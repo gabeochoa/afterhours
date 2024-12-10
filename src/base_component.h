@@ -1,11 +1,14 @@
 
 #pragma once
 
+#include <memory>
+#include <vector>
+
 struct Entity;
 using Entities = std::vector<std::shared_ptr<Entity>>;
 
 struct BaseComponent;
-constexpr int max_num_components = 128;
+constexpr size_t max_num_components = 128;
 using ComponentID = size_t;
 
 namespace components {

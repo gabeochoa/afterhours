@@ -4,11 +4,16 @@
 #include "base_component.h"
 #include "type_name.h"
 
+#if !defined(log_info)
+// TODO eventually implement these
 void log_trace(...) {}
 void log_info(...) {}
 void log_warn(...) {}
 void log_error(...) {}
+#endif
+#if !defined(VALIDATE)
 void VALIDATE(...) {}
+#endif
 
 using ComponentBitSet = std::bitset<max_num_components>;
 // originally this was a std::array<BaseComponent*, max_num_components> but i
@@ -30,7 +35,7 @@ struct Entity {
     Entity(const Entity &) = delete;
     Entity(Entity &&other) noexcept = default;
 
-    ~Entity() { componentArray.clear(); }
+    virtual ~Entity() { componentArray.clear(); }
 
     // These two functions can be used to validate than an entity has all of the
     // matching components that are needed for this system to run
