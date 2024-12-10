@@ -6,13 +6,13 @@
 
 #if !defined(log_info)
 // TODO eventually implement these
-void log_trace(...) {}
-void log_info(...) {}
-void log_warn(...) {}
-void log_error(...) {}
+inline void log_trace(...) {}
+inline void log_info(...) {}
+inline void log_warn(...) {}
+inline void log_error(...) {}
 #endif
 #if !defined(VALIDATE)
-void VALIDATE(...) {}
+inline void VALIDATE(...) {}
 #endif
 
 using ComponentBitSet = std::bitset<max_num_components>;

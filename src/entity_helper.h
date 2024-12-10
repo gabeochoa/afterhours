@@ -33,7 +33,7 @@ struct EntityHelper {
         Break = 2,
     };
 
-    static void forEachEntity(std::function<ForEachFlow(Entity &)> cb);
+    static void forEachEntity(const std::function<ForEachFlow(Entity &)> &cb);
 
     // TODO exists as a conversion for things that need shared_ptr right now
     static std::shared_ptr<Entity> getEntityAsSharedPtr(const Entity &entity) {
@@ -148,7 +148,8 @@ enum ForEachFlow {
     Break = 2,
 };
 
-void EntityHelper::forEachEntity(std::function<ForEachFlow(Entity &)> cb) {
+void EntityHelper::forEachEntity(
+    const std::function<ForEachFlow(Entity &)> &cb) {
     for (const auto &e : get_entities()) {
         if (!e) continue;
         auto fef = cb(*e);
