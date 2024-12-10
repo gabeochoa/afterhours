@@ -3,14 +3,7 @@
 #include <iostream>
 
 #include "../../src/entity_query.h"
-
-struct vec2 {
-  float x;
-  float y;
-};
-constexpr float distance_sq(const vec2 a, const vec2 b) {
-  return (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
-}
+#include "../shared/vector.h"
 
 // Make some components :)
 struct Transform : public BaseComponent {
