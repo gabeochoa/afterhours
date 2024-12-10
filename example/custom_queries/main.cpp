@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-#include "../../src/ah.h"
+#include "../../ah.h"
 #include "../shared/vector.h"
 
 namespace afterhours {

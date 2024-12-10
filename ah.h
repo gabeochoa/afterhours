@@ -11,8 +11,8 @@
 
 namespace afterhours {
 
-#include "entity.h"
-#include "entity_helper.h"
-#include "entity_query.h"
+#include "src/entity.h"
+#include "src/entity_helper.h"
+#include "src/entity_query.h"
 
 }  // namespace afterhours
