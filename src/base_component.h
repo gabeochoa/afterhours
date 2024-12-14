@@ -47,4 +47,12 @@ struct BaseComponent {
 
     virtual void onAttach() {}
     virtual ~BaseComponent() {}
+
+#ifdef ENABLE_AFTERHOURS_BITSERY_SERIALIZE
+    friend bitsery::Access;
+    template<typename S>
+    void serialize(S &s) {
+        s.ext(parent, bitsery::ext::PointerObserver{});
+    }
+#endif
 };
