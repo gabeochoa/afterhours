@@ -1,6 +1,9 @@
 
 #pragma once
 
+#include <optional>
+#include <utility>
+
 #include "base_component.h"
 #include "type_name.h"
 
