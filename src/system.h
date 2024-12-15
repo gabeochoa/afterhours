@@ -70,6 +70,7 @@ struct SystemManager {
         system->for_each(*entity, dt);
       }
     }
+    EntityHelper::cleanup();
   }
 
   void render(const Entities &entities, float dt) {
