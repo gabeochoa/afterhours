@@ -25,6 +25,7 @@ static std::atomic_int ENTITY_ID_GEN = 0;
 
 struct Entity {
   EntityID id;
+  int entity_type = 0;
 
   ComponentBitSet componentSet;
   ComponentArray componentArray;
