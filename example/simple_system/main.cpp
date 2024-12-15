@@ -36,7 +36,8 @@ struct Moves : System<Transform> {
   virtual ~Moves() {}
   // notice how the system<> template class is given here
   // so we will have access to the underlying
-  virtual void for_each_with(Entity &entity, Transform &transform) override {
+  virtual void for_each_with(Entity &entity, Transform &transform,
+                             float) override {
     auto p = transform.pos() + vec2{1, 0};
     transform.update(p);
     std::cout << " updating for entity " << entity.id << " "
@@ -47,7 +48,7 @@ struct Moves : System<Transform> {
 struct MovesAndHasName : System<Transform, HasName> {
   virtual ~MovesAndHasName() {}
   virtual void for_each_with(Entity &entity, Transform &transform,
-                             HasName &hasName) override {
+                             HasName &hasName, float) override {
     auto p = transform.pos() + vec2{1, 0};
     transform.update(p);
     std::cout << " updating for " << hasName.name << " with " << entity.id
@@ -78,12 +79,11 @@ int main(int, char **) {
   make_entities();
 
   SystemManager systems;
-  systems.register_system(std::make_unique<Moves>());
-  systems.register_system(std::make_unique<MovesAndHasName>());
+  systems.register_update_system(std::make_unique<Moves>());
+  systems.register_update_system(std::make_unique<MovesAndHasName>());
 
-  auto &entities = EntityHelper::get_entities_for_mod();
   for (int i = 0; i < 2; i++) {
-    systems.tick(entities);
+    systems.run(1.f);
   }
 
   return 0;
