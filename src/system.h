@@ -67,6 +67,8 @@ struct SystemManager {
         continue;
       system->once(dt);
       for (std::shared_ptr<Entity> entity : entities) {
+        if (!entity)
+          continue;
         system->for_each(*entity, dt);
       }
     }
@@ -79,6 +81,8 @@ struct SystemManager {
         continue;
       system->once(dt);
       for (std::shared_ptr<Entity> entity : entities) {
+        if (!entity)
+          continue;
         const Entity &e = *entity;
         system->for_each(e, dt);
       }
