@@ -21,4 +21,8 @@ namespace afterhours {
 #include "src/entity_query.h"
 #endif
 
-}  // namespace afterhours
+#if defined(AFTER_HOURS_SYSTEM)
+#include "src/system.h"
+#endif
+
+} // namespace afterhours
