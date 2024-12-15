@@ -12,6 +12,10 @@ class SystemBase {
 public:
   SystemBase() {}
   virtual ~SystemBase() {}
+  virtual void once(float) {}
+  virtual void once(float) const {}
+  virtual bool should_run(float) { return true; }
+  virtual bool should_run(float) const { return true; }
   virtual void for_each(Entity &, float) = 0;
   virtual void for_each(const Entity &, float) const = 0;
 };
@@ -59,6 +63,9 @@ struct SystemManager {
 
   void tick(Entities &entities, float dt) {
     for (auto &system : update_systems_) {
+      if (!system->should_run(dt))
+        continue;
+      system->once(dt);
       for (std::shared_ptr<Entity> entity : entities) {
         system->for_each(*entity, dt);
       }
@@ -67,6 +74,9 @@ struct SystemManager {
 
   void render(const Entities &entities, float dt) {
     for (const auto &system : render_systems_) {
+      if (!system->should_run(dt))
+        continue;
+      system->once(dt);
       for (std::shared_ptr<Entity> entity : entities) {
         const Entity &e = *entity;
         system->for_each(e, dt);
