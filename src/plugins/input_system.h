@@ -135,7 +135,8 @@ template <typename Action> struct InputSystem : System<InputCollector<Action>> {
       i++;
     }
     max_gamepad_available = std::max(0, max_gamepad_available);
-    std::cout << "max gamepad available " << max_gamepad_available << std::endl;
+    // std::cout << "max gamepad available " << max_gamepad_available <<
+    // std::endl;
   }
 
   float check_single_action(GamepadID id, input::ValidInputs valid_inputs) {
