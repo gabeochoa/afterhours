@@ -7,6 +7,7 @@
 #include "../base_component.h"
 #include "../entity_query.h"
 #include "../system.h"
+#include "developer.h"
 
 /*
 
@@ -242,6 +243,25 @@ struct InputSystem : System<InputCollector<Action>, TracksMaxGamepadID,
     }
   }
 };
+
+template <typename Action>
+void add_singleton_components(
+    Entity &entity,
+    typename input::TracksInputMapping<Action>::GameMapping inital_mapping) {
+  entity.addComponent<InputCollector<Action>>();
+  entity.addComponent<input::TracksMaxGamepadID>();
+  entity.addComponent<input::TracksInputMapping<Action>>(inital_mapping);
+}
+
+template <typename Action> void enforce_singletons(SystemManager &sm) {
+  sm.register_update_system(
+      std::make_unique<developer::EnforceSingleton<InputCollector<Action>>>());
+  sm.register_update_system(
+      std::make_unique<developer::EnforceSingleton<TracksMaxGamepadID>>());
+  sm.register_update_system(
+      std::make_unique<
+          developer::EnforceSingleton<TracksInputMapping<Action>>>());
+}
 
 } // namespace input
 } // namespace afterhours
