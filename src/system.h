@@ -3,6 +3,7 @@
 #pragma once
 
 #include <bitset>
+#include <functional>
 #include <memory>
 
 #include "base_component.h"
@@ -59,6 +60,12 @@ template <typename... Components> struct System : SystemBase {
 
 #include "entity_helper.h"
 
+struct CallbackSystem : System<> {
+  std::function<void(void)> cb_;
+  CallbackSystem(const std::function<void(void)> &cb) : cb_(cb) {}
+  virtual void once(float) { cb_(); }
+};
+
 struct SystemManager {
   std::vector<std::unique_ptr<SystemBase>> update_systems_;
   std::vector<std::unique_ptr<SystemBase>> render_systems_;
@@ -69,6 +76,14 @@ struct SystemManager {
 
   void register_render_system(std::unique_ptr<SystemBase> system) {
     render_systems_.emplace_back(std::move(system));
+  }
+
+  void register_update_system(const std::function<void(void)> &cb) {
+    register_update_system(std::make_unique<CallbackSystem>(cb));
+  }
+
+  void register_render_system(const std::function<void(void)> &cb) {
+    register_render_system(std::make_unique<CallbackSystem>(cb));
   }
 
   void tick(Entities &entities, float dt) {
