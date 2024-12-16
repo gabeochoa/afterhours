@@ -11,6 +11,10 @@
 
 namespace afterhours {
 
+#if !defined(AFTER_HOURS_MAX_COMPONENTS)
+#define AFTER_HOURS_MAX_COMPONENTS 128
+#endif
+
 #include "src/entity.h"
 
 #if defined(AFTER_HOURS_ENTITY_HELPER)
@@ -21,4 +25,8 @@ namespace afterhours {
 #include "src/entity_query.h"
 #endif
 
-}  // namespace afterhours
+#if defined(AFTER_HOURS_SYSTEM)
+#include "src/system.h"
+#endif
+
+} // namespace afterhours

@@ -8,42 +8,43 @@ struct Entity;
 using Entities = std::vector<std::shared_ptr<Entity>>;
 
 struct BaseComponent;
-constexpr size_t max_num_components = 128;
+
+constexpr size_t max_num_components = AFTER_HOURS_MAX_COMPONENTS;
+
 using ComponentID = size_t;
 
 namespace components {
 namespace internal {
 inline ComponentID get_unique_id() noexcept {
-    static ComponentID lastID{0};
-    // TODO this doesnt work for some reason
-    // if (lastID + 1 > max_num_components)
-    // log_error(
-    // "You are trying to add a new component but you have used up all "
-    // "the space allocated, updated max_num");
-    return lastID++;
+  static ComponentID lastID{0};
+  // TODO this doesnt work for some reason
+  // if (lastID + 1 > max_num_components)
+  // log_error(
+  // "You are trying to add a new component but you have used up all "
+  // "the space allocated, updated max_num");
+  return lastID++;
 }
 
-}  // namespace internal
+} // namespace internal
 
-template<typename T>
-inline ComponentID get_type_id() noexcept {
-    static_assert(std::is_base_of<BaseComponent, T>::value,
-                  "T must inherit from BaseComponent");
-    static ComponentID typeID{internal::get_unique_id()};
-    return typeID;
+template <typename T> inline ComponentID get_type_id() noexcept {
+  static_assert(std::is_base_of<BaseComponent, T>::value,
+                "T must inherit from BaseComponent");
+  static ComponentID typeID{internal::get_unique_id()};
+  return typeID;
 }
-}  // namespace components
+} // namespace components
 
 struct BaseComponent {
-    Entity *parent = nullptr;
+  Entity *parent = nullptr;
 
-    BaseComponent() {}
-    BaseComponent(BaseComponent &&) = default;
+  BaseComponent() {}
+  BaseComponent(BaseComponent &&) = default;
 
-    void attach_parent(Entity *p) {
-        parent = p;
-        onAttach();
-    }
+  void attach_parent(Entity *p) {
+    parent = p;
+    onAttach();
+  }
 
     virtual void onAttach() {}
     virtual ~BaseComponent() {}
