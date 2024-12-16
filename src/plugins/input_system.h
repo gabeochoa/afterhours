@@ -123,6 +123,12 @@ struct TracksMaxGamepadID : public BaseComponent {
   int max_gamepad_available = 0;
 };
 
+template <typename Action> struct TracksInputMapping : public BaseComponent {
+  using GameMapping = std::map<Action, input::ValidInputs>;
+  GameMapping mapping;
+  TracksInputMapping(GameMapping start_mapping) : mapping(start_mapping) {}
+};
+
 struct RenderConnectedGamepads : System<input::TracksMaxGamepadID> {
 
   virtual void for_each_with(const Entity &,
@@ -168,12 +174,8 @@ auto get_input_collector() -> PossibleInputCollector<Action> {
 // TODO i would like to move this out of input namespace
 // at some point
 template <typename Action>
-struct InputSystem : System<InputCollector<Action>, TracksMaxGamepadID> {
-
-  using GameMapping = std::map<Action, input::ValidInputs>;
-  GameMapping initial_mapping;
-
-  InputSystem(GameMapping start_mapping) : initial_mapping(start_mapping) {}
+struct InputSystem : System<InputCollector<Action>, TracksMaxGamepadID,
+                            TracksInputMapping<Action>> {
 
   int fetch_max_gampad_id() {
     int result = -1;
@@ -211,11 +213,12 @@ struct InputSystem : System<InputCollector<Action>, TracksMaxGamepadID> {
 
   virtual void for_each_with(Entity &, InputCollector<Action> &collector,
                              TracksMaxGamepadID &mxGamepadID,
+                             TracksInputMapping<Action> &input_mapper,
                              float dt) override {
     mxGamepadID.max_gamepad_available = std::max(0, fetch_max_gampad_id());
     collector.inputs.clear();
 
-    for (auto &kv : initial_mapping) {
+    for (auto &kv : input_mapper.mapping) {
       Action action = kv.first;
       ValidInputs vis = kv.second;
 
