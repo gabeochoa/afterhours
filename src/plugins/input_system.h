@@ -49,6 +49,11 @@ bool is_gamepad_button_pressed(GamepadID gamepad_id, GamepadButton button) {
 bool is_gamepad_button_down(GamepadID gamepad_id, GamepadButton button) {
   return raylib::IsGamepadButtonDown(gamepad_id, button);
 }
+
+void draw_text(const std::string &text, int x, int y, int fontSize) {
+  raylib::DrawText(text.c_str(), x, y, fontSize, raylib::RED);
+}
+
 #else
 using KeyCode = int;
 using GamepadID = int;
@@ -62,6 +67,7 @@ bool is_gamepad_available(GamepadID) { return false; }
 float get_gamepad_axis_mvt(GamepadID, GamepadAxis) { return 0.f; }
 bool is_gamepad_button_pressed(GamepadID, GamepadButton) { return false; }
 bool is_gamepad_button_down(GamepadID, GamepadButton) { return false; }
+void draw_text(const std::string &, int, int, int) {}
 #endif
 
 enum DeviceMedium {
@@ -115,6 +121,17 @@ template <typename Action> struct InputCollector : public BaseComponent {
 
 struct TracksMaxGamepadID : public BaseComponent {
   int max_gamepad_available = 0;
+};
+
+struct RenderConnectedGamepads : System<input::TracksMaxGamepadID> {
+
+  virtual void for_each_with(const Entity &,
+                             const input::TracksMaxGamepadID &mxGamepadID,
+                             float) const override {
+    draw_text(("Gamepads connected: " +
+               std::to_string(mxGamepadID.max_gamepad_available)),
+              400, 60, 20);
+  }
 };
 
 struct InputQuery : EntityQuery<InputQuery> {};
