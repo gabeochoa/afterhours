@@ -28,12 +28,16 @@ template <typename T> int sgn(T val) { return (T(0) < val) - (val < T(0)); }
 namespace input {
 
 float DEADZONE = 0.25f;
+const int MAX_GAMEPAD_ID = 8;
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 using KeyCode = int;
 using GamepadID = int;
 using GamepadAxis = raylib::GamepadAxis;
 using GamepadButton = raylib::GamepadButton;
+bool is_gamepad_available(GamepadID id) {
+  return raylib::IsGamepadAvailable(id);
+}
 bool is_key_pressed(KeyCode keycode) { return raylib::IsKeyPressed(keycode); }
 bool is_key_down(KeyCode keycode) { return raylib::IsKeyDown(keycode); }
 float get_gamepad_axis_mvt(GamepadID gamepad_id, GamepadAxis axis) {
@@ -54,6 +58,7 @@ using GamepadButton = int;
 // TODO good luck ;)
 bool is_key_pressed(KeyCode) { return false; }
 bool is_key_down(KeyCode) { return false; }
+bool is_gamepad_available(GamepadID) { return false; }
 float get_gamepad_axis_mvt(GamepadID, GamepadAxis) { return 0.f; }
 bool is_gamepad_button_pressed(GamepadID, GamepadButton) { return false; }
 bool is_gamepad_button_down(GamepadID, GamepadButton) { return false; }
@@ -66,6 +71,7 @@ enum DeviceMedium {
 };
 
 template <typename T> struct ActionDone {
+  GamepadID id;
   T action;
   float amount_pressed;
   float length_pressed;
@@ -82,10 +88,10 @@ using ValidInputs = std::vector<AnyInput>;
 float visit_key(int keycode) { return is_key_pressed(keycode) ? 1.f : 0.f; }
 float visit_key_down(int keycode) { return is_key_down(keycode) ? 1.f : 0.f; }
 
-float visit_axis(GamepadAxisWithDir axis_with_dir) {
+float visit_axis(GamepadID id, GamepadAxisWithDir axis_with_dir) {
   // Note: this one is a bit more complex because we have to check if you
   // are pushing in the right direction while also checking the magnitude
-  float mvt = get_gamepad_axis_mvt(0, axis_with_dir.axis);
+  float mvt = get_gamepad_axis_mvt(id, axis_with_dir.axis);
   // Note: The 0.25 is how big the deadzone is
   // TODO consider making the deadzone configurable?
   if (util::sgn(mvt) == axis_with_dir.dir && abs(mvt) > DEADZONE) {
@@ -94,13 +100,12 @@ float visit_axis(GamepadAxisWithDir axis_with_dir) {
   return 0.f;
 }
 
-// TODO support multiple gamepads
-float visit_button(GamepadButton button) {
-  return is_gamepad_button_pressed(0, button) ? 1.f : 0.f;
+float visit_button(GamepadID id, GamepadButton button) {
+  return is_gamepad_button_pressed(id, button) ? 1.f : 0.f;
 }
 
-float visit_button_down(GamepadButton button) {
-  return is_gamepad_button_down(0, button) ? 1.f : 0.f;
+float visit_button_down(GamepadID id, GamepadButton button) {
+  return is_gamepad_button_down(id, button) ? 1.f : 0.f;
 }
 
 template <typename Action> struct InputCollector : public BaseComponent {
@@ -117,8 +122,23 @@ template <typename Action> struct InputSystem : System<InputCollector<Action>> {
   //
 
   InputSystem(GameMapping start_mapping) : mapping(start_mapping) {}
+  int max_gamepad_available = 0;
 
-  float check_single_action(input::ValidInputs valid_inputs) {
+  virtual void once(float) override {
+    int i = 0;
+    while (i < MAX_GAMEPAD_ID) {
+      bool avail = is_gamepad_available(i);
+      if (!avail) {
+        max_gamepad_available = i - 1;
+        break;
+      }
+      i++;
+    }
+    max_gamepad_available = std::max(0, max_gamepad_available);
+    std::cout << "max gamepad available " << max_gamepad_available << std::endl;
+  }
+
+  float check_single_action(GamepadID id, input::ValidInputs valid_inputs) {
     float value = 0.f;
     for (auto &input : valid_inputs) {
       value = fmax(value,      //
@@ -126,11 +146,11 @@ template <typename Action> struct InputSystem : System<InputCollector<Action>> {
                        util::overloaded{
                            //
                            [](int keycode) { return visit_key_down(keycode); },
-                           [](GamepadAxisWithDir axis_with_dir) {
-                             return visit_axis(axis_with_dir);
+                           [id](GamepadAxisWithDir axis_with_dir) {
+                             return visit_axis(id, axis_with_dir);
                            },
-                           [](GamepadButton button) {
-                             return visit_button_down(button);
+                           [id](GamepadButton button) {
+                             return visit_button_down(id, button);
                            },
                            [](auto) {}},
                        input));
@@ -145,11 +165,18 @@ template <typename Action> struct InputSystem : System<InputCollector<Action>> {
     for (auto &kv : mapping) {
       Action action = kv.first;
       ValidInputs vis = kv.second;
-      float amount = check_single_action(vis);
-      if (amount > 0.f) {
-        collector.inputs.push_back(ActionDone{
-            .action = action, .amount_pressed = 1.f, .length_pressed = dt});
-      }
+
+      int i = 0;
+      do {
+        float amount = check_single_action(i, vis);
+        if (amount > 0.f) {
+          collector.inputs.push_back(ActionDone{.id = i,
+                                                .action = action,
+                                                .amount_pressed = 1.f,
+                                                .length_pressed = dt});
+        }
+        i++;
+      } while (i <= max_gamepad_available);
     }
 
     if (collector.inputs.size() == 0) {
