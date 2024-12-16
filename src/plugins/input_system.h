@@ -181,9 +181,7 @@ template <typename Action> struct PossibleInputCollector {
 };
 
 template <typename Action>
-auto get_input_collector()
-    // TODO add helper type for this...
-    -> PossibleInputCollector<Action> {
+auto get_input_collector() -> PossibleInputCollector<Action> {
 
   OptEntity opt_collector =
       InputQuery().whereHasComponent<InputCollector<Action>>().gen_first();
