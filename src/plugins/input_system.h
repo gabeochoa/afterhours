@@ -113,30 +113,30 @@ template <typename Action> struct InputCollector : public BaseComponent {
   float since_last_input = 0.f;
 };
 
-template <typename Action> struct InputSystem : System<InputCollector<Action>> {
+struct TracksMaxGamepadID : public BaseComponent {
+  int max_gamepad_available = 0;
+};
+
+template <typename Action>
+struct InputSystem : System<InputCollector<Action>, TracksMaxGamepadID> {
 
   using GameMapping = std::map<Action, input::ValidInputs>;
+  GameMapping initial_mapping;
 
-  //
-  GameMapping mapping;
-  //
+  InputSystem(GameMapping start_mapping) : initial_mapping(start_mapping) {}
 
-  InputSystem(GameMapping start_mapping) : mapping(start_mapping) {}
-  int max_gamepad_available = 0;
-
-  virtual void once(float) override {
+  int fetch_max_gampad_id() {
+    int result = -1;
     int i = 0;
     while (i < MAX_GAMEPAD_ID) {
       bool avail = is_gamepad_available(i);
       if (!avail) {
-        max_gamepad_available = i - 1;
+        result = i - 1;
         break;
       }
       i++;
     }
-    max_gamepad_available = std::max(0, max_gamepad_available);
-    // std::cout << "max gamepad available " << max_gamepad_available <<
-    // std::endl;
+    return result;
   }
 
   float check_single_action(GamepadID id, input::ValidInputs valid_inputs) {
@@ -160,10 +160,12 @@ template <typename Action> struct InputSystem : System<InputCollector<Action>> {
   }
 
   virtual void for_each_with(Entity &, InputCollector<Action> &collector,
+                             TracksMaxGamepadID &mxGamepadID,
                              float dt) override {
+    mxGamepadID.max_gamepad_available = std::max(0, fetch_max_gampad_id());
     collector.inputs.clear();
 
-    for (auto &kv : mapping) {
+    for (auto &kv : initial_mapping) {
       Action action = kv.first;
       ValidInputs vis = kv.second;
 
@@ -177,7 +179,7 @@ template <typename Action> struct InputSystem : System<InputCollector<Action>> {
                                                 .length_pressed = dt});
         }
         i++;
-      } while (i <= max_gamepad_available);
+      } while (i <= mxGamepadID.max_gamepad_available);
     }
 
     if (collector.inputs.size() == 0) {
