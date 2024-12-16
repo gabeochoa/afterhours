@@ -12,10 +12,16 @@ class SystemBase {
 public:
   SystemBase() {}
   virtual ~SystemBase() {}
-  virtual void once(float) {}
-  virtual void once(float) const {}
+
+  // Runs before calling once/for-each, and when
+  // false skips calling those
   virtual bool should_run(float) { return true; }
   virtual bool should_run(float) const { return true; }
+  // Runs once per frame, before calling for_each
+  virtual void once(float) {}
+  virtual void once(float) const {}
+  // Runs for every entity matching the components
+  // in System<Components>
   virtual void for_each(Entity &, float) = 0;
   virtual void for_each(const Entity &, float) const = 0;
 };
