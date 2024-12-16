@@ -263,5 +263,10 @@ template <typename Action> void enforce_singletons(SystemManager &sm) {
           developer::EnforceSingleton<TracksInputMapping<Action>>>());
 }
 
+template <typename Action> void register_update_systems(SystemManager &sm) {
+  sm.register_update_system(
+      std::make_unique<afterhours::input::InputSystem<Action>>());
+}
+
 } // namespace input
 } // namespace afterhours
