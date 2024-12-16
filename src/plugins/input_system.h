@@ -120,20 +120,20 @@ template <typename Action> struct InputCollector : public BaseComponent {
   float since_last_input = 0.f;
 };
 
-struct TracksMaxGamepadID : public BaseComponent {
+struct ProvidesMaxGamepadID : public BaseComponent {
   int max_gamepad_available = 0;
 };
 
-template <typename Action> struct TracksInputMapping : public BaseComponent {
+template <typename Action> struct ProvidesInputMapping : public BaseComponent {
   using GameMapping = std::map<Action, input::ValidInputs>;
   GameMapping mapping;
-  TracksInputMapping(GameMapping start_mapping) : mapping(start_mapping) {}
+  ProvidesInputMapping(GameMapping start_mapping) : mapping(start_mapping) {}
 };
 
-struct RenderConnectedGamepads : System<input::TracksMaxGamepadID> {
+struct RenderConnectedGamepads : System<input::ProvidesMaxGamepadID> {
 
   virtual void for_each_with(const Entity &,
-                             const input::TracksMaxGamepadID &mxGamepadID,
+                             const input::ProvidesMaxGamepadID &mxGamepadID,
                              float) const override {
     draw_text(("Gamepads connected: " +
                std::to_string(mxGamepadID.max_gamepad_available)),
@@ -175,8 +175,8 @@ auto get_input_collector() -> PossibleInputCollector<Action> {
 // TODO i would like to move this out of input namespace
 // at some point
 template <typename Action>
-struct InputSystem : System<InputCollector<Action>, TracksMaxGamepadID,
-                            TracksInputMapping<Action>> {
+struct InputSystem : System<InputCollector<Action>, ProvidesMaxGamepadID,
+                            ProvidesInputMapping<Action>> {
 
   int fetch_max_gampad_id() {
     int result = -1;
@@ -213,8 +213,8 @@ struct InputSystem : System<InputCollector<Action>, TracksMaxGamepadID,
   }
 
   virtual void for_each_with(Entity &, InputCollector<Action> &collector,
-                             TracksMaxGamepadID &mxGamepadID,
-                             TracksInputMapping<Action> &input_mapper,
+                             ProvidesMaxGamepadID &mxGamepadID,
+                             ProvidesInputMapping<Action> &input_mapper,
                              float dt) override {
     mxGamepadID.max_gamepad_available = std::max(0, fetch_max_gampad_id());
     collector.inputs.clear();
@@ -247,20 +247,20 @@ struct InputSystem : System<InputCollector<Action>, TracksMaxGamepadID,
 template <typename Action>
 void add_singleton_components(
     Entity &entity,
-    typename input::TracksInputMapping<Action>::GameMapping inital_mapping) {
+    typename input::ProvidesInputMapping<Action>::GameMapping inital_mapping) {
   entity.addComponent<InputCollector<Action>>();
-  entity.addComponent<input::TracksMaxGamepadID>();
-  entity.addComponent<input::TracksInputMapping<Action>>(inital_mapping);
+  entity.addComponent<input::ProvidesMaxGamepadID>();
+  entity.addComponent<input::ProvidesInputMapping<Action>>(inital_mapping);
 }
 
 template <typename Action> void enforce_singletons(SystemManager &sm) {
   sm.register_update_system(
       std::make_unique<developer::EnforceSingleton<InputCollector<Action>>>());
   sm.register_update_system(
-      std::make_unique<developer::EnforceSingleton<TracksMaxGamepadID>>());
+      std::make_unique<developer::EnforceSingleton<ProvidesMaxGamepadID>>());
   sm.register_update_system(
       std::make_unique<
-          developer::EnforceSingleton<TracksInputMapping<Action>>>());
+          developer::EnforceSingleton<ProvidesInputMapping<Action>>>());
 }
 
 template <typename Action> void register_update_systems(SystemManager &sm) {
