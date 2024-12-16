@@ -38,8 +38,6 @@ template <typename... Components> struct System : SystemBase {
     }
   }
 
-  virtual void for_each_with(Entity &, Components &..., float) {}
-
   void for_each(const Entity &entity, float dt) const {
     if constexpr (sizeof...(Components) > 0) {
       if ((entity.template has<Components>() && ...)) {
@@ -49,6 +47,12 @@ template <typename... Components> struct System : SystemBase {
       for_each_with(entity, dt);
     }
   }
+
+  // Left for the subclass to implment,
+  // These would be abstract but we dont know if they will want
+  // const or non const versions and the sfinae version is probably
+  // pretty unreadable (and idk how to write it correctly)
+  virtual void for_each_with(Entity &, Components &..., float) {}
   virtual void for_each_with(const Entity &, const Components &...,
                              float) const {}
 };
