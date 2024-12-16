@@ -117,6 +117,39 @@ struct TracksMaxGamepadID : public BaseComponent {
   int max_gamepad_available = 0;
 };
 
+struct InputQuery : EntityQuery<InputQuery> {};
+template <typename Action> struct PossibleInputCollector {
+  std::optional<std::reference_wrapper<InputCollector<Action>>> data;
+  PossibleInputCollector(
+      std::optional<std::reference_wrapper<InputCollector<Action>>> d)
+      : data(d) {}
+  PossibleInputCollector(InputCollector<Action> &d) : data(d) {}
+  PossibleInputCollector() : data({}) {}
+  bool has_value() const { return data.has_value(); }
+  bool valid() const { return has_value(); }
+
+  [[nodiscard]] std::vector<input::ActionDone<Action>> &inputs() {
+    return data.value().get().inputs;
+  }
+
+  [[nodiscard]] float since_last_input() {
+    return data.value().get().since_last_input;
+  }
+};
+
+template <typename Action>
+auto get_input_collector() -> PossibleInputCollector<Action> {
+
+  OptEntity opt_collector =
+      InputQuery().whereHasComponent<InputCollector<Action>>().gen_first();
+  if (!opt_collector.valid())
+    return {};
+  Entity &collector = opt_collector.asE();
+  return collector.get<InputCollector<Action>>();
+}
+
+// TODO i would like to move this out of input namespace
+// at some point
 template <typename Action>
 struct InputSystem : System<InputCollector<Action>, TracksMaxGamepadID> {
 
@@ -189,40 +222,6 @@ struct InputSystem : System<InputCollector<Action>, TracksMaxGamepadID> {
     }
   }
 };
-
-struct InputQuery : EntityQuery<InputQuery> {};
-template <typename Action> struct PossibleInputCollector {
-  std::optional<std::reference_wrapper<InputCollector<Action>>> data;
-  PossibleInputCollector(
-      std::optional<std::reference_wrapper<InputCollector<Action>>> d)
-      : data(d) {}
-  PossibleInputCollector(InputCollector<Action> &d) : data(d) {}
-  PossibleInputCollector() : data({}) {}
-  bool has_value() const { return data.has_value(); }
-  bool valid() const { return has_value(); }
-
-  [[nodiscard]] std::vector<input::ActionDone<Action>> &inputs() {
-    return data.value().get().inputs;
-  }
-
-  [[nodiscard]] float since_last_input() {
-    return data.value().get().since_last_input;
-  }
-};
-
-template <typename Action>
-auto get_input_collector() -> PossibleInputCollector<Action> {
-
-  OptEntity opt_collector =
-      InputQuery().whereHasComponent<InputCollector<Action>>().gen_first();
-  if (!opt_collector.valid())
-    return {};
-  Entity &collector = opt_collector.asE();
-  return collector.get<InputCollector<Action>>();
-}
-
-// TODO i would like to move this out of input namespace
-// at some point
 
 } // namespace input
 } // namespace afterhours
