@@ -7,3 +7,5 @@ check the examples folder for how to use it :)
 
 other examples:
 - https://github.com/gabeochoa/tetr-afterhours/
+- https://github.com/gabeochoa/wm-afterhours/
+- https://github.com/gabeochoa/ui-afterhours/
