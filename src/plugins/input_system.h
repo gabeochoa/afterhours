@@ -52,7 +52,6 @@ bool is_mouse_button_pressed(MouseButton button) {
 bool is_mouse_button_released(MouseButton button) {
   return raylib::IsMouseButtonReleased(button);
 }
-
 bool is_gamepad_available(GamepadID id) {
   return raylib::IsGamepadAvailable(id);
 }
@@ -96,12 +95,13 @@ void draw_text(const std::string &, int, int, int) {}
 #endif
 
 enum DeviceMedium {
+  None,
   Keyboard,
   Gamepad,
-  GamepadWithAxis,
 };
 
 template <typename T> struct ActionDone {
+  DeviceMedium medium;
   GamepadID id;
   T action;
   float amount_pressed;
@@ -141,6 +141,7 @@ float visit_button_down(GamepadID id, GamepadButton button) {
 
 template <typename Action> struct InputCollector : public BaseComponent {
   std::vector<input::ActionDone<Action>> inputs;
+  std::vector<input::ActionDone<Action>> inputs_pressed;
   float since_last_input = 0.f;
 };
 
@@ -180,6 +181,10 @@ template <typename Action> struct PossibleInputCollector {
     return data.value().get().inputs;
   }
 
+  [[nodiscard]] std::vector<input::ActionDone<Action>> &inputs_pressed() {
+    return data.value().get().inputs_pressed;
+  }
+
   [[nodiscard]] float since_last_input() {
     return data.value().get().since_last_input;
   }
@@ -216,24 +221,68 @@ struct InputSystem : System<InputCollector<Action>, ProvidesMaxGamepadID,
     return result;
   }
 
-  float check_single_action(GamepadID id, input::ValidInputs valid_inputs) {
+  std::pair<DeviceMedium, float>
+  check_single_action_pressed(GamepadID id, input::ValidInputs valid_inputs) {
+    DeviceMedium medium;
     float value = 0.f;
     for (auto &input : valid_inputs) {
-      value = fmax(value,      //
-                   std::visit( //
-                       util::overloaded{
-                           //
-                           [](int keycode) { return visit_key_down(keycode); },
-                           [id](GamepadAxisWithDir axis_with_dir) {
-                             return visit_axis(id, axis_with_dir);
-                           },
-                           [id](GamepadButton button) {
-                             return visit_button_down(id, button);
-                           },
-                           [](auto) {}},
-                       input));
+      DeviceMedium temp_medium = None;
+      float temp =             //
+          std::visit(          //
+              util::overloaded{//
+                               [&](int keycode) {
+                                 temp_medium = Keyboard;
+                                 return is_key_pressed(keycode) ? 1.f : 0.f;
+                               },
+                               [&](GamepadAxisWithDir axis_with_dir) {
+                                 temp_medium = Gamepad;
+                                 return visit_axis(id, axis_with_dir);
+                               },
+                               [&](GamepadButton button) {
+                                 temp_medium = Gamepad;
+                                 return is_gamepad_button_pressed(id, button)
+                                            ? 1.f
+                                            : 0.f;
+                               },
+                               [](auto) {}},
+              input);
+      if (temp > value) {
+        value = temp;
+        medium = temp_medium;
+      }
     }
-    return value;
+    return {medium, value};
+  }
+
+  std::pair<DeviceMedium, float>
+  check_single_action_down(GamepadID id, input::ValidInputs valid_inputs) {
+    DeviceMedium medium;
+    float value = 0.f;
+    for (auto &input : valid_inputs) {
+      DeviceMedium temp_medium = None;
+      float temp =             //
+          std::visit(          //
+              util::overloaded{//
+                               [&](int keycode) {
+                                 temp_medium = Keyboard;
+                                 return visit_key_down(keycode);
+                               },
+                               [&](GamepadAxisWithDir axis_with_dir) {
+                                 temp_medium = Gamepad;
+                                 return visit_axis(id, axis_with_dir);
+                               },
+                               [&](GamepadButton button) {
+                                 temp_medium = Gamepad;
+                                 return visit_button_down(id, button);
+                               },
+                               [](auto) {}},
+              input);
+      if (temp > value) {
+        value = temp;
+        medium = temp_medium;
+      }
+    }
+    return {medium, value};
   }
 
   virtual void for_each_with(Entity &, InputCollector<Action> &collector,
@@ -242,6 +291,7 @@ struct InputSystem : System<InputCollector<Action>, ProvidesMaxGamepadID,
                              float dt) override {
     mxGamepadID.max_gamepad_available = std::max(0, fetch_max_gampad_id());
     collector.inputs.clear();
+    collector.inputs_pressed.clear();
 
     for (auto &kv : input_mapper.mapping) {
       Action action = kv.first;
@@ -249,12 +299,28 @@ struct InputSystem : System<InputCollector<Action>, ProvidesMaxGamepadID,
 
       int i = 0;
       do {
-        float amount = check_single_action(i, vis);
-        if (amount > 0.f) {
-          collector.inputs.push_back(ActionDone{.id = i,
-                                                .action = action,
-                                                .amount_pressed = 1.f,
-                                                .length_pressed = dt});
+        // down
+        {
+          auto [medium, amount] = check_single_action_down(i, vis);
+          if (amount > 0.f) {
+            collector.inputs.push_back(ActionDone{.medium = medium,
+                                                  .id = i,
+                                                  .action = action,
+                                                  .amount_pressed = 1.f,
+                                                  .length_pressed = dt});
+          }
+        }
+        // pressed
+        {
+          auto [medium, amount] = check_single_action_pressed(i, vis);
+          if (amount > 0.f) {
+            collector.inputs_pressed.push_back(
+                ActionDone{.medium = medium,
+                           .id = i,
+                           .action = action,
+                           .amount_pressed = 1.f,
+                           .length_pressed = dt});
+          }
         }
         i++;
       } while (i <= mxGamepadID.max_gamepad_available);
