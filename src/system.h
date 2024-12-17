@@ -70,6 +70,9 @@ struct SystemManager {
   std::vector<std::unique_ptr<SystemBase>> update_systems_;
   std::vector<std::unique_ptr<SystemBase>> render_systems_;
 
+  // TODO  - one issue is that if you write a system that could be const
+  // but you add it to update, it wont work since update only calls the
+  // non-const for_each_with
   void register_update_system(std::unique_ptr<SystemBase> system) {
     update_systems_.emplace_back(std::move(system));
   }
