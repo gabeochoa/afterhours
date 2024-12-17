@@ -12,6 +12,19 @@ namespace window_manager {
 struct Resolution {
   int width;
   int height;
+
+  friend std::ostream &operator<<(std::ostream &os, const Resolution &rez) {
+    os << "(" << rez.width << "," << rez.height << ")";
+    return os;
+  }
+
+  bool operator==(const Resolution &other) const {
+    return width == other.width && height == other.height;
+  }
+
+  bool operator<(const Resolution &r) const {
+    return width * height < r.width * r.height;
+  }
 };
 
 struct ProvidesCurrentResolution : public BaseComponent {
