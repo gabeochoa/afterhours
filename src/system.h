@@ -29,6 +29,49 @@ public:
 
 template <typename... Components> struct System : SystemBase {
 
+  /*
+   *
+
+   TODO I would like to support the ability to add Not<> Queries to the systesm
+to filter out things you dont want
+
+But template meta programming is tough
+
+    System<Not<Transform>> => would run for anything that doesnt have transform
+    System<Health, Not<Dead>> => would run for anything that has health and not
+dead
+
+template <typename Component> struct Not : BaseComponent {
+  using type = Component;
+};
+  template <typename... Cs> void for_each(Entity &entity, float dt) {
+    if constexpr (sizeof...(Cs) > 0) {
+      if (
+          //
+          (
+              //
+              (std::is_base_of_v<Not<typename Cs::type>, Cs> //
+                   ? entity.template is_missing<Cs::type>()
+                   : entity.template has<Cs>() //
+               ) &&
+              ...)
+          //
+      ) {
+        for_each_with(entity,
+                      entity.template get<std::conditional_t<
+                          std::is_base_of_v<Not<typename Cs::type>, Cs>,
+                          typename Cs::type, Cs>>()...,
+                      dt);
+      }
+    } else {
+      for_each_with(entity, dt);
+    }
+  }
+
+  void for_each(Entity &entity, float dt) {
+    for_each_with(entity, entity.template get<Components>()..., dt);
+  }
+*/
   void for_each(Entity &entity, float dt) {
     if constexpr (sizeof...(Components) > 0) {
       if ((entity.template has<Components>() && ...)) {
