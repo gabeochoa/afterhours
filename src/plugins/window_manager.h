@@ -9,10 +9,16 @@
 namespace afterhours {
 namespace window_manager {
 
+struct Resolution {
+  size_t width;
+  size_t height;
+};
+
 struct ProvidesCurrentResolution : public BaseComponent {
-  int width;
-  int height;
-  ProvidesCurrentResolution(int w, int h) : width(w), height(h) {}
+  Resolution current_resolution;
+  ProvidesCurrentResolution(const Resolution &rez) : current_resolution(rez) {}
+  [[nodiscard]] size_t width() const { return current_resolution.width; }
+  [[nodiscard]] size_t height() const { return current_resolution.height; }
 };
 
 struct ProvidesTargetFPS : public BaseComponent {
@@ -20,10 +26,19 @@ struct ProvidesTargetFPS : public BaseComponent {
   ProvidesTargetFPS(int f) : fps(f) {}
 };
 
-void add_singleton_components(Entity &entity, int width, int height,
-                              int target_fps) {
-  entity.addComponent<ProvidesCurrentResolution>(width, height);
+struct ProvidesAvailableWindowResolutions : BaseComponent {
+  std::vector<Resolution> available_resolutions;
+  ProvidesAvailableWindowResolutions(const std::vector<Resolution> &rez)
+      : available_resolutions(rez) {}
+};
+
+void add_singleton_components(
+    Entity &entity, const Resolution &rez, int target_fps,
+    const std::vector<Resolution> &available_resolutions) {
+  entity.addComponent<ProvidesCurrentResolution>(rez);
   entity.addComponent<ProvidesTargetFPS>(target_fps);
+  entity.addComponent<ProvidesAvailableWindowResolutions>(
+      available_resolutions);
 }
 
 void enforce_singletons(SystemManager &sm) {
@@ -32,6 +47,9 @@ void enforce_singletons(SystemManager &sm) {
           developer::EnforceSingleton<ProvidesCurrentResolution>>());
   sm.register_update_system(
       std::make_unique<developer::EnforceSingleton<ProvidesTargetFPS>>());
+  sm.register_update_system(
+      std::make_unique<
+          developer::EnforceSingleton<ProvidesAvailableWindowResolutions>>());
 }
 
 void register_update_systems(SystemManager &) {}
