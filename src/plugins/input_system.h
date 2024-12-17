@@ -31,6 +31,7 @@ namespace input {
 float DEADZONE = 0.25f;
 const int MAX_GAMEPAD_ID = 8;
 
+using MouseButton = int;
 #ifdef AFTER_HOURS_USE_RAYLIB
 using MousePosition = raylib::Vector2;
 using KeyCode = int;
@@ -39,6 +40,19 @@ using GamepadAxis = raylib::GamepadAxis;
 using GamepadButton = raylib::GamepadButton;
 
 MousePosition get_mouse_position() { return raylib::GetMousePosition(); }
+bool is_mouse_button_up(MouseButton button) {
+  return raylib::isMouseButtonUp(button);
+}
+bool is_mouse_button_down(MouseButton button) {
+  return raylib::isMouseButtonDown(button);
+}
+bool is_mouse_button_pressed(MouseButton button) {
+  return raylib::isMouseButtonPressed(button);
+}
+bool is_mouse_button_released(MouseButton button) {
+  return raylib::isMouseButtonReleased(button);
+}
+
 bool is_gamepad_available(GamepadID id) {
   return raylib::IsGamepadAvailable(id);
 }
@@ -67,6 +81,11 @@ using GamepadButton = int;
 
 // TODO good luck ;)
 MousePosition get_mouse_position() { return {0, 0}; }
+bool is_mouse_button_up(MouseButton) { return false; }
+bool is_mouse_button_down(MouseButton) { return false; }
+bool is_mouse_button_pressed(MouseButton) { return false; }
+bool is_mouse_button_released(MouseButton) { return false; }
+
 bool is_key_pressed(KeyCode) { return false; }
 bool is_key_down(KeyCode) { return false; }
 bool is_gamepad_available(GamepadID) { return false; }
