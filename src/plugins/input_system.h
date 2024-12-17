@@ -32,10 +32,13 @@ float DEADZONE = 0.25f;
 const int MAX_GAMEPAD_ID = 8;
 
 #ifdef AFTER_HOURS_USE_RAYLIB
+using MousePosition = raylib::Vector2;
 using KeyCode = int;
 using GamepadID = int;
 using GamepadAxis = raylib::GamepadAxis;
 using GamepadButton = raylib::GamepadButton;
+
+MousePosition get_mouse_position() { return raylib::GetMousePosition(); }
 bool is_gamepad_available(GamepadID id) {
   return raylib::IsGamepadAvailable(id);
 }
@@ -56,12 +59,14 @@ void draw_text(const std::string &text, int x, int y, int fontSize) {
 }
 
 #else
+using MousePosition = std::pair<int, int>;
 using KeyCode = int;
 using GamepadID = int;
 using GamepadAxis = int;
 using GamepadButton = int;
 
 // TODO good luck ;)
+MousePosition get_mouse_position() { return {0, 0}; }
 bool is_key_pressed(KeyCode) { return false; }
 bool is_key_down(KeyCode) { return false; }
 bool is_gamepad_available(GamepadID) { return false; }
