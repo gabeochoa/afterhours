@@ -41,16 +41,16 @@ using GamepadButton = raylib::GamepadButton;
 
 MousePosition get_mouse_position() { return raylib::GetMousePosition(); }
 bool is_mouse_button_up(MouseButton button) {
-  return raylib::isMouseButtonUp(button);
+  return raylib::IsMouseButtonUp(button);
 }
 bool is_mouse_button_down(MouseButton button) {
-  return raylib::isMouseButtonDown(button);
+  return raylib::IsMouseButtonDown(button);
 }
 bool is_mouse_button_pressed(MouseButton button) {
-  return raylib::isMouseButtonPressed(button);
+  return raylib::IsMouseButtonPressed(button);
 }
 bool is_mouse_button_released(MouseButton button) {
-  return raylib::isMouseButtonReleased(button);
+  return raylib::IsMouseButtonReleased(button);
 }
 
 bool is_gamepad_available(GamepadID id) {
