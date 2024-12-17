@@ -10,15 +10,15 @@ namespace afterhours {
 namespace window_manager {
 
 struct Resolution {
-  size_t width;
-  size_t height;
+  int width;
+  int height;
 };
 
 struct ProvidesCurrentResolution : public BaseComponent {
   Resolution current_resolution;
   ProvidesCurrentResolution(const Resolution &rez) : current_resolution(rez) {}
-  [[nodiscard]] size_t width() const { return current_resolution.width; }
-  [[nodiscard]] size_t height() const { return current_resolution.height; }
+  [[nodiscard]] int width() const { return current_resolution.width; }
+  [[nodiscard]] int height() const { return current_resolution.height; }
 };
 
 struct ProvidesTargetFPS : public BaseComponent {
