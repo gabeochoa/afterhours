@@ -9,6 +9,10 @@ using Entities = std::vector<std::shared_ptr<Entity>>;
 
 struct BaseComponent;
 
+#if !defined(AFTER_HOURS_MAX_COMPONENTS)
+#define AFTER_HOURS_MAX_COMPONENTS 128
+#endif
+
 constexpr size_t max_num_components = AFTER_HOURS_MAX_COMPONENTS;
 
 using ComponentID = size_t;

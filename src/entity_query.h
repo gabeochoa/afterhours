@@ -1,6 +1,13 @@
 
 #pragma once
 
+#include <algorithm>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <vector>
+#include <iterator>
+
 #include "entity.h"
 #include "entity_helper.h"
 
@@ -48,7 +55,7 @@ struct EntityQuery {
 
   struct WhereID : Modification {
     int id;
-    explicit WhereID(int id) : id(id) {}
+    explicit WhereID(int idIn) : id(idIn) {}
     bool operator()(const Entity &entity) const override {
       return entity.id == id;
     }
@@ -111,7 +118,7 @@ struct EntityQuery {
 
   struct OrderByLambda : OrderBy {
     OrderByFn sortFn;
-    explicit OrderByLambda(const OrderByFn &sortFn) : sortFn(sortFn) {}
+    explicit OrderByLambda(const OrderByFn &sortFnIn) : sortFn(sortFnIn) {}
 
     bool operator()(const Entity &a, const Entity &b) override {
       return sortFn(a, b);
@@ -196,8 +203,8 @@ struct EntityQuery {
   }
 
   EntityQuery() : entities(EntityHelper::get_entities()) {}
-  explicit EntityQuery(const Entities &ents) : entities(ents) {
-    entities = ents;
+  explicit EntityQuery(const Entities &entsIn) : entities(entsIn) {
+    entities = entsIn;
   }
 
   Derived &include_store_entities(bool include = true) {

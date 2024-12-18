@@ -1,8 +1,11 @@
 
 #pragma once
 
+#include <atomic>
 #include <optional>
 #include <utility>
+#include <bitset>
+#include <map>
 
 #include "base_component.h"
 #include "type_name.h"

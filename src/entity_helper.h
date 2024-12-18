@@ -1,5 +1,11 @@
 #pragma once
 
+#include <algorithm>
+#include <set>
+#include <vector>
+#include <functional>
+#include <memory>
+
 #include "entity.h"
 
 using Entities = std::vector<std::shared_ptr<Entity>>;
@@ -142,7 +148,7 @@ void EntityHelper::delete_all_entities(bool include_permanent) {
     entities.erase(newend, entities.end());
 }
 
-enum ForEachFlow {
+enum class ForEachFlow {
     NormalFlow = 0,
     Continue = 1,
     Break = 2,
