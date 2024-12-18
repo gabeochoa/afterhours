@@ -195,19 +195,19 @@ struct InputSystem : System<InputCollector<Action>, ProvidesMaxGamepadID,
   float check_single_action(GamepadID id, input::ValidInputs valid_inputs) {
     float value = 0.f;
     for (auto &input : valid_inputs) {
-      value = fmax(value,      //
-                   std::visit( //
-                       util::overloaded{
-                           //
-                           [](int keycode) { return visit_key_down(keycode); },
-                           [id](GamepadAxisWithDir axis_with_dir) {
-                             return visit_axis(id, axis_with_dir);
-                           },
-                           [id](GamepadButton button) {
-                             return visit_button_down(id, button);
-                           },
-                           [](auto) {}},
-                       input));
+      // value = std::fmax(value,      //
+      //              std::visit( //
+      //                  util::overloaded{
+      //                      //
+      //                      [](int keycode) { return visit_key_down(keycode); },
+      //                      [id](GamepadAxisWithDir axis_with_dir) {
+      //                        return visit_axis(id, axis_with_dir);
+      //                      },
+      //                      [id](GamepadButton button) {
+      //                        return visit_button_down(id, button);
+      //                      },
+      //                      [](auto) {}},
+      //                  input));
     }
     return value;
   }

@@ -27,7 +27,8 @@ using ComponentBitSet = std::bitset<max_num_components>;
 using ComponentArray = std::map<ComponentID, std::unique_ptr<BaseComponent>>;
 using EntityID = int;
 
-static std::atomic_int ENTITY_ID_GEN = 0;
+//std::atomic<int> ENTITY_ID_GEN(0);
+int ENTITY_ID_GEN(0);
 
 struct Entity {
     EntityID id;
@@ -143,10 +144,10 @@ struct Entity {
 
   template <typename T> [[nodiscard]] T &get() {
     warnIfMissingComponent<T>();
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wreturn-stack-address"
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wreturn-stack-address"
+// #pragma clang diagnostic push
+// #pragma clang diagnostic ignored "-Wreturn-stack-address"
+// #pragma GCC diagnostic push
+// #pragma GCC diagnostic ignored "-Wreturn-stack-address"
     return static_cast<T &>(
         *componentArray.at(components::get_type_id<T>()).get());
   }
@@ -156,8 +157,8 @@ struct Entity {
 
     return static_cast<const T &>(
         *componentArray.at(components::get_type_id<T>()).get());
-#pragma GCC diagnostic pop
-#pragma clang diagnostic pop
+// #pragma GCC diagnostic pop
+// #pragma clang diagnostic pop
   }
 };
 
