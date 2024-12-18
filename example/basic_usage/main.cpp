@@ -2,9 +2,9 @@
 
 #include <iostream>
 
-#define AFTER_HOURS_ENTITY_HELPER
-#define AFTER_HOURS_ENTITY_QUERY
-#include "../../ah.h"
+#include "../../src/entity_helper.h"
+#include "../../src/entity.h"
+
 #include "../shared/vector.h"
 
 namespace afterhours {
