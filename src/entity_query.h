@@ -3,23 +3,27 @@
 
 #include <algorithm>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <vector>
-#include <iterator>
 
 #include "entity.h"
 #include "entity_helper.h"
 
-template <typename Derived> //
+template <typename Derived = void> //
 struct EntityQuery {
+  using TReturn =
+      std::conditional_t<std::is_same_v<Derived, void>, EntityQuery, Derived>;
+
   struct Modification {
     virtual ~Modification() = default;
     virtual bool operator()(const Entity &) const = 0;
   };
-  Derived &add_mod(Modification *mod) {
+
+  TReturn &add_mod(Modification *mod) {
     mods.push_back(std::unique_ptr<Modification>(mod));
-    return static_cast<Derived &>(*this);
+    return static_cast<TReturn &>(*this);
   }
 
   struct Not : Modification {
@@ -50,8 +54,8 @@ struct EntityQuery {
       return true;
     }
   };
-  Derived &take(int amount) { return add_mod(new Limit(amount)); }
-  Derived &first() { return take(1); }
+  TReturn &take(int amount) { return add_mod(new Limit(amount)); }
+  TReturn &first() { return take(1); }
 
   struct WhereID : Modification {
     int id;
@@ -60,8 +64,8 @@ struct EntityQuery {
       return entity.id == id;
     }
   };
-  Derived &whereID(int id) { return add_mod(new WhereID(id)); }
-  Derived &whereNotID(int id) { return add_mod(new Not(new WhereID(id))); }
+  TReturn &whereID(int id) { return add_mod(new WhereID(id)); }
+  TReturn &whereNotID(int id) { return add_mod(new Not(new WhereID(id))); }
 
   struct WhereMarkedForCleanup : Modification {
     bool operator()(const Entity &entity) const override {
@@ -69,10 +73,10 @@ struct EntityQuery {
     }
   };
 
-  Derived &whereMarkedForCleanup() {
+  TReturn &whereMarkedForCleanup() {
     return add_mod(new WhereMarkedForCleanup());
   }
-  Derived &whereNotMarkedForCleanup() {
+  TReturn &whereNotMarkedForCleanup() {
     return add_mod(new Not(new WhereMarkedForCleanup()));
   }
 
@@ -96,14 +100,14 @@ struct EntityQuery {
       return filter(entity);
     }
   };
-  Derived &whereLambda(const std::function<bool(const Entity &)> &fn) {
+  TReturn &whereLambda(const std::function<bool(const Entity &)> &fn) {
     return add_mod(new WhereLambda(fn));
   }
-  Derived &
+  TReturn &
   whereLambdaExistsAndTrue(const std::function<bool(const Entity &)> &fn) {
     if (fn)
       return add_mod(new WhereLambda(fn));
-    return static_cast<Derived &>(*this);
+    return static_cast<TReturn &>(*this);
   }
 
   /////////
@@ -125,8 +129,8 @@ struct EntityQuery {
     }
   };
 
-  Derived &orderByLambda(const OrderByFn &sortfn) {
-    return static_cast<Derived &>(set_order_by(new OrderByLambda(sortfn)));
+  TReturn &orderByLambda(const OrderByFn &sortfn) {
+    return static_cast<TReturn &>(set_order_by(new OrderByLambda(sortfn)));
   }
 
   /////////
@@ -207,9 +211,9 @@ struct EntityQuery {
     entities = entsIn;
   }
 
-  Derived &include_store_entities(bool include = true) {
+  TReturn &include_store_entities(bool include = true) {
     _include_store_entities = include;
-    return static_cast<Derived &>(*this);
+    return static_cast<TReturn &>(*this);
   }
 
 private:
@@ -225,10 +229,10 @@ private:
   EntityQuery &set_order_by(OrderBy *ob) {
     if (orderby) {
       log_error("We only apply the first order by in a query at the moment");
-      return static_cast<Derived &>(*this);
+      return static_cast<TReturn &>(*this);
     }
     orderby = std::unique_ptr<OrderBy>(ob);
-    return static_cast<Derived &>(*this);
+    return static_cast<TReturn &>(*this);
   }
 
   RefEntities filter_mod(const RefEntities &in,
