@@ -2,10 +2,10 @@
 #pragma once
 
 #include <atomic>
-#include <optional>
-#include <utility>
 #include <bitset>
 #include <map>
+#include <optional>
+#include <utility>
 
 #include "base_component.h"
 #include "type_name.h"
@@ -30,8 +30,8 @@ using EntityID = int;
 static std::atomic_int ENTITY_ID_GEN = 0;
 
 struct Entity {
-    EntityID id;
-    int entity_type = 0;
+  EntityID id;
+  int entity_type = 0;
 
   ComponentBitSet componentSet;
   ComponentArray componentArray;
@@ -143,10 +143,13 @@ struct Entity {
 
   template <typename T> [[nodiscard]] T &get() {
     warnIfMissingComponent<T>();
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wreturn-stack-address"
+#elif defined(__GNUC__)
 #pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wreturn-stack-address"
+#pragma GCC diagnostic ignored "-Wreturn-local-addr"
+#endif
     return static_cast<T &>(
         *componentArray.at(components::get_type_id<T>()).get());
   }
@@ -156,8 +159,11 @@ struct Entity {
 
     return static_cast<const T &>(
         *componentArray.at(components::get_type_id<T>()).get());
-#pragma GCC diagnostic pop
+#ifdef __clang__
 #pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
   }
 };
 

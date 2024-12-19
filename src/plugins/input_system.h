@@ -110,7 +110,7 @@ template <typename T> struct ActionDone {
 
 struct GamepadAxisWithDir {
   GamepadAxis axis;
-  float dir = -1;
+  int dir = -1;
 };
 
 using AnyInput = std::variant<KeyCode, GamepadAxisWithDir, GamepadButton>;
