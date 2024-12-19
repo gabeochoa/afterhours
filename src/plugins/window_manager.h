@@ -27,6 +27,34 @@ struct Resolution {
   }
 };
 
+#ifdef AFTER_HOURS_USE_RAYLIB
+inline std::vector<Resolution> fetch_available_resolutions() {
+  int count = 0;
+  const GLFWvidmode *modes = glfwGetVideoModes(glfwGetPrimaryMonitor(), &count);
+  std::vector<window_manager::Resolution> resolutions;
+
+  for (int i = 0; i < count; i++) {
+    resolutions.push_back(
+        window_manager::Resolution{modes[i].width, modes[i].height});
+  }
+  // Sort the vector
+  std::sort(resolutions.begin(), resolutions.end());
+
+  // Remove duplicates
+  resolutions.erase(std::unique(resolutions.begin(), resolutions.end()),
+                    resolutions.end());
+
+  return resolutions;
+}
+#else
+inline std::vector<Resolution> fetch_available_resolutions() {
+  return std::vector<Resolution>{{
+      Resolution{.width = 1280, .height = 720},
+      Resolution{.width = 1920, .height = 1080},
+  }};
+}
+#endif
+
 struct ProvidesCurrentResolution : public BaseComponent {
   Resolution current_resolution;
   ProvidesCurrentResolution(const Resolution &rez) : current_resolution(rez) {}
