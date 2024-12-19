@@ -10,6 +10,10 @@
 #include "base_component.h"
 #include "type_name.h"
 
+template <typename Base, typename Derived> bool child_of(Derived *derived) {
+  return dynamic_cast<Base *>(derived) != nullptr;
+}
+
 #if !defined(log_info)
 // TODO eventually implement these
 inline void log_trace(...) {}
@@ -53,6 +57,18 @@ struct Entity {
     bool result = componentSet[components::get_type_id<T>()];
     log_trace("and the result was {}", result);
     return result;
+  }
+
+  template <typename T> [[nodiscard]] bool has_child_of() const {
+    log_trace("checking for child components {} {} on entity {}",
+              components::get_type_id<T>(), type_name<T>(), id);
+    for (const auto &pair : componentArray) {
+      const auto &component = pair.second;
+      if (child_of<T>(component.get())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   template <typename A, typename B, typename... Rest> bool has() const {
@@ -139,6 +155,31 @@ struct Entity {
                "component {}",
                id, components::get_type_id<T>(), type_name<T>());
     }
+  }
+
+  template <typename T> [[nodiscard]] T &get_with_child() {
+    log_trace("fetching for child components {} {} on entity {}",
+              components::get_type_id<T>(), type_name<T>(), id);
+    for (const auto &pair : componentArray) {
+      const auto &component = pair.second;
+      if (child_of<T>(component.get())) {
+        return static_cast<T &>(*pair.second);
+      }
+    }
+    warnIfMissingComponent<T>();
+    return get<T>();
+  }
+
+  template <typename T> [[nodiscard]] const T &get_with_child() const {
+    log_trace("fetching for child components {} {} on entity {}",
+              components::get_type_id<T>(), type_name<T>(), id);
+    for (const auto &pair : componentArray) {
+      const auto &component = pair.second;
+      if (child_of<T>(component.get())) {
+        return static_cast<const T &>(*pair.second);
+      }
+    }
+    return get<T>();
   }
 
   template <typename T> [[nodiscard]] T &get() {
