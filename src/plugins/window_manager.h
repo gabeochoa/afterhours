@@ -71,6 +71,7 @@ inline Resolution fetch_current_resolution() {
 struct ProvidesCurrentResolution : public BaseComponent {
   bool should_refetch = true;
   Resolution current_resolution;
+  ProvidesCurrentResolution() {}
   ProvidesCurrentResolution(const Resolution &rez) : current_resolution(rez) {
     should_refetch = false;
   }
@@ -122,18 +123,22 @@ struct CollectAvailableResolutions
 
 inline void add_singleton_components(Entity &entity, int target_fps) {
   entity.addComponent<ProvidesTargetFPS>(target_fps);
+  entity.addComponent<ProvidesCurrentResolution>();
+  entity.addComponent<ProvidesAvailableWindowResolutions>();
 }
 
 inline void add_singleton_components(Entity &entity, const Resolution &rez,
                                      int target_fps) {
-  add_singleton_components(entity, target_fps);
+  entity.addComponent<ProvidesTargetFPS>(target_fps);
   entity.addComponent<ProvidesCurrentResolution>(rez);
+  entity.addComponent<ProvidesAvailableWindowResolutions>();
 }
 
 inline void
 add_singleton_components(Entity &entity, const Resolution &rez, int target_fps,
                          const std::vector<Resolution> &available_resolutions) {
-  add_singleton_components(entity, rez, target_fps);
+  entity.addComponent<ProvidesTargetFPS>(target_fps);
+  entity.addComponent<ProvidesCurrentResolution>(rez);
   entity.addComponent<ProvidesAvailableWindowResolutions>(
       available_resolutions);
 }
