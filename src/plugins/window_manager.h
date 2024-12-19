@@ -56,6 +56,10 @@ inline Resolution fetch_current_resolution() {
   return Resolution{.width = raylib::GetRenderWidth(),
                     .height = raylib::GetRenderHeight()};
 }
+
+void set_window_size(int width, int height) {
+  raylib::SetWindowSize(width, height);
+}
 #else
 inline std::vector<Resolution> fetch_available_resolutions() {
   return std::vector<Resolution>{{
@@ -66,6 +70,7 @@ inline std::vector<Resolution> fetch_available_resolutions() {
 inline Resolution fetch_current_resolution() {
   return Resolution{.width = 1280, .height = 720};
 }
+void set_window_size(int, int) {}
 #endif
 
 struct ProvidesCurrentResolution : public BaseComponent {
@@ -95,6 +100,8 @@ struct ProvidesTargetFPS : public BaseComponent {
   ProvidesTargetFPS(int f) : fps(f) {}
 };
 
+struct WM : EntityQuery<WM> {};
+
 struct ProvidesAvailableWindowResolutions : BaseComponent {
   bool should_refetch = true;
   std::vector<Resolution> available_resolutions;
@@ -106,6 +113,15 @@ struct ProvidesAvailableWindowResolutions : BaseComponent {
 
   const std::vector<Resolution> &fetch_data() const {
     return available_resolutions;
+  }
+
+  void on_data_changed(size_t index) {
+    auto &entity =
+        WM().whereHasComponent<ProvidesCurrentResolution>().gen_first_enforce();
+    ProvidesCurrentResolution &pcr = entity.get<ProvidesCurrentResolution>();
+    pcr.current_resolution = available_resolutions[index];
+    set_window_size(pcr.current_resolution.width,
+                    pcr.current_resolution.height);
   }
 };
 
