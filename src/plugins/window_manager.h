@@ -25,6 +25,12 @@ struct Resolution {
   bool operator<(const Resolution &r) const {
     return width * height < r.width * r.height;
   }
+
+  operator std::string() const {
+    std::ostringstream oss;
+    oss << "(" << width << "," << height << ")";
+    return oss.str();
+  }
 };
 
 #ifdef AFTER_HOURS_USE_RAYLIB
@@ -46,6 +52,10 @@ inline std::vector<Resolution> fetch_available_resolutions() {
 
   return resolutions;
 }
+inline Resolution fetch_current_resolution() {
+  return Resolution{.width = raylib::GetRenderWidth(),
+                    .height = raylib::GetRenderHeight()};
+}
 #else
 inline std::vector<Resolution> fetch_available_resolutions() {
   return std::vector<Resolution>{{
@@ -53,13 +63,30 @@ inline std::vector<Resolution> fetch_available_resolutions() {
       Resolution{.width = 1920, .height = 1080},
   }};
 }
+inline Resolution fetch_current_resolution() {
+  return Resolution{.width = 1280, .height = 720};
+}
 #endif
 
 struct ProvidesCurrentResolution : public BaseComponent {
+  bool should_refetch = true;
   Resolution current_resolution;
-  ProvidesCurrentResolution(const Resolution &rez) : current_resolution(rez) {}
+  ProvidesCurrentResolution(const Resolution &rez) : current_resolution(rez) {
+    should_refetch = false;
+  }
   [[nodiscard]] int width() const { return current_resolution.width; }
   [[nodiscard]] int height() const { return current_resolution.height; }
+};
+
+struct CollectCurrentResolution : System<ProvidesCurrentResolution> {
+
+  virtual void for_each_with(Entity &, ProvidesCurrentResolution &pCR,
+                             float) override {
+    if (pCR.should_refetch) {
+      pCR.current_resolution = fetch_current_resolution();
+      pCR.should_refetch = false;
+    }
+  }
 };
 
 struct ProvidesTargetFPS : public BaseComponent {
@@ -68,21 +95,50 @@ struct ProvidesTargetFPS : public BaseComponent {
 };
 
 struct ProvidesAvailableWindowResolutions : BaseComponent {
+  bool should_refetch = true;
   std::vector<Resolution> available_resolutions;
+  ProvidesAvailableWindowResolutions() {}
   ProvidesAvailableWindowResolutions(const std::vector<Resolution> &rez)
-      : available_resolutions(rez) {}
+      : available_resolutions(rez) {
+    should_refetch = false;
+  }
+
+  const std::vector<Resolution> &fetch_data() const {
+    return available_resolutions;
+  }
 };
 
-void add_singleton_components(
-    Entity &entity, const Resolution &rez, int target_fps,
-    const std::vector<Resolution> &available_resolutions) {
-  entity.addComponent<ProvidesCurrentResolution>(rez);
+struct CollectAvailableResolutions
+    : System<ProvidesAvailableWindowResolutions> {
+
+  virtual void for_each_with(Entity &, ProvidesAvailableWindowResolutions &pAWR,
+                             float) override {
+    if (pAWR.should_refetch) {
+      pAWR.available_resolutions = fetch_available_resolutions();
+      pAWR.should_refetch = false;
+    }
+  }
+};
+
+inline void add_singleton_components(Entity &entity, int target_fps) {
   entity.addComponent<ProvidesTargetFPS>(target_fps);
+}
+
+inline void add_singleton_components(Entity &entity, const Resolution &rez,
+                                     int target_fps) {
+  add_singleton_components(entity, target_fps);
+  entity.addComponent<ProvidesCurrentResolution>(rez);
+}
+
+inline void
+add_singleton_components(Entity &entity, const Resolution &rez, int target_fps,
+                         const std::vector<Resolution> &available_resolutions) {
+  add_singleton_components(entity, rez, target_fps);
   entity.addComponent<ProvidesAvailableWindowResolutions>(
       available_resolutions);
 }
 
-void enforce_singletons(SystemManager &sm) {
+inline void enforce_singletons(SystemManager &sm) {
   sm.register_update_system(
       std::make_unique<
           developer::EnforceSingleton<ProvidesCurrentResolution>>());
@@ -93,7 +149,10 @@ void enforce_singletons(SystemManager &sm) {
           developer::EnforceSingleton<ProvidesAvailableWindowResolutions>>());
 }
 
-void register_update_systems(SystemManager &) {}
+inline void register_update_systems(SystemManager &sm) {
+  sm.register_update_system(std::make_unique<CollectCurrentResolution>());
+  sm.register_update_system(std::make_unique<CollectAvailableResolutions>());
+}
 
 } // namespace window_manager
 } // namespace afterhours
