@@ -9,6 +9,8 @@
 namespace afterhours {
 namespace window_manager {
 
+struct WM : EntityQuery<WM> {};
+
 struct Resolution {
   int width;
   int height;
@@ -99,8 +101,6 @@ struct ProvidesTargetFPS : public BaseComponent {
   int fps;
   ProvidesTargetFPS(int f) : fps(f) {}
 };
-
-struct WM : EntityQuery<WM> {};
 
 struct ProvidesAvailableWindowResolutions : BaseComponent {
   bool should_refetch = true;
