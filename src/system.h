@@ -14,8 +14,6 @@ public:
   SystemBase() {}
   virtual ~SystemBase() {}
 
-  bool include_derived_children = false;
-
   // Runs before calling once/for-each, and when
   // false skips calling those
   virtual bool should_run(float) { return true; }
@@ -27,8 +25,12 @@ public:
   // in System<Components>
   virtual void for_each(Entity &, float) = 0;
   virtual void for_each(const Entity &, float) const = 0;
+
+#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
+  bool include_derived_children = false;
   virtual void for_each_derived(Entity &, float) = 0;
   virtual void for_each_derived(const Entity &, float) const = 0;
+#endif
 };
 
 template <typename... Components> struct System : SystemBase {
@@ -86,6 +88,7 @@ template <typename Component> struct Not : BaseComponent {
     }
   }
 
+#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
   void for_each_derived(Entity &entity, float dt) {
     if constexpr (sizeof...(Components) > 0) {
       if ((entity.template has_child_of<Components>() && ...)) {
@@ -107,6 +110,10 @@ template <typename Component> struct Not : BaseComponent {
       for_each_with(entity, dt);
     }
   }
+  virtual void for_each_with_derived(Entity &, Components &..., float) {}
+  virtual void for_each_with_derived(const Entity &, const Components &...,
+                                     float) const {}
+#endif
 
   void for_each(const Entity &entity, float dt) const {
     if constexpr (sizeof...(Components) > 0) {
@@ -125,10 +132,6 @@ template <typename Component> struct Not : BaseComponent {
   virtual void for_each_with(Entity &, Components &..., float) {}
   virtual void for_each_with(const Entity &, const Components &...,
                              float) const {}
-
-  virtual void for_each_with_derived(Entity &, Components &..., float) {}
-  virtual void for_each_with_derived(const Entity &, const Components &...,
-                                     float) const {}
 };
 
 #include "entity_helper.h"
@@ -170,9 +173,11 @@ struct SystemManager {
       for (std::shared_ptr<Entity> entity : entities) {
         if (!entity)
           continue;
+#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
         if (system->include_derived_children)
           system->for_each_derived(*entity, dt);
         else
+#endif
           system->for_each(*entity, dt);
       }
     }
@@ -188,9 +193,11 @@ struct SystemManager {
         if (!entity)
           continue;
         const Entity &e = *entity;
+#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
         if (system->include_derived_children)
           system->for_each_derived(e, dt);
         else
+#endif
           system->for_each(e, dt);
       }
     }
