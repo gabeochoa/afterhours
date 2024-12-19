@@ -40,24 +40,7 @@ template <typename T> inline ComponentID get_type_id() noexcept {
 } // namespace components
 
 struct BaseComponent {
-  Entity *parent = nullptr;
-
   BaseComponent() {}
   BaseComponent(BaseComponent &&) = default;
-
-  void attach_parent(Entity *p) {
-    parent = p;
-    onAttach();
-  }
-
-    virtual void onAttach() {}
-    virtual ~BaseComponent() {}
-
-#ifdef ENABLE_AFTERHOURS_BITSERY_SERIALIZE
-    friend bitsery::Access;
-    template<typename S>
-    void serialize(S &s) {
-        s.ext(parent, bitsery::ext::PointerObserver{});
-    }
-#endif
+  virtual ~BaseComponent() {}
 };

@@ -124,8 +124,6 @@ struct Entity {
 
     log_trace("your set is now {}", componentSet);
 
-    componentArray[component_id]->attach_parent(this);
-
     return get<T>();
   }
 
