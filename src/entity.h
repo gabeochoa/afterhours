@@ -71,8 +71,8 @@ struct Entity {
   }
 
   template <typename T> void removeComponent() {
-    log_info("removing component_id:{} {} to entity_id: {}",
-             components::get_type_id<T>(), type_name<T>(), id);
+    log_trace("removing component_id:{} {} to entity_id: {}",
+              components::get_type_id<T>(), type_name<T>(), id);
     if (!this->has<T>()) {
       log_error("trying to remove but this entity {} doesnt have the "
                 "component attached {} {}",
