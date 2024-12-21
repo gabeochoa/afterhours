@@ -61,3 +61,4 @@ examples in other repos:
 - https://github.com/gabeochoa/tetr-afterhours/
 - https://github.com/gabeochoa/wm-afterhours/
 - https://github.com/gabeochoa/ui-afterhours/
+- https://github.com/gabeochoa/pong-afterhours/
