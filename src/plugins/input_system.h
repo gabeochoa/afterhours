@@ -309,7 +309,7 @@ struct input : developer::Plugin {
               collector.inputs.push_back(ActionDone{.medium = medium,
                                                     .id = i,
                                                     .action = action,
-                                                    .amount_pressed = 1.f,
+                                                    .amount_pressed = amount,
                                                     .length_pressed = dt});
             }
           }
@@ -321,7 +321,7 @@ struct input : developer::Plugin {
                   ActionDone{.medium = medium,
                              .id = i,
                              .action = action,
-                             .amount_pressed = 1.f,
+                             .amount_pressed = amount,
                              .length_pressed = dt});
             }
           }
