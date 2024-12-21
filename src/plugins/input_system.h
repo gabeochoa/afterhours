@@ -64,6 +64,9 @@ struct input : developer::Plugin {
     raylib::DrawText(text.c_str(), x, y, fontSize, raylib::RED);
   }
 
+  static void set_gamepad_mappings(const std::string &data) {
+    raylib::SetGamepadMappings(data.c_str());
+  }
 #else
   using MousePosition = std::pair<int, int>;
   using KeyCode = int;
@@ -91,6 +94,7 @@ struct input : developer::Plugin {
   }
   static bool is_gamepad_button_down(GamepadID, GamepadButton) { return false; }
   static void draw_text(const std::string &, int, int, int) {}
+  static void set_gamepad_mappings(const std::string &) {}
 #endif
 
   enum DeviceMedium {
