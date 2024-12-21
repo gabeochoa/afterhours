@@ -154,6 +154,7 @@ struct input : developer::Plugin {
 
   struct ProvidesMaxGamepadID : public BaseComponent {
     int max_gamepad_available = 0;
+    int count() const { return max_gamepad_available + 1; }
   };
 
   template <typename Action>
