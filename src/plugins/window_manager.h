@@ -36,18 +36,18 @@ struct window_manager : developer::Plugin {
 
 #ifdef AFTER_HOURS_USE_RAYLIB
   static std::vector<Resolution> fetch_available_resolutions() {
-    
-    #ifdef __APPLE__
-        // Nothing needed here this one works :)
-    #else
-            // TODO either implement these for windows or get them in the dll
-            const auto glfwGetPrimaryMonitor = []() -> GLFWmonitor* {
-                return nullptr;
-            };
-            const auto glfwGetVideoModes = [](GLFWmonitor*, int*) -> GLFWvidmode* {
-                return nullptr;
-            };
-    #endif
+
+#ifdef __APPLE__
+    // Nothing needed here this one works :)
+#else
+    // TODO either implement these for windows or get them in the dll
+    const auto glfwGetPrimaryMonitor = []() -> GLFWmonitor * {
+      return nullptr;
+    };
+    const auto glfwGetVideoModes = [](GLFWmonitor *, int *) -> GLFWvidmode * {
+      return nullptr;
+    };
+#endif
 
     int count = 0;
     const GLFWvidmode *modes =
