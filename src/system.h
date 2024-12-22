@@ -233,18 +233,14 @@ struct SystemManager {
     }
   }
 
-  void tick_all(float dt) {
-    auto &entities = EntityHelper::get_entities_for_mod();
-    tick(entities, dt);
-  }
+  void tick_all(Entities &entities, float dt) { tick(entities, dt); }
 
-  void fixed_tick_all(float dt) {
+  void fixed_tick_all(Entities &entities, float dt) {
     accumulator += dt;
     int num_ticks = (int)std::floorf(accumulator / FIXED_TICK_RATE);
     accumulator -= (float)num_ticks * FIXED_TICK_RATE;
 
     while (num_ticks > 0) {
-      auto &entities = EntityHelper::get_entities_for_mod();
       fixed_tick(entities, FIXED_TICK_RATE);
       num_ticks--;
     }
@@ -256,8 +252,9 @@ struct SystemManager {
   }
 
   void run(float dt) {
-    fixed_tick_all(dt);
-    tick_all(dt);
+    auto &entities = EntityHelper::get_entities_for_mod();
+    fixed_tick_all(entities, dt);
+    tick_all(entities, dt);
     render_all(dt);
   }
 };
