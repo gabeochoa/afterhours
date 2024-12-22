@@ -143,7 +143,11 @@ struct CallbackSystem : System<> {
 };
 
 struct SystemManager {
+  constexpr static float FIXED_TICK_RATE = 1.f / 120.f;
+  float accumulator = 0.f;
+
   std::vector<std::unique_ptr<SystemBase>> update_systems_;
+  std::vector<std::unique_ptr<SystemBase>> fixed_update_systems_;
   std::vector<std::unique_ptr<SystemBase>> render_systems_;
 
   // TODO  - one issue is that if you write a system that could be const
@@ -153,12 +157,20 @@ struct SystemManager {
     update_systems_.emplace_back(std::move(system));
   }
 
+  void register_fixed_update_system(std::unique_ptr<SystemBase> system) {
+    fixed_update_systems_.emplace_back(std::move(system));
+  }
+
   void register_render_system(std::unique_ptr<SystemBase> system) {
     render_systems_.emplace_back(std::move(system));
   }
 
   void register_update_system(const std::function<void(float)> &cb) {
     register_update_system(std::make_unique<CallbackSystem>(cb));
+  }
+
+  void register_fixed_update_system(const std::function<void(float)> &cb) {
+    register_fixed_update_system(std::make_unique<CallbackSystem>(cb));
   }
 
   void register_render_system(const std::function<void(float)> &cb) {
@@ -182,6 +194,24 @@ struct SystemManager {
       }
     }
     EntityHelper::cleanup();
+  }
+
+  void fixed_tick(Entities &entities, float dt) {
+    for (auto &system : fixed_update_systems_) {
+      if (!system->should_run(dt))
+        continue;
+      system->once(dt);
+      for (std::shared_ptr<Entity> entity : entities) {
+        if (!entity)
+          continue;
+#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
+        if (system->include_derived_children)
+          system->for_each_derived(*entity, dt);
+        else
+#endif
+          system->for_each(*entity, dt);
+      }
+    }
   }
 
   void render(const Entities &entities, float dt) {
@@ -208,12 +238,25 @@ struct SystemManager {
     tick(entities, dt);
   }
 
+  void fixed_tick_all(float dt) {
+    accumulator += dt;
+    int num_ticks = (int)std::floorf(accumulator / FIXED_TICK_RATE);
+    accumulator -= (float)num_ticks * FIXED_TICK_RATE;
+
+    while (num_ticks > 0) {
+      auto &entities = EntityHelper::get_entities_for_mod();
+      fixed_tick(entities, FIXED_TICK_RATE);
+      num_ticks--;
+    }
+  }
+
   void render_all(float dt) {
     const auto &entities = EntityHelper::get_entities();
     render(entities, dt);
   }
 
   void run(float dt) {
+    fixed_tick_all(dt);
     tick_all(dt);
     render_all(dt);
   }
