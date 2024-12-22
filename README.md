@@ -23,6 +23,10 @@ AFTER_HOURS_REPLACE_LOGGING
 AFTER_HOURS_REPLACE_VALIDATE
 - same as logging but assert + log_error
 
+AFTER_HOURS_DEBUG
+- enables some debug logging
+
+
 
 ## Plugins
 

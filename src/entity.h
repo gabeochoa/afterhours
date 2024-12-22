@@ -53,17 +53,21 @@ struct Entity {
   // These two functions can be used to validate than an entity has all of the
   // matching components that are needed for this system to run
   template <typename T> [[nodiscard]] bool has() const {
+    bool result = componentSet[components::get_type_id<T>()];
+#if defined(AFTER_HOURS_DEBUG)
     log_trace("checking component {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
     log_trace("your set is now {}", componentSet);
-    bool result = componentSet[components::get_type_id<T>()];
     log_trace("and the result was {}", result);
+#endif
     return result;
   }
 
   template <typename T> [[nodiscard]] bool has_child_of() const {
+#if defined(AFTER_HOURS_DEBUG)
     log_trace("checking for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
+#endif
     for (const auto &pair : componentArray) {
       const auto &component = pair.second;
       if (child_of<T>(component.get())) {
@@ -89,18 +93,24 @@ struct Entity {
   }
 
   template <typename T> void removeComponent() {
+#if defined(AFTER_HOURS_DEBUG)
     log_trace("removing component_id:{} {} to entity_id: {}",
               components::get_type_id<T>(), type_name<T>(), id);
+#endif
     if (!this->has<T>()) {
+#if defined(AFTER_HOURS_DEBUG)
       log_error("trying to remove but this entity {} doesnt have the "
                 "component attached {} {}",
                 id, components::get_type_id<T>(), type_name<T>());
+#endif
+      return;
     }
     componentSet[components::get_type_id<T>()] = false;
     componentArray.erase(components::get_type_id<T>());
   }
 
   template <typename T, typename... TArgs> T &addComponent(TArgs &&...args) {
+#if defined(AFTER_HOURS_DEBUG)
     log_trace("adding component_id:{} {} to entity_id: {}",
               components::get_type_id<T>(), type_name<T>(), id);
 
@@ -118,13 +128,16 @@ struct Entity {
       //
       // return this->get<T>();
     }
+#endif
 
     auto component = std::make_unique<T>(std::forward<TArgs>(args)...);
     ComponentID component_id = components::get_type_id<T>();
     componentArray[component_id] = std::move(component);
     componentSet[component_id] = true;
 
+#if defined(AFTER_HOURS_DEBUG)
     log_trace("your set is now {}", componentSet);
+#endif
 
     return get<T>();
   }
@@ -150,16 +163,20 @@ struct Entity {
   }
 
   template <typename T> void warnIfMissingComponent() const {
+#if defined(AFTER_HOURS_DEBUG)
     if (this->is_missing<T>()) {
       log_warn("This entity {} is missing id: {}, "
                "component {}",
                id, components::get_type_id<T>(), type_name<T>());
     }
+#endif
   }
 
   template <typename T> [[nodiscard]] T &get_with_child() {
+#if defined(AFTER_HOURS_DEBUG)
     log_trace("fetching for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
+#endif
     for (const auto &pair : componentArray) {
       const auto &component = pair.second;
       if (child_of<T>(component.get())) {
@@ -171,8 +188,10 @@ struct Entity {
   }
 
   template <typename T> [[nodiscard]] const T &get_with_child() const {
+#if defined(AFTER_HOURS_DEBUG)
     log_trace("fetching for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
+#endif
     for (const auto &pair : componentArray) {
       const auto &component = pair.second;
       if (child_of<T>(component.get())) {
