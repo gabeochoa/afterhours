@@ -237,7 +237,7 @@ struct SystemManager {
 
   void fixed_tick_all(Entities &entities, float dt) {
     accumulator += dt;
-    int num_ticks = (int)std::floorf(accumulator / FIXED_TICK_RATE);
+    int num_ticks = (int)std::floor(accumulator / FIXED_TICK_RATE);
     accumulator -= (float)num_ticks * FIXED_TICK_RATE;
 
     while (num_ticks > 0) {
