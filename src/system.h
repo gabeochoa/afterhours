@@ -137,9 +137,9 @@ template <typename Component> struct Not : BaseComponent {
 #include "entity_helper.h"
 
 struct CallbackSystem : System<> {
-  std::function<void(void)> cb_;
-  CallbackSystem(const std::function<void(void)> &cb) : cb_(cb) {}
-  virtual void once(float) { cb_(); }
+  std::function<void(float)> cb_;
+  CallbackSystem(const std::function<void(float)> &cb) : cb_(cb) {}
+  virtual void once(float dt) { cb_(dt); }
 };
 
 struct SystemManager {
@@ -157,11 +157,11 @@ struct SystemManager {
     render_systems_.emplace_back(std::move(system));
   }
 
-  void register_update_system(const std::function<void(void)> &cb) {
+  void register_update_system(const std::function<void(float)> &cb) {
     register_update_system(std::make_unique<CallbackSystem>(cb));
   }
 
-  void register_render_system(const std::function<void(void)> &cb) {
+  void register_render_system(const std::function<void(float)> &cb) {
     register_render_system(std::make_unique<CallbackSystem>(cb));
   }
 
