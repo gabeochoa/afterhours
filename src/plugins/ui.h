@@ -124,6 +124,44 @@ struct UIContext : BaseComponent {
   }
 };
 
+
+struct HasClickListener : BaseComponent {
+  bool down = false;
+  std::function<void(Entity &)> cb;
+  HasClickListener(const std::function<void(Entity &)> &callback)
+      : cb(callback) {}
+};
+
+struct HasDragListener : BaseComponent {
+  bool down = false;
+  std::function<void(Entity &)> cb;
+  HasDragListener(const std::function<void(Entity &)> &callback)
+      : cb(callback) {}
+};
+
+struct HasLabel : BaseComponent {
+  std::string label;
+  HasLabel(const std::string &str) : label(str) {}
+  HasLabel() : label("") {}
+};
+
+struct HasCheckboxState : BaseComponent {
+  bool on;
+  HasCheckboxState(bool b) : on(b) {}
+};
+
+struct HasSliderState : BaseComponent {
+  bool changed_since = false;
+  float value;
+  HasSliderState(float val) : value(val) {}
+};
+
+struct ShouldHide : BaseComponent {};
+
+//// /////
+////  Systems
+//// /////
+
 template<typename InputAction>
 struct BeginUIContextManager : System<UIContext<InputAction>> {
   using InputBits = UIContext<InputAction>::InputBitset;
@@ -160,6 +198,12 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
   }
 };
 
+struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
+  virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent& cmp, float) override {
+      AutoLayout::autolayout(cmp);
+  }
+};
+
 template<typename InputAction>
 struct EndUIContextManager : System<UIContext<InputAction>> {
 
@@ -180,39 +224,6 @@ struct EndUIContextManager : System<UIContext<InputAction>> {
     context.focused_ids.clear();
   }
 };
-
-struct HasClickListener : BaseComponent {
-  bool down = false;
-  std::function<void(Entity &)> cb;
-  HasClickListener(const std::function<void(Entity &)> &callback)
-      : cb(callback) {}
-};
-
-struct HasDragListener : BaseComponent {
-  bool down = false;
-  std::function<void(Entity &)> cb;
-  HasDragListener(const std::function<void(Entity &)> &callback)
-      : cb(callback) {}
-};
-
-struct HasLabel : BaseComponent {
-  std::string label;
-  HasLabel(const std::string &str) : label(str) {}
-  HasLabel() : label("") {}
-};
-
-struct HasCheckboxState : BaseComponent {
-  bool on;
-  HasCheckboxState(bool b) : on(b) {}
-};
-
-struct HasSliderState : BaseComponent {
-  bool changed_since = false;
-  float value;
-  HasSliderState(float val) : value(val) {}
-};
-
-struct ShouldHide : BaseComponent {};
 
 //// /////
 ////  Plugin Info 

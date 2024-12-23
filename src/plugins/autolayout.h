@@ -27,6 +27,8 @@ namespace ui {
 
     using FontID = int;
 
+    struct AutoLayoutRoot : BaseComponent {};
+
     struct UIComponent : BaseComponent {
         std::array<Size,2> desired;
 
@@ -39,7 +41,7 @@ namespace ui {
 
         FontID fontID = -1;
 
-        Rectangle rect (){
+        Rectangle rect () const {
             return Rectangle {
                 .x = computed_rel[0],
                 .y = computed_rel[1],
@@ -47,6 +49,11 @@ namespace ui {
                 .height = computed[1],
             };
         };
+
+        auto& add_child(EntityID id){
+            children.push_back(id);
+            return *this;
+        }
 
         auto& set_desired_x(Size s){
             desired[0] = s;
