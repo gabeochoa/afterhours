@@ -7,7 +7,7 @@
 #include <magic_enum/magic_enum.hpp>
 
 namespace afterhours {
-struct ui: developer::Plugin {
+namespace ui {
 
 static bool is_mouse_inside(const input::MousePosition &mouse_pos,
                             const RectangleType &rect) {
@@ -181,6 +181,43 @@ struct EndUIContextManager : System<UIContext<InputAction>> {
   }
 };
 
+struct HasClickListener : BaseComponent {
+  bool down = false;
+  std::function<void(Entity &)> cb;
+  HasClickListener(const std::function<void(Entity &)> &callback)
+      : cb(callback) {}
+};
+
+struct HasDragListener : BaseComponent {
+  bool down = false;
+  std::function<void(Entity &)> cb;
+  HasDragListener(const std::function<void(Entity &)> &callback)
+      : cb(callback) {}
+};
+
+struct HasLabel : BaseComponent {
+  std::string label;
+  HasLabel(const std::string &str) : label(str) {}
+  HasLabel() : label("") {}
+};
+
+struct HasCheckboxState : BaseComponent {
+  bool on;
+  HasCheckboxState(bool b) : on(b) {}
+};
+
+struct HasSliderState : BaseComponent {
+  bool changed_since = false;
+  float value;
+  HasSliderState(float val) : value(val) {}
+};
+
+struct ShouldHide : BaseComponent {};
+
+//// /////
+////  Plugin Info 
+//// /////
+
   template<typename InputAction>
   static void add_singleton_components(Entity &entity){
       entity.addComponent<UIContext<InputAction>>();
@@ -193,9 +230,10 @@ struct EndUIContextManager : System<UIContext<InputAction>> {
             developer::EnforceSingleton<UIContext<InputAction>>>());
   }
 
-  static void register_update_systems(SystemManager &){}
+  // static void register_update_systems(SystemManager &){}
+ 
 
-};
+} // namespace ui
 
 } // namespace afterhours
 

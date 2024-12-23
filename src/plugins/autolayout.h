@@ -9,7 +9,7 @@
 namespace afterhours {
     using Rectangle = RectangleType;
 
-namespace autolayout {
+namespace ui {
 
     enum struct Dim {
         None, 
@@ -481,6 +481,6 @@ namespace autolayout {
     }
     };
 
-} // namespace autolayout
+} // namespace ui
 
 } // namespace afterhours
