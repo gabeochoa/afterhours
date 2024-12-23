@@ -7,8 +7,9 @@
 #include "../developer.h"
 
 namespace afterhours {
-namespace ui {
     using Rectangle = RectangleType;
+
+namespace autolayout {
 
     enum struct Dim {
         None, 
@@ -465,7 +466,7 @@ namespace ui {
         compute_rect_bounds(widget);
     }
 
-    static void print_tree(ui::UIComponent& cmp, size_t tab = 0){
+    static void print_tree(UIComponent& cmp, size_t tab = 0){
 
         for(size_t i = 0; i< tab; i++) std::cout << "  ";
 
@@ -480,6 +481,6 @@ namespace ui {
     }
     };
 
-} // namespace ui
+} // namespace autolayout
 
 } // namespace afterhours

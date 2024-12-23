@@ -34,45 +34,45 @@ int main(int, char **) {
 
   auto& div = EntityHelper::createEntity();
   {
-      ui::UIComponent& divCmp = div.addComponent<ui::UIComponent>();
-      divCmp.desired[0] = ui::Size{
-          .dim = ui::Dim::Children,
+      autolayout::UIComponent& divCmp = div.addComponent<autolayout::UIComponent>();
+      divCmp.desired[0] = autolayout::Size{
+          .dim = autolayout::Dim::Children,
       };
-      divCmp.desired[1] = ui::Size{
-          .dim = ui::Dim::Children,
+      divCmp.desired[1] = autolayout::Size{
+          .dim = autolayout::Dim::Children,
       };
   }
 
   auto& left = EntityHelper::createEntity();
   {
-      ui::UIComponent& cmp = left.addComponent<ui::UIComponent>();
-      cmp.desired[0] = ui::Size{
-          .dim = ui::Dim::Pixels,
+      autolayout::UIComponent& cmp = left.addComponent<autolayout::UIComponent>();
+      cmp.desired[0] = autolayout::Size{
+          .dim = autolayout::Dim::Pixels,
           .value = 100.f,
       };
-      cmp.desired[1] = ui::Size{
-          .dim = ui::Dim::Pixels,
+      cmp.desired[1] = autolayout::Size{
+          .dim = autolayout::Dim::Pixels,
           .value = 100.f,
       };
   }
-  div.get<ui::UIComponent>().children.push_back(left.id);
+  div.get<autolayout::UIComponent>().children.push_back(left.id);
 
   auto& right = EntityHelper::createEntity();
   {
-      ui::UIComponent& cmp = right.addComponent<ui::UIComponent>();
-      cmp.desired[0] = ui::Size{
-          .dim = ui::Dim::Pixels,
+      autolayout::UIComponent& cmp = right.addComponent<autolayout::UIComponent>();
+      cmp.desired[0] = autolayout::Size{
+          .dim = autolayout::Dim::Pixels,
           .value = 100.f,
       };
-      cmp.desired[1] = ui::Size{
-          .dim = ui::Dim::Pixels,
+      cmp.desired[1] = autolayout::Size{
+          .dim = autolayout::Dim::Pixels,
           .value = 100.f,
       };
   }
-  div.get<ui::UIComponent>().children.push_back(right.id);
+  div.get<autolayout::UIComponent>().children.push_back(right.id);
 
-  ui::AutoLayout::autolayout(div.get<ui::UIComponent>());
-  ui::AutoLayout::print_tree(div.get<ui::UIComponent>());
+  autolayout::AutoLayout::autolayout(div.get<autolayout::UIComponent>());
+  autolayout::AutoLayout::print_tree(div.get<autolayout::UIComponent>());
   
 
   return 0;
