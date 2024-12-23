@@ -40,22 +40,39 @@ Components:
 - InputCollector => where all the action data goes
 - ProvidesMaxGamepadID => the total gamepads connected
 - ProvidesInputMapping => Stores the mapping from Keys => Actions
+
 Update Systems: 
 - InputSystem => does all the heavy lifting
+
 Render Systems: 
 - RenderConnectedGamepads => renders the number of gamepads connected
 
 
-### window_manager (requires raylib)
+### window_manager (desires raylib)
 gives access to resolution and window related functions
 
 Components: 
 - ProvidesTargetFPS
 - ProvidesCurrentResolution
 - ProvidesAvailableWindowResolutions
+
 Update Systems: 
 - CollectCurrentResolution => runs when ProvidesCurrentResolution.should_refetch = true
 - CollectAvailableResolutions => runs when ProvidesAvailableWindowResolutions.should_refetch = true
+
+Render Systems: 
+- :)
+
+
+### ui (requires magic_enum, desires raylib)
+gives access to some UI components 
+
+Components: 
+- UIContext<InputAction>
+
+Update Systems: 
+- :)
+
 Render Systems: 
 - :)
 

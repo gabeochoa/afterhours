@@ -68,7 +68,7 @@ struct input : developer::Plugin {
     raylib::SetGamepadMappings(data.c_str());
   }
 #else
-  using MousePosition = std::pair<int, int>;
+  using MousePosition = MyVec2;
   using KeyCode = int;
   using GamepadID = int;
   using GamepadAxis = int;

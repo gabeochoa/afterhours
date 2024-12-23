@@ -6,32 +6,6 @@
 #include "../entity_query.h"
 #include "../developer.h"
 
-#ifndef RectangleType
-struct MyRectangle {
-    float x,y,width,height;
-};
-#define RectangleType MyRectangle
-#endif
-
-#ifndef vec2 
-struct MyVec2 {
-  float x;
-  float y;
-
-  MyVec2 operator+(const MyVec2 &other) const {
-    return MyVec2{x + other.x, y + other.y};
-  }
-  MyVec2 operator-(const MyVec2 &other) const {
-    return MyVec2{x - other.x, y - other.y};
-  }
-};
-#define vec2 MyVec2
-constexpr float distance_sq(const vec2 a, const vec2 b) {
-  return (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
-}
-#endif
-
-
 namespace afterhours {
 namespace ui {
     using Rectangle = RectangleType;
@@ -72,6 +46,16 @@ namespace ui {
                 .height = computed[1],
             };
         };
+
+        auto& set_desired_x(Size s){
+            desired[0] = s;
+            return *this;
+        }
+
+        auto& set_desired_y(Size s){
+            desired[1] = s;
+            return *this;
+        }
     };
 
     struct AutoLayout {
@@ -451,10 +435,10 @@ namespace ui {
 
     static void compute_rect_bounds(UIComponent& widget) {
         // log_trace("computing rect bounds for {}", widget);
-        vec2 offset = vec2{0.f, 0.f};
+        Vector2Type offset = Vector2Type{0.f, 0.f};
         if (widget.parent != -1) {
             UIComponent& parent = to_cmp(widget.parent);
-            offset = offset + vec2{parent.rect().x, parent.rect().y};
+            offset = offset + Vector2Type{parent.rect().x, parent.rect().y};
         }
 
         widget.computed_rel[0] = offset.x;
@@ -480,6 +464,7 @@ namespace ui {
         // - (pre) compute rect bounds
         compute_rect_bounds(widget);
     }
+
     static void print_tree(ui::UIComponent& cmp, size_t tab = 0){
 
         for(size_t i = 0; i< tab; i++) std::cout << "  ";
@@ -494,7 +479,7 @@ namespace ui {
         }
     }
     };
-}
 
+} // namespace ui
 
 } // namespace afterhours

@@ -9,6 +9,32 @@
 #include "system.h"
 #include "type_name.h"
 
+#ifndef RectangleType
+struct MyRectangle {
+    float x,y,width,height;
+};
+#define RectangleType MyRectangle
+#endif
+
+#ifndef Vector2Type 
+struct MyVec2 {
+  float x;
+  float y;
+
+  MyVec2 operator+(const MyVec2 &other) const {
+    return MyVec2{x + other.x, y + other.y};
+  }
+  MyVec2 operator-(const MyVec2 &other) const {
+    return MyVec2{x - other.x, y - other.y};
+  }
+};
+#define Vector2Type MyVec2
+constexpr float distance_sq(const Vector2Type a, const Vector2Type b) {
+  return (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
+}
+#endif
+
+
 namespace afterhours {
 
 // TODO move into a dedicated file?
