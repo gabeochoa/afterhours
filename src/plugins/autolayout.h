@@ -55,6 +55,11 @@ namespace ui {
             return *this;
         }
 
+        auto& set_parent(EntityID id){
+            parent = id;
+            return *this;
+        }
+
         auto& set_desired_x(Size s){
             desired[0] = s;
             return *this;
@@ -430,11 +435,16 @@ namespace ui {
             if ((will_hit_max_x || will_hit_max_y)) {
                 child.computed_rel[0] = sx;
                 child.computed_rel[1] = sy;
+                std::cout  << "hit max" << std::endl;
                 continue;
             }
 
+
             child.computed_rel[0] = offx;
             child.computed_rel[1] = offy;
+
+            offx += cx;
+            offy += cy;
 
             update_max_size(cx, cy);
             compute_relative_positions(child);
