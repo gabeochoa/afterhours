@@ -48,7 +48,7 @@ int main(int, char **) {
 
   SystemManager systems;
   systems.register_update_system(
-      []() { std::cout << "Anonymous::once" << std::endl; });
+      [](float) { std::cout << "Anonymous::once" << std::endl; });
   systems.register_update_system(std::make_unique<OncePerTick>());
 
   for (int i = 0; i < 2; i++) {
