@@ -143,7 +143,7 @@ int main(int, char **) {
 
       std::cout << div2.get<ui::UIComponent>().rect();
       std::cout << " should be \n";
-      std::cout << Rectangle{.x=0,.y=0, .width=100, .height=360} << std::endl;
+      std::cout << Rectangle{.x=0,.y=50, .width=100, .height=360} << std::endl;
   }
 
   

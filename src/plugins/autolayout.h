@@ -414,8 +414,9 @@ namespace ui {
             col_h = fmax(cy, col_h);
         };
 
-        for (EntityID childID: widget.children) {
-            UIComponent& child = to_cmp(childID);
+        for (EntityID child_id: widget.children) {
+            UIComponent& child = to_cmp(child_id);
+
             // Dont worry about any children that are absolutely positioned
             if (child.absolute) {
                 compute_relative_positions(child);
@@ -435,16 +436,39 @@ namespace ui {
             if ((will_hit_max_x || will_hit_max_y)) {
                 child.computed_rel[0] = sx;
                 child.computed_rel[1] = sy;
-                std::cout  << "hit max" << std::endl;
                 continue;
             }
 
+            // We can grow vertically and current child will push us over height
+            // lets wrap
+            if (cy + offy > sy) {
+                offy = 0;
+                offx += col_w;
+                col_w = cx;
+            }
+
+            // We can grow horizontally and current child will push us over
+            // width lets wrap
+            // TODO support row layout
+            if (false && cx + offx > sx) {
+                offx = 0;
+                offy += col_h;
+                col_h = cy;
+            }
 
             child.computed_rel[0] = offx;
             child.computed_rel[1] = offy;
 
-            offx += cx;
-            offy += cy;
+            // Setup for next child placement
+            // if (widget->growflags & GrowFlags::Column)
+            {
+                offy += cy;
+            }
+            // TODO support row layout
+            // if (widget->growflags & GrowFlags::Row) 
+            // {
+                // offx += cx;
+            // }
 
             update_max_size(cx, cy);
             compute_relative_positions(child);
@@ -480,7 +504,7 @@ namespace ui {
         // - (pre) compute relative positions
         compute_relative_positions(widget);
         // - (pre) compute rect bounds
-        compute_rect_bounds(widget);
+        // compute_rect_bounds(widget);
     }
 
     static void print_tree(UIComponent& cmp, size_t tab = 0){
