@@ -229,10 +229,38 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
   }
 };
 
+struct ClearVisibity : System<UIComponent> {
+  virtual void for_each_with(Entity &, UIComponent &cmp, float) override {
+    cmp.is_visible = false;
+  }
+};
+
 struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
   virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
                              float) override {
+
     AutoLayout::autolayout(cmp);
+
+    // AutoLayout::print_tree(cmp);
+    // log_error("");
+  }
+};
+
+struct SetVisibity : System<AutoLayoutRoot, UIComponent> {
+
+  void set_visibility(UIComponent &cmp) {
+    if (cmp.width() < 0 || cmp.height() < 0) {
+      return;
+    }
+    for (EntityID child : cmp.children) {
+      set_visibility(AutoLayout::to_cmp(child));
+    }
+    cmp.is_visible = true;
+  }
+
+  virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
+                             float) override {
+    set_visibility(cmp);
   }
 };
 
@@ -474,7 +502,9 @@ static void register_update_systems(SystemManager &sm) {
         std::make_unique<ui::UpdateDropdownOptions<InputAction>>());
 
     //
+    sm.register_update_system(std::make_unique<ui::ClearVisibity>());
     sm.register_update_system(std::make_unique<ui::RunAutoLayout>());
+    sm.register_update_system(std::make_unique<ui::SetVisibity>());
     //
     sm.register_update_system(
         std::make_unique<ui::HandleTabbing<InputAction>>());

@@ -43,6 +43,7 @@ struct UIComponent : BaseComponent {
   std::array<Size, 2> desired;
   FlexDirection flex_direction = FlexDirection::Column;
 
+  bool is_visible = false;
   bool absolute = false;
   std::array<float, 2> computed;
   std::array<float, 2> computed_rel;
