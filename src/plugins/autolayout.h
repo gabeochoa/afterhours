@@ -127,16 +127,17 @@ struct UIComponent : BaseComponent {
 };
 
 struct AutoLayout {
-  static Entity &to_ent(EntityID id) {
-    return EntityQuery().whereID(id).gen_first_enforce();
-  }
 
-  static UIComponent &to_cmp(EntityID id) {
-    return EntityQuery().whereID(id).gen_first_enforce().get<UIComponent>();
-  }
+  std::map<EntityID, RefEntity> mapping;
+  AutoLayout(const std::map<EntityID, RefEntity> &mapping_)
+      : mapping(mapping_) {}
 
-  static float compute_size_for_standalone_expectation(UIComponent &widget,
-                                                       Axis axis) {
+  Entity &to_ent(EntityID id) { return mapping.at(id); }
+
+  UIComponent &to_cmp(EntityID id) { return to_ent(id).get<UIComponent>(); }
+
+  float compute_size_for_standalone_expectation(UIComponent &widget,
+                                                Axis axis) {
     Size exp = widget.desired[axis];
     switch (exp.dim) {
     case Dim::Pixels:
@@ -153,7 +154,7 @@ struct AutoLayout {
     }
   }
 
-  static void calculate_standalone(UIComponent &widget) {
+  void calculate_standalone(UIComponent &widget) {
     auto size_x = compute_size_for_standalone_expectation(widget, Axis::X);
     auto size_y = compute_size_for_standalone_expectation(widget, Axis::Y);
 
@@ -161,12 +162,11 @@ struct AutoLayout {
     widget.computed[Axis::Y] = size_y;
 
     for (EntityID child_id : widget.children) {
-      calculate_standalone(to_cmp(child_id));
+      calculate_standalone(this->to_cmp(child_id));
     }
   }
 
-  static float compute_size_for_parent_expectation(UIComponent &widget,
-                                                   Axis axis) {
+  float compute_size_for_parent_expectation(UIComponent &widget, Axis axis) {
     if (widget.absolute && widget.desired[axis].dim == Dim::Percent) {
       VALIDATE(false, "Absolute widgets should not use Percent");
     }
@@ -175,7 +175,7 @@ struct AutoLayout {
     if (widget.parent == -1)
       return no_change;
 
-    float parent_size = to_cmp(widget.parent).computed[axis];
+    float parent_size = this->to_cmp(widget.parent).computed[axis];
     Size exp = widget.desired[axis];
     float new_size = exp.value * parent_size;
     switch (exp.dim) {
@@ -186,7 +186,7 @@ struct AutoLayout {
     }
   }
 
-  static void calculate_those_with_parents(UIComponent &widget) {
+  void calculate_those_with_parents(UIComponent &widget) {
     auto size_x = compute_size_for_parent_expectation(widget, Axis::X);
     auto size_y = compute_size_for_parent_expectation(widget, Axis::Y);
 
@@ -194,15 +194,14 @@ struct AutoLayout {
     widget.computed[Axis::Y] = size_y;
 
     for (EntityID child_id : widget.children) {
-      calculate_those_with_parents(to_cmp(child_id));
+      calculate_those_with_parents(this->to_cmp(child_id));
     }
   }
 
-  static float _sum_children_axis_for_child_exp(UIComponent &widget,
-                                                Axis axis) {
+  float _sum_children_axis_for_child_exp(UIComponent &widget, Axis axis) {
     float total_child_size = 0.f;
     for (EntityID entityID : widget.children) {
-      UIComponent &child = to_cmp(entityID);
+      UIComponent &child = this->to_cmp(entityID);
       // Dont worry about any children that are absolutely positioned
       if (child.absolute)
         continue;
@@ -225,10 +224,10 @@ struct AutoLayout {
     }
     return total_child_size;
   }
-  static float _max_child_size(UIComponent &widget, Axis axis) {
+  float _max_child_size(UIComponent &widget, Axis axis) {
     float max_child_size = 0.f;
     for (EntityID child_id : widget.children) {
-      UIComponent &child = to_cmp(child_id);
+      UIComponent &child = this->to_cmp(child_id);
       // Dont worry about any children that are absolutely positioned
       if (child.absolute)
         continue;
@@ -248,8 +247,7 @@ struct AutoLayout {
     return max_child_size;
   }
 
-  static float compute_size_for_child_expectation(UIComponent &widget,
-                                                  Axis axis) {
+  float compute_size_for_child_expectation(UIComponent &widget, Axis axis) {
     float no_change = widget.computed[axis];
     if (widget.children.empty())
       return no_change;
@@ -267,9 +265,9 @@ struct AutoLayout {
     return expectation;
   }
 
-  static void calculate_those_with_children(UIComponent &widget) {
+  void calculate_those_with_children(UIComponent &widget) {
     for (EntityID child : widget.children) {
-      calculate_those_with_children(to_cmp(child));
+      calculate_those_with_children(this->to_cmp(child));
     }
 
     auto size_x = compute_size_for_child_expectation(widget, Axis::X);
@@ -279,10 +277,10 @@ struct AutoLayout {
     widget.computed[Axis::Y] = size_y;
   }
 
-  static void tax_refund(UIComponent &widget, Axis axis, float error) {
+  void tax_refund(UIComponent &widget, Axis axis, float error) {
     int num_eligible_children = 0;
     for (EntityID child_id : widget.children) {
-      UIComponent &child = to_cmp(child_id);
+      UIComponent &child = this->to_cmp(child_id);
       // Dont worry about any children that are absolutely positioned
       if (child.absolute)
         continue;
@@ -300,7 +298,7 @@ struct AutoLayout {
 
     float indiv_refund = error / num_eligible_children;
     for (EntityID child_id : widget.children) {
-      UIComponent &child = to_cmp(child_id);
+      UIComponent &child = this->to_cmp(child_id);
 
       // Dont worry about any children that are absolutely positioned
       if (child.absolute)
@@ -319,13 +317,13 @@ struct AutoLayout {
     }
   }
 
-  static void solve_violations(UIComponent &widget) {
+  void solve_violations(UIComponent &widget) {
     // we dont care if its less than a pixel
     const float ACCEPTABLE_ERROR = 1.f;
 
     size_t num_children = 0;
     for (EntityID child : widget.children) {
-      if (to_cmp(child).absolute)
+      if (this->to_cmp(child).absolute)
         continue;
       num_children++;
     }
@@ -334,26 +332,27 @@ struct AutoLayout {
 
     // me -> left -> right
 
-    const auto _total_child = [&widget](Axis axis) {
+    const auto _total_child = [this, &widget](Axis axis) {
       float sum = 0.f;
       // TODO support flexing
       for (EntityID child : widget.children) {
         // Dont worry about any children that are absolutely positioned
-        if (to_cmp(child).absolute)
+        if (this->to_cmp(child).absolute)
           continue;
-        sum += to_cmp(child).computed[axis];
+        sum += this->to_cmp(child).computed[axis];
       }
       return sum;
     };
 
-    const auto _solve_error_optional = [&widget](Axis axis, float *error) {
+    const auto _solve_error_optional = [this, &widget](Axis axis,
+                                                       float *error) {
       int num_optional_children = 0;
       for (EntityID child : widget.children) {
         // TODO Dont worry about absolute positioned children
-        if (to_cmp(child).absolute)
+        if (this->to_cmp(child).absolute)
           continue;
 
-        Size exp = to_cmp(child).desired[axis];
+        Size exp = this->to_cmp(child).desired[axis];
         if (exp.strictness == 0.f) {
           num_optional_children++;
         }
@@ -362,7 +361,7 @@ struct AutoLayout {
       if (num_optional_children != 0) {
         float approx_epc = *error / num_optional_children;
         for (EntityID child : widget.children) {
-          UIComponent &child_cmp = to_cmp(child);
+          UIComponent &child_cmp = this->to_cmp(child);
           // Dont worry about absolute positioned children
           if (child_cmp.absolute)
             continue;
@@ -378,19 +377,19 @@ struct AutoLayout {
       }
     };
 
-    const auto fix_violating_children = [num_children, &widget](Axis axis,
-                                                                float error) {
+    const auto fix_violating_children = [num_children, this,
+                                         &widget](Axis axis, float error) {
       VALIDATE(num_children != 0, "Should never have zero children");
 
       size_t num_strict_children = 0;
       size_t num_ignorable_children = 0;
 
       for (EntityID child : widget.children) {
-        Size exp = to_cmp(child).desired[axis];
+        Size exp = this->to_cmp(child).desired[axis];
         if (exp.strictness == 1.f) {
           num_strict_children++;
         }
-        if (to_cmp(child).absolute) {
+        if (this->to_cmp(child).absolute) {
           num_ignorable_children++;
         }
       }
@@ -422,7 +421,7 @@ struct AutoLayout {
       float approx_epc =
           error / (1.f * std::max(1, (int)num_resizeable_children));
       for (EntityID child : widget.children) {
-        UIComponent &child_cmp = to_cmp(child);
+        UIComponent &child_cmp = this->to_cmp(child);
         Size exp = child_cmp.desired[axis];
         if (exp.strictness == 1.f || child_cmp.absolute) {
           continue;
@@ -474,11 +473,11 @@ struct AutoLayout {
 
     // Solve for children
     for (EntityID child : widget.children) {
-      solve_violations(to_cmp(child));
+      solve_violations(this->to_cmp(child));
     }
   }
 
-  static void compute_relative_positions(UIComponent &widget) {
+  void compute_relative_positions(UIComponent &widget) {
     if (widget.parent == -1) {
       // This already happens by default, but lets be explicit about it
       widget.computed_rel[0] = 0.f;
@@ -505,7 +504,7 @@ struct AutoLayout {
     };
 
     for (EntityID child_id : widget.children) {
-      UIComponent &child = to_cmp(child_id);
+      UIComponent &child = this->to_cmp(child_id);
 
       // Dont worry about any children that are absolutely positioned
       if (child.absolute) {
@@ -562,12 +561,12 @@ struct AutoLayout {
     }
   }
 
-  static void compute_rect_bounds(UIComponent &widget) {
+  void compute_rect_bounds(UIComponent &widget) {
     // log_trace("computing rect bounds for {}", widget);
 
     Vector2Type offset = Vector2Type{0.f, 0.f};
     if (widget.parent != -1) {
-      UIComponent &parent = to_cmp(widget.parent);
+      UIComponent &parent = this->to_cmp(widget.parent);
       offset = offset + Vector2Type{parent.rect().x, parent.rect().y};
     }
 
@@ -575,31 +574,42 @@ struct AutoLayout {
     widget.computed_rel[1] += offset.y;
 
     for (EntityID child : widget.children) {
-      compute_rect_bounds(to_cmp(child));
+      compute_rect_bounds(this->to_cmp(child));
     }
   }
 
-  static void reset_computed_values(UIComponent &widget) {
+  void reset_computed_values(UIComponent &widget) {
     widget.reset_computed_values();
     for (EntityID child : widget.children) {
-      reset_computed_values(to_cmp(child));
+      reset_computed_values(this->to_cmp(child));
     }
   }
 
-  static void autolayout(UIComponent &widget) {
-    reset_computed_values(widget);
+  static void autolayout(UIComponent &widget,
+                         const std::map<EntityID, RefEntity> &map) {
+    AutoLayout al(map);
+
+    al.reset_computed_values(widget);
     // - (any) compute solos (doesnt rely on parent/child / other widgets)
-    calculate_standalone(widget);
+    al.calculate_standalone(widget);
     // - (pre) parent sizes
-    calculate_those_with_parents(widget);
+    al.calculate_those_with_parents(widget);
     // - (post) children
-    calculate_those_with_children(widget);
+    al.calculate_those_with_children(widget);
     // - (pre) solve violations
-    solve_violations(widget);
+    al.solve_violations(widget);
     // - (pre) compute relative positions
-    compute_relative_positions(widget);
+    al.compute_relative_positions(widget);
     // - (pre) compute rect bounds
-    compute_rect_bounds(widget);
+    al.compute_rect_bounds(widget);
+  }
+
+  static Entity &to_ent_static(EntityID id) {
+    return EntityQuery().whereID(id).gen_first_enforce();
+  }
+
+  static UIComponent &to_cmp_static(EntityID id) {
+    return to_ent_static(id).get<UIComponent>();
   }
 
   static void print_tree(UIComponent &cmp, size_t tab = 0) {
@@ -614,7 +624,7 @@ struct AutoLayout {
     std::cout << cmp.rect().height << std::endl;
 
     for (EntityID child_id : cmp.children) {
-      print_tree(to_cmp(child_id), tab + 1);
+      print_tree(to_cmp_static(child_id), tab + 1);
     }
   }
 };

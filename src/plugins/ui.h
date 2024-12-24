@@ -249,10 +249,20 @@ struct ClearVisibity : System<UIComponent> {
 };
 
 struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
+
+  std::map<EntityID, RefEntity> components;
+
+  virtual void once(float) override {
+    components.clear();
+    auto comps = EntityQuery().whereHasComponent<UIComponent>().gen();
+    for (Entity &entity : comps) {
+      components.emplace(entity.id, entity);
+    }
+  }
   virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
                              float) override {
 
-    AutoLayout::autolayout(cmp);
+    AutoLayout::autolayout(cmp, components);
 
     // AutoLayout::print_tree(cmp);
     // log_error("");
@@ -266,7 +276,7 @@ struct SetVisibity : System<AutoLayoutRoot, UIComponent> {
       return;
     }
     for (EntityID child : cmp.children) {
-      set_visibility(AutoLayout::to_cmp(child));
+      set_visibility(AutoLayout::to_cmp_static(child));
     }
     cmp.is_visible = true;
   }
