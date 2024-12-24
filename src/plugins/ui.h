@@ -736,7 +736,35 @@ Entity &make_dropdown(Entity &parent, int max_options = -1) {
       },
       max_options);
 
+#ifdef AFTER_HOURS_USE_RAYLIB
+  dropdown.addComponent<ui::HasColor>(raylib::BLUE);
+#endif
+
   return dropdown;
+}
+
+Entity &make_button(Entity &parent, const std::string &label,
+                    Vector2Type button_size) {
+  auto &entity = EntityHelper::createEntity();
+  entity.addComponent<UIComponent>(entity.id)
+      .set_desired_width(ui::Size{
+          .dim = ui::Dim::Pixels,
+          .value = button_size.x,
+      })
+      .set_desired_height(ui::Size{
+          .dim = ui::Dim::Pixels,
+          .value = button_size.y,
+      })
+      .set_parent(parent.id);
+  parent.get<ui::UIComponent>().add_child(entity.id);
+
+  entity.addComponent<ui::HasLabel>(label);
+  entity.addComponent<ui::HasClickListener>(
+      [](Entity &button) { log_info("I clicked the button {}", button.id); });
+#ifdef AFTER_HOURS_USE_RAYLIB
+  entity.addComponent<ui::HasColor>(raylib::BLUE);
+#endif
+  return entity;
 }
 
 //// /////
