@@ -2,6 +2,7 @@
 #pragma once
 
 #include "../base_component.h"
+#include "../bitwise.h"
 #include "../developer.h"
 #include "../entity.h"
 #include "../entity_query.h"
@@ -25,6 +26,12 @@ struct Size {
   float strictness = 1.f;
 };
 
+enum struct FlexDirection {
+  None = 1 << 0,
+  Row = 1 << 1,
+  Column = 1 << 2,
+};
+
 using FontID = int;
 
 struct AutoLayoutRoot : BaseComponent {};
@@ -34,6 +41,7 @@ struct UIComponent : BaseComponent {
   explicit UIComponent(EntityID id_) : id(id_) {}
 
   std::array<Size, 2> desired;
+  FlexDirection flex_direction = FlexDirection::Column;
 
   bool absolute = false;
   std::array<float, 2> computed;
@@ -73,14 +81,26 @@ struct UIComponent : BaseComponent {
     return *this;
   }
 
-  auto &set_desired_x(Size s) {
+  auto &set_desired_width(Size s) {
     desired[0] = s;
     return *this;
   }
 
-  auto &set_desired_y(Size s) {
+  auto &set_desired_height(Size s) {
     desired[1] = s;
     return *this;
+  }
+
+  auto &set_flex_direction(FlexDirection flex) {
+    flex_direction = flex;
+    return *this;
+  }
+
+  void reset_computed_values() {
+    computed[0] = 0.f;
+    computed[1] = 0.f;
+    computed_rel[0] = 0.f;
+    computed_rel[1] = 0.f;
   }
 };
 
@@ -183,6 +203,28 @@ struct AutoLayout {
     }
     return total_child_size;
   }
+  static float _max_child_size(UIComponent &widget, size_t exp_index) {
+    float max_child_size = 0.f;
+    for (EntityID child_id : widget.children) {
+      UIComponent &child = to_cmp(child_id);
+      // Dont worry about any children that are absolutely positioned
+      if (child.absolute)
+        continue;
+
+      float cs = child.computed[exp_index];
+      if (cs == -1) {
+        if (child.desired[exp_index].dim == Dim::Percent &&
+            widget.desired[exp_index].dim == Dim::Children) {
+          VALIDATE(false, "Parents sized with mode 'children' cannot have "
+                          "children sized with mode 'percent'.");
+        }
+        // Instead of silently ignoring this, check the cases above
+        VALIDATE(false, "expect that all children have been solved by now");
+      }
+      max_child_size = fmaxf(max_child_size, cs);
+    }
+    return max_child_size;
+  }
 
   static float compute_size_for_child_expectation(UIComponent &widget,
                                                   size_t exp_index) {
@@ -190,14 +232,17 @@ struct AutoLayout {
     if (widget.children.empty())
       return no_change;
 
+    float expectation = _sum_children_axis_for_child_exp(widget, exp_index);
+
+    if ((widget.flex_direction & FlexDirection::Column) && exp_index == 0) {
+      expectation = _max_child_size(widget, exp_index);
+    }
+
     Size exp = widget.desired[exp_index];
     if (exp.dim != Dim::Children)
       return no_change;
 
-    float total_child_size =
-        _sum_children_axis_for_child_exp(widget, exp_index);
-
-    return total_child_size;
+    return expectation;
   }
 
   static void calculate_those_with_children(UIComponent &widget) {
@@ -269,7 +314,7 @@ struct AutoLayout {
 
     const auto _total_child = [&widget](size_t exp_index) {
       float sum = 0.f;
-      // TODO support growing
+      // TODO support flexing
       for (EntityID child : widget.children) {
         // Dont worry about any children that are absolutely positioned
         if (to_cmp(child).absolute)
@@ -335,13 +380,13 @@ struct AutoLayout {
       size_t num_resizeable_children =
           num_children - num_strict_children - num_ignorable_children;
 
-      /* support grow flags
+      /* support flex flags
       // TODO we cannot enforce the assert below in the case of wrapping
       // because the positioning happens after error correction
       if (error > ACCEPTABLE_ERROR && num_resizeable_children == 0 &&
           //
-          !((widget->growflags & GrowFlags::Column) ||
-            (widget->growflags & GrowFlags::Row))
+          !((widget->flexflags & GrowFlags::Column) ||
+            (widget->flexflags & GrowFlags::Row))
           //
       ) {
           widget->print_tree();
@@ -457,25 +502,25 @@ struct AutoLayout {
       will_hit_max_x = cx + offx > sx;
       will_hit_max_y = cy + offy > sy;
 
-      // We cant grow and are going over the limit
-      if ((will_hit_max_x || will_hit_max_y)) {
+      bool no_flex = child.flex_direction == FlexDirection::None;
+      // We cant flex and are going over the limit
+      if (no_flex && (will_hit_max_x || will_hit_max_y)) {
         child.computed_rel[0] = sx;
         child.computed_rel[1] = sy;
         continue;
       }
 
-      // We can grow vertically and current child will push us over height
+      // We can flex vertically and current child will push us over height
       // lets wrap
-      if (cy + offy > sy) {
+      if (child.flex_direction & FlexDirection::Column && cy + offy > sy) {
         offy = 0;
         offx += col_w;
         col_w = cx;
       }
 
-      // We can grow horizontally and current child will push us over
+      // We can flex horizontally and current child will push us over
       // width lets wrap
-      // TODO support row layout
-      if (false && cx + offx > sx) {
+      if (child.flex_direction & FlexDirection::Row && cx + offx > sx) {
         offx = 0;
         offy += col_h;
         col_h = cy;
@@ -485,13 +530,12 @@ struct AutoLayout {
       child.computed_rel[1] = offy;
 
       // Setup for next child placement
-      // if (widget->growflags & GrowFlags::Column)
-      { offy += cy; }
-      // TODO support row layout
-      // if (widget->growflags & GrowFlags::Row)
-      // {
-      // offx += cx;
-      // }
+      if (child.flex_direction & FlexDirection::Column) {
+        offy += cy;
+      }
+      if (child.flex_direction & FlexDirection::Row) {
+        offx += cx;
+      }
 
       update_max_size(cx, cy);
       compute_relative_positions(child);
@@ -515,7 +559,15 @@ struct AutoLayout {
     }
   }
 
+  static void reset_computed_values(UIComponent &widget) {
+    widget.reset_computed_values();
+    for (EntityID child : widget.children) {
+      reset_computed_values(to_cmp(child));
+    }
+  }
+
   static void autolayout(UIComponent &widget) {
+    reset_computed_values(widget);
     // - (any) compute solos (doesnt rely on parent/child / other widgets)
     calculate_standalone(widget);
     // - (pre) parent sizes
