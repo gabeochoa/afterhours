@@ -42,7 +42,7 @@ int main(int, char **) {
 
   auto &div = EntityHelper::createEntity();
   {
-    ui::UIComponent &divCmp = div.addComponent<ui::UIComponent>();
+    ui::UIComponent &divCmp = div.addComponent<ui::UIComponent>(div.id);
     divCmp.desired[0] = ui::Size{
         .dim = ui::Dim::Children,
     };
@@ -53,7 +53,7 @@ int main(int, char **) {
 
   auto &left = EntityHelper::createEntity();
   {
-    ui::UIComponent &cmp = left.addComponent<ui::UIComponent>();
+    ui::UIComponent &cmp = left.addComponent<ui::UIComponent>(left.id);
     cmp.desired[0] = ui::Size{
         .dim = ui::Dim::Pixels,
         .value = 100.f,
@@ -67,7 +67,7 @@ int main(int, char **) {
 
   auto &right = EntityHelper::createEntity();
   {
-    ui::UIComponent &cmp = right.addComponent<ui::UIComponent>();
+    ui::UIComponent &cmp = right.addComponent<ui::UIComponent>(right.id);
     cmp.desired[0] = ui::Size{
         .dim = ui::Dim::Pixels,
         .value = 100.f,
@@ -86,14 +86,14 @@ int main(int, char **) {
     auto &Sophie = EntityHelper::createEntity();
     {
       Sophie.addComponent<ui::AutoLayoutRoot>();
-      Sophie.addComponent<ui::UIComponent>()
-          .set_desired_x(ui::Size{
+      Sophie.addComponent<ui::UIComponent>(Sophie.id)
+          .set_desired_width(ui::Size{
               // TODO figure out how to update this
               // when resolution changes
               .dim = ui::Dim::Pixels,
               .value = 1280.f,
           })
-          .set_desired_y(ui::Size{
+          .set_desired_height(ui::Size{
               .dim = ui::Dim::Pixels,
               .value = 720.f,
           });
@@ -101,14 +101,14 @@ int main(int, char **) {
 
     auto &button = EntityHelper::createEntity();
     {
-      button.addComponent<ui::UIComponent>()
-          .set_desired_x(ui::Size{
+      button.addComponent<ui::UIComponent>(button.id)
+          .set_desired_width(ui::Size{
               // TODO figure out how to update this
               // when resolution changes
               .dim = ui::Dim::Pixels,
               .value = 100.f,
           })
-          .set_desired_y(ui::Size{
+          .set_desired_height(ui::Size{
               .dim = ui::Dim::Pixels,
               .value = 50.f,
           })
@@ -118,14 +118,14 @@ int main(int, char **) {
 
     auto &div2 = EntityHelper::createEntity();
     {
-      div2.addComponent<ui::UIComponent>()
-          .set_desired_x(ui::Size{
+      div2.addComponent<ui::UIComponent>(div2.id)
+          .set_desired_width(ui::Size{
               // TODO figure out how to update this
               // when resolution changes
               .dim = ui::Dim::Pixels,
               .value = 100.f,
           })
-          .set_desired_y(ui::Size{
+          .set_desired_height(ui::Size{
               .dim = ui::Dim::Percent,
               .value = 0.5f,
           })
