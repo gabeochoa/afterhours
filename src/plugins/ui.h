@@ -153,6 +153,7 @@ struct HasLabel : BaseComponent {
 };
 
 struct HasCheckboxState : BaseComponent {
+  bool changed_since = false;
   bool on;
   HasCheckboxState(bool b) : on(b) {}
 };
@@ -440,8 +441,44 @@ struct UpdateDropdownOptions
   virtual void for_each_with_derived(Entity &entity, UIComponent &component,
                                      HasDropdownState &hasDropdownState,
                                      HasChildrenComponent &hasChildren, float) {
-    component.children.clear();
+    auto options = hasDropdownState.options;
     hasDropdownState.options = hasDropdownState.fetch_options(hasDropdownState);
+
+    // detect if the options changed or if the state changed
+    // and if so, we should refresh
+    {
+      bool changed = false;
+      if (options.size() != hasDropdownState.options.size()) {
+        changed = true;
+      }
+
+      // Validate the order and which strings have changed
+      for (size_t i = 0; i < options.size(); ++i) {
+        if (i >= hasDropdownState.options.size() ||
+            options[i] != hasDropdownState.options[i]) {
+          changed = true;
+        }
+      }
+
+      // Check for new options
+      if (hasDropdownState.options.size() > options.size()) {
+        for (size_t i = options.size(); i < hasDropdownState.options.size();
+             ++i) {
+          changed = true;
+        }
+      }
+
+      if (hasDropdownState.changed_since) {
+        changed = true;
+        hasDropdownState.changed_since = false;
+      }
+
+      if (!changed)
+        return;
+    }
+
+    options = hasDropdownState.options;
+    component.children.clear();
 
     if (hasChildren.children.size() == 0) {
       // no children and no options :)
@@ -450,7 +487,6 @@ struct UpdateDropdownOptions
         return;
       }
 
-      auto &options = hasDropdownState.options;
       for (size_t i = 0; i < options.size(); i++) {
         Entity &child = EntityHelper::createEntity();
         child.addComponent<UIComponent>(child.id)
@@ -466,6 +502,7 @@ struct UpdateDropdownOptions
         child.addComponent<ui::HasLabel>(options[i]);
         child.addComponent<ui::HasClickListener>([i, &entity](Entity &) {
           ui::HasDropdownState &hds = entity.get_with_child<HasDropdownState>();
+          hds.changed_since = true;
           hds.on = !hds.on;
 
           hds.last_option_clicked = i;
