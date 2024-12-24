@@ -1,10 +1,20 @@
 
+#pragma once
 
+#include <algorithm>
+#include <atomic>
+#include <functional>
+#include <initializer_list>
+#include <iostream>
+#include <iterator>
+#include <optional>
+#include <utility>
+//
 #include "autolayout.h"
+#include <magic_enum/magic_enum.hpp>
 
 #include "../developer.h"
 #include "input_system.h"
-#include <magic_enum/magic_enum.hpp>
 
 namespace afterhours {
 namespace ui {
@@ -415,8 +425,7 @@ struct UpdateDropdownOptions
 
   virtual void for_each_with_derived(Entity &entity, UIComponent &component,
                                      HasDropdownState &hasDropdownState,
-                                     HasChildrenComponent &hasChildren,
-                                     float) override {
+                                     HasChildrenComponent &hasChildren, float) {
     component.children.clear();
     hasDropdownState.options = hasDropdownState.fetch_options(hasDropdownState);
 

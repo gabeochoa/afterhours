@@ -1,11 +1,7 @@
 
 
 #include "../shared/vector.h"
-#include <iostream>
 
-#define AFTER_HOURS_ENTITY_HELPER
-#define AFTER_HOURS_ENTITY_QUERY
-#define AFTER_HOURS_SYSTEM
 #include "../../ah.h"
 #include "../../src/plugins/autolayout.h"
 #include "../../src/plugins/ui.h"
@@ -30,7 +26,7 @@ private:
 } // namespace afterhours
 
 // TODO what happens if we pass void?
-enum InputAction {};
+enum struct InputAction {};
 
 int main(int, char **) {
   using namespace afterhours;

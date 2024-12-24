@@ -1,15 +1,16 @@
 
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <bitset>
 #include <map>
 #include <optional>
-#include <utility>
 
 #include "base_component.h"
 #include "type_name.h"
 
+namespace afterhours {
 template <typename Base, typename Derived> bool child_of(Derived *derived) {
   return dynamic_cast<Base *>(derived) != nullptr;
 }
@@ -260,3 +261,4 @@ struct OptEntity {
   operator RefEntity() const { return data.value(); }
   operator bool() const { return valid(); }
 };
+} // namespace afterhours

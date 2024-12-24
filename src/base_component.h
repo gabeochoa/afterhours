@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <vector>
+namespace afterhours {
 
 struct Entity;
 using Entities = std::vector<std::shared_ptr<Entity>>;
@@ -44,3 +45,4 @@ struct BaseComponent {
   BaseComponent(BaseComponent &&) = default;
   virtual ~BaseComponent() {}
 };
+} // namespace afterhours

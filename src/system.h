@@ -3,12 +3,14 @@
 #pragma once
 
 #include <bitset>
+#include <cmath>
 #include <functional>
 #include <memory>
 
 #include "base_component.h"
 #include "entity.h"
 
+namespace afterhours {
 class SystemBase {
 public:
   SystemBase() {}
@@ -258,3 +260,4 @@ struct SystemManager {
     render_all(dt);
   }
 };
+} // namespace afterhours

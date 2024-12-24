@@ -10,6 +10,7 @@
 
 #include "entity.h"
 #include "entity_helper.h"
+namespace afterhours {
 
 template <typename Derived = void> //
 struct EntityQuery {
@@ -284,3 +285,4 @@ private:
     return out;
   }
 };
+} // namespace afterhours
