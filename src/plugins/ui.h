@@ -314,13 +314,14 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
             .whereHasComponent<ui::UIContext<InputAction>>() //
             .gen_first();
     this->context_entity = opt_context.value();
+    this->include_derived_children = true;
   }
 
   virtual ~HandleClicks() {}
 
-  virtual void for_each_with(Entity &entity, UIComponent &component,
-                             HasClickListener &hasClickListener,
-                             float) override {
+  virtual void for_each_with_derived(Entity &entity, UIComponent &component,
+                                     HasClickListener &hasClickListener,
+                                     float) {
     if (!this->context_entity)
       return;
 
@@ -454,23 +455,12 @@ struct UpdateDropdownOptions
             .set_parent(entity.id);
         child.addComponent<ui::HasLabel>(options[i]);
         child.addComponent<ui::HasClickListener>([i, &entity](Entity &) {
-          log_info("clicked {}", i);
-          // Parent stuff.
-
           ui::HasDropdownState &hds = entity.get_with_child<HasDropdownState>();
           hds.on = !hds.on;
 
+          hds.last_option_clicked = i;
           if (hds.on_option_changed)
             hds.on_option_changed(i);
-          hds.last_option_clicked = i;
-
-          return;
-
-          OptEntity opt_context =
-              EntityQuery()
-                  .whereHasComponent<UIContext<InputAction>>()
-                  .gen_first();
-          opt_context->get<ui::UIContext<InputAction>>().set_focus(entity.id);
         });
         hasChildren.add_child(child);
       }
