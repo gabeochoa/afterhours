@@ -30,6 +30,9 @@ using FontID = int;
 struct AutoLayoutRoot : BaseComponent {};
 
 struct UIComponent : BaseComponent {
+  EntityID id;
+  explicit UIComponent(EntityID id_) : id(id_) {}
+
   std::array<Size, 2> desired;
 
   bool absolute = false;
@@ -50,13 +53,23 @@ struct UIComponent : BaseComponent {
     };
   };
 
-  auto &add_child(EntityID id) {
-    children.push_back(id);
+  float x() const { return rect().x; }
+  float y() const { return rect().y; }
+  float width() const { return rect().width; }
+  float height() const { return rect().height; }
+
+  Rectangle focus_rect(int rw = 2) const {
+    return Rectangle{x() - (float)rw, y() - (float)rw,
+                     width() + (2.f * (float)rw), height() + (2.f * (float)rw)};
+  }
+
+  auto &add_child(EntityID id_) {
+    children.push_back(id_);
     return *this;
   }
 
-  auto &set_parent(EntityID id) {
-    parent = id;
+  auto &set_parent(EntityID id_) {
+    parent = id_;
     return *this;
   }
 
@@ -487,14 +500,15 @@ struct AutoLayout {
 
   static void compute_rect_bounds(UIComponent &widget) {
     // log_trace("computing rect bounds for {}", widget);
+
     Vector2Type offset = Vector2Type{0.f, 0.f};
     if (widget.parent != -1) {
       UIComponent &parent = to_cmp(widget.parent);
       offset = offset + Vector2Type{parent.rect().x, parent.rect().y};
     }
 
-    widget.computed_rel[0] = offset.x;
-    widget.computed_rel[1] = offset.y;
+    widget.computed_rel[0] += offset.x;
+    widget.computed_rel[1] += offset.y;
 
     for (EntityID child : widget.children) {
       compute_rect_bounds(to_cmp(child));
@@ -513,7 +527,7 @@ struct AutoLayout {
     // - (pre) compute relative positions
     compute_relative_positions(widget);
     // - (pre) compute rect bounds
-    // compute_rect_bounds(widget);
+    compute_rect_bounds(widget);
   }
 
   static void print_tree(UIComponent &cmp, size_t tab = 0) {
@@ -521,6 +535,7 @@ struct AutoLayout {
     for (size_t i = 0; i < tab; i++)
       std::cout << "  ";
 
+    std::cout << cmp.id << " : ";
     std::cout << cmp.rect().x << ",";
     std::cout << cmp.rect().y << ",";
     std::cout << cmp.rect().width << ",";
