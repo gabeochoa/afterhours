@@ -15,10 +15,8 @@ static bool is_mouse_inside(const input::MousePosition &mouse_pos,
          mouse_pos.y >= rect.y && mouse_pos.y <= rect.y + rect.height;
 }
 
-
-template<typename InputAction> 
-struct UIContext : BaseComponent {
-  // TODO move to input system 
+template <typename InputAction> struct UIContext : BaseComponent {
+  // TODO move to input system
   using InputBitset = std::bitset<magic_enum::enum_count<InputAction>()>;
 
   EntityID ROOT = -1;
@@ -124,7 +122,6 @@ struct UIContext : BaseComponent {
   }
 };
 
-
 struct HasClickListener : BaseComponent {
   bool down = false;
   std::function<void(Entity &)> cb;
@@ -162,7 +159,7 @@ struct ShouldHide : BaseComponent {};
 ////  Systems
 //// /////
 
-template<typename InputAction>
+template <typename InputAction>
 struct BeginUIContextManager : System<UIContext<InputAction>> {
   using InputBits = UIContext<InputAction>::InputBitset;
 
@@ -179,7 +176,8 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
     return output;
   }
 
-  virtual void for_each_with(Entity &, UIContext<InputAction> &context, float) override {
+  virtual void for_each_with(Entity &, UIContext<InputAction> &context,
+                             float) override {
     context.mouse_pos = input::get_mouse_position();
     context.mouseLeftDown = input::is_mouse_button_down(0);
 
@@ -199,15 +197,17 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
 };
 
 struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
-  virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent& cmp, float) override {
-      AutoLayout::autolayout(cmp);
+  virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
+                             float) override {
+    AutoLayout::autolayout(cmp);
   }
 };
 
-template<typename InputAction>
+template <typename InputAction>
 struct EndUIContextManager : System<UIContext<InputAction>> {
 
-  virtual void for_each_with(Entity &, UIContext<InputAction> &context, float) override {
+  virtual void for_each_with(Entity &, UIContext<InputAction> &context,
+                             float) override {
 
     if (context.focus_id == context.ROOT)
       return;
@@ -226,25 +226,22 @@ struct EndUIContextManager : System<UIContext<InputAction>> {
 };
 
 //// /////
-////  Plugin Info 
+////  Plugin Info
 //// /////
 
-  template<typename InputAction>
-  static void add_singleton_components(Entity &entity){
-      entity.addComponent<UIContext<InputAction>>();
-  }
+template <typename InputAction>
+static void add_singleton_components(Entity &entity) {
+  entity.addComponent<UIContext<InputAction>>();
+}
 
-  template<typename InputAction>
-  static void enforce_singletons(SystemManager &sm){
-    sm.register_update_system(
-        std::make_unique<
-            developer::EnforceSingleton<UIContext<InputAction>>>());
-  }
+template <typename InputAction>
+static void enforce_singletons(SystemManager &sm) {
+  sm.register_update_system(
+      std::make_unique<developer::EnforceSingleton<UIContext<InputAction>>>());
+}
 
-  // static void register_update_systems(SystemManager &){}
- 
+// static void register_update_systems(SystemManager &){}
 
 } // namespace ui
 
 } // namespace afterhours
-

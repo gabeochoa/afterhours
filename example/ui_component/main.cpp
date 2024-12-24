@@ -1,7 +1,7 @@
 
 
-#include <iostream>
 #include "../shared/vector.h"
+#include <iostream>
 
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_ENTITY_QUERY
@@ -27,12 +27,10 @@ private:
   vec2 position;
 };
 
-}
+} // namespace afterhours
 
-// TODO what happens if we pass void? 
-enum InputAction {
-};
-
+// TODO what happens if we pass void?
+enum InputAction {};
 
 int main(int, char **) {
   using namespace afterhours;
@@ -46,13 +44,14 @@ int main(int, char **) {
 
   ui::enforce_singletons<InputAction>(systems);
 
-  systems.register_update_system(std::make_unique<ui::BeginUIContextManager<InputAction>>());
-  systems.register_update_system(std::make_unique<ui::EndUIContextManager<InputAction>>());
+  systems.register_update_system(
+      std::make_unique<ui::BeginUIContextManager<InputAction>>());
+  systems.register_update_system(
+      std::make_unique<ui::EndUIContextManager<InputAction>>());
 
   for (int i = 0; i < 2; i++) {
     systems.run(1.f);
   }
-
 
   return 0;
 }
