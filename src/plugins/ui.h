@@ -767,6 +767,123 @@ Entity &make_button(Entity &parent, const std::string &label,
   return entity;
 }
 
+Entity &make_slider(Entity &parent, Vector2Type button_size) {
+  // TODO add vertical slider
+
+  auto &background = EntityHelper::createEntity();
+  background.addComponent<UIComponent>(background.id)
+      .set_desired_width(ui::Size{
+          .dim = ui::Dim::Pixels,
+          .value = button_size.x,
+      })
+      .set_desired_height(ui::Size{
+          .dim = ui::Dim::Pixels,
+          .value = button_size.y,
+      })
+      .set_parent(parent.id);
+  parent.get<ui::UIComponent>().add_child(background.id);
+
+  background.addComponent<ui::HasSliderState>(0.5f);
+#ifdef AFTER_HOURS_USE_RAYLIB
+  background.addComponent<ui::HasColor>(raylib::GREEN);
+#endif
+  background.addComponent<ui::HasDragListener>([](Entity &entity) {
+    float mnf = 0.f;
+    float mxf = 1.f;
+
+    UIComponent &cmp = entity.get<UIComponent>();
+    Rectangle rect = cmp.rect();
+    HasSliderState &sliderState = entity.get<ui::HasSliderState>();
+    float &value = sliderState.value;
+
+    auto mouse_position = input::get_mouse_position();
+    float v = (mouse_position.x - rect.x) / rect.width;
+    if (v < mnf)
+      v = mnf;
+    if (v > mxf)
+      v = mxf;
+    if (v != value) {
+      value = v;
+      sliderState.changed_since = true;
+    }
+
+    auto opt_child =
+        EntityQuery()
+            .whereID(entity.get<ui::HasChildrenComponent>().children[0])
+            .gen_first();
+
+    UIComponent &child_cmp = opt_child->get<UIComponent>();
+    child_cmp.set_desired_width(
+        ui::Size{.dim = ui::Dim::Percent, .value = value * 0.75f});
+
+    // log_info("I clicked the slider {} {}", entity.id, value);
+  });
+
+  // TODO replace when we have actual padding later
+  auto &left_padding = EntityHelper::createEntity();
+  left_padding.addComponent<UIComponent>(left_padding.id)
+      .set_desired_width(ui::Size{
+          .dim = ui::Dim::Percent,
+          .value = 0.f,
+      })
+      .set_desired_height(ui::Size{
+          .dim = ui::Dim::Pixels,
+          .value = button_size.y,
+      })
+      .set_parent(background.id);
+  background.get<ui::UIComponent>().add_child(left_padding.id);
+
+  auto &handle = EntityHelper::createEntity();
+  handle.addComponent<UIComponent>(handle.id)
+      .set_desired_width(ui::Size{
+          .dim = ui::Dim::Pixels,
+          .value = button_size.x * 0.25f,
+      })
+      .set_desired_height(ui::Size{
+          .dim = ui::Dim::Pixels,
+          .value = button_size.y,
+      })
+      .set_parent(background.id);
+  background.get<ui::UIComponent>().add_child(handle.id);
+
+#ifdef AFTER_HOURS_USE_RAYLIB
+  handle.addComponent<ui::HasColor>(raylib::BLUE);
+#endif
+
+  background.addComponent<ui::HasChildrenComponent>();
+  background.get<ui::HasChildrenComponent>().add_child(left_padding);
+  background.get<ui::HasChildrenComponent>().add_child(handle);
+  return background;
+}
+
+Entity &make_checkbox(Entity &parent, Vector2Type button_size) {
+  auto &entity = EntityHelper::createEntity();
+  entity.addComponent<UIComponent>(entity.id)
+      .set_desired_width(ui::Size{
+          .dim = ui::Dim::Pixels,
+          .value = button_size.x,
+      })
+      .set_desired_height(ui::Size{
+          .dim = ui::Dim::Pixels,
+          .value = button_size.y,
+      })
+      .set_parent(parent.id);
+  parent.get<ui::UIComponent>().add_child(entity.id);
+
+#ifdef AFTER_HOURS_USE_RAYLIB
+  entity.addComponent<ui::HasColor>(raylib::BLUE);
+#endif
+  entity.addComponent<ui::HasCheckboxState>(false);
+  entity.addComponent<ui::HasLabel>(" ");
+  entity.addComponent<ui::HasClickListener>([](Entity &checkbox) {
+    log_info("I clicked the checkbox {}", checkbox.id);
+    ui::HasCheckboxState &hcs = checkbox.get<ui::HasCheckboxState>();
+    hcs.on = !hcs.on;
+    checkbox.get<ui::HasLabel>().label = hcs.on ? "X" : " ";
+  });
+  return entity;
+}
+
 //// /////
 ////  Plugin Info
 //// /////
