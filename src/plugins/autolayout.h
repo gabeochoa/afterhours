@@ -76,6 +76,12 @@ struct UIComponent : BaseComponent {
     return *this;
   }
 
+  auto &remove_child(EntityID id_) {
+    children.erase(std::remove(children.begin(), children.end(), id_),
+                   children.end());
+    return *this;
+  }
+
   auto &set_parent(EntityID id_) {
     parent = id_;
     return *this;
