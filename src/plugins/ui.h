@@ -225,6 +225,47 @@ struct EndUIContextManager : System<UIContext<InputAction>> {
   }
 };
 
+// TODO i like this but for Tags, i wish
+// the user of this didnt have to add UIComponent to their for_each_with
+template <typename InputAction, typename... Components>
+struct SystemWithUIContext : System<UIComponent, Components...> {
+  Entity *context_entity;
+  virtual void once(float) override {
+    OptEntity opt_context =
+        EntityQuery()                                        //
+            .whereHasComponent<ui::UIContext<InputAction>>() //
+            .gen_first();
+    this->context_entity = opt_context.value();
+  }
+};
+
+template <typename InputAction>
+struct HandleClicks : SystemWithUIContext<InputAction, ui::HasClickListener> {
+  virtual ~HandleClicks() {}
+
+  virtual void for_each_with(Entity &entity, UIComponent &component,
+                             HasClickListener &hasClickListener,
+                             float) override {
+    if (!this->context_entity)
+      return;
+    UIContext<InputAction> &context =
+        this->context_entity->template get<UIContext<InputAction>>();
+
+    context.active_if_mouse_inside(entity.id, component.rect());
+
+    if (context.has_focus(entity.id) &&
+        context.pressed(InputAction::WidgetPress)) {
+      context.set_focus(entity.id);
+      hasClickListener.cb(entity);
+    }
+
+    if (context.is_mouse_click(entity.id)) {
+      context.set_focus(entity.id);
+      hasClickListener.cb(entity);
+    }
+  }
+};
+
 //// /////
 ////  Plugin Info
 //// /////
