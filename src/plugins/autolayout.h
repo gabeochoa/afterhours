@@ -32,6 +32,12 @@ enum struct FlexDirection {
   Column = 1 << 2,
 };
 
+enum struct Axis { X, Y };
+std::ostream &operator<<(std::ostream &os, const Axis &axis) {
+  os << (axis == Axis::X ? "X-Axis" : "Y-Axis");
+  return os;
+}
+
 using FontID = int;
 
 struct AutoLayoutRoot : BaseComponent {};
@@ -40,12 +46,21 @@ struct UIComponent : BaseComponent {
   EntityID id;
   explicit UIComponent(EntityID id_) : id(id_) {}
 
-  std::array<Size, 2> desired;
+  template <typename T> struct AxisArray {
+    std::array<T, 2> data;
+    T &operator[](Axis axis) { return data[static_cast<size_t>(axis)]; }
+
+    const T &operator[](Axis axis) const {
+      return data[static_cast<size_t>(axis)];
+    }
+  };
+
+  AxisArray<Size> desired;
   FlexDirection flex_direction = FlexDirection::Column;
 
   bool is_visible = false;
   bool absolute = false;
-  std::array<float, 2> computed;
+  AxisArray<float> computed;
   std::array<float, 2> computed_rel;
 
   EntityID parent = -1;
@@ -57,8 +72,8 @@ struct UIComponent : BaseComponent {
     return Rectangle{
         .x = computed_rel[0],
         .y = computed_rel[1],
-        .width = computed[0],
-        .height = computed[1],
+        .width = computed[Axis::X],
+        .height = computed[Axis::Y],
     };
   };
 
@@ -89,12 +104,12 @@ struct UIComponent : BaseComponent {
   }
 
   auto &set_desired_width(Size s) {
-    desired[0] = s;
+    desired[Axis::X] = s;
     return *this;
   }
 
   auto &set_desired_height(Size s) {
-    desired[1] = s;
+    desired[Axis::Y] = s;
     return *this;
   }
 
@@ -104,8 +119,8 @@ struct UIComponent : BaseComponent {
   }
 
   void reset_computed_values() {
-    computed[0] = 0.f;
-    computed[1] = 0.f;
+    computed[Axis::X] = 0.f;
+    computed[Axis::Y] = 0.f;
     computed_rel[0] = 0.f;
     computed_rel[1] = 0.f;
   }
@@ -121,8 +136,8 @@ struct AutoLayout {
   }
 
   static float compute_size_for_standalone_expectation(UIComponent &widget,
-                                                       size_t exp_index) {
-    Size exp = widget.desired[exp_index];
+                                                       Axis axis) {
+    Size exp = widget.desired[axis];
     switch (exp.dim) {
     case Dim::Pixels:
       return exp.value;
@@ -134,16 +149,16 @@ struct AutoLayout {
     default:
       // This is not a standalone widget,
       // so just keep moving along
-      return widget.computed[exp_index];
+      return widget.computed[axis];
     }
   }
 
   static void calculate_standalone(UIComponent &widget) {
-    auto size_x = compute_size_for_standalone_expectation(widget, 0);
-    auto size_y = compute_size_for_standalone_expectation(widget, 1);
+    auto size_x = compute_size_for_standalone_expectation(widget, Axis::X);
+    auto size_y = compute_size_for_standalone_expectation(widget, Axis::Y);
 
-    widget.computed[0] = size_x;
-    widget.computed[1] = size_y;
+    widget.computed[Axis::X] = size_x;
+    widget.computed[Axis::Y] = size_y;
 
     for (EntityID child_id : widget.children) {
       calculate_standalone(to_cmp(child_id));
@@ -151,17 +166,17 @@ struct AutoLayout {
   }
 
   static float compute_size_for_parent_expectation(UIComponent &widget,
-                                                   size_t exp_index) {
-    if (widget.absolute && widget.desired[exp_index].dim == Dim::Percent) {
+                                                   Axis axis) {
+    if (widget.absolute && widget.desired[axis].dim == Dim::Percent) {
       VALIDATE(false, "Absolute widgets should not use Percent");
     }
 
-    float no_change = widget.computed[exp_index];
+    float no_change = widget.computed[axis];
     if (widget.parent == -1)
       return no_change;
 
-    float parent_size = to_cmp(widget.parent).computed[exp_index];
-    Size exp = widget.desired[exp_index];
+    float parent_size = to_cmp(widget.parent).computed[axis];
+    Size exp = widget.desired[axis];
     float new_size = exp.value * parent_size;
     switch (exp.dim) {
     case Dim::Percent:
@@ -172,11 +187,11 @@ struct AutoLayout {
   }
 
   static void calculate_those_with_parents(UIComponent &widget) {
-    auto size_x = compute_size_for_parent_expectation(widget, 0);
-    auto size_y = compute_size_for_parent_expectation(widget, 1);
+    auto size_x = compute_size_for_parent_expectation(widget, Axis::X);
+    auto size_y = compute_size_for_parent_expectation(widget, Axis::Y);
 
-    widget.computed[0] = size_x;
-    widget.computed[1] = size_y;
+    widget.computed[Axis::X] = size_x;
+    widget.computed[Axis::Y] = size_y;
 
     for (EntityID child_id : widget.children) {
       calculate_those_with_parents(to_cmp(child_id));
@@ -184,7 +199,7 @@ struct AutoLayout {
   }
 
   static float _sum_children_axis_for_child_exp(UIComponent &widget,
-                                                size_t exp_index) {
+                                                Axis axis) {
     float total_child_size = 0.f;
     for (EntityID entityID : widget.children) {
       UIComponent &child = to_cmp(entityID);
@@ -192,12 +207,12 @@ struct AutoLayout {
       if (child.absolute)
         continue;
 
-      float cs = child.computed[exp_index];
+      float cs = child.computed[axis];
       //  no computed value yet
       if (cs == -1) {
         if ( //
-            child.desired[exp_index].dim == Dim::Percent &&
-            widget.desired[exp_index].dim == Dim::Children
+            child.desired[axis].dim == Dim::Percent &&
+            widget.desired[axis].dim == Dim::Children
             //
         ) {
           VALIDATE(false, "Parents sized with mode 'children' cannot have "
@@ -210,7 +225,7 @@ struct AutoLayout {
     }
     return total_child_size;
   }
-  static float _max_child_size(UIComponent &widget, size_t exp_index) {
+  static float _max_child_size(UIComponent &widget, Axis axis) {
     float max_child_size = 0.f;
     for (EntityID child_id : widget.children) {
       UIComponent &child = to_cmp(child_id);
@@ -218,10 +233,10 @@ struct AutoLayout {
       if (child.absolute)
         continue;
 
-      float cs = child.computed[exp_index];
+      float cs = child.computed[axis];
       if (cs == -1) {
-        if (child.desired[exp_index].dim == Dim::Percent &&
-            widget.desired[exp_index].dim == Dim::Children) {
+        if (child.desired[axis].dim == Dim::Percent &&
+            widget.desired[axis].dim == Dim::Children) {
           VALIDATE(false, "Parents sized with mode 'children' cannot have "
                           "children sized with mode 'percent'.");
         }
@@ -234,18 +249,18 @@ struct AutoLayout {
   }
 
   static float compute_size_for_child_expectation(UIComponent &widget,
-                                                  size_t exp_index) {
-    float no_change = widget.computed[exp_index];
+                                                  Axis axis) {
+    float no_change = widget.computed[axis];
     if (widget.children.empty())
       return no_change;
 
-    float expectation = _sum_children_axis_for_child_exp(widget, exp_index);
+    float expectation = _sum_children_axis_for_child_exp(widget, axis);
 
-    if ((widget.flex_direction & FlexDirection::Column) && exp_index == 0) {
-      expectation = _max_child_size(widget, exp_index);
+    if ((widget.flex_direction & FlexDirection::Column) && axis == Axis::X) {
+      expectation = _max_child_size(widget, axis);
     }
 
-    Size exp = widget.desired[exp_index];
+    Size exp = widget.desired[axis];
     if (exp.dim != Dim::Children)
       return no_change;
 
@@ -257,14 +272,14 @@ struct AutoLayout {
       calculate_those_with_children(to_cmp(child));
     }
 
-    auto size_x = compute_size_for_child_expectation(widget, 0);
-    auto size_y = compute_size_for_child_expectation(widget, 1);
+    auto size_x = compute_size_for_child_expectation(widget, Axis::X);
+    auto size_y = compute_size_for_child_expectation(widget, Axis::Y);
 
-    widget.computed[0] = size_x;
-    widget.computed[1] = size_y;
+    widget.computed[Axis::X] = size_x;
+    widget.computed[Axis::Y] = size_y;
   }
 
-  static void tax_refund(UIComponent &widget, size_t exp_index, float error) {
+  static void tax_refund(UIComponent &widget, Axis axis, float error) {
     int num_eligible_children = 0;
     for (EntityID child_id : widget.children) {
       UIComponent &child = to_cmp(child_id);
@@ -272,7 +287,7 @@ struct AutoLayout {
       if (child.absolute)
         continue;
 
-      Size exp = child.desired[exp_index];
+      Size exp = child.desired[axis];
       if (exp.strictness == 0.f) {
         num_eligible_children++;
       }
@@ -291,11 +306,11 @@ struct AutoLayout {
       if (child.absolute)
         continue;
 
-      Size exp = child.desired[exp_index];
+      Size exp = child.desired[axis];
       if (exp.strictness == 0.f) {
-        child.computed[exp_index] += abs(indiv_refund);
+        child.computed[axis] += abs(indiv_refund);
         log_trace("Just gave back, time for trickle down");
-        tax_refund(child, exp_index, indiv_refund);
+        tax_refund(child, axis, indiv_refund);
       }
       // TODO idk if we should do this for all non 1.f children?
       // if (exp.strictness == 1.f || child->ignore_size) {
@@ -319,27 +334,26 @@ struct AutoLayout {
 
     // me -> left -> right
 
-    const auto _total_child = [&widget](size_t exp_index) {
+    const auto _total_child = [&widget](Axis axis) {
       float sum = 0.f;
       // TODO support flexing
       for (EntityID child : widget.children) {
         // Dont worry about any children that are absolutely positioned
         if (to_cmp(child).absolute)
           continue;
-        sum += to_cmp(child).computed[exp_index];
+        sum += to_cmp(child).computed[axis];
       }
       return sum;
     };
 
-    const auto _solve_error_optional = [&widget](size_t exp_index,
-                                                 float *error) {
+    const auto _solve_error_optional = [&widget](Axis axis, float *error) {
       int num_optional_children = 0;
       for (EntityID child : widget.children) {
         // TODO Dont worry about absolute positioned children
         if (to_cmp(child).absolute)
           continue;
 
-        Size exp = to_cmp(child).desired[exp_index];
+        Size exp = to_cmp(child).desired[axis];
         if (exp.strictness == 0.f) {
           num_optional_children++;
         }
@@ -353,10 +367,10 @@ struct AutoLayout {
           if (child_cmp.absolute)
             continue;
 
-          Size exp = child_cmp.desired[exp_index];
+          Size exp = child_cmp.desired[axis];
           if (exp.strictness == 0.f) {
-            float cur_size = child_cmp.computed[exp_index];
-            child_cmp.computed[exp_index] = fmaxf(0, cur_size - approx_epc);
+            float cur_size = child_cmp.computed[axis];
+            child_cmp.computed[axis] = fmaxf(0, cur_size - approx_epc);
             if (cur_size > approx_epc)
               *error -= approx_epc;
           }
@@ -364,15 +378,15 @@ struct AutoLayout {
       }
     };
 
-    const auto fix_violating_children = [num_children, &widget](
-                                            size_t exp_index, float error) {
+    const auto fix_violating_children = [num_children, &widget](Axis axis,
+                                                                float error) {
       VALIDATE(num_children != 0, "Should never have zero children");
 
       size_t num_strict_children = 0;
       size_t num_ignorable_children = 0;
 
       for (EntityID child : widget.children) {
-        Size exp = to_cmp(child).desired[exp_index];
+        Size exp = to_cmp(child).desired[axis];
         if (exp.strictness == 1.f) {
           num_strict_children++;
         }
@@ -409,53 +423,53 @@ struct AutoLayout {
           error / (1.f * std::max(1, (int)num_resizeable_children));
       for (EntityID child : widget.children) {
         UIComponent &child_cmp = to_cmp(child);
-        Size exp = child_cmp.desired[exp_index];
+        Size exp = child_cmp.desired[axis];
         if (exp.strictness == 1.f || child_cmp.absolute) {
           continue;
         }
         float portion_of_error = (1.f - exp.strictness) * approx_epc;
-        float cur_size = child_cmp.computed[exp_index];
-        child_cmp.computed[exp_index] = fmaxf(0, cur_size - portion_of_error);
+        float cur_size = child_cmp.computed[axis];
+        child_cmp.computed[axis] = fmaxf(0, cur_size - portion_of_error);
         // Reduce strictness every round
         // so that eventually we will get there
         exp.strictness = fmaxf(0.f, exp.strictness - 0.05f);
-        child_cmp.desired[exp_index] = exp;
+        child_cmp.desired[axis] = exp;
       }
     };
 
     const auto compute_error = [ACCEPTABLE_ERROR, _total_child,
                                 _solve_error_optional, fix_violating_children,
-                                &widget](size_t exp_index) -> float {
-      float my_size = widget.computed[exp_index];
-      float all_children = _total_child(exp_index);
+                                &widget](Axis axis) -> float {
+      float my_size = widget.computed[axis];
+      float all_children = _total_child(axis);
       float error = all_children - my_size;
-      log_trace("starting error {} {}", exp_index, error);
+      log_trace("starting error {} {}", axis, error);
 
       int i_x = 0;
       while (error > ACCEPTABLE_ERROR) {
-        _solve_error_optional(exp_index, &error);
+        _solve_error_optional(axis, &error);
         i_x++;
 
-        fix_violating_children(exp_index, error);
-        all_children = _total_child(exp_index);
+        fix_violating_children(axis, error);
+        all_children = _total_child(axis);
         error = all_children - my_size;
         if (i_x > 10) {
-          log_trace("Hit {}-axis iteration limit trying to solve violations {}",
-                    exp_index == 0 ? "X" : "Y", error);
+          log_trace("Hit {} iteration limit trying to solve violations {}",
+                    axis, error);
           break;
         }
       }
       return error;
     };
 
-    float error_x = compute_error(0);
+    float error_x = compute_error(Axis::X);
     if (error_x < 0) {
-      tax_refund(widget, 0, error_x);
+      tax_refund(widget, Axis::X, error_x);
     }
 
-    float error_y = compute_error(1);
+    float error_y = compute_error(Axis::Y);
     if (error_y < 0) {
-      tax_refund(widget, 1, error_y);
+      tax_refund(widget, Axis::Y, error_y);
     }
 
     // Solve for children
@@ -472,10 +486,10 @@ struct AutoLayout {
     }
 
     // Assuming we dont care about things smaller than 1 pixel
-    widget.computed[0] = round(widget.computed[0]);
-    widget.computed[1] = round(widget.computed[1]);
-    float sx = widget.computed[0];
-    float sy = widget.computed[1];
+    widget.computed[Axis::X] = round(widget.computed[Axis::X]);
+    widget.computed[Axis::Y] = round(widget.computed[Axis::Y]);
+    float sx = widget.computed[Axis::X];
+    float sy = widget.computed[Axis::Y];
 
     float offx = 0.f;
     float offy = 0.f;
@@ -499,8 +513,8 @@ struct AutoLayout {
         continue;
       }
 
-      float cx = child.computed[0];
-      float cy = child.computed[1];
+      float cx = child.computed[Axis::X];
+      float cy = child.computed[Axis::Y];
 
       bool will_hit_max_x = false;
       bool will_hit_max_y = false;

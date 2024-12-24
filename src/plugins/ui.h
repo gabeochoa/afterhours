@@ -450,7 +450,7 @@ struct UpdateDropdownOptions
             })
             .set_desired_height(ui::Size{
                 .dim = ui::Dim::Pixels,
-                .value = component.desired[1].value,
+                .value = component.desired[Axis::Y].value,
             })
             .set_parent(entity.id);
         child.addComponent<ui::HasLabel>(options[i]);
