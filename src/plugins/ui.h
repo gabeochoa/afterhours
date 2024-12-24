@@ -155,6 +155,39 @@ struct HasSliderState : BaseComponent {
 
 struct ShouldHide : BaseComponent {};
 
+struct HasChildrenComponent : BaseComponent {
+  std::vector<EntityID> children;
+  std::function<void(Entity &)> on_child_add;
+  HasChildrenComponent() {}
+  void add_child(Entity &child) {
+    children.push_back(child.id);
+    if (on_child_add)
+      on_child_add(child);
+  }
+  auto &register_on_child_add(const std::function<void(Entity &)> &cb) {
+    on_child_add = cb;
+    return *this;
+  }
+};
+
+struct HasDropdownState : ui::HasCheckboxState {
+  using Options = std::vector<std::string>;
+  Options options;
+  std::function<Options(HasDropdownState &)> fetch_options;
+  std::function<void(size_t)> on_option_changed;
+  size_t last_option_clicked = 0;
+
+  HasDropdownState(
+      const Options &opts,
+      const std::function<Options(HasDropdownState &)> fetch_opts = nullptr,
+      const std::function<void(size_t)> opt_changed = nullptr)
+      : HasCheckboxState(false), options(opts), fetch_options(fetch_opts),
+        on_option_changed(opt_changed) {}
+
+  HasDropdownState(const std::function<Options(HasDropdownState &)> fetch_opts)
+      : HasDropdownState(fetch_opts(*this), fetch_opts, nullptr) {}
+};
+
 //// /////
 ////  Systems
 //// /////
@@ -227,8 +260,12 @@ struct EndUIContextManager : System<UIContext<InputAction>> {
 
 // TODO i like this but for Tags, i wish
 // the user of this didnt have to add UIComponent to their for_each_with
-template <typename InputAction, typename... Components>
-struct SystemWithUIContext : System<UIComponent, Components...> {
+template <typename... Components>
+struct SystemWithUIContext : System<UIComponent, Components...> {};
+
+template <typename InputAction>
+struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
+
   Entity *context_entity;
   virtual void once(float) override {
     OptEntity opt_context =
@@ -237,10 +274,7 @@ struct SystemWithUIContext : System<UIComponent, Components...> {
             .gen_first();
     this->context_entity = opt_context.value();
   }
-};
 
-template <typename InputAction>
-struct HandleClicks : SystemWithUIContext<InputAction, ui::HasClickListener> {
   virtual ~HandleClicks() {}
 
   virtual void for_each_with(Entity &entity, UIComponent &component,
@@ -248,6 +282,7 @@ struct HandleClicks : SystemWithUIContext<InputAction, ui::HasClickListener> {
                              float) override {
     if (!this->context_entity)
       return;
+
     UIContext<InputAction> &context =
         this->context_entity->template get<UIContext<InputAction>>();
 
@@ -262,6 +297,155 @@ struct HandleClicks : SystemWithUIContext<InputAction, ui::HasClickListener> {
     if (context.is_mouse_click(entity.id)) {
       context.set_focus(entity.id);
       hasClickListener.cb(entity);
+    }
+  }
+};
+
+template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
+  Entity *context_entity;
+  virtual void once(float) override {
+    OptEntity opt_context =
+        EntityQuery()                                        //
+            .whereHasComponent<ui::UIContext<InputAction>>() //
+            .gen_first();
+    this->context_entity = opt_context.value();
+  }
+
+  virtual ~HandleTabbing() {}
+
+  virtual void for_each_with(Entity &entity, UIComponent &component,
+                             float) override {
+    if (!this->context_entity)
+      return;
+
+    UIContext<InputAction> &context =
+        this->context_entity->template get<UIContext<InputAction>>();
+
+    if (entity.is_missing<HasClickListener>()) {
+      return;
+    }
+    if (!component.is_visible)
+      return;
+
+    // Valid things to tab to...
+    context.try_to_grab(entity.id);
+    context.process_tabbing(entity.id);
+  }
+};
+
+template <typename InputAction>
+struct HandleDrags : SystemWithUIContext<ui::HasDragListener> {
+  Entity *context_entity;
+  virtual void once(float) override {
+    OptEntity opt_context =
+        EntityQuery()                                        //
+            .whereHasComponent<ui::UIContext<InputAction>>() //
+            .gen_first();
+    this->context_entity = opt_context.value();
+  }
+  virtual ~HandleDrags() {}
+
+  virtual void for_each_with(Entity &entity, UIComponent &component,
+                             HasDragListener &hasDragListener, float) override {
+    if (!this->context_entity)
+      return;
+    UIContext<InputAction> &context =
+        this->context_entity->template get<UIContext<InputAction>>();
+
+    context.active_if_mouse_inside(entity.id, component.rect());
+
+    if (context.has_focus(entity.id) &&
+        context.pressed(InputAction::WidgetPress)) {
+      context.set_focus(entity.id);
+      hasDragListener.cb(entity);
+    }
+
+    if (context.is_active(entity.id)) {
+      context.set_focus(entity.id);
+      hasDragListener.cb(entity);
+    }
+  }
+};
+
+template <typename InputAction>
+struct UpdateDropdownOptions
+    : SystemWithUIContext<HasDropdownState, HasChildrenComponent> {
+
+  Entity *context_entity;
+  virtual void once(float) override {
+    OptEntity opt_context =
+        EntityQuery()                                        //
+            .whereHasComponent<ui::UIContext<InputAction>>() //
+            .gen_first();
+    this->context_entity = opt_context.value();
+  }
+
+  UpdateDropdownOptions()
+      : SystemWithUIContext<HasDropdownState, HasChildrenComponent>() {
+    this->include_derived_children = true;
+  }
+
+  virtual void for_each_with_derived(Entity &entity, UIComponent &component,
+                                     HasDropdownState &hasDropdownState,
+                                     HasChildrenComponent &hasChildren,
+                                     float) override {
+    component.children.clear();
+    hasDropdownState.options = hasDropdownState.fetch_options(hasDropdownState);
+
+    if (hasChildren.children.size() == 0) {
+      // no children and no options :)
+      if (hasDropdownState.options.size() == 0) {
+        log_warn("You have a dropdown with no options");
+        return;
+      }
+
+      auto &options = hasDropdownState.options;
+      for (size_t i = 0; i < options.size(); i++) {
+        Entity &child = EntityHelper::createEntity();
+        child.addComponent<UIComponent>(child.id)
+            .set_desired_width(ui::Size{
+                .dim = ui::Dim::Percent,
+                .value = 1.f,
+            })
+            .set_desired_height(ui::Size{
+                .dim = ui::Dim::Pixels,
+                .value = component.desired[1].value,
+            })
+            .set_parent(entity.id);
+        child.addComponent<ui::HasLabel>(options[i]);
+        child.addComponent<ui::HasClickListener>([i, &entity](Entity &) {
+          log_info("clicked {}", i);
+          // Parent stuff.
+
+          ui::HasDropdownState &hds = entity.get_with_child<HasDropdownState>();
+          hds.on = !hds.on;
+
+          if (hds.on_option_changed)
+            hds.on_option_changed(i);
+          hds.last_option_clicked = i;
+
+          return;
+
+          OptEntity opt_context =
+              EntityQuery()
+                  .whereHasComponent<UIContext<InputAction>>()
+                  .gen_first();
+          opt_context->get<ui::UIContext<InputAction>>().set_focus(entity.id);
+        });
+        hasChildren.add_child(child);
+      }
+    }
+    // If we get here, we should have num_options children...
+
+    if (!hasDropdownState.on) {
+      // just draw the selected one...
+      EntityID child_id =
+          hasChildren.children[hasDropdownState.last_option_clicked];
+      component.add_child(child_id);
+    } else {
+      for (EntityID child_id : hasChildren.children) {
+        component.add_child(child_id);
+      }
     }
   }
 };
@@ -281,7 +465,26 @@ static void enforce_singletons(SystemManager &sm) {
       std::make_unique<developer::EnforceSingleton<UIContext<InputAction>>>());
 }
 
-// static void register_update_systems(SystemManager &){}
+template <typename InputAction>
+static void register_update_systems(SystemManager &sm) {
+  sm.register_update_system(
+      std::make_unique<ui::BeginUIContextManager<InputAction>>());
+  {
+    sm.register_update_system(
+        std::make_unique<ui::UpdateDropdownOptions<InputAction>>());
+
+    //
+    sm.register_update_system(std::make_unique<ui::RunAutoLayout>());
+    //
+    sm.register_update_system(
+        std::make_unique<ui::HandleTabbing<InputAction>>());
+    sm.register_update_system(
+        std::make_unique<ui::HandleClicks<InputAction>>());
+    sm.register_update_system(std::make_unique<ui::HandleDrags<InputAction>>());
+  }
+  sm.register_update_system(
+      std::make_unique<ui::EndUIContextManager<InputAction>>());
+}
 
 } // namespace ui
 
