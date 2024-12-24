@@ -429,20 +429,19 @@ struct AutoLayout {
       float my_size = widget.computed[exp_index];
       float all_children = _total_child(exp_index);
       float error = all_children - my_size;
-      // std::cout << "starting error " << exp_index << " " << error << "\n";
+      log_trace("starting error {} {}", exp_index, error);
 
       int i_x = 0;
       while (error > ACCEPTABLE_ERROR) {
-        _solve_error_optional(0, &error);
+        _solve_error_optional(exp_index, &error);
         i_x++;
 
-        fix_violating_children(0, error);
-        all_children = _total_child(0);
+        fix_violating_children(exp_index, error);
+        all_children = _total_child(exp_index);
         error = all_children - my_size;
-        if (i_x > 100) {
-          log_warn("Hit X-axis iteration limit trying to solve violations");
-          // VALIDATE(false, "hit x iteration limit trying to solve
-          // violations");
+        if (i_x > 10) {
+          log_trace("Hit {}-axis iteration limit trying to solve violations {}",
+                    exp_index == 0 ? "X" : "Y", error);
           break;
         }
       }
@@ -455,8 +454,8 @@ struct AutoLayout {
     }
 
     float error_y = compute_error(1);
-    if (error_y < 1) {
-      tax_refund(widget, 0, error_y);
+    if (error_y < 0) {
+      tax_refund(widget, 1, error_y);
     }
 
     // Solve for children

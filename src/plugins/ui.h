@@ -168,12 +168,15 @@ struct ShouldHide : BaseComponent {};
 struct HasChildrenComponent : BaseComponent {
   std::vector<EntityID> children;
   std::function<void(Entity &)> on_child_add;
+
   HasChildrenComponent() {}
+
   void add_child(Entity &child) {
     children.push_back(child.id);
     if (on_child_add)
       on_child_add(child);
   }
+
   auto &register_on_child_add(const std::function<void(Entity &)> &cb) {
     on_child_add = cb;
     return *this;
