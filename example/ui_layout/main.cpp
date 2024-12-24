@@ -55,6 +55,18 @@ private:
   vec2 position;
 };
 
+void run_and_print_tree(ui::UIComponent &root) {
+
+  std::map<EntityID, RefEntity> components;
+  auto comps = EntityQuery().whereHasComponent<ui::UIComponent>().gen();
+  for (Entity &entity : comps) {
+    components.emplace(entity.id, entity);
+  }
+
+  ui::AutoLayout::autolayout(root, components);
+  ui::AutoLayout::print_tree(root);
+}
+
 } // namespace afterhours
 
 std::ostream &operator<<(std::ostream &os, const RectangleType &data) {
@@ -71,45 +83,44 @@ int main(int, char **) {
 
   auto &div = EntityHelper::createEntity();
   {
-    ui::UIComponent &divCmp = div.addComponent<ui::UIComponent>(div.id);
-    divCmp.desired[0] = ui::Size{
-        .dim = ui::Dim::Children,
-    };
-    divCmp.desired[1] = ui::Size{
-        .dim = ui::Dim::Children,
-    };
+    div.addComponent<ui::UIComponent>(div.id)
+        .set_desired_width(ui::Size{
+            .dim = ui::Dim::Children,
+        })
+        .set_desired_height(ui::Size{
+            .dim = ui::Dim::Children,
+        });
   }
 
   auto &left = EntityHelper::createEntity();
   {
-    ui::UIComponent &cmp = left.addComponent<ui::UIComponent>(left.id);
-    cmp.desired[0] = ui::Size{
-        .dim = ui::Dim::Pixels,
-        .value = 100.f,
-    };
-    cmp.desired[1] = ui::Size{
-        .dim = ui::Dim::Pixels,
-        .value = 100.f,
-    };
+    left.addComponent<ui::UIComponent>(left.id)
+        .set_desired_width(ui::Size{
+            .dim = ui::Dim::Pixels,
+            .value = 100.f,
+        })
+        .set_desired_height(ui::Size{
+            .dim = ui::Dim::Pixels,
+            .value = 100.f,
+        });
   }
   div.get<ui::UIComponent>().children.push_back(left.id);
 
   auto &right = EntityHelper::createEntity();
   {
-    ui::UIComponent &cmp = right.addComponent<ui::UIComponent>(right.id);
-    cmp.desired[0] = ui::Size{
-        .dim = ui::Dim::Pixels,
-        .value = 100.f,
-    };
-    cmp.desired[1] = ui::Size{
-        .dim = ui::Dim::Pixels,
-        .value = 100.f,
-    };
+    right.addComponent<ui::UIComponent>(right.id)
+        .set_desired_width(ui::Size{
+            .dim = ui::Dim::Pixels,
+            .value = 100.f,
+        })
+        .set_desired_height(ui::Size{
+            .dim = ui::Dim::Pixels,
+            .value = 100.f,
+        });
   }
   div.get<ui::UIComponent>().children.push_back(right.id);
 
-  ui::AutoLayout::autolayout(div.get<ui::UIComponent>());
-  ui::AutoLayout::print_tree(div.get<ui::UIComponent>());
+  run_and_print_tree(div.get<ui::UIComponent>());
 
   {
     auto &Sophie = EntityHelper::createEntity();
@@ -162,8 +173,7 @@ int main(int, char **) {
       Sophie.get<ui::UIComponent>().add_child(div2.id);
     }
 
-    afterhours::ui::AutoLayout::autolayout(Sophie.get<ui::UIComponent>());
-    afterhours::ui::AutoLayout::print_tree(Sophie.get<ui::UIComponent>());
+    run_and_print_tree(Sophie.get<ui::UIComponent>());
 
     std::cout << div2.get<ui::UIComponent>().rect();
     std::cout << " should be \n";
