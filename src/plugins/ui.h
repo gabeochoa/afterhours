@@ -527,6 +527,71 @@ struct UpdateDropdownOptions
   }
 };
 
+#ifdef AFTER_HOURS_USE_RAYLIB
+// TODO add a non raylib version...
+struct HasColor : BaseComponent {
+  raylib::Color color;
+  HasColor(raylib::Color c) : color(c) {}
+};
+
+template <typename InputAction>
+struct RenderAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
+
+  virtual ~RenderAutoLayoutRoots() {}
+
+  Entity *context_entity;
+  virtual void once(float) override {
+    OptEntity opt_context =
+        EntityQuery()                                        //
+            .whereHasComponent<ui::UIContext<InputAction>>() //
+            .gen_first();
+    this->context_entity = opt_context.value();
+    this->include_derived_children = true;
+  }
+
+  void render_me(const Entity &entity) const {
+    const UIComponent &cmp = entity.get<UIComponent>();
+
+    UIContext<InputAction> &context =
+        this->context_entity->template get<UIContext<InputAction>>();
+
+    raylib::Color col = entity.get<HasColor>().color;
+
+    if (context.is_hot(entity.id)) {
+      col = raylib::RED;
+    }
+
+    if (context.has_focus(entity.id)) {
+      raylib::DrawRectangleRec(cmp.focus_rect(), raylib::PINK);
+    }
+    raylib::DrawRectangleRec(cmp.rect(), col);
+    if (entity.has<HasLabel>()) {
+      DrawText(entity.get<HasLabel>().label.c_str(), (int)cmp.x(), (int)cmp.y(),
+               (int)(cmp.height() / 2.f), raylib::RAYWHITE);
+    }
+  }
+
+  void render(const Entity &entity) const {
+    const UIComponent &cmp = entity.get<UIComponent>();
+
+    if (entity.has<HasColor>()) {
+      render_me(entity);
+    }
+
+    for (EntityID child : cmp.children) {
+      render(AutoLayout::to_ent_static(child));
+    }
+  }
+
+  virtual void for_each_with_derived(const Entity &entity, const UIComponent &,
+                                     const AutoLayoutRoot &,
+                                     float) const override {
+    render(entity);
+  }
+};
+
+#endif
+
 //// /////
 ////  Plugin Info
 //// /////
@@ -564,6 +629,14 @@ static void register_update_systems(SystemManager &sm) {
   sm.register_update_system(
       std::make_unique<ui::EndUIContextManager<InputAction>>());
 }
+
+#ifdef AFTER_HOURS_USE_RAYLIB
+template <typename InputAction>
+static void register_render_systems(SystemManager &sm) {
+  sm.register_render_system(
+      std::make_unique<ui::RenderAutoLayoutRoots<InputAction>>());
+}
+#endif
 
 } // namespace ui
 
