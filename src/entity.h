@@ -31,7 +31,7 @@ inline void VALIDATE(...) {}
 using ComponentBitSet = std::bitset<max_num_components>;
 // originally this was a std::array<BaseComponent*, max_num_components> but i
 // cant seem to serialize this so lets try map
-using ComponentArray = std::map<ComponentID, std::unique_ptr<BaseComponent>>;
+using ComponentArray = std::map<ComponentID, BaseComponent *>;
 using EntityID = int;
 
 static std::atomic_int ENTITY_ID_GEN = 0;
@@ -51,7 +51,13 @@ struct Entity {
   void operator=(const Entity &) = delete;
   Entity &operator=(Entity &&) = delete;
 
-  virtual ~Entity() { componentArray.clear(); }
+  virtual ~Entity() {
+    for (auto &pair : componentArray) {
+      delete pair.second;
+    }
+    componentSet.reset();
+    componentArray.clear();
+  }
 
   // These two functions can be used to validate than an entity has all of the
   // matching components that are needed for this system to run
@@ -72,8 +78,10 @@ struct Entity {
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
     for (const auto &pair : componentArray) {
-      const auto &component = pair.second;
-      if (child_of<T>(component.get())) {
+      BaseComponent *component = pair.second;
+      if (!component)
+        continue;
+      if (child_of<T>(component)) {
         return true;
       }
     }
@@ -133,7 +141,7 @@ struct Entity {
     }
 #endif
 
-    auto component = std::make_unique<T>(std::forward<TArgs>(args)...);
+    auto component = new T(std::forward<TArgs>(args)...);
     ComponentID component_id = components::get_type_id<T>();
     componentArray[component_id] = std::move(component);
     componentSet[component_id] = true;
@@ -182,7 +190,7 @@ struct Entity {
 #endif
     for (const auto &pair : componentArray) {
       const auto &component = pair.second;
-      if (child_of<T>(component.get())) {
+      if (child_of<T>(component)) {
         return static_cast<T &>(*pair.second);
       }
     }
@@ -197,7 +205,7 @@ struct Entity {
 #endif
     for (const auto &pair : componentArray) {
       const auto &component = pair.second;
-      if (child_of<T>(component.get())) {
+      if (child_of<T>(component)) {
         return static_cast<const T &>(*pair.second);
       }
     }
@@ -213,15 +221,14 @@ struct Entity {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreturn-local-addr"
 #endif
-    return static_cast<T &>(
-        *componentArray.at(components::get_type_id<T>()).get());
+    return static_cast<T &>(*componentArray.at(components::get_type_id<T>()));
   }
 
   template <typename T> [[nodiscard]] const T &get() const {
     warnIfMissingComponent<T>();
 
     return static_cast<const T &>(
-        *componentArray.at(components::get_type_id<T>()).get());
+        *componentArray.at(components::get_type_id<T>()));
 #ifdef __clang__
 #pragma clang diagnostic pop
 #elif defined(__GNUC__)
