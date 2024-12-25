@@ -9,7 +9,7 @@
 #include "entity.h"
 namespace afterhours {
 
-using Entities = std::vector<RefEntity>;
+using Entities = std::vector<Entity>;
 using RefEntities = std::vector<RefEntity>;
 
 static Entities entities_DO_NOT_USE;
@@ -49,7 +49,7 @@ const Entities &EntityHelper::get_entities() { return get_entities_for_mod(); }
 
 RefEntities EntityHelper::get_ref_entities() {
   RefEntities matching;
-  for (Entity &e : EntityHelper::get_entities()) {
+  for (Entity &e : EntityHelper::get_entities_for_mod()) {
     matching.push_back(e);
   }
   return matching;
@@ -68,20 +68,19 @@ Entity &EntityHelper::createPermanentEntity() {
 }
 
 Entity &EntityHelper::createEntityWithOptions(const CreationOptions &options) {
-  auto e = new Entity();
-  get_entities_for_mod().push_back(*e);
+  auto &e = get_entities_for_mod().emplace_back(Entity());
 
   if (options.is_permanent) {
-    permanant_ids.insert(e->id);
+    permanant_ids.insert(e.id);
   }
 
-  return *e;
+  return e;
 }
 
 void EntityHelper::markIDForCleanup(int e_id) {
-  auto &entities = get_entities();
+  auto &entities = get_entities_for_mod();
   auto it = entities.begin();
-  while (it != get_entities().end()) {
+  while (it != entities.end()) {
     Entity &entity = *it;
     if (entity.id == e_id) {
       entity.cleanup = true;
@@ -147,7 +146,7 @@ enum class ForEachFlow {
 
 void EntityHelper::forEachEntity(
     const std::function<ForEachFlow(Entity &)> &cb) {
-  for (Entity &e : get_entities()) {
+  for (Entity &e : get_entities_for_mod()) {
     auto fef = cb(e);
     if (fef == 1)
       continue;
@@ -160,7 +159,7 @@ OptEntity EntityHelper::getEntityForID(EntityID id) {
   if (id == -1)
     return {};
 
-  for (Entity &e : get_entities()) {
+  for (Entity &e : get_entities_for_mod()) {
     if (e.id == id)
       return e;
   }

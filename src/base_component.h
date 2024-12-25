@@ -8,7 +8,7 @@
 namespace afterhours {
 
 struct Entity;
-using Entities = std::vector<std::reference_wrapper<Entity>>;
+using Entities = std::vector<Entity>;
 
 struct BaseComponent;
 

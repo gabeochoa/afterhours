@@ -207,7 +207,7 @@ struct EntityQuery {
     return ids;
   }
 
-  EntityQuery() : entities(EntityHelper::get_entities()) {}
+  EntityQuery() : entities(EntityHelper::get_entities_for_mod()) {}
   explicit EntityQuery(const Entities &entsIn) : entities(entsIn) {
     entities = entsIn;
   }
@@ -248,18 +248,30 @@ private:
     return out;
   }
 
-  RefEntities run_query(UnderlyingOptions) const {
+  RefEntities run_query(UnderlyingOptions options) const {
+    std::vector<int> ids = run_query_ids(options);
     RefEntities out;
+    out.reserve(ids.size());
+
+    for (int id : ids) {
+      out.push_back(std::ref(entities[id]));
+    }
+
+    return out;
+  }
+
+  std::vector<int> run_query_ids(UnderlyingOptions) const {
+    std::vector<int> out;
     out.reserve(entities.size());
 
-    for (Entity &e : entities) {
-      out.push_back(e);
+    for (const Entity &e : entities) {
+      out.push_back(e.id);
     }
 
     auto it = out.end();
     for (auto &mod : mods) {
-      it = std::partition(out.begin(), it, [&mod](const auto &entity) {
-        return (*mod)(entity);
+      it = std::partition(out.begin(), it, [this, &mod](const auto &index) {
+        return (*mod)(entities[index]);
       });
     }
 
@@ -273,8 +285,8 @@ private:
     // TODO :SPEED: if we are doing gen_first() then partial sort?
     // Now run any order bys
     if (orderby) {
-      std::sort(out.begin(), out.end(), [&](const Entity &a, const Entity &b) {
-        return (*orderby)(a, b);
+      std::sort(out.begin(), out.end(), [&](const int &a, const int &b) {
+        return (*orderby)(entities[a], entities[b]);
       });
     }
 

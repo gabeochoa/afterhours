@@ -12,6 +12,8 @@
 
 namespace afterhours {
 template <typename Base, typename Derived> bool child_of(Derived *derived) {
+  if (!derived)
+    return false;
   return dynamic_cast<Base *>(derived) != nullptr;
 }
 
@@ -46,10 +48,10 @@ struct Entity {
   bool cleanup = false;
 
   Entity() : id(ENTITY_ID_GEN++) { componentSet.reset(); }
-  Entity(const Entity &) = delete;
-  Entity(Entity &&other) noexcept = default;
-  void operator=(const Entity &) = delete;
-  Entity &operator=(Entity &&) = delete;
+  // Entity(const Entity &) = delete;
+  // Entity(Entity &&other) noexcept = default;
+  // void operator=(const Entity &) = delete;
+  // Entity &operator=(Entity &&) = delete;
 
   virtual ~Entity() {
     for (auto &pair : componentArray) {
@@ -143,7 +145,7 @@ struct Entity {
 
     auto component = new T(std::forward<TArgs>(args)...);
     ComponentID component_id = components::get_type_id<T>();
-    componentArray[component_id] = std::move(component);
+    componentArray[component_id] = component;
     componentSet[component_id] = true;
 
 #if defined(AFTER_HOURS_DEBUG)
