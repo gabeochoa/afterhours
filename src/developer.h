@@ -11,12 +11,12 @@
 
 #ifndef RectangleType
 struct MyRectangle {
-    float x,y,width,height;
+  float x, y, width, height;
 };
 #define RectangleType MyRectangle
 #endif
 
-#ifndef Vector2Type 
+#ifndef Vector2Type
 struct MyVec2 {
   float x;
   float y;
@@ -34,7 +34,6 @@ constexpr float distance_sq(const Vector2Type a, const Vector2Type b) {
 }
 #endif
 
-
 namespace afterhours {
 
 // TODO move into a dedicated file?
@@ -50,18 +49,18 @@ namespace developer {
 
 template <typename Component> struct EnforceSingleton : System<Component> {
 
-  bool saw_one;
+  EntityID id_seed = -1;
 
-  virtual void once(float) override { saw_one = false; }
+  virtual void once(float) override { id_seed = -1; }
 
-  virtual void for_each_with(Entity &, Component &, float) override {
+  virtual void for_each_with(Entity &entity, Component &, float) override {
 
-    if (saw_one) {
+    if (id_seed > 0) {
       std::cerr << "Enforcing only one entity with " << type_name<Component>()
                 << std::endl;
       assert(false);
     }
-    saw_one = true;
+    id_seed = entity.id;
   }
 };
 

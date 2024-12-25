@@ -3,6 +3,8 @@
 
 #include <memory>
 #include <vector>
+
+#include "type_name.h"
 namespace afterhours {
 
 struct Entity;
@@ -36,6 +38,9 @@ template <typename T> inline ComponentID get_type_id() noexcept {
   static_assert(std::is_base_of<BaseComponent, T>::value,
                 "T must inherit from BaseComponent");
   static ComponentID typeID{internal::get_unique_id()};
+#ifdef AFTER_HOURS_DEBUG
+  log_trace("{} => id: {}", type_name<T>(), typeID);
+#endif
   return typeID;
 }
 } // namespace components

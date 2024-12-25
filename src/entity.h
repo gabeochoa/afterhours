@@ -45,9 +45,11 @@ struct Entity {
 
   bool cleanup = false;
 
-  Entity() : id(ENTITY_ID_GEN++) {}
+  Entity() : id(ENTITY_ID_GEN++) { componentSet.reset(); }
   Entity(const Entity &) = delete;
   Entity(Entity &&other) noexcept = default;
+  void operator=(const Entity &) = delete;
+  Entity &operator=(Entity &&) = delete;
 
   virtual ~Entity() { componentArray.clear(); }
 
@@ -112,8 +114,8 @@ struct Entity {
 
   template <typename T, typename... TArgs> T &addComponent(TArgs &&...args) {
 #if defined(AFTER_HOURS_DEBUG)
-    log_trace("adding component_id:{} {} to entity_id: {}",
-              components::get_type_id<T>(), type_name<T>(), id);
+    log_info("trying to add component_id:{} {} to entity_id: {}",
+             components::get_type_id<T>(), type_name<T>(), id);
 
     // checks for duplicates
     if (this->has<T>()) {
