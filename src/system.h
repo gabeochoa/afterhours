@@ -184,15 +184,13 @@ struct SystemManager {
       if (!system->should_run(dt))
         continue;
       system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
-        if (!entity)
-          continue;
+      for (Entity &entity : entities) {
 #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
         if (system->include_derived_children)
-          system->for_each_derived(*entity, dt);
+          system->for_each_derived(entity, dt);
         else
 #endif
-          system->for_each(*entity, dt);
+          system->for_each(entity, dt);
       }
     }
     EntityHelper::cleanup();
@@ -203,15 +201,13 @@ struct SystemManager {
       if (!system->should_run(dt))
         continue;
       system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
-        if (!entity)
-          continue;
+      for (Entity &entity : entities) {
 #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
         if (system->include_derived_children)
-          system->for_each_derived(*entity, dt);
+          system->for_each_derived(entity, dt);
         else
 #endif
-          system->for_each(*entity, dt);
+          system->for_each(entity, dt);
       }
     }
   }
@@ -221,16 +217,13 @@ struct SystemManager {
       if (!system->should_run(dt))
         continue;
       system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
-        if (!entity)
-          continue;
-        const Entity &e = *entity;
+      for (const Entity &entity : entities) {
 #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
         if (system->include_derived_children)
-          system->for_each_derived(e, dt);
+          system->for_each_derived(entity, dt);
         else
 #endif
-          system->for_each(e, dt);
+          system->for_each(entity, dt);
       }
     }
   }

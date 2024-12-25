@@ -9,7 +9,7 @@
 #include "entity.h"
 namespace afterhours {
 
-using Entities = std::vector<std::shared_ptr<Entity>>;
+using Entities = std::vector<RefEntity>;
 using RefEntities = std::vector<RefEntity>;
 
 static Entities entities_DO_NOT_USE;
@@ -41,23 +41,6 @@ struct EntityHelper {
   };
 
   static void forEachEntity(const std::function<ForEachFlow(Entity &)> &cb);
-
-  // TODO exists as a conversion for things that need shared_ptr right now
-  static std::shared_ptr<Entity> getEntityAsSharedPtr(const Entity &entity) {
-    for (std::shared_ptr<Entity> current_entity : get_entities()) {
-      if (entity.id == current_entity->id)
-        return current_entity;
-    }
-    return {};
-  }
-
-  static std::shared_ptr<Entity> getEntityAsSharedPtr(OptEntity entity) {
-    if (!entity)
-      return {};
-    const Entity &e = entity.asE();
-    return getEntityAsSharedPtr(e);
-  }
-
   static OptEntity getEntityForID(EntityID id);
 };
 
@@ -66,10 +49,8 @@ const Entities &EntityHelper::get_entities() { return get_entities_for_mod(); }
 
 RefEntities EntityHelper::get_ref_entities() {
   RefEntities matching;
-  for (const auto &e : EntityHelper::get_entities()) {
-    if (!e)
-      continue;
-    matching.push_back(*e);
+  for (Entity &e : EntityHelper::get_entities()) {
+    matching.push_back(e);
   }
   return matching;
 }
@@ -87,8 +68,8 @@ Entity &EntityHelper::createPermanentEntity() {
 }
 
 Entity &EntityHelper::createEntityWithOptions(const CreationOptions &options) {
-  std::shared_ptr<Entity> e(new Entity());
-  get_entities_for_mod().push_back(e);
+  auto e = new Entity();
+  get_entities_for_mod().push_back(*e);
 
   if (options.is_permanent) {
     permanant_ids.insert(e->id);
@@ -101,8 +82,9 @@ void EntityHelper::markIDForCleanup(int e_id) {
   auto &entities = get_entities();
   auto it = entities.begin();
   while (it != get_entities().end()) {
-    if ((*it)->id == e_id) {
-      (*it)->cleanup = true;
+    Entity &entity = *it;
+    if (entity.id == e_id) {
+      entity.cleanup = true;
       break;
     }
     it++;
@@ -114,7 +96,7 @@ void EntityHelper::removeEntity(int e_id) {
 
   auto newend = std::remove_if(
       entities.begin(), entities.end(),
-      [e_id](const auto &entity) { return !entity || entity->id == e_id; });
+      [e_id](const Entity &entity) { return entity.id == e_id; });
 
   entities.erase(newend, entities.end());
 }
@@ -124,9 +106,13 @@ void EntityHelper::cleanup() {
   Entities &entities = get_entities_for_mod();
 
   auto newend =
-      std::remove_if(entities.begin(), entities.end(), [](const auto &entity) {
-        return !entity || entity->cleanup;
-      });
+      std::remove_if(entities.begin(), entities.end(),
+                     [](const Entity &entity) { return entity.cleanup; });
+
+  for (auto it = newend; it != entities.end(); it++) {
+    Entity &e = *it;
+    delete &e;
+  }
 
   entities.erase(newend, entities.end());
 }
@@ -146,10 +132,9 @@ void EntityHelper::delete_all_entities(bool include_permanent) {
   // Only delete non perms
   Entities &entities = get_entities_for_mod();
 
-  auto newend =
-      std::remove_if(entities.begin(), entities.end(), [](const auto &entity) {
-        return !permanant_ids.contains(entity->id);
-      });
+  auto newend = std::remove_if(
+      entities.begin(), entities.end(),
+      [](const Entity &entity) { return !permanant_ids.contains(entity.id); });
 
   entities.erase(newend, entities.end());
 }
@@ -162,10 +147,8 @@ enum class ForEachFlow {
 
 void EntityHelper::forEachEntity(
     const std::function<ForEachFlow(Entity &)> &cb) {
-  for (const auto &e : get_entities()) {
-    if (!e)
-      continue;
-    auto fef = cb(*e);
+  for (Entity &e : get_entities()) {
+    auto fef = cb(e);
     if (fef == 1)
       continue;
     if (fef == 2)
@@ -177,11 +160,9 @@ OptEntity EntityHelper::getEntityForID(EntityID id) {
   if (id == -1)
     return {};
 
-  for (const auto &e : get_entities()) {
-    if (!e)
-      continue;
-    if (e->id == id)
-      return *e;
+  for (Entity &e : get_entities()) {
+    if (e.id == id)
+      return e;
   }
   return {};
 }

@@ -6,7 +6,7 @@
 namespace afterhours {
 
 struct Entity;
-using Entities = std::vector<std::shared_ptr<Entity>>;
+using Entities = std::vector<std::reference_wrapper<Entity>>;
 
 struct BaseComponent;
 

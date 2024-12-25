@@ -252,10 +252,7 @@ private:
     RefEntities out;
     out.reserve(entities.size());
 
-    for (const auto &e_ptr : entities) {
-      if (!e_ptr)
-        continue;
-      Entity &e = *e_ptr;
+    for (Entity &e : entities) {
       out.push_back(e);
     }
 
