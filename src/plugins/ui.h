@@ -723,8 +723,10 @@ template <typename ProviderComponent>
 Entity &make_dropdown(Entity &parent, int max_options = -1) {
   using WRDS = ui::HasDropdownStateWithProvider<ProviderComponent>;
   auto &dropdown = EntityHelper::createEntity();
+
   dropdown.addComponent<UIComponent>(dropdown.id).set_parent(parent.id);
   parent.get<ui::UIComponent>().add_child(dropdown.id);
+
   dropdown.addComponent<ui::HasChildrenComponent>();
 
   dropdown.addComponent<WRDS>(
@@ -741,6 +743,16 @@ Entity &make_dropdown(Entity &parent, int max_options = -1) {
 #endif
 
   return dropdown;
+}
+
+static void force_layout_and_print(Entity &root) {
+  std::map<EntityID, RefEntity> components;
+  auto comps = EntityQuery().whereHasComponent<ui::UIComponent>().gen();
+  for (Entity &entity : comps) {
+    components.emplace(entity.id, entity);
+  }
+  ui::AutoLayout::autolayout(root.get<ui::UIComponent>(), components);
+  ui::AutoLayout::print_tree(root.get<ui::UIComponent>());
 }
 
 static Size pixels(float value) {
