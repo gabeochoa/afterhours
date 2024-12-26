@@ -778,12 +778,21 @@ static ComponentSize children_xy() {
   };
 }
 
+static Size padding_(float v, float strict = 0.5f) {
+  return ui::Size{
+      .dim = ui::Dim::Percent,
+      .value = v,
+      .strictness = strict,
+  };
+}
+
 Entity &make_div(Entity &parent, ComponentSize cz) {
   auto &div = EntityHelper::createEntity();
   {
-    div.addComponent<ui::UIComponent>(parent.id)
+    div.addComponent<ui::UIComponent>(div.id)
         .set_desired_width(cz.first)
-        .set_desired_height(cz.second);
+        .set_desired_height(cz.second)
+        .set_parent(parent.id);
     parent.get<ui::UIComponent>().add_child(div.id);
   }
   return div;
