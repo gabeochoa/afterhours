@@ -786,7 +786,7 @@ static Size padding_(float v, float strict = 0.5f) {
   };
 }
 
-Entity &make_div(Entity &parent, ComponentSize cz) {
+static Entity &make_div(Entity &parent, ComponentSize cz) {
   auto &div = EntityHelper::createEntity();
   {
     div.addComponent<ui::UIComponent>(div.id)
@@ -796,6 +796,62 @@ Entity &make_div(Entity &parent, ComponentSize cz) {
     parent.get<ui::UIComponent>().add_child(div.id);
   }
   return div;
+}
+
+struct Padding {
+  float top;
+  float bottom;
+  float left;
+  float right;
+};
+static void pad_component(Entity &component, Padding padding) {
+  auto [top, bottom, left, right] = padding;
+
+  auto &ui_cmp = component.get<ui::UIComponent>();
+  auto &parent = AutoLayout::to_ent_static(ui_cmp.parent);
+
+  // Make it no longer a child of its parent
+  parent.get<UIComponent>().remove_child(component.id);
+
+  {
+    // Top padding
+    make_div(parent, ComponentSize{
+                         padding_(1.f, 1.f),
+                         padding_(top, 0.5f),
+                     });
+
+    auto &button_with_left = make_div(parent, ComponentSize{
+                                                  padding_(1.f, 1.f),
+                                                  children(),
+                                              });
+    button_with_left.get<ui::UIComponent>().flex_direction =
+        afterhours::ui::FlexDirection::Row;
+    {
+
+      make_div(button_with_left, ComponentSize{
+                                     padding_(left, 0.5f),
+                                     pixels(1.f),
+                                 });
+
+      auto &buttons = make_div(button_with_left, afterhours::ui::children_xy());
+
+      {
+        // set the new parent
+        ui_cmp.parent = buttons.id;
+        buttons.get<UIComponent>().add_child(component.id);
+      }
+
+      make_div(button_with_left, ComponentSize{
+                                     padding_(right, 0.5f),
+                                     pixels(1.f),
+                                 });
+    }
+
+    make_div(parent, ComponentSize{
+                         padding_(1.f, 1.f),
+                         padding_(bottom, 0.5f),
+                     });
+  }
 }
 
 Entity &make_button(Entity &parent, const std::string &label,
