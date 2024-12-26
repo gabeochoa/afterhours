@@ -268,7 +268,14 @@ struct AutoLayout {
 
     float expectation = _sum_children_axis_for_child_exp(widget, axis);
 
+    // the min non-flex side of the box, should be whatever the largest child is
+    // for example, when flexing down, the box should be as wide as the widest
+    // child
     if ((widget.flex_direction & FlexDirection::Column) && axis == Axis::X) {
+      expectation = _max_child_size(widget, axis);
+    }
+
+    if ((widget.flex_direction & FlexDirection::Row) && axis == Axis::Y) {
       expectation = _max_child_size(widget, axis);
     }
 
