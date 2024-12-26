@@ -278,6 +278,9 @@ struct AutoLayout {
   }
 
   void calculate_those_with_children(UIComponent &widget) {
+    if (widget.children.size() == 0)
+      return;
+
     for (EntityID child : widget.children) {
       calculate_those_with_children(this->to_cmp(child));
     }
