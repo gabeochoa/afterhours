@@ -26,6 +26,8 @@ struct Size {
   float strictness = 1.f;
 };
 
+using ComponentSize = std::pair<Size, Size>;
+
 enum struct FlexDirection {
   None = 1 << 0,
   Row = 1 << 1,
@@ -61,7 +63,7 @@ struct UIComponent : BaseComponent {
   bool is_visible = false;
   bool absolute = false;
   AxisArray<float> computed;
-  std::array<float, 2> computed_rel;
+  AxisArray<float> computed_rel;
 
   EntityID parent = -1;
   std::vector<EntityID> children;
@@ -70,8 +72,8 @@ struct UIComponent : BaseComponent {
 
   Rectangle rect() const {
     return Rectangle{
-        .x = computed_rel[0],
-        .y = computed_rel[1],
+        .x = computed_rel[Axis::X],
+        .y = computed_rel[Axis::Y],
         .width = computed[Axis::X],
         .height = computed[Axis::Y],
     };
@@ -121,8 +123,8 @@ struct UIComponent : BaseComponent {
   void reset_computed_values() {
     computed[Axis::X] = 0.f;
     computed[Axis::Y] = 0.f;
-    computed_rel[0] = 0.f;
-    computed_rel[1] = 0.f;
+    computed_rel[Axis::X] = 0.f;
+    computed_rel[Axis::Y] = 0.f;
   }
 };
 
@@ -480,8 +482,8 @@ struct AutoLayout {
   void compute_relative_positions(UIComponent &widget) {
     if (widget.parent == -1) {
       // This already happens by default, but lets be explicit about it
-      widget.computed_rel[0] = 0.f;
-      widget.computed_rel[1] = 0.f;
+      widget.computed_rel[Axis::X] = 0.f;
+      widget.computed_rel[Axis::Y] = 0.f;
     }
 
     // Assuming we dont care about things smaller than 1 pixel
@@ -524,8 +526,8 @@ struct AutoLayout {
       bool no_flex = child.flex_direction == FlexDirection::None;
       // We cant flex and are going over the limit
       if (no_flex && (will_hit_max_x || will_hit_max_y)) {
-        child.computed_rel[0] = sx;
-        child.computed_rel[1] = sy;
+        child.computed_rel[Axis::X] = sx;
+        child.computed_rel[Axis::Y] = sy;
         continue;
       }
 
@@ -545,8 +547,8 @@ struct AutoLayout {
         col_h = cy;
       }
 
-      child.computed_rel[0] = offx;
-      child.computed_rel[1] = offy;
+      child.computed_rel[Axis::X] = offx;
+      child.computed_rel[Axis::Y] = offy;
 
       // Setup for next child placement
       if (child.flex_direction & FlexDirection::Column) {
@@ -570,8 +572,8 @@ struct AutoLayout {
       offset = offset + Vector2Type{parent.rect().x, parent.rect().y};
     }
 
-    widget.computed_rel[0] += offset.x;
-    widget.computed_rel[1] += offset.y;
+    widget.computed_rel[Axis::X] += offset.x;
+    widget.computed_rel[Axis::Y] += offset.y;
 
     for (EntityID child : widget.children) {
       compute_rect_bounds(this->to_cmp(child));
