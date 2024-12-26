@@ -855,7 +855,8 @@ static void pad_component(Entity &component, Padding padding) {
 }
 
 Entity &make_button(Entity &parent, const std::string &label,
-                    Vector2Type button_size) {
+                    Vector2Type button_size,
+                    const std::function<void(Entity &)> &click = {}) {
   auto &entity = EntityHelper::createEntity();
   entity.addComponent<UIComponent>(entity.id)
       .set_desired_width(ui::Size{
@@ -870,8 +871,7 @@ Entity &make_button(Entity &parent, const std::string &label,
   parent.get<ui::UIComponent>().add_child(entity.id);
 
   entity.addComponent<ui::HasLabel>(label);
-  entity.addComponent<ui::HasClickListener>(
-      [](Entity &button) { log_info("I clicked the button {}", button.id); });
+  entity.addComponent<ui::HasClickListener>(click);
 #ifdef AFTER_HOURS_USE_RAYLIB
   entity.addComponent<ui::HasColor>(raylib::BLUE);
 #endif
