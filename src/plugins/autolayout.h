@@ -34,12 +34,6 @@ enum struct FlexDirection {
   Column = 1 << 2,
 };
 
-struct Padding {
-    Size top;
-    Size bottom;
-    Size left;
-    Size right;
-};
 
 enum struct Axis { 
     X = 0, 
@@ -56,6 +50,29 @@ std::ostream &operator<<(std::ostream &os, const Axis &axis) {
   os << (axis == Axis::X ? "X-Axis" : "Y-Axis");
   return os;
 }
+
+struct Padding {
+    Size top;
+    Size bottom;
+    Size left;
+    Size right;
+
+    const Size &operator[](Axis axis) const {
+        switch(axis){
+            case Axis::X:
+            case Axis::Y:
+                log_error("Fetching padding by X/Y axis?");
+            case Axis::top:
+                return top;
+            case Axis::bottom:
+                return bottom;
+            case Axis::left:
+                return left;
+            case Axis::right:
+                return right;
+        }
+    }
+};
 
 using FontID = int;
 
@@ -238,7 +255,7 @@ struct AutoLayout {
     widget.computed_padd[Axis::left] = padd_left;
     widget.computed_padd[Axis::right] = padd_right;
     widget.computed_padd[Axis::bottom] = padd_bottom;
-    widget.computed_padd[Axis::X] = padd_left+ padd_right;
+    widget.computed_padd[Axis::X] = padd_left + padd_right;
     widget.computed_padd[Axis::Y] = padd_top + padd_bottom;
 
     widget.computed[Axis::X] = size_x + widget.computed_padd[Axis::X];
@@ -269,12 +286,62 @@ struct AutoLayout {
     }
   }
 
+  float compute_padd_for_parent_exp(const UIComponent &widget,
+                                            Axis axis) {
+    if (widget.absolute && widget.desired[axis].dim == Dim::Percent) {
+      VALIDATE(false, "Absolute widgets should not use Percent");
+    }
+
+    float no_change = widget.computed[axis];
+    if (widget.parent == -1)
+      return no_change;
+
+    // We dont want to check the parent's padding, 
+    // but percent of the whole size
+
+    Axis parent_axis;
+    switch(axis){
+        case Axis::Y:
+        case Axis::top:
+        case Axis::bottom:
+            parent_axis = Axis::Y;
+            break;
+        case Axis::X:
+        case Axis::left:
+        case Axis::right:
+            parent_axis = Axis::X;
+            break;
+    }
+    float parent_size = this->to_cmp(widget.parent).computed[parent_axis];
+
+    Size padd = widget.desired_padding[axis];
+    switch (padd.dim) {
+    case Dim::Percent:
+      return parent_size == -1 ? no_change : padd.value * parent_size;
+    default:
+      return no_change;
+    }
+  }
+
   void calculate_those_with_parents(UIComponent &widget) {
     auto size_x = compute_size_for_parent_exp(widget, Axis::X);
     auto size_y = compute_size_for_parent_exp(widget, Axis::Y);
 
-    widget.computed[Axis::X] = size_x;
-    widget.computed[Axis::Y] = size_y;
+    auto padd_top= compute_padd_for_parent_exp(widget, Axis::top);
+    auto padd_left = compute_padd_for_parent_exp(widget, Axis::left);
+    auto padd_bottom = compute_padd_for_parent_exp(widget, Axis::bottom);
+    auto padd_right = compute_padd_for_parent_exp(widget, Axis::right);
+
+    widget.computed_padd[Axis::top] = padd_top;
+    widget.computed_padd[Axis::left] = padd_left;
+    widget.computed_padd[Axis::right] = padd_right;
+    widget.computed_padd[Axis::bottom] = padd_bottom;
+
+    widget.computed_padd[Axis::X] = padd_left + padd_right;
+    widget.computed_padd[Axis::Y] = padd_top + padd_bottom;
+
+    widget.computed[Axis::X] = size_x + widget.computed_padd[Axis::X];
+    widget.computed[Axis::Y] = size_y + widget.computed_padd[Axis::Y];
 
     for (EntityID child_id : widget.children) {
       calculate_those_with_parents(this->to_cmp(child_id));
@@ -717,11 +784,14 @@ struct AutoLayout {
 
     // now that all children are complete, we can remove the padding spacing
 
-    widget.computed_rel[Axis::X] += (widget.computed_padd[Axis::left]);
-    widget.computed_rel[Axis::Y] += (widget.computed_padd[Axis::top]);
+    auto padding_ = widget.computed_padd;
 
-    widget.computed[Axis::X] -= (widget.computed_padd[Axis::X]);
-    widget.computed[Axis::Y] -= (widget.computed_padd[Axis::Y]);
+    widget.computed_rel[Axis::X] += (padding_[Axis::left]);
+    widget.computed_rel[Axis::Y] += (padding_[Axis::top]);
+
+    widget.computed[Axis::X] -= (padding_[Axis::X]);
+    widget.computed[Axis::Y] -= (padding_[Axis::Y]);
+
 
   }
 

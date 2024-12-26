@@ -252,6 +252,7 @@ struct ClearVisibity : System<UIComponent> {
 struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
 
   std::map<EntityID, RefEntity> components;
+  int print = 10;
 
   virtual void once(float) override {
     components.clear();
@@ -265,7 +266,10 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
 
     AutoLayout::autolayout(cmp, components);
 
-    // AutoLayout::print_tree(cmp);
+    if(print> 0){
+    AutoLayout::print_tree(cmp);
+    print --;
+    }
     // log_error("");
   }
 };
@@ -564,6 +568,9 @@ struct RenderAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     if (context.has_focus(entity.id)) {
       raylib::DrawRectangleRec(cmp.focus_rect(), raylib::PINK);
     }
+    if(true)
+        raylib::DrawRectangleRec(cmp.bounds(), raylib::DARKGREEN);
+
     raylib::DrawRectangleRec(cmp.rect(), col);
     if (entity.has<HasLabel>()) {
       DrawText(entity.get<HasLabel>().label.c_str(), (int)cmp.x(), (int)cmp.y(),
