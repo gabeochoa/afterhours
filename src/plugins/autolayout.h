@@ -52,6 +52,7 @@ enum struct Axis {
     bottom= 5,
 };
 std::ostream &operator<<(std::ostream &os, const Axis &axis) {
+    // TODO
   os << (axis == Axis::X ? "X-Axis" : "Y-Axis");
   return os;
 }
@@ -96,6 +97,15 @@ struct UIComponent : BaseComponent {
         .y = computed_rel[Axis::Y],
         .width = computed[Axis::X],
         .height = computed[Axis::Y],
+    };
+  };
+
+  Rectangle bounds() const {
+    return Rectangle{
+        .x = computed_rel[Axis::X] - computed_padd[Axis::left],
+        .y = computed_rel[Axis::Y] - computed_padd[Axis::top],
+        .width = computed[Axis::X] + computed_padd[Axis::right],
+        .height = computed[Axis::Y] + computed_padd[Axis::bottom],
     };
   };
 
