@@ -179,7 +179,6 @@ struct AutoLayout {
         case Dim::Text:
           log_error("Padding by dimension text not supported");
         case Dim::Percent:
-          log_error("Padding by dimension percent not supported");
         default:
           // This is not a standalone widget,
           // so just keep moving along
@@ -769,7 +768,12 @@ struct AutoLayout {
     std::cout << cmp.rect().x << ",";
     std::cout << cmp.rect().y << ",";
     std::cout << cmp.rect().width << ",";
-    std::cout << cmp.rect().height << std::endl;
+    std::cout << cmp.rect().height << "  ";
+    std::cout << cmp.bounds().x << ",";
+    std::cout << cmp.bounds().y << ",";
+    std::cout << cmp.bounds().width << ",";
+    std::cout << cmp.bounds().height << "  ";
+    std::cout << std::endl;
 
     for (EntityID child_id : cmp.children) {
       print_tree(to_cmp_static(child_id), tab + 1);

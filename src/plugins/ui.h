@@ -796,6 +796,8 @@ static Entity &make_div(Entity &parent, ComponentSize cz) {
         .set_desired_height(cz.second)
         .set_parent(parent.id);
     parent.get<ui::UIComponent>().add_child(div.id);
+          // TODO 
+    div.get<UIComponent>().desired_padding= padding;
   }
   return div;
 }
