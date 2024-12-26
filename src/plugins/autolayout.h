@@ -248,13 +248,21 @@ struct AutoLayout {
       }
       max_child_size = fmaxf(max_child_size, cs);
     }
+
     return max_child_size;
   }
 
   float compute_size_for_child_expectation(UIComponent &widget, Axis axis) {
     float no_change = widget.computed[axis];
-    if (widget.children.empty())
+    if (widget.children.empty()) {
+      // if the component has no children, but the expected size was set,
+      // use that instead
+      // TODO does this need to be a setting? is this generally a decent choice
+      if (widget.desired[axis].value > 0) {
+        return widget.desired[axis].value;
+      }
       return no_change;
+    }
 
     float expectation = _sum_children_axis_for_child_exp(widget, axis);
 
