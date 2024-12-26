@@ -800,13 +800,8 @@ static Entity &make_div(Entity &parent, ComponentSize cz) {
   return div;
 }
 
-struct Padding {
-  float top;
-  float bottom;
-  float left;
-  float right;
-};
 static void pad_component(Entity &component, Padding padding) {
+    /*
   auto [top, bottom, left, right] = padding;
 
   auto &ui_cmp = component.get<ui::UIComponent>();
@@ -854,11 +849,12 @@ static void pad_component(Entity &component, Padding padding) {
                          padding_(bottom, 0.5f),
                      });
   }
+  */
 }
 
 Entity &make_button(Entity &parent, const std::string &label,
                     Vector2Type button_size,
-                    const std::function<void(Entity &)> &click = {}) {
+                    const std::function<void(Entity &)> &click = {}, Padding padding = Padding()) {
   auto &entity = EntityHelper::createEntity();
   entity.addComponent<UIComponent>(entity.id)
       .set_desired_width(ui::Size{
@@ -870,6 +866,9 @@ Entity &make_button(Entity &parent, const std::string &label,
           .value = button_size.y,
       })
       .set_parent(parent.id);
+      // TODO 
+  entity.get<UIComponent>().desired_padding= padding;
+
   parent.get<ui::UIComponent>().add_child(entity.id);
 
   entity.addComponent<ui::HasLabel>(label);

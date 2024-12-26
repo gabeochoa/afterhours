@@ -11,7 +11,7 @@ namespace ui {
 TEST_CASE("UIComponentTest", "[UIComponent]") {
   UIComponent cmp(-1);
   REQUIRE(cmp.flex_direction == FlexDirection::Column);
-  REQUIRE_FALSE(cmp.is_visible);
+  REQUIRE_FALSE(cmp.was_rendered_to_screen);
   REQUIRE_FALSE(cmp.absolute);
   REQUIRE(cmp.fontID == -1);
 }

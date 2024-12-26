@@ -34,7 +34,23 @@ enum struct FlexDirection {
   Column = 1 << 2,
 };
 
-enum struct Axis { X, Y };
+struct Padding {
+    Size top;
+    Size bottom;
+    Size left;
+    Size right;
+};
+
+enum struct Axis { 
+    X = 0, 
+    Y = 1,
+
+    left = 2,
+    top = 3,
+
+    right = 4,
+    bottom= 5,
+};
 std::ostream &operator<<(std::ostream &os, const Axis &axis) {
   os << (axis == Axis::X ? "X-Axis" : "Y-Axis");
   return os;
@@ -48,8 +64,8 @@ struct UIComponent : BaseComponent {
   EntityID id;
   explicit UIComponent(EntityID id_) : id(id_) {}
 
-  template <typename T> struct AxisArray {
-    std::array<T, 2> data;
+  template <typename T, size_t axes=2> struct AxisArray {
+    std::array<T, axes> data;
     T &operator[](Axis axis) { return data[static_cast<size_t>(axis)]; }
 
     const T &operator[](Axis axis) const {
@@ -58,12 +74,15 @@ struct UIComponent : BaseComponent {
   };
 
   AxisArray<Size> desired;
+  Padding desired_padding;
+
   FlexDirection flex_direction = FlexDirection::Column;
 
   bool should_hide = false;
   bool was_rendered_to_screen = false;
   bool absolute = false;
   AxisArray<float> computed;
+  AxisArray<float, 6> computed_padd;
   AxisArray<float> computed_rel;
 
   EntityID parent = -1;
@@ -141,30 +160,80 @@ struct AutoLayout {
     return to_ent(id).get<UIComponent>();
   }
 
-  float compute_size_for_standalone_expectation(UIComponent &widget,
+  float compute_padding_for_standalone_exp(UIComponent &widget,
                                                 Axis axis) {
-    Size exp = widget.desired[axis];
-    switch (exp.dim) {
-    case Dim::Pixels:
-      return exp.value;
-    case Dim::Text:
-      // TODO figure this out
-      // So we can use MeasureTextEx but
-      // we need to know the font and spacing
-      return 100.f;
-    default:
-      // This is not a standalone widget,
-      // so just keep moving along
-      return widget.computed[axis];
+    const auto compute_ = [](Size exp){
+        switch (exp.dim) {
+        case Dim::Pixels:
+          return exp.value;
+        case Dim::Text:
+          log_error("Padding by dimension text not supported");
+        case Dim::Percent:
+          log_error("Padding by dimension percent not supported");
+        default:
+          // This is not a standalone widget,
+          // so just keep moving along
+          return 0.f;
+        }
+        return 0.f;
+    };
+
+    Padding padd = widget.desired_padding;
+    switch(axis){
+        case Axis::X:
+            return compute_(padd.left) + compute_(padd.right);
+        case Axis::Y:
+            return compute_(padd.top) + compute_(padd.bottom);
+        case Axis::top:
+            return compute_(padd.top);
+        case Axis::left:
+            return compute_(padd.left);
+        case Axis::right:
+            return compute_(padd.right);
+        case Axis::bottom:
+            return compute_(padd.bottom);
     }
+    return 0.f;
+  }
+
+  float compute_size_for_standalone_exp(UIComponent &widget,
+                                                Axis axis) {
+    const auto compute_ = [&](Size exp){
+        switch (exp.dim) {
+        case Dim::Pixels:
+          return exp.value;
+        case Dim::Text:
+          // TODO figure this out
+          // So we can use MeasureTextEx but
+          // we need to know the font and spacing
+          return 100.f;
+        default:
+          // This is not a standalone widget,
+          // so just keep moving along
+          return widget.computed[axis];
+        }
+    };
+    Size exp = widget.desired[axis];
+    return compute_(exp);
   }
 
   void calculate_standalone(UIComponent &widget) {
-    auto size_x = compute_size_for_standalone_expectation(widget, Axis::X);
-    auto size_y = compute_size_for_standalone_expectation(widget, Axis::Y);
+    auto size_x = compute_size_for_standalone_exp(widget, Axis::X);
+    auto size_y = compute_size_for_standalone_exp(widget, Axis::Y);
+    auto padd_top = compute_padding_for_standalone_exp(widget, Axis::top);
+    auto padd_left = compute_padding_for_standalone_exp(widget, Axis::left);
+    auto padd_right = compute_padding_for_standalone_exp(widget, Axis::right);
+    auto padd_bottom = compute_padding_for_standalone_exp(widget, Axis::bottom);
 
-    widget.computed[Axis::X] = size_x;
-    widget.computed[Axis::Y] = size_y;
+    widget.computed_padd[Axis::top] = padd_top;
+    widget.computed_padd[Axis::left] = padd_left;
+    widget.computed_padd[Axis::right] = padd_right;
+    widget.computed_padd[Axis::bottom] = padd_bottom;
+    widget.computed_padd[Axis::X] = padd_left+ padd_right;
+    widget.computed_padd[Axis::Y] = padd_top + padd_bottom;
+
+    widget.computed[Axis::X] = size_x + widget.computed_padd[Axis::X];
+    widget.computed[Axis::Y] = size_y + widget.computed_padd[Axis::Y];
 
     for (EntityID child_id : widget.children) {
       calculate_standalone(this->to_cmp(child_id));
@@ -636,6 +705,15 @@ struct AutoLayout {
     for (EntityID child : widget.children) {
       compute_rect_bounds(this->to_cmp(child));
     }
+
+    // now that all children are complete, we can remove the padding spacing
+
+    widget.computed_rel[Axis::X] += (widget.computed_padd[Axis::left]);
+    widget.computed_rel[Axis::Y] += (widget.computed_padd[Axis::top]);
+
+    widget.computed[Axis::X] -= (widget.computed_padd[Axis::X]);
+    widget.computed[Axis::Y] -= (widget.computed_padd[Axis::Y]);
+
   }
 
   void reset_computed_values(UIComponent &widget) {
