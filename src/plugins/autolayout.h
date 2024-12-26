@@ -131,12 +131,14 @@ struct UIComponent : BaseComponent {
 struct AutoLayout {
 
   std::map<EntityID, RefEntity> mapping;
-  AutoLayout(const std::map<EntityID, RefEntity> &mapping_)
+  AutoLayout(const std::map<EntityID, RefEntity> &mapping_ = {})
       : mapping(mapping_) {}
 
   Entity &to_ent(EntityID id) { return mapping.at(id); }
 
-  UIComponent &to_cmp(EntityID id) { return to_ent(id).get<UIComponent>(); }
+  virtual UIComponent &to_cmp(EntityID id) {
+    return to_ent(id).get<UIComponent>();
+  }
 
   float compute_size_for_standalone_expectation(UIComponent &widget,
                                                 Axis axis) {
@@ -168,7 +170,8 @@ struct AutoLayout {
     }
   }
 
-  float compute_size_for_parent_expectation(UIComponent &widget, Axis axis) {
+  float compute_size_for_parent_expectation(const UIComponent &widget,
+                                            Axis axis) {
     if (widget.absolute && widget.desired[axis].dim == Dim::Percent) {
       VALIDATE(false, "Absolute widgets should not use Percent");
     }
@@ -179,10 +182,9 @@ struct AutoLayout {
 
     float parent_size = this->to_cmp(widget.parent).computed[axis];
     Size exp = widget.desired[axis];
-    float new_size = exp.value * parent_size;
     switch (exp.dim) {
     case Dim::Percent:
-      return parent_size == -1 ? no_change : new_size;
+      return parent_size == -1 ? no_change : exp.value * parent_size;
     default:
       return no_change;
     }
@@ -606,12 +608,8 @@ struct AutoLayout {
     al.compute_rect_bounds(widget);
   }
 
-  static Entity &to_ent_static(EntityID id) {
-    return EntityQuery().whereID(id).gen_first_enforce();
-  }
-
   static UIComponent &to_cmp_static(EntityID id) {
-    return to_ent_static(id).get<UIComponent>();
+    return EntityQuery().whereID(id).gen_first_enforce().get<UIComponent>();
   }
 
   static void print_tree(UIComponent &cmp, size_t tab = 0) {
