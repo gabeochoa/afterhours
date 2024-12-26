@@ -608,8 +608,12 @@ struct AutoLayout {
     al.compute_rect_bounds(widget);
   }
 
+  static Entity &to_ent_static(EntityID id) {
+    return EntityQuery().whereID(id).gen_first_enforce();
+  }
+
   static UIComponent &to_cmp_static(EntityID id) {
-    return EntityQuery().whereID(id).gen_first_enforce().get<UIComponent>();
+    return to_ent_static(id).get<UIComponent>();
   }
 
   static void print_tree(UIComponent &cmp, size_t tab = 0) {
