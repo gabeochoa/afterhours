@@ -743,6 +743,40 @@ Entity &make_dropdown(Entity &parent, int max_options = -1) {
   return dropdown;
 }
 
+static Size pixels(float value) {
+  return ui::Size{
+      .dim = ui::Dim::Pixels,
+      .value = value,
+  };
+}
+
+static ComponentSize pixels(float width, float height) {
+  return {pixels(width), pixels(height)};
+}
+
+static Size children() {
+  return ui::Size{
+      .dim = ui::Dim::Children,
+  };
+}
+static ComponentSize children_xy() {
+  return {
+      children(),
+      children(),
+  };
+}
+
+Entity &make_div(Entity &parent, ComponentSize cz) {
+  auto &div = EntityHelper::createEntity();
+  {
+    div.addComponent<ui::UIComponent>(parent.id)
+        .set_desired_width(cz.first)
+        .set_desired_height(cz.second);
+    parent.get<ui::UIComponent>().add_child(div.id);
+  }
+  return div;
+}
+
 Entity &make_button(Entity &parent, const std::string &label,
                     Vector2Type button_size) {
   auto &entity = EntityHelper::createEntity();
