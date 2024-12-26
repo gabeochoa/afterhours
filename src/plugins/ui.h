@@ -245,7 +245,7 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
 
 struct ClearVisibity : System<UIComponent> {
   virtual void for_each_with(Entity &, UIComponent &cmp, float) override {
-    cmp.is_visible = false;
+    cmp.was_rendered_to_screen = false;
   }
 };
 
@@ -270,16 +270,16 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
   }
 };
 
-struct SetVisibity : System<AutoLayoutRoot, UIComponent> {
+struct TrackIfComponentWasRendered : System<AutoLayoutRoot, UIComponent> {
 
   void set_visibility(UIComponent &cmp) {
-    if (cmp.width() < 0 || cmp.height() < 0) {
+    if (cmp.width() < 0 || cmp.height() < 0 || cmp.should_hide) {
       return;
     }
     for (EntityID child : cmp.children) {
       set_visibility(AutoLayout::to_cmp_static(child));
     }
-    cmp.is_visible = true;
+    cmp.was_rendered_to_screen = true;
   }
 
   virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
@@ -377,7 +377,7 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
     if (entity.is_missing<HasClickListener>()) {
       return;
     }
-    if (!component.is_visible)
+    if (!component.was_rendered_to_screen)
       return;
 
     // Valid things to tab to...
@@ -573,6 +573,8 @@ struct RenderAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
 
   void render(const Entity &entity) const {
     const UIComponent &cmp = entity.get<UIComponent>();
+    if (cmp.should_hide)
+      return;
 
     if (entity.has<HasColor>()) {
       render_me(entity);
@@ -1021,7 +1023,8 @@ static void register_update_systems(SystemManager &sm) {
     //
     sm.register_update_system(std::make_unique<ui::ClearVisibity>());
     sm.register_update_system(std::make_unique<ui::RunAutoLayout>());
-    sm.register_update_system(std::make_unique<ui::SetVisibity>());
+    sm.register_update_system(
+        std::make_unique<ui::TrackIfComponentWasRendered>());
     //
     sm.register_update_system(
         std::make_unique<ui::HandleTabbing<InputAction>>());

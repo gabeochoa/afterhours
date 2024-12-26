@@ -60,7 +60,8 @@ struct UIComponent : BaseComponent {
   AxisArray<Size> desired;
   FlexDirection flex_direction = FlexDirection::Column;
 
-  bool is_visible = false;
+  bool should_hide = false;
+  bool was_rendered_to_screen = false;
   bool absolute = false;
   AxisArray<float> computed;
   AxisArray<float> computed_rel;
@@ -209,6 +210,9 @@ struct AutoLayout {
       // Dont worry about any children that are absolutely positioned
       if (child.absolute)
         continue;
+      // Ignore anything that should be hidden
+      if (child.should_hide)
+        continue;
 
       float cs = child.computed[axis];
       if ( //
@@ -236,6 +240,9 @@ struct AutoLayout {
       UIComponent &child = this->to_cmp(child_id);
       // Dont worry about any children that are absolutely positioned
       if (child.absolute)
+        continue;
+      // Ignore anything that should be hidden
+      if (child.should_hide)
         continue;
 
       float cs = child.computed[axis];
@@ -308,6 +315,9 @@ struct AutoLayout {
       // Dont worry about any children that are absolutely positioned
       if (child.absolute)
         continue;
+      // Ignore anything that should be hidden
+      if (child.should_hide)
+        continue;
 
       Size exp = child.desired[axis];
       if (exp.strictness == 0.f) {
@@ -326,6 +336,9 @@ struct AutoLayout {
 
       // Dont worry about any children that are absolutely positioned
       if (child.absolute)
+        continue;
+      // Ignore anything that should be hidden
+      if (child.should_hide)
         continue;
 
       Size exp = child.desired[axis];
@@ -349,6 +362,9 @@ struct AutoLayout {
     for (EntityID child : widget.children) {
       if (this->to_cmp(child).absolute)
         continue;
+      // Ignore anything that should be hidden
+      if (this->to_cmp(child).should_hide)
+        continue;
       num_children++;
     }
     if (num_children == 0)
@@ -363,6 +379,9 @@ struct AutoLayout {
         // Dont worry about any children that are absolutely positioned
         if (this->to_cmp(child).absolute)
           continue;
+        // Ignore anything that should be hidden
+        if (this->to_cmp(child).should_hide)
+          continue;
         sum += this->to_cmp(child).computed[axis];
       }
       return sum;
@@ -374,6 +393,9 @@ struct AutoLayout {
       for (EntityID child : widget.children) {
         // TODO Dont worry about absolute positioned children
         if (this->to_cmp(child).absolute)
+          continue;
+        // Ignore anything that should be hidden
+        if (this->to_cmp(child).should_hide)
           continue;
 
         Size exp = this->to_cmp(child).desired[axis];
@@ -388,6 +410,9 @@ struct AutoLayout {
           UIComponent &child_cmp = this->to_cmp(child);
           // Dont worry about absolute positioned children
           if (child_cmp.absolute)
+            continue;
+          // Ignore anything that should be hidden
+          if (this->to_cmp(child).should_hide)
             continue;
 
           Size exp = child_cmp.desired[axis];
@@ -414,6 +439,10 @@ struct AutoLayout {
           num_strict_children++;
         }
         if (this->to_cmp(child).absolute) {
+          num_ignorable_children++;
+        }
+        // Ignore anything that should be hidden
+        if (this->to_cmp(child).should_hide) {
           num_ignorable_children++;
         }
       }
@@ -447,7 +476,8 @@ struct AutoLayout {
       for (EntityID child : widget.children) {
         UIComponent &child_cmp = this->to_cmp(child);
         Size exp = child_cmp.desired[axis];
-        if (exp.strictness == 1.f || child_cmp.absolute) {
+        if (exp.strictness == 1.f || child_cmp.absolute ||
+            child_cmp.should_hide) {
           continue;
         }
         float portion_of_error = (1.f - exp.strictness) * approx_epc;
@@ -532,6 +562,12 @@ struct AutoLayout {
 
       // Dont worry about any children that are absolutely positioned
       if (child.absolute) {
+        compute_relative_positions(child);
+        continue;
+      }
+
+      // Ignore anything that should be hidden
+      if (child.should_hide) {
         compute_relative_positions(child);
         continue;
       }
