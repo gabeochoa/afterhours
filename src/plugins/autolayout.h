@@ -205,24 +205,26 @@ struct AutoLayout {
   float _sum_children_axis_for_child_exp(UIComponent &widget, Axis axis) {
     float total_child_size = 0.f;
     for (EntityID entityID : widget.children) {
-      UIComponent &child = this->to_cmp(entityID);
+      const UIComponent &child = this->to_cmp(entityID);
       // Dont worry about any children that are absolutely positioned
       if (child.absolute)
         continue;
 
       float cs = child.computed[axis];
+      if ( //
+          child.desired[axis].dim == Dim::Percent &&
+          widget.desired[axis].dim == Dim::Children
+          //
+      ) {
+        log_error("Parents sized with mode 'children' cannot have "
+                  "children sized with mode 'percent'. Failed when checking "
+                  "children for {} axis {}",
+                  widget.id, axis);
+      }
       //  no computed value yet
       if (cs == -1) {
-        if ( //
-            child.desired[axis].dim == Dim::Percent &&
-            widget.desired[axis].dim == Dim::Children
-            //
-        ) {
-          VALIDATE(false, "Parents sized with mode 'children' cannot have "
-                          "children sized with mode 'percent'.");
-        }
         // Instead of silently ignoring this, check the cases above
-        VALIDATE(false, "expect that all children have been solved by now");
+        log_error("expect that all children have been solved by now");
       }
       total_child_size += cs;
     }
