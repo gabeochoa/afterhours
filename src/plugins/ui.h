@@ -879,7 +879,7 @@ Entity &make_button(Entity &parent, const std::string &label,
   return entity;
 }
 
-Entity &make_slider(Entity &parent, Vector2Type button_size) {
+Entity &make_slider(Entity &parent, Vector2Type button_size, const std::function<void(float)>& on_slider_changed = {}) {
   // TODO add vertical slider
 
   auto &background = EntityHelper::createEntity();
@@ -899,7 +899,7 @@ Entity &make_slider(Entity &parent, Vector2Type button_size) {
 #ifdef AFTER_HOURS_USE_RAYLIB
   background.addComponent<ui::HasColor>(raylib::GREEN);
 #endif
-  background.addComponent<ui::HasDragListener>([](Entity &entity) {
+  background.addComponent<ui::HasDragListener>([on_slider_changed](Entity &entity) {
     float mnf = 0.f;
     float mxf = 1.f;
 
@@ -928,7 +928,8 @@ Entity &make_slider(Entity &parent, Vector2Type button_size) {
     child_cmp.set_desired_width(
         ui::Size{.dim = ui::Dim::Percent, .value = value * 0.75f});
 
-    // log_info("I clicked the slider {} {}", entity.id, value);
+    if(sliderState.changed_since && on_slider_changed) on_slider_changed(value);
+
   });
 
   // TODO replace when we have actual padding later
