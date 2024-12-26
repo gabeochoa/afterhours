@@ -788,7 +788,7 @@ static Size padding_(float v, float strict = 0.5f) {
   };
 }
 
-static Entity &make_div(Entity &parent, ComponentSize cz) {
+static Entity &make_div(Entity &parent, ComponentSize cz, Padding padding = Padding()) {
   auto &div = EntityHelper::createEntity();
   {
     div.addComponent<ui::UIComponent>(div.id)

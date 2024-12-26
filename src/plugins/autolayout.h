@@ -249,7 +249,7 @@ struct AutoLayout {
     }
   }
 
-  float compute_size_for_parent_expectation(const UIComponent &widget,
+  float compute_size_for_parent_exp(const UIComponent &widget,
                                             Axis axis) {
     if (widget.absolute && widget.desired[axis].dim == Dim::Percent) {
       VALIDATE(false, "Absolute widgets should not use Percent");
@@ -270,8 +270,8 @@ struct AutoLayout {
   }
 
   void calculate_those_with_parents(UIComponent &widget) {
-    auto size_x = compute_size_for_parent_expectation(widget, Axis::X);
-    auto size_y = compute_size_for_parent_expectation(widget, Axis::Y);
+    auto size_x = compute_size_for_parent_exp(widget, Axis::X);
+    auto size_y = compute_size_for_parent_exp(widget, Axis::Y);
 
     widget.computed[Axis::X] = size_x;
     widget.computed[Axis::Y] = size_y;
@@ -339,7 +339,7 @@ struct AutoLayout {
     return max_child_size;
   }
 
-  float compute_size_for_child_expectation(UIComponent &widget, Axis axis) {
+  float compute_size_for_child_exp(UIComponent &widget, Axis axis) {
     float no_change = widget.computed[axis];
     if (widget.children.empty()) {
       // if the component has no children, but the expected size was set,
@@ -379,8 +379,8 @@ struct AutoLayout {
       calculate_those_with_children(this->to_cmp(child));
     }
 
-    auto size_x = compute_size_for_child_expectation(widget, Axis::X);
-    auto size_y = compute_size_for_child_expectation(widget, Axis::Y);
+    auto size_x = compute_size_for_child_exp(widget, Axis::X);
+    auto size_y = compute_size_for_child_exp(widget, Axis::Y);
 
     widget.computed[Axis::X] = size_x;
     widget.computed[Axis::Y] = size_y;
