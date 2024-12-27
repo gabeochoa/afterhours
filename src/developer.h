@@ -11,12 +11,12 @@
 
 #ifndef RectangleType
 struct MyRectangle {
-    float x,y,width,height;
+  float x, y, width, height;
 };
 #define RectangleType MyRectangle
 #endif
 
-#ifndef Vector2Type 
+#ifndef Vector2Type
 struct MyVec2 {
   float x;
   float y;
@@ -33,7 +33,6 @@ constexpr float distance_sq(const Vector2Type a, const Vector2Type b) {
   return (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
 }
 #endif
-
 
 namespace afterhours {
 

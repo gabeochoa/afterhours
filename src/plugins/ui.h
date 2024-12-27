@@ -801,60 +801,61 @@ static Entity &make_div(Entity &parent, ComponentSize cz) {
 }
 
 static void pad_component(Entity &component, Padding padding) {
-    /*
-  auto [top, bottom, left, right] = padding;
+  /*
+auto [top, bottom, left, right] = padding;
 
-  auto &ui_cmp = component.get<ui::UIComponent>();
-  auto &parent = AutoLayout::to_ent_static(ui_cmp.parent);
+auto &ui_cmp = component.get<ui::UIComponent>();
+auto &parent = AutoLayout::to_ent_static(ui_cmp.parent);
 
-  // Make it no longer a child of its parent
-  parent.get<UIComponent>().remove_child(component.id);
+// Make it no longer a child of its parent
+parent.get<UIComponent>().remove_child(component.id);
 
+{
+  // Top padding
+  make_div(parent, ComponentSize{
+                       padding_(1.f, 1.f),
+                       padding_(top, 0.5f),
+                   });
+
+  auto &button_with_left = make_div(parent, ComponentSize{
+                                                padding_(1.f, 1.f),
+                                                children(),
+                                            });
+  button_with_left.get<ui::UIComponent>().flex_direction =
+      afterhours::ui::FlexDirection::Row;
   {
-    // Top padding
-    make_div(parent, ComponentSize{
-                         padding_(1.f, 1.f),
-                         padding_(top, 0.5f),
-                     });
 
-    auto &button_with_left = make_div(parent, ComponentSize{
-                                                  padding_(1.f, 1.f),
-                                                  children(),
-                                              });
-    button_with_left.get<ui::UIComponent>().flex_direction =
-        afterhours::ui::FlexDirection::Row;
+    make_div(button_with_left, ComponentSize{
+                                   padding_(left, 0.5f),
+                                   pixels(1.f),
+                               });
+
+    auto &buttons = make_div(button_with_left, afterhours::ui::children_xy());
+
     {
-
-      make_div(button_with_left, ComponentSize{
-                                     padding_(left, 0.5f),
-                                     pixels(1.f),
-                                 });
-
-      auto &buttons = make_div(button_with_left, afterhours::ui::children_xy());
-
-      {
-        // set the new parent
-        ui_cmp.parent = buttons.id;
-        buttons.get<UIComponent>().add_child(component.id);
-      }
-
-      make_div(button_with_left, ComponentSize{
-                                     padding_(right, 0.5f),
-                                     pixels(1.f),
-                                 });
+      // set the new parent
+      ui_cmp.parent = buttons.id;
+      buttons.get<UIComponent>().add_child(component.id);
     }
 
-    make_div(parent, ComponentSize{
-                         padding_(1.f, 1.f),
-                         padding_(bottom, 0.5f),
-                     });
+    make_div(button_with_left, ComponentSize{
+                                   padding_(right, 0.5f),
+                                   pixels(1.f),
+                               });
   }
-  */
+
+  make_div(parent, ComponentSize{
+                       padding_(1.f, 1.f),
+                       padding_(bottom, 0.5f),
+                   });
+}
+*/
 }
 
 Entity &make_button(Entity &parent, const std::string &label,
                     Vector2Type button_size,
-                    const std::function<void(Entity &)> &click = {}, Padding padding = Padding()) {
+                    const std::function<void(Entity &)> &click = {},
+                    Padding padding = Padding()) {
   auto &entity = EntityHelper::createEntity();
   entity.addComponent<UIComponent>(entity.id)
       .set_desired_width(ui::Size{
@@ -866,8 +867,8 @@ Entity &make_button(Entity &parent, const std::string &label,
           .value = button_size.y,
       })
       .set_parent(parent.id);
-      // TODO 
-  entity.get<UIComponent>().desired_padding= padding;
+  // TODO
+  entity.get<UIComponent>().desired_padding = padding;
 
   parent.get<ui::UIComponent>().add_child(entity.id);
 
@@ -879,7 +880,8 @@ Entity &make_button(Entity &parent, const std::string &label,
   return entity;
 }
 
-Entity &make_slider(Entity &parent, Vector2Type button_size, const std::function<void(float)>& on_slider_changed = {}) {
+Entity &make_slider(Entity &parent, Vector2Type button_size,
+                    const std::function<void(float)> &on_slider_changed = {}) {
   // TODO add vertical slider
 
   auto &background = EntityHelper::createEntity();
@@ -899,38 +901,39 @@ Entity &make_slider(Entity &parent, Vector2Type button_size, const std::function
 #ifdef AFTER_HOURS_USE_RAYLIB
   background.addComponent<ui::HasColor>(raylib::GREEN);
 #endif
-  background.addComponent<ui::HasDragListener>([on_slider_changed](Entity &entity) {
-    float mnf = 0.f;
-    float mxf = 1.f;
+  background.addComponent<ui::HasDragListener>(
+      [on_slider_changed](Entity &entity) {
+        float mnf = 0.f;
+        float mxf = 1.f;
 
-    UIComponent &cmp = entity.get<UIComponent>();
-    Rectangle rect = cmp.rect();
-    HasSliderState &sliderState = entity.get<ui::HasSliderState>();
-    float &value = sliderState.value;
+        UIComponent &cmp = entity.get<UIComponent>();
+        Rectangle rect = cmp.rect();
+        HasSliderState &sliderState = entity.get<ui::HasSliderState>();
+        float &value = sliderState.value;
 
-    auto mouse_position = input::get_mouse_position();
-    float v = (mouse_position.x - rect.x) / rect.width;
-    if (v < mnf)
-      v = mnf;
-    if (v > mxf)
-      v = mxf;
-    if (v != value) {
-      value = v;
-      sliderState.changed_since = true;
-    }
+        auto mouse_position = input::get_mouse_position();
+        float v = (mouse_position.x - rect.x) / rect.width;
+        if (v < mnf)
+          v = mnf;
+        if (v > mxf)
+          v = mxf;
+        if (v != value) {
+          value = v;
+          sliderState.changed_since = true;
+        }
 
-    auto opt_child =
-        EntityQuery()
-            .whereID(entity.get<ui::HasChildrenComponent>().children[0])
-            .gen_first();
+        auto opt_child =
+            EntityQuery()
+                .whereID(entity.get<ui::HasChildrenComponent>().children[0])
+                .gen_first();
 
-    UIComponent &child_cmp = opt_child->get<UIComponent>();
-    child_cmp.set_desired_width(
-        ui::Size{.dim = ui::Dim::Percent, .value = value * 0.75f});
+        UIComponent &child_cmp = opt_child->get<UIComponent>();
+        child_cmp.set_desired_width(
+            ui::Size{.dim = ui::Dim::Percent, .value = value * 0.75f});
 
-    if(sliderState.changed_since && on_slider_changed) on_slider_changed(value);
-
-  });
+        if (sliderState.changed_since && on_slider_changed)
+          on_slider_changed(value);
+      });
 
   // TODO replace when we have actual padding later
   auto &left_padding = EntityHelper::createEntity();
