@@ -592,6 +592,88 @@ struct RenderAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   }
 };
 
+template <typename InputAction>
+struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
+
+  InputAction toggle_action;
+  bool enabled = false;
+  float enableCooldown = 0.f;
+  float enableCooldownReset = 0.2f;
+
+  mutable int level = 0;
+
+  RenderDebugAutoLayoutRoots(InputAction toggle_kp)
+      : toggle_action(toggle_kp) {}
+
+  virtual ~RenderDebugAutoLayoutRoots() {}
+
+  Entity *context_entity;
+
+  virtual bool should_run(float dt) override {
+    enableCooldown -= dt;
+
+    if (enableCooldown < 0) {
+      enableCooldown = enableCooldownReset;
+      input::PossibleInputCollector<InputAction> inpc =
+          input::get_input_collector<InputAction>();
+      for (auto &actions_done : inpc.inputs()) {
+        if (actions_done.action == toggle_action) {
+          enabled = !enabled;
+          break;
+        }
+      }
+    }
+    return enabled;
+  }
+
+  virtual void once(float) override {
+    OptEntity opt_context =
+        EntityQuery()                                        //
+            .whereHasComponent<ui::UIContext<InputAction>>() //
+            .gen_first();
+    this->context_entity = opt_context.value();
+    this->include_derived_children = true;
+    this->level = 0;
+  }
+
+  void render_me(const Entity &entity) const {
+    const UIComponent &cmp = entity.get<UIComponent>();
+
+    UIContext<InputAction> &context =
+        this->context_entity->template get<UIContext<InputAction>>();
+
+    float fontSize = 20;
+    float x = 0;
+    float y = (fontSize * level) + fontSize / 2.f;
+
+    std::string widget_str =
+        fmt::format("{} ({} {}) {}x{}", entity.id, cmp.x(), cmp.y(),
+                    cmp.rect().width, cmp.rect().height);
+
+    DrawText(widget_str.c_str(), x, y, fontSize, raylib::RAYWHITE);
+  }
+
+  void render(const Entity &entity) const {
+    const UIComponent &cmp = entity.get<UIComponent>();
+    if (cmp.should_hide)
+      return;
+
+    render_me(entity);
+    level++;
+
+    for (EntityID child : cmp.children) {
+      render(AutoLayout::to_ent_static(child));
+    }
+  }
+
+  virtual void for_each_with_derived(const Entity &entity, const UIComponent &,
+                                     const AutoLayoutRoot &,
+                                     float) const override {
+    render(entity);
+    level += 2;
+  }
+};
+
 #endif
 
 // TODO i really wanted to statically validate this
@@ -1041,9 +1123,13 @@ static void register_update_systems(SystemManager &sm) {
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 template <typename InputAction>
-static void register_render_systems(SystemManager &sm) {
+static void register_render_systems(SystemManager &sm,
+                                    InputAction toggle_debug = 0) {
   sm.register_render_system(
       std::make_unique<ui::RenderAutoLayoutRoots<InputAction>>());
+  sm.register_render_system(
+      std::make_unique<ui::RenderDebugAutoLayoutRoots<InputAction>>(
+          toggle_debug));
 }
 #endif
 
