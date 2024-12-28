@@ -20,6 +20,27 @@ enum struct Dim {
   Children,
 };
 
+std::ostream &operator<<(std::ostream &os, const Dim &dim) {
+  switch (dim) {
+  case Dim::None:
+    os << "None";
+    break;
+  case Dim::Pixels:
+    os << "Pixels";
+    break;
+  case Dim::Text:
+    os << "Text";
+    break;
+  case Dim::Percent:
+    os << "Percent";
+    break;
+  case Dim::Children:
+    os << "Children";
+    break;
+  }
+  return os;
+}
+
 struct Size {
   Dim dim = Dim::None;
   float value = -1;
@@ -99,7 +120,26 @@ enum struct Axis {
   bottom = 5,
 };
 std::ostream &operator<<(std::ostream &os, const Axis &axis) {
-  os << (axis == Axis::X ? "X-Axis" : "Y-Axis");
+  switch (axis) {
+  case Axis::X:
+    os << "X-Axis";
+    break;
+  case Axis::Y:
+    os << "Y-Axis";
+    break;
+  case Axis::left:
+    os << "left";
+    break;
+  case Axis::right:
+    os << "right";
+    break;
+  case Axis::top:
+    os << "top";
+    break;
+  case Axis::bottom:
+    os << "bottom";
+    break;
+  }
   return os;
 }
 
