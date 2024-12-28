@@ -987,26 +987,12 @@ Entity &make_slider(Entity &parent, Vector2Type button_size,
                 .gen_first();
 
         UIComponent &child_cmp = opt_child->get<UIComponent>();
-        child_cmp.set_desired_width(
-            ui::Size{.dim = ui::Dim::Percent, .value = value * 0.75f});
+        child_cmp.set_desired_padding(pixels(value * 0.75f * rect.width),
+                                      Axis::left);
 
         if (sliderState.changed_since && on_slider_changed)
           on_slider_changed(value);
       });
-
-  // TODO replace when we have actual padding later
-  auto &left_padding = EntityHelper::createEntity();
-  left_padding.addComponent<UIComponent>(left_padding.id)
-      .set_desired_width(ui::Size{
-          .dim = ui::Dim::Percent,
-          .value = starting_pct * 0.75f,
-      })
-      .set_desired_height(ui::Size{
-          .dim = ui::Dim::Pixels,
-          .value = button_size.y,
-      })
-      .set_parent(background.id);
-  background.get<ui::UIComponent>().add_child(left_padding.id);
 
   auto &handle = EntityHelper::createEntity();
   handle.addComponent<UIComponent>(handle.id)
@@ -1018,7 +1004,9 @@ Entity &make_slider(Entity &parent, Vector2Type button_size,
           .dim = ui::Dim::Pixels,
           .value = button_size.y,
       })
+      .set_desired_padding(pixels(starting_pct * button_size.x), Axis::left)
       .set_parent(background.id);
+  handle.addComponent<UIComponentDebug>("slider_handle");
   background.get<ui::UIComponent>().add_child(handle.id);
 
 #ifdef AFTER_HOURS_USE_RAYLIB
@@ -1026,7 +1014,6 @@ Entity &make_slider(Entity &parent, Vector2Type button_size,
 #endif
 
   background.addComponent<ui::HasChildrenComponent>();
-  background.get<ui::HasChildrenComponent>().add_child(left_padding);
   background.get<ui::HasChildrenComponent>().add_child(handle);
   return background;
 }
