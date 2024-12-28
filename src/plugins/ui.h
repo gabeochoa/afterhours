@@ -674,8 +674,8 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     }
 
     std::string widget_str = fmt::format(
-        "{} ({:04.2f} {:04.2f}) {:04.2f}x{:04.2f} {}", (int)entity.id, cmp.x(),
-        cmp.y(), cmp.rect().width, cmp.rect().height, component_name);
+        "{:03} ({:05.2f} {:05.2f}) {:05.2f}x{:05.2f} {}", (int)entity.id,
+        cmp.x(), cmp.y(), cmp.rect().width, cmp.rect().height, component_name);
 
     DrawText(widget_str.c_str(), x, y, fontSize, raylib::RAYWHITE);
   }
