@@ -210,6 +210,11 @@ struct UIComponent : BaseComponent {
                      width() + (2.f * (float)rw), height() + (2.f * (float)rw)};
   }
 
+  auto &make_absolute() {
+    this->absolute = true;
+    return *this;
+  }
+
   auto &add_child(EntityID id_) {
     children.push_back(id_);
     return *this;
