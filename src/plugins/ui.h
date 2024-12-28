@@ -132,6 +132,24 @@ template <typename InputAction> struct UIContext : BaseComponent {
   }
 };
 
+struct UIComponentDebug : BaseComponent {
+  enum struct Type {
+    custom,
+    //
+    div,
+    button,
+    checkbox,
+    dropdown,
+    slider,
+  } type;
+
+  std::string name;
+
+  UIComponentDebug(Type type_) : type(type_) {}
+  UIComponentDebug(const std::string &name_)
+      : type(Type::custom), name(name_) {}
+};
+
 struct HasClickListener : BaseComponent {
   bool down = false;
   std::function<void(Entity &)> cb;
@@ -643,9 +661,21 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     float x = 0;
     float y = (fontSize * level) + fontSize / 2.f;
 
-    std::string widget_str =
-        fmt::format("{} ({:04.2f} {:04.2f}) {:04.2f}x{:04.2f}", (int)entity.id,
-                    cmp.x(), cmp.y(), cmp.rect().width, cmp.rect().height);
+    std::string component_name = "Unknown";
+    if (entity.has<UIComponentDebug>()) {
+      const auto &cmpdebug = entity.get<UIComponentDebug>();
+      auto type = cmpdebug.type;
+      if (type == UIComponentDebug::Type::custom) {
+        component_name = cmpdebug.name;
+      } else {
+        component_name =
+            magic_enum::enum_name<UIComponentDebug::Type>(cmpdebug.type);
+      }
+    }
+
+    std::string widget_str = fmt::format(
+        "{} ({:04.2f} {:04.2f}) {:04.2f}x{:04.2f} {}", (int)entity.id, cmp.x(),
+        cmp.y(), cmp.rect().width, cmp.rect().height, component_name);
 
     DrawText(widget_str.c_str(), x, y, fontSize, raylib::RAYWHITE);
   }
@@ -804,6 +834,7 @@ template <typename ProviderComponent>
 Entity &make_dropdown(Entity &parent, int max_options = -1) {
   using WRDS = ui::HasDropdownStateWithProvider<ProviderComponent>;
   auto &dropdown = EntityHelper::createEntity();
+  dropdown.addComponent<UIComponentDebug>(UIComponentDebug::Type::dropdown);
 
   dropdown.addComponent<UIComponent>(dropdown.id).set_parent(parent.id);
   parent.get<ui::UIComponent>().add_child(dropdown.id);
@@ -847,6 +878,7 @@ static Size padding_(float v, float strict = 0.5f) {
 static Entity &make_div(Entity &parent, ComponentSize cz) {
   auto &div = EntityHelper::createEntity();
   {
+    div.addComponent<UIComponentDebug>(UIComponentDebug::Type::div);
     div.addComponent<ui::UIComponent>(div.id)
         .set_desired_width(cz.first)
         .set_desired_height(cz.second)
@@ -875,6 +907,7 @@ Entity &make_button(Entity &parent, const std::string &label,
                     const std::function<void(Entity &)> &click = {},
                     Padding padding = Padding(), Margin margin = Margin()) {
   auto &entity = EntityHelper::createEntity();
+  entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::button);
   entity.addComponent<UIComponent>(entity.id)
       .set_desired_width(ui::Size{
           .dim = ui::Dim::Pixels,
@@ -910,6 +943,7 @@ Entity &make_slider(Entity &parent, Vector2Type button_size,
   // TODO add vertical slider
 
   auto &background = EntityHelper::createEntity();
+  background.addComponent<UIComponentDebug>(UIComponentDebug::Type::slider);
   background.addComponent<UIComponent>(background.id)
       .set_desired_width(ui::Size{
           .dim = ui::Dim::Pixels,
@@ -999,6 +1033,7 @@ Entity &make_slider(Entity &parent, Vector2Type button_size,
 
 Entity &make_checkbox(Entity &parent, Vector2Type button_size) {
   auto &entity = EntityHelper::createEntity();
+  entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::checkbox);
   entity.addComponent<UIComponent>(entity.id)
       .set_desired_width(ui::Size{
           .dim = ui::Dim::Pixels,
