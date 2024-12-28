@@ -25,13 +25,13 @@ public:
   virtual void once(float) const {}
   // Runs for every entity matching the components
   // in System<Components>
-  virtual void for_each(Entity &, float) = 0;
-  virtual void for_each(const Entity &, float) const = 0;
+  virtual bool for_each(Entity &, float) = 0;
+  virtual bool for_each(const Entity &, float) const = 0;
 
 #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
   bool include_derived_children = false;
-  virtual void for_each_derived(Entity &, float) = 0;
-  virtual void for_each_derived(const Entity &, float) const = 0;
+  virtual bool for_each_derived(Entity &, float) = 0;
+  virtual bool for_each_derived(const Entity &, float) const = 0;
 #endif
 };
 
@@ -80,51 +80,63 @@ template <typename Component> struct Not : BaseComponent {
     for_each_with(entity, entity.template get<Components>()..., dt);
   }
 */
-  void for_each(Entity &entity, float dt) {
+  bool for_each(Entity &entity, float dt) {
     if constexpr (sizeof...(Components) > 0) {
       if ((entity.template has<Components>() && ...)) {
         for_each_with(entity, entity.template get<Components>()..., dt);
+        return true;
       }
     } else {
       for_each_with(entity, dt);
+      return true;
     }
+    return false;
   }
 
 #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-  void for_each_derived(Entity &entity, float dt) {
+  bool for_each_derived(Entity &entity, float dt) {
     if constexpr (sizeof...(Components) > 0) {
       if ((entity.template has_child_of<Components>() && ...)) {
         for_each_with_derived(
             entity, entity.template get_with_child<Components>()..., dt);
+        return true;
       }
     } else {
       for_each_with(entity, dt);
+      return true;
     }
+    return false;
   }
 
-  void for_each_derived(const Entity &entity, float dt) const {
+  bool for_each_derived(const Entity &entity, float dt) const {
     if constexpr (sizeof...(Components) > 0) {
       if ((entity.template has_child_of<Components>() && ...)) {
         for_each_with_derived(
             entity, entity.template get_with_child<Components>()..., dt);
+        return true;
       }
     } else {
       for_each_with(entity, dt);
+      return true;
     }
+    return false;
   }
   virtual void for_each_with_derived(Entity &, Components &..., float) {}
   virtual void for_each_with_derived(const Entity &, const Components &...,
                                      float) const {}
 #endif
 
-  void for_each(const Entity &entity, float dt) const {
+  bool for_each(const Entity &entity, float dt) const {
     if constexpr (sizeof...(Components) > 0) {
       if ((entity.template has<Components>() && ...)) {
         for_each_with(entity, entity.template get<Components>()..., dt);
+        return true;
       }
     } else {
       for_each_with(entity, dt);
+      return true;
     }
+    return false;
   }
 
   // Left for the subclass to implment,
