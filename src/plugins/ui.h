@@ -1124,8 +1124,9 @@ static void register_update_systems(SystemManager &sm) {
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 template <typename InputAction>
-static void register_render_systems(SystemManager &sm,
-                                    InputAction toggle_debug = 0) {
+static void
+register_render_systems(SystemManager &sm,
+                        InputAction toggle_debug = InputAction::None) {
   sm.register_render_system(
       std::make_unique<ui::RenderAutoLayoutRoots<InputAction>>());
   sm.register_render_system(
