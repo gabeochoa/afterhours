@@ -647,8 +647,8 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     float y = (fontSize * level) + fontSize / 2.f;
 
     std::string widget_str =
-        fmt::format("{} ({} {}) {}x{}", entity.id, cmp.x(), cmp.y(),
-                    cmp.rect().width, cmp.rect().height);
+        fmt::format("{} ({:04.2f} {:04.2f}) {:04.2f}x{:04.2f}", entity.id,
+                    cmp.x(), cmp.y(), cmp.rect().width, cmp.rect().height);
 
     DrawText(widget_str.c_str(), x, y, fontSize, raylib::RAYWHITE);
   }
@@ -963,6 +963,7 @@ Entity &make_button(Entity &parent, const std::string &label,
 }
 
 Entity &make_slider(Entity &parent, Vector2Type button_size,
+                    float starting_pct = 0.f,
                     const std::function<void(float)> &on_slider_changed = {}) {
   // TODO add vertical slider
 
@@ -1022,7 +1023,7 @@ Entity &make_slider(Entity &parent, Vector2Type button_size,
   left_padding.addComponent<UIComponent>(left_padding.id)
       .set_desired_width(ui::Size{
           .dim = ui::Dim::Percent,
-          .value = 0.f,
+          .value = starting_pct * 0.75f,
       })
       .set_desired_height(ui::Size{
           .dim = ui::Dim::Pixels,
