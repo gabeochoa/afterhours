@@ -6,13 +6,16 @@
 #include <cmath>
 #include <functional>
 #include <memory>
+#include <set>
 
 #include "base_component.h"
 #include "entity.h"
+#include "entity_helper.h"
 
 namespace afterhours {
-class SystemBase {
-public:
+struct SystemBase {
+  std::set<EntityID> cached_ids;
+
   SystemBase() {}
   virtual ~SystemBase() {}
 
@@ -25,13 +28,13 @@ public:
   virtual void once(float) const {}
   // Runs for every entity matching the components
   // in System<Components>
-  virtual void for_each(Entity &, float) = 0;
-  virtual void for_each(const Entity &, float) const = 0;
+  virtual bool for_each(Entity &, float) = 0;
+  virtual bool for_each(const Entity &, float) const = 0;
 
 #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
   bool include_derived_children = false;
-  virtual void for_each_derived(Entity &, float) = 0;
-  virtual void for_each_derived(const Entity &, float) const = 0;
+  virtual bool for_each_derived(Entity &, float) = 0;
+  virtual bool for_each_derived(const Entity &, float) const = 0;
 #endif
 };
 
@@ -80,51 +83,63 @@ template <typename Component> struct Not : BaseComponent {
     for_each_with(entity, entity.template get<Components>()..., dt);
   }
 */
-  void for_each(Entity &entity, float dt) {
+  bool for_each(Entity &entity, float dt) {
     if constexpr (sizeof...(Components) > 0) {
       if ((entity.template has<Components>() && ...)) {
         for_each_with(entity, entity.template get<Components>()..., dt);
+        return true;
       }
     } else {
       for_each_with(entity, dt);
+      return true;
     }
+    return false;
   }
 
 #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-  void for_each_derived(Entity &entity, float dt) {
+  bool for_each_derived(Entity &entity, float dt) {
     if constexpr (sizeof...(Components) > 0) {
       if ((entity.template has_child_of<Components>() && ...)) {
         for_each_with_derived(
             entity, entity.template get_with_child<Components>()..., dt);
+        return true;
       }
     } else {
       for_each_with(entity, dt);
+      return true;
     }
+    return false;
   }
 
-  void for_each_derived(const Entity &entity, float dt) const {
+  bool for_each_derived(const Entity &entity, float dt) const {
     if constexpr (sizeof...(Components) > 0) {
       if ((entity.template has_child_of<Components>() && ...)) {
         for_each_with_derived(
             entity, entity.template get_with_child<Components>()..., dt);
+        return true;
       }
     } else {
       for_each_with(entity, dt);
+      return true;
     }
+    return false;
   }
   virtual void for_each_with_derived(Entity &, Components &..., float) {}
   virtual void for_each_with_derived(const Entity &, const Components &...,
                                      float) const {}
 #endif
 
-  void for_each(const Entity &entity, float dt) const {
+  bool for_each(const Entity &entity, float dt) const {
     if constexpr (sizeof...(Components) > 0) {
       if ((entity.template has<Components>() && ...)) {
         for_each_with(entity, entity.template get<Components>()..., dt);
+        return true;
       }
     } else {
       for_each_with(entity, dt);
+      return true;
     }
+    return false;
   }
 
   // Left for the subclass to implment,
@@ -135,8 +150,6 @@ template <typename Component> struct Not : BaseComponent {
   virtual void for_each_with(const Entity &, const Components &...,
                              float) const {}
 };
-
-#include "entity_helper.h"
 
 struct CallbackSystem : System<> {
   std::function<void(float)> cb_;
@@ -151,6 +164,24 @@ struct SystemManager {
   std::vector<std::unique_ptr<SystemBase>> update_systems_;
   std::vector<std::unique_ptr<SystemBase>> fixed_update_systems_;
   std::vector<std::unique_ptr<SystemBase>> render_systems_;
+
+  void reset_caches_when_dirty() {
+    if (dirty_components_STATIC.none())
+      return;
+    log_info("reseting cache");
+
+    for (auto &system : update_systems_) {
+      system->cached_ids.clear();
+    }
+    for (auto &system : fixed_update_systems_) {
+      system->cached_ids.clear();
+    }
+    for (auto &system : render_systems_) {
+      system->cached_ids.clear();
+    }
+
+    dirty_components_STATIC.reset();
+  }
 
   // TODO  - one issue is that if you write a system that could be const
   // but you add it to update, it wont work since update only calls the
@@ -179,21 +210,40 @@ struct SystemManager {
     register_render_system(std::make_unique<CallbackSystem>(cb));
   }
 
+  void for_each(std::unique_ptr<SystemBase> &system, Entities &entities,
+                float dt) {
+
+    bool refill_cache = system->cached_ids.empty();
+
+    for (std::shared_ptr<Entity> entity : entities) {
+      if (!entity)
+        continue;
+      if (!refill_cache && !system->cached_ids.contains(entity->id)) {
+        continue;
+      }
+#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
+      if (system->include_derived_children) {
+        bool keep = system->for_each_derived(*entity, dt);
+        if (keep) {
+          system->cached_ids.insert(entity->id);
+        }
+      } else
+#endif
+      {
+        bool keep = system->for_each(*entity, dt);
+        if (keep) {
+          system->cached_ids.insert(entity->id);
+        }
+      }
+    }
+  }
+
   void tick(Entities &entities, float dt) {
     for (auto &system : update_systems_) {
       if (!system->should_run(dt))
         continue;
       system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
-        if (!entity)
-          continue;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-        if (system->include_derived_children)
-          system->for_each_derived(*entity, dt);
-        else
-#endif
-          system->for_each(*entity, dt);
-      }
+      for_each(system, entities, dt);
     }
     EntityHelper::cleanup();
   }
@@ -203,16 +253,7 @@ struct SystemManager {
       if (!system->should_run(dt))
         continue;
       system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
-        if (!entity)
-          continue;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-        if (system->include_derived_children)
-          system->for_each_derived(*entity, dt);
-        else
-#endif
-          system->for_each(*entity, dt);
-      }
+      for_each(system, entities, dt);
     }
   }
 
@@ -249,12 +290,13 @@ struct SystemManager {
   }
 
   void render_all(float dt) {
-    const auto &entities = EntityHelper::get_entities();
+    const auto entities = EntityHelper::get_ptrs();
     render(entities, dt);
   }
 
   void run(float dt) {
-    auto &entities = EntityHelper::get_entities_for_mod();
+    reset_caches_when_dirty();
+    auto entities = EntityHelper::get_ptrs();
     fixed_tick_all(entities, dt);
     tick_all(entities, dt);
     render_all(dt);

@@ -5,9 +5,6 @@
 #include <vector>
 namespace afterhours {
 
-struct Entity;
-using Entities = std::vector<std::shared_ptr<Entity>>;
-
 struct BaseComponent;
 
 #if !defined(AFTER_HOURS_MAX_COMPONENTS)

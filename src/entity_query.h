@@ -208,7 +208,7 @@ struct EntityQuery {
   }
 
   EntityQuery() : entities(EntityHelper::get_entities()) {}
-  explicit EntityQuery(const Entities &entsIn) : entities(entsIn) {
+  explicit EntityQuery(const EntityMap &entsIn) : entities(entsIn) {
     entities = entsIn;
   }
 
@@ -218,7 +218,7 @@ struct EntityQuery {
   }
 
 private:
-  Entities entities;
+  EntityMap entities;
 
   std::unique_ptr<OrderBy> orderby;
   std::vector<std::unique_ptr<Modification>> mods;
@@ -252,10 +252,10 @@ private:
     RefEntities out;
     out.reserve(entities.size());
 
-    for (const auto &e_ptr : entities) {
-      if (!e_ptr)
+    for (const auto &pair : entities) {
+      if (!pair.second)
         continue;
-      Entity &e = *e_ptr;
+      Entity &e = *(pair.second);
       out.push_back(e);
     }
 
