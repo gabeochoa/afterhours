@@ -29,9 +29,8 @@ inline void VALIDATE(...) {}
 #endif
 
 using ComponentBitSet = std::bitset<max_num_components>;
-// originally this was a std::array<BaseComponent*, max_num_components> but i
-// cant seem to serialize this so lets try map
-using ComponentArray = std::map<ComponentID, std::unique_ptr<BaseComponent>>;
+using ComponentArray =
+    std::array<std::unique_ptr<BaseComponent>, max_num_components>;
 using EntityID = int;
 
 static std::atomic_int ENTITY_ID_GEN = 0;
@@ -49,7 +48,7 @@ struct Entity {
   Entity(const Entity &) = delete;
   Entity(Entity &&other) noexcept = default;
 
-  virtual ~Entity() { componentArray.clear(); }
+  virtual ~Entity() {}
 
   // These two functions can be used to validate than an entity has all of the
   // matching components that are needed for this system to run
@@ -69,8 +68,7 @@ struct Entity {
     log_trace("checking for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
-    for (const auto &pair : componentArray) {
-      const auto &component = pair.second;
+    for (const auto &component : componentArray) {
       if (child_of<T>(component.get())) {
         return true;
       }
@@ -107,7 +105,7 @@ struct Entity {
       return;
     }
     componentSet[components::get_type_id<T>()] = false;
-    componentArray.erase(components::get_type_id<T>());
+    componentArray[components::get_type_id<T>()].reset();
   }
 
   template <typename T, typename... TArgs> T &addComponent(TArgs &&...args) {
@@ -178,10 +176,9 @@ struct Entity {
     log_trace("fetching for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
-    for (const auto &pair : componentArray) {
-      const auto &component = pair.second;
+    for (const auto &component : componentArray) {
       if (child_of<T>(component.get())) {
-        return static_cast<T &>(*pair.second);
+        return static_cast<T &>(*component);
       }
     }
     warnIfMissingComponent<T>();
@@ -193,10 +190,9 @@ struct Entity {
     log_trace("fetching for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
-    for (const auto &pair : componentArray) {
-      const auto &component = pair.second;
+    for (const auto &component : componentArray) {
       if (child_of<T>(component.get())) {
-        return static_cast<const T &>(*pair.second);
+        return static_cast<const T &>(*component);
       }
     }
     return get<T>();
