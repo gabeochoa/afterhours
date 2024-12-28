@@ -38,148 +38,433 @@
 #include "../../ah.h"
 #include "../../src/plugins/autolayout.h"
 
-namespace afterhours {
+#define CATCH_CONFIG_MAIN
+#include "../../vendor/catch2/catch.hpp"
+#include "../../vendor/trompeloeil/trompeloeil.hpp"
 
-struct Transform : public BaseComponent {
-  Transform(float x, float y) {
-    position.x = x;
-    position.y = y;
-  }
+using namespace afterhours;
+using namespace afterhours::ui;
 
-  virtual ~Transform() {}
+auto &to_cmp(Entity &entity) { return AutoLayout::to_cmp_static(entity.id); }
+auto to_rect(Entity &entity) { return to_cmp(entity).rect(); }
+auto to_bounds(Entity &entity) { return to_cmp(entity).bounds(); }
 
-  [[nodiscard]] vec2 pos() const { return position; }
-  void update(vec2 v) { position = v; }
-
-private:
-  vec2 position;
-};
-
-void run_and_print_tree(ui::UIComponent &root) {
-
+void run_(Entity &root_element) {
   std::map<EntityID, RefEntity> components;
   auto comps = EntityQuery().whereHasComponent<ui::UIComponent>().gen();
   for (Entity &entity : comps) {
     components.emplace(entity.id, entity);
   }
+  ui::AutoLayout::autolayout(root_element.get<UIComponent>(), components);
+}
 
+void print_tree(ui::UIComponent &root) {
+  std::map<EntityID, RefEntity> components;
+  auto comps = EntityQuery().whereHasComponent<ui::UIComponent>().gen();
+  for (Entity &entity : comps) {
+    components.emplace(entity.id, entity);
+  }
   ui::AutoLayout::autolayout(root, components);
   ui::AutoLayout::print_tree(root);
 }
 
-} // namespace afterhours
+std::string to_string(const RectangleType &rect) {
+  std::ostringstream ss;
+  ss << "Rect (";
+  ss << rect.x;
+  ss << ", ";
+  ss << rect.y;
+  ss << ") ";
+  ss << rect.width;
+  ss << "x";
+  ss << rect.height;
+  return ss.str();
+}
 
 std::ostream &operator<<(std::ostream &os, const RectangleType &data) {
-  os << "x: " << data.x;
-  os << ", y: " << data.y;
-  os << ", width: " << data.width;
-  os << ", height: " << data.height;
+  os << to_string(data);
   os << std::endl;
   return os;
 }
 
-int main(int, char **) {
-  using namespace afterhours;
+bool compareRect(RectangleType a, RectangleType b) {
+  const auto close = [](float a, float b) { return std::abs(b - a) < 0.001f; };
+  if (!close(a.x, b.x)) {
+    // std::cout << "x" << std::endl;
+    return false;
+  }
+  if (!close(a.y, b.y)) {
+    // std::cout << "y" << std::endl;
+    return false;
+  }
+  if (!close(a.width, b.width)) {
+    // std::cout << "w" << std::endl;
+    return false;
+  }
+  if (!close(a.height, b.height)) {
+    // std::cout << "h" << std::endl;
+    return false;
+  }
+  return true;
+}
+
+void expect(bool b, const std::string &msg, Entity &root) {
+  if (!b) {
+    run_(root);
+    print_tree(root.get<ui::UIComponent>());
+    std::cout << msg << std::endl;
+  }
+  assert(b);
+}
+
+struct RectMatcher : public Catch::MatcherBase<RectangleType> {
+  RectangleType a;
+  RectMatcher(RectangleType a_) : a(a_) {}
+
+  bool match(RectangleType const &in) const override {
+    return (in.x == a.x &&         //
+            in.y == a.y &&         //
+            in.width == a.width && //
+            in.height == a.height);
+  }
+
+  std::string describe() const override {
+    std::ostringstream ss;
+    print_tree(to_cmp(
+        EntityQuery().whereHasComponent<AutoLayoutRoot>().gen_first_enforce()));
+
+    ss << "matches " << to_string(a);
+    return ss.str();
+  }
+};
+
+auto &make_sophie() {
+  auto &sophie = EntityHelper::createEntity();
+  {
+    sophie.addComponent<ui::AutoLayoutRoot>();
+    make_component(sophie)
+        // TODO figure out how to update this
+        // when resolution changes
+        .set_desired_width(pixels(1280.f))
+        .set_desired_height(pixels(720.f));
+  }
+  return sophie;
+}
+
+TEST_CASE("root test") {
+  auto &sophie = make_sophie();
+  run_(sophie);
+  CHECK_THAT(sophie.get<ui::UIComponent>().rect(), RectMatcher(Rectangle{
+                                                       //
+                                                       .x = 0,
+                                                       .y = 0,
+                                                       .width = 1280,
+                                                       .height = 720 //
+                                                   }));
+}
+
+TEST_CASE("default test") {
+  auto &sophie = make_sophie();
+
+  auto &button = EntityHelper::createEntity();
+  {
+    make_component(button)
+        .set_desired_width(pixels(100.f))
+        .set_desired_height(pixels(50.f))
+        .set_parent(sophie);
+  }
 
   auto &div = EntityHelper::createEntity();
   {
-    div.addComponent<ui::UIComponent>(div.id)
-        .set_desired_width(ui::Size{
-            .dim = ui::Dim::Children,
-        })
-        .set_desired_height(ui::Size{
-            .dim = ui::Dim::Children,
-        });
+    make_component(div)
+        .set_desired_width(pixels(100.f))
+        .set_desired_height(percent(0.5f))
+        .set_parent(sophie);
   }
 
-  auto &left = EntityHelper::createEntity();
+  run_(sophie);
+
+  CHECK_THAT(div.get<ui::UIComponent>().rect(), RectMatcher(Rectangle{
+                                                    //
+                                                    .x = 0,
+                                                    .y = 50,
+                                                    .width = 100,
+                                                    .height = 360 //
+                                                }));
+}
+
+TEST_CASE("top padding") {
+  auto &sophie = make_sophie();
+
+  auto &button = EntityHelper::createEntity();
   {
-    left.addComponent<ui::UIComponent>(left.id)
-        .set_desired_width(ui::Size{
-            .dim = ui::Dim::Pixels,
-            .value = 100.f,
-        })
-        .set_desired_height(ui::Size{
-            .dim = ui::Dim::Pixels,
-            .value = 100.f,
-        });
+    make_component(button)
+        .set_desired_width(pixels(100.f))
+        .set_desired_height(pixels(50.f))
+        .set_desired_padding(pixels(10.f), Axis::top)
+        .set_parent(sophie);
   }
-  div.get<ui::UIComponent>().children.push_back(left.id);
 
-  auto &right = EntityHelper::createEntity();
+  auto &div = EntityHelper::createEntity();
   {
-    right.addComponent<ui::UIComponent>(right.id)
-        .set_desired_width(ui::Size{
-            .dim = ui::Dim::Pixels,
-            .value = 100.f,
-        })
-        .set_desired_height(ui::Size{
-            .dim = ui::Dim::Pixels,
-            .value = 100.f,
-        });
+    make_component(div)
+        .set_desired_width(pixels(100.f))
+        .set_desired_height(percent(0.5f))
+        .set_parent(sophie);
   }
-  div.get<ui::UIComponent>().children.push_back(right.id);
 
-  run_and_print_tree(div.get<ui::UIComponent>());
+  run_(sophie);
+  CHECK_THAT(to_rect(div), RectMatcher(Rectangle{
+                               //
+                               .x = 0,
+                               .y = 60,
+                               .width = 100,
+                               .height = 360 //
+                           }));
+}
 
+TEST_CASE("vertical padding") {
+  auto &sophie = make_sophie();
+
+  auto &button = EntityHelper::createEntity();
   {
-    auto &Sophie = EntityHelper::createEntity();
-    {
-      Sophie.addComponent<ui::AutoLayoutRoot>();
-      Sophie.addComponent<ui::UIComponent>(Sophie.id)
-          .set_desired_width(ui::Size{
-              // TODO figure out how to update this
-              // when resolution changes
-              .dim = ui::Dim::Pixels,
-              .value = 1280.f,
-          })
-          .set_desired_height(ui::Size{
-              .dim = ui::Dim::Pixels,
-              .value = 720.f,
-          });
-    }
-
-    auto &button = EntityHelper::createEntity();
-    {
-      button.addComponent<ui::UIComponent>(button.id)
-          .set_desired_width(ui::Size{
-              // TODO figure out how to update this
-              // when resolution changes
-              .dim = ui::Dim::Pixels,
-              .value = 100.f,
-          })
-          .set_desired_height(ui::Size{
-              .dim = ui::Dim::Pixels,
-              .value = 50.f,
-          })
-          .set_parent(Sophie.id);
-      Sophie.get<ui::UIComponent>().add_child(button.id);
-    }
-
-    auto &div2 = EntityHelper::createEntity();
-    {
-      div2.addComponent<ui::UIComponent>(div2.id)
-          .set_desired_width(ui::Size{
-              // TODO figure out how to update this
-              // when resolution changes
-              .dim = ui::Dim::Pixels,
-              .value = 100.f,
-          })
-          .set_desired_height(ui::Size{
-              .dim = ui::Dim::Percent,
-              .value = 0.5f,
-          })
-          .set_parent(Sophie.id);
-      Sophie.get<ui::UIComponent>().add_child(div2.id);
-    }
-
-    run_and_print_tree(Sophie.get<ui::UIComponent>());
-
-    std::cout << div2.get<ui::UIComponent>().rect();
-    std::cout << " should be \n";
-    std::cout << Rectangle{.x = 0, .y = 50, .width = 100, .height = 360}
-              << std::endl;
+    make_component(button)
+        .set_desired_width(pixels(100.f))
+        .set_desired_height(pixels(50.f))
+        .set_desired_padding(pixels(10.f), Axis::Y)
+        .set_parent(sophie);
   }
 
-  return 0;
+  auto &div = EntityHelper::createEntity();
+  {
+    make_component(div)
+        .set_desired_width(pixels(100.f))
+        .set_desired_height(percent(0.5f))
+        .set_parent(sophie);
+  }
+
+  run_(sophie);
+
+  CHECK_THAT(to_rect(button), RectMatcher(Rectangle{
+                                  //
+                                  .x = 0,
+                                  .y = 10,
+                                  .width = 100,
+                                  .height = 50 //
+                              }));
+  CHECK_THAT(to_bounds(button), RectMatcher(Rectangle{
+                                    //
+                                    .x = 0,
+                                    .y = 0,
+                                    .width = 100,
+                                    .height = 70 //
+                                }));
+  CHECK_THAT(to_rect(div), RectMatcher(Rectangle{
+                               //
+                               .x = 0,
+                               .y = 70,
+                               .width = 100,
+                               .height = 360 //
+                           }));
+}
+
+TEST_CASE("horizontal padding") {
+  auto &sophie = make_sophie();
+  auto &button = EntityHelper::createEntity();
+  {
+    make_component(button)
+        .set_desired_width(pixels(100.f))
+        .set_desired_height(pixels(50.f))
+        .set_desired_padding(pixels(10.f), Axis::X)
+        .set_parent(sophie);
+  }
+  run_(sophie);
+  CHECK_THAT(to_rect(button), RectMatcher(Rectangle{
+                                  //
+                                  .x = 10,
+                                  .y = 0,
+                                  .width = 100,
+                                  .height = 50 //
+                              }));
+  CHECK_THAT(to_bounds(button), RectMatcher(Rectangle{
+                                    //
+                                    .x = 0,
+                                    .y = 0,
+                                    .width = 120,
+                                    .height = 50 //
+                                }));
+}
+
+TEST_CASE("left margin") {
+  auto &sophie = make_sophie();
+  auto &button = EntityHelper::createEntity();
+  {
+    make_component(button)
+        .set_desired_width(pixels(100.f))
+        .set_desired_height(pixels(50.f))
+        .set_desired_margin(pixels(10.f), Axis::left)
+        .set_parent(sophie);
+  }
+
+  run_(sophie);
+
+  CHECK_THAT(to_rect(button), RectMatcher(Rectangle{
+                                  //
+                                  .x = 10,
+                                  .y = 0,
+                                  .width = 90,
+                                  .height = 50 //
+                              }));
+  CHECK_THAT(to_bounds(button), RectMatcher(Rectangle{
+                                    //
+                                    .x = 0,
+                                    .y = 0,
+                                    .width = 100,
+                                    .height = 50 //
+                                }));
+}
+
+TEST_CASE("right margin") {
+  auto &sophie = make_sophie();
+  auto &button = EntityHelper::createEntity();
+  {
+    make_component(button)
+        .set_desired_width(pixels(100.f))
+        .set_desired_height(pixels(50.f))
+        .set_desired_margin(pixels(10.f), Axis::right)
+        .set_parent(sophie);
+  }
+
+  run_(sophie);
+
+  CHECK_THAT(to_rect(button), RectMatcher(Rectangle{
+                                  //
+                                  .x = 0,
+                                  .y = 0,
+                                  .width = 90,
+                                  .height = 50 //
+                              }));
+  CHECK_THAT(to_bounds(button), RectMatcher(Rectangle{
+                                    //
+                                    .x = 0,
+                                    .y = 0,
+                                    .width = 100,
+                                    .height = 50 //
+                                }));
+}
+
+TEST_CASE("horizontal margin") {
+  auto &sophie = make_sophie();
+  auto &button = EntityHelper::createEntity();
+  {
+    make_component(button)
+        .set_desired_width(pixels(100.f))
+        .set_desired_height(pixels(50.f))
+        .set_desired_margin(pixels(10.f), Axis::X)
+        .set_parent(sophie);
+  }
+
+  run_(sophie);
+
+  CHECK_THAT(to_rect(button), RectMatcher(Rectangle{
+                                  //
+                                  .x = 10,
+                                  .y = 0,
+                                  .width = 80,
+                                  .height = 50 //
+                              }));
+  CHECK_THAT(to_bounds(button), RectMatcher(Rectangle{
+                                    //
+                                    .x = 0,
+                                    .y = 0,
+                                    .width = 100,
+                                    .height = 50 //
+                                }));
+}
+
+TEST_CASE("top margin") {
+  auto &sophie = make_sophie();
+  auto &button = EntityHelper::createEntity();
+  {
+    make_component(button)
+        .set_desired_width(pixels(100.f))
+        .set_desired_height(pixels(50.f))
+        .set_desired_margin(pixels(10.f), Axis::top)
+        .set_parent(sophie);
+  }
+
+  run_(sophie);
+
+  CHECK_THAT(to_rect(button), RectMatcher(Rectangle{
+                                  //
+                                  .x = 0,
+                                  .y = 10,
+                                  .width = 100,
+                                  .height = 40 //
+                              }));
+  CHECK_THAT(to_bounds(button), RectMatcher(Rectangle{
+                                    //
+                                    .x = 0,
+                                    .y = 0,
+                                    .width = 100,
+                                    .height = 50 //
+                                }));
+}
+
+TEST_CASE("bottom margin") {
+  auto &sophie = make_sophie();
+  auto &button = EntityHelper::createEntity();
+  {
+    make_component(button)
+        .set_desired_width(pixels(100.f))
+        .set_desired_height(pixels(50.f))
+        .set_desired_margin(pixels(10.f), Axis::bottom)
+        .set_parent(sophie);
+  }
+
+  run_(sophie);
+
+  CHECK_THAT(to_rect(button), RectMatcher(Rectangle{
+                                  //
+                                  .x = 0,
+                                  .y = 0,
+                                  .width = 100,
+                                  .height = 40 //
+                              }));
+  CHECK_THAT(to_bounds(button), RectMatcher(Rectangle{
+                                    //
+                                    .x = 0,
+                                    .y = 0,
+                                    .width = 100,
+                                    .height = 50 //
+                                }));
+}
+
+TEST_CASE("vertical margin") {
+  auto &sophie = make_sophie();
+  auto &button = EntityHelper::createEntity();
+  {
+    make_component(button)
+        .set_desired_width(pixels(100.f))
+        .set_desired_height(pixels(50.f))
+        .set_desired_margin(pixels(10.f), Axis::Y)
+        .set_parent(sophie);
+  }
+
+  run_(sophie);
+
+  CHECK_THAT(to_rect(button), RectMatcher(Rectangle{
+                                  //
+                                  .x = 0,
+                                  .y = 10,
+                                  .width = 100,
+                                  .height = 30 //
+                              }));
+  CHECK_THAT(to_bounds(button), RectMatcher(Rectangle{
+                                    //
+                                    .x = 0,
+                                    .y = 0,
+                                    .width = 100,
+                                    .height = 50 //
+                                }));
 }

@@ -26,19 +26,66 @@ struct Size {
   float strictness = 1.f;
 };
 
+static Size pixels(float value, float strictness = 1.f) {
+  return ui::Size{
+      .dim = ui::Dim::Pixels, .value = value, .strictness = strictness};
+}
+
+static Size percent(float value, float strictness = 1.f) {
+  if (value > 1.f) {
+    log_warn("Value should be between 0 and 1");
+  }
+  return ui::Size{
+      .dim = ui::Dim::Percent, .value = value, .strictness = strictness};
+}
+
+static Size children() {
+  return ui::Size{
+      .dim = ui::Dim::Children,
+  };
+}
+
 using ComponentSize = std::pair<Size, Size>;
+
+static ComponentSize pixels_xy(float width, float height) {
+  return {pixels(width), pixels(height)};
+}
+
+static ComponentSize children_xy() {
+  return {
+      children(),
+      children(),
+  };
+}
+
+inline Size half_size(Size size) {
+
+  switch (size.dim) {
+  case Dim::Children:
+  case Dim::Text:
+  case Dim::None: {
+    log_warn("half size not supported for dim {}", size.dim);
+  } break;
+  case Dim::Percent:
+    return Size{
+        .dim = size.dim,
+        .value = size.value / 2.f,
+        .strictness = size.strictness,
+    };
+  case Dim::Pixels:
+    return Size{
+        .dim = size.dim,
+        .value = size.value / 2.f,
+        .strictness = size.strictness,
+    };
+  }
+  return size;
+}
 
 enum struct FlexDirection {
   None = 1 << 0,
   Row = 1 << 1,
   Column = 1 << 2,
-};
-
-struct Padding {
-  Size top;
-  Size bottom;
-  Size left;
-  Size right;
 };
 
 enum struct Axis {
@@ -74,7 +121,8 @@ struct UIComponent : BaseComponent {
   };
 
   AxisArray<Size> desired;
-  Padding desired_padding;
+  AxisArray<Size, 6> desired_padding;
+  AxisArray<Size, 6> desired_margin;
 
   FlexDirection flex_direction = FlexDirection::Column;
 
@@ -82,6 +130,7 @@ struct UIComponent : BaseComponent {
   bool was_rendered_to_screen = false;
   bool absolute = false;
   AxisArray<float> computed;
+  AxisArray<float, 6> computed_margin;
   AxisArray<float, 6> computed_padd;
   AxisArray<float> computed_rel;
 
@@ -96,6 +145,18 @@ struct UIComponent : BaseComponent {
         .y = computed_rel[Axis::Y],
         .width = computed[Axis::X],
         .height = computed[Axis::Y],
+    };
+  };
+
+  Rectangle bounds() const {
+    Rectangle rect_ = rect();
+    return Rectangle{
+        .x = rect_.x - computed_padd[Axis::left] - computed_margin[Axis::left],
+        .y = rect_.y - computed_padd[Axis::top] - computed_margin[Axis::top],
+        .width =
+            rect_.width + computed_padd[Axis::X] + computed_margin[Axis::X],
+        .height =
+            rect_.height + computed_padd[Axis::Y] + computed_margin[Axis::Y],
     };
   };
 
@@ -125,6 +186,12 @@ struct UIComponent : BaseComponent {
     return *this;
   }
 
+  auto &set_parent(Entity &entity) {
+    parent = entity.id;
+    entity.get<UIComponent>().add_child(this->id);
+    return *this;
+  }
+
   auto &set_desired_width(Size s) {
     desired[Axis::X] = s;
     return *this;
@@ -132,6 +199,41 @@ struct UIComponent : BaseComponent {
 
   auto &set_desired_height(Size s) {
     desired[Axis::Y] = s;
+    return *this;
+  }
+
+  auto &set_desired_margin(Size s, Axis axis) {
+    if (axis == Axis::X) {
+      desired_margin[Axis::left] = s;
+      desired_margin[Axis::right] = s;
+      return *this;
+    }
+    if (axis == Axis::Y) {
+      desired_margin[Axis::top] = s;
+      desired_margin[Axis::bottom] = s;
+      return *this;
+    }
+    desired_margin[axis] = s;
+    return *this;
+  }
+
+  auto &set_desired_padding(Size s, Axis axis) {
+    if (axis == Axis::X) {
+      // TODO do you think this should be 5 and 5 or 10 and 10?
+      // .set_desired_padding(pixels(10.f), Axis::Y)
+      //
+      // desired_padding[Axis::left] = half_size(s);
+      // desired_padding[Axis::right] = half_size(s);
+      desired_padding[Axis::left] = s;
+      desired_padding[Axis::right] = s;
+      return *this;
+    }
+    if (axis == Axis::Y) {
+      desired_padding[Axis::top] = s;
+      desired_padding[Axis::bottom] = s;
+      return *this;
+    }
+    desired_padding[axis] = s;
     return *this;
   }
 
@@ -148,6 +250,10 @@ struct UIComponent : BaseComponent {
   }
 };
 
+static UIComponent &make_component(Entity &entity) {
+  return entity.addComponent<ui::UIComponent>(entity.id);
+}
+
 struct AutoLayout {
 
   std::map<EntityID, RefEntity> mapping;
@@ -158,6 +264,39 @@ struct AutoLayout {
 
   virtual UIComponent &to_cmp(EntityID id) {
     return to_ent(id).get<UIComponent>();
+  }
+
+  // TODO do we ever need to check parent?
+  float compute_margin_for_exp(UIComponent &widget, Axis axis) {
+    const auto compute_ = [](Size exp) {
+      switch (exp.dim) {
+      case Dim::Pixels:
+        return exp.value;
+      case Dim::Text:
+        log_error("Margin by dimension text not supported");
+      case Dim::Percent:
+        log_error("Margin by dimension percent not supported");
+      default:
+        // This is not a standalone widget,
+        // so just keep moving along
+        return 0.f;
+      }
+      return 0.f;
+    };
+
+    auto margin = widget.desired_margin;
+    switch (axis) {
+    case Axis::X:
+      return compute_(margin[Axis::left]) + compute_(margin[Axis::right]);
+    case Axis::Y:
+      return compute_(margin[Axis::top]) + compute_(margin[Axis::bottom]);
+    case Axis::top:
+    case Axis::left:
+    case Axis::right:
+    case Axis::bottom:
+      return compute_(margin[axis]);
+    }
+    return 0.f;
   }
 
   float compute_padding_for_standalone_exp(UIComponent &widget, Axis axis) {
@@ -177,20 +316,17 @@ struct AutoLayout {
       return 0.f;
     };
 
-    Padding padd = widget.desired_padding;
+    auto padd = widget.desired_padding;
     switch (axis) {
     case Axis::X:
-      return compute_(padd.left) + compute_(padd.right);
+      return compute_(padd[Axis::left]) + compute_(padd[Axis::right]);
     case Axis::Y:
-      return compute_(padd.top) + compute_(padd.bottom);
+      return compute_(padd[Axis::top]) + compute_(padd[Axis::bottom]);
     case Axis::top:
-      return compute_(padd.top);
     case Axis::left:
-      return compute_(padd.left);
     case Axis::right:
-      return compute_(padd.right);
     case Axis::bottom:
-      return compute_(padd.bottom);
+      return compute_(padd[axis]);
     }
     return 0.f;
   }
@@ -222,6 +358,10 @@ struct AutoLayout {
     auto padd_left = compute_padding_for_standalone_exp(widget, Axis::left);
     auto padd_right = compute_padding_for_standalone_exp(widget, Axis::right);
     auto padd_bottom = compute_padding_for_standalone_exp(widget, Axis::bottom);
+    auto margin_top = compute_margin_for_exp(widget, Axis::top);
+    auto margin_left = compute_margin_for_exp(widget, Axis::left);
+    auto margin_right = compute_margin_for_exp(widget, Axis::right);
+    auto margin_bottom = compute_margin_for_exp(widget, Axis::bottom);
 
     widget.computed_padd[Axis::top] = padd_top;
     widget.computed_padd[Axis::left] = padd_left;
@@ -229,6 +369,14 @@ struct AutoLayout {
     widget.computed_padd[Axis::bottom] = padd_bottom;
     widget.computed_padd[Axis::X] = padd_left + padd_right;
     widget.computed_padd[Axis::Y] = padd_top + padd_bottom;
+
+    widget.computed_margin[Axis::top] = margin_top;
+    widget.computed_margin[Axis::left] = margin_left;
+    widget.computed_margin[Axis::right] = margin_right;
+    widget.computed_margin[Axis::bottom] = margin_bottom;
+    widget.computed_margin[Axis::X] = margin_left + margin_right;
+    widget.computed_margin[Axis::Y] = margin_top + margin_bottom;
+    // No need to add margin since itll only make the visual smaller...
 
     widget.computed[Axis::X] = size_x + widget.computed_padd[Axis::X];
     widget.computed[Axis::Y] = size_y + widget.computed_padd[Axis::Y];
@@ -711,6 +859,14 @@ struct AutoLayout {
 
     widget.computed[Axis::X] -= (widget.computed_padd[Axis::X]);
     widget.computed[Axis::Y] -= (widget.computed_padd[Axis::Y]);
+
+    // Also apply any margin
+
+    widget.computed_rel[Axis::X] += (widget.computed_margin[Axis::left]);
+    widget.computed_rel[Axis::Y] += (widget.computed_margin[Axis::top]);
+
+    widget.computed[Axis::X] -= (widget.computed_margin[Axis::X]);
+    widget.computed[Axis::Y] -= (widget.computed_margin[Axis::Y]);
   }
 
   void reset_computed_values(UIComponent &widget) {

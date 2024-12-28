@@ -839,29 +839,6 @@ static void force_layout_and_print(Entity &root) {
   ui::AutoLayout::print_tree(root.get<ui::UIComponent>());
 }
 
-static Size pixels(float value) {
-  return ui::Size{
-      .dim = ui::Dim::Pixels,
-      .value = value,
-  };
-}
-
-static ComponentSize pixels(float width, float height) {
-  return {pixels(width), pixels(height)};
-}
-
-static Size children() {
-  return ui::Size{
-      .dim = ui::Dim::Children,
-  };
-}
-static ComponentSize children_xy() {
-  return {
-      children(),
-      children(),
-  };
-}
-
 static Size padding_(float v, float strict = 0.5f) {
   return ui::Size{
       .dim = ui::Dim::Percent,
@@ -882,62 +859,24 @@ static Entity &make_div(Entity &parent, ComponentSize cz) {
   return div;
 }
 
-static void pad_component(Entity &component, Padding padding) {
-  /*
-auto [top, bottom, left, right] = padding;
+struct Padding {
+  Size top;
+  Size bottom;
+  Size left;
+  Size right;
+};
 
-auto &ui_cmp = component.get<ui::UIComponent>();
-auto &parent = AutoLayout::to_ent_static(ui_cmp.parent);
-
-// Make it no longer a child of its parent
-parent.get<UIComponent>().remove_child(component.id);
-
-{
-  // Top padding
-  make_div(parent, ComponentSize{
-                       padding_(1.f, 1.f),
-                       padding_(top, 0.5f),
-                   });
-
-  auto &button_with_left = make_div(parent, ComponentSize{
-                                                padding_(1.f, 1.f),
-                                                children(),
-                                            });
-  button_with_left.get<ui::UIComponent>().flex_direction =
-      afterhours::ui::FlexDirection::Row;
-  {
-
-    make_div(button_with_left, ComponentSize{
-                                   padding_(left, 0.5f),
-                                   pixels(1.f),
-                               });
-
-    auto &buttons = make_div(button_with_left, afterhours::ui::children_xy());
-
-    {
-      // set the new parent
-      ui_cmp.parent = buttons.id;
-      buttons.get<UIComponent>().add_child(component.id);
-    }
-
-    make_div(button_with_left, ComponentSize{
-                                   padding_(right, 0.5f),
-                                   pixels(1.f),
-                               });
-  }
-
-  make_div(parent, ComponentSize{
-                       padding_(1.f, 1.f),
-                       padding_(bottom, 0.5f),
-                   });
-}
-*/
-}
+struct Margin {
+  Size top;
+  Size bottom;
+  Size left;
+  Size right;
+};
 
 Entity &make_button(Entity &parent, const std::string &label,
                     Vector2Type button_size,
                     const std::function<void(Entity &)> &click = {},
-                    Padding padding = Padding()) {
+                    Padding padding = Padding(), Margin margin = Margin()) {
   auto &entity = EntityHelper::createEntity();
   entity.addComponent<UIComponent>(entity.id)
       .set_desired_width(ui::Size{
@@ -948,9 +887,15 @@ Entity &make_button(Entity &parent, const std::string &label,
           .dim = ui::Dim::Pixels,
           .value = button_size.y,
       })
+      .set_desired_padding(padding.left, ui::Axis::left)
+      .set_desired_padding(padding.right, ui::Axis::right)
+      .set_desired_padding(padding.top, ui::Axis::top)
+      .set_desired_padding(padding.bottom, ui::Axis::bottom)
+      .set_desired_margin(margin.left, ui::Axis::left)
+      .set_desired_margin(margin.right, ui::Axis::right)
+      .set_desired_margin(margin.top, ui::Axis::top)
+      .set_desired_margin(margin.bottom, ui::Axis::bottom)
       .set_parent(parent.id);
-  // TODO
-  entity.get<UIComponent>().desired_padding = padding;
 
   parent.get<ui::UIComponent>().add_child(entity.id);
 
