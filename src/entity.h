@@ -34,6 +34,7 @@ using ComponentArray =
 using EntityID = int;
 
 static std::atomic_int ENTITY_ID_GEN = 0;
+static ComponentBitSet dirty_components_STATIC;
 
 struct Entity {
   EntityID id;
@@ -106,6 +107,7 @@ struct Entity {
     }
     componentSet[components::get_type_id<T>()] = false;
     componentArray[components::get_type_id<T>()].reset();
+    dirty_components_STATIC[components::get_type_id<T>()] = true;
   }
 
   template <typename T, typename... TArgs> T &addComponent(TArgs &&...args) {
@@ -133,6 +135,7 @@ struct Entity {
     ComponentID component_id = components::get_type_id<T>();
     componentArray[component_id] = std::move(component);
     componentSet[component_id] = true;
+    dirty_components_STATIC[components::get_type_id<T>()] = true;
 
 #if defined(AFTER_HOURS_DEBUG)
     log_trace("your set is now {}", componentSet);
