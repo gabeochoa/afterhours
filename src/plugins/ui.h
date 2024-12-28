@@ -639,15 +639,12 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   void render_me(const Entity &entity) const {
     const UIComponent &cmp = entity.get<UIComponent>();
 
-    UIContext<InputAction> &context =
-        this->context_entity->template get<UIContext<InputAction>>();
-
     float fontSize = 20;
     float x = 0;
     float y = (fontSize * level) + fontSize / 2.f;
 
     std::string widget_str =
-        fmt::format("{} ({:04.2f} {:04.2f}) {:04.2f}x{:04.2f}", entity.id,
+        fmt::format("{} ({:04.2f} {:04.2f}) {:04.2f}x{:04.2f}", (int)entity.id,
                     cmp.x(), cmp.y(), cmp.rect().width, cmp.rect().height);
 
     DrawText(widget_str.c_str(), x, y, fontSize, raylib::RAYWHITE);
