@@ -191,21 +191,26 @@ struct SystemManager {
     register_render_system(std::make_unique<CallbackSystem>(cb));
   }
 
+  void for_each(std::unique_ptr<SystemBase> &system, Entities &entities,
+                float dt) {
+    for (std::shared_ptr<Entity> entity : entities) {
+      if (!entity)
+        continue;
+#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
+      if (system->include_derived_children)
+        system->for_each_derived(*entity, dt);
+      else
+#endif
+        system->for_each(*entity, dt);
+    }
+  }
+
   void tick(Entities &entities, float dt) {
     for (auto &system : update_systems_) {
       if (!system->should_run(dt))
         continue;
       system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
-        if (!entity)
-          continue;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-        if (system->include_derived_children)
-          system->for_each_derived(*entity, dt);
-        else
-#endif
-          system->for_each(*entity, dt);
-      }
+      for_each(system, entities, dt);
     }
     EntityHelper::cleanup();
   }
@@ -215,16 +220,7 @@ struct SystemManager {
       if (!system->should_run(dt))
         continue;
       system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
-        if (!entity)
-          continue;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-        if (system->include_derived_children)
-          system->for_each_derived(*entity, dt);
-        else
-#endif
-          system->for_each(*entity, dt);
-      }
+      for_each(system, entities, dt);
     }
   }
 
@@ -261,12 +257,12 @@ struct SystemManager {
   }
 
   void render_all(float dt) {
-    const auto &entities = EntityHelper::get_entities();
+    const auto entities = EntityHelper::get_ptrs();
     render(entities, dt);
   }
 
   void run(float dt) {
-    auto &entities = EntityHelper::get_entities_for_mod();
+    auto entities = EntityHelper::get_ptrs();
     fixed_tick_all(entities, dt);
     tick_all(entities, dt);
     render_all(dt);

@@ -23,6 +23,13 @@ struct EntityHelper {
 
   static const EntityMap &get_entities() { return entity_map_DO_NOT_USE; }
   static EntityMap &get_entities_for_mod() { return entity_map_DO_NOT_USE; }
+  static std::vector<std::shared_ptr<Entity>> get_ptrs() {
+    std::vector<std::shared_ptr<Entity>> ref;
+    for (auto &pair : entity_map_DO_NOT_USE) {
+      ref.push_back(pair.second);
+    }
+    return ref;
+  }
   static RefEntities get_refs_for_mod() {
     RefEntities ref;
     for (auto &pair : entity_map_DO_NOT_USE) {
