@@ -10,6 +10,7 @@
 #include "entity.h"
 namespace afterhours {
 
+using Entities = std::vector<std::shared_ptr<Entity>>;
 using RefEntities = std::vector<RefEntity>;
 static std::set<int> permanant_ids;
 using EntityMap = std::map<EntityID, std::shared_ptr<Entity>>;

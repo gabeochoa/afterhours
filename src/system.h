@@ -6,13 +6,16 @@
 #include <cmath>
 #include <functional>
 #include <memory>
+#include <set>
 
 #include "base_component.h"
 #include "entity.h"
+#include "entity_helper.h"
 
 namespace afterhours {
-class SystemBase {
-public:
+struct SystemBase {
+  std::set<EntityID> cached_ids;
+
   SystemBase() {}
   virtual ~SystemBase() {}
 
@@ -148,8 +151,6 @@ template <typename Component> struct Not : BaseComponent {
                              float) const {}
 };
 
-#include "entity_helper.h"
-
 struct CallbackSystem : System<> {
   std::function<void(float)> cb_;
   CallbackSystem(const std::function<void(float)> &cb) : cb_(cb) {}
@@ -163,6 +164,24 @@ struct SystemManager {
   std::vector<std::unique_ptr<SystemBase>> update_systems_;
   std::vector<std::unique_ptr<SystemBase>> fixed_update_systems_;
   std::vector<std::unique_ptr<SystemBase>> render_systems_;
+
+  void reset_caches_when_dirty() {
+    if (dirty_components_STATIC.none())
+      return;
+    log_info("reseting cache");
+
+    for (auto &system : update_systems_) {
+      system->cached_ids.clear();
+    }
+    for (auto &system : fixed_update_systems_) {
+      system->cached_ids.clear();
+    }
+    for (auto &system : render_systems_) {
+      system->cached_ids.clear();
+    }
+
+    dirty_components_STATIC.reset();
+  }
 
   // TODO  - one issue is that if you write a system that could be const
   // but you add it to update, it wont work since update only calls the
@@ -193,15 +212,29 @@ struct SystemManager {
 
   void for_each(std::unique_ptr<SystemBase> &system, Entities &entities,
                 float dt) {
+
+    bool refill_cache = system->cached_ids.empty();
+
     for (std::shared_ptr<Entity> entity : entities) {
       if (!entity)
         continue;
+      if (!refill_cache && !system->cached_ids.contains(entity->id)) {
+        continue;
+      }
 #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-      if (system->include_derived_children)
-        system->for_each_derived(*entity, dt);
-      else
+      if (system->include_derived_children) {
+        bool keep = system->for_each_derived(*entity, dt);
+        if (keep) {
+          system->cached_ids.insert(entity->id);
+        }
+      } else
 #endif
-        system->for_each(*entity, dt);
+      {
+        bool keep = system->for_each(*entity, dt);
+        if (keep) {
+          system->cached_ids.insert(entity->id);
+        }
+      }
     }
   }
 
@@ -262,6 +295,7 @@ struct SystemManager {
   }
 
   void run(float dt) {
+    reset_caches_when_dirty();
     auto entities = EntityHelper::get_ptrs();
     fixed_tick_all(entities, dt);
     tick_all(entities, dt);
