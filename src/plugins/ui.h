@@ -270,6 +270,7 @@ struct ClearVisibity : System<UIComponent> {
 struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
 
   std::map<EntityID, RefEntity> components;
+  window_manager::Resolution resolution;
 
   virtual void once(float) override {
     components.clear();
@@ -277,11 +278,18 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
     for (Entity &entity : comps) {
       components.emplace(entity.id, entity);
     }
+
+    Entity &e =
+        EntityQuery()
+            .whereHasComponent<window_manager::ProvidesCurrentResolution>()
+            .gen_first_enforce();
+    resolution =
+        e.get<window_manager::ProvidesCurrentResolution>().current_resolution;
   }
   virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
                              float) override {
 
-    AutoLayout::autolayout(cmp, components);
+    AutoLayout::autolayout(cmp, resolution, components);
 
     // AutoLayout::print_tree(cmp);
     // log_error("");
@@ -857,13 +865,26 @@ Entity &make_dropdown(Entity &parent, int max_options = -1) {
   return dropdown;
 }
 
-static void force_layout_and_print(Entity &root) {
+static void force_layout_and_print(
+    Entity &root,
+    window_manager::Resolution resolution = window_manager::Resolution()) {
   std::map<EntityID, RefEntity> components;
   auto comps = EntityQuery().whereHasComponent<ui::UIComponent>().gen();
   for (Entity &entity : comps) {
     components.emplace(entity.id, entity);
   }
-  ui::AutoLayout::autolayout(root.get<ui::UIComponent>(), components);
+
+  if (resolution.width == 0 || resolution.height == 0) {
+    Entity &e =
+        EntityQuery()
+            .whereHasComponent<window_manager::ProvidesCurrentResolution>()
+            .gen_first_enforce();
+    resolution =
+        e.get<window_manager::ProvidesCurrentResolution>().current_resolution;
+  }
+
+  ui::AutoLayout::autolayout(root.get<ui::UIComponent>(), resolution,
+                             components);
   ui::AutoLayout::print_tree(root.get<ui::UIComponent>());
 }
 

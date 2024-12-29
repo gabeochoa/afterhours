@@ -55,7 +55,8 @@ void run_(Entity &root_element) {
   for (Entity &entity : comps) {
     components.emplace(entity.id, entity);
   }
-  ui::AutoLayout::autolayout(root_element.get<UIComponent>(), components);
+  ui::AutoLayout::autolayout(root_element.get<UIComponent>(), {1280, 720},
+                             components);
 }
 
 void print_tree(ui::UIComponent &root) {
@@ -64,7 +65,7 @@ void print_tree(ui::UIComponent &root) {
   for (Entity &entity : comps) {
     components.emplace(entity.id, entity);
   }
-  ui::AutoLayout::autolayout(root, components);
+  ui::AutoLayout::autolayout(root, {1280, 720}, components);
   ui::AutoLayout::print_tree(root);
 }
 

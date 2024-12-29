@@ -7,6 +7,8 @@
 #include "../entity.h"
 #include "../entity_query.h"
 
+#include "window_manager.h"
+
 namespace afterhours {
 using Rectangle = RectangleType;
 
@@ -18,6 +20,7 @@ enum struct Dim {
   Text,
   Percent,
   Children,
+  ScreenPercent,
 };
 
 std::ostream &operator<<(std::ostream &os, const Dim &dim) {
@@ -36,6 +39,9 @@ std::ostream &operator<<(std::ostream &os, const Dim &dim) {
     break;
   case Dim::Children:
     os << "Children";
+    break;
+  case Dim::ScreenPercent:
+    os << "ScreenPercent";
     break;
   }
   return os;
@@ -58,6 +64,14 @@ static Size percent(float value, float strictness = 1.f) {
   }
   return ui::Size{
       .dim = ui::Dim::Percent, .value = value, .strictness = strictness};
+}
+
+static Size screen_pct(float value, float strictness = 1.f) {
+  if (value > 1.f) {
+    log_warn("Value should be between 0 and 1");
+  }
+  return ui::Size{
+      .dim = ui::Dim::ScreenPercent, .value = value, .strictness = strictness};
 }
 
 static Size children() {
@@ -87,12 +101,8 @@ inline Size half_size(Size size) {
   case Dim::None: {
     log_warn("half size not supported for dim {}", size.dim);
   } break;
+  case Dim::ScreenPercent:
   case Dim::Percent:
-    return Size{
-        .dim = size.dim,
-        .value = size.value / 2.f,
-        .strictness = size.strictness,
-    };
   case Dim::Pixels:
     return Size{
         .dim = size.dim,
@@ -301,9 +311,12 @@ static UIComponent &make_component(Entity &entity) {
 
 struct AutoLayout {
 
+  window_manager::Resolution resolution;
   std::map<EntityID, RefEntity> mapping;
-  AutoLayout(const std::map<EntityID, RefEntity> &mapping_ = {})
-      : mapping(mapping_) {}
+
+  AutoLayout(window_manager::Resolution rez = {},
+             const std::map<EntityID, RefEntity> &mapping_ = {})
+      : resolution(rez), mapping(mapping_) {}
 
   Entity &to_ent(EntityID id) { return mapping.at(id); }
 
@@ -321,7 +334,11 @@ struct AutoLayout {
         log_error("Margin by dimension text not supported");
       case Dim::Percent:
         log_error("Margin by dimension percent not supported");
-      default:
+      case Dim::ScreenPercent:
+        log_error("Margin by dimension screen percent not supported");
+      case Dim::Children:
+        log_error("Margin by dimension children not supported");
+      case Dim::None:
         // This is not a standalone widget,
         // so just keep moving along
         return 0.f;
@@ -353,7 +370,11 @@ struct AutoLayout {
         log_error("Padding by dimension text not supported");
       case Dim::Percent:
         log_error("Padding by dimension percent not supported");
-      default:
+      case Dim::Children:
+        log_error("Padding by children not supported");
+      case Dim::ScreenPercent:
+        log_error("Padding by screen percent not supported");
+      case Dim::None:
         // This is not a standalone widget,
         // so just keep moving along
         return 0.f;
@@ -377,23 +398,44 @@ struct AutoLayout {
   }
 
   float compute_size_for_standalone_exp(UIComponent &widget, Axis axis) {
-    const auto compute_ = [&](Size exp) {
+    const auto compute_ = [&](Size exp, float screenValue) {
       switch (exp.dim) {
       case Dim::Pixels:
         return exp.value;
+      case Dim::ScreenPercent:
+        return exp.value * screenValue;
       case Dim::Text:
         // TODO figure this out
         // So we can use MeasureTextEx but
         // we need to know the font and spacing
         return 100.f;
-      default:
+      case Dim::Percent:
+      case Dim::None:
+      case Dim::Children:
         // This is not a standalone widget,
         // so just keep moving along
         return widget.computed[axis];
       }
+      return widget.computed[axis];
     };
+
+    float screenValue = 0;
+
+    switch (axis) {
+    case Axis::X:
+    case Axis::left:
+    case Axis::right:
+      screenValue = resolution.width;
+      break;
+    case Axis::Y:
+    case Axis::top:
+    case Axis::bottom:
+      screenValue = resolution.height;
+      break;
+    }
+
     Size exp = widget.desired[axis];
-    return compute_(exp);
+    return compute_(exp, screenValue);
   }
 
   void calculate_standalone(UIComponent &widget) {
@@ -446,9 +488,14 @@ struct AutoLayout {
     switch (exp.dim) {
     case Dim::Percent:
       return parent_size == -1 ? no_change : exp.value * parent_size;
-    default:
+    case Dim::None:
+    case Dim::Text:
+    case Dim::ScreenPercent:
+    case Dim::Children:
+    case Dim::Pixels:
       return no_change;
     }
+    return no_change;
   }
 
   void calculate_those_with_parents(UIComponent &widget) {
@@ -922,8 +969,9 @@ struct AutoLayout {
   }
 
   static void autolayout(UIComponent &widget,
+                         const window_manager::Resolution resolution,
                          const std::map<EntityID, RefEntity> &map) {
-    AutoLayout al(map);
+    AutoLayout al(resolution, map);
 
     al.reset_computed_values(widget);
     // - (any) compute solos (doesnt rely on parent/child / other widgets)

@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include <sstream>
+
 #include "../base_component.h"
 #include "../developer.h"
 #include "../entity_query.h"
@@ -11,8 +13,8 @@ namespace afterhours {
 struct window_manager : developer::Plugin {
 
   struct Resolution {
-    int width;
-    int height;
+    int width = 0;
+    int height = 0;
 
     friend std::ostream &operator<<(std::ostream &os, const Resolution &rez) {
       os << "(" << rez.width << "," << rez.height << ")";
