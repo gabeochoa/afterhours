@@ -896,19 +896,6 @@ static Size padding_(float v, float strict = 0.5f) {
   };
 }
 
-static Entity &make_div(Entity &parent, ComponentSize cz) {
-  auto &div = EntityHelper::createEntity();
-  {
-    div.addComponent<UIComponentDebug>(UIComponentDebug::Type::div);
-    div.addComponent<ui::UIComponent>(div.id)
-        .set_desired_width(cz.first)
-        .set_desired_height(cz.second)
-        .set_parent(parent.id);
-    parent.get<ui::UIComponent>().add_child(div.id);
-  }
-  return div;
-}
-
 struct Padding {
   Size top;
   Size bottom;
@@ -922,6 +909,28 @@ struct Margin {
   Size left;
   Size right;
 };
+
+static Entity &make_div(Entity &parent, ComponentSize cz,
+                        Padding padding = Padding(), Margin margin = Margin()) {
+  auto &div = EntityHelper::createEntity();
+  {
+    div.addComponent<UIComponentDebug>(UIComponentDebug::Type::div);
+    div.addComponent<ui::UIComponent>(div.id)
+        .set_desired_width(cz.first)
+        .set_desired_height(cz.second)
+        .set_desired_padding(padding.left, ui::Axis::left)
+        .set_desired_padding(padding.right, ui::Axis::right)
+        .set_desired_padding(padding.top, ui::Axis::top)
+        .set_desired_padding(padding.bottom, ui::Axis::bottom)
+        .set_desired_margin(margin.left, ui::Axis::left)
+        .set_desired_margin(margin.right, ui::Axis::right)
+        .set_desired_margin(margin.top, ui::Axis::top)
+        .set_desired_margin(margin.bottom, ui::Axis::bottom)
+        .set_parent(parent.id);
+    parent.get<ui::UIComponent>().add_child(div.id);
+  }
+  return div;
+}
 
 Entity &make_button(Entity &parent, const std::string &label,
                     Vector2Type button_size,
