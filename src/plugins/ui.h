@@ -627,6 +627,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   float enableCooldownReset = 0.2f;
 
   mutable int level = 0;
+  mutable int indent = 0;
 
   RenderDebugAutoLayoutRoots(InputAction toggle_kp)
       : toggle_action(toggle_kp) {}
@@ -660,13 +661,14 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     this->context_entity = opt_context.value();
     this->include_derived_children = true;
     this->level = 0;
+    this->indent = 0;
   }
 
   void render_me(const Entity &entity) const {
     const UIComponent &cmp = entity.get<UIComponent>();
 
     float fontSize = 20;
-    float x = 0;
+    float x = 10 * indent;
     float y = (fontSize * level) + fontSize / 2.f;
 
     std::string component_name = "Unknown";
@@ -696,9 +698,11 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     render_me(entity);
     level++;
 
+    indent++;
     for (EntityID child : cmp.children) {
       render(AutoLayout::to_ent_static(child));
     }
+    indent--;
   }
 
   virtual void for_each_with_derived(const Entity &entity, const UIComponent &,
@@ -706,6 +710,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
                                      float) const override {
     render(entity);
     level += 2;
+    indent = 0;
   }
 };
 
