@@ -361,8 +361,25 @@ struct AutoLayout {
     return 0.f;
   }
 
+  float fetch_screen_value_(Axis axis) {
+    float screenValue = 0;
+    switch (axis) {
+    case Axis::X:
+    case Axis::left:
+    case Axis::right:
+      screenValue = resolution.width;
+      break;
+    case Axis::Y:
+    case Axis::top:
+    case Axis::bottom:
+      screenValue = resolution.height;
+      break;
+    }
+    return screenValue;
+  }
+
   float compute_padding_for_standalone_exp(UIComponent &widget, Axis axis) {
-    const auto compute_ = [](Size exp) {
+    const auto compute_ = [](Size exp, float screenValue) {
       switch (exp.dim) {
       case Dim::Pixels:
         return exp.value;
@@ -373,7 +390,7 @@ struct AutoLayout {
       case Dim::Children:
         log_error("Padding by children not supported");
       case Dim::ScreenPercent:
-        log_error("Padding by screen percent not supported");
+        return exp.value * screenValue;
       case Dim::None:
         // This is not a standalone widget,
         // so just keep moving along
@@ -382,17 +399,18 @@ struct AutoLayout {
       return 0.f;
     };
 
+    float sv = fetch_screen_value_(axis);
     auto padd = widget.desired_padding;
     switch (axis) {
     case Axis::X:
-      return compute_(padd[Axis::left]) + compute_(padd[Axis::right]);
+      return compute_(padd[Axis::left], sv) + compute_(padd[Axis::right], sv);
     case Axis::Y:
-      return compute_(padd[Axis::top]) + compute_(padd[Axis::bottom]);
+      return compute_(padd[Axis::top], sv) + compute_(padd[Axis::bottom], sv);
     case Axis::top:
     case Axis::left:
     case Axis::right:
     case Axis::bottom:
-      return compute_(padd[axis]);
+      return compute_(padd[axis], sv);
     }
     return 0.f;
   }
@@ -419,21 +437,7 @@ struct AutoLayout {
       return widget.computed[axis];
     };
 
-    float screenValue = 0;
-
-    switch (axis) {
-    case Axis::X:
-    case Axis::left:
-    case Axis::right:
-      screenValue = resolution.width;
-      break;
-    case Axis::Y:
-    case Axis::top:
-    case Axis::bottom:
-      screenValue = resolution.height;
-      break;
-    }
-
+    float screenValue = fetch_screen_value_(axis);
     Size exp = widget.desired[axis];
     return compute_(exp, screenValue);
   }
