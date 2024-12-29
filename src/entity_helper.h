@@ -59,6 +59,7 @@ struct EntityHelper {
   }
 
   static OptEntity getEntityForID(EntityID id);
+  static Entity &getEntityForIDEnforce(EntityID id);
 };
 
 Entities &EntityHelper::get_entities_for_mod() { return entities_DO_NOT_USE; }
@@ -185,4 +186,10 @@ OptEntity EntityHelper::getEntityForID(EntityID id) {
   }
   return {};
 }
+
+Entity &EntityHelper::getEntityForIDEnforce(EntityID id) {
+  auto opt_ent = getEntityForID(id);
+  return opt_ent.asE();
+}
+
 } // namespace afterhours
