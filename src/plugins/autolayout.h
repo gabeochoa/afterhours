@@ -66,7 +66,7 @@ static Size percent(float value, float strictness = 1.f) {
       .dim = ui::Dim::Percent, .value = value, .strictness = strictness};
 }
 
-static Size screen_pct(float value, float strictness = 1.f) {
+static Size screen_pct(float value, float strictness = 0.9f) {
   if (value > 1.f) {
     log_warn("Value should be between 0 and 1");
   }
@@ -944,14 +944,15 @@ struct AutoLayout {
     widget.computed_rel[Axis::X] += offset.x;
     widget.computed_rel[Axis::Y] += offset.y;
 
+    widget.computed_rel[Axis::X] += (widget.computed_padd[Axis::left]);
+    widget.computed_rel[Axis::Y] += (widget.computed_padd[Axis::top]);
+
     for (EntityID child : widget.children) {
       compute_rect_bounds(this->to_cmp(child));
     }
 
     // now that all children are complete, we can remove the padding spacing
 
-    widget.computed_rel[Axis::X] += (widget.computed_padd[Axis::left]);
-    widget.computed_rel[Axis::Y] += (widget.computed_padd[Axis::top]);
 
     widget.computed[Axis::X] -= (widget.computed_padd[Axis::X]);
     widget.computed[Axis::Y] -= (widget.computed_padd[Axis::Y]);
