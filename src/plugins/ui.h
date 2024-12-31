@@ -299,11 +299,15 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
 struct TrackIfComponentWasRendered : System<AutoLayoutRoot, UIComponent> {
 
   void set_visibility(UIComponent &cmp) {
-    if (cmp.width() < 0 || cmp.height() < 0 || cmp.should_hide) {
+    // Hiding hides children
+    if (cmp.should_hide)
       return;
-    }
     for (EntityID child : cmp.children) {
       set_visibility(AutoLayout::to_cmp_static(child));
+    }
+    // you might still have visible children even if you arent big (i think)
+    if (cmp.width() < 0 || cmp.height() < 0) {
+      return;
     }
     cmp.was_rendered_to_screen = true;
   }
@@ -357,6 +361,9 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
   virtual void for_each_with_derived(Entity &entity, UIComponent &component,
                                      HasClickListener &hasClickListener,
                                      float) {
+    if (!component.was_rendered_to_screen)
+      return;
+
     context->active_if_mouse_inside(entity.id, component.rect());
 
     if (context->has_focus(entity.id) &&
@@ -384,9 +391,8 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
 
   virtual void for_each_with(Entity &entity, UIComponent &component,
                              float) override {
-    if (entity.is_missing<HasClickListener>()) {
+    if (entity.is_missing<HasClickListener>())
       return;
-    }
     if (!component.was_rendered_to_screen)
       return;
 
