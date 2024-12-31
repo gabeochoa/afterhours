@@ -954,22 +954,21 @@ Entity &make_button(Entity &parent, const std::string &label,
   return entity;
 }
 
-Entity &make_slider(Entity &parent, Vector2Type button_size,
-                    float starting_pct = 0.f,
-                    const std::function<void(float)> &on_slider_changed = {}) {
+struct SliderConfig {
+  Vector2Type size;
+  float starting_pct;
+  std::function<void(float)> on_slider_changed = nullptr;
+  std::string label;
+};
+
+Entity &make_slider(Entity &parent, SliderConfig config) {
   // TODO add vertical slider
 
   auto &background = EntityHelper::createEntity();
   background.addComponent<UIComponentDebug>(UIComponentDebug::Type::slider);
   background.addComponent<UIComponent>(background.id)
-      .set_desired_width(ui::Size{
-          .dim = ui::Dim::Pixels,
-          .value = button_size.x,
-      })
-      .set_desired_height(ui::Size{
-          .dim = ui::Dim::Pixels,
-          .value = button_size.y,
-      })
+      .set_desired_width(pixels(config.size.x))
+      .set_desired_height(pixels(config.size.y))
       .set_parent(parent.id);
   parent.get<ui::UIComponent>().add_child(background.id);
 
@@ -977,51 +976,51 @@ Entity &make_slider(Entity &parent, Vector2Type button_size,
 #ifdef AFTER_HOURS_USE_RAYLIB
   background.addComponent<ui::HasColor>(raylib::GREEN);
 #endif
-  background.addComponent<ui::HasDragListener>(
-      [on_slider_changed](Entity &entity) {
-        float mnf = 0.f;
-        float mxf = 1.f;
+  background.addComponent<ui::HasDragListener>([config](Entity &entity) {
+    float mnf = 0.f;
+    float mxf = 1.f;
 
-        UIComponent &cmp = entity.get<UIComponent>();
-        Rectangle rect = cmp.rect();
-        HasSliderState &sliderState = entity.get<ui::HasSliderState>();
-        float &value = sliderState.value;
+    UIComponent &cmp = entity.get<UIComponent>();
+    Rectangle rect = cmp.rect();
+    HasSliderState &sliderState = entity.get<ui::HasSliderState>();
+    float &value = sliderState.value;
 
-        auto mouse_position = input::get_mouse_position();
-        float v = (mouse_position.x - rect.x) / rect.width;
-        if (v < mnf)
-          v = mnf;
-        if (v > mxf)
-          v = mxf;
-        if (v != value) {
-          value = v;
-          sliderState.changed_since = true;
-        }
+    auto mouse_position = input::get_mouse_position();
+    float v = (mouse_position.x - rect.x) / rect.width;
+    if (v < mnf)
+      v = mnf;
+    if (v > mxf)
+      v = mxf;
+    if (v != value) {
+      value = v;
+      sliderState.changed_since = true;
+    }
 
-        auto opt_child =
-            EntityQuery()
-                .whereID(entity.get<ui::HasChildrenComponent>().children[0])
-                .gen_first();
+    auto opt_child =
+        EntityQuery()
+            .whereID(entity.get<ui::HasChildrenComponent>().children[0])
+            .gen_first();
 
-        UIComponent &child_cmp = opt_child->get<UIComponent>();
-        child_cmp.set_desired_padding(pixels(value * 0.75f * rect.width),
-                                      Axis::left);
+    UIComponent &child_cmp = opt_child->get<UIComponent>();
+    child_cmp.set_desired_padding(pixels(value * 0.75f * rect.width),
+                                  Axis::left);
 
-        if (sliderState.changed_since && on_slider_changed)
-          on_slider_changed(value);
-      });
+    if (sliderState.changed_since && config.on_slider_changed)
+      config.on_slider_changed(value);
+  });
 
   auto &handle = EntityHelper::createEntity();
   handle.addComponent<UIComponent>(handle.id)
       .set_desired_width(ui::Size{
           .dim = ui::Dim::Pixels,
-          .value = button_size.x * 0.25f,
+          .value = config.size.x * 0.25f,
       })
       .set_desired_height(ui::Size{
           .dim = ui::Dim::Pixels,
-          .value = button_size.y,
+          .value = config.size.y,
       })
-      .set_desired_padding(pixels(starting_pct * button_size.x), Axis::left)
+      .set_desired_padding(pixels(config.starting_pct * config.size.x),
+                           Axis::left)
       .set_parent(background.id);
   handle.addComponent<UIComponentDebug>("slider_handle");
   background.get<ui::UIComponent>().add_child(handle.id);
