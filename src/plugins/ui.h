@@ -957,11 +957,12 @@ Entity &make_button(Entity &parent, const std::string &label,
 struct SliderConfig {
   Vector2Type size;
   float starting_pct;
-  std::function<void(float)> on_slider_changed = nullptr;
-  std::string label;
+  std::function<std::optional<std::string>(float)> on_slider_changed = nullptr;
+  std::string label = "";
+  bool label_is_format_string = false;
 };
-
-Entity &make_slider(Entity &parent, SliderConfig config) {
+Entity &internal_make_slider(Entity &parent, SliderConfig config,
+                             Entity &label) {
   // TODO add vertical slider
 
   auto &background = EntityHelper::createEntity();
@@ -976,38 +977,50 @@ Entity &make_slider(Entity &parent, SliderConfig config) {
 #ifdef AFTER_HOURS_USE_RAYLIB
   background.addComponent<ui::HasColor>(raylib::GREEN);
 #endif
-  background.addComponent<ui::HasDragListener>([config](Entity &entity) {
-    float mnf = 0.f;
-    float mxf = 1.f;
+  background.addComponent<ui::HasDragListener>(
+      [config, &label](Entity &entity) {
+        float mnf = 0.f;
+        float mxf = 1.f;
 
-    UIComponent &cmp = entity.get<UIComponent>();
-    Rectangle rect = cmp.rect();
-    HasSliderState &sliderState = entity.get<ui::HasSliderState>();
-    float &value = sliderState.value;
+        UIComponent &cmp = entity.get<UIComponent>();
+        Rectangle rect = cmp.rect();
+        HasSliderState &sliderState = entity.get<ui::HasSliderState>();
+        float &value = sliderState.value;
 
-    auto mouse_position = input::get_mouse_position();
-    float v = (mouse_position.x - rect.x) / rect.width;
-    if (v < mnf)
-      v = mnf;
-    if (v > mxf)
-      v = mxf;
-    if (v != value) {
-      value = v;
-      sliderState.changed_since = true;
-    }
+        auto mouse_position = input::get_mouse_position();
+        float v = (mouse_position.x - rect.x) / rect.width;
+        if (v < mnf)
+          v = mnf;
+        if (v > mxf)
+          v = mxf;
+        if (v != value) {
+          value = v;
+          sliderState.changed_since = true;
+        }
 
-    auto opt_child =
-        EntityQuery()
-            .whereID(entity.get<ui::HasChildrenComponent>().children[0])
-            .gen_first();
+        auto opt_child =
+            EntityQuery()
+                .whereID(entity.get<ui::HasChildrenComponent>().children[0])
+                .gen_first();
 
-    UIComponent &child_cmp = opt_child->get<UIComponent>();
-    child_cmp.set_desired_padding(pixels(value * 0.75f * rect.width),
-                                  Axis::left);
+        UIComponent &child_cmp = opt_child->get<UIComponent>();
+        child_cmp.set_desired_padding(pixels(value * 0.75f * rect.width),
+                                      Axis::left);
 
-    if (sliderState.changed_since && config.on_slider_changed)
-      config.on_slider_changed(value);
-  });
+        if (sliderState.changed_since && config.on_slider_changed) {
+          std::optional<std::string> val_str = config.on_slider_changed(value);
+          if (val_str.has_value() && !config.label.empty()) {
+            std::string str;
+            if (config.label_is_format_string) {
+              fmt::format_args args = fmt::make_format_args(val_str.value());
+              str = fmt::vformat(config.label, args);
+            } else {
+              str = config.label;
+            }
+            label.get<HasLabel>().label = str;
+          }
+        }
+      });
 
   auto &handle = EntityHelper::createEntity();
   handle.addComponent<UIComponent>(handle.id)
@@ -1032,6 +1045,44 @@ Entity &make_slider(Entity &parent, SliderConfig config) {
   background.addComponent<ui::HasChildrenComponent>();
   background.get<ui::HasChildrenComponent>().add_child(handle);
   return background;
+}
+
+Entity &make_slider(Entity &parent, SliderConfig config) {
+  if (config.label.empty())
+    return internal_make_slider(parent, config, parent);
+
+  //
+  auto &div = make_div(parent, children_xy());
+  div.get<ui::UIComponent>().flex_direction = FlexDirection::Row;
+
+  auto &label = ui::make_div(div, {
+                                      pixels(config.size.x / 2.f),
+                                      pixels(config.size.y),
+                                  });
+#ifdef AFTER_HOURS_USE_RAYLIB
+  label.addComponent<ui::HasColor>(raylib::GRAY);
+#endif
+
+  std::string str;
+  if (config.label_is_format_string) {
+    fmt::format_args args;
+    if (config.on_slider_changed) {
+      auto value = config.on_slider_changed(config.starting_pct);
+      args = fmt::make_format_args(value.value());
+    } else {
+      args = fmt::make_format_args(config.starting_pct);
+    }
+    str = fmt::vformat(config.label, args);
+  } else {
+    str = config.label;
+  }
+
+  label.addComponent<ui::HasLabel>(str);
+
+  config.size.x /= 2.f;
+  internal_make_slider(div, config, label);
+
+  return div;
 }
 
 Entity &make_checkbox(Entity &parent, Vector2Type button_size) {
