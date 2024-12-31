@@ -158,6 +158,10 @@ struct window_manager : developer::Plugin {
     entity.addComponent<ProvidesTargetFPS>(target_fps);
     entity.addComponent<ProvidesCurrentResolution>();
     entity.addComponent<ProvidesAvailableWindowResolutions>();
+
+    EntityHelper::registerSingleton<ProvidesTargetFPS>(entity);
+    EntityHelper::registerSingleton<ProvidesCurrentResolution>(entity);
+    EntityHelper::registerSingleton<ProvidesAvailableWindowResolutions>(entity);
   }
 
   static void add_singleton_components(Entity &entity, const Resolution &rez,
@@ -165,6 +169,10 @@ struct window_manager : developer::Plugin {
     entity.addComponent<ProvidesTargetFPS>(target_fps);
     entity.addComponent<ProvidesCurrentResolution>(rez);
     entity.addComponent<ProvidesAvailableWindowResolutions>();
+
+    EntityHelper::registerSingleton<ProvidesTargetFPS>(entity);
+    EntityHelper::registerSingleton<ProvidesCurrentResolution>(entity);
+    EntityHelper::registerSingleton<ProvidesAvailableWindowResolutions>(entity);
   }
 
   static void add_singleton_components(
@@ -174,6 +182,10 @@ struct window_manager : developer::Plugin {
     entity.addComponent<ProvidesCurrentResolution>(rez);
     entity.addComponent<ProvidesAvailableWindowResolutions>(
         available_resolutions);
+
+    EntityHelper::registerSingleton<ProvidesTargetFPS>(entity);
+    EntityHelper::registerSingleton<ProvidesCurrentResolution>(entity);
+    EntityHelper::registerSingleton<ProvidesAvailableWindowResolutions>(entity);
   }
 
   static void enforce_singletons(SystemManager &sm) {

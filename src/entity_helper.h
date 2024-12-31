@@ -15,6 +15,8 @@ using RefEntities = std::vector<RefEntity>;
 static Entities entities_DO_NOT_USE;
 static std::set<int> permanant_ids;
 
+static std::map<ComponentID, Entity *> singletonMap;
+
 struct EntityHelper {
   struct CreationOptions {
     bool is_permanent;
@@ -27,6 +29,26 @@ struct EntityHelper {
   static Entity &createEntity();
   static Entity &createPermanentEntity();
   static Entity &createEntityWithOptions(const CreationOptions &options);
+
+  template <typename Component> static void registerSingleton(Entity &ent) {
+    ComponentID id = components::get_type_id<Component>();
+    singletonMap.emplace(id, &ent);
+  }
+
+  template <typename Component> static RefEntity get_singleton() {
+    ComponentID id = components::get_type_id<Component>();
+    if (!singletonMap.contains(id)) {
+      log_warn("Singleton map is missing value for component {}. Did you "
+               "register this component previously?",
+               type_name<Component>());
+    }
+    return *singletonMap[id];
+  }
+
+  template <typename Component> static Component *get_singleton_cmp() {
+    Entity &ent = get_singleton<Component>();
+    return &(ent.get<Component>());
+  }
 
   static void markIDForCleanup(int e_id);
   static void removeEntity(int e_id);

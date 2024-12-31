@@ -280,10 +280,9 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
       components.emplace(entity.id, entity);
     }
 
-    Entity &e =
-        EntityQuery()
-            .whereHasComponent<window_manager::ProvidesCurrentResolution>()
-            .gen_first_enforce();
+    Entity &e = EntityHelper::get_singleton<
+        window_manager::ProvidesCurrentResolution>();
+
     resolution =
         e.get<window_manager::ProvidesCurrentResolution>().current_resolution;
   }
@@ -345,13 +344,11 @@ struct SystemWithUIContext : System<UIComponent, Components...> {};
 template <typename InputAction>
 struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
 
-  Entity *context_entity;
+  UIContext<InputAction> *context;
+
   virtual void once(float) override {
-    OptEntity opt_context =
-        EntityQuery()                                        //
-            .whereHasComponent<ui::UIContext<InputAction>>() //
-            .gen_first();
-    this->context_entity = opt_context.value();
+    this->context =
+        EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
     this->include_derived_children = true;
   }
 
@@ -360,47 +357,33 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
   virtual void for_each_with_derived(Entity &entity, UIComponent &component,
                                      HasClickListener &hasClickListener,
                                      float) {
-    if (!this->context_entity)
-      return;
+    context->active_if_mouse_inside(entity.id, component.rect());
 
-    UIContext<InputAction> &context =
-        this->context_entity->template get<UIContext<InputAction>>();
-
-    context.active_if_mouse_inside(entity.id, component.rect());
-
-    if (context.has_focus(entity.id) &&
-        context.pressed(InputAction::WidgetPress)) {
-      context.set_focus(entity.id);
+    if (context->has_focus(entity.id) &&
+        context->pressed(InputAction::WidgetPress)) {
+      context->set_focus(entity.id);
       hasClickListener.cb(entity);
     }
 
-    if (context.is_mouse_click(entity.id)) {
-      context.set_focus(entity.id);
+    if (context->is_mouse_click(entity.id)) {
+      context->set_focus(entity.id);
       hasClickListener.cb(entity);
     }
   }
 };
 
 template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
-  Entity *context_entity;
+  UIContext<InputAction> *context;
+
   virtual void once(float) override {
-    OptEntity opt_context =
-        EntityQuery()                                        //
-            .whereHasComponent<ui::UIContext<InputAction>>() //
-            .gen_first();
-    this->context_entity = opt_context.value();
+    this->context =
+        EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
   }
 
   virtual ~HandleTabbing() {}
 
   virtual void for_each_with(Entity &entity, UIComponent &component,
                              float) override {
-    if (!this->context_entity)
-      return;
-
-    UIContext<InputAction> &context =
-        this->context_entity->template get<UIContext<InputAction>>();
-
     if (entity.is_missing<HasClickListener>()) {
       return;
     }
@@ -408,40 +391,34 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
       return;
 
     // Valid things to tab to...
-    context.try_to_grab(entity.id);
-    context.process_tabbing(entity.id);
+    context->try_to_grab(entity.id);
+    context->process_tabbing(entity.id);
   }
 };
 
 template <typename InputAction>
 struct HandleDrags : SystemWithUIContext<ui::HasDragListener> {
-  Entity *context_entity;
+  UIContext<InputAction> *context;
+
   virtual void once(float) override {
-    OptEntity opt_context =
-        EntityQuery()                                        //
-            .whereHasComponent<ui::UIContext<InputAction>>() //
-            .gen_first();
-    this->context_entity = opt_context.value();
+    this->context =
+        EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
   }
   virtual ~HandleDrags() {}
 
   virtual void for_each_with(Entity &entity, UIComponent &component,
                              HasDragListener &hasDragListener, float) override {
-    if (!this->context_entity)
-      return;
-    UIContext<InputAction> &context =
-        this->context_entity->template get<UIContext<InputAction>>();
 
-    context.active_if_mouse_inside(entity.id, component.rect());
+    context->active_if_mouse_inside(entity.id, component.rect());
 
-    if (context.has_focus(entity.id) &&
-        context.pressed(InputAction::WidgetPress)) {
-      context.set_focus(entity.id);
+    if (context->has_focus(entity.id) &&
+        context->pressed(InputAction::WidgetPress)) {
+      context->set_focus(entity.id);
       hasDragListener.cb(entity);
     }
 
-    if (context.is_active(entity.id)) {
-      context.set_focus(entity.id);
+    if (context->is_active(entity.id)) {
+      context->set_focus(entity.id);
       hasDragListener.cb(entity);
     }
   }
@@ -451,13 +428,11 @@ template <typename InputAction>
 struct UpdateDropdownOptions
     : SystemWithUIContext<HasDropdownState, HasChildrenComponent> {
 
-  Entity *context_entity;
+  UIContext<InputAction> *context;
+
   virtual void once(float) override {
-    OptEntity opt_context =
-        EntityQuery()                                        //
-            .whereHasComponent<ui::UIContext<InputAction>>() //
-            .gen_first();
-    this->context_entity = opt_context.value();
+    this->context =
+        EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
   }
 
   UpdateDropdownOptions()
@@ -603,13 +578,9 @@ struct RenderAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   ui::UIContext<InputAction> *ui_context;
 
   virtual void once(float) override {
-    Entity &ent =
-        EntityQuery()                                                 //
-            .template whereHasComponent<ui::UIContext<InputAction>>() //
-            .template whereHasComponent<FontManager>()                //
-            .gen_first_enforce();
-    this->ui_context = &ent.get<ui::UIContext<InputAction>>();
-    this->font_manager = &ent.get<FontManager>();
+    this->ui_context =
+        EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    this->font_manager = EntityHelper::get_singleton_cmp<FontManager>();
 
     this->include_derived_children = true;
   }
@@ -666,6 +637,8 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   float enableCooldown = 0.f;
   float enableCooldownReset = 0.2f;
 
+  UIContext<InputAction> *context;
+
   mutable int level = 0;
   mutable int indent = 0;
 
@@ -673,8 +646,6 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
       : toggle_action(toggle_kp) {}
 
   virtual ~RenderDebugAutoLayoutRoots() {}
-
-  Entity *context_entity;
 
   virtual bool should_run(float dt) override {
     enableCooldown -= dt;
@@ -694,11 +665,8 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   }
 
   virtual void once(float) override {
-    OptEntity opt_context =
-        EntityQuery()                                        //
-            .whereHasComponent<ui::UIContext<InputAction>>() //
-            .gen_first();
-    this->context_entity = opt_context.value();
+    this->context =
+        EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
     this->include_derived_children = true;
     this->level = 0;
     this->indent = 0;
@@ -1131,6 +1099,9 @@ static void add_singleton_components(Entity &entity) {
   entity.addComponent<UIContext<InputAction>>();
   entity.addComponent<FontManager>().load_font(UIComponent::DEFAULT_FONT,
                                                raylib::GetFontDefault());
+
+  EntityHelper::registerSingleton<UIContext<InputAction>>(entity);
+  EntityHelper::registerSingleton<FontManager>(entity);
 }
 
 template <typename InputAction>

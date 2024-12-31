@@ -349,6 +349,11 @@ struct input : developer::Plugin {
     entity.addComponent<InputCollector<Action>>();
     entity.addComponent<input::ProvidesMaxGamepadID>();
     entity.addComponent<input::ProvidesInputMapping<Action>>(inital_mapping);
+
+    EntityHelper::registerSingleton<InputCollector<Action>>(entity);
+    EntityHelper::registerSingleton<input::ProvidesMaxGamepadID>(entity);
+    EntityHelper::registerSingleton<input::ProvidesInputMapping<Action>>(
+        entity);
   }
 
   template <typename Action> static void enforce_singletons(SystemManager &sm) {
