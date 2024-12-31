@@ -164,13 +164,6 @@ struct HasDragListener : BaseComponent {
       : cb(callback) {}
 };
 
-struct HasLabel : BaseComponent {
-  std::string label;
-  std::string font_name = UIComponent::UNSET_FONT;
-  HasLabel(const std::string &str) : label(str) {}
-  HasLabel() : label("") {}
-};
-
 struct HasCheckboxState : BaseComponent {
   bool changed_since = false;
   bool on;
@@ -373,6 +366,7 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
     }
 
     if (context->is_mouse_click(entity.id)) {
+      log_info("clicked on {}", entity.id);
       context->set_focus(entity.id);
       hasClickListener.cb(entity);
     }
@@ -543,36 +537,8 @@ struct HasColor : BaseComponent {
   HasColor(raylib::Color c) : color(c) {}
 };
 
-struct FontManager : BaseComponent {
-  std::string active_font;
-  std::map<std::string, raylib::Font> fonts;
-
-  auto &load_font(const std::string &font_name, raylib::Font font) {
-    fonts[font_name] = font;
-    return *this;
-  }
-
-  auto &load_font(const std::string &font_name, const char *font_file) {
-    fonts[font_name] = raylib::LoadFont(font_file);
-    return *this;
-  }
-
-  auto &set_active(const std::string &font_name) {
-    if (!fonts.contains(font_name)) {
-      log_warn("{} missing from font manager. Did you call load_font() on it "
-               "previously?",
-               font_name);
-    }
-    active_font = font_name;
-    return *this;
-  }
-
-  raylib::Font get_active_font() { return fonts[active_font]; }
-  raylib::Font get_font(const std::string &name) { return fonts[name]; }
-};
-
-static void draw_text(FontManager &fm, const std::string &text, vec2 position,
-                      int font_size, raylib::Color color) {
+static void draw_text(ui::FontManager &fm, const std::string &text,
+                      vec2 position, int font_size, raylib::Color color) {
   DrawTextEx(fm.get_active_font(), text.c_str(), position, font_size, 1.f,
              color);
 }
@@ -588,7 +554,7 @@ struct RenderAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   virtual void once(float) override {
     this->ui_context =
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
-    this->font_manager = EntityHelper::get_singleton_cmp<FontManager>();
+    this->font_manager = EntityHelper::get_singleton_cmp<ui::FontManager>();
 
     this->include_derived_children = true;
   }
@@ -1105,19 +1071,24 @@ Entity &make_checkbox(Entity &parent, Vector2Type button_size) {
 template <typename InputAction>
 static void add_singleton_components(Entity &entity) {
   entity.addComponent<UIContext<InputAction>>();
-  entity.addComponent<FontManager>().load_font(UIComponent::DEFAULT_FONT,
-                                               raylib::GetFontDefault());
-
   EntityHelper::registerSingleton<UIContext<InputAction>>(entity);
-  EntityHelper::registerSingleton<FontManager>(entity);
+
+#ifdef AFTER_HOURS_USE_RAYLIB
+  entity.addComponent<ui::FontManager>()
+      .load_font(UIComponent::DEFAULT_FONT, raylib::GetFontDefault())
+      .load_font(UIComponent::UNSET_FONT, raylib::GetFontDefault());
+  EntityHelper::registerSingleton<ui::FontManager>(entity);
+#endif
 }
 
 template <typename InputAction>
 static void enforce_singletons(SystemManager &sm) {
   sm.register_update_system(
       std::make_unique<developer::EnforceSingleton<UIContext<InputAction>>>());
+#ifdef AFTER_HOURS_USE_RAYLIB
   sm.register_update_system(
-      std::make_unique<developer::EnforceSingleton<FontManager>>());
+      std::make_unique<developer::EnforceSingleton<ui::FontManager>>());
+#endif
 }
 
 template <typename InputAction>

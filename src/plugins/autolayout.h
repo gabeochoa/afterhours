@@ -14,6 +14,36 @@ using Rectangle = RectangleType;
 
 namespace ui {
 
+#ifdef AFTER_HOURS_USE_RAYLIB
+struct FontManager : BaseComponent {
+  std::string active_font;
+  std::map<std::string, raylib::Font> fonts;
+
+  auto &load_font(const std::string &font_name, raylib::Font font) {
+    fonts[font_name] = font;
+    return *this;
+  }
+
+  auto &load_font(const std::string &font_name, const char *font_file) {
+    fonts[font_name] = raylib::LoadFont(font_file);
+    return *this;
+  }
+
+  auto &set_active(const std::string &font_name) {
+    if (!fonts.contains(font_name)) {
+      log_warn("{} missing from font manager. Did you call load_font() on it "
+               "previously?",
+               font_name);
+    }
+    active_font = font_name;
+    return *this;
+  }
+
+  raylib::Font get_active_font() { return fonts[active_font]; }
+  raylib::Font get_font(const std::string &name) { return fonts[name]; }
+};
+#endif
+
 enum struct Dim {
   None,
   Pixels,
@@ -189,9 +219,11 @@ struct UIComponent : BaseComponent {
   std::vector<EntityID> children;
 
   std::string font_name = UNSET_FONT;
+  float font_size = 50.f;
 
-  auto &enable_font(const std::string &font_name_) {
+  auto &enable_font(const std::string &font_name_, float fs) {
     font_name = font_name_;
+    font_size = fs;
     return *this;
   }
 
@@ -311,6 +343,13 @@ struct UIComponent : BaseComponent {
   }
 };
 
+struct HasLabel : BaseComponent {
+  std::string label;
+  std::string font_name = UIComponent::UNSET_FONT;
+  HasLabel(const std::string &str) : label(str) {}
+  HasLabel() : label("") {}
+};
+
 static UIComponent &make_component(Entity &entity) {
   return entity.addComponent<ui::UIComponent>(entity.id);
 }
@@ -328,6 +367,60 @@ struct AutoLayout {
 
   virtual UIComponent &to_cmp(EntityID id) {
     return to_ent(id).get<UIComponent>();
+  }
+
+  using MeasureTextFn = std::function<Vector2Type(
+      const std::string &, const std::string &, float, float)>;
+
+  MeasureTextFn external_measure_text = nullptr;
+  auto &set_measure_text_fn(const MeasureTextFn &fn) {
+    external_measure_text = fn;
+    return *this;
+  }
+
+  float get_text_size_for_axis(UIComponent &widget, Axis axis) {
+    const std::string &font_name = widget.font_name;
+
+    const Entity &ent = to_ent(widget.id);
+
+    if (ent.is_missing<HasLabel>()) {
+      log_warn("Trying to size a component by Text but component doesnt have "
+               "any text attached (add HasLabel)");
+      return 0;
+    }
+    const std::string &content = ent.get<HasLabel>().label;
+    float font_size = widget.font_size;
+    float spacing = 1.f;
+
+    Vector2Type result;
+    if (external_measure_text) {
+      result = external_measure_text(font_name, content, font_size, spacing);
+    } else {
+#ifdef AFTER_HOURS_USE_RAYLIB
+      auto font_manager = EntityHelper::get_singleton_cmp<FontManager>();
+      auto font = font_manager->get_font(font_name);
+      result = raylib::MeasureTextEx(font, content.c_str(), font_size, spacing);
+#else
+      result = Vector2Type{0.f, 0.f};
+      log_error("Text size measuring not supported. Either use "
+                "AFTER_HOURS_USE_RAYLIB or provide your own through "
+                "set_measure_text_fn()");
+#endif
+    }
+
+    switch (axis) {
+    case Axis::X:
+      return result.x;
+    case Axis::Y:
+      return result.y;
+    case Axis::left:
+    case Axis::top:
+    case Axis::right:
+    case Axis::bottom:
+      log_error("Text size not supported for axis {}", axis);
+      break;
+    }
+    return 0.f;
   }
 
   // TODO do we ever need to check parent?
@@ -429,10 +522,7 @@ struct AutoLayout {
       case Dim::ScreenPercent:
         return exp.value * screenValue;
       case Dim::Text:
-        // TODO figure this out
-        // So we can use MeasureTextEx but
-        // we need to know the font and spacing
-        return 100.f;
+        return get_text_size_for_axis(widget, axis);
       case Dim::Percent:
       case Dim::None:
       case Dim::Children:

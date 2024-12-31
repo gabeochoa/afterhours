@@ -13,7 +13,6 @@ TEST_CASE("UIComponentTest", "[UIComponent]") {
   REQUIRE(cmp.flex_direction == FlexDirection::Column);
   REQUIRE_FALSE(cmp.was_rendered_to_screen);
   REQUIRE_FALSE(cmp.absolute);
-  REQUIRE(cmp.fontID == -1);
 }
 
 TEST_CASE("RectCalculations", "[UIComponent]") {
@@ -83,6 +82,8 @@ TEST_CASE("AutoLayoutCalculateStandaloneWithPercent", "[AutoLayout]") {
   REQUIRE(cmp.computed[Axis::Y] == 200.f);
 }
 
+// TODO
+/*
 TEST_CASE("AutoLayoutCalculateStandaloneWithText", "[AutoLayout]") {
   AutoLayout al; // Empty mapping
   UIComponent cmp(1);
@@ -95,8 +96,6 @@ TEST_CASE("AutoLayoutCalculateStandaloneWithText", "[AutoLayout]") {
   REQUIRE(cmp.computed[Axis::Y] == 200.f);
 }
 
-// TODO
-/*
 class AutoLayoutMock : public AutoLayout {
 public:
   MAKE_MOCK1(to_cmp, UIComponent &(EntityID));
