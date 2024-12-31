@@ -561,6 +561,7 @@ struct FontManager : BaseComponent {
   }
 
   raylib::Font get_active_font() { return fonts[active_font]; }
+  raylib::Font get_font(const std::string &name) { return fonts[name]; }
 };
 
 static void draw_text(FontManager &fm, const std::string &text, vec2 position,
