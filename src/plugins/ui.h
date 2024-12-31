@@ -491,6 +491,7 @@ struct UpdateDropdownOptions
 
       for (size_t i = 0; i < options.size(); i++) {
         Entity &child = EntityHelper::createEntity();
+        child.addComponent<UIComponentDebug>("dropdown_option");
         child.addComponent<UIComponent>(child.id)
             .set_desired_width(ui::Size{
                 .dim = ui::Dim::Percent,
