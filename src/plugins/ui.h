@@ -166,6 +166,7 @@ struct HasDragListener : BaseComponent {
 
 struct HasLabel : BaseComponent {
   std::string label;
+  std::string font_name = UIComponent::UNSET_FONT;
   HasLabel(const std::string &str) : label(str) {}
   HasLabel() : label("") {}
 };
@@ -560,40 +561,76 @@ struct HasColor : BaseComponent {
   HasColor(raylib::Color c) : color(c) {}
 };
 
+struct FontManager : BaseComponent {
+  std::string active_font;
+  std::map<std::string, raylib::Font> fonts;
+
+  auto &load_font(const std::string &font_name, raylib::Font font) {
+    fonts[font_name] = font;
+    return *this;
+  }
+
+  auto &load_font(const std::string &font_name, const char *font_file) {
+    fonts[font_name] = raylib::LoadFont(font_file);
+    return *this;
+  }
+
+  auto &set_active(const std::string &font_name) {
+    if (!fonts.contains(font_name)) {
+      log_warn("{} missing from font manager. Did you call load_font() on it "
+               "previously?",
+               font_name);
+    }
+    active_font = font_name;
+    return *this;
+  }
+
+  raylib::Font get_active_font() { return fonts[active_font]; }
+};
+
+static void draw_text(FontManager &fm, const std::string &text, vec2 position,
+                      int font_size, raylib::Color color) {
+  DrawTextEx(fm.get_active_font(), text.c_str(), position, font_size, 1.f,
+             color);
+}
+
 template <typename InputAction>
 struct RenderAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
 
   virtual ~RenderAutoLayoutRoots() {}
 
-  Entity *context_entity;
+  ui::FontManager *font_manager;
+  ui::UIContext<InputAction> *ui_context;
+
   virtual void once(float) override {
-    OptEntity opt_context =
-        EntityQuery()                                        //
-            .whereHasComponent<ui::UIContext<InputAction>>() //
-            .gen_first();
-    this->context_entity = opt_context.value();
+    Entity &ent =
+        EntityQuery()                                                 //
+            .template whereHasComponent<ui::UIContext<InputAction>>() //
+            .template whereHasComponent<FontManager>()                //
+            .gen_first_enforce();
+    this->ui_context = &ent.get<ui::UIContext<InputAction>>();
+    this->font_manager = &ent.get<FontManager>();
+
     this->include_derived_children = true;
   }
 
   void render_me(const Entity &entity) const {
     const UIComponent &cmp = entity.get<UIComponent>();
 
-    UIContext<InputAction> &context =
-        this->context_entity->template get<UIContext<InputAction>>();
-
     raylib::Color col = entity.get<HasColor>().color;
 
-    if (context.is_hot(entity.id)) {
+    if (ui_context->is_hot(entity.id)) {
       col = raylib::RED;
     }
 
-    if (context.has_focus(entity.id)) {
+    if (ui_context->has_focus(entity.id)) {
       raylib::DrawRectangleRec(cmp.focus_rect(), raylib::PINK);
     }
     raylib::DrawRectangleRec(cmp.rect(), col);
     if (entity.has<HasLabel>()) {
-      DrawText(entity.get<HasLabel>().label.c_str(), (int)cmp.x(), (int)cmp.y(),
-               (int)(cmp.height() / 2.f), raylib::RAYWHITE);
+      draw_text(*font_manager, entity.get<HasLabel>().label.c_str(),
+                vec2{cmp.x(), cmp.y()}, (int)(cmp.height() / 2.f),
+                raylib::RAYWHITE);
     }
   }
 
@@ -601,6 +638,9 @@ struct RenderAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     const UIComponent &cmp = entity.get<UIComponent>();
     if (cmp.should_hide)
       return;
+
+    if (cmp.font_name != UIComponent::UNSET_FONT)
+      font_manager->set_active(cmp.font_name);
 
     if (entity.has<HasColor>()) {
       render_me(entity);
@@ -903,8 +943,8 @@ static Size padding_(float v, float strict = 0.5f) {
 
 struct Padding {
   Size top;
-  Size bottom;
   Size left;
+  Size bottom;
   Size right;
 };
 
@@ -1089,12 +1129,16 @@ Entity &make_checkbox(Entity &parent, Vector2Type button_size) {
 template <typename InputAction>
 static void add_singleton_components(Entity &entity) {
   entity.addComponent<UIContext<InputAction>>();
+  entity.addComponent<FontManager>().load_font(UIComponent::DEFAULT_FONT,
+                                               raylib::GetFontDefault());
 }
 
 template <typename InputAction>
 static void enforce_singletons(SystemManager &sm) {
   sm.register_update_system(
       std::make_unique<developer::EnforceSingleton<UIContext<InputAction>>>());
+  sm.register_update_system(
+      std::make_unique<developer::EnforceSingleton<FontManager>>());
 }
 
 template <typename InputAction>

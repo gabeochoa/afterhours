@@ -153,11 +153,12 @@ std::ostream &operator<<(std::ostream &os, const Axis &axis) {
   return os;
 }
 
-using FontID = int;
-
 struct AutoLayoutRoot : BaseComponent {};
 
 struct UIComponent : BaseComponent {
+  static constexpr std::string UNSET_FONT = "__unset";
+  static constexpr std::string DEFAULT_FONT = "__default";
+
   EntityID id;
   explicit UIComponent(EntityID id_) : id(id_) {}
 
@@ -187,7 +188,12 @@ struct UIComponent : BaseComponent {
   EntityID parent = -1;
   std::vector<EntityID> children;
 
-  FontID fontID = -1;
+  std::string font_name = UNSET_FONT;
+
+  auto &enable_font(const std::string &font_name_) {
+    font_name = font_name_;
+    return *this;
+  }
 
   Rectangle rect() const {
     return Rectangle{
@@ -952,7 +958,6 @@ struct AutoLayout {
     }
 
     // now that all children are complete, we can remove the padding spacing
-
 
     widget.computed[Axis::X] -= (widget.computed_padd[Axis::X]);
     widget.computed[Axis::Y] -= (widget.computed_padd[Axis::Y]);
