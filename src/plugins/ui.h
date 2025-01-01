@@ -330,12 +330,6 @@ Vector2Type button_size = {150.f, 50.f};
 ElementResult button(HasUIContext auto &ctx, Entity &entity,
                      ElementResult parent) {
 
-  ElementResult result = {false, entity.id};
-
-  const auto on_click = [&](Entity &) {
-    result = ElementResult{true, entity.id};
-  };
-
   const auto make_button = [&]() -> UIComponent & {
     if (entity.is_missing<UIComponent>()) {
       entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::button);
@@ -343,10 +337,9 @@ ElementResult button(HasUIContext auto &ctx, Entity &entity,
           .set_desired_width(pixels(button_size.x))
           .set_desired_height(pixels(button_size.y))
           .set_parent(parent.id());
-      entity.addComponent<HasClickListener>(on_click);
+      entity.addComponent<HasClickListener>([](Entity &) {});
 
       entity.addComponent<ui::HasLabel>("Label");
-      entity.addComponent<ui::HasClickListener>(on_click);
 #ifdef AFTER_HOURS_USE_RAYLIB
       entity.addComponent<HasColor>(raylib::BLUE);
 #endif
@@ -366,7 +359,7 @@ ElementResult button(HasUIContext auto &ctx, Entity &entity,
 
   ctx.queue_render(RenderInfo{entity.id});
 
-  return result;
+  return ElementResult{entity.get<HasClickListener>().down, entity.id};
 }
 
 ElementResult slider(HasUIContext auto &ctx, Entity &entity,
@@ -601,6 +594,8 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
   virtual void for_each_with_derived(Entity &entity, UIComponent &component,
                                      HasClickListener &hasClickListener,
                                      float) {
+    hasClickListener.down = false;
+
     if (!component.was_rendered_to_screen)
       return;
 
@@ -610,12 +605,13 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
         context->pressed(InputAction::WidgetPress)) {
       context->set_focus(entity.id);
       hasClickListener.cb(entity);
+      hasClickListener.down = true;
     }
 
     if (context->is_mouse_click(entity.id)) {
-      log_info("clicked on {}", entity.id);
       context->set_focus(entity.id);
       hasClickListener.cb(entity);
+      hasClickListener.down = true;
     }
   }
 };
