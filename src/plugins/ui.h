@@ -1012,8 +1012,10 @@ Entity &internal_make_slider(Entity &parent, SliderConfig config,
           if (val_str.has_value() && !config.label.empty()) {
             std::string str;
             if (config.label_is_format_string) {
+#ifdef AFTER_HOURS_USE_RAYLIB
               fmt::format_args args = fmt::make_format_args(val_str.value());
               str = fmt::vformat(config.label, args);
+#endif
             } else {
               str = config.label;
             }
@@ -1065,6 +1067,7 @@ Entity &make_slider(Entity &parent, SliderConfig config) {
 
   std::string str;
   if (config.label_is_format_string) {
+#ifdef AFTER_HOURS_USE_RAYLIB
     fmt::format_args args;
     if (config.on_slider_changed) {
       auto value = config.on_slider_changed(config.starting_pct);
@@ -1073,6 +1076,7 @@ Entity &make_slider(Entity &parent, SliderConfig config) {
       args = fmt::make_format_args(config.starting_pct);
     }
     str = fmt::vformat(config.label, args);
+#endif
   } else {
     str = config.label;
   }
