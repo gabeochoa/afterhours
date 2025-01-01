@@ -26,6 +26,10 @@ static bool is_mouse_inside(const input::MousePosition &mouse_pos,
          mouse_pos.y >= rect.y && mouse_pos.y <= rect.y + rect.height;
 }
 
+struct RenderInfo {
+  EntityID id;
+};
+
 template <typename InputAction> struct UIContext : BaseComponent {
   using value_type = InputAction;
 
@@ -70,6 +74,7 @@ template <typename InputAction> struct UIContext : BaseComponent {
     hot_id = ROOT;
     active_id = ROOT;
     focused_ids.clear();
+    render_cmds.clear();
   }
 
   void try_to_grab(EntityID id) {
@@ -133,6 +138,10 @@ template <typename InputAction> struct UIContext : BaseComponent {
     // before any returns
     last_processed = id;
   }
+
+  mutable std::vector<RenderInfo> render_cmds;
+
+  void queue_render(RenderInfo &&info) { render_cmds.emplace_back(info); }
 };
 
 struct UIComponentDebug : BaseComponent {
@@ -216,6 +225,241 @@ struct HasDropdownState : ui::HasCheckboxState {
   HasDropdownState(const std::function<Options(HasDropdownState &)> fetch_opts)
       : HasDropdownState(fetch_opts(*this), fetch_opts, nullptr) {}
 };
+
+#ifdef AFTER_HOURS_USE_RAYLIB
+// TODO add a non raylib version...
+struct HasColor : BaseComponent {
+  raylib::Color color;
+  HasColor(raylib::Color c) : color(c) {}
+};
+#endif
+
+struct SliderConfig {
+  Vector2Type size;
+  float starting_pct;
+  std::function<std::optional<std::string>(float)> on_slider_changed = nullptr;
+  std::string label = "";
+  bool label_is_format_string = false;
+};
+
+#ifdef AFTER_HOURS_IMM_UI
+
+namespace imm {
+struct ElementResult {
+  // no explicit on purpose
+  ElementResult(bool val, EntityID id) : result(val), element_id(id) {}
+  ElementResult(bool val, EntityID id, float data_)
+      : result(val), element_id(id), data(data_) {}
+
+  ElementResult(Entity &ent) : result(true), element_id(ent.id) {}
+
+  operator bool() const { return result; }
+  EntityID id() const { return element_id; }
+
+  template <typename T> T as() const { return std::get<T>(data); }
+
+private:
+  bool result = false;
+  EntityID element_id;
+  std::variant<float> data = 0.f;
+};
+
+using UI_UUID = size_t;
+std::map<UI_UUID, EntityID> existing_ui_elements;
+
+Entity &
+mk(const std::source_location location = std::source_location::current()) {
+
+  std::stringstream pre_hash;
+  pre_hash << "file: " << location.file_name() << '(' << location.line() << ':'
+           << location.column() << ") `" << location.function_name()
+           << "`: " << '\n';
+
+  UI_UUID hash = std::hash<std::string>{}(pre_hash.str());
+
+  if (existing_ui_elements.contains(hash)) {
+    auto entityID = existing_ui_elements.at(hash);
+    // std::cout << "Reusing element " << hash << " for " << entityID << "\n";
+    return EntityHelper::getEntityForIDEnforce(entityID);
+  }
+
+  Entity &entity = EntityHelper::createEntity();
+  existing_ui_elements[hash] = entity.id;
+  // std::cout << "Creating element " << hash << " for " << entity.id << "\n";
+  return entity;
+}
+
+template <typename T>
+concept HasUIContext = requires(T a) {
+  {
+    std::is_same_v<T, UIContext<typename decltype(a)::value_type>>
+  } -> std::convertible_to<bool>;
+};
+
+ElementResult div(HasUIContext auto &, Entity &entity, ElementResult parent) {
+
+  const auto make_div = [&]() -> UIComponent & {
+    if (entity.is_missing<UIComponent>()) {
+      entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::div);
+      entity.addComponent<ui::UIComponent>(entity.id)
+          .set_desired_width(children())
+          .set_desired_height(children())
+          // .set_desired_padding(padding.left, ui::Axis::left)
+          // .set_desired_padding(padding.right, ui::Axis::right)
+          // .set_desired_padding(padding.top, ui::Axis::top)
+          // .set_desired_padding(padding.bottom, ui::Axis::bottom)
+          // .set_desired_margin(margin.left, ui::Axis::left)
+          // .set_desired_margin(margin.right, ui::Axis::right)
+          // .set_desired_margin(margin.top, ui::Axis::top)
+          // .set_desired_margin(margin.bottom, ui::Axis::bottom)
+          .set_parent(parent.id());
+
+      Entity &parent_ent = EntityHelper::getEntityForIDEnforce(parent.id());
+      UIComponent &parent_cmp = parent_ent.get<UIComponent>();
+      parent_cmp.add_child(entity.id);
+    }
+    return entity.get<UIComponent>();
+  };
+
+  make_div();
+
+  return {true, entity.id};
+}
+
+Vector2Type button_size = {150.f, 50.f};
+ElementResult button(HasUIContext auto &ctx, Entity &entity,
+                     ElementResult parent) {
+
+  ElementResult result = {false, entity.id};
+
+  const auto on_click = [&](Entity &) {
+    result = ElementResult{true, entity.id};
+  };
+
+  const auto make_button = [&]() -> UIComponent & {
+    if (entity.is_missing<UIComponent>()) {
+      entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::button);
+      entity.addComponent<UIComponent>(entity.id)
+          .set_desired_width(pixels(button_size.x))
+          .set_desired_height(pixels(button_size.y))
+          .set_parent(parent.id());
+      entity.addComponent<HasClickListener>(on_click);
+
+      entity.addComponent<ui::HasLabel>("Label");
+      entity.addComponent<ui::HasClickListener>(on_click);
+#ifdef AFTER_HOURS_USE_RAYLIB
+      entity.addComponent<HasColor>(raylib::BLUE);
+#endif
+
+      Entity &parent_ent = EntityHelper::getEntityForIDEnforce(parent.id());
+      UIComponent &parent_cmp = parent_ent.get<UIComponent>();
+      parent_cmp.add_child(entity.id);
+    }
+    return entity.get<UIComponent>();
+  };
+
+  UIComponent &cmp = make_button();
+
+  // if (cmp.should_hide) {
+  // return result;
+  // }
+
+  ctx.queue_render(RenderInfo{entity.id});
+
+  return result;
+}
+
+ElementResult slider(HasUIContext auto &ctx, Entity &entity,
+                     ElementResult parent, float &owned_value) {
+  ElementResult result = {false, entity.id};
+
+  if (entity.is_missing<ui::HasSliderState>())
+    entity.addComponent<ui::HasSliderState>(owned_value);
+
+  HasSliderState &sliderState = entity.get<ui::HasSliderState>();
+
+  const auto on_drag = [](Entity &draggable) {
+    float mnf = 0.f;
+    float mxf = 1.f;
+
+    UIComponent &cmp = draggable.get<UIComponent>();
+    Rectangle rect = cmp.rect();
+
+    HasSliderState &state = draggable.get<HasSliderState>();
+
+    auto mouse_position = input::get_mouse_position();
+    float v = (mouse_position.x - rect.x) / rect.width;
+    if (v < mnf)
+      v = mnf;
+    if (v > mxf)
+      v = mxf;
+    if (v != state.value) {
+      state.value = v;
+      state.changed_since = true;
+    }
+
+    auto opt_child =
+        EntityQuery()
+            .whereID(draggable.get<ui::HasChildrenComponent>().children[0])
+            .gen_first();
+
+    UIComponent &child_cmp = opt_child->get<UIComponent>();
+    child_cmp.set_desired_padding(pixels(state.value * 0.75f * rect.width),
+                                  Axis::left);
+  };
+
+  const auto make_slider = [&]() -> UIComponent & {
+    if (entity.is_missing<UIComponent>()) {
+      entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::slider);
+      entity.addComponent<UIComponent>(entity.id)
+          .set_desired_width(pixels(button_size.x))
+          .set_desired_height(pixels(button_size.y))
+          .set_parent(parent.id());
+
+      // entity.addComponent<ui::HasLabel>("Label");
+      entity.addComponent<ui::HasDragListener>(on_drag);
+
+      auto &handle = EntityHelper::createEntity();
+      handle.addComponent<UIComponent>(handle.id)
+          .set_desired_width(ui::Size{
+              .dim = ui::Dim::Pixels,
+              .value = button_size.x * 0.25f,
+          })
+          .set_desired_height(ui::Size{
+              .dim = ui::Dim::Pixels,
+              .value = button_size.y,
+          })
+          .set_desired_padding(pixels(owned_value * button_size.x), Axis::left)
+          .set_parent(entity.id);
+      handle.addComponent<UIComponentDebug>("slider_handle");
+      entity.get<ui::UIComponent>().add_child(handle.id);
+
+#ifdef AFTER_HOURS_USE_RAYLIB
+      entity.addComponent<ui::HasColor>(raylib::GREEN);
+      handle.addComponent<ui::HasColor>(raylib::BLUE);
+#endif
+
+      entity.addComponent<ui::HasChildrenComponent>();
+      entity.get<ui::HasChildrenComponent>().add_child(handle);
+
+      Entity &parent_ent = EntityHelper::getEntityForIDEnforce(parent.id());
+      UIComponent &parent_cmp = parent_ent.get<UIComponent>();
+      parent_cmp.add_child(entity.id);
+    }
+    return entity.get<UIComponent>();
+  };
+
+  make_slider();
+
+  ctx.queue_render(RenderInfo{entity.id});
+
+  owned_value = sliderState.value;
+  return ElementResult{sliderState.changed_since, entity.id, sliderState.value};
+}
+
+} // namespace imm
+
+#endif
 
 //// /////
 ////  Systems
@@ -534,13 +778,8 @@ struct UpdateDropdownOptions
 };
 
 #ifdef AFTER_HOURS_USE_RAYLIB
-// TODO add a non raylib version...
-struct HasColor : BaseComponent {
-  raylib::Color color;
-  HasColor(raylib::Color c) : color(c) {}
-};
 
-static void draw_text(ui::FontManager &fm, const std::string &text,
+static void draw_text(const ui::FontManager &fm, const std::string &text,
                       vec2 position, int font_size, raylib::Color color) {
   DrawTextEx(fm.get_active_font(), text.c_str(), position, font_size, 1.f,
              color);
@@ -957,13 +1196,6 @@ Entity &make_button(Entity &parent, const std::string &label,
   return entity;
 }
 
-struct SliderConfig {
-  Vector2Type size;
-  float starting_pct;
-  std::function<std::optional<std::string>(float)> on_slider_changed = nullptr;
-  std::string label = "";
-  bool label_is_format_string = false;
-};
 Entity &internal_make_slider(Entity &parent, SliderConfig config,
                              Entity &label) {
   // TODO add vertical slider
