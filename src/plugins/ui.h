@@ -8,6 +8,7 @@
 #include <iostream>
 #include <iterator>
 #include <optional>
+#include <source_location>
 #include <utility>
 //
 #include "autolayout.h"
@@ -26,6 +27,8 @@ static bool is_mouse_inside(const input::MousePosition &mouse_pos,
 }
 
 template <typename InputAction> struct UIContext : BaseComponent {
+  using value_type = InputAction;
+
   // TODO move to input system
   using InputBitset = std::bitset<magic_enum::enum_count<InputAction>()>;
 
@@ -44,12 +47,12 @@ template <typename InputAction> struct UIContext : BaseComponent {
   InputAction last_action;
   InputBitset all_actions;
 
-  [[nodiscard]] bool is_hot(EntityID id) { return hot_id == id; };
-  [[nodiscard]] bool is_active(EntityID id) { return active_id == id; };
+  [[nodiscard]] bool is_hot(EntityID id) const { return hot_id == id; };
+  [[nodiscard]] bool is_active(EntityID id) const { return active_id == id; };
   void set_hot(EntityID id) { hot_id = id; }
   void set_active(EntityID id) { active_id = id; }
 
-  bool has_focus(EntityID id) { return focus_id == id; }
+  bool has_focus(EntityID id) const { return focus_id == id; }
   void set_focus(EntityID id) { focus_id = id; }
 
   void active_if_mouse_inside(EntityID id, Rectangle rect) {
