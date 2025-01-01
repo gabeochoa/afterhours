@@ -934,6 +934,63 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   }
 };
 
+template <typename InputAction>
+struct RenderImm : System<UIContext<InputAction>, FontManager> {
+
+  virtual void once(float) override { this->include_derived_children = true; }
+
+  void render_me(const UIContext<InputAction> &context,
+                 const FontManager &font_manager, const Entity &entity) const {
+    const UIComponent &cmp = entity.get<UIComponent>();
+
+    raylib::Color col = entity.template get<HasColor>().color;
+
+    if (context.is_hot(entity.id)) {
+      col = raylib::RED;
+    }
+
+    if (context.has_focus(entity.id)) {
+      raylib::DrawRectangleRec(cmp.focus_rect(), raylib::PINK);
+    }
+    raylib::DrawRectangleRec(cmp.rect(), col);
+    if (entity.has<HasLabel>()) {
+      draw_text(font_manager, entity.get<HasLabel>().label.c_str(),
+                vec2{cmp.x(), cmp.y()}, (int)(cmp.height() / 2.f),
+                raylib::RAYWHITE);
+    }
+  }
+
+  void render(const UIContext<InputAction> &context,
+              const FontManager &font_manager, const Entity &entity) const {
+    const UIComponent &cmp = entity.get<UIComponent>();
+    if (cmp.should_hide)
+      return;
+
+    if (cmp.font_name != UIComponent::UNSET_FONT)
+      const_cast<FontManager &>(font_manager).set_active(cmp.font_name);
+
+    if (entity.has<HasColor>()) {
+      render_me(context, font_manager, entity);
+    }
+
+    for (EntityID child : cmp.children) {
+      render(context, font_manager, AutoLayout::to_ent_static(child));
+    }
+  }
+
+  virtual void for_each_with(const Entity &,
+                             const UIContext<InputAction> &context,
+                             const FontManager &font_manager,
+                             float) const override {
+    for (auto &cmd : context.render_cmds) {
+      auto id = cmd.id;
+      auto &ent = EntityHelper::getEntityForIDEnforce(id);
+      render(context, font_manager, ent);
+    }
+    context.render_cmds.clear();
+  }
+};
+
 #endif
 
 // TODO i really wanted to statically validate this
@@ -1410,6 +1467,7 @@ register_render_systems(SystemManager &sm,
   sm.register_render_system(
       std::make_unique<ui::RenderDebugAutoLayoutRoots<InputAction>>(
           toggle_debug));
+  sm.register_render_system(std::make_unique<ui::RenderImm<InputAction>>());
 }
 #endif
 
