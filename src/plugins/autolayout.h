@@ -39,8 +39,10 @@ struct FontManager : BaseComponent {
     return *this;
   }
 
-  raylib::Font get_active_font() { return fonts[active_font]; }
-  raylib::Font get_font(const std::string &name) { return fonts[name]; }
+  raylib::Font get_active_font() const { return fonts.at(active_font); }
+  raylib::Font get_font(const std::string &name) const {
+    return fonts.at(name);
+  }
 };
 #endif
 
