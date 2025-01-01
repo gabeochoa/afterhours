@@ -373,6 +373,12 @@ ElementResult slider(HasUIContext auto &ctx, Entity &entity,
                      std::string label = "") {
   ElementResult result = {false, entity.id};
 
+  Vector2Type size = button_size;
+  if (!label.empty()) {
+    size.x /= 2.f;
+    size.y /= 2.f;
+  }
+
   if (entity.is_missing<ui::HasSliderState>())
     entity.addComponent<ui::HasSliderState>(owned_value);
 
@@ -408,13 +414,13 @@ ElementResult slider(HasUIContext auto &ctx, Entity &entity,
                                   Axis::left);
   };
 
-  const auto make_slider = [button_size, &on_drag, &owned_value](
+  const auto make_slider = [size, &on_drag, &owned_value](
                                Entity &entity, EntityID parent_id) -> Entity & {
     if (entity.is_missing<UIComponent>()) {
       entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::slider);
       entity.addComponent<UIComponent>(entity.id)
-          .set_desired_width(pixels(button_size.x))
-          .set_desired_height(pixels(button_size.y))
+          .set_desired_width(pixels(size.x))
+          .set_desired_height(pixels(size.y))
           .set_parent(parent_id);
 
       // entity.addComponent<ui::HasLabel>("Label");
@@ -424,13 +430,13 @@ ElementResult slider(HasUIContext auto &ctx, Entity &entity,
       handle.addComponent<UIComponent>(handle.id)
           .set_desired_width(ui::Size{
               .dim = ui::Dim::Pixels,
-              .value = button_size.x * 0.25f,
+              .value = size.x * 0.25f,
           })
           .set_desired_height(ui::Size{
               .dim = ui::Dim::Pixels,
-              .value = button_size.y,
+              .value = size.y,
           })
-          .set_desired_padding(pixels(owned_value * button_size.x), Axis::left)
+          .set_desired_padding(pixels(owned_value * size.x), Axis::left)
           .set_parent(entity.id);
       handle.addComponent<UIComponentDebug>("slider_handle");
       entity.get<ui::UIComponent>().add_child(handle.id);
@@ -471,12 +477,8 @@ ElementResult slider(HasUIContext auto &ctx, Entity &entity,
     auto &label_holder = mk(div_ent.id, entity.id);
     div(ctx, label_holder, div_ent);
     label_holder.get<UIComponent>()
-        .set_desired_width(ui::Size{
-            .dim = ui::Dim::Text,
-        })
-        .set_desired_height(ui::Size{
-            .dim = ui::Dim::Text,
-        });
+        .set_desired_width(pixels(size.x))
+        .set_desired_height(pixels(size.y));
     label_holder.get<UIComponentDebug>().set(UIComponentDebug::Type::custom,
                                              "slider_label");
     label_holder.addComponent<HasLabel>(label);
