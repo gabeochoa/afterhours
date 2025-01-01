@@ -160,6 +160,11 @@ struct UIComponentDebug : BaseComponent {
   UIComponentDebug(Type type_) : type(type_) {}
   UIComponentDebug(const std::string &name_)
       : type(Type::custom), name(name_) {}
+
+  void set(Type type_, const std::string &name_) {
+    type = type_;
+    name = name_;
+  }
 };
 
 struct HasClickListener : BaseComponent {
@@ -363,7 +368,8 @@ ElementResult button(HasUIContext auto &ctx, Entity &entity,
 }
 
 ElementResult slider(HasUIContext auto &ctx, Entity &entity,
-                     ElementResult parent, float &owned_value) {
+                     ElementResult parent, float &owned_value,
+                     std::string label = "") {
   ElementResult result = {false, entity.id};
 
   if (entity.is_missing<ui::HasSliderState>())
@@ -401,13 +407,14 @@ ElementResult slider(HasUIContext auto &ctx, Entity &entity,
                                   Axis::left);
   };
 
-  const auto make_slider = [&]() -> UIComponent & {
+  const auto make_slider = [button_size, &on_drag, &owned_value](
+                               Entity &entity, EntityID parent_id) -> Entity & {
     if (entity.is_missing<UIComponent>()) {
       entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::slider);
       entity.addComponent<UIComponent>(entity.id)
           .set_desired_width(pixels(button_size.x))
           .set_desired_height(pixels(button_size.y))
-          .set_parent(parent.id());
+          .set_parent(parent_id);
 
       // entity.addComponent<ui::HasLabel>("Label");
       entity.addComponent<ui::HasDragListener>(on_drag);
@@ -435,19 +442,58 @@ ElementResult slider(HasUIContext auto &ctx, Entity &entity,
       entity.addComponent<ui::HasChildrenComponent>();
       entity.get<ui::HasChildrenComponent>().add_child(handle);
 
-      Entity &parent_ent = EntityHelper::getEntityForIDEnforce(parent.id());
+      Entity &parent_ent = EntityHelper::getEntityForIDEnforce(parent_id);
       UIComponent &parent_cmp = parent_ent.get<UIComponent>();
       parent_cmp.add_child(entity.id);
     }
-    return entity.get<UIComponent>();
+    return entity;
   };
 
-  make_slider();
+  if (label.empty()) {
+    make_slider(entity, parent.id());
 
-  ctx.queue_render(RenderInfo{entity.id});
+    ctx.queue_render(RenderInfo{entity.id});
+
+    owned_value = sliderState.value;
+    return ElementResult{sliderState.changed_since, entity.id,
+                         sliderState.value};
+  }
+
+  Entity &div_ent = mk();
+  auto elem = div(ctx, div_ent, parent);
+  div_ent.get<UIComponent>().set_flex_direction(FlexDirection::Row);
+  div_ent.get<UIComponentDebug>().set(UIComponentDebug::Type::custom,
+                                      "slider_group");
+
+  // label
+  {
+    auto &label_holder = mk();
+    div(ctx, label_holder, div_ent);
+    label_holder.get<UIComponent>()
+        .set_desired_width(ui::Size{
+            .dim = ui::Dim::Text,
+        })
+        .set_desired_height(ui::Size{
+            .dim = ui::Dim::Text,
+        });
+    label_holder.get<UIComponentDebug>().set(UIComponentDebug::Type::custom,
+                                             "slider_label");
+    label_holder.addComponent<HasLabel>(label);
+
+    // TODO right now we require color to render,
+    // but we should require color or label
+#ifdef AFTER_HOURS_USE_RAYLIB
+    label_holder.addComponent<ui::HasColor>(raylib::BLUE);
+#endif
+  }
+
+  make_slider(entity, elem.id());
+
+  ctx.queue_render(RenderInfo{elem.id()});
 
   owned_value = sliderState.value;
-  return ElementResult{sliderState.changed_since, entity.id, sliderState.value};
+  return ElementResult{sliderState.changed_since, div_ent.id,
+                       sliderState.value};
 }
 
 } // namespace imm
