@@ -273,12 +273,13 @@ using UI_UUID = size_t;
 std::map<UI_UUID, EntityID> existing_ui_elements;
 
 Entity &
-mk(const std::source_location location = std::source_location::current()) {
+mk(EntityID parentID, EntityID otherID = 0,
+   const std::source_location location = std::source_location::current()) {
 
   std::stringstream pre_hash;
-  pre_hash << "file: " << location.file_name() << '(' << location.line() << ':'
-           << location.column() << ") `" << location.function_name()
-           << "`: " << '\n';
+  pre_hash << parentID << otherID << "file: " << location.file_name() << '('
+           << location.line() << ':' << location.column() << ") `"
+           << location.function_name() << "`: " << '\n';
 
   UI_UUID hash = std::hash<std::string>{}(pre_hash.str());
 
@@ -459,7 +460,7 @@ ElementResult slider(HasUIContext auto &ctx, Entity &entity,
                          sliderState.value};
   }
 
-  Entity &div_ent = mk();
+  Entity &div_ent = mk(parent.id(), entity.id);
   auto elem = div(ctx, div_ent, parent);
   div_ent.get<UIComponent>().set_flex_direction(FlexDirection::Row);
   div_ent.get<UIComponentDebug>().set(UIComponentDebug::Type::custom,
@@ -467,7 +468,7 @@ ElementResult slider(HasUIContext auto &ctx, Entity &entity,
 
   // label
   {
-    auto &label_holder = mk();
+    auto &label_holder = mk(div_ent.id, entity.id);
     div(ctx, label_holder, div_ent);
     label_holder.get<UIComponent>()
         .set_desired_width(ui::Size{
