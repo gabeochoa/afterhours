@@ -3,6 +3,8 @@
 
 #include <memory>
 #include <vector>
+
+#include "type_name.h"
 namespace afterhours {
 
 struct Entity;

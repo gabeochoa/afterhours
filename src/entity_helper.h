@@ -32,15 +32,22 @@ struct EntityHelper {
 
   template <typename Component> static void registerSingleton(Entity &ent) {
     ComponentID id = components::get_type_id<Component>();
+
+    if (singletonMap.contains(id)) {
+      log_error("Already had registered singleton {}", type_name<Component>());
+    }
+
     singletonMap.emplace(id, &ent);
+    log_info("Registered singleton {} for {} ({})", ent.id,
+             type_name<Component>(), id);
   }
 
   template <typename Component> static RefEntity get_singleton() {
     ComponentID id = components::get_type_id<Component>();
     if (!singletonMap.contains(id)) {
-      log_warn("Singleton map is missing value for component {}. Did you "
+      log_warn("Singleton map is missing value for component {} ({}). Did you "
                "register this component previously?",
-               type_name<Component>());
+               id, type_name<Component>());
     }
     return *singletonMap[id];
   }
