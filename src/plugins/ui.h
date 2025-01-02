@@ -252,32 +252,35 @@ struct SliderConfig {
 namespace imm {
 struct ElementResult {
   // no explicit on purpose
-  ElementResult(bool val, EntityID id) : result(val), element_id(id) {}
-  ElementResult(bool val, EntityID id, float data_)
-      : result(val), element_id(id), data(data_) {}
+  ElementResult(bool val, Entity &ref) : result(val), element(ref) {}
+  ElementResult(bool val, Entity &ref, float data_)
+      : result(val), element(ref), data(data_) {}
 
-  ElementResult(Entity &ent) : result(true), element_id(ent.id) {}
+  ElementResult(Entity &ent) : result(true), element(ent) {}
 
   operator bool() const { return result; }
-  EntityID id() const { return element_id; }
+  EntityID id() const { return element.id; }
+  Entity &ent() const { return element; }
 
   template <typename T> T as() const { return std::get<T>(data); }
 
 private:
   bool result = false;
-  EntityID element_id;
+  Entity &element;
   std::variant<float> data = 0.f;
 };
 
 using UI_UUID = size_t;
 std::map<UI_UUID, EntityID> existing_ui_elements;
 
-Entity &
-mk(EntityID parentID, EntityID otherID = 0,
+using EntityParent = std::pair<RefEntity, RefEntity>;
+
+EntityParent
+mk(Entity &parent, EntityID otherID = 0,
    const std::source_location location = std::source_location::current()) {
 
   std::stringstream pre_hash;
-  pre_hash << parentID << otherID << "file: " << location.file_name() << '('
+  pre_hash << parent.id << otherID << "file: " << location.file_name() << '('
            << location.line() << ':' << location.column() << ") `"
            << location.function_name() << "`: " << '\n';
 
@@ -286,13 +289,13 @@ mk(EntityID parentID, EntityID otherID = 0,
   if (existing_ui_elements.contains(hash)) {
     auto entityID = existing_ui_elements.at(hash);
     // std::cout << "Reusing element " << hash << " for " << entityID << "\n";
-    return EntityHelper::getEntityForIDEnforce(entityID);
+    return {EntityHelper::getEntityForIDEnforce(entityID), parent};
   }
 
   Entity &entity = EntityHelper::createEntity();
   existing_ui_elements[hash] = entity.id;
   // std::cout << "Creating element " << hash << " for " << entity.id << "\n";
-  return entity;
+  return {entity, parent};
 }
 
 template <typename T>
@@ -302,7 +305,9 @@ concept HasUIContext = requires(T a) {
   } -> std::convertible_to<bool>;
 };
 
-ElementResult div(HasUIContext auto &, Entity &entity, ElementResult parent) {
+ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair) {
+  Entity &entity = ep_pair.first;
+  Entity &parent = ep_pair.second;
 
   const auto make_div = [&]() -> UIComponent & {
     if (entity.is_missing<UIComponent>()) {
@@ -318,9 +323,9 @@ ElementResult div(HasUIContext auto &, Entity &entity, ElementResult parent) {
           // .set_desired_margin(margin.right, ui::Axis::right)
           // .set_desired_margin(margin.top, ui::Axis::top)
           // .set_desired_margin(margin.bottom, ui::Axis::bottom)
-          .set_parent(parent.id());
+          .set_parent(parent.id);
 
-      Entity &parent_ent = EntityHelper::getEntityForIDEnforce(parent.id());
+      Entity &parent_ent = EntityHelper::getEntityForIDEnforce(parent.id);
       UIComponent &parent_cmp = parent_ent.get<UIComponent>();
       parent_cmp.add_child(entity.id);
     }
@@ -329,12 +334,13 @@ ElementResult div(HasUIContext auto &, Entity &entity, ElementResult parent) {
 
   make_div();
 
-  return {true, entity.id};
+  return {true, entity};
 }
 
 Vector2Type button_size = {150.f, 50.f};
-ElementResult button(HasUIContext auto &ctx, Entity &entity,
-                     ElementResult parent) {
+ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair) {
+  Entity &entity = ep_pair.first;
+  Entity &parent = ep_pair.second;
 
   const auto make_button = [&]() -> UIComponent & {
     if (entity.is_missing<UIComponent>()) {
@@ -342,7 +348,7 @@ ElementResult button(HasUIContext auto &ctx, Entity &entity,
       entity.addComponent<UIComponent>(entity.id)
           .set_desired_width(pixels(button_size.x))
           .set_desired_height(pixels(button_size.y))
-          .set_parent(parent.id());
+          .set_parent(parent.id);
       entity.addComponent<HasClickListener>([](Entity &) {});
 
       entity.addComponent<ui::HasLabel>("Label");
@@ -350,8 +356,7 @@ ElementResult button(HasUIContext auto &ctx, Entity &entity,
       entity.addComponent<HasColor>(raylib::BLUE);
 #endif
 
-      Entity &parent_ent = EntityHelper::getEntityForIDEnforce(parent.id());
-      UIComponent &parent_cmp = parent_ent.get<UIComponent>();
+      UIComponent &parent_cmp = parent.get<UIComponent>();
       parent_cmp.add_child(entity.id);
     }
     return entity.get<UIComponent>();
@@ -359,19 +364,17 @@ ElementResult button(HasUIContext auto &ctx, Entity &entity,
 
   UIComponent &cmp = make_button();
 
-  // if (cmp.should_hide) {
-  // return result;
-  // }
-
   ctx.queue_render(RenderInfo{entity.id});
 
-  return ElementResult{entity.get<HasClickListener>().down, entity.id};
+  return ElementResult{entity.get<HasClickListener>().down, entity};
 }
 
-ElementResult slider(HasUIContext auto &ctx, Entity &entity,
-                     ElementResult parent, float &owned_value,
-                     std::string label = "") {
-  ElementResult result = {false, entity.id};
+ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
+                     float &owned_value, std::string label = "") {
+  Entity &entity = ep_pair.first;
+  Entity &parent = ep_pair.second;
+
+  ElementResult result = {false, entity};
 
   Vector2Type size = button_size;
   if (!label.empty()) {
@@ -414,17 +417,19 @@ ElementResult slider(HasUIContext auto &ctx, Entity &entity,
                                   Axis::left);
   };
 
-  const auto make_slider = [size, &on_drag, &owned_value](
-                               Entity &entity, EntityID parent_id) -> Entity & {
-    if (entity.is_missing<UIComponent>()) {
-      entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::slider);
-      entity.addComponent<UIComponent>(entity.id)
+  const auto make_slider = [size, &on_drag,
+                            &owned_value](Entity &slider_entity,
+                                          EntityID parent_id) -> Entity & {
+    if (slider_entity.is_missing<UIComponent>()) {
+      slider_entity.addComponent<UIComponentDebug>(
+          UIComponentDebug::Type::slider);
+      slider_entity.addComponent<UIComponent>(slider_entity.id)
           .set_desired_width(pixels(size.x))
           .set_desired_height(pixels(size.y))
           .set_parent(parent_id);
 
-      // entity.addComponent<ui::HasLabel>("Label");
-      entity.addComponent<ui::HasDragListener>(on_drag);
+      // slider_entity.addComponent<ui::HasLabel>("Label");
+      slider_entity.addComponent<ui::HasDragListener>(on_drag);
 
       auto &handle = EntityHelper::createEntity();
       handle.addComponent<UIComponent>(handle.id)
@@ -437,45 +442,43 @@ ElementResult slider(HasUIContext auto &ctx, Entity &entity,
               .value = size.y,
           })
           .set_desired_padding(pixels(owned_value * size.x), Axis::left)
-          .set_parent(entity.id);
+          .set_parent(slider_entity.id);
       handle.addComponent<UIComponentDebug>("slider_handle");
-      entity.get<ui::UIComponent>().add_child(handle.id);
+      slider_entity.get<ui::UIComponent>().add_child(handle.id);
 
 #ifdef AFTER_HOURS_USE_RAYLIB
-      entity.addComponent<ui::HasColor>(raylib::GREEN);
+      slider_entity.addComponent<ui::HasColor>(raylib::GREEN);
       handle.addComponent<ui::HasColor>(raylib::BLUE);
 #endif
 
-      entity.addComponent<ui::HasChildrenComponent>();
-      entity.get<ui::HasChildrenComponent>().add_child(handle);
+      slider_entity.addComponent<ui::HasChildrenComponent>();
+      slider_entity.get<ui::HasChildrenComponent>().add_child(handle);
 
       Entity &parent_ent = EntityHelper::getEntityForIDEnforce(parent_id);
       UIComponent &parent_cmp = parent_ent.get<UIComponent>();
-      parent_cmp.add_child(entity.id);
+      parent_cmp.add_child(slider_entity.id);
     }
-    return entity;
+    return slider_entity;
   };
 
   if (label.empty()) {
-    make_slider(entity, parent.id());
+    make_slider(entity, parent.id);
 
     ctx.queue_render(RenderInfo{entity.id});
 
     owned_value = sliderState.value;
-    return ElementResult{sliderState.changed_since, entity.id,
-                         sliderState.value};
+    return ElementResult{sliderState.changed_since, entity, sliderState.value};
   }
 
-  Entity &div_ent = mk(parent.id(), entity.id);
-  auto elem = div(ctx, div_ent, parent);
+  auto elem_pair = div(ctx, mk(parent, entity.id));
+  Entity &div_ent = elem_pair.ent();
   div_ent.get<UIComponent>().set_flex_direction(FlexDirection::Row);
   div_ent.get<UIComponentDebug>().set(UIComponentDebug::Type::custom,
                                       "slider_group");
 
   // label
   {
-    auto &label_holder = mk(div_ent.id, entity.id);
-    div(ctx, label_holder, div_ent);
+    Entity &label_holder = div(ctx, mk(div_ent, entity.id)).ent();
     label_holder.get<UIComponent>()
         .set_desired_width(pixels(size.x))
         .set_desired_height(pixels(size.y));
@@ -490,13 +493,12 @@ ElementResult slider(HasUIContext auto &ctx, Entity &entity,
 #endif
   }
 
-  make_slider(entity, elem.id());
+  make_slider(entity, div_ent.id);
 
-  ctx.queue_render(RenderInfo{elem.id()});
+  ctx.queue_render(RenderInfo{div_ent.id});
 
   owned_value = sliderState.value;
-  return ElementResult{sliderState.changed_since, div_ent.id,
-                       sliderState.value};
+  return ElementResult{sliderState.changed_since, div_ent, sliderState.value};
 }
 
 } // namespace imm

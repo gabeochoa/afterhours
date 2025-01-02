@@ -46,8 +46,8 @@ struct UITest : System<UIContext<InputAction>> {
   virtual void for_each_with(Entity &entity, UIContext<InputAction> &context,
                              float) override {
 
-    auto elem = div(context, mk(), entity);
-    if (button(context, mk(), elem)) {
+    auto elem = imm::div(context, mk(entity));
+    if (button(context, mk(elem.ent()))) {
       std::cout << "button clicked" << std::endl;
     }
   }
