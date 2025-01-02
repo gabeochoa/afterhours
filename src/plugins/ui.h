@@ -421,8 +421,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                             &owned_value](Entity &slider_entity,
                                           EntityID parent_id) -> Entity & {
     if (slider_entity.is_missing<UIComponent>()) {
-      slider_entity.addComponent<UIComponentDebug>(
-          UIComponentDebug::Type::slider);
+      slider_entity
+          .addComponent<UIComponentDebug>(UIComponentDebug::Type::custom)
+          .set(UIComponentDebug::Type::custom, "slider_background");
       slider_entity.addComponent<UIComponent>(slider_entity.id)
           .set_desired_width(pixels(size.x))
           .set_desired_height(pixels(size.y))
