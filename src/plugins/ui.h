@@ -337,7 +337,7 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair) {
   return {true, entity};
 }
 
-Vector2Type button_size = {150.f, 50.f};
+Vector2Type default_component_size = {150.f, 50.f};
 ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair) {
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
@@ -346,8 +346,8 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair) {
     if (entity.is_missing<UIComponent>()) {
       entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::button);
       entity.addComponent<UIComponent>(entity.id)
-          .set_desired_width(pixels(button_size.x))
-          .set_desired_height(pixels(button_size.y))
+          .set_desired_width(pixels(default_component_size.x))
+          .set_desired_height(pixels(default_component_size.y))
           .set_parent(parent.id);
       entity.addComponent<HasClickListener>([](Entity &) {});
 
@@ -376,7 +376,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   ElementResult result = {false, entity};
 
-  Vector2Type size = button_size;
+  Vector2Type size = default_component_size;
   if (!label.empty()) {
     size.x /= 2.f;
     size.y /= 2.f;
@@ -1267,7 +1267,7 @@ static Entity &make_div(Entity &parent, ComponentSize cz,
 }
 
 Entity &make_button(Entity &parent, const std::string &label,
-                    Vector2Type button_size,
+                    Vector2Type default_component_size,
                     const std::function<void(Entity &)> &click = {},
                     Padding padding = Padding(), Margin margin = Margin()) {
   auto &entity = EntityHelper::createEntity();
@@ -1275,11 +1275,11 @@ Entity &make_button(Entity &parent, const std::string &label,
   entity.addComponent<UIComponent>(entity.id)
       .set_desired_width(ui::Size{
           .dim = ui::Dim::Pixels,
-          .value = button_size.x,
+          .value = default_component_size.x,
       })
       .set_desired_height(ui::Size{
           .dim = ui::Dim::Pixels,
-          .value = button_size.y,
+          .value = default_component_size.y,
       })
       .set_desired_padding(padding.left, ui::Axis::left)
       .set_desired_padding(padding.right, ui::Axis::right)
@@ -1429,17 +1429,17 @@ Entity &make_slider(Entity &parent, SliderConfig config) {
   return div;
 }
 
-Entity &make_checkbox(Entity &parent, Vector2Type button_size) {
+Entity &make_checkbox(Entity &parent, Vector2Type default_component_size) {
   auto &entity = EntityHelper::createEntity();
   entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::checkbox);
   entity.addComponent<UIComponent>(entity.id)
       .set_desired_width(ui::Size{
           .dim = ui::Dim::Pixels,
-          .value = button_size.x,
+          .value = default_component_size.x,
       })
       .set_desired_height(ui::Size{
           .dim = ui::Dim::Pixels,
-          .value = button_size.y,
+          .value = default_component_size.y,
       })
       .set_parent(parent.id);
   parent.get<ui::UIComponent>().add_child(entity.id);
