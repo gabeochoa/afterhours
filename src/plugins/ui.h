@@ -425,130 +425,112 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
-  ElementResult result = {false, entity};
-
   Vector2Type size = default_component_size;
   if (!config.label.empty()) {
     size.x /= 2.f;
     size.y /= 2.f;
   }
-
-  if (entity.is_missing<ui::HasSliderState>())
-    entity.addComponent<ui::HasSliderState>(owned_value);
-
-  HasSliderState &sliderState = entity.get<ui::HasSliderState>();
-
-  const auto on_drag = [](Entity &draggable) {
-    float mnf = 0.f;
-    float mxf = 1.f;
-
-    UIComponent &cmp = draggable.get<UIComponent>();
-    Rectangle rect = cmp.rect();
-
-    HasSliderState &state = draggable.get<HasSliderState>();
-
-    auto mouse_position = input::get_mouse_position();
-    float v = (mouse_position.x - rect.x) / rect.width;
-    if (v < mnf)
-      v = mnf;
-    if (v > mxf)
-      v = mxf;
-    if (v != state.value) {
-      state.value = v;
-      state.changed_since = true;
-    }
-
-    auto opt_child =
-        EntityQuery()
-            .whereID(draggable.get<ui::HasChildrenComponent>().children[0])
-            .gen_first();
-
-    UIComponent &child_cmp = opt_child->get<UIComponent>();
-    child_cmp.set_desired_padding(pixels(state.value * 0.75f * rect.width),
-                                  Axis::left);
-  };
-
-  const auto make_slider = [config, size, &on_drag,
-                            &owned_value](Entity &slider_entity,
-                                          EntityID parent_id) -> Entity & {
-    if (slider_entity.is_missing<UIComponent>()) {
-      slider_entity
-          .addComponent<UIComponentDebug>(UIComponentDebug::Type::custom)
-          .set(UIComponentDebug::Type::custom, "slider_background");
-      slider_entity.addComponent<UIComponent>(slider_entity.id)
-          .set_desired_width(pixels(size.x))
-          .set_desired_height(pixels(size.y))
-          .set_desired_padding(config.padding)
-          .set_desired_margin(config.margin)
-          .set_parent(parent_id);
-
-      // slider_entity.addComponent<ui::HasLabel>("Label");
-      slider_entity.addComponent<ui::HasDragListener>(on_drag);
-
-      auto &handle = EntityHelper::createEntity();
-      handle.addComponent<UIComponent>(handle.id)
-          .set_desired_width(pixels(size.x * 0.25f))
-          .set_desired_height(pixels(size.y))
-          .set_desired_padding(pixels(owned_value * size.x), Axis::left)
-          .set_parent(slider_entity.id);
-      handle.addComponent<UIComponentDebug>("slider_handle");
-      slider_entity.get<ui::UIComponent>().add_child(handle.id);
+  ElementResult result = {false, entity};
 
 #ifdef AFTER_HOURS_USE_RAYLIB
-      slider_entity.addComponent<ui::HasColor>(raylib::GREEN);
-      handle.addComponent<ui::HasColor>(raylib::BLUE);
+  config.color = raylib::BLUE;
 #endif
 
-      slider_entity.addComponent<ui::HasChildrenComponent>();
-      slider_entity.get<ui::HasChildrenComponent>().add_child(handle);
+  _init_component(entity, parent, //
+                  {pixels(size.x), pixels(size.y)}, config,
+                  UIComponentDebug::Type::custom, "slider_label");
 
-      Entity &parent_ent = EntityHelper::getEntityForIDEnforce(parent_id);
-      UIComponent &parent_cmp = parent_ent.get<UIComponent>();
-      parent_cmp.add_child(slider_entity.id);
-    }
-    return slider_entity;
-  };
+  // TODO make this happen automatically
+  entity.get<ui::HasLabel>().label = config.label;
 
-  if (config.label.empty()) {
-    make_slider(entity, parent.id);
+  auto elem = div(ctx, mk(parent, entity.id + 0),
+                  ComponentConfig{
+#ifdef AFTER_HOURS_USE_RAYLIB
+                      .color = raylib::RED,
+#endif
 
-    ctx.queue_render(RenderInfo{entity.id});
+                  });
 
-    owned_value = sliderState.value;
-    return ElementResult{sliderState.changed_since, entity, sliderState.value};
-  }
+  Entity &slider_bg = elem.ent();
+  if (slider_bg.is_missing<ui::HasSliderState>())
+    slider_bg.addComponent<ui::HasSliderState>(owned_value);
 
-  auto elem_pair = div(ctx, mk(parent, entity.id));
-  Entity &div_ent = elem_pair.ent();
-  div_ent.get<UIComponent>().set_flex_direction(FlexDirection::Row);
-  div_ent.get<UIComponentDebug>().set(UIComponentDebug::Type::custom,
-                                      "slider_group");
+  HasSliderState &sliderState = slider_bg.get<ui::HasSliderState>();
+  // sliderState.value = owned_value;
+  sliderState.changed_since = true;
 
-  // label
   {
-    Entity &label_holder = div(ctx, mk(div_ent, entity.id)).ent();
-    label_holder.get<UIComponent>()
+    slider_bg.get<UIComponent>()
         .set_desired_width(pixels(size.x))
-        .set_desired_height(pixels(size.y));
-    label_holder.get<UIComponentDebug>().set(UIComponentDebug::Type::custom,
-                                             "slider_label");
-    label_holder.addComponent<HasLabel>(config.label);
+        .set_desired_height(pixels(size.y))
+        //
+        ;
+    slider_bg.get<UIComponentDebug>().set(UIComponentDebug::Type::custom,
+                                          "slider_background")
+        //
+        ;
+    slider_bg.addComponentIfMissing<ui::HasDragListener>(
+        [&sliderState](Entity &draggable) {
+          float mnf = 0.f;
+          float mxf = 1.f;
 
-    // TODO right now we require color to render,
-    // but we should require color or label
-#ifdef AFTER_HOURS_USE_RAYLIB
-    label_holder.addComponent<ui::HasColor>(raylib::BLUE);
-#endif
+          UIComponent &cmp = draggable.get<UIComponent>();
+          Rectangle rect = cmp.rect();
+
+          auto mouse_position = input::get_mouse_position();
+          float v = (mouse_position.x - rect.x) / rect.width;
+          if (v < mnf)
+            v = mnf;
+          if (v > mxf)
+            v = mxf;
+
+          if (v != sliderState.value) {
+            sliderState.value = v;
+            sliderState.changed_since = true;
+          }
+
+          auto opt_child =
+              EntityQuery()
+                  .whereID(draggable.get<UIComponent>().children[0])
+                  .gen_first();
+
+          UIComponent &child_cmp = opt_child->get<UIComponent>();
+          child_cmp.set_desired_padding(
+              pixels(sliderState.value * 0.75f * rect.width), Axis::left);
+        });
   }
 
-  make_slider(entity, div_ent.id);
+  auto handle = div(ctx, mk(slider_bg),
+                    ComponentConfig{
+                        .padding =
+                            Padding{
+                                .left = pixels(owned_value * size.x),
+                            },
+#ifdef AFTER_HOURS_USE_RAYLIB
+                        .color = raylib::GREEN,
+#endif
+
+                    });
+  {
+    handle.ent()
+        .template get<UIComponent>()
+        .set_desired_width(pixels(size.x * 0.25f))
+        .set_desired_height(pixels(size.y))
+        //
+        ;
+    handle
+        .ent() //
+        .template get<UIComponentDebug>()
+        .set(UIComponentDebug::Type::custom, "slider_handle")
+        //
+        ;
+  }
+  // TODO tabbing when dragged should go to handle
 
   ctx.queue_render(RenderInfo{entity.id});
-  ctx.queue_render(RenderInfo{div_ent.id});
-  ctx.queue_render(RenderInfo{entity.get<UIComponent>().children[0]});
 
   owned_value = sliderState.value;
-  return ElementResult{sliderState.changed_since, div_ent, sliderState.value};
+  return ElementResult{sliderState.changed_since, entity, sliderState.value};
 }
 
 /*
