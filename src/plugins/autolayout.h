@@ -14,38 +14,6 @@ using Rectangle = RectangleType;
 
 namespace ui {
 
-#ifdef AFTER_HOURS_USE_RAYLIB
-struct FontManager : BaseComponent {
-  std::string active_font;
-  std::map<std::string, raylib::Font> fonts;
-
-  auto &load_font(const std::string &font_name, raylib::Font font) {
-    fonts[font_name] = font;
-    return *this;
-  }
-
-  auto &load_font(const std::string &font_name, const char *font_file) {
-    fonts[font_name] = raylib::LoadFont(font_file);
-    return *this;
-  }
-
-  auto &set_active(const std::string &font_name) {
-    if (!fonts.contains(font_name)) {
-      log_warn("{} missing from font manager. Did you call load_font() on it "
-               "previously?",
-               font_name);
-    }
-    active_font = font_name;
-    return *this;
-  }
-
-  raylib::Font get_active_font() const { return fonts.at(active_font); }
-  raylib::Font get_font(const std::string &name) const {
-    return fonts.at(name);
-  }
-};
-#endif
-
 enum struct Dim {
   None,
   Pixels,
@@ -372,6 +340,45 @@ struct UIComponent : BaseComponent {
     computed_rel[Axis::Y] = 0.f;
   }
 };
+
+#ifdef AFTER_HOURS_USE_RAYLIB
+struct FontManager : BaseComponent {
+  std::string active_font = UIComponent::DEFAULT_FONT;
+  std::map<std::string, raylib::Font> fonts;
+
+  auto &load_font(const std::string &font_name, raylib::Font font) {
+    fonts[font_name] = font;
+    return *this;
+  }
+
+  auto &load_font(const std::string &font_name, const char *font_file) {
+    fonts[font_name] = raylib::LoadFont(font_file);
+    return *this;
+  }
+
+  auto &set_active(const std::string &font_name) {
+    if (!fonts.contains(font_name)) {
+      log_warn("{} missing from font manager. Did you call load_font() on it "
+               "previously?",
+               font_name);
+    }
+    active_font = font_name;
+    return *this;
+  }
+
+  raylib::Font get_active_font() const {
+    if (!fonts.contains(active_font)) {
+      log_warn("{} missing from font manager. Did you call load_font() on it "
+               "previously?",
+               active_font);
+    }
+    return fonts.at(active_font);
+  }
+  raylib::Font get_font(const std::string &name) const {
+    return fonts.at(name);
+  }
+};
+#endif
 
 struct HasLabel : BaseComponent {
   std::string label;
