@@ -307,9 +307,12 @@ concept HasUIContext = requires(T a) {
 };
 
 struct ComponentConfig {
+  ComponentSize size;
   Padding padding;
   Margin margin;
   std::string label;
+
+  std::string debug_name;
 
 #ifdef AFTER_HOURS_USE_RAYLIB
   std::optional<raylib::Color> color;
@@ -318,18 +321,24 @@ struct ComponentConfig {
 
 Vector2Type default_component_size = {150.f, 50.f};
 
-bool _init_component(Entity &entity, Entity &parent, ComponentSize comp_size,
+bool _init_component(Entity &entity, Entity &parent, 
                      ComponentConfig config, UIComponentDebug::Type type,
                      const std::string debug_name = "") {
 
   if (entity.is_missing<UIComponent>()) {
-    entity.addComponent<UIComponentDebug>(type).set(type, debug_name);
     entity.addComponent<ui::UIComponent>(entity.id)
-        .set_desired_width(comp_size.first)
-        .set_desired_height(comp_size.second)
+        .set_desired_width(config.size.first)
+        .set_desired_height(config.size.second)
         .set_desired_padding(config.padding)
         .set_desired_margin(config.margin)
         .set_parent(parent.id);
+
+    entity.addComponent<UIComponentDebug>(type).set(type, debug_name);
+    if(!config.debug_name.empty()){
+      entity.get<UIComponentDebug>().set(
+            UIComponentDebug::Type::custom, 
+            config.debug_name);
+    }
 
     if (!config.label.empty())
       entity.addComponent<ui::HasLabel>(config.label);
@@ -354,8 +363,9 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
-  _init_component(entity, parent, //
-                  ComponentSize{children(), children()}, config,
+  config.size = ComponentSize{children(), children()};
+
+  _init_component(entity, parent, config, 
                   UIComponentDebug::Type::div);
 
   ctx.queue_render(RenderInfo{entity.id});
@@ -372,9 +382,10 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
   config.color = raylib::BLUE;
 #endif
 
+  config.size = ComponentSize{pixels(default_component_size.x), pixels(default_component_size.y)};
+
   _init_component(
       entity, parent, //
-      {pixels(default_component_size.x), pixels(default_component_size.y)},
       config, UIComponentDebug::Type::button);
 
   entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
@@ -405,9 +416,10 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   config.color = raylib::BLUE;
 #endif
 
+  config.size = ComponentSize {pixels(default_component_size.x), pixels(default_component_size.y)};
+
   _init_component(
       entity, parent, //
-      {pixels(default_component_size.x), pixels(default_component_size.y)},
       config, UIComponentDebug::Type::checkbox);
 
   entity.addComponentIfMissing<HasClickListener>([](Entity &checkbox) {
@@ -439,8 +451,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   config.color = raylib::BLUE;
 #endif
 
+  config.size = ComponentSize{pixels(size.x), pixels(size.y)};
   _init_component(entity, parent, //
-                  {pixels(size.x), pixels(size.y)}, config,
+                  config,
                   UIComponentDebug::Type::custom, "slider");
 
 
@@ -449,7 +462,11 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 #ifdef AFTER_HOURS_USE_RAYLIB
                       .color = raylib::RED,
 #endif
-
+                      .size = ComponentSize{
+                        pixels(size.x),
+                        pixels(size.y),
+                      },
+                      .debug_name = "slider_background",
                   });
 
   Entity &slider_bg = elem.ent();
@@ -461,15 +478,6 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   sliderState.changed_since = true;
 
   {
-    slider_bg.get<UIComponent>()
-        .set_desired_width(pixels(size.x))
-        .set_desired_height(pixels(size.y))
-        //
-        ;
-    slider_bg.get<UIComponentDebug>().set(UIComponentDebug::Type::custom,
-                                          "slider_background")
-        //
-        ;
     slider_bg.addComponentIfMissing<ui::HasDragListener>(
         [&sliderState](Entity &draggable) {
           float mnf = 0.f;
