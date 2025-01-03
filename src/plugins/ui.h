@@ -261,6 +261,7 @@ struct ElementResult {
   operator bool() const { return result; }
   EntityID id() const { return element.id; }
   Entity &ent() const { return element; }
+  UIComponent &cmp() const { return element.get<UIComponent>(); }
 
   template <typename T> T as() const { return std::get<T>(data); }
 
@@ -343,6 +344,8 @@ bool _init_component(Entity &entity, Entity &parent, ComponentSize comp_size,
     parent_cmp.add_child(entity.id);
     return true;
   }
+  if (!config.label.empty())
+    entity.get<ui::HasLabel>().label = config.label;
   return false;
 }
 
@@ -438,10 +441,8 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   _init_component(entity, parent, //
                   {pixels(size.x), pixels(size.y)}, config,
-                  UIComponentDebug::Type::custom, "slider_label");
+                  UIComponentDebug::Type::custom, "slider");
 
-  // TODO make this happen automatically
-  entity.get<ui::HasLabel>().label = config.label;
 
   auto elem = div(ctx, mk(parent, entity.id + 0),
                   ComponentConfig{
