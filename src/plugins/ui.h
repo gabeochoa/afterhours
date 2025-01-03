@@ -377,6 +377,59 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
   return ElementResult{entity.get<HasClickListener>().down, entity};
 }
 
+/*
+    if (imm::checkbox(context, mk(button_group.ent()), test)) {
+      log_info("checkbox {}", test);
+    }
+*/
+ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
+                       bool &value,
+                       ComponentConfig config = ComponentConfig()) {
+
+  Entity &entity = ep_pair.first;
+  Entity &parent = ep_pair.second;
+
+  if (entity.is_missing<ui::HasCheckboxState>())
+    entity.addComponent<ui::HasCheckboxState>(value);
+  HasCheckboxState &checkboxState = entity.get<ui::HasCheckboxState>();
+
+  const auto make_button = [&]() -> UIComponent & {
+    if (entity.is_missing<UIComponent>()) {
+      entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::checkbox);
+      entity.addComponent<UIComponent>(entity.id)
+          .set_desired_width(pixels(default_component_size.x))
+          .set_desired_height(pixels(default_component_size.y))
+          .set_desired_padding(config.padding)
+          .set_desired_margin(config.margin)
+          .set_parent(parent.id);
+
+      entity.addComponent<ui::HasCheckboxState>(value);
+
+      entity.addComponent<HasClickListener>([](Entity &checkbox) {
+        ui::HasCheckboxState &hcs = checkbox.get<ui::HasCheckboxState>();
+        hcs.on = !hcs.on;
+        checkbox.get<ui::HasLabel>().label = hcs.on ? "X" : " ";
+      });
+
+      entity.addComponent<ui::HasLabel>(value ? "X" : " ");
+#ifdef AFTER_HOURS_USE_RAYLIB
+      entity.addComponent<HasColor>(raylib::BLUE);
+#endif
+
+      UIComponent &parent_cmp = parent.get<UIComponent>();
+      parent_cmp.add_child(entity.id);
+    }
+    return entity.get<UIComponent>();
+  };
+
+  UIComponent &cmp = make_button();
+
+  ctx.queue_render(RenderInfo{entity.id});
+
+  value = checkboxState.on;
+  return ElementResult{checkboxState.on, entity};
+}
+
 ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                      float &owned_value,
                      ComponentConfig config = ComponentConfig()) {
@@ -1233,60 +1286,6 @@ static Size padding_(float v, float strict = 0.5f) {
       .value = v,
       .strictness = strict,
   };
-}
-
-/*
-static Entity &make_div(Entity &parent, ComponentSize cz,
-                        Padding padding = Padding(), Margin margin = Margin()) {
-  auto &div = EntityHelper::createEntity();
-  {
-    div.addComponent<UIComponentDebug>(UIComponentDebug::Type::div);
-    div.addComponent<ui::UIComponent>(div.id)
-        .set_desired_width(cz.first)
-        .set_desired_height(cz.second)
-        .set_desired_padding(padding.left, ui::Axis::left)
-        .set_desired_padding(padding.right, ui::Axis::right)
-        .set_desired_padding(padding.top, ui::Axis::top)
-        .set_desired_padding(padding.bottom, ui::Axis::bottom)
-        .set_desired_margin(margin.left, ui::Axis::left)
-        .set_desired_margin(margin.right, ui::Axis::right)
-        .set_desired_margin(margin.top, ui::Axis::top)
-        .set_desired_margin(margin.bottom, ui::Axis::bottom)
-        .set_parent(parent.id);
-    parent.get<ui::UIComponent>().add_child(div.id);
-  }
-  return div;
-}
-*/
-
-// TODO convert into immediate mode
-Entity &make_checkbox(Entity &parent, Vector2Type default_component_size) {
-  auto &entity = EntityHelper::createEntity();
-  entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::checkbox);
-  entity.addComponent<UIComponent>(entity.id)
-      .set_desired_width(ui::Size{
-          .dim = ui::Dim::Pixels,
-          .value = default_component_size.x,
-      })
-      .set_desired_height(ui::Size{
-          .dim = ui::Dim::Pixels,
-          .value = default_component_size.y,
-      })
-      .set_parent(parent.id);
-  parent.get<ui::UIComponent>().add_child(entity.id);
-
-#ifdef AFTER_HOURS_USE_RAYLIB
-  entity.addComponent<ui::HasColor>(raylib::BLUE);
-#endif
-  entity.addComponent<ui::HasCheckboxState>(false);
-  entity.addComponent<ui::HasLabel>(" ");
-  entity.addComponent<ui::HasClickListener>([](Entity &checkbox) {
-    log_info("I clicked the checkbox {}", checkbox.id);
-    ui::HasCheckboxState &hcs = checkbox.get<ui::HasCheckboxState>();
-    hcs.on = !hcs.on;
-    checkbox.get<ui::HasLabel>().label = hcs.on ? "X" : " ";
-  });
-  return entity;
 }
 
 //// /////
