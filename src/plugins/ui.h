@@ -1341,6 +1341,8 @@ template <typename InputAction>
 static void enforce_singletons(SystemManager &sm) {
 
   validate_enum_has_value(InputAction, "None", "any unmapped input");
+  validate_enum_has_value(InputAction, "WidgetMod",
+                          "while held, press WidgetNext to do WidgetBack");
   validate_enum_has_value(InputAction, "WidgetNext",
                           "'tab' forward between ui elements");
   validate_enum_has_value(InputAction, "WidgetBack",
