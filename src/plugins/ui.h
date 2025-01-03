@@ -363,30 +363,16 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
-  const auto make_button = [&]() -> UIComponent & {
-    if (entity.is_missing<UIComponent>()) {
-      entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::button);
-      entity.addComponent<UIComponent>(entity.id)
-          .set_desired_width(pixels(default_component_size.x))
-          .set_desired_height(pixels(default_component_size.y))
-          .set_desired_padding(config.padding)
-          .set_desired_margin(config.margin)
-          .set_parent(parent.id);
-      entity.addComponent<HasClickListener>([](Entity &) {});
-
-      if (!config.label.empty())
-        entity.addComponent<ui::HasLabel>(config.label);
 #ifdef AFTER_HOURS_USE_RAYLIB
-      entity.addComponent<HasColor>(raylib::BLUE);
+  config.color = raylib::BLUE;
 #endif
 
-      UIComponent &parent_cmp = parent.get<UIComponent>();
-      parent_cmp.add_child(entity.id);
-    }
-    return entity.get<UIComponent>();
-  };
+  _init_component(
+      entity, parent, //
+      {pixels(default_component_size.x), pixels(default_component_size.y)},
+      config, UIComponentDebug::Type::button);
 
-  UIComponent &cmp = make_button();
+  entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
 
   ctx.queue_render(RenderInfo{entity.id});
 
