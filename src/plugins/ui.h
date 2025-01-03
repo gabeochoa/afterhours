@@ -325,20 +325,15 @@ bool _init_component(Entity &entity, Entity &parent,
                      ComponentConfig config, UIComponentDebug::Type type,
                      const std::string debug_name = "") {
 
+    bool created = false;
+
+    // only once on startup 
   if (entity.is_missing<UIComponent>()) {
     entity.addComponent<ui::UIComponent>(entity.id)
-        .set_desired_width(config.size.first)
-        .set_desired_height(config.size.second)
-        .set_desired_padding(config.padding)
-        .set_desired_margin(config.margin)
         .set_parent(parent.id);
 
-    entity.addComponent<UIComponentDebug>(type).set(type, debug_name);
-    if(!config.debug_name.empty()){
-      entity.get<UIComponentDebug>().set(
-            UIComponentDebug::Type::custom, 
-            config.debug_name);
-    }
+    entity.addComponent<UIComponentDebug>(type)//
+        .set(type, debug_name);
 
     if (!config.label.empty())
       entity.addComponent<ui::HasLabel>(config.label);
@@ -351,11 +346,33 @@ bool _init_component(Entity &entity, Entity &parent,
 
     UIComponent &parent_cmp = parent.get<UIComponent>();
     parent_cmp.add_child(entity.id);
-    return true;
+    created = true;
   }
+
+  // things that happen every frame 
+
+    entity.get<UIComponent>()
+        .set_desired_width(config.size.first)
+        .set_desired_height(config.size.second)
+        .set_desired_padding(config.padding)
+        .set_desired_margin(config.margin);
+
+    if(!config.debug_name.empty()){
+      entity.get<UIComponentDebug>().set(
+            UIComponentDebug::Type::custom, 
+            config.debug_name);
+    }
+
+#ifdef AFTER_HOURS_USE_RAYLIB
+    if (config.color.has_value()) {
+      entity.get<HasColor>().color = config.color.value();
+    }
+#endif
+
   if (!config.label.empty())
     entity.get<ui::HasLabel>().label = config.label;
-  return false;
+
+  return created;
 }
 
 ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
@@ -451,7 +468,10 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   config.color = raylib::BLUE;
 #endif
 
-  config.size = ComponentSize{pixels(size.x), pixels(size.y)};
+  config.size = ComponentSize{
+      pixels(size.x * 2), pixels(size.y)
+  };
+
   _init_component(entity, parent, //
                   config,
                   UIComponentDebug::Type::custom, "slider");
@@ -468,6 +488,11 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                       },
                       .debug_name = "slider_background",
                   });
+
+  // TODO why do we need to do this? 
+  // why isnt this covered by the pixels(size.x) above?
+    elem.ent().template get<UIComponent>()
+        .set_desired_width(pixels(size.x));
 
   Entity &slider_bg = elem.ent();
   if (slider_bg.is_missing<ui::HasSliderState>())
@@ -511,29 +536,25 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   auto handle = div(ctx, mk(slider_bg),
                     ComponentConfig{
+                        .size = {
+                            pixels(size.x * 0.25f),
+                            pixels(size.y)
+                        },
                         .padding =
                             Padding{
-                                .left = pixels(owned_value * size.x),
+                                .left = pixels(owned_value * 0.75f * size.x),
                             },
 #ifdef AFTER_HOURS_USE_RAYLIB
                         .color = raylib::GREEN,
 #endif
+                        .debug_name= "slider_handle",
+                    }
+                    );
 
-                    });
-  {
-    handle.ent()
-        .template get<UIComponent>()
-        .set_desired_width(pixels(size.x * 0.25f))
-        .set_desired_height(pixels(size.y))
-        //
-        ;
-    handle
-        .ent() //
-        .template get<UIComponentDebug>()
-        .set(UIComponentDebug::Type::custom, "slider_handle")
-        //
-        ;
-  }
+  handle.cmp()
+         .set_desired_width(pixels(size.x * 0.25f))
+        .set_desired_height(pixels(size.y));
+
   // TODO tabbing when dragged should go to handle
 
   ctx.queue_render(RenderInfo{entity.id});
