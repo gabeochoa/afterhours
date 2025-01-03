@@ -581,11 +581,9 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
     HasDropdownState &ds = dd.get<ui::HasDropdownState>();
     ds.on = !ds.on;
     ds.changed_since = true;
-    log_info("click {}", ds.on);
 
     auto children = dd.get<UIComponent>().children;
     if (ds.on) {
-      log_info("unhiding");
       for (size_t i = 0; i < children.size(); i++) {
         EntityID id = children[i];
         Entity &opt = EntityHelper::getEntityForIDEnforce(id);
@@ -597,7 +595,6 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
         }
       }
     } else {
-      log_info("hiding");
       for (size_t i = 0; i < children.size(); i++) {
         EntityID id = children[i];
         Entity &opt = EntityHelper::getEntityForIDEnforce(id);
@@ -1407,7 +1404,7 @@ constexpr static InputValidationMode validation_mode =
 #elif defined(AFTER_HOURS_INPUT_VALIDATION_NONE)
     InputValidationMode::None;
 #else
-    InputValidationMode::Assert;
+    InputValidationMode::LogOnly;
 #endif
 
 // NOTE: i tried to write this as a constexpr function but
