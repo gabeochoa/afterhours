@@ -185,6 +185,20 @@ std::ostream &operator<<(std::ostream &os, const Axis &axis) {
   return os;
 }
 
+struct Padding {
+  Size top;
+  Size left;
+  Size bottom;
+  Size right;
+};
+
+struct Margin {
+  Size top;
+  Size bottom;
+  Size left;
+  Size right;
+};
+
 struct AutoLayoutRoot : BaseComponent {};
 
 struct UIComponent : BaseComponent {
@@ -329,6 +343,14 @@ struct UIComponent : BaseComponent {
       return *this;
     }
     desired_padding[axis] = s;
+    return *this;
+  }
+
+  auto &set_desired_padding(Padding padding) {
+    desired_padding[Axis::top] = padding.top;
+    desired_padding[Axis::left] = padding.left;
+    desired_padding[Axis::bottom] = padding.bottom;
+    desired_padding[Axis::right] = padding.right;
     return *this;
   }
 

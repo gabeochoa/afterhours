@@ -1230,20 +1230,6 @@ static Size padding_(float v, float strict = 0.5f) {
   };
 }
 
-struct Padding {
-  Size top;
-  Size left;
-  Size bottom;
-  Size right;
-};
-
-struct Margin {
-  Size top;
-  Size bottom;
-  Size left;
-  Size right;
-};
-
 /*
 static Entity &make_div(Entity &parent, ComponentSize cz,
                         Padding padding = Padding(), Margin margin = Margin()) {
