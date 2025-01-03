@@ -305,7 +305,14 @@ concept HasUIContext = requires(T a) {
   } -> std::convertible_to<bool>;
 };
 
-ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair) {
+struct ComponentConfig {
+  Padding padding;
+  Margin margin;
+  std::string label;
+};
+
+ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
+                  ComponentConfig config = ComponentConfig()) {
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
@@ -315,15 +322,12 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair) {
       entity.addComponent<ui::UIComponent>(entity.id)
           .set_desired_width(children())
           .set_desired_height(children())
-          // .set_desired_padding(padding.left, ui::Axis::left)
-          // .set_desired_padding(padding.right, ui::Axis::right)
-          // .set_desired_padding(padding.top, ui::Axis::top)
-          // .set_desired_padding(padding.bottom, ui::Axis::bottom)
-          // .set_desired_margin(margin.left, ui::Axis::left)
-          // .set_desired_margin(margin.right, ui::Axis::right)
-          // .set_desired_margin(margin.top, ui::Axis::top)
-          // .set_desired_margin(margin.bottom, ui::Axis::bottom)
+          .set_desired_padding(config.padding)
+          .set_desired_margin(config.margin)
           .set_parent(parent.id);
+
+      if (!config.label.empty())
+        entity.addComponent<ui::HasLabel>(config.label);
 
       Entity &parent_ent = EntityHelper::getEntityForIDEnforce(parent.id);
       UIComponent &parent_cmp = parent_ent.get<UIComponent>();
@@ -338,7 +342,8 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair) {
 }
 
 Vector2Type default_component_size = {150.f, 50.f};
-ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair) {
+ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
+                     ComponentConfig config = ComponentConfig()) {
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
@@ -348,10 +353,13 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair) {
       entity.addComponent<UIComponent>(entity.id)
           .set_desired_width(pixels(default_component_size.x))
           .set_desired_height(pixels(default_component_size.y))
+          .set_desired_padding(config.padding)
+          .set_desired_margin(config.margin)
           .set_parent(parent.id);
       entity.addComponent<HasClickListener>([](Entity &) {});
 
-      entity.addComponent<ui::HasLabel>("Label");
+      if (!config.label.empty())
+        entity.addComponent<ui::HasLabel>(config.label);
 #ifdef AFTER_HOURS_USE_RAYLIB
       entity.addComponent<HasColor>(raylib::BLUE);
 #endif
@@ -370,14 +378,15 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair) {
 }
 
 ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
-                     float &owned_value, std::string label = "") {
+                     float &owned_value,
+                     ComponentConfig config = ComponentConfig()) {
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
   ElementResult result = {false, entity};
 
   Vector2Type size = default_component_size;
-  if (!label.empty()) {
+  if (!config.label.empty()) {
     size.x /= 2.f;
     size.y /= 2.f;
   }
@@ -417,16 +426,18 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                                   Axis::left);
   };
 
-  const auto make_slider = [size, &on_drag,
+  const auto make_slider = [config, size, &on_drag,
                             &owned_value](Entity &slider_entity,
                                           EntityID parent_id) -> Entity & {
     if (slider_entity.is_missing<UIComponent>()) {
       slider_entity
           .addComponent<UIComponentDebug>(UIComponentDebug::Type::custom)
-          .set(UIComponentDebug::Type::custom, "slider_background");
+          .set(UIComponentDebug::Type::custom, "slier_background");
       slider_entity.addComponent<UIComponent>(slider_entity.id)
           .set_desired_width(pixels(size.x))
           .set_desired_height(pixels(size.y))
+          .set_desired_padding(config.padding)
+          .set_desired_margin(config.margin)
           .set_parent(parent_id);
 
       // slider_entity.addComponent<ui::HasLabel>("Label");
@@ -434,14 +445,8 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
       auto &handle = EntityHelper::createEntity();
       handle.addComponent<UIComponent>(handle.id)
-          .set_desired_width(ui::Size{
-              .dim = ui::Dim::Pixels,
-              .value = size.x * 0.25f,
-          })
-          .set_desired_height(ui::Size{
-              .dim = ui::Dim::Pixels,
-              .value = size.y,
-          })
+          .set_desired_width(pixels(size.x * 0.25f))
+          .set_desired_height(pixels(size.y))
           .set_desired_padding(pixels(owned_value * size.x), Axis::left)
           .set_parent(slider_entity.id);
       handle.addComponent<UIComponentDebug>("slider_handle");
@@ -462,7 +467,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
     return slider_entity;
   };
 
-  if (label.empty()) {
+  if (config.label.empty()) {
     make_slider(entity, parent.id);
 
     ctx.queue_render(RenderInfo{entity.id});
@@ -485,7 +490,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
         .set_desired_height(pixels(size.y));
     label_holder.get<UIComponentDebug>().set(UIComponentDebug::Type::custom,
                                              "slider_label");
-    label_holder.addComponent<HasLabel>(label);
+    label_holder.addComponent<HasLabel>(config.label);
 
     // TODO right now we require color to render,
     // but we should require color or label

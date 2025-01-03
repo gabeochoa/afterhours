@@ -326,6 +326,14 @@ struct UIComponent : BaseComponent {
     return *this;
   }
 
+  auto &set_desired_margin(Margin margin) {
+    desired_margin[Axis::top] = margin.top;
+    desired_margin[Axis::left] = margin.left;
+    desired_margin[Axis::bottom] = margin.bottom;
+    desired_margin[Axis::right] = margin.right;
+    return *this;
+  }
+
   auto &set_desired_padding(Size s, Axis axis) {
     if (axis == Axis::X) {
       // TODO do you think this should be 5 and 5 or 10 and 10?
