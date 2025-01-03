@@ -1145,10 +1145,9 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   }
 };
 
-template <typename InputAction>
-struct RenderImm : System<UIContext<InputAction>, FontManager> {
+template <typename InputAction> struct RenderImm : System<> {
 
-  virtual void once(float) override { this->include_derived_children = true; }
+  RenderImm() : System<>() { this->include_derived_children = true; }
 
   void render_me(const UIContext<InputAction> &context,
                  const FontManager &font_manager, const Entity &entity) const {
@@ -1190,10 +1189,23 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     // }
   }
 
-  virtual void for_each_with(const Entity &,
-                             const UIContext<InputAction> &context,
-                             const FontManager &font_manager,
+  virtual void for_each_with(const Entity &entity,
+                             // TODO why if we add these to the filter,
+                             // this doesnt return any entities?
+                             //
+                             // const UIContext<InputAction> &context,
+                             // const FontManager &font_manager,
                              float) const override {
+
+    if (entity.is_missing<UIContext<InputAction>>())
+      return;
+    if (entity.is_missing<FontManager>())
+      return;
+
+    const UIContext<InputAction> &context =
+        entity.get<UIContext<InputAction>>();
+    const FontManager &font_manager = entity.get<FontManager>();
+
     for (auto &cmd : context.render_cmds) {
       auto id = cmd.id;
       auto &ent = EntityHelper::getEntityForIDEnforce(id);
@@ -1490,8 +1502,8 @@ template <typename InputAction>
 static void
 register_render_systems(SystemManager &sm,
                         InputAction toggle_debug = InputAction::None) {
-  sm.register_render_system(
-      std::make_unique<ui::RenderAutoLayoutRoots<InputAction>>());
+  // sm.register_render_system(
+  // std::make_unique<ui::RenderAutoLayoutRoots<InputAction>>());
   sm.register_render_system(
       std::make_unique<ui::RenderDebugAutoLayoutRoots<InputAction>>(
           toggle_debug));
