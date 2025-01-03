@@ -253,6 +253,10 @@ struct ElementResult {
   ElementResult(bool val, Entity &ref) : result(val), element(ref) {}
   ElementResult(bool val, Entity &ref, float data_)
       : result(val), element(ref), data(data_) {}
+  ElementResult(bool val, Entity &ref, int data_)
+      : result(val), element(ref), data(data_) {}
+  ElementResult(bool val, Entity &ref, size_t data_)
+      : result(val), element(ref), data((int)data_) {}
 
   ElementResult(Entity &ent) : result(true), element(ent) {}
 
@@ -265,7 +269,7 @@ struct ElementResult {
 private:
   bool result = false;
   Entity &element;
-  std::variant<float> data = 0.f;
+  std::variant<float, int> data = 0.f;
 };
 
 using UI_UUID = size_t;
@@ -274,7 +278,7 @@ std::map<UI_UUID, EntityID> existing_ui_elements;
 using EntityParent = std::pair<RefEntity, RefEntity>;
 
 EntityParent
-mk(Entity &parent, EntityID otherID = 0,
+mk(Entity &parent, EntityID otherID = -1,
    const std::source_location location = std::source_location::current()) {
 
   std::stringstream pre_hash;
@@ -292,7 +296,7 @@ mk(Entity &parent, EntityID otherID = 0,
 
   Entity &entity = EntityHelper::createEntity();
   existing_ui_elements[hash] = entity.id;
-  // std::cout << "Creating element " << hash << " for " << entity.id << "\n";
+  std::cout << "Creating element " << hash << " for " << entity.id << "\n";
   return {entity, parent};
 }
 
@@ -545,6 +549,119 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   owned_value = sliderState.value;
   return ElementResult{sliderState.changed_since, div_ent, sliderState.value};
+}
+
+/*
+    if (imm::dropdown(context, mk(button_group.ent()), data, option_index)) {
+      log_info("dropdown {}", option_index);
+    }
+    */
+
+ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
+                       const std::vector<std::string> &options,
+                       int &option_index,
+                       ComponentConfig config = ComponentConfig()) {
+
+  Entity &entity = ep_pair.first;
+  Entity &parent = ep_pair.second;
+
+  if (entity.is_missing<ui::HasDropdownState>())
+    entity.addComponent<ui::HasDropdownState>(
+        options, nullptr, [&](size_t opt) {
+          HasDropdownState &ds = entity.get<ui::HasDropdownState>();
+          if (!ds.on) {
+            ds.last_option_clicked = opt;
+          }
+        });
+  HasDropdownState &dropdownState = entity.get<ui::HasDropdownState>();
+  dropdownState.last_option_clicked = option_index;
+  dropdownState.changed_since = false;
+
+  const auto toggle_visibility = [&ctx](Entity &dd) {
+    HasDropdownState &ds = dd.get<ui::HasDropdownState>();
+    ds.on = !ds.on;
+    ds.changed_since = true;
+    log_info("click {}", ds.on);
+
+    auto children = dd.get<UIComponent>().children;
+    if (ds.on) {
+      log_info("unhiding");
+      for (size_t i = 0; i < children.size(); i++) {
+        EntityID id = children[i];
+        Entity &opt = EntityHelper::getEntityForIDEnforce(id);
+        if (i != 0 && opt.has<UIComponent>())
+          opt.get<UIComponent>().should_hide = false;
+
+        if (i == ds.last_option_clicked) {
+          ctx.set_focus(id);
+        }
+      }
+    } else {
+      log_info("hiding");
+      for (size_t i = 0; i < children.size(); i++) {
+        EntityID id = children[i];
+        Entity &opt = EntityHelper::getEntityForIDEnforce(id);
+        if (i != 0 && opt.has<UIComponent>())
+          opt.get<UIComponent>().should_hide = true;
+      }
+    }
+  };
+
+  const auto make_dropdown = [&]() -> UIComponent & {
+    if (entity.is_missing<UIComponent>()) {
+      entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::dropdown);
+      entity.addComponent<UIComponent>(entity.id)
+          .set_desired_width(pixels(default_component_size.x))
+          .set_desired_height(children(default_component_size.y))
+          .set_desired_padding(config.padding)
+          .set_desired_margin(config.margin)
+          .set_parent(parent.id);
+
+      UIComponent &parent_cmp = parent.get<UIComponent>();
+      parent_cmp.add_child(entity.id);
+    }
+
+    return entity.get<UIComponent>();
+  };
+
+  UIComponent &cmp = make_dropdown();
+
+  const auto on_option_click = [toggle_visibility, options, &ctx](Entity &dd,
+                                                                  size_t i) {
+    toggle_visibility(dd);
+
+    HasDropdownState &ds = dd.get<ui::HasDropdownState>();
+    ds.last_option_clicked = i;
+
+    EntityID id = dd.get<UIComponent>().children[0];
+    Entity &first_child = EntityHelper::getEntityForIDEnforce(id);
+
+    first_child.get<ui::HasLabel>().label = (options[ds.last_option_clicked]);
+    ctx.set_focus(first_child.id);
+  };
+
+  if (button(ctx, mk(entity, 0),
+             ComponentConfig{
+                 .label = options[dropdownState.on
+                                      ? 0
+                                      : dropdownState.last_option_clicked]})) {
+    on_option_click(entity, 0);
+  }
+
+  if (dropdownState.on) {
+    for (size_t i = 1; i < options.size(); i++) {
+      if (button(ctx, mk(entity, i), ComponentConfig{.label = options[i]})) {
+        on_option_click(entity, i);
+      }
+    }
+  } else {
+  }
+
+  ctx.queue_render(RenderInfo{entity.id});
+
+  option_index = dropdownState.last_option_clicked;
+  return ElementResult{dropdownState.changed_since, entity,
+                       dropdownState.last_option_clicked};
 }
 
 } // namespace imm
@@ -1070,9 +1187,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       render_me(context, font_manager, entity);
     }
 
-    for (EntityID child : cmp.children) {
-      render(context, font_manager, AutoLayout::to_ent_static(child));
-    }
+    // NOTE: i dont think we need this TODO
+    // for (EntityID child : cmp.children) {
+    // render(context, font_manager, AutoLayout::to_ent_static(child));
+    // }
   }
 
   virtual void for_each_with(const Entity &,

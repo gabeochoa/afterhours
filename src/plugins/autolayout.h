@@ -106,10 +106,8 @@ static Size screen_pct(float value, float strictness = 0.9f) {
       .dim = ui::Dim::ScreenPercent, .value = value, .strictness = strictness};
 }
 
-static Size children() {
-  return ui::Size{
-      .dim = ui::Dim::Children,
-  };
+static Size children(float value = -1) {
+  return ui::Size{.dim = ui::Dim::Children, .value = value};
 }
 
 using ComponentSize = std::pair<Size, Size>;
@@ -702,14 +700,17 @@ struct AutoLayout {
 
   float compute_size_for_child_expectation(UIComponent &widget, Axis axis) {
     float no_change = widget.computed[axis];
+
+    Size exp = widget.desired[axis];
+    if (exp.dim != Dim::Children)
+      return no_change;
+
+    float existing_desire = exp.value;
     if (widget.children.empty()) {
       // if the component has no children, but the expected size was set,
       // use that instead
       // TODO does this need to be a setting? is this generally a decent choice
-      if (widget.desired[axis].value > 0) {
-        return widget.desired[axis].value;
-      }
-      return no_change;
+      return std::max(no_change, existing_desire);
     }
 
     float expectation = _sum_children_axis_for_child_exp(widget, axis);
@@ -719,22 +720,23 @@ struct AutoLayout {
     // child
     if ((widget.flex_direction & FlexDirection::Column) && axis == Axis::X) {
       expectation = _max_child_size(widget, axis);
+      expectation = std::max(expectation, existing_desire);
     }
 
     if ((widget.flex_direction & FlexDirection::Row) && axis == Axis::Y) {
       expectation = _max_child_size(widget, axis);
+      expectation = std::max(expectation, existing_desire);
     }
-
-    Size exp = widget.desired[axis];
-    if (exp.dim != Dim::Children)
-      return no_change;
 
     return expectation;
   }
 
   void calculate_those_with_children(UIComponent &widget) {
-    if (widget.children.size() == 0)
-      return;
+    // Note, we dont early return when empty, because
+    // there is some min_height/width logic in the compute
+    // size and so we need run those
+    // (specifically this is for dropdown but anything with changing children
+    // probably needs this)
 
     for (EntityID child : widget.children) {
       calculate_those_with_children(this->to_cmp(child));
