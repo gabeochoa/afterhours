@@ -307,39 +307,57 @@ struct ComponentConfig {
   Padding padding;
   Margin margin;
   std::string label;
+
+#ifdef AFTER_HOURS_USE_RAYLIB
+  std::optional<raylib::Color> color;
+#endif
 };
+
+Vector2Type default_component_size = {150.f, 50.f};
+
+bool _init_component(Entity &entity, Entity &parent, ComponentSize comp_size,
+                     ComponentConfig config, UIComponentDebug::Type type,
+                     const std::string debug_name = "") {
+
+  if (entity.is_missing<UIComponent>()) {
+    entity.addComponent<UIComponentDebug>(type).set(type, debug_name);
+    entity.addComponent<ui::UIComponent>(entity.id)
+        .set_desired_width(comp_size.first)
+        .set_desired_height(comp_size.second)
+        .set_desired_padding(config.padding)
+        .set_desired_margin(config.margin)
+        .set_parent(parent.id);
+
+    if (!config.label.empty())
+      entity.addComponent<ui::HasLabel>(config.label);
+
+#ifdef AFTER_HOURS_USE_RAYLIB
+    if (config.color.has_value()) {
+      entity.addComponent<HasColor>(config.color.value());
+    }
+#endif
+
+    UIComponent &parent_cmp = parent.get<UIComponent>();
+    parent_cmp.add_child(entity.id);
+    return true;
+  }
+  return false;
+}
 
 ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
                   ComponentConfig config = ComponentConfig()) {
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
-  const auto make_div = [&]() -> UIComponent & {
-    if (entity.is_missing<UIComponent>()) {
-      entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::div);
-      entity.addComponent<ui::UIComponent>(entity.id)
-          .set_desired_width(children())
-          .set_desired_height(children())
-          .set_desired_padding(config.padding)
-          .set_desired_margin(config.margin)
-          .set_parent(parent.id);
+  _init_component(entity, parent, //
+                  ComponentSize{children(), children()}, config,
+                  UIComponentDebug::Type::div);
 
-      if (!config.label.empty())
-        entity.addComponent<ui::HasLabel>(config.label);
-
-      Entity &parent_ent = EntityHelper::getEntityForIDEnforce(parent.id);
-      UIComponent &parent_cmp = parent_ent.get<UIComponent>();
-      parent_cmp.add_child(entity.id);
-    }
-    return entity.get<UIComponent>();
-  };
-
-  make_div();
+  ctx.queue_render(RenderInfo{entity.id});
 
   return {true, entity};
 }
 
-Vector2Type default_component_size = {150.f, 50.f};
 ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
                      ComponentConfig config = ComponentConfig()) {
   Entity &entity = ep_pair.first;
