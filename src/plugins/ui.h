@@ -720,7 +720,8 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
   }
 };
 
-struct TrackIfComponentWasRendered : System<AutoLayoutRoot, UIComponent> {
+template<typename InputAction>
+struct TrackIfComponentWillBeRendered : System<> {
 
   void set_visibility(UIComponent &cmp) {
     // Hiding hides children
@@ -736,9 +737,20 @@ struct TrackIfComponentWasRendered : System<AutoLayoutRoot, UIComponent> {
     cmp.was_rendered_to_screen = true;
   }
 
-  virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
+  virtual void for_each_with(Entity &entity,
                              float) override {
-    set_visibility(cmp);
+    if (entity.is_missing<UIContext<InputAction>>())
+      return;
+
+    const UIContext<InputAction> &context =
+        entity.get<UIContext<InputAction>>();
+
+    for (auto &cmd : context.render_cmds) {
+      auto id = cmd.id;
+      Entity &ent = EntityHelper::getEntityForIDEnforce(id);
+      set_visibility(ent.get<UIComponent>());
+    }
+
   }
 };
 
@@ -1405,7 +1417,7 @@ static void register_update_systems(SystemManager &sm) {
     sm.register_update_system(std::make_unique<ui::ClearVisibity>());
     sm.register_update_system(std::make_unique<ui::RunAutoLayout>());
     sm.register_update_system(
-        std::make_unique<ui::TrackIfComponentWasRendered>());
+        std::make_unique<ui::TrackIfComponentWillBeRendered<InputAction>>());
     //
     sm.register_update_system(
         std::make_unique<ui::HandleTabbing<InputAction>>());
