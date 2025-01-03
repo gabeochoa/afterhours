@@ -245,8 +245,6 @@ struct SliderConfig {
   bool label_is_format_string = false;
 };
 
-#ifdef AFTER_HOURS_IMM_UI
-
 namespace imm {
 struct ElementResult {
   // no explicit on purpose
@@ -476,7 +474,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
     if (slider_entity.is_missing<UIComponent>()) {
       slider_entity
           .addComponent<UIComponentDebug>(UIComponentDebug::Type::custom)
-          .set(UIComponentDebug::Type::custom, "slier_background");
+          .set(UIComponentDebug::Type::custom, "slider_background");
       slider_entity.addComponent<UIComponent>(slider_entity.id)
           .set_desired_width(pixels(size.x))
           .set_desired_height(pixels(size.y))
@@ -545,7 +543,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   make_slider(entity, div_ent.id);
 
+  ctx.queue_render(RenderInfo{entity.id});
   ctx.queue_render(RenderInfo{div_ent.id});
+  ctx.queue_render(RenderInfo{entity.get<UIComponent>().children[0]});
 
   owned_value = sliderState.value;
   return ElementResult{sliderState.changed_since, div_ent, sliderState.value};
@@ -662,8 +662,6 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
 }
 
 } // namespace imm
-
-#endif
 
 //// /////
 ////  Systems
@@ -991,66 +989,6 @@ static void draw_text(const ui::FontManager &fm, const std::string &text,
   DrawTextEx(fm.get_active_font(), text.c_str(), position, font_size, 1.f,
              color);
 }
-
-template <typename InputAction>
-struct RenderAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
-
-  virtual ~RenderAutoLayoutRoots() {}
-
-  ui::FontManager *font_manager;
-  ui::UIContext<InputAction> *ui_context;
-
-  virtual void once(float) override {
-    this->ui_context =
-        EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
-    this->font_manager = EntityHelper::get_singleton_cmp<ui::FontManager>();
-
-    this->include_derived_children = true;
-  }
-
-  void render_me(const Entity &entity) const {
-    const UIComponent &cmp = entity.get<UIComponent>();
-
-    raylib::Color col = entity.get<HasColor>().color;
-
-    if (ui_context->is_hot(entity.id)) {
-      col = raylib::RED;
-    }
-
-    if (ui_context->has_focus(entity.id)) {
-      raylib::DrawRectangleRec(cmp.focus_rect(), raylib::PINK);
-    }
-    raylib::DrawRectangleRec(cmp.rect(), col);
-    if (entity.has<HasLabel>()) {
-      draw_text(*font_manager, entity.get<HasLabel>().label.c_str(),
-                vec2{cmp.x(), cmp.y()}, (int)(cmp.height() / 2.f),
-                raylib::RAYWHITE);
-    }
-  }
-
-  void render(const Entity &entity) const {
-    const UIComponent &cmp = entity.get<UIComponent>();
-    if (cmp.should_hide)
-      return;
-
-    if (cmp.font_name != UIComponent::UNSET_FONT)
-      font_manager->set_active(cmp.font_name);
-
-    if (entity.has<HasColor>()) {
-      render_me(entity);
-    }
-
-    for (EntityID child : cmp.children) {
-      render(AutoLayout::to_ent_static(child));
-    }
-  }
-
-  virtual void for_each_with_derived(const Entity &entity, const UIComponent &,
-                                     const AutoLayoutRoot &,
-                                     float) const override {
-    render(entity);
-  }
-};
 
 template <typename InputAction>
 struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
@@ -1502,8 +1440,6 @@ template <typename InputAction>
 static void
 register_render_systems(SystemManager &sm,
                         InputAction toggle_debug = InputAction::None) {
-  // sm.register_render_system(
-  // std::make_unique<ui::RenderAutoLayoutRoots<InputAction>>());
   sm.register_render_system(
       std::make_unique<ui::RenderDebugAutoLayoutRoots<InputAction>>(
           toggle_debug));
