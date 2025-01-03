@@ -395,36 +395,21 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
     entity.addComponent<ui::HasCheckboxState>(value);
   HasCheckboxState &checkboxState = entity.get<ui::HasCheckboxState>();
 
-  const auto make_button = [&]() -> UIComponent & {
-    if (entity.is_missing<UIComponent>()) {
-      entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::checkbox);
-      entity.addComponent<UIComponent>(entity.id)
-          .set_desired_width(pixels(default_component_size.x))
-          .set_desired_height(pixels(default_component_size.y))
-          .set_desired_padding(config.padding)
-          .set_desired_margin(config.margin)
-          .set_parent(parent.id);
-
-      entity.addComponent<ui::HasCheckboxState>(value);
-
-      entity.addComponent<HasClickListener>([](Entity &checkbox) {
-        ui::HasCheckboxState &hcs = checkbox.get<ui::HasCheckboxState>();
-        hcs.on = !hcs.on;
-        checkbox.get<ui::HasLabel>().label = hcs.on ? "X" : " ";
-      });
-
-      entity.addComponent<ui::HasLabel>(value ? "X" : " ");
+  config.label = checkboxState.on ? "X" : " ";
 #ifdef AFTER_HOURS_USE_RAYLIB
-      entity.addComponent<HasColor>(raylib::BLUE);
+  config.color = raylib::BLUE;
 #endif
 
-      UIComponent &parent_cmp = parent.get<UIComponent>();
-      parent_cmp.add_child(entity.id);
-    }
-    return entity.get<UIComponent>();
-  };
+  _init_component(
+      entity, parent, //
+      {pixels(default_component_size.x), pixels(default_component_size.y)},
+      config, UIComponentDebug::Type::checkbox);
 
-  UIComponent &cmp = make_button();
+  entity.addComponentIfMissing<HasClickListener>([](Entity &checkbox) {
+    ui::HasCheckboxState &hcs = checkbox.get<ui::HasCheckboxState>();
+    hcs.on = !hcs.on;
+    checkbox.get<ui::HasLabel>().label = hcs.on ? "X" : " ";
+  });
 
   ctx.queue_render(RenderInfo{entity.id});
 
