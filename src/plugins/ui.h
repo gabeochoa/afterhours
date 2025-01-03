@@ -1303,6 +1303,8 @@ constexpr static InputValidationMode validation_mode =
     InputValidationMode::Assert;
 #endif
 
+// NOTE: i tried to write this as a constexpr function but
+// the string joining wasnt working for me for some reason
 #define validate_enum_has_value(enum_name, name, reason)                       \
   do {                                                                         \
     if constexpr (validation_mode == InputValidationMode::None) {              \
