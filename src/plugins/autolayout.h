@@ -246,6 +246,10 @@ struct UIComponent : BaseComponent {
   }
 
   auto &add_child(EntityID id_) {
+    if (id_ == id) {
+      log_error("Adding child with id {} that matches our current id {}", id_,
+                id);
+    }
     children.push_back(id_);
     return *this;
   }
