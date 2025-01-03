@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <format>
 #include <functional>
 #include <initializer_list>
 #include <iostream>
@@ -116,24 +117,21 @@ template <typename InputAction> struct UIContext : BaseComponent {
     // not very discoverable
 
     if (has_focus(id)) {
-      if (
-          //
-          pressed(InputAction::WidgetNext) || pressed(InputAction::ValueDown)
-          // TODO add support for holding down tab
-          // get().is_held_down_debounced(InputAction::WidgetNext) ||
-          // get().is_held_down_debounced(InputAction::ValueDown)
-      ) {
-        set_focus(ROOT);
-        if (is_held_down(InputAction::WidgetMod)) {
+      if constexpr (magic_enum::enum_contains<InputAction>("WidgetNext")) {
+        if (pressed(InputAction::WidgetNext)) {
+          set_focus(ROOT);
+          if constexpr (magic_enum::enum_contains<InputAction>("WidgetMod")) {
+            if (is_held_down(InputAction::WidgetMod)) {
+              set_focus(last_processed);
+            }
+          }
+        }
+      }
+      if constexpr (magic_enum::enum_contains<InputAction>("WidgetBack")) {
+        if (pressed(InputAction::WidgetBack)) {
           set_focus(last_processed);
         }
       }
-      if (pressed(InputAction::ValueUp)) {
-        set_focus(last_processed);
-      }
-      // if (pressed(InputAction::WidgetBack)) {
-      // set_focus(last_processed);
-      // }
     }
     // before any returns
     last_processed = id;
@@ -1292,6 +1290,38 @@ static Size padding_(float v, float strict = 0.5f) {
 ////  Plugin Info
 //// /////
 
+enum struct InputValidationMode { None, LogOnly, Assert };
+
+constexpr static InputValidationMode validation_mode =
+#if defined(AFTER_HOURS_INPUT_VALIDATION_ASSERT)
+    InputValidationMode::Assert;
+#elif defined(AFTER_HOURS_INPUT_VALIDATION_LOG_ONLY)
+    InputValidationMode::LogOnly;
+#elif defined(AFTER_HOURS_INPUT_VALIDATION_NONE)
+    InputValidationMode::None;
+#else
+    InputValidationMode::Assert;
+#endif
+
+#define validate_enum_has_value(enum_name, name, reason)                       \
+  do {                                                                         \
+    if constexpr (validation_mode == InputValidationMode::None) {              \
+      log_error("validation mode none");                                       \
+      return;                                                                  \
+    }                                                                          \
+                                                                               \
+    if constexpr (!magic_enum::enum_contains<enum_name>(name)) {               \
+      if constexpr (validation_mode == InputValidationMode::Assert) {          \
+        static_assert(false, "InputAction missing value '" name                \
+                             "'. Input used to " reason);                      \
+      } else if constexpr (validation_mode == InputValidationMode::LogOnly) {  \
+        log_warn("InputAction missing value '" name                            \
+                 "'. Input used to " reason);                                  \
+      } else {                                                                 \
+      }                                                                        \
+    }                                                                          \
+  } while (0);
+
 template <typename InputAction>
 static void add_singleton_components(Entity &entity) {
   entity.addComponent<UIContext<InputAction>>();
@@ -1307,6 +1337,14 @@ static void add_singleton_components(Entity &entity) {
 
 template <typename InputAction>
 static void enforce_singletons(SystemManager &sm) {
+
+  validate_enum_has_value(InputAction, "None", "any unmapped input");
+  validate_enum_has_value(InputAction, "WidgetNext",
+                          "'tab' forward between ui elements");
+  validate_enum_has_value(InputAction, "WidgetBack",
+                          "'tab' back between ui elements");
+  validate_enum_has_value(InputAction, "WidgetPress", "click on element");
+
   sm.register_update_system(
       std::make_unique<developer::EnforceSingleton<UIContext<InputAction>>>());
 #ifdef AFTER_HOURS_USE_RAYLIB

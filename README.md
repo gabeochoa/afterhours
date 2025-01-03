@@ -26,6 +26,10 @@ AFTER_HOURS_REPLACE_VALIDATE
 AFTER_HOURS_DEBUG
 - enables some debug logging
 
+AFTER_HOURS_INPUT_VALIDATION_<>
+- for UI plugin, validates that you have mapped input actions used by the plugin
+- add ASSERT or LOG_ONLY to enable validation
+- or NONE (default) to disable it
 
 
 ## Plugins
