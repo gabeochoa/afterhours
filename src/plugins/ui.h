@@ -290,13 +290,13 @@ mk(Entity &parent, EntityID otherID = -1,
 
   if (existing_ui_elements.contains(hash)) {
     auto entityID = existing_ui_elements.at(hash);
-    // std::cout << "Reusing element " << hash << " for " << entityID << "\n";
+    log_trace("Reusing element {} for {}", hash, entityID);
     return {EntityHelper::getEntityForIDEnforce(entityID), parent};
   }
 
   Entity &entity = EntityHelper::createEntity();
   existing_ui_elements[hash] = entity.id;
-  std::cout << "Creating element " << hash << " for " << entity.id << "\n";
+  log_info("Creating element {} for {}", hash, entity.id);
   return {entity, parent};
 }
 
@@ -312,6 +312,7 @@ struct ComponentConfig {
   Padding padding;
   Margin margin;
   std::string label;
+  bool is_absolute = false;
 
   std::string debug_name;
   int render_layer = 0;
@@ -358,6 +359,9 @@ static bool _init_component(Entity &entity, Entity &parent,
       .set_desired_height(config.size.second)
       .set_desired_padding(config.padding)
       .set_desired_margin(config.margin);
+
+  if (config.is_absolute)
+    entity.get<UIComponent>().make_absolute();
 
   if (!config.debug_name.empty()) {
     entity.get<UIComponentDebug>().set(UIComponentDebug::Type::custom,
