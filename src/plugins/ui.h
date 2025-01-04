@@ -29,6 +29,7 @@ static bool is_mouse_inside(const input::MousePosition &mouse_pos,
 
 struct RenderInfo {
   EntityID id;
+  int layer = 0;
 };
 
 template <typename InputAction> struct UIContext : BaseComponent {
@@ -313,6 +314,7 @@ struct ComponentConfig {
   std::string label;
 
   std::string debug_name;
+  int render_layer = 0;
 
 #ifdef AFTER_HOURS_USE_RAYLIB
   std::optional<raylib::Color> color;
@@ -383,7 +385,7 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
 
   _init_component(entity, parent, config, UIComponentDebug::Type::div);
 
-  ctx.queue_render(RenderInfo{entity.id});
+  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
 
   return {true, entity};
 }
@@ -405,7 +407,7 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
 
   entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
 
-  ctx.queue_render(RenderInfo{entity.id});
+  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
 
   return ElementResult{entity.get<HasClickListener>().down, entity};
 }
@@ -443,7 +445,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
     checkbox.get<ui::HasLabel>().label = hcs.on ? "X" : " ";
   });
 
-  ctx.queue_render(RenderInfo{entity.id});
+  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
 
   value = checkboxState.on;
   return ElementResult{checkboxState.on, entity};
@@ -479,6 +481,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                               pixels(size.y),
                           },
                       .debug_name = "slider_background",
+                      .render_layer = config.render_layer,
 #ifdef AFTER_HOURS_USE_RAYLIB
                       .color = raylib::RED,
 #endif
@@ -536,6 +539,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                                 .left = pixels(owned_value * 0.75f * size.x),
                             },
                         .debug_name = "slider_handle",
+                        .render_layer = config.render_layer + 1,
 #ifdef AFTER_HOURS_USE_RAYLIB
                         .color = raylib::GREEN,
 #endif
@@ -547,7 +551,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // TODO tabbing when dragged should go to handle
 
-  ctx.queue_render(RenderInfo{entity.id});
+  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
 
   owned_value = sliderState.value;
   return ElementResult{sliderState.changed_since, entity, sliderState.value};
@@ -652,14 +656,16 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
 
   if (dropdownState.on) {
     for (size_t i = 1; i < options.size(); i++) {
-      if (button(ctx, mk(entity, i), ComponentConfig{.label = options[i]})) {
+      if (button(ctx, mk(entity, i),
+                 ComponentConfig{.label = options[i],
+                                 .render_layer = (config.render_layer + 1)})) {
         on_option_click(entity, i);
       }
     }
   } else {
   }
 
-  ctx.queue_render(RenderInfo{entity.id});
+  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
 
   option_index = dropdownState.last_option_clicked;
   return ElementResult{dropdownState.changed_since, entity,
@@ -1157,6 +1163,10 @@ template <typename InputAction> struct RenderImm : System<> {
     const UIContext<InputAction> &context =
         entity.get<UIContext<InputAction>>();
     const FontManager &font_manager = entity.get<FontManager>();
+
+    std::ranges::sort(context.render_cmds, [](RenderInfo a, RenderInfo b) {
+      return a.layer < b.layer;
+    });
 
     for (auto &cmd : context.render_cmds) {
       auto id = cmd.id;
