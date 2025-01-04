@@ -321,18 +321,18 @@ struct ComponentConfig {
 
 Vector2Type default_component_size = {150.f, 50.f};
 
-bool _init_component(Entity &entity, Entity &parent, 
-                     ComponentConfig config, UIComponentDebug::Type type,
+bool _init_component(Entity &entity, Entity &parent, ComponentConfig config,
+                     UIComponentDebug::Type type,
                      const std::string debug_name = "") {
 
-    bool created = false;
+  bool created = false;
 
-    // only once on startup 
+  // only once on startup
   if (entity.is_missing<UIComponent>()) {
-    entity.addComponent<ui::UIComponent>(entity.id)
-        .set_parent(parent.id);
+    entity.addComponent<ui::UIComponent>(entity.id).set_parent(parent.id);
 
-    entity.addComponent<UIComponentDebug>(type)//
+    entity
+        .addComponent<UIComponentDebug>(type) //
         .set(type, debug_name);
 
     if (!config.label.empty())
@@ -349,24 +349,23 @@ bool _init_component(Entity &entity, Entity &parent,
     created = true;
   }
 
-  // things that happen every frame 
+  // things that happen every frame
 
-    entity.get<UIComponent>()
-        .set_desired_width(config.size.first)
-        .set_desired_height(config.size.second)
-        .set_desired_padding(config.padding)
-        .set_desired_margin(config.margin);
+  entity.get<UIComponent>()
+      .set_desired_width(config.size.first)
+      .set_desired_height(config.size.second)
+      .set_desired_padding(config.padding)
+      .set_desired_margin(config.margin);
 
-    if(!config.debug_name.empty()){
-      entity.get<UIComponentDebug>().set(
-            UIComponentDebug::Type::custom, 
-            config.debug_name);
-    }
+  if (!config.debug_name.empty()) {
+    entity.get<UIComponentDebug>().set(UIComponentDebug::Type::custom,
+                                       config.debug_name);
+  }
 
 #ifdef AFTER_HOURS_USE_RAYLIB
-    if (config.color.has_value()) {
-      entity.get<HasColor>().color = config.color.value();
-    }
+  if (config.color.has_value()) {
+    entity.get<HasColor>().color = config.color.value();
+  }
 #endif
 
   if (!config.label.empty())
@@ -382,8 +381,7 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
 
   config.size = ComponentSize{children(), children()};
 
-  _init_component(entity, parent, config, 
-                  UIComponentDebug::Type::div);
+  _init_component(entity, parent, config, UIComponentDebug::Type::div);
 
   ctx.queue_render(RenderInfo{entity.id});
 
@@ -399,11 +397,11 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
   config.color = raylib::BLUE;
 #endif
 
-  config.size = ComponentSize{pixels(default_component_size.x), pixels(default_component_size.y)};
+  config.size = ComponentSize{pixels(default_component_size.x),
+                              pixels(default_component_size.y)};
 
-  _init_component(
-      entity, parent, //
-      config, UIComponentDebug::Type::button);
+  _init_component(entity, parent, //
+                  config, UIComponentDebug::Type::button);
 
   entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
 
@@ -433,11 +431,11 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   config.color = raylib::BLUE;
 #endif
 
-  config.size = ComponentSize {pixels(default_component_size.x), pixels(default_component_size.y)};
+  config.size = ComponentSize{pixels(default_component_size.x),
+                              pixels(default_component_size.y)};
 
-  _init_component(
-      entity, parent, //
-      config, UIComponentDebug::Type::checkbox);
+  _init_component(entity, parent, //
+                  config, UIComponentDebug::Type::checkbox);
 
   entity.addComponentIfMissing<HasClickListener>([](Entity &checkbox) {
     ui::HasCheckboxState &hcs = checkbox.get<ui::HasCheckboxState>();
@@ -468,31 +466,27 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   config.color = raylib::BLUE;
 #endif
 
-  config.size = ComponentSize{
-      pixels(size.x * 2), pixels(size.y)
-  };
+  config.size = ComponentSize{pixels(size.x * 2), pixels(size.y)};
 
   _init_component(entity, parent, //
-                  config,
-                  UIComponentDebug::Type::custom, "slider");
-
+                  config, UIComponentDebug::Type::custom, "slider");
 
   auto elem = div(ctx, mk(parent, entity.id + 0),
                   ComponentConfig{
+                      .size =
+                          ComponentSize{
+                              pixels(size.x),
+                              pixels(size.y),
+                          },
+                      .debug_name = "slider_background",
 #ifdef AFTER_HOURS_USE_RAYLIB
                       .color = raylib::RED,
 #endif
-                      .size = ComponentSize{
-                        pixels(size.x),
-                        pixels(size.y),
-                      },
-                      .debug_name = "slider_background",
                   });
 
-  // TODO why do we need to do this? 
+  // TODO why do we need to do this?
   // why isnt this covered by the pixels(size.x) above?
-    elem.ent().template get<UIComponent>()
-        .set_desired_width(pixels(size.x));
+  elem.ent().template get<UIComponent>().set_desired_width(pixels(size.x));
 
   Entity &slider_bg = elem.ent();
   if (slider_bg.is_missing<ui::HasSliderState>())
@@ -536,24 +530,20 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   auto handle = div(ctx, mk(slider_bg),
                     ComponentConfig{
-                        .size = {
-                            pixels(size.x * 0.25f),
-                            pixels(size.y)
-                        },
+                        .size = {pixels(size.x * 0.25f), pixels(size.y)},
                         .padding =
                             Padding{
                                 .left = pixels(owned_value * 0.75f * size.x),
                             },
+                        .debug_name = "slider_handle",
 #ifdef AFTER_HOURS_USE_RAYLIB
                         .color = raylib::GREEN,
 #endif
-                        .debug_name= "slider_handle",
-                    }
-                    );
+                    });
 
   handle.cmp()
-         .set_desired_width(pixels(size.x * 0.25f))
-        .set_desired_height(pixels(size.y));
+      .set_desired_width(pixels(size.x * 0.25f))
+      .set_desired_height(pixels(size.y));
 
   // TODO tabbing when dragged should go to handle
 
@@ -750,7 +740,7 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
   }
 };
 
-template<typename InputAction>
+template <typename InputAction>
 struct TrackIfComponentWillBeRendered : System<> {
 
   void set_visibility(UIComponent &cmp) {
@@ -767,8 +757,7 @@ struct TrackIfComponentWillBeRendered : System<> {
     cmp.was_rendered_to_screen = true;
   }
 
-  virtual void for_each_with(Entity &entity,
-                             float) override {
+  virtual void for_each_with(Entity &entity, float) override {
     if (entity.is_missing<UIContext<InputAction>>())
       return;
 
@@ -780,7 +769,6 @@ struct TrackIfComponentWillBeRendered : System<> {
       Entity &ent = EntityHelper::getEntityForIDEnforce(id);
       set_visibility(ent.get<UIComponent>());
     }
-
   }
 };
 
