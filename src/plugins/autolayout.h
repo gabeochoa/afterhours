@@ -23,7 +23,7 @@ enum struct Dim {
   ScreenPercent,
 };
 
-std::ostream &operator<<(std::ostream &os, const Dim &dim) {
+inline std::ostream &operator<<(std::ostream &os, const Dim &dim) {
   switch (dim) {
   case Dim::None:
     os << "None";
@@ -127,7 +127,7 @@ enum struct Axis {
   right = 4,
   bottom = 5,
 };
-std::ostream &operator<<(std::ostream &os, const Axis &axis) {
+inline std::ostream &operator<<(std::ostream &os, const Axis &axis) {
   switch (axis) {
   case Axis::X:
     os << "X-Axis";

@@ -272,11 +272,11 @@ private:
 };
 
 using UI_UUID = size_t;
-std::map<UI_UUID, EntityID> existing_ui_elements;
+static std::map<UI_UUID, EntityID> existing_ui_elements;
 
 using EntityParent = std::pair<RefEntity, RefEntity>;
 
-EntityParent
+static EntityParent
 mk(Entity &parent, EntityID otherID = -1,
    const std::source_location location = std::source_location::current()) {
 
@@ -319,11 +319,11 @@ struct ComponentConfig {
 #endif
 };
 
-Vector2Type default_component_size = {150.f, 50.f};
+static Vector2Type default_component_size = {150.f, 50.f};
 
-bool _init_component(Entity &entity, Entity &parent, ComponentConfig config,
-                     UIComponentDebug::Type type,
-                     const std::string debug_name = "") {
+static bool _init_component(Entity &entity, Entity &parent,
+                            ComponentConfig config, UIComponentDebug::Type type,
+                            const std::string debug_name = "") {
 
   bool created = false;
 
