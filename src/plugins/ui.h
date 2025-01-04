@@ -466,7 +466,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   config.color = raylib::BLUE;
 #endif
 
-  config.size = ComponentSize{pixels(size.x * 2), pixels(size.y)};
+  config.size = ComponentSize{pixels(size.x), pixels(size.y)};
 
   _init_component(entity, parent, //
                   config, UIComponentDebug::Type::custom, "slider");
