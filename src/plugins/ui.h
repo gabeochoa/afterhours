@@ -644,7 +644,10 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                  .label = options[dropdownState.on
                                       ? 0
                                       : dropdownState.last_option_clicked]})) {
-    on_option_click(entity, 0);
+
+    dropdownState.on // when closed we dont want to "select" the visible option
+        ? on_option_click(entity, 0)
+        : toggle_visibility(entity);
   }
 
   if (dropdownState.on) {
