@@ -130,6 +130,23 @@ struct window_manager : developer::Plugin {
       return available_resolutions;
     }
 
+    size_t current_index() const {
+      const auto &entity = EntityQuery()
+                               .whereHasComponent<ProvidesCurrentResolution>()
+                               .gen_first_enforce();
+      const ProvidesCurrentResolution &pcr =
+          entity.get<ProvidesCurrentResolution>();
+
+      for (size_t i = 0; i < available_resolutions.size(); i++) {
+        if (pcr.current_resolution == available_resolutions[i]) {
+          return i;
+        }
+      }
+      log_warn(
+          "Could not find the current resolution as an available resolution");
+      return 0;
+    }
+
     void on_data_changed(size_t index) {
       auto &entity = EntityQuery()
                          .whereHasComponent<ProvidesCurrentResolution>()
