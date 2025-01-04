@@ -1087,8 +1087,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   }
 
   virtual void for_each_with_derived(const Entity &entity, const UIComponent &,
-                                     const AutoLayoutRoot &,
-                                     float) const override {
+                                     const AutoLayoutRoot &, float) const {
     render(entity);
     level += 2;
     indent = 0;
