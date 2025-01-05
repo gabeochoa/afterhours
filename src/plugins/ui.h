@@ -193,6 +193,7 @@ struct HasSliderState : BaseComponent {
 };
 
 struct ShouldHide : BaseComponent {};
+struct SkipWhenTabbing : BaseComponent {};
 
 struct HasChildrenComponent : BaseComponent {
   std::vector<EntityID> children;
@@ -314,6 +315,10 @@ struct ComponentConfig {
   std::string label;
   bool is_absolute = false;
 
+  // inheritable options
+  bool skip_when_tabbing = false;
+
+  // debugs
   std::string debug_name;
   int render_layer = 0;
 
@@ -346,6 +351,9 @@ static bool _init_component(Entity &entity, Entity &parent,
       entity.addComponent<HasColor>(config.color.value());
     }
 #endif
+
+    if (config.skip_when_tabbing)
+      entity.addComponent<SkipWhenTabbing>();
 
     UIComponent &parent_cmp = parent.get<UIComponent>();
     parent_cmp.add_child(entity.id);
@@ -484,6 +492,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                               pixels(size.x),
                               pixels(size.y),
                           },
+                      // inheritables
+                      .skip_when_tabbing = config.skip_when_tabbing,
+                      // debugs
                       .debug_name = "slider_background",
                       .render_layer = config.render_layer,
 #ifdef AFTER_HOURS_USE_RAYLIB
@@ -542,6 +553,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                             Padding{
                                 .left = pixels(owned_value * 0.75f * size.x),
                             },
+                        // inheritables
+                        .skip_when_tabbing = config.skip_when_tabbing,
+                        // debugs
                         .debug_name = "slider_handle",
                         .render_layer = config.render_layer + 1,
 #ifdef AFTER_HOURS_USE_RAYLIB
@@ -647,11 +661,16 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
     ctx.set_focus(first_child.id);
   };
 
-  if (button(ctx, mk(entity, 0),
-             ComponentConfig{
-                 .label = options[dropdownState.on
-                                      ? 0
-                                      : dropdownState.last_option_clicked]})) {
+  if (button(
+          ctx, mk(entity, 0),
+          ComponentConfig{
+              .label =
+                  options[dropdownState.on ? 0
+                                           : dropdownState.last_option_clicked],
+              // inheritables
+              .skip_when_tabbing = config.skip_when_tabbing,
+              // debugs
+          })) {
 
     dropdownState.on // when closed we dont want to "select" the visible option
         ? on_option_click(entity, 0)
@@ -661,8 +680,13 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   if (dropdownState.on) {
     for (size_t i = 1; i < options.size(); i++) {
       if (button(ctx, mk(entity, i),
-                 ComponentConfig{.label = options[i],
-                                 .render_layer = (config.render_layer + 1)})) {
+                 ComponentConfig{
+                     .label = options[i],
+                     // inheritables
+                     .skip_when_tabbing = config.skip_when_tabbing,
+                     // debugs
+                     .render_layer = (config.render_layer + 1),
+                 })) {
         on_option_click(entity, i);
       }
     }
@@ -862,7 +886,10 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
 
   virtual void for_each_with(Entity &entity, UIComponent &component,
                              float) override {
-    if (entity.is_missing<HasClickListener>())
+    if (entity.is_missing<HasClickListener>() &&
+        entity.is_missing<HasDragListener>())
+      return;
+    if (entity.has<SkipWhenTabbing>())
       return;
     if (!component.was_rendered_to_screen)
       return;
