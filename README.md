@@ -31,6 +31,9 @@ AFTER_HOURS_INPUT_VALIDATION_<>
 - add ASSERT or LOG_ONLY to enable validation
 - or NONE (default) to disable it
 
+AFTER_HOURS_ENTITY_ALLOC_DEBUG
+- turns on log_warn whenever Entities deallocates (and theoretically allocates but unlikely) 
+
 
 ## Plugins
 
