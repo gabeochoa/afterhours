@@ -448,6 +448,12 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   HasCheckboxState &checkboxState = entity.get<ui::HasCheckboxState>();
 
   config.label = checkboxState.on ? "X" : " ";
+
+  // By default have centered text if user didnt specify anything
+  if (config.label_alignment == TextAlignment::None) {
+    config.label_alignment = TextAlignment::Center;
+  }
+
 #ifdef AFTER_HOURS_USE_RAYLIB
   config.color = raylib::BLUE;
 #endif
