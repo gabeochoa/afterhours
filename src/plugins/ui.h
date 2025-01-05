@@ -257,6 +257,8 @@ struct ElementResult {
       : result(val), element(ref), data(data_) {}
   ElementResult(bool val, Entity &ref, size_t data_)
       : result(val), element(ref), data((int)data_) {}
+  ElementResult(bool val, Entity &ref, bool data_)
+      : result(val), element(ref), data((bool)data_) {}
 
   ElementResult(Entity &ent) : result(true), element(ent) {}
 
@@ -270,7 +272,7 @@ struct ElementResult {
 private:
   bool result = false;
   Entity &element;
-  std::variant<float, int> data = 0.f;
+  std::variant<float, int, bool> data = 0.f;
 };
 
 using UI_UUID = size_t;
