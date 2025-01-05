@@ -683,6 +683,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
               .label_alignment = config.label_alignment,
               .skip_when_tabbing = config.skip_when_tabbing,
               // debugs
+              .debug_name = "option 1",
           })) {
 
     dropdownState.on // when closed we dont want to "select" the visible option
@@ -699,6 +700,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                      .label_alignment = config.label_alignment,
                      .skip_when_tabbing = config.skip_when_tabbing,
                      // debugs
+                     .debug_name = std::format("option {}", i + 1),
                      .render_layer = (config.render_layer + 1),
                  })) {
         on_option_click(entity, i);
