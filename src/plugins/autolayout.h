@@ -383,10 +383,19 @@ struct FontManager : BaseComponent {
   }
 };
 #endif
+enum struct TextAlignment {
+  Left,
+  Center,
+  Right,
+  None = Left,
+};
 
 struct HasLabel : BaseComponent {
+  TextAlignment alignment = TextAlignment::None;
+
   std::string label;
   std::string font_name = UIComponent::UNSET_FONT;
+
   HasLabel(const std::string &str) : label(str) {}
   HasLabel() : label("") {}
 };

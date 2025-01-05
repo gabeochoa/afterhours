@@ -1039,8 +1039,47 @@ struct UpdateDropdownOptions
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 
+static Vector2Type position_text(const ui::FontManager &fm,
+                                 const std::string &text,
+                                 RectangleType container, int font_size,
+                                 TextAlignment alignment) {
+  raylib::Font font = fm.get_active_font();
+  Vector2Type text_size =
+      raylib::MeasureTextEx(font, text.c_str(), font_size, 1.f);
+
+  Vector2Type position;
+
+  switch (alignment) {
+  case TextAlignment::Left:
+    position = Vector2Type{
+        .x = container.x,
+        .y = container.y + (container.height - text_size.y) / 2,
+    };
+    break;
+  case TextAlignment::Center:
+    position = Vector2Type{
+        .x = container.x + (container.width - text_size.x) / 2,
+        .y = container.y + (container.height - text_size.y) / 2,
+    };
+    break;
+  case TextAlignment::Right:
+    position = Vector2Type{
+        .x = container.x + container.width - text_size.x,
+        .y = container.y + (container.height - text_size.y) / 2,
+    };
+    break;
+  default:
+    // Handle unknown alignment (shouldn't happen)
+    break;
+  }
+
+  return position;
+}
+
 static void draw_text(const ui::FontManager &fm, const std::string &text,
-                      vec2 position, int font_size, raylib::Color color) {
+                      RectangleType rect, int font_size,
+                      TextAlignment alignment, raylib::Color color) {
+  Vector2Type position = position_text(fm, text, rect, font_size, alignment);
   DrawTextEx(fm.get_active_font(), text.c_str(), position, font_size, 1.f,
              color);
 }
@@ -1156,8 +1195,8 @@ template <typename InputAction> struct RenderImm : System<> {
     }
     raylib::DrawRectangleRec(cmp.rect(), col);
     if (entity.has<HasLabel>()) {
-      draw_text(font_manager, entity.get<HasLabel>().label.c_str(),
-                vec2{cmp.x(), cmp.y()}, (int)(cmp.height() / 2.f),
+      draw_text(font_manager, entity.get<HasLabel>().label.c_str(), cmp.rect(),
+                (int)(cmp.height() / 2.f), entity.get<HasLabel>().alignment,
                 raylib::RAYWHITE);
     }
   }
