@@ -398,6 +398,11 @@ struct HasLabel : BaseComponent {
 
   HasLabel(const std::string &str) : label(str) {}
   HasLabel() : label("") {}
+
+  auto &set_alignment(TextAlignment align_) {
+    alignment = align_;
+    return *this;
+  }
 };
 
 struct AutoLayout {

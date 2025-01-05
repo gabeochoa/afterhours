@@ -316,6 +316,7 @@ struct ComponentConfig {
   bool is_absolute = false;
 
   // inheritable options
+  TextAlignment label_alignment = TextAlignment::None;
   bool skip_when_tabbing = false;
 
   // debugs
@@ -344,7 +345,8 @@ static bool _init_component(Entity &entity, Entity &parent,
         .set(type, debug_name);
 
     if (!config.label.empty())
-      entity.addComponent<ui::HasLabel>(config.label);
+      entity.addComponent<ui::HasLabel>(config.label)
+          .set_alignment(config.label_alignment);
 
 #ifdef AFTER_HOURS_USE_RAYLIB
     if (config.color.has_value()) {
@@ -493,6 +495,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                               pixels(size.y),
                           },
                       // inheritables
+                      .label_alignment = config.label_alignment,
                       .skip_when_tabbing = config.skip_when_tabbing,
                       // debugs
                       .debug_name = "slider_background",
@@ -554,6 +557,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                                 .left = pixels(owned_value * 0.75f * size.x),
                             },
                         // inheritables
+                        .label_alignment = config.label_alignment,
                         .skip_when_tabbing = config.skip_when_tabbing,
                         // debugs
                         .debug_name = "slider_handle",
@@ -671,6 +675,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                   options[dropdownState.on ? 0
                                            : dropdownState.last_option_clicked],
               // inheritables
+              .label_alignment = config.label_alignment,
               .skip_when_tabbing = config.skip_when_tabbing,
               // debugs
           })) {
@@ -686,6 +691,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                  ComponentConfig{
                      .label = options[i],
                      // inheritables
+                     .label_alignment = config.label_alignment,
                      .skip_when_tabbing = config.skip_when_tabbing,
                      // debugs
                      .render_layer = (config.render_layer + 1),
