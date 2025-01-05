@@ -36,28 +36,66 @@ struct window_manager : developer::Plugin {
     }
   };
 
-  static std::vector<Resolution> fetch_available_resolutions() {
-    return std::vector<Resolution>{{
-        Resolution{.width = 1280, .height = 720},
-        Resolution{.width = 1920, .height = 1080},
-    }};
-  }
-
 #ifdef AFTER_HOURS_USE_RAYLIB
   static Resolution fetch_current_resolution() {
     return Resolution{.width = raylib::GetRenderWidth(),
                       .height = raylib::GetRenderHeight()};
   }
 
+  static Resolution fetch_maximum_resolution() {
+    int monitor = raylib::GetCurrentMonitor();
+    return Resolution{.width = raylib::GetMonitorWidth(0),
+                      .height = raylib::GetMonitorHeight(0)};
+  }
+
   static void set_window_size(int width, int height) {
     raylib::SetWindowSize(width, height);
   }
 #else
+  static Resolution fetch_maximum_resolution() {
+    return Resolution{.width = 1280, .height = 720};
+  }
   static Resolution fetch_current_resolution() {
     return Resolution{.width = 1280, .height = 720};
   }
   static void set_window_size(int, int) {}
 #endif
+
+  static std::vector<Resolution> fetch_available_resolutions() {
+    // These come from the steam hardware survey: jan 5 2025
+    std::vector<Resolution> resolutions = {
+        Resolution{.width = 800, .height = 1280},
+        Resolution{.width = 1280, .height = 1024},
+        Resolution{.width = 1280, .height = 720},
+        Resolution{.width = 1280, .height = 800},
+        Resolution{.width = 1360, .height = 768},
+        Resolution{.width = 1366, .height = 768},
+        Resolution{.width = 1440, .height = 900},
+        Resolution{.width = 1600, .height = 900},
+        Resolution{.width = 1680, .height = 1050},
+        Resolution{.width = 1920, .height = 1080},
+        Resolution{.width = 1920, .height = 1200},
+        Resolution{.width = 2560, .height = 1600},
+        Resolution{.width = 2560, .height = 1080},
+        Resolution{.width = 2560, .height = 1440},
+        Resolution{.width = 2880, .height = 1800},
+        Resolution{.width = 3440, .height = 1440},
+        Resolution{.width = 3840, .height = 2160},
+        Resolution{.width = 5120, .height = 1440},
+    };
+
+    Resolution max = fetch_maximum_resolution();
+
+    // Filter out resolutions that exceed the maximum supported resolution
+    resolutions.erase(std::remove_if(resolutions.begin(), resolutions.end(),
+                                     [&](const Resolution &res) {
+                                       return res.width > max.width ||
+                                              res.height > max.height;
+                                     }),
+                      resolutions.end());
+
+    return resolutions;
+  }
 
   struct ProvidesCurrentResolution : public BaseComponent {
     bool should_refetch = true;
