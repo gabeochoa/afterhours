@@ -6,10 +6,20 @@
 #include <set>
 #include <vector>
 
+#include "debug_allocator.h"
 #include "entity.h"
-namespace afterhours {
 
-using Entities = std::vector<std::shared_ptr<Entity>>;
+namespace afterhours {
+using EntityType = std::shared_ptr<Entity>;
+
+#ifdef AFTER_HOURS_ENTITY_ALLOC_DEBUG
+using EntityAllocator = developer::DebugAllocator<EntityType>;
+#else
+using EntityAllocator = std::allocator<EntityType>;
+#endif
+
+using Entities = std::vector<EntityType, EntityAllocator>;
+
 using RefEntities = std::vector<RefEntity>;
 
 static Entities entities_DO_NOT_USE;
