@@ -23,6 +23,9 @@ using Entities = std::vector<EntityType, EntityAllocator>;
 using RefEntities = std::vector<RefEntity>;
 
 static Entities entities_DO_NOT_USE;
+static Entities temp_entities;
+
+// TODO spelling
 static std::set<int> permanant_ids;
 
 static std::map<ComponentID, Entity *> singletonMap;
@@ -37,6 +40,11 @@ struct EntityHelper {
     Continue = 1,
     Break = 2,
   };
+
+  static void reserve_temp_space() {
+    // by default lets only allow 100 ents to be created per frame
+    temp_entities.reserve(sizeof(EntityType) * 100);
+  }
 
   static Entities &get_entities_for_mod() { return entities_DO_NOT_USE; }
   static const Entities &get_entities() { return get_entities_for_mod(); }
@@ -60,14 +68,33 @@ struct EntityHelper {
   }
 
   static Entity &createEntityWithOptions(const CreationOptions &options) {
+    if (temp_entities.capacity() == 0) [[unlikely]]
+      reserve_temp_space();
+
     std::shared_ptr<Entity> e(new Entity());
-    get_entities_for_mod().push_back(e);
+    temp_entities.push_back(e);
+    log_info("created new entity {}", e->id);
 
     if (options.is_permanent) {
       permanant_ids.insert(e->id);
     }
 
     return *e;
+  }
+
+  static void merge_entity_arrays() {
+    if (temp_entities.empty())
+      return;
+
+    for (const auto &entity : temp_entities) {
+      if (!entity)
+        continue;
+      if (entity->cleanup)
+        continue;
+      entities_DO_NOT_USE.push_back(entity);
+    }
+    // clear() Leaves the capacity() of a vector unchanged
+    temp_entities.clear();
   }
 
   template <typename Component> static void registerSingleton(Entity &ent) {
@@ -109,18 +136,22 @@ struct EntityHelper {
     }
   }
 
-  static void removeEntity(int e_id) {
-    auto &entities = get_entities_for_mod();
-
-    auto newend = std::remove_if(
-        entities.begin(), entities.end(),
-        [e_id](const auto &entity) { return !entity || entity->id == e_id; });
-
-    entities.erase(newend, entities.end());
-  }
+  // note: I feel like we dont need to give this ability
+  // you should be using cleanup=true
+  //
+  // static void removeEntity(int e_id) {
+  // auto &entities = get_entities_for_mod();
+  //
+  // auto newend = std::remove_if(
+  // entities.begin(), entities.end(),
+  // [e_id](const auto &entity) { return !entity || entity->id == e_id; });
+  // entities.erase(newend, entities.end());
+  // }
 
   static void cleanup() {
+    EntityHelper::merge_entity_arrays();
     // Cleanup entities marked cleanup
+    //
     Entities &entities = get_entities_for_mod();
 
     auto newend = std::remove_if(
@@ -133,10 +164,12 @@ struct EntityHelper {
   static void delete_all_entities_NO_REALLY_I_MEAN_ALL() {
     Entities &entities = get_entities_for_mod();
     // just clear the whole thing
-    entities.clear();
+    temp_entities.clear();
   }
 
   static void delete_all_entities(bool include_permanent) {
+    EntityHelper::merge_entity_arrays();
+
     if (include_permanent) {
       delete_all_entities_NO_REALLY_I_MEAN_ALL();
       return;

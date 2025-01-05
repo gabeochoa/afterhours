@@ -207,6 +207,13 @@ struct EntityQuery {
     return ids;
   }
 
+  // TODO this allocates (and deallocates) the entire list of entities
+  // every time you make one.
+  // We might want to replace this with some indexer instead so we can still
+  // filter and then copy at the end or something
+
+  // TODO Created entities are not available in queries until the next system
+  // runs is this a problem?
   EntityQuery() : entities(EntityHelper::get_entities()) {}
   explicit EntityQuery(const Entities &entsIn) : entities(entsIn) {
     entities = entsIn;

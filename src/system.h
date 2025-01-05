@@ -194,8 +194,8 @@ struct SystemManager {
 #endif
           system->for_each(*entity, dt);
       }
+      EntityHelper::merge_entity_arrays();
     }
-    EntityHelper::cleanup();
   }
 
   void fixed_tick(Entities &entities, float dt) {
@@ -257,6 +257,9 @@ struct SystemManager {
     auto &entities = EntityHelper::get_entities_for_mod();
     fixed_tick_all(entities, dt);
     tick_all(entities, dt);
+
+    EntityHelper::cleanup();
+
     render_all(dt);
   }
 };

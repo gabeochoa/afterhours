@@ -201,6 +201,7 @@ struct input : developer::Plugin {
   template <typename Action>
   static auto get_input_collector() -> PossibleInputCollector<Action> {
 
+    // TODO replace with a singletone query
     OptEntity opt_collector =
         EntityQuery().whereHasComponent<InputCollector<Action>>().gen_first();
     if (!opt_collector.valid())
