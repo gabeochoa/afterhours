@@ -1169,8 +1169,10 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     if (cmp.should_hide)
       return;
 
-    render_me(entity);
-    level++;
+    if (cmp.was_rendered_to_screen) {
+      render_me(entity);
+      level++;
+    }
 
     indent++;
     for (EntityID child : cmp.children) {
