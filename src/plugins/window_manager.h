@@ -36,39 +36,14 @@ struct window_manager : developer::Plugin {
     }
   };
 
-#ifdef AFTER_HOURS_USE_RAYLIB
   static std::vector<Resolution> fetch_available_resolutions() {
-
-#ifdef __APPLE__
-    // Nothing needed here this one works :)
-#else
-    // TODO either implement these for windows or get them in the dll
-    const auto glfwGetPrimaryMonitor = []() -> GLFWmonitor * {
-      return nullptr;
-    };
-    const auto glfwGetVideoModes = [](GLFWmonitor *, int *) -> GLFWvidmode * {
-      return nullptr;
-    };
-#endif
-
-    int count = 0;
-    const GLFWvidmode *modes =
-        glfwGetVideoModes(glfwGetPrimaryMonitor(), &count);
-    std::vector<window_manager::Resolution> resolutions;
-
-    for (int i = 0; i < count; i++) {
-      resolutions.push_back(
-          window_manager::Resolution{modes[i].width, modes[i].height});
-    }
-    // Sort the vector
-    std::sort(resolutions.begin(), resolutions.end());
-
-    // Remove duplicates
-    resolutions.erase(std::unique(resolutions.begin(), resolutions.end()),
-                      resolutions.end());
-
-    return resolutions;
+    return std::vector<Resolution>{{
+        Resolution{.width = 1280, .height = 720},
+        Resolution{.width = 1920, .height = 1080},
+    }};
   }
+
+#ifdef AFTER_HOURS_USE_RAYLIB
   static Resolution fetch_current_resolution() {
     return Resolution{.width = raylib::GetRenderWidth(),
                       .height = raylib::GetRenderHeight()};
@@ -78,12 +53,6 @@ struct window_manager : developer::Plugin {
     raylib::SetWindowSize(width, height);
   }
 #else
-  static std::vector<Resolution> fetch_available_resolutions() {
-    return std::vector<Resolution>{{
-        Resolution{.width = 1280, .height = 720},
-        Resolution{.width = 1920, .height = 1080},
-    }};
-  }
   static Resolution fetch_current_resolution() {
     return Resolution{.width = 1280, .height = 720};
   }
