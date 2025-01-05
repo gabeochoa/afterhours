@@ -391,10 +391,6 @@ struct HasLabel : BaseComponent {
   HasLabel() : label("") {}
 };
 
-static UIComponent &make_component(Entity &entity) {
-  return entity.addComponent<ui::UIComponent>(entity.id);
-}
-
 struct AutoLayout {
 
   window_manager::Resolution resolution;
@@ -404,7 +400,15 @@ struct AutoLayout {
              const std::map<EntityID, RefEntity> &mapping_ = {})
       : resolution(rez), mapping(mapping_) {}
 
-  Entity &to_ent(EntityID id) { return mapping.at(id); }
+  Entity &to_ent(EntityID id) {
+    auto it = mapping.find(id);
+    if (it == mapping.end()) {
+      log_error("during autolayout, we looked for an entity with id {} but it "
+                "wasnt in the mapping provided",
+                id);
+    }
+    return it->second;
+  }
 
   virtual UIComponent &to_cmp(EntityID id) {
     return to_ent(id).get<UIComponent>();

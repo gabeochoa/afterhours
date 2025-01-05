@@ -31,5 +31,6 @@ public:
     std::allocator<T>().deallocate(p, n);
   }
 };
+
 } // namespace developer
 } // namespace afterhours

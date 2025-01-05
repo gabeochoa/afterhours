@@ -45,6 +45,12 @@
 using namespace afterhours;
 using namespace afterhours::ui;
 
+static UIComponent &make_component(Entity &entity) {
+  auto &cmp = entity.addComponent<ui::UIComponent>(entity.id);
+  EntityHelper::merge_entity_arrays();
+  return cmp;
+}
+
 auto &to_cmp(Entity &entity) { return AutoLayout::to_cmp_static(entity.id); }
 auto to_rect(Entity &entity) { return to_cmp(entity).rect(); }
 auto to_bounds(Entity &entity) { return to_cmp(entity).bounds(); }

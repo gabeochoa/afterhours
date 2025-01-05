@@ -73,7 +73,6 @@ struct EntityHelper {
 
     std::shared_ptr<Entity> e(new Entity());
     temp_entities.push_back(e);
-    log_info("created new entity {}", e->id);
 
     if (options.is_permanent) {
       permanant_ids.insert(e->id);
