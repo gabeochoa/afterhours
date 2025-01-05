@@ -589,6 +589,9 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
+  if (options.empty())
+    return {false, entity};
+
   if (entity.is_missing<ui::HasDropdownState>())
     entity.addComponent<ui::HasDropdownState>(
         options, nullptr, [&](size_t opt) {
