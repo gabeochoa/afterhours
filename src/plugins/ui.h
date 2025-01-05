@@ -469,13 +469,17 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   entity.addComponentIfMissing<HasClickListener>([](Entity &checkbox) {
     ui::HasCheckboxState &hcs = checkbox.get<ui::HasCheckboxState>();
     hcs.on = !hcs.on;
+    hcs.changed_since = true;
     checkbox.get<ui::HasLabel>().label = hcs.on ? "X" : " ";
   });
 
   ctx.queue_render(RenderInfo{entity.id, config.render_layer});
 
   value = checkboxState.on;
-  return ElementResult{checkboxState.on, entity};
+
+  ElementResult result{checkboxState.changed_since, entity, checkboxState.on};
+  checkboxState.changed_since = false;
+  return result;
 }
 
 ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
