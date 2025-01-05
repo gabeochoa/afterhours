@@ -416,6 +416,11 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
   config.size = ComponentSize{pixels(default_component_size.x),
                               pixels(default_component_size.y)};
 
+  // By default buttons have centered text if user didnt specify anything
+  if (config.label_alignment == TextAlignment::None) {
+    config.label_alignment = TextAlignment::Center;
+  }
+
   _init_component(entity, parent, //
                   config, UIComponentDebug::Type::button);
 
