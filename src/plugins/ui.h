@@ -1072,32 +1072,54 @@ struct UpdateDropdownOptions
   }
 };
 
-static Vector2Type position_text(const ui::FontManager &fm,
-                                 const std::string &text,
-                                 RectangleType container, int font_size,
-                                 TextAlignment alignment) {
+static RectangleType position_text(const ui::FontManager &fm,
+                                   const std::string &text,
+                                   RectangleType container,
+                                   TextAlignment alignment,
+                                   Vector2Type margin_px) {
   Font font = fm.get_active_font();
-  Vector2Type text_size = measure_text(font, text.c_str(), font_size, 1.f);
 
+  // Calculate the maximum text size based on the container size and margins
+  Vector2Type max_text_size = Vector2Type{
+      .x = container.width - 2 * margin_px.x,
+      .y = container.height - 2 * margin_px.y,
+  };
+
+  // Find the largest font size that fits within the maximum text size
+  float font_size = 1.f;
+  Vector2Type text_size;
+  while (true) {
+    text_size = measure_text(font, text.c_str(), font_size, 1.f);
+    if (text_size.x > max_text_size.x || text_size.y > max_text_size.y) {
+      break;
+    }
+    font_size++;
+  }
+  font_size--; // Decrease font size by 1 to ensure it fits
+
+  // Calculate the text position based on the alignment and margins
   Vector2Type position;
-
   switch (alignment) {
   case TextAlignment::Left:
     position = Vector2Type{
-        .x = container.x,
-        .y = container.y + (container.height - text_size.y) / 2,
+        .x = container.x + margin_px.x,
+        .y = container.y + margin_px.y +
+             (container.height - 2 * margin_px.y - text_size.y) / 2,
     };
     break;
   case TextAlignment::Center:
     position = Vector2Type{
-        .x = container.x + (container.width - text_size.x) / 2,
-        .y = container.y + (container.height - text_size.y) / 2,
+        .x = container.x + margin_px.x +
+             (container.width - 2 * margin_px.x - text_size.x) / 2,
+        .y = container.y + margin_px.y +
+             (container.height - 2 * margin_px.y - text_size.y) / 2,
     };
     break;
   case TextAlignment::Right:
     position = Vector2Type{
-        .x = container.x + container.width - text_size.x,
-        .y = container.y + (container.height - text_size.y) / 2,
+        .x = container.x + container.width - margin_px.x - text_size.x,
+        .y = container.y + margin_px.y +
+             (container.height - 2 * margin_px.y - text_size.y) / 2,
     };
     break;
   default:
@@ -1105,16 +1127,21 @@ static Vector2Type position_text(const ui::FontManager &fm,
     break;
   }
 
-  return position;
+  return RectangleType{
+      .x = position.x,
+      .y = position.y,
+      .width = font_size,
+      .height = font_size,
+  };
 }
 
 static void draw_text_in_rect(const ui::FontManager &fm,
                               const std::string &text, RectangleType rect,
-                              int font_size, TextAlignment alignment,
-                              Color color) {
-  Vector2Type position = position_text(fm, text, rect, font_size, alignment);
-  draw_text_ex(fm.get_active_font(), text.c_str(), position, font_size, 1.f,
-               color);
+                              TextAlignment alignment, Color color) {
+  RectangleType sizing =
+      position_text(fm, text, rect, alignment, Vector2Type{5.f, 5.f});
+  draw_text_ex(fm.get_active_font(), text.c_str(),
+               Vector2Type{sizing.x, sizing.y}, sizing.height, 1.f, color);
 }
 
 template <typename InputAction>
@@ -1239,8 +1266,8 @@ template <typename InputAction> struct RenderImm : System<> {
     draw_rectangle(cmp.rect(), col);
     if (entity.has<HasLabel>()) {
       draw_text_in_rect(font_manager, entity.get<HasLabel>().label.c_str(),
-                        cmp.rect(), (int)(cmp.height() / 2.f),
-                        entity.get<HasLabel>().alignment, colors::UI_WHITE);
+                        cmp.rect(), entity.get<HasLabel>().alignment,
+                        colors::UI_WHITE);
     }
   }
 
