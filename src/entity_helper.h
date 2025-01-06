@@ -8,6 +8,7 @@
 
 #include "debug_allocator.h"
 #include "entity.h"
+#include "singleton.h"
 
 namespace afterhours {
 using EntityType = std::shared_ptr<Entity>;
@@ -22,15 +23,16 @@ using Entities = std::vector<EntityType, EntityAllocator>;
 
 using RefEntities = std::vector<RefEntity>;
 
-static Entities entities_DO_NOT_USE;
-static Entities temp_entities;
-
-// TODO spelling
-static std::set<int> permanant_ids;
-
-static std::map<ComponentID, Entity *> singletonMap;
-
+SINGLETON_FWD(EntityHelper)
 struct EntityHelper {
+  SINGLETON(EntityHelper)
+
+  Entities entities_DO_NOT_USE;
+  Entities temp_entities;
+  // TODO spelling
+  std::set<int> permanant_ids;
+  std::map<ComponentID, Entity *> singletonMap;
+
   struct CreationOptions {
     bool is_permanent;
   };
@@ -43,10 +45,14 @@ struct EntityHelper {
 
   static void reserve_temp_space() {
     // by default lets only allow 100 ents to be created per frame
-    temp_entities.reserve(sizeof(EntityType) * 100);
+    EntityHelper::get().temp_entities.reserve(sizeof(EntityType) * 100);
   }
 
-  static Entities &get_entities_for_mod() { return entities_DO_NOT_USE; }
+  static Entities &get_temp() { return EntityHelper::get().temp_entities; }
+
+  static Entities &get_entities_for_mod() {
+    return EntityHelper::get().entities_DO_NOT_USE;
+  }
   static const Entities &get_entities() { return get_entities_for_mod(); }
 
   static RefEntities get_ref_entities() {
@@ -68,54 +74,54 @@ struct EntityHelper {
   }
 
   static Entity &createEntityWithOptions(const CreationOptions &options) {
-    if (temp_entities.capacity() == 0) [[unlikely]]
+    if (get_temp().capacity() == 0) [[unlikely]]
       reserve_temp_space();
 
     std::shared_ptr<Entity> e(new Entity());
-    temp_entities.push_back(e);
+    get_temp().push_back(e);
 
     if (options.is_permanent) {
-      permanant_ids.insert(e->id);
+      EntityHelper::get().permanant_ids.insert(e->id);
     }
 
     return *e;
   }
 
   static void merge_entity_arrays() {
-    if (temp_entities.empty())
+    if (get_temp().empty())
       return;
 
-    for (const auto &entity : temp_entities) {
+    for (const auto &entity : get_temp()) {
       if (!entity)
         continue;
       if (entity->cleanup)
         continue;
-      entities_DO_NOT_USE.push_back(entity);
+      get_entities_for_mod().push_back(entity);
     }
     // clear() Leaves the capacity() of a vector unchanged
-    temp_entities.clear();
+    get_temp().clear();
   }
 
   template <typename Component> static void registerSingleton(Entity &ent) {
     ComponentID id = components::get_type_id<Component>();
 
-    if (singletonMap.contains(id)) {
+    if (EntityHelper::get().singletonMap.contains(id)) {
       log_error("Already had registered singleton {}", type_name<Component>());
     }
 
-    singletonMap.emplace(id, &ent);
+    EntityHelper::get().singletonMap.emplace(id, &ent);
     log_info("Registered singleton {} for {} ({})", ent.id,
              type_name<Component>(), id);
   }
 
   template <typename Component> static RefEntity get_singleton() {
     ComponentID id = components::get_type_id<Component>();
-    if (!singletonMap.contains(id)) {
+    if (!EntityHelper::get().singletonMap.contains(id)) {
       log_warn("Singleton map is missing value for component {} ({}). Did you "
                "register this component previously?",
                id, type_name<Component>());
     }
-    return *singletonMap[id];
+    return *EntityHelper::get().singletonMap[id];
   }
 
   template <typename Component> static Component *get_singleton_cmp() {
@@ -164,7 +170,7 @@ struct EntityHelper {
     Entities &entities = get_entities_for_mod();
     // just clear the whole thing
     entities.clear();
-    temp_entities.clear();
+    EntityHelper::get().temp_entities.clear();
   }
 
   static void delete_all_entities(bool include_permanent) {
@@ -179,8 +185,9 @@ struct EntityHelper {
     Entities &entities = get_entities_for_mod();
 
     auto newend = std::remove_if(
-        entities.begin(), entities.end(),
-        [](const auto &entity) { return !permanant_ids.contains(entity->id); });
+        entities.begin(), entities.end(), [](const auto &entity) {
+          return !EntityHelper::get().permanant_ids.contains(entity->id);
+        });
 
     entities.erase(newend, entities.end());
   }
