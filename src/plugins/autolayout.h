@@ -99,7 +99,19 @@ static Size children(float value = -1) {
   return ui::Size{.dim = ui::Dim::Children, .value = value};
 }
 
-using ComponentSize = std::pair<Size, Size>;
+struct ComponentSize {
+  Size x_axis;
+  Size y_axis;
+
+  bool is_default = false;
+  ComponentSize(std::pair<Size, Size> pair)
+      : x_axis(pair.first), y_axis(pair.second) {}
+  ComponentSize(Size x, Size y) : x_axis(x), y_axis(y) {}
+  ComponentSize(Size x, Size y, bool is_default_)
+      : x_axis(x), y_axis(y), is_default(is_default_) {}
+  ComponentSize(std::pair<Size, Size> pair, bool is_default_)
+      : x_axis(pair.first), y_axis(pair.second), is_default(is_default_) {}
+};
 
 static ComponentSize pixels_xy(float width, float height) {
   return {pixels(width), pixels(height)};

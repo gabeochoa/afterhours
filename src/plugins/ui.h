@@ -343,8 +343,11 @@ concept HasUIContext = requires(T a) {
   } -> std::convertible_to<bool>;
 };
 
+static Vector2Type default_component_size = {150.f, 50.f};
+
 struct ComponentConfig {
-  ComponentSize size;
+  ComponentSize size = ComponentSize(pixels(default_component_size.x),
+                                     pixels(default_component_size.y), true);
   Padding padding;
   Margin margin;
   std::string label;
@@ -360,8 +363,6 @@ struct ComponentConfig {
 
   std::optional<Color> color;
 };
-
-static Vector2Type default_component_size = {150.f, 50.f};
 
 static bool _init_component(Entity &entity, Entity &parent,
                             ComponentConfig config, UIComponentDebug::Type type,
@@ -396,8 +397,8 @@ static bool _init_component(Entity &entity, Entity &parent,
   // things that happen every frame
 
   entity.get<UIComponent>()
-      .set_desired_width(config.size.first)
-      .set_desired_height(config.size.second)
+      .set_desired_width(config.size.x_axis)
+      .set_desired_height(config.size.y_axis)
       .set_desired_padding(config.padding)
       .set_desired_margin(config.margin);
 
@@ -440,9 +441,6 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
 
   config.color = colors::UI_BLUE;
 
-  config.size = ComponentSize{pixels(default_component_size.x),
-                              pixels(default_component_size.y)};
-
   // By default buttons have centered text if user didnt specify anything
   if (config.label_alignment == TextAlignment::None) {
     config.label_alignment = TextAlignment::Center;
@@ -482,9 +480,6 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   config.color = colors::UI_BLUE;
-
-  config.size = ComponentSize{pixels(default_component_size.x),
-                              pixels(default_component_size.y)};
 
   _init_component(entity, parent, //
                   config, UIComponentDebug::Type::checkbox);
