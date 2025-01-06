@@ -506,27 +506,25 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
-  Vector2Type size = default_component_size;
-  if (!config.label.empty()) {
-    size.x /= 2.f;
-    size.y /= 2.f;
+  if (config.size.is_default) {
+    Vector2Type size = default_component_size;
+    if (!config.label.empty()) {
+      size.x /= 2.f;
+      size.y /= 2.f;
+    }
+    config.size = ComponentSize{pixels(size.x), pixels(size.y)};
   }
+
   ElementResult result = {false, entity};
 
   config.color = colors::UI_BLUE;
-
-  config.size = ComponentSize{pixels(size.x), pixels(size.y)};
 
   _init_component(entity, parent, //
                   config, UIComponentDebug::Type::custom, "slider");
 
   auto elem = div(ctx, mk(parent, entity.id + 0),
                   ComponentConfig{
-                      .size =
-                          ComponentSize{
-                              pixels(size.x),
-                              pixels(size.y),
-                          },
+                      .size = config.size,
                       // inheritables
                       .label_alignment = config.label_alignment,
                       .skip_when_tabbing = config.skip_when_tabbing,
@@ -538,7 +536,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // TODO why do we need to do this?
   // why isnt this covered by the pixels(size.x) above?
-  elem.ent().template get<UIComponent>().set_desired_width(pixels(size.x));
+  elem.ent().template get<UIComponent>().set_desired_width(config.size.x_axis);
 
   Entity &slider_bg = elem.ent();
   if (slider_bg.is_missing<ui::HasSliderState>())
@@ -582,10 +580,12 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   auto handle = div(ctx, mk(slider_bg),
                     ComponentConfig{
-                        .size = {pixels(size.x * 0.25f), pixels(size.y)},
+                        .size = {pixels(0.25f * config.size.x_axis.value),
+                                 config.size.y_axis},
                         .padding =
                             Padding{
-                                .left = pixels(owned_value * 0.75f * size.x),
+                                .left = pixels(owned_value * 0.75f *
+                                               config.size.x_axis.value),
                             },
                         // inheritables
                         .label_alignment = config.label_alignment,
@@ -597,8 +597,8 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                     });
 
   handle.cmp()
-      .set_desired_width(pixels(size.x * 0.25f))
-      .set_desired_height(pixels(size.y));
+      .set_desired_width(pixels(0.25f * config.size.x_axis.value))
+      .set_desired_height(config.size.y_axis);
 
   ctx.queue_render(RenderInfo{entity.id, config.render_layer});
 
