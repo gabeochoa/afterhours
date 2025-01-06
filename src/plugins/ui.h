@@ -27,6 +27,20 @@ constexpr Color UI_BLUE = raylib::BLUE;
 constexpr Color UI_WHITE = raylib::RAYWHITE;
 constexpr Color UI_PINK = raylib::PINK;
 } // namespace colors
+
+inline void draw_text_ex(raylib::Font font, const char *content,
+                         Vector2Type position, float font_size, float spacing,
+                         Color color) {
+  raylib::DrawTextEx(font, content, position, font_size, spacing, color);
+}
+inline void draw_text(const char *content, float x, float y, float font_size,
+                      Color color) {
+  raylib::DrawText(content, x, y, font_size, color);
+}
+
+inline void draw_rectangle(RectangleType rect, Color color) {
+  raylib::DrawRectangleRec(rect, color);
+}
 #else
 using Color = ColorType;
 namespace colors {
@@ -36,6 +50,11 @@ constexpr Color UI_BLUE = {0, 0, 255, 255};
 constexpr Color UI_WHITE = {255, 255, 255, 255};
 constexpr Color UI_PINK = {250, 200, 200, 255};
 } // namespace colors
+
+inline void draw_text_ex(afterhours::Font, const char *, Vector2Type, float,
+                         float, Color) {}
+inline void draw_text(const char *, float, float, float, Color) {}
+inline void draw_rectangle(RectangleType, Color) {}
 #endif
 
 namespace afterhours {
@@ -1063,15 +1082,12 @@ struct UpdateDropdownOptions
   }
 };
 
-#ifdef AFTER_HOURS_USE_RAYLIB
-
 static Vector2Type position_text(const ui::FontManager &fm,
                                  const std::string &text,
                                  RectangleType container, int font_size,
                                  TextAlignment alignment) {
-  raylib::Font font = fm.get_active_font();
-  Vector2Type text_size =
-      raylib::MeasureTextEx(font, text.c_str(), font_size, 1.f);
+  Font font = fm.get_active_font();
+  Vector2Type text_size = measure_text(font, text.c_str(), font_size, 1.f);
 
   Vector2Type position;
 
@@ -1102,12 +1118,13 @@ static Vector2Type position_text(const ui::FontManager &fm,
   return position;
 }
 
-static void draw_text(const ui::FontManager &fm, const std::string &text,
-                      RectangleType rect, int font_size,
-                      TextAlignment alignment, Color color) {
+static void draw_text_in_rect(const ui::FontManager &fm,
+                              const std::string &text, RectangleType rect,
+                              int font_size, TextAlignment alignment,
+                              Color color) {
   Vector2Type position = position_text(fm, text, rect, font_size, alignment);
-  DrawTextEx(fm.get_active_font(), text.c_str(), position, font_size, 1.f,
-             color);
+  draw_text_ex(fm.get_active_font(), text.c_str(), position, font_size, 1.f,
+               color);
 }
 
 template <typename InputAction>
@@ -1172,11 +1189,11 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
       }
     }
 
-    std::string widget_str = fmt::format(
+    std::string widget_str = std::format(
         "{:03} (x{:05.2f} y{:05.2f}) w{:05.2f}xh{:05.2f} {}", (int)entity.id,
         cmp.x(), cmp.y(), cmp.rect().width, cmp.rect().height, component_name);
 
-    DrawText(widget_str.c_str(), x, y, fontSize, colors::UI_WHITE);
+    draw_text(widget_str.c_str(), x, y, fontSize, colors::UI_WHITE);
   }
 
   void render(const Entity &entity) const {
@@ -1219,13 +1236,13 @@ template <typename InputAction> struct RenderImm : System<> {
     }
 
     if (context.has_focus(entity.id)) {
-      raylib::DrawRectangleRec(cmp.focus_rect(), colors::UI_PINK);
+      draw_rectangle(cmp.focus_rect(), colors::UI_PINK);
     }
-    raylib::DrawRectangleRec(cmp.rect(), col);
+    draw_rectangle(cmp.rect(), col);
     if (entity.has<HasLabel>()) {
-      draw_text(font_manager, entity.get<HasLabel>().label.c_str(), cmp.rect(),
-                (int)(cmp.height() / 2.f), entity.get<HasLabel>().alignment,
-                colors::UI_WHITE);
+      draw_text_in_rect(font_manager, entity.get<HasLabel>().label.c_str(),
+                        cmp.rect(), (int)(cmp.height() / 2.f),
+                        entity.get<HasLabel>().alignment, colors::UI_WHITE);
     }
   }
 
@@ -1277,8 +1294,6 @@ template <typename InputAction> struct RenderImm : System<> {
     context.render_cmds.clear();
   }
 };
-
-#endif
 
 // TODO i really wanted to statically validate this
 // so that any developer would get a reasonable compiler msg
