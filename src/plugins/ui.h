@@ -1135,6 +1135,8 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   mutable int level = 0;
   mutable int indent = 0;
 
+  float fontSize = 20;
+
   RenderDebugAutoLayoutRoots(InputAction toggle_kp)
       : toggle_action(toggle_kp) {}
 
@@ -1161,14 +1163,20 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     this->context =
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
     this->include_derived_children = true;
-    this->level = 0;
+
+    draw_text(std::format("mouse({}, {})", this->context->mouse_pos.x,
+                          this->context->mouse_pos.y)
+                  .c_str(),
+              0, 0, fontSize, colors::UI_WHITE);
+
+    // starting at 1 to avoid the mouse text
+    this->level = 1;
     this->indent = 0;
   }
 
   void render_me(const Entity &entity) const {
     const UIComponent &cmp = entity.get<UIComponent>();
 
-    float fontSize = 20;
     float x = 10 * indent;
     float y = (fontSize * level) + fontSize / 2.f;
 
