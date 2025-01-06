@@ -13,7 +13,7 @@
 struct MyRectangle {
   float x, y, width, height;
 };
-#define RectangleType MyRectangle
+using RectangleType = MyRectangle;
 #endif
 
 #ifndef ColorType
@@ -40,7 +40,7 @@ struct MyVec2 {
     return MyVec2{x - other.x, y - other.y};
   }
 };
-#define Vector2Type MyVec2
+using Vector2Type = MyVec2;
 constexpr float distance_sq(const Vector2Type a, const Vector2Type b) {
   return (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
 }
