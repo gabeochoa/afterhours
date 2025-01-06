@@ -605,8 +605,6 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       .set_desired_width(pixels(size.x * 0.25f))
       .set_desired_height(pixels(size.y));
 
-  // TODO tabbing when dragged should go to handle
-
   ctx.queue_render(RenderInfo{entity.id, config.render_layer});
 
   owned_value = sliderState.value;
