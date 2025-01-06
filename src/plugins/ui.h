@@ -343,7 +343,7 @@ concept HasUIContext = requires(T a) {
   } -> std::convertible_to<bool>;
 };
 
-static Vector2Type default_component_size = {150.f, 50.f};
+static Vector2Type default_component_size = {200.f, 50.f};
 
 struct ComponentConfig {
   ComponentSize size = ComponentSize(pixels(default_component_size.x),
@@ -352,6 +352,7 @@ struct ComponentConfig {
   Margin margin;
   std::string label;
   bool is_absolute = false;
+  FlexDirection flex_direction = FlexDirection::Column;
 
   // inheritable options
   TextAlignment label_alignment = TextAlignment::None;
@@ -506,23 +507,33 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
-  if (config.size.is_default) {
-    Vector2Type size = default_component_size;
-    if (!config.label.empty()) {
-      size.x /= 2.f;
-      size.y /= 2.f;
-    }
-    config.size = ComponentSize{pixels(size.x), pixels(size.y)};
-  }
-
   ElementResult result = {false, entity};
 
-  config.color = colors::UI_BLUE;
+  std::string original_label = config.label;
+  config.label = "";
 
   _init_component(entity, parent, //
                   config, UIComponentDebug::Type::custom, "slider");
 
-  auto elem = div(ctx, mk(parent, entity.id + 0),
+  auto label = div(ctx, mk(entity, entity.id + 0),
+                   ComponentConfig{
+                       .size = config.size,
+                       .label = original_label,
+                       // inheritables
+                       .label_alignment = config.label_alignment,
+                       .skip_when_tabbing = config.skip_when_tabbing,
+                       // debugs
+                       .debug_name = "slider_text",
+                       .render_layer = config.render_layer + 0,
+                       //
+                       .color = colors::UI_BLUE,
+                   });
+  label.ent()
+      .template get<UIComponent>()
+      .set_desired_width(config.size._scale_x(0.5f).x_axis)
+      .set_desired_height(config.size.y_axis);
+
+  auto elem = div(ctx, mk(entity, parent.id + entity.id + 0),
                   ComponentConfig{
                       .size = config.size,
                       // inheritables
@@ -530,7 +541,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                       .skip_when_tabbing = config.skip_when_tabbing,
                       // debugs
                       .debug_name = "slider_background",
-                      .render_layer = config.render_layer,
+                      .render_layer = config.render_layer + 1,
                       .color = colors::UI_RED,
                   });
 
@@ -592,7 +603,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                         .skip_when_tabbing = config.skip_when_tabbing,
                         // debugs
                         .debug_name = "slider_handle",
-                        .render_layer = config.render_layer + 1,
+                        .render_layer = config.render_layer + 2,
                         .color = colors::UI_GREEN,
                     });
 
@@ -1084,6 +1095,8 @@ static RectangleType position_text(const ui::FontManager &fm,
       .x = container.width - 2 * margin_px.x,
       .y = container.height - 2 * margin_px.y,
   };
+
+  // TODO add some caching here?
 
   // Find the largest font size that fits within the maximum text size
   float font_size = 1.f;

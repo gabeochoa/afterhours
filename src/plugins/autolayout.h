@@ -111,6 +111,21 @@ struct ComponentSize {
       : x_axis(x), y_axis(y), is_default(is_default_) {}
   ComponentSize(std::pair<Size, Size> pair, bool is_default_)
       : x_axis(pair.first), y_axis(pair.second), is_default(is_default_) {}
+
+  auto _scale_x(float s) {
+    if (x_axis.dim != ui::Dim::Pixels) {
+      log_warn("Scaling a non pixel component size ...");
+    }
+    x_axis.value *= s;
+    return ComponentSize(*this);
+  }
+  auto _scale_y(float s) {
+    if (y_axis.dim != ui::Dim::Pixels) {
+      log_warn("Scaling a non pixel component size ...");
+    }
+    y_axis.value *= s;
+    return ComponentSize(*this);
+  }
 };
 
 static ComponentSize pixels_xy(float width, float height) {
