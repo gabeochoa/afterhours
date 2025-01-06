@@ -16,6 +16,13 @@ struct MyRectangle {
 #define RectangleType MyRectangle
 #endif
 
+#ifndef ColorType
+struct MyColor {
+  unsigned char r, g, b, a;
+};
+#define ColorType MyColor
+#endif
+
 #ifndef Vector2Type
 struct MyVec2 {
   float x;

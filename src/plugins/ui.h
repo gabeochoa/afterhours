@@ -18,6 +18,26 @@
 #include "../developer.h"
 #include "input_system.h"
 
+#ifdef AFTER_HOURS_USE_RAYLIB
+using Color = raylib::Color;
+namespace colors {
+constexpr Color UI_RED = raylib::RED;
+constexpr Color UI_GREEN = raylib::GREEN;
+constexpr Color UI_BLUE = raylib::BLUE;
+constexpr Color UI_WHITE = raylib::RAYWHITE;
+constexpr Color UI_PINK = raylib::PINK;
+} // namespace colors
+#else
+using Color = ColorType;
+namespace colors {
+constexpr Color UI_RED = {255, 0, 0, 255};
+constexpr Color UI_GREEN = {0, 255, 0, 255};
+constexpr Color UI_BLUE = {0, 0, 255, 255};
+constexpr Color UI_WHITE = {255, 255, 255, 255};
+constexpr Color UI_PINK = {250, 200, 200, 255};
+} // namespace colors
+#endif
+
 namespace afterhours {
 namespace ui {
 
@@ -231,13 +251,10 @@ struct HasDropdownState : ui::HasCheckboxState {
       : HasDropdownState(fetch_opts(*this), fetch_opts, nullptr) {}
 };
 
-#ifdef AFTER_HOURS_USE_RAYLIB
-// TODO add a non raylib version...
 struct HasColor : BaseComponent {
-  raylib::Color color;
-  HasColor(raylib::Color c) : color(c) {}
+  Color color;
+  HasColor(Color c) : color(c) {}
 };
-#endif
 
 struct SliderConfig {
   Vector2Type size;
@@ -325,9 +342,7 @@ struct ComponentConfig {
   std::string debug_name;
   int render_layer = 0;
 
-#ifdef AFTER_HOURS_USE_RAYLIB
-  std::optional<raylib::Color> color;
-#endif
+  std::optional<Color> color;
 };
 
 static Vector2Type default_component_size = {150.f, 50.f};
@@ -350,11 +365,9 @@ static bool _init_component(Entity &entity, Entity &parent,
       entity.addComponent<ui::HasLabel>(config.label)
           .set_alignment(config.label_alignment);
 
-#ifdef AFTER_HOURS_USE_RAYLIB
     if (config.color.has_value()) {
       entity.addComponent<HasColor>(config.color.value());
     }
-#endif
 
     if (config.skip_when_tabbing)
       entity.addComponent<SkipWhenTabbing>();
@@ -380,11 +393,9 @@ static bool _init_component(Entity &entity, Entity &parent,
                                        config.debug_name);
   }
 
-#ifdef AFTER_HOURS_USE_RAYLIB
   if (config.color.has_value()) {
     entity.get<HasColor>().color = config.color.value();
   }
-#endif
 
   if (!config.label.empty())
     entity.get<ui::HasLabel>().label = config.label;
@@ -411,9 +422,7 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
-#ifdef AFTER_HOURS_USE_RAYLIB
-  config.color = raylib::BLUE;
-#endif
+  config.color = colors::UI_BLUE;
 
   config.size = ComponentSize{pixels(default_component_size.x),
                               pixels(default_component_size.y)};
@@ -456,9 +465,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
     config.label_alignment = TextAlignment::Center;
   }
 
-#ifdef AFTER_HOURS_USE_RAYLIB
-  config.color = raylib::BLUE;
-#endif
+  config.color = colors::UI_BLUE;
 
   config.size = ComponentSize{pixels(default_component_size.x),
                               pixels(default_component_size.y)};
@@ -495,9 +502,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   }
   ElementResult result = {false, entity};
 
-#ifdef AFTER_HOURS_USE_RAYLIB
-  config.color = raylib::BLUE;
-#endif
+  config.color = colors::UI_BLUE;
 
   config.size = ComponentSize{pixels(size.x), pixels(size.y)};
 
@@ -517,9 +522,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                       // debugs
                       .debug_name = "slider_background",
                       .render_layer = config.render_layer,
-#ifdef AFTER_HOURS_USE_RAYLIB
-                      .color = raylib::RED,
-#endif
+                      .color = colors::UI_RED,
                   });
 
   // TODO why do we need to do this?
@@ -579,9 +582,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                         // debugs
                         .debug_name = "slider_handle",
                         .render_layer = config.render_layer + 1,
-#ifdef AFTER_HOURS_USE_RAYLIB
-                        .color = raylib::GREEN,
-#endif
+                        .color = colors::UI_GREEN,
                     });
 
   handle.cmp()
@@ -1103,7 +1104,7 @@ static Vector2Type position_text(const ui::FontManager &fm,
 
 static void draw_text(const ui::FontManager &fm, const std::string &text,
                       RectangleType rect, int font_size,
-                      TextAlignment alignment, raylib::Color color) {
+                      TextAlignment alignment, Color color) {
   Vector2Type position = position_text(fm, text, rect, font_size, alignment);
   DrawTextEx(fm.get_active_font(), text.c_str(), position, font_size, 1.f,
              color);
@@ -1175,7 +1176,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
         "{:03} (x{:05.2f} y{:05.2f}) w{:05.2f}xh{:05.2f} {}", (int)entity.id,
         cmp.x(), cmp.y(), cmp.rect().width, cmp.rect().height, component_name);
 
-    DrawText(widget_str.c_str(), x, y, fontSize, raylib::RAYWHITE);
+    DrawText(widget_str.c_str(), x, y, fontSize, colors::UI_WHITE);
   }
 
   void render(const Entity &entity) const {
@@ -1211,20 +1212,20 @@ template <typename InputAction> struct RenderImm : System<> {
                  const FontManager &font_manager, const Entity &entity) const {
     const UIComponent &cmp = entity.get<UIComponent>();
 
-    raylib::Color col = entity.template get<HasColor>().color;
+    Color col = entity.template get<HasColor>().color;
 
     if (context.is_hot(entity.id)) {
-      col = raylib::RED;
+      col = colors::UI_RED;
     }
 
     if (context.has_focus(entity.id)) {
-      raylib::DrawRectangleRec(cmp.focus_rect(), raylib::PINK);
+      raylib::DrawRectangleRec(cmp.focus_rect(), colors::UI_PINK);
     }
     raylib::DrawRectangleRec(cmp.rect(), col);
     if (entity.has<HasLabel>()) {
       draw_text(font_manager, entity.get<HasLabel>().label.c_str(), cmp.rect(),
                 (int)(cmp.height() / 2.f), entity.get<HasLabel>().alignment,
-                raylib::RAYWHITE);
+                colors::UI_WHITE);
     }
   }
 
@@ -1426,9 +1427,7 @@ Entity &make_dropdown(Entity &parent, int max_options = -1) {
       },
       max_options);
 
-#ifdef AFTER_HOURS_USE_RAYLIB
-  dropdown.addComponent<ui::HasColor>(raylib::BLUE);
-#endif
+  dropdown.addComponent<ui::HasColor>(colors::UI_BLUE);
 
   return dropdown;
 }
