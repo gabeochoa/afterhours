@@ -12,6 +12,27 @@
 namespace afterhours {
 using Rectangle = RectangleType;
 
+#ifdef AFTER_HOURS_USE_RAYLIB
+using Font = raylib::Font;
+inline raylib::Font load_font_from_file(const char *file) {
+  return raylib::LoadFont(file);
+}
+inline vec2 measure_text(raylib::Font font, const char *content, float size,
+                         float spacing) {
+  return raylib::MeasureTextEx(font, content, size, spacing);
+}
+#else
+using Font = FontType;
+inline Font load_font_from_file(const char *) { return Font(); }
+inline Vector2Type measure_text(Font, const char *, float /*size*/,
+                                float /*spacing*/) {
+  log_warn("Text size measuring not supported. Either use "
+           "AFTER_HOURS_USE_RAYLIB or provide your own through "
+           "set_measure_text_fn()");
+  return Vector2Type{0, 0};
+}
+#endif
+
 namespace ui {
 
 enum struct Dim {
@@ -345,18 +366,17 @@ struct UIComponent : BaseComponent {
   }
 };
 
-#ifdef AFTER_HOURS_USE_RAYLIB
 struct FontManager : BaseComponent {
   std::string active_font = UIComponent::DEFAULT_FONT;
-  std::map<std::string, raylib::Font> fonts;
+  std::map<std::string, Font> fonts;
 
-  auto &load_font(const std::string &font_name, raylib::Font font) {
+  auto &load_font(const std::string &font_name, Font font) {
     fonts[font_name] = font;
     return *this;
   }
 
   auto &load_font(const std::string &font_name, const char *font_file) {
-    fonts[font_name] = raylib::LoadFont(font_file);
+    fonts[font_name] = load_font_from_file(font_file);
     return *this;
   }
 
@@ -364,25 +384,23 @@ struct FontManager : BaseComponent {
     if (!fonts.contains(font_name)) {
       log_warn("{} missing from font manager. Did you call load_font() on it "
                "previously?",
-               font_name);
+               font_name.c_str());
     }
     active_font = font_name;
     return *this;
   }
 
-  raylib::Font get_active_font() const {
+  Font get_active_font() const {
     if (!fonts.contains(active_font)) {
       log_warn("{} missing from font manager. Did you call load_font() on it "
                "previously?",
-               active_font);
+               active_font.c_str());
     }
     return fonts.at(active_font);
   }
-  raylib::Font get_font(const std::string &name) const {
-    return fonts.at(name);
-  }
+  Font get_font(const std::string &name) const { return fonts.at(name); }
 };
-#endif
+
 enum struct TextAlignment {
   Left,
   Center,
@@ -455,16 +473,9 @@ struct AutoLayout {
     if (external_measure_text) {
       result = external_measure_text(font_name, content, font_size, spacing);
     } else {
-#ifdef AFTER_HOURS_USE_RAYLIB
       auto font_manager = EntityHelper::get_singleton_cmp<FontManager>();
       auto font = font_manager->get_font(font_name);
-      result = raylib::MeasureTextEx(font, content.c_str(), font_size, spacing);
-#else
-      result = Vector2Type{0.f, 0.f};
-      log_error("Text size measuring not supported. Either use "
-                "AFTER_HOURS_USE_RAYLIB or provide your own through "
-                "set_measure_text_fn()");
-#endif
+      result = measure_text(font, content.c_str(), font_size, spacing);
     }
 
     switch (axis) {

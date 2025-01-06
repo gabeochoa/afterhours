@@ -23,6 +23,11 @@ struct MyColor {
 #define ColorType MyColor
 #endif
 
+#ifndef FontType
+struct MyFont {};
+#define FontType MyFont
+#endif
+
 #ifndef Vector2Type
 struct MyVec2 {
   float x;
