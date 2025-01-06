@@ -41,6 +41,9 @@ inline void draw_text(const char *content, float x, float y, float font_size,
 inline void draw_rectangle(RectangleType rect, Color color) {
   raylib::DrawRectangleRec(rect, color);
 }
+
+inline afterhours::Font get_default_font() { return raylib::GetFontDefault(); }
+inline afterhours::Font get_unset_font() { return raylib::GetFontDefault(); }
 #else
 using Color = ColorType;
 namespace colors {
@@ -55,6 +58,8 @@ inline void draw_text_ex(afterhours::Font, const char *, Vector2Type, float,
                          float, Color) {}
 inline void draw_text(const char *, float, float, float, Color) {}
 inline void draw_rectangle(RectangleType, Color) {}
+inline afterhours::Font get_default_font() { return afterhours::Font(); }
+inline afterhours::Font get_unset_font() { return afterhours::Font(); }
 #endif
 
 namespace afterhours {
@@ -1521,12 +1526,10 @@ static void add_singleton_components(Entity &entity) {
   entity.addComponent<UIContext<InputAction>>();
   EntityHelper::registerSingleton<UIContext<InputAction>>(entity);
 
-#ifdef AFTER_HOURS_USE_RAYLIB
   entity.addComponent<ui::FontManager>()
-      .load_font(UIComponent::DEFAULT_FONT, raylib::GetFontDefault())
-      .load_font(UIComponent::UNSET_FONT, raylib::GetFontDefault());
+      .load_font(UIComponent::DEFAULT_FONT, get_default_font())
+      .load_font(UIComponent::UNSET_FONT, get_unset_font());
   EntityHelper::registerSingleton<ui::FontManager>(entity);
-#endif
 }
 
 template <typename InputAction>
@@ -1543,10 +1546,8 @@ static void enforce_singletons(SystemManager &sm) {
 
   sm.register_update_system(
       std::make_unique<developer::EnforceSingleton<UIContext<InputAction>>>());
-#ifdef AFTER_HOURS_USE_RAYLIB
   sm.register_update_system(
       std::make_unique<developer::EnforceSingleton<ui::FontManager>>());
-#endif
 }
 
 template <typename InputAction>
@@ -1573,7 +1574,6 @@ static void register_update_systems(SystemManager &sm) {
       std::make_unique<ui::EndUIContextManager<InputAction>>());
 }
 
-#ifdef AFTER_HOURS_USE_RAYLIB
 template <typename InputAction>
 static void
 register_render_systems(SystemManager &sm,
@@ -1583,7 +1583,6 @@ register_render_systems(SystemManager &sm,
           toggle_debug));
   sm.register_render_system(std::make_unique<ui::RenderImm<InputAction>>());
 }
-#endif
 
 } // namespace ui
 
