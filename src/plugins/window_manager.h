@@ -64,10 +64,9 @@ struct window_manager : developer::Plugin {
   static std::vector<Resolution> fetch_available_resolutions() {
     // These come from the steam hardware survey: jan 5 2025
     std::vector<Resolution> resolutions = {
-        Resolution{.width = 800, .height = 1280},
-        Resolution{.width = 1280, .height = 1024},
         Resolution{.width = 1280, .height = 720},
         Resolution{.width = 1280, .height = 800},
+        Resolution{.width = 1280, .height = 1024},
         Resolution{.width = 1360, .height = 768},
         Resolution{.width = 1366, .height = 768},
         Resolution{.width = 1440, .height = 900},
@@ -75,9 +74,9 @@ struct window_manager : developer::Plugin {
         Resolution{.width = 1680, .height = 1050},
         Resolution{.width = 1920, .height = 1080},
         Resolution{.width = 1920, .height = 1200},
-        Resolution{.width = 2560, .height = 1600},
         Resolution{.width = 2560, .height = 1080},
         Resolution{.width = 2560, .height = 1440},
+        Resolution{.width = 2560, .height = 1600},
         Resolution{.width = 2880, .height = 1800},
         Resolution{.width = 3440, .height = 1440},
         Resolution{.width = 3840, .height = 2160},
