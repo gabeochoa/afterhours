@@ -280,14 +280,6 @@ struct HasColor : BaseComponent {
   HasColor(Color c) : color(c) {}
 };
 
-struct SliderConfig {
-  Vector2Type size;
-  float starting_pct;
-  std::function<std::optional<std::string>(float)> on_slider_changed = nullptr;
-  std::string label = "";
-  bool label_is_format_string = false;
-};
-
 namespace imm {
 struct ElementResult {
   // no explicit on purpose
@@ -1473,14 +1465,6 @@ static void force_layout_and_print(
   ui::AutoLayout::autolayout(root.get<ui::UIComponent>(), resolution,
                              components);
   ui::AutoLayout::print_tree(root.get<ui::UIComponent>());
-}
-
-static Size padding_(float v, float strict = 0.5f) {
-  return ui::Size{
-      .dim = ui::Dim::Percent,
-      .value = v,
-      .strictness = strict,
-  };
 }
 
 //// /////
