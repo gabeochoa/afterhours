@@ -163,6 +163,7 @@ struct EntityHelper {
   static void delete_all_entities_NO_REALLY_I_MEAN_ALL() {
     Entities &entities = get_entities_for_mod();
     // just clear the whole thing
+    entities.clear();
     temp_entities.clear();
   }
 

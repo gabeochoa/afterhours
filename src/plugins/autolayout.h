@@ -74,12 +74,12 @@ struct Size {
   float strictness = 1.f;
 };
 
-static Size pixels(float value, float strictness = 1.f) {
+inline Size pixels(float value, float strictness = 1.f) {
   return ui::Size{
       .dim = ui::Dim::Pixels, .value = value, .strictness = strictness};
 }
 
-static Size percent(float value, float strictness = 1.f) {
+inline Size percent(float value, float strictness = 1.f) {
   if (value > 1.f) {
     log_warn("Value should be between 0 and 1");
   }
@@ -87,7 +87,7 @@ static Size percent(float value, float strictness = 1.f) {
       .dim = ui::Dim::Percent, .value = value, .strictness = strictness};
 }
 
-static Size screen_pct(float value, float strictness = 0.9f) {
+inline Size screen_pct(float value, float strictness = 0.9f) {
   if (value > 1.f) {
     log_warn("Value should be between 0 and 1");
   }
@@ -95,7 +95,7 @@ static Size screen_pct(float value, float strictness = 0.9f) {
       .dim = ui::Dim::ScreenPercent, .value = value, .strictness = strictness};
 }
 
-static Size children(float value = -1) {
+inline Size children(float value = -1) {
   return ui::Size{.dim = ui::Dim::Children, .value = value};
 }
 
@@ -128,11 +128,11 @@ struct ComponentSize {
   }
 };
 
-static ComponentSize pixels_xy(float width, float height) {
+inline ComponentSize pixels_xy(float width, float height) {
   return {pixels(width), pixels(height)};
 }
 
-static ComponentSize children_xy() {
+inline ComponentSize children_xy() {
   return {
       children(),
       children(),
