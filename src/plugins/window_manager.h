@@ -38,8 +38,9 @@ struct window_manager : developer::Plugin {
 
 #ifdef AFTER_HOURS_USE_RAYLIB
   static Resolution fetch_current_resolution() {
-    return Resolution{.width = raylib::GetRenderWidth(),
-                      .height = raylib::GetRenderHeight()};
+    auto scale = raylib::GetWindowScaleDPI();
+    return Resolution{.width = raylib::GetRenderWidth() / scale.x,
+                      .height = raylib::GetRenderHeight() / scale.y};
   }
 
   static Resolution fetch_maximum_resolution() {
