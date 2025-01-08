@@ -1589,10 +1589,10 @@ template <typename InputAction>
 static void
 register_render_systems(SystemManager &sm,
                         InputAction toggle_debug = InputAction::None) {
+  sm.register_render_system(std::make_unique<ui::RenderImm<InputAction>>());
   sm.register_render_system(
       std::make_unique<ui::RenderDebugAutoLayoutRoots<InputAction>>(
           toggle_debug));
-  sm.register_render_system(std::make_unique<ui::RenderImm<InputAction>>());
 }
 
 } // namespace ui
