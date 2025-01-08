@@ -646,17 +646,19 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   dropdownState.last_option_clicked = option_index;
   dropdownState.changed_since = false;
 
-  const auto toggle_visibility = [&ctx](Entity &dd) {
+  size_t first_hidable = config.label.empty() ? 1 : 2;
+
+  const auto toggle_visibility = [first_hidable, &ctx](Entity &dd) {
     HasDropdownState &ds = dd.get<ui::HasDropdownState>();
     ds.on = !ds.on;
     ds.changed_since = true;
 
     auto children = dd.get<UIComponent>().children;
     if (ds.on) {
-      for (size_t i = 0; i < children.size(); i++) {
+      for (size_t i = first_hidable; i < children.size(); i++) {
         EntityID id = children[i];
         Entity &opt = EntityHelper::getEntityForIDEnforce(id);
-        if (i != 0 && opt.has<UIComponent>())
+        if (opt.has<UIComponent>())
           opt.get<UIComponent>().should_hide = false;
 
         if (i == ds.last_option_clicked) {
@@ -664,19 +666,14 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
         }
       }
     } else {
-      for (size_t i = 0; i < children.size(); i++) {
+      for (size_t i = first_hidable; i < children.size(); i++) {
         EntityID id = children[i];
         Entity &opt = EntityHelper::getEntityForIDEnforce(id);
-        if (i != 0 && opt.has<UIComponent>())
+        if (opt.has<UIComponent>())
           opt.get<UIComponent>().should_hide = true;
       }
     }
   };
-
-  config.size = ComponentSize(pixels(default_component_size.x),
-                              children(default_component_size.y));
-
-  _init_component(entity, parent, config, UIComponentDebug::Type::dropdown);
 
   const auto on_option_click = [toggle_visibility, options, &ctx](Entity &dd,
                                                                   size_t i) {
@@ -692,9 +689,41 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
     ctx.set_focus(first_child.id);
   };
 
+  config.size = ComponentSize(pixels(default_component_size.x),
+                              children(default_component_size.y));
+  config.flex_direction = FlexDirection::Row;
+
+  _init_component(entity, parent, config, UIComponentDebug::Type::dropdown);
+
+  Size width = config.size._scale_x(0.5f).x_axis;
+
+  int child_index = 0;
+
+  if (!config.label.empty()) {
+    auto label = div(ctx, mk(entity, child_index++),
+                     ComponentConfig{
+                         .size = config.size,
+                         .label = config.label,
+                         // inheritables
+                         .label_alignment = config.label_alignment,
+                         .skip_when_tabbing = config.skip_when_tabbing,
+                         // debugs
+                         .debug_name = "dropdown_label",
+                         .render_layer = (config.render_layer + 1),
+                         //
+                         .color = colors::UI_BLUE,
+                     });
+    label
+        .ent() //
+        .template get<UIComponent>()
+        .set_desired_width(width)
+        .set_desired_height(config.size.y_axis);
+  }
+
   if (button(
-          ctx, mk(entity, 0),
+          ctx, mk(entity, child_index++),
           ComponentConfig{
+              .size = ComponentSize{width, config.size.y_axis},
               .label =
                   options[dropdownState.on ? 0
                                            : dropdownState.last_option_clicked],
@@ -703,6 +732,8 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
               .skip_when_tabbing = config.skip_when_tabbing,
               // debugs
               .debug_name = "option 1",
+              .render_layer =
+                  (config.render_layer + (dropdownState.on ? 0 : 0)),
           })) {
 
     dropdownState.on // when closed we dont want to "select" the visible option
@@ -712,8 +743,9 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
 
   if (dropdownState.on) {
     for (size_t i = 1; i < options.size(); i++) {
-      if (button(ctx, mk(entity, i),
+      if (button(ctx, mk(entity, child_index + i),
                  ComponentConfig{
+                     .size = ComponentSize{width, config.size.y_axis},
                      .label = options[i],
                      // inheritables
                      .label_alignment = config.label_alignment,
