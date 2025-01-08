@@ -41,8 +41,9 @@ struct window_manager : developer::Plugin {
     auto scale = raylib::GetWindowScaleDPI();
     // generally im pretty confident that this will end up with a nice round
     // number resolution but i havent done any research about it - gabe Jan 2025
-    return Resolution{.width = static_cast<int>(raylib::GetRenderWidth() / scale.x),
-                      .height = static_cast<int>(raylib::GetRenderHeight() / scale.y});
+    return Resolution{
+        .width = static_cast<int>(raylib::GetRenderWidth() / scale.x),
+        .height = static_cast<int>(raylib::GetRenderHeight() / scale.y)};
   }
 
   static Resolution fetch_maximum_resolution() {
