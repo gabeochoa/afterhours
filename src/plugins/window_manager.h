@@ -39,8 +39,10 @@ struct window_manager : developer::Plugin {
 #ifdef AFTER_HOURS_USE_RAYLIB
   static Resolution fetch_current_resolution() {
     auto scale = raylib::GetWindowScaleDPI();
-    return Resolution{.width = raylib::GetRenderWidth() / scale.x,
-                      .height = raylib::GetRenderHeight() / scale.y};
+    // generally im pretty confident that this will end up with a nice round
+    // number resolution but i havent done any research about it - gabe Jan 2025
+    return Resolution{.width = static_cast<int>(raylib::GetRenderWidth() / scale.x),
+                      .height = static_cast<int>(raylib::GetRenderHeight() / scale.y});
   }
 
   static Resolution fetch_maximum_resolution() {
