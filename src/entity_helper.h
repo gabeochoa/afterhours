@@ -164,6 +164,9 @@ struct EntityHelper {
         [](const auto &entity) { return !entity || entity->cleanup; });
 
     entities.erase(newend, entities.end());
+
+    // mark all dirty for now
+    dirtyComponents.set();
   }
 
   static void delete_all_entities_NO_REALLY_I_MEAN_ALL() {
@@ -171,6 +174,7 @@ struct EntityHelper {
     // just clear the whole thing
     entities.clear();
     EntityHelper::get().temp_entities.clear();
+    dirtyComponents.set();
   }
 
   static void delete_all_entities(bool include_permanent) {
