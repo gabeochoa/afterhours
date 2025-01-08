@@ -673,24 +673,10 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
     }
   };
 
-  const auto make_dropdown = [&]() -> UIComponent & {
-    if (entity.is_missing<UIComponent>()) {
-      entity.addComponent<UIComponentDebug>(UIComponentDebug::Type::dropdown);
-      entity.addComponent<UIComponent>(entity.id)
-          .set_desired_width(pixels(default_component_size.x))
-          .set_desired_height(children(default_component_size.y))
-          .set_desired_padding(config.padding)
-          .set_desired_margin(config.margin)
-          .set_parent(parent.id);
+  config.size = ComponentSize(pixels(default_component_size.x),
+                              children(default_component_size.y));
 
-      UIComponent &parent_cmp = parent.get<UIComponent>();
-      parent_cmp.add_child(entity.id);
-    }
-
-    return entity.get<UIComponent>();
-  };
-
-  UIComponent &cmp = make_dropdown();
+  _init_component(entity, parent, config, UIComponentDebug::Type::dropdown);
 
   const auto on_option_click = [toggle_visibility, options, &ctx](Entity &dd,
                                                                   size_t i) {
