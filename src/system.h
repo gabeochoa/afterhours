@@ -11,10 +11,14 @@
 #include "entity.h"
 
 namespace afterhours {
-class SystemBase {
-public:
-  SystemBase() {}
+struct SystemBase {
+  Entities cache;
+  Signature signature;
+
+  SystemBase(const Signature &sig) : signature(sig) {}
   virtual ~SystemBase() {}
+
+  virtual void update_cache(Entities &, const Signature &dirty) = 0;
 
   // Runs before calling once/for-each, and when
   // false skips calling those
@@ -28,61 +32,97 @@ public:
   virtual void for_each(Entity &, float) = 0;
   virtual void for_each(const Entity &, float) const = 0;
 
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-  bool include_derived_children = false;
-  virtual void for_each_derived(Entity &, float) = 0;
-  virtual void for_each_derived(const Entity &, float) const = 0;
-#endif
+  virtual void for_each_cached(float) = 0;
+  virtual void for_each_cached(float) const = 0;
 };
 
-template <typename... Components> struct System : SystemBase {
+/*
+ *
 
-  /*
-   *
-
-   TODO I would like to support the ability to add Not<> Queries to the systesm
+ TODO I would like to support the ability to add Not<> Queries to the systesm
 to filter out things you dont want
 
 But template meta programming is tough
 
-    System<Not<Transform>> => would run for anything that doesnt have transform
-    System<Health, Not<Dead>> => would run for anything that has health and not
+  System<Not<Transform>> => would run for anything that doesnt have transform
+  System<Health, Not<Dead>> => would run for anything that has health and not
 dead
 
 template <typename Component> struct Not : BaseComponent {
-  using type = Component;
+using type = Component;
 };
-  template <typename... Cs> void for_each(Entity &entity, float dt) {
-    if constexpr (sizeof...(Cs) > 0) {
-      if (
-          //
-          (
-              //
-              (std::is_base_of_v<Not<typename Cs::type>, Cs> //
-                   ? entity.template is_missing<Cs::type>()
-                   : entity.template has<Cs>() //
-               ) &&
-              ...)
-          //
-      ) {
-        for_each_with(entity,
-                      entity.template get<std::conditional_t<
-                          std::is_base_of_v<Not<typename Cs::type>, Cs>,
-                          typename Cs::type, Cs>>()...,
-                      dt);
-      }
-    } else {
-      for_each_with(entity, dt);
+template <typename... Cs> void for_each(Entity &entity, float dt) {
+  if constexpr (sizeof...(Cs) > 0) {
+    if (
+        //
+        (
+            //
+            (std::is_base_of_v<Not<typename Cs::type>, Cs> //
+                 ? entity.template is_missing<Cs::type>()
+                 : entity.template has<Cs>() //
+             ) &&
+            ...)
+        //
+    ) {
+      for_each_with(entity,
+                    entity.template get<std::conditional_t<
+                        std::is_base_of_v<Not<typename Cs::type>, Cs>,
+                        typename Cs::type, Cs>>()...,
+                    dt);
+    }
+  } else {
+    for_each_with(entity, dt);
+  }
+}
+
+void for_each(Entity &entity, float dt) {
+  for_each_with(entity, entity.template get<Components>()..., dt);
+}
+*/
+
+#include "entity_helper.h"
+
+template <typename... Components> struct System : SystemBase {
+
+  System() : SystemBase(get_signature()) {
+    // log_info("signature {} {}", typeid(*this).name(), signature);
+  }
+
+  static constexpr Signature get_signature() {
+    Signature sig;
+    ((sig.set(components::get_type_id<Components>())), ...);
+    return sig;
+  }
+
+  virtual void update_cache(Entities &entities, const Signature &dirty) {
+    bool needs_update = (signature & dirty) == signature;
+    if (!needs_update)
+      return;
+    cache.clear();
+    for (std::shared_ptr<Entity> entity : entities) {
+      if (!entity)
+        continue;
+      if (entity->has(signature))
+        cache.push_back(entity);
+    }
+    // log_info(" {} cache has {} items", typeid(*this).name(), cache.size());
+  }
+
+  virtual void for_each_cached(float dt) override {
+    for (std::shared_ptr<Entity> ptr : cache) {
+      for_each(*ptr, dt);
     }
   }
 
-  void for_each(Entity &entity, float dt) {
-    for_each_with(entity, entity.template get<Components>()..., dt);
+  virtual void for_each_cached(float dt) const override {
+    for (std::shared_ptr<Entity> ptr : cache) {
+      for_each(*ptr, dt);
+    }
   }
-*/
-  void for_each(Entity &entity, float dt) {
+
+  virtual void for_each(Entity &entity, float dt) override {
     if constexpr (sizeof...(Components) > 0) {
-      if ((entity.template has<Components>() && ...)) {
+      if ((entity.has(signature))) {
         for_each_with(entity, entity.template get<Components>()..., dt);
       }
     } else {
@@ -90,36 +130,9 @@ template <typename Component> struct Not : BaseComponent {
     }
   }
 
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-  void for_each_derived(Entity &entity, float dt) {
+  virtual void for_each(const Entity &entity, float dt) const override {
     if constexpr (sizeof...(Components) > 0) {
-      if ((entity.template has_child_of<Components>() && ...)) {
-        for_each_with_derived(
-            entity, entity.template get_with_child<Components>()..., dt);
-      }
-    } else {
-      for_each_with(entity, dt);
-    }
-  }
-
-  void for_each_derived(const Entity &entity, float dt) const {
-    if constexpr (sizeof...(Components) > 0) {
-      if ((entity.template has_child_of<Components>() && ...)) {
-        for_each_with_derived(
-            entity, entity.template get_with_child<Components>()..., dt);
-      }
-    } else {
-      for_each_with(entity, dt);
-    }
-  }
-  virtual void for_each_with_derived(Entity &, Components &..., float) {}
-  virtual void for_each_with_derived(const Entity &, const Components &...,
-                                     float) const {}
-#endif
-
-  void for_each(const Entity &entity, float dt) const {
-    if constexpr (sizeof...(Components) > 0) {
-      if ((entity.template has<Components>() && ...)) {
+      if ((entity.has(signature))) {
         for_each_with(entity, entity.template get<Components>()..., dt);
       }
     } else {
@@ -135,8 +148,6 @@ template <typename Component> struct Not : BaseComponent {
   virtual void for_each_with(const Entity &, const Components &...,
                              float) const {}
 };
-
-#include "entity_helper.h"
 
 struct CallbackSystem : System<> {
   std::function<void(float)> cb_;
@@ -179,59 +190,51 @@ struct SystemManager {
     register_render_system(std::make_unique<CallbackSystem>(cb));
   }
 
-  void tick(Entities &entities, float dt) {
+  void update_caches(Entities &entities) {
     for (auto &system : update_systems_) {
-      if (!system->should_run(dt))
+      system->update_cache(entities, dirtyComponents);
+    }
+    for (auto &system : fixed_update_systems_) {
+      system->update_cache(entities, dirtyComponents);
+    }
+    for (auto &system : render_systems_) {
+      system->update_cache(entities, dirtyComponents);
+    }
+    dirtyComponents.reset();
+  }
+
+  void tick(Entities &entities, float dt) {
+    for (std::unique_ptr<SystemBase> &system_ptr : update_systems_) {
+      SystemBase &system = *system_ptr;
+      if (!system.should_run(dt))
         continue;
-      system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
-        if (!entity)
-          continue;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-        if (system->include_derived_children)
-          system->for_each_derived(*entity, dt);
-        else
-#endif
-          system->for_each(*entity, dt);
-      }
+      system.once(dt);
+      system.for_each_cached(dt);
       EntityHelper::merge_entity_arrays();
+      continue;
     }
   }
 
   void fixed_tick(Entities &entities, float dt) {
-    for (auto &system : fixed_update_systems_) {
-      if (!system->should_run(dt))
+    for (std::unique_ptr<SystemBase> &system_ptr : fixed_update_systems_) {
+      SystemBase &system = *system_ptr;
+      if (!system.should_run(dt))
         continue;
-      system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
-        if (!entity)
-          continue;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-        if (system->include_derived_children)
-          system->for_each_derived(*entity, dt);
-        else
-#endif
-          system->for_each(*entity, dt);
-      }
+      system.once(dt);
+      system.for_each_cached(dt);
+      EntityHelper::merge_entity_arrays();
+      continue;
     }
   }
 
   void render(const Entities &entities, float dt) {
-    for (const auto &system : render_systems_) {
-      if (!system->should_run(dt))
+    for (const std::unique_ptr<SystemBase> &system_ptr : render_systems_) {
+      SystemBase &system = *system_ptr;
+      if (!system.should_run(dt))
         continue;
-      system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
-        if (!entity)
-          continue;
-        const Entity &e = *entity;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-        if (system->include_derived_children)
-          system->for_each_derived(e, dt);
-        else
-#endif
-          system->for_each(e, dt);
-      }
+      system.once(dt);
+      const_cast<const SystemBase &>(system).for_each_cached(dt);
+      continue;
     }
   }
 
@@ -255,6 +258,10 @@ struct SystemManager {
 
   void run(float dt) {
     auto &entities = EntityHelper::get_entities_for_mod();
+    // log_info(" {} entities ", entities.size());
+
+    update_caches(entities);
+
     fixed_tick_all(entities, dt);
     tick_all(entities, dt);
 

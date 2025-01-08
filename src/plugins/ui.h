@@ -828,11 +828,9 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
       components.emplace(entity.id, entity);
     }
 
-    Entity &e = EntityHelper::get_singleton<
-        window_manager::ProvidesCurrentResolution>();
-
-    resolution =
-        e.get<window_manager::ProvidesCurrentResolution>().current_resolution;
+    resolution = EntityHelper::get_singleton_cmp<
+                     afterhours::window_manager::ProvidesCurrentResolution>()
+                     ->current_resolution;
   }
   virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
                              float) override {
@@ -911,14 +909,12 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
   virtual void once(float) override {
     this->context =
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
-    this->include_derived_children = true;
   }
 
   virtual ~HandleClicks() {}
 
-  virtual void for_each_with_derived(Entity &entity, UIComponent &component,
-                                     HasClickListener &hasClickListener,
-                                     float) {
+  virtual void for_each_with(Entity &entity, UIComponent &component,
+                             HasClickListener &hasClickListener, float) {
     hasClickListener.down = false;
 
     if (!component.was_rendered_to_screen)
@@ -1007,13 +1003,11 @@ struct UpdateDropdownOptions
   }
 
   UpdateDropdownOptions()
-      : SystemWithUIContext<HasDropdownState, HasChildrenComponent>() {
-    this->include_derived_children = true;
-  }
+      : SystemWithUIContext<HasDropdownState, HasChildrenComponent>() {}
 
-  virtual void for_each_with_derived(Entity &entity, UIComponent &component,
-                                     HasDropdownState &hasDropdownState,
-                                     HasChildrenComponent &hasChildren, float) {
+  virtual void for_each_with(Entity &entity, UIComponent &component,
+                             HasDropdownState &hasDropdownState,
+                             HasChildrenComponent &hasChildren, float) {
     auto options = hasDropdownState.options;
     hasDropdownState.options = hasDropdownState.fetch_options(hasDropdownState);
 
@@ -1215,7 +1209,6 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   virtual void once(float) override {
     this->context =
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
-    this->include_derived_children = true;
 
     draw_text(std::format("mouse({}, {})", this->context->mouse_pos.x,
                           this->context->mouse_pos.y)
@@ -1269,8 +1262,8 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     indent--;
   }
 
-  virtual void for_each_with_derived(const Entity &entity, const UIComponent &,
-                                     const AutoLayoutRoot &, float) const {
+  virtual void for_each_with(const Entity &entity, const UIComponent &,
+                             const AutoLayoutRoot &, float) const {
     render(entity);
     level += 2;
     indent = 0;
@@ -1279,7 +1272,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
 
 template <typename InputAction> struct RenderImm : System<> {
 
-  RenderImm() : System<>() { this->include_derived_children = true; }
+  RenderImm() : System<>() {}
 
   void render_me(const UIContext<InputAction> &context,
                  const FontManager &font_manager, const Entity &entity) const {
