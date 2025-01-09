@@ -28,8 +28,9 @@ public:
   virtual void for_each(Entity &, float) = 0;
   virtual void for_each(const Entity &, float) const = 0;
 
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
   bool include_derived_children = false;
+
+#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
   virtual void for_each_derived(Entity &, float) = 0;
   virtual void for_each_derived(const Entity &, float) const = 0;
 #endif
