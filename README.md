@@ -89,17 +89,20 @@ sprite rendering
 Components: 
 - HasSpritesheet 
 - HasSprite
+- HasAnimation
 
 Update Systems: 
-- :)
+- AnimationUpdateCurrentFrame
 
 Render Systems: 
 - RenderSprites
+- RenderAnimation
 
 
 
 
 examples in other repos:
+- https://github.com/gabeochoa/kart-afterhours/
 - https://github.com/gabeochoa/tetr-afterhours/
 - https://github.com/gabeochoa/wm-afterhours/
 - https://github.com/gabeochoa/ui-afterhours/
