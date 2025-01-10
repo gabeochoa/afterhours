@@ -23,24 +23,14 @@ inline void draw_texture_pro(Texture, Rectangle, Rectangle, Vector2Type, float,
                              Color) {}
 #endif
 
-struct HasSpritesheet : BaseComponent {
-  Texture texture;
-  HasSpritesheet(const Texture tex) : texture(tex) {}
-};
-
-struct HasSprite : BaseComponent {
+struct TransformData {
   // TODO stolen from transform...
   Vector2Type position;
   Vector2Type size;
   float angle;
 
-  Rectangle frame;
-  float scale;
-  Color colorTint;
-  HasSprite(Vector2Type pos, Vector2Type size_, float angle_, Rectangle frm,
-            float scl, Color colorTintIn)
-      : position(pos), size(size_), angle(angle_), frame{frm}, scale{scl},
-        colorTint{colorTintIn} {}
+  TransformData(Vector2Type pos, Vector2Type size_, float angle_)
+      : position(pos), size(size_), angle(angle_) {}
 
   auto &update_position(const Vector2Type &pos) {
     position = pos;
@@ -57,22 +47,39 @@ struct HasSprite : BaseComponent {
     return *this;
   }
 
-  auto &update_transform(const Vector2Type &pos, const Vector2Type &size_,
-                         const float &ang) {
-    return update_position(pos).update_size(size_).update_angle(ang);
-  }
-
   Vector2Type center() const {
     return {
         position.x + (size.x / 2.f),
         position.y + (size.y / 2.f),
     };
   }
+};
+
+struct HasSpritesheet : BaseComponent {
+  Texture texture;
+  HasSpritesheet(const Texture tex) : texture(tex) {}
+};
+
+struct HasSprite : BaseComponent {
+  TransformData transform;
+
+  Rectangle frame;
+  float scale;
+  Color colorTint;
+  HasSprite(Vector2Type pos, Vector2Type size_, float angle_, Rectangle frm,
+            float scl, Color colorTintIn)
+      : transform(pos, size_, angle_), frame{frm}, scale{scl},
+        colorTint{colorTintIn} {}
+
+  auto &update_transform(const Vector2Type &pos, const Vector2Type &size_,
+                         const float &ang) {
+    return transform.update_position(pos).update_size(size_).update_angle(ang);
+  }
 
   Rectangle destination() const {
     return Rectangle{
-        center().x,
-        center().y,
+        transform.center().x,
+        transform.center().y,
         frame.width * scale,
         frame.height * scale,
     };
