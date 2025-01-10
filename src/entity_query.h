@@ -214,7 +214,20 @@ struct EntityQuery {
 
   // TODO Created entities are not available in queries until the next system
   // runs is this a problem?
-  EntityQuery() : entities(EntityHelper::get_entities()) {}
+  // (for now adding force_merge)
+  EntityQuery(bool force_merge = false)
+      : entities(EntityHelper::get_entities()) {
+    size_t size = EntityHelper::get().temp_entities.size();
+    if (size == 0)
+      return;
+
+    if (force_merge) {
+      EntityHelper::merge_entity_arrays();
+      entities = EntityHelper::get_entities();
+    } else {
+      log_error("query will miss {} ents in temp", size);
+    }
+  }
   explicit EntityQuery(const Entities &entsIn) : entities(entsIn) {
     entities = entsIn;
   }
