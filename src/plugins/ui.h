@@ -16,18 +16,10 @@
 #include <magic_enum/magic_enum.hpp>
 
 #include "../developer.h"
+#include "color.h"
 #include "input_system.h"
 
 #ifdef AFTER_HOURS_USE_RAYLIB
-using Color = raylib::Color;
-namespace colors {
-constexpr Color UI_RED = raylib::RED;
-constexpr Color UI_GREEN = raylib::GREEN;
-constexpr Color UI_BLUE = raylib::BLUE;
-constexpr Color UI_WHITE = raylib::RAYWHITE;
-constexpr Color UI_PINK = raylib::PINK;
-} // namespace colors
-
 inline void draw_text_ex(raylib::Font font, const char *content,
                          Vector2Type position, float font_size, float spacing,
                          Color color) {
@@ -46,15 +38,6 @@ inline afterhours::Font get_default_font() { return raylib::GetFontDefault(); }
 inline afterhours::Font get_unset_font() { return raylib::GetFontDefault(); }
 
 #else
-using Color = ColorType;
-namespace colors {
-constexpr Color UI_RED = {255, 0, 0, 255};
-constexpr Color UI_GREEN = {0, 255, 0, 255};
-constexpr Color UI_BLUE = {0, 0, 255, 255};
-constexpr Color UI_WHITE = {255, 255, 255, 255};
-constexpr Color UI_PINK = {250, 200, 200, 255};
-} // namespace colors
-
 inline void draw_text_ex(afterhours::Font, const char *, Vector2Type, float,
                          float, Color) {}
 inline void draw_text(const char *, float, float, float, Color) {}
@@ -64,6 +47,7 @@ inline afterhours::Font get_unset_font() { return afterhours::Font(); }
 #endif
 
 namespace afterhours {
+
 namespace ui {
 
 static bool is_mouse_inside(const input::MousePosition &mouse_pos,
@@ -274,11 +258,6 @@ struct HasDropdownState : ui::HasCheckboxState {
 
   HasDropdownState(const std::function<Options(HasDropdownState &)> fetch_opts)
       : HasDropdownState(fetch_opts(*this), fetch_opts, nullptr) {}
-};
-
-struct HasColor : BaseComponent {
-  Color color;
-  HasColor(Color c) : color(c) {}
 };
 
 namespace imm {
@@ -1499,7 +1478,7 @@ Entity &make_dropdown(Entity &parent, int max_options = -1) {
       },
       max_options);
 
-  dropdown.addComponent<ui::HasColor>(colors::UI_BLUE);
+  dropdown.addComponent<HasColor>(colors::UI_BLUE);
 
   return dropdown;
 }
