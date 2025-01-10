@@ -44,6 +44,7 @@ inline void draw_rectangle(RectangleType rect, Color color) {
 
 inline afterhours::Font get_default_font() { return raylib::GetFontDefault(); }
 inline afterhours::Font get_unset_font() { return raylib::GetFontDefault(); }
+
 #else
 using Color = ColorType;
 namespace colors {

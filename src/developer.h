@@ -9,6 +9,11 @@
 #include "system.h"
 #include "type_name.h"
 
+#ifndef TextureType
+struct MyTexture {};
+using TextureType = MyTexture;
+#endif
+
 #ifndef RectangleType
 struct MyRectangle {
   float x, y, width, height;

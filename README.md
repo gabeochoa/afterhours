@@ -83,6 +83,20 @@ Update Systems:
 Render Systems: 
 - :)
 
+### texture manager (desires raylib)
+sprite rendering
+
+Components: 
+- HasSpritesheet 
+- HasSprite
+
+Update Systems: 
+- :)
+
+Render Systems: 
+- RenderSprites
+
+
 
 
 examples in other repos:

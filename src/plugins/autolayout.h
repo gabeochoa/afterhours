@@ -11,6 +11,7 @@
 
 namespace afterhours {
 using Rectangle = RectangleType;
+using vec2 = Vector2Type;
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 using Font = raylib::Font;
