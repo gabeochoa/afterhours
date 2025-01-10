@@ -406,7 +406,8 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
-  config.size = ComponentSize{children(), children()};
+  if (config.size.is_default)
+    config.size = ComponentSize{children(), children()};
 
   _init_component(entity, parent, config, UIComponentDebug::Type::div);
 
