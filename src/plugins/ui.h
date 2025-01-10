@@ -1265,16 +1265,19 @@ template <typename InputAction> struct RenderImm : System<> {
                  const FontManager &font_manager, const Entity &entity) const {
     const UIComponent &cmp = entity.get<UIComponent>();
 
-    Color col = entity.template get<HasColor>().color;
+    if (entity.has<HasColor>()) {
+      Color col = entity.template get<HasColor>().color;
 
-    if (context.is_hot(entity.id)) {
-      col = colors::UI_RED;
+      if (context.is_hot(entity.id)) {
+        col = colors::UI_RED;
+      }
+
+      if (context.has_focus(entity.id)) {
+        draw_rectangle(cmp.focus_rect(), colors::UI_PINK);
+      }
+      draw_rectangle(cmp.rect(), col);
     }
 
-    if (context.has_focus(entity.id)) {
-      draw_rectangle(cmp.focus_rect(), colors::UI_PINK);
-    }
-    draw_rectangle(cmp.rect(), col);
     if (entity.has<HasLabel>()) {
       draw_text_in_rect(font_manager, entity.get<HasLabel>().label.c_str(),
                         cmp.rect(), entity.get<HasLabel>().alignment,
@@ -1291,7 +1294,7 @@ template <typename InputAction> struct RenderImm : System<> {
     if (cmp.font_name != UIComponent::UNSET_FONT)
       const_cast<FontManager &>(font_manager).set_active(cmp.font_name);
 
-    if (entity.has<HasColor>()) {
+    if (entity.has<HasColor>() || entity.has<HasLabel>()) {
       render_me(context, font_manager, entity);
     }
 
