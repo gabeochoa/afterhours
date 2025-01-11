@@ -97,10 +97,11 @@ struct input : developer::Plugin {
   static void set_gamepad_mappings(const std::string &) {}
 #endif
 
-  enum DeviceMedium {
+  enum struct DeviceMedium {
     None,
     Keyboard,
-    Gamepad,
+    GamepadButton,
+    GamepadAxis,
   };
 
   template <typename T> struct ActionDone {
@@ -235,20 +236,20 @@ struct input : developer::Plugin {
       DeviceMedium medium;
       float value = 0.f;
       for (auto &input : valid_inputs) {
-        DeviceMedium temp_medium = None;
+        DeviceMedium temp_medium = DeviceMedium::None;
         float temp =             //
             std::visit(          //
                 util::overloaded{//
                                  [&](int keycode) {
-                                   temp_medium = Keyboard;
+                                   temp_medium = DeviceMedium::Keyboard;
                                    return is_key_pressed(keycode) ? 1.f : 0.f;
                                  },
                                  [&](GamepadAxisWithDir axis_with_dir) {
-                                   temp_medium = Gamepad;
+                                   temp_medium = DeviceMedium::GamepadAxis;
                                    return visit_axis(id, axis_with_dir);
                                  },
                                  [&](GamepadButton button) {
-                                   temp_medium = Gamepad;
+                                   temp_medium = DeviceMedium::GamepadButton;
                                    return is_gamepad_button_pressed(id, button)
                                               ? 1.f
                                               : 0.f;
@@ -268,20 +269,20 @@ struct input : developer::Plugin {
       DeviceMedium medium;
       float value = 0.f;
       for (auto &input : valid_inputs) {
-        DeviceMedium temp_medium = None;
+        DeviceMedium temp_medium = DeviceMedium::None;
         float temp =             //
             std::visit(          //
                 util::overloaded{//
                                  [&](int keycode) {
-                                   temp_medium = Keyboard;
+                                   temp_medium = DeviceMedium::Keyboard;
                                    return visit_key_down(keycode);
                                  },
                                  [&](GamepadAxisWithDir axis_with_dir) {
-                                   temp_medium = Gamepad;
+                                   temp_medium = DeviceMedium::GamepadAxis;
                                    return visit_axis(id, axis_with_dir);
                                  },
                                  [&](GamepadButton button) {
-                                   temp_medium = Gamepad;
+                                   temp_medium = DeviceMedium::GamepadButton;
                                    return visit_button_down(id, button);
                                  },
                                  [](auto) {}},
