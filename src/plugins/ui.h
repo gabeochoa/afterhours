@@ -38,8 +38,8 @@ inline void draw_rectangle(RectangleType rect, Color color) {
   raylib::DrawRectangleRec(rect, color);
 }
 
-inline afterhours::Font get_default_font() { return raylib::GetFontDefault(); }
-inline afterhours::Font get_unset_font() { return raylib::GetFontDefault(); }
+inline raylib::Font get_default_font() { return raylib::GetFontDefault(); }
+inline raylib::Font get_unset_font() { return raylib::GetFontDefault(); }
 
 #else
 inline void draw_text_ex(afterhours::Font, const char *, Vector2Type, float,
@@ -188,15 +188,22 @@ struct UIComponentDebug : BaseComponent {
     slider,
   } type;
 
-  std::string name;
+  std::string name_value;
 
   UIComponentDebug(Type type_) : type(type_) {}
   UIComponentDebug(const std::string &name_)
-      : type(Type::custom), name(name_) {}
+      : type(Type::custom), name_value(name_) {}
 
   void set(Type type_, const std::string &name_) {
     type = type_;
-    name = name_;
+    name_value = name_;
+  }
+
+  std::string name() const {
+    if (type == UIComponentDebug::Type::custom) {
+      return name_value;
+    }
+    return std::string(magic_enum::enum_name<UIComponentDebug::Type>(type));
   }
 };
 
@@ -816,6 +823,26 @@ struct ClearUIComponentChildren : System<UIComponent> {
   }
 };
 
+static void print_debug_autolayout_tree(Entity &entity, UIComponent &cmp,
+                                        size_t tab = 0) {
+
+  for (size_t i = 0; i < tab; i++)
+    std::cout << "  ";
+
+  std::cout << cmp.id << " : ";
+  std::cout << cmp.rect().x << ",";
+  std::cout << cmp.rect().y << ",";
+  std::cout << cmp.rect().width << ",";
+  std::cout << cmp.rect().height << " ";
+  std::cout << entity.get<UIComponentDebug>().name() << " ";
+  std::cout << std::endl;
+
+  for (EntityID child_id : cmp.children) {
+    print_debug_autolayout_tree(AutoLayout::to_ent_static(child_id),
+                                AutoLayout::to_cmp_static(child_id), tab + 1);
+  }
+}
+
 struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
 
   std::map<EntityID, RefEntity> components;
@@ -834,12 +861,13 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
     resolution =
         e.get<window_manager::ProvidesCurrentResolution>().current_resolution;
   }
-  virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
+
+  virtual void for_each_with(Entity &entity, AutoLayoutRoot &, UIComponent &cmp,
                              float) override {
 
     AutoLayout::autolayout(cmp, resolution, components);
 
-    // AutoLayout::print_tree(cmp);
+    // print_debug_autolayout_tree(entity, cmp);
     // log_error("");
   }
 };
@@ -1236,13 +1264,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     std::string component_name = "Unknown";
     if (entity.has<UIComponentDebug>()) {
       const auto &cmpdebug = entity.get<UIComponentDebug>();
-      auto type = cmpdebug.type;
-      if (type == UIComponentDebug::Type::custom) {
-        component_name = cmpdebug.name;
-      } else {
-        component_name =
-            magic_enum::enum_name<UIComponentDebug::Type>(cmpdebug.type);
-      }
+      component_name = cmpdebug.name();
     }
 
     std::string widget_str = std::format(
@@ -1539,7 +1561,7 @@ static void force_layout_and_print(
 
   ui::AutoLayout::autolayout(root.get<ui::UIComponent>(), resolution,
                              components);
-  ui::AutoLayout::print_tree(root.get<ui::UIComponent>());
+  print_debug_autolayout_tree(root, root.get<ui::UIComponent>());
 }
 
 //// /////

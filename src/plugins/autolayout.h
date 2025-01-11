@@ -234,8 +234,8 @@ struct UIComponent : BaseComponent {
   explicit UIComponent(EntityID id_) : id(id_) { init_values(); }
 
   void init_values() {
-    computed[Axis::X] = 0;
-    computed[Axis::Y] = 0;
+    computed[Axis::X] = -1;
+    computed[Axis::Y] = -1;
 
     computed_padd[Axis::X] = 0;
     computed_padd[Axis::Y] = 0;
@@ -1347,22 +1347,6 @@ struct AutoLayout {
 
   static UIComponent &to_cmp_static(EntityID id) {
     return to_ent_static(id).get<UIComponent>();
-  }
-
-  static void print_tree(UIComponent &cmp, size_t tab = 0) {
-
-    for (size_t i = 0; i < tab; i++)
-      std::cout << "  ";
-
-    std::cout << cmp.id << " : ";
-    std::cout << cmp.rect().x << ",";
-    std::cout << cmp.rect().y << ",";
-    std::cout << cmp.rect().width << ",";
-    std::cout << cmp.rect().height << std::endl;
-
-    for (EntityID child_id : cmp.children) {
-      print_tree(to_cmp_static(child_id), tab + 1);
-    }
   }
 };
 
