@@ -532,7 +532,8 @@ struct AutoLayout {
 
   // TODO do we ever need to check parent?
   float compute_margin_for_exp(UIComponent &widget, Axis axis) {
-    const auto compute_ = [](Size exp) {
+    float screenValue = fetch_screen_value_(axis);
+    const auto compute_ = [screenValue](Size exp) {
       switch (exp.dim) {
       case Dim::Pixels:
         return exp.value;
@@ -541,7 +542,7 @@ struct AutoLayout {
       case Dim::Percent:
         log_error("Margin by dimension percent not supported");
       case Dim::ScreenPercent:
-        log_error("Margin by dimension screen percent not supported");
+        return exp.value * screenValue;
       case Dim::Children:
         log_error("Margin by dimension children not supported");
       case Dim::None:
