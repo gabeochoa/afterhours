@@ -75,13 +75,21 @@ Render Systems:
 gives access to some UI components 
 
 Components: 
-- UIContext<InputAction>
+- there are a bunch, but you dont use them directly
 
 Update Systems: 
-- :)
+- register_before_ui_updates() => do this before you run div() or button()
+- register_after_ui_updates() => do this after all your ui is run
 
 Render Systems: 
-- :)
+- register_render_systems() => does both UI and debug rendering
+
+UI Elements:
+- div
+- button
+- slider
+- dropdown 
+- checkbox
 
 ### texture manager (desires raylib)
 sprite rendering

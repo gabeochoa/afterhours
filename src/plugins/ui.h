@@ -1589,9 +1589,14 @@ static void enforce_singletons(SystemManager &sm) {
 }
 
 template <typename InputAction>
-static void register_update_systems(SystemManager &sm) {
+static void register_before_ui_updates(SystemManager &sm) {
+  sm.register_update_system(std::make_unique<ui::ClearUIComponentChildren>());
   sm.register_update_system(
       std::make_unique<ui::BeginUIContextManager<InputAction>>());
+}
+
+template <typename InputAction>
+static void register_after_ui_updates(SystemManager &sm) {
   {
     sm.register_update_system(
         std::make_unique<ui::UpdateDropdownOptions<InputAction>>());
@@ -1610,7 +1615,6 @@ static void register_update_systems(SystemManager &sm) {
   }
   sm.register_update_system(
       std::make_unique<ui::EndUIContextManager<InputAction>>());
-  sm.register_update_system(std::make_unique<ClearUIComponentChildren>());
 }
 
 template <typename InputAction>
