@@ -370,10 +370,11 @@ static bool _init_component(Entity &entity, Entity &parent,
     if (config.skip_when_tabbing)
       entity.addComponent<SkipWhenTabbing>();
 
-    UIComponent &parent_cmp = parent.get<UIComponent>();
-    parent_cmp.add_child(entity.id);
     created = true;
   }
+
+  UIComponent &parent_cmp = parent.get<UIComponent>();
+  parent_cmp.add_child(entity.id);
 
   // things that happen every frame
 
@@ -794,6 +795,12 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
 struct ClearVisibity : System<UIComponent> {
   virtual void for_each_with(Entity &, UIComponent &cmp, float) override {
     cmp.was_rendered_to_screen = false;
+  }
+};
+
+struct ClearUIComponentChildren : System<UIComponent> {
+  virtual void for_each_with(Entity &, UIComponent &cmp, float) override {
+    cmp.children.clear();
   }
 };
 
@@ -1603,6 +1610,7 @@ static void register_update_systems(SystemManager &sm) {
   }
   sm.register_update_system(
       std::make_unique<ui::EndUIContextManager<InputAction>>());
+  sm.register_update_system(std::make_unique<ClearUIComponentChildren>());
 }
 
 template <typename InputAction>
