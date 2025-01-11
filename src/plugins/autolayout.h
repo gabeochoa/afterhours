@@ -575,8 +575,10 @@ struct AutoLayout {
   }
 
   float compute_margin_for_exp(UIComponent &widget, Axis axis) {
+    float no_change = widget.computed_margin[axis];
+
     float screenValue = fetch_screen_value_(axis);
-    const auto compute_ = [screenValue](Size exp) {
+    const auto compute_ = [=](Size exp) {
       switch (exp.dim) {
       case Dim::Pixels:
         return exp.value;
@@ -591,9 +593,9 @@ struct AutoLayout {
       case Dim::None:
         // This is not a standalone widget,
         // so just keep moving along
-        return 0.f;
+        return no_change;
       }
-      return 0.f;
+      return no_change;
     };
 
     auto margin = widget.desired_margin;
@@ -608,7 +610,7 @@ struct AutoLayout {
     case Axis::bottom:
       return compute_(margin[axis]);
     }
-    return 0.f;
+    return no_change;
   }
 
   float fetch_screen_value_(Axis axis) {
@@ -758,7 +760,7 @@ struct AutoLayout {
       case Dim::Pixels:
         return no_change;
       }
-      return 0.f;
+      return no_change;
     };
 
     auto padd = widget.desired_padding;
@@ -773,7 +775,7 @@ struct AutoLayout {
     case Axis::bottom:
       return compute_(padd[axis]);
     }
-    return 0.f;
+    return no_change;
   }
 
   float compute_margin_for_parent_exp(UIComponent &widget, Axis axis) {
