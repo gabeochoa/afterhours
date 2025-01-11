@@ -1252,7 +1252,8 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     Rectangle debug_label_location = Rectangle{x, y, text_width, fontSize};
 
     if (is_mouse_inside(this->context->mouse_pos, debug_label_location)) {
-      draw_rectangle_outline(cmp.rect(), colors::UI_BLACK);
+      draw_rectangle_outline(cmp.rect(), colors::UI_RED);
+      draw_rectangle_outline(cmp.bounds(), colors::UI_BLACK);
       draw_rectangle(debug_label_location, colors::UI_BLUE);
     } else {
       draw_rectangle(debug_label_location, colors::UI_BLACK);
