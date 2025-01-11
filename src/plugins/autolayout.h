@@ -503,6 +503,30 @@ struct AutoLayout {
     return to_ent(id).get<UIComponent>();
   }
 
+  std::array<float, 4>
+  for_each_spacing(UIComponent &widget,
+                   const std::function<float(UIComponent &, Axis)> &cb) {
+    std::array<float, 4> data;
+    data[0] = cb(widget, Axis::top);
+    data[1] = cb(widget, Axis::left);
+    data[2] = cb(widget, Axis::right);
+    data[3] = cb(widget, Axis::bottom);
+    return data;
+  }
+
+  void write_each_spacing(UIComponent &widget,
+                          UIComponent::AxisArray<float, 6> &computed,
+                          const std::function<float(UIComponent &, Axis)> &cb) {
+    auto [_top, _left, _right, _bottom] = for_each_spacing(widget, cb);
+    computed[Axis::top] = _top;
+    computed[Axis::left] = _left;
+    computed[Axis::bottom] = _bottom;
+    computed[Axis::right] = _right;
+
+    computed[Axis::X] = _left + _right;
+    computed[Axis::Y] = _top + _bottom;
+  }
+
   using MeasureTextFn = std::function<Vector2Type(
       const std::string &, const std::string &, float, float)>;
 
@@ -643,7 +667,8 @@ struct AutoLayout {
   }
 
   float compute_size_for_standalone_exp(UIComponent &widget, Axis axis) {
-    const auto compute_ = [&](Size exp, float screenValue) {
+    float screenValue = fetch_screen_value_(axis);
+    const auto compute_ = [&](Size exp) {
       switch (exp.dim) {
       case Dim::Pixels:
         return exp.value;
@@ -660,39 +685,23 @@ struct AutoLayout {
       }
       return widget.computed[axis];
     };
-
-    float screenValue = fetch_screen_value_(axis);
-    Size exp = widget.desired[axis];
-    return compute_(exp, screenValue);
+    return compute_(widget.desired[axis]);
   }
 
   void calculate_standalone(UIComponent &widget) {
     auto size_x = compute_size_for_standalone_exp(widget, Axis::X);
     auto size_y = compute_size_for_standalone_exp(widget, Axis::Y);
-    auto padd_top = compute_padding_for_standalone_exp(widget, Axis::top);
-    auto padd_left = compute_padding_for_standalone_exp(widget, Axis::left);
-    auto padd_right = compute_padding_for_standalone_exp(widget, Axis::right);
-    auto padd_bottom = compute_padding_for_standalone_exp(widget, Axis::bottom);
-    auto margin_top = compute_margin_for_exp(widget, Axis::top);
-    auto margin_left = compute_margin_for_exp(widget, Axis::left);
-    auto margin_right = compute_margin_for_exp(widget, Axis::right);
-    auto margin_bottom = compute_margin_for_exp(widget, Axis::bottom);
 
-    widget.computed_padd[Axis::top] = padd_top;
-    widget.computed_padd[Axis::left] = padd_left;
-    widget.computed_padd[Axis::right] = padd_right;
-    widget.computed_padd[Axis::bottom] = padd_bottom;
-    widget.computed_padd[Axis::X] = padd_left + padd_right;
-    widget.computed_padd[Axis::Y] = padd_top + padd_bottom;
+    write_each_spacing(widget, widget.computed_padd,
+                       [&](UIComponent &w, Axis a) {
+                         return compute_padding_for_standalone_exp(w, a);
+                       });
 
-    widget.computed_margin[Axis::top] = margin_top;
-    widget.computed_margin[Axis::left] = margin_left;
-    widget.computed_margin[Axis::right] = margin_right;
-    widget.computed_margin[Axis::bottom] = margin_bottom;
-    widget.computed_margin[Axis::X] = margin_left + margin_right;
-    widget.computed_margin[Axis::Y] = margin_top + margin_bottom;
+    write_each_spacing(
+        widget, widget.computed_margin,
+        [&](UIComponent &w, Axis a) { return compute_margin_for_exp(w, a); });
+
     // No need to add margin since itll only make the visual smaller...
-
     widget.computed[Axis::X] = size_x + widget.computed_padd[Axis::X];
     widget.computed[Axis::Y] = size_y + widget.computed_padd[Axis::Y];
 
@@ -734,13 +743,14 @@ struct AutoLayout {
 
     float parent_size = this->to_cmp(widget.parent).computed[axis];
 
-    const auto compute_ = [no_change, parent_size](Size exp) {
+    const auto compute_ = [=](Size exp) {
       switch (exp.dim) {
       case Dim::Children:
         log_error("Padding by children not supported");
       case Dim::Text:
         log_error("Padding by dimension text not supported");
       case Dim::Percent:
+        log_info("padding for parent {} {} {}", axis, exp.value, parent_size);
         return exp.value * parent_size;
       // already handled during standalone
       case Dim::ScreenPercent:
