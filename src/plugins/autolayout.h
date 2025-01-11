@@ -717,19 +717,35 @@ struct AutoLayout {
 
   float compute_size_for_parent_expectation(const UIComponent &widget,
                                             Axis axis) {
-    if (widget.absolute && widget.desired[axis].dim == Dim::Percent) {
+    const Size &exp = widget.desired[axis];
+
+    if (widget.absolute && exp.dim == Dim::Percent) {
       VALIDATE(false, "Absolute widgets should not use Percent");
     }
 
     float no_change = widget.computed[axis];
-    if (widget.parent == -1)
+    if (widget.parent == -1) {
+      if (exp.dim == Dim::Percent) {
+        log_error("Trying to compute percent expectation for {}, but never set "
+                  "parent",
+                  widget.id);
+      }
+      // root component
       return no_change;
+    }
 
-    float parent_size = this->to_cmp(widget.parent).computed[axis];
-    if (parent_size == -1)
-      return no_change;
+    UIComponent &parent = this->to_cmp(widget.parent);
+    if (parent.computed[axis] == -1) {
+      log_error(
+          "Trying to compute expectation for {}, but parent {} size hasnt "
+          "been calculated yet",
+          widget.id, widget.parent);
+    }
 
-    const Size &exp = widget.desired[axis];
+    float parent_size = (parent.computed[axis]        //
+                         - parent.computed_padd[axis] //
+                         - parent.computed_margin[axis]);
+
     switch (exp.dim) {
     case Dim::Percent:
       return exp.value * parent_size;
