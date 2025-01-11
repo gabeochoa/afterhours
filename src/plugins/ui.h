@@ -675,17 +675,23 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                               children(default_component_size.y));
   config.flex_direction = FlexDirection::Row;
 
+  // we have to clear the label otherwise itll render at the full
+  // component width..
+  // TODO is there a way for us to support doing this without the gotchas?
+  std::string label_str = config.label;
+  config.label = "";
+
   _init_component(entity, parent, config, UIComponentDebug::Type::dropdown);
 
   Size width = config.size._scale_x(0.5f).x_axis;
 
   int child_index = 0;
 
-  if (!config.label.empty()) {
+  if (!label_str.empty()) {
     auto label = div(ctx, mk(entity, child_index++),
                      ComponentConfig{
                          .size = config.size,
-                         .label = config.label,
+                         .label = label_str,
                          // inheritables
                          .label_alignment = config.label_alignment,
                          .skip_when_tabbing = config.skip_when_tabbing,
