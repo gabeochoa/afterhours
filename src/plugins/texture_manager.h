@@ -100,6 +100,11 @@ struct HasSprite : BaseComponent {
     return transform.update_position(pos).update_size(size_).update_angle(ang);
   }
 
+  auto &update_color(const Color col) {
+    colorTint = col;
+    return *this;
+  }
+
   float angle() const { return transform.angle; }
 
   Rectangle destination() const {
