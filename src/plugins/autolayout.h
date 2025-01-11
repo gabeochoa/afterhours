@@ -844,28 +844,15 @@ struct AutoLayout {
     auto size_x = compute_size_for_parent_expectation(widget, Axis::X);
     auto size_y = compute_size_for_parent_expectation(widget, Axis::Y);
 
-    auto padd_top = compute_padding_for_parent_exp(widget, Axis::top);
-    auto padd_left = compute_padding_for_parent_exp(widget, Axis::left);
-    auto padd_right = compute_padding_for_parent_exp(widget, Axis::right);
-    auto padd_bottom = compute_padding_for_parent_exp(widget, Axis::bottom);
-    auto margin_top = compute_margin_for_parent_exp(widget, Axis::top);
-    auto margin_left = compute_margin_for_parent_exp(widget, Axis::left);
-    auto margin_right = compute_margin_for_parent_exp(widget, Axis::right);
-    auto margin_bottom = compute_margin_for_parent_exp(widget, Axis::bottom);
+    write_each_spacing(widget, widget.computed_padd,
+                       [&](UIComponent &w, Axis a) {
+                         return compute_padding_for_parent_exp(w, a);
+                       });
 
-    widget.computed_padd[Axis::top] = padd_top;
-    widget.computed_padd[Axis::left] = padd_left;
-    widget.computed_padd[Axis::right] = padd_right;
-    widget.computed_padd[Axis::bottom] = padd_bottom;
-    widget.computed_padd[Axis::X] = padd_left + padd_right;
-    widget.computed_padd[Axis::Y] = padd_top + padd_bottom;
-
-    widget.computed_margin[Axis::top] = margin_top;
-    widget.computed_margin[Axis::left] = margin_left;
-    widget.computed_margin[Axis::right] = margin_right;
-    widget.computed_margin[Axis::bottom] = margin_bottom;
-    widget.computed_margin[Axis::X] = margin_left + margin_right;
-    widget.computed_margin[Axis::Y] = margin_top + margin_bottom;
+    write_each_spacing(widget, widget.computed_margin,
+                       [&](UIComponent &w, Axis a) {
+                         return compute_margin_for_parent_exp(w, a);
+                       });
 
     widget.computed[Axis::X] = size_x;
     widget.computed[Axis::Y] = size_y;
