@@ -416,8 +416,8 @@ struct UIComponent : BaseComponent {
   }
 
   void reset_computed_values() {
-    computed[Axis::X] = 0.f;
-    computed[Axis::Y] = 0.f;
+    init_values();
+
     computed_rel[Axis::X] = 0.f;
     computed_rel[Axis::Y] = 0.f;
   }
