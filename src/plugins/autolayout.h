@@ -1207,8 +1207,8 @@ struct AutoLayout {
     float sx = widget.computed[Axis::X];
     float sy = widget.computed[Axis::Y];
 
-    float offx = 0.f;
-    float offy = 0.f;
+    float offx = widget.computed_margin[Axis::left];
+    float offy = widget.computed_margin[Axis::top];
 
     // Represents the current wrap's largest
     // ex. on Column mode we only care about where to start the next column
