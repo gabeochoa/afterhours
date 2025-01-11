@@ -30,6 +30,10 @@ inline void draw_text(const char *content, float x, float y, float font_size,
   raylib::DrawText(content, x, y, font_size, color);
 }
 
+inline void draw_rectangle_outline(RectangleType rect, Color color) {
+  raylib::DrawRectangleLinesEx(rect, 3.f, color);
+}
+
 inline void draw_rectangle(RectangleType rect, Color color) {
   raylib::DrawRectangleRec(rect, color);
 }
@@ -42,6 +46,7 @@ inline void draw_text_ex(afterhours::Font, const char *, Vector2Type, float,
                          float, Color) {}
 inline void draw_text(const char *, float, float, float, Color) {}
 inline void draw_rectangle(RectangleType, Color) {}
+inline void draw_rectangle_outline(RectangleType, Color) {}
 inline afterhours::Font get_default_font() { return afterhours::Font(); }
 inline afterhours::Font get_unset_font() { return afterhours::Font(); }
 #endif
@@ -1244,7 +1249,15 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
         cmp.x(), cmp.y(), cmp.rect().width, cmp.rect().height, component_name);
 
     float text_width = measure_text_internal(widget_str.c_str(), fontSize);
-    draw_rectangle(Rectangle{x, y, text_width, fontSize}, colors::UI_BLACK);
+    Rectangle debug_label_location = Rectangle{x, y, text_width, fontSize};
+
+    if (is_mouse_inside(this->context->mouse_pos, debug_label_location)) {
+      draw_rectangle_outline(cmp.rect(), colors::UI_BLACK);
+      draw_rectangle(debug_label_location, colors::UI_BLUE);
+    } else {
+      draw_rectangle(debug_label_location, colors::UI_BLACK);
+    }
+
     draw_text(widget_str.c_str(), x, y, fontSize,
               this->context->is_hot(entity.id) ? colors::UI_RED
                                                : colors::UI_WHITE);
