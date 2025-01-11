@@ -29,7 +29,27 @@ constexpr Color UI_PINK = {250, 200, 200, 255};
 namespace afterhours {
 
 struct HasColor : BaseComponent {
-  Color color;
-  HasColor(Color c) : color(c) {}
+private:
+  mutable Color color_;
+
+public:
+  using FetchFn = std::function<Color()>;
+  bool is_dynamic = false;
+  FetchFn fetch_fn = nullptr;
+
+  HasColor(Color c) : color_(c) {}
+  HasColor(const FetchFn &fetch)
+      : color_(fetch()), is_dynamic(true), fetch_fn(fetch) {}
+
+  Color color() const {
+    if (fetch_fn) {
+      color_ = fetch_fn();
+    }
+    return color_;
+  }
+  auto &set(Color col) {
+    color_ = col;
+    return *this;
+  }
 };
 } // namespace afterhours

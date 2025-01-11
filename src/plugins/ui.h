@@ -392,7 +392,7 @@ static bool _init_component(Entity &entity, Entity &parent,
   }
 
   if (config.color.has_value()) {
-    entity.get<HasColor>().color = config.color.value();
+    entity.get<HasColor>().set(config.color.value());
   }
 
   if (!config.label.empty())
@@ -1267,7 +1267,7 @@ template <typename InputAction> struct RenderImm : System<> {
     const UIComponent &cmp = entity.get<UIComponent>();
 
     if (entity.has<HasColor>()) {
-      Color col = entity.template get<HasColor>().color;
+      Color col = entity.template get<HasColor>().color();
 
       if (context.is_hot(entity.id)) {
         col = colors::UI_RED;
