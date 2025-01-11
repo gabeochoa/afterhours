@@ -1230,7 +1230,11 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
         "{:03} (x{:05.2f} y{:05.2f}) w{:05.2f}xh{:05.2f} {}", (int)entity.id,
         cmp.x(), cmp.y(), cmp.rect().width, cmp.rect().height, component_name);
 
-    draw_text(widget_str.c_str(), x, y, fontSize, colors::UI_WHITE);
+    float text_width = measure_text_internal(widget_str.c_str(), fontSize);
+    draw_rectangle(Rectangle{x, y, text_width, fontSize}, colors::UI_BLACK);
+    draw_text(widget_str.c_str(), x, y, fontSize,
+              this->context->is_hot(entity.id) ? colors::UI_RED
+                                               : colors::UI_WHITE);
   }
 
   void render(const Entity &entity) const {
