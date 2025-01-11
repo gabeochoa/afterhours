@@ -259,6 +259,16 @@ struct UIComponent : BaseComponent {
     const T &operator[](Axis axis) const {
       return data[static_cast<size_t>(axis)];
     }
+
+  private:
+    friend std::ostream &operator<<(std::ostream &os,
+                                    const AxisArray<T, axes> &p) {
+      os << "AxisArray" << axes << ": ";
+      for (auto d : p.data) {
+        os << d << ", ";
+      }
+      return os;
+    }
   };
 
   AxisArray<Size> desired;
@@ -480,6 +490,29 @@ struct HasLabel : BaseComponent {
   }
 };
 
+inline bool
+is_dimension_percent_based(const UIComponent::AxisArray<Size, 6> &desire,
+                           Axis axis) {
+  bool is_pct_dim = false;
+  switch (axis) {
+  case Axis::X:
+    is_pct_dim = desire[Axis::left].dim == Dim::Percent ||
+                 desire[Axis::right].dim == Dim::Percent;
+    break;
+  case Axis::Y:
+    is_pct_dim = desire[Axis::top].dim == Dim::Percent ||
+                 desire[Axis::bottom].dim == Dim::Percent;
+    break;
+  case Axis::top:
+  case Axis::bottom:
+  case Axis::right:
+  case Axis::left:
+    is_pct_dim = desire[axis].dim == Dim::Percent;
+    break;
+  }
+  return is_pct_dim;
+}
+
 struct AutoLayout {
 
   window_manager::Resolution resolution;
@@ -584,12 +617,11 @@ struct AutoLayout {
         return exp.value;
       case Dim::Text:
         log_error("Margin by dimension text not supported");
-      case Dim::Percent:
-        log_error("Margin by dimension percent not supported");
       case Dim::ScreenPercent:
         return exp.value * screenValue;
       case Dim::Children:
         log_error("Margin by dimension children not supported");
+      case Dim::Percent:
       case Dim::None:
         // This is not a standalone widget,
         // so just keep moving along
@@ -694,8 +726,8 @@ struct AutoLayout {
   }
 
   void calculate_standalone(UIComponent &widget) {
-    auto size_x = compute_size_for_standalone_exp(widget, Axis::X);
-    auto size_y = compute_size_for_standalone_exp(widget, Axis::Y);
+    widget.computed[Axis::X] = compute_size_for_standalone_exp(widget, Axis::X);
+    widget.computed[Axis::Y] = compute_size_for_standalone_exp(widget, Axis::Y);
 
     write_each_spacing(widget, widget.computed_padd,
                        [&](UIComponent &w, Axis a) {
@@ -705,10 +737,6 @@ struct AutoLayout {
     write_each_spacing(
         widget, widget.computed_margin,
         [&](UIComponent &w, Axis a) { return compute_margin_for_exp(w, a); });
-
-    // No need to add margin since itll only make the visual smaller...
-    widget.computed[Axis::X] = size_x + widget.computed_padd[Axis::X];
-    widget.computed[Axis::Y] = size_y + widget.computed_padd[Axis::Y];
 
     for (EntityID child_id : widget.children) {
       calculate_standalone(this->to_cmp(child_id));
@@ -742,8 +770,9 @@ struct AutoLayout {
           widget.id, widget.parent);
     }
 
-    float parent_size = (parent.computed[axis]        //
-                         - parent.computed_padd[axis] //
+    // We dont include padding because padding is
+    // around the content, not inside
+    float parent_size = (parent.computed[axis] //
                          - parent.computed_margin[axis]);
 
     switch (exp.dim) {
@@ -762,22 +791,39 @@ struct AutoLayout {
   float compute_padding_for_parent_exp(UIComponent &widget, Axis axis) {
     float no_change = widget.computed_padd[axis];
 
-    if (widget.parent == -1)
+    if (widget.parent == -1) {
+      if (widget.desired_padding[axis].dim == Dim::Percent) {
+        log_error("Trying to compute padding percent expectation for {}, but "
+                  "never set "
+                  "parent",
+                  widget.id);
+      }
+      // root component
       return no_change;
+    }
 
-    float parent_size = this->to_cmp(widget.parent).computed[axis];
-    if (parent_size == -1)
+    UIComponent &parent = this->to_cmp(widget.parent);
+    if (parent.computed[axis] == -1) {
+      if (is_dimension_percent_based(widget.desired_padding, axis)) {
+        log_error("Trying to compute padding percent expectation for {}, but "
+                  "parent {} size not calculated yet",
+                  widget.id, widget.parent);
+      }
       return no_change;
+    }
 
-    const auto compute_ = [=](const Size &exp) {
+    const auto parent_size = [&parent](Axis axis) -> float {
+      return parent.computed[axis];
+    };
+
+    const auto compute_ = [=](const Size &exp, float parent_value) {
       switch (exp.dim) {
       case Dim::Children:
         log_error("Padding by children not supported");
       case Dim::Text:
         log_error("Padding by dimension text not supported");
       case Dim::Percent:
-        log_info("padding for parent {} {} {}", axis, exp.value, parent_size);
-        return exp.value * parent_size;
+        return exp.value * parent_value;
       // already handled during standalone
       case Dim::ScreenPercent:
       case Dim::None:
@@ -790,25 +836,57 @@ struct AutoLayout {
     const auto &padd = widget.desired_padding;
     switch (axis) {
     case Axis::X:
-      return compute_(padd[Axis::left]) + compute_(padd[Axis::right]);
+      return compute_(padd[Axis::left], parent_size(Axis::X) / 2.f) +
+             compute_(padd[Axis::right], parent_size(Axis::X) / 2.f);
     case Axis::Y:
-      return compute_(padd[Axis::top]) + compute_(padd[Axis::bottom]);
-    case Axis::top:
+      return compute_(padd[Axis::top], parent_size(Axis::Y) / 2.f) +
+             compute_(padd[Axis::bottom], parent_size(Axis::Y) / 2.f);
     case Axis::left:
     case Axis::right:
+      return compute_(padd[axis], (parent_size(Axis::X) / 2.f));
+    case Axis::top:
     case Axis::bottom:
-      return compute_(padd[axis]);
+      return compute_(padd[axis], (parent_size(Axis::Y) / 2.f));
     }
     return no_change;
   }
 
   float compute_margin_for_parent_exp(UIComponent &widget, Axis axis) {
+    const auto &margin = widget.desired_margin;
     float no_change = widget.computed_margin[axis];
     if (widget.parent == -1)
       return no_change;
-    float parent_size = this->to_cmp(widget.parent).computed_margin[axis];
-    if (parent_size == -1)
+
+    UIComponent &parent = this->to_cmp(widget.parent);
+    if (parent.computed[axis] == -1) {
+      bool is_pct_dim = false;
+      switch (axis) {
+      case Axis::X:
+        is_pct_dim = margin[Axis::left].dim == Dim::Percent ||
+                     margin[Axis::right].dim == Dim::Percent;
+        break;
+      case Axis::Y:
+        is_pct_dim = margin[Axis::top].dim == Dim::Percent ||
+                     margin[Axis::bottom].dim == Dim::Percent;
+        break;
+      case Axis::top:
+      case Axis::bottom:
+      case Axis::right:
+      case Axis::left:
+        is_pct_dim = margin[axis].dim == Dim::Percent;
+        break;
+      }
+
+      if (is_pct_dim) {
+        log_error("Trying to compute margin percent expectation for {}, but "
+                  "parent {} size not calculated yet",
+                  widget.id, widget.parent);
+      }
       return no_change;
+    }
+
+    // again ignore padding on purpose
+    float parent_size = (parent.computed[axis] - parent.computed_margin[axis]);
 
     const auto compute_ = [parent_size, no_change](const Size &exp) {
       switch (exp.dim) {
@@ -825,7 +903,6 @@ struct AutoLayout {
       return no_change;
     };
 
-    const auto &margin = widget.desired_margin;
     switch (axis) {
     case Axis::X:
       return compute_(margin[Axis::left]) + compute_(margin[Axis::right]);
@@ -841,8 +918,10 @@ struct AutoLayout {
   }
 
   void calculate_those_with_parents(UIComponent &widget) {
-    auto size_x = compute_size_for_parent_expectation(widget, Axis::X);
-    auto size_y = compute_size_for_parent_expectation(widget, Axis::Y);
+    widget.computed[Axis::X] =
+        compute_size_for_parent_expectation(widget, Axis::X);
+    widget.computed[Axis::Y] =
+        compute_size_for_parent_expectation(widget, Axis::Y);
 
     write_each_spacing(widget, widget.computed_padd,
                        [&](UIComponent &w, Axis a) {
@@ -853,9 +932,6 @@ struct AutoLayout {
                        [&](UIComponent &w, Axis a) {
                          return compute_margin_for_parent_exp(w, a);
                        });
-
-    widget.computed[Axis::X] = size_x;
-    widget.computed[Axis::Y] = size_y;
 
     for (EntityID child_id : widget.children) {
       calculate_those_with_parents(this->to_cmp(child_id));
@@ -1204,8 +1280,8 @@ struct AutoLayout {
     // Assuming we dont care about things smaller than 1 pixel
     widget.computed[Axis::X] = round(widget.computed[Axis::X]);
     widget.computed[Axis::Y] = round(widget.computed[Axis::Y]);
-    float sx = widget.computed[Axis::X];
-    float sy = widget.computed[Axis::Y];
+    float sx = widget.computed[Axis::X] + widget.computed_padd[Axis::X];
+    float sy = widget.computed[Axis::Y] + widget.computed_padd[Axis::Y];
 
     float offx = widget.computed_margin[Axis::left];
     float offy = widget.computed_margin[Axis::top];
@@ -1235,8 +1311,8 @@ struct AutoLayout {
         continue;
       }
 
-      float cx = child.computed[Axis::X];
-      float cy = child.computed[Axis::Y];
+      float cx = child.computed[Axis::X] + child.computed_padd[Axis::X];
+      float cy = child.computed[Axis::Y] + child.computed_padd[Axis::Y];
 
       bool will_hit_max_x = false;
       bool will_hit_max_y = false;
@@ -1302,11 +1378,6 @@ struct AutoLayout {
     for (EntityID child : widget.children) {
       compute_rect_bounds(this->to_cmp(child));
     }
-
-    // now that all children are complete, we can remove the padding spacing
-
-    widget.computed[Axis::X] -= (widget.computed_padd[Axis::X]);
-    widget.computed[Axis::Y] -= (widget.computed_padd[Axis::Y]);
 
     // Also apply any margin
 

@@ -834,7 +834,8 @@ static void print_debug_autolayout_tree(Entity &entity, UIComponent &cmp,
   std::cout << cmp.rect().y << ",";
   std::cout << cmp.rect().width << ",";
   std::cout << cmp.rect().height << " ";
-  std::cout << entity.get<UIComponentDebug>().name() << " ";
+  if (entity.has<UIComponentDebug>())
+    std::cout << entity.get<UIComponentDebug>().name() << " ";
   std::cout << std::endl;
 
   for (EntityID child_id : cmp.children) {
