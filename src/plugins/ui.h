@@ -427,7 +427,8 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
-  config.color = colors::UI_BLUE;
+  if (!config.color.has_value())
+    config.color = colors::UI_BLUE;
 
   // By default buttons have centered text if user didnt specify anything
   if (config.label_alignment == TextAlignment::None) {
