@@ -634,16 +634,19 @@ struct AutoLayout {
     float no_change = widget.computed_padd[axis];
     float screenValue = fetch_screen_value_(axis);
 
-    const auto compute_ = [no_change, screenValue](Size exp) {
+    const auto compute_ = [no_change, screenValue](const Size &exp) {
       switch (exp.dim) {
       case Dim::Pixels:
         return exp.value;
-      case Dim::Text:
-        log_error("Padding by dimension text not supported");
-      case Dim::Children:
-        log_error("Padding by children not supported");
       case Dim::ScreenPercent:
         return exp.value * screenValue;
+        //
+      case Dim::Text:
+        log_error("Padding by dimension text not supported");
+        return no_change;
+      case Dim::Children:
+        log_error("Padding by children not supported");
+        return no_change;
         // This is not a standalone widget,
         // so just keep moving along
       case Dim::Percent:
@@ -653,7 +656,7 @@ struct AutoLayout {
       return no_change;
     };
 
-    auto padd = widget.desired_padding;
+    const auto &padd = widget.desired_padding;
     switch (axis) {
     case Axis::X:
       return compute_(padd[Axis::left]) + compute_(padd[Axis::right]);
@@ -670,7 +673,7 @@ struct AutoLayout {
 
   float compute_size_for_standalone_exp(UIComponent &widget, Axis axis) {
     float screenValue = fetch_screen_value_(axis);
-    const auto compute_ = [&](Size exp) {
+    const auto compute_ = [&](const Size &exp) {
       switch (exp.dim) {
       case Dim::Pixels:
         return exp.value;
@@ -723,10 +726,13 @@ struct AutoLayout {
       return no_change;
 
     float parent_size = this->to_cmp(widget.parent).computed[axis];
-    Size exp = widget.desired[axis];
+    if (parent_size == -1)
+      return no_change;
+
+    const Size &exp = widget.desired[axis];
     switch (exp.dim) {
     case Dim::Percent:
-      return parent_size == -1 ? no_change : exp.value * parent_size;
+      return exp.value * parent_size;
     case Dim::None:
     case Dim::Text:
     case Dim::ScreenPercent:
@@ -744,8 +750,10 @@ struct AutoLayout {
       return no_change;
 
     float parent_size = this->to_cmp(widget.parent).computed[axis];
+    if (parent_size == -1)
+      return no_change;
 
-    const auto compute_ = [=](Size exp) {
+    const auto compute_ = [=](const Size &exp) {
       switch (exp.dim) {
       case Dim::Children:
         log_error("Padding by children not supported");
@@ -763,7 +771,7 @@ struct AutoLayout {
       return no_change;
     };
 
-    auto padd = widget.desired_padding;
+    const auto &padd = widget.desired_padding;
     switch (axis) {
     case Axis::X:
       return compute_(padd[Axis::left]) + compute_(padd[Axis::right]);
@@ -783,8 +791,10 @@ struct AutoLayout {
     if (widget.parent == -1)
       return no_change;
     float parent_size = this->to_cmp(widget.parent).computed_margin[axis];
+    if (parent_size == -1)
+      return no_change;
 
-    const auto compute_ = [parent_size, no_change](Size exp) {
+    const auto compute_ = [parent_size, no_change](const Size &exp) {
       switch (exp.dim) {
       case Dim::Percent:
         return exp.value * parent_size;
@@ -799,7 +809,7 @@ struct AutoLayout {
       return no_change;
     };
 
-    auto margin = widget.desired_margin;
+    const auto &margin = widget.desired_margin;
     switch (axis) {
     case Axis::X:
       return compute_(margin[Axis::left]) + compute_(margin[Axis::right]);
