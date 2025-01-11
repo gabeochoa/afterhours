@@ -230,7 +230,27 @@ struct UIComponent : BaseComponent {
   static constexpr std::string DEFAULT_FONT = "__default";
 
   EntityID id;
-  explicit UIComponent(EntityID id_) : id(id_) {}
+  UIComponent() { init_values(); }
+  explicit UIComponent(EntityID id_) : id(id_) { init_values(); }
+
+  void init_values() {
+    computed[Axis::X] = 0;
+    computed[Axis::Y] = 0;
+
+    computed_padd[Axis::X] = 0;
+    computed_padd[Axis::Y] = 0;
+    computed_padd[Axis::top] = 0;
+    computed_padd[Axis::left] = 0;
+    computed_padd[Axis::bottom] = 0;
+    computed_padd[Axis::right] = 0;
+
+    computed_margin[Axis::X] = 0;
+    computed_margin[Axis::Y] = 0;
+    computed_margin[Axis::top] = 0;
+    computed_margin[Axis::left] = 0;
+    computed_margin[Axis::bottom] = 0;
+    computed_margin[Axis::right] = 0;
+  }
 
   template <typename T, size_t axes = 2> struct AxisArray {
     std::array<T, axes> data;
@@ -530,7 +550,6 @@ struct AutoLayout {
     return 0.f;
   }
 
-  // TODO do we ever need to check parent?
   float compute_margin_for_exp(UIComponent &widget, Axis axis) {
     float screenValue = fetch_screen_value_(axis);
     const auto compute_ = [screenValue](Size exp) {
@@ -586,40 +605,41 @@ struct AutoLayout {
   }
 
   float compute_padding_for_standalone_exp(UIComponent &widget, Axis axis) {
-    const auto compute_ = [](Size exp, float screenValue) {
+    float no_change = widget.computed_padd[axis];
+    float screenValue = fetch_screen_value_(axis);
+
+    const auto compute_ = [no_change, screenValue](Size exp) {
       switch (exp.dim) {
       case Dim::Pixels:
         return exp.value;
       case Dim::Text:
         log_error("Padding by dimension text not supported");
-      case Dim::Percent:
-        log_error("Padding by dimension percent not supported");
       case Dim::Children:
         log_error("Padding by children not supported");
       case Dim::ScreenPercent:
         return exp.value * screenValue;
-      case Dim::None:
         // This is not a standalone widget,
         // so just keep moving along
-        return 0.f;
+      case Dim::Percent:
+      case Dim::None:
+        return no_change;
       }
-      return 0.f;
+      return no_change;
     };
 
-    float sv = fetch_screen_value_(axis);
     auto padd = widget.desired_padding;
     switch (axis) {
     case Axis::X:
-      return compute_(padd[Axis::left], sv) + compute_(padd[Axis::right], sv);
+      return compute_(padd[Axis::left]) + compute_(padd[Axis::right]);
     case Axis::Y:
-      return compute_(padd[Axis::top], sv) + compute_(padd[Axis::bottom], sv);
+      return compute_(padd[Axis::top]) + compute_(padd[Axis::bottom]);
     case Axis::top:
     case Axis::left:
     case Axis::right:
     case Axis::bottom:
-      return compute_(padd[axis], sv);
+      return compute_(padd[axis]);
     }
-    return 0.f;
+    return no_change;
   }
 
   float compute_size_for_standalone_exp(UIComponent &widget, Axis axis) {
@@ -706,9 +726,108 @@ struct AutoLayout {
     return no_change;
   }
 
+  float compute_padding_for_parent_exp(UIComponent &widget, Axis axis) {
+    float no_change = widget.computed_padd[axis];
+
+    if (widget.parent == -1)
+      return no_change;
+
+    float parent_size = this->to_cmp(widget.parent).computed[axis];
+
+    const auto compute_ = [no_change, parent_size](Size exp) {
+      switch (exp.dim) {
+      case Dim::Children:
+        log_error("Padding by children not supported");
+      case Dim::Text:
+        log_error("Padding by dimension text not supported");
+      case Dim::Percent:
+        return exp.value * parent_size;
+      // already handled during standalone
+      case Dim::ScreenPercent:
+      case Dim::None:
+      case Dim::Pixels:
+        return no_change;
+      }
+      return 0.f;
+    };
+
+    auto padd = widget.desired_padding;
+    switch (axis) {
+    case Axis::X:
+      return compute_(padd[Axis::left]) + compute_(padd[Axis::right]);
+    case Axis::Y:
+      return compute_(padd[Axis::top]) + compute_(padd[Axis::bottom]);
+    case Axis::top:
+    case Axis::left:
+    case Axis::right:
+    case Axis::bottom:
+      return compute_(padd[axis]);
+    }
+    return 0.f;
+  }
+
+  float compute_margin_for_parent_exp(UIComponent &widget, Axis axis) {
+    float no_change = widget.computed_margin[axis];
+    if (widget.parent == -1)
+      return no_change;
+    float parent_size = this->to_cmp(widget.parent).computed_margin[axis];
+
+    const auto compute_ = [parent_size, no_change](Size exp) {
+      switch (exp.dim) {
+      case Dim::Percent:
+        return exp.value * parent_size;
+        //
+      case Dim::Children:
+      case Dim::None:
+      case Dim::Text:
+      case Dim::ScreenPercent:
+      case Dim::Pixels:
+        return no_change;
+      }
+      return no_change;
+    };
+
+    auto margin = widget.desired_margin;
+    switch (axis) {
+    case Axis::X:
+      return compute_(margin[Axis::left]) + compute_(margin[Axis::right]);
+    case Axis::Y:
+      return compute_(margin[Axis::top]) + compute_(margin[Axis::bottom]);
+    case Axis::top:
+    case Axis::left:
+    case Axis::right:
+    case Axis::bottom:
+      return compute_(margin[axis]);
+    }
+    return no_change;
+  }
+
   void calculate_those_with_parents(UIComponent &widget) {
     auto size_x = compute_size_for_parent_expectation(widget, Axis::X);
     auto size_y = compute_size_for_parent_expectation(widget, Axis::Y);
+
+    auto padd_top = compute_padding_for_parent_exp(widget, Axis::top);
+    auto padd_left = compute_padding_for_parent_exp(widget, Axis::left);
+    auto padd_right = compute_padding_for_parent_exp(widget, Axis::right);
+    auto padd_bottom = compute_padding_for_parent_exp(widget, Axis::bottom);
+    auto margin_top = compute_margin_for_parent_exp(widget, Axis::top);
+    auto margin_left = compute_margin_for_parent_exp(widget, Axis::left);
+    auto margin_right = compute_margin_for_parent_exp(widget, Axis::right);
+    auto margin_bottom = compute_margin_for_parent_exp(widget, Axis::bottom);
+
+    widget.computed_padd[Axis::top] = padd_top;
+    widget.computed_padd[Axis::left] = padd_left;
+    widget.computed_padd[Axis::right] = padd_right;
+    widget.computed_padd[Axis::bottom] = padd_bottom;
+    widget.computed_padd[Axis::X] = padd_left + padd_right;
+    widget.computed_padd[Axis::Y] = padd_top + padd_bottom;
+
+    widget.computed_margin[Axis::top] = margin_top;
+    widget.computed_margin[Axis::left] = margin_left;
+    widget.computed_margin[Axis::right] = margin_right;
+    widget.computed_margin[Axis::bottom] = margin_bottom;
+    widget.computed_margin[Axis::X] = margin_left + margin_right;
+    widget.computed_margin[Axis::Y] = margin_top + margin_bottom;
 
     widget.computed[Axis::X] = size_x;
     widget.computed[Axis::Y] = size_y;
