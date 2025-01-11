@@ -158,10 +158,8 @@ struct window_manager : developer::Plugin {
     }
 
     void on_data_changed(size_t index) {
-      auto &entity = EntityQuery()
-                         .whereHasComponent<ProvidesCurrentResolution>()
-                         .gen_first_enforce();
-      ProvidesCurrentResolution &pcr = entity.get<ProvidesCurrentResolution>();
+      ProvidesCurrentResolution &pcr =
+          *(EntityHelper::get_singleton_cmp<ProvidesCurrentResolution>());
       pcr.current_resolution = available_resolutions[index];
       set_window_size(pcr.current_resolution.width,
                       pcr.current_resolution.height);
