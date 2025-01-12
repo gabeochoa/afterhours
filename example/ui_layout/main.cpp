@@ -255,40 +255,57 @@ TEST_CASE("top padding") {
                            }));
 }
 
-std::array<RefEntity, 3> grandparent_setup(Entity &sophie, Axis axis) {
+enum struct ApplicationLocation {
+  Grandparent,
+  Parent,
+  Child,
+};
+
+std::array<RefEntity, 3> grandparent_setup_padding(
+    Entity &sophie, Axis axis, Size padding_size,
+    ApplicationLocation location = ApplicationLocation::Grandparent) {
 
   auto &div = EntityHelper::createEntity();
   {
-    make_component(div)
-        .set_desired_width(pixels(100.f))
-        .set_desired_height(percent(0.5f))
-        .set_desired_padding(pixels(10.f), axis)
-        .set_parent(sophie);
+    auto &c = make_component(div)
+                  .set_desired_width(pixels(100.f))
+                  .set_desired_height(percent(0.5f))
+                  .set_parent(sophie);
+
+    if (location == ApplicationLocation::Grandparent)
+      c.set_desired_padding(padding_size, axis);
   }
 
   auto &child = EntityHelper::createEntity();
   {
-    make_component(child)
-        .set_desired_width(percent(1.f))
-        .set_desired_height(percent(0.5f))
-        .set_parent(div);
+    auto &c = make_component(child)
+                  .set_desired_width(percent(1.f))
+                  .set_desired_height(percent(0.5f))
+                  .set_parent(div);
+
+    if (location == ApplicationLocation::Parent)
+      c.set_desired_padding(padding_size, axis);
   }
 
   auto &button = EntityHelper::createEntity();
   {
-    make_component(button)
-        .set_desired_width(percent(1.f))
-        .set_desired_height(percent(0.5f))
-        .set_parent(child);
+    auto &c = make_component(button)
+                  .set_desired_width(percent(1.f))
+                  .set_desired_height(percent(0.5f))
+                  .set_parent(child);
+
+    if (location == ApplicationLocation::Child)
+      c.set_desired_padding(padding_size, axis);
   }
 
   run_(sophie);
   return {{div, child, button}};
 }
 
-TEST_CASE("top padding with grandparent") {
+TEST_CASE("top pixel padding on grandparent") {
   auto &sophie = make_sophie();
-  auto [div, child, button] = grandparent_setup(sophie, Axis::top);
+  auto [div, child, button] =
+      grandparent_setup_padding(sophie, Axis::top, pixels(10.f));
 
   auto div_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 360 + 10};
   auto div_rect = Rectangle{.x = 0, .y = 10, .width = 100, .height = 360};
@@ -306,9 +323,10 @@ TEST_CASE("top padding with grandparent") {
   CHECK_THAT(to_rect(button), RectMatcher(button_rect));
 }
 
-TEST_CASE("bottom padding with grandparent") {
+TEST_CASE("bottom pixel padding on grandparent") {
   auto &sophie = make_sophie();
-  auto [div, child, button] = grandparent_setup(sophie, Axis::bottom);
+  auto [div, child, button] =
+      grandparent_setup_padding(sophie, Axis::bottom, pixels(10.f));
 
   auto div_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 360 + 10};
   auto div_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = 360};
@@ -326,9 +344,10 @@ TEST_CASE("bottom padding with grandparent") {
   CHECK_THAT(to_rect(button), RectMatcher(button_rect));
 }
 
-TEST_CASE("left padding with grandparent") {
+TEST_CASE("left pixel padding on grandparent") {
   auto &sophie = make_sophie();
-  auto [div, child, button] = grandparent_setup(sophie, Axis::left);
+  auto [div, child, button] =
+      grandparent_setup_padding(sophie, Axis::left, pixels(10.f));
 
   auto div_bounds = Rectangle{.x = 0, .y = 0, .width = 100 + 10, .height = 360};
   auto div_rect = Rectangle{.x = 10, .y = 0, .width = 100, .height = 360};
@@ -346,9 +365,10 @@ TEST_CASE("left padding with grandparent") {
   CHECK_THAT(to_rect(button), RectMatcher(button_rect));
 }
 
-TEST_CASE("right padding with grandparent") {
+TEST_CASE("right pixel padding on grandparent") {
   auto &sophie = make_sophie();
-  auto [div, child, button] = grandparent_setup(sophie, Axis::right);
+  auto [div, child, button] =
+      grandparent_setup_padding(sophie, Axis::right, pixels(10.f));
 
   auto div_bounds = Rectangle{.x = 0, .y = 0, .width = 100 + 10, .height = 360};
   auto div_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = 360};
@@ -360,6 +380,86 @@ TEST_CASE("right padding with grandparent") {
   CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
   CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 
+  auto button_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
+  auto button_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
+  CHECK_THAT(to_bounds(button), RectMatcher(button_bounds));
+  CHECK_THAT(to_rect(button), RectMatcher(button_rect));
+}
+
+TEST_CASE("top pixel padding on parent") {
+  auto &sophie = make_sophie();
+  auto [div, child, button] = grandparent_setup_padding(
+      sophie, Axis::top, pixels(10.f), ApplicationLocation::Parent);
+  auto div_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 360};
+  auto div_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = 360};
+
+  CHECK_THAT(to_bounds(div), RectMatcher(div_bounds));
+  CHECK_THAT(to_rect(div), RectMatcher(div_rect));
+
+  auto child_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = 180 + 10};
+  auto child_rect = Rectangle{.x = 0, .y = 10, .width = 100, .height = 180};
+
+  CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
+  CHECK_THAT(to_rect(child), RectMatcher(child_rect));
+
+  auto button_bounds = Rectangle{.x = 0, .y = 10, .width = 100, .height = 90};
+  auto button_rect = Rectangle{.x = 0, .y = 10, .width = 100, .height = 90};
+
+  CHECK_THAT(to_bounds(button), RectMatcher(button_bounds));
+  CHECK_THAT(to_rect(button), RectMatcher(button_rect));
+}
+
+TEST_CASE("left pixel padding on parent") {
+  auto &sophie = make_sophie();
+  auto [div, child, button] = grandparent_setup_padding(
+      sophie, Axis::left, pixels(10.f), ApplicationLocation::Parent);
+  auto div_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 360};
+  auto div_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = 360};
+  CHECK_THAT(to_bounds(div), RectMatcher(div_bounds));
+  CHECK_THAT(to_rect(div), RectMatcher(div_rect));
+  auto child_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100 + 10, .height = 180};
+  auto child_rect = Rectangle{.x = 10, .y = 0, .width = 100, .height = 180};
+  CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
+  CHECK_THAT(to_rect(child), RectMatcher(child_rect));
+  auto button_bounds = Rectangle{.x = 10, .y = 0, .width = 100, .height = 90};
+  auto button_rect = Rectangle{.x = 10, .y = 0, .width = 100, .height = 90};
+  CHECK_THAT(to_bounds(button), RectMatcher(button_bounds));
+  CHECK_THAT(to_rect(button), RectMatcher(button_rect));
+}
+TEST_CASE("bottom pixel padding on parent") {
+  auto &sophie = make_sophie();
+  auto [div, child, button] = grandparent_setup_padding(
+      sophie, Axis::bottom, pixels(10.f), ApplicationLocation::Parent);
+  auto div_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 360};
+  auto div_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = 360};
+  CHECK_THAT(to_bounds(div), RectMatcher(div_bounds));
+  CHECK_THAT(to_rect(div), RectMatcher(div_rect));
+  auto child_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = 180 + 10};
+  auto child_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = 180};
+  CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
+  CHECK_THAT(to_rect(child), RectMatcher(child_rect));
+  auto button_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
+  auto button_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
+  CHECK_THAT(to_bounds(button), RectMatcher(button_bounds));
+  CHECK_THAT(to_rect(button), RectMatcher(button_rect));
+}
+
+TEST_CASE("right pixel padding on parent") {
+  auto &sophie = make_sophie();
+  auto [div, child, button] = grandparent_setup_padding(
+      sophie, Axis::right, pixels(10.f), ApplicationLocation::Parent);
+  auto div_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 360};
+  auto div_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = 360};
+  CHECK_THAT(to_bounds(div), RectMatcher(div_bounds));
+  CHECK_THAT(to_rect(div), RectMatcher(div_rect));
+  auto child_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100 + 10, .height = 180};
+  auto child_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = 180};
+  CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
+  CHECK_THAT(to_rect(child), RectMatcher(child_rect));
   auto button_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
   auto button_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
   CHECK_THAT(to_bounds(button), RectMatcher(button_bounds));
