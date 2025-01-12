@@ -1378,6 +1378,8 @@ template <typename InputAction> struct RenderImm : System<> {
     const FontManager &font_manager = entity.get<FontManager>();
 
     std::ranges::sort(context.render_cmds, [](RenderInfo a, RenderInfo b) {
+      if (a.layer == b.layer)
+        return a.id < b.id;
       return a.layer < b.layer;
     });
 
