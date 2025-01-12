@@ -772,8 +772,7 @@ struct AutoLayout {
 
     // We dont include padding because padding is
     // around the content, not inside
-    float parent_size = (parent.computed[axis] //
-                         - parent.computed_margin[axis]);
+    float parent_size = (parent.computed[axis] - parent.computed_margin[axis]);
 
     switch (exp.dim) {
     case Dim::Percent:
@@ -859,25 +858,7 @@ struct AutoLayout {
 
     UIComponent &parent = this->to_cmp(widget.parent);
     if (parent.computed[axis] == -1) {
-      bool is_pct_dim = false;
-      switch (axis) {
-      case Axis::X:
-        is_pct_dim = margin[Axis::left].dim == Dim::Percent ||
-                     margin[Axis::right].dim == Dim::Percent;
-        break;
-      case Axis::Y:
-        is_pct_dim = margin[Axis::top].dim == Dim::Percent ||
-                     margin[Axis::bottom].dim == Dim::Percent;
-        break;
-      case Axis::top:
-      case Axis::bottom:
-      case Axis::right:
-      case Axis::left:
-        is_pct_dim = margin[axis].dim == Dim::Percent;
-        break;
-      }
-
-      if (is_pct_dim) {
+      if (is_dimension_percent_based(widget.desired_padding, axis)) {
         log_error("Trying to compute margin percent expectation for {}, but "
                   "parent {} size not calculated yet",
                   widget.id, widget.parent);
@@ -1284,8 +1265,10 @@ struct AutoLayout {
     float sx = widget.computed[Axis::X] + widget.computed_padd[Axis::X];
     float sy = widget.computed[Axis::Y] + widget.computed_padd[Axis::Y];
 
-    float offx = widget.computed_margin[Axis::left];
-    float offy = widget.computed_margin[Axis::top];
+    // this is 0 instead of margin, because the margin will be added in
+    // compute rect
+    float offx = 0;
+    float offy = 0;
 
     // Represents the current wrap's largest
     // ex. on Column mode we only care about where to start the next column
@@ -1312,6 +1295,7 @@ struct AutoLayout {
         continue;
       }
 
+      // computed bounds
       float cx = child.computed[Axis::X] + child.computed_padd[Axis::X];
       float cy = child.computed[Axis::Y] + child.computed_padd[Axis::Y];
 
@@ -1332,7 +1316,7 @@ struct AutoLayout {
       // We can flex vertically and current child will push us over height
       // lets wrap
       if (child.flex_direction & FlexDirection::Column && cy + offy > sy) {
-        offy = widget.computed_margin[Axis::top];
+        offy = 0;
         offx += col_w;
         col_w = cx;
       }
@@ -1340,7 +1324,7 @@ struct AutoLayout {
       // We can flex horizontally and current child will push us over
       // width lets wrap
       if (child.flex_direction & FlexDirection::Row && cx + offx > sx) {
-        offx = widget.computed_margin[Axis::left];
+        offx = 0;
         offy += col_h;
         col_h = cy;
       }
@@ -1367,11 +1351,13 @@ struct AutoLayout {
     Vector2Type offset = Vector2Type{0.f, 0.f};
     if (widget.parent != -1) {
       UIComponent &parent = this->to_cmp(widget.parent);
-      offset = offset + Vector2Type{parent.rect().x, parent.rect().y};
+      offset = Vector2Type{
+          parent.computed_rel[Axis::X] + parent.computed_margin[Axis::left],
+          parent.computed_rel[Axis::Y] + parent.computed_margin[Axis::top],
+      };
+      widget.computed_rel[Axis::X] += offset.x;
+      widget.computed_rel[Axis::Y] += offset.y;
     }
-
-    widget.computed_rel[Axis::X] += offset.x;
-    widget.computed_rel[Axis::Y] += offset.y;
 
     widget.computed_rel[Axis::X] += (widget.computed_padd[Axis::left]);
     widget.computed_rel[Axis::Y] += (widget.computed_padd[Axis::top]);
@@ -1379,14 +1365,6 @@ struct AutoLayout {
     for (EntityID child : widget.children) {
       compute_rect_bounds(this->to_cmp(child));
     }
-
-    // Also apply any margin
-
-    widget.computed_rel[Axis::X] += (widget.computed_margin[Axis::left]);
-    widget.computed_rel[Axis::Y] += (widget.computed_margin[Axis::top]);
-
-    widget.computed[Axis::X] -= (widget.computed_margin[Axis::X]);
-    widget.computed[Axis::Y] -= (widget.computed_margin[Axis::Y]);
   }
 
   void reset_computed_values(UIComponent &widget) {
