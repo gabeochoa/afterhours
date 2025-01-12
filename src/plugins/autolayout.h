@@ -764,10 +764,13 @@ struct AutoLayout {
 
     UIComponent &parent = this->to_cmp(widget.parent);
     if (parent.computed[axis] == -1) {
-      log_error(
-          "Trying to compute expectation for {}, but parent {} size hasnt "
-          "been calculated yet",
-          widget.id, widget.parent);
+      if (is_dimension_percent_based(widget.desired_padding, axis)) {
+        log_error(
+            "Trying to compute expectation for {}, but parent {} size hasnt "
+            "been calculated yet",
+            widget.id, widget.parent);
+      }
+      return no_change;
     }
 
     // We dont include padding because padding is
