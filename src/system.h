@@ -23,6 +23,9 @@ public:
   // Runs once per frame, before calling for_each
   virtual void once(float) {}
   virtual void once(float) const {}
+  // Runs once per frame, after calling for_each
+  virtual void after(float) {}
+  virtual void after(float) const {}
   // Runs for every entity matching the components
   // in System<Components>
   virtual void for_each(Entity &, float) = 0;
@@ -195,6 +198,7 @@ struct SystemManager {
 #endif
           system->for_each(*entity, dt);
       }
+      system->after(dt);
       EntityHelper::merge_entity_arrays();
     }
   }
@@ -214,6 +218,7 @@ struct SystemManager {
 #endif
           system->for_each(*entity, dt);
       }
+      system->after(dt);
     }
   }
 
@@ -233,6 +238,7 @@ struct SystemManager {
 #endif
           system->for_each(e, dt);
       }
+      system->after(dt);
     }
   }
 
