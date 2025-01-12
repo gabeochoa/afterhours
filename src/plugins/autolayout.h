@@ -836,17 +836,17 @@ struct AutoLayout {
     const auto &padd = widget.desired_padding;
     switch (axis) {
     case Axis::X:
-      return compute_(padd[Axis::left], parent_size(Axis::X) / 2.f) +
-             compute_(padd[Axis::right], parent_size(Axis::X) / 2.f);
+      return compute_(padd[Axis::left], parent_size(Axis::X)) +
+             compute_(padd[Axis::right], parent_size(Axis::X));
     case Axis::Y:
-      return compute_(padd[Axis::top], parent_size(Axis::Y) / 2.f) +
-             compute_(padd[Axis::bottom], parent_size(Axis::Y) / 2.f);
+      return compute_(padd[Axis::top], parent_size(Axis::Y)) +
+             compute_(padd[Axis::bottom], parent_size(Axis::Y));
     case Axis::left:
     case Axis::right:
-      return compute_(padd[axis], (parent_size(Axis::X) / 2.f));
+      return compute_(padd[axis], parent_size(Axis::X));
     case Axis::top:
     case Axis::bottom:
-      return compute_(padd[axis], (parent_size(Axis::Y) / 2.f));
+      return compute_(padd[axis], parent_size(Axis::Y));
     }
     return no_change;
   }

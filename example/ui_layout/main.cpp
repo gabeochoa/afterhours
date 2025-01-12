@@ -480,20 +480,22 @@ TEST_CASE("right pixel padding on parent") {
 TEST_CASE("top percent padding on grandparent") {
   auto &sophie = make_sophie();
   auto [div, child, button] =
-      grandparent_setup_padding(sophie, Axis::top, percent(0.1f));
+      grandparent_setup_padding(sophie, Axis::top, percent(0.05f));
 
-  auto div_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H2 + 10};
-  auto div_rect = Rectangle{.x = 0, .y = 10, .width = 100, .height = H2};
+  float gap = 36;
+
+  auto div_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H2 + gap};
+  auto div_rect = Rectangle{.x = 0, .y = gap, .width = 100, .height = H2};
   CHECK_THAT(to_bounds(div), RectMatcher(div_bounds));
   CHECK_THAT(to_rect(div), RectMatcher(div_rect));
 
-  auto child_bounds = Rectangle{.x = 0, .y = 10, .width = 100, .height = H4};
-  auto child_rect = Rectangle{.x = 0, .y = 10, .width = 100, .height = H4};
+  auto child_bounds = Rectangle{.x = 0, .y = gap, .width = 100, .height = H4};
+  auto child_rect = Rectangle{.x = 0, .y = gap, .width = 100, .height = H4};
   CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
   CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 
-  auto button_bounds = Rectangle{.x = 0, .y = 10, .width = 100, .height = H8};
-  auto button_rect = Rectangle{.x = 0, .y = 10, .width = 100, .height = H8};
+  auto button_bounds = Rectangle{.x = 0, .y = gap, .width = 100, .height = H8};
+  auto button_rect = Rectangle{.x = 0, .y = gap, .width = 100, .height = H8};
   CHECK_THAT(to_bounds(button), RectMatcher(button_bounds));
   CHECK_THAT(to_rect(button), RectMatcher(button_rect));
 }
@@ -615,7 +617,7 @@ TEST_CASE("right margin") {
                                   //
                                   .x = 0,
                                   .y = 0,
-                                  .width = H8,
+                                  .width = 90,
                                   .height = 50 //
                               }));
   CHECK_THAT(to_bounds(button), RectMatcher(Rectangle{
