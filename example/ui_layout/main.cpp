@@ -673,13 +673,11 @@ TEST_CASE("right percent padding on parent") {
   CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
 
-/*
-
 TEST_CASE("top percent padding on child") {
   auto &sophie = make_sophie();
   auto [grandparent, parent, child] = grandparent_setup_padding(
       sophie, Axis::top, percent(0.05f), ApplicationLocation::Child);
-  float gap = 2;
+  float gap = 9;
 
   auto grandparent_bounds =
       Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
@@ -688,12 +686,12 @@ TEST_CASE("top percent padding on child") {
   CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
 
   auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
-  auto parent_rect =
-      Rectangle{.x = 0, .y = 0, .width = 100, .height = H4 - gap};
+  auto parent_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
   CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
   CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
-  auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H8};
+  auto child_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = H8 + gap};
   auto child_rect = Rectangle{.x = 0, .y = gap, .width = 100, .height = H8};
   CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
   CHECK_THAT(to_rect(child), RectMatcher(child_rect));
@@ -711,13 +709,13 @@ TEST_CASE("left percent padding on child") {
   CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
   CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
 
-  auto parent_bounds = Rectangle{.x = gap, .y = 0, .width = 100, .height = H4};
-  auto parent_rect =
-      Rectangle{.x = gap, .y = 0, .width = 100 - gap, .height = H4};
+  auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
+  auto parent_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
   CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
   CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
-  auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H8};
+  auto child_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100 + gap, .height = H8};
   auto child_rect = Rectangle{.x = gap, .y = 0, .width = 100, .height = H8};
   CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
   CHECK_THAT(to_rect(child), RectMatcher(child_rect));
@@ -727,7 +725,7 @@ TEST_CASE("bottom percent padding on child") {
   auto &sophie = make_sophie();
   auto [grandparent, parent, child] = grandparent_setup_padding(
       sophie, Axis::bottom, percent(0.05f), ApplicationLocation::Child);
-  float gap = 2;
+  float gap = 9;
 
   auto grandparent_bounds =
       Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
@@ -735,13 +733,13 @@ TEST_CASE("bottom percent padding on child") {
   CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
   CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
 
-  auto parent_bounds =
-      Rectangle{.x = 0, .y = 0, .width = 100, .height = H4 + gap};
+  auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
   auto parent_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
   CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
   CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
-  auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H8};
+  auto child_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = H8 + gap};
   auto child_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H8};
   CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
   CHECK_THAT(to_rect(child), RectMatcher(child_rect));
@@ -759,18 +757,18 @@ TEST_CASE("right percent padding on child") {
   CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
   CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
 
-  auto parent_bounds =
-      Rectangle{.x = 0, .y = 0, .width = 100 + gap, .height = H4};
+  auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
   auto parent_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
   CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
   CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
-  auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H8};
+  // TODO should the child bounds go outside its parent bounds?
+  auto child_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100 + gap, .height = H8};
   auto child_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H8};
   CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
   CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
-*/
 
 TEST_CASE("vertical padding") {
   auto &sophie = make_sophie();
@@ -1014,4 +1012,339 @@ TEST_CASE("vertical margin") {
                                    .width = 100,
                                    .height = 50 //
                                }));
+}
+
+std::array<RefEntity, 3> grandparent_setup_margin(
+    Entity &sophie, Axis axis, Size margin_size,
+    ApplicationLocation location = ApplicationLocation::Grandparent) {
+
+  auto &grandparent = EntityHelper::createEntity();
+  {
+    auto &c = make_component(grandparent)
+                  .set_desired_width(pixels(100.f))
+                  .set_desired_height(percent(0.5f))
+                  .set_parent(sophie);
+
+    if (location == ApplicationLocation::Grandparent)
+      c.set_desired_margin(margin_size, axis);
+  }
+
+  auto &parent = EntityHelper::createEntity();
+  {
+    auto &c = make_component(parent)
+                  .set_desired_width(percent(1.f))
+                  .set_desired_height(percent(0.5f))
+                  .set_parent(grandparent);
+
+    if (location == ApplicationLocation::Parent)
+      c.set_desired_margin(margin_size, axis);
+  }
+
+  auto &child = EntityHelper::createEntity();
+  {
+    auto &c = make_component(child)
+                  .set_desired_width(percent(1.f))
+                  .set_desired_height(percent(0.5f))
+                  .set_parent(parent);
+
+    if (location == ApplicationLocation::Child)
+      c.set_desired_margin(margin_size, axis);
+  }
+
+  run_(sophie);
+  return {{grandparent, parent, child}};
+}
+
+TEST_CASE("top pixel margin on grandparent") {
+  auto &sophie = make_sophie();
+  auto [grandparent, parent, child] =
+      grandparent_setup_margin(sophie, Axis::top, pixels(10.f));
+
+  auto grandparent_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  auto grandparent_rect =
+      Rectangle{.x = 0, .y = 10, .width = 100, .height = H2 - 10};
+  CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
+  CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
+
+  auto parent_bounds =
+      Rectangle{.x = 0, .y = 10, .width = 100, .height = (H2 - 10) / 2.f};
+  auto parent_rect =
+      Rectangle{.x = 0, .y = 10, .width = 100, .height = (H2 - 10) / 2.f};
+  CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
+  CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
+
+  auto child_bounds = Rectangle{
+      .x = 0, .y = 10, .width = 100, .height = std::ceil((H2 - 10) / 4.f)};
+  auto child_rect = Rectangle{
+      .x = 0, .y = 10, .width = 100, .height = std::ceil((H2 - 10) / 4.f)};
+  CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
+  CHECK_THAT(to_rect(child), RectMatcher(child_rect));
+}
+
+TEST_CASE("left pixel margin on grandparent") {
+  auto &sophie = make_sophie();
+  auto [grandparent, parent, child] =
+      grandparent_setup_margin(sophie, Axis::left, pixels(10.f));
+
+  auto grandparent_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  auto grandparent_rect =
+      Rectangle{.x = 10, .y = 0, .width = 100 - 10, .height = H2};
+  CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
+  CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
+
+  auto parent_bounds =
+      Rectangle{.x = 10, .y = 0, .width = 100 - 10, .height = (H2) / 2.f};
+  auto parent_rect =
+      Rectangle{.x = 10, .y = 0, .width = 100 - 10, .height = (H2) / 2.f};
+  CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
+  CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
+
+  auto child_bounds = Rectangle{
+      .x = 10, .y = 0, .width = 100 - 10, .height = std::ceil((H2) / 4.f)};
+  auto child_rect = Rectangle{
+      .x = 10, .y = 0, .width = 100 - 10, .height = std::ceil((H2) / 4.f)};
+  CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
+  CHECK_THAT(to_rect(child), RectMatcher(child_rect));
+}
+
+TEST_CASE("bottom pixel margin on grandparent") {
+  auto &sophie = make_sophie();
+  auto [grandparent, parent, child] =
+      grandparent_setup_margin(sophie, Axis::bottom, pixels(10.f));
+
+  auto grandparent_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  auto grandparent_rect =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = H2 - 10};
+  CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
+  CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
+
+  auto parent_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = (H2 - 10) / 2.f};
+  auto parent_rect =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = (H2 - 10) / 2.f};
+  CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
+  CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
+
+  auto child_bounds = Rectangle{
+      .x = 0, .y = 0, .width = 100, .height = std::ceil((H2 - 10) / 4.f)};
+  auto child_rect = Rectangle{
+      .x = 0, .y = 0, .width = 100, .height = std::ceil((H2 - 10) / 4.f)};
+  CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
+  CHECK_THAT(to_rect(child), RectMatcher(child_rect));
+}
+
+TEST_CASE("right pixel margin on grandparent") {
+  auto &sophie = make_sophie();
+  auto [grandparent, parent, child] =
+      grandparent_setup_margin(sophie, Axis::right, pixels(10.f));
+
+  auto grandparent_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  auto grandparent_rect =
+      Rectangle{.x = 0, .y = 0, .width = 100 - 10, .height = H2};
+  CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
+  CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
+
+  auto parent_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100 - 10, .height = (H2) / 2.f};
+  auto parent_rect =
+      Rectangle{.x = 0, .y = 0, .width = 100 - 10, .height = (H2) / 2.f};
+  CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
+  CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
+
+  auto child_bounds = Rectangle{
+      .x = 0, .y = 0, .width = 100 - 10, .height = std::ceil((H2) / 4.f)};
+  auto child_rect = Rectangle{
+      .x = 0, .y = 0, .width = 100 - 10, .height = std::ceil((H2) / 4.f)};
+  CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
+  CHECK_THAT(to_rect(child), RectMatcher(child_rect));
+}
+
+TEST_CASE("top pixel margin on parent") {
+  auto &sophie = make_sophie();
+  auto [grandparent, parent, child] = grandparent_setup_margin(
+      sophie, Axis::top, pixels(10.f), ApplicationLocation::Parent);
+
+  auto grandparent_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  auto grandparent_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
+  CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
+
+  auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
+  auto parent_rect =
+      Rectangle{.x = 0, .y = 10, .width = 100, .height = (H4 - 10)};
+  CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
+  CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
+
+  auto child_bounds =
+      Rectangle{.x = 0, .y = 10, .width = 100, .height = (H4 - 10) / 2.f};
+  auto child_rect =
+      Rectangle{.x = 0, .y = 10, .width = 100, .height = (H4 - 10) / 2.f};
+  CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
+  CHECK_THAT(to_rect(child), RectMatcher(child_rect));
+}
+
+TEST_CASE("left pixel margin on parent") {
+  auto &sophie = make_sophie();
+  auto [grandparent, parent, child] = grandparent_setup_margin(
+      sophie, Axis::left, pixels(10.f), ApplicationLocation::Parent);
+
+  auto grandparent_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  auto grandparent_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
+  CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
+
+  auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
+  auto parent_rect =
+      Rectangle{.x = 10, .y = 0, .width = 100 - 10, .height = H4};
+  CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
+  CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
+
+  auto child_bounds =
+      Rectangle{.x = 10, .y = 0, .width = 100 - 10, .height = H4 / 2.f};
+  auto child_rect =
+      Rectangle{.x = 10, .y = 0, .width = 100 - 10, .height = H4 / 2.f};
+  CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
+  CHECK_THAT(to_rect(child), RectMatcher(child_rect));
+}
+
+TEST_CASE("bottom pixel margin on parent") {
+  auto &sophie = make_sophie();
+  auto [grandparent, parent, child] = grandparent_setup_margin(
+      sophie, Axis::bottom, pixels(10.f), ApplicationLocation::Parent);
+
+  auto grandparent_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  auto grandparent_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
+  CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
+
+  auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
+  auto parent_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4 - 10};
+  CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
+  CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
+
+  auto child_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = (H4 - 10) / 2.f};
+  auto child_rect =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = (H4 - 10) / 2.f};
+  CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
+  CHECK_THAT(to_rect(child), RectMatcher(child_rect));
+}
+
+TEST_CASE("right pixel margin on parent") {
+  auto &sophie = make_sophie();
+  auto [grandparent, parent, child] = grandparent_setup_margin(
+      sophie, Axis::right, pixels(10.f), ApplicationLocation::Parent);
+
+  auto grandparent_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  auto grandparent_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
+  CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
+
+  auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
+  auto parent_rect = Rectangle{.x = 0, .y = 0, .width = 100 - 10, .height = H4};
+  CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
+  CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
+
+  auto child_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100 - 10, .height = H4 / 2.f};
+  auto child_rect =
+      Rectangle{.x = 0, .y = 0, .width = 100 - 10, .height = H4 / 2.f};
+  CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
+  CHECK_THAT(to_rect(child), RectMatcher(child_rect));
+}
+
+TEST_CASE("top pixel margin on child") {
+  auto &sophie = make_sophie();
+  auto [grandparent, parent, child] = grandparent_setup_margin(
+      sophie, Axis::top, pixels(10.f), ApplicationLocation::Child);
+
+  auto grandparent_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  auto grandparent_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
+  CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
+
+  auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
+  auto parent_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
+  CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
+  CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
+
+  auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H8};
+  auto child_rect = Rectangle{.x = 0, .y = 10, .width = 100, .height = H8 - 10};
+  CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
+  CHECK_THAT(to_rect(child), RectMatcher(child_rect));
+}
+
+TEST_CASE("left pixel margin on child") {
+  auto &sophie = make_sophie();
+  auto [grandparent, parent, child] = grandparent_setup_margin(
+      sophie, Axis::left, pixels(10.f), ApplicationLocation::Child);
+
+  auto grandparent_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  auto grandparent_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
+  CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
+
+  auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
+  auto parent_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
+  CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
+  CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
+
+  auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H8};
+  auto child_rect = Rectangle{.x = 10, .y = 0, .width = 100 - 10, .height = H8};
+  CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
+  CHECK_THAT(to_rect(child), RectMatcher(child_rect));
+}
+
+TEST_CASE("bottom pixel margin on child") {
+  auto &sophie = make_sophie();
+  auto [grandparent, parent, child] = grandparent_setup_margin(
+      sophie, Axis::bottom, pixels(10.f), ApplicationLocation::Child);
+
+  auto grandparent_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  auto grandparent_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
+  CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
+
+  auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
+  auto parent_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
+  CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
+  CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
+
+  auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H8};
+  auto child_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H8 - 10};
+  CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
+  CHECK_THAT(to_rect(child), RectMatcher(child_rect));
+}
+
+TEST_CASE("right pixel margin on child") {
+  auto &sophie = make_sophie();
+  auto [grandparent, parent, child] = grandparent_setup_margin(
+      sophie, Axis::right, pixels(10.f), ApplicationLocation::Child);
+
+  auto grandparent_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  auto grandparent_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
+  CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
+
+  auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
+  auto parent_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
+  CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
+  CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
+
+  auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H8};
+  auto child_rect = Rectangle{.x = 0, .y = 0, .width = 100 - 10, .height = H8};
+  CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
+  CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
