@@ -1280,6 +1280,7 @@ struct AutoLayout {
     // Assuming we dont care about things smaller than 1 pixel
     widget.computed[Axis::X] = round(widget.computed[Axis::X]);
     widget.computed[Axis::Y] = round(widget.computed[Axis::Y]);
+
     float sx = widget.computed[Axis::X] + widget.computed_padd[Axis::X];
     float sy = widget.computed[Axis::Y] + widget.computed_padd[Axis::Y];
 
@@ -1331,7 +1332,7 @@ struct AutoLayout {
       // We can flex vertically and current child will push us over height
       // lets wrap
       if (child.flex_direction & FlexDirection::Column && cy + offy > sy) {
-        offy = 0;
+        offy = widget.computed_margin[Axis::top];
         offx += col_w;
         col_w = cx;
       }
@@ -1339,7 +1340,7 @@ struct AutoLayout {
       // We can flex horizontally and current child will push us over
       // width lets wrap
       if (child.flex_direction & FlexDirection::Row && cx + offx > sx) {
-        offx = 0;
+        offx = widget.computed_margin[Axis::left];
         offy += col_h;
         col_h = cy;
       }
