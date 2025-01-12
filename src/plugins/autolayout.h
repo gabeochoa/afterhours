@@ -811,8 +811,8 @@ struct AutoLayout {
       return no_change;
     }
 
-    const auto parent_size = [&parent](Axis axis) -> float {
-      return parent.computed[axis];
+    const auto parent_size = [&parent](Axis axis_in) -> float {
+      return parent.computed[axis_in];
     };
 
     const auto compute_ = [=](const Size &exp, float parent_value) {
@@ -875,8 +875,8 @@ struct AutoLayout {
 
     // again ignore padding on purpose
 
-    const auto parent_size = [&parent](Axis axis) -> float {
-      return parent.computed[axis] - parent.computed_margin[axis];
+    const auto parent_size = [&parent](Axis axis_in) -> float {
+      return parent.computed[axis_in] - parent.computed_margin[axis_in];
     };
 
     const auto compute_ = [no_change](const Size &exp, float parent_size) {
