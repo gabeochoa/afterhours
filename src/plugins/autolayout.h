@@ -299,10 +299,10 @@ struct UIComponent : BaseComponent {
 
   Rectangle rect() const {
     return Rectangle{
-        .x = computed_rel[Axis::X],
-        .y = computed_rel[Axis::Y],
-        .width = computed[Axis::X],
-        .height = computed[Axis::Y],
+        .x = computed_rel[Axis::X] + computed_margin[Axis::left],
+        .y = computed_rel[Axis::Y] + computed_margin[Axis::top],
+        .width = computed[Axis::X] - computed_margin[Axis::X],
+        .height = computed[Axis::Y] - computed_margin[Axis::Y],
     };
   };
 
@@ -851,10 +851,17 @@ struct AutoLayout {
   }
 
   float compute_margin_for_parent_exp(UIComponent &widget, Axis axis) {
+
     const auto &margin = widget.desired_margin;
     float no_change = widget.computed_margin[axis];
-    if (widget.parent == -1)
+    if (widget.parent == -1) {
+      if (is_dimension_percent_based(widget.desired_padding, axis)) {
+        log_error("Trying to compute margin percent expectation for {}, but "
+                  "no parent",
+                  widget.id);
+      }
       return no_change;
+    }
 
     UIComponent &parent = this->to_cmp(widget.parent);
     if (parent.computed[axis] == -1) {
@@ -867,9 +874,12 @@ struct AutoLayout {
     }
 
     // again ignore padding on purpose
-    float parent_size = (parent.computed[axis] - parent.computed_margin[axis]);
 
-    const auto compute_ = [parent_size, no_change](const Size &exp) {
+    const auto parent_size = [&parent](Axis axis) -> float {
+      return parent.computed[axis] - parent.computed_margin[axis];
+    };
+
+    const auto compute_ = [no_change](const Size &exp, float parent_size) {
       switch (exp.dim) {
       case Dim::Percent:
         return exp.value * parent_size;
@@ -886,15 +896,19 @@ struct AutoLayout {
 
     switch (axis) {
     case Axis::X:
-      return compute_(margin[Axis::left]) + compute_(margin[Axis::right]);
+      return compute_(margin[Axis::left], parent_size(Axis::X)) +
+             compute_(margin[Axis::right], parent_size(Axis::X));
     case Axis::Y:
-      return compute_(margin[Axis::top]) + compute_(margin[Axis::bottom]);
-    case Axis::top:
+      return compute_(margin[Axis::top], parent_size(Axis::Y)) +
+             compute_(margin[Axis::bottom], parent_size(Axis::Y));
     case Axis::left:
     case Axis::right:
+      return compute_(margin[axis], parent_size(Axis::X));
+    case Axis::top:
     case Axis::bottom:
-      return compute_(margin[axis]);
+      return compute_(margin[axis], parent_size(Axis::Y));
     }
+    log_error("computing margin for parent exp but got invalid axis {}", axis);
     return no_change;
   }
 

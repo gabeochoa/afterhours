@@ -174,6 +174,94 @@ auto &make_sophie() {
   return sophie;
 }
 
+enum struct ApplicationLocation {
+  Grandparent,
+  Parent,
+  Child,
+};
+
+std::array<RefEntity, 3> grandparent_setup_padding(
+    Entity &sophie, Axis axis, Size padding_size,
+    ApplicationLocation location = ApplicationLocation::Grandparent) {
+
+  auto &div = EntityHelper::createEntity();
+  {
+    auto &c = make_component(div)
+                  .set_desired_width(pixels(100.f))
+                  .set_desired_height(percent(0.5f))
+                  .set_parent(sophie);
+
+    if (location == ApplicationLocation::Grandparent)
+      c.set_desired_padding(padding_size, axis);
+  }
+
+  auto &parent = EntityHelper::createEntity();
+  {
+    auto &c = make_component(parent)
+                  .set_desired_width(percent(1.f))
+                  .set_desired_height(percent(0.5f))
+                  .set_parent(div);
+
+    if (location == ApplicationLocation::Parent)
+      c.set_desired_padding(padding_size, axis);
+  }
+
+  auto &child = EntityHelper::createEntity();
+  {
+    auto &c = make_component(child)
+                  .set_desired_width(percent(1.f))
+                  .set_desired_height(percent(0.5f))
+                  .set_parent(parent);
+
+    if (location == ApplicationLocation::Child)
+      c.set_desired_padding(padding_size, axis);
+  }
+
+  run_(sophie);
+  return {{div, parent, child}};
+}
+
+std::array<RefEntity, 3> grandparent_setup_margin(
+    Entity &sophie, Axis axis, Size margin_size,
+    ApplicationLocation location = ApplicationLocation::Grandparent) {
+
+  auto &grandparent = EntityHelper::createEntity();
+  {
+    auto &c = make_component(grandparent)
+                  .set_desired_width(pixels(100.f))
+                  .set_desired_height(percent(0.5f))
+                  .set_parent(sophie);
+
+    if (location == ApplicationLocation::Grandparent)
+      c.set_desired_margin(margin_size, axis);
+  }
+
+  auto &parent = EntityHelper::createEntity();
+  {
+    auto &c = make_component(parent)
+                  .set_desired_width(percent(1.f))
+                  .set_desired_height(percent(0.5f))
+                  .set_parent(grandparent);
+
+    if (location == ApplicationLocation::Parent)
+      c.set_desired_margin(margin_size, axis);
+  }
+
+  auto &child = EntityHelper::createEntity();
+  {
+    auto &c = make_component(child)
+                  .set_desired_width(percent(1.f))
+                  .set_desired_height(percent(0.5f))
+                  .set_parent(parent);
+
+    if (location == ApplicationLocation::Child)
+      c.set_desired_margin(margin_size, axis);
+  }
+
+  run_(sophie);
+  return {{grandparent, parent, child}};
+}
+
 TEST_CASE("root test") {
   auto &sophie = make_sophie();
   run_(sophie);
@@ -264,53 +352,6 @@ TEST_CASE("top padding") {
                                        .width = 100,
                                        .height = H2,
                                    }));
-}
-
-enum struct ApplicationLocation {
-  Grandparent,
-  Parent,
-  Child,
-};
-
-std::array<RefEntity, 3> grandparent_setup_padding(
-    Entity &sophie, Axis axis, Size padding_size,
-    ApplicationLocation location = ApplicationLocation::Grandparent) {
-
-  auto &div = EntityHelper::createEntity();
-  {
-    auto &c = make_component(div)
-                  .set_desired_width(pixels(100.f))
-                  .set_desired_height(percent(0.5f))
-                  .set_parent(sophie);
-
-    if (location == ApplicationLocation::Grandparent)
-      c.set_desired_padding(padding_size, axis);
-  }
-
-  auto &parent = EntityHelper::createEntity();
-  {
-    auto &c = make_component(parent)
-                  .set_desired_width(percent(1.f))
-                  .set_desired_height(percent(0.5f))
-                  .set_parent(div);
-
-    if (location == ApplicationLocation::Parent)
-      c.set_desired_padding(padding_size, axis);
-  }
-
-  auto &child = EntityHelper::createEntity();
-  {
-    auto &c = make_component(child)
-                  .set_desired_width(percent(1.f))
-                  .set_desired_height(percent(0.5f))
-                  .set_parent(parent);
-
-    if (location == ApplicationLocation::Child)
-      c.set_desired_padding(padding_size, axis);
-  }
-
-  run_(sophie);
-  return {{div, parent, child}};
 }
 
 TEST_CASE("top pixel padding on grandparent") {
@@ -857,7 +898,7 @@ TEST_CASE("left margin") {
                                  //
                                  .x = 10,
                                  .y = 0,
-                                 .width = H8,
+                                 .width = 90,
                                  .height = 50 //
                              }));
   CHECK_THAT(to_bounds(child), RectMatcher(Rectangle{
@@ -1012,47 +1053,6 @@ TEST_CASE("vertical margin") {
                                    .width = 100,
                                    .height = 50 //
                                }));
-}
-
-std::array<RefEntity, 3> grandparent_setup_margin(
-    Entity &sophie, Axis axis, Size margin_size,
-    ApplicationLocation location = ApplicationLocation::Grandparent) {
-
-  auto &grandparent = EntityHelper::createEntity();
-  {
-    auto &c = make_component(grandparent)
-                  .set_desired_width(pixels(100.f))
-                  .set_desired_height(percent(0.5f))
-                  .set_parent(sophie);
-
-    if (location == ApplicationLocation::Grandparent)
-      c.set_desired_margin(margin_size, axis);
-  }
-
-  auto &parent = EntityHelper::createEntity();
-  {
-    auto &c = make_component(parent)
-                  .set_desired_width(percent(1.f))
-                  .set_desired_height(percent(0.5f))
-                  .set_parent(grandparent);
-
-    if (location == ApplicationLocation::Parent)
-      c.set_desired_margin(margin_size, axis);
-  }
-
-  auto &child = EntityHelper::createEntity();
-  {
-    auto &c = make_component(child)
-                  .set_desired_width(percent(1.f))
-                  .set_desired_height(percent(0.5f))
-                  .set_parent(parent);
-
-    if (location == ApplicationLocation::Child)
-      c.set_desired_margin(margin_size, axis);
-  }
-
-  run_(sophie);
-  return {{grandparent, parent, child}};
 }
 
 TEST_CASE("top pixel margin on grandparent") {
@@ -1345,6 +1345,35 @@ TEST_CASE("right pixel margin on child") {
 
   auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = H8};
   auto child_rect = Rectangle{.x = 0, .y = 0, .width = 100 - 10, .height = H8};
+  CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
+  CHECK_THAT(to_rect(child), RectMatcher(child_rect));
+}
+
+TEST_CASE("top percent margin on grandparent") {
+  auto &sophie = make_sophie();
+  auto [grandparent, parent, child] =
+      grandparent_setup_margin(sophie, Axis::top, percent(0.1f));
+
+  float gap = HEIGHT * 0.1f;
+
+  auto grandparent_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+  auto grandparent_rect =
+      Rectangle{.x = 0, .y = gap, .width = 100, .height = H2 - gap};
+  CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
+  CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
+
+  auto parent_bounds =
+      Rectangle{.x = 0, .y = gap, .width = 100, .height = (H2 - gap) / 2.f};
+  auto parent_rect =
+      Rectangle{.x = 0, .y = gap, .width = 100, .height = (H2 - gap) / 2.f};
+  CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
+  CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
+
+  auto child_bounds = Rectangle{
+      .x = 0, .y = gap, .width = 100, .height = std::ceil((H2 - gap) / 4.f)};
+  auto child_rect = Rectangle{
+      .x = 0, .y = gap, .width = 100, .height = std::ceil((H2 - gap) / 4.f)};
   CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
   CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
