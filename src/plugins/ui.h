@@ -458,7 +458,7 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
     }
 */
 ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
-                       bool &value,
+                       bool &value, bool disable = false,
                        ComponentConfig config = ComponentConfig()) {
 
   Entity &entity = ep_pair.first;
@@ -480,12 +480,16 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   _init_component(entity, parent, //
                   config, UIComponentDebug::Type::checkbox);
 
-  entity.addComponentIfMissing<HasClickListener>([](Entity &checkbox) {
-    ui::HasCheckboxState &hcs = checkbox.get<ui::HasCheckboxState>();
-    hcs.on = !hcs.on;
-    hcs.changed_since = true;
-    checkbox.get<ui::HasLabel>().label = hcs.on ? "X" : " ";
-  });
+  if (disable) {
+    entity.removeComponentIfExists<HasClickListener>();
+  } else {
+    entity.addComponentIfMissing<HasClickListener>([](Entity &checkbox) {
+      ui::HasCheckboxState &hcs = checkbox.get<ui::HasCheckboxState>();
+      hcs.on = !hcs.on;
+      hcs.changed_since = true;
+      checkbox.get<ui::HasLabel>().label = hcs.on ? "X" : " ";
+    });
+  }
 
   ctx.queue_render(RenderInfo{entity.id, config.render_layer});
 
@@ -494,6 +498,33 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   ElementResult result{checkboxState.changed_since, entity, checkboxState.on};
   checkboxState.changed_since = false;
   return result;
+}
+
+// imm::checkbox_group(context, mk(elem.ent()), enabled_weapons);
+template <size_t Size>
+ElementResult checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
+                             std::bitset<Size> &values, int max_enabled = -1,
+                             ComponentConfig config = ComponentConfig()) {
+
+  Entity &entity = ep_pair.first;
+  div(ctx, ep_pair, config);
+
+  size_t count = values.count();
+  bool should_disable = max_enabled != -1 && count >= max_enabled;
+
+  bool changed = false;
+  for (int i = 0; i < values.size(); i++) {
+    bool value = values.test(i);
+    if (checkbox(ctx, mk(entity, i), value, !value && should_disable, config)) {
+      changed = true;
+      if (value)
+        values.set(i);
+      else
+        values.reset(i);
+    }
+  }
+
+  return {changed, entity};
 }
 
 ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
@@ -1420,8 +1451,8 @@ struct ProviderConsumer : public DataStorage {
 
   struct has_fetch_data_member {
     template <typename U>
-    static auto test(U *)
-        -> decltype(std::declval<U>().fetch_data(), void(), std::true_type{});
+    static auto test(U *) -> decltype(std::declval<U>().fetch_data(), void(),
+                                      std::true_type{});
 
     template <typename U> static auto test(...) -> std::false_type;
 
