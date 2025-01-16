@@ -958,10 +958,13 @@ struct AutoLayout {
                   "children for {} axis {}",
                   widget.id, axis);
       }
+
       //  no computed value yet
       if (cs == -1) {
         // Instead of silently ignoring this, check the cases above
-        log_error("expect that all children have been solved by now");
+        log_error("expect that all children have been solved by now child {} "
+                  "parent {}",
+                  entityID, widget.id);
       }
       total_child_size += cs;
     }
@@ -1003,10 +1006,13 @@ struct AutoLayout {
 
     float existing_desire = exp.value;
     if (widget.children.empty()) {
-      // if the component has no children, but the expected size was set,
-      // use that instead
-      // TODO does this need to be a setting? is this generally a decent choice
-      return std::max(no_change, existing_desire);
+      // Make sure we arent setting -1 in this case
+      return std::max(0.f,
+                      // if the component has no children, but the expected size
+                      // was set, use that instead
+                      // TODO does this need to be a setting? is this generally
+                      // a decent choice
+                      std::max(no_change, existing_desire));
     }
 
     float expectation = _sum_children_axis_for_child_exp(widget, axis);
