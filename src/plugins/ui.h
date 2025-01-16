@@ -179,13 +179,8 @@ template <typename InputAction> struct UIContext : BaseComponent {
 
 struct UIComponentDebug : BaseComponent {
   enum struct Type {
+    unknown,
     custom,
-    //
-    div,
-    button,
-    checkbox,
-    dropdown,
-    slider,
   } type;
 
   std::string name_value;
@@ -194,8 +189,12 @@ struct UIComponentDebug : BaseComponent {
   UIComponentDebug(const std::string &name_)
       : type(Type::custom), name_value(name_) {}
 
-  void set(Type type_, const std::string &name_) {
-    type = type_;
+  void set(const std::string &name_) {
+    if (name_ == "") {
+      type = Type::unknown;
+      return;
+    }
+    type = Type::custom;
     name_value = name_;
   }
 
@@ -351,14 +350,14 @@ struct ComponentConfig {
   bool skip_when_tabbing = false;
 
   // debugs
-  std::string debug_name;
+  std::string debug_name = "";
   int render_layer = 0;
 
   std::optional<Color> color;
 };
 
 static bool _init_component(Entity &entity, Entity &parent,
-                            ComponentConfig config, UIComponentDebug::Type type,
+                            ComponentConfig config,
                             const std::string debug_name = "") {
 
   bool created = false;
@@ -367,9 +366,7 @@ static bool _init_component(Entity &entity, Entity &parent,
   if (entity.is_missing<UIComponent>()) {
     entity.addComponent<ui::UIComponent>(entity.id).set_parent(parent.id);
 
-    entity
-        .addComponent<UIComponentDebug>(type) //
-        .set(type, debug_name);
+    entity.addComponent<UIComponentDebug>(debug_name);
 
     if (!config.label.empty())
       entity.addComponent<ui::HasLabel>(config.label)
@@ -400,8 +397,7 @@ static bool _init_component(Entity &entity, Entity &parent,
     entity.get<UIComponent>().make_absolute();
 
   if (!config.debug_name.empty()) {
-    entity.get<UIComponentDebug>().set(UIComponentDebug::Type::custom,
-                                       config.debug_name);
+    entity.get<UIComponentDebug>().set(config.debug_name);
   }
 
   if (config.color.has_value()) {
@@ -422,7 +418,7 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
   if (config.size.is_default)
     config.size = ComponentSize{children(), children()};
 
-  _init_component(entity, parent, config, UIComponentDebug::Type::div);
+  _init_component(entity, parent, config);
 
   ctx.queue_render(RenderInfo{entity.id, config.render_layer});
 
@@ -443,7 +439,7 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   _init_component(entity, parent, //
-                  config, UIComponentDebug::Type::button);
+                  config, "button");
 
   entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
 
@@ -477,8 +473,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
 
   config.color = colors::UI_BLUE;
 
-  _init_component(entity, parent, //
-                  config, UIComponentDebug::Type::checkbox);
+  _init_component(entity, parent, config, "checkbox");
 
   if (disable) {
     entity.removeComponentIfExists<HasClickListener>();
@@ -500,14 +495,68 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   return result;
 }
 
-// imm::checkbox_group(context, mk(elem.ent()), enabled_weapons);
-template <size_t Size>
-ElementResult checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
-                             std::bitset<Size> &values, int max_enabled = -1,
-                             ComponentConfig config = ComponentConfig()) {
+ElementResult checkbox_group_row(HasUIContext auto &ctx, EntityParent ep_pair,
+                                 int index, bool &value, bool should_disable,
+                                 ComponentConfig config = ComponentConfig()) {
 
   Entity &entity = ep_pair.first;
-  div(ctx, ep_pair, config);
+  Entity &parent = ep_pair.second;
+
+  auto label = config.label;
+  config.label = "";
+
+  _init_component(entity, parent, config, "checkbox_row");
+
+  config.size = ComponentSize(pixels(default_component_size.x),
+                              children(default_component_size.y));
+  if (!label.empty()) {
+    config.size = config.size._scale_x(0.5f);
+
+    div(ctx, mk(entity),
+        ComponentConfig{
+            .size = config.size,
+            .label = label,
+            // inheritables
+            .label_alignment = config.label_alignment,
+            .skip_when_tabbing = config.skip_when_tabbing,
+            // debugs
+            .debug_name = std::format("checkbox label {}", index),
+            .render_layer = config.render_layer,
+        });
+  }
+
+  bool changed = false;
+  if (checkbox(ctx, mk(entity), value, !value && should_disable,
+               ComponentConfig{
+                   .size = config.size,
+                   // inheritables
+                   .label_alignment = config.label_alignment,
+                   .skip_when_tabbing = config.skip_when_tabbing,
+                   // debugs
+                   .debug_name = std::format("checkbox {}", index),
+                   .render_layer = config.render_layer,
+               })) {
+    changed = true;
+  }
+
+  return {changed, entity};
+}
+
+// imm::checkbox_group(context, mk(elem.ent()), enabled_weapons);
+template <size_t Size>
+ElementResult
+checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
+               std::bitset<Size> &values, int max_enabled = -1,
+               const std::array<std::string_view, Size> &labels = {{}},
+               ComponentConfig config = ComponentConfig()) {
+
+  Entity &entity = ep_pair.first;
+  Entity &parent = ep_pair.second;
+
+  auto max_height = config.size.y_axis;
+  config.size.y_axis = children();
+  _init_component(entity, parent, config, "checkbox_group");
+  config.size.y_axis = max_height;
 
   size_t count = values.count();
   bool should_disable = max_enabled != -1 && count >= max_enabled;
@@ -515,7 +564,21 @@ ElementResult checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
   bool changed = false;
   for (int i = 0; i < values.size(); i++) {
     bool value = values.test(i);
-    if (checkbox(ctx, mk(entity, i), value, !value && should_disable, config)) {
+
+    if (checkbox_group_row(
+            ctx, mk(entity, i), i, value, should_disable,
+            ComponentConfig{
+                .size = config.size,
+                .label = i < labels.size() ? std::string(labels[i]) : "",
+                .flex_direction = FlexDirection::Row,
+                // inheritables
+                .label_alignment = config.label_alignment,
+                .skip_when_tabbing = config.skip_when_tabbing,
+                // debugs
+                .debug_name = std::format("checkbox row {}", i),
+                .render_layer = config.render_layer,
+
+            })) {
       changed = true;
       if (value)
         values.set(i);
@@ -538,8 +601,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   std::string original_label = config.label;
   config.label = "";
 
-  _init_component(entity, parent, //
-                  config, UIComponentDebug::Type::custom, "slider");
+  _init_component(entity, parent, config, "slider");
 
   auto label = div(ctx, mk(entity, entity.id + 0),
                    ComponentConfig{
@@ -725,7 +787,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   std::string label_str = config.label;
   config.label = "";
 
-  _init_component(entity, parent, config, UIComponentDebug::Type::dropdown);
+  _init_component(entity, parent, config, "dropdown");
 
   Size width = config.size._scale_x(0.5f).x_axis;
 
@@ -1451,8 +1513,8 @@ struct ProviderConsumer : public DataStorage {
 
   struct has_fetch_data_member {
     template <typename U>
-    static auto test(U *) -> decltype(std::declval<U>().fetch_data(), void(),
-                                      std::true_type{});
+    static auto test(U *)
+        -> decltype(std::declval<U>().fetch_data(), void(), std::true_type{});
 
     template <typename U> static auto test(...) -> std::false_type;
 
@@ -1554,7 +1616,7 @@ template <typename ProviderComponent>
 Entity &make_dropdown(Entity &parent, int max_options = -1) {
   using WRDS = ui::HasDropdownStateWithProvider<ProviderComponent>;
   auto &dropdown = EntityHelper::createEntity();
-  dropdown.addComponent<UIComponentDebug>(UIComponentDebug::Type::dropdown);
+  dropdown.addComponent<UIComponentDebug>("dropdown");
 
   dropdown.addComponent<UIComponent>(dropdown.id).set_parent(parent.id);
   parent.get<ui::UIComponent>().add_child(dropdown.id);
