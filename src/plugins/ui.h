@@ -526,7 +526,7 @@ ElementResult checkbox_group_row(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   bool changed = false;
-  if (checkbox(ctx, mk(entity), value, !value && should_disable,
+  if (checkbox(ctx, mk(entity), value, should_disable,
                ComponentConfig{
                    .size = config.size,
                    // inheritables
@@ -546,8 +546,9 @@ ElementResult checkbox_group_row(HasUIContext auto &ctx, EntityParent ep_pair,
 template <size_t Size>
 ElementResult
 checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
-               std::bitset<Size> &values, int max_enabled = -1,
+               std::bitset<Size> &values,
                const std::array<std::string_view, Size> &labels = {{}},
+               std::pair<int, int> min_max = {-1, -1},
                ComponentConfig config = ComponentConfig()) {
 
   Entity &entity = ep_pair.first;
@@ -558,15 +559,25 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
   _init_component(entity, parent, config, "checkbox_group");
   config.size.y_axis = max_height;
 
-  size_t count = values.count();
-  bool should_disable = max_enabled != -1 && count >= max_enabled;
+  int count = (int)values.count();
+
+  log_info("min {} {}", min_max.first, count);
+
+  const auto should_disable = [min_max, count](bool value) -> bool {
+    // we should disable, if not checked and we are at the cap
+    bool at_cap = !value && min_max.second != -1 && count >= min_max.second;
+    // we should disable, if checked and we are at the min
+    bool at_min = value && min_max.first != -1 && count <= min_max.first;
+
+    return at_cap || at_min;
+  };
 
   bool changed = false;
   for (int i = 0; i < values.size(); i++) {
     bool value = values.test(i);
 
     if (checkbox_group_row(
-            ctx, mk(entity, i), i, value, should_disable,
+            ctx, mk(entity, i), i, value, should_disable(value),
             ComponentConfig{
                 .size = config.size,
                 .label = i < labels.size() ? std::string(labels[i]) : "",
