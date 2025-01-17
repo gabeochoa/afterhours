@@ -956,7 +956,7 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
         e.get<window_manager::ProvidesCurrentResolution>().current_resolution;
   }
 
-  virtual void for_each_with(Entity &entity, AutoLayoutRoot &, UIComponent &cmp,
+  virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
                              float) override {
 
     AutoLayout::autolayout(cmp, resolution, components);
@@ -1513,8 +1513,8 @@ struct ProviderConsumer : public DataStorage {
 
   struct has_fetch_data_member {
     template <typename U>
-    static auto test(U *)
-        -> decltype(std::declval<U>().fetch_data(), void(), std::true_type{});
+    static auto test(U *) -> decltype(std::declval<U>().fetch_data(), void(),
+                                      std::true_type{});
 
     template <typename U> static auto test(...) -> std::false_type;
 
