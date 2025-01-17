@@ -566,7 +566,6 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
     bool at_cap = !value && min_max.second != -1 && count >= min_max.second;
     // we should disable, if checked and we are at the min
     bool at_min = value && min_max.first != -1 && count <= min_max.first;
-
     return at_cap || at_min;
   };
 
@@ -715,14 +714,146 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 }
 
 /*
+    {
+      ComponentConfig resolution_config;
+      resolution_config.label = "Resolution";
+
+      if (imm::pagination(context, mk(elem.ent()), {{"test", "test2", "test3"}},
+                          win_condition_index, std::move(resolution_config))) {
+      }
+    }
+    */
+ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
+                         const std::vector<std::string> &options,
+                         size_t &option_index,
+                         ComponentConfig config = ComponentConfig()) {
+  Entity &entity = ep_pair.first;
+  Entity &parent = ep_pair.second;
+
+  if (options.empty())
+    return {false, entity};
+
+  if (entity.is_missing<ui::HasDropdownState>())
+    entity.addComponent<ui::HasDropdownState>(
+        options, nullptr, [&](size_t opt) {
+          HasDropdownState &ds = entity.get<ui::HasDropdownState>();
+          if (!ds.on) {
+            ds.last_option_clicked = opt;
+          }
+        });
+  HasDropdownState &dropdownState = entity.get<ui::HasDropdownState>();
+  dropdownState.last_option_clicked = (size_t)option_index;
+  dropdownState.changed_since = false;
+
+  const auto on_option_click = [options, &ctx](Entity &dd, size_t i) {
+    HasDropdownState &ds = dd.get<ui::HasDropdownState>();
+    ds.last_option_clicked = i;
+    ds.on = !ds.on;
+    ds.changed_since = true;
+
+    EntityID id = dd.get<UIComponent>().children[i];
+    ctx.set_focus(id);
+  };
+
+  config.size = ComponentSize(children(default_component_size.x),
+                              pixels(default_component_size.y));
+  config.flex_direction = FlexDirection::Row;
+
+  // we have to clear the label otherwise itll render at the full
+  // component width..
+  // TODO is there a way for us to support doing this without the gotchas?
+  std::string label_str = config.label;
+  config.label = "";
+
+  bool first_time = _init_component(entity, parent, config, "pagination");
+
+  int child_index = 0;
+
+  if (button(ctx, mk(entity),
+             ComponentConfig{
+                 .size = ComponentSize{pixels(default_component_size.x / 2.f),
+                                       config.size.y_axis},
+                 .label = "<",
+                 // inheritables
+                 .label_alignment = config.label_alignment,
+                 .skip_when_tabbing = config.skip_when_tabbing,
+                 // debugs
+                 .debug_name = "left",
+                 .render_layer = (config.render_layer),
+             })) {
+    if (option_index > 1) {
+      on_option_click(entity, option_index - 1);
+    } else {
+      EntityID id = entity.get<UIComponent>().children[1];
+      ctx.set_focus(id);
+    }
+  }
+
+  for (size_t i = 0; i < options.size(); i++) {
+    if (button(ctx, mk(entity, child_index + i),
+               ComponentConfig{
+                   .size = ComponentSize{pixels(default_component_size.x / 2.f),
+                                         config.size.y_axis},
+                   .label = options[i],
+                   // inheritables
+                   .label_alignment = config.label_alignment,
+                   .skip_when_tabbing = config.skip_when_tabbing,
+                   // debugs
+                   .debug_name = std::format("option {}", i + 1),
+                   .render_layer = (config.render_layer + 1),
+               })) {
+      // we do +1 because the < button
+      on_option_click(entity, i + 1);
+    }
+  }
+
+  if (button(ctx, mk(entity),
+             ComponentConfig{
+                 .size = ComponentSize{pixels(default_component_size.x / 2.f),
+                                       config.size.y_axis},
+                 .label = ">",
+                 // inheritables
+                 .label_alignment = config.label_alignment,
+                 .skip_when_tabbing = config.skip_when_tabbing,
+                 // debugs
+                 .debug_name = "right",
+                 .render_layer = (config.render_layer),
+             })) {
+    if (option_index < options.size()) {
+      on_option_click(entity, option_index + 1);
+    } else {
+      EntityID id = entity.get<UIComponent>().children[options.size()];
+      ctx.set_focus(id);
+    }
+  }
+
+  // When its the fist time we load, we want the focus to not be on the
+  // < button but to be on the current option with index option_index
+  if (first_time) {
+    EntityID id = entity.get<UIComponent>()
+                      .children[dropdownState.last_option_clicked + 1];
+    ctx.set_focus(id);
+  }
+
+  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
+
+  option_index = dropdownState.last_option_clicked;
+  return ElementResult{dropdownState.changed_since, entity,
+                       dropdownState.last_option_clicked};
+}
+
+/*
     if (imm::dropdown(context, mk(button_group.ent()), data, option_index)) {
       log_info("dropdown {}", option_index);
     }
     */
 
+// TODO add arrows so its easier to distinguish between dropdown and just a
+// normal button
+
 ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                        const std::vector<std::string> &options,
-                       int &option_index,
+                       size_t &option_index,
                        ComponentConfig config = ComponentConfig()) {
 
   Entity &entity = ep_pair.first;
