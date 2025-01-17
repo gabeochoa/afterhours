@@ -117,6 +117,8 @@ struct window_manager : developer::Plugin {
                                float) override {
       if (pCR.should_refetch) {
         pCR.current_resolution = fetch_current_resolution();
+        set_window_size(pCR.current_resolution.width,
+                        pCR.current_resolution.height);
         pCR.should_refetch = false;
       }
     }
