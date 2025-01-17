@@ -561,8 +561,6 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
 
   int count = (int)values.count();
 
-  log_info("min {} {}", min_max.first, count);
-
   const auto should_disable = [min_max, count](bool value) -> bool {
     // we should disable, if not checked and we are at the cap
     bool at_cap = !value && min_max.second != -1 && count >= min_max.second;
