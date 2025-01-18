@@ -20,45 +20,9 @@
 #include "input_system.h"
 #include "texture_manager.h"
 
+#include "../drawing_helpers.h"
+
 namespace afterhours {
-
-#ifdef AFTER_HOURS_USE_RAYLIB
-inline void draw_text_ex(raylib::Font font, const char *content,
-                         Vector2Type position, float font_size, float spacing,
-                         Color color) {
-  raylib::DrawTextEx(font, content, position, font_size, spacing, color);
-}
-inline void draw_text(const char *content, float x, float y, float font_size,
-                      Color color) {
-  raylib::DrawText(content, x, y, font_size, color);
-}
-
-inline void draw_rectangle_outline(RectangleType rect, Color color) {
-  raylib::DrawRectangleLinesEx(rect, 3.f, color);
-}
-
-inline void draw_rectangle(RectangleType rect, Color color) {
-  raylib::DrawRectangleRec(rect, color);
-}
-
-inline void draw_rectangle_rounded(RectangleType rect, float roundness,
-                                   int segments, Color color) {
-  raylib::DrawRectangleRounded(rect, roundness, segments, color);
-}
-
-inline raylib::Font get_default_font() { return raylib::GetFontDefault(); }
-inline raylib::Font get_unset_font() { return raylib::GetFontDefault(); }
-
-#else
-inline void draw_text_ex(afterhours::Font, const char *, Vector2Type, float,
-                         float, Color) {}
-inline void draw_text(const char *, float, float, float, Color) {}
-inline void draw_rectangle(RectangleType, Color) {}
-inline void draw_rectangle_outline(RectangleType, Color) {}
-inline void draw_rectangle_rounded(RectangleType, float, int, Color) {}
-inline afterhours::Font get_default_font() { return afterhours::Font(); }
-inline afterhours::Font get_unset_font() { return afterhours::Font(); }
-#endif
 
 namespace ui {
 
@@ -1806,10 +1770,15 @@ template <typename InputAction> struct RenderImm : System<> {
 
       // TODO do we need another color for this?
       if (context.has_focus(entity.id)) {
-        draw_rectangle(cmp.focus_rect(),
-                       context.theme.from_usage(Theme::Usage::Accent));
+        draw_rectangle_rounded(cmp.focus_rect(),
+                               0.5f, // roundness
+                               8,    // segments
+                               context.theme.from_usage(Theme::Usage::Accent));
       }
-      draw_rectangle(cmp.rect(), col);
+      draw_rectangle_rounded(cmp.rect(),
+                             0.5f, // roundness
+                             8,    // segments
+                             col);
     }
 
     if (entity.has<HasLabel>()) {
