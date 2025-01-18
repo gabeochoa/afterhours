@@ -323,7 +323,7 @@ struct UIComponent : BaseComponent {
   float width() const { return rect().width; }
   float height() const { return rect().height; }
 
-  Rectangle focus_rect(int rw = 2) const {
+  Rectangle focus_rect(int rw = 4) const {
     return Rectangle{x() - (float)rw, y() - (float)rw,
                      width() + (2.f * (float)rw), height() + (2.f * (float)rw)};
   }
