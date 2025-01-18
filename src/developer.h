@@ -10,7 +10,10 @@
 #include "type_name.h"
 
 #ifndef TextureType
-struct MyTexture {};
+struct MyTexture {
+  float width;
+  float height;
+};
 using TextureType = MyTexture;
 #endif
 
