@@ -867,7 +867,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                         // debugs
                         .debug_name = "slider_handle",
                         .render_layer = config.render_layer + 2,
-                        .color_usage = Theme::Usage::Accent,
+                        .color_usage = Theme::Usage::Primary,
                     });
 
   handle.cmp()
@@ -1801,7 +1801,7 @@ template <typename InputAction> struct RenderImm : System<> {
       Color col = entity.template get<HasColor>().color();
 
       if (context.is_hot(entity.id)) {
-        col = context.theme.from_usage(Theme::Usage::Accent);
+        col = context.theme.from_usage(Theme::Usage::Background);
       }
 
       // TODO do we need another color for this?
