@@ -79,6 +79,20 @@ struct TransformData {
   }
 };
 
+struct HasTexture : BaseComponent {
+  Texture texture;
+
+  enum struct Alignment {
+    Left,
+    Center,
+    Right,
+    None = Left,
+  } alignment = Alignment::None;
+
+  HasTexture(const Texture &tex, Alignment align)
+      : texture(tex), alignment(align) {}
+};
+
 struct HasSpritesheet : BaseComponent {
   Texture texture;
   HasSpritesheet(const Texture tex) : texture(tex) {}
