@@ -19,6 +19,8 @@
 #include "color.h"
 #include "input_system.h"
 
+namespace afterhours {
+
 #ifdef AFTER_HOURS_USE_RAYLIB
 inline void draw_text_ex(raylib::Font font, const char *content,
                          Vector2Type position, float font_size, float spacing,
@@ -51,9 +53,88 @@ inline afterhours::Font get_default_font() { return afterhours::Font(); }
 inline afterhours::Font get_unset_font() { return afterhours::Font(); }
 #endif
 
-namespace afterhours {
-
 namespace ui {
+
+struct Theme {
+  enum struct Usage {
+    Font,
+    DarkFont,
+    Background,
+    Primary,
+    Secondary,
+    Accent,
+    Error,
+
+    //
+    Custom,
+    Default,
+  };
+
+  static bool is_valid(Usage cu) {
+    switch (cu) {
+    case Usage::Font:
+    case Usage::DarkFont:
+    case Usage::Background:
+    case Usage::Primary:
+    case Usage::Secondary:
+    case Usage::Accent:
+    case Usage::Error:
+      return true;
+    case Usage::Custom:
+    case Usage::Default:
+      return false;
+    };
+    return false;
+  }
+
+  Color font;
+  Color darkfont;
+  Color background;
+
+  Color primary;
+  Color secondary;
+  Color accent;
+  Color error;
+
+  Theme()
+      : font(colors::isabelline), darkfont(colors::oxford_blue),
+        background(colors::oxford_blue), primary(colors::pacific_blue),
+        secondary(colors::tea_green), accent(colors::orange_soda),
+        // TODO find a better error color
+        error(colors::red) {}
+
+  Theme(Color f, Color df, Color bg, Color p, Color s, Color a, Color e)
+      : font(f), darkfont(df), background(bg), primary(p), secondary(s),
+        accent(a), error(e) {}
+
+  Color from_usage(Usage cu) const {
+    switch (cu) {
+    case Usage::Font:
+      return font;
+    case Usage::DarkFont:
+      return darkfont;
+    case Usage::Background:
+      return background;
+    case Usage::Primary:
+      return primary;
+    case Usage::Secondary:
+      return secondary;
+    case Usage::Accent:
+      return accent;
+    case Usage::Error:
+      return error;
+    case Usage::Default:
+      log_warn("You should not be fetching 'default' color usage from theme, "
+               "UI library should handle this??");
+      return primary;
+    case Usage::Custom:
+      log_warn("You should not be fetching 'custom' color usage from theme, "
+               "UI library should handle this??");
+      return primary;
+    }
+    return background;
+  }
+};
 
 static bool is_mouse_inside(const input::MousePosition &mouse_pos,
                             const RectangleType &rect) {
@@ -86,6 +167,8 @@ template <typename InputAction> struct UIContext : BaseComponent {
   bool mouseLeftDown;
   InputAction last_action;
   InputBitset all_actions;
+
+  Theme theme;
 
   [[nodiscard]] bool is_hot(EntityID id) const { return hot_id == id; };
   [[nodiscard]] bool is_active(EntityID id) const { return active_id == id; };
@@ -345,6 +428,9 @@ struct ComponentConfig {
   bool is_absolute = false;
   FlexDirection flex_direction = FlexDirection::Column;
 
+  Theme::Usage color_usage = Theme::Usage::Default;
+  std::optional<Color> custom_color;
+
   // inheritable options
   TextAlignment label_alignment = TextAlignment::None;
   bool skip_when_tabbing = false;
@@ -352,14 +438,11 @@ struct ComponentConfig {
   // debugs
   std::string debug_name = "";
   int render_layer = 0;
-
-  std::optional<Color> color;
 };
 
-static bool _init_component(Entity &entity, Entity &parent,
-                            ComponentConfig config,
-                            const std::string debug_name = "") {
-
+static bool _init_component(HasUIContext auto &ctx, Entity &entity,
+                            Entity &parent, ComponentConfig config,
+                            const std::string &debug_name = "") {
   bool created = false;
 
   // only once on startup
@@ -372,8 +455,25 @@ static bool _init_component(Entity &entity, Entity &parent,
       entity.addComponent<ui::HasLabel>(config.label)
           .set_alignment(config.label_alignment);
 
-    if (config.color.has_value()) {
-      entity.addComponent<HasColor>(config.color.value());
+    if (Theme::is_valid(config.color_usage)) {
+      entity.addComponent<HasColor>(ctx.theme.from_usage(config.color_usage));
+
+      if (config.custom_color.has_value()) {
+        log_warn("You have custom color set on {} but didnt set "
+                 "config.color_usage = Custom",
+                 debug_name.c_str());
+      }
+    }
+
+    if (config.color_usage == Theme::Usage::Custom) {
+      if (config.custom_color.has_value()) {
+        entity.addComponentIfMissing<HasColor>(config.custom_color.value());
+      } else {
+        log_warn("You have custom color usage selected on {} but didnt set "
+                 "config.custom_color",
+                 debug_name.c_str());
+        entity.addComponentIfMissing<HasColor>(colors::UI_PINK);
+      }
     }
 
     if (config.skip_when_tabbing)
@@ -400,8 +500,17 @@ static bool _init_component(Entity &entity, Entity &parent,
     entity.get<UIComponentDebug>().set(config.debug_name);
   }
 
-  if (config.color.has_value()) {
-    entity.get<HasColor>().set(config.color.value());
+  if (Theme::is_valid(config.color_usage)) {
+    entity.get<HasColor>().set(ctx.theme.from_usage(config.color_usage));
+  }
+
+  if (config.color_usage == Theme::Usage::Custom) {
+    if (config.custom_color.has_value()) {
+      entity.get<HasColor>().set(config.custom_color.value());
+    } else {
+      // no warning on this to avoid spamming log
+      entity.get<HasColor>().set(colors::UI_PINK);
+    }
   }
 
   if (!config.label.empty())
@@ -418,7 +527,7 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
   if (config.size.is_default)
     config.size = ComponentSize{children(), children()};
 
-  _init_component(entity, parent, config);
+  _init_component(ctx, entity, parent, config);
 
   ctx.queue_render(RenderInfo{entity.id, config.render_layer});
 
@@ -430,16 +539,15 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
-  if (!config.color.has_value())
-    config.color = colors::UI_BLUE;
+  if (config.color_usage == Theme::Usage::Default)
+    config.color_usage = Theme::Usage::Primary;
 
   // By default buttons have centered text if user didnt specify anything
   if (config.label_alignment == TextAlignment::None) {
     config.label_alignment = TextAlignment::Center;
   }
 
-  _init_component(entity, parent, //
-                  config, "button");
+  _init_component(ctx, entity, parent, config, "button");
 
   entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
 
@@ -471,9 +579,10 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
     config.label_alignment = TextAlignment::Center;
   }
 
-  config.color = colors::UI_BLUE;
+  if (config.color_usage == Theme::Usage::Default)
+    config.color_usage = Theme::Usage::Primary;
 
-  _init_component(entity, parent, config, "checkbox");
+  _init_component(ctx, entity, parent, config, "checkbox");
 
   if (disable) {
     entity.removeComponentIfExists<HasClickListener>();
@@ -505,7 +614,7 @@ ElementResult checkbox_group_row(HasUIContext auto &ctx, EntityParent ep_pair,
   auto label = config.label;
   config.label = "";
 
-  _init_component(entity, parent, config, "checkbox_row");
+  _init_component(ctx, entity, parent, config, "checkbox_row");
 
   config.size = ComponentSize(pixels(default_component_size.x),
                               children(default_component_size.y));
@@ -556,7 +665,7 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
 
   auto max_height = config.size.y_axis;
   config.size.y_axis = children();
-  _init_component(entity, parent, config, "checkbox_group");
+  _init_component(ctx, entity, parent, config, "checkbox_group");
   config.size.y_axis = max_height;
 
   int count = (int)values.count();
@@ -609,7 +718,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   std::string original_label = config.label;
   config.label = "";
 
-  _init_component(entity, parent, config, "slider");
+  _init_component(ctx, entity, parent, config, "slider");
 
   auto label = div(ctx, mk(entity, entity.id + 0),
                    ComponentConfig{
@@ -622,7 +731,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                        .debug_name = "slider_text",
                        .render_layer = config.render_layer + 0,
                        //
-                       .color = colors::UI_BLUE,
+                       .color_usage = Theme::Usage::Primary,
                    });
   label.ent()
       .template get<UIComponent>()
@@ -638,7 +747,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                       // debugs
                       .debug_name = "slider_background",
                       .render_layer = config.render_layer + 1,
-                      .color = colors::UI_RED,
+                      .color_usage = Theme::Usage::Secondary,
                   });
 
   // TODO why do we need to do this?
@@ -700,7 +809,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                         // debugs
                         .debug_name = "slider_handle",
                         .render_layer = config.render_layer + 2,
-                        .color = colors::UI_GREEN,
+                        .color_usage = Theme::Usage::Accent,
                     });
 
   handle.cmp()
@@ -765,7 +874,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
   std::string label_str = config.label;
   config.label = "";
 
-  bool first_time = _init_component(entity, parent, config, "pagination");
+  bool first_time = _init_component(ctx, entity, parent, config, "pagination");
 
   int child_index = 0;
 
@@ -927,7 +1036,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   std::string label_str = config.label;
   config.label = "";
 
-  _init_component(entity, parent, config, "dropdown");
+  _init_component(ctx, entity, parent, config, "dropdown");
 
   Size width = config.size._scale_x(0.5f).x_axis;
 
@@ -945,7 +1054,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                          .debug_name = "dropdown_label",
                          .render_layer = (config.render_layer + 1),
                          //
-                         .color = colors::UI_BLUE,
+                         .color_usage = Theme::Usage::Primary,
                      });
     label
         .ent() //
@@ -1482,7 +1591,8 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     draw_text(std::format("mouse({}, {})", this->context->mouse_pos.x,
                           this->context->mouse_pos.y)
                   .c_str(),
-              0, 0, fontSize, colors::UI_WHITE);
+              0, 0, fontSize,
+              this->context->theme.from_usage(Theme::Usage::Font));
 
     // starting at 1 to avoid the mouse text
     this->level = 1;
@@ -1509,7 +1619,8 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     Rectangle debug_label_location = Rectangle{x, y, text_width, fontSize};
 
     if (is_mouse_inside(this->context->mouse_pos, debug_label_location)) {
-      draw_rectangle_outline(cmp.rect(), colors::UI_RED);
+      draw_rectangle_outline(
+          cmp.rect(), this->context->theme.from_usage(Theme::Usage::Error));
       draw_rectangle_outline(cmp.bounds(), colors::UI_BLACK);
       draw_rectangle(debug_label_location, colors::UI_BLUE);
     } else {
@@ -1517,8 +1628,9 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     }
 
     draw_text(widget_str.c_str(), x, y, fontSize,
-              this->context->is_hot(entity.id) ? colors::UI_RED
-                                               : colors::UI_WHITE);
+              this->context->is_hot(entity.id)
+                  ? this->context->theme.from_usage(Theme::Usage::Error)
+                  : this->context->theme.from_usage(Theme::Usage::Font));
   }
 
   void render(const Entity &entity) const {
@@ -1558,11 +1670,13 @@ template <typename InputAction> struct RenderImm : System<> {
       Color col = entity.template get<HasColor>().color();
 
       if (context.is_hot(entity.id)) {
-        col = colors::UI_RED;
+        col = context.theme.from_usage(Theme::Usage::Accent);
       }
 
+      // TODO do we need another color for this?
       if (context.has_focus(entity.id)) {
-        draw_rectangle(cmp.focus_rect(), colors::UI_PINK);
+        draw_rectangle(cmp.focus_rect(),
+                       context.theme.from_usage(Theme::Usage::Accent));
       }
       draw_rectangle(cmp.rect(), col);
     }
@@ -1570,7 +1684,7 @@ template <typename InputAction> struct RenderImm : System<> {
     if (entity.has<HasLabel>()) {
       draw_text_in_rect(font_manager, entity.get<HasLabel>().label.c_str(),
                         cmp.rect(), entity.get<HasLabel>().alignment,
-                        colors::UI_WHITE);
+                        context.theme.from_usage(Theme::Usage::Font));
     }
   }
 
@@ -1653,8 +1767,8 @@ struct ProviderConsumer : public DataStorage {
 
   struct has_fetch_data_member {
     template <typename U>
-    static auto test(U *) -> decltype(std::declval<U>().fetch_data(), void(),
-                                      std::true_type{});
+    static auto test(U *)
+        -> decltype(std::declval<U>().fetch_data(), void(), std::true_type{});
 
     template <typename U> static auto test(...) -> std::false_type;
 

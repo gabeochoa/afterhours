@@ -4,6 +4,8 @@
 #include "../base_component.h"
 #include "../developer.h"
 
+namespace afterhours {
+
 #ifdef AFTER_HOURS_USE_RAYLIB
 using Color = raylib::Color;
 namespace colors {
@@ -28,7 +30,16 @@ constexpr Color UI_PINK = {250, 200, 200, 255};
 
 #endif
 
-namespace afterhours {
+namespace colors {
+static const Color red = UI_RED;
+static const Color transleucent_green = Color{0, 250, 50, 5};
+static const Color transleucent_red = Color{250, 0, 50, 5};
+static const Color pacific_blue = Color{71, 168, 189, 255};
+static const Color oxford_blue = Color{12, 27, 51, 255};
+static const Color orange_soda = Color{240, 100, 73, 255};
+static const Color isabelline = Color{237, 230, 227, 255};
+static const Color tea_green = Color{195, 232, 189, 255};
+} // namespace colors
 
 struct HasColor : BaseComponent {
 private:
