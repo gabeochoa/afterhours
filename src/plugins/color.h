@@ -38,7 +38,17 @@ static const Color pacific_blue = Color{71, 168, 189, 255};
 static const Color oxford_blue = Color{12, 27, 51, 255};
 static const Color orange_soda = Color{240, 100, 73, 255};
 static const Color isabelline = Color{237, 230, 227, 255};
-static const Color tea_green = Color{195, 232, 189, 255};
+static const Color tea_green =
+    Color{166, 185, 189, 255}; // 195, 232, 189, 255};
+
+static Color darken(const Color &color, float factor = 0.8f) {
+  Color darkerColor;
+  darkerColor.r = static_cast<unsigned char>(color.r * factor);
+  darkerColor.g = static_cast<unsigned char>(color.g * factor);
+  darkerColor.b = static_cast<unsigned char>(color.b * factor);
+  darkerColor.a = color.a;
+  return darkerColor;
+}
 } // namespace colors
 
 struct HasColor : BaseComponent {

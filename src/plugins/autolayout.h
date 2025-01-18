@@ -480,12 +480,24 @@ struct HasLabel : BaseComponent {
 
   std::string label;
   std::string font_name = UIComponent::UNSET_FONT;
+  bool is_disabled = false;
 
-  HasLabel(const std::string &str) : label(str) {}
-  HasLabel() : label("") {}
+  HasLabel(const std::string &str, bool is_disabled_ = false)
+      : label(str), is_disabled(is_disabled_) {}
+  HasLabel() : label(""), is_disabled(false) {}
 
   auto &set_alignment(TextAlignment align_) {
     alignment = align_;
+    return *this;
+  }
+
+  auto &set_label(const std::string &str) {
+    label = str;
+    return *this;
+  }
+
+  auto &set_disabled(bool dis_) {
+    is_disabled = dis_;
     return *this;
   }
 };

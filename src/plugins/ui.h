@@ -107,32 +107,45 @@ struct Theme {
       : font(f), darkfont(df), background(bg), primary(p), secondary(s),
         accent(a), error(e) {}
 
-  Color from_usage(Usage cu) const {
+  Color from_usage(Usage cu, bool disabled = false) const {
+    Color color;
     switch (cu) {
     case Usage::Font:
-      return font;
+      color = font;
+      break;
     case Usage::DarkFont:
-      return darkfont;
+      color = darkfont;
+      break;
     case Usage::Background:
-      return background;
+      color = background;
+      break;
     case Usage::Primary:
-      return primary;
+      color = primary;
+      break;
     case Usage::Secondary:
-      return secondary;
+      color = secondary;
+      break;
     case Usage::Accent:
-      return accent;
+      color = accent;
+      break;
     case Usage::Error:
-      return error;
+      color = error;
+      break;
     case Usage::Default:
       log_warn("You should not be fetching 'default' color usage from theme, "
                "UI library should handle this??");
-      return primary;
+      color = primary;
+      break;
     case Usage::Custom:
       log_warn("You should not be fetching 'custom' color usage from theme, "
                "UI library should handle this??");
-      return primary;
+      color = primary;
+      break;
     }
-    return background;
+    if (disabled) {
+      return colors::darken(color, 0.5f);
+    }
+    return color;
   }
 };
 
@@ -434,6 +447,7 @@ struct ComponentConfig {
   // inheritable options
   TextAlignment label_alignment = TextAlignment::None;
   bool skip_when_tabbing = false;
+  bool disabled = false;
 
   // debugs
   std::string debug_name = "";
@@ -452,11 +466,12 @@ static bool _init_component(HasUIContext auto &ctx, Entity &entity,
     entity.addComponent<UIComponentDebug>(debug_name);
 
     if (!config.label.empty())
-      entity.addComponent<ui::HasLabel>(config.label)
+      entity.addComponent<ui::HasLabel>(config.label, config.disabled)
           .set_alignment(config.label_alignment);
 
     if (Theme::is_valid(config.color_usage)) {
-      entity.addComponent<HasColor>(ctx.theme.from_usage(config.color_usage));
+      entity.addComponent<HasColor>(
+          ctx.theme.from_usage(config.color_usage, config.disabled));
 
       if (config.custom_color.has_value()) {
         log_warn("You have custom color set on {} but didnt set "
@@ -493,6 +508,12 @@ static bool _init_component(HasUIContext auto &ctx, Entity &entity,
       .set_desired_padding(config.padding)
       .set_desired_margin(config.margin);
 
+  if (!config.label.empty())
+    entity.get<ui::HasLabel>()
+        .set_label(config.label)
+        .set_disabled(config.disabled)
+        .set_alignment(config.label_alignment);
+
   if (config.is_absolute)
     entity.get<UIComponent>().make_absolute();
 
@@ -501,7 +522,8 @@ static bool _init_component(HasUIContext auto &ctx, Entity &entity,
   }
 
   if (Theme::is_valid(config.color_usage)) {
-    entity.get<HasColor>().set(ctx.theme.from_usage(config.color_usage));
+    entity.get<HasColor>().set(
+        ctx.theme.from_usage(config.color_usage, config.disabled));
   }
 
   if (config.color_usage == Theme::Usage::Custom) {
@@ -562,7 +584,7 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
     }
 */
 ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
-                       bool &value, bool disable = false,
+                       bool &value,
                        ComponentConfig config = ComponentConfig()) {
 
   Entity &entity = ep_pair.first;
@@ -584,7 +606,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
 
   _init_component(ctx, entity, parent, config, "checkbox");
 
-  if (disable) {
+  if (config.disabled) {
     entity.removeComponentIfExists<HasClickListener>();
   } else {
     entity.addComponentIfMissing<HasClickListener>([](Entity &checkbox) {
@@ -605,7 +627,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
 }
 
 ElementResult checkbox_group_row(HasUIContext auto &ctx, EntityParent ep_pair,
-                                 int index, bool &value, bool should_disable,
+                                 int index, bool &value,
                                  ComponentConfig config = ComponentConfig()) {
 
   Entity &entity = ep_pair.first;
@@ -628,6 +650,7 @@ ElementResult checkbox_group_row(HasUIContext auto &ctx, EntityParent ep_pair,
             // inheritables
             .label_alignment = config.label_alignment,
             .skip_when_tabbing = config.skip_when_tabbing,
+            .disabled = config.disabled,
             // debugs
             .debug_name = std::format("checkbox label {}", index),
             .render_layer = config.render_layer,
@@ -635,12 +658,13 @@ ElementResult checkbox_group_row(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   bool changed = false;
-  if (checkbox(ctx, mk(entity), value, should_disable,
+  if (checkbox(ctx, mk(entity), value,
                ComponentConfig{
                    .size = config.size,
                    // inheritables
                    .label_alignment = config.label_alignment,
                    .skip_when_tabbing = config.skip_when_tabbing,
+                   .disabled = config.disabled,
                    // debugs
                    .debug_name = std::format("checkbox {}", index),
                    .render_layer = config.render_layer,
@@ -683,7 +707,7 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
     bool value = values.test(i);
 
     if (checkbox_group_row(
-            ctx, mk(entity, i), i, value, should_disable(value),
+            ctx, mk(entity, i), i, value,
             ComponentConfig{
                 .size = config.size,
                 .label = i < labels.size() ? std::string(labels[i]) : "",
@@ -691,6 +715,7 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
                 // inheritables
                 .label_alignment = config.label_alignment,
                 .skip_when_tabbing = config.skip_when_tabbing,
+                .disabled = should_disable(value),
                 // debugs
                 .debug_name = std::format("checkbox row {}", i),
                 .render_layer = config.render_layer,
@@ -727,6 +752,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                        // inheritables
                        .label_alignment = config.label_alignment,
                        .skip_when_tabbing = config.skip_when_tabbing,
+                       .disabled = config.disabled,
                        // debugs
                        .debug_name = "slider_text",
                        .render_layer = config.render_layer + 0,
@@ -744,6 +770,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                       // inheritables
                       .label_alignment = config.label_alignment,
                       .skip_when_tabbing = config.skip_when_tabbing,
+                      .disabled = config.disabled,
                       // debugs
                       .debug_name = "slider_background",
                       .render_layer = config.render_layer + 1,
@@ -806,6 +833,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                         // inheritables
                         .label_alignment = config.label_alignment,
                         .skip_when_tabbing = config.skip_when_tabbing,
+                        .disabled = config.disabled,
                         // debugs
                         .debug_name = "slider_handle",
                         .render_layer = config.render_layer + 2,
@@ -886,6 +914,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                  // inheritables
                  .label_alignment = config.label_alignment,
                  .skip_when_tabbing = config.skip_when_tabbing,
+                 .disabled = config.disabled,
                  // debugs
                  .debug_name = "left",
                  .render_layer = (config.render_layer),
@@ -907,6 +936,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                    // inheritables
                    .label_alignment = config.label_alignment,
                    .skip_when_tabbing = config.skip_when_tabbing,
+                   .disabled = config.disabled,
                    // debugs
                    .debug_name = std::format("option {}", i + 1),
                    .render_layer = (config.render_layer + 1),
@@ -924,6 +954,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                  // inheritables
                  .label_alignment = config.label_alignment,
                  .skip_when_tabbing = config.skip_when_tabbing,
+                 .disabled = config.disabled,
                  // debugs
                  .debug_name = "right",
                  .render_layer = (config.render_layer),
@@ -1050,6 +1081,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                          // inheritables
                          .label_alignment = config.label_alignment,
                          .skip_when_tabbing = config.skip_when_tabbing,
+                         .disabled = config.disabled,
                          // debugs
                          .debug_name = "dropdown_label",
                          .render_layer = (config.render_layer + 1),
@@ -1073,6 +1105,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
               // inheritables
               .label_alignment = config.label_alignment,
               .skip_when_tabbing = config.skip_when_tabbing,
+              .disabled = config.disabled,
               // debugs
               .debug_name = "option 1",
               .render_layer =
@@ -1093,6 +1126,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                      // inheritables
                      .label_alignment = config.label_alignment,
                      .skip_when_tabbing = config.skip_when_tabbing,
+                     .disabled = config.disabled,
                      // debugs
                      .debug_name = std::format("option {}", i + 1),
                      .render_layer = (config.render_layer + 1),
@@ -1444,7 +1478,7 @@ struct UpdateDropdownOptions
                 .value = component.desired[Axis::Y].value,
             })
             .set_parent(entity.id);
-        child.addComponent<ui::HasLabel>(options[i]);
+        child.addComponent<ui::HasLabel>(options[i], false);
         child.addComponent<ui::HasClickListener>([i, &entity](Entity &) {
           ui::HasDropdownState &hds = entity.get_with_child<HasDropdownState>();
           hds.changed_since = true;
@@ -1682,9 +1716,10 @@ template <typename InputAction> struct RenderImm : System<> {
     }
 
     if (entity.has<HasLabel>()) {
-      draw_text_in_rect(font_manager, entity.get<HasLabel>().label.c_str(),
-                        cmp.rect(), entity.get<HasLabel>().alignment,
-                        context.theme.from_usage(Theme::Usage::Font));
+      const HasLabel &hasLabel = entity.get<HasLabel>();
+      draw_text_in_rect(
+          font_manager, hasLabel.label.c_str(), cmp.rect(), hasLabel.alignment,
+          context.theme.from_usage(Theme::Usage::Font, hasLabel.is_disabled));
     }
   }
 
