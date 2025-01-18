@@ -18,6 +18,7 @@
 #include "../developer.h"
 #include "color.h"
 #include "input_system.h"
+#include "texture_manager.h"
 
 namespace afterhours {
 
@@ -432,6 +433,12 @@ concept HasUIContext = requires(T a) {
 
 static Vector2Type default_component_size = {200.f, 50.f};
 
+struct TextureConfig {
+  texture_manager::Texture texture;
+  texture_manager::HasTexture::Alignment alignment =
+      texture_manager::HasTexture::Alignment::None;
+};
+
 struct ComponentConfig {
   ComponentSize size = ComponentSize(pixels(default_component_size.x),
                                      pixels(default_component_size.y), true);
@@ -443,6 +450,8 @@ struct ComponentConfig {
 
   Theme::Usage color_usage = Theme::Usage::Default;
   std::optional<Color> custom_color;
+
+  std::optional<TextureConfig> texture_config;
 
   // inheritable options
   TextAlignment label_alignment = TextAlignment::None;
@@ -493,6 +502,12 @@ static bool _init_component(HasUIContext auto &ctx, Entity &entity,
 
     if (config.skip_when_tabbing)
       entity.addComponent<SkipWhenTabbing>();
+
+    if (config.texture_config.has_value()) {
+      const TextureConfig &conf = config.texture_config.value();
+      entity.addComponent<texture_manager::HasTexture>(conf.texture,
+                                                       conf.alignment);
+    }
 
     created = true;
   }
@@ -1580,6 +1595,73 @@ static void draw_text_in_rect(const ui::FontManager &fm,
                Vector2Type{sizing.x, sizing.y}, sizing.height, 1.f, color);
 }
 
+static Vector2Type
+position_texture(texture_manager::Texture, Vector2Type size,
+                 RectangleType container,
+                 texture_manager::HasTexture::Alignment alignment,
+                 Vector2Type margin_px = {0.f, 0.f}) {
+
+  // Calculate the text position based on the alignment and margins
+  Vector2Type position;
+
+  switch (alignment) {
+  case texture_manager::HasTexture::Alignment::Left:
+    position = Vector2Type{
+        .x = container.x + margin_px.x,
+        .y = container.y + margin_px.y + size.x,
+    };
+    break;
+  case texture_manager::HasTexture::Alignment::Center:
+    position = Vector2Type{
+        .x = container.x + margin_px.x + (container.width / 2) + (size.x / 2),
+        .y = container.y + margin_px.y + (container.height / 2) + (size.y / 2),
+    };
+    break;
+  case texture_manager::HasTexture::Alignment::Right:
+    position = Vector2Type{
+        .x = container.x + container.width - margin_px.x + size.x,
+        .y = container.y + margin_px.y + size.y,
+    };
+    break;
+  default:
+    // Handle unknown alignment (shouldn't happen)
+    break;
+  }
+
+  return Vector2Type{
+      .x = position.x,
+      .y = position.y,
+  };
+}
+
+static void
+draw_texture_in_rect(texture_manager::Texture texture, RectangleType rect,
+                     texture_manager::HasTexture::Alignment alignment) {
+
+  float scale = texture.height / rect.height;
+  Vector2Type size = {
+      texture.width / scale,
+      texture.height / scale,
+  };
+
+  Vector2Type location = position_texture(texture, size, rect, alignment);
+
+  texture_manager::draw_texture_pro(texture,
+                                    RectangleType{
+                                        0,
+                                        0,
+                                        texture.width,
+                                        texture.height,
+                                    },
+                                    RectangleType{
+                                        .x = location.x,
+                                        .y = location.y,
+                                        .width = size.x,
+                                        .height = size.y,
+                                    },
+                                    size, 0.f, colors::UI_WHITE);
+}
+
 template <typename InputAction>
 struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
 
@@ -1720,6 +1802,12 @@ template <typename InputAction> struct RenderImm : System<> {
       draw_text_in_rect(
           font_manager, hasLabel.label.c_str(), cmp.rect(), hasLabel.alignment,
           context.theme.from_usage(Theme::Usage::Font, hasLabel.is_disabled));
+    }
+
+    if (entity.has<texture_manager::HasTexture>()) {
+      const texture_manager::HasTexture &texture =
+          entity.get<texture_manager::HasTexture>();
+      draw_texture_in_rect(texture.texture, cmp.rect(), texture.alignment);
     }
   }
 
