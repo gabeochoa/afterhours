@@ -433,6 +433,15 @@ concept HasUIContext = requires(T a) {
 
 static Vector2Type default_component_size = {200.f, 50.f};
 
+/*
+
+  auto tex = TextureLibrary::get().get("xbox_button_color_a");
+  settings_button_config.texture_config = TextureConfig{
+      .texture = tex,
+      .alignment = texture_manager::HasTexture::Alignment::Center,
+  };
+
+ * */
 struct TextureConfig {
   texture_manager::Texture texture;
   texture_manager::HasTexture::Alignment alignment =
