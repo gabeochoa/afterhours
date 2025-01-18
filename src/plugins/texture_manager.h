@@ -83,6 +83,7 @@ struct HasTexture : BaseComponent {
   Texture texture;
 
   enum struct Alignment {
+    // TODO add support for InnerLeft, InnerRight
     Left,
     Center,
     Right,
