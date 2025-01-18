@@ -41,6 +41,11 @@ inline void draw_rectangle(RectangleType rect, Color color) {
   raylib::DrawRectangleRec(rect, color);
 }
 
+inline void draw_rectangle_rounded(RectangleType rect, float roundness,
+                                   int segments, Color color) {
+  raylib::DrawRectangleRounded(rect, roundness, segments, color);
+}
+
 inline raylib::Font get_default_font() { return raylib::GetFontDefault(); }
 inline raylib::Font get_unset_font() { return raylib::GetFontDefault(); }
 
@@ -50,6 +55,7 @@ inline void draw_text_ex(afterhours::Font, const char *, Vector2Type, float,
 inline void draw_text(const char *, float, float, float, Color) {}
 inline void draw_rectangle(RectangleType, Color) {}
 inline void draw_rectangle_outline(RectangleType, Color) {}
+inline void draw_rectangle_rounded(RectangleType, float, int, Color) {}
 inline afterhours::Font get_default_font() { return afterhours::Font(); }
 inline afterhours::Font get_unset_font() { return afterhours::Font(); }
 #endif
