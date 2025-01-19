@@ -118,6 +118,8 @@ struct Theme {
     }
     return color;
   }
+
+  std::bitset<4> rounded_corners = std::bitset<4>().set();
 };
 
 static bool is_mouse_inside(const input::MousePosition &mouse_pos,
@@ -338,6 +340,15 @@ struct HasDropdownState : ui::HasCheckboxState {
       : HasDropdownState(fetch_opts(*this), fetch_opts, nullptr) {}
 };
 
+struct HasRoundedCorners : BaseComponent {
+  std::bitset<4> rounded_corners = std::bitset<4>().reset();
+  auto &set(std::bitset<4> input) {
+    rounded_corners = input;
+    return *this;
+  }
+  auto &get() const { return rounded_corners; }
+};
+
 namespace imm {
 struct ElementResult {
   // no explicit on purpose
@@ -431,6 +442,7 @@ struct ComponentConfig {
   std::optional<Color> custom_color;
 
   std::optional<TextureConfig> texture_config;
+  std::optional<std::bitset<4>> rounded_corners;
 
   // inheritable options
   TextAlignment label_alignment = TextAlignment::None;
@@ -502,6 +514,12 @@ static bool _init_component(HasUIContext auto &ctx, Entity &entity,
       .set_desired_padding(config.padding)
       .set_desired_margin(config.margin);
 
+  if (config.rounded_corners.has_value() &&
+      config.rounded_corners.value().any()) {
+    entity.addComponentIfMissing<HasRoundedCorners>().set(
+        config.rounded_corners.value());
+  }
+
   if (!config.label.empty())
     entity.get<ui::HasLabel>()
         .set_label(config.label)
@@ -543,6 +561,11 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
   if (config.size.is_default)
     config.size = ComponentSize{children(), children()};
 
+  // Load from theme when not passed in
+  if (!config.rounded_corners.has_value()) {
+    config.rounded_corners = ctx.theme.rounded_corners;
+  }
+
   _init_component(ctx, entity, parent, config);
 
   ctx.queue_render(RenderInfo{entity.id, config.render_layer});
@@ -561,6 +584,11 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
   // By default buttons have centered text if user didnt specify anything
   if (config.label_alignment == TextAlignment::None) {
     config.label_alignment = TextAlignment::Center;
+  }
+
+  // Load from theme when not passed in
+  if (!config.rounded_corners.has_value()) {
+    config.rounded_corners = ctx.theme.rounded_corners;
   }
 
   _init_component(ctx, entity, parent, config, "button");
@@ -597,6 +625,11 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
 
   if (config.color_usage == Theme::Usage::Default)
     config.color_usage = Theme::Usage::Primary;
+
+  // Load from theme when not passed in
+  if (!config.rounded_corners.has_value()) {
+    config.rounded_corners = ctx.theme.rounded_corners;
+  }
 
   _init_component(ctx, entity, parent, config, "checkbox");
 
@@ -737,12 +770,22 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   std::string original_label = config.label;
   config.label = "";
 
+  // Load from theme when not passed in
+  if (!config.rounded_corners.has_value()) {
+    config.rounded_corners = ctx.theme.rounded_corners;
+  }
+
   _init_component(ctx, entity, parent, config, "slider");
+
+  auto label_corners = std::bitset<4>(config.rounded_corners.value()) //
+                           .set(1, false)
+                           .set(3, false);
 
   auto label = div(ctx, mk(entity, entity.id + 0),
                    ComponentConfig{
                        .size = config.size,
                        .label = original_label,
+                       .rounded_corners = label_corners,
                        // inheritables
                        .label_alignment = config.label_alignment,
                        .skip_when_tabbing = config.skip_when_tabbing,
@@ -758,9 +801,16 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       .set_desired_width(config.size._scale_x(0.5f).x_axis)
       .set_desired_height(config.size.y_axis);
 
+  // TODO we want the left two to not be rounded here,
+  // but for some reason it doesnt work?
+  auto elem_corners = std::bitset<4>(config.rounded_corners.value())
+                          .set(0, false)
+                          .set(2, false);
+
   auto elem = div(ctx, mk(entity, parent.id + entity.id + 0),
                   ComponentConfig{
                       .size = config.size,
+                      .rounded_corners = elem_corners,
                       // inheritables
                       .label_alignment = config.label_alignment,
                       .skip_when_tabbing = config.skip_when_tabbing,
@@ -1768,17 +1818,22 @@ template <typename InputAction> struct RenderImm : System<> {
         col = context.theme.from_usage(Theme::Usage::Background);
       }
 
+      auto corner_settings = entity.has<HasRoundedCorners>()
+                                 ? entity.get<HasRoundedCorners>().get()
+                                 : std::bitset<4>().reset();
+
       // TODO do we need another color for this?
       if (context.has_focus(entity.id)) {
         draw_rectangle_rounded(cmp.focus_rect(),
                                0.5f, // roundness
                                8,    // segments
-                               context.theme.from_usage(Theme::Usage::Accent));
+                               context.theme.from_usage(Theme::Usage::Accent),
+                               corner_settings);
       }
       draw_rectangle_rounded(cmp.rect(),
                              0.5f, // roundness
                              8,    // segments
-                             col);
+                             col, corner_settings);
     }
 
     if (entity.has<HasLabel>()) {
