@@ -972,7 +972,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
 
   if (button(ctx, mk(entity),
              ComponentConfig{
-                 .size = ComponentSize{pixels(default_component_size.x / 2.f),
+                 .size = ComponentSize{pixels(default_component_size.x / 4.f),
                                        config.size.y_axis},
                  .label = "<",
                  // inheritables
@@ -1012,7 +1012,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
 
   if (button(ctx, mk(entity),
              ComponentConfig{
-                 .size = ComponentSize{pixels(default_component_size.x / 2.f),
+                 .size = ComponentSize{pixels(default_component_size.x / 4.f),
                                        config.size.y_axis},
                  .label = ">",
                  // inheritables
