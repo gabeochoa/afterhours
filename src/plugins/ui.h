@@ -470,6 +470,7 @@ struct ComponentConfig {
    rounded checkbox when max set to 1
    focus ring should wrap label when label exists
    toggle button (basically a slider than can only be full or empty)
+   pagination with only one visible option (but wraps around when going off
 
 
  * */
@@ -986,8 +987,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
     if (option_index > 1) {
       on_option_click(entity, option_index - 1);
     } else {
-      EntityID id = entity.get<UIComponent>().children[1];
-      ctx.set_focus(id);
+      on_option_click(entity, options.size());
     }
   }
 
@@ -1026,8 +1026,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
     if (option_index < options.size()) {
       on_option_click(entity, option_index + 1);
     } else {
-      EntityID id = entity.get<UIComponent>().children[options.size()];
-      ctx.set_focus(id);
+      on_option_click(entity, 1);
     }
   }
 
