@@ -454,6 +454,26 @@ struct ComponentConfig {
   int render_layer = 0;
 };
 
+/*
+
+
+   div
+   button
+   checkbox
+   checkbox group
+   dropdown
+   slider
+
+
+   todo
+   button group
+   rounded checkbox when max set to 1
+   focus ring should wrap label when label exists
+   toggle button (basically a slider than can only be full or empty)
+
+
+ * */
+
 static bool _init_component(HasUIContext auto &ctx, Entity &entity,
                             Entity &parent, ComponentConfig config,
                             const std::string &debug_name = "") {
