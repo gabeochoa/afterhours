@@ -338,6 +338,14 @@ struct HasDropdownState : ui::HasCheckboxState {
 
   HasDropdownState(const std::function<Options(HasDropdownState &)> fetch_opts)
       : HasDropdownState(fetch_opts(*this), fetch_opts, nullptr) {}
+
+  template <size_t N>
+  HasDropdownState(
+      const std::array<std::string_view, N> &opts,
+      const std::function<Options(HasDropdownState &)> fetch_opts = nullptr,
+      const std::function<void(size_t)> opt_changed = nullptr)
+      : HasDropdownState(Options(opts.begin(), opts.end()), fetch_opts,
+                         opt_changed) {}
 };
 
 struct HasRoundedCorners : BaseComponent {
