@@ -637,6 +637,61 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
 }
 
 /*
+  {
+    std::array<std::string, 4> labels = {{
+        "play",
+        "about",
+        "settings",
+        "exit",
+    }};
+
+    if (auto result = button_group(context, mk(button_group_e.ent()), labels);
+        result) {
+      log_info("button clicked {}", result.as<int>());
+    }
+  }
+  */
+
+// TODO add support for padding
+template <typename Container>
+ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
+                           const Container &labels,
+                           ComponentConfig config = ComponentConfig()) {
+
+  Entity &entity = ep_pair.first;
+  Entity &parent = ep_pair.second;
+
+  auto max_height = config.size.y_axis;
+  config.size.y_axis = children();
+  _init_component(ctx, entity, parent, config, "button_group");
+  config.size.y_axis = max_height;
+
+  bool clicked = false;
+  int value = -1;
+  for (int i = 0; i < labels.size(); i++) {
+
+    if (button(ctx, mk(entity, i),
+               ComponentConfig{
+                   .size = config.size,
+                   .label = i < labels.size() ? std::string(labels[i]) : "",
+                   .flex_direction = FlexDirection::Row,
+                   // inheritables
+                   .label_alignment = config.label_alignment,
+                   .skip_when_tabbing = config.skip_when_tabbing,
+                   // debugs
+                   .debug_name = std::format("button group {}", i),
+                   .render_layer = config.render_layer,
+
+               })) {
+      clicked = true;
+      value = i;
+    }
+  }
+
+  return {clicked, entity, value};
+}
+
+/*
     if (imm::checkbox(context, mk(button_group.ent()), test)) {
       log_info("checkbox {}", test);
     }
@@ -1141,7 +1196,6 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
 
   config.size = ComponentSize(pixels(default_component_size.x),
                               children(default_component_size.y));
-  config.flex_direction = FlexDirection::Row;
 
   // we have to clear the label otherwise itll render at the full
   // component width..
