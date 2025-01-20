@@ -648,6 +648,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   if (entity.is_missing<ui::HasCheckboxState>())
     entity.addComponent<ui::HasCheckboxState>(value);
   HasCheckboxState &checkboxState = entity.get<ui::HasCheckboxState>();
+  checkboxState.on = value;
 
   config.label = checkboxState.on ? "X" : " ";
 
