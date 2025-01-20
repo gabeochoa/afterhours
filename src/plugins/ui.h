@@ -591,8 +591,11 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
-  if (config.size.is_default)
+  if (config.size.is_default && config.label.empty())
     config.size = ComponentSize{children(), children()};
+  if (config.size.is_default && !config.label.empty())
+    config.size = ComponentSize{children(default_component_size.x),
+                                children(default_component_size.y)};
 
   // Load from theme when not passed in
   if (!config.rounded_corners.has_value()) {
