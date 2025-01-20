@@ -370,6 +370,10 @@ struct ElementResult {
   ElementResult(bool val, Entity &ref, bool data_)
       : result(val), element(ref), data((bool)data_) {}
 
+  template <size_t Size>
+  ElementResult(bool val, Entity &ref, std::bitset<Size> data_)
+      : result(val), element(ref), data(data_.to_ulong()) {}
+
   ElementResult(Entity &ent) : result(true), element(ent) {}
 
   operator bool() const { return result; }
@@ -382,7 +386,7 @@ struct ElementResult {
 private:
   bool result = false;
   Entity &element;
-  std::variant<float, int, bool> data = 0.f;
+  std::variant<float, int, bool, unsigned long> data = 0.f;
 };
 
 using UI_UUID = size_t;
@@ -785,7 +789,7 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
     }
   }
 
-  return {changed, entity};
+  return {changed, entity, values};
 }
 
 ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
