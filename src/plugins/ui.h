@@ -467,6 +467,23 @@ struct ComponentConfig {
   int render_layer = 0;
 };
 
+ComponentConfig _overwrite_defaults(HasUIContext auto &ctx,
+                                    ComponentConfig config,
+                                    bool enable_color = false) {
+  if (enable_color && config.color_usage == Theme::Usage::Default)
+    config.color_usage = Theme::Usage::Primary;
+
+  // By default buttons have centered text if user didnt specify anything
+  if (config.label_alignment == TextAlignment::None) {
+    config.label_alignment = TextAlignment::Center;
+  }
+
+  if (!config.rounded_corners.has_value()) {
+    config.rounded_corners = ctx.theme.rounded_corners;
+  }
+  return config;
+}
+
 /*
 
 
@@ -604,11 +621,7 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
     config.size = ComponentSize{children(default_component_size.x),
                                 children(default_component_size.y)};
 
-  // Load from theme when not passed in
-  if (!config.rounded_corners.has_value()) {
-    config.rounded_corners = ctx.theme.rounded_corners;
-  }
-
+  config = _overwrite_defaults(ctx, config);
   _init_component(ctx, entity, parent, config);
 
   ctx.queue_render(RenderInfo{entity.id, config.render_layer});
@@ -621,19 +634,7 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
-  if (config.color_usage == Theme::Usage::Default)
-    config.color_usage = Theme::Usage::Primary;
-
-  // By default buttons have centered text if user didnt specify anything
-  if (config.label_alignment == TextAlignment::None) {
-    config.label_alignment = TextAlignment::Center;
-  }
-
-  // Load from theme when not passed in
-  if (!config.rounded_corners.has_value()) {
-    config.rounded_corners = ctx.theme.rounded_corners;
-  }
-
+  config = _overwrite_defaults(ctx, config, true);
   _init_component(ctx, entity, parent, config, "button");
 
   entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
@@ -716,19 +717,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
 
   config.label = checkboxState.on ? "X" : " ";
 
-  // By default have centered text if user didnt specify anything
-  if (config.label_alignment == TextAlignment::None) {
-    config.label_alignment = TextAlignment::Center;
-  }
-
-  if (config.color_usage == Theme::Usage::Default)
-    config.color_usage = Theme::Usage::Primary;
-
-  // Load from theme when not passed in
-  if (!config.rounded_corners.has_value()) {
-    config.rounded_corners = ctx.theme.rounded_corners;
-  }
-
+  config = _overwrite_defaults(ctx, config, true);
   _init_component(ctx, entity, parent, config, "checkbox");
 
   if (config.disabled) {
@@ -871,11 +860,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   std::string original_label = config.label;
   config.label = "";
 
-  // Load from theme when not passed in
-  if (!config.rounded_corners.has_value()) {
-    config.rounded_corners = ctx.theme.rounded_corners;
-  }
-
+  config = _overwrite_defaults(ctx, config, true);
   _init_component(ctx, entity, parent, config, "slider");
 
   auto label_corners = std::bitset<4>(config.rounded_corners.value()) //
@@ -1174,10 +1159,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   std::string label_str = config.label;
   config.label = "";
 
-  if (!config.rounded_corners.has_value()) {
-    config.rounded_corners = ctx.theme.rounded_corners;
-  }
-
+  config = _overwrite_defaults(ctx, config);
   _init_component(ctx, entity, parent, config, "dropdown");
 
   auto button_corners = std::bitset<4>(config.rounded_corners.value());
