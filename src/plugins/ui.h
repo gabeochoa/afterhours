@@ -937,6 +937,8 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       }
     }
     */
+// TODO option_index being returned isnt the same as the one being shown
+// visually
 template <typename Container>
 ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                          const Container &options, size_t &option_index,
@@ -960,8 +962,9 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
   dropdownState.changed_since = false;
 
   const auto on_option_click = [options, &ctx](Entity &dd, size_t i) {
+    size_t index = i % options.size();
     HasDropdownState &ds = dd.get<ui::HasDropdownState>();
-    ds.last_option_clicked = i;
+    ds.last_option_clicked = index;
     ds.on = !ds.on;
     ds.changed_since = true;
 
