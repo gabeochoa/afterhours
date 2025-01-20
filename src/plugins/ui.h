@@ -669,19 +669,17 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &parent = ep_pair.second;
 
   auto max_height = config.size.y_axis;
-  config.size.y_axis = children();
+  config.size.y_axis = children(max_height.value);
   _init_component(ctx, entity, parent, config, "button_group");
   config.size.y_axis = max_height;
 
   bool clicked = false;
   int value = -1;
   for (int i = 0; i < labels.size(); i++) {
-
     if (button(ctx, mk(entity, i),
                ComponentConfig{
                    .size = config.size,
                    .label = i < labels.size() ? std::string(labels[i]) : "",
-                   .flex_direction = FlexDirection::Row,
                    // inheritables
                    .label_alignment = config.label_alignment,
                    .skip_when_tabbing = config.skip_when_tabbing,
@@ -690,7 +688,6 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
                    // debugs
                    .debug_name = std::format("button group {}", i),
                    .render_layer = config.render_layer,
-
                })) {
       clicked = true;
       value = i;
@@ -1150,6 +1147,126 @@ template <typename Container>
 ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                        const Container &options, size_t &option_index,
                        ComponentConfig config = ComponentConfig()) {
+  Entity &entity = ep_pair.first;
+  Entity &parent = ep_pair.second;
+
+  if (options.empty())
+    return {false, entity};
+
+  if (entity.is_missing<ui::HasDropdownState>())
+    entity.addComponent<ui::HasDropdownState>(
+        options, nullptr, [&](size_t opt) {
+          HasDropdownState &ds = entity.get<ui::HasDropdownState>();
+          if (!ds.on) {
+            ds.last_option_clicked = opt;
+          }
+        });
+  HasDropdownState &dropdownState = entity.get<ui::HasDropdownState>();
+  dropdownState.last_option_clicked = option_index;
+  dropdownState.changed_since = false;
+
+  config.size = ComponentSize(children(default_component_size.x),
+                              pixels(default_component_size.y));
+
+  // we have to clear the label otherwise itll render at the full
+  // component width..
+  // TODO is there a way for us to support doing this without the gotchas?
+  std::string label_str = config.label;
+  config.label = "";
+
+  _init_component(ctx, entity, parent, config, "dropdown");
+
+  if (!label_str.empty()) {
+    auto label = div(ctx, mk(entity),
+                     ComponentConfig{
+                         .size =
+                             ComponentSize{
+                                 pixels(default_component_size.x / 2.f),
+                                 pixels(default_component_size.y),
+                             },
+                         .label = std::string(label_str),
+                         // inheritables
+                         .label_alignment = config.label_alignment,
+                         .skip_when_tabbing = config.skip_when_tabbing,
+                         .disabled = config.disabled,
+                         .hidden = config.hidden,
+                         // debugs
+                         .debug_name = "dropdown_label",
+                         .render_layer = (config.render_layer + 1),
+                         //
+                         .color_usage = Theme::Usage::Primary,
+                     });
+  }
+
+  const auto toggle_visibility = [&](Entity &) {
+    dropdownState.on = !dropdownState.on;
+  };
+
+  const auto on_option_click = [&](Entity &dd, size_t option_index) {
+    toggle_visibility(dd);
+    dropdownState.last_option_clicked = option_index;
+    dropdownState.changed_since = true;
+
+    EntityID id = entity.get<UIComponent>().children[label_str.empty() ? 0 : 1];
+    Entity &first_child = EntityHelper::getEntityForIDEnforce(id);
+
+    first_child.get<ui::HasLabel>().label = (options[option_index]);
+    ctx.set_focus(first_child.id);
+  };
+
+  if (button(ctx, mk(entity),
+             ComponentConfig{
+                 .size =
+                     ComponentSize{
+                         pixels(default_component_size.x / 2.f),
+                         pixels(default_component_size.y),
+                     },
+                 .label = std::string(
+                     options[dropdownState.on
+                                 ? 0
+                                 : dropdownState.last_option_clicked]),
+                 // inheritables
+                 .label_alignment = config.label_alignment,
+                 .skip_when_tabbing = config.skip_when_tabbing,
+                 .disabled = config.disabled,
+                 .hidden = config.hidden,
+                 // debugs
+                 .debug_name = "option 1",
+                 .render_layer =
+                     (config.render_layer + (dropdownState.on ? 0 : 0)),
+             })) {
+
+    dropdownState.on // when closed we dont want to "select" the visible option
+        ? on_option_click(entity, 0)
+        : toggle_visibility(entity);
+  }
+
+  if (auto result =
+          button_group(ctx, mk(entity), options,
+                       ComponentConfig{
+                           // inheritables
+                           .label_alignment = config.label_alignment,
+                           .skip_when_tabbing = config.skip_when_tabbing,
+                           .disabled = config.disabled,
+                           .hidden = config.hidden || !dropdownState.on,
+                           // debugs
+                           .debug_name = std::format("dropdown button group"),
+                           .render_layer = config.render_layer + 1,
+                       });
+      result) {
+    on_option_click(entity, result.template as<int>());
+  }
+
+  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
+  option_index = dropdownState.last_option_clicked;
+  return ElementResult{dropdownState.changed_since, entity,
+                       dropdownState.last_option_clicked};
+}
+
+template <typename Container>
+ElementResult dropdown_old(HasUIContext auto &ctx, EntityParent ep_pair,
+                           const Container &options, size_t &option_index,
+                           ComponentConfig config = ComponentConfig()) {
 
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
@@ -1208,7 +1325,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
     EntityID id = dd.get<UIComponent>().children[0];
     Entity &first_child = EntityHelper::getEntityForIDEnforce(id);
 
-    first_child.get<ui::HasLabel>().label = (options[ds.last_option_clicked]);
+    first_child.get<ui::HasLabel>().label = (options[i]);
     ctx.set_focus(first_child.id);
   };
 
@@ -1966,7 +2083,7 @@ template <typename InputAction> struct RenderImm : System<> {
   void render(const UIContext<InputAction> &context,
               const FontManager &font_manager, const Entity &entity) const {
     const UIComponent &cmp = entity.get<UIComponent>();
-    if (cmp.should_hide)
+    if (cmp.should_hide || entity.has<ShouldHide>())
       return;
 
     if (cmp.font_name != UIComponent::UNSET_FONT)
