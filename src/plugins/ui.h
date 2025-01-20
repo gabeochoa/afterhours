@@ -1174,9 +1174,19 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   std::string label_str = config.label;
   config.label = "";
 
+  if (!config.rounded_corners.has_value()) {
+    config.rounded_corners = ctx.theme.rounded_corners;
+  }
+
   _init_component(ctx, entity, parent, config, "dropdown");
 
+  auto button_corners = std::bitset<4>(config.rounded_corners.value());
   if (!label_str.empty()) {
+    auto label_corners = std::bitset<4>(config.rounded_corners.value()) //
+                             .set(1, false)
+                             .set(3, false);
+    button_corners = button_corners.set(0, false);
+
     auto label = div(ctx, mk(entity),
                      ComponentConfig{
                          .size =
@@ -1185,6 +1195,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                                  pixels(default_component_size.y),
                              },
                          .label = std::string(label_str),
+                         .rounded_corners = label_corners,
                          // inheritables
                          .label_alignment = config.label_alignment,
                          .skip_when_tabbing = config.skip_when_tabbing,
@@ -1225,6 +1236,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                      options[dropdownState.on
                                  ? 0
                                  : dropdownState.last_option_clicked]),
+                 .rounded_corners = button_corners,
                  // inheritables
                  .label_alignment = config.label_alignment,
                  .skip_when_tabbing = config.skip_when_tabbing,
