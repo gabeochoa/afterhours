@@ -933,9 +933,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       }
     }
     */
+template <typename Container>
 ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
-                         const std::vector<std::string> &options,
-                         size_t &option_index,
+                         const Container &options, size_t &option_index,
                          ComponentConfig config = ComponentConfig()) {
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
@@ -1004,7 +1004,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                ComponentConfig{
                    .size = ComponentSize{pixels(default_component_size.x / 2.f),
                                          config.size.y_axis},
-                   .label = options[i],
+                   .label = std::string(options[i]),
                    // inheritables
                    .label_alignment = config.label_alignment,
                    .skip_when_tabbing = config.skip_when_tabbing,
