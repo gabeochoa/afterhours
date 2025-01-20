@@ -1073,9 +1073,9 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
 // TODO add arrows so its easier to distinguish between dropdown and just a
 // normal button
 
+template <typename Container>
 ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
-                       const std::vector<std::string> &options,
-                       size_t &option_index,
+                       const Container &options, size_t &option_index,
                        ComponentConfig config = ComponentConfig()) {
 
   Entity &entity = ep_pair.first;
@@ -1159,7 +1159,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
     auto label = div(ctx, mk(entity, child_index++),
                      ComponentConfig{
                          .size = config.size,
-                         .label = label_str,
+                         .label = std::string(label_str),
                          // inheritables
                          .label_alignment = config.label_alignment,
                          .skip_when_tabbing = config.skip_when_tabbing,
@@ -1177,22 +1177,22 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
         .set_desired_height(config.size.y_axis);
   }
 
-  if (button(
-          ctx, mk(entity, child_index++),
-          ComponentConfig{
-              .size = ComponentSize{width, config.size.y_axis},
-              .label =
-                  options[dropdownState.on ? 0
-                                           : dropdownState.last_option_clicked],
-              // inheritables
-              .label_alignment = config.label_alignment,
-              .skip_when_tabbing = config.skip_when_tabbing,
-              .disabled = config.disabled,
-              // debugs
-              .debug_name = "option 1",
-              .render_layer =
-                  (config.render_layer + (dropdownState.on ? 0 : 0)),
-          })) {
+  if (button(ctx, mk(entity, child_index++),
+             ComponentConfig{
+                 .size = ComponentSize{width, config.size.y_axis},
+                 .label = std::string(
+                     options[dropdownState.on
+                                 ? 0
+                                 : dropdownState.last_option_clicked]),
+                 // inheritables
+                 .label_alignment = config.label_alignment,
+                 .skip_when_tabbing = config.skip_when_tabbing,
+                 .disabled = config.disabled,
+                 // debugs
+                 .debug_name = "option 1",
+                 .render_layer =
+                     (config.render_layer + (dropdownState.on ? 0 : 0)),
+             })) {
 
     dropdownState.on // when closed we dont want to "select" the visible option
         ? on_option_click(entity, 0)
@@ -1204,7 +1204,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
       if (button(ctx, mk(entity, child_index + i),
                  ComponentConfig{
                      .size = ComponentSize{width, config.size.y_axis},
-                     .label = options[i],
+                     .label = std::string(options[i]),
                      // inheritables
                      .label_alignment = config.label_alignment,
                      .skip_when_tabbing = config.skip_when_tabbing,
