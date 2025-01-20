@@ -460,6 +460,7 @@ struct ComponentConfig {
   TextAlignment label_alignment = TextAlignment::None;
   bool skip_when_tabbing = false;
   bool disabled = false;
+  bool hidden = false;
 
   // debugs
   std::string debug_name = "";
@@ -540,6 +541,12 @@ static bool _init_component(HasUIContext auto &ctx, Entity &entity,
   parent_cmp.add_child(entity.id);
 
   // things that happen every frame
+
+  if (config.hidden) {
+    entity.addComponentIfMissing<ShouldHide>();
+  } else {
+    entity.removeComponentIfExists<ShouldHide>();
+  }
 
   entity.get<UIComponent>()
       .set_desired_width(config.size.x_axis)
@@ -678,6 +685,8 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
                    // inheritables
                    .label_alignment = config.label_alignment,
                    .skip_when_tabbing = config.skip_when_tabbing,
+                   .disabled = config.disabled,
+                   .hidden = config.hidden,
                    // debugs
                    .debug_name = std::format("button group {}", i),
                    .render_layer = config.render_layer,
@@ -770,6 +779,7 @@ ElementResult checkbox_group_row(HasUIContext auto &ctx, EntityParent ep_pair,
             .label_alignment = config.label_alignment,
             .skip_when_tabbing = config.skip_when_tabbing,
             .disabled = config.disabled,
+            .hidden = config.hidden,
             // debugs
             .debug_name = std::format("checkbox label {}", index),
             .render_layer = config.render_layer,
@@ -784,6 +794,7 @@ ElementResult checkbox_group_row(HasUIContext auto &ctx, EntityParent ep_pair,
                    .label_alignment = config.label_alignment,
                    .skip_when_tabbing = config.skip_when_tabbing,
                    .disabled = config.disabled,
+                   .hidden = config.hidden,
                    // debugs
                    .debug_name = std::format("checkbox {}", index),
                    .render_layer = config.render_layer,
@@ -835,6 +846,7 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
                 .label_alignment = config.label_alignment,
                 .skip_when_tabbing = config.skip_when_tabbing,
                 .disabled = should_disable(value),
+                .hidden = config.hidden,
                 // debugs
                 .debug_name = std::format("checkbox row {}", i),
                 .render_layer = config.render_layer,
@@ -882,6 +894,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                        .label_alignment = config.label_alignment,
                        .skip_when_tabbing = config.skip_when_tabbing,
                        .disabled = config.disabled,
+                       .hidden = config.hidden,
                        // debugs
                        .debug_name = "slider_text",
                        .render_layer = config.render_layer + 0,
@@ -907,6 +920,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                       .label_alignment = config.label_alignment,
                       .skip_when_tabbing = config.skip_when_tabbing,
                       .disabled = config.disabled,
+                      .hidden = config.hidden,
                       // debugs
                       .debug_name = "slider_background",
                       .render_layer = config.render_layer + 1,
@@ -970,6 +984,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                         .label_alignment = config.label_alignment,
                         .skip_when_tabbing = config.skip_when_tabbing,
                         .disabled = config.disabled,
+                        .hidden = config.hidden,
                         // debugs
                         .debug_name = "slider_handle",
                         .render_layer = config.render_layer + 2,
@@ -1054,6 +1069,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                  .label_alignment = config.label_alignment,
                  .skip_when_tabbing = config.skip_when_tabbing,
                  .disabled = config.disabled,
+                 .hidden = config.hidden,
                  // debugs
                  .debug_name = "left",
                  .render_layer = (config.render_layer),
@@ -1075,6 +1091,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                    .label_alignment = config.label_alignment,
                    .skip_when_tabbing = config.skip_when_tabbing,
                    .disabled = config.disabled,
+                   .hidden = config.hidden,
                    // debugs
                    .debug_name = std::format("option {}", i + 1),
                    .render_layer = (config.render_layer + 1),
@@ -1093,6 +1110,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                  .label_alignment = config.label_alignment,
                  .skip_when_tabbing = config.skip_when_tabbing,
                  .disabled = config.disabled,
+                 .hidden = config.hidden,
                  // debugs
                  .debug_name = "right",
                  .render_layer = (config.render_layer),
@@ -1218,6 +1236,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                          .label_alignment = config.label_alignment,
                          .skip_when_tabbing = config.skip_when_tabbing,
                          .disabled = config.disabled,
+                         .hidden = config.hidden,
                          // debugs
                          .debug_name = "dropdown_label",
                          .render_layer = (config.render_layer + 1),
@@ -1242,6 +1261,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                  .label_alignment = config.label_alignment,
                  .skip_when_tabbing = config.skip_when_tabbing,
                  .disabled = config.disabled,
+                 .hidden = config.hidden,
                  // debugs
                  .debug_name = "option 1",
                  .render_layer =
@@ -1263,6 +1283,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                      .label_alignment = config.label_alignment,
                      .skip_when_tabbing = config.skip_when_tabbing,
                      .disabled = config.disabled,
+                     .hidden = config.hidden,
                      // debugs
                      .debug_name = std::format("option {}", i + 1),
                      .render_layer = (config.render_layer + 1),
