@@ -615,9 +615,8 @@ template <typename Component, typename... CArgs>
 Component &_init_state(Entity &entity,
                        const std::function<void(Component &)> &cb,
                        CArgs &&...args) {
-  if (entity.is_missing<Component>())
-    entity.addComponent<Component>(std::forward<CArgs>(args)...);
-  auto &cmp = entity.get<Component>();
+  auto &cmp =
+      entity.addComponentIfMissing<Component>(std::forward<CArgs>(args)...);
   cb(cmp);
   return cmp;
 }
@@ -719,9 +718,9 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &parent = ep_pair.second;
 
   HasCheckboxState &checkboxState = _init_state<HasCheckboxState>(
-      entity, [&](auto &cbs) { cbs.on = value; }, value);
+      entity, [&](auto &) {}, value);
 
-  config.label = checkboxState.on ? "X" : " ";
+  config.label = value ? "X" : " ";
 
   config = _overwrite_defaults(ctx, config, true);
   _init_component(ctx, entity, parent, config, "checkbox");
@@ -729,17 +728,15 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   if (config.disabled) {
     entity.removeComponentIfExists<HasClickListener>();
   } else {
-    entity.addComponentIfMissing<HasClickListener>([](Entity &checkbox) {
-      ui::HasCheckboxState &hcs = checkbox.get<ui::HasCheckboxState>();
-      hcs.on = !hcs.on;
-      hcs.changed_since = true;
-      checkbox.get<ui::HasLabel>().label = hcs.on ? "X" : " ";
+    entity.addComponentIfMissing<HasClickListener>([](Entity &ent) {
+      auto &cbs = ent.get<HasCheckboxState>();
+      cbs.on = !cbs.on;
+      cbs.changed_since = true;
     });
   }
 
   value = checkboxState.on;
-
-  ElementResult result{checkboxState.changed_since, entity, checkboxState.on};
+  ElementResult result{checkboxState.changed_since, entity, value};
   checkboxState.changed_since = false;
   return result;
 }
@@ -792,7 +789,7 @@ ElementResult checkbox_group_row(HasUIContext auto &ctx, EntityParent ep_pair,
     changed = true;
   }
 
-  return {changed, entity};
+  return {changed, entity, value};
 }
 
 // imm::checkbox_group(context, mk(elem.ent()), enabled_weapons);
