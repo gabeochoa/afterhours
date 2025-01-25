@@ -1147,17 +1147,19 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   if (options.empty())
     return {false, entity};
 
-  if (entity.is_missing<ui::HasDropdownState>())
-    entity.addComponent<ui::HasDropdownState>(
-        options, nullptr, [&](size_t opt) {
-          HasDropdownState &ds = entity.get<ui::HasDropdownState>();
-          if (!ds.on) {
-            ds.last_option_clicked = opt;
-          }
-        });
-  HasDropdownState &dropdownState = entity.get<ui::HasDropdownState>();
-  dropdownState.last_option_clicked = option_index;
-  dropdownState.changed_since = false;
+  HasDropdownState &dropdownState = _init_state<HasDropdownState>(
+      entity,
+      [&](auto &hdds) {
+        hdds.last_option_clicked = option_index;
+        hdds.changed_since = false;
+      },
+      options, nullptr,
+      [&](size_t opt) {
+        HasDropdownState &ds = entity.get<ui::HasDropdownState>();
+        if (!ds.on) {
+          ds.last_option_clicked = opt;
+        }
+      });
 
   config.size = ComponentSize(children(default_component_size.x),
                               pixels(default_component_size.y));
