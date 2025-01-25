@@ -607,6 +607,7 @@ static bool _init_component(HasUIContext auto &ctx, Entity &entity,
   if (!config.label.empty())
     entity.get<ui::HasLabel>().label = config.label;
 
+  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
   return created;
 }
 
@@ -635,8 +636,6 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
   config = _overwrite_defaults(ctx, config);
   _init_component(ctx, entity, parent, config);
 
-  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
-
   return {true, entity};
 }
 
@@ -649,8 +648,6 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
   _init_component(ctx, entity, parent, config, "button");
 
   entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
-
-  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
 
   return ElementResult{entity.get<HasClickListener>().down, entity};
 }
@@ -739,8 +736,6 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
       checkbox.get<ui::HasLabel>().label = hcs.on ? "X" : " ";
     });
   }
-
-  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
 
   value = checkboxState.on;
 
@@ -986,8 +981,6 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       .set_desired_width(pixels(0.25f * config.size.x_axis.value))
       .set_desired_height(config.size.y_axis);
 
-  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
-
   owned_value = sliderState.value;
   return ElementResult{sliderState.changed_since, entity, sliderState.value};
 }
@@ -1120,8 +1113,6 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                       .children[dropdownState.last_option_clicked + 1];
     ctx.set_focus(id);
   }
-
-  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
 
   option_index = dropdownState.last_option_clicked;
   return ElementResult{dropdownState.changed_since, entity,
@@ -1262,7 +1253,6 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
     on_option_click(entity, result.template as<int>());
   }
 
-  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
   option_index = dropdownState.last_option_clicked;
   return ElementResult{dropdownState.changed_since, entity,
                        dropdownState.last_option_clicked};
@@ -1415,8 +1405,6 @@ ElementResult dropdown_old(HasUIContext auto &ctx, EntityParent ep_pair,
     }
   } else {
   }
-
-  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
 
   option_index = dropdownState.last_option_clicked;
   return ElementResult{dropdownState.changed_since, entity,
