@@ -1164,7 +1164,13 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   config = _overwrite_defaults(ctx, config);
   _init_component(ctx, entity, parent, config, "dropdown");
 
+  auto size = ComponentSize{
+      pixels(label_str.empty() ? default_component_size.x
+                               : (default_component_size.x / 2.f)),
+      pixels(default_component_size.y),
+  };
   auto button_corners = std::bitset<4>(config.rounded_corners.value());
+
   if (!label_str.empty()) {
     auto label_corners = std::bitset<4>(config.rounded_corners.value()) //
                              .set(1, false)
@@ -1173,11 +1179,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
 
     auto label = div(ctx, mk(entity),
                      ComponentConfig{
-                         .size =
-                             ComponentSize{
-                                 pixels(default_component_size.x / 2.f),
-                                 pixels(default_component_size.y),
-                             },
+                         .size = size,
                          .label = std::string(label_str),
                          .rounded_corners = label_corners,
                          // inheritables
@@ -1187,7 +1189,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                          .hidden = config.hidden,
                          // debugs
                          .debug_name = "dropdown_label",
-                         .render_layer = (config.render_layer + 1),
+                         .render_layer = (config.render_layer + 0),
                          //
                          .color_usage = Theme::Usage::Primary,
                      });
@@ -1211,11 +1213,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
 
   if (button(ctx, mk(entity),
              ComponentConfig{
-                 .size =
-                     ComponentSize{
-                         pixels(default_component_size.x / 2.f),
-                         pixels(default_component_size.y),
-                     },
+                 .size = size,
                  .label = std::string(
                      options[dropdownState.on
                                  ? 0
