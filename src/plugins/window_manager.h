@@ -138,11 +138,11 @@ struct window_manager : developer::Plugin {
       should_refetch = false;
     }
 
-    const std::vector<Resolution> &fetch_data() const {
+    [[nodiscard]] const std::vector<Resolution> &fetch_data() const {
       return available_resolutions;
     }
 
-    size_t current_index() const {
+    [[nodiscard]] size_t current_index() const {
       const auto &entity = EntityQuery()
                                .whereHasComponent<ProvidesCurrentResolution>()
                                .gen_first_enforce();
@@ -159,12 +159,13 @@ struct window_manager : developer::Plugin {
       return 0;
     }
 
-    void on_data_changed(size_t index) {
+    Resolution on_data_changed(size_t index) {
       ProvidesCurrentResolution &pcr =
           *(EntityHelper::get_singleton_cmp<ProvidesCurrentResolution>());
       pcr.current_resolution = available_resolutions[index];
       set_window_size(pcr.current_resolution.width,
                       pcr.current_resolution.height);
+      return pcr.current_resolution;
     }
   };
 
