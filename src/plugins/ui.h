@@ -325,8 +325,8 @@ struct HasChildrenComponent : BaseComponent {
 struct HasDropdownState : ui::HasCheckboxState {
   using Options = std::vector<std::string>;
   Options options;
-  std::function<Options(HasDropdownState &)> fetch_options;
-  std::function<void(size_t)> on_option_changed;
+  std::function<Options(HasDropdownState &)> fetch_options = nullptr;
+  std::function<void(size_t)> on_option_changed = nullptr;
   size_t last_option_clicked = 0;
 
   HasDropdownState(
@@ -610,6 +610,17 @@ static bool _init_component(HasUIContext auto &ctx, Entity &entity,
   return created;
 }
 
+template <typename Component, typename... CArgs>
+Component &_init_state(Entity &entity,
+                       const std::function<void(Component &)> &cb,
+                       CArgs &&...args) {
+  if (entity.is_missing<Component>())
+    entity.addComponent<Component>(std::forward<CArgs>(args)...);
+  auto &cmp = entity.get<Component>();
+  cb(cmp);
+  return cmp;
+}
+
 ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
                   ComponentConfig config = ComponentConfig()) {
   Entity &entity = ep_pair.first;
@@ -710,10 +721,8 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
-  if (entity.is_missing<ui::HasCheckboxState>())
-    entity.addComponent<ui::HasCheckboxState>(value);
-  HasCheckboxState &checkboxState = entity.get<ui::HasCheckboxState>();
-  checkboxState.on = value;
+  HasCheckboxState &checkboxState = _init_state<HasCheckboxState>(
+      entity, [&](auto &cbs) { cbs.on = value; }, value);
 
   config.label = checkboxState.on ? "X" : " ";
 
