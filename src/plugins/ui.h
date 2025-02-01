@@ -717,8 +717,8 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
-  HasCheckboxState &checkboxState = _init_state<HasCheckboxState>(
-      entity, [&](auto &) {}, value);
+  HasCheckboxState &checkboxState =
+      _init_state<HasCheckboxState>(entity, [&](auto &) {}, value);
 
   config.label = value ? "X" : " ";
 
@@ -872,6 +872,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                    ComponentConfig{
                        .size = config.size,
                        .label = original_label,
+                       //
+                       .color_usage = Theme::Usage::Primary,
+                       //
                        .rounded_corners = label_corners,
                        // inheritables
                        .label_alignment = config.label_alignment,
@@ -881,8 +884,6 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                        // debugs
                        .debug_name = "slider_text",
                        .render_layer = config.render_layer + 0,
-                       //
-                       .color_usage = Theme::Usage::Primary,
                    });
   label.ent()
       .template get<UIComponent>()
@@ -898,6 +899,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   auto elem = div(ctx, mk(entity, parent.id + entity.id + 0),
                   ComponentConfig{
                       .size = config.size,
+                      .color_usage = Theme::Usage::Secondary,
                       .rounded_corners = elem_corners,
                       // inheritables
                       .label_alignment = config.label_alignment,
@@ -907,7 +909,6 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                       // debugs
                       .debug_name = "slider_background",
                       .render_layer = config.render_layer + 1,
-                      .color_usage = Theme::Usage::Secondary,
                   });
 
   // TODO why do we need to do this?
@@ -963,6 +964,8 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                                 .left = pixels(owned_value * 0.75f *
                                                config.size.x_axis.value),
                             },
+                        //
+                        .color_usage = Theme::Usage::Primary,
                         // inheritables
                         .label_alignment = config.label_alignment,
                         .skip_when_tabbing = config.skip_when_tabbing,
@@ -971,7 +974,6 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                         // debugs
                         .debug_name = "slider_handle",
                         .render_layer = config.render_layer + 2,
-                        .color_usage = Theme::Usage::Primary,
                     });
 
   handle.cmp()
@@ -1178,6 +1180,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                      ComponentConfig{
                          .size = size,
                          .label = std::string(label_str),
+                         .color_usage = Theme::Usage::Primary,
                          .rounded_corners = label_corners,
                          // inheritables
                          .label_alignment = config.label_alignment,
@@ -1188,7 +1191,6 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                          .debug_name = "dropdown_label",
                          .render_layer = (config.render_layer + 0),
                          //
-                         .color_usage = Theme::Usage::Primary,
                      });
   }
 
@@ -2147,8 +2149,8 @@ struct ProviderConsumer : public DataStorage {
 
   struct has_fetch_data_member {
     template <typename U>
-    static auto test(U *)
-        -> decltype(std::declval<U>().fetch_data(), void(), std::true_type{});
+    static auto test(U *) -> decltype(std::declval<U>().fetch_data(), void(),
+                                      std::true_type{});
 
     template <typename U> static auto test(...) -> std::false_type;
 
