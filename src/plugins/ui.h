@@ -1210,13 +1210,14 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
     ctx.set_focus(first_child.id);
   };
 
+  auto current_option = std::string(
+      options[dropdownState.on ? 0 : dropdownState.last_option_clicked]);
+  auto drop_arrow_icon = dropdownState.on ? " ^" : " V";
+  auto main_button_label = std::format("{}{}", current_option, drop_arrow_icon);
   if (button(ctx, mk(entity),
              ComponentConfig{
                  .size = size,
-                 .label = std::string(
-                     options[dropdownState.on
-                                 ? 0
-                                 : dropdownState.last_option_clicked]),
+                 .label = main_button_label,
                  .rounded_corners = button_corners,
                  // inheritables
                  .label_alignment = config.label_alignment,
