@@ -6,6 +6,7 @@
 #include "../base_component.h"
 #include "../developer.h"
 #include "../entity_query.h"
+#include "../logging.h"
 #include "../system.h"
 
 namespace afterhours {
@@ -154,9 +155,31 @@ struct window_manager : developer::Plugin {
           return i;
         }
       }
-      log_warn(
-          "Could not find the current resolution as an available resolution");
-      return 0;
+
+      // If current resolution is not in the list, find the closest match
+      size_t closest_index = 0;
+      int min_diff = std::numeric_limits<int>::max();
+
+      for (size_t i = 0; i < available_resolutions.size(); i++) {
+        int diff = std::abs(pcr.current_resolution.width -
+                            available_resolutions[i].width) +
+                   std::abs(pcr.current_resolution.height -
+                            available_resolutions[i].height);
+        if (diff < min_diff) {
+          min_diff = diff;
+          closest_index = i;
+        }
+      }
+
+      log_once_per(
+          std::chrono::minutes(1), VENDOR_LOG_WARN,
+          "Could not find the current resolution {} as an available "
+          "resolution, using closest match {}",
+          static_cast<std::string>(pcr.current_resolution).c_str(),
+          static_cast<std::string>(available_resolutions[closest_index])
+              .c_str());
+
+      return closest_index;
     }
 
     Resolution on_data_changed(size_t index) {
