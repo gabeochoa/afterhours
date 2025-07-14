@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include <algorithm>
@@ -465,21 +464,82 @@ struct ComponentConfig {
   // debugs
   std::string debug_name = "";
   int render_layer = 0;
+
+  // Builder methods for fluent configuration
+  ComponentConfig &with_label(const std::string &lbl) {
+    label = lbl;
+    return *this;
+  }
+  ComponentConfig &with_size(const ComponentSize &sz) {
+    size = sz;
+    return *this;
+  }
+  ComponentConfig &with_color(Theme::Usage usage) {
+    color_usage = usage;
+    return *this;
+  }
+  ComponentConfig &with_custom_color(Color color) {
+    color_usage = Theme::Usage::Custom;
+    custom_color = color;
+    return *this;
+  }
+  ComponentConfig &with_alignment(TextAlignment align) {
+    label_alignment = align;
+    return *this;
+  }
+  ComponentConfig &with_rounded_corners(const std::bitset<4> &corners) {
+    rounded_corners = corners;
+    return *this;
+  }
+  ComponentConfig &with_debug_name(const std::string &name) {
+    debug_name = name;
+    return *this;
+  }
+  ComponentConfig &with_render_layer(int layer) {
+    render_layer = layer;
+    return *this;
+  }
+  ComponentConfig &with_disabled(bool dis) {
+    disabled = dis;
+    return *this;
+  }
+  ComponentConfig &with_hidden(bool hide) {
+    hidden = hide;
+    return *this;
+  }
+  ComponentConfig &with_skip_tabbing(bool skip) {
+    skip_when_tabbing = skip;
+    return *this;
+  }
+  ComponentConfig &with_flex_direction(FlexDirection dir) {
+    flex_direction = dir;
+    return *this;
+  }
+
+  // Static method to create inheritable config from parent
+  static ComponentConfig inherit_from(const ComponentConfig &parent,
+                                      const std::string &debug_name = "") {
+    return ComponentConfig{}
+        .with_alignment(parent.label_alignment)
+        .with_disabled(parent.disabled)
+        .with_hidden(parent.hidden)
+        .with_skip_tabbing(parent.skip_when_tabbing);
+  }
 };
 
 ComponentConfig _overwrite_defaults(HasUIContext auto &ctx,
                                     ComponentConfig config,
                                     bool enable_color = false) {
   if (enable_color && config.color_usage == Theme::Usage::Default)
-    config.color_usage = Theme::Usage::Primary;
+    config.with_color(Theme::Usage::Primary);
 
   // By default buttons have centered text if user didnt specify anything
   if (config.label_alignment == TextAlignment::None) {
-    config.label_alignment = TextAlignment::Center;
+    config.with_alignment(TextAlignment::Center);
   }
 
   if (!config.rounded_corners.has_value()) {
-    config.rounded_corners = ctx.theme.rounded_corners;
+    config.with_rounded_corners(ctx.theme.rounded_corners);
   }
   return config;
 }
@@ -627,10 +687,10 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &parent = ep_pair.second;
 
   if (config.size.is_default && config.label.empty())
-    config.size = ComponentSize{children(), children()};
+    config.with_size(ComponentSize{children(), children()});
   if (config.size.is_default && !config.label.empty())
-    config.size = ComponentSize{children(default_component_size.x),
-                                children(default_component_size.y)};
+    config.with_size(ComponentSize{children(default_component_size.x),
+                                   children(default_component_size.y)});
 
   config = _overwrite_defaults(ctx, config);
   _init_component(ctx, entity, parent, config);
@@ -684,19 +744,12 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
   bool clicked = false;
   int value = -1;
   for (int i = 0; i < labels.size(); i++) {
-    if (button(ctx, mk(entity, i),
-               ComponentConfig{
-                   .size = config.size,
-                   .label = i < labels.size() ? std::string(labels[i]) : "",
-                   // inheritables
-                   .label_alignment = config.label_alignment,
-                   .skip_when_tabbing = config.skip_when_tabbing,
-                   .disabled = config.disabled,
-                   .hidden = config.hidden,
-                   // debugs
-                   .debug_name = std::format("button group {}", i),
-                   .render_layer = config.render_layer,
-               })) {
+    if (button(
+            ctx, mk(entity, i),
+            ComponentConfig::inherit_from(config,
+                                          std::format("button group {}", i))
+                .with_size(config.size)
+                .with_label(i < labels.size() ? std::string(labels[i]) : ""))) {
       clicked = true;
       value = i;
     }
@@ -717,8 +770,8 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
-  HasCheckboxState &checkboxState =
-      _init_state<HasCheckboxState>(entity, [&](auto &) {}, value);
+  HasCheckboxState &checkboxState = _init_state<HasCheckboxState>(
+      entity, [&](auto &) {}, value);
 
   config.label = value ? "X" : " ";
 
@@ -759,33 +812,17 @@ ElementResult checkbox_group_row(HasUIContext auto &ctx, EntityParent ep_pair,
     config.size = config.size._scale_x(0.5f);
 
     div(ctx, mk(entity),
-        ComponentConfig{
-            .size = config.size,
-            .label = label,
-            // inheritables
-            .label_alignment = config.label_alignment,
-            .skip_when_tabbing = config.skip_when_tabbing,
-            .disabled = config.disabled,
-            .hidden = config.hidden,
-            // debugs
-            .debug_name = std::format("checkbox label {}", index),
-            .render_layer = config.render_layer,
-        });
+        ComponentConfig::inherit_from(config,
+                                      std::format("checkbox label {}", index))
+            .with_size(config.size)
+            .with_label(label));
   }
 
   bool changed = false;
   if (checkbox(ctx, mk(entity), value,
-               ComponentConfig{
-                   .size = config.size,
-                   // inheritables
-                   .label_alignment = config.label_alignment,
-                   .skip_when_tabbing = config.skip_when_tabbing,
-                   .disabled = config.disabled,
-                   .hidden = config.hidden,
-                   // debugs
-                   .debug_name = std::format("checkbox {}", index),
-                   .render_layer = config.render_layer,
-               })) {
+               ComponentConfig::inherit_from(config,
+                                             std::format("checkbox {}", index))
+                   .with_size(config.size))) {
     changed = true;
   }
 
@@ -2150,8 +2187,8 @@ struct ProviderConsumer : public DataStorage {
 
   struct has_fetch_data_member {
     template <typename U>
-    static auto test(U *) -> decltype(std::declval<U>().fetch_data(), void(),
-                                      std::true_type{});
+    static auto test(U *)
+        -> decltype(std::declval<U>().fetch_data(), void(), std::true_type{});
 
     template <typename U> static auto test(...) -> std::false_type;
 
