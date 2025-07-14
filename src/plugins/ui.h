@@ -527,6 +527,16 @@ struct ComponentConfig {
   }
 };
 
+inline std::bitset<4>
+modify_corners(const std::bitset<4> &base,
+               const std::vector<std::pair<int, bool>> &modifications) {
+  auto result = base;
+  for (const auto &[index, value] : modifications) {
+    result.set(index, value);
+  }
+  return result;
+}
+
 ComponentConfig _overwrite_defaults(HasUIContext auto &ctx,
                                     ComponentConfig config,
                                     bool enable_color = false) {
@@ -901,9 +911,8 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   config = _overwrite_defaults(ctx, config, true);
   _init_component(ctx, entity, parent, config, "slider");
 
-  auto label_corners = std::bitset<4>(config.rounded_corners.value()) //
-                           .set(1, false)
-                           .set(3, false);
+  auto label_corners =
+      modify_corners(config.rounded_corners.value(), {{1, false}, {3, false}});
 
   auto label = div(ctx, mk(entity, entity.id + 0),
                    ComponentConfig{
@@ -929,9 +938,8 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // TODO we want the left two to not be rounded here,
   // but for some reason it doesnt work?
-  auto elem_corners = std::bitset<4>(config.rounded_corners.value())
-                          .set(0, false)
-                          .set(2, false);
+  auto elem_corners =
+      modify_corners(config.rounded_corners.value(), {{0, false}, {2, false}});
 
   auto elem = div(ctx, mk(entity, parent.id + entity.id + 0),
                   ComponentConfig{
@@ -1208,10 +1216,9 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   auto button_corners = std::bitset<4>(config.rounded_corners.value());
 
   if (!label_str.empty()) {
-    auto label_corners = std::bitset<4>(config.rounded_corners.value()) //
-                             .set(1, false)
-                             .set(3, false);
-    button_corners = button_corners.set(0, false);
+    auto label_corners = modify_corners(config.rounded_corners.value(),
+                                        {{1, false}, {3, false}});
+    button_corners = modify_corners(button_corners, {{0, false}});
 
     auto label = div(ctx, mk(entity),
                      ComponentConfig{
