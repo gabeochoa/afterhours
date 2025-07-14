@@ -1,12 +1,9 @@
 #pragma once
 
 #include <algorithm>
-#include <atomic>
 #include <format>
 #include <functional>
-#include <initializer_list>
 #include <iostream>
-#include <iterator>
 #include <optional>
 #include <source_location>
 #include <utility>
@@ -474,7 +471,15 @@ struct ComponentConfig {
     size = sz;
     return *this;
   }
-  ComponentConfig &with_color(Theme::Usage usage) {
+  ComponentConfig &with_padding(const Padding &padding_) {
+    padding = padding_;
+    return *this;
+  }
+  ComponentConfig &with_margin(const Margin &margin_) {
+    margin = margin_;
+    return *this;
+  }
+  ComponentConfig &with_color_usage(Theme::Usage usage) {
     color_usage = usage;
     return *this;
   }
@@ -541,7 +546,7 @@ ComponentConfig _overwrite_defaults(HasUIContext auto &ctx,
                                     ComponentConfig config,
                                     bool enable_color = false) {
   if (enable_color && config.color_usage == Theme::Usage::Default)
-    config.with_color(Theme::Usage::Primary);
+    config.with_color_usage(Theme::Usage::Primary);
 
   // By default buttons have centered text if user didnt specify anything
   if (config.label_alignment == TextAlignment::None) {
@@ -1000,26 +1005,21 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
         });
   }
 
-  auto handle = div(ctx, mk(slider_bg),
-                    ComponentConfig{
-                        .size = {pixels(0.25f * config.size.x_axis.value),
-                                 config.size.y_axis},
-                        .padding =
-                            Padding{
-                                .left = pixels(owned_value * 0.75f *
-                                               config.size.x_axis.value),
-                            },
-                        //
-                        .color_usage = Theme::Usage::Primary,
-                        // inheritables
-                        .label_alignment = config.label_alignment,
-                        .skip_when_tabbing = config.skip_when_tabbing,
-                        .disabled = config.disabled,
-                        .hidden = config.hidden,
-                        // debugs
-                        .debug_name = "slider_handle",
-                        .render_layer = config.render_layer + 2,
-                    });
+  auto handle_corners =
+      modify_corners(config.rounded_corners.value(), {{0, false}, {2, false}});
+
+  auto handle_config =
+      ComponentConfig::inherit_from(config, "slider_handle")
+          .with_size(ComponentSize{pixels(0.25f * config.size.x_axis.value),
+                                   config.size.y_axis})
+          .with_padding(Padding{
+              .left = pixels(owned_value * 0.75f * config.size.x_axis.value)})
+          .with_color_usage(Theme::Usage::Primary)
+          .with_rounded_corners(handle_corners)
+          .with_debug_name("slider_handle")
+          .with_render_layer(config.render_layer + 2);
+
+  auto handle = div(ctx, mk(slider_bg), handle_config);
 
   handle.cmp()
       .set_desired_width(pixels(0.25f * config.size.x_axis.value))
