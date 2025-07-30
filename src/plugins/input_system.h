@@ -357,8 +357,9 @@ struct input : developer::Plugin {
       return "keyboard_volume_up";
     case raylib::KEY_VOLUME_DOWN:
       return "keyboard_volume_down";
-    case raylib::KEY_MENU:
-      return "keyboard_menu";
+      // TODO figure out why this is the same as KEY_R 
+    // case raylib::KEY_MENU:
+      // return "keyboard_menu";
     case raylib::KEY_NULL:
       log_info("Passed in {} but wasnt able to parse it", keycode);
       break;
