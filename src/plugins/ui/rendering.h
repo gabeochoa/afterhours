@@ -21,11 +21,11 @@ namespace afterhours {
 
 namespace ui {
 
-static RectangleType position_text(const ui::FontManager &fm,
-                                   const std::string &text,
-                                   RectangleType container,
-                                   TextAlignment alignment,
-                                   Vector2Type margin_px) {
+static inline RectangleType position_text(const ui::FontManager &fm,
+                                          const std::string &text,
+                                          RectangleType container,
+                                          TextAlignment alignment,
+                                          Vector2Type margin_px) {
   Font font = fm.get_active_font();
 
   // Calculate the maximum text size based on the container size and margins
@@ -86,16 +86,17 @@ static RectangleType position_text(const ui::FontManager &fm,
   };
 }
 
-static void draw_text_in_rect(const ui::FontManager &fm,
-                              const std::string &text, RectangleType rect,
-                              TextAlignment alignment, Color color) {
+static inline void draw_text_in_rect(const ui::FontManager &fm,
+                                     const std::string &text,
+                                     RectangleType rect,
+                                     TextAlignment alignment, Color color) {
   RectangleType sizing =
       position_text(fm, text, rect, alignment, Vector2Type{5.f, 5.f});
   draw_text_ex(fm.get_active_font(), text.c_str(),
                Vector2Type{sizing.x, sizing.y}, sizing.height, 1.f, color);
 }
 
-static Vector2Type
+static inline Vector2Type
 position_texture(texture_manager::Texture, Vector2Type size,
                  RectangleType container,
                  texture_manager::HasTexture::Alignment alignment,
@@ -134,7 +135,7 @@ position_texture(texture_manager::Texture, Vector2Type size,
   };
 }
 
-static void
+static inline void
 draw_texture_in_rect(texture_manager::Texture texture, RectangleType rect,
                      texture_manager::HasTexture::Alignment alignment) {
 

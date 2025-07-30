@@ -17,8 +17,8 @@ namespace afterhours {
 
 namespace ui {
 
-static bool is_mouse_inside(const input::MousePosition &mouse_pos,
-                            const RectangleType &rect) {
+static inline bool is_mouse_inside(const input::MousePosition &mouse_pos,
+                                   const RectangleType &rect) {
   return mouse_pos.x >= rect.x && mouse_pos.x <= rect.x + rect.width &&
          mouse_pos.y >= rect.y && mouse_pos.y <= rect.y + rect.height;
 }

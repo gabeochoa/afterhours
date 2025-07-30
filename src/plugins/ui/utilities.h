@@ -18,7 +18,7 @@ namespace afterhours {
 
 namespace ui {
 
-static void force_layout_and_print(
+static inline void force_layout_and_print(
     Entity &root,
     window_manager::Resolution resolution = window_manager::Resolution()) {
   std::map<EntityID, RefEntity> components;

@@ -203,7 +203,7 @@ modify_corners(const std::bitset<4> &base,
                const std::vector<std::pair<int, bool>> &modifications) {
   auto result = base;
   for (const auto &[index, value] : modifications) {
-    result.set(index, value);
+    result.set(static_cast<size_t>(index), value);
   }
   return result;
 }
@@ -228,6 +228,7 @@ ComponentConfig _overwrite_defaults(HasUIContext auto &ctx,
 static bool _init_component(HasUIContext auto &ctx, Entity &entity,
                             Entity &parent, ComponentConfig config,
                             const std::string &debug_name = "") {
+  (void)debug_name;
   bool created = false;
 
   // only once on startup
