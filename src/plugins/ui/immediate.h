@@ -103,6 +103,67 @@ struct TextureConfig {
       texture_manager::HasTexture::Alignment::None;
 };
 
+// Corner positions in the bitset
+enum CornerPosition {
+  TOP_LEFT = 0,
+  TOP_RIGHT = 1,
+  BOTTOM_LEFT = 2,
+  BOTTOM_RIGHT = 3
+};
+
+// Corner state
+enum CornerState {
+  ROUND = true,
+  SHARP = false // shorter than NOT_ROUNDED
+};
+
+class RoundedCorners {
+private:
+  std::bitset<4> corners;
+
+public:
+  RoundedCorners() : corners(std::bitset<4>().set()) {} // default all rounded
+  RoundedCorners(const std::bitset<4> &base) : corners(base) {}
+
+  // Fluent API for modifying corners
+  RoundedCorners &top_left(CornerState state) {
+    corners.set(TOP_LEFT, state);
+    return *this;
+  }
+
+  RoundedCorners &top_right(CornerState state) {
+    corners.set(TOP_RIGHT, state);
+    return *this;
+  }
+
+  RoundedCorners &bottom_left(CornerState state) {
+    corners.set(BOTTOM_LEFT, state);
+    return *this;
+  }
+
+  RoundedCorners &bottom_right(CornerState state) {
+    corners.set(BOTTOM_RIGHT, state);
+    return *this;
+  }
+
+  // Alternative shorter API
+  RoundedCorners &round(CornerPosition corner) {
+    corners.set(corner, ROUND);
+    return *this;
+  }
+
+  RoundedCorners &sharp(CornerPosition corner) {
+    corners.set(corner, SHARP);
+    return *this;
+  }
+
+  // Conversion to bitset
+  operator std::bitset<4>() const { return corners; }
+
+  // Get the underlying bitset
+  const std::bitset<4> &get() const { return corners; }
+};
+
 struct ComponentConfig {
   ComponentSize size = ComponentSize(pixels(default_component_size.x),
                                      pixels(default_component_size.y), true);
@@ -162,6 +223,10 @@ struct ComponentConfig {
     rounded_corners = corners;
     return *this;
   }
+  ComponentConfig &with_rounded_corners(const RoundedCorners &corners) {
+    rounded_corners = corners.get();
+    return *this;
+  }
   ComponentConfig &with_debug_name(const std::string &name) {
     debug_name = name;
     return *this;
@@ -197,16 +262,6 @@ struct ComponentConfig {
         .with_skip_tabbing(parent.skip_when_tabbing);
   }
 };
-
-inline std::bitset<4>
-modify_corners(const std::bitset<4> &base,
-               const std::vector<std::pair<int, bool>> &modifications) {
-  auto result = base;
-  for (const auto &[index, value] : modifications) {
-    result.set(static_cast<size_t>(index), value);
-  }
-  return result;
-}
 
 ComponentConfig _overwrite_defaults(HasUIContext auto &ctx,
                                     ComponentConfig config,
@@ -539,8 +594,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   config = _overwrite_defaults(ctx, config, true);
   _init_component(ctx, entity, parent, config, "slider");
 
-  auto label_corners =
-      modify_corners(config.rounded_corners.value(), {{1, false}, {3, false}});
+  auto label_corners = RoundedCorners(config.rounded_corners.value())
+                           .sharp(TOP_RIGHT)
+                           .sharp(BOTTOM_RIGHT);
 
   auto label = div(ctx, mk(entity, entity.id + 0),
                    ComponentConfig{
@@ -564,8 +620,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       .set_desired_width(config.size._scale_x(0.5f).x_axis)
       .set_desired_height(config.size.y_axis);
 
-  auto elem_corners =
-      modify_corners(config.rounded_corners.value(), {{0, false}, {2, false}});
+  auto elem_corners = RoundedCorners(config.rounded_corners.value())
+                          .sharp(TOP_LEFT)
+                          .sharp(BOTTOM_LEFT);
 
   auto elem = div(ctx, mk(entity, parent.id + entity.id + 0),
                   ComponentConfig{
@@ -803,9 +860,11 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   auto button_corners = std::bitset<4>(config.rounded_corners.value());
 
   if (!label_str.empty()) {
-    auto label_corners = modify_corners(config.rounded_corners.value(),
-                                        {{1, false}, {3, false}});
-    button_corners = modify_corners(button_corners, {{0, false}, {2, false}});
+    auto label_corners = RoundedCorners(config.rounded_corners.value())
+                             .sharp(TOP_RIGHT)
+                             .sharp(BOTTOM_RIGHT);
+    button_corners =
+        RoundedCorners(button_corners).sharp(TOP_LEFT).sharp(BOTTOM_LEFT);
 
     auto label = div(ctx, mk(entity),
                      ComponentConfig{
