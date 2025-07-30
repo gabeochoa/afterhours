@@ -234,6 +234,8 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
       return;
     if (entity.has<SkipWhenTabbing>())
       return;
+    if (entity.has<ShouldHide>())
+      return;
     if (!component.was_rendered_to_screen)
       return;
 
