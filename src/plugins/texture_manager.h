@@ -10,8 +10,8 @@ using Rectangle = raylib::Rectangle;
 using Texture = raylib::Texture2D;
 using Color = raylib::Color;
 
-inline void draw_texture_pro(Texture sheet, Rectangle frame, Rectangle location,
-                             Vector2Type size, float angle, Color tint) {
+inline void draw_texture_pro(const Texture sheet, const Rectangle frame, const Rectangle location,
+                             const Vector2Type size, const float angle, const Color tint) {
   raylib::DrawTexturePro(sheet, frame, location, size, angle, tint);
 }
 #else
@@ -19,8 +19,8 @@ using Rectangle = RectangleType;
 using Texture = TextureType;
 using Color = ColorType;
 
-inline void draw_texture_pro(Texture, Rectangle, Rectangle, Vector2Type, float,
-                             Color) {}
+inline void draw_texture_pro(const Texture, const Rectangle, const Rectangle, const Vector2Type, const float,
+                             const Color) {}
 #endif
 
 #ifndef AFTERHOURS_SPRITE_SIZE_PX
@@ -31,7 +31,7 @@ inline void draw_texture_pro(Texture, Rectangle, Rectangle, Vector2Type, float,
 #define AFTERHOURS_SPRITE_SHEET_NUM_SPRITES_WIDE 32
 #endif
 
-constexpr static Rectangle idx_to_sprite_frame(int i, int j) {
+constexpr static Rectangle idx_to_sprite_frame(const int i, const int j) {
   return Rectangle{.x = (float)i * AFTERHOURS_SPRITE_SIZE_PX,
                    .y = (float)j * AFTERHOURS_SPRITE_SIZE_PX,
                    .width = AFTERHOURS_SPRITE_SIZE_PX,
@@ -53,7 +53,7 @@ struct TransformData {
   Vector2Type size;
   float angle;
 
-  TransformData(Vector2Type pos, Vector2Type size_, float angle_)
+  TransformData(const Vector2Type pos, const Vector2Type size_, const float angle_)
       : position(pos), size(size_), angle(angle_) {}
 
   auto &update_position(const Vector2Type &pos) {
@@ -90,7 +90,7 @@ struct HasTexture : BaseComponent {
     None = Left,
   } alignment = Alignment::None;
 
-  HasTexture(const Texture &tex, Alignment align)
+  HasTexture(const Texture &tex, const Alignment align)
       : texture(tex), alignment(align) {}
 };
 
@@ -105,8 +105,8 @@ struct HasSprite : BaseComponent {
   Rectangle frame;
   float scale;
   Color colorTint;
-  HasSprite(Vector2Type pos, Vector2Type size_, float angle_, Rectangle frm,
-            float scl, Color colorTintIn)
+  HasSprite(const Vector2Type pos, const Vector2Type size_, const float angle_, const Rectangle frm,
+            const float scl, const Color colorTintIn)
       : transform(pos, size_, angle_), frame{frm}, scale{scl},
         colorTint{colorTintIn} {}
 
@@ -147,9 +147,9 @@ struct HasAnimation : BaseComponent {
   float rotation = 0;
   Color colorTint;
 
-  HasAnimation(Vector2Type position, Vector2Type size, float angle,
-               Vector2Type start_position_, int total_frames_, float frame_dur_,
-               bool once_, float scale_, int cur_frame_, float rot, Color tint)
+  HasAnimation(const Vector2Type position, const Vector2Type size, const float angle,
+               const Vector2Type start_position_, const int total_frames_, const float frame_dur_,
+               const bool once_, const float scale_, const int cur_frame_, const float rot, const Color tint)
       : transform(position, size, angle), start_position(start_position_),
         cur_frame_position(start_position_), total_frames(total_frames_),
         frame_dur(frame_dur_), frame_time(frame_dur_), once(once_),
@@ -166,7 +166,7 @@ struct HasAnimation : BaseComponent {
 struct AnimationUpdateCurrentFrame : System<HasAnimation> {
 
   virtual void for_each_with(Entity &entity, HasAnimation &hasAnimation,
-                             float dt) override {
+                             const float dt) override {
     hasAnimation.frame_time -= dt;
     if (hasAnimation.frame_time > 0) {
       return;
@@ -181,7 +181,7 @@ struct AnimationUpdateCurrentFrame : System<HasAnimation> {
       hasAnimation.cur_frame = 0;
     }
 
-    auto [i, j] =
+    const auto [i, j] =
         idx_to_next_sprite_location((int)hasAnimation.cur_frame_position.x,
                                     (int)hasAnimation.cur_frame_position.y);
 
@@ -194,12 +194,12 @@ struct RenderSprites : System<HasSprite> {
 
   Texture sheet;
 
-  virtual void once(float) override {
+  virtual void once(const float) override {
     sheet = EntityHelper::get_singleton_cmp<HasSpritesheet>()->texture;
   }
 
   virtual void for_each_with(const Entity &, const HasSprite &hasSprite,
-                             float) const override {
+                             const float) const override {
 
     draw_texture_pro(sheet, hasSprite.frame, hasSprite.destination(),
                      Vector2Type{hasSprite.transform.size.x / 2.f,
@@ -212,15 +212,15 @@ struct RenderAnimation : System<HasAnimation> {
 
   Texture sheet;
 
-  virtual void once(float) override {
+  virtual void once(const float) override {
     sheet = EntityHelper::get_singleton_cmp<HasSpritesheet>()->texture;
   }
 
   virtual void for_each_with(const Entity &, const HasAnimation &hasAnimation,
-                             float) const override {
+                             const float) const override {
 
-    auto [i, j] = hasAnimation.cur_frame_position;
-    Rectangle frame = idx_to_sprite_frame((int)i, (int)j);
+    const auto [i, j] = hasAnimation.cur_frame_position;
+    const Rectangle frame = idx_to_sprite_frame((int)i, (int)j);
 
     draw_texture_pro(sheet, frame,
                      Rectangle{

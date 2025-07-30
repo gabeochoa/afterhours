@@ -39,7 +39,7 @@ struct window_manager : developer::Plugin {
 
 #ifdef AFTER_HOURS_USE_RAYLIB
   static Resolution fetch_current_resolution() {
-    auto scale = raylib::GetWindowScaleDPI();
+    const auto scale = raylib::GetWindowScaleDPI();
     // generally im pretty confident that this will end up with a nice round
     // number resolution but i havent done any research about it - gabe Jan 2025
     return Resolution{
@@ -48,12 +48,12 @@ struct window_manager : developer::Plugin {
   }
 
   static Resolution fetch_maximum_resolution() {
-    int monitor = raylib::GetCurrentMonitor();
+    const int monitor = raylib::GetCurrentMonitor();
     return Resolution{.width = raylib::GetMonitorWidth(0),
                       .height = raylib::GetMonitorHeight(0)};
   }
 
-  static void set_window_size(int width, int height) {
+  static void set_window_size(const int width, const int height) {
     raylib::SetWindowSize(width, height);
   }
 #else
@@ -63,7 +63,7 @@ struct window_manager : developer::Plugin {
   static Resolution fetch_current_resolution() {
     return Resolution{.width = 1280, .height = 720};
   }
-  static void set_window_size(int, int) {}
+  static void set_window_size(const int, const int) {}
 #endif
 
   static std::vector<Resolution> fetch_available_resolutions() {
@@ -88,7 +88,7 @@ struct window_manager : developer::Plugin {
         Resolution{.width = 5120, .height = 1440},
     };
 
-    Resolution max = fetch_maximum_resolution();
+    const Resolution max = fetch_maximum_resolution();
 
     // Filter out resolutions that exceed the maximum supported resolution
     resolutions.erase(std::remove_if(resolutions.begin(), resolutions.end(),
@@ -115,7 +115,7 @@ struct window_manager : developer::Plugin {
   struct CollectCurrentResolution : System<ProvidesCurrentResolution> {
 
     virtual void for_each_with(Entity &, ProvidesCurrentResolution &pCR,
-                               float) override {
+                               const float) override {
       if (pCR.should_refetch) {
         pCR.current_resolution = fetch_current_resolution();
         set_window_size(pCR.current_resolution.width,
@@ -127,7 +127,7 @@ struct window_manager : developer::Plugin {
 
   struct ProvidesTargetFPS : public BaseComponent {
     int fps;
-    ProvidesTargetFPS(int f) : fps(f) {}
+    ProvidesTargetFPS(const int f) : fps(f) {}
   };
 
   struct ProvidesAvailableWindowResolutions : BaseComponent {
@@ -161,7 +161,7 @@ struct window_manager : developer::Plugin {
       int min_diff = std::numeric_limits<int>::max();
 
       for (size_t i = 0; i < available_resolutions.size(); i++) {
-        int diff = std::abs(pcr.current_resolution.width -
+        const int diff = std::abs(pcr.current_resolution.width -
                             available_resolutions[i].width) +
                    std::abs(pcr.current_resolution.height -
                             available_resolutions[i].height);
@@ -182,7 +182,7 @@ struct window_manager : developer::Plugin {
       return closest_index;
     }
 
-    Resolution on_data_changed(size_t index) {
+    Resolution on_data_changed(const size_t index) {
       ProvidesCurrentResolution &pcr =
           *(EntityHelper::get_singleton_cmp<ProvidesCurrentResolution>());
       pcr.current_resolution = available_resolutions[index];
@@ -197,7 +197,7 @@ struct window_manager : developer::Plugin {
 
     virtual void for_each_with(Entity &,
                                ProvidesAvailableWindowResolutions &pAWR,
-                               float) override {
+                               const float) override {
       if (pAWR.should_refetch) {
         pAWR.available_resolutions = fetch_available_resolutions();
         pAWR.should_refetch = false;
@@ -205,7 +205,7 @@ struct window_manager : developer::Plugin {
     }
   };
 
-  static void add_singleton_components(Entity &entity, int target_fps) {
+  static void add_singleton_components(Entity &entity, const int target_fps) {
     entity.addComponent<ProvidesTargetFPS>(target_fps);
     entity.addComponent<ProvidesCurrentResolution>();
     entity.addComponent<ProvidesAvailableWindowResolutions>();
@@ -216,7 +216,7 @@ struct window_manager : developer::Plugin {
   }
 
   static void add_singleton_components(Entity &entity, const Resolution &rez,
-                                       int target_fps) {
+                                       const int target_fps) {
     entity.addComponent<ProvidesTargetFPS>(target_fps);
     entity.addComponent<ProvidesCurrentResolution>(rez);
     entity.addComponent<ProvidesAvailableWindowResolutions>();
@@ -227,7 +227,7 @@ struct window_manager : developer::Plugin {
   }
 
   static void add_singleton_components(
-      Entity &entity, const Resolution &rez, int target_fps,
+      Entity &entity, const Resolution &rez, const int target_fps,
       const std::vector<Resolution> &available_resolutions) {
     entity.addComponent<ProvidesTargetFPS>(target_fps);
     entity.addComponent<ProvidesCurrentResolution>(rez);

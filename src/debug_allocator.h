@@ -19,13 +19,13 @@ public:
 
   template <typename U> DebugAllocator(const DebugAllocator<U> &) {}
 
-  T *allocate(std::size_t n) {
+  T *allocate(const std::size_t n) {
     log_warn("{}Allocating {} ({} elements of size {}) {}", green,
              n * sizeof(T), n, sizeof(T), clear);
     return std::allocator<T>().allocate(n);
   }
 
-  void deallocate(T *p, std::size_t n) {
+  void deallocate(T *p, const std::size_t n) {
     log_warn("{}Deallocating {} ({} elements of size {}) {}", red,
              n * sizeof(T), n, sizeof(T), clear);
     std::allocator<T>().deallocate(p, n);

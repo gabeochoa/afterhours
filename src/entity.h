@@ -41,7 +41,7 @@ struct Entity {
   // These two functions can be used to validate than an entity has all of the
   // matching components that are needed for this system to run
   template <typename T> [[nodiscard]] bool has() const {
-    bool result = componentSet[components::get_type_id<T>()];
+    const bool result = componentSet[components::get_type_id<T>()];
 #if defined(AFTER_HOURS_DEBUG)
     log_trace("checking component {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
@@ -118,7 +118,7 @@ struct Entity {
 #endif
 
     auto component = std::make_unique<T>(std::forward<TArgs>(args)...);
-    ComponentID component_id = components::get_type_id<T>();
+    const ComponentID component_id = components::get_type_id<T>();
     componentArray[component_id] = std::move(component);
     componentSet[component_id] = true;
 
@@ -219,8 +219,8 @@ struct OptEntity {
   OptEntityType data;
 
   OptEntity() {}
-  OptEntity(OptEntityType opt_e) : data(opt_e) {}
-  OptEntity(RefEntity _e) : data(_e) {}
+  OptEntity(const OptEntityType opt_e) : data(opt_e) {}
+  OptEntity(const RefEntity _e) : data(_e) {}
   OptEntity(Entity &_e) : data(_e) {}
 
   bool has_value() const { return data.has_value(); }

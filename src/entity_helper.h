@@ -103,7 +103,7 @@ struct EntityHelper {
   }
 
   template <typename Component> static void registerSingleton(Entity &ent) {
-    ComponentID id = components::get_type_id<Component>();
+    const ComponentID id = components::get_type_id<Component>();
 
     if (EntityHelper::get().singletonMap.contains(id)) {
       log_error("Already had registered singleton {}", type_name<Component>());
@@ -115,7 +115,7 @@ struct EntityHelper {
   }
 
   template <typename Component> static RefEntity get_singleton() {
-    ComponentID id = components::get_type_id<Component>();
+    const ComponentID id = components::get_type_id<Component>();
     if (!EntityHelper::get().singletonMap.contains(id)) {
       log_warn("Singleton map is missing value for component {} ({}). Did you "
                "register this component previously?",
@@ -129,8 +129,8 @@ struct EntityHelper {
     return &(ent.get<Component>());
   }
 
-  static void markIDForCleanup(int e_id) {
-    auto &entities = get_entities();
+  static void markIDForCleanup(const int e_id) {
+    const auto &entities = get_entities();
     auto it = entities.begin();
     while (it != get_entities().end()) {
       if ((*it)->id == e_id) {
@@ -159,7 +159,7 @@ struct EntityHelper {
     //
     Entities &entities = get_entities_for_mod();
 
-    auto newend = std::remove_if(
+    const auto newend = std::remove_if(
         entities.begin(), entities.end(),
         [](const auto &entity) { return !entity || entity->cleanup; });
 
@@ -173,7 +173,7 @@ struct EntityHelper {
     EntityHelper::get().temp_entities.clear();
   }
 
-  static void delete_all_entities(bool include_permanent) {
+  static void delete_all_entities(const bool include_permanent) {
     EntityHelper::merge_entity_arrays();
 
     if (include_permanent) {
@@ -184,7 +184,7 @@ struct EntityHelper {
     // Only delete non perms
     Entities &entities = get_entities_for_mod();
 
-    auto newend = std::remove_if(
+    const auto newend = std::remove_if(
         entities.begin(), entities.end(), [](const auto &entity) {
           return !EntityHelper::get().permanant_ids.contains(entity->id);
         });
@@ -196,7 +196,7 @@ struct EntityHelper {
     for (const auto &e : get_entities()) {
       if (!e)
         continue;
-      auto fef = cb(*e);
+      const auto fef = cb(*e);
       if (fef == 1)
         continue;
       if (fef == 2)
@@ -206,21 +206,21 @@ struct EntityHelper {
 
   // TODO exists as a conversion for things that need shared_ptr right now
   static std::shared_ptr<Entity> getEntityAsSharedPtr(const Entity &entity) {
-    for (std::shared_ptr<Entity> current_entity : get_entities()) {
+    for (const std::shared_ptr<Entity> &current_entity : get_entities()) {
       if (entity.id == current_entity->id)
         return current_entity;
     }
     return {};
   }
 
-  static std::shared_ptr<Entity> getEntityAsSharedPtr(OptEntity entity) {
+  static std::shared_ptr<Entity> getEntityAsSharedPtr(const OptEntity entity) {
     if (!entity)
       return {};
     const Entity &e = entity.asE();
     return getEntityAsSharedPtr(e);
   }
 
-  static OptEntity getEntityForID(EntityID id) {
+  static OptEntity getEntityForID(const EntityID id) {
     if (id == -1)
       return {};
 
@@ -233,7 +233,7 @@ struct EntityHelper {
     return {};
   }
 
-  static Entity &getEntityForIDEnforce(EntityID id) {
+  static Entity &getEntityForIDEnforce(const EntityID id) {
     auto opt_ent = getEntityForID(id);
     return opt_ent.asE();
   }

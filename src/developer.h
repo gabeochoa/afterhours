@@ -62,7 +62,9 @@ template <class... Ts> struct overloaded : Ts... {
   using Ts::operator()...;
 };
 
-template <typename T> int sgn(T val) { return (T(0) < val) - (val < T(0)); }
+template <typename T> int sgn(const T val) {
+  return (T(0) < val) - (val < T(0));
+}
 
 } // namespace util
 
@@ -72,9 +74,9 @@ template <typename Component> struct EnforceSingleton : System<Component> {
 
   bool saw_one;
 
-  virtual void once(float) override { saw_one = false; }
+  virtual void once(const float) override { saw_one = false; }
 
-  virtual void for_each_with(Entity &, Component &, float) override {
+  virtual void for_each_with(Entity &, Component &, const float) override {
 
     if (saw_one) {
       std::cerr << "Enforcing only one entity with " << type_name<Component>()

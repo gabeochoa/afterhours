@@ -55,12 +55,12 @@ struct Size {
   float strictness = 1.f;
 };
 
-inline Size pixels(float value, float strictness = 1.f) {
+inline Size pixels(const float value, const float strictness = 1.f) {
   return ui::Size{
       .dim = ui::Dim::Pixels, .value = value, .strictness = strictness};
 }
 
-inline Size percent(float value, float strictness = 1.f) {
+inline Size percent(const float value, const float strictness = 1.f) {
   if (value > 1.f) {
     log_warn("Value should be between 0 and 1");
   }
@@ -68,7 +68,7 @@ inline Size percent(float value, float strictness = 1.f) {
       .dim = ui::Dim::Percent, .value = value, .strictness = strictness};
 }
 
-inline Size screen_pct(float value, float strictness = 0.9f) {
+inline Size screen_pct(const float value, const float strictness = 0.9f) {
   if (value > 1.f) {
     log_warn("Value should be between 0 and 1");
   }
@@ -76,7 +76,7 @@ inline Size screen_pct(float value, float strictness = 0.9f) {
       .dim = ui::Dim::ScreenPercent, .value = value, .strictness = strictness};
 }
 
-inline Size children(float value = -1) {
+inline Size children(const float value = -1) {
   return ui::Size{.dim = ui::Dim::Children, .value = value};
 }
 

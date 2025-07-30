@@ -11,14 +11,15 @@ namespace raylib {
 static Texture2D texShapes = {1, 1, 1, 1, 7};
 
 // AI
-inline int CalculateSegments(float radius) {
-  float th = acosf(2 * powf(1 - SMOOTH_CIRCLE_ERROR_RATE / radius, 2) - 1);
+inline int CalculateSegments(const float radius) {
+  const float th =
+      acosf(2 * powf(1 - SMOOTH_CIRCLE_ERROR_RATE / radius, 2) - 1);
   return (int)(ceilf(2 * PI / th) / 4.0f);
 }
 
-inline void DrawCorner(float x, float y, float radius, int segments,
-                       Color color, float angle) {
-  float stepLength = 90.0f / (float)segments;
+inline void DrawCorner(const float x, const float y, const float radius,
+                       const int segments, const Color color, float angle) {
+  const float stepLength = 90.0f / (float)segments;
 
   rlBegin(RL_TRIANGLES);
   rlColor4ub(color.r, color.g, color.b, color.a);
@@ -34,40 +35,43 @@ inline void DrawCorner(float x, float y, float radius, int segments,
   rlEnd();
 }
 
-inline void DrawRectangleCustom(Rectangle rec, float roundnessBottomRight,
-                                float roundnessBottomLeft,
-                                float roundnessTopRight, float roundnessTopLeft,
-                                int segments, Color color) {
+inline void DrawRectangleCustom(const Rectangle rec,
+                                const float roundnessBottomRight,
+                                const float roundnessBottomLeft,
+                                const float roundnessTopRight,
+                                const float roundnessTopLeft,
+                                const int segments, const Color color) {
   // Calculate corner radius for each corner
-  float radiusBottomRight = (rec.width > rec.height)
-                                ? (rec.height * roundnessBottomRight) / 2
-                                : (rec.width * roundnessBottomRight) / 2;
-  float radiusBottomLeft = (rec.width > rec.height)
-                               ? (rec.height * roundnessBottomLeft) / 2
-                               : (rec.width * roundnessBottomLeft) / 2;
-  float radiusTopRight = (rec.width > rec.height)
-                             ? (rec.height * roundnessTopRight) / 2
-                             : (rec.width * roundnessTopRight) / 2;
-  float radiusTopLeft = (rec.width > rec.height)
-                            ? (rec.height * roundnessTopLeft) / 2
-                            : (rec.width * roundnessTopLeft) / 2;
+  const float radiusBottomRight = (rec.width > rec.height)
+                                      ? (rec.height * roundnessBottomRight) / 2
+                                      : (rec.width * roundnessBottomRight) / 2;
+  const float radiusBottomLeft = (rec.width > rec.height)
+                                     ? (rec.height * roundnessBottomLeft) / 2
+                                     : (rec.width * roundnessBottomLeft) / 2;
+  const float radiusTopRight = (rec.width > rec.height)
+                                   ? (rec.height * roundnessTopRight) / 2
+                                   : (rec.width * roundnessTopRight) / 2;
+  const float radiusTopLeft = (rec.width > rec.height)
+                                  ? (rec.height * roundnessTopLeft) / 2
+                                  : (rec.width * roundnessTopLeft) / 2;
 
   // Calculate number of segments to use for each corner
-  int segmentsBottomRight =
+  const int segmentsBottomRight =
       (segments < 4) ? CalculateSegments(radiusBottomRight) : segments;
-  int segmentsBottomLeft =
+  const int segmentsBottomLeft =
       (segments < 4) ? CalculateSegments(radiusBottomLeft) : segments;
-  int segmentsTopRight =
+  const int segmentsTopRight =
       (segments < 4) ? CalculateSegments(radiusTopRight) : segments;
-  int segmentsTopLeft =
+  const int segmentsTopLeft =
       (segments < 4) ? CalculateSegments(radiusTopLeft) : segments;
 
   // Draw the main rectangle (excluding corner areas)
-  float leftX = rec.x + radiusTopLeft;
-  float rightX = rec.x + rec.width -
-                 (radiusTopRight > 0 ? radiusTopRight : radiusBottomRight);
-  float topY = rec.y + radiusTopLeft;
-  float bottomY = rec.y + rec.height - radiusBottomLeft;
+  const float leftX = rec.x + radiusTopLeft;
+  const float rightX =
+      rec.x + rec.width -
+      (radiusTopRight > 0 ? radiusTopRight : radiusBottomRight);
+  const float topY = rec.y + radiusTopLeft;
+  const float bottomY = rec.y + rec.height - radiusBottomLeft;
 
   // Center rectangle
   if (leftX < rightX && topY < bottomY) {
@@ -77,8 +81,8 @@ inline void DrawRectangleCustom(Rectangle rec, float roundnessBottomRight,
 
   // Top rectangle (between top corners)
   if (radiusTopLeft > 0 || radiusTopRight > 0) {
-    float topRectLeft = rec.x + radiusTopLeft;
-    float topRectRight = rec.x + rec.width - radiusTopRight;
+    const float topRectLeft = rec.x + radiusTopLeft;
+    const float topRectRight = rec.x + rec.width - radiusTopRight;
     if (topRectLeft < topRectRight) {
       DrawRectangleRec(Rectangle{topRectLeft, rec.y, topRectRight - topRectLeft,
                                  radiusTopLeft},
@@ -88,8 +92,8 @@ inline void DrawRectangleCustom(Rectangle rec, float roundnessBottomRight,
 
   // Bottom rectangle (between bottom corners)
   if (radiusBottomLeft > 0 || radiusBottomRight > 0) {
-    float bottomRectLeft = rec.x + radiusBottomLeft;
-    float bottomRectRight = rec.x + rec.width - radiusBottomRight;
+    const float bottomRectLeft = rec.x + radiusBottomLeft;
+    const float bottomRectRight = rec.x + rec.width - radiusBottomRight;
     if (bottomRectLeft < bottomRectRight) {
       DrawRectangleRec(
           Rectangle{bottomRectLeft, rec.y + rec.height - radiusBottomLeft,
@@ -100,8 +104,8 @@ inline void DrawRectangleCustom(Rectangle rec, float roundnessBottomRight,
 
   // Left rectangle (between left corners)
   if (radiusTopLeft > 0 || radiusBottomLeft > 0) {
-    float leftRectTop = rec.y + radiusTopLeft;
-    float leftRectBottom = rec.y + rec.height - radiusBottomLeft;
+    const float leftRectTop = rec.y + radiusTopLeft;
+    const float leftRectBottom = rec.y + rec.height - radiusBottomLeft;
     if (leftRectTop < leftRectBottom) {
       DrawRectangleRec(Rectangle{rec.x, leftRectTop, radiusTopLeft,
                                  leftRectBottom - leftRectTop},
@@ -111,8 +115,8 @@ inline void DrawRectangleCustom(Rectangle rec, float roundnessBottomRight,
 
   // Right rectangle (between right corners)
   if (radiusBottomRight > 0) {
-    float rightRectTop = rec.y + radiusTopRight;
-    float rightRectBottom = rec.y + rec.height - radiusBottomRight;
+    const float rightRectTop = rec.y + radiusTopRight;
+    const float rightRectBottom = rec.y + rec.height - radiusBottomRight;
     DrawRectangleRec(Rectangle{rec.x + rec.width - radiusBottomRight,
                                rightRectTop, radiusBottomRight,
                                rightRectBottom - rightRectTop},
@@ -120,8 +124,8 @@ inline void DrawRectangleCustom(Rectangle rec, float roundnessBottomRight,
   }
 
   if (radiusTopRight > 0) {
-    float rightRectTop = rec.y + radiusTopRight;
-    float rightRectBottom = rec.y + rec.height - radiusBottomRight;
+    const float rightRectTop = rec.y + radiusTopRight;
+    const float rightRectBottom = rec.y + rec.height - radiusBottomRight;
     DrawRectangleRec(Rectangle{rec.x + rec.width - radiusTopRight, rightRectTop,
                                radiusTopRight, rightRectBottom - rightRectTop},
                      color);
@@ -153,28 +157,29 @@ inline void DrawRectangleCustom(Rectangle rec, float roundnessBottomRight,
 namespace afterhours {
 #ifdef AFTER_HOURS_USE_RAYLIB
 
-inline void draw_text_ex(raylib::Font font, const char *content,
-                         Vector2Type position, float font_size, float spacing,
-                         Color color) {
+inline void draw_text_ex(const raylib::Font font, const char *content,
+                         const Vector2Type position, const float font_size,
+                         const float spacing, const Color color) {
   raylib::DrawTextEx(font, content, position, font_size, spacing, color);
 }
-inline void draw_text(const char *content, float x, float y, float font_size,
-                      Color color) {
+inline void draw_text(const char *content, const float x, const float y,
+                      const float font_size, const Color color) {
   raylib::DrawText(content, x, y, font_size, color);
 }
 
-inline void draw_rectangle_outline(RectangleType rect, Color color) {
+inline void draw_rectangle_outline(const RectangleType rect,
+                                   const Color color) {
   raylib::DrawRectangleLinesEx(rect, 3.f, color);
 }
 
-inline void draw_rectangle(RectangleType rect, Color color) {
+inline void draw_rectangle(const RectangleType rect, const Color color) {
   raylib::DrawRectangleRec(rect, color);
 }
 
-inline void
-draw_rectangle_rounded(RectangleType rect, float roundness, int segments,
-                       Color color,
-                       std::bitset<4> corners = std::bitset<4>().reset()) {
+inline void draw_rectangle_rounded(
+    const RectangleType rect, const float roundness, const int segments,
+    const Color color,
+    const std::bitset<4> corners = std::bitset<4>().reset()) {
   if (corners.all()) {
     raylib::DrawRectangleRounded(rect, roundness, segments, color);
     return;
@@ -199,13 +204,15 @@ inline raylib::Font get_default_font() { return raylib::GetFontDefault(); }
 inline raylib::Font get_unset_font() { return raylib::GetFontDefault(); }
 
 #else
-inline void draw_text_ex(afterhours::Font, const char *, Vector2Type, float,
-                         float, Color) {}
-inline void draw_text(const char *, float, float, float, Color) {}
-inline void draw_rectangle(RectangleType, Color) {}
-inline void draw_rectangle_outline(RectangleType, Color) {}
-inline void draw_rectangle_rounded(RectangleType, float, int, Color,
-                                   std::bitset<4>) {}
+inline void draw_text_ex(const afterhours::Font, const char *,
+                         const Vector2Type, const float, const float,
+                         const Color) {}
+inline void draw_text(const char *, const float, const float, const float,
+                      const Color) {}
+inline void draw_rectangle(const RectangleType, const Color) {}
+inline void draw_rectangle_outline(const RectangleType, const Color) {}
+inline void draw_rectangle_rounded(const RectangleType, const float, const int,
+                                   const Color, const std::bitset<4>) {}
 inline afterhours::Font get_default_font() { return afterhours::Font(); }
 inline afterhours::Font get_unset_font() { return afterhours::Font(); }
 #endif

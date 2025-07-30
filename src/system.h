@@ -9,6 +9,7 @@
 
 #include "base_component.h"
 #include "entity.h"
+#include "entity_helper.h"
 
 namespace afterhours {
 class SystemBase {
@@ -18,24 +19,24 @@ public:
 
   // Runs before calling once/for-each, and when
   // false skips calling those
-  virtual bool should_run(float) { return true; }
-  virtual bool should_run(float) const { return true; }
+  virtual bool should_run(const float) { return true; }
+  virtual bool should_run(const float) const { return true; }
   // Runs once per frame, before calling for_each
-  virtual void once(float) {}
-  virtual void once(float) const {}
+  virtual void once(const float) {}
+  virtual void once(const float) const {}
   // Runs once per frame, after calling for_each
-  virtual void after(float) {}
-  virtual void after(float) const {}
+  virtual void after(const float) {}
+  virtual void after(const float) const {}
   // Runs for every entity matching the components
   // in System<Components>
-  virtual void for_each(Entity &, float) = 0;
-  virtual void for_each(const Entity &, float) const = 0;
+  virtual void for_each(Entity &, const float) = 0;
+  virtual void for_each(const Entity &, const float) const = 0;
 
   bool include_derived_children = false;
 
 #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-  virtual void for_each_derived(Entity &, float) = 0;
-  virtual void for_each_derived(const Entity &, float) const = 0;
+  virtual void for_each_derived(Entity &, const float) = 0;
+  virtual void for_each_derived(const Entity &, const float) const = 0;
 #endif
 };
 
@@ -84,7 +85,7 @@ template <typename Component> struct Not : BaseComponent {
     for_each_with(entity, entity.template get<Components>()..., dt);
   }
 */
-  void for_each(Entity &entity, float dt) {
+  void for_each(Entity &entity, const float dt) {
     if constexpr (sizeof...(Components) > 0) {
       if ((entity.template has<Components>() && ...)) {
         for_each_with(entity, entity.template get<Components>()..., dt);
@@ -95,7 +96,7 @@ template <typename Component> struct Not : BaseComponent {
   }
 
 #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-  void for_each_derived(Entity &entity, float dt) {
+  void for_each_derived(Entity &entity, const float dt) {
     if constexpr (sizeof...(Components) > 0) {
       if ((entity.template has_child_of<Components>() && ...)) {
         for_each_with_derived(
@@ -106,7 +107,7 @@ template <typename Component> struct Not : BaseComponent {
     }
   }
 
-  void for_each_derived(const Entity &entity, float dt) const {
+  void for_each_derived(const Entity &entity, const float dt) const {
     if constexpr (sizeof...(Components) > 0) {
       if ((entity.template has_child_of<Components>() && ...)) {
         for_each_with_derived(
@@ -116,12 +117,12 @@ template <typename Component> struct Not : BaseComponent {
       for_each_with(entity, dt);
     }
   }
-  virtual void for_each_with_derived(Entity &, Components &..., float) {}
+  virtual void for_each_with_derived(Entity &, Components &..., const float) {}
   virtual void for_each_with_derived(const Entity &, const Components &...,
-                                     float) const {}
+                                     const float) const {}
 #endif
 
-  void for_each(const Entity &entity, float dt) const {
+  void for_each(const Entity &entity, const float dt) const {
     if constexpr (sizeof...(Components) > 0) {
       if ((entity.template has<Components>() && ...)) {
         for_each_with(entity, entity.template get<Components>()..., dt);
@@ -135,17 +136,15 @@ template <typename Component> struct Not : BaseComponent {
   // These would be abstract but we dont know if they will want
   // const or non const versions and the sfinae version is probably
   // pretty unreadable (and idk how to write it correctly)
-  virtual void for_each_with(Entity &, Components &..., float) {}
+  virtual void for_each_with(Entity &, Components &..., const float) {}
   virtual void for_each_with(const Entity &, const Components &...,
-                             float) const {}
+                             const float) const {}
 };
-
-#include "entity_helper.h"
 
 struct CallbackSystem : System<> {
   std::function<void(float)> cb_;
   CallbackSystem(const std::function<void(float)> &cb) : cb_(cb) {}
-  virtual void once(float dt) { cb_(dt); }
+  virtual void once(const float dt) { cb_(dt); }
 };
 
 struct SystemManager {
@@ -183,7 +182,7 @@ struct SystemManager {
     register_render_system(std::make_unique<CallbackSystem>(cb));
   }
 
-  void tick(Entities &entities, float dt) {
+  void tick(Entities &entities, const float dt) {
     for (auto &system : update_systems_) {
       if (!system->should_run(dt))
         continue;
@@ -203,7 +202,7 @@ struct SystemManager {
     }
   }
 
-  void fixed_tick(Entities &entities, float dt) {
+  void fixed_tick(Entities &entities, const float dt) {
     for (auto &system : fixed_update_systems_) {
       if (!system->should_run(dt))
         continue;
@@ -222,7 +221,7 @@ struct SystemManager {
     }
   }
 
-  void render(const Entities &entities, float dt) {
+  void render(const Entities &entities, const float dt) {
     for (const auto &system : render_systems_) {
       if (!system->should_run(dt))
         continue;
@@ -242,9 +241,9 @@ struct SystemManager {
     }
   }
 
-  void tick_all(Entities &entities, float dt) { tick(entities, dt); }
+  void tick_all(Entities &entities, const float dt) { tick(entities, dt); }
 
-  void fixed_tick_all(Entities &entities, float dt) {
+  void fixed_tick_all(Entities &entities, const float dt) {
     accumulator += dt;
     int num_ticks = (int)std::floor(accumulator / FIXED_TICK_RATE);
     accumulator -= (float)num_ticks * FIXED_TICK_RATE;
@@ -255,12 +254,12 @@ struct SystemManager {
     }
   }
 
-  void render_all(float dt) {
+  void render_all(const float dt) {
     const auto &entities = EntityHelper::get_entities();
     render(entities, dt);
   }
 
-  void run(float dt) {
+  void run(const float dt) {
     auto &entities = EntityHelper::get_entities_for_mod();
     fixed_tick_all(entities, dt);
     tick_all(entities, dt);

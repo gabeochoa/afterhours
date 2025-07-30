@@ -27,40 +27,42 @@ struct input : developer::Plugin {
   static MousePosition get_mouse_position() {
     return raylib::GetMousePosition();
   }
-  static bool is_mouse_button_up(MouseButton button) {
+  static bool is_mouse_button_up(const MouseButton button) {
     return raylib::IsMouseButtonUp(button);
   }
-  static bool is_mouse_button_down(MouseButton button) {
+  static bool is_mouse_button_down(const MouseButton button) {
     return raylib::IsMouseButtonDown(button);
   }
-  static bool is_mouse_button_pressed(MouseButton button) {
+  static bool is_mouse_button_pressed(const MouseButton button) {
     return raylib::IsMouseButtonPressed(button);
   }
-  static bool is_mouse_button_released(MouseButton button) {
+  static bool is_mouse_button_released(const MouseButton button) {
     return raylib::IsMouseButtonReleased(button);
   }
-  static bool is_gamepad_available(GamepadID id) {
+  static bool is_gamepad_available(const GamepadID id) {
     return raylib::IsGamepadAvailable(id);
   }
-  static bool is_key_pressed(KeyCode keycode) {
+  static bool is_key_pressed(const KeyCode keycode) {
     return raylib::IsKeyPressed(keycode);
   }
-  static bool is_key_down(KeyCode keycode) {
+  static bool is_key_down(const KeyCode keycode) {
     return raylib::IsKeyDown(keycode);
   }
-  static float get_gamepad_axis_mvt(GamepadID gamepad_id, GamepadAxis axis) {
+  static float get_gamepad_axis_mvt(const GamepadID gamepad_id,
+                                    const GamepadAxis axis) {
     return raylib::GetGamepadAxisMovement(gamepad_id, axis);
   }
-  static bool is_gamepad_button_pressed(GamepadID gamepad_id,
-                                        GamepadButton button) {
+  static bool is_gamepad_button_pressed(const GamepadID gamepad_id,
+                                        const GamepadButton button) {
     return raylib::IsGamepadButtonPressed(gamepad_id, button);
   }
-  static bool is_gamepad_button_down(GamepadID gamepad_id,
-                                     GamepadButton button) {
+  static bool is_gamepad_button_down(const GamepadID gamepad_id,
+                                     const GamepadButton button) {
     return raylib::IsGamepadButtonDown(gamepad_id, button);
   }
 
-  static void draw_text(const std::string &text, int x, int y, int fontSize) {
+  static void draw_text(const std::string &text, const int x, const int y,
+                        const int fontSize) {
     raylib::DrawText(text.c_str(), x, y, fontSize, raylib::RED);
   }
 
@@ -68,7 +70,7 @@ struct input : developer::Plugin {
     raylib::SetGamepadMappings(data.c_str());
   }
 
-  static std::string name_for_button(GamepadButton input) {
+  static std::string name_for_button(const GamepadButton input) {
     switch (input) {
     case raylib::GAMEPAD_BUTTON_LEFT_FACE_UP:
       return "D-Pad Up";
@@ -97,7 +99,7 @@ struct input : developer::Plugin {
     }
   }
 
-  static std::string icon_for_button(GamepadButton input) {
+  static std::string icon_for_button(const GamepadButton input) {
     switch (input) {
     case raylib::GAMEPAD_BUTTON_LEFT_FACE_UP:
       return "xbox_dpad_up";
@@ -132,8 +134,8 @@ struct input : developer::Plugin {
     }
   }
 
-  static std::string icon_for_key(int keycode) {
-    raylib::KeyboardKey key =
+  static std::string icon_for_key(const int keycode) {
+    const raylib::KeyboardKey key =
         magic_enum::enum_cast<raylib::KeyboardKey>(keycode).value_or(
             raylib::KeyboardKey::KEY_NULL);
     switch (key) {
@@ -372,28 +374,32 @@ struct input : developer::Plugin {
 
   // TODO good luck ;)
   static MousePosition get_mouse_position() { return {0, 0}; }
-  static bool is_mouse_button_up(MouseButton) { return false; }
-  static bool is_mouse_button_down(MouseButton) { return false; }
-  static bool is_mouse_button_pressed(MouseButton) { return false; }
-  static bool is_mouse_button_released(MouseButton) { return false; }
+  static bool is_mouse_button_up(const MouseButton) { return false; }
+  static bool is_mouse_button_down(const MouseButton) { return false; }
+  static bool is_mouse_button_pressed(const MouseButton) { return false; }
+  static bool is_mouse_button_released(const MouseButton) { return false; }
   static
 
       bool
-      is_key_pressed(KeyCode) {
+      is_key_pressed(const KeyCode) {
     return false;
   }
-  static bool is_key_down(KeyCode) { return false; }
-  static bool is_gamepad_available(GamepadID) { return false; }
-  static float get_gamepad_axis_mvt(GamepadID, GamepadAxis) { return 0.f; }
-  static bool is_gamepad_button_pressed(GamepadID, GamepadButton) {
+  static bool is_key_down(const KeyCode) { return false; }
+  static bool is_gamepad_available(const GamepadID) { return false; }
+  static float get_gamepad_axis_mvt(const GamepadID, const GamepadAxis) {
+    return 0.f;
+  }
+  static bool is_gamepad_button_pressed(const GamepadID, const GamepadButton) {
     return false;
   }
-  static bool is_gamepad_button_down(GamepadID, GamepadButton) { return false; }
-  static void draw_text(const std::string &, int, int, int) {}
+  static bool is_gamepad_button_down(const GamepadID, const GamepadButton) {
+    return false;
+  }
+  static void draw_text(const std::string &, const int, const int, const int) {}
   static void set_gamepad_mappings(const std::string &) {}
-  static std::string name_for_button(GamepadButton) { return "unknown"; }
-  static std::string icon_for_button(GamepadButton) { return "unknown"; }
-  static std::string icon_for_key(int) { return "unknown"; }
+  static std::string name_for_button(const GamepadButton) { return "unknown"; }
+  static std::string icon_for_button(const GamepadButton) { return "unknown"; }
+  static std::string icon_for_key(const int) { return "unknown"; }
 #endif
 
   enum struct DeviceMedium {
@@ -419,17 +425,18 @@ struct input : developer::Plugin {
   using AnyInput = std::variant<KeyCode, GamepadAxisWithDir, GamepadButton>;
   using ValidInputs = std::vector<AnyInput>;
 
-  static float visit_key(int keycode) {
+  static float visit_key(const int keycode) {
     return is_key_pressed(keycode) ? 1.f : 0.f;
   }
-  static float visit_key_down(int keycode) {
+  static float visit_key_down(const int keycode) {
     return is_key_down(keycode) ? 1.f : 0.f;
   }
 
-  static float visit_axis(GamepadID id, GamepadAxisWithDir axis_with_dir) {
+  static float visit_axis(const GamepadID id,
+                          const GamepadAxisWithDir axis_with_dir) {
     // Note: this one is a bit more complex because we have to check if you
     // are pushing in the right direction while also checking the magnitude
-    float mvt = get_gamepad_axis_mvt(id, axis_with_dir.axis);
+    const float mvt = get_gamepad_axis_mvt(id, axis_with_dir.axis);
     // Note: The 0.25 is how big the deadzone is
     // TODO consider making the deadzone configurable?
     if (util::sgn(mvt) == axis_with_dir.dir && abs(mvt) > DEADZONE) {
@@ -438,11 +445,12 @@ struct input : developer::Plugin {
     return 0.f;
   }
 
-  static float visit_button(GamepadID id, GamepadButton button) {
+  static float visit_button(const GamepadID id, const GamepadButton button) {
     return is_gamepad_button_pressed(id, button) ? 1.f : 0.f;
   }
 
-  static float visit_button_down(GamepadID id, GamepadButton button) {
+  static float visit_button_down(const GamepadID id,
+                                 const GamepadButton button) {
     return is_gamepad_button_down(id, button) ? 1.f : 0.f;
   }
 
@@ -461,14 +469,15 @@ struct input : developer::Plugin {
   struct ProvidesInputMapping : public BaseComponent {
     using GameMapping = std::map<Action, input::ValidInputs>;
     GameMapping mapping;
-    ProvidesInputMapping(GameMapping start_mapping) : mapping(start_mapping) {}
+    ProvidesInputMapping(const GameMapping start_mapping)
+        : mapping(start_mapping) {}
   };
 
   struct RenderConnectedGamepads : System<input::ProvidesMaxGamepadID> {
 
     virtual void for_each_with(const Entity &,
                                const input::ProvidesMaxGamepadID &mxGamepadID,
-                               float) const override {
+                               const float) const override {
       draw_text(("Gamepads connected: " +
                  std::to_string(mxGamepadID.max_gamepad_available)),
                 400, 60, 20);
@@ -478,7 +487,7 @@ struct input : developer::Plugin {
   template <typename Action> struct PossibleInputCollector {
     std::optional<std::reference_wrapper<InputCollector<Action>>> data;
     PossibleInputCollector(
-        std::optional<std::reference_wrapper<InputCollector<Action>>> d)
+        const std::optional<std::reference_wrapper<InputCollector<Action>>> d)
         : data(d) {}
     PossibleInputCollector(InputCollector<Action> &d) : data(d) {}
     PossibleInputCollector() : data({}) {}
@@ -531,23 +540,23 @@ struct input : developer::Plugin {
     }
 
     std::pair<DeviceMedium, float>
-    check_single_action_pressed(GamepadID id, input::ValidInputs valid_inputs) {
+    check_single_action_pressed(const GamepadID id, const input::ValidInputs valid_inputs) {
       DeviceMedium medium;
       float value = 0.f;
-      for (auto &input : valid_inputs) {
+      for (const auto &input : valid_inputs) {
         DeviceMedium temp_medium = DeviceMedium::None;
-        float temp =             //
+        const float temp =             //
             std::visit(          //
                 util::overloaded{//
-                                 [&](int keycode) {
+                                 [&](const int keycode) {
                                    temp_medium = DeviceMedium::Keyboard;
                                    return is_key_pressed(keycode) ? 1.f : 0.f;
                                  },
-                                 [&](GamepadAxisWithDir axis_with_dir) {
+                                 [&](const GamepadAxisWithDir axis_with_dir) {
                                    temp_medium = DeviceMedium::GamepadAxis;
                                    return visit_axis(id, axis_with_dir);
                                  },
-                                 [&](GamepadButton button) {
+                                 [&](const GamepadButton button) {
                                    temp_medium = DeviceMedium::GamepadButton;
                                    return is_gamepad_button_pressed(id, button)
                                               ? 1.f
@@ -564,23 +573,23 @@ struct input : developer::Plugin {
     }
 
     std::pair<DeviceMedium, float>
-    check_single_action_down(GamepadID id, input::ValidInputs valid_inputs) {
+    check_single_action_down(const GamepadID id, const input::ValidInputs valid_inputs) {
       DeviceMedium medium;
       float value = 0.f;
-      for (auto &input : valid_inputs) {
+      for (const auto &input : valid_inputs) {
         DeviceMedium temp_medium = DeviceMedium::None;
-        float temp =             //
+        const float temp =             //
             std::visit(          //
                 util::overloaded{//
-                                 [&](int keycode) {
+                                 [&](const int keycode) {
                                    temp_medium = DeviceMedium::Keyboard;
                                    return visit_key_down(keycode);
                                  },
-                                 [&](GamepadAxisWithDir axis_with_dir) {
+                                 [&](const GamepadAxisWithDir axis_with_dir) {
                                    temp_medium = DeviceMedium::GamepadAxis;
                                    return visit_axis(id, axis_with_dir);
                                  },
-                                 [&](GamepadButton button) {
+                                 [&](const GamepadButton button) {
                                    temp_medium = DeviceMedium::GamepadButton;
                                    return visit_button_down(id, button);
                                  },
@@ -597,20 +606,20 @@ struct input : developer::Plugin {
     virtual void for_each_with(Entity &, InputCollector<Action> &collector,
                                ProvidesMaxGamepadID &mxGamepadID,
                                ProvidesInputMapping<Action> &input_mapper,
-                               float dt) override {
+                               const float dt) override {
       mxGamepadID.max_gamepad_available = std::max(0, fetch_max_gampad_id());
       collector.inputs.clear();
       collector.inputs_pressed.clear();
 
-      for (auto &kv : input_mapper.mapping) {
-        Action action = kv.first;
-        ValidInputs vis = kv.second;
+      for (const auto &kv : input_mapper.mapping) {
+        const Action action = kv.first;
+        const ValidInputs vis = kv.second;
 
         int i = 0;
         do {
           // down
           {
-            auto [medium, amount] = check_single_action_down(i, vis);
+            const auto [medium, amount] = check_single_action_down(i, vis);
             if (amount > 0.f) {
               collector.inputs.push_back(ActionDone{.medium = medium,
                                                     .id = i,
@@ -621,7 +630,7 @@ struct input : developer::Plugin {
           }
           // pressed
           {
-            auto [medium, amount] = check_single_action_pressed(i, vis);
+            const auto [medium, amount] = check_single_action_pressed(i, vis);
             if (amount > 0.f) {
               collector.inputs_pressed.push_back(
                   ActionDone{.medium = medium,
@@ -645,7 +654,7 @@ struct input : developer::Plugin {
 
   template <typename Action>
   static void add_singleton_components(
-      Entity &entity, typename input::ProvidesInputMapping<Action>::GameMapping
+      Entity &entity, const typename input::ProvidesInputMapping<Action>::GameMapping
                           inital_mapping) {
     entity.addComponent<InputCollector<Action>>();
     entity.addComponent<input::ProvidesMaxGamepadID>();

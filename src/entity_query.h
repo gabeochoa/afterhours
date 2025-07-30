@@ -46,7 +46,7 @@ struct EntityQuery {
   struct Limit : Modification {
     int amount;
     mutable int amount_taken;
-    explicit Limit(int amt) : amount(amt), amount_taken(0) {}
+    explicit Limit(const int amt) : amount(amt), amount_taken(0) {}
 
     bool operator()(const Entity &) const override {
       if (amount_taken > amount)
@@ -55,18 +55,18 @@ struct EntityQuery {
       return true;
     }
   };
-  TReturn &take(int amount) { return add_mod(new Limit(amount)); }
+  TReturn &take(const int amount) { return add_mod(new Limit(amount)); }
   TReturn &first() { return take(1); }
 
   struct WhereID : Modification {
     int id;
-    explicit WhereID(int idIn) : id(idIn) {}
+    explicit WhereID(const int idIn) : id(idIn) {}
     bool operator()(const Entity &entity) const override {
       return entity.id == id;
     }
   };
-  TReturn &whereID(int id) { return add_mod(new WhereID(id)); }
-  TReturn &whereNotID(int id) { return add_mod(new Not(new WhereID(id))); }
+  TReturn &whereID(const int id) { return add_mod(new WhereID(id)); }
+  TReturn &whereNotID(const int id) { return add_mod(new Not(new WhereID(id))); }
 
   struct WhereMarkedForCleanup : Modification {
     bool operator()(const Entity &entity) const override {
@@ -148,7 +148,7 @@ struct EntityQuery {
   }
 
   [[nodiscard]] RefEntities
-  values_ignore_cache(UnderlyingOptions options) const {
+  values_ignore_cache(const UnderlyingOptions options) const {
     ents = run_query(options);
     return ents;
   }
@@ -159,7 +159,7 @@ struct EntityQuery {
     return ents;
   }
 
-  [[nodiscard]] RefEntities gen_with_options(UnderlyingOptions options) const {
+  [[nodiscard]] RefEntities gen_with_options(const UnderlyingOptions options) const {
     if (!ran_query)
       return values_ignore_cache(options);
     return ents;
@@ -167,7 +167,7 @@ struct EntityQuery {
 
   [[nodiscard]] OptEntity gen_first() const {
     if (has_values()) {
-      auto values = gen_with_options({.stop_on_first = true});
+      const auto values = gen_with_options({.stop_on_first = true});
       if (values.empty()) {
         log_error("we expected to find a value but didnt...");
       }
@@ -180,7 +180,7 @@ struct EntityQuery {
     if (!has_values()) {
       log_error("tried to use gen enforce, but found no values");
     }
-    auto values = gen_with_options({.stop_on_first = true});
+    const auto values = gen_with_options({.stop_on_first = true});
     if (values.empty()) {
       log_error("we expected to find a value but didnt...");
     }
@@ -215,9 +215,9 @@ struct EntityQuery {
   // TODO Created entities are not available in queries until the next system
   // runs is this a problem?
   // (for now adding force_merge)
-  EntityQuery(bool force_merge = false)
+  EntityQuery(const bool force_merge = false)
       : entities(EntityHelper::get_entities()) {
-    size_t size = EntityHelper::get().temp_entities.size();
+    const size_t size = EntityHelper::get().temp_entities.size();
     if (size == 0)
       return;
 
@@ -232,7 +232,7 @@ struct EntityQuery {
     entities = entsIn;
   }
 
-  TReturn &include_store_entities(bool include = true) {
+  TReturn &include_store_entities(const bool include = true) {
     _include_store_entities = include;
     return static_cast<TReturn &>(*this);
   }
@@ -260,7 +260,7 @@ private:
                          const std::unique_ptr<Modification> &mod) const {
     RefEntities out;
     out.reserve(in.size());
-    for (auto &entity : in) {
+    for (const auto &entity : in) {
       if ((*mod)(entity)) {
         out.push_back(entity);
       }
@@ -268,7 +268,7 @@ private:
     return out;
   }
 
-  RefEntities run_query(UnderlyingOptions) const {
+  RefEntities run_query(const UnderlyingOptions) const {
     RefEntities out;
     out.reserve(entities.size());
 
@@ -280,7 +280,7 @@ private:
     }
 
     auto it = out.end();
-    for (auto &mod : mods) {
+    for (const auto &mod : mods) {
       it = std::partition(out.begin(), it, [&mod](const auto &entity) {
         return (*mod)(entity);
       });

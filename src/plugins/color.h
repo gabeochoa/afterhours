@@ -41,7 +41,7 @@ static const Color isabelline = Color{237, 230, 227, 255};
 static const Color tea_green =
     Color{166, 185, 189, 255}; // 195, 232, 189, 255};
 
-static Color darken(const Color &color, float factor = 0.8f) {
+static Color darken(const Color &color, const float factor = 0.8f) {
   Color darkerColor;
   darkerColor.r = static_cast<unsigned char>(color.r * factor);
   darkerColor.g = static_cast<unsigned char>(color.g * factor);
@@ -60,7 +60,7 @@ public:
   bool is_dynamic = false;
   FetchFn fetch_fn = nullptr;
 
-  HasColor(Color c) : color_(c) {}
+  HasColor(const Color c) : color_(c) {}
   HasColor(const FetchFn &fetch)
       : color_(fetch()), is_dynamic(true), fetch_fn(fetch) {}
 
@@ -70,7 +70,7 @@ public:
     }
     return color_;
   }
-  auto &set(Color col) {
+  auto &set(const Color col) {
     color_ = col;
     return *this;
   }
