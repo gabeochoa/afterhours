@@ -1,0 +1,382 @@
+#pragma once
+
+#include <algorithm>
+#include <bitset>
+#include <map>
+#include <set>
+#include <vector>
+
+#include "../../entity.h"
+#include "../../entity_helper.h"
+#include "../../entity_query.h"
+#include "../../logging.h"
+#include "../../system.h"
+#include "../autolayout.h"
+#include "../input_system.h"
+#include "../window_manager.h"
+#include "components.h"
+#include "context.h"
+
+namespace afterhours {
+
+namespace ui {
+
+template <typename InputAction>
+struct BeginUIContextManager : System<UIContext<InputAction>> {
+  using InputBits = UIContext<InputAction>::InputBitset;
+
+  // TODO this should live inside input_system
+  // but then it would require magic_enum as a dependency
+  InputBits inputs_as_bits(
+      const std::vector<input::ActionDone<InputAction>> &inputs) const {
+    InputBits output;
+    for (auto &input : inputs) {
+      if (input.amount_pressed <= 0.f)
+        continue;
+      output[magic_enum::enum_index<InputAction>(input.action).value()] = true;
+    }
+    return output;
+  }
+
+  virtual void for_each_with(Entity &, UIContext<InputAction> &context,
+                             float) override {
+    context.mouse_pos = input::get_mouse_position();
+    context.mouseLeftDown = input::is_mouse_button_down(0);
+
+    {
+      input::PossibleInputCollector<InputAction> inpc =
+          input::get_input_collector<InputAction>();
+      if (inpc.has_value()) {
+        context.all_actions = inputs_as_bits(inpc.inputs());
+        for (auto &actions_done : inpc.inputs_pressed()) {
+          context.last_action = actions_done.action;
+        }
+      }
+    }
+
+    context.hot_id = context.ROOT;
+  }
+};
+
+struct ClearVisibity : System<UIComponent> {
+  virtual void for_each_with(Entity &, UIComponent &cmp, float) override {
+    cmp.was_rendered_to_screen = false;
+  }
+};
+
+struct ClearUIComponentChildren : System<UIComponent> {
+  virtual void for_each_with(Entity &, UIComponent &cmp, float) override {
+    cmp.children.clear();
+  }
+};
+
+static void print_debug_autolayout_tree(Entity &entity, UIComponent &cmp,
+                                        size_t tab = 0) {
+
+  for (size_t i = 0; i < tab; i++)
+    std::cout << "  ";
+
+  std::cout << cmp.id << " : ";
+  std::cout << cmp.rect().x << ",";
+  std::cout << cmp.rect().y << ",";
+  std::cout << cmp.rect().width << ",";
+  std::cout << cmp.rect().height << " ";
+  if (entity.has<UIComponentDebug>())
+    std::cout << entity.get<UIComponentDebug>().name() << " ";
+  std::cout << std::endl;
+
+  for (EntityID child_id : cmp.children) {
+    print_debug_autolayout_tree(AutoLayout::to_ent_static(child_id),
+                                AutoLayout::to_cmp_static(child_id), tab + 1);
+  }
+}
+
+struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
+
+  std::map<EntityID, RefEntity> components;
+  window_manager::Resolution resolution;
+
+  virtual void once(float) override {
+    components.clear();
+    auto comps = EntityQuery().whereHasComponent<UIComponent>().gen();
+    for (Entity &entity : comps) {
+      components.emplace(entity.id, entity);
+    }
+
+    Entity &e = EntityHelper::get_singleton<
+        window_manager::ProvidesCurrentResolution>();
+
+    resolution =
+        e.get<window_manager::ProvidesCurrentResolution>().current_resolution;
+  }
+
+  virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
+                             float) override {
+
+    AutoLayout::autolayout(cmp, resolution, components);
+
+    // print_debug_autolayout_tree(entity, cmp);
+    // log_error("");
+  }
+};
+
+template <typename InputAction>
+struct TrackIfComponentWillBeRendered : System<> {
+
+  void set_visibility(UIComponent &cmp) {
+    // Hiding hides children
+    if (cmp.should_hide)
+      return;
+    for (EntityID child : cmp.children) {
+      set_visibility(AutoLayout::to_cmp_static(child));
+    }
+    // you might still have visible children even if you arent big (i think)
+    if (cmp.width() < 0 || cmp.height() < 0) {
+      return;
+    }
+    cmp.was_rendered_to_screen = true;
+  }
+
+  virtual void for_each_with(Entity &entity, float) override {
+    if (entity.is_missing<UIContext<InputAction>>())
+      return;
+
+    const UIContext<InputAction> &context =
+        entity.get<UIContext<InputAction>>();
+
+    for (auto &cmd : context.render_cmds) {
+      auto id = cmd.id;
+      Entity &ent = EntityHelper::getEntityForIDEnforce(id);
+      set_visibility(ent.get<UIComponent>());
+    }
+  }
+};
+
+template <typename InputAction>
+struct EndUIContextManager : System<UIContext<InputAction>> {
+
+  virtual void for_each_with(Entity &, UIContext<InputAction> &context,
+                             float) override {
+
+    if (context.focus_id == context.ROOT)
+      return;
+
+    if (context.mouseLeftDown) {
+      if (context.is_active(context.ROOT)) {
+        context.set_active(context.FAKE);
+      }
+    } else {
+      context.set_active(context.ROOT);
+    }
+    if (!context.focused_ids.contains(context.focus_id))
+      context.focus_id = context.ROOT;
+    context.focused_ids.clear();
+  }
+};
+
+// TODO i like this but for Tags, i wish
+// the user of this didnt have to add UIComponent to their for_each_with
+template <typename... Components>
+struct SystemWithUIContext : System<UIComponent, Components...> {};
+
+template <typename InputAction>
+struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
+
+  UIContext<InputAction> *context;
+
+  virtual void once(float) override {
+    this->context =
+        EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    this->include_derived_children = true;
+  }
+
+  virtual ~HandleClicks() {}
+
+  virtual void for_each_with_derived(Entity &entity, UIComponent &component,
+                                     HasClickListener &hasClickListener,
+                                     float) {
+    hasClickListener.down = false;
+
+    if (!component.was_rendered_to_screen)
+      return;
+
+    context->active_if_mouse_inside(entity.id, component.rect());
+
+    if (context->has_focus(entity.id) &&
+        context->pressed(InputAction::WidgetPress)) {
+      context->set_focus(entity.id);
+      hasClickListener.cb(entity);
+      hasClickListener.down = true;
+    }
+
+    if (context->is_mouse_click(entity.id)) {
+      context->set_focus(entity.id);
+      hasClickListener.cb(entity);
+      hasClickListener.down = true;
+    }
+  }
+};
+
+template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
+  UIContext<InputAction> *context;
+
+  virtual void once(float) override {
+    this->context =
+        EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+  }
+
+  virtual ~HandleTabbing() {}
+
+  virtual void for_each_with(Entity &entity, UIComponent &component,
+                             float) override {
+    if (entity.is_missing<HasClickListener>() &&
+        entity.is_missing<HasDragListener>())
+      return;
+    if (entity.has<SkipWhenTabbing>())
+      return;
+    if (!component.was_rendered_to_screen)
+      return;
+
+    // Valid things to tab to...
+    context->try_to_grab(entity.id);
+    context->process_tabbing(entity.id);
+  }
+};
+
+template <typename InputAction>
+struct HandleDrags : SystemWithUIContext<ui::HasDragListener> {
+  UIContext<InputAction> *context;
+
+  virtual void once(float) override {
+    this->context =
+        EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+  }
+  virtual ~HandleDrags() {}
+
+  virtual void for_each_with(Entity &entity, UIComponent &component,
+                             HasDragListener &hasDragListener, float) override {
+
+    context->active_if_mouse_inside(entity.id, component.rect());
+
+    if (context->has_focus(entity.id) &&
+        context->pressed(InputAction::WidgetPress)) {
+      context->set_focus(entity.id);
+      hasDragListener.cb(entity);
+    }
+
+    if (context->is_active(entity.id)) {
+      context->set_focus(entity.id);
+      hasDragListener.cb(entity);
+    }
+  }
+};
+
+template <typename InputAction>
+struct UpdateDropdownOptions
+    : SystemWithUIContext<HasDropdownState, HasChildrenComponent> {
+
+  UIContext<InputAction> *context;
+
+  virtual void once(float) override {
+    this->context =
+        EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+  }
+
+  UpdateDropdownOptions()
+      : SystemWithUIContext<HasDropdownState, HasChildrenComponent>() {
+    this->include_derived_children = true;
+  }
+
+  virtual void for_each_with_derived(Entity &entity, UIComponent &component,
+                                     HasDropdownState &hasDropdownState,
+                                     HasChildrenComponent &hasChildren, float) {
+    auto options = hasDropdownState.options;
+    hasDropdownState.options = hasDropdownState.fetch_options(hasDropdownState);
+
+    // detect if the options changed or if the state changed
+    // and if so, we should refresh
+    {
+      bool changed = false;
+      if (options.size() != hasDropdownState.options.size()) {
+        changed = true;
+      }
+
+      // Validate the order and which strings have changed
+      for (size_t i = 0; i < options.size(); ++i) {
+        if (i >= hasDropdownState.options.size() ||
+            options[i] != hasDropdownState.options[i]) {
+          changed = true;
+        }
+      }
+
+      // Check for new options
+      if (hasDropdownState.options.size() > options.size()) {
+        for (size_t i = options.size(); i < hasDropdownState.options.size();
+             ++i) {
+          changed = true;
+        }
+      }
+
+      if (hasDropdownState.changed_since) {
+        changed = true;
+        hasDropdownState.changed_since = false;
+      }
+
+      if (!changed)
+        return;
+    }
+
+    options = hasDropdownState.options;
+    component.children.clear();
+
+    if (hasChildren.children.size() == 0) {
+      // no children and no options :)
+      if (hasDropdownState.options.size() == 0) {
+        log_warn("You have a dropdown with no options");
+        return;
+      }
+
+      for (size_t i = 0; i < options.size(); i++) {
+        Entity &child = EntityHelper::createEntity();
+        child.addComponent<UIComponentDebug>("dropdown_option");
+        child.addComponent<UIComponent>(child.id)
+            .set_desired_width(ui::Size{
+                .dim = ui::Dim::Percent,
+                .value = 1.f,
+            })
+            .set_desired_height(ui::Size{
+                .dim = ui::Dim::Pixels,
+                .value = component.desired[Axis::Y].value,
+            })
+            .set_parent(entity.id);
+        child.addComponent<ui::HasLabel>(options[i], false);
+        child.addComponent<ui::HasClickListener>([i, &entity](Entity &) {
+          ui::HasDropdownState &hds = entity.get_with_child<HasDropdownState>();
+          hds.changed_since = true;
+          hds.on = !hds.on;
+
+          hds.last_option_clicked = i;
+          if (hds.on_option_changed)
+            hds.on_option_changed(i);
+        });
+        hasChildren.add_child(child);
+      }
+    }
+    // If we get here, we should have num_options children...
+
+    if (!hasDropdownState.on) {
+      // just draw the selected one...
+      EntityID child_id =
+          hasChildren.children[hasDropdownState.last_option_clicked];
+      component.add_child(child_id);
+    } else {
+      for (EntityID child_id : hasChildren.children) {
+        component.add_child(child_id);
+      }
+    }
+  }
+};
+
+} // namespace ui
+
+} // namespace afterhours
