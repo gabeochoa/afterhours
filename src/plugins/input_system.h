@@ -136,8 +136,9 @@ struct input : developer::Plugin {
 
   static std::string icon_for_key(const int keycode) {
     const raylib::KeyboardKey key =
-        magic_enum::enum_cast<raylib::KeyboardKey>(keycode).value_or(
-            raylib::KeyboardKey::KEY_NULL);
+        magic_enum::enum_cast<raylib::KeyboardKey>(
+            static_cast<unsigned int>(keycode))
+            .value_or(raylib::KeyboardKey::KEY_NULL);
     switch (key) {
     case raylib::KEY_TAB:
       return "keyboard_tab";
@@ -540,12 +541,13 @@ struct input : developer::Plugin {
     }
 
     std::pair<DeviceMedium, float>
-    check_single_action_pressed(const GamepadID id, const input::ValidInputs valid_inputs) {
+    check_single_action_pressed(const GamepadID id,
+                                const input::ValidInputs valid_inputs) {
       DeviceMedium medium;
       float value = 0.f;
       for (const auto &input : valid_inputs) {
         DeviceMedium temp_medium = DeviceMedium::None;
-        const float temp =             //
+        const float temp =       //
             std::visit(          //
                 util::overloaded{//
                                  [&](const int keycode) {
@@ -573,12 +575,13 @@ struct input : developer::Plugin {
     }
 
     std::pair<DeviceMedium, float>
-    check_single_action_down(const GamepadID id, const input::ValidInputs valid_inputs) {
+    check_single_action_down(const GamepadID id,
+                             const input::ValidInputs valid_inputs) {
       DeviceMedium medium;
       float value = 0.f;
       for (const auto &input : valid_inputs) {
         DeviceMedium temp_medium = DeviceMedium::None;
-        const float temp =             //
+        const float temp =       //
             std::visit(          //
                 util::overloaded{//
                                  [&](const int keycode) {
@@ -654,8 +657,9 @@ struct input : developer::Plugin {
 
   template <typename Action>
   static void add_singleton_components(
-      Entity &entity, const typename input::ProvidesInputMapping<Action>::GameMapping
-                          inital_mapping) {
+      Entity &entity,
+      const typename input::ProvidesInputMapping<Action>::GameMapping
+          inital_mapping) {
     entity.addComponent<InputCollector<Action>>();
     entity.addComponent<input::ProvidesMaxGamepadID>();
     entity.addComponent<input::ProvidesInputMapping<Action>>(inital_mapping);
