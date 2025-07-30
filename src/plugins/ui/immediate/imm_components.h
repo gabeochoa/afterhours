@@ -22,6 +22,66 @@ namespace ui {
 
 namespace imm {
 
+ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
+                  ComponentConfig config = ComponentConfig()) {
+  Entity &entity = ep_pair.first;
+  Entity &parent = ep_pair.second;
+
+  if (config.size.is_default && config.label.empty())
+    config.with_size(ComponentSize{children(), children()});
+  if (config.size.is_default && !config.label.empty())
+    config.with_size(ComponentSize{children(default_component_size.x),
+                                   children(default_component_size.y)});
+
+  config = _overwrite_defaults(ctx, config);
+  _init_component(ctx, entity, parent, config);
+
+  return {true, entity};
+}
+
+ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
+                     ComponentConfig config = ComponentConfig()) {
+  Entity &entity = ep_pair.first;
+  Entity &parent = ep_pair.second;
+
+  config = _overwrite_defaults(ctx, config, true);
+  _init_component(ctx, entity, parent, config, "button");
+
+  entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
+
+  return ElementResult{entity.get<HasClickListener>().down, entity};
+}
+
+template <typename Container>
+ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
+                           const Container &labels,
+                           ComponentConfig config = ComponentConfig()) {
+
+  Entity &entity = ep_pair.first;
+  Entity &parent = ep_pair.second;
+
+  auto max_height = config.size.y_axis;
+  config.size.y_axis = children(max_height.value);
+  _init_component(ctx, entity, parent, config, "button_group");
+  config.size.y_axis = max_height;
+
+  bool clicked = false;
+  int value = -1;
+  for (int i = 0; i < labels.size(); i++) {
+    if (button(
+            ctx, mk(entity, i),
+            ComponentConfig::inherit_from(config,
+                                          std::format("button group {}", i))
+                .with_size(config.size)
+                .with_label(i < labels.size() ? std::string(labels[i]) : ""))) {
+      clicked = true;
+      value = i;
+    }
+  }
+
+  return {clicked, entity, value};
+}
+
 ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
                        bool &value,
                        ComponentConfig config = ComponentConfig()) {
