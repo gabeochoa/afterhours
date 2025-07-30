@@ -623,8 +623,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
         });
   }
 
-  auto handle_corners =
-      modify_corners(config.rounded_corners.value(), {{0, false}, {2, false}});
+  auto handle_corners = config.rounded_corners.value();
 
   auto handle_config =
       ComponentConfig::inherit_from(config, "slider_handle")
