@@ -49,8 +49,8 @@ struct window_manager : developer::Plugin {
 
   static Resolution fetch_maximum_resolution() {
     const int monitor = raylib::GetCurrentMonitor();
-    return Resolution{.width = raylib::GetMonitorWidth(0),
-                      .height = raylib::GetMonitorHeight(0)};
+    return Resolution{.width = raylib::GetMonitorWidth(monitor),
+                      .height = raylib::GetMonitorHeight(monitor)};
   }
 
   static void set_window_size(const int width, const int height) {
