@@ -806,7 +806,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   if (!label_str.empty()) {
     auto label_corners = modify_corners(config.rounded_corners.value(),
                                         {{1, false}, {3, false}});
-    button_corners = modify_corners(button_corners, {{0, false}});
+    button_corners = modify_corners(button_corners, {{0, false}, {2, false}});
 
     auto label = div(ctx, mk(entity),
                      ComponentConfig{
