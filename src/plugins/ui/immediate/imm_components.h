@@ -541,6 +541,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   auto drop_arrow_icon = dropdownState.on ? " ^" : " V";
   auto main_button_label = std::format("{}{}", current_option, drop_arrow_icon);
   if (button(ctx, mk(entity),
+             // TODO use the new inherit_from builder
              ComponentConfig{
                  .size = size,
                  .label = main_button_label,
@@ -550,6 +551,9 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                  .skip_when_tabbing = config.skip_when_tabbing,
                  .disabled = config.disabled,
                  .hidden = config.hidden,
+                 // TODO This works great but we need a way to
+                 // close the dropdown when you leave without selecting anything
+                 //  .select_on_focus = true,
                  // debugs
                  .debug_name = "option 1",
                  .render_layer =
