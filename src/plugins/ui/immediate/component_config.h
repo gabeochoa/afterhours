@@ -136,8 +136,8 @@ struct ComponentConfig {
     font_size = font_size_;
     return *this;
   }
-  ComponentConfig &with_absolute(bool absolute = true) {
-    is_absolute = absolute;
+  ComponentConfig &with_absolute_position() {
+    is_absolute = true;
     return *this;
   }
 
