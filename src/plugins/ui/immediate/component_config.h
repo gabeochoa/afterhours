@@ -59,7 +59,9 @@ struct ComponentConfig {
   std::string debug_name = "";
   int render_layer = 0;
 
-  // Builder methods for fluent configuration
+  std::string font_name = UIComponent::UNSET_FONT;
+  float font_size = 50.f;
+
   ComponentConfig &with_label(const std::string &lbl) {
     label = lbl;
     return *this;
@@ -129,6 +131,15 @@ struct ComponentConfig {
     flex_direction = dir;
     return *this;
   }
+  ComponentConfig &with_font(const std::string &font_name_, float font_size_) {
+    font_name = font_name_;
+    font_size = font_size_;
+    return *this;
+  }
+  ComponentConfig &with_absolute(bool absolute = true) {
+    is_absolute = absolute;
+    return *this;
+  }
 
   // Static method to create inheritable config from parent
   static ComponentConfig inherit_from(const ComponentConfig &parent,
@@ -138,7 +149,8 @@ struct ComponentConfig {
         .with_disabled(parent.disabled)
         .with_hidden(parent.hidden)
         .with_skip_tabbing(parent.skip_when_tabbing)
-        .with_select_on_focus(parent.select_on_focus);
+        .with_select_on_focus(parent.select_on_focus)
+        .with_font(parent.font_name, parent.font_size);
   }
 };
 
@@ -253,6 +265,10 @@ static bool _init_component(HasUIContext auto &ctx, Entity &entity,
 
   if (!config.debug_name.empty()) {
     entity.get<UIComponentDebug>().set(config.debug_name);
+  }
+
+  if (config.font_name != UIComponent::UNSET_FONT) {
+    entity.get<UIComponent>().enable_font(config.font_name, config.font_size);
   }
 
   if (Theme::is_valid(config.color_usage)) {
