@@ -191,20 +191,13 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
 
     if (checkbox_group_row(
             ctx, mk(entity, i), i, value,
-            ComponentConfig{
-                .size = config.size,
-                .label = i < labels.size() ? std::string(labels[i]) : "",
-                .flex_direction = FlexDirection::Row,
-                // inheritables
-                .label_alignment = config.label_alignment,
-                .skip_when_tabbing = config.skip_when_tabbing,
-                .disabled = should_disable(value),
-                .hidden = config.hidden,
-                // debugs
-                .debug_name = std::format("checkbox row {}", i),
-                .render_layer = config.render_layer,
-
-            })) {
+            ComponentConfig::inherit_from(config,
+                                          std::format("checkbox row {}", i))
+                .with_size(config.size)
+                .with_label(i < labels.size() ? std::string(labels[i]) : "")
+                .with_flex_direction(FlexDirection::Row)
+                .with_disabled(should_disable(value))
+                .with_render_layer(config.render_layer))) {
       changed = true;
       if (value)
         values.set(i);
@@ -235,22 +228,12 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                            .sharp(BOTTOM_RIGHT);
 
   auto label = div(ctx, mk(entity, entity.id + 0),
-                   ComponentConfig{
-                       .size = config.size,
-                       .label = original_label,
-                       //
-                       .color_usage = Theme::Usage::Primary,
-                       //
-                       .rounded_corners = label_corners,
-                       // inheritables
-                       .label_alignment = config.label_alignment,
-                       .skip_when_tabbing = config.skip_when_tabbing,
-                       .disabled = config.disabled,
-                       .hidden = config.hidden,
-                       // debugs
-                       .debug_name = "slider_text",
-                       .render_layer = config.render_layer + 0,
-                   });
+                   ComponentConfig::inherit_from(config, "slider_text")
+                       .with_size(config.size)
+                       .with_label(original_label)
+                       .with_color_usage(Theme::Usage::Primary)
+                       .with_rounded_corners(label_corners)
+                       .with_render_layer(config.render_layer + 0));
   label.ent()
       .template get<UIComponent>()
       .set_desired_width(config.size._scale_x(0.5f).x_axis)
@@ -261,19 +244,11 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                           .sharp(BOTTOM_LEFT);
 
   auto elem = div(ctx, mk(entity, parent.id + entity.id + 0),
-                  ComponentConfig{
-                      .size = config.size,
-                      .color_usage = Theme::Usage::Secondary,
-                      .rounded_corners = elem_corners,
-                      // inheritables
-                      .label_alignment = config.label_alignment,
-                      .skip_when_tabbing = config.skip_when_tabbing,
-                      .disabled = config.disabled,
-                      .hidden = config.hidden,
-                      // debugs
-                      .debug_name = "slider_background",
-                      .render_layer = config.render_layer + 1,
-                  });
+                  ComponentConfig::inherit_from(config, "slider_background")
+                      .with_size(config.size)
+                      .with_color_usage(Theme::Usage::Secondary)
+                      .with_rounded_corners(elem_corners)
+                      .with_render_layer(config.render_layer + 1));
 
   elem.ent().template get<UIComponent>().set_desired_width(config.size.x_axis);
 
@@ -383,20 +358,13 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
 
   int child_index = 0;
 
-  if (button(ctx, mk(entity),
-             ComponentConfig{
-                 .size = ComponentSize{pixels(default_component_size.x / 4.f),
-                                       config.size.y_axis},
-                 .label = "<",
-                 // inheritables
-                 .label_alignment = config.label_alignment,
-                 .skip_when_tabbing = config.skip_when_tabbing,
-                 .disabled = config.disabled,
-                 .hidden = config.hidden,
-                 // debugs
-                 .debug_name = "left",
-                 .render_layer = (config.render_layer),
-             })) {
+  if (button(
+          ctx, mk(entity),
+          ComponentConfig::inherit_from(config, "left")
+              .with_size(ComponentSize{pixels(default_component_size.x / 4.f),
+                                       config.size.y_axis})
+              .with_label("<")
+              .with_render_layer(config.render_layer))) {
     if (option_index > 1) {
       on_option_click(entity, option_index - 1);
     } else {
@@ -405,38 +373,25 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   for (size_t i = 0; i < options.size(); i++) {
-    if (button(ctx, mk(entity, child_index + i),
-               ComponentConfig{
-                   .size = ComponentSize{pixels(default_component_size.x / 2.f),
-                                         config.size.y_axis},
-                   .label = std::string(options[i]),
-                   // inheritables
-                   .label_alignment = config.label_alignment,
-                   .skip_when_tabbing = config.skip_when_tabbing,
-                   .disabled = config.disabled,
-                   .hidden = config.hidden,
-                   // debugs
-                   .debug_name = std::format("option {}", i + 1),
-                   .render_layer = (config.render_layer + 1),
-               })) {
+    if (button(
+            ctx, mk(entity, child_index + i),
+            ComponentConfig::inherit_from(config,
+                                          std::format("option {}", i + 1))
+                .with_size(ComponentSize{pixels(default_component_size.x / 2.f),
+                                         config.size.y_axis})
+                .with_label(std::string(options[i]))
+                .with_render_layer(config.render_layer + 1))) {
       on_option_click(entity, i + 1);
     }
   }
 
-  if (button(ctx, mk(entity),
-             ComponentConfig{
-                 .size = ComponentSize{pixels(default_component_size.x / 4.f),
-                                       config.size.y_axis},
-                 .label = ">",
-                 // inheritables
-                 .label_alignment = config.label_alignment,
-                 .skip_when_tabbing = config.skip_when_tabbing,
-                 .disabled = config.disabled,
-                 .hidden = config.hidden,
-                 // debugs
-                 .debug_name = "right",
-                 .render_layer = (config.render_layer),
-             })) {
+  if (button(
+          ctx, mk(entity),
+          ComponentConfig::inherit_from(config, "right")
+              .with_size(ComponentSize{pixels(default_component_size.x / 4.f),
+                                       config.size.y_axis})
+              .with_label(">")
+              .with_render_layer(config.render_layer))) {
     if (option_index < options.size()) {
       on_option_click(entity, option_index + 1);
     } else {
@@ -503,21 +458,12 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
         RoundedCorners(button_corners).sharp(TOP_LEFT).sharp(BOTTOM_LEFT);
 
     auto label = div(ctx, mk(entity),
-                     ComponentConfig{
-                         .size = size,
-                         .label = std::string(label_str),
-                         .color_usage = Theme::Usage::Primary,
-                         .rounded_corners = label_corners,
-                         // inheritables
-                         .label_alignment = config.label_alignment,
-                         .skip_when_tabbing = config.skip_when_tabbing,
-                         .disabled = config.disabled,
-                         .hidden = config.hidden,
-                         // debugs
-                         .debug_name = "dropdown_label",
-                         .render_layer = (config.render_layer + 0),
-                         //
-                     });
+                     ComponentConfig::inherit_from(config, "dropdown_label")
+                         .with_size(size)
+                         .with_label(std::string(label_str))
+                         .with_color_usage(Theme::Usage::Primary)
+                         .with_rounded_corners(label_corners)
+                         .with_render_layer(config.render_layer + 0));
   }
 
   const auto toggle_visibility = [&](Entity &) {
@@ -541,40 +487,24 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   auto drop_arrow_icon = dropdownState.on ? " ^" : " V";
   auto main_button_label = std::format("{}{}", current_option, drop_arrow_icon);
   if (button(ctx, mk(entity),
-             // TODO use the new inherit_from builder
-             ComponentConfig{
-                 .size = size,
-                 .label = main_button_label,
-                 .rounded_corners = button_corners,
-                 // inheritables
-                 .label_alignment = config.label_alignment,
-                 .skip_when_tabbing = config.skip_when_tabbing,
-                 .disabled = config.disabled,
-                 .hidden = config.hidden,
+             ComponentConfig::inherit_from(config, "option 1")
+                 .with_size(size)
+                 .with_label(main_button_label)
+                 .with_rounded_corners(button_corners)
                  // TODO This works great but we need a way to
                  // close the dropdown when you leave without selecting anything
-                 //  .select_on_focus = true,
-                 // debugs
-                 .debug_name = "option 1",
-                 .render_layer =
-                     (config.render_layer + (dropdownState.on ? 0 : 0)),
-             })) {
+                 //  .with_select_on_focus(true)
+                 .with_render_layer(config.render_layer +
+                                    (dropdownState.on ? 0 : 0)))) {
 
     dropdownState.on ? on_option_click(entity, 0) : toggle_visibility(entity);
   }
 
-  if (auto result =
-          button_group(ctx, mk(entity), options,
-                       ComponentConfig{
-                           // inheritables
-                           .label_alignment = config.label_alignment,
-                           .skip_when_tabbing = config.skip_when_tabbing,
-                           .disabled = config.disabled,
-                           .hidden = config.hidden || !dropdownState.on,
-                           // debugs
-                           .debug_name = std::format("dropdown button group"),
-                           .render_layer = config.render_layer + 1,
-                       });
+  if (auto result = button_group(
+          ctx, mk(entity), options,
+          ComponentConfig::inherit_from(config, "dropdown button group")
+              .with_hidden(config.hidden || !dropdownState.on)
+              .with_render_layer(config.render_layer + 1));
       result) {
     on_option_click(entity, result.template as<int>());
   }
