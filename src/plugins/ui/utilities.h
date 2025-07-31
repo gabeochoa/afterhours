@@ -128,6 +128,8 @@ static void register_after_ui_updates(SystemManager &sm) {
     sm.register_update_system(
         std::make_unique<ui::HandleClicks<InputAction>>());
     sm.register_update_system(std::make_unique<ui::HandleDrags<InputAction>>());
+    sm.register_update_system(
+        std::make_unique<ui::HandleSelectOnFocus<InputAction>>());
   }
   sm.register_update_system(
       std::make_unique<ui::EndUIContextManager<InputAction>>());

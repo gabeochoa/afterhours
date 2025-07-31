@@ -70,6 +70,7 @@ struct HasSliderState : BaseComponent {
 
 struct ShouldHide : BaseComponent {};
 struct SkipWhenTabbing : BaseComponent {};
+struct SelectOnFocus : BaseComponent {};
 
 struct HasChildrenComponent : BaseComponent {
   std::vector<EntityID> children;

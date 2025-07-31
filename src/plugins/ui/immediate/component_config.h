@@ -53,6 +53,7 @@ struct ComponentConfig {
   bool skip_when_tabbing = false;
   bool disabled = false;
   bool hidden = false;
+  bool select_on_focus = false;
 
   // debugs
   std::string debug_name = "";
@@ -116,6 +117,10 @@ struct ComponentConfig {
     skip_when_tabbing = skip;
     return *this;
   }
+  ComponentConfig &with_select_on_focus(bool select) {
+    select_on_focus = select;
+    return *this;
+  }
   ComponentConfig &with_flex_direction(FlexDirection dir) {
     flex_direction = dir;
     return *this;
@@ -128,7 +133,8 @@ struct ComponentConfig {
         .with_alignment(parent.label_alignment)
         .with_disabled(parent.disabled)
         .with_hidden(parent.hidden)
-        .with_skip_tabbing(parent.skip_when_tabbing);
+        .with_skip_tabbing(parent.skip_when_tabbing)
+        .with_select_on_focus(parent.select_on_focus);
   }
 };
 
@@ -196,6 +202,9 @@ static bool _init_component(HasUIContext auto &ctx, Entity &entity,
 
     if (config.skip_when_tabbing)
       entity.addComponent<SkipWhenTabbing>();
+
+    if (config.select_on_focus)
+      entity.addComponent<SelectOnFocus>();
 
     if (config.texture_config.has_value()) {
       const TextureConfig &conf = config.texture_config.value();

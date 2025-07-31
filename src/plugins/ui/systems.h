@@ -274,6 +274,46 @@ struct HandleDrags : SystemWithUIContext<ui::HasDragListener> {
 };
 
 template <typename InputAction>
+struct HandleSelectOnFocus
+    : SystemWithUIContext<ui::SelectOnFocus, ui::HasClickListener> {
+  UIContext<InputAction> *context;
+  std::set<EntityID> last_focused_ids;
+
+  virtual void once(float) override {
+    this->context =
+        EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    this->include_derived_children = true;
+  }
+
+  virtual ~HandleSelectOnFocus() {}
+
+  virtual void for_each_with_derived(Entity &entity, UIComponent &component,
+                                     SelectOnFocus &selectOnFocus,
+                                     HasClickListener &hasClickListener,
+                                     float) {
+    if (!component.was_rendered_to_screen)
+      return;
+
+    // Check if this entity just gained focus
+    bool currently_focused = context->has_focus(entity.id);
+    bool was_focused = last_focused_ids.contains(entity.id);
+
+    if (currently_focused && !was_focused) {
+      // Component just gained focus, trigger the click
+      hasClickListener.cb(entity);
+      hasClickListener.down = true;
+    }
+
+    // Update our tracking
+    if (currently_focused) {
+      last_focused_ids.insert(entity.id);
+    } else {
+      last_focused_ids.erase(entity.id);
+    }
+  }
+};
+
+template <typename InputAction>
 struct UpdateDropdownOptions
     : SystemWithUIContext<HasDropdownState, HasChildrenComponent> {
 
