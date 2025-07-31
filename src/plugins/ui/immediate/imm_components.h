@@ -83,6 +83,7 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
             ctx, mk(entity, i),
             ComponentConfig::inherit_from(config,
                                           std::format("button group {}", i))
+                .with_size(config.size)
                 .with_label(i < labels.size() ? std::string(labels[i]) : ""))) {
       clicked = true;
       value = i;
