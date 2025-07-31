@@ -97,6 +97,10 @@ struct ComponentConfig {
     rounded_corners = corners.get();
     return *this;
   }
+  ComponentConfig &disable_rounded_corners() {
+    rounded_corners = std::bitset<4>().reset();
+    return *this;
+  }
   ComponentConfig &with_debug_name(const std::string &name) {
     debug_name = name;
     return *this;
