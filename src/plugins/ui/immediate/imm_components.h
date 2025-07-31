@@ -65,6 +65,8 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
   _init_component(ctx, entity, parent, config, "button_group");
   config.size.y_axis = max_height;
 
+  entity.get<UIComponent>().flex_direction = config.flex_direction;
+
   bool clicked = false;
   int value = -1;
   for (int i = 0; i < labels.size(); i++) {
