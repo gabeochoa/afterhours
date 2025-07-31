@@ -63,7 +63,7 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
   auto max_height = config.size.y_axis;
   config.size.y_axis = children(max_height.value);
   auto max_width = config.size.x_axis;
-  config.size.x_axis = pixels(max_width.value / labels.size());
+  config.size.x_axis = children(max_width.value);
 
   _init_component(ctx, entity, parent, config, "button_group");
 
