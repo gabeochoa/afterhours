@@ -62,8 +62,17 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
 
   auto max_height = config.size.y_axis;
   config.size.y_axis = children(max_height.value);
+  auto max_width = config.size.x_axis;
+  config.size.x_axis = pixels(max_width.value / labels.size());
+
   _init_component(ctx, entity, parent, config, "button_group");
-  config.size.y_axis = max_height;
+
+  config.size.x_axis = config.flex_direction == FlexDirection::Row
+                           ? pixels(max_width.value / labels.size())
+                           : max_width;
+  config.size.y_axis = config.flex_direction == FlexDirection::Row
+                           ? max_height
+                           : children(max_height.value);
 
   entity.get<UIComponent>().flex_direction = config.flex_direction;
 
@@ -74,7 +83,6 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
             ctx, mk(entity, i),
             ComponentConfig::inherit_from(config,
                                           std::format("button group {}", i))
-                .with_size(config.size)
                 .with_label(i < labels.size() ? std::string(labels[i]) : ""))) {
       clicked = true;
       value = i;
