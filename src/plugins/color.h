@@ -50,6 +50,15 @@ static Color darken(const Color &color, const float factor = 0.8f) {
   return darkerColor;
 }
 
+static Color increase(const Color &color, const int factor = 10) {
+  Color darkerColor;
+  darkerColor.r = static_cast<unsigned char>(color.r + factor);
+  darkerColor.g = static_cast<unsigned char>(color.g + factor);
+  darkerColor.b = static_cast<unsigned char>(color.b + factor);
+  darkerColor.a = color.a;
+  return darkerColor;
+}
+
 static Color set_opacity(const Color &color, const unsigned char alpha) {
   Color transparentColor = color;
   transparentColor.a = alpha;
