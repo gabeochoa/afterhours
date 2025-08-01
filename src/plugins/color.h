@@ -49,6 +49,19 @@ static Color darken(const Color &color, const float factor = 0.8f) {
   darkerColor.a = color.a;
   return darkerColor;
 }
+
+static Color set_opacity(const Color &color, const unsigned char alpha) {
+  Color transparentColor = color;
+  transparentColor.a = alpha;
+  return transparentColor;
+}
+
+static Color opacity_pct(const Color &color, const float percentage) {
+  Color transparentColor = color;
+  transparentColor.a =
+      static_cast<unsigned char>(255 * std::clamp(percentage, 0.0f, 1.0f));
+  return transparentColor;
+}
 } // namespace colors
 
 struct HasColor : BaseComponent {
