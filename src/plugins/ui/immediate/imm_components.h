@@ -124,6 +124,8 @@ ElementResult checkbox_no_label(HasUIContext auto &ctx, EntityParent ep_pair,
   return result;
 }
 
+// TODO the focus ring is not correct because the actual clickable area is the
+// checkbox_no_label element, not the checkbox element.
 ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
                        bool &value,
                        ComponentConfig config = ComponentConfig()) {
