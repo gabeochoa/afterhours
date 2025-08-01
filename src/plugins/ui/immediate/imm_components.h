@@ -147,18 +147,27 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_size(config.size)
             .with_label(label);
 
+    // TODO - if the user wants to mess with the corners, how can we merge these
     if (config.color_usage == Theme::Usage::Default)
-      label_config.with_color_usage(Theme::Usage::Primary);
+      label_config.with_color_usage(Theme::Usage::Primary)
+          .with_rounded_corners(
+              RoundedCorners().sharp(TOP_RIGHT).sharp(BOTTOM_RIGHT));
 
     div(ctx, mk(entity), label_config);
   }
 
+  auto checkbox_config =
+      ComponentConfig::inherit_from(
+          config, std::format("checkbox indiv from {}", config.debug_name))
+          .with_size(config.size);
+
+  if (config.color_usage == Theme::Usage::Default)
+    checkbox_config.with_color_usage(Theme::Usage::Primary)
+        .with_rounded_corners(
+            RoundedCorners().sharp(TOP_LEFT).sharp(BOTTOM_LEFT));
+
   bool changed = false;
-  if (checkbox_no_label(
-          ctx, mk(entity), value,
-          ComponentConfig::inherit_from(
-              config, std::format("checkbox indiv from {}", config.debug_name))
-              .with_size(config.size))) {
+  if (checkbox_no_label(ctx, mk(entity), value, checkbox_config)) {
     changed = true;
   }
 
