@@ -141,11 +141,16 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   if (!label.empty()) {
     config.size = config.size._scale_x(0.5f);
 
-    div(ctx, mk(entity),
+    auto label_config =
         ComponentConfig::inherit_from(
             config, std::format("checkbox label {}", config.debug_name))
             .with_size(config.size)
-            .with_label(label));
+            .with_label(label);
+
+    if (config.color_usage == Theme::Usage::Default)
+      label_config.with_color_usage(Theme::Usage::Primary);
+
+    div(ctx, mk(entity), label_config);
   }
 
   bool changed = false;
@@ -196,6 +201,7 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
                                           std::format("checkbox row {}", i))
                 .with_size(config.size)
                 .with_label(i < labels.size() ? std::string(labels[i]) : "")
+                .with_color_usage(Theme::Usage::None)
                 .with_flex_direction(FlexDirection::Row)
                 .with_disabled(should_disable(value))
                 .with_render_layer(config.render_layer))) {

@@ -20,6 +20,7 @@ struct Theme {
     //
     Custom,
     Default,
+    None,
   };
 
   static bool is_valid(Usage cu) {
@@ -34,6 +35,7 @@ struct Theme {
       return true;
     case Usage::Custom:
     case Usage::Default:
+    case Usage::None:
       return false;
     };
     return false;
@@ -90,6 +92,11 @@ struct Theme {
       break;
     case Usage::Custom:
       log_warn("You should not be fetching 'custom' color usage from theme, "
+               "UI library should handle this??");
+      color = primary;
+      break;
+    case Usage::None:
+      log_warn("You should not be fetching 'none' color usage from theme, "
                "UI library should handle this??");
       color = primary;
       break;
