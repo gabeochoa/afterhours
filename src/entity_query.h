@@ -66,7 +66,9 @@ struct EntityQuery {
     }
   };
   TReturn &whereID(const int id) { return add_mod(new WhereID(id)); }
-  TReturn &whereNotID(const int id) { return add_mod(new Not(new WhereID(id))); }
+  TReturn &whereNotID(const int id) {
+    return add_mod(new Not(new WhereID(id)));
+  }
 
   struct WhereMarkedForCleanup : Modification {
     bool operator()(const Entity &entity) const override {
@@ -159,7 +161,8 @@ struct EntityQuery {
     return ents;
   }
 
-  [[nodiscard]] RefEntities gen_with_options(const UnderlyingOptions options) const {
+  [[nodiscard]] RefEntities
+  gen_with_options(const UnderlyingOptions options) const {
     if (!ran_query)
       return values_ignore_cache(options);
     return ents;
@@ -205,6 +208,12 @@ struct EntityQuery {
     std::transform(results.begin(), results.end(), std::back_inserter(ids),
                    [](const Entity &ent) -> int { return ent.id; });
     return ids;
+  }
+
+  [[nodiscard]] OptEntity gen_random() const {
+    const auto results = gen();
+    size_t random_index = rand() % results.size();
+    return results[random_index];
   }
 
   // TODO this allocates (and deallocates) the entire list of entities
