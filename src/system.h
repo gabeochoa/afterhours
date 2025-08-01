@@ -33,6 +33,7 @@ public:
   virtual void for_each(const Entity &, const float) const = 0;
 
   bool include_derived_children = false;
+  bool ignore_temp_entities = false;
 
 #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
   virtual void for_each_derived(Entity &, const float) = 0;

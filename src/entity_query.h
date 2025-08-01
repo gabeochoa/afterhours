@@ -222,18 +222,35 @@ struct EntityQuery {
   // filter and then copy at the end or something
 
   // TODO Created entities are not available in queries until the next system
-  // runs is this a problem?
-  // (for now adding force_merge)
-  EntityQuery(const bool force_merge = false)
+  // runs is this a problem?  (for now adding force_merge)
+  struct QueryOptions {
+    bool force_merge = false;
+    bool ignore_temp_warning = false;
+  };
+
+  EntityQuery(const QueryOptions &options = {})
       : entities(EntityHelper::get_entities()) {
     const size_t size = EntityHelper::get().temp_entities.size();
     if (size == 0)
       return;
 
-    if (force_merge) {
+    if (options.force_merge) {
       EntityHelper::merge_entity_arrays();
       entities = EntityHelper::get_entities();
-    } else {
+    } else if (!options.ignore_temp_warning) {
+      // Print details about the first 10 entities in temp for debugging
+      const auto &temp_entities = EntityHelper::get().temp_entities;
+      const size_t num_to_print = std::min(size_t(10), temp_entities.size());
+
+      for (size_t i = 0; i < num_to_print; ++i) {
+        const auto &entity = temp_entities[i];
+        if (entity) {
+          log_warn("  temp entity {}: id={}, cleanup={}", i, entity->id,
+                   entity->cleanup);
+        } else {
+          log_warn("  temp entity {}: null", i);
+        }
+      }
       log_error("query will miss {} ents in temp", size);
     }
   }
