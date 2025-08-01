@@ -93,9 +93,9 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
   return {clicked, entity, value};
 }
 
-ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
-                       bool &value,
-                       ComponentConfig config = ComponentConfig()) {
+ElementResult checkbox_no_label(HasUIContext auto &ctx, EntityParent ep_pair,
+                                bool &value,
+                                ComponentConfig config = ComponentConfig()) {
 
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
@@ -124,9 +124,9 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   return result;
 }
 
-ElementResult checkbox_group_row(HasUIContext auto &ctx, EntityParent ep_pair,
-                                 int index, bool &value,
-                                 ComponentConfig config = ComponentConfig()) {
+ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
+                       bool &value,
+                       ComponentConfig config = ComponentConfig()) {
 
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
@@ -142,17 +142,18 @@ ElementResult checkbox_group_row(HasUIContext auto &ctx, EntityParent ep_pair,
     config.size = config.size._scale_x(0.5f);
 
     div(ctx, mk(entity),
-        ComponentConfig::inherit_from(config,
-                                      std::format("checkbox label {}", index))
+        ComponentConfig::inherit_from(
+            config, std::format("checkbox label {}", config.debug_name))
             .with_size(config.size)
             .with_label(label));
   }
 
   bool changed = false;
-  if (checkbox(ctx, mk(entity), value,
-               ComponentConfig::inherit_from(config,
-                                             std::format("checkbox {}", index))
-                   .with_size(config.size))) {
+  if (checkbox_no_label(
+          ctx, mk(entity), value,
+          ComponentConfig::inherit_from(
+              config, std::format("checkbox indiv from {}", config.debug_name))
+              .with_size(config.size))) {
     changed = true;
   }
 
@@ -189,8 +190,8 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
   for (int i = 0; i < values.size(); i++) {
     bool value = values.test(i);
 
-    if (checkbox_group_row(
-            ctx, mk(entity, i), i, value,
+    if (checkbox(
+            ctx, mk(entity, i), value,
             ComponentConfig::inherit_from(config,
                                           std::format("checkbox row {}", i))
                 .with_size(config.size)
