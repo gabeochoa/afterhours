@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <sstream>
 
 #include "../base_component.h"
