@@ -11,6 +11,7 @@
 #include "../../entity_helper.h"
 #include "../../logging.h"
 #include "../input_system.h"
+
 #include "theme.h"
 
 namespace afterhours {
@@ -50,6 +51,8 @@ template <typename InputAction> struct UIContext : BaseComponent {
   InputBitset all_actions;
 
   Theme theme;
+  // TODO: Add styling defaults back when circular dependency is resolved
+  // imm::UIStylingDefaults styling_defaults;
 
   [[nodiscard]] bool is_hot(EntityID id) const { return hot_id == id; };
   [[nodiscard]] bool is_active(EntityID id) const { return active_id == id; };

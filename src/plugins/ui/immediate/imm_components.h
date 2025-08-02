@@ -33,7 +33,7 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
     config.with_size(ComponentSize{children(default_component_size.x),
                                    children(default_component_size.y)});
 
-  config = _overwrite_defaults(ctx, config);
+  config = _overwrite_defaults(ctx, config, ComponentType::Div);
   _init_component(ctx, entity, parent, config);
 
   return {true, entity};
@@ -44,7 +44,7 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &entity = ep_pair.first;
   Entity &parent = ep_pair.second;
 
-  config = _overwrite_defaults(ctx, config, true);
+  config = _overwrite_defaults(ctx, config, ComponentType::Button, true);
   _init_component(ctx, entity, parent, config, "button");
 
   entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
@@ -105,7 +105,8 @@ ElementResult checkbox_no_label(HasUIContext auto &ctx, EntityParent ep_pair,
 
   config.label = value ? "X" : " ";
 
-  config = _overwrite_defaults(ctx, config, true);
+  config =
+      _overwrite_defaults(ctx, config, ComponentType::CheckboxNoLabel, true);
   _init_component(ctx, entity, parent, config, "checkbox");
 
   if (config.disabled) {
@@ -238,7 +239,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   std::string original_label = config.label;
   config.label = "";
 
-  config = _overwrite_defaults(ctx, config, true);
+  config = _overwrite_defaults(ctx, config, ComponentType::Slider, true);
   _init_component(ctx, entity, parent, config, "slider");
 
   auto label_corners = RoundedCorners(config.rounded_corners.value())
@@ -458,7 +459,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   std::string label_str = config.label;
   config.label = "";
 
-  config = _overwrite_defaults(ctx, config);
+  config = _overwrite_defaults(ctx, config, ComponentType::Dropdown);
   _init_component(ctx, entity, parent, config, "dropdown");
 
   auto size = ComponentSize{

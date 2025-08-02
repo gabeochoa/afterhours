@@ -154,6 +154,153 @@ struct ComponentConfig {
   }
 };
 
+struct ComponentConfigBuilder : public ComponentConfig {
+  ComponentConfigBuilder() = default;
+  ComponentConfigBuilder(const ComponentConfig &config)
+      : ComponentConfig(config) {}
+
+  ComponentConfig build() const { return *this; }
+};
+
+// Component type enum for styling defaults
+enum struct ComponentType {
+  Button,
+  ButtonGroup,
+  Div,
+  Slider,
+  Checkbox,
+  CheckboxNoLabel,
+  Dropdown,
+  // Add more component types as needed
+};
+
+// Comprehensive styling defaults with real ComponentConfig support
+struct UIStylingDefaults {
+  std::map<ComponentType, ComponentConfig> component_configs;
+
+  UIStylingDefaults() = default;
+
+  // Singleton pattern
+  static UIStylingDefaults &get() {
+    static UIStylingDefaults instance;
+    return instance;
+  }
+
+  // Delete copy constructor and assignment operator
+  UIStylingDefaults(const UIStylingDefaults &) = delete;
+  UIStylingDefaults &operator=(const UIStylingDefaults &) = delete;
+
+  // Set default styling with real ComponentConfig
+  UIStylingDefaults &set_component_config(ComponentType component_type,
+                                          const ComponentConfig &config) {
+    component_configs[component_type] = config;
+    return *this;
+  }
+
+  // Get real ComponentConfig for a component type
+  std::optional<ComponentConfig>
+  get_component_config(ComponentType component_type) const {
+    auto it = component_configs.find(component_type);
+    if (it != component_configs.end()) {
+      return it->second;
+    }
+    return std::nullopt;
+  }
+
+  // Check if defaults exist for a component type
+  bool has_component_defaults(ComponentType component_type) const {
+    return component_configs.find(component_type) != component_configs.end();
+  }
+
+  // Merge component defaults with a config
+  ComponentConfig merge_with_defaults(ComponentType component_type,
+                                      const ComponentConfig &config) const {
+    auto defaults = get_component_config(component_type);
+    if (!defaults.has_value()) {
+      return config;
+    }
+
+    // Start with the defaults
+    ComponentConfig merged = defaults.value();
+
+    // Override with user-specified values (only if user actually specified
+    // something)
+    if (config.padding.top.value > 0 || config.padding.left.value > 0 ||
+        config.padding.bottom.value > 0 || config.padding.right.value > 0) {
+      merged.padding = config.padding;
+    }
+
+    if (config.margin.top.value > 0 || config.margin.left.value > 0 ||
+        config.margin.bottom.value > 0 || config.margin.right.value > 0) {
+      merged.margin = config.margin;
+    }
+
+    if (!config.size.is_default) {
+      merged.size = config.size;
+    }
+
+    if (config.color_usage != Theme::Usage::Default) {
+      merged.color_usage = config.color_usage;
+      merged.custom_color = config.custom_color;
+    }
+
+    if (config.label_alignment != TextAlignment::None) {
+      merged.label_alignment = config.label_alignment;
+    }
+
+    if (!config.label.empty()) {
+      merged.label = config.label;
+    }
+
+    if (config.rounded_corners.has_value()) {
+      merged.rounded_corners = config.rounded_corners;
+    }
+
+    if (config.disabled) {
+      merged.disabled = config.disabled;
+    }
+
+    if (config.hidden) {
+      merged.hidden = config.hidden;
+    }
+
+    if (config.skip_when_tabbing) {
+      merged.skip_when_tabbing = config.skip_when_tabbing;
+    }
+
+    if (config.select_on_focus) {
+      merged.select_on_focus = config.select_on_focus;
+    }
+
+    if (config.font_name != UIComponent::UNSET_FONT) {
+      merged.font_name = config.font_name;
+      merged.font_size = config.font_size;
+    }
+
+    if (config.texture_config.has_value()) {
+      merged.texture_config = config.texture_config;
+    }
+
+    if (config.is_absolute) {
+      merged.is_absolute = config.is_absolute;
+    }
+
+    if (config.flex_direction != FlexDirection::Column) {
+      merged.flex_direction = config.flex_direction;
+    }
+
+    if (config.render_layer != 0) {
+      merged.render_layer = config.render_layer;
+    }
+
+    if (!config.debug_name.empty()) {
+      merged.debug_name = config.debug_name;
+    }
+
+    return merged;
+  }
+};
+
 template <typename T>
 concept HasUIContext = requires(T a) {
   {
@@ -163,7 +310,14 @@ concept HasUIContext = requires(T a) {
 
 ComponentConfig _overwrite_defaults(HasUIContext auto &ctx,
                                     ComponentConfig config,
+                                    ComponentType component_type,
                                     bool enable_color = false) {
+  auto &styling_defaults = UIStylingDefaults::get();
+
+  if (styling_defaults.has_component_defaults(component_type)) {
+    config = styling_defaults.merge_with_defaults(component_type, config);
+  }
+
   if (enable_color && config.color_usage == Theme::Usage::Default)
     config.with_color_usage(Theme::Usage::Primary);
 
