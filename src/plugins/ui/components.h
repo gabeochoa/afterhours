@@ -114,6 +114,23 @@ struct HasDropdownState : ui::HasCheckboxState {
       const std::function<void(size_t)> opt_changed = nullptr)
       : HasDropdownState(Options(opts.begin(), opts.end()), fetch_opts,
                          opt_changed) {}
+
+  size_t current_index() const { return last_option_clicked; }
+  void set_current_index(size_t index) { last_option_clicked = index; }
+};
+
+struct HasNavigationBarState : ui::HasDropdownState {
+  HasNavigationBarState(const Options &opts,
+                        const std::function<void(size_t)> opt_changed = nullptr)
+      : HasDropdownState(opts, nullptr, opt_changed) {}
+
+  template <size_t N>
+  HasNavigationBarState(const std::array<std::string_view, N> &opts,
+                        const std::function<void(size_t)> opt_changed = nullptr)
+      : HasNavigationBarState(Options(opts.begin(), opts.end()), opt_changed) {}
+
+  size_t current_index() const { return last_option_clicked; }
+  void set_current_index(size_t index) { last_option_clicked = index; }
 };
 
 struct HasRoundedCorners : BaseComponent {

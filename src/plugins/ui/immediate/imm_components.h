@@ -533,6 +533,89 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                        dropdownState.last_option_clicked};
 }
 
+template <typename Container>
+ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
+                             const Container &options, size_t &option_index,
+                             ComponentConfig config = ComponentConfig()) {
+  Entity &entity = ep_pair.first;
+  Entity &parent = ep_pair.second;
+
+  if (options.empty())
+    return {false, entity};
+
+  HasNavigationBarState &navState = _init_state<HasNavigationBarState>(
+      entity,
+      [&](auto &hnbs) {
+        hnbs.set_current_index(option_index);
+        hnbs.changed_since = false;
+      },
+      options, nullptr);
+
+  config.size = ComponentSize(children(default_component_size.x),
+                              pixels(default_component_size.y));
+
+  config = _overwrite_defaults(ctx, config, ComponentType::Div);
+  _init_component(ctx, entity, parent, config, "navigation_bar");
+
+  entity.get<UIComponent>().flex_direction = FlexDirection::Row;
+
+  bool clicked = false;
+  size_t new_index = navState.current_index();
+
+  auto left_arrow_config =
+      ComponentConfig::inherit_from(config, "left_arrow")
+          .with_size(ComponentSize{pixels(40), pixels(40)})
+          .with_label("<")
+          .with_color_usage(Theme::Usage::Accent)
+          .with_rounded_corners(
+              RoundedCorners().sharp(TOP_RIGHT).sharp(BOTTOM_RIGHT));
+
+  auto right_arrow_config =
+      ComponentConfig::inherit_from(config, "right_arrow")
+          .with_size(ComponentSize{pixels(40), pixels(40)})
+          .with_label(">")
+          .with_color_usage(Theme::Usage::Accent)
+          .with_rounded_corners(
+              RoundedCorners().sharp(TOP_LEFT).sharp(BOTTOM_LEFT));
+
+  auto center_label_config =
+      ComponentConfig::inherit_from(config, "center_label")
+          .with_size(ComponentSize{pixels(220), pixels(40)})
+          .with_label(std::string(options[navState.current_index()]))
+          .with_color_usage(Theme::Usage::Primary)
+          .with_rounded_corners(RoundedCorners()
+                                    .sharp(TOP_LEFT)
+                                    .sharp(TOP_RIGHT)
+                                    .sharp(BOTTOM_LEFT)
+                                    .sharp(BOTTOM_RIGHT))
+          .with_skip_tabbing(true);
+
+  if (button(ctx, mk(entity), left_arrow_config)) {
+    clicked = true;
+    new_index = (navState.current_index() == 0) ? options.size() - 1
+                                                : navState.current_index() - 1;
+  }
+
+  div(ctx, mk(entity), center_label_config);
+
+  if (button(ctx, mk(entity), right_arrow_config)) {
+    clicked = true;
+    new_index = (navState.current_index() + 1) % options.size();
+  }
+
+  if (clicked) {
+    navState.set_current_index(new_index);
+    navState.changed_since = true;
+    if (navState.on_option_changed) {
+      navState.on_option_changed(new_index);
+    }
+  }
+
+  option_index = navState.current_index();
+  return ElementResult{navState.changed_since, entity,
+                       navState.current_index()};
+}
+
 } // namespace imm
 
 } // namespace ui
