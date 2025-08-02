@@ -33,7 +33,22 @@ mk(Entity &parent, EntityID otherID = -1,
   if (existing_ui_elements.contains(hash)) {
     auto entityID = existing_ui_elements.at(hash);
     log_trace("Reusing element {} for {}", hash, entityID);
-    return {EntityHelper::getEntityForIDEnforce(entityID), parent};
+
+    // Add better error handling for entity ID conflicts
+    try {
+      return {EntityHelper::getEntityForIDEnforce(entityID), parent};
+    } catch (const std::bad_optional_access &e) {
+      log_error(
+          "Entity ID conflict detected! This usually happens when mk() is "
+          "called multiple times "
+          "from the same source location without proper index management. "
+          "Location: {}:{}:{}, Function: {}. "
+          "Consider using mk(parent, index) with unique indices or "
+          "mk_next(parent) for auto-incrementing.",
+          location.file_name(), location.line(), location.column(),
+          location.function_name());
+      throw;
+    }
   }
 
   Entity &entity = EntityHelper::createEntity();
