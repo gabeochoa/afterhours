@@ -5,6 +5,8 @@
 #include <vector>
 
 #include "type_name.h"
+#include "logging.h"
+
 namespace afterhours {
 
 struct BaseComponent;
@@ -21,11 +23,15 @@ namespace components {
 namespace internal {
 inline ComponentID get_unique_id() noexcept {
   static ComponentID lastID{0};
-  // TODO this doesnt work for some reason
-  // if (lastID + 1 > max_num_components)
-  // log_error(
-  // "You are trying to add a new component but you have used up all "
-  // "the space allocated, updated max_num");
+  if (lastID >= max_num_components) {
+    log_error(
+      "You are trying to add a new component but you have used up all "
+      "the space allocated (max: %zu), increase AFTER_HOURS_MAX_COMPONENTS", 
+      max_num_components);
+    // Return the last valid ID to prevent array bounds violations
+    // This creates duplicate IDs but prevents undefined behavior
+    return max_num_components - 1;
+  }
   return lastID++;
 }
 

@@ -1,15 +1,50 @@
 
 #pragma once
 
+#include <iostream>
+#include <cstdarg>
+
 #if !defined(AFTER_HOURS_REPLACE_LOGGING)
-// TODO eventually implement these
 // TODO move to a log.h file and include them in the other parts of the library
-inline void log_trace(...) {}
-inline void log_info(...) {}
-inline void log_warn(...) {}
-inline void log_error(...) {}
-inline void log_clean(...) {}
-inline void log_once_per(...) {}
+
+inline void log_trace(...) {
+    // For now, trace logging is disabled
+}
+
+inline void log_info(const char* format, ...) {
+    std::cout << "[INFO] ";
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+    std::cout << std::endl;
+}
+
+inline void log_warn(const char* format, ...) {
+    std::cout << "[WARN] ";
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+    std::cout << std::endl;
+}
+
+inline void log_error(const char* format, ...) {
+    std::cerr << "[ERROR] ";
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    std::cerr << std::endl;
+}
+
+inline void log_clean(...) {
+    // For now, clean logging is disabled
+}
+
+inline void log_once_per(...) {
+    // For now, once per logging is disabled
+}
 #endif
 
 enum {
