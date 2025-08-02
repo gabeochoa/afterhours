@@ -61,6 +61,7 @@ struct ComponentConfig {
 
   std::string font_name = UIComponent::UNSET_FONT;
   float font_size = 50.f;
+  bool is_internal = false;
 
   ComponentConfig &with_label(const std::string &lbl) {
     label = lbl;
@@ -140,6 +141,10 @@ struct ComponentConfig {
     is_absolute = true;
     return *this;
   }
+  ComponentConfig &with_internal(bool internal = true) {
+    is_internal = internal;
+    return *this;
+  }
 
   // Static method to create inheritable config from parent
   static ComponentConfig inherit_from(const ComponentConfig &parent,
@@ -150,7 +155,8 @@ struct ComponentConfig {
         .with_hidden(parent.hidden)
         .with_skip_tabbing(parent.skip_when_tabbing)
         .with_select_on_focus(parent.select_on_focus)
-        .with_font(parent.font_name, parent.font_size);
+        .with_font(parent.font_name, parent.font_size)
+        .with_internal(parent.is_internal);
   }
 };
 
@@ -314,9 +320,17 @@ ComponentConfig _overwrite_defaults(HasUIContext auto &ctx,
                                     bool enable_color = false) {
   auto &styling_defaults = UIStylingDefaults::get();
 
-  if (styling_defaults.has_component_defaults(component_type)) {
+  // Apply user styling defaults if available
+  if (
+      // Skip if internal
+      !config.is_internal &&
+      styling_defaults.has_component_defaults(component_type)) {
     config = styling_defaults.merge_with_defaults(component_type, config);
   }
+
+  // Mark as internal after applying defaults (library components should be
+  // internal)
+  config.with_internal(true);
 
   if (enable_color && config.color_usage == Theme::Usage::Default)
     config.with_color_usage(Theme::Usage::Primary);
