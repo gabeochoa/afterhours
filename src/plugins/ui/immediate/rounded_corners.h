@@ -30,7 +30,6 @@ public:
   RoundedCorners() : corners(std::bitset<4>().set()) {} // default all rounded
   RoundedCorners(const std::bitset<4> &base) : corners(base) {}
 
-  // Fluent API for modifying corners
   RoundedCorners &top_left(CornerState state) {
     corners.set(TOP_LEFT, state);
     return *this;
@@ -51,7 +50,6 @@ public:
     return *this;
   }
 
-  // Alternative shorter API
   RoundedCorners &round(CornerPosition corner) {
     corners.set(corner, ROUND);
     return *this;
@@ -59,6 +57,80 @@ public:
 
   RoundedCorners &sharp(CornerPosition corner) {
     corners.set(corner, SHARP);
+    return *this;
+  }
+
+  RoundedCorners &all_round() {
+    corners.set();
+    return *this;
+  }
+
+  RoundedCorners &all_sharp() {
+    corners.reset();
+    return *this;
+  }
+
+  RoundedCorners &left_round() {
+    corners.set(TOP_RIGHT, SHARP);
+    corners.set(BOTTOM_RIGHT, SHARP);
+    corners.set(TOP_LEFT, ROUND);
+    corners.set(BOTTOM_LEFT, ROUND);
+    return *this;
+  }
+
+  RoundedCorners &right_round() {
+    corners.set(TOP_LEFT, SHARP);
+    corners.set(BOTTOM_LEFT, SHARP);
+    corners.set(TOP_RIGHT, ROUND);
+    corners.set(BOTTOM_RIGHT, ROUND);
+    return *this;
+  }
+
+  RoundedCorners &top_round() {
+    corners.set(TOP_LEFT, ROUND);
+    corners.set(TOP_RIGHT, ROUND);
+    corners.set(BOTTOM_RIGHT, ROUND);
+    corners.set(BOTTOM_LEFT, SHARP);
+    return *this;
+  }
+
+  RoundedCorners &bottom_round() {
+    corners.set(TOP_LEFT, SHARP);
+    corners.set(TOP_RIGHT, SHARP);
+    corners.set(BOTTOM_LEFT, ROUND);
+    corners.set(BOTTOM_RIGHT, ROUND);
+    return *this;
+  }
+
+  RoundedCorners &left_sharp() {
+    corners.set(TOP_LEFT, SHARP);
+    corners.set(BOTTOM_LEFT, SHARP);
+    corners.set(TOP_RIGHT, ROUND);
+    corners.set(BOTTOM_RIGHT, ROUND);
+    return *this;
+  }
+
+  RoundedCorners &right_sharp() {
+    corners.set(TOP_RIGHT, SHARP);
+    corners.set(BOTTOM_RIGHT, SHARP);
+    corners.set(TOP_LEFT, ROUND);
+    corners.set(BOTTOM_LEFT, ROUND);
+    return *this;
+  }
+
+  RoundedCorners &top_sharp() {
+    corners.set(TOP_LEFT, SHARP);
+    corners.set(TOP_RIGHT, SHARP);
+    corners.set(BOTTOM_RIGHT, ROUND);
+    corners.set(BOTTOM_LEFT, ROUND);
+    return *this;
+  }
+
+  RoundedCorners &bottom_sharp() {
+    corners.set(TOP_LEFT, ROUND);
+    corners.set(TOP_RIGHT, ROUND);
+    corners.set(BOTTOM_LEFT, SHARP);
+    corners.set(BOTTOM_RIGHT, SHARP);
     return *this;
   }
 

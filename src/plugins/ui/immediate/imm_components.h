@@ -153,8 +153,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
     // TODO - if the user wants to mess with the corners, how can we merge these
     if (config.color_usage == Theme::Usage::Default)
       label_config.with_color_usage(Theme::Usage::Primary)
-          .with_rounded_corners(
-              RoundedCorners().sharp(TOP_RIGHT).sharp(BOTTOM_RIGHT));
+          .with_rounded_corners(RoundedCorners().right_sharp());
 
     div(ctx, mk(entity), label_config);
   }
@@ -166,8 +165,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
 
   if (config.color_usage == Theme::Usage::Default)
     checkbox_config.with_color_usage(Theme::Usage::Primary)
-        .with_rounded_corners(
-            RoundedCorners().sharp(TOP_LEFT).sharp(BOTTOM_LEFT));
+        .with_rounded_corners(RoundedCorners().left_sharp());
 
   bool changed = false;
   if (checkbox_no_label(ctx, mk(entity), value, checkbox_config)) {
@@ -258,9 +256,8 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       .set_desired_width(config.size._scale_x(0.5f).x_axis)
       .set_desired_height(config.size.y_axis);
 
-  auto elem_corners = RoundedCorners(config.rounded_corners.value())
-                          .sharp(TOP_LEFT)
-                          .sharp(BOTTOM_LEFT);
+  auto elem_corners =
+      RoundedCorners(config.rounded_corners.value()).left_sharp();
 
   auto elem = div(ctx, mk(entity, parent.id + entity.id + 0),
                   ComponentConfig::inherit_from(config, "slider_background")
@@ -470,11 +467,9 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   auto button_corners = std::bitset<4>(config.rounded_corners.value());
 
   if (!label_str.empty()) {
-    auto label_corners = RoundedCorners(config.rounded_corners.value())
-                             .sharp(TOP_RIGHT)
-                             .sharp(BOTTOM_RIGHT);
-    button_corners =
-        RoundedCorners(button_corners).sharp(TOP_LEFT).sharp(BOTTOM_LEFT);
+    auto label_corners =
+        RoundedCorners(config.rounded_corners.value()).right_sharp();
+    button_corners = RoundedCorners(button_corners).left_sharp();
 
     auto label = div(ctx, mk(entity),
                      ComponentConfig::inherit_from(config, "dropdown_label")
@@ -566,28 +561,20 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
       ComponentConfig::inherit_from(config, "left_arrow")
           .with_size(ComponentSize{pixels(40), pixels(40)})
           .with_label("<")
-          .with_color_usage(Theme::Usage::Accent)
-          .with_rounded_corners(
-              RoundedCorners().sharp(TOP_RIGHT).sharp(BOTTOM_RIGHT));
+          .with_rounded_corners(RoundedCorners().left_round());
 
   auto right_arrow_config =
       ComponentConfig::inherit_from(config, "right_arrow")
           .with_size(ComponentSize{pixels(40), pixels(40)})
           .with_label(">")
-          .with_color_usage(Theme::Usage::Accent)
-          .with_rounded_corners(
-              RoundedCorners().sharp(TOP_LEFT).sharp(BOTTOM_LEFT));
+          .with_rounded_corners(RoundedCorners().right_round());
 
   auto center_label_config =
       ComponentConfig::inherit_from(config, "center_label")
           .with_size(ComponentSize{pixels(220), pixels(40)})
           .with_label(std::string(options[navState.current_index()]))
           .with_color_usage(Theme::Usage::Primary)
-          .with_rounded_corners(RoundedCorners()
-                                    .sharp(TOP_LEFT)
-                                    .sharp(TOP_RIGHT)
-                                    .sharp(BOTTOM_LEFT)
-                                    .sharp(BOTTOM_RIGHT))
+          .with_rounded_corners(RoundedCorners().all_sharp())
           .with_skip_tabbing(true);
 
   if (button(ctx, mk(entity), left_arrow_config)) {
