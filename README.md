@@ -90,6 +90,7 @@ UI Elements:
 - slider
 - dropdown 
 - checkbox
+- // TODO add more 
 
 ### texture manager (desires raylib)
 sprite rendering

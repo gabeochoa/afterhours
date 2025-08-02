@@ -48,6 +48,7 @@ struct ComponentConfig {
   std::optional<TextureConfig> texture_config;
   std::optional<std::bitset<4>> rounded_corners;
 
+  // TODO should everything be inheritable?
   // inheritable options
   TextAlignment label_alignment = TextAlignment::None;
   bool skip_when_tabbing = false;
