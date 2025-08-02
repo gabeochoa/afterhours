@@ -1,5 +1,37 @@
 # TODO List
 
+> **📋 Regeneration Instructions for Cursor Agents:**
+> 
+> To update this file with current TODOs from the codebase, follow these steps:
+> 
+> 1. **Search for TODO comments:**
+>    ```bash
+>    grep -r --include="*.h" --include="*.cpp" --include="*.c" --include="*.hpp" --exclude-dir="vendor" "TODO\|FIXME\|HACK\|XXX\|NOTE" src/ example/ README.md
+>    ```
+> 
+> 2. **For each TODO found:**
+>    - Read the surrounding code context (±5-10 lines) to understand the issue
+>    - Categorize as: Bug, Performance, Feature, Architecture, Documentation, etc.
+>    - Assign priority: 🔴 High (bugs/safety), 🟡 Medium (performance/arch), 🟢 Low (features)
+>    - Write clear explanation of what the TODO actually means and why it exists
+> 
+> 3. **Organize by:**
+>    - Core System (entity, query, system, logging, etc.)
+>    - Plugins (input, UI, texture, autolayout, etc.)  
+>    - Examples and Documentation
+>    - Technical Notes
+> 
+> 4. **Include summary section with:**
+>    - Priority breakdown (High/Medium/Low)
+>    - Statistics (total TODOs, critical issues, etc.)
+>    - Quick reference for critical bugs vs features
+> 
+> 5. **Exclude vendor directory** - contains third-party code TODOs we don't control
+> 
+> 🔄 **Last Updated:** [Update this date when regenerating]
+
+---
+
 This document contains all TODO, FIXME, HACK, XXX, and NOTE comments found in the codebase, analyzed with context to understand the actual issues.
 
 ## Core System TODOs
@@ -155,4 +187,5 @@ This document contains all TODO, FIXME, HACK, XXX, and NOTE comments found in th
 **Total Notes Found**: 6  
 **Critical Issues**: 4  
 **Performance Issues**: 6  
-**Feature Requests**: 12
+**Feature Requests**: 12  
+**Last Updated**: December 2024
