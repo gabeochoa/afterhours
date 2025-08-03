@@ -514,7 +514,7 @@ struct input : developer::Plugin {
 
     // TODO replace with a singletone query
     OptEntity opt_collector =
-        EntityQuery({.ignore_temp_warning = true}).whereHasComponent<InputCollector<Action>>().gen_first();
+        EntityQuery({.ignore_temp_warning = true}).template whereHasComponent<InputCollector<Action>>().gen_first();
     if (!opt_collector.valid())
       return {};
     Entity &collector = opt_collector.asE();
