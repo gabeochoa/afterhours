@@ -15,6 +15,15 @@
 #include "components/pixels/checkbox_no_label_tests.h"
 #include "components/pixels/dropdown_tests.h"
 
+// Include all component test headers - percent() tests
+#include "components/percent/button_tests.h"
+#include "components/percent/button_group_tests.h"
+#include "components/percent/div_tests.h"
+#include "components/percent/slider_tests.h"
+#include "components/percent/checkbox_tests.h"
+#include "components/percent/checkbox_no_label_tests.h"
+#include "components/percent/dropdown_tests.h"
+
 namespace afterhours {
 namespace ui {
 TEST_CASE("UIComponentTest", "[UIComponent]") {
