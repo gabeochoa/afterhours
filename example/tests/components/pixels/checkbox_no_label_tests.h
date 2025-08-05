@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../../../vendor/catch2/catch.hpp"
-#include "../../../src/plugins/autolayout.h"
+#include "../../../../vendor/catch2/catch.hpp"
+#include "../../../../src/plugins/autolayout.h"
 
 namespace afterhours {
 namespace ui {

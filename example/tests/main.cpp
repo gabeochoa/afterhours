@@ -6,14 +6,14 @@
 //
 #include "../../src/plugins/autolayout.h"
 
-// Include all component test headers
-#include "components/button_tests.h"
-#include "components/button_group_tests.h"
-#include "components/div_tests.h"
-#include "components/slider_tests.h"
-#include "components/checkbox_tests.h"
-#include "components/checkbox_no_label_tests.h"
-#include "components/dropdown_tests.h"
+// Include all component test headers - pixels() tests
+#include "components/pixels/button_tests.h"
+#include "components/pixels/button_group_tests.h"
+#include "components/pixels/div_tests.h"
+#include "components/pixels/slider_tests.h"
+#include "components/pixels/checkbox_tests.h"
+#include "components/pixels/checkbox_no_label_tests.h"
+#include "components/pixels/dropdown_tests.h"
 
 namespace afterhours {
 namespace ui {
