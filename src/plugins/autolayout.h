@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include "../base_component.h"
@@ -55,6 +54,12 @@ struct Size {
   float strictness = 1.f;
 };
 
+inline std::ostream &operator<<(std::ostream &os, const Size &size) {
+  os << "Size(dim: " << size.dim << ", value: " << size.value
+     << ", strictness: " << size.strictness << ")";
+  return os;
+}
+
 inline Size pixels(const float value, const float strictness = 1.f) {
   return ui::Size{
       .dim = ui::Dim::Pixels, .value = value, .strictness = strictness};
@@ -108,6 +113,11 @@ struct ComponentSize {
     return ComponentSize(*this);
   }
 };
+
+inline std::ostream &operator<<(std::ostream &os, const ComponentSize &cs) {
+  os << "ComponentSize(x: " << cs.x_axis << ", y: " << cs.y_axis << ")";
+  return os;
+}
 
 inline ComponentSize pixels_xy(float width, float height) {
   return {pixels(width), pixels(height)};

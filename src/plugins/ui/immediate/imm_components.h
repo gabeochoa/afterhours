@@ -6,11 +6,8 @@
 
 #include "../../../entity.h"
 #include "../../../entity_helper.h"
-#include "../../../logging.h"
 #include "../../input_system.h"
 #include "../components.h"
-#include "../context.h"
-#include "../theme.h"
 #include "component_config.h"
 #include "element_result.h"
 #include "entity_management.h"
@@ -363,8 +360,10 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
     ctx.set_focus(id);
   };
 
-  config.size = ComponentSize(children(default_component_size.x),
-                              pixels(default_component_size.y));
+  if (config.size.is_default) {
+    config.size = ComponentSize(children(default_component_size.x),
+                                pixels(default_component_size.y));
+  }
   config.flex_direction = FlexDirection::Row;
 
   std::string label_str = config.label;
@@ -450,34 +449,35 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
         }
       });
 
-  config.size = ComponentSize(children(default_component_size.x),
-                              pixels(default_component_size.y));
+  if (config.size.is_default) {
+    config.size = ComponentSize(children(default_component_size.x),
+                                pixels(default_component_size.y));
+  }
 
   std::string label_str = config.label;
   config.label = "";
+  config.flex_direction = FlexDirection::Row;
 
   config = _overwrite_defaults(ctx, config, ComponentType::Dropdown);
   _init_component(ctx, entity, parent, config, "dropdown");
 
-  auto size = ComponentSize{
-      pixels(label_str.empty() ? default_component_size.x
-                               : (default_component_size.x / 2.f)),
-      pixels(default_component_size.y),
-  };
   auto button_corners = std::bitset<4>(config.rounded_corners.value());
 
+  auto config_size = config.size;
+
   if (!label_str.empty()) {
-    auto label_corners =
-        RoundedCorners(config.rounded_corners.value()).right_sharp();
+    config_size = config.size._scale_x(0.5f);
     button_corners = RoundedCorners(button_corners).left_sharp();
 
-    auto label = div(ctx, mk(entity),
-                     ComponentConfig::inherit_from(config, "dropdown_label")
-                         .with_size(size)
-                         .with_label(std::string(label_str))
-                         .with_color_usage(Theme::Usage::Primary)
-                         .with_rounded_corners(label_corners)
-                         .with_render_layer(config.render_layer + 0));
+    auto label = div(
+        ctx, mk(entity),
+        ComponentConfig::inherit_from(config, "dropdown_label")
+            .with_size(config_size)
+            .with_label(std::string(label_str))
+            .with_color_usage(Theme::Usage::Primary)
+            .with_rounded_corners(
+                RoundedCorners(config.rounded_corners.value()).right_sharp())
+            .with_render_layer(config.render_layer + 0));
   }
 
   const auto toggle_visibility = [&](Entity &) {
@@ -502,7 +502,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   auto main_button_label = std::format("{}{}", current_option, drop_arrow_icon);
   if (button(ctx, mk(entity),
              ComponentConfig::inherit_from(config, "option 1")
-                 .with_size(size)
+                 .with_size(config_size)
                  .with_label(main_button_label)
                  .with_rounded_corners(button_corners)
                  // TODO This works great but we need a way to
