@@ -546,46 +546,46 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
       },
       options, nullptr);
 
-  config.size = ComponentSize(children(default_component_size.x),
-                              pixels(default_component_size.y));
+  if (config.size.is_default) {
+    config.size = ComponentSize(pixels(default_component_size.x),
+                                pixels(default_component_size.y));
+  }
+  // TODO - add default
+  config.flex_direction = FlexDirection::Row;
 
   config = _overwrite_defaults(ctx, config, ComponentType::Div);
   _init_component(ctx, entity, parent, config, "navigation_bar");
 
-  entity.get<UIComponent>().flex_direction = FlexDirection::Row;
-
   bool clicked = false;
   size_t new_index = navState.current_index();
 
-  auto left_arrow_config =
-      ComponentConfig::inherit_from(config, "left_arrow")
-          .with_size(ComponentSize{pixels(40), pixels(40)})
-          .with_label("<")
-          .with_rounded_corners(RoundedCorners().left_round());
+  auto arrow_size =
+      ComponentSize{config.size._scale_x(0.20f).x_axis, config.size.y_axis};
 
-  auto right_arrow_config =
-      ComponentConfig::inherit_from(config, "right_arrow")
-          .with_size(ComponentSize{pixels(40), pixels(40)})
-          .with_label(">")
-          .with_rounded_corners(RoundedCorners().right_round());
-
-  auto center_label_config =
-      ComponentConfig::inherit_from(config, "center_label")
-          .with_size(ComponentSize{pixels(220), pixels(40)})
-          .with_label(std::string(options[navState.current_index()]))
-          .with_color_usage(Theme::Usage::Primary)
-          .with_rounded_corners(RoundedCorners().all_sharp())
-          .with_skip_tabbing(true);
-
-  if (button(ctx, mk(entity), left_arrow_config)) {
+  if (button(ctx, mk(entity),
+             ComponentConfig::inherit_from(config, "left_arrow")
+                 .with_size(arrow_size)
+                 .with_label("<")
+                 .with_rounded_corners(RoundedCorners().left_round()))) {
     clicked = true;
     new_index = (navState.current_index() == 0) ? options.size() - 1
                                                 : navState.current_index() - 1;
   }
 
-  div(ctx, mk(entity), center_label_config);
+  div(ctx, mk(entity),
+      ComponentConfig::inherit_from(config, "center_label")
+          .with_size(ComponentSize{pixels(default_component_size.x / 2.f),
+                                   config.size.y_axis})
+          .with_label(std::string(options[navState.current_index()]))
+          .with_color_usage(Theme::Usage::Primary)
+          .with_rounded_corners(RoundedCorners().all_sharp())
+          .with_skip_tabbing(true));
 
-  if (button(ctx, mk(entity), right_arrow_config)) {
+  if (button(ctx, mk(entity),
+             ComponentConfig::inherit_from(config, "right_arrow")
+                 .with_size(arrow_size)
+                 .with_label(">")
+                 .with_rounded_corners(RoundedCorners().right_round()))) {
     clicked = true;
     new_index = (navState.current_index() + 1) % options.size();
   }
