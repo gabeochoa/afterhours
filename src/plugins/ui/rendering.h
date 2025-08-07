@@ -319,6 +319,26 @@ template <typename InputAction> struct RenderImm : System<> {
       const texture_manager::HasTexture &texture =
           entity.get<texture_manager::HasTexture>();
       draw_texture_in_rect(texture.texture, cmp.rect(), texture.alignment);
+    } else if (entity.has<ui::HasImage>()) {
+      const ui::HasImage &img = entity.get<ui::HasImage>();
+      texture_manager::Rectangle src =
+          img.source_rect.value_or(texture_manager::Rectangle{
+              0, 0, (float)img.texture.width, (float)img.texture.height});
+
+      // Scale to fit height of rect
+      float scale = src.height / cmp.rect().height;
+      Vector2Type size = {src.width / scale, src.height / scale};
+      Vector2Type location =
+          position_texture(img.texture, size, cmp.rect(), img.alignment);
+
+      texture_manager::draw_texture_pro(img.texture, src,
+                                        RectangleType{
+                                            .x = location.x,
+                                            .y = location.y,
+                                            .width = size.x,
+                                            .height = size.y,
+                                        },
+                                        size, 0.f, colors::UI_WHITE);
     }
   }
 
@@ -331,7 +351,9 @@ template <typename InputAction> struct RenderImm : System<> {
     if (cmp.font_name != UIComponent::UNSET_FONT)
       const_cast<FontManager &>(font_manager).set_active(cmp.font_name);
 
-    if (entity.has<HasColor>() || entity.has<HasLabel>()) {
+    if (entity.has<HasColor>() || entity.has<HasLabel>() ||
+        entity.has<ui::HasImage>() ||
+        entity.has<texture_manager::HasTexture>()) {
       render_me(context, font_manager, entity);
     }
 

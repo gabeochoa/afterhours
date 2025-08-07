@@ -1,7 +1,9 @@
 #pragma once
 
+#include "../texture_manager.h"
 #include <functional>
 #include <magic_enum/magic_enum.hpp>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -140,6 +142,20 @@ struct HasRoundedCorners : BaseComponent {
     return *this;
   }
   auto &get() const { return rounded_corners; }
+};
+
+struct HasImage : BaseComponent {
+  afterhours::texture_manager::Texture texture;
+  std::optional<afterhours::texture_manager::Rectangle> source_rect;
+  afterhours::texture_manager::HasTexture::Alignment alignment =
+      afterhours::texture_manager::HasTexture::Alignment::Center;
+
+  HasImage(
+      afterhours::texture_manager::Texture tex,
+      std::optional<afterhours::texture_manager::Rectangle> src = std::nullopt,
+      afterhours::texture_manager::HasTexture::Alignment align =
+          afterhours::texture_manager::HasTexture::Alignment::Center)
+      : texture(tex), source_rect(src), alignment(align) {}
 };
 
 } // namespace ui
