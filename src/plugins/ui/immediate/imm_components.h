@@ -559,8 +559,10 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
   bool clicked = false;
   size_t new_index = navState.current_index();
 
-  auto arrow_size =
-      ComponentSize{config.size._scale_x(0.20f).x_axis, config.size.y_axis};
+  constexpr float arrow_ratio = 0.20f;
+  constexpr float label_ratio = 1.f - (arrow_ratio * 2.f); // 60 % for label
+
+  auto arrow_size = ComponentSize{percent(arrow_ratio), config.size.y_axis};
 
   if (button(ctx, mk(entity),
              ComponentConfig::inherit_from(config, "left_arrow")
@@ -574,8 +576,7 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
 
   div(ctx, mk(entity),
       ComponentConfig::inherit_from(config, "center_label")
-          .with_size(ComponentSize{pixels(default_component_size.x / 2.f),
-                                   config.size.y_axis})
+          .with_size(ComponentSize{percent(label_ratio), config.size.y_axis})
           .with_label(std::string(options[navState.current_index()]))
           .with_color_usage(Theme::Usage::Primary)
           .with_rounded_corners(RoundedCorners().all_sharp())
