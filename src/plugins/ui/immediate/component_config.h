@@ -350,6 +350,14 @@ ComponentConfig _overwrite_defaults(HasUIContext auto &ctx,
 static bool _init_component(HasUIContext auto &ctx, Entity &entity,
                             Entity &parent, ComponentConfig config,
                             const std::string &debug_name = "") {
+  auto [entity, parent] = ep_pair;
+  config = _overwrite_defaults(ctx, config, component_type, enable_color);
+  return _add_missing_components(ctx, entity, parent, config, debug_name);
+}
+
+static bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
+                                    Entity &parent, ComponentConfig config,
+                                    const std::string &debug_name = "") {
   (void)debug_name;
   bool created = false;
 
