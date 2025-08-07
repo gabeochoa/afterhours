@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <bitset>
 #include <format>
@@ -282,11 +283,8 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
           Rectangle rect = cmp.rect();
 
           auto mouse_position = input::get_mouse_position();
-          float v = (mouse_position.x - rect.x) / rect.width;
-          if (v < mnf)
-            v = mnf;
-          if (v > mxf)
-            v = mxf;
+          float v =
+              std::clamp((mouse_position.x - rect.x) / rect.width, mnf, mxf);
 
           if (v != sliderState.value) {
             sliderState.value = v;
