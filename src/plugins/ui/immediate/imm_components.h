@@ -71,7 +71,7 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
 
   bool clicked = false;
   int value = -1;
-  for (int i = 0; i < labels.size(); i++) {
+  for (size_t i = 0; i < labels.size(); ++i) {
     if (button(
             ctx, mk(entity, i),
             ComponentConfig::inherit_from(config,
@@ -79,7 +79,7 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
                 .with_size(config.size)
                 .with_label(i < labels.size() ? std::string(labels[i]) : ""))) {
       clicked = true;
-      value = i;
+      value = static_cast<int>(i);
     }
   }
 
@@ -193,7 +193,7 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
   };
 
   bool changed = false;
-  for (int i = 0; i < values.size(); i++) {
+  for (size_t i = 0; i < values.size(); ++i) {
     bool value = values.test(i);
 
     if (checkbox(
