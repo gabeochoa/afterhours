@@ -21,8 +21,7 @@ namespace imm {
 
 ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
                   ComponentConfig config = ComponentConfig()) {
-  Entity &entity = ep_pair.first;
-  Entity &parent = ep_pair.second;
+  auto [entity, parent] = deref(ep_pair);
 
   if (config.size.is_default && config.label.empty())
     config.with_size(ComponentSize{children(), children()});
@@ -30,19 +29,16 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
     config.with_size(ComponentSize{children(default_component_size.x),
                                    children(default_component_size.y)});
 
-  config = _overwrite_defaults(ctx, config, ComponentType::Div);
-  _add_missing_components(ctx, entity, parent, config);
+  _init_component(ctx, ep_pair, config, ComponentType::Div);
 
   return {true, entity};
 }
 
 ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
                      ComponentConfig config = ComponentConfig()) {
-  Entity &entity = ep_pair.first;
-  Entity &parent = ep_pair.second;
+  auto [entity, parent] = deref(ep_pair);
 
-  config = _overwrite_defaults(ctx, config, ComponentType::Button, true);
-  _add_missing_components(ctx, entity, parent, config, "button");
+  _init_component(ctx, ep_pair, config, ComponentType::Button, true, "button");
 
   entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
 
@@ -54,15 +50,15 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
                            const Container &labels,
                            ComponentConfig config = ComponentConfig()) {
 
-  Entity &entity = ep_pair.first;
-  Entity &parent = ep_pair.second;
+  auto [entity, parent] = deref(ep_pair);
 
   auto max_height = config.size.y_axis;
   config.size.y_axis = children(max_height.value);
   auto max_width = config.size.x_axis;
   config.size.x_axis = children(max_width.value);
 
-  _add_missing_components(ctx, entity, parent, config, "button_group");
+  _init_component(ctx, ep_pair, config, ComponentType::Div, false,
+                  "button_group");
 
   config.size.x_axis = config.flex_direction == FlexDirection::Row
                            ? pixels(max_width.value / labels.size())
@@ -94,17 +90,15 @@ ElementResult checkbox_no_label(HasUIContext auto &ctx, EntityParent ep_pair,
                                 bool &value,
                                 ComponentConfig config = ComponentConfig()) {
 
-  Entity &entity = ep_pair.first;
-  Entity &parent = ep_pair.second;
+  auto [entity, parent] = deref(ep_pair);
 
   HasCheckboxState &checkboxState = _init_state<HasCheckboxState>(
       entity, [&](auto &) {}, value);
 
   config.label = value ? "X" : " ";
 
-  config =
-      _overwrite_defaults(ctx, config, ComponentType::CheckboxNoLabel, true);
-  _add_missing_components(ctx, entity, parent, config, "checkbox");
+  _init_component(ctx, ep_pair, config, ComponentType::CheckboxNoLabel, true,
+                  "checkbox");
 
   if (config.disabled) {
     entity.removeComponentIfExists<HasClickListener>();
@@ -128,13 +122,13 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
                        bool &value,
                        ComponentConfig config = ComponentConfig()) {
 
-  Entity &entity = ep_pair.first;
-  Entity &parent = ep_pair.second;
+  auto [entity, parent] = deref(ep_pair);
 
   auto label = config.label;
   config.label = "";
 
-  _add_missing_components(ctx, entity, parent, config, "checkbox_row");
+  _init_component(ctx, ep_pair, config, ComponentType::Div, false,
+                  "checkbox_row");
 
   config.size = ComponentSize(pixels(default_component_size.x),
                               children(default_component_size.y));
@@ -180,12 +174,12 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
                std::pair<int, int> min_max = {-1, -1},
                ComponentConfig config = ComponentConfig()) {
 
-  Entity &entity = ep_pair.first;
-  Entity &parent = ep_pair.second;
+  auto [entity, parent] = deref(ep_pair);
 
   auto max_height = config.size.y_axis;
   config.size.y_axis = children();
-  _add_missing_components(ctx, entity, parent, config, "checkbox_group");
+  _init_component(ctx, ep_pair, config, ComponentType::Div, false,
+                  "checkbox_group");
   config.size.y_axis = max_height;
 
   int count = (int)values.count();
@@ -226,16 +220,14 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
 ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                      float &owned_value,
                      ComponentConfig config = ComponentConfig()) {
-  Entity &entity = ep_pair.first;
-  Entity &parent = ep_pair.second;
+  auto [entity, parent] = deref(ep_pair);
 
   ElementResult result = {false, entity};
 
   std::string original_label = config.label;
   config.label = "";
 
-  config = _overwrite_defaults(ctx, config, ComponentType::Slider, true);
-  _add_missing_components(ctx, entity, parent, config, "slider");
+  _init_component(ctx, ep_pair, config, ComponentType::Slider, true, "slider");
 
   auto label_corners = RoundedCorners(config.rounded_corners.value())
                            .sharp(TOP_RIGHT)
@@ -331,8 +323,7 @@ template <typename Container>
 ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                          const Container &options, size_t &option_index,
                          ComponentConfig config = ComponentConfig()) {
-  Entity &entity = ep_pair.first;
-  Entity &parent = ep_pair.second;
+  auto [entity, parent] = deref(ep_pair);
 
   if (options.empty())
     return {false, entity};
@@ -369,8 +360,8 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
   std::string label_str = config.label;
   config.label = "";
 
-  bool first_time =
-      _add_missing_components(ctx, entity, parent, config, "pagination");
+  bool first_time = _init_component(ctx, ep_pair, config, ComponentType::Div,
+                                    false, "pagination");
 
   int child_index = 0;
 
@@ -430,8 +421,7 @@ template <typename Container>
 ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                        const Container &options, size_t &option_index,
                        ComponentConfig config = ComponentConfig()) {
-  Entity &entity = ep_pair.first;
-  Entity &parent = ep_pair.second;
+  auto [entity, parent] = deref(ep_pair);
 
   if (options.empty())
     return {false, entity};
@@ -459,8 +449,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   config.label = "";
   config.flex_direction = FlexDirection::Row;
 
-  config = _overwrite_defaults(ctx, config, ComponentType::Dropdown);
-  _add_missing_components(ctx, entity, parent, config, "dropdown");
+  _init_component(ctx, ep_pair, config, ComponentType::Dropdown);
 
   auto button_corners = std::bitset<4>(config.rounded_corners.value());
 
@@ -533,8 +522,7 @@ template <typename Container>
 ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
                              const Container &options, size_t &option_index,
                              ComponentConfig config = ComponentConfig()) {
-  Entity &entity = ep_pair.first;
-  Entity &parent = ep_pair.second;
+  auto [entity, parent] = deref(ep_pair);
 
   if (options.empty())
     return {false, entity};
@@ -554,8 +542,8 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
   // TODO - add default
   config.flex_direction = FlexDirection::Row;
 
-  config = _overwrite_defaults(ctx, config, ComponentType::Div);
-  _add_missing_components(ctx, entity, parent, config, "navigation_bar");
+  _init_component(ctx, ep_pair, config, ComponentType::Div, false,
+                  "navigation_bar");
 
   bool clicked = false;
   size_t new_index = navState.current_index();

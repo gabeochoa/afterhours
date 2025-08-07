@@ -19,6 +19,10 @@ static std::map<UI_UUID, EntityID> existing_ui_elements;
 
 using EntityParent = std::pair<RefEntity, RefEntity>;
 
+inline std::pair<Entity &, Entity &> deref(EntityParent p) {
+  return {p.first.get(), p.second.get()};
+}
+
 static EntityParent
 mk(Entity &parent, EntityID otherID = -1,
    const std::source_location location = std::source_location::current()) {

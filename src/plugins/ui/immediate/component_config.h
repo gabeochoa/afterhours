@@ -347,8 +347,11 @@ ComponentConfig _overwrite_defaults(HasUIContext auto &ctx,
   return config;
 }
 
-static bool _init_component(HasUIContext auto &ctx, Entity &entity,
-                            Entity &parent, ComponentConfig config,
+// Convenience initializer that applies defaults and delegates to implementation
+static bool _init_component(HasUIContext auto &ctx, EntityParent ep_pair,
+                            ComponentConfig &config,
+                            ComponentType component_type,
+                            bool enable_color = false,
                             const std::string &debug_name = "") {
   auto [entity, parent] = ep_pair;
   config = _overwrite_defaults(ctx, config, component_type, enable_color);
