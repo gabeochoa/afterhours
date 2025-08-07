@@ -19,6 +19,14 @@ namespace ui {
 
 namespace imm {
 
+inline size_t prev_index(size_t current, size_t total) {
+  return (current == 0) ? total - 1 : current - 1;
+}
+
+inline size_t next_index(size_t current, size_t total) {
+  return (current + 1) % total;
+}
+
 ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
                   ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
@@ -372,11 +380,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                                        config.size.y_axis})
               .with_label("<")
               .with_render_layer(config.render_layer))) {
-    if (option_index > 1) {
-      on_option_click(entity, option_index - 1);
-    } else {
-      on_option_click(entity, options.size());
-    }
+    on_option_click(entity, prev_index(option_index - 1, options.size()));
   }
 
   for (size_t i = 0; i < options.size(); i++) {
@@ -399,11 +403,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                                        config.size.y_axis})
               .with_label(">")
               .with_render_layer(config.render_layer))) {
-    if (option_index < options.size()) {
-      on_option_click(entity, option_index + 1);
-    } else {
-      on_option_click(entity, 1);
-    }
+    on_option_click(entity, next_index(option_index, options.size()));
   }
 
   if (first_time) {
@@ -559,8 +559,7 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
                  .with_label("<")
                  .with_rounded_corners(RoundedCorners().left_round()))) {
     clicked = true;
-    new_index = (navState.current_index() == 0) ? options.size() - 1
-                                                : navState.current_index() - 1;
+    new_index = prev_index(navState.current_index(), options.size());
   }
 
   div(ctx, mk(entity),
@@ -577,7 +576,7 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
                  .with_label(">")
                  .with_rounded_corners(RoundedCorners().right_round()))) {
     clicked = true;
-    new_index = (navState.current_index() + 1) % options.size();
+    new_index = next_index(navState.current_index(), options.size());
   }
 
   if (clicked) {
