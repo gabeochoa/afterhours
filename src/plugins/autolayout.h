@@ -99,15 +99,21 @@ struct ComponentSize {
       : x_axis(pair.first), y_axis(pair.second), is_default(is_default_) {}
 
   auto _scale_x(float s) {
-    if (x_axis.dim != ui::Dim::Pixels) {
-      log_warn("Scaling a non pixel component size ...");
+    if (x_axis.dim == ui::Dim::Children || x_axis.dim == ui::Dim::Text ||
+        x_axis.dim == ui::Dim::None) {
+      log_warn(
+          "Scaling component size with unsupported dim {} (Children/Text/None)",
+          x_axis.dim);
     }
     x_axis.value *= s;
     return ComponentSize(*this);
   }
   auto _scale_y(float s) {
-    if (y_axis.dim != ui::Dim::Pixels) {
-      log_warn("Scaling a non pixel component size ...");
+    if (y_axis.dim == ui::Dim::Children || y_axis.dim == ui::Dim::Text ||
+        y_axis.dim == ui::Dim::None) {
+      log_warn(
+          "Scaling component size with unsupported dim {} (Children/Text/None)",
+          y_axis.dim);
     }
     y_axis.value *= s;
     return ComponentSize(*this);
