@@ -18,6 +18,7 @@
 #include "element_result.h"
 #include "entity_management.h"
 #include "rounded_corners.h"
+#include "border_style.h"
 
 namespace afterhours {
 
@@ -47,6 +48,11 @@ struct ComponentConfig {
 
   std::optional<TextureConfig> texture_config;
   std::optional<std::bitset<4>> rounded_corners;
+
+  // Border configuration
+  std::optional<ui::BorderSideArray> border_patterns;
+  float border_thickness = 0.0f;
+  std::optional<Color> border_color;
 
   // TODO should everything be inheritable?
   // inheritable options
@@ -103,6 +109,22 @@ struct ComponentConfig {
   }
   ComponentConfig &disable_rounded_corners() {
     rounded_corners = std::bitset<4>().reset();
+    return *this;
+  }
+  // Border API
+  ComponentConfig &border(const BorderStyle &style) {
+    border_patterns = style.get_patterns();
+    border_thickness = style.thickness();
+    return *this;
+  }
+  ComponentConfig &with_border_color(Color c) {
+    border_color = c;
+    return *this;
+  }
+  ComponentConfig &disable_border() {
+    border_patterns = std::nullopt;
+    border_thickness = 0.0f;
+    border_color = std::nullopt;
     return *this;
   }
   ComponentConfig &with_debug_name(const std::string &name) {
@@ -261,6 +283,14 @@ struct UIStylingDefaults {
 
     if (config.rounded_corners.has_value()) {
       merged.rounded_corners = config.rounded_corners;
+    }
+
+    // Border merging
+    if (config.border_patterns.has_value() || config.border_thickness > 0.0f ||
+        config.border_color.has_value()) {
+      merged.border_patterns = config.border_patterns;
+      merged.border_thickness = config.border_thickness;
+      merged.border_color = config.border_color;
     }
 
     if (config.disabled) {
@@ -432,6 +462,18 @@ static bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
       config.rounded_corners.value().any()) {
     entity.addComponentIfMissing<HasRoundedCorners>().set(
         config.rounded_corners.value());
+  }
+
+  // Border component update
+  if (config.border_patterns.has_value() && config.border_thickness > 0.0f) {
+    auto &hb = entity.addComponentIfMissing<HasBorder>();
+    hb.set_patterns(config.border_patterns.value())
+        .set_thickness(config.border_thickness);
+    if (config.border_color.has_value()) {
+      hb.set_color(config.border_color.value());
+    }
+  } else {
+    entity.removeComponentIfExists<HasBorder>();
   }
 
   if (!config.label.empty())

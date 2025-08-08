@@ -308,6 +308,14 @@ template <typename InputAction> struct RenderImm : System<> {
                              col, corner_settings);
     }
 
+    // Border pass drawn above fill
+    if (entity.has<HasBorder>()) {
+      const HasBorder &hb = entity.get<HasBorder>();
+      Color border_col = hb.color_override.value_or(
+          context.theme.from_usage(Theme::Usage::Font));
+      draw_border_sides(cmp.rect(), hb.thickness, hb.sides, border_col);
+    }
+
     if (entity.has<HasLabel>()) {
       const HasLabel &hasLabel = entity.get<HasLabel>();
       draw_text_in_rect(
