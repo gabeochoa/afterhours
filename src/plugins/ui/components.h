@@ -1,6 +1,8 @@
 #pragma once
 
 #include "../texture_manager.h"
+#include "border.h"
+#include "../color.h"
 #include <functional>
 #include <magic_enum/magic_enum.hpp>
 #include <optional>
@@ -142,6 +144,26 @@ struct HasRoundedCorners : BaseComponent {
     return *this;
   }
   auto &get() const { return rounded_corners; }
+};
+
+struct HasBorder : BaseComponent {
+  BorderSideArray sides; // patterns per side: Top, Right, Bottom, Left
+  float thickness = 1.0f;
+  std::optional<Color> color_override;
+
+  HasBorder() { sides.fill(BorderPattern::None); }
+  HasBorder &set_patterns(const BorderSideArray &patterns) {
+    sides = patterns;
+    return *this;
+  }
+  HasBorder &set_thickness(float px) {
+    thickness = px;
+    return *this;
+  }
+  HasBorder &set_color(Color c) {
+    color_override = c;
+    return *this;
+  }
 };
 
 struct HasImage : BaseComponent {

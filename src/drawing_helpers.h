@@ -4,6 +4,7 @@
 #include "developer.h"
 #include "font_helper.h"
 #include "plugins/color.h"
+#include "plugins/ui/border.h"
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 namespace raylib {
@@ -200,6 +201,84 @@ inline void draw_rectangle_rounded(
                               segments, color);
 }
 
+inline void draw_border_sides(const RectangleType rect, float thickness,
+                              const ui::BorderSideArray &sides,
+                              const Color color) {
+  if (thickness <= 0.0f)
+    return;
+
+  const float t = thickness;
+
+  // Helper lambdas
+  auto draw_solid_h = [&](float x, float y, float w) {
+    draw_rectangle(RectangleType{.x = x, .y = y, .width = w, .height = t},
+                   color);
+  };
+  auto draw_solid_v = [&](float x, float y, float h) {
+    draw_rectangle(RectangleType{.x = x, .y = y, .width = t, .height = h},
+                   color);
+  };
+  auto draw_dotted_h = [&](float x, float y, float w) {
+    float step = t * 2.0f;
+    for (float cx = x; cx < x + w; cx += step) {
+      float dot_w = std::min(t, x + w - cx);
+      draw_solid_h(cx, y, dot_w);
+    }
+  };
+  auto draw_dotted_v = [&](float x, float y, float h) {
+    float step = t * 2.0f;
+    for (float cy = y; cy < y + h; cy += step) {
+      float dot_h = std::min(t, y + h - cy);
+      draw_solid_v(x, cy, dot_h);
+    }
+  };
+
+  // Top
+  switch (sides[static_cast<int>(ui::BorderSide::Top)]) {
+  case ui::BorderPattern::Solid:
+    draw_solid_h(rect.x, rect.y, rect.width);
+    break;
+  case ui::BorderPattern::Dotted:
+    draw_dotted_h(rect.x, rect.y, rect.width);
+    break;
+  default:
+    break;
+  }
+  // Right
+  switch (sides[static_cast<int>(ui::BorderSide::Right)]) {
+  case ui::BorderPattern::Solid:
+    draw_solid_v(rect.x + rect.width - t, rect.y, rect.height);
+    break;
+  case ui::BorderPattern::Dotted:
+    draw_dotted_v(rect.x + rect.width - t, rect.y, rect.height);
+    break;
+  default:
+    break;
+  }
+  // Bottom
+  switch (sides[static_cast<int>(ui::BorderSide::Bottom)]) {
+  case ui::BorderPattern::Solid:
+    draw_solid_h(rect.x, rect.y + rect.height - t, rect.width);
+    break;
+  case ui::BorderPattern::Dotted:
+    draw_dotted_h(rect.x, rect.y + rect.height - t, rect.width);
+    break;
+  default:
+    break;
+  }
+  // Left
+  switch (sides[static_cast<int>(ui::BorderSide::Left)]) {
+  case ui::BorderPattern::Solid:
+    draw_solid_v(rect.x, rect.y, rect.height);
+    break;
+  case ui::BorderPattern::Dotted:
+    draw_dotted_v(rect.x, rect.y, rect.height);
+    break;
+  default:
+    break;
+  }
+}
+
 inline raylib::Font get_default_font() { return raylib::GetFontDefault(); }
 inline raylib::Font get_unset_font() { return raylib::GetFontDefault(); }
 
@@ -213,6 +292,8 @@ inline void draw_rectangle(const RectangleType, const Color) {}
 inline void draw_rectangle_outline(const RectangleType, const Color) {}
 inline void draw_rectangle_rounded(const RectangleType, const float, const int,
                                    const Color, const std::bitset<4>) {}
+inline void draw_border_sides(const RectangleType, float,
+                              const ui::BorderSideArray &, const Color) {}
 inline afterhours::Font get_default_font() { return afterhours::Font(); }
 inline afterhours::Font get_unset_font() { return afterhours::Font(); }
 #endif
