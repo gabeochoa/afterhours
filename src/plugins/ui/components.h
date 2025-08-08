@@ -1,7 +1,8 @@
 #pragma once
 
 #include "../texture_manager.h"
-#include "../border.h"
+#include "border.h"
+#include "../color.h"
 #include <functional>
 #include <magic_enum/magic_enum.hpp>
 #include <optional>
