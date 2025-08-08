@@ -57,7 +57,9 @@ mk(Entity &parent, EntityID otherID = -1,
 
   Entity &entity = EntityHelper::createEntity();
   existing_ui_elements[hash] = entity.id;
-  log_info("Creating element {} for {}", hash, entity.id);
+  // TODO - add a count of how many elements are created
+  // so we can track if its growing every frame
+  log_trace("Creating element {} for {}", hash, entity.id);
   return {entity, parent};
 }
 
