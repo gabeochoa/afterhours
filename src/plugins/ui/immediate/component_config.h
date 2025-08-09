@@ -165,6 +165,29 @@ struct ComponentConfig {
     return *this;
   }
 
+  bool has_padding() const {
+    return padding.top.value > 0 || padding.left.value > 0 ||
+           padding.bottom.value > 0 || padding.right.value > 0;
+  }
+  bool has_margin() const {
+    return margin.top.value > 0 || margin.left.value > 0 ||
+           margin.bottom.value > 0 || margin.right.value > 0;
+  }
+  bool has_size_override() const { return !size.is_default; }
+  bool has_label_alignment_override() const {
+    return label_alignment != TextAlignment::None;
+  }
+  bool has_any_rounded_corners() const { return rounded_corners.has_value(); }
+  bool has_font_override() const {
+    return font_name != UIComponent::UNSET_FONT;
+  }
+  bool has_texture() const { return texture_config.has_value(); }
+  bool has_image_alignment() const { return image_alignment.has_value(); }
+  bool is_disabled() const { return disabled; }
+  bool is_hidden() const { return hidden; }
+  bool skips_when_tabbing() const { return skip_when_tabbing; }
+  bool selects_on_focus() const { return select_on_focus; }
+
   // Static method to create inheritable config from parent
   static ComponentConfig inherit_from(const ComponentConfig &parent,
                                       const std::string &debug_name = "") {
@@ -260,81 +283,54 @@ struct UIStylingDefaults {
 
     ComponentConfig merged = defaults.value();
 
-    if (config.padding.top.value > 0 || config.padding.left.value > 0 ||
-        config.padding.bottom.value > 0 || config.padding.right.value > 0) {
+    if (config.has_padding())
       merged.padding = config.padding;
-    }
-
-    if (config.margin.top.value > 0 || config.margin.left.value > 0 ||
-        config.margin.bottom.value > 0 || config.margin.right.value > 0) {
+    if (config.has_margin())
       merged.margin = config.margin;
-    }
-
-    if (!config.size.is_default) {
+    if (config.has_size_override())
       merged.size = config.size;
-    }
 
     if (config.color_usage != Theme::Usage::Default) {
       merged.color_usage = config.color_usage;
       merged.custom_color = config.custom_color;
     }
 
-    if (config.label_alignment != TextAlignment::None) {
+    if (config.has_label_alignment_override())
       merged.label_alignment = config.label_alignment;
-    }
 
-    if (!config.label.empty()) {
+    if (!config.label.empty())
       merged.label = config.label;
-    }
 
-    if (config.rounded_corners.has_value()) {
+    if (config.has_any_rounded_corners())
       merged.rounded_corners = config.rounded_corners;
-    }
 
-    if (config.disabled) {
+    if (config.is_disabled())
       merged.disabled = config.disabled;
-    }
-
-    if (config.hidden) {
+    if (config.is_hidden())
       merged.hidden = config.hidden;
-    }
-
-    if (config.skip_when_tabbing) {
+    if (config.skips_when_tabbing())
       merged.skip_when_tabbing = config.skip_when_tabbing;
-    }
-
-    if (config.select_on_focus) {
+    if (config.selects_on_focus())
       merged.select_on_focus = config.select_on_focus;
-    }
 
-    if (config.font_name != UIComponent::UNSET_FONT) {
+    if (config.has_font_override()) {
       merged.font_name = config.font_name;
       merged.font_size = config.font_size;
     }
 
-    if (config.texture_config.has_value()) {
+    if (config.has_texture())
       merged.texture_config = config.texture_config;
-    }
-
-    if (config.image_alignment.has_value()) {
+    if (config.has_image_alignment())
       merged.image_alignment = config.image_alignment;
-    }
 
-    if (config.is_absolute) {
+    if (config.is_absolute)
       merged.is_absolute = config.is_absolute;
-    }
-
-    if (config.flex_direction != FlexDirection::Column) {
+    if (config.flex_direction != FlexDirection::Column)
       merged.flex_direction = config.flex_direction;
-    }
-
-    if (config.render_layer != 0) {
+    if (config.render_layer != 0)
       merged.render_layer = config.render_layer;
-    }
-
-    if (!config.debug_name.empty()) {
+    if (!config.debug_name.empty())
       merged.debug_name = config.debug_name;
-    }
 
     return merged;
   }
