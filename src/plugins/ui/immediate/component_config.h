@@ -150,9 +150,10 @@ struct ComponentConfig {
     texture_config = tex_cfg;
     return *this;
   }
-  ComponentConfig &with_texture(texture_manager::Texture texture,
-                                texture_manager::HasTexture::Alignment alignment =
-                                    texture_manager::HasTexture::Alignment::None) {
+  ComponentConfig &
+  with_texture(texture_manager::Texture texture,
+               texture_manager::HasTexture::Alignment alignment =
+                   texture_manager::HasTexture::Alignment::None) {
     texture_config = TextureConfig{texture, alignment};
     return *this;
   }
