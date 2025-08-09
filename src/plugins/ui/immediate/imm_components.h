@@ -52,6 +52,26 @@ ElementResult image(HasUIContext auto &ctx, EntityParent ep_pair,
   return {false, entity};
 }
 
+ElementResult
+sprite(HasUIContext auto &ctx, EntityParent ep_pair,
+       afterhours::texture_manager::Texture texture,
+       afterhours::texture_manager::Rectangle source_rect,
+       afterhours::texture_manager::HasTexture::Alignment alignment =
+           afterhours::texture_manager::HasTexture::Alignment::Center,
+       ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+
+  _init_component(ctx, ep_pair, config, ComponentType::Image);
+
+  auto &img = entity.addComponentIfMissing<ui::HasImage>(texture, source_rect,
+                                                         alignment);
+  img.texture = texture;
+  img.source_rect = source_rect;
+  img.alignment = alignment;
+
+  return {false, entity};
+}
+
 ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
                      ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
