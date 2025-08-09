@@ -188,6 +188,63 @@ struct ComponentConfig {
   bool skips_when_tabbing() const { return skip_when_tabbing; }
   bool selects_on_focus() const { return select_on_focus; }
 
+  // Apply override fields from another config onto this one, using
+  // explicit-set semantics encoded by helper queries above.
+  ComponentConfig apply_overrides(const ComponentConfig &overrides) const {
+    ComponentConfig merged = *this;
+
+    if (overrides.has_padding())
+      merged.padding = overrides.padding;
+    if (overrides.has_margin())
+      merged.margin = overrides.margin;
+    if (overrides.has_size_override())
+      merged.size = overrides.size;
+
+    if (overrides.color_usage != Theme::Usage::Default) {
+      merged.color_usage = overrides.color_usage;
+      merged.custom_color = overrides.custom_color;
+    }
+
+    if (overrides.has_label_alignment_override())
+      merged.label_alignment = overrides.label_alignment;
+
+    if (!overrides.label.empty())
+      merged.label = overrides.label;
+
+    if (overrides.has_any_rounded_corners())
+      merged.rounded_corners = overrides.rounded_corners;
+
+    if (overrides.is_disabled())
+      merged.disabled = overrides.disabled;
+    if (overrides.is_hidden())
+      merged.hidden = overrides.hidden;
+    if (overrides.skips_when_tabbing())
+      merged.skip_when_tabbing = overrides.skip_when_tabbing;
+    if (overrides.selects_on_focus())
+      merged.select_on_focus = overrides.select_on_focus;
+
+    if (overrides.has_font_override()) {
+      merged.font_name = overrides.font_name;
+      merged.font_size = overrides.font_size;
+    }
+
+    if (overrides.has_texture())
+      merged.texture_config = overrides.texture_config;
+    if (overrides.has_image_alignment())
+      merged.image_alignment = overrides.image_alignment;
+
+    if (overrides.is_absolute)
+      merged.is_absolute = overrides.is_absolute;
+    if (overrides.flex_direction != FlexDirection::Column)
+      merged.flex_direction = overrides.flex_direction;
+    if (overrides.render_layer != 0)
+      merged.render_layer = overrides.render_layer;
+    if (!overrides.debug_name.empty())
+      merged.debug_name = overrides.debug_name;
+
+    return merged;
+  }
+
   // Static method to create inheritable config from parent
   static ComponentConfig inherit_from(const ComponentConfig &parent,
                                       const std::string &debug_name = "") {
@@ -281,58 +338,7 @@ struct UIStylingDefaults {
       return config;
     }
 
-    ComponentConfig merged = defaults.value();
-
-    if (config.has_padding())
-      merged.padding = config.padding;
-    if (config.has_margin())
-      merged.margin = config.margin;
-    if (config.has_size_override())
-      merged.size = config.size;
-
-    if (config.color_usage != Theme::Usage::Default) {
-      merged.color_usage = config.color_usage;
-      merged.custom_color = config.custom_color;
-    }
-
-    if (config.has_label_alignment_override())
-      merged.label_alignment = config.label_alignment;
-
-    if (!config.label.empty())
-      merged.label = config.label;
-
-    if (config.has_any_rounded_corners())
-      merged.rounded_corners = config.rounded_corners;
-
-    if (config.is_disabled())
-      merged.disabled = config.disabled;
-    if (config.is_hidden())
-      merged.hidden = config.hidden;
-    if (config.skips_when_tabbing())
-      merged.skip_when_tabbing = config.skip_when_tabbing;
-    if (config.selects_on_focus())
-      merged.select_on_focus = config.select_on_focus;
-
-    if (config.has_font_override()) {
-      merged.font_name = config.font_name;
-      merged.font_size = config.font_size;
-    }
-
-    if (config.has_texture())
-      merged.texture_config = config.texture_config;
-    if (config.has_image_alignment())
-      merged.image_alignment = config.image_alignment;
-
-    if (config.is_absolute)
-      merged.is_absolute = config.is_absolute;
-    if (config.flex_direction != FlexDirection::Column)
-      merged.flex_direction = config.flex_direction;
-    if (config.render_layer != 0)
-      merged.render_layer = config.render_layer;
-    if (!config.debug_name.empty())
-      merged.debug_name = config.debug_name;
-
-    return merged;
+    return defaults.value().apply_overrides(config);
   }
 };
 
