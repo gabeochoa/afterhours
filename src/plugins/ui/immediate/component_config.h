@@ -410,8 +410,8 @@ static void apply_layout(Entity &entity, const ComponentConfig &config) {
 static void apply_label(Entity &entity, const ComponentConfig &config) {
   if (config.label.empty())
     return;
-  auto &lbl = entity.addComponentIfMissing<ui::HasLabel>(config.label,
-                                                          config.disabled);
+  auto &lbl =
+      entity.addComponentIfMissing<ui::HasLabel>(config.label, config.disabled);
   lbl.set_label(config.label)
       .set_disabled(config.disabled)
       .set_alignment(config.label_alignment);
@@ -470,21 +470,17 @@ static bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
     created = true;
   }
 
-  UIComponent &parent_cmp = parent.get<UIComponent>();
-  parent_cmp.add_child(entity.id);
-
-  apply_flags(entity, config);
-
-  apply_layout(entity, config);
-
-  apply_label(entity, config);
-
   if (!config.debug_name.empty()) {
     entity.get<UIComponentDebug>().set(config.debug_name);
   }
 
-  apply_visuals(ctx, entity, config);
+  UIComponent &parent_cmp = parent.get<UIComponent>();
+  parent_cmp.add_child(entity.id);
 
+  apply_flags(entity, config);
+  apply_layout(entity, config);
+  apply_visuals(ctx, entity, config);
+  apply_label(entity, config);
   apply_texture(entity, config);
 
   ctx.queue_render(RenderInfo{entity.id, config.render_layer});
