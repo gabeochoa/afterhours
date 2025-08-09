@@ -46,8 +46,7 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
 ElementResult image(HasUIContext auto &ctx, EntityParent ep_pair,
                     ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
-
-  _init_component(ctx, ep_pair, config, ComponentType::Image);
+  _init_component(ctx, ep_pair, config, ComponentType::Image, "image");
 
   return {false, entity};
 }
@@ -61,7 +60,7 @@ sprite(HasUIContext auto &ctx, EntityParent ep_pair,
        ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
-  _init_component(ctx, ep_pair, config, ComponentType::Image);
+  _init_component(ctx, ep_pair, config, ComponentType::Image, "sprite");
 
   auto &img = entity.addComponentIfMissing<ui::HasImage>(texture, source_rect,
                                                          alignment);
@@ -98,11 +97,12 @@ ElementResult icon_row(HasUIContext auto &ctx, EntityParent ep_pair,
 
     sprite(ctx, mk(row.ent(), static_cast<int>(i)), spritesheet, frame,
            afterhours::texture_manager::HasTexture::Alignment::Center,
-           ComponentConfig::inherit_from(config, "icon_row_item")
+           ComponentConfig::inherit_from(config)
                .with_size(ComponentSize{icon_width, icon_height})
                .with_margin(Margin{
                    .left = percent(i == 0 ? first_left_margin_percent
-                                          : subsequent_left_margin_percent)}));
+                                          : subsequent_left_margin_percent)})
+               .with_debug_name(std::format("icon_row_item_{}", i)));
     i++;
   }
 
