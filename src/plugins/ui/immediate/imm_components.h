@@ -72,6 +72,43 @@ sprite(HasUIContext auto &ctx, EntityParent ep_pair,
   return {false, entity};
 }
 
+template <typename Container>
+ElementResult icon_row(HasUIContext auto &ctx, EntityParent ep_pair,
+                       afterhours::texture_manager::Texture spritesheet,
+                       const Container &frames, float scale = 1.f,
+                       float first_left_margin_percent = 0.2f,
+                       float subsequent_left_margin_percent = 0.1f,
+                       ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+
+  auto row =
+      div(ctx, ep_pair,
+          ComponentConfig::inherit_from(config, "icon_row")
+              .with_size(config.size)
+              .with_margin(config.margin)
+              .with_padding(config.padding)
+              .with_flex_direction(FlexDirection::Row)
+              .with_debug_name(config.debug_name.empty() ? "icon_row"
+                                                         : config.debug_name));
+
+  size_t i = 0;
+  for (const auto &frame : frames) {
+    auto icon_width = pixels(frame.width * scale);
+    auto icon_height = pixels(frame.height * scale);
+
+    sprite(ctx, mk(row.ent(), static_cast<int>(i)), spritesheet, frame,
+           afterhours::texture_manager::HasTexture::Alignment::Center,
+           ComponentConfig::inherit_from(config, "icon_row_item")
+               .with_size(ComponentSize{icon_width, icon_height})
+               .with_margin(Margin{
+                   .left = percent(i == 0 ? first_left_margin_percent
+                                          : subsequent_left_margin_percent)}));
+    i++;
+  }
+
+  return {false, row.ent()};
+}
+
 ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
                      ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
