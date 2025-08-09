@@ -170,15 +170,22 @@ struct ComponentConfig {
                                       const std::string &debug_name = "") {
     return ComponentConfig{}
         .with_debug_name(debug_name)
-        .with_alignment(parent.label_alignment)
-        .with_disabled(parent.disabled)
-        .with_hidden(parent.hidden)
-        .with_skip_tabbing(parent.skip_when_tabbing)
-        .with_select_on_focus(parent.select_on_focus)
-        .with_font(parent.font_name, parent.font_size)
-        .with_internal(parent.is_internal)
-        .with_image_alignment(parent.image_alignment.value_or(
-            texture_manager::HasTexture::Alignment::Center));
+        .apply_inheritable_from(parent);
+  }
+
+  // Copies only inheritable fields from parent into this config
+  ComponentConfig &apply_inheritable_from(const ComponentConfig &parent) {
+    label_alignment = parent.label_alignment;
+    disabled = parent.disabled;
+    hidden = parent.hidden;
+    skip_when_tabbing = parent.skip_when_tabbing;
+    select_on_focus = parent.select_on_focus;
+    font_name = parent.font_name;
+    font_size = parent.font_size;
+    is_internal = parent.is_internal;
+    image_alignment = parent.image_alignment.value_or(
+        texture_manager::HasTexture::Alignment::Center);
+    return *this;
   }
 };
 
