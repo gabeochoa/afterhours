@@ -188,8 +188,6 @@ struct ComponentConfig {
   bool skips_when_tabbing() const { return skip_when_tabbing; }
   bool selects_on_focus() const { return select_on_focus; }
 
-  // Apply override fields from another config onto this one, using
-  // explicit-set semantics encoded by helper queries above.
   ComponentConfig apply_overrides(const ComponentConfig &overrides) const {
     ComponentConfig merged = *this;
 
@@ -385,6 +383,80 @@ static bool _init_component(HasUIContext auto &ctx, EntityParent ep_pair,
   return _add_missing_components(ctx, entity, parent, config, debug_name);
 }
 
+static void apply_flags(Entity &entity, const ComponentConfig &config) {
+  if (config.skip_when_tabbing)
+    entity.addComponentIfMissing<SkipWhenTabbing>();
+  if (config.select_on_focus)
+    entity.addComponentIfMissing<SelectOnFocus>();
+
+  if (config.hidden) {
+    entity.addComponentIfMissing<ShouldHide>();
+  } else {
+    entity.removeComponentIfExists<ShouldHide>();
+  }
+}
+
+static void apply_layout(Entity &entity, const ComponentConfig &config) {
+  entity.get<UIComponent>()
+      .set_desired_width(config.size.x_axis)
+      .set_desired_height(config.size.y_axis)
+      .set_desired_padding(config.padding)
+      .set_desired_margin(config.margin);
+
+  if (config.is_absolute)
+    entity.get<UIComponent>().make_absolute();
+}
+
+static void apply_label(Entity &entity, const ComponentConfig &config) {
+  if (config.label.empty())
+    return;
+  auto &lbl = entity.addComponentIfMissing<ui::HasLabel>(config.label,
+                                                          config.disabled);
+  lbl.set_label(config.label)
+      .set_disabled(config.disabled)
+      .set_alignment(config.label_alignment);
+}
+
+static void apply_texture(Entity &entity, const ComponentConfig &config) {
+  if (!config.texture_config.has_value())
+    return;
+  const TextureConfig &conf = config.texture_config.value();
+  auto &ht = entity.addComponentIfMissing<texture_manager::HasTexture>(
+      conf.texture, conf.alignment);
+  ht.texture = conf.texture;
+  ht.alignment = conf.alignment;
+}
+
+static void apply_visuals(HasUIContext auto &ctx, Entity &entity,
+                          const ComponentConfig &config) {
+  if (config.rounded_corners.has_value() &&
+      config.rounded_corners.value().any()) {
+    entity.addComponentIfMissing<HasRoundedCorners>().set(
+        config.rounded_corners.value());
+  }
+
+  if (config.font_name != UIComponent::UNSET_FONT) {
+    entity.get<UIComponent>().enable_font(config.font_name, config.font_size);
+  }
+
+  if (Theme::is_valid(config.color_usage)) {
+    entity.addComponentIfMissing<HasColor>(
+        ctx.theme.from_usage(config.color_usage, config.disabled));
+    entity.get<HasColor>().set(
+        ctx.theme.from_usage(config.color_usage, config.disabled));
+  }
+
+  if (config.color_usage == Theme::Usage::Custom) {
+    if (config.custom_color.has_value()) {
+      entity.addComponentIfMissing<HasColor>(config.custom_color.value());
+      entity.get<HasColor>().set(config.custom_color.value());
+    } else {
+      entity.addComponentIfMissing<HasColor>(colors::UI_PINK);
+      entity.get<HasColor>().set(colors::UI_PINK);
+    }
+  }
+}
+
 static bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
                                     Entity &parent, ComponentConfig config,
                                     const std::string &debug_name = "") {
@@ -393,46 +465,7 @@ static bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
 
   if (entity.is_missing<UIComponent>()) {
     entity.addComponent<ui::UIComponent>(entity.id).set_parent(parent.id);
-
     entity.addComponent<UIComponentDebug>(debug_name);
-
-    if (!config.label.empty())
-      entity.addComponent<ui::HasLabel>(config.label, config.disabled)
-          .set_alignment(config.label_alignment);
-
-    if (Theme::is_valid(config.color_usage)) {
-      entity.addComponent<HasColor>(
-          ctx.theme.from_usage(config.color_usage, config.disabled));
-
-      if (config.custom_color.has_value()) {
-        log_warn("You have custom color set on {} but didnt set "
-                 "config.color_usage = Custom",
-                 debug_name.c_str());
-      }
-    }
-
-    if (config.color_usage == Theme::Usage::Custom) {
-      if (config.custom_color.has_value()) {
-        entity.addComponentIfMissing<HasColor>(config.custom_color.value());
-      } else {
-        log_warn("You have custom color usage selected on {} but didnt set "
-                 "config.custom_color",
-                 debug_name.c_str());
-        entity.addComponentIfMissing<HasColor>(colors::UI_PINK);
-      }
-    }
-
-    if (config.skip_when_tabbing)
-      entity.addComponent<SkipWhenTabbing>();
-
-    if (config.select_on_focus)
-      entity.addComponent<SelectOnFocus>();
-
-    if (config.texture_config.has_value()) {
-      const TextureConfig &conf = config.texture_config.value();
-      entity.addComponent<texture_manager::HasTexture>(conf.texture,
-                                                       conf.alignment);
-    }
 
     created = true;
   }
@@ -440,64 +473,19 @@ static bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
   UIComponent &parent_cmp = parent.get<UIComponent>();
   parent_cmp.add_child(entity.id);
 
-  if (config.hidden) {
-    entity.addComponentIfMissing<ShouldHide>();
-  } else {
-    entity.removeComponentIfExists<ShouldHide>();
-  }
+  apply_flags(entity, config);
 
-  entity.get<UIComponent>()
-      .set_desired_width(config.size.x_axis)
-      .set_desired_height(config.size.y_axis)
-      .set_desired_padding(config.padding)
-      .set_desired_margin(config.margin);
+  apply_layout(entity, config);
 
-  if (config.rounded_corners.has_value() &&
-      config.rounded_corners.value().any()) {
-    entity.addComponentIfMissing<HasRoundedCorners>().set(
-        config.rounded_corners.value());
-  }
-
-  if (!config.label.empty())
-    entity.get<ui::HasLabel>()
-        .set_label(config.label)
-        .set_disabled(config.disabled)
-        .set_alignment(config.label_alignment);
-
-  if (config.is_absolute)
-    entity.get<UIComponent>().make_absolute();
+  apply_label(entity, config);
 
   if (!config.debug_name.empty()) {
     entity.get<UIComponentDebug>().set(config.debug_name);
   }
 
-  if (config.font_name != UIComponent::UNSET_FONT) {
-    entity.get<UIComponent>().enable_font(config.font_name, config.font_size);
-  }
+  apply_visuals(ctx, entity, config);
 
-  if (Theme::is_valid(config.color_usage)) {
-    entity.get<HasColor>().set(
-        ctx.theme.from_usage(config.color_usage, config.disabled));
-  }
-
-  if (config.color_usage == Theme::Usage::Custom) {
-    if (config.custom_color.has_value()) {
-      entity.get<HasColor>().set(config.custom_color.value());
-    } else {
-      entity.get<HasColor>().set(colors::UI_PINK);
-    }
-  }
-
-  if (!config.label.empty())
-    entity.get<ui::HasLabel>().label = config.label;
-
-  if (config.texture_config.has_value()) {
-    const TextureConfig &conf = config.texture_config.value();
-    auto &ht = entity.addComponentIfMissing<texture_manager::HasTexture>(
-        conf.texture, conf.alignment);
-    ht.texture = conf.texture;
-    ht.alignment = conf.alignment;
-  }
+  apply_texture(entity, config);
 
   ctx.queue_render(RenderInfo{entity.id, config.render_layer});
   return created;
