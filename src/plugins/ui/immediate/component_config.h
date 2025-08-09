@@ -178,10 +178,12 @@ enum struct ComponentType {
   Checkbox,
   CheckboxNoLabel,
   Dropdown,
-  // Add more component types as needed
+  Pagination,
+  NavigationBar,
+  CheckboxGroup,
 };
 
-// Comprehensive styling defaults with real ComponentConfig support
+// TODO singleton helper
 struct UIStylingDefaults {
   std::map<ComponentType, ComponentConfig> component_configs;
 

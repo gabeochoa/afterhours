@@ -66,7 +66,7 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
   auto max_width = config.size.x_axis;
   config.size.x_axis = children(max_width.value);
 
-  _init_component(ctx, ep_pair, config, ComponentType::Div, false,
+  _init_component(ctx, ep_pair, config, ComponentType::ButtonGroup, false,
                   "button_group");
 
   config.size.x_axis = config.flex_direction == FlexDirection::Row
@@ -187,7 +187,7 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
 
   auto max_height = config.size.y_axis;
   config.size.y_axis = children();
-  _init_component(ctx, ep_pair, config, ComponentType::Div, false,
+  _init_component(ctx, ep_pair, config, ComponentType::CheckboxGroup, false,
                   "checkbox_group");
   config.size.y_axis = max_height;
 
@@ -366,8 +366,8 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
   std::string label_str = config.label;
   config.label = "";
 
-  bool first_time = _init_component(ctx, ep_pair, config, ComponentType::Div,
-                                    false, "pagination");
+  bool first_time = _init_component(
+      ctx, ep_pair, config, ComponentType::Pagination, false, "pagination");
 
   int child_index = 0;
 
@@ -540,7 +540,7 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
   // TODO - add default
   config.flex_direction = FlexDirection::Row;
 
-  _init_component(ctx, ep_pair, config, ComponentType::Div, false,
+  _init_component(ctx, ep_pair, config, ComponentType::NavigationBar, false,
                   "navigation_bar");
 
   bool clicked = false;
