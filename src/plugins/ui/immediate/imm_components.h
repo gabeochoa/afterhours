@@ -52,17 +52,16 @@ ElementResult image(HasUIContext auto &ctx, EntityParent ep_pair,
   return {false, entity};
 }
 
-ElementResult
-sprite(HasUIContext auto &ctx, EntityParent ep_pair,
-       afterhours::texture_manager::Texture texture,
-       afterhours::texture_manager::Rectangle source_rect,
-       afterhours::texture_manager::HasTexture::Alignment alignment =
-           afterhours::texture_manager::HasTexture::Alignment::Center,
-       ComponentConfig config = ComponentConfig()) {
+ElementResult sprite(HasUIContext auto &ctx, EntityParent ep_pair,
+                     afterhours::texture_manager::Texture texture,
+                     afterhours::texture_manager::Rectangle source_rect,
+                     ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
   _init_component(ctx, ep_pair, config, ComponentType::Image, false, "sprite");
 
+  auto alignment = config.image_alignment.value_or(
+      afterhours::texture_manager::HasTexture::Alignment::Center);
   auto &img = entity.addComponentIfMissing<ui::HasImage>(texture, source_rect,
                                                          alignment);
   img.texture = texture;
@@ -97,8 +96,9 @@ ElementResult icon_row(HasUIContext auto &ctx, EntityParent ep_pair,
     auto icon_height = pixels(frame.height * scale);
 
     sprite(ctx, mk(row.ent(), static_cast<int>(i)), spritesheet, frame,
-           afterhours::texture_manager::HasTexture::Alignment::Center,
            ComponentConfig::inherit_from(config)
+               .with_image_alignment(
+                   afterhours::texture_manager::HasTexture::Alignment::Center)
                .with_size(ComponentSize{icon_width, icon_height})
                .with_margin(Margin{
                    .left = percent(i == 0 ? first_left_margin_percent

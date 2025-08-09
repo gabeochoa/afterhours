@@ -46,6 +46,7 @@ struct ComponentConfig {
   std::optional<Color> custom_color;
 
   std::optional<TextureConfig> texture_config;
+  std::optional<texture_manager::HasTexture::Alignment> image_alignment;
   std::optional<std::bitset<4>> rounded_corners;
 
   // TODO should everything be inheritable?
@@ -158,17 +159,26 @@ struct ComponentConfig {
     return *this;
   }
 
+  ComponentConfig &
+  with_image_alignment(texture_manager::HasTexture::Alignment alignment) {
+    image_alignment = alignment;
+    return *this;
+  }
+
   // Static method to create inheritable config from parent
   static ComponentConfig inherit_from(const ComponentConfig &parent,
                                       const std::string &debug_name = "") {
     return ComponentConfig{}
+        .with_debug_name(debug_name)
         .with_alignment(parent.label_alignment)
         .with_disabled(parent.disabled)
         .with_hidden(parent.hidden)
         .with_skip_tabbing(parent.skip_when_tabbing)
         .with_select_on_focus(parent.select_on_focus)
         .with_font(parent.font_name, parent.font_size)
-        .with_internal(parent.is_internal);
+        .with_internal(parent.is_internal)
+        .with_image_alignment(parent.image_alignment.value_or(
+            texture_manager::HasTexture::Alignment::Center));
   }
 };
 
@@ -297,6 +307,10 @@ struct UIStylingDefaults {
 
     if (config.texture_config.has_value()) {
       merged.texture_config = config.texture_config;
+    }
+
+    if (config.image_alignment.has_value()) {
+      merged.image_alignment = config.image_alignment;
     }
 
     if (config.is_absolute) {
