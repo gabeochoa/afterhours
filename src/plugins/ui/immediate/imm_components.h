@@ -43,6 +43,15 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
   return {true, entity};
 }
 
+ElementResult image(HasUIContext auto &ctx, EntityParent ep_pair,
+                    ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+
+  _init_component(ctx, ep_pair, config, ComponentType::Image);
+
+  return {false, entity};
+}
+
 ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
                      ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);

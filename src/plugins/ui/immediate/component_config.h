@@ -146,6 +146,16 @@ struct ComponentConfig {
     is_internal = internal;
     return *this;
   }
+  ComponentConfig &with_texture(const TextureConfig &tex_cfg) {
+    texture_config = tex_cfg;
+    return *this;
+  }
+  ComponentConfig &with_texture(texture_manager::Texture texture,
+                                texture_manager::HasTexture::Alignment alignment =
+                                    texture_manager::HasTexture::Alignment::None) {
+    texture_config = TextureConfig{texture, alignment};
+    return *this;
+  }
 
   // Static method to create inheritable config from parent
   static ComponentConfig inherit_from(const ComponentConfig &parent,
@@ -181,6 +191,7 @@ enum struct ComponentType {
   Pagination,
   NavigationBar,
   CheckboxGroup,
+  Image,
 };
 
 // TODO singleton helper
@@ -229,11 +240,8 @@ struct UIStylingDefaults {
       return config;
     }
 
-    // Start with the defaults
     ComponentConfig merged = defaults.value();
 
-    // Override with user-specified values (only if user actually specified
-    // something)
     if (config.padding.top.value > 0 || config.padding.left.value > 0 ||
         config.padding.bottom.value > 0 || config.padding.right.value > 0) {
       merged.padding = config.padding;
@@ -323,22 +331,16 @@ ComponentConfig _overwrite_defaults(HasUIContext auto &ctx,
                                     bool enable_color = false) {
   auto &styling_defaults = UIStylingDefaults::get();
 
-  // Apply user styling defaults if available
-  if (
-      // Skip if internal
-      !config.is_internal &&
+  if (!config.is_internal &&
       styling_defaults.has_component_defaults(component_type)) {
     config = styling_defaults.merge_with_defaults(component_type, config);
   }
 
-  // Mark as internal after applying defaults (library components should be
-  // internal)
   config.with_internal(true);
 
   if (enable_color && config.color_usage == Theme::Usage::Default)
     config.with_color_usage(Theme::Usage::Primary);
 
-  // By default buttons have centered text if user didnt specify anything
   if (config.label_alignment == TextAlignment::None) {
     config.with_alignment(TextAlignment::Center);
   }
@@ -349,7 +351,6 @@ ComponentConfig _overwrite_defaults(HasUIContext auto &ctx,
   return config;
 }
 
-// Convenience initializer that applies defaults and delegates to implementation
 static bool _init_component(HasUIContext auto &ctx, EntityParent ep_pair,
                             ComponentConfig &config,
                             ComponentType component_type,
@@ -366,7 +367,6 @@ static bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
   (void)debug_name;
   bool created = false;
 
-  // only once on startup
   if (entity.is_missing<UIComponent>()) {
     entity.addComponent<ui::UIComponent>(entity.id).set_parent(parent.id);
 
@@ -416,8 +416,6 @@ static bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
   UIComponent &parent_cmp = parent.get<UIComponent>();
   parent_cmp.add_child(entity.id);
 
-  // things that happen every frame
-
   if (config.hidden) {
     entity.addComponentIfMissing<ShouldHide>();
   } else {
@@ -462,13 +460,20 @@ static bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
     if (config.custom_color.has_value()) {
       entity.get<HasColor>().set(config.custom_color.value());
     } else {
-      // no warning on this to avoid spamming log
       entity.get<HasColor>().set(colors::UI_PINK);
     }
   }
 
   if (!config.label.empty())
     entity.get<ui::HasLabel>().label = config.label;
+
+  if (config.texture_config.has_value()) {
+    const TextureConfig &conf = config.texture_config.value();
+    auto &ht = entity.addComponentIfMissing<texture_manager::HasTexture>(
+        conf.texture, conf.alignment);
+    ht.texture = conf.texture;
+    ht.alignment = conf.alignment;
+  }
 
   ctx.queue_render(RenderInfo{entity.id, config.render_layer});
   return created;
