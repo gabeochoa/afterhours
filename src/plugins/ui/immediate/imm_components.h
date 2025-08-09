@@ -550,6 +550,21 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
       options[dropdownState.on ? 0 : dropdownState.last_option_clicked]);
   auto drop_arrow_icon = dropdownState.on ? " ^" : " V";
   auto main_button_label = std::format("{}{}", current_option, drop_arrow_icon);
+  // TODO hot sibling summary: previously, when a label was present to the left
+  // of the dropdown button, we passed that label entity id as a "hot sibling"
+  // to the main button so hovering/focusing the button would visually hot the
+  // label too. Implementation details we removed:
+  // - ComponentConfig had a std::vector<EntityID> hot_siblings with builder
+  //   helpers with_hot_siblings/add_hot_sibling.
+  // - Applying config added a ui::BringsHotSiblings component to the target
+  //   entity, storing those ids.
+  // - In rendering, when an entity became hot, we iterated its parent's
+  //   children and, for each sibling entity that had BringsHotSiblings
+  //   including the current entity id, we treated that sibling as hot as well.
+  // - In this dropdown, when a label existed, we collected the label child id
+  //   and passed it via with_hot_siblings({label_id}) to the main button.
+  // Re-adding this would require restoring: ComponentConfig hot_siblings api,
+  // ui::BringsHotSiblings component, and the rendering propagation logic.
   if (button(ctx, mk(entity),
              ComponentConfig::inherit_from(config, "option 1")
                  .with_size(config_size)
