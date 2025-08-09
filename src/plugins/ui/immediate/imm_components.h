@@ -75,8 +75,6 @@ template <typename Container>
 ElementResult icon_row(HasUIContext auto &ctx, EntityParent ep_pair,
                        afterhours::texture_manager::Texture spritesheet,
                        const Container &frames, float scale = 1.f,
-                       float first_left_margin_percent = 0.2f,
-                       float subsequent_left_margin_percent = 0.1f,
                        ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
@@ -100,9 +98,6 @@ ElementResult icon_row(HasUIContext auto &ctx, EntityParent ep_pair,
                .with_image_alignment(
                    afterhours::texture_manager::HasTexture::Alignment::Center)
                .with_size(ComponentSize{icon_width, icon_height})
-               .with_margin(Margin{
-                   .left = percent(i == 0 ? first_left_margin_percent
-                                          : subsequent_left_margin_percent)})
                .with_debug_name(std::format("icon_row_item_{}", i)));
     i++;
   }
