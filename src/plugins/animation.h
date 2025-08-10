@@ -33,6 +33,12 @@ struct animation : developer::Plugin {
     EasingType current_easing = EasingType::Linear;
     std::deque<AnimSegment> queue;
     std::function<void()> on_complete;
+    struct Watcher {
+      std::function<int(float)> quantize;
+      std::optional<int> last_value;
+      std::function<void(int)> callback;
+    };
+    std::vector<Watcher> watchers;
   };
 
   template <typename Enum> struct EnumHash {
@@ -99,7 +105,19 @@ struct animation : developer::Plugin {
         } else {
           tr.elapsed += dt;
           float u = apply_ease(tr.current_easing, tr.elapsed / tr.duration);
-          tr.current = std::lerp(tr.from, tr.to, u);
+          float new_current = std::lerp(tr.from, tr.to, u);
+          // notify watchers if quantized value changed during this update
+          if (!tr.watchers.empty()) {
+            for (auto &w : tr.watchers) {
+              int q = w.quantize(new_current);
+              if (!w.last_value.has_value() || q != *w.last_value) {
+                w.last_value = q;
+                if (w.callback)
+                  w.callback(q);
+              }
+            }
+          }
+          tr.current = new_current;
           if (tr.elapsed >= tr.duration) {
             tr.current = tr.to;
             if (!tr.queue.empty()) {
@@ -151,6 +169,7 @@ struct animation : developer::Plugin {
       tr.active = false;
       tr.queue.clear();
       tr.on_complete = nullptr;
+      tr.watchers.clear();
       return *this;
     }
     AnimHandle &to(float value, float duration, EasingType easing) {
@@ -197,6 +216,18 @@ struct animation : developer::Plugin {
       AnimTrack &tr = mgr.ensure_track(key);
       tr.on_complete = std::move(callback);
       return *this;
+    }
+    AnimHandle &on_change(std::function<int(float)> quantize,
+                          std::function<void(int)> cb) {
+      AnimTrack &tr = mgr.ensure_track(key);
+      tr.watchers.push_back(typename AnimTrack::Watcher{
+          std::move(quantize), std::nullopt, std::move(cb)});
+      return *this;
+    }
+    AnimHandle &on_step(float step, std::function<void(int)> cb) {
+      return on_change(
+          [step](float v) { return static_cast<int>(std::floor(v / step)); },
+          std::move(cb));
     }
     AnimHandle &loop_sequence(const std::vector<AnimSegment> &segments) {
       sequence(segments);

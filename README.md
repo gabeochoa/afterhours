@@ -114,7 +114,7 @@ Render Systems:
 - api (templated by your enum key type):
   - `animation::AnimationManager<Key>`: holds tracks
   - `animation::manager<Key>()`: singleton manager accessor
-  - `animation::anim(Key key)`: fluent handle with `.from()`, `.to()`, `.sequence()`, `.hold()`, `.on_complete()`
+  - `animation::anim(Key key)`: fluent handle with `.from()`, `.to()`, `.sequence()`, `.hold()`, `.on_complete()`, `.on_change()`, `.on_step()`
   - `animation::one_shot(Key key, Fn)` and `animation::one_shot(Enum base, size_t index, Fn)`: run an animation once per key (or per composite key)
   - `AnimHandle::loop_sequence(segments)`: repeat a sequence forever (calls `.sequence` again on complete)
   - `animation::register_update_systems<Key>(SystemManager&)`: updates manager each frame
@@ -133,6 +133,7 @@ afterhours::animation::anim(UIKey::MapShuffle)
   .sequence({ { .to_value = 8.f, .duration = 0.45f, .easing = afterhours::animation::animation::EasingType::Linear },
               { .to_value = 5.f, .duration = 0.55f, .easing = afterhours::animation::animation::EasingType::EaseOutQuad } })
   .hold(0.5f)
+  .on_step(1.0f, [](int step){ /* called when value crosses multiples of 1.0 */ })
   .on_complete([]{ /* done */ });
 
 // read value in UI
