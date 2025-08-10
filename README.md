@@ -108,6 +108,35 @@ Render Systems:
 - RenderAnimation
 
 
+### animation 
+
+- types: `afterhours::animation::EasingType`, `AnimSegment`, `AnimTrack`
+- api (templated by your enum key type):
+  - `animation::AnimationManager<Key>`: holds tracks
+  - `animation::manager<Key>()`: singleton manager accessor
+  - `animation::anim(Key key)`: fluent handle with `.from()`, `.to()`, `.sequence()`, `.hold()`, `.on_complete()`
+  - `animation::register_update_systems<Key>(SystemManager&)`: updates manager each frame
+
+example:
+```cpp
+// define your keys (app side)
+enum struct UIKey : size_t { MapShuffle };
+
+// wire update
+afterhours::animation::register_update_systems<UIKey>(systems);
+
+// start animation
+afterhours::animation::anim(UIKey::MapShuffle)
+  .from(0.0f)
+  .sequence({ { .to_value = 8.f, .duration = 0.45f, .easing = afterhours::animation::animation::EasingType::Linear },
+              { .to_value = 5.f, .duration = 0.55f, .easing = afterhours::animation::animation::EasingType::EaseOutQuad } })
+  .hold(0.5f)
+  .on_complete([]{ /* done */ });
+
+// read value in UI
+auto v = afterhours::animation::manager<UIKey>().get_value(UIKey::MapShuffle);
+```
+
 
 
 examples in other repos:
