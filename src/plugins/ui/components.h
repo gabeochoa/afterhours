@@ -158,6 +158,12 @@ struct HasImage : BaseComponent {
       : texture(tex), source_rect(src), alignment(align) {}
 };
 
+struct HasOpacity : BaseComponent {
+  float value = 1.0f;
+  HasOpacity() = default;
+  explicit HasOpacity(float v) : value(v) {}
+};
+
 } // namespace ui
 
 } // namespace afterhours

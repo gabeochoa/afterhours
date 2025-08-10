@@ -56,6 +56,7 @@ struct ComponentConfig {
   bool disabled = false;
   bool hidden = false;
   bool select_on_focus = false;
+  float opacity = 1.0f;
 
   // debugs
   std::string debug_name = "";
@@ -128,6 +129,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_select_on_focus(bool select) {
     select_on_focus = select;
+    return *this;
+  }
+  ComponentConfig &with_opacity(float v) {
+    opacity = v;
     return *this;
   }
   ComponentConfig &with_flex_direction(FlexDirection dir) {
@@ -455,6 +460,8 @@ static void apply_visuals(HasUIContext auto &ctx, Entity &entity,
       entity.get<HasColor>().set(colors::UI_PINK);
     }
   }
+  entity.addComponentIfMissing<HasOpacity>().value =
+      std::clamp(config.opacity, 0.0f, 1.0f);
 }
 
 static bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,

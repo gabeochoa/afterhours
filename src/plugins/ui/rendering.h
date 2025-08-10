@@ -21,6 +21,25 @@ namespace afterhours {
 
 namespace ui {
 
+static inline float _compute_effective_opacity(const Entity &entity) {
+  float result = 1.0f;
+  const Entity *cur = &entity;
+  int guard = 0;
+  while (cur) {
+    if (cur->has<HasOpacity>()) {
+      result *= std::clamp(cur->get<HasOpacity>().value, 0.0f, 1.0f);
+    }
+    if (!cur->has<UIComponent>())
+      break;
+    EntityID pid = cur->get<UIComponent>().parent;
+    if (pid < 0 || pid == cur->id)
+      break;
+    cur = &EntityHelper::getEntityForIDEnforce(pid);
+    if (++guard > 64)
+      break;
+  }
+  return std::clamp(result, 0.0f, 1.0f);
+}
 static inline RectangleType position_text(const ui::FontManager &fm,
                                           const std::string &text,
                                           RectangleType container,
@@ -282,6 +301,7 @@ template <typename InputAction> struct RenderImm : System<> {
   void render_me(const UIContext<InputAction> &context,
                  const FontManager &font_manager, const Entity &entity) const {
     const UIComponent &cmp = entity.get<UIComponent>();
+    const float effective_opacity = _compute_effective_opacity(entity);
 
     if (entity.has<HasColor>()) {
       Color col = entity.template get<HasColor>().color();
@@ -290,17 +310,25 @@ template <typename InputAction> struct RenderImm : System<> {
         col = context.theme.from_usage(Theme::Usage::Background);
       }
 
+      if (effective_opacity < 1.0f) {
+        col = colors::opacity_pct(col, effective_opacity);
+      }
+
       auto corner_settings = entity.has<HasRoundedCorners>()
                                  ? entity.get<HasRoundedCorners>().get()
                                  : std::bitset<4>().reset();
 
       // TODO do we need another color for this?
       if (context.has_focus(entity.id)) {
+        Color focus_col = context.theme.from_usage(Theme::Usage::Accent);
+        float effective_opacity = _compute_effective_opacity(entity);
+        if (effective_opacity < 1.0f) {
+          focus_col = colors::opacity_pct(focus_col, effective_opacity);
+        }
         draw_rectangle_rounded(cmp.focus_rect(),
                                0.5f, // roundness
                                8,    // segments
-                               context.theme.from_usage(Theme::Usage::Accent),
-                               corner_settings);
+                               focus_col, corner_settings);
       }
       draw_rectangle_rounded(cmp.rect(),
                              0.5f, // roundness
@@ -310,14 +338,22 @@ template <typename InputAction> struct RenderImm : System<> {
 
     if (entity.has<HasLabel>()) {
       const HasLabel &hasLabel = entity.get<HasLabel>();
-      draw_text_in_rect(
-          font_manager, hasLabel.label.c_str(), cmp.rect(), hasLabel.alignment,
-          context.theme.from_usage(Theme::Usage::Font, hasLabel.is_disabled));
+      Color font_col =
+          context.theme.from_usage(Theme::Usage::Font, hasLabel.is_disabled);
+      if (effective_opacity < 1.0f) {
+        font_col = colors::opacity_pct(font_col, effective_opacity);
+      }
+      draw_text_in_rect(font_manager, hasLabel.label.c_str(), cmp.rect(),
+                        hasLabel.alignment, font_col);
     }
 
     if (entity.has<texture_manager::HasTexture>()) {
       const texture_manager::HasTexture &texture =
           entity.get<texture_manager::HasTexture>();
+      // draw textured rect with opacity via color tint
+      // NOTE: draw_texture_in_rect path lacks tint, so opacity will apply to
+      // images below reuse existing helper (no tint support), so fallback to
+      // image path below
       draw_texture_in_rect(texture.texture, cmp.rect(), texture.alignment);
     } else if (entity.has<ui::HasImage>()) {
       const ui::HasImage &img = entity.get<ui::HasImage>();
@@ -331,6 +367,10 @@ template <typename InputAction> struct RenderImm : System<> {
       Vector2Type location =
           position_texture(img.texture, size, cmp.rect(), img.alignment);
 
+      Color img_col = colors::UI_WHITE;
+      if (effective_opacity < 1.0f) {
+        img_col = colors::opacity_pct(img_col, effective_opacity);
+      }
       texture_manager::draw_texture_pro(img.texture, src,
                                         RectangleType{
                                             .x = location.x,
@@ -338,7 +378,7 @@ template <typename InputAction> struct RenderImm : System<> {
                                             .width = size.x,
                                             .height = size.y,
                                         },
-                                        size, 0.f, colors::UI_WHITE);
+                                        size, 0.f, img_col);
     }
   }
 
