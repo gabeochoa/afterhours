@@ -56,7 +56,11 @@ struct ComponentConfig {
   bool disabled = false;
   bool hidden = false;
   bool select_on_focus = false;
+
+  // ui modifiers
   float opacity = 1.0f;
+  float translate_x = 0.0f;
+  float translate_y = 0.0f;
 
   // debugs
   std::string debug_name = "";
@@ -129,6 +133,11 @@ struct ComponentConfig {
   }
   ComponentConfig &with_select_on_focus(bool select) {
     select_on_focus = select;
+    return *this;
+  }
+  ComponentConfig &with_translate(float x, float y) {
+    translate_x = x;
+    translate_y = y;
     return *this;
   }
   ComponentConfig &with_opacity(float v) {
@@ -462,6 +471,11 @@ static void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   }
   entity.addComponentIfMissing<HasOpacity>().value =
       std::clamp(config.opacity, 0.0f, 1.0f);
+  if (config.translate_x != 0.0f || config.translate_y != 0.0f) {
+    auto &mods = entity.addComponentIfMissing<HasUIModifiers>();
+    mods.translate_x = config.translate_x;
+    mods.translate_y = config.translate_y;
+  }
 }
 
 static bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
