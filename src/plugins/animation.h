@@ -7,6 +7,7 @@
 #include <optional>
 #include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "../developer.h"
 #include "../system.h"
@@ -197,6 +198,13 @@ struct animation : developer::Plugin {
       tr.on_complete = std::move(callback);
       return *this;
     }
+    AnimHandle &loop_sequence(const std::vector<AnimSegment> &segments) {
+      sequence(segments);
+      Key k = key;
+      auto segs = segments;
+      on_complete([k, segs]() mutable { anim<Key>(k).sequence(segs); });
+      return *this;
+    }
     float value() const {
       auto v = mgr.get_value(key);
       return v.value_or(0.f);
@@ -221,6 +229,26 @@ struct animation : developer::Plugin {
   template <typename E>
   static inline std::optional<float> get_value(E base, size_t index) {
     return manager<CompositeKey>().get_value(make_key(base, index));
+  }
+
+  template <typename Key, typename Fn>
+  static inline void one_shot(Key key, Fn fn) {
+    using Hasher = typename KeyHasher<Key>::type;
+    static std::unordered_set<Key, Hasher> started;
+    if (started.contains(key))
+      return;
+    started.insert(key);
+    fn(anim<Key>(key));
+  }
+
+  template <typename E, typename Fn>
+  static inline void one_shot(E base, size_t index, Fn fn) {
+    CompositeKey k = make_key(base, index);
+    static std::unordered_set<CompositeKey, CompositeKeyHash> started;
+    if (started.contains(k))
+      return;
+    started.insert(k);
+    fn(anim(base, index));
   }
 
   template <typename Key>

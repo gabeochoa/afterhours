@@ -115,6 +115,8 @@ Render Systems:
   - `animation::AnimationManager<Key>`: holds tracks
   - `animation::manager<Key>()`: singleton manager accessor
   - `animation::anim(Key key)`: fluent handle with `.from()`, `.to()`, `.sequence()`, `.hold()`, `.on_complete()`
+  - `animation::one_shot(Key key, Fn)` and `animation::one_shot(Enum base, size_t index, Fn)`: run an animation once per key (or per composite key)
+  - `AnimHandle::loop_sequence(segments)`: repeat a sequence forever (calls `.sequence` again on complete)
   - `animation::register_update_systems<Key>(SystemManager&)`: updates manager each frame
 
 example:
@@ -135,6 +137,34 @@ afterhours::animation::anim(UIKey::MapShuffle)
 
 // read value in UI
 auto v = afterhours::animation::manager<UIKey>().get_value(UIKey::MapShuffle);
+```
+
+one-shot usage:
+```cpp
+// runs once per key
+afterhours::animation::one_shot(UIKey::IntroReveal, [](auto h){
+  h.from(0.0f).to(1.0f, 0.3f, afterhours::animation::EasingType::EaseOutQuad);
+});
+
+// runs once per composite key (enum+index)
+afterhours::animation::one_shot(UIKey::MapCard, i, [i](auto h){
+  const float delay = 0.05f * static_cast<float>(i);
+  h.from(0.0f)
+   .sequence({
+     { .to_value = 0.0f, .duration = delay,  .easing = afterhours::animation::EasingType::Hold },
+     { .to_value = 1.0f, .duration = 0.25f, .easing = afterhours::animation::EasingType::EaseOutQuad },
+   });
+});
+```
+
+looping usage:
+```cpp
+afterhours::animation::anim(UIKey::Spinner)
+  .from(0.0f)
+  .loop_sequence({
+    { .to_value = 1.0f, .duration = 0.5f, .easing = afterhours::animation::EasingType::Linear },
+    { .to_value = 0.0f, .duration = 0.5f, .easing = afterhours::animation::EasingType::Linear },
+  });
 ```
 
 
