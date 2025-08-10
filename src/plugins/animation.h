@@ -41,6 +41,35 @@ struct animation : developer::Plugin {
     }
   };
 
+  struct CompositeKey {
+    size_t base = 0;
+    size_t index = 0;
+    bool operator==(const CompositeKey &other) const noexcept {
+      return base == other.base && index == other.index;
+    }
+  };
+
+  struct CompositeKeyHash {
+    size_t operator()(const CompositeKey &k) const noexcept {
+      size_t h = k.base * 1469598103934665603ull;
+      h ^= k.index + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2);
+      return h;
+    }
+  };
+
+  template <typename E>
+  static inline CompositeKey make_key(E base, size_t index) {
+    return CompositeKey{static_cast<size_t>(base), index};
+  }
+
+  // Hasher trait: default to EnumHash, specialize for CompositeKey
+  template <typename Key> struct KeyHasher {
+    using type = EnumHash<Key>;
+  };
+  template <> struct KeyHasher<CompositeKey> {
+    using type = CompositeKeyHash;
+  };
+
   static float apply_ease(EasingType easing, float t) {
     t = std::clamp(t, 0.f, 1.f);
     switch (easing) {
@@ -55,7 +84,7 @@ struct animation : developer::Plugin {
   }
 
   template <typename Key> struct AnimationManager {
-    static_assert(std::is_enum_v<Key>, "Key must be an enum type");
+    using Hasher = typename KeyHasher<Key>::type;
 
     void update(float dt) {
       for (auto &kv : tracks) {
@@ -104,7 +133,7 @@ struct animation : developer::Plugin {
     }
 
   private:
-    std::unordered_map<Key, AnimTrack, EnumHash<Key>> tracks;
+    std::unordered_map<Key, AnimTrack, Hasher> tracks;
   };
 
   template <typename Key> struct AnimHandle {
@@ -181,6 +210,17 @@ struct animation : developer::Plugin {
   }
   template <typename Key> static inline AnimHandle<Key> anim(Key key) {
     return AnimHandle<Key>{key, manager<Key>()};
+  }
+
+  template <typename E>
+  static inline AnimHandle<CompositeKey> anim(E base, size_t index) {
+    return AnimHandle<CompositeKey>{make_key(base, index),
+                                    manager<CompositeKey>()};
+  }
+
+  template <typename E>
+  static inline std::optional<float> get_value(E base, size_t index) {
+    return manager<CompositeKey>().get_value(make_key(base, index));
   }
 
   template <typename Key>
