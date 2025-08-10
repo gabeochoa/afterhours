@@ -299,10 +299,13 @@ struct HandleLeftRight : SystemWithUIContext<ui::HasLeftRightListener> {
     if (!context->has_focus(entity.id))
       return;
 
-    if (context->pressed(InputAction::WidgetLeft)) {
+    // TODO consider using a different repeat rate
+    if (context->pressed(InputAction::WidgetLeft) ||
+        context->is_held_down(InputAction::WidgetLeft)) {
       listener.cb(entity, -1);
     }
-    if (context->pressed(InputAction::WidgetRight)) {
+    if (context->pressed(InputAction::WidgetRight) ||
+        context->is_held_down(InputAction::WidgetRight)) {
       listener.cb(entity, +1);
     }
   }
