@@ -1,6 +1,11 @@
 #pragma once
 
 #include "../texture_manager.h"
+#if __has_include(<magic_enum/magic_enum.hpp>)
+#include <magic_enum/magic_enum.hpp>
+#else
+#include "../../../vendor/magic_enum/magic_enum.hpp"
+#endif
 #include <functional>
 #include <magic_enum/magic_enum.hpp>
 #include <optional>
@@ -56,6 +61,12 @@ struct HasDragListener : BaseComponent {
   bool down = false;
   std::function<void(Entity &)> cb;
   HasDragListener(const std::function<void(Entity &)> &callback)
+      : cb(callback) {}
+};
+
+struct HasLeftRightListener : BaseComponent {
+  std::function<void(Entity &, int)> cb;
+  HasLeftRightListener(const std::function<void(Entity &, int)> &callback)
       : cb(callback) {}
 };
 

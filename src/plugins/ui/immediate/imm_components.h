@@ -383,6 +383,24 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       .set_desired_width(pixels(0.25f * config.size.x_axis.value))
       .set_desired_height(config.size.y_axis);
 
+  slider_bg.addComponentIfMissing<ui::HasLeftRightListener>(
+      [&sliderState](Entity &ent, int dir) {
+        const float step = 0.01f;
+        float next = sliderState.value + (dir < 0 ? -step : step);
+        next = std::clamp(next, 0.0f, 1.0f);
+        if (next == sliderState.value)
+          return;
+        sliderState.value = next;
+        sliderState.changed_since = true;
+        UIComponent &cmp = ent.get<UIComponent>();
+        Rectangle rect = cmp.rect();
+        EntityID child_id = cmp.children[0];
+        Entity &child = EntityHelper::getEntityForIDEnforce(child_id);
+        UIComponent &child_cmp = child.get<UIComponent>();
+        child_cmp.set_desired_padding(
+            pixels(sliderState.value * 0.75f * rect.width), Axis::left);
+      });
+
   owned_value = sliderState.value;
   return ElementResult{sliderState.changed_since, entity, sliderState.value};
 }

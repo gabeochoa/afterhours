@@ -2,6 +2,11 @@
 
 #include <format>
 #include <iostream>
+#if __has_include(<magic_enum/magic_enum.hpp>)
+#include <magic_enum/magic_enum.hpp>
+#else
+#include "../../../vendor/magic_enum/magic_enum.hpp"
+#endif
 
 #include "../../developer.h"
 #include "../../entity.h"
@@ -128,6 +133,8 @@ static void register_after_ui_updates(SystemManager &sm) {
     sm.register_update_system(
         std::make_unique<ui::HandleClicks<InputAction>>());
     sm.register_update_system(std::make_unique<ui::HandleDrags<InputAction>>());
+    sm.register_update_system(
+        std::make_unique<ui::HandleLeftRight<InputAction>>());
     sm.register_update_system(
         std::make_unique<ui::HandleSelectOnFocus<InputAction>>());
   }

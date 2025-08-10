@@ -18,6 +18,11 @@
 #include "animation_keys.h"
 #include "components.h"
 #include "context.h"
+#if __has_include(<magic_enum/magic_enum.hpp>)
+#include <magic_enum/magic_enum.hpp>
+#else
+#include "../../../vendor/magic_enum/magic_enum.hpp"
+#endif
 
 namespace afterhours {
 
@@ -271,6 +276,34 @@ struct HandleDrags : SystemWithUIContext<ui::HasDragListener> {
     if (context->is_active(entity.id)) {
       context->set_focus(entity.id);
       hasDragListener.cb(entity);
+    }
+  }
+};
+
+template <typename InputAction>
+struct HandleLeftRight : SystemWithUIContext<ui::HasLeftRightListener> {
+  UIContext<InputAction> *context;
+
+  virtual void once(float) override {
+    this->context =
+        EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    this->include_derived_children = true;
+  }
+  virtual ~HandleLeftRight() {}
+
+  virtual void for_each_with_derived(Entity &entity, UIComponent &component,
+                                     HasLeftRightListener &listener, float) {
+    if (!component.was_rendered_to_screen)
+      return;
+
+    if (!context->has_focus(entity.id))
+      return;
+
+    if (context->pressed(InputAction::WidgetLeft)) {
+      listener.cb(entity, -1);
+    }
+    if (context->pressed(InputAction::WidgetRight)) {
+      listener.cb(entity, +1);
     }
   }
 };
