@@ -335,32 +335,32 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   HasSliderState &sliderState = slider_bg.get<ui::HasSliderState>();
   sliderState.changed_since = true;
 
+  auto apply_slider_value = [&](Entity &target, float new_value_pct) {
+    float clamped = std::clamp(new_value_pct, 0.f, 1.f);
+    if (clamped == sliderState.value)
+      return;
+    sliderState.value = clamped;
+    sliderState.changed_since = true;
+
+    UIComponent &cmp = target.get<UIComponent>();
+    Rectangle rect = cmp.rect();
+    if (!cmp.children.empty()) {
+      EntityID child_id = cmp.children[0];
+      Entity &child = EntityHelper::getEntityForIDEnforce(child_id);
+      UIComponent &child_cmp = child.get<UIComponent>();
+      child_cmp.set_desired_padding(
+          pixels(sliderState.value * 0.75f * rect.width), Axis::left);
+    }
+  };
+
   {
     slider_bg.addComponentIfMissing<ui::HasDragListener>(
-        [&sliderState](Entity &draggable) {
-          float mnf = 0.f;
-          float mxf = 1.f;
-
+        [apply_slider_value](Entity &draggable) {
           UIComponent &cmp = draggable.get<UIComponent>();
           Rectangle rect = cmp.rect();
-
           auto mouse_position = input::get_mouse_position();
-          float v =
-              std::clamp((mouse_position.x - rect.x) / rect.width, mnf, mxf);
-
-          if (v != sliderState.value) {
-            sliderState.value = v;
-            sliderState.changed_since = true;
-          }
-
-          auto opt_child =
-              EntityQuery()
-                  .whereID(draggable.get<UIComponent>().children[0])
-                  .gen_first();
-
-          UIComponent &child_cmp = opt_child->get<UIComponent>();
-          child_cmp.set_desired_padding(
-              pixels(sliderState.value * 0.75f * rect.width), Axis::left);
+          float v = (mouse_position.x - rect.x) / rect.width;
+          apply_slider_value(draggable, v);
         });
   }
 
@@ -384,21 +384,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       .set_desired_height(config.size.y_axis);
 
   slider_bg.addComponentIfMissing<ui::HasLeftRightListener>(
-      [&sliderState](Entity &ent, int dir) {
+      [apply_slider_value, &sliderState](Entity &ent, int dir) {
         const float step = 0.01f;
-        float next = sliderState.value + (dir < 0 ? -step : step);
-        next = std::clamp(next, 0.0f, 1.0f);
-        if (next == sliderState.value)
-          return;
-        sliderState.value = next;
-        sliderState.changed_since = true;
-        UIComponent &cmp = ent.get<UIComponent>();
-        Rectangle rect = cmp.rect();
-        EntityID child_id = cmp.children[0];
-        Entity &child = EntityHelper::getEntityForIDEnforce(child_id);
-        UIComponent &child_cmp = child.get<UIComponent>();
-        child_cmp.set_desired_padding(
-            pixels(sliderState.value * 0.75f * rect.width), Axis::left);
+        apply_slider_value(ent, sliderState.value + (dir < 0 ? -step : step));
       });
 
   owned_value = sliderState.value;
