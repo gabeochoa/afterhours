@@ -231,6 +231,20 @@ struct animation : developer::Plugin {
     return manager<CompositeKey>().get_value(make_key(base, index));
   }
 
+  template <typename Key>
+  static inline float clamp_value(Key key, float mn, float mx) {
+    auto v = manager<Key>().get_value(key);
+    float x = v.value_or(mx);
+    return std::clamp(x, mn, mx);
+  }
+
+  template <typename E>
+  static inline float clamp_value(E base, size_t index, float mn, float mx) {
+    auto v = get_value(base, index);
+    float x = v.value_or(mx);
+    return std::clamp(x, mn, mx);
+  }
+
   template <typename Key, typename Fn>
   static inline void one_shot(Key key, Fn fn) {
     using Hasher = typename KeyHasher<Key>::type;
