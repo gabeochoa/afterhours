@@ -11,9 +11,11 @@
 #include "../../entity_query.h"
 #include "../../logging.h"
 #include "../../system.h"
+#include "../animation.h"
 #include "../autolayout.h"
 #include "../input_system.h"
 #include "../window_manager.h"
+#include "animation_keys.h"
 #include "components.h"
 #include "context.h"
 

@@ -10,8 +10,10 @@
 #include "../../entity_query.h"
 #include "../../font_helper.h"
 #include "../../logging.h"
+#include "../animation.h"
 #include "../input_system.h"
 #include "../texture_manager.h"
+#include "animation_keys.h"
 #include "components.h"
 #include "context.h"
 #include "systems.h"
@@ -302,6 +304,11 @@ template <typename InputAction> struct RenderImm : System<> {
                  const FontManager &font_manager, const Entity &entity) const {
     const UIComponent &cmp = entity.get<UIComponent>();
     const float effective_opacity = _compute_effective_opacity(entity);
+    RectangleType draw_rect = cmp.rect();
+
+    if (entity.has<HasUIModifiers>()) {
+      draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
+    }
 
     if (entity.has<HasColor>()) {
       Color col = entity.template get<HasColor>().color();
@@ -325,12 +332,16 @@ template <typename InputAction> struct RenderImm : System<> {
         if (effective_opacity < 1.0f) {
           focus_col = colors::opacity_pct(focus_col, effective_opacity);
         }
-        draw_rectangle_rounded(cmp.focus_rect(),
+        RectangleType focus_rect = cmp.focus_rect();
+        if (entity.has<HasUIModifiers>()) {
+          focus_rect = entity.get<HasUIModifiers>().apply_modifier(focus_rect);
+        }
+        draw_rectangle_rounded(focus_rect,
                                0.5f, // roundness
                                8,    // segments
                                focus_col, corner_settings);
       }
-      draw_rectangle_rounded(cmp.rect(),
+      draw_rectangle_rounded(draw_rect,
                              0.5f, // roundness
                              8,    // segments
                              col, corner_settings);
@@ -343,7 +354,7 @@ template <typename InputAction> struct RenderImm : System<> {
       if (effective_opacity < 1.0f) {
         font_col = colors::opacity_pct(font_col, effective_opacity);
       }
-      draw_text_in_rect(font_manager, hasLabel.label.c_str(), cmp.rect(),
+      draw_text_in_rect(font_manager, hasLabel.label.c_str(), draw_rect,
                         hasLabel.alignment, font_col);
     }
 
@@ -354,7 +365,7 @@ template <typename InputAction> struct RenderImm : System<> {
       // NOTE: draw_texture_in_rect path lacks tint, so opacity will apply to
       // images below reuse existing helper (no tint support), so fallback to
       // image path below
-      draw_texture_in_rect(texture.texture, cmp.rect(), texture.alignment);
+      draw_texture_in_rect(texture.texture, draw_rect, texture.alignment);
     } else if (entity.has<ui::HasImage>()) {
       const ui::HasImage &img = entity.get<ui::HasImage>();
       texture_manager::Rectangle src =
@@ -362,10 +373,10 @@ template <typename InputAction> struct RenderImm : System<> {
               0, 0, (float)img.texture.width, (float)img.texture.height});
 
       // Scale to fit height of rect
-      float scale = src.height / cmp.rect().height;
+      float scale = src.height / draw_rect.height;
       Vector2Type size = {src.width / scale, src.height / scale};
       Vector2Type location =
-          position_texture(img.texture, size, cmp.rect(), img.alignment);
+          position_texture(img.texture, size, draw_rect, img.alignment);
 
       Color img_col = colors::UI_WHITE;
       if (effective_opacity < 1.0f) {

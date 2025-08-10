@@ -5,4 +5,5 @@
 #include "immediate/element_result.h"
 #include "immediate/entity_management.h"
 #include "immediate/imm_components.h"
+#include "immediate/imm_transform.h"
 #include "immediate/rounded_corners.h"

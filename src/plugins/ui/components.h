@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "../../drawing_helpers.h"
 #include "../../entity.h"
 #include "../../entity_helper.h"
 #include "../../logging.h"
@@ -162,6 +163,45 @@ struct HasOpacity : BaseComponent {
   float value = 1.0f;
   HasOpacity() = default;
   explicit HasOpacity(float v) : value(v) {}
+};
+
+struct HasButtonAnimState : BaseComponent {
+  bool hovered = false;
+};
+
+struct HasUIModifiers : BaseComponent {
+  float scale = 1.0f;
+  float translate_x = 0.f;
+  float translate_y = 0.f;
+
+  RectangleType apply_modifier(RectangleType rect) const {
+    rect = scale_rect(rect);
+    if (translate_x != 0.f || translate_y != 0.f) {
+      rect.x += translate_x;
+      rect.y += translate_y;
+    }
+    return rect;
+  }
+
+private:
+  RectangleType scale_rect(RectangleType rect) const {
+    float s = scale;
+    if (s != 1.0f) {
+      float cx = rect.x + rect.width / 2.0f;
+      float cy = rect.y + rect.height / 2.0f;
+      float new_w = rect.width * s;
+      float new_h = rect.height * s;
+      rect.x = cx - new_w / 2.0f;
+      rect.y = cy - new_h / 2.0f;
+      rect.width = new_w;
+      rect.height = new_h;
+    }
+    if (translate_x != 0.f || translate_y != 0.f) {
+      rect.x += translate_x;
+      rect.y += translate_y;
+    }
+    return rect;
+  }
 };
 
 } // namespace ui
