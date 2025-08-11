@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <cmath>
 #include <map>
 #include <variant>
 
@@ -8,6 +9,7 @@
 #include "../developer.h"
 #include "../entity_query.h"
 #include "../system.h"
+#include "window_manager.h"
 
 namespace afterhours {
 
@@ -25,7 +27,47 @@ struct input : developer::Plugin {
   using GamepadButton = raylib::GamepadButton;
 
   static MousePosition get_mouse_position() {
-    return raylib::GetMousePosition();
+    const raylib::Vector2 raw = raylib::GetMousePosition();
+
+    const int window_w = raylib::GetScreenWidth();
+    const int window_h = raylib::GetScreenHeight();
+
+    const auto *pcr = EntityHelper::get_singleton_cmp<
+        window_manager::ProvidesCurrentResolution>();
+    if (pcr == nullptr) {
+      return raw;
+    }
+    const float content_w = static_cast<float>(pcr->current_resolution.width);
+    const float content_h = static_cast<float>(pcr->current_resolution.height);
+    if (content_w <= 0.0f || content_h <= 0.0f) {
+      return raw;
+    }
+
+    int dest_w = window_w;
+    int dest_h =
+        static_cast<int>(std::round((double)dest_w * content_h / content_w));
+    if (dest_h > window_h) {
+      dest_h = window_h;
+      dest_w =
+          static_cast<int>(std::round((double)dest_h * content_w / content_h));
+    }
+    const int bar_w_total = window_w - dest_w;
+    const int bar_h_total = window_h - dest_h;
+    const int bar_left = bar_w_total / 2;
+    const int bar_top = bar_h_total / 2;
+
+    const float min_x = static_cast<float>(bar_left);
+    const float min_y = static_cast<float>(bar_top);
+    const float max_x = static_cast<float>(bar_left + dest_w);
+    const float max_y = static_cast<float>(bar_top + dest_h);
+
+    if (raw.x < min_x || raw.x > max_x || raw.y < min_y || raw.y > max_y) {
+      return raw;
+    }
+
+    const float scale_x = content_w / static_cast<float>(dest_w);
+    const float scale_y = content_h / static_cast<float>(dest_h);
+    return {(raw.x - min_x) * scale_x, (raw.y - min_y) * scale_y};
   }
   static bool is_mouse_button_up(const MouseButton button) {
     return raylib::IsMouseButtonUp(button);
@@ -357,9 +399,9 @@ struct input : developer::Plugin {
       return "keyboard_volume_up";
     case raylib::KEY_VOLUME_DOWN:
       return "keyboard_volume_down";
-      // TODO figure out why this is the same as KEY_R 
+      // TODO figure out why this is the same as KEY_R
     // case raylib::KEY_MENU:
-      // return "keyboard_menu";
+    // return "keyboard_menu";
     case raylib::KEY_NULL:
       log_info("Passed in {} but wasnt able to parse it", keycode);
       break;
@@ -514,7 +556,9 @@ struct input : developer::Plugin {
 
     // TODO replace with a singletone query
     OptEntity opt_collector =
-        EntityQuery({.ignore_temp_warning = true}).template whereHasComponent<InputCollector<Action>>().gen_first();
+        EntityQuery({.ignore_temp_warning = true})
+            .template whereHasComponent<InputCollector<Action>>()
+            .gen_first();
     if (!opt_collector.valid())
       return {};
     Entity &collector = opt_collector.asE();

@@ -1,7 +1,9 @@
 
 #pragma once
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <sstream>
 
 #include "../base_component.h"
@@ -41,11 +43,23 @@ struct window_manager : developer::Plugin {
 #ifdef AFTER_HOURS_USE_RAYLIB
   static Resolution fetch_current_resolution() {
     const auto scale = raylib::GetWindowScaleDPI();
-    // generally im pretty confident that this will end up with a nice round
-    // number resolution but i havent done any research about it - gabe Jan 2025
-    return Resolution{
-        .width = static_cast<int>(raylib::GetRenderWidth() / scale.x),
-        .height = static_cast<int>(raylib::GetRenderHeight() / scale.y)};
+    const float rw =
+        static_cast<float>(raylib::GetRenderWidth()) / std::max(1.0f, scale.x);
+    const float rh =
+        static_cast<float>(raylib::GetRenderHeight()) / std::max(1.0f, scale.y);
+
+    const float target_aspect = 16.0f / 9.0f;
+    int width = 0;
+    int height = 0;
+    if (rw / rh >= target_aspect) {
+      height = static_cast<int>(std::round(rh));
+      width = static_cast<int>(std::round(rh * target_aspect));
+    } else {
+      width = static_cast<int>(std::round(rw));
+      height = static_cast<int>(std::round(rw / target_aspect));
+    }
+
+    return Resolution{.width = width, .height = height};
   }
 
   static Resolution fetch_maximum_resolution() {
@@ -117,10 +131,9 @@ struct window_manager : developer::Plugin {
 
     virtual void for_each_with(Entity &, ProvidesCurrentResolution &pCR,
                                const float) override {
-      if (pCR.should_refetch) {
-        pCR.current_resolution = fetch_current_resolution();
-        set_window_size(pCR.current_resolution.width,
-                        pCR.current_resolution.height);
+      const Resolution latest = fetch_current_resolution();
+      if (pCR.should_refetch || !(latest == pCR.current_resolution)) {
+        pCR.current_resolution = latest;
         pCR.should_refetch = false;
       }
     }
@@ -163,9 +176,9 @@ struct window_manager : developer::Plugin {
 
       for (size_t i = 0; i < available_resolutions.size(); i++) {
         const int diff = std::abs(pcr.current_resolution.width -
-                            available_resolutions[i].width) +
-                   std::abs(pcr.current_resolution.height -
-                            available_resolutions[i].height);
+                                  available_resolutions[i].width) +
+                         std::abs(pcr.current_resolution.height -
+                                  available_resolutions[i].height);
         if (diff < min_diff) {
           min_diff = diff;
           closest_index = i;
