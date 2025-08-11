@@ -71,6 +71,28 @@ ElementResult sprite(HasUIContext auto &ctx, EntityParent ep_pair,
   return {false, entity};
 }
 
+inline ElementResult
+image_button(HasUIContext auto &ctx, EntityParent ep_pair,
+             afterhours::texture_manager::Texture texture,
+             afterhours::texture_manager::Rectangle source_rect,
+             ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+
+  _init_component(ctx, ep_pair, config, ComponentType::Image, true,
+                  "image_button");
+
+  auto alignment = config.image_alignment.value_or(
+      afterhours::texture_manager::HasTexture::Alignment::Center);
+  auto &img = entity.addComponentIfMissing<ui::HasImage>(texture, source_rect,
+                                                         alignment);
+  img.texture = texture;
+  img.source_rect = source_rect;
+  img.alignment = alignment;
+
+  entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
+  return ElementResult{entity.get<HasClickListener>().down, entity};
+}
+
 template <typename Container>
 ElementResult icon_row(HasUIContext auto &ctx, EntityParent ep_pair,
                        afterhours::texture_manager::Texture spritesheet,
