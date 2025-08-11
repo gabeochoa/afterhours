@@ -201,8 +201,20 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   _init_component(ctx, ep_pair, config, ComponentType::Div, false,
                   "checkbox_row");
 
-  config.size = ComponentSize(pixels(default_component_size.x),
-                              children(default_component_size.y));
+  // 2025-08-11: ensure checkbox row uses responsive defaults so both label and
+  // button scale with resolution. Previously, only the label used a responsive
+  // size, causing the button to remain tiny at higher DPIs/resolutions.
+  {
+    auto &styling_defaults = UIStylingDefaults::get();
+    if (auto def =
+            styling_defaults.get_component_config(ComponentType::Checkbox);
+        def.has_value()) {
+      config.size = def->size;
+    } else {
+      config.size = ComponentSize(pixels(default_component_size.x),
+                                  children(default_component_size.y));
+    }
+  }
   if (!label.empty()) {
     config.size = config.size._scale_x(0.5f);
 
@@ -220,6 +232,8 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
     div(ctx, mk(entity), label_config);
   }
 
+  // 2025-08-11: explicitly propagate the responsive size to the clickable
+  // checkbox so it scales along with the label and row container.
   auto checkbox_config =
       ComponentConfig::inherit_from(
           config, std::format("checkbox indiv from {}", config.debug_name))
@@ -366,12 +380,37 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   auto handle_corners = config.rounded_corners.value();
 
+  const auto dim = config.size.x_axis.dim;
+  const float width_val = config.size.x_axis.value;
+  // 2025-08-11: guard against effectively zero-width sliders when
+  // responsive units are very small. Warn so we can diagnose invisible
+  // handles quickly without digging through UI layout.
+  const bool tiny_width =
+      (dim == Dim::Pixels && width_val < 8.0f) ||
+      ((dim == Dim::Percent || dim == Dim::ScreenPercent) && width_val < 0.02f);
+  if (tiny_width) {
+    log_warn("slider width is very small (dim={}, value={:.4f}); slider handle "
+             "may be invisible (component: {})",
+             (int)dim, width_val, config.debug_name);
+  }
+
+  Size handle_width_size{dim, width_val * 0.25f, config.size.x_axis.strictness};
+  if (dim == Dim::Pixels)
+    handle_width_size.value = std::max(2.0f, handle_width_size.value);
+  else if (dim == Dim::Percent || dim == Dim::ScreenPercent)
+    handle_width_size.value = std::max(0.02f, handle_width_size.value);
+
+  Size handle_left_size{dim, owned_value * 0.75f * width_val,
+                        config.size.x_axis.strictness};
+  if (dim == Dim::Pixels)
+    handle_left_size.value = std::max(0.0f, handle_left_size.value);
+  else if (dim == Dim::Percent || dim == Dim::ScreenPercent)
+    handle_left_size.value = std::max(0.0f, handle_left_size.value);
+
   auto handle_config =
       ComponentConfig::inherit_from(config, "slider_handle")
-          .with_size(ComponentSize{pixels(0.25f * config.size.x_axis.value),
-                                   config.size.y_axis})
-          .with_padding(Padding{
-              .left = pixels(owned_value * 0.75f * config.size.x_axis.value)})
+          .with_size(ComponentSize{handle_width_size, config.size.y_axis})
+          .with_padding(Padding{.left = handle_left_size})
           .with_color_usage(Theme::Usage::Primary)
           .with_rounded_corners(handle_corners)
           .with_debug_name("slider_handle")
@@ -380,7 +419,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   auto handle = div(ctx, mk(slider_bg), handle_config);
 
   handle.cmp()
-      .set_desired_width(pixels(0.25f * config.size.x_axis.value))
+      .set_desired_width(handle_config.size.x_axis)
       .set_desired_height(config.size.y_axis);
 
   slider_bg.addComponentIfMissing<ui::HasLeftRightListener>(
@@ -425,10 +464,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
     ctx.set_focus(id);
   };
 
-  if (config.size.is_default) {
-    config.size = ComponentSize(children(default_component_size.x),
-                                pixels(default_component_size.y));
-  }
+  // Use styling defaults for size if none provided
   config.flex_direction = FlexDirection::Row;
 
   std::string label_str = config.label;
@@ -507,8 +543,14 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
       });
 
   if (config.size.is_default) {
-    config.size = ComponentSize(children(default_component_size.x),
-                                pixels(default_component_size.y));
+    auto &styling_defaults = UIStylingDefaults::get();
+    if (auto def =
+            styling_defaults.get_component_config(ComponentType::Dropdown)) {
+      config.size = (*def).size;
+    } else {
+      config.size = ComponentSize(children(default_component_size.x),
+                                  pixels(default_component_size.y));
+    }
   }
 
   std::string label_str = config.label;
@@ -617,8 +659,14 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
       options, nullptr);
 
   if (config.size.is_default) {
-    config.size = ComponentSize(pixels(default_component_size.x),
-                                pixels(default_component_size.y));
+    auto &styling_defaults = UIStylingDefaults::get();
+    if (auto def = styling_defaults.get_component_config(
+            ComponentType::NavigationBar)) {
+      config.size = (*def).size;
+    } else {
+      config.size = ComponentSize(pixels(default_component_size.x),
+                                  pixels(default_component_size.y));
+    }
   }
   // TODO - add default
   config.flex_direction = FlexDirection::Row;
