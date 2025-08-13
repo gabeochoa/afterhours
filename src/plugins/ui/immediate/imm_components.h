@@ -133,6 +133,11 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
 
   _init_component(ctx, ep_pair, config, ComponentType::Button, true, "button");
 
+  // Apply flex-direction specifically for buttons so they can drive wrapping
+  // TODO: this is a hack to get buttons to wrap. We should find a better way to
+  // do this.
+  entity.get<UIComponent>().flex_direction = config.flex_direction;
+
   entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
 
   return ElementResult{entity.get<HasClickListener>().down, entity};
