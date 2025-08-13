@@ -314,37 +314,7 @@ template <typename InputAction> struct RenderImm : System<> {
                                ? entity.get<HasRoundedCorners>().get()
                                : std::bitset<4>().reset();
 
-    // Focus ring: draw independently of background color so cluster roots
-    // without HasColor still show the combined focus ring.
-    bool should_draw_focus_here = context.has_focus(entity.id);
-
-    // Suppress child ring if parent is a cluster root
-    if (should_draw_focus_here && entity.has<InFocusCluster>()) {
-      EntityID parent_id = cmp.parent;
-      if (parent_id >= 0) {
-        const Entity &parent_ent =
-            EntityHelper::getEntityForIDEnforce(parent_id);
-        if (parent_ent.has<FocusClusterRoot>()) {
-          should_draw_focus_here = false;
-        }
-      }
-    }
-
-    // Elevate ring to cluster root if any immediate InFocusCluster child is
-    // focused
-    if (!should_draw_focus_here && entity.has<FocusClusterRoot>()) {
-      for (EntityID child_id : cmp.children) {
-        const Entity &child = AutoLayout::to_ent_static(child_id);
-        if (!child.has<InFocusCluster>())
-          continue;
-        if (context.has_focus(child.id)) {
-          should_draw_focus_here = true;
-          break;
-        }
-      }
-    }
-
-    if (should_draw_focus_here) {
+    if (context.visual_focus_id == entity.id) {
       Color focus_col = context.theme.from_usage(Theme::Usage::Accent);
       float effective_focus_opacity = _compute_effective_opacity(entity);
       if (effective_focus_opacity < 1.0f) {

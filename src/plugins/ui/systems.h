@@ -181,6 +181,34 @@ struct EndUIContextManager : System<UIContext<InputAction>> {
   }
 };
 
+template <typename InputAction> struct ComputeVisualFocusId : System<> {
+  virtual void for_each_with(Entity &, float) override {
+    auto ctx = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    ctx->visual_focus_id = ctx->ROOT;
+    if (ctx->focus_id == ctx->ROOT)
+      return;
+    OptEntity focused = EntityHelper::getEntityForID(ctx->focus_id);
+    if (!focused.has_value())
+      return;
+    Entity &fe = focused.asE();
+    // climb to nearest FocusClusterRoot if member of a cluster
+    Entity *current = &fe;
+    int guard = 0;
+    while (current->has<ui::InFocusCluster>()) {
+      const UIComponent &cmp = current->get<UIComponent>();
+      if (cmp.parent < 0 || ++guard > 64)
+        break;
+      Entity &parent = EntityHelper::getEntityForIDEnforce(cmp.parent);
+      if (parent.has<ui::FocusClusterRoot>()) {
+        ctx->visual_focus_id = parent.id;
+        return;
+      }
+      current = &parent;
+    }
+    ctx->visual_focus_id = fe.id;
+  }
+};
+
 // TODO i like this but for Tags, i wish
 // the user of this didnt have to add UIComponent to their for_each_with
 template <typename... Components>

@@ -44,10 +44,13 @@ template <typename InputAction> struct UIContext : BaseComponent {
 
   std::set<EntityID> focused_ids;
 
-  EntityID hot_id = ROOT;
-  EntityID focus_id = ROOT;
-  EntityID active_id = ROOT;
-  EntityID last_processed = ROOT;
+  EntityID hot_id = ROOT;          // hot means the mouse is over this element
+  EntityID focus_id = ROOT;        // current actual focused element
+  EntityID visual_focus_id = ROOT; // the element the ring should be drawn on
+  EntityID active_id =
+      ROOT; // active means the element is being interacted with
+  EntityID last_processed =
+      ROOT; // last element that was processed (used for reverse tabbing)
 
   input::MousePosition mouse_pos;
   bool mouseLeftDown;
@@ -77,6 +80,7 @@ template <typename InputAction> struct UIContext : BaseComponent {
 
   void reset() {
     focus_id = ROOT;
+    visual_focus_id = ROOT;
     last_processed = ROOT;
     hot_id = ROOT;
     active_id = ROOT;
