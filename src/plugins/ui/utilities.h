@@ -137,6 +137,9 @@ static void register_after_ui_updates(SystemManager &sm) {
         std::make_unique<ui::HandleLeftRight<InputAction>>());
     sm.register_update_system(
         std::make_unique<ui::HandleSelectOnFocus<InputAction>>());
+    // compute visual focus after input handlers adjusted logical focus
+    sm.register_update_system(
+        std::make_unique<ui::ComputeVisualFocusId<InputAction>>());
   }
   sm.register_update_system(
       std::make_unique<ui::EndUIContextManager<InputAction>>());
