@@ -86,6 +86,9 @@ struct ShouldHide : BaseComponent {};
 struct SkipWhenTabbing : BaseComponent {};
 struct SelectOnFocus : BaseComponent {};
 
+struct FocusClusterRoot : BaseComponent {};
+struct InFocusCluster : BaseComponent {};
+
 struct HasChildrenComponent : BaseComponent {
   std::vector<EntityID> children;
   std::function<void(Entity &)> on_child_add;

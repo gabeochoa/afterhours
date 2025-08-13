@@ -237,7 +237,8 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
                                   children(default_component_size.y));
     }
   }
-  if (!label.empty()) {
+  bool has_label_child = !label.empty();
+  if (has_label_child) {
     config.size = config.size._scale_x(0.5f);
 
     auto label_config =
@@ -251,7 +252,8 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
       label_config.with_color_usage(Theme::Usage::Primary)
           .with_rounded_corners(RoundedCorners().right_sharp());
 
-    div(ctx, mk(entity), label_config);
+    auto label_ent = div(ctx, mk(entity), label_config);
+    label_ent.ent().template addComponentIfMissing<InFocusCluster>();
   }
 
   // 2025-08-11: explicitly propagate the responsive size to the clickable
@@ -266,9 +268,16 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
         .with_rounded_corners(RoundedCorners().left_sharp());
 
   bool changed = false;
-  if (checkbox_no_label(ctx, mk(entity), value, checkbox_config)) {
+  auto checkbox_ent =
+      checkbox_no_label(ctx, mk(entity), value, checkbox_config);
+  checkbox_ent.ent().template addComponentIfMissing<InFocusCluster>();
+  if (checkbox_ent) {
     changed = true;
   }
+
+  // Mark the container row as the focus cluster root so focus ring surrounds
+  // both the label (if present) and the checkbox box.
+  entity.template addComponentIfMissing<FocusClusterRoot>();
 
   return {changed, entity, value};
 }
@@ -351,6 +360,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       .template get<UIComponent>()
       .set_desired_width(config.size._scale_x(0.5f).x_axis)
       .set_desired_height(config.size.y_axis);
+  label.ent().template addComponentIfMissing<InFocusCluster>();
 
   auto elem_corners =
       RoundedCorners(config.rounded_corners.value()).left_sharp();
@@ -365,6 +375,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   elem.ent().template get<UIComponent>().set_desired_width(config.size.x_axis);
 
   Entity &slider_bg = elem.ent();
+  slider_bg.template addComponentIfMissing<InFocusCluster>();
   if (slider_bg.is_missing<ui::HasSliderState>())
     slider_bg.addComponent<ui::HasSliderState>(owned_value);
 
@@ -451,6 +462,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       });
 
   owned_value = sliderState.value;
+  entity.template addComponentIfMissing<FocusClusterRoot>();
   return ElementResult{sliderState.changed_since, entity, sliderState.value};
 }
 
@@ -581,11 +593,13 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
 
   _init_component(ctx, ep_pair, config, ComponentType::Dropdown);
 
-  auto button_corners = std::bitset<4>(config.rounded_corners.value());
+  auto button_corners =
+      config.rounded_corners.value_or(ctx.theme.rounded_corners);
 
   auto config_size = config.size;
 
-  if (!label_str.empty()) {
+  bool has_label_child = !label_str.empty();
+  if (has_label_child) {
     config_size = config.size._scale_x(0.5f);
     button_corners = RoundedCorners(button_corners).left_sharp();
 
@@ -595,9 +609,9 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_size(config_size)
             .with_label(std::string(label_str))
             .with_color_usage(Theme::Usage::Primary)
-            .with_rounded_corners(
-                RoundedCorners(config.rounded_corners.value()).right_sharp())
+            .with_rounded_corners(RoundedCorners(button_corners).right_sharp())
             .with_render_layer(config.render_layer + 0));
+    label.ent().template addComponentIfMissing<InFocusCluster>();
   }
 
   const auto toggle_visibility = [&](Entity &) {
@@ -635,19 +649,26 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   //   and passed it via with_hot_siblings({label_id}) to the main button.
   // Re-adding this would require restoring: ComponentConfig hot_siblings api,
   // ui::BringsHotSiblings component, and the rendering propagation logic.
-  if (button(ctx, mk(entity),
-             ComponentConfig::inherit_from(config, "option 1")
-                 .with_size(config_size)
-                 .with_label(main_button_label)
-                 .with_rounded_corners(button_corners)
-                 // TODO This works great but we need a way to
-                 // close the dropdown when you leave without selecting anything
-                 //  .with_select_on_focus(true)
-                 .with_render_layer(config.render_layer +
-                                    (dropdownState.on ? 0 : 0)))) {
+  auto main_btn = button(
+      ctx, mk(entity),
+      ComponentConfig::inherit_from(config, "option 1")
+          .with_size(config_size)
+          .with_label(main_button_label)
+          .with_rounded_corners(button_corners)
+          // TODO This works great but we need a way to
+          // close the dropdown when you leave without selecting anything
+          //  .with_select_on_focus(true)
+          .with_render_layer(config.render_layer + (dropdownState.on ? 0 : 0)));
+  if (main_btn) {
 
     dropdownState.on ? on_option_click(entity, 0) : toggle_visibility(entity);
   }
+
+  // Mark the label + main dropdown button as a focus cluster, but do not
+  // include dropdown items (they should be separately focusable when open).
+  entity.template addComponentIfMissing<FocusClusterRoot>();
+  // Mark the main dropdown button as part of the cluster
+  main_btn.ent().template addComponentIfMissing<InFocusCluster>();
 
   if (auto result = button_group(
           ctx, mk(entity), options,
