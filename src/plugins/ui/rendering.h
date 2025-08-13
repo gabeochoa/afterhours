@@ -310,6 +310,60 @@ template <typename InputAction> struct RenderImm : System<> {
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
     }
 
+    auto corner_settings = entity.has<HasRoundedCorners>()
+                               ? entity.get<HasRoundedCorners>().get()
+                               : std::bitset<4>().reset();
+
+    // Focus ring: draw independently of background color so cluster roots
+    // without HasColor still show the combined focus ring.
+    bool should_draw_focus_here = context.has_focus(entity.id);
+
+    // Suppress child ring if parent is a cluster root
+    if (should_draw_focus_here && entity.has<InFocusCluster>()) {
+      EntityID parent_id = cmp.parent;
+      if (parent_id >= 0) {
+        const Entity &parent_ent =
+            EntityHelper::getEntityForIDEnforce(parent_id);
+        if (parent_ent.has<FocusClusterRoot>()) {
+          should_draw_focus_here = false;
+        }
+      }
+    }
+
+    // Elevate ring to cluster root if any immediate InFocusCluster child is
+    // focused
+    if (!should_draw_focus_here && entity.has<FocusClusterRoot>()) {
+      for (EntityID child_id : cmp.children) {
+        const Entity &child = AutoLayout::to_ent_static(child_id);
+        if (!child.has<InFocusCluster>())
+          continue;
+        if (context.has_focus(child.id)) {
+          should_draw_focus_here = true;
+          break;
+        }
+      }
+    }
+
+    if (should_draw_focus_here) {
+      Color focus_col = context.theme.from_usage(Theme::Usage::Accent);
+      float effective_focus_opacity = _compute_effective_opacity(entity);
+      if (effective_focus_opacity < 1.0f) {
+        focus_col = colors::opacity_pct(focus_col, effective_focus_opacity);
+      }
+      RectangleType focus_rect = cmp.focus_rect();
+      if (entity.has<HasUIModifiers>()) {
+        focus_rect = entity.get<HasUIModifiers>().apply_modifier(focus_rect);
+      }
+      if (corner_settings.any()) {
+        draw_rectangle_rounded(focus_rect,
+                               0.5f, // roundness
+                               8,    // segments
+                               focus_col, corner_settings);
+      } else {
+        draw_rectangle_outline(focus_rect, focus_col);
+      }
+    }
+
     if (entity.has<HasColor>()) {
       Color col = entity.template get<HasColor>().color();
 
@@ -321,26 +375,6 @@ template <typename InputAction> struct RenderImm : System<> {
         col = colors::opacity_pct(col, effective_opacity);
       }
 
-      auto corner_settings = entity.has<HasRoundedCorners>()
-                                 ? entity.get<HasRoundedCorners>().get()
-                                 : std::bitset<4>().reset();
-
-      // TODO do we need another color for this?
-      if (context.has_focus(entity.id)) {
-        Color focus_col = context.theme.from_usage(Theme::Usage::Accent);
-        float effective_opacity = _compute_effective_opacity(entity);
-        if (effective_opacity < 1.0f) {
-          focus_col = colors::opacity_pct(focus_col, effective_opacity);
-        }
-        RectangleType focus_rect = cmp.focus_rect();
-        if (entity.has<HasUIModifiers>()) {
-          focus_rect = entity.get<HasUIModifiers>().apply_modifier(focus_rect);
-        }
-        draw_rectangle_rounded(focus_rect,
-                               0.5f, // roundness
-                               8,    // segments
-                               focus_col, corner_settings);
-      }
       draw_rectangle_rounded(draw_rect,
                              0.5f, // roundness
                              8,    // segments
@@ -404,7 +438,8 @@ template <typename InputAction> struct RenderImm : System<> {
 
     if (entity.has<HasColor>() || entity.has<HasLabel>() ||
         entity.has<ui::HasImage>() ||
-        entity.has<texture_manager::HasTexture>()) {
+        entity.has<texture_manager::HasTexture>() ||
+        entity.has<FocusClusterRoot>()) {
       render_me(context, font_manager, entity);
     }
 
