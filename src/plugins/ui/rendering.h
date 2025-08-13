@@ -196,6 +196,10 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
 
   mutable int level = 0;
   mutable int indent = 0;
+  mutable EntityID isolated_id = -1;
+  mutable bool isolate_enabled = false;
+  enum struct IsolationMode { NodeOnly, NodeAndDescendants };
+  mutable IsolationMode isolation_mode = IsolationMode::NodeOnly;
 
   float fontSize = 20;
 
@@ -237,11 +241,29 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     this->indent = 0;
   }
 
+  bool is_descendant_of_isolated(const Entity &entity) const {
+    if (!isolate_enabled)
+      return false;
+    if (entity.id == isolated_id)
+      return false;
+    const Entity *cur = &entity;
+    int guard = 0;
+    while (cur->has<UIComponent>()) {
+      const UIComponent &cur_cmp = cur->get<UIComponent>();
+      if (cur_cmp.parent < 0 || ++guard > 64)
+        break;
+      if (cur_cmp.parent == isolated_id)
+        return true;
+      cur = &EntityHelper::getEntityForIDEnforce(cur_cmp.parent);
+    }
+    return false;
+  }
+
   void render_me(const Entity &entity) const {
     const UIComponent &cmp = entity.get<UIComponent>();
 
-    float x = 10 * indent;
-    float y = (fontSize * level) + fontSize / 2.f;
+    const float x = 10 * indent;
+    const float y = (fontSize * level) + fontSize / 2.f;
 
     std::string component_name = "Unknown";
     if (entity.has<UIComponentDebug>()) {
@@ -249,26 +271,63 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
       component_name = cmpdebug.name();
     }
 
-    std::string widget_str = std::format(
+    const std::string widget_str = std::format(
         "{:03} (x{:05.2f} y{:05.2f}) w{:05.2f}xh{:05.2f} {}", (int)entity.id,
         cmp.x(), cmp.y(), cmp.rect().width, cmp.rect().height, component_name);
 
-    float text_width = measure_text_internal(widget_str.c_str(), fontSize);
-    Rectangle debug_label_location = Rectangle{x, y, text_width, fontSize};
+    const float text_width =
+        measure_text_internal(widget_str.c_str(), fontSize);
+    const Rectangle debug_label_location =
+        Rectangle{x, y, text_width, fontSize};
 
-    if (is_mouse_inside(this->context->mouse_pos, debug_label_location)) {
-      draw_rectangle_outline(
-          cmp.rect(), this->context->theme.from_usage(Theme::Usage::Error));
-      draw_rectangle_outline(cmp.bounds(), colors::UI_BLACK);
-      draw_rectangle(debug_label_location, colors::UI_BLUE);
+    const bool is_hovered =
+        is_mouse_inside(this->context->mouse_pos, debug_label_location);
+    bool show = true;
+    if (isolate_enabled) {
+      if (entity.id == isolated_id) {
+        show = true;
+      } else if (isolation_mode == IsolationMode::NodeAndDescendants) {
+        show = is_descendant_of_isolated(entity);
+      } else {
+        show = false;
+      }
+    }
+    const bool hidden = !show;
+
+    const auto color_or_hidden = [hidden](Color c) {
+      return hidden ? colors::opacity_pct(c, 0.f) : c;
+    };
+
+    if (is_hovered) {
+      draw_rectangle_outline(cmp.rect(),
+                             color_or_hidden(this->context->theme.from_usage(
+                                 Theme::Usage::Error)));
+      draw_rectangle_outline(cmp.bounds(), color_or_hidden(colors::UI_BLACK));
+      draw_rectangle(debug_label_location, color_or_hidden(colors::UI_BLUE));
     } else {
-      draw_rectangle(debug_label_location, colors::UI_BLACK);
+      draw_rectangle(debug_label_location, color_or_hidden(colors::UI_BLACK));
     }
 
-    draw_text(widget_str.c_str(), x, y, fontSize,
-              this->context->is_hot(entity.id)
-                  ? this->context->theme.from_usage(Theme::Usage::Error)
-                  : this->context->theme.from_usage(Theme::Usage::Font));
+    Color baseText = this->context->is_hot(entity.id)
+                         ? this->context->theme.from_usage(Theme::Usage::Error)
+                         : this->context->theme.from_usage(Theme::Usage::Font);
+    draw_text(widget_str.c_str(), x, y, fontSize, color_or_hidden(baseText));
+
+    const bool left_released = input::is_mouse_button_released(0);
+    const bool right_released = input::is_mouse_button_released(1);
+    if (is_hovered && (left_released || right_released)) {
+      IsolationMode new_mode = left_released ? IsolationMode::NodeAndDescendants
+                                             : IsolationMode::NodeOnly;
+      if (isolate_enabled && isolated_id == entity.id &&
+          isolation_mode == new_mode) {
+        isolate_enabled = false;
+        isolated_id = -1;
+      } else {
+        isolate_enabled = true;
+        isolated_id = entity.id;
+        isolation_mode = new_mode;
+      }
+    }
   }
 
   void render(const Entity &entity) const {

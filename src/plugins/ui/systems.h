@@ -402,7 +402,6 @@ struct UpdateDropdownOptions
     hasDropdownState.options = hasDropdownState.fetch_options(hasDropdownState);
 
     // detect if the options changed or if the state changed
-    // and if so, we should refresh
     {
       bool changed = false;
       if (options.size() != hasDropdownState.options.size()) {
