@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <vector>
+#include <type_traits>
 
 #include "entity.h"
 #include "entity_helper.h"
@@ -105,6 +106,31 @@ struct EntityQuery {
   };
   TReturn &whereLambda(const std::function<bool(const Entity &)> &fn) {
     return add_mod(new WhereLambda(fn));
+  }
+
+  // Enum-friendly overloads for tag predicates (accept any enum)
+  template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
+  auto &whereHasTag(const TEnum tag_enum) {
+    return whereHasTag(static_cast<TagId>(tag_enum));
+  }
+
+  template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
+  auto &whereHasAllTags(const TEnum tag_enum) {
+    return whereHasTag(static_cast<TagId>(tag_enum));
+  }
+
+  template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
+  auto &whereHasAnyTag(const TEnum tag_enum) {
+    TagBitset mask;
+    mask.set(static_cast<TagId>(tag_enum));
+    return whereHasAnyTag(mask);
+  }
+
+  template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
+  auto &whereHasNoTags(const TEnum tag_enum) {
+    TagBitset mask;
+    mask.set(static_cast<TagId>(tag_enum));
+    return whereHasNoTags(mask);
   }
   TReturn &
   whereLambdaExistsAndTrue(const std::function<bool(const Entity &)> &fn) {
