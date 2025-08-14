@@ -148,20 +148,17 @@ These tests serve as **regression tests** to ensure that future changes don't ac
 
 ---
 
-## 🔍 Technical Details
+## 🔖 New Example: `tag_filters/` — Mixing Tag Predicates and Components
 
-### Files Modified:
-- `src/logging.h` - Implemented functional logging system
-- `src/base_component.h` - Enabled and fixed overflow protection
-- `src/plugins/window_manager.h` - Added missing `<chrono>` include
+Demonstrates how to use `afterhours::tags::All`, `Any`, and `None` inside `System<...>` templates alongside component filters.
 
-### Root Cause:
-The original component overflow check was disabled because `log_error()` was just an empty stub function, making the error reporting ineffective.
+- Shows systems that:
+  - run on all entities with a component AND a required tag
+  - run on entities with any of multiple tags
+  - exclude entities with a forbidden tag
+  - mix multiple components with tag predicates
 
-### Solution:
-1. Implemented proper logging functions with printf-style formatting
-2. Re-enabled the overflow check with improved logic
-3. Added proper bounds checking to prevent array violations
-4. Fixed compilation issues that were preventing other examples from building
-
-The fix addresses **TODO item #1** from the high-priority list in `todo.md` and makes the system significantly more robust and developer-friendly.
+How to run:
+```bash
+cd example/tag_filters && make
+```

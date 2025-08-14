@@ -2,16 +2,45 @@
 
 #pragma once
 
-#include <bitset>
 #include <cmath>
 #include <functional>
 #include <memory>
+#include <type_traits>
 
 #include "base_component.h"
 #include "entity.h"
 #include "entity_helper.h"
 
 namespace afterhours {
+namespace tags {
+template <auto... TagEnums> struct All {};
+template <auto... TagEnums> struct Any {};
+template <auto... TagEnums> struct None {};
+} // namespace tags
+
+// Helper meta types usable across System specializations
+template <typename... Ts> struct type_list {};
+
+template <typename List, typename T> struct list_prepend;
+template <typename... Ts, typename T> struct list_prepend<type_list<Ts...>, T> {
+  using type = type_list<T, Ts...>;
+};
+
+template <typename T, typename Enable = void>
+struct is_component : std::false_type {};
+template <typename T>
+struct is_component<T, std::enable_if_t<std::is_base_of_v<BaseComponent, T>>>
+    : std::true_type {};
+
+template <typename...> struct filter_components;
+template <> struct filter_components<> {
+  using type = type_list<>;
+};
+template <typename T, typename... Rest> struct filter_components<T, Rest...> {
+  using prev = typename filter_components<Rest...>::type;
+  using type = std::conditional_t<is_component<T>::value,
+                                  typename list_prepend<prev, T>::type, prev>;
+};
 class SystemBase {
 public:
   SystemBase() {}
@@ -41,7 +70,151 @@ public:
 #endif
 };
 
-template <typename... Components> struct System : SystemBase {
+// Base that declares the correct for_each_with signatures based on components
+// only
+template <typename List> struct SystemForEachBase;
+template <typename... Cs> struct SystemForEachBase<type_list<Cs...>> {
+  virtual void for_each_with(Entity &, Cs &..., const float) {}
+  virtual void for_each_with(const Entity &, const Cs &..., const float) const {
+  }
+#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
+  virtual void for_each_with_derived(Entity &, Cs &..., const float) {}
+  virtual void for_each_with_derived(const Entity &, const Cs &...,
+                                     const float) const {}
+#endif
+};
+
+template <typename... Components>
+struct System
+    : SystemBase,
+      SystemForEachBase<typename filter_components<Components...>::type> {
+  using ComponentsOnly = typename filter_components<Components...>::type;
+  using ForEachBase = SystemForEachBase<ComponentsOnly>;
+
+  template <typename> struct HasAllComponents;
+  template <typename... Cs> struct HasAllComponents<type_list<Cs...>> {
+    static bool value(const Entity &entity) {
+      return ((entity.template has<Cs>()) && ...);
+    }
+    static bool value_child(const Entity &entity) {
+      return ((entity.template has_child_of<Cs>()) && ...);
+    }
+  };
+  template <> struct HasAllComponents<type_list<>> {
+    static bool value(const Entity &) { return true; }
+    static bool value_child(const Entity &) { return true; }
+  };
+
+  template <typename> struct CallWithComponents;
+  template <typename... Cs> struct CallWithComponents<type_list<Cs...>> {
+    template <typename Self>
+    static void call(Self *self, Entity &entity, const float dt) {
+      static_cast<ForEachBase *>(self)->for_each_with(
+          entity, entity.template get<Cs>()..., dt);
+    }
+    template <typename Self>
+    static void call_const(const Self *self, const Entity &entity,
+                           const float dt) {
+      static_cast<const ForEachBase *>(self)->for_each_with(
+          entity, entity.template get<Cs>()..., dt);
+    }
+  };
+  template <> struct CallWithComponents<type_list<>> {
+    template <typename Self>
+    static void call(Self *self, Entity &entity, const float dt) {
+      self->for_each_with(entity, dt);
+    }
+    template <typename Self>
+    static void call_const(const Self *self, const Entity &entity,
+                           const float dt) {
+      self->for_each_with(entity, dt);
+    }
+  };
+
+  template <typename> struct CallWithChildComponents;
+  template <typename... Cs> struct CallWithChildComponents<type_list<Cs...>> {
+    template <typename Self>
+    static void call(Self *self, Entity &entity, const float dt) {
+      static_cast<ForEachBase *>(self)->for_each_with_derived(
+          entity, entity.template get_with_child<Cs>()..., dt);
+    }
+    template <typename Self>
+    static void call_const(const Self *self, const Entity &entity,
+                           const float dt) {
+      static_cast<const ForEachBase *>(self)->for_each_with_derived(
+          entity, entity.template get_with_child<Cs>()..., dt);
+    }
+  };
+  template <> struct CallWithChildComponents<type_list<>> {
+    template <typename Self>
+    static void call(Self *self, Entity &entity, const float dt) {
+      self->for_each_with(entity, dt);
+    }
+    template <typename Self>
+    static void call_const(const Self *self, const Entity &entity,
+                           const float dt) {
+      self->for_each_with(entity, dt);
+    }
+  };
+
+  template <typename...> struct AllMask {
+    static TagBitset value() { return {}; }
+  };
+  template <auto... Es> struct AllMask<tags::All<Es...>> {
+    static TagBitset value() {
+      TagBitset m;
+      (m.set(static_cast<TagId>(Es)), ...);
+      return m;
+    }
+  };
+  template <typename...> struct AnyMask {
+    static TagBitset value() { return {}; }
+  };
+  template <auto... Es> struct AnyMask<tags::Any<Es...>> {
+    static TagBitset value() {
+      TagBitset m;
+      (m.set(static_cast<TagId>(Es)), ...);
+      return m;
+    }
+  };
+  template <typename...> struct NoneMask {
+    static TagBitset value() { return {}; }
+  };
+  template <auto... Es> struct NoneMask<tags::None<Es...>> {
+    static TagBitset value() {
+      TagBitset m;
+      (m.set(static_cast<TagId>(Es)), ...);
+      return m;
+    }
+  };
+
+  static TagBitset required_all_mask() {
+    static TagBitset m = (TagBitset{} | ... | AllMask<Components>::value());
+    return m;
+  }
+
+  static TagBitset required_any_mask() {
+    static TagBitset m = (TagBitset{} | ... | AnyMask<Components>::value());
+    return m;
+  }
+
+  static TagBitset forbidden_mask() {
+    static TagBitset m = (TagBitset{} | ... | NoneMask<Components>::value());
+    return m;
+  }
+
+  static bool tags_ok(const Entity &entity) {
+    const TagBitset &all = required_all_mask();
+    const TagBitset &any = required_any_mask();
+    const TagBitset &none = forbidden_mask();
+    if (all.any() && !entity.hasAllTags(all))
+      return false;
+    if (any.any() && !entity.hasAnyTag(any))
+      return false;
+    if (none.any() && !entity.hasNoTags(none))
+      return false;
+    return true;
+  }
 
   /*
    *
@@ -87,35 +260,30 @@ template <typename Component> struct Not : BaseComponent {
   }
 */
   void for_each(Entity &entity, const float dt) {
-    if constexpr (sizeof...(Components) > 0) {
-      if ((entity.template has<Components>() && ...)) {
-        for_each_with(entity, entity.template get<Components>()..., dt);
-      }
-    } else {
-      for_each_with(entity, dt);
+    if (!tags_ok(entity))
+      return;
+    using ComponentsOnly = typename filter_components<Components...>::type;
+    if (HasAllComponents<ComponentsOnly>::value(entity)) {
+      CallWithComponents<ComponentsOnly>::call(this, entity, dt);
     }
   }
 
 #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
   void for_each_derived(Entity &entity, const float dt) {
-    if constexpr (sizeof...(Components) > 0) {
-      if ((entity.template has_child_of<Components>() && ...)) {
-        for_each_with_derived(
-            entity, entity.template get_with_child<Components>()..., dt);
-      }
-    } else {
-      for_each_with(entity, dt);
+    if (!tags_ok(entity))
+      return;
+    using ComponentsOnly = typename filter_components<Components...>::type;
+    if (HasAllComponents<ComponentsOnly>::value_child(entity)) {
+      CallWithChildComponents<ComponentsOnly>::call(this, entity, dt);
     }
   }
 
   void for_each_derived(const Entity &entity, const float dt) const {
-    if constexpr (sizeof...(Components) > 0) {
-      if ((entity.template has_child_of<Components>() && ...)) {
-        for_each_with_derived(
-            entity, entity.template get_with_child<Components>()..., dt);
-      }
-    } else {
-      for_each_with(entity, dt);
+    if (!tags_ok(entity))
+      return;
+    using ComponentsOnly = typename filter_components<Components...>::type;
+    if (HasAllComponents<ComponentsOnly>::value_child(entity)) {
+      CallWithChildComponents<ComponentsOnly>::call_const(this, entity, dt);
     }
   }
   virtual void for_each_with_derived(Entity &, Components &..., const float) {}
@@ -124,12 +292,11 @@ template <typename Component> struct Not : BaseComponent {
 #endif
 
   void for_each(const Entity &entity, const float dt) const {
-    if constexpr (sizeof...(Components) > 0) {
-      if ((entity.template has<Components>() && ...)) {
-        for_each_with(entity, entity.template get<Components>()..., dt);
-      }
-    } else {
-      for_each_with(entity, dt);
+    if (!tags_ok(entity))
+      return;
+    using ComponentsOnly = typename filter_components<Components...>::type;
+    if (HasAllComponents<ComponentsOnly>::value(entity)) {
+      CallWithComponents<ComponentsOnly>::call_const(this, entity, dt);
     }
   }
 
@@ -137,9 +304,10 @@ template <typename Component> struct Not : BaseComponent {
   // These would be abstract but we dont know if they will want
   // const or non const versions and the sfinae version is probably
   // pretty unreadable (and idk how to write it correctly)
-  virtual void for_each_with(Entity &, Components &..., const float) {}
-  virtual void for_each_with(const Entity &, const Components &...,
-                             const float) const {}
+  using ForEachBase::for_each_with;
+#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
+  using ForEachBase::for_each_with_derived;
+#endif
 };
 
 struct CallbackSystem : System<> {

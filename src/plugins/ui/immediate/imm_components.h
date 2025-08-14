@@ -429,7 +429,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   if (tiny_width) {
     log_warn("slider width is very small (dim={}, value={:.4f}); slider handle "
              "may be invisible (component: {})",
-             (int)dim, width_val, config.debug_name);
+             (int)dim, width_val, config.debug_name.c_str());
   }
 
   Size handle_width_size{dim, width_val * 0.25f, config.size.x_axis.strictness};
