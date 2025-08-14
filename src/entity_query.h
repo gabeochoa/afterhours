@@ -114,6 +114,48 @@ struct EntityQuery {
   }
 
   /////////
+  // Tag-aware predicates
+  struct WhereHasTag : Modification {
+    TagId id;
+    explicit WhereHasTag(const TagId idIn) : id(idIn) {}
+    bool operator()(const Entity &entity) const override {
+      return entity.hasTag(id);
+    }
+  };
+  TReturn &whereHasTag(const TagId id) { return add_mod(new WhereHasTag(id)); }
+
+  struct WhereHasAllTags : Modification {
+    TagBitset mask;
+    explicit WhereHasAllTags(const TagBitset &m) : mask(m) {}
+    bool operator()(const Entity &entity) const override {
+      return entity.hasAllTags(mask);
+    }
+  };
+  TReturn &whereHasAllTags(const TagBitset &mask) {
+    return add_mod(new WhereHasAllTags(mask));
+  }
+
+  struct WhereHasAnyTag : Modification {
+    TagBitset mask;
+    explicit WhereHasAnyTag(const TagBitset &m) : mask(m) {}
+    bool operator()(const Entity &entity) const override {
+      return entity.hasAnyTag(mask);
+    }
+  };
+  TReturn &whereHasAnyTag(const TagBitset &mask) {
+    return add_mod(new WhereHasAnyTag(mask));
+  }
+
+  struct WhereHasNoTags : Modification {
+    TagBitset mask;
+    explicit WhereHasNoTags(const TagBitset &m) : mask(m) {}
+    bool operator()(const Entity &entity) const override {
+      return entity.hasNoTags(mask);
+    }
+  };
+  TReturn &whereHasNoTags(const TagBitset &mask) {
+    return add_mod(new WhereHasNoTags(mask));
+  }
 
   // TODO add support for converting Entities to other Entities
 
