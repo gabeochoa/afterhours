@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <map>
 #include <optional>
+#include <type_traits>
 
 #include "base_component.h"
 #include "logging.h"
@@ -225,16 +226,31 @@ struct Entity {
     tags.set(tag_id);
   }
 
+  template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
+  void enableTag(const TEnum tag_enum) {
+    enableTag(static_cast<TagId>(tag_enum));
+  }
+
   void disableTag(const TagId tag_id) {
     if (tag_id >= AFTER_HOURS_MAX_ENTITY_TAGS)
       return;
     tags.reset(tag_id);
   }
 
+  template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
+  void disableTag(const TEnum tag_enum) {
+    disableTag(static_cast<TagId>(tag_enum));
+  }
+
   [[nodiscard]] bool hasTag(const TagId tag_id) const {
     if (tag_id >= AFTER_HOURS_MAX_ENTITY_TAGS)
       return false;
     return tags.test(tag_id);
+  }
+
+  template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
+  [[nodiscard]] bool hasTag(const TEnum tag_enum) const {
+    return hasTag(static_cast<TagId>(tag_enum));
   }
 
   [[nodiscard]] bool hasAllTags(const TagBitset &mask) const {
