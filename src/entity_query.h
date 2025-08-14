@@ -6,8 +6,8 @@
 #include <iterator>
 #include <memory>
 #include <optional>
-#include <vector>
 #include <type_traits>
+#include <vector>
 
 #include "entity.h"
 #include "entity_helper.h"
@@ -114,9 +114,23 @@ struct EntityQuery {
     return whereHasTag(static_cast<TagId>(tag_enum));
   }
 
+  template <auto TagEnum,
+            std::enable_if_t<std::is_enum_v<decltype(TagEnum)>, int> = 0>
+  auto &whereHasTag() {
+    return whereHasTag(static_cast<TagId>(TagEnum));
+  }
+
   template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
   auto &whereHasAllTags(const TEnum tag_enum) {
     return whereHasTag(static_cast<TagId>(tag_enum));
+  }
+
+  template <auto TagEnum,
+            std::enable_if_t<std::is_enum_v<decltype(TagEnum)>, int> = 0>
+  auto &whereHasAllTags() {
+    TagBitset mask;
+    mask.set(static_cast<TagId>(TagEnum));
+    return whereHasAllTags(mask);
   }
 
   template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
@@ -126,10 +140,26 @@ struct EntityQuery {
     return whereHasAnyTag(mask);
   }
 
+  template <auto TagEnum,
+            std::enable_if_t<std::is_enum_v<decltype(TagEnum)>, int> = 0>
+  auto &whereHasAnyTag() {
+    TagBitset mask;
+    mask.set(static_cast<TagId>(TagEnum));
+    return whereHasAnyTag(mask);
+  }
+
   template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
   auto &whereHasNoTags(const TEnum tag_enum) {
     TagBitset mask;
     mask.set(static_cast<TagId>(tag_enum));
+    return whereHasNoTags(mask);
+  }
+
+  template <auto TagEnum,
+            std::enable_if_t<std::is_enum_v<decltype(TagEnum)>, int> = 0>
+  auto &whereHasNoTags() {
+    TagBitset mask;
+    mask.set(static_cast<TagId>(TagEnum));
     return whereHasNoTags(mask);
   }
   TReturn &
