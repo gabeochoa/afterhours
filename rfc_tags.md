@@ -1,210 +1,139 @@
-# RFC: Entity Tags/Groups and TaggedQuery (afterhours)
+# RFC: Entity Tags/Groups integrated into Entity and EntityQuery (afterhours)
 
 ## Summary
-Introduce lightweight bitset-based tags on `afterhours::Entity` and a minimal `TaggedQuery` API to:
-- Simplify common filters (e.g., store-spawned vs. non-store) and enable bulk operations
-- Replace ad-hoc flags like `.include_store_entities()` and marker components used only for filtering
-- Keep the feature generic in `vendor/afterhours`, with game-specific tag enums defined in this repo
+Introduce lightweight bitset-based tags on `afterhours::Entity` and integrate tag predicates into `EntityQuery`:
+- Simplify common filters and enable bulk operations
+- Replace ad-hoc flags like `.include_store_entities()` and marker-only components
+- Keep the feature generic in `vendor/afterhours`; games define their own typed tag enums
 
-This is backwards-compatible and requires only a small addition to `Entity` and its serialization.
+Backwards-compatible: adds a small field to `Entity`; optional serialization is guarded.
 
 ## Motivation
-Today we use:
-- A negative filter against a marker component (`IsStoreSpawned`) plus a toggle `.include_store_entities()` to opt-in
-- A boolean `entity.cleanup` for immediate delete-on-tick (orthogonal)
-- “Permanent” entity creation (lifetime semantics)
-
-These result in scattered and ad-hoc filters. We can centralize filtering with tags:
-- `Store` for store-spawned entities
-- `Permanent` for lifetime semantics
-- `CleanupOnRoundEnd` for bulk deletes
-
-Tags provide:
-- Clear, composable semantics for queries (all/any/none)
-- Efficient filters using bitset operations
-- Bulk operations (e.g., erase all with a tag)
+Current cross-cutting filters (store vs non-store, permanent, round cleanup) are scattered across ad-hoc flags and marker components. Centralizing this with tags provides:
+- Clear, composable semantics (all/any/none)
+- Fast, constant-time checks
+- Straightforward bulk ops (e.g., mark all tagged for cleanup)
 
 ## Goals
-- Generic tag mechanism inside `afterhours` (no game-specific names)
-- Fast, constant-time checks for tag membership
-- Ergonomic AND/OR/NOT tag filters via `TaggedQuery`
-- Backwards-compatible serialization
+- Generic tag mechanism in `afterhours` (no game-specific names)
+- Fast tag membership checks
+- Ergonomic AND/OR/NOT tag filters via `EntityQuery` methods
+- Backwards-compatible, opt-in serialization
 
 ## Non-goals
-- Full-fledged type-safe tag registry in the library (games define their own enums)
-- Replacing `entity.cleanup` immediate deletion flag (tags represent membership, not one-shot actions)
+- A global type-safe registry in the library (games keep their own enums)
+- Replacing `entity.cleanup` (tags are membership, not one-shot actions)
 
 ## Design
 
 ### Entity: Tag storage and API (in vendor/afterhours)
 - Data
   - `TagBitset tags{}` stored on `afterhours::Entity`
-  - Configurable capacity via compile-time constant: `AH_MAX_ENTITY_TAGS` (default 64)
+  - Capacity via compile-time constant: `AFTER_HOURS_MAX_ENTITY_TAGS` (default 64)
 - Types
   - `using TagId = uint8_t;`
-  - `using TagBitset = std::bitset<AH_MAX_ENTITY_TAGS>;`
+  - `using TagBitset = std::bitset<AFTER_HOURS_MAX_ENTITY_TAGS>;`
 - Methods
-  - `void addTag(TagId id);`
-  - `void removeTag(TagId id);`
+  - `void enableTag(TagId id);`
+  - `void disableTag(TagId id);`
   - `bool hasTag(TagId id) const;`
-  - `bool hasAll(const TagBitset& mask) const;`
-  - `bool hasAny(const TagBitset& mask) const;`
-  - `bool hasNone(const TagBitset& mask) const;`
-- Optional typed helpers (header-only), so callers can use `enum class GameTag : uint8_t { ... }`.
+  - `bool hasAllTags(const TagBitset &mask) const;`
+  - `bool hasAnyTag(const TagBitset &mask) const;`
+  - `bool hasNoTags(const TagBitset &mask) const;`
 
 Example (library side):
 ```cpp
-#ifndef AH_MAX_ENTITY_TAGS
-constexpr size_t AH_MAX_ENTITY_TAGS = 64;
+#ifndef AFTER_HOURS_MAX_ENTITY_TAGS
+constexpr size_t AFTER_HOURS_MAX_ENTITY_TAGS = 64;
 #endif
 
 using TagId = uint8_t;
-using TagBitset = std::bitset<AH_MAX_ENTITY_TAGS>;
+using TagBitset = std::bitset<AFTER_HOURS_MAX_ENTITY_TAGS>;
 
 struct Entity {
   // existing fields...
   TagBitset tags{};
 
-  void addTag(TagId id) { tags.set(id); }
-  void removeTag(TagId id) { tags.reset(id); }
-  bool hasTag(TagId id) const { return tags.test(id); }
+  void enableTag(TagId id) { if (id < AFTER_HOURS_MAX_ENTITY_TAGS) tags.set(id); }
+  void disableTag(TagId id) { if (id < AFTER_HOURS_MAX_ENTITY_TAGS) tags.reset(id); }
+  bool hasTag(TagId id) const { return id < AFTER_HOURS_MAX_ENTITY_TAGS && tags.test(id); }
 
-  bool hasAll(const TagBitset& m) const { return (tags & m) == m; }
-  bool hasAny(const TagBitset& m) const { return (tags & m).any(); }
-  bool hasNone(const TagBitset& m) const { return (tags & m).none(); }
+  bool hasAllTags(const TagBitset &m) const { return (tags & m) == m; }
+  bool hasAnyTag(const TagBitset &m) const { return (tags & m).any(); }
+  bool hasNoTags(const TagBitset &m) const { return (tags & m).none(); }
 };
 ```
 
-### TaggedQuery (in vendor/afterhours)
-A small tag-focused query that complements component/type predicates used by the game.
-
-- Interface
-  - `TaggedQuery(const Entities&)`
-  - `TaggedQuery& allOf(const TagBitset&)`
-  - `TaggedQuery& anyOf(const TagBitset&)`
-  - `TaggedQuery& noneOf(const TagBitset&)`
-  - `template<typename Pred> TaggedQuery& where(Pred)` (optional extra predicate)
-  - `std::vector<RefEntity> gen() const`
-- Matching rule
-  - Require all bits in `all`
-  - Require at least one bit from `any` if set
-  - Require none of the bits in `none`
-
-Sketch:
-```cpp
-struct TagMask { TagBitset all{}, any{}, none{}; };
-
-class TaggedQuery {
- public:
-  explicit TaggedQuery(const Entities& entities) : entities_(entities) {}
-
-  TaggedQuery& allOf(const TagBitset& m) { mask_.all |= m; return *this; }
-  TaggedQuery& anyOf(const TagBitset& m) { mask_.any |= m; return *this; }
-  TaggedQuery& noneOf(const TagBitset& m) { mask_.none |= m; return *this; }
-
-  template <typename Pred>
-  TaggedQuery& where(Pred p) { pred_ = std::move(p); return *this; }
-
-  std::vector<RefEntity> gen() const {
-    std::vector<RefEntity> out; out.reserve(entities_.size());
-    for (const auto& sp : entities_) {
-      if (!sp) continue; Entity& e = *sp;
-      if (!e.hasAll(mask_.all)) continue;
-      if (mask_.any.any() && !e.hasAny(mask_.any)) continue;
-      if (!e.hasNone(mask_.none)) continue;
-      if (pred_ && !pred_(e)) continue;
-      out.push_back(e);
-    }
-    return out;
-  }
-
- private:
-  const Entities& entities_; TagMask mask_{}; std::function<bool(const Entity&)> pred_{};
-};
-```
-
-### Serialization
-- With `ENABLE_AFTERHOURS_BITSERY_SERIALIZE`, append `tags` to `Entity` serialization using `bitsery`:
-  - `s.ext(entity.tags, bitsery::ext::StdBitset{});`
-- Place near `componentSet` for locality
-- Backwards compatibility: older saves load with `tags = 0` (no tags)
-
-## Integration in this repo (pharmasea)
-
-### Tag definitions
-Define a typed enum for game tags in our codebase:
-```cpp
-enum class GameTag : uint8_t {
-  Store = 0,
-  Permanent = 1,
-  CleanupOnRoundEnd = 2,
-  // ... future tags
-};
-
-inline afterhours::TagBitset mask(GameTag tag) {
-  afterhours::TagBitset m; m.set(static_cast<uint8_t>(tag)); return m;
-}
-
-inline void add_tag(afterhours::Entity& e, GameTag tag) {
-  e.addTag(static_cast<uint8_t>(tag));
-}
-```
-
-### Assign tags
-- Store-spawned entities: set `GameTag::Store`
-- Permanent entities: set `GameTag::Permanent` in `createPermanentEntity`
-- Round-lifetime entities: set `GameTag::CleanupOnRoundEnd`
-
-### Replace ad-hoc filters
-- Current default excludes store entities via `Not(WhereHasComponent<IsStoreSpawned>)` unless `.include_store_entities()` is set
-- New approach:
-  - Default exclusions use tag masks: e.g., `.noneOf(mask(GameTag::Store))`
-  - Include store when needed by omitting that exclusion or specifying `.anyOf(mask(GameTag::Store))`
-- Replace sentinel component checks (`IsStoreSpawned`) with tag checks where appropriate
-- Keep `entity.cleanup` for immediate deletes; tags handle membership and bulk ops
-
-### Bridging helpers (optional)
-Add minimal sugar to existing `EntityQuery` to keep call sites ergonomic:
+### Query integration (extend EntityQuery)
+Add tag-aware predicates alongside existing component filters. Suggested API:
 ```cpp
 struct EntityQuery {
   // ... existing
-  EntityQuery& whereHasTag(GameTag tag);
-  EntityQuery& whereAnyTag(const afterhours::TagBitset& mask);
-  EntityQuery& whereNoTag(GameTag tag);
+  EntityQuery &whereHasTag(TagId id);
+  EntityQuery &whereHasAllTags(const TagBitset &mask);
+  EntityQuery &whereHasAnyTag(const TagBitset &mask);
+  EntityQuery &whereHasNoTags(const TagBitset &mask);
 };
 ```
-These would internally delegate to `afterhours::TaggedQuery` or reuse `Entity` tag predicates during partitioning.
+These are implemented as `Modification`s that invoke the `Entity` tag predicates during partitioning.
 
-## Examples
+Note: deprecate `.include_store_entities(bool)` in favor of explicit tag predicates. It is not currently consulted during filtering and can be removed after migration.
 
-### Exclude store by default
+### Optional typed sugar (outside library)
+Games can provide typed helpers without changing the core API:
 ```cpp
-auto ents = afterhours::TaggedQuery(EntityHelper::get_entities())
-  .noneOf(mask(GameTag::Store))
+enum struct GameTag : uint8_t { Store, Permanent, CleanupOnRoundEnd /* ... */ };
+
+inline TagBitset make_mask(std::initializer_list<GameTag> list) {
+  TagBitset m; for (auto t : list) m.set(static_cast<uint8_t>(t)); return m;
+}
+```
+
+### Optional bulk ops (EntityHelper)
+Consider small helpers that use tag masks for common operations:
+- `mark_all_for_cleanup_with_tags(const TagBitset &mask)`
+- `erase_all_with_tags(const TagBitset &mask)`
+
+These are opt-in and can be omitted if we prefer to keep `EntityHelper` minimal.
+
+### Serialization (optional)
+If a consumer enables bitsery-based serialization of `Entity`, include `tags` next to `componentSet` under a guard. Suggested macro: `AFTER_HOURS_ENABLE_BITSERY_SERIALIZE`.
+```cpp
+s.ext(entity.componentSet, bitsery::ext::StdBitset{});
+s.ext(entity.tags, bitsery::ext::StdBitset{}); // NEW
+s.value1b(entity.cleanup);
+```
+
+## Examples (with EntityQuery)
+
+### Exclude store by default in a helper
+```cpp
+auto ents = afterhours::EntityQuery()
+  .whereHasNoTags(make_mask({GameTag::Store}))
   .gen();
 ```
 
-### Include store for specific queries (e.g., floor markers)
+### Include store for specific queries
 ```cpp
-auto ents = afterhours::TaggedQuery(EntityHelper::get_entities())
-  .anyOf(mask(GameTag::Store))
-  .where([](const Entity& e){ return e.has<IsFloorMarker>(); })
+auto ents = afterhours::EntityQuery()
+  .whereHasAnyTag(make_mask({GameTag::Store}))
+  .whereHasComponent<IsFloorMarker>()
   .gen();
 ```
 
 ### Bulk cleanup at round end
 ```cpp
-for (auto& e : afterhours::TaggedQuery(EntityHelper::get_entities())
-                  .allOf(mask(GameTag::CleanupOnRoundEnd))
+for (auto &e : afterhours::EntityQuery()
+                  .whereHasAllTags(make_mask({GameTag::CleanupOnRoundEnd}))
                   .gen()) {
-  e.get().cleanup = true; // or remove immediately in a bulk op
+  e.get().cleanup = true;
 }
 ```
 
-### Protect permanent entities
+### Protect permanent entities during wipe
 ```cpp
-for (auto& e : afterhours::TaggedQuery(EntityHelper::get_entities())
-                  .noneOf(mask(GameTag::Permanent))
+for (auto &e : afterhours::EntityQuery()
+                  .whereHasNoTags(make_mask({GameTag::Permanent}))
                   .gen()) {
   // eligible for full wipe
 }
@@ -212,42 +141,31 @@ for (auto& e : afterhours::TaggedQuery(EntityHelper::get_entities())
 
 ## Performance
 - Tag checks are constant-time bitset ops
-- Query remains O(N) over live entities, like current `EntityQuery`
-- Memory: one bitset per entity (64 bits by default)
+- Query remains O(N) over live entities; tag checks add negligible cost
+- If needed, we can explore optional per-tag indices after profiling
 
-## Migration Plan
-1. Add tags and `TaggedQuery` to `vendor/afterhours` (generic)
-2. In this repo:
-   - Introduce `GameTag` enum and helpers
-   - Tag entities at creation/modification sites
-   - Replace `.include_store_entities()` occurrences with tag-based filters
-   - Replace `IsStoreSpawned` usage in filters with tag checks where suitable
-3. Keep `entity.cleanup` semantics unchanged
-4. Optionally remove marker-only components over time
+## Migration Plan (consumer repo)
+1. Add `GameTag` enum and helpers
+2. Tag entities at creation/modification sites
+3. Replace `.include_store_entities()` and marker-only filters with tag predicates
+4. Keep `entity.cleanup` unchanged; tags are for membership and bulk ops
+5. Optionally unify existing “permanent” semantics with a `Permanent` tag
 
 ## Alternatives Considered
-- Only using marker components: works but spreads logic and requires component presence checks everywhere
-- String-based tags: flexible but slower and more error-prone
-- Storing tags outside `Entity`: complicates serialization and ownership
+- Only marker components: works but spreads logic and adds boilerplate
+- String-based tags: flexible but slower and error-prone
+- Tags stored outside `Entity`: complicates ownership/serialization
 
 ## Open Questions
-- Tag capacity: is 64 sufficient, or should we raise to 128? (compile-time switch)
-- Built-in bulk ops in `afterhours` (`erase_tagged`, `count_tagged`) vs. leaving to consumers
-- Should `afterhours` expose typed tag helpers or keep only index-based API?
+- Capacity: is 64 sufficient? Do we want to permit 128 via macro override?
+- Should we add bulk ops to `EntityHelper` or keep them in consumers?
+- Do we want library-provided typed helpers, or leave them entirely to consumers?
 
 ## Backwards Compatibility
-- Saves without tags load with zero-initialized tag bitset
-- Network: no change unless `Entity` is serialized over the wire; if so, tags are included as an additional bitset field and default to zero
+- New entities default to zeroed tag bitset
+- Saves without tags load with `tags = 0` when serialization is enabled
 
 ## Rollout
-- Submit PR to `afterhours` with `Entity` tag field, API, `TaggedQuery`, and serialization guard
-- Update this repo to use tags gradually, starting with `.include_store_entities()` replacements
-
-## Appendix: Drop-in serialization change (bitsery)
-Where `Entity` is serialized (guarded by `ENABLE_AFTERHOURS_BITSERY_SERIALIZE`):
-```cpp
-s.ext(entity.componentSet, bitsery::ext::StdBitset{});
-s.ext(entity.tags, bitsery::ext::StdBitset{}); // NEW
-s.value1b(entity.cleanup);
-// ... existing componentArray map
-```
+- Add `tags` field and tag predicates to `Entity`
+- Extend `EntityQuery` with tag-aware predicates
+- Deprecate and later remove `.include_store_entities()` after call sites migrate

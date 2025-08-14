@@ -4,6 +4,7 @@
 #include <array>
 #include <atomic>
 #include <bitset>
+#include <cstdint>
 #include <map>
 #include <optional>
 
@@ -12,6 +13,12 @@
 #include "type_name.h"
 
 namespace afterhours {
+#ifndef AFTER_HOURS_MAX_ENTITY_TAGS
+#define AFTER_HOURS_MAX_ENTITY_TAGS 64
+#endif
+
+using TagId = std::uint8_t;
+using TagBitset = std::bitset<AFTER_HOURS_MAX_ENTITY_TAGS>;
 template <typename Base, typename Derived> bool child_of(Derived *derived) {
   return dynamic_cast<Base *>(derived) != nullptr;
 }
@@ -30,6 +37,7 @@ struct Entity {
   ComponentBitSet componentSet;
   ComponentArray componentArray;
 
+  TagBitset tags{};
   bool cleanup = false;
 
   Entity() : id(ENTITY_ID_GEN++) {}
@@ -209,6 +217,36 @@ struct Entity {
 #elif defined(__GNUC__)
 #pragma GCC diagnostic pop
 #endif
+  }
+
+  void enableTag(const TagId tag_id) {
+    if (tag_id >= AFTER_HOURS_MAX_ENTITY_TAGS)
+      return;
+    tags.set(tag_id);
+  }
+
+  void disableTag(const TagId tag_id) {
+    if (tag_id >= AFTER_HOURS_MAX_ENTITY_TAGS)
+      return;
+    tags.reset(tag_id);
+  }
+
+  [[nodiscard]] bool hasTag(const TagId tag_id) const {
+    if (tag_id >= AFTER_HOURS_MAX_ENTITY_TAGS)
+      return false;
+    return tags.test(tag_id);
+  }
+
+  [[nodiscard]] bool hasAllTags(const TagBitset &mask) const {
+    return (tags & mask) == mask;
+  }
+
+  [[nodiscard]] bool hasAnyTag(const TagBitset &mask) const {
+    return (tags & mask).any();
+  }
+
+  [[nodiscard]] bool hasNoTags(const TagBitset &mask) const {
+    return (tags & mask).none();
   }
 };
 
