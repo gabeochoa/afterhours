@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "profiling_macros.h"
 #include <algorithm>
 #include <functional>
 #include <iterator>
