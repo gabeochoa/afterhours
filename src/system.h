@@ -357,19 +357,31 @@ struct SystemManager {
     for (auto &system : update_systems_) {
       if (!system->should_run(dt))
         continue;
-      system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
-        if (!entity)
-          continue;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-        if (system->include_derived_children)
-          system->for_each_derived(*entity, dt);
-        else
-#endif
-          system->for_each(*entity, dt);
+      
+      {
+        PROFILE_SCOPE("update_system_once");
+        system->once(dt);
       }
-      system->after(dt);
-      EntityHelper::merge_entity_arrays();
+      
+      {
+        PROFILE_SCOPE("update_system_for_each");
+        for (std::shared_ptr<Entity> entity : entities) {
+          if (!entity)
+            continue;
+#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
+          if (system->include_derived_children)
+            system->for_each_derived(*entity, dt);
+          else
+#endif
+            system->for_each(*entity, dt);
+        }
+      }
+      
+      {
+        PROFILE_SCOPE("update_system_after");
+        system->after(dt);
+        EntityHelper::merge_entity_arrays();
+      }
     }
   }
 
@@ -378,18 +390,30 @@ struct SystemManager {
     for (auto &system : fixed_update_systems_) {
       if (!system->should_run(dt))
         continue;
-      system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
-        if (!entity)
-          continue;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-        if (system->include_derived_children)
-          system->for_each_derived(*entity, dt);
-        else
-#endif
-          system->for_each(*entity, dt);
+      
+      {
+        PROFILE_SCOPE("fixed_system_once");
+        system->once(dt);
       }
-      system->after(dt);
+      
+      {
+        PROFILE_SCOPE("fixed_system_for_each");
+        for (std::shared_ptr<Entity> entity : entities) {
+          if (!entity)
+            continue;
+#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
+          if (system->include_derived_children)
+            system->for_each_derived(*entity, dt);
+          else
+#endif
+            system->for_each(*entity, dt);
+        }
+      }
+      
+      {
+        PROFILE_SCOPE("fixed_system_after");
+        system->after(dt);
+      }
     }
   }
 
@@ -398,25 +422,41 @@ struct SystemManager {
     for (const auto &system : render_systems_) {
       if (!system->should_run(dt))
         continue;
-      system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
-        if (!entity)
-          continue;
-        const Entity &e = *entity;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-        if (system->include_derived_children)
-          system->for_each_derived(e, dt);
-        else
-#endif
-          system->for_each(e, dt);
+      
+      {
+        PROFILE_SCOPE("render_system_once");
+        system->once(dt);
       }
-      system->after(dt);
+      
+      {
+        PROFILE_SCOPE("render_system_for_each");
+        for (std::shared_ptr<Entity> entity : entities) {
+          if (!entity)
+            continue;
+          const Entity &e = *entity;
+#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
+          if (system->include_derived_children)
+            system->for_each_derived(e, dt);
+          else
+#endif
+            system->for_each(e, dt);
+        }
+      }
+      
+      {
+        PROFILE_SCOPE("render_system_after");
+        system->after(dt);
+      }
     }
   }
 
-  void tick_all(Entities &entities, const float dt) { tick(entities, dt); }
+  void tick_all(Entities &entities, const float dt) { 
+    PROFILE_SCOPE("tick_all");
+    tick(entities, dt); 
+  }
 
   void fixed_tick_all(Entities &entities, const float dt) {
+    PROFILE_SCOPE("fixed_tick_all");
     accumulator += dt;
     int num_ticks = (int)std::floor(accumulator / FIXED_TICK_RATE);
     accumulator -= (float)num_ticks * FIXED_TICK_RATE;
@@ -428,6 +468,7 @@ struct SystemManager {
   }
 
   void render_all(const float dt) {
+    PROFILE_SCOPE("render_all");
     const auto &entities = EntityHelper::get_entities();
     render(entities, dt);
   }
@@ -435,12 +476,42 @@ struct SystemManager {
   void run(const float dt) {
     PROFILE_SCOPE("SystemManager::run");
     auto &entities = EntityHelper::get_entities_for_mod();
+    
+    {
+      PROFILE_SCOPE("before_fixed_update");
+      // Pre-fixed update preparation
+    }
+    
     fixed_tick_all(entities, dt);
+    
+    {
+      PROFILE_SCOPE("after_fixed_update");
+      // Post-fixed update processing
+    }
+    
+    {
+      PROFILE_SCOPE("before_update");
+      // Pre-update preparation
+    }
+    
     tick_all(entities, dt);
 
-    EntityHelper::cleanup();
+    {
+      PROFILE_SCOPE("entity_cleanup");
+      EntityHelper::cleanup();
+    }
 
+    {
+      PROFILE_SCOPE("before_render");
+      // Pre-render preparation
+    }
+    
     render_all(dt);
+    
+    {
+      PROFILE_SCOPE("after_render");
+      // Post-render processing
+    }
   }
 };
 } // namespace afterhours
