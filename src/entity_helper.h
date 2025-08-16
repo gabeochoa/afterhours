@@ -196,6 +196,7 @@ struct EntityHelper {
   }
 
   static void forEachEntity(const std::function<ForEachFlow(Entity &)> &cb) {
+    PROFILE_SCOPE("EntityHelper::forEachEntity");
     for (const auto &e : get_entities()) {
       if (!e)
         continue;

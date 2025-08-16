@@ -383,6 +383,7 @@ private:
 
   RefEntities filter_mod(const RefEntities &in,
                          const std::unique_ptr<Modification> &mod) const {
+    PROFILE_SCOPE("EntityQuery::filter_mod");
     RefEntities out;
     out.reserve(in.size());
     for (const auto &entity : in) {

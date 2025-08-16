@@ -27,6 +27,7 @@ struct input : developer::Plugin {
   using GamepadButton = raylib::GamepadButton;
 
   static MousePosition get_mouse_position() {
+    PROFILE_SCOPE("input::get_mouse_position");
     const raylib::Vector2 raw = raylib::GetMousePosition();
 
     const int window_w = raylib::GetScreenWidth();

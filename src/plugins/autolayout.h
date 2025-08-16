@@ -1276,6 +1276,7 @@ struct AutoLayout {
   }
 
   void compute_relative_positions(UIComponent &widget) {
+    PROFILE_SCOPE("AutoLayout::compute_relative_positions");
     if (widget.parent == -1) {
       // This already happens by default, but lets be explicit about it
       widget.computed_rel[Axis::X] = 0.f;
@@ -1370,6 +1371,7 @@ struct AutoLayout {
   }
 
   void compute_rect_bounds(UIComponent &widget) {
+    PROFILE_SCOPE("AutoLayout::compute_rect_bounds");
     // log_trace("computing rect bounds for {}", widget);
 
     Vector2Type offset = Vector2Type{0.f, 0.f};
