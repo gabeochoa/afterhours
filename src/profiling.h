@@ -13,7 +13,7 @@
 #endif
 
 #ifdef ENABLE_PROFILING
-    #include "../spall.h"
+    #include "../vendor/spall.h"
     #include <chrono>
     #include <string>
     #include <thread>
