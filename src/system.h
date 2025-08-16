@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "profiling_macros.h"
 #include <cmath>
 #include <functional>
 #include <memory>
@@ -352,6 +353,7 @@ struct SystemManager {
   }
 
   void tick(Entities &entities, const float dt) {
+    PROFILE_SCOPE("SystemManager::tick");
     for (auto &system : update_systems_) {
       if (!system->should_run(dt))
         continue;
@@ -372,6 +374,7 @@ struct SystemManager {
   }
 
   void fixed_tick(Entities &entities, const float dt) {
+    PROFILE_SCOPE("SystemManager::fixed_tick");
     for (auto &system : fixed_update_systems_) {
       if (!system->should_run(dt))
         continue;
@@ -391,6 +394,7 @@ struct SystemManager {
   }
 
   void render(const Entities &entities, const float dt) {
+    PROFILE_SCOPE("SystemManager::render");
     for (const auto &system : render_systems_) {
       if (!system->should_run(dt))
         continue;
@@ -429,6 +433,7 @@ struct SystemManager {
   }
 
   void run(const float dt) {
+    PROFILE_SCOPE("SystemManager::run");
     auto &entities = EntityHelper::get_entities_for_mod();
     fixed_tick_all(entities, dt);
     tick_all(entities, dt);

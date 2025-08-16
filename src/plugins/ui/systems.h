@@ -47,6 +47,7 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
 
   virtual void for_each_with(Entity &, UIContext<InputAction> &context,
                              float) override {
+    PROFILE_SCOPE("BeginUIContextManager::for_each_with");
     context.mouse_pos = input::get_mouse_position();
     context.mouseLeftDown = input::is_mouse_button_down(0);
 

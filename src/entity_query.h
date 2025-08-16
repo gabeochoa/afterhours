@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "profiling_macros.h"
 #include <algorithm>
 #include <functional>
 #include <iterator>
@@ -254,6 +255,7 @@ struct EntityQuery {
   }
 
   [[nodiscard]] RefEntities gen() const {
+    PROFILE_SCOPE("EntityQuery::gen");
     if (!ran_query)
       return values_ignore_cache({});
     return ents;
@@ -382,6 +384,7 @@ private:
 
   RefEntities filter_mod(const RefEntities &in,
                          const std::unique_ptr<Modification> &mod) const {
+    PROFILE_SCOPE("EntityQuery::filter_mod");
     RefEntities out;
     out.reserve(in.size());
     for (const auto &entity : in) {
@@ -393,6 +396,7 @@ private:
   }
 
   RefEntities run_query(const UnderlyingOptions) const {
+    PROFILE_SCOPE("EntityQuery::run_query");
     RefEntities out;
     out.reserve(entities.size());
 

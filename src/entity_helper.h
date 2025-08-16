@@ -1,5 +1,6 @@
 #pragma once
 
+#include "profiling_macros.h"
 #include <algorithm>
 #include <functional>
 #include <memory>
@@ -74,6 +75,7 @@ struct EntityHelper {
   }
 
   static Entity &createEntityWithOptions(const CreationOptions &options) {
+    PROFILE_SCOPE("EntityHelper::createEntityWithOptions");
     if (get_temp().capacity() == 0) [[unlikely]]
       reserve_temp_space();
 
@@ -88,6 +90,7 @@ struct EntityHelper {
   }
 
   static void merge_entity_arrays() {
+    PROFILE_SCOPE("EntityHelper::merge_entity_arrays");
     if (get_temp().empty())
       return;
 
@@ -154,6 +157,7 @@ struct EntityHelper {
   // }
 
   static void cleanup() {
+    PROFILE_SCOPE("EntityHelper::cleanup");
     EntityHelper::merge_entity_arrays();
     // Cleanup entities marked cleanup
     //
@@ -193,6 +197,7 @@ struct EntityHelper {
   }
 
   static void forEachEntity(const std::function<ForEachFlow(Entity &)> &cb) {
+    PROFILE_SCOPE("EntityHelper::forEachEntity");
     for (const auto &e : get_entities()) {
       if (!e)
         continue;
