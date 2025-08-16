@@ -357,14 +357,14 @@ struct SystemManager {
     for (auto &system : update_systems_) {
       if (!system->should_run(dt))
         continue;
-      
+
       {
-        PROFILE_SCOPE("update_system_once");
+        PROFILE_SCOPE_SYSTEM(system.get(), "once");
         system->once(dt);
       }
-      
+
       {
-        PROFILE_SCOPE("update_system_for_each");
+        PROFILE_SCOPE_SYSTEM(system.get(), "for_each");
         for (std::shared_ptr<Entity> entity : entities) {
           if (!entity)
             continue;
@@ -376,9 +376,9 @@ struct SystemManager {
             system->for_each(*entity, dt);
         }
       }
-      
+
       {
-        PROFILE_SCOPE("update_system_after");
+        PROFILE_SCOPE_SYSTEM(system.get(), "after");
         system->after(dt);
         EntityHelper::merge_entity_arrays();
       }
@@ -390,14 +390,14 @@ struct SystemManager {
     for (auto &system : fixed_update_systems_) {
       if (!system->should_run(dt))
         continue;
-      
+
       {
-        PROFILE_SCOPE("fixed_system_once");
+        PROFILE_SCOPE_SYSTEM(system.get(), "once");
         system->once(dt);
       }
-      
+
       {
-        PROFILE_SCOPE("fixed_system_for_each");
+        PROFILE_SCOPE_SYSTEM(system.get(), "for_each");
         for (std::shared_ptr<Entity> entity : entities) {
           if (!entity)
             continue;
@@ -409,9 +409,9 @@ struct SystemManager {
             system->for_each(*entity, dt);
         }
       }
-      
+
       {
-        PROFILE_SCOPE("fixed_system_after");
+        PROFILE_SCOPE_SYSTEM(system.get(), "after");
         system->after(dt);
       }
     }
@@ -422,14 +422,14 @@ struct SystemManager {
     for (const auto &system : render_systems_) {
       if (!system->should_run(dt))
         continue;
-      
+
       {
-        PROFILE_SCOPE("render_system_once");
+        PROFILE_SCOPE_SYSTEM(system.get(), "once");
         system->once(dt);
       }
-      
+
       {
-        PROFILE_SCOPE("render_system_for_each");
+        PROFILE_SCOPE_SYSTEM(system.get(), "for_each");
         for (std::shared_ptr<Entity> entity : entities) {
           if (!entity)
             continue;
@@ -442,17 +442,17 @@ struct SystemManager {
             system->for_each(e, dt);
         }
       }
-      
+
       {
-        PROFILE_SCOPE("render_system_after");
+        PROFILE_SCOPE_SYSTEM(system.get(), "after");
         system->after(dt);
       }
     }
   }
 
-  void tick_all(Entities &entities, const float dt) { 
+  void tick_all(Entities &entities, const float dt) {
     PROFILE_SCOPE("tick_all");
-    tick(entities, dt); 
+    tick(entities, dt);
   }
 
   void fixed_tick_all(Entities &entities, const float dt) {
@@ -476,24 +476,24 @@ struct SystemManager {
   void run(const float dt) {
     PROFILE_SCOPE("SystemManager::run");
     auto &entities = EntityHelper::get_entities_for_mod();
-    
+
     {
       PROFILE_SCOPE("before_fixed_update");
       // Pre-fixed update preparation
     }
-    
+
     fixed_tick_all(entities, dt);
-    
+
     {
       PROFILE_SCOPE("after_fixed_update");
       // Post-fixed update processing
     }
-    
+
     {
       PROFILE_SCOPE("before_update");
       // Pre-update preparation
     }
-    
+
     tick_all(entities, dt);
 
     {
@@ -505,9 +505,9 @@ struct SystemManager {
       PROFILE_SCOPE("before_render");
       // Pre-render preparation
     }
-    
+
     render_all(dt);
-    
+
     {
       PROFILE_SCOPE("after_render");
       // Post-render processing

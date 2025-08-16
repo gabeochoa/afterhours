@@ -153,20 +153,18 @@ void create_test_entities() {
 void run_systems() {
   PROFILE_SCOPE("run_systems");
 
-  using namespace afterhours;
+  // Example of profiling with system type names
+  PROFILE_SCOPE_SYSTEM_TYPE(afterhours::MovementSystem, "custom_profile");
 
-  SystemManager systems;
+  // Register systems
+  auto movement_system = std::make_unique<afterhours::MovementSystem>();
+  auto health_system = std::make_unique<afterhours::HealthSystem>();
+  auto player_system = std::make_unique<afterhours::PlayerSystem>();
 
-  // Register our systems
-  systems.register_update_system(std::make_unique<MovementSystem>());
-  systems.register_update_system(std::make_unique<HealthSystem>());
-  systems.register_update_system(std::make_unique<PlayerSystem>());
-
-  // Run systems for multiple frames
-  for (int frame = 0; frame < 10; ++frame) {
-    PROFILE_SCOPE_ARGS("system_frame", "frame=" + std::to_string(frame));
-    systems.run(0.016f); // 60 FPS simulation
-  }
+  // Run systems (this would normally be done by SystemManager)
+  movement_system->once(0.016f);
+  health_system->once(0.016f);
+  player_system->once(0.016f);
 }
 
 void run_queries() {

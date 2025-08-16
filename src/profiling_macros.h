@@ -14,6 +14,7 @@
 
 #ifdef ENABLE_PROFILING
 #include "spall.h"
+#include "type_name.h"
 #include <chrono>
 #include <mutex>
 #include <string>
@@ -155,6 +156,12 @@ public:
   profiling::ProfileScope profile_scope_##__LINE__(name)
 #define PROFILE_SCOPE_ARGS(name, args)                                         \
   profiling::ProfileScope profile_scope_##__LINE__(name, args)
+#define PROFILE_SCOPE_SYSTEM(system_ptr, phase)                                \
+  profiling::ProfileScope profile_scope_sys_##__LINE__(                        \
+      std::string(type_name<decltype(*system_ptr)>()) + "::" + phase)
+#define PROFILE_SCOPE_SYSTEM_TYPE(system_type, phase)                          \
+  profiling::ProfileScope profile_scope_type_##__LINE__(                       \
+      std::string(type_name<system_type>()) + "::" + phase)
 #define PROFILE_BEGIN(name)                                                    \
   if (profiling::g_profiler.is_initialized())                                  \
   profiling::g_profiler.begin_event(name)
@@ -196,6 +203,8 @@ inline Profiler g_profiler;
 
 #define PROFILE_SCOPE(name) (void)0
 #define PROFILE_SCOPE_ARGS(name, args) (void)0
+#define PROFILE_SCOPE_SYSTEM(system_ptr, phase) (void)0
+#define PROFILE_SCOPE_SYSTEM_TYPE(system_type, phase) (void)0
 #define PROFILE_BEGIN(name) (void)0
 #define PROFILE_END() (void)0
 #define PROFILE_FLUSH() (void)0
