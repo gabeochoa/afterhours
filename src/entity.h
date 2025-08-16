@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "profiling_macros.h"
 #include <array>
 #include <atomic>
 #include <bitset>
@@ -50,7 +51,8 @@ struct Entity {
   // These two functions can be used to validate than an entity has all of the
   // matching components that are needed for this system to run
   template <typename T> [[nodiscard]] bool has() const {
-    PROFILE_SCOPE_ARGS("Entity::has", "component=" + std::string(type_name<T>()));
+    PROFILE_SCOPE_ARGS("Entity::has",
+                       "component=" + std::string(type_name<T>()));
     const bool result = componentSet[components::get_type_id<T>()];
 #if defined(AFTER_HOURS_DEBUG)
     log_trace("checking component {} {} on entity {}",
@@ -107,7 +109,8 @@ struct Entity {
   }
 
   template <typename T, typename... TArgs> T &addComponent(TArgs &&...args) {
-    PROFILE_SCOPE_ARGS("Entity::addComponent", "component=" + std::string(type_name<T>()));
+    PROFILE_SCOPE_ARGS("Entity::addComponent",
+                       "component=" + std::string(type_name<T>()));
 #if defined(AFTER_HOURS_DEBUG)
     log_trace("adding component_id:{} {} to entity_id: {}",
               components::get_type_id<T>(), type_name<T>(), id);
@@ -198,7 +201,8 @@ struct Entity {
   }
 
   template <typename T> [[nodiscard]] T &get() {
-    PROFILE_SCOPE_ARGS("Entity::get", "component=" + std::string(type_name<T>()));
+    PROFILE_SCOPE_ARGS("Entity::get",
+                       "component=" + std::string(type_name<T>()));
     warnIfMissingComponent<T>();
 #ifdef __clang__
 #pragma clang diagnostic push

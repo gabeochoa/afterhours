@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "profiling_macros.h"
 #include <cmath>
 #include <functional>
 #include <memory>
