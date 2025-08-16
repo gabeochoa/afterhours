@@ -254,6 +254,7 @@ struct EntityQuery {
   }
 
   [[nodiscard]] RefEntities gen() const {
+    PROFILE_SCOPE("EntityQuery::gen");
     if (!ran_query)
       return values_ignore_cache({});
     return ents;
@@ -393,6 +394,7 @@ private:
   }
 
   RefEntities run_query(const UnderlyingOptions) const {
+    PROFILE_SCOPE("EntityQuery::run_query");
     RefEntities out;
     out.reserve(entities.size());
 

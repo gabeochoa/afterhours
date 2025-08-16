@@ -723,6 +723,7 @@ struct AutoLayout {
   }
 
   void calculate_standalone(UIComponent &widget) {
+    PROFILE_SCOPE("AutoLayout::calculate_standalone");
     widget.computed[Axis::X] = compute_size_for_standalone_exp(widget, Axis::X);
     widget.computed[Axis::Y] = compute_size_for_standalone_exp(widget, Axis::Y);
 
@@ -913,6 +914,7 @@ struct AutoLayout {
   }
 
   void calculate_those_with_parents(UIComponent &widget) {
+    PROFILE_SCOPE("AutoLayout::calculate_those_with_parents");
     widget.computed[Axis::X] =
         compute_size_for_parent_expectation(widget, Axis::X);
     widget.computed[Axis::Y] =
@@ -1031,6 +1033,7 @@ struct AutoLayout {
   }
 
   void calculate_those_with_children(UIComponent &widget) {
+    PROFILE_SCOPE("AutoLayout::calculate_those_with_children");
     // Note, we dont early return when empty, because
     // there is some min_height/width logic in the compute
     // size and so we need run those
@@ -1095,6 +1098,7 @@ struct AutoLayout {
   }
 
   void solve_violations(UIComponent &widget) {
+    PROFILE_SCOPE("AutoLayout::solve_violations");
     // we dont care if its less than a pixel
     const float ACCEPTABLE_ERROR = 1.f;
 
@@ -1397,6 +1401,7 @@ struct AutoLayout {
   static void autolayout(UIComponent &widget,
                          const window_manager::Resolution resolution,
                          const std::map<EntityID, RefEntity> &map) {
+    PROFILE_SCOPE("AutoLayout::autolayout");
     AutoLayout al(resolution, map);
 
     al.reset_computed_values(widget);

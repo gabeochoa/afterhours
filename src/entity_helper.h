@@ -74,6 +74,7 @@ struct EntityHelper {
   }
 
   static Entity &createEntityWithOptions(const CreationOptions &options) {
+    PROFILE_SCOPE("EntityHelper::createEntityWithOptions");
     if (get_temp().capacity() == 0) [[unlikely]]
       reserve_temp_space();
 
@@ -88,6 +89,7 @@ struct EntityHelper {
   }
 
   static void merge_entity_arrays() {
+    PROFILE_SCOPE("EntityHelper::merge_entity_arrays");
     if (get_temp().empty())
       return;
 
@@ -154,6 +156,7 @@ struct EntityHelper {
   // }
 
   static void cleanup() {
+    PROFILE_SCOPE("EntityHelper::cleanup");
     EntityHelper::merge_entity_arrays();
     // Cleanup entities marked cleanup
     //
