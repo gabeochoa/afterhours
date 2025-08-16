@@ -13,11 +13,12 @@
 #endif
 
 #ifdef ENABLE_PROFILING
-#include "../vendor/spall.h"
+#include "spall.h"
 #include <chrono>
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unistd.h>
 
 namespace profiling {
 
