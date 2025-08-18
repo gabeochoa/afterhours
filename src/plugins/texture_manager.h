@@ -169,7 +169,7 @@ struct HasAnimation : BaseComponent {
 
 struct AnimationUpdateCurrentFrame : System<HasAnimation> {
 
-  virtual void for_each_with(Entity &entity, HasAnimation &hasAnimation,
+  virtual inline void for_each_with(Entity &entity, HasAnimation &hasAnimation,
                              const float dt) override {
     hasAnimation.frame_time -= dt;
     if (hasAnimation.frame_time > 0) {
@@ -198,11 +198,11 @@ struct RenderSprites : System<HasSprite> {
 
   Texture sheet;
 
-  virtual void once(const float) override {
+  virtual inline void once(const float) override {
     sheet = EntityHelper::get_singleton_cmp<HasSpritesheet>()->texture;
   }
 
-  virtual void for_each_with(const Entity &, const HasSprite &hasSprite,
+  virtual inline void for_each_with(const Entity &, const HasSprite &hasSprite,
                              const float) const override {
 
     draw_texture_pro(sheet, hasSprite.frame, hasSprite.destination(),
@@ -216,11 +216,11 @@ struct RenderAnimation : System<HasAnimation> {
 
   Texture sheet;
 
-  virtual void once(const float) override {
+  virtual inline void once(const float) override {
     sheet = EntityHelper::get_singleton_cmp<HasSpritesheet>()->texture;
   }
 
-  virtual void for_each_with(const Entity &, const HasAnimation &hasAnimation,
+  virtual inline void for_each_with(const Entity &, const HasAnimation &hasAnimation,
                              const float) const override {
 
     const auto [i, j] = hasAnimation.cur_frame_position;
@@ -240,22 +240,22 @@ struct RenderAnimation : System<HasAnimation> {
   }
 };
 
-static void add_singleton_components(Entity &entity,
+static inline void add_singleton_components(Entity &entity,
                                      const Texture &spriteSheet) {
   entity.addComponent<HasSpritesheet>(spriteSheet);
   EntityHelper::registerSingleton<HasSpritesheet>(entity);
 }
 
-static void enforce_singletons(SystemManager &sm) {
+static inline void enforce_singletons(SystemManager &sm) {
   sm.register_update_system(
       std::make_unique<developer::EnforceSingleton<HasSpritesheet>>());
 }
 
-static void register_update_systems(SystemManager &sm) {
+static inline void register_update_systems(SystemManager &sm) {
   sm.register_update_system(std::make_unique<AnimationUpdateCurrentFrame>());
 }
 
-static void register_render_systems(SystemManager &sm) {
+static inline void register_render_systems(SystemManager &sm) {
   sm.register_render_system(std::make_unique<RenderSprites>());
   sm.register_render_system(std::make_unique<RenderAnimation>());
 }
