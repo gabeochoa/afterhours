@@ -69,12 +69,8 @@ struct animation : developer::Plugin {
     return CompositeKey{static_cast<size_t>(base), index};
   }
 
-  // Hasher trait: default to EnumHash, specialize for CompositeKey
-  template <typename Key> struct KeyHasher {
-    using type = EnumHash<Key>;
-  };
-  template <> struct KeyHasher<CompositeKey> {
-    using type = CompositeKeyHash;
+    template <typename Key> struct KeyHasher {
+    using type = std::conditional_t<std::is_same_v<Key, CompositeKey>, CompositeKeyHash, EnumHash<Key>>;
   };
 
   static float apply_ease(EasingType easing, float t) {
