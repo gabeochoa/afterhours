@@ -222,7 +222,7 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
   virtual void once(float) override {
     this->context =
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
-    this->include_derived_children = true;
+    // this->include_derived_children = true;  // Commented out - derived children feature removed
   }
 
   virtual ~HandleClicks() {}
@@ -315,7 +315,7 @@ struct HandleLeftRight : SystemWithUIContext<ui::HasLeftRightListener> {
   virtual void once(float) override {
     this->context =
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
-    this->include_derived_children = true;
+    // this->include_derived_children = true;  // Commented out - derived children feature removed
   }
   virtual ~HandleLeftRight() {}
 
@@ -348,7 +348,7 @@ struct HandleSelectOnFocus
   virtual void once(float) override {
     this->context =
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
-    this->include_derived_children = true;
+    // this->include_derived_children = true;  // Commented out - derived children feature removed
   }
 
   virtual ~HandleSelectOnFocus() {}
@@ -392,7 +392,7 @@ struct UpdateDropdownOptions
 
   UpdateDropdownOptions()
       : SystemWithUIContext<HasDropdownState, HasChildrenComponent>() {
-    this->include_derived_children = true;
+    // this->include_derived_children = true;  // Commented out - derived children feature removed
   }
 
   virtual void for_each_with_derived(Entity &entity, UIComponent &component,

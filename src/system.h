@@ -32,13 +32,14 @@ public:
   virtual void for_each(Entity &, const float) = 0;
   virtual void for_each(const Entity &, const float) const = 0;
 
-  bool include_derived_children = false;
+  // bool include_derived_children = false;  // Commented out - not needed for kart/pharmasea
   bool ignore_temp_entities = false;
 
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-  virtual void for_each_derived(Entity &, const float) = 0;
-  virtual void for_each_derived(const Entity &, const float) const = 0;
-#endif
+// Commented out derived children support - not needed for kart/pharmasea
+// #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
+//   virtual void for_each_derived(Entity &, const float) = 0;
+//   virtual void for_each_derived(const Entity &, const float) const = 0;
+// #endif
 };
 
 template <typename... Components> struct System : SystemBase {
@@ -96,32 +97,33 @@ template <typename Component> struct Not : BaseComponent {
     }
   }
 
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-  void for_each_derived(Entity &entity, const float dt) {
-    if constexpr (sizeof...(Components) > 0) {
-      if ((entity.template has_child_of<Components>() && ...)) {
-        for_each_with_derived(
-            entity, entity.template get_with_child<Components>()..., dt);
-      }
-    } else {
-      for_each_with(entity, dt);
-    }
-  }
+// Commented out derived children support - not needed for kart/pharmasea
+// #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
+//   void for_each_derived(Entity &entity, const float dt) {
+//     if constexpr (sizeof...(Components) > 0) {
+//       if ((entity.template has_child_of<Components>() && ...)) {
+//         for_each_with_derived(
+//             entity, entity.template get_with_child<Components>()..., dt);
+//       }
+//     } else {
+//       for_each_with(entity, dt);
+//     }
+//   }
 
-  void for_each_derived(const Entity &entity, const float dt) const {
-    if constexpr (sizeof...(Components) > 0) {
-      if ((entity.template has_child_of<Components>() && ...)) {
-        for_each_with_derived(
-            entity, entity.template get_with_child<Components>()..., dt);
-      }
-    } else {
-      for_each_with(entity, dt);
-    }
-  }
-  virtual void for_each_with_derived(Entity &, Components &..., const float) {}
-  virtual void for_each_with_derived(const Entity &, const Components &...,
-                                     const float) const {}
-#endif
+//   void for_each_derived(const Entity &entity, const float dt) const {
+//     if constexpr (sizeof...(Components) > 0) {
+//       if ((entity.template has_child_of<Components>() && ...)) {
+//         for_each_with_derived(
+//             entity, entity.template get_with_child<Components>()..., dt);
+//       }
+//     } else {
+//       for_each_with(entity, dt);
+//     }
+//   }
+//   virtual void for_each_with_derived(Entity &, Components &..., const float) {}
+//   virtual void for_each_with_derived(const Entity &, const Components &...,
+//                                      const float) const {}
+// #endif
 
   void for_each(const Entity &entity, const float dt) const {
     if constexpr (sizeof...(Components) > 0) {
@@ -191,11 +193,12 @@ struct SystemManager {
       for (std::shared_ptr<Entity> entity : entities) {
         if (!entity)
           continue;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-        if (system->include_derived_children)
-          system->for_each_derived(*entity, dt);
-        else
-#endif
+// Commented out derived children support - not needed for kart/pharmasea
+// #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
+//         if (system->include_derived_children)
+//           system->for_each_derived(*entity, dt);
+//         else
+// #endif
           system->for_each(*entity, dt);
       }
       system->after(dt);
@@ -211,11 +214,12 @@ struct SystemManager {
       for (std::shared_ptr<Entity> entity : entities) {
         if (!entity)
           continue;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-        if (system->include_derived_children)
-          system->for_each_derived(*entity, dt);
-        else
-#endif
+// Commented out derived children support - not needed for kart/pharmasea
+// #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
+//         if (system->include_derived_children)
+//           system->for_each_derived(*entity, dt);
+//         else
+// #endif
           system->for_each(*entity, dt);
       }
       system->after(dt);
@@ -231,11 +235,12 @@ struct SystemManager {
         if (!entity)
           continue;
         const Entity &e = *entity;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-        if (system->include_derived_children)
-          system->for_each_derived(e, dt);
-        else
-#endif
+// Commented out derived children support - not needed for kart/pharmasea
+// #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
+//         if (system->include_derived_children)
+//           system->for_each_derived(e, dt);
+//         else
+// #endif
           system->for_each(e, dt);
       }
       system->after(dt);

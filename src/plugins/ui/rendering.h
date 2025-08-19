@@ -228,8 +228,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   virtual void once(float) override {
     this->context =
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
-    this->include_derived_children = true;
-
+    // this->include_derived_children = true;  // Commented out - derived children feature removed
     draw_text(std::format("mouse({}, {})", this->context->mouse_pos.x,
                           this->context->mouse_pos.y)
                   .c_str(),
@@ -357,7 +356,9 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
 
 template <typename InputAction> struct RenderImm : System<> {
 
-  RenderImm() : System<>() { this->include_derived_children = true; }
+  RenderImm() : System<>() { 
+    // this->include_derived_children = true;  // Commented out - derived children feature removed
+  }
 
   void render_me(const UIContext<InputAction> &context,
                  const FontManager &font_manager, const Entity &entity) const {
