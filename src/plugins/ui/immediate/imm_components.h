@@ -120,7 +120,7 @@ ElementResult icon_row(HasUIContext auto &ctx, EntityParent ep_pair,
                .with_image_alignment(
                    afterhours::texture_manager::HasTexture::Alignment::Center)
                .with_size(ComponentSize{icon_width, icon_height})
-               .with_debug_name(std::format("icon_row_item_{}", i)));
+               .with_debug_name(fmt::format("icon_row_item_{}", i)));
     i++;
   }
 
@@ -173,7 +173,7 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
     if (button(
             ctx, mk(entity, i),
             ComponentConfig::inherit_from(config,
-                                          std::format("button group {}", i))
+                                          fmt::format("button group {}", i))
                 .with_size(config.size)
                 .with_label(i < labels.size() ? std::string(labels[i]) : ""))) {
       clicked = true;
@@ -248,7 +248,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
 
     auto label_config =
         ComponentConfig::inherit_from(
-            config, std::format("checkbox label {}", config.debug_name))
+            config, fmt::format("checkbox label {}", config.debug_name))
             .with_size(config.size)
             .with_label(label);
 
@@ -265,7 +265,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   // checkbox so it scales along with the label and row container.
   auto checkbox_config =
       ComponentConfig::inherit_from(
-          config, std::format("checkbox indiv from {}", config.debug_name))
+          config, fmt::format("checkbox indiv from {}", config.debug_name))
           .with_size(config.size);
 
   if (config.color_usage == Theme::Usage::Default)
@@ -320,7 +320,7 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
     if (checkbox(
             ctx, mk(entity, i), value,
             ComponentConfig::inherit_from(config,
-                                          std::format("checkbox row {}", i))
+                                          fmt::format("checkbox row {}", i))
                 .with_size(config.size)
                 .with_label(i < labels.size() ? std::string(labels[i]) : "")
                 .with_color_usage(Theme::Usage::None)
@@ -528,7 +528,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
     if (button(
             ctx, mk(entity, child_index + i),
             ComponentConfig::inherit_from(config,
-                                          std::format("option {}", i + 1))
+                                          fmt::format("option {}", i + 1))
                 .with_size(ComponentSize{pixels(default_component_size.x / 2.f),
                                          config.size.y_axis})
                 .with_label(std::string(options[i]))
@@ -638,7 +638,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   auto current_option = std::string(
       options[dropdownState.on ? 0 : dropdownState.last_option_clicked]);
   auto drop_arrow_icon = dropdownState.on ? " ^" : " V";
-  auto main_button_label = std::format("{}{}", current_option, drop_arrow_icon);
+  auto main_button_label = fmt::format("{}{}", current_option, drop_arrow_icon);
   // TODO hot sibling summary: previously, when a label was present to the left
   // of the dropdown button, we passed that label entity id as a "hot sibling"
   // to the main button so hovering/focusing the button would visually hot the

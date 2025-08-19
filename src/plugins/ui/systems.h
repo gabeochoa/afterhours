@@ -395,7 +395,7 @@ struct UpdateDropdownOptions
     // this->include_derived_children = true;  // Commented out - derived children feature removed
   }
 
-  virtual void for_each_with_derived(Entity &entity, UIComponent &component,
+  virtual void for_each_with(Entity &entity, UIComponent &component,
                                      HasDropdownState &hasDropdownState,
                                      HasChildrenComponent &hasChildren, float) {
     auto options = hasDropdownState.options;
