@@ -1,7 +1,7 @@
 #pragma once
 
 #include <algorithm>
-#include <format>
+#include <fmt/format.h>
 #include <vector>
 
 #include "../../drawing_helpers.h"
@@ -229,9 +229,9 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     this->context =
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
     // this->include_derived_children = true;  // Commented out - derived children feature removed
-    draw_text(std::format("mouse({}, {})", this->context->mouse_pos.x,
-                          this->context->mouse_pos.y)
-                  .c_str(),
+    auto mouse_str = fmt::format("mouse({}, {})", this->context->mouse_pos.x,
+                                 this->context->mouse_pos.y);
+    draw_text(mouse_str.c_str(),
               0, 0, fontSize,
               this->context->theme.from_usage(Theme::Usage::Font));
 
@@ -270,7 +270,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
       component_name = cmpdebug.name();
     }
 
-    const std::string widget_str = std::format(
+    const std::string widget_str = fmt::format(
         "{:03} (x{:05.2f} y{:05.2f}) w{:05.2f}xh{:05.2f} {}", (int)entity.id,
         cmp.x(), cmp.y(), cmp.rect().width, cmp.rect().height, component_name);
 
@@ -496,11 +496,24 @@ template <typename InputAction> struct RenderImm : System<> {
         entity.get<UIContext<InputAction>>();
     const FontManager &font_manager = entity.get<FontManager>();
 
-    std::ranges::sort(context.render_cmds, [](RenderInfo a, RenderInfo b) {
-      if (a.layer == b.layer)
-        return a.id < b.id;
-      return a.layer < b.layer;
-    });
+    // TODO replace with std::sort
+    {
+      auto &v = context.render_cmds;
+      for (size_t i = 1; i < v.size(); ++i) {
+        RenderInfo key = v[i];
+        size_t j = i;
+        while (j > 0) {
+          const RenderInfo &prev = v[j - 1];
+          bool less = (key.layer < prev.layer) ||
+                      (key.layer == prev.layer && key.id < prev.id);
+          if (!less)
+            break;
+          v[j] = prev;
+          --j;
+        }
+        v[j] = key;
+      }
+    }
 
     for (auto &cmd : context.render_cmds) {
       auto id = cmd.id;
