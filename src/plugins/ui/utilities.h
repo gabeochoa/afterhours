@@ -119,8 +119,12 @@ static void register_before_ui_updates(SystemManager &sm) {
 template <typename InputAction>
 static void register_after_ui_updates(SystemManager &sm) {
   {
+#if _WIN32
+    // TODO: not working on windows
+#else
     sm.register_update_system(
         std::make_unique<ui::UpdateDropdownOptions<InputAction>>());
+#endif
 
     //
     sm.register_update_system(std::make_unique<ui::ClearVisibity>());
