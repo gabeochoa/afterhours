@@ -100,7 +100,10 @@ struct System
       return ((entity.template has_child_of<Cs>()) && ...);
     }
   };
-
+  template <> struct HasAllComponents<type_list<>> {
+    static bool value(const Entity &) { return true; }
+    static bool value_child(const Entity &) { return true; }
+  };
 
   template <typename> struct CallWithComponents;
   template <typename... Cs> struct CallWithComponents<type_list<Cs...>> {
@@ -116,7 +119,17 @@ struct System
           entity, entity.template get<Cs>()..., dt);
     }
   };
-
+  template <> struct CallWithComponents<type_list<>> {
+    template <typename Self>
+    static void call(Self *self, Entity &entity, const float dt) {
+      self->for_each_with(entity, dt);
+    }
+    template <typename Self>
+    static void call_const(const Self *self, const Entity &entity,
+                           const float dt) {
+      self->for_each_with(entity, dt);
+    }
+  };
 
   template <typename> struct CallWithChildComponents;
   template <typename... Cs> struct CallWithChildComponents<type_list<Cs...>> {
@@ -132,7 +145,17 @@ struct System
           entity, entity.template get_with_child<Cs>()..., dt);
     }
   };
-
+  template <> struct CallWithChildComponents<type_list<>> {
+    template <typename Self>
+    static void call(Self *self, Entity &entity, const float dt) {
+      self->for_each_with(entity, dt);
+    }
+    template <typename Self>
+    static void call_const(const Self *self, const Entity &entity,
+                           const float dt) {
+      self->for_each_with(entity, dt);
+    }
+  };
 
   template <typename...> struct AllMask {
     static TagBitset value() { return {}; }
@@ -292,41 +315,6 @@ template <typename Component> struct Not : BaseComponent {
 #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
   using ForEachBase::for_each_with_derived;
 #endif
-};
-
-template<>
-template<>
-struct System<type_list<>>::HasAllComponents<type_list<>> {
-  static bool value(const Entity &) { return true; }
-  static bool value_child(const Entity &) { return true; }
-};
-
-template<>
-template<>
-struct System<type_list<>>::CallWithComponents<type_list<>> {
-  template <typename Self>
-  static void call(Self *self, Entity &entity, const float dt) {
-    self->for_each_with(entity, dt);
-  }
-  template <typename Self>
-  static void call_const(const Self *self, const Entity &entity,
-                         const float dt) {
-    self->for_each_with(entity, dt);
-  }
-};
-
-template<>
-template<>
-struct System<type_list<>>::CallWithChildComponents<type_list<>> {
-  template <typename Self>
-  static void call(Self *self, Entity &entity, const float dt) {
-    self->for_each_with(entity, dt);
-  }
-  template <typename Self>
-  static void call_const(const Self *self, const Entity &entity,
-                         const float dt) {
-    self->for_each_with(entity, dt);
-  }
 };
 
 struct CallbackSystem : System<> {
