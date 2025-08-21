@@ -100,10 +100,29 @@ struct System
       return ((entity.template has_child_of<Cs>()) && ...);
     }
   };
+#ifdef _WIN32
+  template <typename List> struct HasAllComponents {
+    static bool value(const Entity &entity) {
+      if constexpr (std::is_same_v<List, type_list<>>) {
+        return true;
+      } else {
+        return HasAllComponents<List>::value(entity);
+      }
+    }
+    static bool value_child(const Entity &entity) {
+      if constexpr (std::is_same_v<List, type_list<>>) {
+        return true;
+      } else {
+        return HasAllComponents<List>::value_child(entity);
+      }
+    }
+  };
+#else
   template <> struct HasAllComponents<type_list<>> {
     static bool value(const Entity &) { return true; }
     static bool value_child(const Entity &) { return true; }
   };
+#endif
 
   template <typename> struct CallWithComponents;
   template <typename... Cs> struct CallWithComponents<type_list<Cs...>> {
@@ -119,6 +138,27 @@ struct System
           entity, entity.template get<Cs>()..., dt);
     }
   };
+#ifdef _WIN32
+  template <typename List> struct CallWithComponents {
+    template <typename Self>
+    static void call(Self *self, Entity &entity, const float dt) {
+      if constexpr (std::is_same_v<List, type_list<>>) {
+        self->for_each_with(entity, dt);
+      } else {
+        CallWithComponents<List>::call(self, entity, dt);
+      }
+    }
+    template <typename Self>
+    static void call_const(const Self *self, const Entity &entity,
+                           const float dt) {
+      if constexpr (std::is_same_v<List, type_list<>>) {
+        self->for_each_with(entity, dt);
+      } else {
+        CallWithComponents<List>::call_const(self, entity, dt);
+      }
+    }
+  };
+#else
   template <> struct CallWithComponents<type_list<>> {
     template <typename Self>
     static void call(Self *self, Entity &entity, const float dt) {
@@ -130,6 +170,7 @@ struct System
       self->for_each_with(entity, dt);
     }
   };
+#endif
 
   template <typename> struct CallWithChildComponents;
   template <typename... Cs> struct CallWithChildComponents<type_list<Cs...>> {
@@ -145,6 +186,27 @@ struct System
           entity, entity.template get_with_child<Cs>()..., dt);
     }
   };
+#ifdef _WIN32
+  template <typename List> struct CallWithChildComponents {
+    template <typename Self>
+    static void call(Self *self, Entity &entity, const float dt) {
+      if constexpr (std::is_same_v<List, type_list<>>) {
+        self->for_each_with(entity, dt);
+      } else {
+        CallWithChildComponents<List>::call(self, entity, dt);
+      }
+    }
+    template <typename Self>
+    static void call_const(const Self *self, const Entity &entity,
+                           const float dt) {
+      if constexpr (std::is_same_v<List, type_list<>>) {
+        self->for_each_with(entity, dt);
+      } else {
+        CallWithChildComponents<List>::call_const(self, entity, dt);
+      }
+    }
+  };
+#else
   template <> struct CallWithChildComponents<type_list<>> {
     template <typename Self>
     static void call(Self *self, Entity &entity, const float dt) {
@@ -156,6 +218,7 @@ struct System
       self->for_each_with(entity, dt);
     }
   };
+#endif
 
   template <typename...> struct AllMask {
     static TagBitset value() { return {}; }
