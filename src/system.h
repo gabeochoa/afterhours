@@ -165,6 +165,7 @@ struct System
     }
   };
 
+ #if __APPLE__ 
   static TagBitset required_all_mask() {
     static TagBitset m = (TagBitset{} | ... | AllMask<Components>::value());
     return m;
@@ -192,6 +193,12 @@ struct System
       return false;
     return true;
   }
+
+#else 
+  static bool tags_ok(const Entity &entity) {
+    return true;
+  }
+#endif 
 
   /*
    *
