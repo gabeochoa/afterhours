@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <bitset>
-#include <format>
+#include "fmt/format.h"
 
 #include "../../../entity.h"
 #include "../../../entity_helper.h"
@@ -638,7 +638,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   auto current_option = std::string(
       options[dropdownState.on ? 0 : dropdownState.last_option_clicked]);
   auto drop_arrow_icon = dropdownState.on ? " ^" : " V";
-      auto main_button_label = fmt::format("{}{}", current_option, drop_arrow_icon);
+  auto main_button_label = fmt::format("{}{}", current_option, drop_arrow_icon);
   // TODO hot sibling summary: previously, when a label was present to the left
   // of the dropdown button, we passed that label entity id as a "hot sibling"
   // to the main button so hovering/focusing the button would visually hot the

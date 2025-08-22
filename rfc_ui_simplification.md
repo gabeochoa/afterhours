@@ -103,7 +103,7 @@ auto elem = div(ctx, mk(entity),
         .with_margin(config.margin)
         .with_padding(config.padding)
         .with_flex_direction(FlexDirection::Row)
-        .with_debug_name(std::format("icon_row_item_{}", i)));
+        .with_debug_name(fmt::format("icon_row_item_{}", i)));
 ```
 
 #### Proposed Simplification
