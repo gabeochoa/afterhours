@@ -84,6 +84,16 @@ template <typename... Cs> struct SystemForEachBase<type_list<Cs...>> {
 #endif
 };
 
+// Explicit specialization for empty parameter pack
+template <> struct SystemForEachBase<type_list<>> {
+  virtual void for_each_with(Entity &, const float) {}
+  virtual void for_each_with(const Entity &, const float) const {}
+#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
+  virtual void for_each_with_derived(Entity &, const float) {}
+  virtual void for_each_with_derived(const Entity &, const float) const {}
+#endif
+};
+
 template <typename... Components>
 struct System
     : SystemBase,
