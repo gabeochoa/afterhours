@@ -495,10 +495,8 @@ template <typename InputAction> struct RenderImm : System<> {
         entity.get<UIContext<InputAction>>();
     const FontManager &font_manager = entity.get<FontManager>();
 
-    // For some reason mingw also doesnt like this sorting lambda 
-    // so instead you get bubble sort, sorry 
-    // you shouldve gotten a computer with a better compiler :shrug:
-#if _WIN32
+    #if __WIN32
+    // Note we have to do bubble sort here because mingw doesnt support std::ranges::sort
     for (size_t i = 0; i < context.render_cmds.size(); ++i) {
       for (size_t j = i + 1; j < context.render_cmds.size(); ++j) {
         if ((context.render_cmds[i].layer > context.render_cmds[j].layer) ||
@@ -508,13 +506,14 @@ template <typename InputAction> struct RenderImm : System<> {
         }
       }
     }
-#else
-    std::sort(context.render_cmds.begin(), context.render_cmds.end(), [](const RenderInfo& a, const RenderInfo& b) {
+    #else 
+    std::ranges::sort(context.render_cmds, [](RenderInfo a, RenderInfo b) {
       if (a.layer == b.layer)
         return a.id < b.id;
       return a.layer < b.layer;
     });
-#endif 
+    #endif
+
 
     for (auto &cmd : context.render_cmds) {
       auto id = cmd.id;
