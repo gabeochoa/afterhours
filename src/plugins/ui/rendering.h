@@ -230,7 +230,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
     this->include_derived_children = true;
 
-    draw_text(std::format("mouse({}, {})", this->context->mouse_pos.x,
+    draw_text(fmt::format("mouse({}, {})", this->context->mouse_pos.x,
                           this->context->mouse_pos.y)
                   .c_str(),
               0, 0, fontSize,
@@ -271,7 +271,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
       component_name = cmpdebug.name();
     }
 
-    const std::string widget_str = std::format(
+    const std::string widget_str = fmt::format(
         "{:03} (x{:05.2f} y{:05.2f}) w{:05.2f}xh{:05.2f} {}", (int)entity.id,
         cmp.x(), cmp.y(), cmp.rect().width, cmp.rect().height, component_name);
 
