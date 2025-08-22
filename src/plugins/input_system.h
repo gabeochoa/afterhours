@@ -11,6 +11,8 @@
 #include "../system.h"
 #include "window_manager.h"
 
+
+
 namespace afterhours {
 
 struct input : developer::Plugin {
@@ -453,13 +455,26 @@ struct input : developer::Plugin {
     GamepadAxis,
   };
 
-  template <typename T> struct ActionDone {
+  struct ActionDone {
     DeviceMedium medium;
     GamepadID id;
-    T action;
+    int action;
     float amount_pressed;
     float length_pressed;
+
+    ActionDone() = default;
+    ActionDone(const ActionDone&) = default;
+    ActionDone(ActionDone&&) = default;
+    ActionDone& operator=(const ActionDone&) = default;
+    ActionDone& operator=(ActionDone&&) = default;
+    
+    ActionDone(DeviceMedium m, GamepadID i, int a, float amount, float length)
+        : medium(m), id(i), action(a), amount_pressed(amount), length_pressed(length) {}
   };
+
+  using ActionDoneInputAction = ActionDone;
+
+
 
   struct GamepadAxisWithDir {
     GamepadAxis axis;
@@ -498,20 +513,21 @@ struct input : developer::Plugin {
     return is_gamepad_button_down(id, button) ? 1.f : 0.f;
   }
 
-  template <typename Action> struct InputCollector : public BaseComponent {
-    std::vector<input::ActionDone<Action>> inputs;
-    std::vector<input::ActionDone<Action>> inputs_pressed;
+  struct InputCollector : public BaseComponent {
+    std::vector<input::ActionDone> inputs;
+    std::vector<input::ActionDone> inputs_pressed;
     float since_last_input = 0.f;
   };
+
+  using InputCollectorInputAction = InputCollector;
 
   struct ProvidesMaxGamepadID : public BaseComponent {
     int max_gamepad_available = 0;
     size_t count() const { return (size_t)max_gamepad_available + 1; }
   };
 
-  template <typename Action>
   struct ProvidesInputMapping : public BaseComponent {
-    using GameMapping = std::map<Action, input::ValidInputs>;
+    using GameMapping = std::map<int, input::ValidInputs>;
     GameMapping mapping;
     ProvidesInputMapping(const GameMapping start_mapping)
         : mapping(start_mapping) {}
@@ -528,21 +544,21 @@ struct input : developer::Plugin {
     }
   };
 
-  template <typename Action> struct PossibleInputCollector {
-    std::optional<std::reference_wrapper<InputCollector<Action>>> data;
+  struct PossibleInputCollector {
+    std::optional<std::reference_wrapper<InputCollector>> data;
     PossibleInputCollector(
-        const std::optional<std::reference_wrapper<InputCollector<Action>>> d)
+        const std::optional<std::reference_wrapper<InputCollector>> d)
         : data(d) {}
-    PossibleInputCollector(InputCollector<Action> &d) : data(d) {}
+    PossibleInputCollector(InputCollector &d) : data(d) {}
     PossibleInputCollector() : data({}) {}
     bool has_value() const { return data.has_value(); }
     bool valid() const { return has_value(); }
 
-    [[nodiscard]] std::vector<input::ActionDone<Action>> &inputs() {
+    [[nodiscard]] std::vector<input::ActionDone> &inputs() {
       return data.value().get().inputs;
     }
 
-    [[nodiscard]] std::vector<input::ActionDone<Action>> &inputs_pressed() {
+    [[nodiscard]] std::vector<input::ActionDone> &inputs_pressed() {
       return data.value().get().inputs_pressed;
     }
 
@@ -551,25 +567,23 @@ struct input : developer::Plugin {
     }
   };
 
-  template <typename Action>
-  static auto get_input_collector() -> PossibleInputCollector<Action> {
+  static auto get_input_collector() -> PossibleInputCollector {
 
     // TODO replace with a singletone query
     OptEntity opt_collector =
         EntityQuery({.ignore_temp_warning = true})
-            .template whereHasComponent<InputCollector<Action>>()
+            .template whereHasComponent<InputCollector>()
             .gen_first();
     if (!opt_collector.valid())
       return {};
     Entity &collector = opt_collector.asE();
-    return collector.get<InputCollector<Action>>();
+    return collector.get<InputCollector>();
   }
 
   // TODO i would like to move this out of input namespace
   // at some point
-  template <typename Action>
-  struct InputSystem : System<InputCollector<Action>, ProvidesMaxGamepadID,
-                              ProvidesInputMapping<Action>> {
+  struct InputSystem : System<InputCollector, ProvidesMaxGamepadID,
+                              ProvidesInputMapping> {
 
     int fetch_max_gampad_id() {
       int result = -1;
@@ -651,16 +665,16 @@ struct input : developer::Plugin {
       return {medium, value};
     }
 
-    virtual void for_each_with(Entity &, InputCollector<Action> &collector,
+    virtual void for_each_with(Entity &, InputCollector &collector,
                                ProvidesMaxGamepadID &mxGamepadID,
-                               ProvidesInputMapping<Action> &input_mapper,
+                               ProvidesInputMapping &input_mapper,
                                const float dt) override {
       mxGamepadID.max_gamepad_available = std::max(0, fetch_max_gampad_id());
       collector.inputs.clear();
       collector.inputs_pressed.clear();
 
       for (const auto &kv : input_mapper.mapping) {
-        const Action action = kv.first;
+        const int action = kv.first;
         const ValidInputs vis = kv.second;
 
         int i = 0;
@@ -669,11 +683,7 @@ struct input : developer::Plugin {
           {
             const auto [medium, amount] = check_single_action_down(i, vis);
             if (amount > 0.f) {
-              collector.inputs.push_back(ActionDone{.medium = medium,
-                                                    .id = i,
-                                                    .action = action,
-                                                    .amount_pressed = amount,
-                                                    .length_pressed = dt});
+              collector.inputs.push_back(ActionDone(medium, i, action, amount, dt));
             }
           }
           // pressed
@@ -681,11 +691,7 @@ struct input : developer::Plugin {
             const auto [medium, amount] = check_single_action_pressed(i, vis);
             if (amount > 0.f) {
               collector.inputs_pressed.push_back(
-                  ActionDone{.medium = medium,
-                             .id = i,
-                             .action = action,
-                             .amount_pressed = amount,
-                             .length_pressed = dt});
+                  ActionDone(medium, i, action, amount, dt));
             }
           }
           i++;
@@ -700,36 +706,33 @@ struct input : developer::Plugin {
     }
   };
 
-  template <typename Action>
   static void add_singleton_components(
       Entity &entity,
-      const typename input::ProvidesInputMapping<Action>::GameMapping
-          inital_mapping) {
-    entity.addComponent<InputCollector<Action>>();
+      const ProvidesInputMapping::GameMapping inital_mapping) {
+    entity.addComponent<InputCollector>();
     entity.addComponent<input::ProvidesMaxGamepadID>();
-    entity.addComponent<input::ProvidesInputMapping<Action>>(inital_mapping);
+    entity.addComponent<input::ProvidesInputMapping>(inital_mapping);
 
-    EntityHelper::registerSingleton<InputCollector<Action>>(entity);
+    EntityHelper::registerSingleton<InputCollector>(entity);
     EntityHelper::registerSingleton<input::ProvidesMaxGamepadID>(entity);
-    EntityHelper::registerSingleton<input::ProvidesInputMapping<Action>>(
+    EntityHelper::registerSingleton<input::ProvidesInputMapping>(
         entity);
   }
 
-  template <typename Action> static void enforce_singletons(SystemManager &sm) {
+  static void enforce_singletons(SystemManager &sm) {
     sm.register_update_system(
         std::make_unique<
-            developer::EnforceSingleton<InputCollector<Action>>>());
+            developer::EnforceSingleton<InputCollector>>());
     sm.register_update_system(
         std::make_unique<developer::EnforceSingleton<ProvidesMaxGamepadID>>());
     sm.register_update_system(
         std::make_unique<
-            developer::EnforceSingleton<ProvidesInputMapping<Action>>>());
+            developer::EnforceSingleton<ProvidesInputMapping>>());
   }
 
-  template <typename Action>
   static void register_update_systems(SystemManager &sm) {
     sm.register_update_system(
-        std::make_unique<afterhours::input::InputSystem<Action>>());
+        std::make_unique<afterhours::input::InputSystem>());
   }
 
   // Renderer Systems:

@@ -35,12 +35,12 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
   // TODO this should live inside input_system
   // but then it would require magic_enum as a dependency
   InputBits inputs_as_bits(
-      const std::vector<input::ActionDone<InputAction>> &inputs) const {
+      const std::vector<input::ActionDone> &inputs) const {
     InputBits output;
     for (auto &input : inputs) {
       if (input.amount_pressed <= 0.f)
         continue;
-      output[magic_enum::enum_index<InputAction>(input.action).value()] = true;
+      output[magic_enum::enum_index<InputAction>(static_cast<InputAction>(input.action)).value()] = true;
     }
     return output;
   }
@@ -51,12 +51,12 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
     context.mouseLeftDown = input::is_mouse_button_down(0);
 
     {
-      input::PossibleInputCollector<InputAction> inpc =
-          input::get_input_collector<InputAction>();
+      input::PossibleInputCollector inpc =
+          input::get_input_collector();
       if (inpc.has_value()) {
         context.all_actions = inputs_as_bits(inpc.inputs());
         for (auto &actions_done : inpc.inputs_pressed()) {
-          context.last_action = actions_done.action;
+          context.last_action = static_cast<InputAction>(actions_done.action);
         }
       }
     }

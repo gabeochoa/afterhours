@@ -213,10 +213,10 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
 
     if (enableCooldown < 0) {
       enableCooldown = enableCooldownReset;
-      input::PossibleInputCollector<InputAction> inpc =
-          input::get_input_collector<InputAction>();
+      input::PossibleInputCollector inpc =
+          input::get_input_collector();
       for (auto &actions_done : inpc.inputs()) {
-        if (actions_done.action == toggle_action) {
+        if (static_cast<InputAction>(actions_done.action) == toggle_action) {
           enabled = !enabled;
           break;
         }
