@@ -124,14 +124,12 @@ static void register_after_ui_updates(SystemManager &sm) {
          std::make_unique<ui::UpdateDropdownOptions<InputAction>>());
 #endif
 
-#if __APPLE__
     //
     sm.register_update_system(std::make_unique<ui::ClearVisibity>());
     sm.register_update_system(std::make_unique<ui::RunAutoLayout>());
     sm.register_update_system(
         std::make_unique<ui::TrackIfComponentWillBeRendered<InputAction>>());
     //
-#endif
     sm.register_update_system(
         std::make_unique<ui::HandleTabbing<InputAction>>());
     sm.register_update_system(
