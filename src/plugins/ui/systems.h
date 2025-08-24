@@ -392,14 +392,38 @@ struct UpdateDropdownOptions
 
   UpdateDropdownOptions()
       : SystemWithUIContext<HasDropdownState, HasChildrenComponent>() {
+    // TODO figure out if this actually will cause trouble 
+    // Remove include_derived_children since we want to process entities with direct components
+    #if __WIN32 
+    // this->include_derived_children = true;
+    #else
     this->include_derived_children = true;
+    #endif
   }
 
+  #if __WIN32 
+  virtual void for_each_with(Entity &entity, UIComponent &component,
+                                     HasDropdownState &hasDropdownState,
+                                     HasChildrenComponent &hasChildren, float) {
+
+  #else
   virtual void for_each_with_derived(Entity &entity, UIComponent &component,
                                      HasDropdownState &hasDropdownState,
                                      HasChildrenComponent &hasChildren, float) {
+  #endif
+    // The system should automatically filter entities to only those with required components
+    // No need to manually check since SystemWithUIContext<HasDropdownState, HasChildrenComponent> handles this
+    
     auto options = hasDropdownState.options;
     hasDropdownState.options = hasDropdownState.fetch_options(hasDropdownState);
+    
+    // Validate returned options
+    // TODO replace with a pound define
+    if (hasDropdownState.options.size() > 100) {
+      log_error("UpdateDropdownOptions: Entity {} - fetch_options returned {} options - ABORTING", 
+                entity.id, hasDropdownState.options.size());
+      return;
+    }
 
     // detect if the options changed or if the state changed
     {
@@ -429,8 +453,9 @@ struct UpdateDropdownOptions
         hasDropdownState.changed_since = false;
       }
 
-      if (!changed)
+      if (!changed) {
         return;
+      }
     }
 
     options = hasDropdownState.options;
@@ -442,7 +467,7 @@ struct UpdateDropdownOptions
         log_warn("You have a dropdown with no options");
         return;
       }
-
+      
       for (size_t i = 0; i < options.size(); i++) {
         Entity &child = EntityHelper::createEntity();
         child.addComponent<UIComponentDebug>("dropdown_option");

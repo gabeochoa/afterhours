@@ -119,10 +119,8 @@ static void register_before_ui_updates(SystemManager &sm) {
 template <typename InputAction>
 static void register_after_ui_updates(SystemManager &sm) {
   {
-#if __APPLE__
     sm.register_update_system(
          std::make_unique<ui::UpdateDropdownOptions<InputAction>>());
-#endif
 
     //
     sm.register_update_system(std::make_unique<ui::ClearVisibity>());
