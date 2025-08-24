@@ -160,20 +160,20 @@ static inline void
 draw_texture_in_rect(texture_manager::Texture texture, RectangleType rect,
                      texture_manager::HasTexture::Alignment alignment) {
 
-  float scale = texture.height / rect.height;
+  float scale = (float)texture.height / rect.height;
   Vector2Type size = {
-      texture.width / scale,
-      texture.height / scale,
+      (float)texture.width / scale,
+      (float)texture.height / scale,
   };
 
   Vector2Type location = position_texture(texture, size, rect, alignment);
 
   texture_manager::draw_texture_pro(texture,
                                     RectangleType{
-                                        0,
-                                        0,
-                                        texture.width,
-                                        texture.height,
+                                        0.0f,
+                                        0.0f,
+                                        (float)texture.width,
+                                        (float)texture.height,
                                     },
                                     RectangleType{
                                         .x = location.x,
@@ -201,7 +201,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   enum struct IsolationMode { NodeOnly, NodeAndDescendants };
   mutable IsolationMode isolation_mode = IsolationMode::NodeOnly;
 
-  float fontSize = 20;
+  float fontSize = 20.0f;
 
   RenderDebugAutoLayoutRoots(InputAction toggle_kp)
       : toggle_action(toggle_kp) {}
@@ -233,7 +233,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     draw_text(fmt::format("mouse({}, {})", this->context->mouse_pos.x,
                           this->context->mouse_pos.y)
                   .c_str(),
-              0, 0, fontSize,
+              0.0f, 0.0f, fontSize,
               this->context->theme.from_usage(Theme::Usage::Font));
 
     // starting at 1 to avoid the mouse text
@@ -435,7 +435,7 @@ template <typename InputAction> struct RenderImm : System<UIContext<InputAction>
       const ui::HasImage &img = entity.get<ui::HasImage>();
       texture_manager::Rectangle src =
           img.source_rect.value_or(texture_manager::Rectangle{
-              0, 0, (float)img.texture.width, (float)img.texture.height});
+              0.0f, 0.0f, (float)img.texture.width, (float)img.texture.height});
 
       // Scale to fit height of rect
       float scale = src.height / draw_rect.height;
