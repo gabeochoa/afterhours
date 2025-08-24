@@ -355,9 +355,11 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   }
 };
 
-template <typename InputAction> struct RenderImm : System<> {
+template <typename InputAction> struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
-  RenderImm() : System<>() { this->include_derived_children = true; }
+  RenderImm() : System<UIContext<InputAction>, FontManager>() { 
+    this->include_derived_children = true; 
+  }
 
   void render_me(const UIContext<InputAction> &context,
                  const FontManager &font_manager, const Entity &entity) const {
@@ -478,24 +480,11 @@ template <typename InputAction> struct RenderImm : System<> {
     // }
   }
 
-  virtual void for_each_with(const Entity &entity,
-                             // TODO why if we add these to the filter,
-                             // this doesnt return any entities?
-                             //
-                             // const UIContext<InputAction> &context,
-                             // const FontManager &font_manager,
+  virtual void for_each_with_derived(const Entity &entity,
+                             const UIContext<InputAction> &context,
+                             const FontManager &font_manager,
                              float) const override {
-
-    if (entity.is_missing<UIContext<InputAction>>())
-      return;
-    if (entity.is_missing<FontManager>())
-      return;
-
-    const UIContext<InputAction> &context =
-        entity.get<UIContext<InputAction>>();
-    const FontManager &font_manager = entity.get<FontManager>();
-
-    #if __WIN32
+#if __WIN32
     // Note we have to do bubble sort here because mingw doesnt support std::ranges::sort
     for (size_t i = 0; i < context.render_cmds.size(); ++i) {
       for (size_t j = i + 1; j < context.render_cmds.size(); ++j) {
@@ -506,14 +495,13 @@ template <typename InputAction> struct RenderImm : System<> {
         }
       }
     }
-    #else 
+#else 
     std::ranges::sort(context.render_cmds, [](RenderInfo a, RenderInfo b) {
       if (a.layer == b.layer)
         return a.id < b.id;
       return a.layer < b.layer;
     });
-    #endif
-
+#endif
 
     for (auto &cmd : context.render_cmds) {
       auto id = cmd.id;
