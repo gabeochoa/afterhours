@@ -234,6 +234,9 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
     if (!component.was_rendered_to_screen)
       return;
 
+    if (component.should_hide || entity.has<ShouldHide>())
+      return;
+
     context->active_if_mouse_inside(entity.id, component.rect());
 
     if (context->has_focus(entity.id) &&

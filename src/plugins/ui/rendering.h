@@ -213,8 +213,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
 
     if (enableCooldown < 0) {
       enableCooldown = enableCooldownReset;
-      input::PossibleInputCollector inpc =
-          input::get_input_collector();
+      input::PossibleInputCollector inpc = input::get_input_collector();
       for (auto &actions_done : inpc.inputs()) {
         if (static_cast<InputAction>(actions_done.action) == toggle_action) {
           enabled = !enabled;
@@ -355,10 +354,11 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   }
 };
 
-template <typename InputAction> struct RenderImm : System<UIContext<InputAction>, FontManager> {
+template <typename InputAction>
+struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
-  RenderImm() : System<UIContext<InputAction>, FontManager>() { 
-    this->include_derived_children = true; 
+  RenderImm() : System<UIContext<InputAction>, FontManager>() {
+    this->include_derived_children = true;
   }
 
   void render_me(const UIContext<InputAction> &context,
@@ -481,21 +481,22 @@ template <typename InputAction> struct RenderImm : System<UIContext<InputAction>
   }
 
   virtual void for_each_with_derived(const Entity &entity,
-                             const UIContext<InputAction> &context,
-                             const FontManager &font_manager,
-                             float) const override {
+                                     const UIContext<InputAction> &context,
+                                     const FontManager &font_manager,
+                                     float) const override {
 #if __WIN32
-    // Note we have to do bubble sort here because mingw doesnt support std::ranges::sort
+    // Note we have to do bubble sort here because mingw doesnt support
+    // std::ranges::sort
     for (size_t i = 0; i < context.render_cmds.size(); ++i) {
       for (size_t j = i + 1; j < context.render_cmds.size(); ++j) {
         if ((context.render_cmds[i].layer > context.render_cmds[j].layer) ||
-            (context.render_cmds[i].layer == context.render_cmds[j].layer && 
+            (context.render_cmds[i].layer == context.render_cmds[j].layer &&
              context.render_cmds[i].id > context.render_cmds[j].id)) {
           std::swap(context.render_cmds[i], context.render_cmds[j]);
         }
       }
     }
-#else 
+#else
     std::ranges::sort(context.render_cmds, [](RenderInfo a, RenderInfo b) {
       if (a.layer == b.layer)
         return a.id < b.id;
