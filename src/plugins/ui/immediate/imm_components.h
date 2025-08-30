@@ -1,9 +1,9 @@
 #pragma once
 
+#include "fmt/format.h"
 #include <algorithm>
 #include <array>
 #include <bitset>
-#include "fmt/format.h"
 
 #include "../../../entity.h"
 #include "../../../entity_helper.h"
@@ -719,6 +719,8 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
   // TODO - add default
   config.flex_direction = FlexDirection::Row;
 
+  // Prevent the parent navigation bar from getting a background color
+  config.with_color_usage(Theme::Usage::None);
   _init_component(ctx, ep_pair, config, ComponentType::NavigationBar, false,
                   "navigation_bar");
 
