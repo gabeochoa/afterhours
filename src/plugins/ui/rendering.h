@@ -1,7 +1,7 @@
 #pragma once
 
-#include <algorithm>
 #include "fmt/format.h"
+#include <algorithm>
 #include <vector>
 
 #include "../../drawing_helpers.h"
@@ -17,6 +17,7 @@
 #include "components.h"
 #include "context.h"
 #include "systems.h"
+#include "text_utils.h"
 #include "theme.h"
 
 namespace afterhours {
@@ -113,8 +114,32 @@ static inline void draw_text_in_rect(const ui::FontManager &fm,
                                      TextAlignment alignment, Color color) {
   RectangleType sizing =
       position_text(fm, text, rect, alignment, Vector2Type{5.f, 5.f});
-  draw_text_ex(fm.get_active_font(), text.c_str(),
-               Vector2Type{sizing.x, sizing.y}, sizing.height, 1.f, color);
+
+  // Check if text contains CJK characters and use appropriate rendering
+  if (afterhours::ui::text_utils::contains_cjk(text)) {
+    // For CJK text, we need to handle UTF-8 properly
+    // Use the font's active font and render with proper spacing
+    Font font = fm.get_active_font();
+    float fontSize = sizing.height;
+    float spacing = 1.0f;
+
+    // Calculate starting position based on alignment
+    Vector2Type startPos = {sizing.x, sizing.y};
+    if (alignment == TextAlignment::Center) {
+      // Center the text within the rectangle
+      Vector2Type textSize =
+          measure_text_utf8(font, text.c_str(), fontSize, spacing);
+      startPos.x = rect.x + (rect.width - textSize.x) / 2.0f;
+      startPos.y = rect.y + (rect.height - textSize.y) / 2.0f;
+    }
+
+    // Draw the text using draw_text_ex which handles UTF-8 properly
+    draw_text_ex(font, text.c_str(), startPos, fontSize, spacing, color);
+  } else {
+    // For non-CJK text, use the existing method
+    draw_text_ex(fm.get_active_font(), text.c_str(),
+                 Vector2Type{sizing.x, sizing.y}, sizing.height, 1.f, color);
+  }
 }
 
 static inline Vector2Type

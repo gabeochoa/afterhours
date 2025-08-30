@@ -432,6 +432,31 @@ struct FontManager : BaseComponent {
     return *this;
   }
 
+  // Add codepoint-based font loading for CJK support
+  auto &load_font_with_codepoints(const std::string &font_name,
+                                  const char *font_file, int *codepoints,
+                                  int codepoint_count) {
+    if (font_name.empty()) {
+      log_error("Cannot load font with empty name");
+      return *this;
+    }
+
+    if (!font_file) {
+      log_error("Cannot load font '{}' with null file path", font_name.c_str());
+      return *this;
+    }
+
+    if (!codepoints || codepoint_count <= 0) {
+      log_error("Cannot load font '{}' with invalid codepoints",
+                font_name.c_str());
+      return *this;
+    }
+
+    fonts[font_name] = load_font_from_file_with_codepoints(
+        font_file, codepoints, codepoint_count);
+    return *this;
+  }
+
   auto &set_active(const std::string &font_name) {
     if (!fonts.contains(font_name)) {
       log_warn("{} missing from font manager. Did you call load_font() on it "
