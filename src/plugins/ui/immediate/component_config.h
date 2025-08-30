@@ -304,6 +304,8 @@ enum struct ComponentType {
 // TODO singleton helper
 struct UIStylingDefaults {
   std::map<ComponentType, ComponentConfig> component_configs;
+  std::string default_font_name = UIComponent::UNSET_FONT;
+  float default_font_size = 16.f;
 
   UIStylingDefaults() = default;
 
@@ -325,6 +327,14 @@ struct UIStylingDefaults {
 
   UIStylingDefaults &set_accent_color(const Color &color) {
     return set_theme_color(Theme::Usage::Accent, color);
+  }
+
+  // Font configuration methods
+  UIStylingDefaults &set_default_font(const std::string &font_name,
+                                      float font_size) {
+    default_font_name = font_name;
+    default_font_size = font_size;
+    return *this;
   }
 
   // Singleton pattern
@@ -363,11 +373,20 @@ struct UIStylingDefaults {
   ComponentConfig merge_with_defaults(ComponentType component_type,
                                       const ComponentConfig &config) const {
     auto defaults = get_component_config(component_type);
-    if (!defaults.has_value()) {
-      return config;
+    ComponentConfig result = config;
+
+    // Apply default font if not already set
+    if (result.font_name == UIComponent::UNSET_FONT &&
+        default_font_name != UIComponent::UNSET_FONT) {
+      result.font_name = default_font_name;
+      result.font_size = default_font_size;
     }
 
-    return defaults.value().apply_overrides(config);
+    if (!defaults.has_value()) {
+      return result;
+    }
+
+    return defaults.value().apply_overrides(result);
   }
 };
 

@@ -489,8 +489,9 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     if (cmp.should_hide || entity.has<ShouldHide>())
       return;
 
-    if (cmp.font_name != UIComponent::UNSET_FONT)
+    if (cmp.font_name != UIComponent::UNSET_FONT) {
       const_cast<FontManager &>(font_manager).set_active(cmp.font_name);
+    }
 
     if (entity.has<HasColor>() || entity.has<HasLabel>() ||
         entity.has<ui::HasImage>() ||
