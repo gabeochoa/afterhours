@@ -1,7 +1,5 @@
 #pragma once
 
-#include <algorithm>
-#include <bitset>
 #include <map>
 #include <set>
 #include <vector>
@@ -11,13 +9,12 @@
 #include "../../entity_query.h"
 #include "../../logging.h"
 #include "../../system.h"
-#include "../animation.h"
 #include "../autolayout.h"
 #include "../input_system.h"
 #include "../window_manager.h"
-#include "animation_keys.h"
 #include "components.h"
 #include "context.h"
+#include "theme_defaults.h"
 #if __has_include(<magic_enum/magic_enum.hpp>)
 #include <magic_enum/magic_enum.hpp>
 #else
@@ -48,6 +45,10 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
 
   virtual void for_each_with(Entity &, UIContext<InputAction> &context,
                              float) override {
+    // Apply theme defaults first
+    auto &theme_defaults = imm::ThemeDefaults::get();
+    context.theme = theme_defaults.get_theme(context.theme);
+
     context.mouse_pos = input::get_mouse_position();
     context.mouseLeftDown = input::is_mouse_button_down(0);
 

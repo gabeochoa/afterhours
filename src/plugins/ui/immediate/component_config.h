@@ -5,17 +5,14 @@
 #include <optional>
 #include <string>
 
-#include "../../../drawing_helpers.h"
 #include "../../../entity.h"
-#include "../../../entity_helper.h"
-#include "../../../logging.h"
 #include "../../autolayout.h"
 #include "../../color.h"
 #include "../../texture_manager.h"
 #include "../components.h"
 #include "../context.h"
 #include "../theme.h"
-#include "element_result.h"
+#include "../theme_defaults.h"
 #include "entity_management.h"
 #include "rounded_corners.h"
 
@@ -309,6 +306,26 @@ struct UIStylingDefaults {
   std::map<ComponentType, ComponentConfig> component_configs;
 
   UIStylingDefaults() = default;
+
+  // Theme configuration methods
+  UIStylingDefaults &set_theme_color(Theme::Usage usage, const Color &color) {
+    auto &theme_defaults = ThemeDefaults::get();
+    theme_defaults.set_theme_color(usage, color);
+    return *this;
+  }
+
+  // Helper methods for common theme colors
+  UIStylingDefaults &set_primary_color(const Color &color) {
+    return set_theme_color(Theme::Usage::Primary, color);
+  }
+
+  UIStylingDefaults &set_secondary_color(const Color &color) {
+    return set_theme_color(Theme::Usage::Secondary, color);
+  }
+
+  UIStylingDefaults &set_accent_color(const Color &color) {
+    return set_theme_color(Theme::Usage::Accent, color);
+  }
 
   // Singleton pattern
   static UIStylingDefaults &get() {
