@@ -350,7 +350,10 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   std::string original_label = config.label;
   config.label = "";
 
+  auto original_color_usage = config.color_usage;
+  config.with_color_usage(Theme::Usage::None);
   _init_component(ctx, ep_pair, config, ComponentType::Slider, true, "slider");
+  config.color_usage = original_color_usage;
 
   auto label_corners = RoundedCorners(config.rounded_corners.value())
                            .sharp(TOP_RIGHT)
