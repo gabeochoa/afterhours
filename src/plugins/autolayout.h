@@ -213,6 +213,7 @@ struct AutoLayoutRoot : BaseComponent {};
 struct UIComponent : BaseComponent {
   static constexpr std::string UNSET_FONT = "__unset";
   static constexpr std::string DEFAULT_FONT = "__default";
+  static constexpr std::string SYMBOL_FONT = "__symbol";
 
   EntityID id;
   UIComponent() { init_values(); }

@@ -87,6 +87,7 @@ static void add_singleton_components(Entity &entity) {
 
   entity.addComponent<ui::FontManager>()
       .load_font(UIComponent::DEFAULT_FONT, get_default_font())
+      .load_font(UIComponent::SYMBOL_FONT, get_default_font())
       .load_font(UIComponent::UNSET_FONT, get_unset_font());
   EntityHelper::registerSingleton<ui::FontManager>(entity);
 }
@@ -120,7 +121,7 @@ template <typename InputAction>
 static void register_after_ui_updates(SystemManager &sm) {
   {
     sm.register_update_system(
-         std::make_unique<ui::UpdateDropdownOptions<InputAction>>());
+        std::make_unique<ui::UpdateDropdownOptions<InputAction>>());
 
     //
     sm.register_update_system(std::make_unique<ui::ClearVisibity>());
