@@ -194,6 +194,8 @@ ElementResult checkbox_no_label(HasUIContext auto &ctx, EntityParent ep_pair,
       entity, [&](auto &) {}, value);
 
   config.label = value ? "X" : " ";
+  config.font_name = UIComponent::DEFAULT_FONT;
+  config.font_size = 16.f;
 
   _init_component(ctx, ep_pair, config, ComponentType::CheckboxNoLabel, true,
                   "checkbox");
@@ -520,6 +522,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
               .with_size(ComponentSize{pixels(default_component_size.x / 4.f),
                                        config.size.y_axis})
               .with_label("<")
+              .with_font(UIComponent::DEFAULT_FONT, 16.f)
               .with_render_layer(config.render_layer))) {
     on_option_click(entity, prev_index(option_index - 1, options.size()));
   }
@@ -543,6 +546,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
               .with_size(ComponentSize{pixels(default_component_size.x / 4.f),
                                        config.size.y_axis})
               .with_label(">")
+              .with_font(UIComponent::DEFAULT_FONT, 16.f)
               .with_render_layer(config.render_layer))) {
     on_option_click(entity, next_index(option_index, options.size()));
   }
@@ -736,6 +740,7 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
              ComponentConfig::inherit_from(config, "left_arrow")
                  .with_size(arrow_size)
                  .with_label("<")
+                 .with_font(UIComponent::DEFAULT_FONT, 16.f)
                  .with_rounded_corners(RoundedCorners().left_round()))) {
     clicked = true;
     new_index = prev_index(navState.current_index(), options.size());
@@ -753,6 +758,7 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
              ComponentConfig::inherit_from(config, "right_arrow")
                  .with_size(arrow_size)
                  .with_label(">")
+                 .with_font(UIComponent::DEFAULT_FONT, 16.f)
                  .with_rounded_corners(RoundedCorners().right_round()))) {
     clicked = true;
     new_index = next_index(navState.current_index(), options.size());
