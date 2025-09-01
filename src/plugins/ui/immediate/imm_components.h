@@ -442,6 +442,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   Entity &slider_bg = elem.ent();
   slider_bg.template addComponentIfMissing<InFocusCluster>();
+
   if (slider_bg.is_missing<ui::HasSliderState>())
     slider_bg.addComponent<ui::HasSliderState>(owned_value);
 
@@ -528,6 +529,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   handle.cmp()
       .set_desired_width(handle_config.size.x_axis)
       .set_desired_height(config.size.y_axis);
+  handle.ent().template addComponentIfMissing<InFocusCluster>();
 
   // Add handle label if needed
   if (handle_label_position == SliderHandleValueLabelPosition::OnHandle) {
