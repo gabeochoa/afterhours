@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <bitset>
+#include <string>
 
 #include "../../../entity.h"
 #include "../../../entity_helper.h"
@@ -340,12 +341,64 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
   return {changed, entity, values};
 }
 
+// Helper function to generate label text based on position and value
+static std::string
+generate_label_text(const std::string &original_label, float value,
+                    SliderHandleValueLabelPosition position) {
+  switch (position) {
+  case SliderHandleValueLabelPosition::None:
+  case SliderHandleValueLabelPosition::OnHandle:
+    return original_label;
+  case SliderHandleValueLabelPosition::WithLabel:
+    return original_label + ": " +
+           std::to_string(static_cast<int>(value * 100)) + "%";
+  case SliderHandleValueLabelPosition::WithLabelNewLine:
+    return original_label + "\n" +
+           std::to_string(static_cast<int>(value * 100)) + "%";
+  }
+  return original_label;
+}
+
+// Helper function to update label entity
+static void update_label_entity(Entity &entity, const std::string &new_text) {
+  if (entity.has<ui::HasLabel>()) {
+    entity.get<ui::HasLabel>().set_label(new_text);
+  }
+}
+
+// Helper function to find and update handle label
+static void update_handle_label(Entity &handle_entity, float value) {
+  UIComponent &handle_cmp = handle_entity.get<UIComponent>();
+  for (EntityID child_id : handle_cmp.children) {
+    Entity &child_entity = EntityHelper::getEntityForIDEnforce(child_id);
+    if (child_entity.has<ui::HasLabel>()) {
+      update_label_entity(child_entity,
+                          std::to_string(static_cast<int>(value * 100)));
+      break;
+    }
+  }
+}
+
+// Helper function to find and update main label
+static void update_main_label(Entity &slider_entity,
+                              const std::string &original_label, float value,
+                              SliderHandleValueLabelPosition position) {
+  UIComponent &slider_cmp = slider_entity.get<UIComponent>();
+  if (!slider_cmp.children.empty()) {
+    EntityID main_label_id = slider_cmp.children[0];
+    Entity &main_label_entity =
+        EntityHelper::getEntityForIDEnforce(main_label_id);
+    std::string new_text = generate_label_text(original_label, value, position);
+    update_label_entity(main_label_entity, new_text);
+  }
+}
+
 ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                      float &owned_value,
-                     ComponentConfig config = ComponentConfig()) {
+                     ComponentConfig config = ComponentConfig(),
+                     SliderHandleValueLabelPosition handle_label_position =
+                         SliderHandleValueLabelPosition::None) {
   auto [entity, parent] = deref(ep_pair);
-
-  ElementResult result = {false, entity};
 
   std::string original_label = config.label;
   config.label = "";
@@ -355,6 +408,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   _init_component(ctx, ep_pair, config, ComponentType::Slider, true, "slider");
   config.color_usage = original_color_usage;
 
+  // Create main label
+  std::string main_label_text =
+      generate_label_text(original_label, owned_value, handle_label_position);
   auto label_corners = RoundedCorners(config.rounded_corners.value())
                            .sharp(TOP_RIGHT)
                            .sharp(BOTTOM_RIGHT);
@@ -362,7 +418,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   auto label = div(ctx, mk(entity, entity.id + 0),
                    ComponentConfig::inherit_from(config, "slider_text")
                        .with_size(config.size)
-                       .with_label(original_label)
+                       .with_label(main_label_text)
                        .with_color_usage(Theme::Usage::Primary)
                        .with_rounded_corners(label_corners)
                        .with_render_layer(config.render_layer + 0));
@@ -372,9 +428,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       .set_desired_height(config.size.y_axis);
   label.ent().template addComponentIfMissing<InFocusCluster>();
 
+  // Create slider background
   auto elem_corners =
       RoundedCorners(config.rounded_corners.value()).left_sharp();
-
   auto elem = div(ctx, mk(entity, parent.id + entity.id + 0),
                   ComponentConfig::inherit_from(config, "slider_background")
                       .with_size(config.size)
@@ -392,6 +448,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   HasSliderState &sliderState = slider_bg.get<ui::HasSliderState>();
   sliderState.changed_since = true;
 
+  // Create value update function
   auto apply_slider_value = [&](Entity &target, float new_value_pct) {
     float clamped = std::clamp(new_value_pct, 0.f, 1.f);
     if (clamped == sliderState.value)
@@ -407,27 +464,35 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       UIComponent &child_cmp = child.get<UIComponent>();
       child_cmp.set_desired_padding(
           pixels(sliderState.value * 0.75f * rect.width), Axis::left);
+
+      // Update labels based on position
+      if (handle_label_position == SliderHandleValueLabelPosition::OnHandle) {
+        update_handle_label(child, sliderState.value);
+      } else if (handle_label_position ==
+                     SliderHandleValueLabelPosition::WithLabel ||
+                 handle_label_position ==
+                     SliderHandleValueLabelPosition::WithLabelNewLine) {
+        update_main_label(target, original_label, sliderState.value,
+                          handle_label_position);
+      }
     }
   };
 
-  {
-    slider_bg.addComponentIfMissing<ui::HasDragListener>(
-        [apply_slider_value](Entity &draggable) {
-          UIComponent &cmp = draggable.get<UIComponent>();
-          Rectangle rect = cmp.rect();
-          auto mouse_position = input::get_mouse_position();
-          float v = (mouse_position.x - rect.x) / rect.width;
-          apply_slider_value(draggable, v);
-        });
-  }
+  // Add drag listener
+  slider_bg.addComponentIfMissing<ui::HasDragListener>(
+      [apply_slider_value](Entity &draggable) {
+        UIComponent &cmp = draggable.get<UIComponent>();
+        Rectangle rect = cmp.rect();
+        auto mouse_position = input::get_mouse_position();
+        float v = (mouse_position.x - rect.x) / rect.width;
+        apply_slider_value(draggable, v);
+      });
 
-  auto handle_corners = config.rounded_corners.value();
-
+  // Create handle
   const auto dim = config.size.x_axis.dim;
   const float width_val = config.size.x_axis.value;
-  // 2025-08-11: guard against effectively zero-width sliders when
-  // responsive units are very small. Warn so we can diagnose invisible
-  // handles quickly without digging through UI layout.
+
+  // Warn about tiny widths
   const bool tiny_width =
       (dim == Dim::Pixels && width_val < 8.0f) ||
       ((dim == Dim::Percent || dim == Dim::ScreenPercent) && width_val < 0.02f);
@@ -455,16 +520,32 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
           .with_size(ComponentSize{handle_width_size, config.size.y_axis})
           .with_padding(Padding{.left = handle_left_size})
           .with_color_usage(Theme::Usage::Primary)
-          .with_rounded_corners(handle_corners)
+          .with_rounded_corners(config.rounded_corners.value())
           .with_debug_name("slider_handle")
           .with_render_layer(config.render_layer + 2);
 
   auto handle = div(ctx, mk(slider_bg), handle_config);
-
   handle.cmp()
       .set_desired_width(handle_config.size.x_axis)
       .set_desired_height(config.size.y_axis);
 
+  // Add handle label if needed
+  if (handle_label_position == SliderHandleValueLabelPosition::OnHandle) {
+    std::string handle_label_text =
+        std::to_string(static_cast<int>(sliderState.value * 100));
+    auto handle_label_config =
+        ComponentConfig::inherit_from(config, "slider_handle_label")
+            .with_label(handle_label_text)
+            .with_size(ComponentSize{handle_width_size, config.size.y_axis})
+            .with_color_usage(Theme::Usage::Primary)
+            .with_render_layer(config.render_layer + 3)
+            .with_font(config.font_name, config.font_size);
+
+    auto handle_label = div(ctx, mk(handle.ent()), handle_label_config);
+    handle_label.ent().template addComponentIfMissing<InFocusCluster>();
+  }
+
+  // Add keyboard listener
   slider_bg.addComponentIfMissing<ui::HasLeftRightListener>(
       [apply_slider_value, &sliderState](Entity &ent, int dir) {
         const float step = 0.01f;

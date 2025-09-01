@@ -30,6 +30,13 @@ struct TextureConfig {
       texture_manager::HasTexture::Alignment::None;
 };
 
+enum class SliderHandleValueLabelPosition {
+  None,            // No label
+  OnHandle,        // Show the value on the handle
+  WithLabel,       // Show the main label with the value
+  WithLabelNewLine // Show the main label with the value on a separate line
+};
+
 struct ComponentConfig {
   ComponentSize size = ComponentSize(pixels(default_component_size.x),
                                      pixels(default_component_size.y), true);
@@ -159,6 +166,7 @@ struct ComponentConfig {
     is_internal = internal;
     return *this;
   }
+
   ComponentConfig &with_texture(const TextureConfig &tex_cfg) {
     texture_config = tex_cfg;
     return *this;
