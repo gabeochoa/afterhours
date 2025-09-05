@@ -52,7 +52,7 @@ struct ThemeDefaults {
     return *this;
   }
 
-  Theme get_theme(const Theme &) const { return theme; }
+  Theme get_theme() const { return theme; }
 };
 
 } // namespace imm

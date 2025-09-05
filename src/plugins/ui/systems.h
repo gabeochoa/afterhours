@@ -47,7 +47,7 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
                              float) override {
     // Apply theme defaults first
     auto &theme_defaults = imm::ThemeDefaults::get();
-    context.theme = theme_defaults.get_theme(context.theme);
+    context.theme = theme_defaults.get_theme();
 
     context.mouse_pos = input::get_mouse_position();
     context.mouseLeftDown = input::is_mouse_button_down(0);
