@@ -132,17 +132,19 @@ template <typename InputAction>
 struct TrackIfComponentWillBeRendered : System<> {
 
   void set_visibility(UIComponent &cmp) {
-    // Hiding hides children
-    if (cmp.should_hide)
+    // Early exit if already processed or hidden
+    if (cmp.was_rendered_to_screen || cmp.should_hide)
       return;
+
+    // Process children first (bottom-up approach for better early exits)
     for (EntityID child : cmp.children) {
       set_visibility(AutoLayout::to_cmp_static(child));
     }
-    // you might still have visible children even if you arent big (i think)
-    if (cmp.width() < 0 || cmp.height() < 0) {
-      return;
+
+    // Only mark visible if component has valid dimensions
+    if (cmp.width() >= 0 && cmp.height() >= 0) {
+      cmp.was_rendered_to_screen = true;
     }
-    cmp.was_rendered_to_screen = true;
   }
 
   virtual void for_each_with(Entity &entity, float) override {
