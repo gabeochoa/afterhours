@@ -64,10 +64,8 @@ public:
   bool include_derived_children = false;
   bool ignore_temp_entities = false;
 
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
   virtual void for_each_derived(Entity &, const float) = 0;
   virtual void for_each_derived(const Entity &, const float) const = 0;
-#endif
 };
 
 // Base that declares the correct for_each_with signatures based on components
@@ -77,21 +75,17 @@ template <typename... Cs> struct SystemForEachBase<type_list<Cs...>> {
   virtual void for_each_with(Entity &, Cs &..., const float) {}
   virtual void for_each_with(const Entity &, const Cs &..., const float) const {
   }
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
   virtual void for_each_with_derived(Entity &, Cs &..., const float) {}
   virtual void for_each_with_derived(const Entity &, const Cs &...,
                                      const float) const {}
-#endif
 };
 
 // Explicit specialization for empty parameter pack
 template <> struct SystemForEachBase<type_list<>> {
   virtual void for_each_with(Entity &, const float) {}
   virtual void for_each_with(const Entity &, const float) const {}
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
   virtual void for_each_with_derived(Entity &, const float) {}
   virtual void for_each_with_derived(const Entity &, const float) const {}
-#endif
 };
 
 template <typename... Components>
@@ -261,7 +255,7 @@ struct System
     }
   };
 
- #if __APPLE__ 
+#if __APPLE__
   static TagBitset required_all_mask() {
     static TagBitset m = (TagBitset{} | ... | AllMask<Components>::value());
     return m;
@@ -290,11 +284,9 @@ struct System
     return true;
   }
 
-#else 
-  static bool tags_ok(const Entity &entity) {
-    return true;
-  }
-#endif 
+#else
+  static bool tags_ok(const Entity &entity) { return true; }
+#endif
 
   /*
    *
@@ -348,7 +340,6 @@ template <typename Component> struct Not : BaseComponent {
     }
   }
 
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
   void for_each_derived(Entity &entity, const float dt) {
     if (!tags_ok(entity))
       return;
@@ -369,7 +360,6 @@ template <typename Component> struct Not : BaseComponent {
   virtual void for_each_with_derived(Entity &, Components &..., const float) {}
   virtual void for_each_with_derived(const Entity &, const Components &...,
                                      const float) const {}
-#endif
 
   void for_each(const Entity &entity, const float dt) const {
     if (!tags_ok(entity))
@@ -385,9 +375,7 @@ template <typename Component> struct Not : BaseComponent {
   // const or non const versions and the sfinae version is probably
   // pretty unreadable (and idk how to write it correctly)
   using ForEachBase::for_each_with;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
   using ForEachBase::for_each_with_derived;
-#endif
 };
 
 struct CallbackSystem : System<> {
@@ -439,11 +427,9 @@ struct SystemManager {
       for (std::shared_ptr<Entity> entity : entities) {
         if (!entity)
           continue;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
         if (system->include_derived_children)
           system->for_each_derived(*entity, dt);
         else
-#endif
           system->for_each(*entity, dt);
       }
       system->after(dt);
@@ -459,11 +445,9 @@ struct SystemManager {
       for (std::shared_ptr<Entity> entity : entities) {
         if (!entity)
           continue;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
         if (system->include_derived_children)
           system->for_each_derived(*entity, dt);
         else
-#endif
           system->for_each(*entity, dt);
       }
       system->after(dt);
@@ -479,11 +463,9 @@ struct SystemManager {
         if (!entity)
           continue;
         const Entity &e = *entity;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
         if (system->include_derived_children)
           system->for_each_derived(e, dt);
         else
-#endif
           system->for_each(e, dt);
       }
       system->after(dt);
