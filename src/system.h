@@ -60,6 +60,8 @@ public:
   // in System<Components>
   virtual void for_each(Entity &, const float) = 0;
   virtual void for_each(const Entity &, const float) const = 0;
+  virtual void for_each_internal(const float) = 0;
+  virtual void for_each_internal(const float) const = 0;
 
   bool include_derived_children = false;
   bool ignore_temp_entities = false;
@@ -75,22 +77,22 @@ public:
 template <typename List> struct SystemForEachBase;
 template <typename... Cs> struct SystemForEachBase<type_list<Cs...>> {
   virtual void for_each_with(Entity &, Cs &..., const float) {}
-  virtual void for_each_with(const Entity &, const Cs &..., const float) const {
-  }
+  virtual void for_each_const(const Entity &, const Cs &...,
+                              const float) const {}
 #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
   virtual void for_each_with_derived(Entity &, Cs &..., const float) {}
-  virtual void for_each_with_derived(const Entity &, const Cs &...,
-                                     const float) const {}
+  virtual void for_each_const_derived(const Entity &, const Cs &...,
+                                      const float) const {}
 #endif
 };
 
 // Explicit specialization for empty parameter pack
 template <> struct SystemForEachBase<type_list<>> {
   virtual void for_each_with(Entity &, const float) {}
-  virtual void for_each_with(const Entity &, const float) const {}
+  virtual void for_each_const(const Entity &, const float) const {}
 #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
   virtual void for_each_with_derived(Entity &, const float) {}
-  virtual void for_each_with_derived(const Entity &, const float) const {}
+  virtual void for_each_const_derived(const Entity &, const float) const {}
 #endif
 };
 
@@ -144,7 +146,7 @@ struct System
     template <typename Self>
     static void call_const(const Self *self, const Entity &entity,
                            const float dt) {
-      static_cast<const ForEachBase *>(self)->for_each_with(
+      static_cast<const ForEachBase *>(self)->for_each_const(
           entity, entity.template get<Cs>()..., dt);
     }
   };
@@ -177,7 +179,7 @@ struct System
     template <typename Self>
     static void call_const(const Self *self, const Entity &entity,
                            const float dt) {
-      self->for_each_with(entity, dt);
+      self->for_each_const(entity, dt);
     }
   };
 #endif
@@ -192,7 +194,7 @@ struct System
     template <typename Self>
     static void call_const(const Self *self, const Entity &entity,
                            const float dt) {
-      static_cast<const ForEachBase *>(self)->for_each_with_derived(
+      static_cast<const ForEachBase *>(self)->for_each_const_derived(
           entity, entity.template get_with_child<Cs>()..., dt);
     }
   };
@@ -220,12 +222,12 @@ struct System
   template <> struct CallWithChildComponents<type_list<>> {
     template <typename Self>
     static void call(Self *self, Entity &entity, const float dt) {
-      self->for_each_with(entity, dt);
+      self->for_each_with_derived(entity, dt);
     }
     template <typename Self>
     static void call_const(const Self *self, const Entity &entity,
                            const float dt) {
-      self->for_each_with(entity, dt);
+      self->for_each_const_derived(entity, dt);
     }
   };
 #endif
@@ -261,7 +263,7 @@ struct System
     }
   };
 
- #if __APPLE__ 
+#if __APPLE__
   static TagBitset required_all_mask() {
     static TagBitset m = (TagBitset{} | ... | AllMask<Components>::value());
     return m;
@@ -290,11 +292,9 @@ struct System
     return true;
   }
 
-#else 
-  static bool tags_ok(const Entity &entity) {
-    return true;
-  }
-#endif 
+#else
+  static bool tags_ok(const Entity &entity) { return true; }
+#endif
 
   /*
    *
@@ -339,17 +339,75 @@ template <typename Component> struct Not : BaseComponent {
     for_each_with(entity, entity.template get<Components>()..., dt);
   }
 */
-  void for_each(Entity &entity, const float dt) {
+  void for_each(Entity &entity, const float dt) override {
     if (!tags_ok(entity))
       return;
     using ComponentsOnly = typename filter_components<Components...>::type;
     if (HasAllComponents<ComponentsOnly>::value(entity)) {
-      CallWithComponents<ComponentsOnly>::call(this, entity, dt);
+      CallWithComponents<ComponentsOnly>::call_const(this, entity, dt);
+    }
+  }
+
+  void for_each_internal(const float dt) override {
+    using ComponentsOnly = typename filter_components<Components...>::type;
+    if constexpr (sizeof...(Components) == 0) {
+      // No components - iterate all entities
+      for (const auto &entity : EntityHelper::get_entities()) {
+        if (!entity)
+          continue;
+        if (!tags_ok(*entity))
+          continue;
+        CallWithComponents<ComponentsOnly>::call(this, *entity, dt);
+      }
+    } else {
+      // Use component intersection for efficiency
+      auto entity_ids = EntityHelper::intersect_components<Components...>();
+
+      for (EntityID entity_id : entity_ids) {
+        auto opt_entity = EntityHelper::getEntityForID(entity_id);
+        if (!opt_entity)
+          continue;
+
+        Entity &entity = opt_entity.asE();
+        if (!tags_ok(entity))
+          continue;
+
+        CallWithComponents<ComponentsOnly>::call(this, entity, dt);
+      }
+    }
+  }
+
+  void for_each_internal(const float dt) const override {
+    using ComponentsOnly = typename filter_components<Components...>::type;
+    if constexpr (sizeof...(Components) == 0) {
+      // No components - iterate all entities
+      for (const auto &entity : EntityHelper::get_entities()) {
+        if (!entity)
+          continue;
+        if (!tags_ok(*entity))
+          continue;
+        CallWithComponents<ComponentsOnly>::call_const(this, *entity, dt);
+      }
+    } else {
+      // Use component intersection for efficiency
+      auto entity_ids = EntityHelper::intersect_components<Components...>();
+
+      for (EntityID entity_id : entity_ids) {
+        auto opt_entity = EntityHelper::getEntityForID(entity_id);
+        if (!opt_entity)
+          continue;
+
+        const Entity &entity = opt_entity.asE();
+        if (!tags_ok(entity))
+          continue;
+
+        CallWithComponents<ComponentsOnly>::call_const(this, entity, dt);
+      }
     }
   }
 
 #if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-  void for_each_derived(Entity &entity, const float dt) {
+  void for_each_derived(Entity &entity, const float dt) override {
     if (!tags_ok(entity))
       return;
     using ComponentsOnly = typename filter_components<Components...>::type;
@@ -367,11 +425,11 @@ template <typename Component> struct Not : BaseComponent {
     }
   }
   virtual void for_each_with_derived(Entity &, Components &..., const float) {}
-  virtual void for_each_with_derived(const Entity &, const Components &...,
-                                     const float) const {}
+  virtual void for_each_const_derived(const Entity &, const Components &...,
+                                      const float) const {}
 #endif
 
-  void for_each(const Entity &entity, const float dt) const {
+  void for_each(const Entity &entity, const float dt) const override {
     if (!tags_ok(entity))
       return;
     using ComponentsOnly = typename filter_components<Components...>::type;
@@ -394,6 +452,11 @@ struct CallbackSystem : System<> {
   std::function<void(float)> cb_;
   CallbackSystem(const std::function<void(float)> &cb) : cb_(cb) {}
   virtual void once(const float dt) { cb_(dt); }
+  // Callback systems don't process entities, just run the callback
+  virtual void for_each(Entity &, const float) override {}
+  virtual void for_each(const Entity &, const float) const override {}
+  virtual void for_each_internal(const float) override {}
+  virtual void for_each_internal(const float) const override {}
 };
 
 struct SystemManager {
@@ -431,88 +494,59 @@ struct SystemManager {
     register_render_system(std::make_unique<CallbackSystem>(cb));
   }
 
-  void tick(Entities &entities, const float dt) {
+  void tick(const float dt) {
     for (auto &system : update_systems_) {
       if (!system->should_run(dt))
         continue;
       system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
-        if (!entity)
-          continue;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-        if (system->include_derived_children)
-          system->for_each_derived(*entity, dt);
-        else
-#endif
-          system->for_each(*entity, dt);
-      }
+      system->for_each_internal(dt);
       system->after(dt);
       EntityHelper::merge_entity_arrays();
     }
   }
 
-  void fixed_tick(Entities &entities, const float dt) {
+  void fixed_tick(const float dt) {
     for (auto &system : fixed_update_systems_) {
       if (!system->should_run(dt))
         continue;
       system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
-        if (!entity)
-          continue;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-        if (system->include_derived_children)
-          system->for_each_derived(*entity, dt);
-        else
-#endif
-          system->for_each(*entity, dt);
-      }
+      system->for_each_internal(dt);
       system->after(dt);
     }
   }
 
-  void render(const Entities &entities, const float dt) {
-    for (const auto &system : render_systems_) {
+  void render(const float dt) {
+    for (auto &system : render_systems_) {
       if (!system->should_run(dt))
         continue;
       system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
-        if (!entity)
-          continue;
-        const Entity &e = *entity;
-#if defined(AFTER_HOURS_INCLUDE_DERIVED_CHILDREN)
-        if (system->include_derived_children)
-          system->for_each_derived(e, dt);
-        else
-#endif
-          system->for_each(e, dt);
-      }
+      system->for_each_internal(dt);
       system->after(dt);
     }
   }
 
-  void tick_all(Entities &entities, const float dt) { tick(entities, dt); }
+  void tick_all(const float dt) { tick(dt); }
 
-  void fixed_tick_all(Entities &entities, const float dt) {
+  void fixed_tick_all(const float dt) {
     accumulator += dt;
     int num_ticks = (int)std::floor(accumulator / FIXED_TICK_RATE);
     accumulator -= (float)num_ticks * FIXED_TICK_RATE;
 
     while (num_ticks > 0) {
-      fixed_tick(entities, FIXED_TICK_RATE);
+      fixed_tick(FIXED_TICK_RATE);
       num_ticks--;
     }
   }
 
-  void render_all(const float dt) {
-    const auto &entities = EntityHelper::get_entities();
-    render(entities, dt);
-  }
+  void render_all(const float dt) { render(dt); }
 
   void run(const float dt) {
-    auto &entities = EntityHelper::get_entities_for_mod();
-    fixed_tick_all(entities, dt);
-    tick_all(entities, dt);
+    EntityHelper::merge_entity_arrays();
 
+    fixed_tick_all(dt);
+    tick_all(dt);
+
+    EntityHelper::rebuild_component_sets();
     EntityHelper::cleanup();
 
     render_all(dt);

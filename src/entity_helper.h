@@ -4,6 +4,8 @@
 #include <functional>
 #include <memory>
 #include <set>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "debug_allocator.h"
@@ -32,6 +34,9 @@ struct EntityHelper {
   // TODO spelling
   std::set<int> permanant_ids;
   std::map<ComponentID, Entity *> singletonMap;
+
+  // Component-based entity sets for efficient queries
+  std::unordered_map<ComponentID, std::vector<EntityID>> component_entity_sets;
 
   struct CreationOptions {
     bool is_permanent;
@@ -83,6 +88,8 @@ struct EntityHelper {
     if (options.is_permanent) {
       EntityHelper::get().permanant_ids.insert(e->id);
     }
+
+    rebuild_component_sets();
 
     return *e;
   }
@@ -236,6 +243,218 @@ struct EntityHelper {
   static Entity &getEntityForIDEnforce(const EntityID id) {
     auto opt_ent = getEntityForID(id);
     return opt_ent.asE();
+  }
+
+  // Component set management functions
+  template <typename Component>
+  static void add_entity_to_component_set(EntityID entity_id) {
+    ComponentID comp_id = components::get_type_id<Component>();
+    auto &entity_set = get().component_entity_sets[comp_id];
+
+    // Insert in sorted order for efficient intersection
+    auto it = std::lower_bound(entity_set.begin(), entity_set.end(), entity_id);
+    if (it == entity_set.end() || *it != entity_id) {
+      entity_set.insert(it, entity_id);
+    }
+  }
+
+  template <typename Component>
+  static void remove_entity_from_component_set(EntityID entity_id) {
+    ComponentID comp_id = components::get_type_id<Component>();
+    auto &entity_set = get().component_entity_sets[comp_id];
+
+    auto it = std::lower_bound(entity_set.begin(), entity_set.end(), entity_id);
+    if (it != entity_set.end() && *it == entity_id) {
+      entity_set.erase(it);
+    }
+  }
+
+  template <typename Component>
+  static const std::vector<EntityID> &get_entities_with_component() {
+    ComponentID comp_id = components::get_type_id<Component>();
+    return get().component_entity_sets[comp_id];
+  }
+
+  // Efficient set intersection for any number of components using variadic
+  // templates
+  template <typename... Components>
+  static std::vector<EntityID> intersect_components() {
+    if constexpr (sizeof...(Components) == 0) {
+      // No components - return all entities
+      std::vector<EntityID> result;
+      for (const auto &entity : get_entities()) {
+        if (entity) {
+          result.push_back(entity->id);
+        }
+      }
+      return result;
+    } else if constexpr (sizeof...(Components) == 1) {
+      // Single component - return entities with that component
+      auto result = get_entities_with_component<Components...>();
+      return result;
+    } else {
+      // Multiple components - use recursive intersection
+      auto result = intersect_components_recursive<Components...>();
+      return result;
+    }
+  }
+
+private:
+  // Helper function for recursive intersection
+  template <typename First, typename Second, typename... Rest>
+  static std::vector<EntityID> intersect_components_recursive() {
+    const auto &set_a = get_entities_with_component<First>();
+    const auto &set_b = get_entities_with_component<Second>();
+
+    std::vector<EntityID> result;
+    result.reserve(std::min(set_a.size(), set_b.size()));
+
+    std::set_intersection(set_a.begin(), set_a.end(), set_b.begin(),
+                          set_b.end(), std::back_inserter(result));
+
+    if constexpr (sizeof...(Rest) > 0) {
+      // Continue with remaining components
+      return intersect_with_remaining<Rest...>(::std::move(result));
+    } else {
+      return result;
+    }
+  }
+
+  template <typename Next, typename... Rest>
+  static std::vector<EntityID>
+  intersect_with_remaining(std::vector<EntityID> current) {
+    const auto &next_set = get_entities_with_component<Next>();
+
+    std::vector<EntityID> result;
+    result.reserve(std::min(current.size(), next_set.size()));
+
+    std::set_intersection(current.begin(), current.end(), next_set.begin(),
+                          next_set.end(), std::back_inserter(result));
+
+    if constexpr (sizeof...(Rest) > 0) {
+      return intersect_with_remaining<Rest...>(::std::move(result));
+    } else {
+      return result;
+    }
+  }
+
+  // Alternative hash-based intersection for better performance with many
+  // components
+  template <typename... Components>
+  static std::vector<EntityID> intersect_components_hash() {
+    if constexpr (sizeof...(Components) == 0) {
+      // No components - return all entities
+      std::vector<EntityID> result;
+      for (const auto &entity : get_entities()) {
+        if (entity) {
+          result.push_back(entity->id);
+        }
+      }
+      return result;
+    } else if constexpr (sizeof...(Components) == 1) {
+      // Single component - return entities with that component
+      return get_entities_with_component<Components...>();
+    } else {
+      // Use hash-based intersection for multiple components
+      return intersect_components_hash_impl<Components...>();
+    }
+  }
+
+private:
+  template <typename First, typename... Rest>
+  static std::vector<EntityID> intersect_components_hash_impl() {
+    const auto &first_set = get_entities_with_component<First>();
+
+    if constexpr (sizeof...(Rest) == 0) {
+      return first_set;
+    } else {
+      // Create hash set from first component
+      std::unordered_set<EntityID> hash_set(first_set.begin(), first_set.end());
+
+      // Intersect with remaining components
+      return intersect_with_hash_set<Rest...>(::std::move(hash_set));
+    }
+  }
+
+  template <typename Next, typename... Rest>
+  static std::vector<EntityID>
+  intersect_with_hash_set(std::unordered_set<EntityID> hash_set) {
+    const auto &next_set = get_entities_with_component<Next>();
+
+    std::vector<EntityID> result;
+    result.reserve(std::min(hash_set.size(), next_set.size()));
+
+    // Check which entities from next_set exist in hash_set
+    for (const auto &entity_id : next_set) {
+      if (hash_set.contains(entity_id)) {
+        result.push_back(entity_id);
+      }
+    }
+
+    if constexpr (sizeof...(Rest) > 0) {
+      // Update hash set for next iteration
+      hash_set.clear();
+      hash_set.insert(result.begin(), result.end());
+      return intersect_with_hash_set<Rest...>(::std::move(hash_set));
+    } else {
+      return result;
+    }
+  }
+
+public:
+  // Rebuild all component sets from current entities
+  static void rebuild_component_sets() {
+    // Clear all existing sets
+    get().component_entity_sets.clear();
+
+    // Rebuild from all entities
+    for (const auto &entity : get_entities()) {
+      if (!entity)
+        continue;
+
+      // Add entity to sets for each component it has
+      for (size_t i = 0; i < max_num_components; ++i) {
+        if (entity->componentSet[i]) {
+          ComponentID comp_id = static_cast<ComponentID>(i);
+          get().component_entity_sets[comp_id].push_back(entity->id);
+        }
+      }
+    }
+
+    // Sort all sets for efficient intersection
+    for (auto &[comp_id, entity_set] : get().component_entity_sets) {
+      std::sort(entity_set.begin(), entity_set.end());
+    }
+  }
+
+  // Manually add/remove entity from component set (for external use)
+  static void add_entity_to_component_set(ComponentID comp_id,
+                                          EntityID entity_id) {
+    auto &entity_set = get().component_entity_sets[comp_id];
+    auto it = std::lower_bound(entity_set.begin(), entity_set.end(), entity_id);
+    if (it == entity_set.end() || *it != entity_id) {
+      entity_set.insert(it, entity_id);
+    }
+  }
+
+  static void remove_entity_from_component_set(ComponentID comp_id,
+                                               EntityID entity_id) {
+    auto &entity_set = get().component_entity_sets[comp_id];
+    auto it = std::lower_bound(entity_set.begin(), entity_set.end(), entity_id);
+    if (it != entity_set.end() && *it == entity_id) {
+      entity_set.erase(it);
+    }
+  }
+
+  // Wrapper functions for Entity component management
+  template <typename Component>
+  static void add_entity_to_component_set_wrapper(EntityID entity_id) {
+    add_entity_to_component_set<Component>(entity_id);
+  }
+
+  template <typename Component>
+  static void remove_entity_from_component_set_wrapper(EntityID entity_id) {
+    remove_entity_from_component_set<Component>(entity_id);
   }
 };
 

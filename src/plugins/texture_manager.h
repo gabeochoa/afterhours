@@ -202,8 +202,8 @@ struct RenderSprites : System<HasSprite> {
     sheet = EntityHelper::get_singleton_cmp<HasSpritesheet>()->texture;
   }
 
-  virtual void for_each_with(const Entity &, const HasSprite &hasSprite,
-                             const float) const override {
+  virtual void for_each_const(const Entity &, const HasSprite &hasSprite,
+                              const float) const override {
 
     draw_texture_pro(sheet, hasSprite.frame, hasSprite.destination(),
                      Vector2Type{hasSprite.transform.size.x / 2.f,
@@ -220,8 +220,8 @@ struct RenderAnimation : System<HasAnimation> {
     sheet = EntityHelper::get_singleton_cmp<HasSpritesheet>()->texture;
   }
 
-  virtual void for_each_with(const Entity &, const HasAnimation &hasAnimation,
-                             const float) const override {
+  virtual void for_each_const(const Entity &, const HasAnimation &hasAnimation,
+                              const float) const override {
 
     const auto [i, j] = hasAnimation.cur_frame_position;
     const Rectangle frame = idx_to_sprite_frame((int)i, (int)j);

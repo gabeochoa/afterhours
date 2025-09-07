@@ -1,5 +1,6 @@
 
 
+#include <cassert>
 #include <iostream>
 
 #define AFTER_HOURS_ENTITY_HELPER
@@ -73,10 +74,43 @@ void make_entities() {
   }
 }
 
+void test_component_sets() {
+  using namespace afterhours;
+
+  // Test component set queries directly
+  auto transform_entities = EntityHelper::intersect_components<Transform>();
+  auto hasname_entities = EntityHelper::intersect_components<HasName>();
+  auto both_entities = EntityHelper::intersect_components<Transform, HasName>();
+
+  std::cout << "Transform entities: " << transform_entities.size() << std::endl;
+  std::cout << "HasName entities: " << hasname_entities.size() << std::endl;
+  std::cout << "Both components entities: " << both_entities.size()
+            << std::endl;
+
+  // Assertions to verify component sets are working
+  assert(transform_entities.size() == 10 &&
+         "Should have 10 entities with Transform component");
+  assert(hasname_entities.size() == 5 &&
+         "Should have 5 entities with HasName component");
+  assert(both_entities.size() == 5 &&
+         "Should have 5 entities with both components");
+
+  std::cout << "✓ Component set tests passed!" << std::endl;
+}
+
 int main(int, char **) {
   using namespace afterhours;
 
   make_entities();
+
+  // Merge entities from temp to main list before testing
+  EntityHelper::merge_entity_arrays();
+
+  // Rebuild component sets after merging
+  EntityHelper::rebuild_component_sets();
+
+  // Test component sets before running systems
+  test_component_sets();
 
   SystemManager systems;
   systems.register_update_system(std::make_unique<Moves>());

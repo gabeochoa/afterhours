@@ -371,8 +371,8 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     indent--;
   }
 
-  virtual void for_each_with_derived(const Entity &entity, const UIComponent &,
-                                     const AutoLayoutRoot &, float) const {
+  virtual void for_each_const_derived(const Entity &entity, const UIComponent &,
+                                      const AutoLayoutRoot &, float) const {
     render(entity);
     level += 2;
     indent = 0;
@@ -506,10 +506,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     // }
   }
 
-  virtual void for_each_with_derived(const Entity &entity,
-                                     const UIContext<InputAction> &context,
-                                     const FontManager &font_manager,
-                                     float) const override {
+  virtual void for_each_const_derived(const Entity &entity,
+                                      const UIContext<InputAction> &context,
+                                      const FontManager &font_manager,
+                                      float) const override {
 #if __WIN32
     // Note we have to do bubble sort here because mingw doesnt support
     // std::ranges::sort
