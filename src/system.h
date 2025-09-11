@@ -12,6 +12,52 @@
 #include "entity_helper.h"
 
 namespace afterhours {
+static void
+updateEntityInComponentMapDuringAdd(Entity *entity,
+                                    const ComponentBitSet &previous_set,
+                                    const ComponentBitSet &new_set) {
+  auto &entity_helper = EntityHelper::get();
+
+  log_info("System map ADD: Entity {} moving from {} to {}", entity->id,
+           previous_set.to_string().c_str(), new_set.to_string().c_str());
+
+  // Remove entity from previous set's entry
+  auto prev_it = entity_helper.system_map.find(previous_set);
+  if (prev_it != entity_helper.system_map.end()) {
+    prev_it->second.erase(entity);
+    // Clean up empty entries
+    if (prev_it->second.empty()) {
+      entity_helper.system_map.erase(prev_it);
+    }
+  }
+
+  // Add entity to new set's entry
+  entity_helper.system_map[new_set].insert(entity);
+
+  log_info("System map ADD: Entity {} now in {} sets", entity->id,
+           entity_helper.system_map.size());
+}
+
+static void
+updateEntityInComponentMapDuringRemove(Entity *entity,
+                                       const ComponentBitSet &previous_set,
+                                       const ComponentBitSet &new_set) {
+  auto &entity_helper = EntityHelper::get();
+
+  // Remove entity from previous set's entry
+  auto prev_it = entity_helper.system_map.find(previous_set);
+  if (prev_it != entity_helper.system_map.end()) {
+    prev_it->second.erase(entity);
+    // Clean up empty entries
+    if (prev_it->second.empty()) {
+      entity_helper.system_map.erase(prev_it);
+    }
+  }
+
+  // Add entity to new set's entry
+  entity_helper.system_map[new_set].insert(entity);
+}
+
 namespace tags {
 template <auto... TagEnums> struct All {};
 template <auto... TagEnums> struct Any {};
@@ -66,6 +112,12 @@ public:
 
   virtual void for_each_derived(Entity &, const float) = 0;
   virtual void for_each_derived(const Entity &, const float) const = 0;
+
+  // Virtual method to get component bitset - to be overridden by
+  // System<Components>
+  virtual ComponentBitSet get_component_bitset() const {
+    return ComponentBitSet{};
+  }
 };
 
 // Base that declares the correct for_each_with signatures based on components
@@ -255,6 +307,23 @@ struct System
     }
   };
 
+  // Helper to get component bitset for this system
+  template <typename> struct GetComponentBitSet;
+  template <typename... Cs> struct GetComponentBitSet<type_list<Cs...>> {
+    static ComponentBitSet value() {
+      ComponentBitSet set;
+      (set.set(components::get_type_id<Cs>()), ...);
+      return set;
+    }
+  };
+  template <> struct GetComponentBitSet<type_list<>> {
+    static ComponentBitSet value() { return ComponentBitSet{}; }
+  };
+
+  ComponentBitSet get_component_bitset() const {
+    return GetComponentBitSet<ComponentsOnly>::value();
+  }
+
 #if __APPLE__
   static TagBitset required_all_mask() {
     static TagBitset m = (TagBitset{} | ... | AllMask<Components>::value());
@@ -419,12 +488,21 @@ struct SystemManager {
     register_render_system(std::make_unique<CallbackSystem>(cb));
   }
 
-  void tick(Entities &entities, const float dt) {
+  void tick(Entities &, const float dt) {
     for (auto &system : update_systems_) {
       if (!system->should_run(dt))
         continue;
       system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
+
+      // Get entities that match this system's component requirements
+      auto componentBitset =
+          static_cast<const SystemBase *>(system.get())->get_component_bitset();
+      log_info("System tick: Getting entities for component set {}",
+               componentBitset.to_string().c_str());
+      const auto &matchingEntities =
+          EntityHelper::getEntitiesForComponentSet(componentBitset);
+
+      for (Entity *entity : matchingEntities) {
         if (!entity)
           continue;
         if (system->include_derived_children)
@@ -437,12 +515,17 @@ struct SystemManager {
     }
   }
 
-  void fixed_tick(Entities &entities, const float dt) {
+  void fixed_tick(Entities &, const float dt) {
     for (auto &system : fixed_update_systems_) {
       if (!system->should_run(dt))
         continue;
       system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
+
+      // Get entities that match this system's component requirements
+      const auto &matchingEntities = EntityHelper::getEntitiesForComponentSet(
+          system->get_component_bitset());
+
+      for (Entity *entity : matchingEntities) {
         if (!entity)
           continue;
         if (system->include_derived_children)
@@ -454,19 +537,26 @@ struct SystemManager {
     }
   }
 
-  void render(const Entities &entities, const float dt) {
+  void render(const Entities &, const float dt) {
     for (const auto &system : render_systems_) {
       if (!system->should_run(dt))
         continue;
       system->once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
+
+      // Get entities that match this system's component requirements
+      auto componentBitset = system->get_component_bitset();
+      log_info("System render: Getting entities for component set {}",
+               componentBitset.to_string().c_str());
+      const auto &matchingEntities =
+          EntityHelper::getEntitiesForComponentSet(componentBitset);
+
+      for (Entity *entity : matchingEntities) {
         if (!entity)
           continue;
-        const Entity &e = *entity;
         if (system->include_derived_children)
-          system->for_each_derived(e, dt);
+          system->for_each_derived(*entity, dt);
         else
-          system->for_each(e, dt);
+          system->for_each(*entity, dt);
       }
       system->after(dt);
     }

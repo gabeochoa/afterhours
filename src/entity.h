@@ -27,10 +27,21 @@ template <typename Base, typename Derived> bool child_of(Derived *derived) {
 using ComponentBitSet = std::bitset<max_num_components>;
 using ComponentArray =
     std::array<std::unique_ptr<BaseComponent>, max_num_components>;
-using EntityID = int;
 
+using EntityID = int;
 static std::atomic_int ENTITY_ID_GEN = 0;
 
+struct Entity;
+
+// defined in system.h
+static void
+updateEntityInComponentMapDuringAdd(Entity *entity,
+                                    const ComponentBitSet &previous_set,
+                                    const ComponentBitSet &new_set);
+static void
+updateEntityInComponentMapDuringRemove(Entity *entity,
+                                       const ComponentBitSet &previous_set,
+                                       const ComponentBitSet &new_set);
 struct Entity {
   EntityID id;
   int entity_type = 0;
@@ -101,8 +112,13 @@ struct Entity {
 #endif
       return;
     }
+
+    ComponentBitSet previous_set = componentSet;
+
     componentSet[components::get_type_id<T>()] = false;
     componentArray[components::get_type_id<T>()].reset();
+
+    updateEntityInComponentMapDuringRemove(this, previous_set, componentSet);
   }
 
   template <typename T, typename... TArgs> T &addComponent(TArgs &&...args) {
@@ -126,6 +142,8 @@ struct Entity {
     }
 #endif
 
+    ComponentBitSet previous_set = componentSet;
+
     auto component = std::make_unique<T>(std::forward<TArgs>(args)...);
     const ComponentID component_id = components::get_type_id<T>();
     componentArray[component_id] = std::move(component);
@@ -134,6 +152,8 @@ struct Entity {
 #if defined(AFTER_HOURS_DEBUG)
     log_trace("your set is now {}", componentSet);
 #endif
+
+    updateEntityInComponentMapDuringAdd(this, previous_set, componentSet);
 
     return get<T>();
   }

@@ -20,7 +20,6 @@ using EntityAllocator = std::allocator<EntityType>;
 #endif
 
 using Entities = std::vector<EntityType, EntityAllocator>;
-
 using RefEntities = std::vector<RefEntity>;
 
 SINGLETON_FWD(EntityHelper)
@@ -32,6 +31,8 @@ struct EntityHelper {
   // TODO spelling
   std::set<int> permanant_ids;
   std::map<ComponentID, Entity *> singletonMap;
+
+  std::unordered_map<ComponentBitSet, std::set<Entity *>> system_map;
 
   struct CreationOptions {
     bool is_permanent;
@@ -83,6 +84,10 @@ struct EntityHelper {
     if (options.is_permanent) {
       EntityHelper::get().permanant_ids.insert(e->id);
     }
+
+    // Add entity to empty component set in system map
+    ComponentBitSet emptySet;
+    EntityHelper::get().system_map[emptySet].insert(e.get());
 
     return *e;
   }
@@ -236,6 +241,20 @@ struct EntityHelper {
   static Entity &getEntityForIDEnforce(const EntityID id) {
     auto opt_ent = getEntityForID(id);
     return opt_ent.asE();
+  }
+
+  static const std::set<Entity *> &
+  getEntitiesForComponentSet(const ComponentBitSet &componentSet) {
+    auto it = EntityHelper::get().system_map.find(componentSet);
+    if (it != EntityHelper::get().system_map.end()) {
+      log_info("System map GET: Found {} entities for component set {}",
+               it->second.size(), componentSet.to_string().c_str());
+      return it->second;
+    }
+    log_info("System map GET: No entities found for component set {}",
+             componentSet.to_string().c_str());
+    static const std::set<Entity *> empty_set;
+    return empty_set;
   }
 };
 
