@@ -1,9 +1,5 @@
 #pragma once
 
-// Define this as the component registration unit to ensure consistent component
-// type IDs
-#define AFTER_HOURS_COMPONENT_REGISTRATION_UNIT
-
 #include "../../src/entity_helper.h"
 #include "../../src/system.h"
 
