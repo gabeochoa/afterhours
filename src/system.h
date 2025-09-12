@@ -458,17 +458,18 @@ struct SystemManager {
     for (const auto &system : render_systems_) {
       if (!system->should_run(dt))
         continue;
-      system->once(dt);
+      const SystemBase &sys = *system;
+      sys.once(dt);
       for (std::shared_ptr<Entity> entity : entities) {
         if (!entity)
           continue;
         const Entity &e = *entity;
-        if (system->include_derived_children)
-          system->for_each_derived(e, dt);
+        if (sys.include_derived_children)
+          sys.for_each_derived(e, dt);
         else
-          system->for_each(e, dt);
+          sys.for_each(e, dt);
       }
-      system->after(dt);
+      sys.after(dt);
     }
   }
 
