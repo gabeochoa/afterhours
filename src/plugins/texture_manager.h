@@ -196,9 +196,9 @@ struct AnimationUpdateCurrentFrame : System<HasAnimation> {
 
 struct RenderSprites : System<HasSprite> {
 
-  Texture sheet;
+  mutable Texture sheet;
 
-  virtual void once(const float) override {
+  virtual void once(const float) const override {
     sheet = EntityHelper::get_singleton_cmp<HasSpritesheet>()->texture;
   }
 
@@ -214,9 +214,9 @@ struct RenderSprites : System<HasSprite> {
 
 struct RenderAnimation : System<HasAnimation> {
 
-  Texture sheet;
+  mutable Texture sheet;
 
-  virtual void once(const float) override {
+  virtual void once(const float) const override {
     sheet = EntityHelper::get_singleton_cmp<HasSpritesheet>()->texture;
   }
 

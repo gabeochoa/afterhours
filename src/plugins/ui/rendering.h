@@ -217,7 +217,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   float enableCooldown = 0.f;
   float enableCooldownReset = 0.2f;
 
-  UIContext<InputAction> *context;
+  mutable UIContext<InputAction> *context;
 
   mutable int level = 0;
   mutable int indent = 0;
@@ -228,8 +228,9 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
 
   float fontSize = 20.0f;
 
-  RenderDebugAutoLayoutRoots(InputAction toggle_kp)
-      : toggle_action(toggle_kp) {}
+  RenderDebugAutoLayoutRoots(InputAction toggle_kp) : toggle_action(toggle_kp) {
+    this->include_derived_children = true;
+  }
 
   virtual ~RenderDebugAutoLayoutRoots() {}
 
@@ -249,10 +250,9 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     return enabled;
   }
 
-  virtual void once(float) override {
+  virtual void once(float) const override {
     this->context =
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
-    this->include_derived_children = true;
 
     draw_text(fmt::format("mouse({}, {})", this->context->mouse_pos.x,
                           this->context->mouse_pos.y)
