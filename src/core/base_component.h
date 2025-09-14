@@ -1,11 +1,11 @@
-
 #pragma once
 
 #include <memory>
+#include <type_traits>
 #include <vector>
 
-#include "type_name.h"
-#include "logging.h"
+#include "../logging.h"
+#include "../type_name.h"
 
 namespace afterhours {
 
@@ -25,11 +25,9 @@ inline ComponentID get_unique_id() noexcept {
   static ComponentID lastID{0};
   if (lastID >= max_num_components) {
     log_error(
-      "You are trying to add a new component but you have used up all "
-      "the space allocated (max: %zu), increase AFTER_HOURS_MAX_COMPONENTS", 
-      max_num_components);
-    // Return the last valid ID to prevent array bounds violations
-    // This creates duplicate IDs but prevents undefined behavior
+        "You are trying to add a new component but you have used up all "
+        "the space allocated (max: %zu), increase AFTER_HOURS_MAX_COMPONENTS",
+        max_num_components);
     return max_num_components - 1;
   }
   return lastID++;

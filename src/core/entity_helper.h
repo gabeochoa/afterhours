@@ -6,9 +6,9 @@
 #include <set>
 #include <vector>
 
-#include "debug_allocator.h"
+#include "../debug_allocator.h"
+#include "../singleton.h"
 #include "entity.h"
-#include "singleton.h"
 
 namespace afterhours {
 using EntityType = std::shared_ptr<Entity>;
@@ -29,7 +29,6 @@ struct EntityHelper {
 
   Entities entities_DO_NOT_USE;
   Entities temp_entities;
-  // TODO spelling
   std::set<int> permanant_ids;
   std::map<ComponentID, Entity *> singletonMap;
 
@@ -44,7 +43,6 @@ struct EntityHelper {
   };
 
   static void reserve_temp_space() {
-    // by default lets only allow 100 ents to be created per frame
     EntityHelper::get().temp_entities.reserve(sizeof(EntityType) * 100);
   }
 
@@ -98,7 +96,6 @@ struct EntityHelper {
         continue;
       get_entities_for_mod().push_back(entity);
     }
-    // clear() Leaves the capacity() of a vector unchanged
     get_temp().clear();
   }
 
@@ -141,22 +138,8 @@ struct EntityHelper {
     }
   }
 
-  // note: I feel like we dont need to give this ability
-  // you should be using cleanup=true
-  //
-  // static void removeEntity(int e_id) {
-  // auto &entities = get_entities_for_mod();
-  //
-  // auto newend = std::remove_if(
-  // entities.begin(), entities.end(),
-  // [e_id](const auto &entity) { return !entity || entity->id == e_id; });
-  // entities.erase(newend, entities.end());
-  // }
-
   static void cleanup() {
     EntityHelper::merge_entity_arrays();
-    // Cleanup entities marked cleanup
-    //
     Entities &entities = get_entities_for_mod();
 
     const auto newend = std::remove_if(
@@ -168,7 +151,6 @@ struct EntityHelper {
 
   static void delete_all_entities_NO_REALLY_I_MEAN_ALL() {
     Entities &entities = get_entities_for_mod();
-    // just clear the whole thing
     entities.clear();
     EntityHelper::get().temp_entities.clear();
   }
@@ -181,7 +163,6 @@ struct EntityHelper {
       return;
     }
 
-    // Only delete non perms
     Entities &entities = get_entities_for_mod();
 
     const auto newend = std::remove_if(
@@ -204,7 +185,6 @@ struct EntityHelper {
     }
   }
 
-  // TODO exists as a conversion for things that need shared_ptr right now
   static std::shared_ptr<Entity> getEntityAsSharedPtr(const Entity &entity) {
     for (const std::shared_ptr<Entity> &current_entity : get_entities()) {
       if (entity.id == current_entity->id)

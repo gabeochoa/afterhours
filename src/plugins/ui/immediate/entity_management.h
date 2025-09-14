@@ -4,8 +4,8 @@
 #include <source_location>
 #include <sstream>
 
-#include "../../../entity.h"
-#include "../../../entity_helper.h"
+#include "../../../core/entity.h"
+#include "../../../core/entity_helper.h"
 #include "../../../logging.h"
 
 namespace afterhours {

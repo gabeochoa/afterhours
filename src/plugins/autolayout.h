@@ -1,11 +1,8 @@
 #pragma once
 
-#include "../base_component.h"
 #include "../bitwise.h"
 #include "../developer.h"
-#include "../entity.h"
-#include "../entity_query.h"
-
+#include "../ecs.h"
 #include "../font_helper.h"
 #include "window_manager.h"
 

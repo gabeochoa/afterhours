@@ -4,10 +4,10 @@
 #include <algorithm>
 #include <vector>
 
+#include "../../core/entity.h"
+#include "../../core/entity_helper.h"
+#include "../../core/entity_query.h"
 #include "../../drawing_helpers.h"
-#include "../../entity.h"
-#include "../../entity_helper.h"
-#include "../../entity_query.h"
 #include "../../font_helper.h"
 #include "../../logging.h"
 #include "../animation.h"

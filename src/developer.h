@@ -4,9 +4,9 @@
 #include <cassert>
 #include <iostream>
 
-#include "base_component.h"
-#include "entity_query.h"
-#include "system.h"
+#include "core/base_component.h"
+#include "core/entity_query.h"
+#include "core/system.h"
 #include "type_name.h"
 
 #ifndef TextureType

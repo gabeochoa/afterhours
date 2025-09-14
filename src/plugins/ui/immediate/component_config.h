@@ -5,7 +5,7 @@
 #include <optional>
 #include <string>
 
-#include "../../../entity.h"
+#include "../../../core/entity.h"
 #include "../../autolayout.h"
 #include "../../color.h"
 #include "../../texture_manager.h"

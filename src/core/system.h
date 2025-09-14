@@ -1,5 +1,4 @@
 
-
 #pragma once
 
 #include <cmath>
@@ -18,7 +17,6 @@ template <auto... TagEnums> struct Any {};
 template <auto... TagEnums> struct None {};
 } // namespace tags
 
-// Helper meta types usable across System specializations
 template <typename... Ts> struct type_list {};
 
 template <typename List, typename T> struct list_prepend;
@@ -46,18 +44,12 @@ public:
   SystemBase() {}
   virtual ~SystemBase() {}
 
-  // Runs before calling once/for-each, and when
-  // false skips calling those
   virtual bool should_run(const float) { return true; }
   virtual bool should_run(const float) const { return true; }
-  // Runs once per frame, before calling for_each
   virtual void once(const float) {}
   virtual void once(const float) const {}
-  // Runs once per frame, after calling for_each
   virtual void after(const float) {}
   virtual void after(const float) const {}
-  // Runs for every entity matching the components
-  // in System<Components>
   virtual void for_each(Entity &, const float) = 0;
   virtual void for_each(const Entity &, const float) const = 0;
 
@@ -68,8 +60,6 @@ public:
   virtual void for_each_derived(const Entity &, const float) const = 0;
 };
 
-// Base that declares the correct for_each_with signatures based on components
-// only
 template <typename List> struct SystemForEachBase;
 template <typename... Cs> struct SystemForEachBase<type_list<Cs...>> {
   virtual void for_each_with(Entity &, Cs &..., const float) {}
@@ -80,7 +70,6 @@ template <typename... Cs> struct SystemForEachBase<type_list<Cs...>> {
                                      const float) const {}
 };
 
-// Explicit specialization for empty parameter pack
 template <> struct SystemForEachBase<type_list<>> {
   virtual void for_each_with(Entity &, const float) {}
   virtual void for_each_with(const Entity &, const float) const {}
@@ -288,49 +277,6 @@ struct System
   static bool tags_ok(const Entity &entity) { return true; }
 #endif
 
-  /*
-   *
-
-   TODO I would like to support the ability to add Not<> Queries to the systesm
-to filter out things you dont want
-
-But template meta programming is tough
-
-    System<Not<Transform>> => would run for anything that doesnt have transform
-    System<Health, Not<Dead>> => would run for anything that has health and not
-dead
-
-template <typename Component> struct Not : BaseComponent {
-  using type = Component;
-};
-  template <typename... Cs> void for_each(Entity &entity, float dt) {
-    if constexpr (sizeof...(Cs) > 0) {
-      if (
-          //
-          (
-              //
-              (std::is_base_of_v<Not<typename Cs::type>, Cs> //
-                   ? entity.template is_missing<Cs::type>()
-                   : entity.template has<Cs>() //
-               ) &&
-              ...)
-          //
-      ) {
-        for_each_with(entity,
-                      entity.template get<std::conditional_t<
-                          std::is_base_of_v<Not<typename Cs::type>, Cs>,
-                          typename Cs::type, Cs>>()...,
-                      dt);
-      }
-    } else {
-      for_each_with(entity, dt);
-    }
-  }
-
-  void for_each(Entity &entity, float dt) {
-    for_each_with(entity, entity.template get<Components>()..., dt);
-  }
-*/
   void for_each(Entity &entity, const float dt) {
     if (!tags_ok(entity))
       return;
@@ -366,10 +312,6 @@ template <typename Component> struct Not : BaseComponent {
     }
   }
 
-  // Left for the subclass to implment,
-  // These would be abstract but we dont know if they will want
-  // const or non const versions and the sfinae version is probably
-  // pretty unreadable (and idk how to write it correctly)
   using ForEachBase::for_each_with;
   using ForEachBase::for_each_with_derived;
 };
@@ -388,9 +330,6 @@ struct SystemManager {
   std::vector<std::unique_ptr<SystemBase>> fixed_update_systems_;
   std::vector<std::unique_ptr<SystemBase>> render_systems_;
 
-  // TODO  - one issue is that if you write a system that could be const
-  // but you add it to update, it wont work since update only calls the
-  // non-const for_each_with
   void register_update_system(std::unique_ptr<SystemBase> system) {
     update_systems_.emplace_back(std::move(system));
   }

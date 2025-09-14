@@ -2,8 +2,8 @@
 
 #include <iostream>
 
-#include "../../src/entity_helper.h"
-#include "../../src/entity.h"
+#include "../../src/core/entity.h"
+#include "../../src/core/entity_helper.h"
 
 #include "../shared/vector.h"
 
@@ -34,7 +34,8 @@ int main(int, char **) {
 
   auto &entity = EntityHelper::createEntity();
   entity.addComponent<Transform>(0, 10);
-  std::cout << "Creating a component with only a transform component" << "\n";
+  std::cout << "Creating a component with only a transform component"
+            << "\n";
 
   std::cout << std::boolalpha;
   std::cout << "has transform? " << entity.has<Transform>() << "\n";

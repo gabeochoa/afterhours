@@ -1,6 +1,6 @@
 
 FLAGS = -std=c++2a -Wall -Wextra -Wpedantic -Wuninitialized -Wshadow \
-		-Wmost -Wconversion -g 
+		-Wmost -Wconversion -g -I../../vendor/ -I../../../../vendor
 
 all:
-	clang++ $(FLAGS) -I../../vendor/ main.cpp -o ui_layout.exe && ./ui_layout.exe
+	clang++ $(FLAGS) main.cpp -o ui_layout.exe && ./ui_layout.exe

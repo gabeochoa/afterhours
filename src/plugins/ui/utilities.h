@@ -8,12 +8,12 @@
 #include "../../../vendor/magic_enum/magic_enum.hpp"
 #endif
 
+#include "../../core/entity.h"
+#include "../../core/entity_helper.h"
+#include "../../core/entity_query.h"
+#include "../../core/system.h"
 #include "../../developer.h"
-#include "../../entity.h"
-#include "../../entity_helper.h"
-#include "../../entity_query.h"
 #include "../../logging.h"
-#include "../../system.h"
 #include "../autolayout.h"
 #include "../window_manager.h"
 #include "components.h"

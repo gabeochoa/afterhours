@@ -1,7 +1,7 @@
 
 #pragma once
 
-#include "../base_component.h"
+#include "../core/base_component.h"
 #include "../developer.h"
 
 namespace afterhours {

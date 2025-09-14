@@ -12,9 +12,9 @@
 #include <string>
 #include <vector>
 
+#include "../../core/entity.h"
+#include "../../core/entity_helper.h"
 #include "../../drawing_helpers.h"
-#include "../../entity.h"
-#include "../../entity_helper.h"
 #include "../../logging.h"
 
 namespace afterhours {

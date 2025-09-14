@@ -4,11 +4,11 @@
 #include <set>
 #include <vector>
 
-#include "../../entity.h"
-#include "../../entity_helper.h"
-#include "../../entity_query.h"
+#include "../../core/entity.h"
+#include "../../core/entity_helper.h"
+#include "../../core/entity_query.h"
+#include "../../core/system.h"
 #include "../../logging.h"
-#include "../../system.h"
 #include "../autolayout.h"
 #include "../input_system.h"
 #include "../window_manager.h"

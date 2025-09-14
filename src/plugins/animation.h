@@ -9,8 +9,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "../core/system.h"
 #include "../developer.h"
-#include "../system.h"
 
 namespace afterhours {
 
@@ -71,7 +71,8 @@ struct animation : developer::Plugin {
 
   // Hasher trait: default to EnumHash, specialize for CompositeKey
   template <typename Key> struct KeyHasher {
-    using type = std::conditional_t<std::is_same_v<Key, CompositeKey>, CompositeKeyHash, EnumHash<Key>>;
+    using type = std::conditional_t<std::is_same_v<Key, CompositeKey>,
+                                    CompositeKeyHash, EnumHash<Key>>;
   };
 
   static float apply_ease(EasingType easing, float t) {

@@ -4,9 +4,9 @@
 #include <string>
 #include <vector>
 
-#include "../../entity.h"
-#include "../../entity_helper.h"
-#include "../../entity_query.h"
+#include "../../core/entity.h"
+#include "../../core/entity_helper.h"
+#include "../../core/entity_query.h"
 #include "../../logging.h"
 #include "components.h"
 

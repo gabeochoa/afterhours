@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include <array>
@@ -9,9 +8,9 @@
 #include <optional>
 #include <type_traits>
 
+#include "../logging.h"
+#include "../type_name.h"
 #include "base_component.h"
-#include "logging.h"
-#include "type_name.h"
 
 namespace afterhours {
 #ifndef AFTER_HOURS_MAX_ENTITY_TAGS
@@ -47,8 +46,6 @@ struct Entity {
 
   virtual ~Entity() {}
 
-  // These two functions can be used to validate than an entity has all of the
-  // matching components that are needed for this system to run
   template <typename T> [[nodiscard]] bool has() const {
     const bool result = componentSet[components::get_type_id<T>()];
 #if defined(AFTER_HOURS_DEBUG)
@@ -110,7 +107,6 @@ struct Entity {
     log_trace("adding component_id:{} {} to entity_id: {}",
               components::get_type_id<T>(), type_name<T>(), id);
 
-    // checks for duplicates
     if (this->has<T>()) {
       log_warn("This entity {} already has this component attached id: "
                "{}, "
@@ -118,11 +114,6 @@ struct Entity {
                id, components::get_type_id<T>(), type_name<T>());
 
       VALIDATE(false, "duplicate component");
-      // Commented out on purpose because the assert is gonna kill the
-      // program anyway at some point we should stop enforcing it to avoid
-      // crashing the game when people are playing
-      //
-      // return this->get<T>();
     }
 #endif
 
@@ -286,10 +277,6 @@ struct OptEntity {
 
   const Entity *value() const { return &(data.value().get()); }
   const Entity *operator*() const { return value(); }
-  // TODO look into switching this to using functional monadic stuff
-  // i think optional.transform can take and handle calling functions on an
-  // optional without having to expose the underlying value or existance of
-  // value
   const Entity *operator->() const { return value(); }
 
   Entity &asE() { return data.value(); }

@@ -6,11 +6,11 @@
 #include <cmath>
 #include <sstream>
 
-#include "../base_component.h"
+#include "../core/base_component.h"
+#include "../core/entity_query.h"
+#include "../core/system.h"
 #include "../developer.h"
-#include "../entity_query.h"
 #include "../logging.h"
-#include "../system.h"
 
 namespace afterhours {
 

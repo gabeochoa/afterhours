@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include <algorithm>
@@ -9,6 +8,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "../logging.h"
 #include "entity.h"
 #include "entity_helper.h"
 namespace afterhours {
@@ -37,12 +37,6 @@ struct EntityQuery {
       return !((*mod)(entity));
     }
   };
-  // TODO i would love to just have an api like
-  // .not(whereHasComponent<Example>())
-  // but   ^ doesnt have a type we can pass
-  // we could do something like
-  // .not(new WhereHasComponent<Example>())
-  // but that would exclude most of the helper fns
 
   struct Limit : Modification {
     int amount;
@@ -108,7 +102,6 @@ struct EntityQuery {
     return add_mod(new WhereLambda(fn));
   }
 
-  // Enum-friendly overloads for tag predicates (accept any enum)
   template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
   auto &whereHasTag(const TEnum tag_enum) {
     return whereHasTag(static_cast<TagId>(tag_enum));
@@ -169,8 +162,6 @@ struct EntityQuery {
     return static_cast<TReturn &>(*this);
   }
 
-  /////////
-  // Tag-aware predicates
   struct WhereHasTag : Modification {
     TagId id;
     explicit WhereHasTag(const TagId idIn) : id(idIn) {}
@@ -213,8 +204,6 @@ struct EntityQuery {
     return add_mod(new WhereHasNoTags(mask));
   }
 
-  // TODO add support for converting Entities to other Entities
-
   using OrderByFn = std::function<bool(const Entity &, const Entity &)>;
   struct OrderBy {
     virtual ~OrderBy() {}
@@ -234,7 +223,6 @@ struct EntityQuery {
     return static_cast<TReturn &>(set_order_by(new OrderByLambda(sortfn)));
   }
 
-  /////////
   struct UnderlyingOptions {
     bool stop_on_first = false;
   };
@@ -314,13 +302,6 @@ struct EntityQuery {
     return results[random_index];
   }
 
-  // TODO this allocates (and deallocates) the entire list of entities
-  // every time you make one.
-  // We might want to replace this with some indexer instead so we can still
-  // filter and then copy at the end or something
-
-  // TODO Created entities are not available in queries until the next system
-  // runs is this a problem?  (for now adding force_merge)
   struct QueryOptions {
     bool force_merge = false;
     bool ignore_temp_warning = false;
@@ -336,7 +317,6 @@ struct EntityQuery {
       EntityHelper::merge_entity_arrays();
       entities = EntityHelper::get_entities();
     } else if (!options.ignore_temp_warning) {
-      // Print details about the first 10 entities in temp for debugging
       const auto &temp_entities = EntityHelper::get().temp_entities;
       const size_t num_to_print = std::min(size_t(10), temp_entities.size());
 
@@ -416,16 +396,12 @@ private:
       return out;
     }
 
-    // TODO :SPEED: if there is only one item no need to sort
-    // TODO :SPEED: if we are doing gen_first() then partial sort?
-    // Now run any order bys
     if (orderby) {
       std::sort(out.begin(), out.end(), [&](const Entity &a, const Entity &b) {
         return (*orderby)(a, b);
       });
     }
 
-    // ran_query = true;
     return out;
   }
 };

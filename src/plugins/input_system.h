@@ -5,13 +5,11 @@
 #include <map>
 #include <variant>
 
-#include "../base_component.h"
+#include "../core/base_component.h"
+#include "../core/entity_query.h"
+#include "../core/system.h"
 #include "../developer.h"
-#include "../entity_query.h"
-#include "../system.h"
 #include "window_manager.h"
-
-
 
 namespace afterhours {
 
@@ -463,18 +461,17 @@ struct input : developer::Plugin {
     float length_pressed;
 
     ActionDone() = default;
-    ActionDone(const ActionDone&) = default;
-    ActionDone(ActionDone&&) = default;
-    ActionDone& operator=(const ActionDone&) = default;
-    ActionDone& operator=(ActionDone&&) = default;
-    
+    ActionDone(const ActionDone &) = default;
+    ActionDone(ActionDone &&) = default;
+    ActionDone &operator=(const ActionDone &) = default;
+    ActionDone &operator=(ActionDone &&) = default;
+
     ActionDone(DeviceMedium m, GamepadID i, int a, float amount, float length)
-        : medium(m), id(i), action(a), amount_pressed(amount), length_pressed(length) {}
+        : medium(m), id(i), action(a), amount_pressed(amount),
+          length_pressed(length) {}
   };
 
   using ActionDoneInputAction = ActionDone;
-
-
 
   struct GamepadAxisWithDir {
     GamepadAxis axis;
@@ -570,10 +567,9 @@ struct input : developer::Plugin {
   static auto get_input_collector() -> PossibleInputCollector {
 
     // TODO replace with a singletone query
-    OptEntity opt_collector =
-        EntityQuery({.ignore_temp_warning = true})
-            .template whereHasComponent<InputCollector>()
-            .gen_first();
+    OptEntity opt_collector = EntityQuery({.ignore_temp_warning = true})
+                                  .template whereHasComponent<InputCollector>()
+                                  .gen_first();
     if (!opt_collector.valid())
       return {};
     Entity &collector = opt_collector.asE();
@@ -582,8 +578,8 @@ struct input : developer::Plugin {
 
   // TODO i would like to move this out of input namespace
   // at some point
-  struct InputSystem : System<InputCollector, ProvidesMaxGamepadID,
-                              ProvidesInputMapping> {
+  struct InputSystem
+      : System<InputCollector, ProvidesMaxGamepadID, ProvidesInputMapping> {
 
     int fetch_max_gampad_id() {
       int result = -1;
@@ -683,7 +679,8 @@ struct input : developer::Plugin {
           {
             const auto [medium, amount] = check_single_action_down(i, vis);
             if (amount > 0.f) {
-              collector.inputs.push_back(ActionDone(medium, i, action, amount, dt));
+              collector.inputs.push_back(
+                  ActionDone(medium, i, action, amount, dt));
             }
           }
           // pressed
@@ -707,27 +704,23 @@ struct input : developer::Plugin {
   };
 
   static void add_singleton_components(
-      Entity &entity,
-      const ProvidesInputMapping::GameMapping inital_mapping) {
+      Entity &entity, const ProvidesInputMapping::GameMapping inital_mapping) {
     entity.addComponent<InputCollector>();
     entity.addComponent<input::ProvidesMaxGamepadID>();
     entity.addComponent<input::ProvidesInputMapping>(inital_mapping);
 
     EntityHelper::registerSingleton<InputCollector>(entity);
     EntityHelper::registerSingleton<input::ProvidesMaxGamepadID>(entity);
-    EntityHelper::registerSingleton<input::ProvidesInputMapping>(
-        entity);
+    EntityHelper::registerSingleton<input::ProvidesInputMapping>(entity);
   }
 
   static void enforce_singletons(SystemManager &sm) {
     sm.register_update_system(
-        std::make_unique<
-            developer::EnforceSingleton<InputCollector>>());
+        std::make_unique<developer::EnforceSingleton<InputCollector>>());
     sm.register_update_system(
         std::make_unique<developer::EnforceSingleton<ProvidesMaxGamepadID>>());
     sm.register_update_system(
-        std::make_unique<
-            developer::EnforceSingleton<ProvidesInputMapping>>());
+        std::make_unique<developer::EnforceSingleton<ProvidesInputMapping>>());
   }
 
   static void register_update_systems(SystemManager &sm) {

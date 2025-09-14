@@ -6,8 +6,8 @@
 #include <bitset>
 #include <string>
 
-#include "../../../entity.h"
-#include "../../../entity_helper.h"
+#include "../../../core/entity.h"
+#include "../../../core/entity_helper.h"
 #include "../../input_system.h"
 #include "../components.h"
 #include "component_config.h"

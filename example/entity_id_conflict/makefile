@@ -1,5 +1,5 @@
 FLAGS = -std=c++2a -Wall -Wextra -Wpedantic -Wuninitialized -Wshadow \
-		-Wmost -Wconversion -g
+		-Wmost -Wconversion -g -I../../vendor/ -I../../../../vendor
 
 all:
-	clang++ $(FLAGS) -I../../vendor/ main.cpp -o entity_id_conflict.exe && ./entity_id_conflict.exe 
+	clang++ $(FLAGS) main.cpp -o entity_id_conflict.exe && ./entity_id_conflict.exe 
