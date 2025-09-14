@@ -415,6 +415,10 @@ struct input : developer::Plugin {
   using GamepadID = int;
   using GamepadAxis = int;
   using GamepadButton = int;
+  
+  // Wrapper types to avoid duplicate int in variant
+  struct KeyCodeWrapper { int value; };
+  struct GamepadButtonWrapper { int value; };
 
   // TODO good luck ;)
   static MousePosition get_mouse_position() { return {0, 0}; }
@@ -478,7 +482,7 @@ struct input : developer::Plugin {
     int dir = -1;
   };
 
-  using AnyInput = std::variant<KeyCode, GamepadAxisWithDir, GamepadButton>;
+  using AnyInput = std::variant<KeyCodeWrapper, GamepadAxisWithDir, GamepadButtonWrapper>;
   using ValidInputs = std::vector<AnyInput>;
 
   static float visit_key(const int keycode) {
@@ -605,21 +609,20 @@ struct input : developer::Plugin {
         const float temp =       //
             std::visit(          //
                 util::overloaded{//
-                                 [&](const int keycode) {
+                                 [&](const KeyCodeWrapper keycode) {
                                    temp_medium = DeviceMedium::Keyboard;
-                                   return is_key_pressed(keycode) ? 1.f : 0.f;
+                                   return is_key_pressed(keycode.value) ? 1.f : 0.f;
                                  },
                                  [&](const GamepadAxisWithDir axis_with_dir) {
                                    temp_medium = DeviceMedium::GamepadAxis;
                                    return visit_axis(id, axis_with_dir);
                                  },
-                                 [&](const GamepadButton button) {
+                                 [&](const GamepadButtonWrapper button) {
                                    temp_medium = DeviceMedium::GamepadButton;
-                                   return is_gamepad_button_pressed(id, button)
+                                   return is_gamepad_button_pressed(id, button.value)
                                               ? 1.f
                                               : 0.f;
-                                 },
-                                 [](auto) {}},
+                                 }},
                 input);
         if (temp > value) {
           value = temp;
@@ -639,19 +642,18 @@ struct input : developer::Plugin {
         const float temp =       //
             std::visit(          //
                 util::overloaded{//
-                                 [&](const int keycode) {
+                                 [&](const KeyCodeWrapper keycode) {
                                    temp_medium = DeviceMedium::Keyboard;
-                                   return visit_key_down(keycode);
+                                   return visit_key_down(keycode.value);
                                  },
                                  [&](const GamepadAxisWithDir axis_with_dir) {
                                    temp_medium = DeviceMedium::GamepadAxis;
                                    return visit_axis(id, axis_with_dir);
                                  },
-                                 [&](const GamepadButton button) {
+                                 [&](const GamepadButtonWrapper button) {
                                    temp_medium = DeviceMedium::GamepadButton;
-                                   return visit_button_down(id, button);
-                                 },
-                                 [](auto) {}},
+                                   return visit_button_down(id, button.value);
+                                 }},
                 input);
         if (temp > value) {
           value = temp;

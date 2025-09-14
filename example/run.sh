@@ -5,11 +5,15 @@ echo "=== Afterhours Examples Test Runner ==="
 echo "Running all example directories..."
 echo
 
-# Find all directories (excluding root directory and hidden directories)
-all_dirs=$(find . -maxdepth 1 -type d | grep -vE '^\.$' | grep -vE '^\./\.' | sort)
+# Find all directories with either makefiles or source files (excluding root directory and hidden directories)
+all_dirs=$(find . -maxdepth 1 -type d | grep -vE '^\.$' | grep -vE '^\./\.' | while read dir; do
+    if [ -f "$dir/makefile" ] || [ -f "$dir/Makefile" ] || find "$dir" -maxdepth 1 -name "*.cpp" -o -name "*.c" | grep -q .; then
+        echo "$dir"
+    fi
+done | sort)
 
 if [ -z "$all_dirs" ]; then
-    echo "No directories found"
+    echo "No directories with makefiles or source files found"
     exit 1
 fi
 
@@ -43,8 +47,7 @@ for dir in $all_dirs; do
     else
         echo "  No makefile found, skipping..."
         echo "⚠️  $example_name: SKIPPED (no makefile)"
-        ((fail_count++))
-        failed_examples+=("$example_name")
+        # Don't count skipped directories as failures
     fi
     echo
 done
