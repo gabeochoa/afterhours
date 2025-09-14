@@ -334,7 +334,6 @@ template <typename Component> struct Not : BaseComponent {
   void for_each(Entity &entity, const float dt) {
     if (!tags_ok(entity))
       return;
-    using ComponentsOnly = typename filter_components<Components...>::type;
     if (HasAllComponents<ComponentsOnly>::value(entity)) {
       CallWithComponents<ComponentsOnly>::call(this, entity, dt);
     }
@@ -343,7 +342,6 @@ template <typename Component> struct Not : BaseComponent {
   void for_each_derived(Entity &entity, const float dt) {
     if (!tags_ok(entity))
       return;
-    using ComponentsOnly = typename filter_components<Components...>::type;
     if (HasAllComponents<ComponentsOnly>::value_child(entity)) {
       CallWithChildComponents<ComponentsOnly>::call(this, entity, dt);
     }
@@ -352,7 +350,6 @@ template <typename Component> struct Not : BaseComponent {
   void for_each_derived(const Entity &entity, const float dt) const {
     if (!tags_ok(entity))
       return;
-    using ComponentsOnly = typename filter_components<Components...>::type;
     if (HasAllComponents<ComponentsOnly>::value_child(entity)) {
       CallWithChildComponents<ComponentsOnly>::call_const(this, entity, dt);
     }
@@ -364,7 +361,6 @@ template <typename Component> struct Not : BaseComponent {
   void for_each(const Entity &entity, const float dt) const {
     if (!tags_ok(entity))
       return;
-    using ComponentsOnly = typename filter_components<Components...>::type;
     if (HasAllComponents<ComponentsOnly>::value(entity)) {
       CallWithComponents<ComponentsOnly>::call_const(this, entity, dt);
     }
