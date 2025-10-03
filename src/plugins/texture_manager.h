@@ -135,29 +135,29 @@ struct HasSprite : BaseComponent {
 };
 
 struct HasAnimation : BaseComponent {
+  struct Params {
+    Vector2Type position{0, 0};
+    Vector2Type size{0, 0};
+    float angle{0.f};
+    Vector2Type start_position{0, 0};
+    int total_frames{10};
+    float frame_dur{1.f / 20.f};
+    bool once{false};
+    float scale{1.f};
+    int cur_frame{0};
+    float rotation{0.f};
+    Color colorTint{255, 255, 255, 255};
+  };
+
   TransformData transform;
-
-  Vector2Type start_position;
+  Params params;
   Vector2Type cur_frame_position;
-  int total_frames = 10;
-  float frame_dur = 1.f / 20.f;
   float frame_time = 1.f / 20.f;
-  bool once = false;
-  float scale = 1.f;
 
-  int cur_frame = 0;
-  float rotation = 0;
-  Color colorTint;
-
-  HasAnimation(const Vector2Type position, const Vector2Type size,
-               const float angle, const Vector2Type start_position_,
-               const int total_frames_, const float frame_dur_,
-               const bool once_, const float scale_, const int cur_frame_,
-               const float rot, const Color tint)
-      : transform(position, size, angle), start_position(start_position_),
-        cur_frame_position(start_position_), total_frames(total_frames_),
-        frame_dur(frame_dur_), frame_time(frame_dur_), once(once_),
-        scale(scale_), cur_frame(cur_frame_), rotation(rot), colorTint(tint) {}
+  HasAnimation(const Params &params_in)
+      : transform(params_in.position, params_in.size, params_in.angle),
+        params(params_in), cur_frame_position(params_in.start_position),
+        frame_time(params_in.frame_dur) {}
 
   auto &update_transform(const Vector2Type &pos, const Vector2Type &size_,
                          const float &ang) {
@@ -165,6 +165,14 @@ struct HasAnimation : BaseComponent {
   }
 
   float angle() const { return transform.angle; }
+  float rotation() const { return params.rotation; }
+  float scale() const { return params.scale; }
+  Color colorTint() const { return params.colorTint; }
+  int total_frames() const { return params.total_frames; }
+  float frame_dur() const { return params.frame_dur; }
+  bool once() const { return params.once; }
+  int cur_frame() const { return params.cur_frame; }
+  Vector2Type start_position() const { return params.start_position; }
 };
 
 struct AnimationUpdateCurrentFrame : System<HasAnimation> {
@@ -175,14 +183,14 @@ struct AnimationUpdateCurrentFrame : System<HasAnimation> {
     if (hasAnimation.frame_time > 0) {
       return;
     }
-    hasAnimation.frame_time = hasAnimation.frame_dur;
+    hasAnimation.frame_time = hasAnimation.frame_dur();
 
-    if (hasAnimation.cur_frame >= hasAnimation.total_frames) {
-      if (hasAnimation.once) {
+    if (hasAnimation.cur_frame() >= hasAnimation.total_frames()) {
+      if (hasAnimation.once()) {
         entity.cleanup = true;
         return;
       }
-      hasAnimation.cur_frame = 0;
+      hasAnimation.params.cur_frame = 0;
     }
 
     const auto [i, j] =
@@ -190,7 +198,7 @@ struct AnimationUpdateCurrentFrame : System<HasAnimation> {
                                     (int)hasAnimation.cur_frame_position.y);
 
     hasAnimation.cur_frame_position = Vector2Type{(float)i, (float)j};
-    hasAnimation.cur_frame++;
+    hasAnimation.params.cur_frame++;
   }
 };
 
@@ -230,13 +238,13 @@ struct RenderAnimation : System<HasAnimation> {
                      Rectangle{
                          hasAnimation.transform.center().x,
                          hasAnimation.transform.center().y,
-                         frame.width * hasAnimation.scale,
-                         frame.height * hasAnimation.scale,
+                         frame.width * hasAnimation.scale(),
+                         frame.height * hasAnimation.scale(),
                      },
                      Vector2Type{frame.width / 2.f,
                                  frame.height / 2.f}, // transform.center(),
-                     hasAnimation.angle() + hasAnimation.rotation,
-                     hasAnimation.colorTint);
+                     hasAnimation.angle() + hasAnimation.rotation(),
+                     hasAnimation.colorTint());
   }
 };
 
