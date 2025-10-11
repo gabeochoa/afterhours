@@ -90,6 +90,22 @@ struct ComponentConfig {
     margin = margin_;
     return *this;
   }
+  ComponentConfig &with_margin(Spacing spacing) {
+    auto gap_size = spacing_to_size(spacing);
+    margin = Margin{.top = gap_size,
+                    .left = gap_size,
+                    .bottom = gap_size,
+                    .right = gap_size};
+    return *this;
+  }
+  ComponentConfig &with_padding(Spacing spacing) {
+    auto gap_size = spacing_to_size(spacing);
+    padding = Padding{.top = gap_size,
+                      .left = gap_size,
+                      .bottom = gap_size,
+                      .right = gap_size};
+    return *this;
+  }
   ComponentConfig &with_color_usage(Theme::Usage usage) {
     color_usage = usage;
     return *this;

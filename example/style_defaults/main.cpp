@@ -40,10 +40,7 @@ auto create_button_old_way(UIContext<InputAction> &context,
                            EntityParent ep_pair, const std::string &label) {
   // This is what the feedback is complaining about - hardcoded values
   auto config = ComponentConfig{}
-                    .with_padding(Padding{.top = pixels(5.f),
-                                          .left = pixels(0.f),
-                                          .bottom = pixels(5.f),
-                                          .right = pixels(0.f)})
+                    .with_padding(Spacing::xs)
                     .with_size(ComponentSize{pixels(100.f), pixels(30.f)})
                     .with_label(label);
 
@@ -73,23 +70,14 @@ struct StylingDefaultsDemo : System<UIContext<InputAction>> {
     // Set up comprehensive styling defaults
     auto button_defaults =
         ComponentConfig{}
-            .with_padding(Padding{.top = pixels(10.f),
-                                  .left = pixels(15.f),
-                                  .bottom = pixels(10.f),
-                                  .right = pixels(15.f)})
+            .with_padding(Spacing::sm)
             .with_size(ComponentSize{pixels(140.f), pixels(40.f)})
             .with_color_usage(Theme::Usage::Primary)
             .with_rounded_corners(8.f);
 
     auto div_defaults = ComponentConfig{}
-                            .with_padding(Padding{.top = pixels(15.f),
-                                                  .left = pixels(15.f),
-                                                  .bottom = pixels(15.f),
-                                                  .right = pixels(15.f)})
-                            .with_margin(Margin{.top = pixels(8.f),
-                                                .left = pixels(8.f),
-                                                .bottom = pixels(8.f),
-                                                .right = pixels(8.f)})
+                            .with_padding(Spacing::md)
+                            .with_margin(Spacing::xs)
                             .with_color_usage(Theme::Usage::Background);
 
     auto slider_defaults =
@@ -167,11 +155,7 @@ struct StylingDefaultsDemo : System<UIContext<InputAction>> {
     printf("\n--- Builder Pattern ---\n");
 
     ComponentConfigBuilder builder;
-    builder
-        .with_padding(Padding{.top = pixels(20.f),
-                              .left = pixels(20.f),
-                              .bottom = pixels(20.f),
-                              .right = pixels(20.f)})
+    builder.with_padding(Spacing::lg)
         .with_size(ComponentSize{pixels(160.f), pixels(50.f)})
         .with_color_usage(Theme::Usage::Secondary)
         .with_label("Builder Button")

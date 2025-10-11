@@ -85,6 +85,30 @@ inline Size children(const float value = -1) {
 inline Size h720(const float px) { return screen_pct(px / 720.f); }
 inline Size w1280(const float px) { return screen_pct(px / 1280.f); }
 
+enum struct Spacing {
+  xs, // Extra small: 0.01f (7.2px at 720p)
+  sm, // Small: 0.02f (14.4px at 720p)
+  md, // Medium: 0.04f (28.8px at 720p)
+  lg, // Large: 0.08f (57.6px at 720p)
+  xl, // Extra large: 0.16f (115.2px at 720p)
+};
+
+inline Size spacing_to_size(Spacing spacing) {
+  switch (spacing) {
+  case Spacing::xs:
+    return screen_pct(0.01f);
+  case Spacing::sm:
+    return screen_pct(0.02f);
+  case Spacing::md:
+    return screen_pct(0.04f);
+  case Spacing::lg:
+    return screen_pct(0.08f);
+  case Spacing::xl:
+    return screen_pct(0.16f);
+  }
+  return screen_pct(0.04f); // Default to medium
+}
+
 struct ComponentSize {
   Size x_axis;
   Size y_axis;

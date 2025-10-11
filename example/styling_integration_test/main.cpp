@@ -44,10 +44,7 @@ struct StylingIntegrationTest : System<UIContext<InputAction>> {
     // Set up button styling defaults
     auto button_defaults =
         ComponentConfig{}
-            .with_padding(Padding{.top = pixels(10.f),
-                                  .left = pixels(15.f),
-                                  .bottom = pixels(10.f),
-                                  .right = pixels(15.f)})
+            .with_padding(Spacing::sm)
             .with_size(ComponentSize{pixels(140.f), pixels(40.f)})
             .with_color_usage(Theme::Usage::Primary)
             .with_rounded_corners(8.f);
