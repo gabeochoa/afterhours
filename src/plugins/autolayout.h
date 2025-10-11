@@ -82,6 +82,9 @@ inline Size children(const float value = -1) {
   return ui::Size{.dim = ui::Dim::Children, .value = value};
 }
 
+inline Size h720(const float px) { return screen_pct(px / 720.f); }
+inline Size w1280(const float px) { return screen_pct(px / 1280.f); }
+
 struct ComponentSize {
   Size x_axis;
   Size y_axis;
