@@ -610,24 +610,27 @@ struct input : developer::Plugin {
       float value = 0.f;
       for (const auto &input : valid_inputs) {
         DeviceMedium temp_medium = DeviceMedium::None;
-        const float temp = //
-            std::visit(    //
-                util::overloaded{
-                    //
-                    [&](const KeyCode keycode) {
-                      temp_medium = DeviceMedium::Keyboard;
-                      return is_key_pressed(keycode) ? 1.f : 0.f;
-                    },
-                    [&](const GamepadAxisWithDir axis_with_dir) {
-                      temp_medium = DeviceMedium::GamepadAxis;
-                      return visit_axis(id, axis_with_dir);
-                    },
-                    [&](const GamepadButton button) {
-                      temp_medium = DeviceMedium::GamepadButton;
-                      return is_gamepad_button_pressed(id, button) ? 1.f
-                                                                   : 0.f;
-                    }},
-                input);
+        const float temp = [&] {
+          switch (input.index()) {
+          case 0: { // KeyCode
+            const auto keycode = std::get<0>(input);
+            temp_medium = DeviceMedium::Keyboard;
+            return is_key_pressed(keycode) ? 1.f : 0.f;
+          }
+          case 1: { // GamepadAxisWithDir
+            const auto axis_with_dir = std::get<1>(input);
+            temp_medium = DeviceMedium::GamepadAxis;
+            return visit_axis(id, axis_with_dir);
+          }
+          case 2: { // GamepadButton
+            const auto button = std::get<2>(input);
+            temp_medium = DeviceMedium::GamepadButton;
+            return is_gamepad_button_pressed(id, button) ? 1.f : 0.f;
+          }
+          default:
+            return 0.f;
+          }
+        }();
         if (temp > value) {
           value = temp;
           medium = temp_medium;
@@ -643,22 +646,27 @@ struct input : developer::Plugin {
       float value = 0.f;
       for (const auto &input : valid_inputs) {
         DeviceMedium temp_medium = DeviceMedium::None;
-        const float temp =       //
-            std::visit(          //
-                util::overloaded{//
-                                 [&](const KeyCode keycode) {
-                                   temp_medium = DeviceMedium::Keyboard;
-                                   return visit_key_down(keycode);
-                                 },
-                                 [&](const GamepadAxisWithDir axis_with_dir) {
-                                   temp_medium = DeviceMedium::GamepadAxis;
-                                   return visit_axis(id, axis_with_dir);
-                                 },
-                                 [&](const GamepadButton button) {
-                                   temp_medium = DeviceMedium::GamepadButton;
-                                   return visit_button_down(id, button);
-                                 }},
-                input);
+        const float temp = [&] {
+          switch (input.index()) {
+          case 0: { // KeyCode
+            const auto keycode = std::get<0>(input);
+            temp_medium = DeviceMedium::Keyboard;
+            return visit_key_down(keycode);
+          }
+          case 1: { // GamepadAxisWithDir
+            const auto axis_with_dir = std::get<1>(input);
+            temp_medium = DeviceMedium::GamepadAxis;
+            return visit_axis(id, axis_with_dir);
+          }
+          case 2: { // GamepadButton
+            const auto button = std::get<2>(input);
+            temp_medium = DeviceMedium::GamepadButton;
+            return visit_button_down(id, button);
+          }
+          default:
+            return 0.f;
+          }
+        }();
         if (temp > value) {
           value = temp;
           medium = temp_medium;

@@ -62,6 +62,8 @@ template <class... Ts> struct overloaded : Ts... {
   using Ts::operator()...;
 };
 
+template <class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
+
 template <typename T> int sgn(const T val) {
   return (T(0) < val) - (val < T(0));
 }
