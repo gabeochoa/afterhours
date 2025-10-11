@@ -1,5 +1,5 @@
 
-FLAGS = -std=c++2a -Wall -Wextra -Wpedantic -Wuninitialized -Wshadow \
+FLAGS = -std=c++23 -Wall -Wextra -Wpedantic -Wuninitialized -Wshadow \
 		-Wmost -Wconversion -g -I../../vendor/ -I../../../../vendor
 
 all:

@@ -43,6 +43,14 @@
 #include "../../vendor/catch2/catch.hpp"
 #include "../../vendor/trompeloeil/trompeloeil.hpp"
 
+// C++20/C++23 compatibility fix - add deduction guide for existing overloaded
+// struct
+namespace afterhours {
+namespace util {
+template <class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
+}
+} // namespace afterhours
+
 using namespace afterhours;
 using namespace afterhours::ui;
 
