@@ -6,6 +6,24 @@
 //
 #include "../../src/plugins/autolayout.h"
 
+// Include all component test headers - pixels() tests
+#include "components/pixels/button_tests.h"
+#include "components/pixels/button_group_tests.h"
+#include "components/pixels/div_tests.h"
+#include "components/pixels/slider_tests.h"
+#include "components/pixels/checkbox_tests.h"
+#include "components/pixels/checkbox_no_label_tests.h"
+#include "components/pixels/dropdown_tests.h"
+
+// Include all component test headers - percent() tests
+#include "components/percent/button_tests.h"
+#include "components/percent/button_group_tests.h"
+#include "components/percent/div_tests.h"
+#include "components/percent/slider_tests.h"
+#include "components/percent/checkbox_tests.h"
+#include "components/percent/checkbox_no_label_tests.h"
+#include "components/percent/dropdown_tests.h"
+
 namespace afterhours {
 namespace ui {
 TEST_CASE("UIComponentTest", "[UIComponent]") {
@@ -82,7 +100,7 @@ TEST_CASE("AutoLayoutCalculateStandaloneWithPercent", "[AutoLayout]") {
   REQUIRE(cmp.computed[Axis::Y] == 200.f);
 }
 
-// TODO
+// TODO: Text dimension test causes segfault - needs investigation
 /*
 TEST_CASE("AutoLayoutCalculateStandaloneWithText", "[AutoLayout]") {
   AutoLayout al; // Empty mapping
@@ -95,7 +113,9 @@ TEST_CASE("AutoLayoutCalculateStandaloneWithText", "[AutoLayout]") {
   REQUIRE(cmp.computed[Axis::X] == 100.f); // Default value for text
   REQUIRE(cmp.computed[Axis::Y] == 200.f);
 }
+*/
 
+/*
 class AutoLayoutMock : public AutoLayout {
 public:
   MAKE_MOCK1(to_cmp, UIComponent &(EntityID));
@@ -124,6 +144,8 @@ TEST_CASE("AutoLayoutCalculateThoseWithParents", "[AutoLayout]") {
   REQUIRE(child.computed[Axis::Y] == Approx(0.f).epsilon(0.1f));
 }
 */
+
+
 
 } // namespace ui
 } // namespace afterhours
