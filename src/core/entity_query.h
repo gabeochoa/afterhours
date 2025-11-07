@@ -301,19 +301,17 @@ struct EntityQuery {
     if (results.empty()) {
       return {};
     }
-    // Use seeded RNG if available, otherwise fallback to rand()
-    // This allows external code to provide a seeded RNG via a callback
     size_t random_index = rand() % results.size();
     return results[random_index];
   }
-  
-  template<typename RngFn>
-  [[nodiscard]] OptEntity gen_random(RngFn &&rng_fn) const {
+
+  template <typename RngFunc>
+  [[nodiscard]] OptEntity gen_random(RngFunc &&rng_func) const {
     const auto results = gen();
     if (results.empty()) {
       return {};
     }
-    size_t random_index = rng_fn(results.size());
+    size_t random_index = rng_func(results.size());
     if (random_index >= results.size()) {
       return {};
     }
