@@ -314,6 +314,9 @@ struct EntityQuery {
       return {};
     }
     size_t random_index = rng_fn(results.size());
+    if (random_index >= results.size()) {
+      return {};
+    }
     return results[random_index];
   }
 
