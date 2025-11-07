@@ -298,7 +298,23 @@ struct EntityQuery {
 
   [[nodiscard]] OptEntity gen_random() const {
     const auto results = gen();
+    if (results.empty()) {
+      return {};
+    }
     size_t random_index = rand() % results.size();
+    return results[random_index];
+  }
+
+  template <typename RngFunc>
+  [[nodiscard]] OptEntity gen_random(RngFunc &&rng_func) const {
+    const auto results = gen();
+    if (results.empty()) {
+      return {};
+    }
+    size_t random_index = rng_func(results.size());
+    if (random_index >= results.size()) {
+      return {};
+    }
     return results[random_index];
   }
 
