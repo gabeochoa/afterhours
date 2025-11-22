@@ -352,11 +352,6 @@ struct EntityQuery {
     entities = entsIn;
   }
 
-  TReturn &include_store_entities(const bool include = true) {
-    _include_store_entities = include;
-    return static_cast<TReturn &>(*this);
-  }
-
 private:
   Entities entities;
 
@@ -364,8 +359,6 @@ private:
   std::vector<std::unique_ptr<Modification>> mods;
   mutable RefEntities ents;
   mutable bool ran_query = false;
-
-  bool _include_store_entities = false;
 
   EntityQuery &set_order_by(OrderBy *ob) {
     if (orderby) {
