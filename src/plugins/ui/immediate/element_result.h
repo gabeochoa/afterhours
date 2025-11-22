@@ -3,8 +3,7 @@
 #include <bitset>
 #include <variant>
 
-#include "../../../core/entity.h"
-#include "../../../core/entity_helper.h"
+#include "../../../ecs.h"
 #include "../components.h"
 #include "../context.h"
 
