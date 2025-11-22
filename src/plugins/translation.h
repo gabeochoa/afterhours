@@ -5,6 +5,8 @@
 #include "../core/entity_query.h"
 #include "../developer.h"
 #include "../logging.h"
+#include <cstddef>
+#include <fmt/args.h>
 #include <fmt/format.h>
 #include <functional>
 #include <magic_enum/magic_enum.hpp>
@@ -89,7 +91,9 @@ public:
     if (skip_translate())
       return underlying_TL_ONLY();
     if (is_formatted() && param_name_map) {
-      return fmt::vformat(underlying_TL_ONLY(), get_params(*param_name_map));
+      const ParamNameMap *map_ptr =
+          reinterpret_cast<const ParamNameMap *>(param_name_map);
+      return fmt::vformat(underlying_TL_ONLY(), get_params(*map_ptr));
     }
     return underlying_TL_ONLY();
   }
@@ -193,7 +197,8 @@ struct translation_plugin : developer::Plugin {
       return;
     }
     provides->current_language = language;
-    log_trace("Language set to: {}", get_language_name(language));
+    std::string lang_name = get_language_name(language);
+    log_trace("Language set to: {}", lang_name.c_str());
   }
 
   static Language get_language() {
