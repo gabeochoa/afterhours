@@ -1,87 +1,118 @@
 #pragma once
 
 #include <bitset>
+#include <functional>
 #include <random>
 
 namespace bitset_utils {
 
-template <typename T, typename E> void set(T &bitset, E enum_value) {
-  bitset.set(static_cast<int>(enum_value));
+template<typename T, typename E>
+void set(T &bitset, E enum_value) {
+    bitset.set(static_cast<int>(enum_value));
 }
 
-template <typename T, typename E> void reset(T &bitset, E enum_value) {
-  bitset.reset(static_cast<int>(enum_value));
+template<typename T, typename E>
+void reset(T &bitset, E enum_value) {
+    bitset.reset(static_cast<int>(enum_value));
 }
 
-template <typename T, typename E> bool test(const T &bitset, E enum_value) {
-  return bitset.test(static_cast<int>(enum_value));
+template<typename T, typename E>
+bool test(const T &bitset, E enum_value) {
+    return bitset.test(static_cast<int>(enum_value));
 }
 
-template <typename T> int index_of_nth_set_bit(const T &bitset, const int n) {
-  int count = 0;
-  for (size_t i = 0; i < bitset.size(); ++i) {
-    if (bitset.test(i)) {
-      if (++count == n) {
-        return static_cast<int>(i);
-      }
+template<typename T>
+int index_of_nth_set_bit(const T &bitset, const int n) {
+    int count = 0;
+    for (size_t i = 0; i < bitset.size(); ++i) {
+        if (bitset.test(i)) {
+            if (++count == n) {
+                return static_cast<int>(i);
+            }
+        }
     }
-  }
-  return -1; // Return -1 if the nth set bit is not found
+    return -1;  // Return -1 if the nth set bit is not found
 }
 
-template <size_t N>
+template<size_t N>
 int get_random_boolean_bit(const std::bitset<N> &bitset,
                            std::mt19937 &generator, size_t max_value = N,
                            bool value = true) {
-  std::vector<int> enabled_indices;
-  for (size_t i = 0; i < max_value; ++i) {
-    if (bitset.test(i) == value) {
-      enabled_indices.push_back(static_cast<int>(i));
+    std::vector<int> enabled_indices;
+    for (size_t i = 0; i < max_value; ++i) {
+        if (bitset.test(i) == value) {
+            enabled_indices.push_back(static_cast<int>(i));
+        }
     }
-  }
 
-  if (enabled_indices.empty()) {
-    // No bits are enabled, return -1 or handle the error as needed.
-    return -1;
-  }
-  int random_index = generator() % (static_cast<int>(enabled_indices.size()));
-  return enabled_indices[random_index];
+    if (enabled_indices.empty()) {
+        // No bits are enabled, return -1 or handle the error as needed.
+        return -1;
+    }
+    int random_index = generator() % (static_cast<int>(enabled_indices.size()));
+    return enabled_indices[random_index];
 }
 
-template <size_t N>
+template<size_t N>
 int get_random_enabled_bit(const std::bitset<N> &bitset,
                            std::mt19937 &generator, size_t max_value = N) {
-  return get_random_boolean_bit(bitset, generator, max_value, true);
+    return get_random_boolean_bit(bitset, generator, max_value, true);
 }
-template <size_t N>
+template<size_t N>
 int get_random_disabled_bit(const std::bitset<N> &bitset,
                             std::mt19937 &generator, size_t max_value = N) {
-  return get_random_boolean_bit(bitset, generator, max_value, false);
+    return get_random_boolean_bit(bitset, generator, max_value, false);
 }
 
-template <size_t N>
+template<size_t N>
 int get_next_boolean_bit(const std::bitset<N> &bitset, size_t start = 0,
                          bool value = true) {
-  for (size_t i = start; i < start + bitset.size(); ++i) {
-    size_t index = i % bitset.size();
-    if (bitset.test(index) == value) {
-      return (int)index;
+    for (size_t i = start; i < start + bitset.size(); ++i) {
+        size_t index = i % bitset.size();
+        if (bitset.test(index) == value) {
+            return (int) index;
+        }
     }
-  }
-  return -1;
+    return -1;
 }
 
-template <size_t N> int get_first_enabled_bit(const std::bitset<N> &bitset) {
-  return get_next_boolean_bit(bitset, 0, true);
+template<size_t N>
+int get_first_enabled_bit(const std::bitset<N> &bitset) {
+    return get_next_boolean_bit(bitset, 0, true);
 }
 
-template <size_t N> int get_first_disabled_bit(const std::bitset<N> &bitset) {
-  return get_next_boolean_bit(bitset, 0, false);
+template<size_t N>
+int get_first_disabled_bit(const std::bitset<N> &bitset) {
+    return get_next_boolean_bit(bitset, 0, false);
 }
 
-template <size_t N>
+template<size_t N>
 int get_next_disabled_bit(const std::bitset<N> &bitset, size_t start) {
-  return get_next_boolean_bit(bitset, start, false);
+    return get_next_boolean_bit(bitset, start, false);
 }
 
-}; // namespace bitset_utils
+// TODO combine these
+enum struct ForEachFlow {
+    NormalFlow = 0,
+    Continue = 1,
+    Break = 2,
+};
+
+template<size_t N>
+void for_each_enabled_bit(const std::bitset<N> &bitset,
+                          const std::function<ForEachFlow(size_t)> &cb) {
+    for (size_t i = 0; i < bitset.size(); ++i) {
+        if (bitset.test(i)) {
+            ForEachFlow fef = cb(i);
+            switch (fef) {
+                case ForEachFlow::NormalFlow:
+                case ForEachFlow::Continue:
+                    break;
+                case ForEachFlow::Break:
+                    return;
+            }
+        }
+    }
+}
+
+};  // namespace bitset_utils
