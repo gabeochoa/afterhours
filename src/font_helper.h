@@ -112,7 +112,8 @@ inline raylib::Font load_font_for_string(const std::string &content,
 }
 
 inline float measure_text_internal(const char *content, const float size) {
-    return raylib::MeasureText(content, size);
+    return static_cast<float>(
+        raylib::MeasureText(content, static_cast<int>(size)));
 }
 inline vec2 measure_text(const raylib::Font font, const char *content,
                          const float size, const float spacing) {
