@@ -113,12 +113,24 @@ struct EntityHelper {
 
   template <typename Component> static RefEntity get_singleton() {
     const ComponentID id = components::get_type_id<Component>();
-    if (!EntityHelper::get().singletonMap.contains(id)) {
+    auto &singleton_map = EntityHelper::get().singletonMap;
+    if (!singleton_map.contains(id)) {
       log_warn("Singleton map is missing value for component {} ({}). Did you "
                "register this component previously?",
                id, type_name<Component>());
+      // Return a reference to a static dummy entity to avoid crash
+      // This should never happen in proper usage, but prevents segfault
+      static Entity dummy_entity;
+      return dummy_entity;
     }
-    return *EntityHelper::get().singletonMap[id];
+    auto *entity_ptr = singleton_map.at(id);
+    if (!entity_ptr) {
+      log_error("Singleton map contains null pointer for component {} ({})",
+                id, type_name<Component>());
+      static Entity dummy_entity;
+      return dummy_entity;
+    }
+    return *entity_ptr;
   }
 
   template <typename Component> static Component *get_singleton_cmp() {
