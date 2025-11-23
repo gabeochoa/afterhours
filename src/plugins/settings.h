@@ -13,6 +13,18 @@
 #include "../logging.h"
 #include "files.h"
 
+// Compile-time check: ensure settings.cpp is compiled in your project
+// If you see a linker error, make sure to compile vendor/afterhours/src/plugins/settings.cpp
+#ifndef AFTERHOURS_SETTINGS_CPP_COMPILED
+// This will cause a linker error if settings.cpp is not compiled
+// The error message will guide you to compile the .cpp file
+namespace afterhours {
+namespace settings_plugin_internal {
+void _require_settings_cpp_compiled();
+}  // namespace settings_plugin_internal
+}  // namespace afterhours
+#endif
+
 // Settings serialization format selection
 // Define one of:
 //   #define AFTERHOURS_SETTINGS_OUTPUT_JSON
