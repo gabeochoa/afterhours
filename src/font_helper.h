@@ -10,6 +10,7 @@
 namespace afterhours {
 #ifdef AFTER_HOURS_USE_RAYLIB
 using Font = raylib::Font;
+using vec2 = raylib::Vector2;
 inline raylib::Font load_font_from_file(const char *file) {
     return raylib::LoadFont(file);
 }
@@ -115,22 +116,22 @@ inline float measure_text_internal(const char *content, const float size) {
     return static_cast<float>(
         raylib::MeasureText(content, static_cast<int>(size)));
 }
-inline vec2 measure_text(const raylib::Font font, const char *content,
+inline raylib::Vector2 measure_text(const raylib::Font font, const char *content,
                          const float size, const float spacing) {
     return raylib::MeasureTextEx(font, content, size, spacing);
 }
 
 // Add proper UTF-8 text measurement for CJK support
-inline vec2 measure_text_utf8(const raylib::Font font, const char *content,
+inline raylib::Vector2 measure_text_utf8(const raylib::Font font, const char *content,
                               const float size, const float spacing) {
     if (!content) {
         log_warn("Null content passed to measure_text_utf8");
-        return vec2{0, 0};
+        return raylib::Vector2{0, 0};
     }
 
     if (size <= 0) {
         log_warn("Invalid font size {} passed to measure_text_utf8", size);
-        return vec2{0, 0};
+        return raylib::Vector2{0, 0};
     }
 
     // Use the existing measure_text for now, but this could be enhanced
