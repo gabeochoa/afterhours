@@ -65,8 +65,6 @@ inline void UnloadMusicStream(MusicStub) {}
 inline MusicStub LoadMusicStream(const char *) { return MusicStub{}; }
 #endif
 
-namespace afterhours {
-
 struct sound_system : developer::Plugin {
   // Games should define their own SoundFile enum and provide a conversion
   // function Example:
