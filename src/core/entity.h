@@ -11,11 +11,9 @@
 #include "../logging.h"
 #include "../type_name.h"
 #include "base_component.h"
-
-// Forward declaration for EntityHelper - full definition included at end
-namespace afterhours {
-struct EntityHelper;
-}
+// Include EntityHelper before Entity - entity_helper.h forward-declares Entity
+// This allows Entity template methods to use EntityHelper when parsed
+#include "entity_helper.h"
 
 namespace afterhours {
 #ifndef AFTER_HOURS_MAX_ENTITY_TAGS
@@ -52,11 +50,23 @@ struct Entity {
   virtual ~Entity() {}
 
   template <typename T> [[nodiscard]] bool has() const {
-    // For now, use AoS only - SOA integration will be added after circular dependency is resolved
-    const bool result = componentSet[components::get_type_id<T>()];
+    ComponentID cid = components::get_type_id<T>();
+    
+    // Check SOA storage first (EntityHelper included at top of file)
+    // Template instantiation happens after EntityHelper is fully defined
+    bool soa_result = false;
+    if constexpr (std::is_base_of_v<BaseComponent, T>) {
+      // EntityHelper will be defined when this template is instantiated
+      soa_result = EntityHelper::get_component_storage<T>().has_component(id);
+    }
+    
+    // Also check componentSet for backward compatibility
+    bool aos_result = componentSet[cid];
+    
+    const bool result = soa_result || aos_result;
 #if defined(AFTER_HOURS_DEBUG)
     log_trace("checking component {} {} on entity {}",
-              components::get_type_id<T>(), type_name<T>(), id);
+              cid, type_name<T>(), id);
     log_trace("your set is now {}", componentSet);
     log_trace("and the result was {}", result);
 #endif
@@ -104,8 +114,25 @@ struct Entity {
 #endif
       return;
     }
-    componentSet[components::get_type_id<T>()] = false;
-    componentArray[components::get_type_id<T>()].reset();
+    
+    ComponentID cid = components::get_type_id<T>();
+    
+    // Remove from SOA storage
+    if constexpr (std::is_base_of_v<BaseComponent, T>) {
+      auto &storage = EntityHelper::get_component_storage<T>();
+      if (storage.has_component(id)) {
+        storage.remove_component(id);
+      }
+      
+      // Update fingerprint
+      ComponentBitSet fingerprint = EntityHelper::get_fingerprint_for_entity(id);
+      fingerprint[cid] = false;
+      EntityHelper::update_fingerprint_for_entity(id, fingerprint);
+    }
+    
+    // Also update AoS for backward compatibility
+    componentSet[cid] = false;
+    componentArray[cid].reset();
   }
 
   template <typename T, typename... TArgs> T &addComponent(TArgs &&...args) {
@@ -123,9 +150,30 @@ struct Entity {
     }
 #endif
 
-    auto component = std::make_unique<T>(std::forward<TArgs>(args)...);
     const ComponentID component_id = components::get_type_id<T>();
-    componentArray[component_id] = std::move(component);
+    
+    // Add to SOA storage first
+    T *soa_component = nullptr;
+    if constexpr (std::is_base_of_v<BaseComponent, T>) {
+      auto &storage = EntityHelper::get_component_storage<T>();
+      T &soa_ref = storage.add_component(id, std::forward<TArgs>(args)...);
+      soa_component = &soa_ref;
+      
+      // Update fingerprint
+      ComponentBitSet fingerprint = EntityHelper::get_fingerprint_for_entity(id);
+      fingerprint[component_id] = true;
+      EntityHelper::update_fingerprint_for_entity(id, fingerprint);
+    }
+    
+    // Also add to AoS for backward compatibility
+    // If SOA component exists, copy from it; otherwise create new
+    std::unique_ptr<T> aos_component;
+    if (soa_component) {
+      aos_component = std::make_unique<T>(*soa_component);
+    } else {
+      aos_component = std::make_unique<T>(std::forward<TArgs>(args)...);
+    }
+    componentArray[component_id] = std::move(aos_component);
     componentSet[component_id] = true;
 
 #if defined(AFTER_HOURS_DEBUG)
@@ -194,6 +242,16 @@ struct Entity {
 
   template <typename T> [[nodiscard]] T &get() {
     warnIfMissingComponent<T>();
+    
+    // Try SOA storage first
+    if constexpr (std::is_base_of_v<BaseComponent, T>) {
+      auto *soa_component = EntityHelper::get_component_for_entity<T>(id);
+      if (soa_component) {
+        return *soa_component;
+      }
+    }
+    
+    // Fallback to AoS for backward compatibility
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wreturn-stack-address"
@@ -203,18 +261,27 @@ struct Entity {
 #endif
     return static_cast<T &>(
         *componentArray.at(components::get_type_id<T>()).get());
-  }
-
-  template <typename T> [[nodiscard]] const T &get() const {
-    warnIfMissingComponent<T>();
-
-    return static_cast<const T &>(
-        *componentArray.at(components::get_type_id<T>()).get());
 #ifdef __clang__
 #pragma clang diagnostic pop
 #elif defined(__GNUC__)
 #pragma GCC diagnostic pop
 #endif
+  }
+
+  template <typename T> [[nodiscard]] const T &get() const {
+    warnIfMissingComponent<T>();
+
+    // Try SOA storage first
+    if constexpr (std::is_base_of_v<BaseComponent, T>) {
+      const auto *soa_component = EntityHelper::get_component_for_entity_const<T>(id);
+      if (soa_component) {
+        return *soa_component;
+      }
+    }
+    
+    // Fallback to AoS for backward compatibility
+    return static_cast<const T &>(
+        *componentArray.at(components::get_type_id<T>()).get());
   }
 
   void enableTag(const TagId tag_id) {
@@ -292,4 +359,176 @@ struct OptEntity {
   operator RefEntity() const { return data.value(); }
   operator bool() const { return valid(); }
 };
+
+// Implement EntityHelper methods that need Entity to be complete
+// These are defined here after Entity is fully defined
+
+inline Entity &EntityHelper::createEntity() {
+  return createEntityWithOptions({.is_permanent = false});
+}
+
+inline Entity &EntityHelper::createPermanentEntity() {
+  return createEntityWithOptions({.is_permanent = true});
+}
+
+inline Entity &EntityHelper::createEntityWithOptions(const CreationOptions &options) {
+  if (get_temp().capacity() == 0) [[unlikely]]
+    reserve_temp_space();
+
+  std::shared_ptr<Entity> e(new Entity());
+  get_temp().push_back(e);
+
+  if (options.is_permanent) {
+    EntityHelper::get().permanant_ids.insert(e->id);
+  }
+
+  return *e;
+}
+
+inline void EntityHelper::merge_entity_arrays() {
+  if (get_temp().empty())
+    return;
+
+  for (const auto &entity : get_temp()) {
+    if (!entity)
+      continue;
+    if (entity->cleanup)
+      continue;
+    get_entities_for_mod().push_back(entity);
+  }
+  get_temp().clear();
+}
+
+template <typename Component>
+inline void EntityHelper::registerSingleton(Entity &ent) {
+  const ComponentID id = components::get_type_id<Component>();
+
+  if (EntityHelper::get().singletonMap.contains(id)) {
+    log_error("Already had registered singleton {}", type_name<Component>());
+  }
+
+  EntityHelper::get().singletonMap.emplace(id, &ent);
+  log_info("Registered singleton {} for {} ({})", ent.id,
+           type_name<Component>(), id);
+}
+
+template <typename Component>
+inline RefEntity EntityHelper::get_singleton() {
+  const ComponentID id = components::get_type_id<Component>();
+  auto &singleton_map = EntityHelper::get().singletonMap;
+  if (!singleton_map.contains(id)) {
+    log_warn("Singleton map is missing value for component {} ({}). Did you "
+             "register this component previously?",
+             id, type_name<Component>());
+    static Entity dummy_entity;
+    return dummy_entity;
+  }
+  auto *entity_ptr = singleton_map.at(id);
+  if (!entity_ptr) {
+    log_error("Singleton map contains null pointer for component {} ({})",
+              id, type_name<Component>());
+    static Entity dummy_entity;
+    return dummy_entity;
+  }
+  return *entity_ptr;
+}
+
+template <typename Component>
+inline Component *EntityHelper::get_singleton_cmp() {
+  Entity &ent = get_singleton<Component>();
+  return &(ent.get<Component>());
+}
+
+inline void EntityHelper::markIDForCleanup(const int e_id) {
+  const auto &entities = get_entities();
+  auto it = entities.begin();
+  while (it != get_entities().end()) {
+    if ((*it)->id == e_id) {
+      (*it)->cleanup = true;
+      break;
+    }
+    it++;
+  }
+}
+
+inline void EntityHelper::cleanup() {
+  EntityHelper::merge_entity_arrays();
+  Entities &entities = get_entities_for_mod();
+
+  const auto newend = std::remove_if(
+      entities.begin(), entities.end(),
+      [](const auto &entity) { return !entity || entity->cleanup; });
+
+  entities.erase(newend, entities.end());
+}
+
+inline void EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL() {
+  Entities &entities = get_entities_for_mod();
+  entities.clear();
+  EntityHelper::get().temp_entities.clear();
+}
+
+inline void EntityHelper::delete_all_entities(const bool include_permanent) {
+  EntityHelper::merge_entity_arrays();
+
+  if (include_permanent) {
+    delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    return;
+  }
+
+  Entities &entities = get_entities_for_mod();
+
+  const auto newend = std::remove_if(
+      entities.begin(), entities.end(), [](const auto &entity) {
+        return !EntityHelper::get().permanant_ids.contains(entity->id);
+      });
+
+  entities.erase(newend, entities.end());
+}
+
+inline void EntityHelper::forEachEntity(const std::function<ForEachFlow(Entity &)> &cb) {
+  for (const auto &e : get_entities()) {
+    if (!e)
+      continue;
+    const auto fef = cb(*e);
+    if (fef == 1)
+      continue;
+    if (fef == 2)
+      break;
+  }
+}
+
+inline std::shared_ptr<Entity> EntityHelper::getEntityAsSharedPtr(const Entity &entity) {
+  for (const std::shared_ptr<Entity> &current_entity : get_entities()) {
+    if (entity.id == current_entity->id)
+      return current_entity;
+  }
+  return {};
+}
+
+inline std::shared_ptr<Entity> EntityHelper::getEntityAsSharedPtr(const OptEntity entity) {
+  if (!entity)
+    return {};
+  const Entity &e = entity.asE();
+  return getEntityAsSharedPtr(e);
+}
+
+inline OptEntity EntityHelper::getEntityForID(const EntityID id) {
+  if (id == -1)
+    return {};
+
+  for (const auto &e : get_entities()) {
+    if (!e)
+      continue;
+    if (e->id == id)
+      return *e;
+  }
+  return {};
+}
+
+inline Entity &EntityHelper::getEntityForIDEnforce(const EntityID id) {
+  auto opt_ent = getEntityForID(id);
+  return opt_ent.asE();
+}
+
 } // namespace afterhours
