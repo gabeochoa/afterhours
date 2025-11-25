@@ -8,9 +8,16 @@
 
 #include "../debug_allocator.h"
 #include "../singleton.h"
-#include "entity.h"
+#include "component_fingerprint_storage.h"
+#include "component_storage_registry.h"
 
+// Forward declarations to break circular dependency with entity.h
 namespace afterhours {
+struct Entity;
+struct OptEntity;
+using EntityID = int;
+using ComponentBitSet = std::bitset<max_num_components>;
+using RefEntity = std::reference_wrapper<Entity>;
 using EntityType = std::shared_ptr<Entity>;
 
 #ifdef AFTER_HOURS_ENTITY_ALLOC_DEBUG
@@ -31,6 +38,10 @@ struct EntityHelper {
   Entities temp_entities;
   std::set<int> permanant_ids;
   std::map<ComponentID, Entity *> singletonMap;
+  
+  // SOA storage
+  ComponentFingerprintStorage fingerprint_storage;
+  ComponentStorageRegistry component_registry;
 
   struct CreationOptions {
     bool is_permanent;
@@ -229,6 +240,39 @@ struct EntityHelper {
     auto opt_ent = getEntityForID(id);
     return opt_ent.asE();
   }
+  
+  // SOA helper methods
+  template <typename Component>
+  static ComponentStorage<Component> &get_component_storage() {
+    return get().component_registry.get_storage<Component>();
+  }
+  
+  static ComponentFingerprintStorage &get_fingerprint_storage() {
+    return get().fingerprint_storage;
+  }
+  
+  template <typename Component>
+  static Component *get_component_for_entity(EntityID eid) {
+    auto &storage = get_component_storage<Component>();
+    return storage.get_component(eid);
+  }
+  
+  template <typename Component>
+  static const Component *get_component_for_entity_const(EntityID eid) {
+    auto &storage = get_component_storage<Component>();
+    return storage.get_component(eid);
+  }
+  
+  static ComponentBitSet get_fingerprint_for_entity(EntityID eid) {
+    return get_fingerprint_storage().get_fingerprint(eid);
+  }
+  
+  static void update_fingerprint_for_entity(EntityID eid, const ComponentBitSet &fingerprint) {
+    get_fingerprint_storage().update_fingerprint(eid, fingerprint);
+  }
 };
+
+// Include full Entity definition after EntityHelper is defined
+// This breaks the circular dependency: entity.h can now use EntityHelper
 
 } // namespace afterhours

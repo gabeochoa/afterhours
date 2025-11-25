@@ -6,7 +6,12 @@
 #include <vector>
 
 #include "base_component.h"
-#include "entity.h"
+
+// Forward declarations - full definitions in entity.h
+namespace afterhours {
+using ComponentBitSet = std::bitset<max_num_components>;
+using EntityID = int;
+}
 
 namespace afterhours {
 
