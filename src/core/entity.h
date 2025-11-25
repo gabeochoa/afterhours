@@ -12,6 +12,11 @@
 #include "../type_name.h"
 #include "base_component.h"
 
+// Forward declaration for EntityHelper - full definition included at end
+namespace afterhours {
+struct EntityHelper;
+}
+
 namespace afterhours {
 #ifndef AFTER_HOURS_MAX_ENTITY_TAGS
 #define AFTER_HOURS_MAX_ENTITY_TAGS 64
@@ -47,6 +52,7 @@ struct Entity {
   virtual ~Entity() {}
 
   template <typename T> [[nodiscard]] bool has() const {
+    // For now, use AoS only - SOA integration will be added after circular dependency is resolved
     const bool result = componentSet[components::get_type_id<T>()];
 #if defined(AFTER_HOURS_DEBUG)
     log_trace("checking component {} {} on entity {}",
