@@ -360,7 +360,6 @@ struct settings : developer::Plugin {
         SettingsData default_data;
         add_singleton_components<SettingsData>(entity, default_data,
                                                settings_file);
-        EntityHelper::merge_entity_arrays();
     }
 
     template<typename SettingsData>

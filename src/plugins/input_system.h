@@ -587,7 +587,7 @@ struct input : developer::Plugin {
     static auto get_input_collector() -> PossibleInputCollector {
         // TODO replace with a singletone query
         OptEntity opt_collector =
-            EntityQuery({.ignore_temp_warning = true})
+            EntityQuery()
                 .template whereHasComponent<InputCollector>()
                 .gen_first();
         if (!opt_collector.valid()) return {};

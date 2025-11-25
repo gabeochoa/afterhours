@@ -8,10 +8,23 @@
 
 namespace afterhours {
 
+// Forward declaration
+using EntityID = int;
+
+// Type-erased base class for component storages
+// Defined here so ComponentStorage can inherit from it
+struct ComponentStorageBase {
+  virtual ~ComponentStorageBase() = default;
+  virtual void remove_component(EntityID eid) = 0;
+  virtual bool has_component(EntityID eid) const = 0;
+  virtual size_t size() const = 0;
+  virtual void clear() = 0;
+};
+
 // Component storage for SOA architecture
 // Stores components of a specific type in dense arrays
 template <typename Component>
-struct ComponentStorage {
+struct ComponentStorage : public ComponentStorageBase {
   static_assert(std::is_base_of<BaseComponent, Component>::value,
                 "Component must inherit from BaseComponent");
   
@@ -66,12 +79,12 @@ struct ComponentStorage {
   }
   
   // Check if entity has this component
-  bool has_component(EntityID eid) const {
+  bool has_component(EntityID eid) const override {
     return entity_to_index.contains(eid);
   }
   
   // Remove component for an entity
-  void remove_component(EntityID eid) {
+  void remove_component(EntityID eid) override {
     auto it = entity_to_index.find(eid);
     if (it == entity_to_index.end()) {
       return; // Component doesn't exist
@@ -105,7 +118,7 @@ struct ComponentStorage {
   }
   
   // Get count of entities with this component
-  size_t size() const {
+  size_t size() const override {
     return components.size();
   }
   
@@ -115,7 +128,7 @@ struct ComponentStorage {
   }
   
   // Clear all components
-  void clear() {
+  void clear() override {
     components.clear();
     entity_ids.clear();
     entity_to_index.clear();

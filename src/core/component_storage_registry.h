@@ -8,15 +8,6 @@
 
 namespace afterhours {
 
-// Type-erased base class for component storages
-struct ComponentStorageBase {
-  virtual ~ComponentStorageBase() = default;
-  virtual void remove_component(EntityID eid) = 0;
-  virtual bool has_component(EntityID eid) const = 0;
-  virtual size_t size() const = 0;
-  virtual void clear() = 0;
-};
-
 // Registry for component storages (one storage per component type)
 struct ComponentStorageRegistry {
   // Type-erased storage map: ComponentID -> ComponentStorageBase*

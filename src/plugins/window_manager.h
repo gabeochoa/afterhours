@@ -159,7 +159,7 @@ struct window_manager : developer::Plugin {
 
         [[nodiscard]] size_t current_index() const {
             const auto &entity =
-                EntityQuery({.force_merge = true})
+                EntityQuery()
                     .whereHasComponent<ProvidesCurrentResolution>()
                     .gen_first_enforce();
             const ProvidesCurrentResolution &pcr =

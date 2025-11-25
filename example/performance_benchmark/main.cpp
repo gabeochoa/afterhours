@@ -221,7 +221,6 @@ void benchmark_entity_creation() {
             []() {
               EntityHelper::delete_all_entities(true);
               create_test_entities(NUM_ENTITIES);
-              EntityHelper::merge_entity_arrays();
             },
             10, 2);
 }
@@ -232,7 +231,6 @@ void benchmark_component_access() {
   // Reset
   EntityHelper::delete_all_entities(true);
   create_test_entities(NUM_ENTITIES);
-  EntityHelper::merge_entity_arrays();
 
   run_benchmark("Access Transform component (direct)", []() {
     int sum = 0;
@@ -262,7 +260,6 @@ void benchmark_queries() {
   // Reset
   EntityHelper::delete_all_entities(true);
   create_test_entities(NUM_ENTITIES);
-  EntityHelper::merge_entity_arrays();
 
   run_benchmark("Query: Transform only", []() {
     return EntityQuery().whereHasComponent<Transform>().gen().size();
@@ -323,7 +320,6 @@ void benchmark_system_iteration() {
   // Reset
   EntityHelper::delete_all_entities(true);
   create_test_entities(NUM_ENTITIES);
-  EntityHelper::merge_entity_arrays();
 
   SystemManager systems;
   auto move_system = std::make_unique<MoveSystem>();
@@ -347,15 +343,12 @@ void benchmark_memory_usage() {
   });
 
   create_test_entities(1000);
-  EntityHelper::merge_entity_arrays();
   measure("Memory: 1,000 entities", []() {});
 
   create_test_entities(9000); // Total 10k
-  EntityHelper::merge_entity_arrays();
   measure("Memory: 10,000 entities", []() {});
 
   create_test_entities(90000); // Total 100k
-  EntityHelper::merge_entity_arrays();
   measure("Memory: 100,000 entities", []() {});
 
   std::cout << "\n";
@@ -369,7 +362,6 @@ void benchmark_query_scaling() {
   for (size_t count : entity_counts) {
     EntityHelper::delete_all_entities(true);
     create_test_entities(count);
-    EntityHelper::merge_entity_arrays();
 
     std::string label = "Query scaling: " + std::to_string(count) + " entities";
     run_benchmark(label, []() {

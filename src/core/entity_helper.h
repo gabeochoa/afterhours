@@ -35,7 +35,6 @@ struct EntityHelper {
   SINGLETON(EntityHelper)
 
   Entities entities_DO_NOT_USE;
-  Entities temp_entities;
   std::set<int> permanant_ids;
   std::map<ComponentID, Entity *> singletonMap;
   
@@ -52,12 +51,6 @@ struct EntityHelper {
     Continue = 1,
     Break = 2,
   };
-
-  static void reserve_temp_space() {
-    EntityHelper::get().temp_entities.reserve(sizeof(EntityType) * 100);
-  }
-
-  static Entities &get_temp() { return EntityHelper::get().temp_entities; }
 
   static Entities &get_entities_for_mod() {
     return EntityHelper::get().entities_DO_NOT_USE;
@@ -80,7 +73,6 @@ struct EntityHelper {
   static Entity &createEntityWithOptions(const CreationOptions &options);
 
   // Forward declarations - implementations after Entity is defined
-  static void merge_entity_arrays();
   template <typename Component> static void registerSingleton(Entity &ent);
   template <typename Component> static RefEntity get_singleton();
   template <typename Component> static Component *get_singleton_cmp();

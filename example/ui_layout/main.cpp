@@ -48,7 +48,6 @@ using namespace afterhours::ui;
 
 static UIComponent &make_component(Entity &entity) {
   auto &cmp = entity.addComponent<ui::UIComponent>(entity.id);
-  EntityHelper::merge_entity_arrays();
   return cmp;
 }
 

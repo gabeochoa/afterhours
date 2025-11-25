@@ -121,7 +121,6 @@ void files::init(const std::string &game_name, const std::string &root_folder) {
     // Create singleton entity
     Entity &entity = EntityHelper::createPermanentEntity();
     add_singleton_components(entity, game_name, root_folder);
-    EntityHelper::merge_entity_arrays();
 }
 
 fs::path files::get_resource_path(const std::string &group,

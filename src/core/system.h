@@ -54,7 +54,6 @@ public:
   virtual void for_each(const Entity &, const float) const = 0;
 
   bool include_derived_children = false;
-  bool ignore_temp_entities = false;
 
   virtual void for_each_derived(Entity &, const float) = 0;
   virtual void for_each_derived(const Entity &, const float) const = 0;
@@ -368,7 +367,8 @@ struct SystemManager {
           system->for_each(*entity, dt);
       }
       system->after(dt);
-      EntityHelper::merge_entity_arrays();
+      // Note: merge_entity_arrays() removed - entities now added directly to SOA storage
+      // No merge needed since temp_entities pattern is being phased out
     }
   }
 

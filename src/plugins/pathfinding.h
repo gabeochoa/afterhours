@@ -361,7 +361,6 @@ struct pathfinding : developer::Plugin {
 
         Entity &entity = EntityHelper::createPermanentEntity();
         add_singleton_components(entity);
-        EntityHelper::merge_entity_arrays();
     }
 
     static std::thread start() {
