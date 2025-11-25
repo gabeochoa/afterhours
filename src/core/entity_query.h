@@ -393,65 +393,66 @@ private:
     return out;
   }
 
-  // Extract component requirements from WhereHasComponent modifications
-  ComponentBitSet extract_component_mask() const {
-    ComponentBitSet mask;
-    for (const auto &mod : mods) {
-      // Check if this is a WhereHasComponent modification
-      auto *where_has = dynamic_cast<const WhereHasComponent<BaseComponent> *>(mod.get());
-      if (where_has) {
-        // We can't easily extract the component type from the type-erased Modification
-        // So we'll use a different approach: check all mods and build mask
-        // For now, we'll filter by checking each mod
-      }
-    }
-    return mask;
-  }
-  
+
   // Filter entities by SOA fingerprint first (fast pre-filtering)
   RefEntities filter_by_soa_fingerprints() const {
     RefEntities out;
     
-    // Get all entity IDs from SOA fingerprint storage
+    // If no component requirements, use all entities (backward compatibility)
+    if (!has_component_requirements) {
+      out.reserve(entities.size());
+      for (const auto &e_ptr : entities) {
+        if (!e_ptr)
+          continue;
+        Entity &e = *e_ptr;
+        out.push_back(e);
+      }
+      return out;
+    }
+    
+    // Use SOA fingerprint storage for fast filtering
     const auto &fingerprint_storage = EntityHelper::get_fingerprint_storage();
     const auto &all_fingerprints = fingerprint_storage.fingerprints;
     const auto &all_entity_ids = fingerprint_storage.entity_ids;
     
-    // Build component requirement mask from WhereHasComponent modifications
-    ComponentBitSet required_mask;
-    bool has_component_requirements = false;
-    
-    for (const auto &mod : mods) {
-      // Try to extract component requirements
-      // Since modifications are type-erased, we need to check them at runtime
-      // For now, we'll do a hybrid approach: use SOA for initial filtering if possible
+    // Build lookup map for fast entity access
+    std::unordered_map<EntityID, std::shared_ptr<Entity>> entity_map;
+    entity_map.reserve(entities.size());
+    for (const auto &e_ptr : entities) {
+      if (e_ptr) {
+        entity_map[e_ptr->id] = e_ptr;
+      }
     }
     
-    // If we have component requirements, filter by fingerprints first
-    if (has_component_requirements) {
-      out.reserve(all_fingerprints.size());
-      for (size_t i = 0; i < all_fingerprints.size(); ++i) {
-        EntityID eid = all_entity_ids[i];
-        
-        // Skip cleanup-marked entities
-        if (fingerprint_storage.cleanup_marked.contains(eid)) {
-          continue;
-        }
-        
-        // Check if fingerprint matches required components
-        const ComponentBitSet &fp = all_fingerprints[i];
-        if ((fp & required_mask) == required_mask) {
-          // Find entity in entities list
-          for (const auto &e_ptr : entities) {
-            if (!e_ptr)
-              continue;
-            if (e_ptr->id == eid) {
-              out.push_back(*e_ptr);
-              break;
-            }
-          }
+    // Filter by fingerprints
+    out.reserve(all_fingerprints.size());
+    for (size_t i = 0; i < all_fingerprints.size(); ++i) {
+      EntityID eid = all_entity_ids[i];
+      
+      // Skip cleanup-marked entities
+      if (fingerprint_storage.cleanup_marked.contains(eid)) {
+        continue;
+      }
+      
+      // Check if fingerprint matches required components
+      const ComponentBitSet &fp = all_fingerprints[i];
+      if ((fp & required_components_mask) == required_components_mask) {
+        // Find entity in entities list
+        auto it = entity_map.find(eid);
+        if (it != entity_map.end()) {
+          out.push_back(*(it->second));
         }
       }
+    }
+    
+    return out;
+  }
+
+  RefEntities run_query(const UnderlyingOptions) const {
+    // Use SOA fingerprint filtering if we have component requirements
+    RefEntities out;
+    if (has_component_requirements) {
+      out = filter_by_soa_fingerprints();
     } else {
       // No component requirements, use all entities (backward compatibility)
       out.reserve(entities.size());
@@ -462,28 +463,8 @@ private:
         out.push_back(e);
       }
     }
-    
-    return out;
-  }
 
-  RefEntities run_query(const UnderlyingOptions) const {
-    // Try SOA fingerprint filtering first for better performance
-    RefEntities out = filter_by_soa_fingerprints();
-    
-    // If SOA filtering didn't help (no component requirements), use original approach
-    if (out.empty() && entities.size() > 0) {
-      // Fallback to original implementation for backward compatibility
-      out.clear();
-      out.reserve(entities.size());
-      for (const auto &e_ptr : entities) {
-        if (!e_ptr)
-          continue;
-        Entity &e = *e_ptr;
-        out.push_back(e);
-      }
-    }
-
-    // Apply remaining modifications
+    // Apply remaining modifications (tags, lambdas, etc.)
     auto it = out.end();
     for (const auto &mod : mods) {
       it = std::partition(out.begin(), it, [&mod](const auto &entity) {
