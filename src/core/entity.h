@@ -473,11 +473,24 @@ inline void EntityHelper::cleanup() {
   EntityHelper::merge_entity_arrays();
   Entities &entities = get_entities_for_mod();
 
+  // Mark entities for cleanup in SOA storage
+  for (const auto &entity : entities) {
+    if (!entity)
+      continue;
+    if (entity->cleanup) {
+      get_fingerprint_storage().mark_for_cleanup(entity->id);
+      get().component_registry.remove_entity_from_all(entity->id);
+    }
+  }
+
   const auto newend = std::remove_if(
       entities.begin(), entities.end(),
       [](const auto &entity) { return !entity || entity->cleanup; });
 
   entities.erase(newend, entities.end());
+  
+  // Cleanup SOA fingerprint storage (removes marked entities)
+  get_fingerprint_storage().cleanup();
 }
 
 inline void EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL() {
