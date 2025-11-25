@@ -74,172 +74,26 @@ struct EntityHelper {
     return matching;
   }
 
-  static Entity &createEntity() {
-    return createEntityWithOptions({.is_permanent = false});
-  }
+  // Forward declarations - implementations after Entity is defined
+  static Entity &createEntity();
+  static Entity &createPermanentEntity();
+  static Entity &createEntityWithOptions(const CreationOptions &options);
 
-  static Entity &createPermanentEntity() {
-    return createEntityWithOptions({.is_permanent = true});
-  }
+  // Forward declarations - implementations after Entity is defined
+  static void merge_entity_arrays();
+  template <typename Component> static void registerSingleton(Entity &ent);
+  template <typename Component> static RefEntity get_singleton();
+  template <typename Component> static Component *get_singleton_cmp();
+  static void markIDForCleanup(const int e_id);
+  static void cleanup();
+  static void delete_all_entities_NO_REALLY_I_MEAN_ALL();
+  static void delete_all_entities(const bool include_permanent);
 
-  static Entity &createEntityWithOptions(const CreationOptions &options) {
-    if (get_temp().capacity() == 0) [[unlikely]]
-      reserve_temp_space();
-
-    std::shared_ptr<Entity> e(new Entity());
-    get_temp().push_back(e);
-
-    if (options.is_permanent) {
-      EntityHelper::get().permanant_ids.insert(e->id);
-    }
-
-    return *e;
-  }
-
-  static void merge_entity_arrays() {
-    if (get_temp().empty())
-      return;
-
-    for (const auto &entity : get_temp()) {
-      if (!entity)
-        continue;
-      if (entity->cleanup)
-        continue;
-      get_entities_for_mod().push_back(entity);
-    }
-    get_temp().clear();
-  }
-
-  template <typename Component> static void registerSingleton(Entity &ent) {
-    const ComponentID id = components::get_type_id<Component>();
-
-    if (EntityHelper::get().singletonMap.contains(id)) {
-      log_error("Already had registered singleton {}", type_name<Component>());
-    }
-
-    EntityHelper::get().singletonMap.emplace(id, &ent);
-    log_info("Registered singleton {} for {} ({})", ent.id,
-             type_name<Component>(), id);
-  }
-
-  template <typename Component> static RefEntity get_singleton() {
-    const ComponentID id = components::get_type_id<Component>();
-    auto &singleton_map = EntityHelper::get().singletonMap;
-    if (!singleton_map.contains(id)) {
-      log_warn("Singleton map is missing value for component {} ({}). Did you "
-               "register this component previously?",
-               id, type_name<Component>());
-      // Return a reference to a static dummy entity to avoid crash
-      // This should never happen in proper usage, but prevents segfault
-      static Entity dummy_entity;
-      return dummy_entity;
-    }
-    auto *entity_ptr = singleton_map.at(id);
-    if (!entity_ptr) {
-      log_error("Singleton map contains null pointer for component {} ({})",
-                id, type_name<Component>());
-      static Entity dummy_entity;
-      return dummy_entity;
-    }
-    return *entity_ptr;
-  }
-
-  template <typename Component> static Component *get_singleton_cmp() {
-    Entity &ent = get_singleton<Component>();
-    return &(ent.get<Component>());
-  }
-
-  static void markIDForCleanup(const int e_id) {
-    const auto &entities = get_entities();
-    auto it = entities.begin();
-    while (it != get_entities().end()) {
-      if ((*it)->id == e_id) {
-        (*it)->cleanup = true;
-        break;
-      }
-      it++;
-    }
-  }
-
-  static void cleanup() {
-    EntityHelper::merge_entity_arrays();
-    Entities &entities = get_entities_for_mod();
-
-    const auto newend = std::remove_if(
-        entities.begin(), entities.end(),
-        [](const auto &entity) { return !entity || entity->cleanup; });
-
-    entities.erase(newend, entities.end());
-  }
-
-  static void delete_all_entities_NO_REALLY_I_MEAN_ALL() {
-    Entities &entities = get_entities_for_mod();
-    entities.clear();
-    EntityHelper::get().temp_entities.clear();
-  }
-
-  static void delete_all_entities(const bool include_permanent) {
-    EntityHelper::merge_entity_arrays();
-
-    if (include_permanent) {
-      delete_all_entities_NO_REALLY_I_MEAN_ALL();
-      return;
-    }
-
-    Entities &entities = get_entities_for_mod();
-
-    const auto newend = std::remove_if(
-        entities.begin(), entities.end(), [](const auto &entity) {
-          return !EntityHelper::get().permanant_ids.contains(entity->id);
-        });
-
-    entities.erase(newend, entities.end());
-  }
-
-  static void forEachEntity(const std::function<ForEachFlow(Entity &)> &cb) {
-    for (const auto &e : get_entities()) {
-      if (!e)
-        continue;
-      const auto fef = cb(*e);
-      if (fef == 1)
-        continue;
-      if (fef == 2)
-        break;
-    }
-  }
-
-  static std::shared_ptr<Entity> getEntityAsSharedPtr(const Entity &entity) {
-    for (const std::shared_ptr<Entity> &current_entity : get_entities()) {
-      if (entity.id == current_entity->id)
-        return current_entity;
-    }
-    return {};
-  }
-
-  static std::shared_ptr<Entity> getEntityAsSharedPtr(const OptEntity entity) {
-    if (!entity)
-      return {};
-    const Entity &e = entity.asE();
-    return getEntityAsSharedPtr(e);
-  }
-
-  static OptEntity getEntityForID(const EntityID id) {
-    if (id == -1)
-      return {};
-
-    for (const auto &e : get_entities()) {
-      if (!e)
-        continue;
-      if (e->id == id)
-        return *e;
-    }
-    return {};
-  }
-
-  static Entity &getEntityForIDEnforce(const EntityID id) {
-    auto opt_ent = getEntityForID(id);
-    return opt_ent.asE();
-  }
+  static void forEachEntity(const std::function<ForEachFlow(Entity &)> &cb);
+  static std::shared_ptr<Entity> getEntityAsSharedPtr(const Entity &entity);
+  static std::shared_ptr<Entity> getEntityAsSharedPtr(const OptEntity entity);
+  static OptEntity getEntityForID(const EntityID id);
+  static Entity &getEntityForIDEnforce(const EntityID id);
   
   // SOA helper methods
   template <typename Component>
@@ -272,7 +126,181 @@ struct EntityHelper {
   }
 };
 
+} // namespace afterhours
+
 // Include full Entity definition after EntityHelper is defined
-// This breaks the circular dependency: entity.h can now use EntityHelper
+// This allows entity_helper.h method implementations that need Entity to work
+#include "entity.h"
+
+// Implement EntityHelper methods that need Entity to be complete
+namespace afterhours {
+
+inline Entity &EntityHelper::createEntity() {
+  return createEntityWithOptions({.is_permanent = false});
+}
+
+inline Entity &EntityHelper::createPermanentEntity() {
+  return createEntityWithOptions({.is_permanent = true});
+}
+
+inline Entity &EntityHelper::createEntityWithOptions(const CreationOptions &options) {
+  if (get_temp().capacity() == 0) [[unlikely]]
+    reserve_temp_space();
+
+  std::shared_ptr<Entity> e(new Entity());
+  get_temp().push_back(e);
+
+  if (options.is_permanent) {
+    EntityHelper::get().permanant_ids.insert(e->id);
+  }
+
+  return *e;
+}
+
+inline void EntityHelper::merge_entity_arrays() {
+  if (get_temp().empty())
+    return;
+
+  for (const auto &entity : get_temp()) {
+    if (!entity)
+      continue;
+    if (entity->cleanup)
+      continue;
+    get_entities_for_mod().push_back(entity);
+  }
+  get_temp().clear();
+}
+
+template <typename Component>
+inline void EntityHelper::registerSingleton(Entity &ent) {
+  const ComponentID id = components::get_type_id<Component>();
+
+  if (EntityHelper::get().singletonMap.contains(id)) {
+    log_error("Already had registered singleton {}", type_name<Component>());
+  }
+
+  EntityHelper::get().singletonMap.emplace(id, &ent);
+  log_info("Registered singleton {} for {} ({})", ent.id,
+           type_name<Component>(), id);
+}
+
+template <typename Component>
+inline RefEntity EntityHelper::get_singleton() {
+  const ComponentID id = components::get_type_id<Component>();
+  auto &singleton_map = EntityHelper::get().singletonMap;
+  if (!singleton_map.contains(id)) {
+    log_warn("Singleton map is missing value for component {} ({}). Did you "
+             "register this component previously?",
+             id, type_name<Component>());
+    static Entity dummy_entity;
+    return dummy_entity;
+  }
+  auto *entity_ptr = singleton_map.at(id);
+  if (!entity_ptr) {
+    log_error("Singleton map contains null pointer for component {} ({})",
+              id, type_name<Component>());
+    static Entity dummy_entity;
+    return dummy_entity;
+  }
+  return *entity_ptr;
+}
+
+template <typename Component>
+inline Component *EntityHelper::get_singleton_cmp() {
+  Entity &ent = get_singleton<Component>();
+  return &(ent.get<Component>());
+}
+
+inline void EntityHelper::markIDForCleanup(const int e_id) {
+  const auto &entities = get_entities();
+  auto it = entities.begin();
+  while (it != get_entities().end()) {
+    if ((*it)->id == e_id) {
+      (*it)->cleanup = true;
+      break;
+    }
+    it++;
+  }
+}
+
+inline void EntityHelper::cleanup() {
+  EntityHelper::merge_entity_arrays();
+  Entities &entities = get_entities_for_mod();
+
+  const auto newend = std::remove_if(
+      entities.begin(), entities.end(),
+      [](const auto &entity) { return !entity || entity->cleanup; });
+
+  entities.erase(newend, entities.end());
+}
+
+inline void EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL() {
+  Entities &entities = get_entities_for_mod();
+  entities.clear();
+  EntityHelper::get().temp_entities.clear();
+}
+
+inline void EntityHelper::delete_all_entities(const bool include_permanent) {
+  EntityHelper::merge_entity_arrays();
+
+  if (include_permanent) {
+    delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    return;
+  }
+
+  Entities &entities = get_entities_for_mod();
+
+  const auto newend = std::remove_if(
+      entities.begin(), entities.end(), [](const auto &entity) {
+        return !EntityHelper::get().permanant_ids.contains(entity->id);
+      });
+
+  entities.erase(newend, entities.end());
+}
+
+inline void EntityHelper::forEachEntity(const std::function<ForEachFlow(Entity &)> &cb) {
+  for (const auto &e : get_entities()) {
+    if (!e)
+      continue;
+    const auto fef = cb(*e);
+    if (fef == 1)
+      continue;
+    if (fef == 2)
+      break;
+  }
+}
+
+inline std::shared_ptr<Entity> EntityHelper::getEntityAsSharedPtr(const Entity &entity) {
+  for (const std::shared_ptr<Entity> &current_entity : get_entities()) {
+    if (entity.id == current_entity->id)
+      return current_entity;
+  }
+  return {};
+}
+
+inline std::shared_ptr<Entity> EntityHelper::getEntityAsSharedPtr(const OptEntity entity) {
+  if (!entity)
+    return {};
+  const Entity &e = entity.asE();
+  return getEntityAsSharedPtr(e);
+}
+
+inline OptEntity EntityHelper::getEntityForID(const EntityID id) {
+  if (id == -1)
+    return {};
+
+  for (const auto &e : get_entities()) {
+    if (!e)
+      continue;
+    if (e->id == id)
+      return *e;
+  }
+  return {};
+}
+
+inline Entity &EntityHelper::getEntityForIDEnforce(const EntityID id) {
+  auto opt_ent = getEntityForID(id);
+  return opt_ent.asE();
+}
 
 } // namespace afterhours
