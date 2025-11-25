@@ -378,6 +378,10 @@ inline Entity &EntityHelper::createEntityWithOptions(const CreationOptions &opti
   std::shared_ptr<Entity> e(new Entity());
   get_temp().push_back(e);
 
+  // Register entity in SOA fingerprint storage
+  ComponentBitSet empty_fingerprint;
+  get_fingerprint_storage().add_entity(e->id, empty_fingerprint);
+
   if (options.is_permanent) {
     EntityHelper::get().permanant_ids.insert(e->id);
   }
@@ -394,6 +398,20 @@ inline void EntityHelper::merge_entity_arrays() {
       continue;
     if (entity->cleanup)
       continue;
+    
+    // Register entity in SOA fingerprint storage if not already registered
+    // (entities created directly might not be registered yet)
+    if (!get_fingerprint_storage().has_entity(entity->id)) {
+      ComponentBitSet fingerprint;
+      // Build fingerprint from entity's componentSet
+      for (size_t i = 0; i < entity->componentSet.size(); ++i) {
+        if (entity->componentSet[i]) {
+          fingerprint[i] = true;
+        }
+      }
+      get_fingerprint_storage().add_entity(entity->id, fingerprint);
+    }
+    
     get_entities_for_mod().push_back(entity);
   }
   get_temp().clear();
@@ -466,6 +484,10 @@ inline void EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL() {
   Entities &entities = get_entities_for_mod();
   entities.clear();
   EntityHelper::get().temp_entities.clear();
+  
+  // Clear SOA storage
+  get_fingerprint_storage().clear();
+  get().component_registry.clear_all();
 }
 
 inline void EntityHelper::delete_all_entities(const bool include_permanent) {

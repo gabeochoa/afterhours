@@ -80,6 +80,18 @@ struct ComponentStorageRegistry {
     }
   }
   
+  // Mark entity for cleanup in all storages (if they support it)
+  void mark_entity_for_cleanup(EntityID eid) {
+    // ComponentStorage handles cleanup via remove_component, so this is a no-op
+    // But we keep it for API consistency with fingerprint storage
+  }
+  
+  // Cleanup marked entities (remove them from all storages)
+  void cleanup() {
+    // ComponentStorage handles cleanup via remove_component during normal operations
+    // This is a no-op but kept for API consistency
+  }
+  
   // Clear all storages
   void clear_all() {
     storages.clear();
