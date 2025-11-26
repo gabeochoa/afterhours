@@ -247,6 +247,17 @@ struct EntityQuery {
     return ents;
   }
 
+  template <typename Component>
+  [[nodiscard]] std::vector<std::reference_wrapper<Component>> gen_as() const {
+    const auto results = gen();
+    std::vector<std::reference_wrapper<Component>> components;
+    components.reserve(results.size());
+    for (Entity &entity : results) {
+      components.push_back(std::ref(entity.get<Component>()));
+    }
+    return components;
+  }
+
   [[nodiscard]] RefEntities
   gen_with_options(const UnderlyingOptions options) const {
     if (!ran_query)
