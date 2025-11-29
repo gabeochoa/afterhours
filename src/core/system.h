@@ -280,7 +280,8 @@ struct System
   void for_each(Entity &entity, const float dt) {
     if (!tags_ok(entity))
       return;
-    if (HasAllComponents<ComponentsOnly>::value(entity)) {
+    bool has_all = HasAllComponents<ComponentsOnly>::value(entity);
+    if (has_all) {
       CallWithComponents<ComponentsOnly>::call(this, entity, dt);
     }
   }

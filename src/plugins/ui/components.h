@@ -188,16 +188,7 @@ struct HasUIModifiers : BaseComponent {
   float translate_y = 0.f;
 
   RectangleType apply_modifier(RectangleType rect) const {
-    rect = scale_rect(rect);
-    if (translate_x != 0.f || translate_y != 0.f) {
-      rect.x += translate_x;
-      rect.y += translate_y;
-    }
-    return rect;
-  }
-
-private:
-  RectangleType scale_rect(RectangleType rect) const {
+    // Apply scale first
     float s = scale;
     if (s != 1.0f) {
       float cx = rect.x + rect.width / 2.0f;
@@ -209,6 +200,7 @@ private:
       rect.width = new_w;
       rect.height = new_h;
     }
+    // Apply translate (only once!)
     if (translate_x != 0.f || translate_y != 0.f) {
       rect.x += translate_x;
       rect.y += translate_y;

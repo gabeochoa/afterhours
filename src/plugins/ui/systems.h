@@ -40,7 +40,7 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
     return output;
   }
 
-  virtual void for_each_with(Entity &, UIContext<InputAction> &context,
+  virtual void for_each_with(Entity &entity, UIContext<InputAction> &context,
                              float) override {
     // Apply theme defaults first
     auto &theme_defaults = imm::ThemeDefaults::get();
