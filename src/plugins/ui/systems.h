@@ -148,13 +148,15 @@ struct TrackIfComponentWillBeRendered : System<> {
     if (entity.is_missing<UIContext<InputAction>>())
       return;
 
-    const UIContext<InputAction> &context =
-        entity.get<UIContext<InputAction>>();
-
-    for (auto &cmd : context.render_cmds) {
-      auto id = cmd.id;
-      Entity &ent = EntityHelper::getEntityForIDEnforce(id);
-      set_visibility(ent.get<UIComponent>());
+    // Set visibility for all UIComponents, not just those in render_cmds
+    // render_cmds are cleared at the end of render phase, so we can't rely on
+    // them Instead, we check all components that have valid dimensions after
+    // layout
+    auto comps = EntityQuery().whereHasComponent<UIComponent>().gen();
+    for (Entity &ent : comps) {
+      if (ent.has<UIComponent>()) {
+        set_visibility(ent.get<UIComponent>());
+      }
     }
   }
 };
@@ -239,7 +241,13 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
     if (entity.has<HasLabel>() && entity.get<HasLabel>().is_disabled)
       return;
 
-    context->active_if_mouse_inside(entity.id, component.rect());
+    // Apply translation if present (with_translate applies via HasUIModifiers)
+    RectangleType rect = component.rect();
+    if (entity.has<HasUIModifiers>()) {
+      rect = entity.get<HasUIModifiers>().apply_modifier(rect);
+    }
+
+    context->active_if_mouse_inside(entity.id, rect);
 
     if (context->has_focus(entity.id) &&
         context->pressed(InputAction::WidgetPress)) {
