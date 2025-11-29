@@ -287,6 +287,10 @@ struct EntityQuery {
     return values[0];
   }
 
+  template <typename Component> [[nodiscard]] Component &gen_first_as() const {
+    return gen_first_enforce().template get<Component>();
+  }
+
   [[nodiscard]] std::optional<int> gen_first_id() const {
     if (!has_values())
       return {};
