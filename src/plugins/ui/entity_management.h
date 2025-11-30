@@ -4,8 +4,8 @@
 #include <source_location>
 #include <sstream>
 
-#include "../../../ecs.h"
-#include "../../../logging.h"
+#include "../../ecs.h"
+#include "../../logging.h"
 
 namespace afterhours {
 

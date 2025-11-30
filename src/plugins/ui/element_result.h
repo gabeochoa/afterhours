@@ -3,9 +3,9 @@
 #include <bitset>
 #include <variant>
 
-#include "../../../ecs.h"
-#include "../components.h"
-#include "../context.h"
+#include "../../ecs.h"
+#include "components.h"
+#include "context.h"
 
 namespace afterhours {
 

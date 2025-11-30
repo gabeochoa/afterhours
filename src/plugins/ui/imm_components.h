@@ -6,10 +6,10 @@
 #include <bitset>
 #include <string>
 
-#include "../../../ecs.h"
-#include "../../input_system.h"
-#include "../components.h"
+#include "../../ecs.h"
+#include "../input_system.h"
 #include "component_config.h"
+#include "components.h"
 #include "element_result.h"
 #include "entity_management.h"
 #include "rounded_corners.h"
