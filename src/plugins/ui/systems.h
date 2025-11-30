@@ -81,13 +81,36 @@ static void print_debug_autolayout_tree(Entity &entity, UIComponent &cmp,
   for (size_t i = 0; i < tab; i++)
     std::cout << "  ";
 
-  std::cout << cmp.id << " : ";
-  std::cout << cmp.rect().x << ",";
-  std::cout << cmp.rect().y << ",";
-  std::cout << cmp.rect().width << ",";
-  std::cout << cmp.rect().height << " ";
+  std::cout << "ID:" << cmp.id << " ";
+
   if (entity.has<UIComponentDebug>())
-    std::cout << entity.get<UIComponentDebug>().name() << " ";
+    std::cout << "[" << entity.get<UIComponentDebug>().name() << "] ";
+
+  std::cout << "Rect(" << cmp.rect().x << "," << cmp.rect().y << " "
+            << cmp.rect().width << "x" << cmp.rect().height << ") ";
+
+  std::cout << "Computed(" << cmp.computed[Axis::X] << "x"
+            << cmp.computed[Axis::Y] << ") ";
+
+  std::cout << "RelPos(" << cmp.computed_rel[Axis::X] << ","
+            << cmp.computed_rel[Axis::Y] << ") ";
+
+  std::cout << "Padding(" << cmp.computed_padd[Axis::left] << ","
+            << cmp.computed_padd[Axis::top] << ","
+            << cmp.computed_padd[Axis::right] << ","
+            << cmp.computed_padd[Axis::bottom] << ") ";
+
+  std::cout << "Margin(" << cmp.computed_margin[Axis::left] << ","
+            << cmp.computed_margin[Axis::top] << ","
+            << cmp.computed_margin[Axis::right] << ","
+            << cmp.computed_margin[Axis::bottom] << ") ";
+
+  std::cout << "Desired(" << cmp.desired[Axis::X] << "," << cmp.desired[Axis::Y]
+            << ") ";
+
+  if (cmp.absolute)
+    std::cout << "[ABS] ";
+
   std::cout << std::endl;
 
   for (EntityID child_id : cmp.children) {
@@ -118,7 +141,10 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
   virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
                              float) override {
 
-    AutoLayout::autolayout(cmp, resolution, components);
+    auto &styling_defaults = imm::UIStylingDefaults::get();
+    bool enable_grid = styling_defaults.enable_grid_snapping;
+
+    AutoLayout::autolayout(cmp, resolution, components, enable_grid);
 
     // print_debug_autolayout_tree(entity, cmp);
     // log_error("");

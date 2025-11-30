@@ -564,10 +564,16 @@ struct AutoLayout {
 
   window_manager::Resolution resolution;
   std::map<EntityID, RefEntity> mapping;
+  bool enable_grid_snapping = false;
 
   AutoLayout(window_manager::Resolution rez = {},
              const std::map<EntityID, RefEntity> &mapping_ = {})
       : resolution(rez), mapping(mapping_) {}
+
+  auto &set_grid_snapping(bool enabled) {
+    enable_grid_snapping = enabled;
+    return *this;
+  }
 
   Entity &to_ent(EntityID id) {
     auto it = mapping.find(id);
@@ -707,6 +713,13 @@ struct AutoLayout {
       break;
     }
     return screenValue;
+  }
+
+  float snap_to_8pt_grid(float value, Axis axis) {
+    constexpr float GRID_UNIT_720P = 4.0f;
+    float screen_value = fetch_screen_value_(axis);
+    float grid_unit = GRID_UNIT_720P * (screen_value / 720.0f);
+    return std::round(value / grid_unit) * grid_unit;
   }
 
   float compute_padding_for_standalone_exp(UIComponent &widget, Axis axis) {
@@ -1328,9 +1341,12 @@ struct AutoLayout {
       widget.computed_rel[Axis::Y] = 0.f;
     }
 
-    // Assuming we dont care about things smaller than 1 pixel
-    widget.computed[Axis::X] = round(widget.computed[Axis::X]);
-    widget.computed[Axis::Y] = round(widget.computed[Axis::Y]);
+    if (enable_grid_snapping) {
+      widget.computed[Axis::X] =
+          snap_to_8pt_grid(widget.computed[Axis::X], Axis::X);
+      widget.computed[Axis::Y] =
+          snap_to_8pt_grid(widget.computed[Axis::Y], Axis::Y);
+    }
 
     float sx = widget.computed[Axis::X] + widget.computed_padd[Axis::X];
     float sy = widget.computed[Axis::Y] + widget.computed_padd[Axis::Y];
@@ -1399,15 +1415,36 @@ struct AutoLayout {
         col_h = cy;
       }
 
-      child.computed_rel[Axis::X] = offx;
-      child.computed_rel[Axis::Y] = offy;
+      if (enable_grid_snapping) {
+        child.computed_rel[Axis::X] = snap_to_8pt_grid(offx, Axis::X);
+        child.computed_rel[Axis::Y] = snap_to_8pt_grid(offy, Axis::Y);
+      } else {
+        child.computed_rel[Axis::X] = offx;
+        child.computed_rel[Axis::Y] = offy;
+      }
+
+      constexpr float GRID_UNIT_720P = 4.0f;
+      float grid_unit_y =
+          GRID_UNIT_720P * (fetch_screen_value_(Axis::Y) / 720.0f);
+      float grid_unit_x =
+          GRID_UNIT_720P * (fetch_screen_value_(Axis::X) / 720.0f);
 
       // Setup for next child placement
-      if (child.flex_direction & FlexDirection::Column) {
-        offy += cy;
+      if (widget.flex_direction & FlexDirection::Column) {
+        float next_y = offy + cy;
+        if (enable_grid_snapping) {
+          next_y += grid_unit_y;
+          next_y = snap_to_8pt_grid(next_y, Axis::Y);
+        }
+        offy = next_y;
       }
-      if (child.flex_direction & FlexDirection::Row) {
-        offx += cx;
+      if (widget.flex_direction & FlexDirection::Row) {
+        float next_x = offx + cx;
+        if (enable_grid_snapping) {
+          next_x += grid_unit_x;
+          next_x = snap_to_8pt_grid(next_x, Axis::X);
+        }
+        offx = next_x;
       }
 
       update_max_size(cx, cy);
@@ -1446,8 +1483,10 @@ struct AutoLayout {
 
   static void autolayout(UIComponent &widget,
                          const window_manager::Resolution resolution,
-                         const std::map<EntityID, RefEntity> &map) {
+                         const std::map<EntityID, RefEntity> &map,
+                         bool enable_grid_snapping = false) {
     AutoLayout al(resolution, map);
+    al.set_grid_snapping(enable_grid_snapping);
 
     al.reset_computed_values(widget);
     // - (any) compute solos (doesnt rely on parent/child / other widgets)
