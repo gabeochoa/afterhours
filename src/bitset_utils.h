@@ -49,7 +49,9 @@ int get_random_boolean_bit(const std::bitset<N> &bitset,
         // No bits are enabled, return -1 or handle the error as needed.
         return -1;
     }
-    int random_index = generator() % (static_cast<int>(enabled_indices.size()));
+    const auto enabled_count = static_cast<size_t>(enabled_indices.size());
+    std::uniform_int_distribution<size_t> dist(0, enabled_count - 1);
+    const auto random_index = dist(generator);
     return enabled_indices[random_index];
 }
 
