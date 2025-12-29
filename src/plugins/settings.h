@@ -338,8 +338,10 @@ struct settings : developer::Plugin {
   template <typename SettingsData>
   static void init(const std::string & /* game_name */,
                    const std::string &settings_file) {
-    auto *provider = get_provider<SettingsData>();
-    if (provider) {
+    // Check if already initialized by checking singleton map directly
+    const ComponentID id =
+        components::get_type_id<ProvidesSettings<SettingsData>>();
+    if (EntityHelper::get().singletonMap.contains(id)) {
       log_warn("Settings plugin already initialized");
       return;
     }
