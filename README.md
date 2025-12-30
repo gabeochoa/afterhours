@@ -34,6 +34,32 @@ AFTER_HOURS_INPUT_VALIDATION_<>
 AFTER_HOURS_ENTITY_ALLOC_DEBUG
 - turns on log_warn whenever Entities deallocates (and theoretically allocates but unlikely) 
 
+AFTER_HOURS_ASSIGN_HANDLES_ON_CREATE
+- (optional) assigns stable `EntityHandle`s at `createEntity*()` time (even while entities are still in `temp_entities`)
+- by default handles are assigned on `merge_entity_arrays()` for maximum behavioral compatibility
+
+## EntityHandle (recommended for long-lived references)
+
+`RefEntity` / `OptEntity` are convenient for short-lived usage (like immediate query results), but **do not store them long-term**.
+
+For persistent relationships, store `EntityHandle` and resolve it when needed:
+
+```cpp
+afterhours::EntityHandle h = afterhours::EntityHelper::handle_for(entity);
+afterhours::OptEntity opt = afterhours::EntityHelper::resolve(h);
+if (opt) {
+  afterhours::Entity& e = opt.asE();
+  // use e...
+}
+```
+
+Default behavior:
+- temp entities (created this frame) live in `temp_entities`
+- handles are assigned on merge, so `handle_for(temp_entity)` returns invalid until merged
+
+Opt-in behavior:
+- define `AFTER_HOURS_ASSIGN_HANDLES_ON_CREATE` to assign handles immediately and allow resolving pre-merge
+
 
 ## Plugins
 
