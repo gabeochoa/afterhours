@@ -99,7 +99,7 @@ struct EntityHelper {
     }
 
     static OptEntity resolve(const EntityHandle h) {
-        if (!h.valid()) {
+        if (h.is_invalid()) {
             return {};
         }
 
