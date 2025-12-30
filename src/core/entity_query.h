@@ -311,6 +311,32 @@ struct EntityQuery {
     return ids;
   }
 
+  // Handle-based query results (non-breaking additive APIs).
+  // NOTE: By default, temp entities are not query-visible unless force_merge is
+  // enabled, so these handles are generally for merged entities only.
+  [[nodiscard]] std::vector<EntityHandle> gen_handles() const {
+    const auto results = gen();
+    std::vector<EntityHandle> handles;
+    handles.reserve(results.size());
+    std::transform(results.begin(), results.end(), std::back_inserter(handles),
+                   [](const RefEntity &ent) -> EntityHandle {
+                     return EntityHelper::handle_for(ent.get());
+                   });
+    return handles;
+  }
+
+  [[nodiscard]] std::optional<EntityHandle> gen_first_handle() const {
+    auto opt = gen_first();
+    if (!opt) {
+      return {};
+    }
+    const EntityHandle h = EntityHelper::handle_for(opt.asE());
+    if (!h.valid()) {
+      return {};
+    }
+    return h;
+  }
+
   [[nodiscard]] OptEntity gen_random() const {
     const auto results = gen();
     if (results.empty()) {

@@ -32,6 +32,19 @@ struct EntityHelper {
   std::set<int> permanant_ids;
   std::map<ComponentID, Entity *> singletonMap;
 
+  // Compatibility-first design:
+  // - `entities_DO_NOT_USE` remains the canonical dense list of live entities
+  //   for iteration and for EntityQuery snapshots.
+  // - Slots provide O(1) handle resolution and safe invalidation via generation.
+  struct Slot {
+    EntityType ent{};
+    uint32_t gen = 1;
+    uint32_t index_into_dense = 0;
+  };
+
+  std::vector<Slot> slots;
+  std::vector<uint32_t> free_list;
+
   struct CreationOptions {
     bool is_permanent;
   };
@@ -52,6 +65,125 @@ struct EntityHelper {
     return EntityHelper::get().entities_DO_NOT_USE;
   }
   static const Entities &get_entities() { return get_entities_for_mod(); }
+
+  // Default behavior (compatibility-first):
+  // - Temp entities (pre-merge) have invalid handles (until merged).
+  // - Invalid/stale handles resolve to null / empty.
+  static EntityHandle handle_for(const Entity &e) {
+    const uint32_t slot = e.ah_slot_index;
+    if (slot == EntityHandle::INVALID_SLOT) {
+      return EntityHandle::invalid();
+    }
+
+    auto &self = EntityHelper::get();
+    if (slot >= self.slots.size()) {
+      log_error("handle_for: entity id {} has out-of-range slot {} (slots size {})",
+                e.id, slot, self.slots.size());
+      return EntityHandle::invalid();
+    }
+
+    const Slot &s = self.slots[slot];
+    if (!s.ent || s.ent.get() != &e) {
+      log_error(
+          "handle_for: slot {} does not match entity id {} (slot ent: {}, slot ent id: {})",
+          slot, e.id, s.ent ? "non-null" : "null",
+          s.ent ? s.ent->id : -1);
+      return EntityHandle::invalid();
+    }
+
+    return {slot, s.gen};
+  }
+
+  static OptEntity resolve(const EntityHandle h) {
+    if (!h.valid()) {
+      return {};
+    }
+
+    auto &self = EntityHelper::get();
+    if (h.slot >= self.slots.size()) {
+      return {};
+    }
+
+    Slot &s = self.slots[h.slot];
+    if (s.gen != h.gen) {
+      return {};
+    }
+    if (!s.ent) {
+      return {};
+    }
+    return *s.ent;
+  }
+
+  // Allocate a slot index for a newly-merged entity.
+  // NOTE: generation is NOT reset on reuse; it is only incremented on delete.
+  static uint32_t alloc_slot_index() {
+    auto &self = EntityHelper::get();
+    if (!self.free_list.empty()) {
+      const uint32_t slot = self.free_list.back();
+      self.free_list.pop_back();
+      return slot;
+    }
+    self.slots.push_back(Slot{});
+    return static_cast<uint32_t>(self.slots.size() - 1);
+  }
+
+  static uint32_t bump_gen(uint32_t gen) {
+    gen += 1;
+    // If `gen` overflows (uint32 wraparound), it can become 0. Avoid 0 to keep
+    // "0 == default/uninitialized" out of the valid space.
+    if (gen == 0) {
+      gen = 1;
+    }
+    return gen;
+  }
+
+  static void invalidate_slot_for_entity_if_any(const EntityType &sp,
+                                                EntityHelper &self) {
+    if (!sp) {
+      return;
+    }
+    const uint32_t slot = sp->ah_slot_index;
+    sp->ah_slot_index = EntityHandle::INVALID_SLOT;
+
+    if (slot == EntityHandle::INVALID_SLOT) {
+      return;
+    }
+    if (slot >= self.slots.size()) {
+      log_error(
+          "invalidate_slot_for_entity_if_any: entity id {} has out-of-range slot {} (slots size {})",
+          sp->id, slot, self.slots.size());
+      return;
+    }
+
+    Slot &s = self.slots[slot];
+    if (!s.ent) {
+      return;
+    }
+    s.ent.reset();
+    s.gen = bump_gen(s.gen);
+    self.free_list.push_back(slot);
+  }
+
+  // Dense removal that preserves handle bookkeeping:
+  // - invalidates the removed entity's slot (bump generation + free slot)
+  // - swap-removes from the dense `entities_DO_NOT_USE` vector
+  // - updates the moved entity's slot back-pointer to its new dense index
+  static void swap_remove_dense_index(Entities &entities, size_t i,
+                                      EntityHelper &self) {
+    invalidate_slot_for_entity_if_any(entities[i], self);
+
+    if (i != entities.size() - 1) {
+      std::swap(entities[i], entities.back());
+      if (entities[i]) {
+        const uint32_t moved_slot = entities[i]->ah_slot_index;
+        if (moved_slot != EntityHandle::INVALID_SLOT &&
+            moved_slot < self.slots.size()) {
+          self.slots[moved_slot].index_into_dense = static_cast<uint32_t>(i);
+        }
+      }
+    }
+    entities.pop_back();
+  }
 
   static RefEntities get_ref_entities() {
     RefEntities matching;
@@ -76,6 +208,21 @@ struct EntityHelper {
       reserve_temp_space();
 
     std::shared_ptr<Entity> e(new Entity());
+
+#if defined(AFTER_HOURS_ASSIGN_HANDLES_ON_CREATE)
+    // Opt-in behavior: assign a stable handle immediately, even while the entity
+    // lives in `temp_entities`. Queries still won't see temp entities unless
+    // force-merged, but `resolve(handle)` will work.
+    {
+      auto &self = EntityHelper::get();
+      const uint32_t slot = alloc_slot_index();
+      Slot &s = self.slots[slot];
+      s.ent = e;
+      s.index_into_dense = 0xFFFFFFFFu; // not in dense list yet
+      e->ah_slot_index = slot;
+    }
+#endif
+
     get_temp().push_back(e);
 
     if (options.is_permanent) {
@@ -89,12 +236,31 @@ struct EntityHelper {
     if (get_temp().empty())
       return;
 
+    auto &self = EntityHelper::get();
     for (const auto &entity : get_temp()) {
       if (!entity)
         continue;
-      if (entity->cleanup)
+      if (entity->cleanup) {
+#if defined(AFTER_HOURS_ASSIGN_HANDLES_ON_CREATE)
+        // If we assigned a handle on create, make sure to invalidate it for
+        // temp entities that are never merged.
+        invalidate_slot_for_entity_if_any(entity, self);
+#endif
         continue;
+      }
+
       get_entities_for_mod().push_back(entity);
+      const uint32_t dense_index =
+          static_cast<uint32_t>(get_entities_for_mod().size() - 1);
+
+      uint32_t slot = entity->ah_slot_index;
+      if (slot == EntityHandle::INVALID_SLOT) {
+        slot = alloc_slot_index();
+        entity->ah_slot_index = slot;
+      }
+      Slot &s = self.slots[slot];
+      s.ent = entity;
+      s.index_into_dense = dense_index;
     }
     get_temp().clear();
   }
@@ -153,18 +319,54 @@ struct EntityHelper {
   static void cleanup() {
     EntityHelper::merge_entity_arrays();
     Entities &entities = get_entities_for_mod();
+    auto &self = EntityHelper::get();
 
-    const auto newend = std::remove_if(
-        entities.begin(), entities.end(),
-        [](const auto &entity) { return !entity || entity->cleanup; });
-
-    entities.erase(newend, entities.end());
+    size_t i = 0;
+    while (i < entities.size()) {
+      const auto &sp = entities[i];
+      if (sp && !sp->cleanup) {
+        ++i;
+        continue;
+      }
+      swap_remove_dense_index(entities, i, self);
+    }
   }
 
   static void delete_all_entities_NO_REALLY_I_MEAN_ALL() {
     Entities &entities = get_entities_for_mod();
+    auto &self = EntityHelper::get();
+
+    for (auto &sp : entities) {
+      if (sp) {
+        sp->ah_slot_index = EntityHandle::INVALID_SLOT;
+      }
+    }
+    for (auto &sp : self.temp_entities) {
+      if (sp) {
+        sp->ah_slot_index = EntityHandle::INVALID_SLOT;
+      }
+    }
+
+    // Invalidate all slots that currently own an entity, and rebuild the free
+    // list so future allocations can reuse slots safely (with bumped gens).
+    self.free_list.clear();
+    self.free_list.reserve(self.slots.size());
+    for (uint32_t slot = 0; slot < self.slots.size(); ++slot) {
+      Slot &s = self.slots[slot];
+      if (s.ent) {
+        s.ent.reset();
+        s.gen = bump_gen(s.gen);
+      }
+      self.free_list.push_back(slot);
+    }
+
     entities.clear();
-    EntityHelper::get().temp_entities.clear();
+    self.temp_entities.clear();
+
+    // Also reset auxiliary bookkeeping. This method is explicitly a "hard
+    // reset", so it's appropriate to clear these too.
+    self.permanant_ids.clear();
+    self.singletonMap.clear();
   }
 
   static void delete_all_entities(const bool include_permanent) {
@@ -176,13 +378,19 @@ struct EntityHelper {
     }
 
     Entities &entities = get_entities_for_mod();
+    auto &self = EntityHelper::get();
 
-    const auto newend = std::remove_if(
-        entities.begin(), entities.end(), [](const auto &entity) {
-          return !EntityHelper::get().permanant_ids.contains(entity->id);
-        });
-
-    entities.erase(newend, entities.end());
+    size_t i = 0;
+    while (i < entities.size()) {
+      const auto &sp = entities[i];
+      if (!sp) {
+        // Treat nulls as deletable.
+      } else if (self.permanant_ids.contains(sp->id)) {
+        ++i;
+        continue;
+      }
+      swap_remove_dense_index(entities, i, self);
+    }
   }
 
   static void forEachEntity(const std::function<ForEachFlow(Entity &)> &cb) {

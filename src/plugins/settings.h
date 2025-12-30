@@ -7,9 +7,9 @@
 #include <string>
 
 #include "../core/base_component.h"
-#include "../core/entity_helper.h"
 #include "../core/system.h"
 #include "../developer.h"
+#include "../ecs.h"
 #include "../logging.h"
 #include "files.h"
 
