@@ -11,23 +11,27 @@ namespace afterhours {
 // This is a simple POD type intended to be safe for caller-defined
 // serialization (two fixed-width 32-bit integers).
 struct EntityHandle {
-  uint32_t slot;
-  uint32_t gen;
+    uint32_t slot;
+    uint32_t gen;
 
-  static constexpr uint32_t INVALID_SLOT = 0xFFFFFFFFu;
+    static constexpr uint32_t INVALID_SLOT = 0xFFFFFFFFu;
 
-  static constexpr EntityHandle invalid() { return {INVALID_SLOT, 0}; }
-  [[nodiscard]] constexpr bool valid() const { return slot != INVALID_SLOT; }
+    static constexpr EntityHandle invalid() { return {INVALID_SLOT, 0}; }
+    [[nodiscard]] constexpr bool is_valid() const {
+        return slot != INVALID_SLOT;
+    }
+    [[nodiscard]] constexpr bool is_invalid() const {
+        return slot == INVALID_SLOT;
+    }
 
-  friend constexpr bool operator==(const EntityHandle &a,
-                                   const EntityHandle &b) {
-    return a.slot == b.slot && a.gen == b.gen;
-  }
-  friend constexpr bool operator!=(const EntityHandle &a,
-                                   const EntityHandle &b) {
-    return !(a == b);
-  }
+    friend constexpr bool operator==(const EntityHandle &a,
+                                     const EntityHandle &b) {
+        return a.slot == b.slot && a.gen == b.gen;
+    }
+    friend constexpr bool operator!=(const EntityHandle &a,
+                                     const EntityHandle &b) {
+        return !(a == b);
+    }
 };
 
-} // namespace afterhours
-
+}  // namespace afterhours
