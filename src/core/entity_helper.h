@@ -32,6 +32,18 @@ struct EntityHelper {
   std::set<int> permanant_ids;
   std::map<ComponentID, Entity *> singletonMap;
 
+  // Handle store:
+  // - stable slot table + generation counters
+  // - id->slot mapping for O(1) EntityID resolution
+  struct Slot {
+    EntityType ent{};
+    std::uint32_t gen = 1;
+  };
+
+  std::vector<Slot> slots;
+  std::vector<std::uint32_t> free_slots;
+  std::vector<std::uint32_t> id_to_slot;
+
   struct CreationOptions {
     bool is_permanent;
   };
@@ -52,6 +64,118 @@ struct EntityHelper {
     return EntityHelper::get().entities_DO_NOT_USE;
   }
   static const Entities &get_entities() { return get_entities_for_mod(); }
+
+  static std::uint32_t bump_gen(std::uint32_t gen) {
+    gen += 1u;
+    // avoid wrap to 0
+    if (gen == 0u)
+      gen = 1u;
+    return gen;
+  }
+
+  static std::uint32_t alloc_slot_index() {
+    auto &self = EntityHelper::get();
+    if (!self.free_slots.empty()) {
+      const std::uint32_t slot = self.free_slots.back();
+      self.free_slots.pop_back();
+      return slot;
+    }
+    self.slots.push_back(Slot{});
+    return static_cast<std::uint32_t>(self.slots.size() - 1u);
+  }
+
+  static void ensure_id_mapping_size(const EntityID id) {
+    if (id < 0)
+      return;
+    auto &self = EntityHelper::get();
+    const auto need = static_cast<std::size_t>(id) + 1u;
+    if (self.id_to_slot.size() < need) {
+      self.id_to_slot.resize(need, EntityHandle::INVALID_SLOT);
+    }
+  }
+
+  static void assign_slot_to_entity(const EntityType &sp) {
+    if (!sp)
+      return;
+    auto &self = EntityHelper::get();
+    if (sp->ah_slot_index != EntityHandle::INVALID_SLOT) {
+      // already assigned (should be rare in default config)
+      ensure_id_mapping_size(sp->id);
+      if (sp->id >= 0)
+        self.id_to_slot[static_cast<std::size_t>(sp->id)] = sp->ah_slot_index;
+      return;
+    }
+
+    const std::uint32_t slot = alloc_slot_index();
+    if (slot >= self.slots.size()) {
+      log_error("alloc_slot_index returned out-of-range slot {}", slot);
+      return;
+    }
+    self.slots[slot].ent = sp;
+    sp->ah_slot_index = slot;
+
+    ensure_id_mapping_size(sp->id);
+    if (sp->id >= 0)
+      self.id_to_slot[static_cast<std::size_t>(sp->id)] = slot;
+  }
+
+  static void invalidate_entity_slot_if_any(const EntityType &sp) {
+    if (!sp)
+      return;
+    auto &self = EntityHelper::get();
+    const EntityID id = sp->id;
+    const std::uint32_t slot = sp->ah_slot_index;
+    sp->ah_slot_index = EntityHandle::INVALID_SLOT;
+
+    if (id >= 0 && static_cast<std::size_t>(id) < self.id_to_slot.size()) {
+      if (self.id_to_slot[static_cast<std::size_t>(id)] == slot) {
+        self.id_to_slot[static_cast<std::size_t>(id)] = EntityHandle::INVALID_SLOT;
+      }
+    }
+
+    if (slot == EntityHandle::INVALID_SLOT)
+      return;
+    if (slot >= self.slots.size()) {
+      log_error("invalidate_entity_slot_if_any: out-of-range slot {}", slot);
+      return;
+    }
+
+    Slot &s = self.slots[slot];
+    if (s.ent) {
+      s.ent.reset();
+    }
+    s.gen = bump_gen(s.gen);
+    self.free_slots.push_back(slot);
+  }
+
+  // Public handle helpers (additive API)
+  static EntityHandle handle_for(const Entity &e) {
+    const std::uint32_t slot = e.ah_slot_index;
+    if (slot == EntityHandle::INVALID_SLOT)
+      return EntityHandle::invalid();
+
+    auto &self = EntityHelper::get();
+    if (slot >= self.slots.size())
+      return EntityHandle::invalid();
+    const Slot &s = self.slots[slot];
+    if (!s.ent || s.ent.get() != &e)
+      return EntityHandle::invalid();
+    return {slot, s.gen};
+  }
+
+  static OptEntity resolve(const EntityHandle h) {
+    if (h.is_invalid())
+      return {};
+    auto &self = EntityHelper::get();
+    if (h.slot >= self.slots.size())
+      return {};
+    Slot &s = self.slots[h.slot];
+    if (s.gen != h.gen)
+      return {};
+    if (!s.ent)
+      return {};
+    return *s.ent;
+  }
 
   static RefEntities get_ref_entities() {
     RefEntities matching;
@@ -95,6 +219,7 @@ struct EntityHelper {
       if (entity->cleanup)
         continue;
       get_entities_for_mod().push_back(entity);
+      assign_slot_to_entity(entity);
     }
     get_temp().clear();
   }
@@ -154,17 +279,38 @@ struct EntityHelper {
     EntityHelper::merge_entity_arrays();
     Entities &entities = get_entities_for_mod();
 
-    const auto newend = std::remove_if(
-        entities.begin(), entities.end(),
-        [](const auto &entity) { return !entity || entity->cleanup; });
-
-    entities.erase(newend, entities.end());
+    std::size_t i = 0;
+    while (i < entities.size()) {
+      const auto &sp = entities[i];
+      if (sp && !sp->cleanup) {
+        ++i;
+        continue;
+      }
+      // invalidate removed entity slot/id mapping
+      invalidate_entity_slot_if_any(entities[i]);
+      if (i != entities.size() - 1) {
+        std::swap(entities[i], entities.back());
+      }
+      entities.pop_back();
+    }
   }
 
   static void delete_all_entities_NO_REALLY_I_MEAN_ALL() {
+    auto &self = EntityHelper::get();
     Entities &entities = get_entities_for_mod();
+
+    // Invalidate slots for all entities we currently know about.
+    for (auto &sp : entities) {
+      invalidate_entity_slot_if_any(sp);
+    }
+    for (auto &sp : self.temp_entities) {
+      invalidate_entity_slot_if_any(sp);
+    }
+
     entities.clear();
-    EntityHelper::get().temp_entities.clear();
+    self.temp_entities.clear();
+    self.permanant_ids.clear();
+    self.singletonMap.clear();
   }
 
   static void delete_all_entities(const bool include_permanent) {
@@ -216,6 +362,18 @@ struct EntityHelper {
     if (id == -1)
       return {};
 
+    auto &self = EntityHelper::get();
+    if (id >= 0 && static_cast<std::size_t>(id) < self.id_to_slot.size()) {
+      const std::uint32_t slot = self.id_to_slot[static_cast<std::size_t>(id)];
+      if (slot != EntityHandle::INVALID_SLOT && slot < self.slots.size()) {
+        const auto &sp = self.slots[slot].ent;
+        if (sp && sp->id == id) {
+          return *sp;
+        }
+      }
+    }
+
+    // Fallback (should be rare): linear scan.
     for (const auto &e : get_entities()) {
       if (!e)
         continue;
