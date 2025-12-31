@@ -242,6 +242,31 @@ TEST_CASE("ECS: EntityHandle generation changes on slot reuse",
   }
 }
 
+TEST_CASE("EntityQuery: gen_first short-circuits on early match",
+          "[ECS][EntityQuery]") {
+  EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+  // Create and merge a few entities so iteration order is deterministic.
+  Entity &first = EntityHelper::createEntity();
+  EntityHelper::createEntity();
+  EntityHelper::createEntity();
+  EntityHelper::merge_entity_arrays();
+
+  int calls = 0;
+  auto opt = EntityQuery<>({.ignore_temp_warning = true})
+                 .whereLambda([&](const Entity &e) {
+                   calls++;
+                   return e.id == first.id;
+                 })
+                 .gen_first();
+
+  REQUIRE(opt.valid());
+  REQUIRE(opt.asE().id == first.id);
+  // With stop-on-first enabled in gen_first(), we should only evaluate until we
+  // find the first match (which is the first entity here).
+  REQUIRE(calls == 1);
+}
+
 TEST_CASE("ECS: EntityQuery tag predicates remain correct",
           "[ECS][EntityQuery][Tags]") {
   EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();

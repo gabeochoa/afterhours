@@ -228,16 +228,20 @@ struct EntityQuery {
   };
 
   [[nodiscard]] bool has_values() const {
+    // If we've already materialized results, don't re-run.
+    if (ran_query)
+      return !ents.empty();
     return !run_query({.stop_on_first = true}).empty();
   }
 
   [[nodiscard]] bool is_empty() const {
-    return run_query({.stop_on_first = true}).empty();
+    return !has_values();
   }
 
   [[nodiscard]] RefEntities
   values_ignore_cache(const UnderlyingOptions options) const {
     ents = run_query(options);
+    ran_query = true;
     return ents;
   }
 
@@ -266,23 +270,17 @@ struct EntityQuery {
   }
 
   [[nodiscard]] OptEntity gen_first() const {
-    if (has_values()) {
-      const auto values = gen_with_options({.stop_on_first = true});
-      if (values.empty()) {
-        log_error("we expected to find a value but didnt...");
-      }
-      return values[0];
-    }
-    return {};
+    // Avoid calling has_values() here; that would run the query twice.
+    const auto values = run_query({.stop_on_first = true});
+    if (values.empty())
+      return {};
+    return values[0];
   }
 
   [[nodiscard]] Entity &gen_first_enforce() const {
-    if (!has_values()) {
-      log_error("tried to use gen enforce, but found no values");
-    }
-    const auto values = gen_with_options({.stop_on_first = true});
+    const auto values = run_query({.stop_on_first = true});
     if (values.empty()) {
-      log_error("we expected to find a value but didnt...");
+      log_error("tried to use gen_first_enforce, but found no values");
     }
     return values[0];
   }
@@ -292,9 +290,10 @@ struct EntityQuery {
   }
 
   [[nodiscard]] std::optional<int> gen_first_id() const {
-    if (!has_values())
+    auto opt = gen_first();
+    if (!opt)
       return {};
-    return gen_with_options({.stop_on_first = true})[0].get().id;
+    return opt.asE().id;
   }
 
   [[nodiscard]] size_t gen_count() const {
@@ -396,9 +395,32 @@ private:
     return out;
   }
 
-  RefEntities run_query(const UnderlyingOptions) const {
+  RefEntities run_query(const UnderlyingOptions options) const {
     RefEntities out;
     out.reserve(entities.size());
+
+    // Fast path: if we only need to know whether *any* entity matches (or to
+    // return the first match), we can short-circuit as long as we aren't
+    // ordering results.
+    if (options.stop_on_first && !orderby) {
+      for (const auto &e_ptr : entities) {
+        if (!e_ptr)
+          continue;
+        const Entity &e = *e_ptr;
+        bool ok = true;
+        for (const auto &mod : mods) {
+          if (!(*mod)(e)) {
+            ok = false;
+            break;
+          }
+        }
+        if (ok) {
+          out.push_back(const_cast<Entity &>(e));
+          return out;
+        }
+      }
+      return out;
+    }
 
     for (const auto &e_ptr : entities) {
       if (!e_ptr)
