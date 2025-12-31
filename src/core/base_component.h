@@ -45,7 +45,10 @@ template <typename T> inline ComponentID get_type_id() noexcept {
 
 struct BaseComponent {
   BaseComponent() {}
+  BaseComponent(const BaseComponent &) = default;
+  BaseComponent &operator=(const BaseComponent &) = default;
   BaseComponent(BaseComponent &&) = default;
+  BaseComponent &operator=(BaseComponent &&) = default;
   virtual ~BaseComponent() {}
 };
 } // namespace afterhours
