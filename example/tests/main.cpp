@@ -198,6 +198,50 @@ TEST_CASE("ECS: cleanup removes entities and lookups stop finding them",
                     .has_values());
 }
 
+TEST_CASE("ECS: EntityHandle resolves after merge and becomes stale on cleanup",
+          "[ECS][EntityHandle]") {
+  EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+  Entity &e = EntityHelper::createEntity();
+  // By default, handles are not assigned until merge.
+  REQUIRE_FALSE(EntityHelper::handle_for(e).valid());
+
+  EntityHelper::merge_entity_arrays();
+  EntityHandle h = EntityHelper::handle_for(e);
+  REQUIRE(h.valid());
+  REQUIRE(EntityHelper::resolve(h).valid());
+  REQUIRE(EntityHelper::resolve(h).asE().id == e.id);
+
+  EntityHelper::markIDForCleanup(e.id);
+  EntityHelper::cleanup();
+  REQUIRE_FALSE(EntityHelper::resolve(h).valid());
+}
+
+TEST_CASE("ECS: EntityHandle generation changes on slot reuse",
+          "[ECS][EntityHandle]") {
+  EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+  Entity &a = EntityHelper::createEntity();
+  EntityHelper::merge_entity_arrays();
+  EntityHandle h1 = EntityHelper::handle_for(a);
+  REQUIRE(h1.valid());
+
+  EntityHelper::markIDForCleanup(a.id);
+  EntityHelper::cleanup();
+  REQUIRE_FALSE(EntityHelper::resolve(h1).valid());
+
+  // Create another entity; we expect slot reuse in steady-state.
+  Entity &b = EntityHelper::createEntity();
+  EntityHelper::merge_entity_arrays();
+  EntityHandle h2 = EntityHelper::handle_for(b);
+  REQUIRE(h2.valid());
+
+  // Slot may reuse; generation must change if it does.
+  if (h2.slot == h1.slot) {
+    REQUIRE(h2.gen != h1.gen);
+  }
+}
+
 TEST_CASE("ECS: EntityQuery tag predicates remain correct",
           "[ECS][EntityQuery][Tags]") {
   EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
