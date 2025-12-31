@@ -145,6 +145,13 @@ Separate “identity” from “memory address”:
 - **Policy guardrail**:
   - use `src/core/pointer_policy.h` to `static_assert` that snapshot/component template parameters are pointer-free
   - treat `RefEntity`/`OptEntity` as pointer-like for this purpose (i.e., banned from pointer-free snapshot surfaces).
+- **Snapshot surface (Phase 3 enforcement point)**:
+  - provide a pointer-free “DTO snapshot” API in `src/core/snapshot.h`
+  - important: components may be intentionally non-copyable; snapshotting should copy *DTOs*, not components
+  - recommended pattern:
+    - snapshot entities: `snapshot::take_entities() -> std::vector<EntityRecord>`
+    - snapshot a component into a pointer-free DTO:
+      `snapshot::take_components<Component, DTO>(converter) -> std::vector<ComponentRecord<DTO>>`
 
 ### Phase 4 — Component storage: pools/SoA behind existing `Entity` API
 
