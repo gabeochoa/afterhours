@@ -30,6 +30,7 @@ public:
   static constexpr DenseIndex INVALID_INDEX =
       (std::numeric_limits<DenseIndex>::max)();
 
+  // Used by Entity/Query fast paths to check component presence for an entity.
   [[nodiscard]] bool has(const EntityID id) const {
     if (id < 0)
       return false;
@@ -37,6 +38,7 @@ public:
     return idx < entity_to_dense_.size() && entity_to_dense_[idx] != INVALID_INDEX;
   }
 
+  // Used by RTTI/derived queries and internal callers that need nullable access.
   [[nodiscard]] T *try_get(const EntityID id) {
     if (!has(id))
       return nullptr;
@@ -44,6 +46,7 @@ public:
     return &dense_[static_cast<std::size_t>(di)];
   }
 
+  // Const version of `try_get()` for read-only access paths.
   [[nodiscard]] const T *try_get(const EntityID id) const {
     if (!has(id))
       return nullptr;
@@ -51,13 +54,16 @@ public:
     return &dense_[static_cast<std::size_t>(di)];
   }
 
+  // Used by `Entity::get<T>()` once presence has been validated.
   [[nodiscard]] T &get(const EntityID id) {
     // Caller is expected to have validated presence via Entity::has<T>().
     return *try_get(id);
   }
 
+  // Const `get()` used by `Entity::get<T>() const`.
   [[nodiscard]] const T &get(const EntityID id) const { return *try_get(id); }
 
+  // Used by `Entity::addComponent<T>()` to construct/attach a component in-place.
   template <typename... Args> T &emplace(const EntityID id, Args &&...args) {
     ensure_entity_mapping_size(id);
 
@@ -74,6 +80,7 @@ public:
     return dense_.back();
   }
 
+  // Used by `Entity::removeComponent<T>()` and entity cleanup/delete paths.
   void remove(const EntityID id) {
     if (!has(id))
       return;
@@ -107,6 +114,7 @@ public:
 #endif
   }
 
+  // Used by "reset world" operations to drop all components of this type.
   void clear() {
     dense_.clear();
     dense_to_entity_.clear();
@@ -116,6 +124,7 @@ public:
 #endif
   }
 
+  // Used as an explicit flush boundary for EOF-stability mode compaction.
   void flush_end_of_frame() {
 #if defined(AFTER_HOURS_KEEP_REFERENCES_UNTIL_EOF)
     if (pending_removals_.empty())
@@ -150,6 +159,7 @@ public:
 private:
   static constexpr EntityID INVALID_ENTITY_ID = -1;
 
+  // Used to grow `entity_to_dense_` so `EntityID` can index it safely.
   void ensure_entity_mapping_size(const EntityID id) {
     if (id < 0)
       return;
