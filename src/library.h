@@ -6,11 +6,11 @@
 namespace ah_std = std;
 #else
 #include "../expected.hpp"
-namespace ah_std = tl;  // fallback to tl::expected/unexpected
+namespace ah_std = afterhours_expected; // fallback expected/unexpected
 #endif
 #else
 #include "../expected.hpp"
-namespace ah_std = tl;  // fallback to tl::expected/unexpected
+namespace ah_std = afterhours_expected; // fallback expected/unexpected
 #endif
 #include <map>
 #include <string>
