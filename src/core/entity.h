@@ -5,11 +5,10 @@
 #include <cstdint>
 #include <optional>
 #include <type_traits>
-#include <algorithm>
-#include <vector>
 
 #include "../logging.h"
 #include "../type_name.h"
+#include "../bitset_utils.h"
 #include "base_component.h"
 #include "component_store.h"
 #include "entity_id.h"
@@ -43,16 +42,6 @@ struct Entity {
   EntityHandle::Slot ah_slot_index = EntityHandle::INVALID_SLOT;
 
   ComponentBitSet componentSet;
-  // Tracks the ComponentIDs currently attached to this entity.
-  //
-  // This exists to avoid O(max_num_components) scans in:
-  // - derived/RTTI access paths (`get_with_child` / `has_child_of`)
-  // - cleanup/delete paths that need to remove all attached pooled components
-  //
-  // Invariant (maintained by Entity::{add/remove}Component + cleanup helpers):
-  // - If `componentSet[cid] == true`, then `cid` appears exactly once here.
-  // - If `componentSet[cid] == false`, then `cid` does not appear here.
-  std::vector<ComponentID> attached_components;
 
   TagBitset tags{};
   bool cleanup = false;
@@ -79,17 +68,20 @@ struct Entity {
     log_trace("checking for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
-    for (const ComponentID cid : attached_components) {
-      if (!componentSet[cid]) // defensive: should always be true
-        continue;
+    bool found = false;
+    bitset_utils::for_each_enabled_bit(componentSet, [&](const std::size_t i) {
+      const auto cid = static_cast<ComponentID>(i);
       const BaseComponent *cmp =
           ComponentStore::get().try_get_base(cid, this->id);
       if (!cmp)
-        continue;
-      if (child_of<T>(cmp))
-        return true;
-    }
-    return false;
+        return bitset_utils::ForEachFlow::Continue;
+      if (child_of<T>(cmp)) {
+        found = true;
+        return bitset_utils::ForEachFlow::Break;
+      }
+      return bitset_utils::ForEachFlow::Continue;
+    });
+    return found;
   }
 
   template <typename A, typename B, typename... Rest> bool has() const {
@@ -122,10 +114,6 @@ struct Entity {
     }
     const ComponentID cid = components::get_type_id<T>();
     componentSet[cid] = false;
-    // Keep attached_components in sync (expected small vector).
-    attached_components.erase(
-        std::remove(attached_components.begin(), attached_components.end(), cid),
-        attached_components.end());
     ComponentStore::get().remove_for<T>(this->id);
   }
 
@@ -143,13 +131,12 @@ struct Entity {
       VALIDATE(false, "duplicate component");
 #endif
       // Keep state stable in non-debug builds too (and avoid corrupting
-      // attached_components with duplicates).
+      // any derived/cleanup traversal invariants).
       return this->get<T>();
     }
 
     const ComponentID cid = components::get_type_id<T>();
     componentSet[cid] = true;
-    attached_components.push_back(cid);
     return ComponentStore::get().emplace_for<T>(this->id,
                                                 std::forward<TArgs>(args)...);
   }
@@ -198,16 +185,20 @@ struct Entity {
     // NOTE: This path is only used by `get_with_child/has_child_of` (i.e. when
     // systems/queries are operating in "include derived children" mode). The
     // normal `get<T>()` / `has<T>()` path remains O(1).
-    for (const ComponentID cid : attached_components) {
-      if (!componentSet[cid]) // defensive: should always be true
-        continue;
+    T *found = nullptr;
+    bitset_utils::for_each_enabled_bit(componentSet, [&](const std::size_t i) {
+      const auto cid = static_cast<ComponentID>(i);
       BaseComponent *cmp = ComponentStore::get().try_get_base(cid, this->id);
       if (!cmp)
-        continue;
+        return bitset_utils::ForEachFlow::Continue;
       if (auto *as_t = dynamic_cast<T *>(cmp)) {
-        return *as_t;
+        found = as_t;
+        return bitset_utils::ForEachFlow::Break;
       }
-    }
+      return bitset_utils::ForEachFlow::Continue;
+    });
+    if (found)
+      return *found;
     warnIfMissingComponent<T>();
     return get<T>();
   }
@@ -219,17 +210,21 @@ struct Entity {
 #endif
     // Const version of the derived-component scan (see non-const overload).
     // We only `dynamic_cast` components that are present per `componentSet`.
-    for (const ComponentID cid : attached_components) {
-      if (!componentSet[cid]) // defensive: should always be true
-        continue;
+    const T *found = nullptr;
+    bitset_utils::for_each_enabled_bit(componentSet, [&](const std::size_t i) {
+      const auto cid = static_cast<ComponentID>(i);
       const BaseComponent *cmp =
           ComponentStore::get().try_get_base(cid, this->id);
       if (!cmp)
-        continue;
+        return bitset_utils::ForEachFlow::Continue;
       if (const auto *as_t = dynamic_cast<const T *>(cmp)) {
-        return *as_t;
+        found = as_t;
+        return bitset_utils::ForEachFlow::Break;
       }
-    }
+      return bitset_utils::ForEachFlow::Continue;
+    });
+    if (found)
+      return *found;
     return get<T>();
   }
 

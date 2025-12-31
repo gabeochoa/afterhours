@@ -6,6 +6,7 @@
 #include <set>
 #include <vector>
 
+#include "../bitset_utils.h"
 #include "../debug_allocator.h"
 #include "../singleton.h"
 #include "component_store.h"
@@ -302,12 +303,17 @@ struct EntityHelper {
   // This centralizes the "walk bitset, remove from ComponentStore, clear bit"
   // pattern used by cleanup/delete operations.
   static void remove_pooled_components_for(Entity &e) {
-    // Iterate only attached components (avoids scanning the full bitset width).
-    for (const ComponentID cid : e.attached_components) {
+    // Iterate enabled bits in the componentSet and remove the pooled instances.
+    // NOTE: `for_each_enabled_bit` scans the bitset width; we can optimize later.
+    std::vector<ComponentID> to_remove;
+    bitset_utils::for_each_enabled_bit(e.componentSet, [&](const std::size_t i) {
+      to_remove.push_back(static_cast<ComponentID>(i));
+      return bitset_utils::ForEachFlow::Continue;
+    });
+    for (const ComponentID cid : to_remove) {
       e.componentSet[cid] = false;
       ComponentStore::get().remove_by_component_id(cid, e.id);
     }
-    e.attached_components.clear();
   }
 
   static void cleanup() {
