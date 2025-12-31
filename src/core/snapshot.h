@@ -13,6 +13,12 @@
 
 namespace afterhours {
 
+// Snapshot API (pointer-free export)
+// - **What**: materialize `(EntityHandle, value)` pairs for entities with a component.
+// - **Why**: safe surface for save/load, replay, debug capture (no live pointers).
+// - **How**: prefer `snapshot_for<Component>(projector)` where `projector` returns a
+//   small, copyable, pointer-free DTO. Many ECS components are intentionally non-copyable.
+//
 // Pointer-free snapshot surface:
 // - Materializes a stable list of (EntityHandle, component_value) pairs.
 // - Intended for serialization/debug capture/replay without embedding pointers.
