@@ -41,8 +41,8 @@ struct EntityHelper {
   };
 
   std::vector<Slot> slots;
-  std::vector<std::uint32_t> free_slots;
-  std::vector<std::uint32_t> id_to_slot;
+  std::vector<EntityHandle::Slot> free_slots;
+  std::vector<EntityHandle::Slot> id_to_slot;
 
   struct CreationOptions {
     bool is_permanent;
@@ -73,15 +73,15 @@ struct EntityHelper {
     return gen;
   }
 
-  static std::uint32_t alloc_slot_index() {
+  static EntityHandle::Slot alloc_slot_index() {
     auto &self = EntityHelper::get();
     if (!self.free_slots.empty()) {
-      const std::uint32_t slot = self.free_slots.back();
+      const EntityHandle::Slot slot = self.free_slots.back();
       self.free_slots.pop_back();
       return slot;
     }
     self.slots.push_back(Slot{});
-    return static_cast<std::uint32_t>(self.slots.size() - 1u);
+    return static_cast<EntityHandle::Slot>(self.slots.size() - 1u);
   }
 
   static void ensure_id_mapping_size(const EntityID id) {
@@ -106,7 +106,7 @@ struct EntityHelper {
       return;
     }
 
-    const std::uint32_t slot = alloc_slot_index();
+    const EntityHandle::Slot slot = alloc_slot_index();
     if (slot >= self.slots.size()) {
       log_error("alloc_slot_index returned out-of-range slot {}", slot);
       return;
@@ -124,7 +124,7 @@ struct EntityHelper {
       return;
     auto &self = EntityHelper::get();
     const EntityID id = sp->id;
-    const std::uint32_t slot = sp->ah_slot_index;
+    const EntityHandle::Slot slot = sp->ah_slot_index;
     sp->ah_slot_index = EntityHandle::INVALID_SLOT;
 
     if (id >= 0 && static_cast<std::size_t>(id) < self.id_to_slot.size()) {
@@ -150,7 +150,7 @@ struct EntityHelper {
 
   // Public handle helpers (additive API)
   static EntityHandle handle_for(const Entity &e) {
-    const std::uint32_t slot = e.ah_slot_index;
+    const EntityHandle::Slot slot = e.ah_slot_index;
     if (slot == EntityHandle::INVALID_SLOT)
       return EntityHandle::invalid();
 
@@ -364,7 +364,8 @@ struct EntityHelper {
 
     auto &self = EntityHelper::get();
     if (id >= 0 && static_cast<std::size_t>(id) < self.id_to_slot.size()) {
-      const std::uint32_t slot = self.id_to_slot[static_cast<std::size_t>(id)];
+      const EntityHandle::Slot slot =
+          self.id_to_slot[static_cast<std::size_t>(id)];
       if (slot != EntityHandle::INVALID_SLOT && slot < self.slots.size()) {
         const auto &sp = self.slots[slot].ent;
         if (sp && sp->id == id) {

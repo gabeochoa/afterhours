@@ -10,10 +10,12 @@ namespace afterhours {
 //
 // This is a POD type intended to be serialization-friendly (two 32-bit ints).
 struct EntityHandle {
-  std::uint32_t slot;
+  using Slot = std::uint32_t;
+
+  Slot slot;
   std::uint32_t gen;
 
-  static constexpr std::uint32_t INVALID_SLOT = 0xFFFFFFFFu;
+  static constexpr Slot INVALID_SLOT = 0xFFFFFFFFu;
 
   static constexpr EntityHandle invalid() { return {INVALID_SLOT, 0u}; }
 

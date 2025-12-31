@@ -38,7 +38,7 @@ struct Entity {
   // Runtime-only metadata used by the handle-based store.
   // - INVALID_SLOT means this entity has not been assigned a stable slot yet
   //   (e.g., it's still in temp_entities pre-merge).
-  std::uint32_t ah_slot_index = EntityHandle::INVALID_SLOT;
+  EntityHandle::Slot ah_slot_index = EntityHandle::INVALID_SLOT;
 
   ComponentBitSet componentSet;
   ComponentArray componentArray;
