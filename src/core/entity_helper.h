@@ -297,6 +297,18 @@ struct EntityHelper {
     }
   }
 
+  // Remove pooled components for an entity based on its component bitset.
+  // This centralizes the "walk bitset, remove from ComponentStore, clear bit"
+  // pattern used by cleanup/delete operations.
+  static void remove_pooled_components_for(Entity &e) {
+    for (ComponentID cid = 0; cid < max_num_components; ++cid) {
+      if (!e.componentSet[cid])
+        continue;
+      e.componentSet[cid] = false;
+      ComponentStore::get().remove_by_component_id(cid, e.id);
+    }
+  }
+
   static void cleanup() {
     EntityHelper::merge_entity_arrays();
     Entities &entities = get_entities_for_mod();
@@ -311,13 +323,7 @@ struct EntityHelper {
         continue;
       }
       if (sp) {
-        // Remove pooled components for this entity (based on its bitset).
-        for (ComponentID cid = 0; cid < max_num_components; ++cid) {
-          if (!sp->componentSet[cid])
-            continue;
-          sp->componentSet[cid] = false;
-          ComponentStore::get().remove_by_component_id(cid, sp->id);
-        }
+        remove_pooled_components_for(*sp);
       }
       // invalidate removed entity slot/id mapping
       invalidate_entity_slot_if_any(entities[i]);
@@ -337,25 +343,13 @@ struct EntityHelper {
 
     // Invalidate slots for all entities we currently know about.
     for (auto &sp : entities) {
-      if (sp) {
-        for (ComponentID cid = 0; cid < max_num_components; ++cid) {
-          if (!sp->componentSet[cid])
-            continue;
-          sp->componentSet[cid] = false;
-          ComponentStore::get().remove_by_component_id(cid, sp->id);
-        }
-      }
+      if (sp)
+        remove_pooled_components_for(*sp);
       invalidate_entity_slot_if_any(sp);
     }
     for (auto &sp : self.temp_entities) {
-      if (sp) {
-        for (ComponentID cid = 0; cid < max_num_components; ++cid) {
-          if (!sp->componentSet[cid])
-            continue;
-          sp->componentSet[cid] = false;
-          ComponentStore::get().remove_by_component_id(cid, sp->id);
-        }
-      }
+      if (sp)
+        remove_pooled_components_for(*sp);
       invalidate_entity_slot_if_any(sp);
     }
 
@@ -389,12 +383,7 @@ struct EntityHelper {
       const auto &sp = *it;
       if (!sp)
         continue;
-      for (ComponentID cid = 0; cid < max_num_components; ++cid) {
-        if (!sp->componentSet[cid])
-          continue;
-        sp->componentSet[cid] = false;
-        ComponentStore::get().remove_by_component_id(cid, sp->id);
-      }
+      remove_pooled_components_for(*sp);
       invalidate_entity_slot_if_any(sp);
     }
 
