@@ -138,6 +138,13 @@ Separate “identity” from “memory address”:
 - **Typical pattern**:
   - store `EntityHandle target;`
   - use `if (auto e = EntityHelper::resolve(target)) { ... }`
+- **Recommended persisted reference helper**:
+  - store `OptEntityHandle { EntityID id; EntityHandle handle; }`
+  - resolve with `ref.resolve()` (tries handle first, then ID fallback)
+  - property: when an entity is deleted and its slot is reused, the generation check stales old references safely.
+- **Policy guardrail**:
+  - use `src/core/pointer_policy.h` to `static_assert` that snapshot/component template parameters are pointer-free
+  - treat `RefEntity`/`OptEntity` as pointer-like for this purpose (i.e., banned from pointer-free snapshot surfaces).
 
 ### Phase 4 — Component storage: pools/SoA behind existing `Entity` API
 
