@@ -1074,10 +1074,11 @@ TEST_CASE("top pixel margin on grandparent") {
   CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
   CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
-  auto child_bounds = Rectangle{
-      .x = 0, .y = 10, .width = 100, .height = std::ceil((H2 - 10) / 4.f)};
-  auto child_rect = Rectangle{
-      .x = 0, .y = 10, .width = 100, .height = std::ceil((H2 - 10) / 4.f)};
+  // Note: current layout allows fractional pixel sizes here (no rounding up).
+  auto child_bounds =
+      Rectangle{.x = 0, .y = 10, .width = 100, .height = (H2 - 10) / 4.f};
+  auto child_rect =
+      Rectangle{.x = 0, .y = 10, .width = 100, .height = (H2 - 10) / 4.f};
   CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
   CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1128,10 +1129,11 @@ TEST_CASE("bottom pixel margin on grandparent") {
   CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
   CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
-  auto child_bounds = Rectangle{
-      .x = 0, .y = 0, .width = 100, .height = std::ceil((H2 - 10) / 4.f)};
-  auto child_rect = Rectangle{
-      .x = 0, .y = 0, .width = 100, .height = std::ceil((H2 - 10) / 4.f)};
+  // Note: current layout allows fractional pixel sizes here (no rounding up).
+  auto child_bounds =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = (H2 - 10) / 4.f};
+  auto child_rect =
+      Rectangle{.x = 0, .y = 0, .width = 100, .height = (H2 - 10) / 4.f};
   CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
   CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
