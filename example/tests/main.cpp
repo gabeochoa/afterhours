@@ -320,13 +320,17 @@ TEST_CASE("Phase 3: snapshot surface is pointer-free and captures components",
   REQUIRE(hb.valid());
   a.addComponent<Targets>().target = hb;
 
-  // Should compile + run: Targets is pointer-free under our policy.
-  auto snap = afterhours::snapshot::take<Targets>();
+  struct TargetsDTO {
+    EntityHandle target{};
+  };
+  // Snapshot DTO is pointer-free under our policy.
+  static_assert(!afterhours::is_pointer_like_v<TargetsDTO>);
 
-  // There should be at least 2 entities and at least 1 Targets record.
-  REQUIRE(snap.entities.size() >= 2);
-  const auto &targets = std::get<std::vector<afterhours::snapshot::ComponentRecord<Targets>>>(
-      snap.components);
+  auto entities = afterhours::snapshot::take_entities();
+  REQUIRE(entities.size() >= 2);
+
+  auto targets = afterhours::snapshot::take_components<Targets, TargetsDTO>(
+      [](const Targets &t) { return TargetsDTO{.target = t.target}; });
   REQUIRE(targets.size() == 1);
 
   // And the stored handle should match.

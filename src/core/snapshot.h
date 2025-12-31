@@ -1,6 +1,6 @@
 #pragma once
 
-#include <tuple>
+#include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -28,68 +28,62 @@ template <typename T> struct ComponentRecord {
   T value{};
 };
 
-template <typename... Components> struct Snapshot {
-  std::vector<EntityRecord> entities;
-  std::tuple<std::vector<ComponentRecord<Components>>...> components;
-};
-
-namespace detail {
-template <typename T>
-inline void append_component_records(std::vector<ComponentRecord<T>> &out,
-                                     const Entities &ents) {
-  static_assert(std::is_copy_constructible_v<T>,
-                "snapshot requires copyable component types (T must be "
-                "CopyConstructible). If you need move-only components, "
-                "snapshot them explicitly via a separate DTO.");
-
+inline std::vector<EntityRecord> take_entities(const Options &opt = {}) {
+  if (opt.force_merge) {
+    EntityHelper::merge_entity_arrays();
+  }
+  std::vector<EntityRecord> out;
+  const Entities &ents = EntityHelper::get_entities();
+  out.reserve(ents.size());
   for (const auto &sp : ents) {
     if (!sp)
       continue;
     const Entity &e = *sp;
-    if (!e.has<T>())
-      continue;
     const EntityHandle h = EntityHelper::handle_for(e);
     if (!h.valid())
       continue;
-    out.push_back(ComponentRecord<T>{.entity = h, .value = e.get<T>()});
+    out.push_back(EntityRecord{
+        .handle = h,
+        .entity_type = e.entity_type,
+        .tags = e.tags,
+        .cleanup = e.cleanup,
+    });
   }
+  return out;
 }
-} // namespace detail
 
-// Take a pointer-free snapshot of the world for a chosen component set.
+// Snapshot one component type into a pointer-free DTO type.
 //
-// This is intentionally explicit: the caller chooses which components are part
-// of the snapshot surface. A compile-time policy rejects pointer-like types.
-template <typename... Components>
-inline Snapshot<Components...> take(const Options &opt = {}) {
-  static_assert_pointer_free_types<Components...>();
+// This avoids copying components (which may be intentionally non-copyable).
+// Instead, you provide a converter from `const Component&` -> `DTO`.
+template <typename Component, typename DTO, typename Converter>
+inline std::vector<ComponentRecord<DTO>>
+take_components(Converter &&convert, const Options &opt = {}) {
+  static_assert_pointer_free_types<DTO>();
+  static_assert(std::is_copy_constructible_v<DTO>,
+                "snapshot DTOs must be CopyConstructible");
+  static_assert(std::is_base_of_v<BaseComponent, Component>,
+                "Component must inherit from BaseComponent");
 
   if (opt.force_merge) {
     EntityHelper::merge_entity_arrays();
   }
 
-  Snapshot<Components...> s;
-
+  std::vector<ComponentRecord<DTO>> out;
   const Entities &ents = EntityHelper::get_entities();
-  s.entities.reserve(ents.size());
-
   for (const auto &sp : ents) {
     if (!sp)
       continue;
     const Entity &e = *sp;
+    if (!e.has<Component>())
+      continue;
     const EntityHandle h = EntityHelper::handle_for(e);
     if (!h.valid())
       continue;
-    s.entities.push_back(EntityRecord{
-        .handle = h, .entity_type = e.entity_type, .tags = e.tags, .cleanup = e.cleanup});
+    out.push_back(ComponentRecord<DTO>{
+        .entity = h, .value = convert(e.get<Component>())});
   }
-
-  // Fill per-component arrays.
-  (detail::append_component_records<Components>(
-       std::get<std::vector<ComponentRecord<Components>>>(s.components), ents),
-   ...);
-
-  return s;
+  return out;
 }
 
 } // namespace afterhours::snapshot
