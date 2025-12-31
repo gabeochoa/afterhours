@@ -4,7 +4,12 @@ This doc captures what “serializing pointers” means in this repo today, what
 
 ## Problem statement (what we want)
 
-- **Goal**: save-games / network snapshots should contain **no pointer values** and should not require pointer-linking contexts (e.g., Bitsery pointer extension contexts).
+- **Goal**: save-games / network snapshots should contain **no pointer values**, including:
+  - raw pointers (`T*`, `void*`)
+  - smart pointers (`std::unique_ptr`, `std::shared_ptr`)
+  - “observed pointer” / pointer-linking serialization mechanisms (e.g., Bitsery pointer extensions)
+  
+  Everything that persists must be **IDs or handles**.
 - **Constraints**:
   - Keep the **public ECS API** mostly stable (`Entity::addComponent/get/has/remove`, `EntityID`, `OptEntity`, `EntityQuery`, `System<...>`).
   - Avoid slowing down games; ideally this work should be a net performance improvement (less allocation, better cache locality).
@@ -150,6 +155,27 @@ This is the core “stop serializing pointers” requirement at the game layer.
 
 This is the big internal change that removes most ECS-pointer pressure and improves runtime performance.
 
+### End-of-frame reference stability (compatibility mode)
+
+Some projects may currently rely on references/pointers staying valid at least until the end of the frame.
+We can support that as an opt-in compatibility mode:
+
+- `AFTER_HOURS_KEEP_REFERENCES_UNTIL_EOF`
+
+Implementation sketch (applies to both entity and component storage):
+
+- **Defer destructive operations** (swap-removes, vector compaction, slot reuse) until an explicit end-of-frame boundary.
+- Collect:
+  - entities to delete
+  - components to remove
+  - pool compactions to perform
+- Execute them in a single “flush” phase at EOF (or when `EntityHelper::cleanup()` is called, if cleanup is the frame boundary).
+
+Default (no define) remains the fastest mode:
+
+- immediate swap-remove on delete/remove
+- no guarantees about pointer/reference stability across the frame
+
 ### Target storage model
 
 For each component type `T`, maintain a `ComponentPool<T>`:
@@ -190,6 +216,11 @@ That’s usually fine (and preferable) if projects follow the rule:
 If needed, provide a temporary compatibility macro:
 
 - `AFTER_HOURS_STABLE_COMPONENT_ADDRESSES` → uses a stable-address container (slower; transitional only).
+
+Alternative (preferred) compatibility story:
+
+- keep pointer stability only “until EOF” via `AFTER_HOURS_KEEP_REFERENCES_UNTIL_EOF`
+- keep long-lived references stable via `EntityHandle` + re-fetch (not by storing `T*`)
 
 ### Interaction with “derived/child-of” queries
 
