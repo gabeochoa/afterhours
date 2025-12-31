@@ -34,6 +34,8 @@ Plugins may use the following public static methods from `EntityHelper`:
 - `EntityHelper::getEntityForIDEnforce(const EntityID id)` - Get entity by ID (throws if not found)
 - `EntityHelper::getEntityAsSharedPtr(const Entity &entity)` - Get shared pointer to entity
 - `EntityHelper::getEntityAsSharedPtr(const OptEntity entity)` - Get shared pointer from OptEntity
+- `EntityHelper::handle_for(const Entity &entity)` - Get the entity's stable handle (merged entities only by default)
+- `EntityHelper::resolve(const EntityHandle handle)` - Resolve a handle to an entity (returns OptEntity; stale/invalid handles fail)
 
 ### Entity Management
 - `EntityHelper::merge_entity_arrays()` - Merge temporary entities into main entity array
@@ -44,6 +46,19 @@ Plugins may use the following public static methods from `EntityHelper`:
 
 ### Iteration
 - `EntityHelper::forEachEntity(const std::function<ForEachFlow(Entity &)> &cb)` - Iterate over all entities
+
+### Handle-based Entity Identity (Recommended for long-lived references)
+Plugins may use `EntityHandle` for persistent relationships (instead of storing `Entity&` / `RefEntity` long-term).
+
+- `EntityHandle` (defined in `core/entity_handle.h`, included by `core/entity.h`)
+
+**Important behavior note (default)**:
+- Entities created via `createEntity*()` live in `temp_entities` until `merge_entity_arrays()`.
+- By default, handles are assigned **on merge**, so temp entities will return an **invalid** handle from `handle_for`.
+
+**Optional behavior (opt-in)**:
+- Define `AFTER_HOURS_ASSIGN_HANDLES_ON_CREATE` to assign handles immediately on `createEntity*()`.
+- With this flag, `handle_for` will return a valid handle for temp entities and `resolve(handle)` will work pre-merge.
 
 ### Internal Access (Use with Caution)
 - `EntityHelper::get_temp()` - Get temporary entities vector (for advanced use cases)
@@ -171,5 +186,6 @@ auto *component = EntityHelper::get_singleton_cmp<MySingleton>();
 ✅ **Do** use `EntityHelper::get_singleton<Component>()` for singletons
 ✅ **Do** use `EntityQuery` for querying entities
 ✅ **Do** use `EntityHelper::createEntity()` for entity creation
+✅ **Do** store `EntityHandle` for long-lived references and call `EntityHelper::resolve(handle)`
 ✅ **Do** include `ecs.h` for ECS functionality
 

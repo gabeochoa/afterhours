@@ -11,6 +11,7 @@
 #include "../logging.h"
 #include "../type_name.h"
 #include "base_component.h"
+#include "entity_handle.h"
 
 namespace afterhours {
 #ifndef AFTER_HOURS_MAX_ENTITY_TAGS
@@ -33,6 +34,11 @@ static std::atomic_int ENTITY_ID_GEN = 0;
 struct Entity {
   EntityID id;
   int entity_type = 0;
+
+  // Runtime-only metadata used by the handle-based store. By default, entities
+  // created into `temp_entities` will keep this invalid until they are merged
+  // into the main entity list.
+  uint32_t ah_slot_index = EntityHandle::INVALID_SLOT;
 
   ComponentBitSet componentSet;
   ComponentArray componentArray;
