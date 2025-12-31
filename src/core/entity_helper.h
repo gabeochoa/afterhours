@@ -397,11 +397,17 @@ struct EntityHelper {
     }
 
     // Fallback (should be rare): linear scan.
+    log_warn(
+        "getEntityForID fallback scan for id={} (id_to_slot.size={}, slots.size={})",
+        id, self.id_to_slot.size(), self.slots.size());
     for (const auto &e : get_entities()) {
       if (!e)
         continue;
-      if (e->id == id)
+      if (e->id == id) {
+        log_warn("getEntityForID fallback hit: id={} entity_type={}", id,
+                 e->entity_type);
         return *e;
+      }
     }
     return {};
   }
