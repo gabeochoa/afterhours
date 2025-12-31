@@ -52,6 +52,14 @@ struct Entity {
 
   virtual ~Entity() {}
 
+  // Iterate all enabled component type IDs on this entity.
+  // NOTE: Current implementation scans the bitset width.
+  template <typename Fn> void for_each_component_id(Fn &&fn) const {
+    bitset_utils::for_each_enabled_bit(componentSet, [&](const std::size_t i) {
+      return fn(static_cast<ComponentID>(i));
+    });
+  }
+
   template <typename T> [[nodiscard]] bool has() const {
     const bool result = componentSet[components::get_type_id<T>()];
 #if defined(AFTER_HOURS_DEBUG)
@@ -69,8 +77,7 @@ struct Entity {
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
     bool found = false;
-    bitset_utils::for_each_enabled_bit(componentSet, [&](const std::size_t i) {
-      const auto cid = static_cast<ComponentID>(i);
+    for_each_component_id([&](const ComponentID cid) {
       const BaseComponent *cmp =
           ComponentStore::get().try_get_base(cid, this->id);
       if (!cmp)
@@ -186,8 +193,7 @@ struct Entity {
     // systems/queries are operating in "include derived children" mode). The
     // normal `get<T>()` / `has<T>()` path remains O(1).
     T *found = nullptr;
-    bitset_utils::for_each_enabled_bit(componentSet, [&](const std::size_t i) {
-      const auto cid = static_cast<ComponentID>(i);
+    for_each_component_id([&](const ComponentID cid) {
       BaseComponent *cmp = ComponentStore::get().try_get_base(cid, this->id);
       if (!cmp)
         return bitset_utils::ForEachFlow::Continue;
@@ -211,8 +217,7 @@ struct Entity {
     // Const version of the derived-component scan (see non-const overload).
     // We only `dynamic_cast` components that are present per `componentSet`.
     const T *found = nullptr;
-    bitset_utils::for_each_enabled_bit(componentSet, [&](const std::size_t i) {
-      const auto cid = static_cast<ComponentID>(i);
+    for_each_component_id([&](const ComponentID cid) {
       const BaseComponent *cmp =
           ComponentStore::get().try_get_base(cid, this->id);
       if (!cmp)
