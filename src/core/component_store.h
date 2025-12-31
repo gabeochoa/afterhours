@@ -29,10 +29,10 @@ struct ComponentStore {
     void clear() override { pool.clear(); }
     void flush_end_of_frame() override { pool.flush_end_of_frame(); }
     BaseComponent *try_get_base(EntityID id) override {
-      return pool.try_get(id);
+      return pool.try_get_base(id);
     }
     const BaseComponent *try_get_base(EntityID id) const override {
-      return pool.try_get(id);
+      return pool.try_get_base(id);
     }
   };
 

@@ -38,20 +38,14 @@ public:
     return idx < entity_to_dense_.size() && entity_to_dense_[idx] != INVALID_INDEX;
   }
 
-  // Used by RTTI/derived queries and internal callers that need nullable access.
-  [[nodiscard]] T *try_get(const EntityID id) {
-    if (!has(id))
-      return nullptr;
-    const DenseIndex di = entity_to_dense_[static_cast<std::size_t>(id)];
-    return &dense_[static_cast<std::size_t>(di)];
+  // Used by RTTI/derived queries via `ComponentStore` (type-erased access).
+  [[nodiscard]] BaseComponent *try_get_base(const EntityID id) {
+    return static_cast<BaseComponent *>(try_get(id));
   }
 
-  // Const version of `try_get()` for read-only access paths.
-  [[nodiscard]] const T *try_get(const EntityID id) const {
-    if (!has(id))
-      return nullptr;
-    const DenseIndex di = entity_to_dense_[static_cast<std::size_t>(id)];
-    return &dense_[static_cast<std::size_t>(di)];
+  // Const version of `try_get_base()` for read-only RTTI/derived access.
+  [[nodiscard]] const BaseComponent *try_get_base(const EntityID id) const {
+    return static_cast<const BaseComponent *>(try_get(id));
   }
 
   // Used by `Entity::get<T>()` once presence has been validated.
@@ -158,6 +152,22 @@ public:
 
 private:
   static constexpr EntityID INVALID_ENTITY_ID = -1;
+
+  // Internal nullable access used by `get()` and `try_get_base()`.
+  [[nodiscard]] T *try_get(const EntityID id) {
+    if (!has(id))
+      return nullptr;
+    const DenseIndex di = entity_to_dense_[static_cast<std::size_t>(id)];
+    return &dense_[static_cast<std::size_t>(di)];
+  }
+
+  // Const version of internal `try_get()`.
+  [[nodiscard]] const T *try_get(const EntityID id) const {
+    if (!has(id))
+      return nullptr;
+    const DenseIndex di = entity_to_dense_[static_cast<std::size_t>(id)];
+    return &dense_[static_cast<std::size_t>(di)];
+  }
 
   // Used to grow `entity_to_dense_` so `EntityID` can index it safely.
   void ensure_entity_mapping_size(const EntityID id) {
