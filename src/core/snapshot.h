@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <cstddef>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -32,6 +33,30 @@ struct SnapshotOptions {
   // If true, drop entities that don't have a valid EntityHandle (e.g. temp
   // entities before merge). This is usually what you want for persisted data.
   bool skip_invalid_handles = true;
+};
+
+struct ApplySnapshotOptions {
+  // If true, merge temp entities before applying so handles resolve.
+  // This matches the default snapshot_for<>() behavior (force_merge view).
+  bool force_merge = true;
+
+  // If true, silently skip invalid handles rather than treating them as missing.
+  bool skip_invalid_handles = true;
+
+  // If true, spawn a new entity when a handle can't be resolved (stale/missing).
+  // NOTE: the new entity will not (and cannot) retain the original handle.
+  bool create_missing_entities = false;
+
+  // If true, merge newly created entities so they receive handles/slots.
+  // Only relevant when create_missing_entities=true.
+  bool merge_new_entities = true;
+};
+
+struct ApplySnapshotResult {
+  std::size_t applied = 0;
+  std::size_t skipped_invalid_handle = 0;
+  std::size_t skipped_unresolved = 0;
+  std::size_t spawned = 0;
 };
 
 template <typename T>
@@ -74,6 +99,85 @@ template <typename T>
   }
 
   return out;
+}
+
+// Apply a snapshot back onto the world by resolving handles and invoking an
+// applier callback.
+//
+// This is intentionally generic: the snapshot "value" is often a pointer-free
+// DTO produced by snapshot_for<T>(projector), not the component type itself.
+template <typename V, typename ApplyFn>
+[[nodiscard]] ApplySnapshotResult
+apply_snapshot(const std::vector<std::pair<EntityHandle, V>> &snap,
+               ApplyFn &&apply, const ApplySnapshotOptions options = {}) {
+  static_assert_pointer_free_type<V>();
+  static_assert(
+      std::is_invocable_v<ApplyFn, Entity &, const V &>,
+      "apply_snapshot requires an applier callable with signature: "
+      "void(Entity&, const V&)");
+
+  if (options.force_merge) {
+    EntityHelper::merge_entity_arrays();
+  }
+
+  ApplySnapshotResult res{};
+
+  for (const auto &[h, v] : snap) {
+    if (h.is_invalid()) {
+      if (options.skip_invalid_handles) {
+        ++res.skipped_invalid_handle;
+        continue;
+      }
+    }
+
+    auto resolved = EntityHelper::resolve(h);
+    if (resolved.valid()) {
+      apply(resolved.asE(), v);
+      ++res.applied;
+      continue;
+    }
+
+    if (!options.create_missing_entities) {
+      ++res.skipped_unresolved;
+      continue;
+    }
+
+    Entity &e = EntityHelper::createEntity();
+    apply(e, v);
+    ++res.spawned;
+  }
+
+  if (res.spawned > 0 && options.create_missing_entities &&
+      options.merge_new_entities) {
+    EntityHelper::merge_entity_arrays();
+  }
+
+  return res;
+}
+
+// Convenience: apply a "direct component snapshot" produced by snapshot_for<T>()
+// (i.e. vector<pair<EntityHandle, Component>>).
+template <typename T>
+[[nodiscard]] ApplySnapshotResult
+apply_snapshot_for(const Snapshot<T> &snap,
+                   const ApplySnapshotOptions options = {})
+  requires(std::is_copy_constructible_v<SnapshotComponent<T>>) {
+  using C = SnapshotComponent<T>;
+  return apply_snapshot<C>(
+      snap,
+      [](Entity &e, const C &value) {
+        if (e.has<C>()) {
+          if constexpr (std::is_copy_assignable_v<C>) {
+            e.get<C>() = value;
+          } else {
+            e.removeComponent<C>();
+            e.addComponent<C>(value);
+          }
+        } else {
+          e.addComponent<C>(value);
+        }
+      },
+      options);
 }
 
 // Snapshot a component type `T` by projecting it to a pointer-free, copyable
