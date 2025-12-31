@@ -7,5 +7,8 @@ namespace afterhours {
 // introducing component pools and stores.
 using EntityID = int;
 
+// Conventional sentinel for "no entity".
+inline constexpr EntityID INVALID_ENTITY_ID = -1;
+
 } // namespace afterhours
 
