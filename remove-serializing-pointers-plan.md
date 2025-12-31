@@ -171,3 +171,96 @@ Options:
 - No debug logging in release hot paths.
 - Avoid `shared_ptr` churn in the core iteration path where possible.
 
+## Validation: example-driven tests per phase
+
+Below are concrete test ideas (2–3 per phase) that fit the existing `example/tests` Catch2 setup and the usage patterns in `example/`.
+
+### Phase 1 — Handles + O(1) ID resolution
+
+- **Handle lifecycle correctness**
+  - Create entity → merge → get handle → resolve(handle) returns same entity ID.
+  - Mark for cleanup + cleanup → old handle resolves invalid.
+  - Create a new entity → verify slot reuse bumps generation (old handle stays invalid, new handle valid).
+- **`EntityID` lookup correctness under churn**
+  - Create N entities, merge, delete a subset (including middle element to force swap-remove), then:
+    - `getEntityForIDEnforce(id)` succeeds for survivors
+    - `getEntityForID(id)` returns empty for deleted
+  - This validates that the ID→slot mapping stays correct across swap-removes.
+- **Temp entity semantics preserved**
+  - Create entity (temp), confirm query misses it unless forced merge (current behavior).
+  - If a “handles-on-create” define exists, ensure resolve(handle) works even when query misses temp.
+
+### Phase 2 — Query behavior (no double-run, correct results)
+
+- **`gen_first` and `has_values` correctness**
+  - Build a small world with known entities.
+  - Assert:
+    - `q.has_values()` matches `(q.gen_count() > 0)`
+    - `q.gen_first_enforce().id` equals the first element returned by `q.gen()` for stable-order queries
+- **Force-merge behavior stays correct**
+  - Create entities without calling `merge_entity_arrays()`.
+  - Assert:
+    - query with default options misses them
+    - query with `{.force_merge=true}` sees them
+- **Stop-on-first option actually short-circuits (instrumented)**
+  - Add a test-only `whereLambda` that increments a counter on each entity visited.
+  - Call `gen_first()` and assert the counter is “small” (ideally 1) in a known ordering case.
+  - This requires Phase 2’s implementation to truly early-exit.
+
+### Phase 3 — Game components use IDs/handles (no pointers in persisted state)
+
+- **Reference component uses handles, not pointers**
+  - Define a component `Targets { EntityHandle target; }`.
+  - Create A and B, set `A.Targets.target = handle_for(B)`.
+  - Delete B, then assert resolve(A.Targets.target) is invalid.
+- **No pointer serialization policy enforcement (compile-time)**
+  - Add a small template in a “snapshot” header that `static_assert`s that snapshot inputs do not contain banned pointer types, e.g.:
+    - reject `T*`, `std::unique_ptr`, `std::shared_ptr`
+  - Tests can validate the “good” component compiles and (optionally) that a “bad” component is rejected (this may be kept as a commented “negative compile test” example if your CI can’t do compile-fail tests).
+
+### Phase 4 — Component pools/SoA behind existing `Entity` API
+
+- **Core API parity**
+  - For a component `Transform`:
+    - `addComponent<Transform>` then `has<Transform>` true and `get<Transform>` returns expected values
+    - `removeComponent<Transform>` then `has<Transform>` false
+- **Swap-remove correctness inside pools**
+  - Add `Transform` to many entities.
+  - Remove `Transform` from one in the middle.
+  - Assert all remaining entities still return correct `Transform` data (validates sparse/dense index updates).
+- **EOF reference stability (opt-in)**
+  - Under `AFTER_HOURS_KEEP_REFERENCES_UNTIL_EOF`:
+    - take a reference/pointer to a component, trigger removals that would normally swap-remove, and assert the reference remains usable until the explicit EOF flush.
+  - Without the define:
+    - document that the same pattern is unsupported (test should not rely on it).
+
+### Phase 5 — Pointer-free snapshots (explicit serialization surface)
+
+- **Snapshot contains only IDs/handles**
+  - Build a tiny world, take `snapshot<Transform, Health>()`.
+  - `static_assert` snapshot types are pointer-free:
+    - no raw pointers/smart pointers in snapshot structs
+    - handles are POD (`EntityHandle`)
+- **Round-trip correctness (in-memory)**
+  - Serialize snapshot to a buffer (format doesn’t matter yet), deserialize, rebuild world, and assert:
+    - entity count matches
+    - selected component values match
+    - entity references via handles resolve correctly after rebuild (where applicable)
+
+## “Run non-raylib tests between each phase” (current baseline)
+
+Recommended non-raylib targets to run after each phase:
+
+- `make -C example/tests`
+- `make -C example/tag_filters`
+- `make -C example/basic_usage`
+- `make -C example/custom_queries`
+- `make -C example/simple_system`
+- `make -C example/functional_usage`
+- `make -C example/not_system`
+
+Notes from reviewing/running `example/` in this environment:
+
+- `example/tests` currently passes.
+- `example/ui_layout` currently runs but has 2 failing assertions due to float rounding (`87.5` vs expected `88`). It’s useful coverage, but it shouldn’t gate phases until it’s made epsilon/rounding-tolerant.
+
