@@ -302,12 +302,12 @@ struct EntityHelper {
   // This centralizes the "walk bitset, remove from ComponentStore, clear bit"
   // pattern used by cleanup/delete operations.
   static void remove_pooled_components_for(Entity &e) {
-    for (ComponentID cid = 0; cid < max_num_components; ++cid) {
-      if (!e.componentSet[cid])
-        continue;
+    // Iterate only attached components (avoids scanning the full bitset width).
+    for (const ComponentID cid : e.attached_components) {
       e.componentSet[cid] = false;
       ComponentStore::get().remove_by_component_id(cid, e.id);
     }
+    e.attached_components.clear();
   }
 
   static void cleanup() {

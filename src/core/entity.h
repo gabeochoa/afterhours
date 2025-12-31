@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <optional>
 #include <type_traits>
+#include <algorithm>
+#include <vector>
 
 #include "../logging.h"
 #include "../type_name.h"
@@ -41,6 +43,16 @@ struct Entity {
   EntityHandle::Slot ah_slot_index = EntityHandle::INVALID_SLOT;
 
   ComponentBitSet componentSet;
+  // Tracks the ComponentIDs currently attached to this entity.
+  //
+  // This exists to avoid O(max_num_components) scans in:
+  // - derived/RTTI access paths (`get_with_child` / `has_child_of`)
+  // - cleanup/delete paths that need to remove all attached pooled components
+  //
+  // Invariant (maintained by Entity::{add/remove}Component + cleanup helpers):
+  // - If `componentSet[cid] == true`, then `cid` appears exactly once here.
+  // - If `componentSet[cid] == false`, then `cid` does not appear here.
+  std::vector<ComponentID> attached_components;
 
   TagBitset tags{};
   bool cleanup = false;
@@ -67,8 +79,8 @@ struct Entity {
     log_trace("checking for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
-    for (ComponentID cid = 0; cid < max_num_components; ++cid) {
-      if (!componentSet[cid])
+    for (const ComponentID cid : attached_components) {
+      if (!componentSet[cid]) // defensive: should always be true
         continue;
       const BaseComponent *cmp =
           ComponentStore::get().try_get_base(cid, this->id);
@@ -108,7 +120,12 @@ struct Entity {
 #endif
       return;
     }
-    componentSet[components::get_type_id<T>()] = false;
+    const ComponentID cid = components::get_type_id<T>();
+    componentSet[cid] = false;
+    // Keep attached_components in sync (expected small vector).
+    attached_components.erase(
+        std::remove(attached_components.begin(), attached_components.end(), cid),
+        attached_components.end());
     ComponentStore::get().remove_for<T>(this->id);
   }
 
@@ -116,18 +133,23 @@ struct Entity {
 #if defined(AFTER_HOURS_DEBUG)
     log_trace("adding component_id:{} {} to entity_id: {}",
               components::get_type_id<T>(), type_name<T>(), id);
-
+#endif
     if (this->has<T>()) {
+#if defined(AFTER_HOURS_DEBUG)
       log_warn("This entity {} already has this component attached id: "
                "{}, "
                "component {}",
                id, components::get_type_id<T>(), type_name<T>());
-
       VALIDATE(false, "duplicate component");
-    }
 #endif
+      // Keep state stable in non-debug builds too (and avoid corrupting
+      // attached_components with duplicates).
+      return this->get<T>();
+    }
 
-    componentSet[components::get_type_id<T>()] = true;
+    const ComponentID cid = components::get_type_id<T>();
+    componentSet[cid] = true;
+    attached_components.push_back(cid);
     return ComponentStore::get().emplace_for<T>(this->id,
                                                 std::forward<TArgs>(args)...);
   }
@@ -176,8 +198,8 @@ struct Entity {
     // NOTE: This path is only used by `get_with_child/has_child_of` (i.e. when
     // systems/queries are operating in "include derived children" mode). The
     // normal `get<T>()` / `has<T>()` path remains O(1).
-    for (ComponentID cid = 0; cid < max_num_components; ++cid) {
-      if (!componentSet[cid])
+    for (const ComponentID cid : attached_components) {
+      if (!componentSet[cid]) // defensive: should always be true
         continue;
       BaseComponent *cmp = ComponentStore::get().try_get_base(cid, this->id);
       if (!cmp)
@@ -197,8 +219,8 @@ struct Entity {
 #endif
     // Const version of the derived-component scan (see non-const overload).
     // We only `dynamic_cast` components that are present per `componentSet`.
-    for (ComponentID cid = 0; cid < max_num_components; ++cid) {
-      if (!componentSet[cid])
+    for (const ComponentID cid : attached_components) {
+      if (!componentSet[cid]) // defensive: should always be true
         continue;
       const BaseComponent *cmp =
           ComponentStore::get().try_get_base(cid, this->id);
