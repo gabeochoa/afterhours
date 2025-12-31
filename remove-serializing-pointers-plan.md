@@ -1,285 +1,173 @@
-# Remove “serializing pointers” from Afterhours (plan + options)
+# Remove “serializing pointers” from Afterhours (plan + phases)
 
-This doc captures what “serializing pointers” means in this repo today, what we learned from `example/`, what `entity-handle-slots` tried (and why it was perceived as slow), and a phased plan to stop needing pointer-linking serialization **without changing the public API too much and without slowing down games**.
+This plan removes the need to serialize **any** pointers (raw pointers, smart pointers, observed-pointer systems) by making persisted state strictly **IDs/handles**, while keeping the public ECS API mostly intact and avoiding performance regressions.
 
-## Problem statement (what we want)
+## Existing setup
 
-- **Goal**: save-games / network snapshots should contain **no pointer values**, including:
-  - raw pointers (`T*`, `void*`)
-  - smart pointers (`std::unique_ptr`, `std::shared_ptr`)
-  - “observed pointer” / pointer-linking serialization mechanisms (e.g., Bitsery pointer extensions)
-  
-  Everything that persists must be **IDs or handles**.
-- **Constraints**:
-  - Keep the **public ECS API** mostly stable (`Entity::addComponent/get/has/remove`, `EntityID`, `OptEntity`, `EntityQuery`, `System<...>`).
-  - Avoid slowing down games; ideally this work should be a net performance improvement (less allocation, better cache locality).
-  - Components are defined by games, so the library cannot rely on “knowing all component types” at runtime in advance.
+### ECS component storage (pointer-based)
 
-## What “serializing pointers” means here (today)
+- `Entity` stores components as heap objects:
+  - `componentArray`: `std::array<std::unique_ptr<BaseComponent>, max_num_components>`
+  - `componentSet`: bitset presence mask keyed by `ComponentID`
 
-### ECS internal storage is pointer-heavy
+This implies:
 
-Current `Entity` component storage is:
+- **runtime**: lots of small allocations and pointer chasing
+- **serialization pressure**: anything that tries to serialize “an Entity” will quickly run into pointer-shaped state
 
-- `componentArray`: `std::array<std::unique_ptr<BaseComponent>, max_num_components>`
+### Entity storage and access patterns
 
-This creates two persistent pressures:
+- Entities live as `std::shared_ptr<Entity>` in a dense list plus a temp list that is merged later.
+- `EntityHelper::getEntityForID` is currently a linear scan (O(N)).
 
-- **Serialization pressure**: if a project serializes `Entity` or any object graph containing entities/components, it inevitably encounters `unique_ptr<BaseComponent>` and any pointers those components store.
-- **Runtime pressure**: per-component heap allocation (`make_unique<T>`) and pointer chasing on every access.
+### Existing usage patterns (from `example/`)
 
-### `example/` shows the “good direction”: IDs rather than pointers
+The UI stack already follows the “good” pattern:
 
-The UI plugin and examples already model relationships using `EntityID`:
+- relationships are modeled with `EntityID` (parent/children/focus/hot/etc.)
+- code resolves IDs back to entities when needed
 
-- `UIComponent.parent`, `UIComponent.children`, focus/hot IDs in `UIContext`, etc.
+This is exactly the direction we want for all persisted game state.
 
-This is pointer-free and serializable by construction. We want to push the whole ecosystem toward this pattern:
+### Prior art in this repo: `origin/entity-handle-slots`
 
-- **store IDs/handles** for references
-- **re-resolve** through ECS when needed
+That branch introduces the right handle concept:
 
-## Related real-world context (PharmaSea)
+- `EntityHandle { slot, gen }` (slot+generation)
+- `EntityHelper::resolve(handle)` and generation bumps on delete
 
-PharmaSea contains explicit pointer serialization infrastructure and docs about moving away from it (handle-based store, pointer-free serialization options). It’s a strong signal that:
+But it likely felt slow because key hot paths were still expensive:
 
-- pointer-linking contexts are a real maintenance burden
-- “stable handles” and “slot+generation” are the right *conceptual* solution
+- `EntityID -> entity` remained O(N)
+- `EntityQuery` could run queries more than once per call chain and didn’t early-exit
+- `shared_ptr` remained on the iteration hot path
 
-## What `entity-handle-slots` provides (and what looked slow)
+## Current problem
 
-The `origin/entity-handle-slots` branch introduces:
+### “No pointers in serialized data” (hard requirement)
 
-- `EntityHandle { uint32_t slot; uint32_t gen; }`
-- `Entity::ah_slot_index` runtime metadata
-- slot table + freelist + generation bumping on delete
-- additive query helpers like `EntityQuery::gen_handles()`
+Persisted formats (save-game, network snapshots) must contain **zero pointer values**, including:
 
-### Why it could feel slow in games (observed issues)
+- raw pointers (`T*`, `void*`)
+- smart pointers (`std::unique_ptr`, `std::shared_ptr`)
+- pointer-linking/observed-pointer serialization systems (e.g., Bitsery pointer extensions)
 
-Even with handles, the branch still has several hot-path costs:
+Everything persisted must be **IDs or handles**.
 
-- **Entities are still `shared_ptr<Entity>`** everywhere.
-  - extra indirection and refcount traffic; also harms cache locality.
-- **`getEntityForID` is still O(N)** linear scan over `entities`.
-  - UI and gameplay often do lots of ID→entity resolution; this can dominate frame time.
-- **`EntityQuery` does extra work**:
-  - `has_values()` runs a full query each time.
-  - `gen_first()` calls `has_values()` and then effectively runs again.
-  - `stop_on_first` option exists but `run_query` does not early-exit.
-  - `run_query` always builds an intermediate `RefEntities out` before filtering.
-- **Handle validation/logging** in `handle_for` is great for debugging but should be compiled out in release builds.
+### Performance constraints
 
-### Takeaway
+- We can’t slow down games.
+- Ideally, this refactor is a net win (fewer allocations, better locality, faster lookups).
 
-`entity-handle-slots` is the right *shape* (slot+generation), but it needs a few structural changes to be fast:
+### Compatibility constraint: “stable until end-of-frame”
 
-- O(1) `EntityID → handle/slot → entity`
-- fewer allocations and fewer full scans
-- avoid double-running queries
-- remove `shared_ptr` from the iteration hot path if possible
+- Best case: references don’t change until end of the frame.
+- Acceptable back-compat: make this behavior opt-in via:
+  - `AFTER_HOURS_KEEP_REFERENCES_UNTIL_EOF`
 
-## Strategy overview (phased, compatibility-first)
+## Solution overview
 
-We can decouple the work into two orthogonal tracks:
+### Core idea
 
-1) **Entity identity / references**: move projects from pointers to `EntityHandle` (or equivalent) with O(1) resolution.
-2) **Component storage**: move from pointer-per-component to pool-based storage (AoS/SoA-friendly) while preserving API shape.
+Separate “identity” from “memory address”:
 
-Doing (1) first removes most “pointer serialization” needs immediately for game code that stores entity references.
-Doing (2) later removes the ECS internal pointer pressure and improves performance.
+- **Persist**: IDs/handles only.
+- **Runtime access**: resolve IDs/handles through ECS to reach current objects.
 
-## Phase 1: Fast handle system (slot+generation) with O(1) ID resolution
+### Key building blocks
 
-### Public API (additive)
+- **Entity handles**: slot+generation handles that detect stale references after delete/reuse.
+- **O(1) resolution**:
+  - `EntityID -> slot/handle -> entity` must be O(1) (no scans).
+- **Pointer-free serialization primitives**:
+  - explicit snapshot structures that serialize `(handle/id, component value)` pairs
+  - never serialize `Entity` via pointer graphs
+- **(Optional but recommended) component pools**:
+  - move from per-entity `unique_ptr<BaseComponent>` to per-component dense pools (SoA-friendly)
+  - keep public `Entity::addComponent/get/has/remove` intact by forwarding internally
+- **EOF stability mode**:
+  - defer destructive operations until a frame boundary when `AFTER_HOURS_KEEP_REFERENCES_UNTIL_EOF` is enabled
 
-- Add `afterhours::EntityHandle` (POD): `{slot, gen}`.
-- Add:
+## Solution phase breakdown
+
+### Phase 1 — Entity handles + O(1) `EntityID` resolution (no API break)
+
+**Goal**: make “store handle/id, resolve later” cheap enough to be the default pattern everywhere.
+
+- **Add/standardize** `EntityHandle { uint32_t slot; uint32_t gen; }` (POD).
+- **Expose**:
   - `EntityHelper::handle_for(const Entity&) -> EntityHandle`
   - `EntityHelper::resolve(EntityHandle) -> OptEntity`
-  - `EntityHelper::resolveEnforced(EntityHandle) -> RefEntity` (optional)
+- **Make `EntityID -> entity` O(1)**:
+  - Add `std::vector<uint32_t> id_to_slot` (or equivalent).
+  - Update it on merge/create/delete.
+  - Re-implement `getEntityForID` using this mapping (no scans).
+- **Release build performance**:
+  - compile out handle validation/logging in hot paths (keep in debug).
 
-These are already implemented in `entity-handle-slots` (good starting point).
+### Phase 2 — Fix `EntityQuery` hot paths (avoid double work)
 
-### Make `EntityID → entity` O(1)
+**Goal**: queries should not become the next bottleneck once ID/handle resolution becomes cheap.
 
-Add a mapping owned by `EntityHelper`:
+- Ensure `gen_first()`/`has_values()` do not run the query twice.
+- Implement true early-exit for “stop on first”.
+- Avoid building intermediate vectors when only existence/first element is needed.
 
-- **Option A**: `std::vector<uint32_t> id_to_slot;`
-  - `id_to_slot[entity.id] = entity.ah_slot_index`
-  - on deletion: set to `INVALID_SLOT`
-  - `getEntityForID` becomes: `slot = id_to_slot[id]` then `resolve({slot, slots[slot].gen})` (or directly use slot’s `ent` if gen matches)
+### Phase 3 — Remove pointer-shaped state from *game* components (policy + migration)
 
-- **Option B**: `std::vector<uint32_t> id_to_dense_index;`
-  - best if dense list is canonical and stable; must update on swap-remove.
+**Goal**: games stop needing pointer-linking serialization immediately, even before internal ECS storage changes.
 
-This single change removes a major perf cliff in UI and gameplay code.
+- **Rule**: serialized components must not contain:
+  - `Entity*`, `RefEntity`, `std::shared_ptr<Entity>`, `std::unique_ptr<...>`
+- **Replacement**:
+  - use `EntityHandle` (preferred) or `EntityID` (only when lifetime is tightly controlled).
+- **Typical pattern**:
+  - store `EntityHandle target;`
+  - use `if (auto e = EntityHelper::resolve(target)) { ... }`
 
-### Remove “slow query patterns”
+### Phase 4 — Component storage: pools/SoA behind existing `Entity` API
 
-Make `EntityQuery` not run multiple times per call chain:
+**Goal**: remove internal pointer pressure, reduce allocations, improve locality, and make snapshots straightforward.
 
-- `gen_first()` should not call `has_values()` (which runs the query) and then run again.
-- `has_values()` should be implemented as “try find first match” without building full lists.
-- Implement `stop_on_first` as a true early-exit.
+- Introduce `ComponentPool<T>` (dense + sparse index):
+  - `dense: std::vector<T>`
+  - `dense_to_entity: std::vector<EntityID>`
+  - `entity_to_dense: std::vector<uint32_t>`
+- Keep public API shape:
+  - `Entity::addComponent<T>(...)`
+  - `Entity::get<T>()`
+  - `Entity::has<T>()`
+  - `Entity::removeComponent<T>()`
 
-### Compile out handle validation in release
+**Compatibility: EOF stability**
 
-Keep correctness checks in debug builds, but in release:
+- `AFTER_HOURS_KEEP_REFERENCES_UNTIL_EOF`:
+  - defer swap-removes/compaction/slot reuse until an end-of-frame flush (or treat `EntityHelper::cleanup()` as the flush boundary).
+- Default mode (no define):
+  - immediate swap-remove; no pointer stability guarantees.
 
-- `handle_for` should be minimal branching
-- no logging in hot paths
+**Derived/child-of queries**
 
-## Phase 2: Stop storing entity pointers in game components (policy + helpers)
-
-This is the core “stop serializing pointers” requirement at the game layer.
-
-### Recommended rule (document + enforce)
-
-- Don’t store `Entity*`, `RefEntity`, or `shared_ptr<Entity>` inside components that are serialized.
-- Store `EntityHandle` (or `EntityID` if you accept stale references) instead.
-
-### Helper patterns
-
-- Store `EntityHandle parent;` in a component.
-- On use: `if (auto opt = EntityHelper::resolve(parent)) { ... }`
-
-### Migration approach
-
-- Identify pointer-shaped fields in game components (e.g., `Entity*`, `RefEntity`, `shared_ptr<Entity>`).
-- Replace them with:
-  - `EntityHandle` if the link should remain valid across deletes/respawns (and detect staleness)
-  - `EntityID` if lifetime is tightly controlled and staleness is acceptable/validated elsewhere
-
-## Phase 3: Component storage redesign (SoA/pools) while keeping public API stable
-
-This is the big internal change that removes most ECS-pointer pressure and improves runtime performance.
-
-### End-of-frame reference stability (compatibility mode)
-
-Some projects may currently rely on references/pointers staying valid at least until the end of the frame.
-We can support that as an opt-in compatibility mode:
-
-- `AFTER_HOURS_KEEP_REFERENCES_UNTIL_EOF`
-
-Implementation sketch (applies to both entity and component storage):
-
-- **Defer destructive operations** (swap-removes, vector compaction, slot reuse) until an explicit end-of-frame boundary.
-- Collect:
-  - entities to delete
-  - components to remove
-  - pool compactions to perform
-- Execute them in a single “flush” phase at EOF (or when `EntityHelper::cleanup()` is called, if cleanup is the frame boundary).
-
-Default (no define) remains the fastest mode:
-
-- immediate swap-remove on delete/remove
-- no guarantees about pointer/reference stability across the frame
-
-### Target storage model
-
-For each component type `T`, maintain a `ComponentPool<T>`:
-
-- `std::vector<T> dense;`
-- `std::vector<EntityID> dense_to_entity;`
-- `std::vector<uint32_t> entity_to_dense;` (sparse; sized to max entity id or grown)
-
-Operations:
-
-- **add**: `dense.emplace_back(args...)`, set sparse index, set entity bit.
-- **get**: O(1) index lookup.
-- **remove**: swap-remove `dense`, update moved entity’s sparse index, clear bit.
-
-### Why this works when games define components
-
-It’s template-instantiated per component type `T` on demand. The library doesn’t need to “know all components” at runtime.
-
-### Keeping public API shape
-
-Keep existing `Entity` methods (same signatures):
-
-- `addComponent<T>(...)`
-- `get<T>()`
-- `has<T>()`
-- `removeComponent<T>()`
-
-Under the hood, these forward to the pool.
-
-### Caveat: component pointer stability
-
-With dense vectors, component addresses can move (vector growth, swap-remove).
-
-That’s usually fine (and preferable) if projects follow the rule:
-
-- do not store `T*` long-term; store entity handle and re-fetch component.
-
-If needed, provide a temporary compatibility macro:
-
-- `AFTER_HOURS_STABLE_COMPONENT_ADDRESSES` → uses a stable-address container (slower; transitional only).
-
-Alternative (preferred) compatibility story:
-
-- keep pointer stability only “until EOF” via `AFTER_HOURS_KEEP_REFERENCES_UNTIL_EOF`
-- keep long-lived references stable via `EntityHandle` + re-fetch (not by storing `T*`)
-
-### Interaction with “derived/child-of” queries
-
-Current `has_child_of/get_with_child` uses RTTI (`dynamic_cast`) over `BaseComponent*`.
-
-Pool-based storage doesn’t naturally support that.
-
+Current RTTI-based `has_child_of/get_with_child` depends on pointer-backed components.
 Options:
 
-- **Legacy mode only**: keep “derived children” feature only when using pointer-backed components.
-- **Explicit registry**: allow projects to register derived relationships (base→derived type IDs) and implement “child-of” queries by checking those sets.
+- legacy-only support for derived queries, or
+- explicit derived registry (base → derived type IDs) if we want it with pools
 
-## Phase 4: Pointer-free serialization support (explicit snapshots, not pointer graphs)
+### Phase 5 — Pointer-free serialization: explicit snapshots (no pointer graphs)
 
-Instead of serializing `Entity` directly (which tends to pull in storage internals and pointers), provide explicit snapshot helpers.
+**Goal**: serialization becomes deterministic and pointer-free by design.
 
-### Snapshot concept (game chooses what to persist)
+- Provide snapshot helpers (game chooses the component list):
+  - entities: `(EntityHandle, tags, entity_type, cleanup?)`
+  - per component type `T`: `(EntityHandle, T value)`
+- Components that reference other entities store:
+  - `EntityHandle` (not pointers)
 
-A snapshot is a POD-friendly structure:
+## Performance guardrails (keep games fast)
 
-- entities: `(EntityHandle or EntityID, tags, entity_type, cleanup?)`
-- per component type `T`: list of `(EntityHandle or EntityID, T value)`
-
-Games specify the component list explicitly:
-
-- `snapshot<Transform, Health, Inventory>(...)`
-
-This avoids “unknown component type” issues and avoids pointer-linking entirely.
-
-### Reference fields inside components
-
-If components contain relationships, they store:
-
-- `EntityHandle` for entity refs
-- other stable handles/IDs for non-entity resources
-
-No `Entity*` or smart pointers in serialized state.
-
-## Practical performance checklist (so we don’t regress games)
-
-If we adopt handles + pools, performance should improve, but only if we avoid these traps:
-
-- Don’t keep `getEntityForID` as linear scan.
-- Don’t run queries twice (`has_values` + `gen_first`).
-- Don’t rebuild intermediate vectors unnecessarily.
-- Don’t do debug logging in release hot paths.
-- Avoid `shared_ptr` for the primary iteration list if possible; if kept, limit refcount churn.
-
-## Suggested implementation order (lowest risk first)
-
-1) **Land handle API + O(1) ID lookup** (fixes real perf cliff; low user-facing change).
-2) **Fix `EntityQuery` to early-exit + avoid double-run** (pure perf, no public API break).
-3) **Document + migrate pointer-shaped game fields to `EntityHandle`** (kills pointer serialization needs in game state).
-4) **Introduce component pools behind existing `Entity` API** (big internal refactor; large perf upside).
-5) **Add optional snapshot helpers** (nice UX for saves/network, pointer-free by design).
-
-## How this addresses “remove serializing pointers”
-
-- Game state no longer stores pointer values; it stores `EntityHandle` (POD) and component values.
-- ECS no longer encourages pointer graphs via per-component `unique_ptr` allocations.
-- Save/network formats no longer need pointer-linking contexts; they become deterministic, explicit, and portable.
+- No O(N) scans for ID lookups.
+- No query double-run patterns (`has_values()` then `gen_first()`).
+- No debug logging in release hot paths.
+- Avoid `shared_ptr` churn in the core iteration path where possible.
 
