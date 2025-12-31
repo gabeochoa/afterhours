@@ -65,12 +65,17 @@ struct EntityHelper {
   }
   static const Entities &get_entities() { return get_entities_for_mod(); }
 
+  // Bump a slot generation counter so old handles become stale.
+  // Returns a non-zero generation (wraparound skips 0).
   static EntityHandle::Slot bump_gen(EntityHandle::Slot gen) {
     // Unsigned wraparound is well-defined; if we wrapped to 0, bump to 1.
     const EntityHandle::Slot next = gen + 1;
     return next + static_cast<EntityHandle::Slot>(next == 0);
   }
 
+  // Allocate a slot index for a (merged) entity.
+  // - Reuses a free slot if available
+  // - Otherwise grows the slot table
   static EntityHandle::Slot alloc_slot_index() {
     auto &self = EntityHelper::get();
     if (!self.free_slots.empty()) {
@@ -82,6 +87,8 @@ struct EntityHelper {
     return static_cast<EntityHandle::Slot>(self.slots.size() - 1);
   }
 
+  // Ensure `id_to_slot[id]` is in-bounds.
+  // New entries are initialized to INVALID_SLOT.
   static void ensure_id_mapping_size(const EntityID id) {
     if (id < 0)
       return;
@@ -92,6 +99,8 @@ struct EntityHelper {
     }
   }
 
+  // Assign a stable slot to an entity (if it doesn't already have one).
+  // Also updates the O(1) `EntityID -> slot` mapping.
   static void assign_slot_to_entity(const EntityType &sp) {
     if (!sp)
       return;
@@ -117,6 +126,11 @@ struct EntityHelper {
       self.id_to_slot[static_cast<std::size_t>(sp->id)] = slot;
   }
 
+  // Invalidate an entity's slot and ID mapping (if any).
+  // - Clears id_to_slot[entity.id]
+  // - Clears slots[slot].ent
+  // - Bumps slots[slot].gen (stales old handles)
+  // - Adds slot back to the free list
   static void invalidate_entity_slot_if_any(const EntityType &sp) {
     if (!sp)
       return;
@@ -147,6 +161,9 @@ struct EntityHelper {
   }
 
   // Public handle helpers (additive API)
+  // Return a stable handle for a currently-merged entity.
+  // Returns invalid if the entity has no slot yet (temp pre-merge) or if the
+  // slot doesn't currently point at this entity.
   static EntityHandle handle_for(const Entity &e) {
     const EntityHandle::Slot slot = e.ah_slot_index;
     if (slot == EntityHandle::INVALID_SLOT)
@@ -161,6 +178,12 @@ struct EntityHelper {
     return {slot, s.gen};
   }
 
+  // Resolve a handle into an entity reference (if still alive).
+  // Returns empty if:
+  // - handle is invalid
+  // - slot is out of range
+  // - generation mismatch (stale handle)
+  // - slot is empty (entity deleted)
   static OptEntity resolve(const EntityHandle h) {
     if (h.is_invalid())
       return {};
