@@ -6,6 +6,7 @@
 //
 #include "../../src/plugins/autolayout.h"
 #include "../../src/ecs.h"
+#include <algorithm>
 
 namespace afterhours {
 namespace ui {
@@ -128,6 +129,42 @@ TEST_CASE("AutoLayoutCalculateThoseWithParents", "[AutoLayout]") {
 
 } // namespace ui
 
+// Phase-0 regression helpers: tag filtering via both EntityQuery and System tags
+enum struct DemoTag : uint8_t { Runner = 0, Chaser = 1, Store = 2 };
+
+struct TagTestTransform : BaseComponent {
+  int x = 0;
+};
+
+struct TagTestHealth : BaseComponent {
+  int hp = 100;
+};
+
+// System requiring Transform and the Runner tag, excluding Store
+struct MoveRunnersSys
+    : System<TagTestTransform, tags::All<DemoTag::Runner>,
+             tags::None<DemoTag::Store>> {
+  void for_each_with(Entity &, TagTestTransform &t, float) override { t.x += 1; }
+};
+
+// System that runs on Health with any of the Chaser or Runner tags
+struct HealAnyoneTaggedSys
+    : System<TagTestHealth, tags::Any<DemoTag::Chaser, DemoTag::Runner>> {
+  void for_each_with(Entity &, TagTestHealth &h, float) override {
+    h.hp = std::min(h.hp + 5, 100);
+  }
+};
+
+// Excludes Store-tagged entities regardless of components
+struct DebugNonStoreSys : System<tags::None<DemoTag::Store>> {
+  int *count = nullptr;
+  explicit DebugNonStoreSys(int *c) : count(c) {}
+  void for_each_with(Entity &, float) override {
+    if (count)
+      (*count)++;
+  }
+};
+
 TEST_CASE("ECS: temp entities are not query-visible until merge (unless forced)",
           "[ECS][EntityQuery][TempEntities]") {
   EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
@@ -168,6 +205,107 @@ TEST_CASE("ECS: cleanup removes entities and lookups stop finding them",
   REQUIRE_FALSE(EntityQuery<>({.ignore_temp_warning = true})
                     .whereID(id)
                     .has_values());
+}
+
+TEST_CASE("ECS: EntityQuery tag predicates remain correct",
+          "[ECS][EntityQuery][Tags]") {
+  EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+  Entity &a = EntityHelper::createEntity();
+  a.enableTag(DemoTag::Runner);
+
+  Entity &b = EntityHelper::createEntity();
+  b.enableTag(DemoTag::Runner);
+  b.enableTag(DemoTag::Store);
+
+  Entity &c = EntityHelper::createEntity();
+  c.enableTag(DemoTag::Chaser);
+
+  EntityHelper::merge_entity_arrays();
+
+  // Any(Runner, Chaser) should match all 3.
+  {
+    auto ents = EntityQuery<>({.ignore_temp_warning = true})
+                    .whereHasAnyTag(DemoTag::Runner)
+                    .gen();
+    REQUIRE(ents.size() == 2);
+  }
+
+  // None(Store) should match a and c only.
+  {
+    auto ents = EntityQuery<>({.ignore_temp_warning = true})
+                    .whereHasNoTags(DemoTag::Store)
+                    .gen();
+    REQUIRE(ents.size() == 2);
+  }
+
+  // Runner AND None(Store) should match only a.
+  {
+    auto ents = EntityQuery<>({.ignore_temp_warning = true})
+                    .whereHasTag(DemoTag::Runner)
+                    .whereHasNoTags(DemoTag::Store)
+                    .gen();
+    REQUIRE(ents.size() == 1);
+  }
+}
+
+TEST_CASE("ECS: System tag filters remain correct across merge timing",
+          "[ECS][System][Tags]") {
+  EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+  // Create sample entities (these start as temp entities).
+  Entity &e0 = EntityHelper::createEntity();
+  e0.addComponent<TagTestTransform>().x = 0;
+  e0.enableTag(DemoTag::Runner);
+
+  Entity &e1 = EntityHelper::createEntity();
+  e1.addComponent<TagTestTransform>().x = 5;
+  e1.enableTag(DemoTag::Runner);
+  e1.enableTag(DemoTag::Store); // excluded
+
+  Entity &e2 = EntityHelper::createEntity();
+  e2.addComponent<TagTestHealth>().hp = 50;
+  e2.enableTag(DemoTag::Chaser);
+
+  Entity &e3 = EntityHelper::createEntity();
+  e3.addComponent<TagTestHealth>().hp = 10;
+  e3.enableTag(DemoTag::Runner);
+
+  int non_store_count = 0;
+  SystemManager sm;
+  sm.register_update_system(std::make_unique<MoveRunnersSys>());
+  sm.register_update_system(std::make_unique<HealAnyoneTaggedSys>());
+  sm.register_update_system(std::make_unique<DebugNonStoreSys>(&non_store_count));
+
+  // First tick: MoveRunners runs before temp entities are merged (so it won't
+  // see them). Merge happens after each system, so later systems see entities.
+  sm.tick_all(EntityHelper::get_entities_for_mod(), 0.016f);
+
+  // Second tick: MoveRunners should see merged entities and run exactly once.
+  sm.tick_all(EntityHelper::get_entities_for_mod(), 0.016f);
+
+  // Validate transform updates:
+  REQUIRE(e0.get<TagTestTransform>().x == 1); // 0 -> 1 (ran once)
+  REQUIRE(e1.get<TagTestTransform>().x == 5); // store excluded
+
+  // Validate health updates: healer runs on Chaser or Runner tagged health.
+  REQUIRE(e2.get<TagTestHealth>().hp == 60); // 50 -> 55 -> 60
+  REQUIRE(e3.get<TagTestHealth>().hp == 20); // 10 -> 15 -> 20
+
+  // DebugNonStore runs both ticks; it should process only non-store entities:
+  // e0, e2, e3 => 3 per tick => 6 total
+  REQUIRE(non_store_count == 6);
+}
+
+TEST_CASE("ECS: get_singleton is safe when missing (returns a dummy entity)",
+          "[ECS][Singleton]") {
+  struct MissingSingleton : BaseComponent {};
+
+  EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+  // Not registered => should not crash. It should return a dummy entity ref.
+  RefEntity e = EntityHelper::get_singleton<MissingSingleton>();
+  REQUIRE_FALSE(e.get().has<MissingSingleton>());
 }
 
 } // namespace afterhours
