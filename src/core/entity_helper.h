@@ -297,7 +297,8 @@ struct EntityHelper {
     }
   }
 
-  // Remove pooled components for an entity based on its component bitset.
+  // Remove "pooled" components for an entity (components stored in a per-type
+  // dense pool, rather than heap-allocated per-entity pointers).
   // This centralizes the "walk bitset, remove from ComponentStore, clear bit"
   // pattern used by cleanup/delete operations.
   static void remove_pooled_components_for(Entity &e) {
@@ -343,13 +344,15 @@ struct EntityHelper {
 
     // Invalidate slots for all entities we currently know about.
     for (auto &sp : entities) {
-      if (sp)
-        remove_pooled_components_for(*sp);
+      if (!sp)
+        continue;
+      remove_pooled_components_for(*sp);
       invalidate_entity_slot_if_any(sp);
     }
     for (auto &sp : self.temp_entities) {
-      if (sp)
-        remove_pooled_components_for(*sp);
+      if (!sp)
+        continue;
+      remove_pooled_components_for(*sp);
       invalidate_entity_slot_if_any(sp);
     }
 

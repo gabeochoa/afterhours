@@ -10,9 +10,14 @@
 
 namespace afterhours {
 
+struct Entity;
+
 SINGLETON_FWD(ComponentStore)
 struct ComponentStore {
   SINGLETON(ComponentStore)
+
+  // `Entity` is allowed to use the internal RTTI/derived access path.
+  friend struct Entity;
 
   struct IPool {
     virtual ~IPool() = default;
@@ -66,20 +71,6 @@ struct ComponentStore {
     return const_cast<ComponentStore *>(this)->pool_for<T>().get(id);
   }
 
-  [[nodiscard]] BaseComponent *try_get_base(const ComponentID cid,
-                                           const EntityID id) {
-    if (cid >= pools_.size() || !pools_[cid])
-      return nullptr;
-    return pools_[cid]->try_get_base(id);
-  }
-
-  [[nodiscard]] const BaseComponent *try_get_base(const ComponentID cid,
-                                                 const EntityID id) const {
-    if (cid >= pools_.size() || !pools_[cid])
-      return nullptr;
-    return pools_[cid]->try_get_base(id);
-  }
-
   void remove_by_component_id(const ComponentID cid, const EntityID id) {
     if (cid < pools_.size() && pools_[cid]) {
       pools_[cid]->remove(id);
@@ -101,6 +92,20 @@ struct ComponentStore {
   }
 
 private:
+  [[nodiscard]] BaseComponent *try_get_base(const ComponentID cid,
+                                           const EntityID id) {
+    if (cid >= pools_.size() || !pools_[cid])
+      return nullptr;
+    return pools_[cid]->try_get_base(id);
+  }
+
+  [[nodiscard]] const BaseComponent *try_get_base(const ComponentID cid,
+                                                 const EntityID id) const {
+    if (cid >= pools_.size() || !pools_[cid])
+      return nullptr;
+    return pools_[cid]->try_get_base(id);
+  }
+
   void ensure_pool_slot(const ComponentID cid) {
     if (pools_.size() <= cid) {
       pools_.resize(cid + 1);
