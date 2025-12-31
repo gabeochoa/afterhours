@@ -1,16 +1,16 @@
 #pragma once
 
-#include <array>
 #include <atomic>
 #include <bitset>
 #include <cstdint>
-#include <map>
 #include <optional>
 #include <type_traits>
 
 #include "../logging.h"
 #include "../type_name.h"
 #include "base_component.h"
+#include "component_store.h"
+#include "entity_id.h"
 #include "entity_handle.h"
 #include "pointer_policy.h"
 
@@ -22,13 +22,12 @@ namespace afterhours {
 using TagId = std::uint8_t;
 using TagBitset = std::bitset<AFTER_HOURS_MAX_ENTITY_TAGS>;
 template <typename Base, typename Derived> bool child_of(Derived *derived) {
-  return dynamic_cast<Base *>(derived) != nullptr;
+  using BasePtr =
+      std::conditional_t<std::is_const_v<Derived>, const Base *, Base *>;
+  return dynamic_cast<BasePtr>(derived) != nullptr;
 }
 
 using ComponentBitSet = std::bitset<max_num_components>;
-using ComponentArray =
-    std::array<std::unique_ptr<BaseComponent>, max_num_components>;
-using EntityID = int;
 
 static std::atomic_int ENTITY_ID_GEN = 0;
 
@@ -42,7 +41,6 @@ struct Entity {
   EntityHandle::Slot ah_slot_index = EntityHandle::INVALID_SLOT;
 
   ComponentBitSet componentSet;
-  ComponentArray componentArray;
 
   TagBitset tags{};
   bool cleanup = false;
@@ -69,10 +67,15 @@ struct Entity {
     log_trace("checking for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
-    for (const auto &component : componentArray) {
-      if (child_of<T>(component.get())) {
+    for (ComponentID cid = 0; cid < max_num_components; ++cid) {
+      if (!componentSet[cid])
+        continue;
+      const BaseComponent *cmp =
+          ComponentStore::get().try_get_base(cid, this->id);
+      if (!cmp)
+        continue;
+      if (child_of<T>(cmp))
         return true;
-      }
     }
     return false;
   }
@@ -106,7 +109,7 @@ struct Entity {
       return;
     }
     componentSet[components::get_type_id<T>()] = false;
-    componentArray[components::get_type_id<T>()].reset();
+    ComponentStore::get().remove_for<T>(this->id);
   }
 
   template <typename T, typename... TArgs> T &addComponent(TArgs &&...args) {
@@ -124,16 +127,9 @@ struct Entity {
     }
 #endif
 
-    auto component = std::make_unique<T>(std::forward<TArgs>(args)...);
-    const ComponentID component_id = components::get_type_id<T>();
-    componentArray[component_id] = std::move(component);
-    componentSet[component_id] = true;
-
-#if defined(AFTER_HOURS_DEBUG)
-    log_trace("your set is now {}", componentSet);
-#endif
-
-    return get<T>();
+    componentSet[components::get_type_id<T>()] = true;
+    return ComponentStore::get().emplace_for<T>(this->id,
+                                                std::forward<TArgs>(args)...);
   }
 
   template <typename T, typename... TArgs>
@@ -171,9 +167,23 @@ struct Entity {
     log_trace("fetching for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
-    for (const auto &component : componentArray) {
-      if (child_of<T>(component.get())) {
-        return static_cast<T &>(*component);
+    // Derived-component support:
+    // - Walk all *present* component type IDs on this entity (via the bitset)
+    // - For each present type ID, fetch the pooled BaseComponent instance
+    // - `dynamic_cast` to `T` so callers can ask for a base type and still get a
+    //   derived component instance (legacy behavior)
+    //
+    // NOTE: This path is only used by `get_with_child/has_child_of` (i.e. when
+    // systems/queries are operating in "include derived children" mode). The
+    // normal `get<T>()` / `has<T>()` path remains O(1).
+    for (ComponentID cid = 0; cid < max_num_components; ++cid) {
+      if (!componentSet[cid])
+        continue;
+      BaseComponent *cmp = ComponentStore::get().try_get_base(cid, this->id);
+      if (!cmp)
+        continue;
+      if (auto *as_t = dynamic_cast<T *>(cmp)) {
+        return *as_t;
       }
     }
     warnIfMissingComponent<T>();
@@ -185,9 +195,17 @@ struct Entity {
     log_trace("fetching for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
-    for (const auto &component : componentArray) {
-      if (child_of<T>(component.get())) {
-        return static_cast<const T &>(*component);
+    // Const version of the derived-component scan (see non-const overload).
+    // We only `dynamic_cast` components that are present per `componentSet`.
+    for (ComponentID cid = 0; cid < max_num_components; ++cid) {
+      if (!componentSet[cid])
+        continue;
+      const BaseComponent *cmp =
+          ComponentStore::get().try_get_base(cid, this->id);
+      if (!cmp)
+        continue;
+      if (const auto *as_t = dynamic_cast<const T *>(cmp)) {
+        return *as_t;
       }
     }
     return get<T>();
@@ -195,27 +213,12 @@ struct Entity {
 
   template <typename T> [[nodiscard]] T &get() {
     warnIfMissingComponent<T>();
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wreturn-stack-address"
-#elif defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wreturn-local-addr"
-#endif
-    return static_cast<T &>(
-        *componentArray.at(components::get_type_id<T>()).get());
+    return ComponentStore::get().get_for<T>(this->id);
   }
 
   template <typename T> [[nodiscard]] const T &get() const {
     warnIfMissingComponent<T>();
-
-    return static_cast<const T &>(
-        *componentArray.at(components::get_type_id<T>()).get());
-#ifdef __clang__
-#pragma clang diagnostic pop
-#elif defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
+    return ComponentStore::get().get_for<T>(this->id);
   }
 
   void enableTag(const TagId tag_id) {

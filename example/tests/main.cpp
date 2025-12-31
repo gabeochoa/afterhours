@@ -258,7 +258,7 @@ static_assert(afterhours::is_pointer_like_v<afterhours::OptEntity>);
 static_assert(!afterhours::is_pointer_like_v<afterhours::EntityHandle>);
 static_assert(!afterhours::is_pointer_like_v<Targets>);
 
-TEST_CASE("Phase 3: components store EntityHandle (not pointers) and handles "
+TEST_CASE("ECS: components can store EntityHandle (not pointers) and handles "
           "become stale after cleanup",
           "[ECS][EntityHandle][Components]") {
   EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
@@ -281,7 +281,7 @@ TEST_CASE("Phase 3: components store EntityHandle (not pointers) and handles "
   REQUIRE_FALSE(EntityHelper::resolve(a.get<Targets>().target).valid());
 }
 
-TEST_CASE("Phase 3: OptEntityHandle resolves and becomes stale on cleanup",
+TEST_CASE("ECS: OptEntityHandle resolves and becomes stale on cleanup",
           "[ECS][OptEntityHandle]") {
   EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
 

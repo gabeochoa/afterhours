@@ -8,6 +8,7 @@
 
 #include "../debug_allocator.h"
 #include "../singleton.h"
+#include "component_store.h"
 #include "entity.h"
 
 namespace afterhours {
@@ -296,16 +297,34 @@ struct EntityHelper {
     }
   }
 
+  // Remove "pooled" components for an entity (components stored in a per-type
+  // dense pool, rather than heap-allocated per-entity pointers).
+  // This centralizes the "walk bitset, remove from ComponentStore, clear bit"
+  // pattern used by cleanup/delete operations.
+  static void remove_pooled_components_for(Entity &e) {
+    for (ComponentID cid = 0; cid < max_num_components; ++cid) {
+      if (!e.componentSet[cid])
+        continue;
+      e.componentSet[cid] = false;
+      ComponentStore::get().remove_by_component_id(cid, e.id);
+    }
+  }
+
   static void cleanup() {
     EntityHelper::merge_entity_arrays();
     Entities &entities = get_entities_for_mod();
 
     std::size_t i = 0;
     while (i < entities.size()) {
+      // `sp` is the current entity shared_ptr at index `i`.
+      // (Entities are stored as `std::shared_ptr<Entity>` in `Entities`.)
       const auto &sp = entities[i];
       if (sp && !sp->cleanup) {
         ++i;
         continue;
+      }
+      if (sp) {
+        remove_pooled_components_for(*sp);
       }
       // invalidate removed entity slot/id mapping
       invalidate_entity_slot_if_any(entities[i]);
@@ -314,6 +333,9 @@ struct EntityHelper {
       }
       entities.pop_back();
     }
+
+    // Treat cleanup as an end-of-frame boundary for component storage.
+    ComponentStore::get().flush_end_of_frame();
   }
 
   static void delete_all_entities_NO_REALLY_I_MEAN_ALL() {
@@ -322,9 +344,15 @@ struct EntityHelper {
 
     // Invalidate slots for all entities we currently know about.
     for (auto &sp : entities) {
+      if (!sp)
+        continue;
+      remove_pooled_components_for(*sp);
       invalidate_entity_slot_if_any(sp);
     }
     for (auto &sp : self.temp_entities) {
+      if (!sp)
+        continue;
+      remove_pooled_components_for(*sp);
       invalidate_entity_slot_if_any(sp);
     }
 
@@ -332,6 +360,8 @@ struct EntityHelper {
     self.temp_entities.clear();
     self.permanant_ids.clear();
     self.singletonMap.clear();
+
+    ComponentStore::get().clear_all();
   }
 
   static void delete_all_entities(const bool include_permanent) {
@@ -344,12 +374,24 @@ struct EntityHelper {
 
     Entities &entities = get_entities_for_mod();
 
-    const auto newend = std::remove_if(
-        entities.begin(), entities.end(), [](const auto &entity) {
-          return !EntityHelper::get().permanant_ids.contains(entity->id);
-        });
+    const auto newend = std::remove_if(entities.begin(), entities.end(),
+                                       [](const auto &entity) {
+                                         return !EntityHelper::get()
+                                                     .permanant_ids.contains(
+                                                         entity->id);
+                                       });
+
+    // Anything being erased must also be removed from handle/component stores.
+    for (auto it = newend; it != entities.end(); ++it) {
+      const auto &sp = *it;
+      if (!sp)
+        continue;
+      remove_pooled_components_for(*sp);
+      invalidate_entity_slot_if_any(sp);
+    }
 
     entities.erase(newend, entities.end());
+    ComponentStore::get().flush_end_of_frame();
   }
 
   static void forEachEntity(const std::function<ForEachFlow(Entity &)> &cb) {
