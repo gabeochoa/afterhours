@@ -1,23 +1,27 @@
 #pragma once
 
 #include "entity.h"
-#include "entity_helper.h"
 #include "entity_handle.h"
+#include "entity_helper.h"
 
 namespace afterhours {
 
-// Pointer-free reference to an entity for persisted state.
+// Pointer-free, optionally-resolvable entity reference for persisted state.
 //
 // - Stores only IDs/handles (no pointers, no reference wrappers).
 // - Resolves to a live entity at runtime via EntityHelper.
 // - Safe against stale references: when an entity is deleted and its slot is
-//   reused, the handle generation ensures the old reference stops resolving.
-struct EntityRef {
+//   reused, the handle generation ensures old references stop resolving.
+//
+// Name rationale:
+// - We already have `RefEntity` (reference_wrapper) and `OptEntity` (optional
+//   reference_wrapper). This type is the "optional entity handle" equivalent.
+struct OptEntityHandle {
   EntityID id = -1;
   EntityHandle handle = EntityHandle::invalid();
 
-  static EntityRef from_entity(const Entity &e) {
-    EntityRef r;
+  static OptEntityHandle from_entity(const Entity &e) {
+    OptEntityHandle r;
     r.id = e.id;
     r.handle = EntityHelper::handle_for(e);
     return r;
