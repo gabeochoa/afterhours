@@ -303,6 +303,8 @@ struct EntityHelper {
 
     std::size_t i = 0;
     while (i < entities.size()) {
+      // `sp` is the current entity shared_ptr at index `i`.
+      // (Entities are stored as `std::shared_ptr<Entity>` in `Entities`.)
       const auto &sp = entities[i];
       if (sp && !sp->cleanup) {
         ++i;

@@ -167,6 +167,15 @@ struct Entity {
     log_trace("fetching for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
+    // Derived-component support:
+    // - Walk all *present* component type IDs on this entity (via the bitset)
+    // - For each present type ID, fetch the pooled BaseComponent instance
+    // - `dynamic_cast` to `T` so callers can ask for a base type and still get a
+    //   derived component instance (legacy behavior)
+    //
+    // NOTE: This path is only used by `get_with_child/has_child_of` (i.e. when
+    // systems/queries are operating in "include derived children" mode). The
+    // normal `get<T>()` / `has<T>()` path remains O(1).
     for (ComponentID cid = 0; cid < max_num_components; ++cid) {
       if (!componentSet[cid])
         continue;
@@ -186,6 +195,8 @@ struct Entity {
     log_trace("fetching for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
+    // Const version of the derived-component scan (see non-const overload).
+    // We only `dynamic_cast` components that are present per `componentSet`.
     for (ComponentID cid = 0; cid < max_num_components; ++cid) {
       if (!componentSet[cid])
         continue;
