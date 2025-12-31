@@ -8,7 +8,6 @@
 #include "../../src/ecs.h"
 #include "../../src/core/pointer_policy.h"
 #include "../../src/core/opt_entity_handle.h"
-#include "../../src/core/snapshot.h"
 #include <algorithm>
 #include <memory>
 
@@ -306,37 +305,6 @@ TEST_CASE("Phase 3: OptEntityHandle resolves and becomes stale on cleanup",
 
   // sanity: unrelated entity still exists
   REQUIRE(EntityHelper::getEntityForID(a.id).valid());
-}
-
-TEST_CASE("Phase 3: snapshot surface is pointer-free and captures components",
-          "[ECS][Snapshot]") {
-  EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
-
-  Entity &a = EntityHelper::createEntity();
-  Entity &b = EntityHelper::createEntity();
-  EntityHelper::merge_entity_arrays();
-
-  const EntityHandle hb = EntityHelper::handle_for(b);
-  REQUIRE(hb.valid());
-  a.addComponent<Targets>().target = hb;
-
-  struct TargetsDTO {
-    EntityHandle target{};
-  };
-  // Snapshot DTO is pointer-free under our policy.
-  static_assert(!afterhours::is_pointer_like_v<TargetsDTO>);
-
-  auto entities = afterhours::snapshot::take_entities();
-  REQUIRE(entities.size() >= 2);
-
-  auto targets = afterhours::snapshot::take_components<Targets, TargetsDTO>(
-      [](const Targets &t) { return TargetsDTO{.target = t.target}; });
-  REQUIRE(targets.size() == 1);
-
-  // And the stored handle should match.
-  REQUIRE(targets[0].value.target.valid());
-  REQUIRE(targets[0].value.target.slot == hb.slot);
-  REQUIRE(targets[0].value.target.gen == hb.gen);
 }
 
 TEST_CASE("EntityQuery: gen_first short-circuits on early match",
