@@ -66,11 +66,9 @@ struct EntityHelper {
   static const Entities &get_entities() { return get_entities_for_mod(); }
 
   static EntityHandle::Slot bump_gen(EntityHandle::Slot gen) {
-    gen += 1;
-    // avoid wrap to 0
-    if (gen == 0)
-      gen = 1;
-    return gen;
+    // Unsigned wraparound is well-defined; if we wrapped to 0, bump to 1.
+    const EntityHandle::Slot next = gen + 1;
+    return next + static_cast<EntityHandle::Slot>(next == 0);
   }
 
   static EntityHandle::Slot alloc_slot_index() {
@@ -363,13 +361,14 @@ struct EntityHelper {
       return {};
 
     auto &self = EntityHelper::get();
-    if (id >= 0 && static_cast<std::size_t>(id) < self.id_to_slot.size()) {
-      const EntityHandle::Slot slot =
-          self.id_to_slot[static_cast<std::size_t>(id)];
-      if (slot != EntityHandle::INVALID_SLOT && slot < self.slots.size()) {
-        const auto &sp = self.slots[slot].ent;
-        if (sp && sp->id == id) {
-          return *sp;
+    if (id >= 0) {
+      const std::size_t idx = static_cast<std::size_t>(id);
+      if (idx < self.id_to_slot.size()) {
+        const EntityHandle::Slot slot = self.id_to_slot[idx];
+        if (slot != EntityHandle::INVALID_SLOT && slot < self.slots.size()) {
+          if (const auto &sp = self.slots[slot].ent; sp && sp->id == id) {
+            return *sp;
+          }
         }
       }
     }
