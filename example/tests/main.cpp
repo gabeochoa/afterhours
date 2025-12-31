@@ -281,6 +281,48 @@ TEST_CASE("ECS: components can store EntityHandle (not pointers) and handles "
   REQUIRE_FALSE(EntityHelper::resolve(a.get<Targets>().target).valid());
 }
 
+struct SnapshotTestCmp : BaseComponent {
+  int x = 0;
+};
+
+struct SnapshotTestValue {
+  int x = 0;
+};
+
+TEST_CASE("ECS: snapshot_for<T> returns (EntityHandle, T) pairs for entities "
+          "with the component",
+          "[ECS][Snapshot]") {
+  EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+  Entity &a = EntityHelper::createEntity();
+  Entity &b = EntityHelper::createEntity();
+  Entity &c = EntityHelper::createEntity();
+
+  EntityHelper::merge_entity_arrays();
+
+  a.addComponent<SnapshotTestCmp>().x = 10;
+  c.addComponent<SnapshotTestCmp>().x = 30;
+
+  const auto snap = snapshot_for<SnapshotTestCmp>([](const SnapshotTestCmp &cmp) {
+    return SnapshotTestValue{.x = cmp.x};
+  });
+  REQUIRE(snap.size() == 2);
+
+  // Validate handles resolve + values were copied.
+  for (const auto &[h, cmp] : snap) {
+    REQUIRE(h.valid());
+    REQUIRE(EntityHelper::resolve(h).valid());
+    const int id = EntityHelper::resolve(h).asE().id;
+    if (id == a.id) {
+      REQUIRE(cmp.x == 10);
+    } else if (id == c.id) {
+      REQUIRE(cmp.x == 30);
+    } else {
+      FAIL("snapshot contains unexpected entity");
+    }
+  }
+}
+
 TEST_CASE("ECS: OptEntityHandle resolves and becomes stale on cleanup",
           "[ECS][OptEntityHandle]") {
   EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();

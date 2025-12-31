@@ -4,4 +4,5 @@
 #include "core/entity.h"
 #include "core/entity_helper.h"
 #include "core/entity_query.h"
+#include "core/snapshot.h"
 #include "core/system.h"
