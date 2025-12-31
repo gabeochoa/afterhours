@@ -5,6 +5,7 @@
 #include "../../vendor/trompeloeil/trompeloeil.hpp"
 //
 #include "../../src/plugins/autolayout.h"
+#include "../../src/ecs.h"
 
 namespace afterhours {
 namespace ui {
@@ -126,4 +127,47 @@ TEST_CASE("AutoLayoutCalculateThoseWithParents", "[AutoLayout]") {
 */
 
 } // namespace ui
+
+TEST_CASE("ECS: temp entities are not query-visible until merge (unless forced)",
+          "[ECS][EntityQuery][TempEntities]") {
+  EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+  Entity &e = EntityHelper::createEntity();
+  const int id = e.id;
+
+  // Default query should miss temp entities.
+  {
+    EntityQuery<> q({.ignore_temp_warning = true});
+    q.whereID(id);
+    REQUIRE_FALSE(q.has_values());
+  }
+
+  // Force-merged query should see them.
+  {
+    EntityQuery<> q({.force_merge = true, .ignore_temp_warning = true});
+    q.whereID(id);
+    REQUIRE(q.has_values());
+  }
+}
+
+TEST_CASE("ECS: cleanup removes entities and lookups stop finding them",
+          "[ECS][Cleanup]") {
+  EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+  Entity &e = EntityHelper::createEntity();
+  const int id = e.id;
+  EntityHelper::merge_entity_arrays();
+
+  // Sanity: it exists after merge.
+  REQUIRE(EntityHelper::getEntityForID(id).valid());
+
+  EntityHelper::markIDForCleanup(id);
+  EntityHelper::cleanup();
+
+  REQUIRE_FALSE(EntityHelper::getEntityForID(id).valid());
+  REQUIRE_FALSE(EntityQuery<>({.ignore_temp_warning = true})
+                    .whereID(id)
+                    .has_values());
+}
+
 } // namespace afterhours

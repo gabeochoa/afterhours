@@ -90,6 +90,20 @@ Separate “identity” from “memory address”:
 
 ## Solution phase breakdown
 
+### Phase 0 — Baseline: make current tests pass + add regression coverage
+
+**Goal**: establish a clean baseline and add “tripwire” tests that catch accidental behavior changes during the refactor.
+
+- **Fix currently failing test(s)**:
+  - `example/ui_layout` currently has a couple failing assertions due to rounding (`87.5` vs expected `88`).
+  - Make these tests tolerant to the intended behavior (either adjust expectations or use an epsilon-based matcher).
+- **Add new regression tests (before refactor)**
+  - Focus on behaviors likely to be accidentally changed by handle/SoA refactors:
+    - temp entities are not query-visible until merged (unless forced)
+    - cleanup removes entities and queries don’t return cleaned entities
+    - tag filtering behavior in `EntityQuery` stays correct
+    - singleton access remains safe (no crashes when missing)
+
 ### Phase 1 — Entity handles + O(1) `EntityID` resolution (no API break)
 
 **Goal**: make “store handle/id, resolve later” cheap enough to be the default pattern everywhere.
@@ -174,6 +188,19 @@ Options:
 ## Validation: example-driven tests per phase
 
 Below are concrete test ideas (2–3 per phase) that fit the existing `example/tests` Catch2 setup and the usage patterns in `example/`.
+
+### Phase 0 — Baseline + regression tripwires
+
+- **UI layout rounding regression**
+  - Update the couple failing assertions in `example/ui_layout` so the suite is green.
+  - Add at least one explicit test that covers the specific rounding case (so we don’t “fix” it later by accident).
+- **Temp entity visibility is stable**
+  - Create an entity without merging.
+  - Assert query misses it by default and sees it with `{.force_merge=true}`.
+  - This is already exercised informally in `example/custom_queries`; turn it into a Catch test in `example/tests`.
+- **Cleanup removes entities**
+  - Create/merge entities, mark one for cleanup, call `EntityHelper::cleanup()`.
+  - Assert it is not returned by `EntityQuery().whereID(id)` and `getEntityForID(id)` returns empty.
 
 ### Phase 1 — Handles + O(1) ID resolution
 
@@ -262,5 +289,5 @@ Recommended non-raylib targets to run after each phase:
 Notes from reviewing/running `example/` in this environment:
 
 - `example/tests` currently passes.
-- `example/ui_layout` currently runs but has 2 failing assertions due to float rounding (`87.5` vs expected `88`). It’s useful coverage, but it shouldn’t gate phases until it’s made epsilon/rounding-tolerant.
+- `example/ui_layout` is useful non-raylib coverage but currently had 2 failing assertions due to float rounding (`87.5` vs expected `88`). Phase 0 is to make this suite green so it can act as a guardrail.
 
