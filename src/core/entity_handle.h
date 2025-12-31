@@ -9,7 +9,6 @@ namespace afterhours {
 // - `slot` indexes a stable slot table
 // - `gen` is a generation counter to detect stale handles after deletion/reuse
 //
-// This is a POD type intended to be serialization-friendly (two 32-bit ints).
 struct EntityHandle {
   using Slot = std::size_t;
 
