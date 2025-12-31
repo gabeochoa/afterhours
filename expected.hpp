@@ -1,6 +1,6 @@
 #pragma once
 
-// Minimal expected/unexpected implementation (Afterhours fallback).
+// Minimal tl::expected / tl::unexpected implementation.
 //
 // This exists as a fallback for toolchains where <expected> is not available or
 // does not expose the feature test macro used by this repo.
@@ -10,13 +10,7 @@
 #include <type_traits>
 #include <utility>
 
-// IMPORTANT (integration note):
-// This intentionally does NOT define `tl::expected` / `tl::unexpected`.
-// Many downstream projects already vendor a full `tl::expected` header (often
-// as `expected.hpp`) and including both would cause ODR/redefinition errors.
-//
-// `src/library.h` aliases `ah_std` to this namespace when it needs a fallback.
-namespace afterhours_expected {
+namespace tl {
 
 template <typename E> struct unexpected {
   E error;
@@ -124,5 +118,5 @@ private:
   } storage_{};
 };
 
-} // namespace afterhours_expected
+} // namespace tl
 

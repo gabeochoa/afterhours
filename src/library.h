@@ -1,31 +1,16 @@
 #pragma once
 
-// expected/unexpected selection (must avoid duplicate definitions):
-//
-// - Prefer the standard library <expected> when available.
-// - Allow downstream projects to force using their own tl::expected header
-//   (common in "vendored Afterhours" layouts where the parent repo already has
-//   vendor/expected.hpp).
-// - Otherwise, fall back to Afterhours' minimal internal implementation, which
-//   intentionally does NOT define anything in namespace `tl`.
-//
-// Downstream usage (example):
-//   CXXFLAGS += -DAFTER_HOURS_USE_EXTERNAL_TL_EXPECTED -Ivendor
-// where vendor/expected.hpp provides tl::expected/tl::unexpected.
-#if defined(AFTER_HOURS_USE_EXTERNAL_TL_EXPECTED)
-#include <expected.hpp>
-namespace ah_std = tl;
-#elif __has_include(<expected>)
+#if __has_include(<expected>)
 #include <expected>
 #if defined(__cpp_lib_expected)
 namespace ah_std = std;
 #else
 #include "../expected.hpp"
-namespace ah_std = afterhours_expected; // fallback expected/unexpected
+namespace ah_std = tl;  // fallback to tl::expected/unexpected
 #endif
 #else
 #include "../expected.hpp"
-namespace ah_std = afterhours_expected; // fallback expected/unexpected
+namespace ah_std = tl;  // fallback to tl::expected/unexpected
 #endif
 #include <map>
 #include <string>
