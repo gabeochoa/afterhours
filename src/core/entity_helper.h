@@ -37,7 +37,7 @@ struct EntityHelper {
   // - id->slot mapping for O(1) EntityID resolution
   struct Slot {
     EntityType ent{};
-    std::uint32_t gen = 1;
+    EntityHandle::Slot gen = 1;
   };
 
   std::vector<Slot> slots;
@@ -65,11 +65,11 @@ struct EntityHelper {
   }
   static const Entities &get_entities() { return get_entities_for_mod(); }
 
-  static std::uint32_t bump_gen(std::uint32_t gen) {
-    gen += 1u;
+  static EntityHandle::Slot bump_gen(EntityHandle::Slot gen) {
+    gen += 1;
     // avoid wrap to 0
-    if (gen == 0u)
-      gen = 1u;
+    if (gen == 0)
+      gen = 1;
     return gen;
   }
 
@@ -81,14 +81,14 @@ struct EntityHelper {
       return slot;
     }
     self.slots.push_back(Slot{});
-    return static_cast<EntityHandle::Slot>(self.slots.size() - 1u);
+    return static_cast<EntityHandle::Slot>(self.slots.size() - 1);
   }
 
   static void ensure_id_mapping_size(const EntityID id) {
     if (id < 0)
       return;
     auto &self = EntityHelper::get();
-    const auto need = static_cast<std::size_t>(id) + 1u;
+    const auto need = static_cast<std::size_t>(id) + 1;
     if (self.id_to_slot.size() < need) {
       self.id_to_slot.resize(need, EntityHandle::INVALID_SLOT);
     }
