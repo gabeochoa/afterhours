@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "../logging.h"
+#include "../type_name.h"
 #include "entity_handle.h"
 #include "entity_helper.h"
 #include "entity_query.h"
