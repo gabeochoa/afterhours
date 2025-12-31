@@ -8,6 +8,8 @@
 #include "../../src/ecs.h"
 #include <algorithm>
 
+#include "../tag_filter_regression/demo_tags.h"
+
 namespace afterhours {
 namespace ui {
 TEST_CASE("UIComponentTest", "[UIComponent]") {
@@ -128,17 +130,6 @@ TEST_CASE("AutoLayoutCalculateThoseWithParents", "[AutoLayout]") {
 */
 
 } // namespace ui
-
-// Phase-0 regression helpers: tag filtering via both EntityQuery and System tags
-enum struct DemoTag : uint8_t { Runner = 0, Chaser = 1, Store = 2 };
-
-struct TagTestTransform : BaseComponent {
-  int x = 0;
-};
-
-struct TagTestHealth : BaseComponent {
-  int hp = 100;
-};
 
 // System requiring Transform and the Runner tag, excluding Store
 struct MoveRunnersSys
