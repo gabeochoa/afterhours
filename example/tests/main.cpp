@@ -6,7 +6,9 @@
 //
 #include "../../src/plugins/autolayout.h"
 #include "../../src/ecs.h"
+#include "../../src/core/pointer_policy.h"
 #include <algorithm>
+#include <memory>
 
 #include "../tag_filter_regression/demo_tags.h"
 
@@ -240,6 +242,42 @@ TEST_CASE("ECS: EntityHandle generation changes on slot reuse",
   if (h2.slot == h1.slot) {
     REQUIRE(h2.gen != h1.gen);
   }
+}
+
+struct Targets : BaseComponent {
+  EntityHandle target{};
+};
+
+static_assert(!afterhours::is_pointer_like_v<int>);
+static_assert(afterhours::is_pointer_like_v<int *>);
+static_assert(afterhours::is_pointer_like_v<std::shared_ptr<int>>);
+static_assert(afterhours::is_pointer_like_v<std::unique_ptr<int>>);
+static_assert(afterhours::is_pointer_like_v<afterhours::RefEntity>);
+static_assert(afterhours::is_pointer_like_v<afterhours::OptEntity>);
+static_assert(!afterhours::is_pointer_like_v<afterhours::EntityHandle>);
+static_assert(!afterhours::is_pointer_like_v<Targets>);
+
+TEST_CASE("Phase 3: components store EntityHandle (not pointers) and handles "
+          "become stale after cleanup",
+          "[ECS][EntityHandle][Components]") {
+  EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+  Entity &a = EntityHelper::createEntity();
+  Entity &b = EntityHelper::createEntity();
+  EntityHelper::merge_entity_arrays();
+
+  const EntityHandle hb = EntityHelper::handle_for(b);
+  REQUIRE(hb.valid());
+
+  a.addComponent<Targets>().target = hb;
+
+  REQUIRE(EntityHelper::resolve(a.get<Targets>().target).valid());
+  REQUIRE(EntityHelper::resolve(a.get<Targets>().target).asE().id == b.id);
+
+  EntityHelper::markIDForCleanup(b.id);
+  EntityHelper::cleanup();
+
+  REQUIRE_FALSE(EntityHelper::resolve(a.get<Targets>().target).valid());
 }
 
 TEST_CASE("EntityQuery: gen_first short-circuits on early match",

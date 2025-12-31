@@ -12,6 +12,7 @@
 #include "../type_name.h"
 #include "base_component.h"
 #include "entity_handle.h"
+#include "pointer_policy.h"
 
 namespace afterhours {
 #ifndef AFTER_HOURS_MAX_ENTITY_TAGS
@@ -305,4 +306,8 @@ struct OptEntity {
   operator RefEntity() const { return data.value(); }
   operator bool() const { return valid(); }
 };
+
+// Treat ECS reference wrappers as "pointer-like" for pointer-free snapshot APIs.
+template <> struct is_pointer_like<RefEntity> : std::true_type {};
+template <> struct is_pointer_like<OptEntity> : std::true_type {};
 } // namespace afterhours
