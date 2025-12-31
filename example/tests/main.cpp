@@ -7,7 +7,7 @@
 #include "../../src/plugins/autolayout.h"
 #include "../../src/ecs.h"
 #include "../../src/core/pointer_policy.h"
-#include "../../src/core/entity_ref.h"
+#include "../../src/core/opt_entity_handle.h"
 #include <algorithm>
 #include <memory>
 
@@ -281,15 +281,15 @@ TEST_CASE("Phase 3: components store EntityHandle (not pointers) and handles "
   REQUIRE_FALSE(EntityHelper::resolve(a.get<Targets>().target).valid());
 }
 
-TEST_CASE("Phase 3: EntityRef resolves and becomes stale on cleanup",
-          "[ECS][EntityRef]") {
+TEST_CASE("Phase 3: OptEntityHandle resolves and becomes stale on cleanup",
+          "[ECS][OptEntityHandle]") {
   EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
 
   Entity &a = EntityHelper::createEntity();
   Entity &b = EntityHelper::createEntity();
   EntityHelper::merge_entity_arrays();
 
-  EntityRef ref_b = EntityRef::from_entity(b);
+  OptEntityHandle ref_b = OptEntityHandle::from_entity(b);
   REQUIRE(ref_b.id == b.id);
   REQUIRE(ref_b.handle.valid());
 

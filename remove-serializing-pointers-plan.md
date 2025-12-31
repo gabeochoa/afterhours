@@ -139,7 +139,7 @@ Separate “identity” from “memory address”:
   - store `EntityHandle target;`
   - use `if (auto e = EntityHelper::resolve(target)) { ... }`
 - **Recommended persisted reference helper**:
-  - store `EntityRef { EntityID id; EntityHandle handle; }`
+  - store `OptEntityHandle { EntityID id; EntityHandle handle; }`
   - resolve with `ref.resolve()` (tries handle first, then ID fallback)
   - property: when an entity is deleted and its slot is reused, the generation check stales old references safely.
 - **Policy guardrail**:
