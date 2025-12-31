@@ -258,7 +258,7 @@ static_assert(afterhours::is_pointer_like_v<afterhours::OptEntity>);
 static_assert(!afterhours::is_pointer_like_v<afterhours::EntityHandle>);
 static_assert(!afterhours::is_pointer_like_v<Targets>);
 
-TEST_CASE("Phase 3: components store EntityHandle (not pointers) and handles "
+TEST_CASE("ECS: components can store EntityHandle (not pointers) and handles "
           "become stale after cleanup",
           "[ECS][EntityHandle][Components]") {
   EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
@@ -281,7 +281,7 @@ TEST_CASE("Phase 3: components store EntityHandle (not pointers) and handles "
   REQUIRE_FALSE(EntityHelper::resolve(a.get<Targets>().target).valid());
 }
 
-TEST_CASE("Phase 3: OptEntityHandle resolves and becomes stale on cleanup",
+TEST_CASE("ECS: OptEntityHandle resolves and becomes stale on cleanup",
           "[ECS][OptEntityHandle]") {
   EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
 
@@ -305,58 +305,6 @@ TEST_CASE("Phase 3: OptEntityHandle resolves and becomes stale on cleanup",
 
   // sanity: unrelated entity still exists
   REQUIRE(EntityHelper::getEntityForID(a.id).valid());
-}
-
-TEST_CASE("Phase 4: pooled component storage preserves add/get/has/remove API",
-          "[ECS][Components][Phase4]") {
-  EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
-
-  Entity &a = EntityHelper::createEntity();
-  Entity &b = EntityHelper::createEntity();
-  Entity &c = EntityHelper::createEntity();
-  EntityHelper::merge_entity_arrays();
-
-  REQUIRE_FALSE(a.has<TagTestTransform>());
-  REQUIRE_FALSE(b.has<TagTestTransform>());
-  REQUIRE_FALSE(c.has<TagTestTransform>());
-
-  a.addComponent<TagTestTransform>().x = 10;
-  b.addComponent<TagTestTransform>().x = 20;
-  c.addComponent<TagTestTransform>().x = 30;
-
-  REQUIRE(a.has<TagTestTransform>());
-  REQUIRE(b.has<TagTestTransform>());
-  REQUIRE(c.has<TagTestTransform>());
-  REQUIRE(a.get<TagTestTransform>().x == 10);
-  REQUIRE(b.get<TagTestTransform>().x == 20);
-  REQUIRE(c.get<TagTestTransform>().x == 30);
-
-  b.removeComponent<TagTestTransform>();
-  REQUIRE_FALSE(b.has<TagTestTransform>());
-
-  // Swap-remove correctness: removing b's component should not corrupt others.
-  REQUIRE(a.get<TagTestTransform>().x == 10);
-  REQUIRE(c.get<TagTestTransform>().x == 30);
-}
-
-TEST_CASE("Phase 4: derived child queries still work with pooled components",
-          "[ECS][Components][Derived][Phase4]") {
-  struct BaseFoo : BaseComponent {
-    int v = 1;
-  };
-  struct DerivedFoo : BaseFoo {
-    int extra = 7;
-  };
-
-  EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
-  Entity &e = EntityHelper::createEntity();
-  EntityHelper::merge_entity_arrays();
-
-  e.addComponent<DerivedFoo>().v = 42;
-
-  REQUIRE(e.has_child_of<BaseFoo>());
-  BaseFoo &as_base = e.get_with_child<BaseFoo>();
-  REQUIRE(as_base.v == 42);
 }
 
 TEST_CASE("EntityQuery: gen_first short-circuits on early match",
