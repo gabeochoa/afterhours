@@ -13,7 +13,7 @@ namespace afterhours {
 // can coexist in one process (e.g. host+client, server+client, tests).
 struct EntityCollection {
   std::atomic_int entity_id_gen{0};
-  ComponentStore component_store{};
+  ComponentStore cmp_store{};
   EntityHelper entity_helper{};
 
   EntityCollection();
@@ -44,7 +44,7 @@ struct ScopedEntityCollection {
 [[nodiscard]] inline ComponentStore &global_component_store() {
   assert(g_collection &&
          "afterhours: no current EntityCollection set (use ScopedEntityCollection)");
-  return g_collection->component_store;
+  return g_collection->cmp_store;
 }
 [[nodiscard]] inline EntityHelper &global_entity_helper() {
   assert(g_collection &&
@@ -53,7 +53,7 @@ struct ScopedEntityCollection {
 }
 
 inline EntityCollection::EntityCollection() {
-  entity_helper.bind(component_store, entity_id_gen);
+  entity_helper.bind(cmp_store, entity_id_gen);
 }
 
 } // namespace afterhours
