@@ -10,6 +10,7 @@
 #include "../../src/core/opt_entity_handle.h"
 #include <algorithm>
 #include <memory>
+#include <thread>
 
 #include "../tag_filter_regression/demo_tags.h"
 
@@ -442,6 +443,81 @@ TEST_CASE("ECS: get_singleton is safe when missing (returns a dummy entity)",
   // Not registered => should not crash. It should return a dummy entity ref.
   RefEntity e = EntityHelper::get_singleton<MissingSingleton>();
   REQUIRE_FALSE(e.get().has<MissingSingleton>());
+}
+
+TEST_CASE("ECS: two threads can run independent worlds (TLS world binding)",
+          "[ECS][World][Thread]") {
+  struct Marker : BaseComponent {
+    int v = 0;
+  };
+
+  afterhours::EcsWorld world_a;
+  afterhours::EcsWorld world_b;
+
+  std::atomic_bool ok_a{true};
+  std::atomic_bool ok_b{true};
+
+  std::thread ta([&] {
+    try {
+      afterhours::ScopedWorld _w(world_a);
+      Entity &e0 = EntityHelper::createEntity();
+      Entity &e1 = EntityHelper::createEntity();
+      if (!(e0.id == 0 && e1.id == 1))
+        ok_a = false;
+      e0.addComponent<Marker>().v = 111;
+      e1.addComponent<Marker>().v = 112;
+      EntityHelper::merge_entity_arrays();
+    } catch (...) {
+      ok_a = false;
+    }
+  });
+
+  std::thread tb([&] {
+    try {
+      afterhours::ScopedWorld _w(world_b);
+      Entity &e0 = EntityHelper::createEntity();
+      Entity &e1 = EntityHelper::createEntity();
+      if (!(e0.id == 0 && e1.id == 1))
+        ok_b = false;
+      e0.addComponent<Marker>().v = 221;
+      e1.addComponent<Marker>().v = 222;
+      EntityHelper::merge_entity_arrays();
+    } catch (...) {
+      ok_b = false;
+    }
+  });
+
+  ta.join();
+  tb.join();
+
+  REQUIRE(ok_a.load());
+  REQUIRE(ok_b.load());
+
+  // Validate isolation from the main thread by explicitly switching worlds.
+  {
+    afterhours::ScopedWorld _w(world_a);
+    auto ents = EntityQuery<>({.ignore_temp_warning = true}).gen();
+    REQUIRE(ents.size() == 2);
+    REQUIRE(ents[0].get().has<Marker>());
+    REQUIRE(ents[1].get().has<Marker>());
+    const int v0 = ents[0].get().get<Marker>().v;
+    const int v1 = ents[1].get().get<Marker>().v;
+    REQUIRE((v0 == 111 || v0 == 112));
+    REQUIRE((v1 == 111 || v1 == 112));
+    REQUIRE(v0 != v1);
+  }
+  {
+    afterhours::ScopedWorld _w(world_b);
+    auto ents = EntityQuery<>({.ignore_temp_warning = true}).gen();
+    REQUIRE(ents.size() == 2);
+    REQUIRE(ents[0].get().has<Marker>());
+    REQUIRE(ents[1].get().has<Marker>());
+    const int v0 = ents[0].get().get<Marker>().v;
+    const int v1 = ents[1].get().get<Marker>().v;
+    REQUIRE((v0 == 221 || v0 == 222));
+    REQUIRE((v1 == 221 || v1 == 222));
+    REQUIRE(v0 != v1);
+  }
 }
 
 } // namespace afterhours
