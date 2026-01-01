@@ -245,6 +245,37 @@ TEST_CASE("ECS: EntityHandle generation changes on slot reuse",
     }
 }
 
+TEST_CASE("ECS: EntityQuery can produce handles for long-lived references",
+          "[ECS][EntityQuery][EntityHandle]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &e = EntityHelper::createEntity();
+    const int id = e.id;
+    EntityHelper::merge_entity_arrays();
+
+    // gen_first_handle
+    {
+        EntityQuery<> q({.ignore_temp_warning = true});
+        q.whereID(id);
+        auto opt_handle = q.gen_first_handle();
+        REQUIRE(opt_handle.has_value());
+        REQUIRE(opt_handle->valid());
+        REQUIRE(EntityHelper::resolve(*opt_handle).valid());
+        REQUIRE(EntityHelper::resolve(*opt_handle).asE().id == id);
+    }
+
+    // gen_handles
+    {
+        EntityQuery<> q({.ignore_temp_warning = true});
+        q.whereID(id);
+        const auto handles = q.gen_handles();
+        REQUIRE(handles.size() == 1);
+        REQUIRE(handles[0].valid());
+        REQUIRE(EntityHelper::resolve(handles[0]).valid());
+        REQUIRE(EntityHelper::resolve(handles[0]).asE().id == id);
+    }
+}
+
 struct Targets : BaseComponent {
     EntityHandle target{};
 };
