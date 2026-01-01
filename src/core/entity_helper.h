@@ -1,14 +1,16 @@
 #pragma once
 
-#include <algorithm>
 #include <functional>
 #include <memory>
-#include <set>
+#include <thread>
 #include <vector>
 
 #include "../debug_allocator.h"
 #include "../singleton.h"
 #include "entity.h"
+
+// Include entity_collection.h first so EntityCollection is fully defined
+#include "entity_collection.h"
 
 namespace afterhours {
 using EntityType = std::shared_ptr<Entity>;
@@ -20,33 +22,14 @@ using EntityAllocator = std::allocator<EntityType>;
 #endif
 
 using Entities = std::vector<EntityType, EntityAllocator>;
-
 using RefEntities = std::vector<RefEntity>;
 
 SINGLETON_FWD(EntityHelper)
 struct EntityHelper {
     SINGLETON(EntityHelper)
 
-    Entities entities_DO_NOT_USE;
-    Entities temp_entities;
-    std::set<int> permanant_ids;
-    std::map<ComponentID, Entity *> singletonMap;
-
-    // Handle store:
-    // - stable slot table + generation counters
-    // - id->slot mapping for O(1) EntityID resolution
-    struct Slot {
-        EntityType ent{};
-        EntityHandle::Slot gen = 1;
-    };
-
-    std::vector<Slot> slots;
-    std::vector<EntityHandle::Slot> free_slots;
-    std::vector<EntityHandle::Slot> id_to_slot;
-
-    struct CreationOptions {
-        bool is_permanent;
-    };
+    // Default collection for backward compatibility
+    EntityCollection default_collection;
 
     enum ForEachFlow {
         NormalFlow = 0,
@@ -54,145 +37,81 @@ struct EntityHelper {
         Break = 2,
     };
 
-    static void reserve_temp_space() {
-        EntityHelper::get().temp_entities.reserve(sizeof(EntityType) * 100);
+    // Get the thread-local default collection pointer
+    // Returns a reference to the thread-local pointer (nullptr if not set)
+    static EntityCollection *&get_thread_default_collection_ptr() {
+        // Use function-local static thread_local for C++11 compatibility
+        thread_local static EntityCollection *thread_default_collection =
+            nullptr;
+        return thread_default_collection;
     }
 
-    static Entities &get_temp() { return EntityHelper::get().temp_entities; }
+    // Register a collection as the default for the current thread
+    // Pass nullptr to unregister and fall back to the singleton's default
+    static void set_default_collection(EntityCollection *collection) {
+        get_thread_default_collection_ptr() = collection;
+    }
+
+    // Get the default collection for the current thread
+    // Returns the thread-local collection if registered, otherwise the
+    // singleton's default
+    static EntityCollection &get_default_collection() {
+        EntityCollection *thread_collection =
+            get_thread_default_collection_ptr();
+        if (thread_collection != nullptr) {
+            return *thread_collection;
+        }
+        return EntityHelper::get().default_collection;
+    }
+
+    // Static methods that delegate to default collection (backward
+    // compatibility)
+    static void reserve_temp_space() {
+        get_default_collection().reserve_temp_space();
+    }
+
+    static Entities &get_temp() { return get_default_collection().get_temp(); }
 
     static Entities &get_entities_for_mod() {
-        return EntityHelper::get().entities_DO_NOT_USE;
+        return get_default_collection().get_entities_for_mod();
     }
-    static const Entities &get_entities() { return get_entities_for_mod(); }
-
-    // Bump a slot generation counter so old handles become stale.
-    // Returns a non-zero generation (wraparound skips 0).
-    static EntityHandle::Generation bump_gen(EntityHandle::Generation gen) {
-        // Unsigned wraparound is well-defined; if we wrapped to 0, bump to 1.
-        const EntityHandle::Generation next = gen + 1;
-        return next + static_cast<EntityHandle::Generation>(next == 0);
+    static const Entities &get_entities() {
+        return get_default_collection().get_entities();
     }
 
-    // Allocate a slot index for a (merged) entity.
-    // - Reuses a free slot if available
-    // - Otherwise grows the slot table
+    // Static methods that delegate to default collection (backward
+    // compatibility)
+    static EntityHandle::Slot bump_gen(EntityHandle::Slot gen) {
+        return EntityCollection::bump_gen(gen);
+    }
+
     static EntityHandle::Slot alloc_slot_index() {
-        auto &self = EntityHelper::get();
-        if (!self.free_slots.empty()) {
-            const EntityHandle::Slot slot = self.free_slots.back();
-            self.free_slots.pop_back();
-            return slot;
-        }
-        self.slots.push_back(Slot{});
-        return static_cast<EntityHandle::Slot>(self.slots.size() - 1);
+        return get_default_collection().alloc_slot_index();
     }
 
-    // Ensure `id_to_slot[id]` is in-bounds.
-    // New entries are initialized to INVALID_SLOT.
     static void ensure_id_mapping_size(const EntityID id) {
-        if (id < 0) return;
-        auto &self = EntityHelper::get();
-        const auto need = static_cast<std::size_t>(id) + 1;
-        if (self.id_to_slot.size() < need) {
-            self.id_to_slot.resize(need, EntityHandle::INVALID_SLOT);
-        }
+        get_default_collection().ensure_id_mapping_size(id);
     }
 
-    // Assign a stable slot to an entity (if it doesn't already have one).
-    // Also updates the O(1) `EntityID -> slot` mapping.
     static void assign_slot_to_entity(const EntityType &sp) {
-        if (!sp) return;
-        auto &self = EntityHelper::get();
-        if (sp->ah_slot_index != EntityHandle::INVALID_SLOT) {
-            // already assigned (should be rare in default config)
-            ensure_id_mapping_size(sp->id);
-            if (sp->id >= 0)
-                self.id_to_slot[static_cast<std::size_t>(sp->id)] =
-                    sp->ah_slot_index;
-            return;
-        }
-
-        const EntityHandle::Slot slot = alloc_slot_index();
-        if (slot >= self.slots.size()) {
-            log_error("alloc_slot_index returned out-of-range slot {}", slot);
-            return;
-        }
-        self.slots[slot].ent = sp;
-        sp->ah_slot_index = slot;
-
-        ensure_id_mapping_size(sp->id);
-        if (sp->id >= 0)
-            self.id_to_slot[static_cast<std::size_t>(sp->id)] = slot;
+        get_default_collection().assign_slot_to_entity(sp);
     }
 
-    // Invalidate an entity's slot and ID mapping (if any).
-    // - Clears id_to_slot[entity.id]
-    // - Clears slots[slot].ent
-    // - Bumps slots[slot].gen (stales old handles)
-    // - Adds slot back to the free list
     static void invalidate_entity_slot_if_any(const EntityType &sp) {
-        if (!sp) return;
-        auto &self = EntityHelper::get();
-        const EntityID id = sp->id;
-        const EntityHandle::Slot slot = sp->ah_slot_index;
-        sp->ah_slot_index = EntityHandle::INVALID_SLOT;
-
-        if (id >= 0 && static_cast<std::size_t>(id) < self.id_to_slot.size()) {
-            if (self.id_to_slot[static_cast<std::size_t>(id)] == slot) {
-                self.id_to_slot[static_cast<std::size_t>(id)] =
-                    EntityHandle::INVALID_SLOT;
-            }
-        }
-
-        if (slot == EntityHandle::INVALID_SLOT) return;
-        if (slot >= self.slots.size()) {
-            log_error("invalidate_entity_slot_if_any: out-of-range slot {}",
-                      slot);
-            return;
-        }
-
-        Slot &s = self.slots[slot];
-        if (s.ent) {
-            s.ent.reset();
-        }
-        s.gen = bump_gen(s.gen);
-        self.free_slots.push_back(slot);
+        get_default_collection().invalidate_entity_slot_if_any(sp);
     }
 
-    // Public handle helpers (additive API)
-    // Return a stable handle for a currently-merged entity.
-    // Returns invalid if the entity has no slot yet (temp pre-merge) or if the
-    // slot doesn't currently point at this entity.
     static EntityHandle handle_for(const Entity &e) {
-        const EntityHandle::Slot slot = e.ah_slot_index;
-        if (slot == EntityHandle::INVALID_SLOT) return EntityHandle::invalid();
-
-        auto &self = EntityHelper::get();
-        if (slot >= self.slots.size()) return EntityHandle::invalid();
-        const Slot &s = self.slots[slot];
-        if (!s.ent || s.ent.get() != &e) return EntityHandle::invalid();
-        return {slot, s.gen};
+        return get_default_collection().handle_for(e);
     }
 
-    // Resolve a handle into an entity reference (if still alive).
-    // Returns empty if:
-    // - handle is invalid
-    // - slot is out of range
-    // - generation mismatch (stale handle)
-    // - slot is empty (entity deleted)
     static OptEntity resolve(const EntityHandle h) {
-        if (h.is_invalid()) return {};
-        auto &self = EntityHelper::get();
-        if (h.slot >= self.slots.size()) return {};
-        Slot &s = self.slots[h.slot];
-        if (s.gen != h.gen) return {};
-        if (!s.ent) return {};
-        return *s.ent;
+        return get_default_collection().resolve(h);
     }
 
     static RefEntities get_ref_entities() {
         RefEntities matching;
-        for (const auto &e : EntityHelper::get_entities()) {
+        for (const auto &e : get_entities()) {
             if (!e) continue;
             matching.push_back(*e);
         }
@@ -200,150 +119,49 @@ struct EntityHelper {
     }
 
     static Entity &createEntity() {
-        return createEntityWithOptions({.is_permanent = false});
+        return get_default_collection().createEntity();
     }
 
     static Entity &createPermanentEntity() {
-        return createEntityWithOptions({.is_permanent = true});
+        return get_default_collection().createPermanentEntity();
     }
 
-    static Entity &createEntityWithOptions(const CreationOptions &options) {
-        if (get_temp().capacity() == 0) [[unlikely]]
-            reserve_temp_space();
-
-        std::shared_ptr<Entity> e(new Entity());
-        get_temp().push_back(e);
-
-        if (options.is_permanent) {
-            EntityHelper::get().permanant_ids.insert(e->id);
-        }
-
-        return *e;
+    static Entity &createEntityWithOptions(
+        const EntityCollection::CreationOptions &options) {
+        return get_default_collection().createEntityWithOptions(options);
     }
 
     static void merge_entity_arrays() {
-        if (get_temp().empty()) return;
-
-        for (const auto &entity : get_temp()) {
-            if (!entity) continue;
-            if (entity->cleanup) continue;
-            get_entities_for_mod().push_back(entity);
-            assign_slot_to_entity(entity);
-        }
-        get_temp().clear();
+        get_default_collection().merge_entity_arrays();
     }
 
     template<typename Component>
     static void registerSingleton(Entity &ent) {
-        const ComponentID id = components::get_type_id<Component>();
-
-        if (EntityHelper::get().singletonMap.contains(id)) {
-            log_error("Already had registered singleton {}",
-                      type_name<Component>());
-        }
-
-        EntityHelper::get().singletonMap.emplace(id, &ent);
-        log_info("Registered singleton {} for {} ({})", ent.id,
-                 type_name<Component>(), id);
+        get_default_collection().registerSingleton<Component>(ent);
     }
 
     template<typename Component>
     static RefEntity get_singleton() {
-        const ComponentID id = components::get_type_id<Component>();
-        auto &singleton_map = EntityHelper::get().singletonMap;
-        if (!singleton_map.contains(id)) {
-            log_warn(
-                "Singleton map is missing value for component {} ({}). Did you "
-                "register this component previously?",
-                id, type_name<Component>());
-            // Return a reference to a static dummy entity to avoid crash
-            // This should never happen in proper usage, but prevents segfault
-            static Entity dummy_entity;
-            return dummy_entity;
-        }
-        auto *entity_ptr = singleton_map.at(id);
-        if (!entity_ptr) {
-            log_error(
-                "Singleton map contains null pointer for component {} ({})", id,
-                type_name<Component>());
-            static Entity dummy_entity;
-            return dummy_entity;
-        }
-        return *entity_ptr;
+        return get_default_collection().get_singleton<Component>();
     }
 
     template<typename Component>
     static Component *get_singleton_cmp() {
-        Entity &ent = get_singleton<Component>();
-        return &(ent.get<Component>());
+        return get_default_collection().get_singleton_cmp<Component>();
     }
 
     static void markIDForCleanup(const int e_id) {
-        const auto &entities = get_entities();
-        auto it = entities.begin();
-        while (it != get_entities().end()) {
-            if ((*it)->id == e_id) {
-                (*it)->cleanup = true;
-                break;
-            }
-            it++;
-        }
+        get_default_collection().markIDForCleanup(e_id);
     }
 
-    static void cleanup() {
-        EntityHelper::merge_entity_arrays();
-        Entities &entities = get_entities_for_mod();
-
-        std::size_t i = 0;
-        while (i < entities.size()) {
-            const auto &sp = entities[i];
-            if (sp && !sp->cleanup) {
-                ++i;
-                continue;
-            }
-            // invalidate removed entity slot/id mapping
-            invalidate_entity_slot_if_any(entities[i]);
-            if (i != entities.size() - 1) {
-                std::swap(entities[i], entities.back());
-            }
-            entities.pop_back();
-        }
-    }
+    static void cleanup() { get_default_collection().cleanup(); }
 
     static void delete_all_entities_NO_REALLY_I_MEAN_ALL() {
-        auto &self = EntityHelper::get();
-        Entities &entities = get_entities_for_mod();
-
-        // Invalidate slots for all entities we currently know about.
-        for (auto &sp : entities) {
-            invalidate_entity_slot_if_any(sp);
-        }
-        for (auto &sp : self.temp_entities) {
-            invalidate_entity_slot_if_any(sp);
-        }
-
-        entities.clear();
-        self.temp_entities.clear();
-        self.permanant_ids.clear();
-        self.singletonMap.clear();
+        get_default_collection().delete_all_entities_NO_REALLY_I_MEAN_ALL();
     }
 
     static void delete_all_entities(const bool include_permanent) {
-        EntityHelper::merge_entity_arrays();
-
-        if (include_permanent) {
-            delete_all_entities_NO_REALLY_I_MEAN_ALL();
-            return;
-        }
-
-        Entities &entities = get_entities_for_mod();
-
-        const auto newend = std::remove_if(
-            entities.begin(), entities.end(), [](const auto &entity) {
-                return !EntityHelper::get().permanant_ids.contains(entity->id);
-            });
-
-        entities.erase(newend, entities.end());
+        get_default_collection().delete_all_entities(include_permanent);
     }
 
     static void forEachEntity(const std::function<ForEachFlow(Entity &)> &cb) {
@@ -370,42 +188,11 @@ struct EntityHelper {
     }
 
     static OptEntity getEntityForID(const EntityID id) {
-        if (id == -1) return {};
-
-        auto &self = EntityHelper::get();
-        if (id >= 0) {
-            const std::size_t idx = static_cast<std::size_t>(id);
-            if (idx < self.id_to_slot.size()) {
-                const EntityHandle::Slot slot = self.id_to_slot[idx];
-                if (slot != EntityHandle::INVALID_SLOT &&
-                    slot < self.slots.size()) {
-                    if (const auto &sp = self.slots[slot].ent;
-                        sp && sp->id == id) {
-                        return *sp;
-                    }
-                }
-            }
-        }
-
-        // Fallback (should be rare): linear scan.
-        log_warn(
-            "getEntityForID fallback scan for id={} (id_to_slot.size={}, "
-            "slots.size={})",
-            id, self.id_to_slot.size(), self.slots.size());
-        for (const auto &e : get_entities()) {
-            if (!e) continue;
-            if (e->id == id) {
-                log_warn("getEntityForID fallback hit: id={} entity_type={}",
-                         id, e->entity_type);
-                return *e;
-            }
-        }
-        return {};
+        return get_default_collection().getEntityForID(id);
     }
 
     static Entity &getEntityForIDEnforce(const EntityID id) {
-        auto opt_ent = getEntityForID(id);
-        return opt_ent.asE();
+        return get_default_collection().getEntityForIDEnforce(id);
     }
 };
 

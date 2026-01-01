@@ -112,8 +112,8 @@ files::ProvidesResourcePaths *files::get_provider() {
 
 void files::init(const std::string &game_name, const std::string &root_folder) {
     // Check if already initialized by checking singleton map directly
-    const ComponentID id = components::get_type_id<ProvidesResourcePaths>();
-    if (EntityHelper::get().singletonMap.contains(id)) {
+    if (EntityHelper::get_default_collection()
+            .has_singleton<ProvidesResourcePaths>()) {
         log_warn("Files plugin already initialized");
         return;
     }
