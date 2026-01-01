@@ -6,8 +6,8 @@
 #include <sstream>
 #include <string>
 
+#include "../ecs.h"
 #include "../core/base_component.h"
-#include "../core/entity_helper.h"
 #include "../core/system.h"
 #include "../developer.h"
 #include "../logging.h"
@@ -33,13 +33,14 @@ void _require_settings_cpp_compiled();
 //   #define AFTERHOURS_SETTINGS_OUTPUT_RAW_STRING
 // Default is JSON if none specified
 
-// JSON library - games should include nlohmann/json.hpp before this file
-// or define their own JSON type
+// JSON library
+// - If you want to provide your own JSON type, define JSON_TYPE before including
+//   this header.
 #if defined(AFTERHOURS_SETTINGS_OUTPUT_JSON) ||                                \
     (!defined(AFTERHOURS_SETTINGS_OUTPUT_BITSERY) &&                           \
      !defined(AFTERHOURS_SETTINGS_OUTPUT_RAW_STRING))
 #ifndef JSON_TYPE
-#include "../../../nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 using json = nlohmann::json;
 #else
 using json = JSON_TYPE;

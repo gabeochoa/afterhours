@@ -63,6 +63,16 @@ while IFS= read -r file; do
   fi
 done < <(find "$PLUGIN_DIR" -name "*.h" -type f)
 
+# Compile-fail regressions (pointer-free snapshot policy, etc.)
+echo ""
+echo "Running compile-fail regression checks..."
+if bash ./check_compile_fail_tests.sh; then
+  echo -e "${GREEN}✓ Compile-fail regressions passed${NC}"
+else
+  echo -e "${RED}VIOLATION:${NC} compile-fail regression checks failed"
+  VIOLATIONS=$((VIOLATIONS + 1))
+fi
+
 # Summary
 echo ""
 if [ $VIOLATIONS -eq 0 ]; then
