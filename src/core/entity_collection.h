@@ -287,6 +287,18 @@ struct EntityCollection {
                 ++i;
                 continue;
             }
+            // Remove any singleton registrations pointing at this entity.
+            // (We can't leave dangling Entity* in singletonMap.)
+            if (sp) {
+                Entity *removed = sp.get();
+                for (auto it = singletonMap.begin(); it != singletonMap.end();) {
+                    if (it->second == removed) {
+                        it = singletonMap.erase(it);
+                    } else {
+                        ++it;
+                    }
+                }
+            }
             // invalidate removed entity slot/id mapping
             invalidate_entity_slot_if_any(entities[i]);
             if (i != entities.size() - 1) {
@@ -322,13 +334,73 @@ struct EntityCollection {
         }
 
         Entities &entities = get_entities_for_mod();
+        std::size_t i = 0;
+        while (i < entities.size()) {
+            const auto &sp = entities[i];
+            const bool keep = sp && permanant_ids.contains(sp->id);
+            if (keep) {
+                ++i;
+                continue;
+            }
 
-        const auto newend = std::remove_if(
-            entities.begin(), entities.end(), [this](const auto &entity) {
-                return !permanant_ids.contains(entity->id);
-            });
+            // Remove singleton registrations pointing to the entity we're
+            // deleting.
+            if (sp) {
+                Entity *removed = sp.get();
+                for (auto it = singletonMap.begin(); it != singletonMap.end();) {
+                    if (it->second == removed) {
+                        it = singletonMap.erase(it);
+                    } else {
+                        ++it;
+                    }
+                }
+            }
 
-        entities.erase(newend, entities.end());
+            // Invalidate slot/id mapping so lookups and handles don't retain
+            // references to removed entities.
+            invalidate_entity_slot_if_any(entities[i]);
+
+            if (i != entities.size() - 1) std::swap(entities[i], entities.back());
+            entities.pop_back();
+        }
+    }
+
+    // Rebuild the handle store (slots/free list/id mapping) from the current
+    // `entities_DO_NOT_USE` contents. This is intended for integration points
+    // that bulk-replace the entity list (e.g., loading a snapshot).
+    //
+    // Note: this does NOT preserve handle values across rebuilds; it creates a
+    // fresh slot table consistent with the current entities.
+    void rebuild_handle_store_from_entities() {
+        slots.clear();
+        free_slots.clear();
+        id_to_slot.clear();
+
+        // Ensure entities don't think they already have a slot.
+        for (auto &sp : entities_DO_NOT_USE) {
+            if (!sp) continue;
+            sp->ah_slot_index = EntityHandle::INVALID_SLOT;
+        }
+
+        for (auto &sp : entities_DO_NOT_USE) {
+            if (!sp) continue;
+            if (sp->cleanup) continue;
+            assign_slot_to_entity(sp);
+        }
+    }
+
+    // Replace the entire entity list with a new one and rebuild handle/id
+    // indices accordingly.
+    void replace_all_entities(Entities new_entities) {
+        // Clear all runtime-only state.
+        entities_DO_NOT_USE.clear();
+        temp_entities.clear();
+        permanant_ids.clear();
+        singletonMap.clear();
+
+        // Replace and rebuild indices.
+        entities_DO_NOT_USE = std::move(new_entities);
+        rebuild_handle_store_from_entities();
     }
 
     OptEntity getEntityForID(const EntityID id) const {
@@ -346,19 +418,16 @@ struct EntityCollection {
             }
         }
 
-        // Fallback (should be rare): linear scan.
-        log_warn(
-            "getEntityForID fallback scan for id={} (id_to_slot.size={}, "
-            "slots.size={})",
-            id, id_to_slot.size(), slots.size());
+// In debug builds we can do an expensive scan to help catch missing mapping
+// updates during development/integration. Release builds should never scan.
+#if defined(AFTER_HOURS_DEBUG)
+        log_warn("getEntityForID fallback scan for id={} (id_to_slot.size={}, slots.size={})",
+                 id, id_to_slot.size(), slots.size());
         for (const auto &e : get_entities()) {
             if (!e) continue;
-            if (e->id == id) {
-                log_warn("getEntityForID fallback hit: id={} entity_type={}",
-                         id, e->entity_type);
-                return *e;
-            }
+            if (e->id == id) return *e;
         }
+#endif
         return {};
     }
 
