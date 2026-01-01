@@ -150,6 +150,11 @@ struct EntityHelper {
         return get_default_collection().get_singleton_cmp<Component>();
     }
 
+    template<typename Component>
+    static bool has_singleton() {
+        return get_default_collection().has_singleton<Component>();
+    }
+
     static void markIDForCleanup(const int e_id) {
         get_default_collection().markIDForCleanup(e_id);
     }
