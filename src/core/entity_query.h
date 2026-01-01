@@ -294,6 +294,29 @@ struct EntityQuery {
         return opt.asE().id;
     }
 
+    // Generate stable handles for the current result set.
+    // This is useful for storing long-lived references without keeping pointers.
+    [[nodiscard]] std::vector<EntityHandle> gen_handles() const {
+        const auto results = gen();
+        std::vector<EntityHandle> handles;
+        handles.reserve(results.size());
+        for (Entity &ent : results) {
+            handles.push_back(EntityHelper::handle_for(ent));
+        }
+        return handles;
+    }
+
+    // Generate the first stable handle for this query (if any).
+    // Returns empty if the query returns no entities or if the entity does not
+    // have a valid handle (e.g., temp pre-merge).
+    [[nodiscard]] std::optional<EntityHandle> gen_first_handle() const {
+        auto opt = gen_first();
+        if (!opt) return {};
+        EntityHandle h = EntityHelper::handle_for(opt.asE());
+        if (h.is_invalid()) return {};
+        return h;
+    }
+
     [[nodiscard]] size_t gen_count() const {
         if (!ran_query) return values_ignore_cache({}).size();
         return ents.size();
