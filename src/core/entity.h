@@ -39,7 +39,7 @@ inline static std::atomic_int ENTITY_ID_GEN{0};
 struct Entity {
   // World-bound component storage for this entity.
   // If null, falls back to the process-default ComponentStore.
-  ComponentStore *ah_store = nullptr;
+  ComponentStore *cmp_store = nullptr;
 
   EntityID id;
   int entity_type = 0;
@@ -54,19 +54,19 @@ struct Entity {
   TagBitset tags{};
   bool cleanup = false;
 
-  Entity() : ah_store(&ComponentStore::get()), id(ENTITY_ID_GEN++) {}
+  Entity() : cmp_store(&ComponentStore::get()), id(ENTITY_ID_GEN++) {}
   Entity(ComponentStore &store, const EntityID id_in)
-      : ah_store(&store), id(id_in) {}
+      : cmp_store(&store), id(id_in) {}
   Entity(const Entity &) = delete;
   Entity(Entity &&other) noexcept = default;
 
   virtual ~Entity() {}
 
   [[nodiscard]] ComponentStore &component_store() {
-    return ah_store ? *ah_store : ComponentStore::get();
+    return cmp_store ? *cmp_store : ComponentStore::get();
   }
   [[nodiscard]] const ComponentStore &component_store() const {
-    return ah_store ? *ah_store : ComponentStore::get();
+    return cmp_store ? *cmp_store : ComponentStore::get();
   }
 
   template <typename T> [[nodiscard]] bool has() const {
