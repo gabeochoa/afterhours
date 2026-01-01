@@ -10,4 +10,3 @@ void _require_settings_cpp_compiled() {}
 }  // namespace settings_plugin_internal
 
 }  // namespace afterhours
-

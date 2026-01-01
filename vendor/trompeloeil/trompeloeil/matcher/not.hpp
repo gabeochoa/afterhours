@@ -19,64 +19,44 @@
 #include "../matcher.hpp"
 #endif
 
-namespace trompeloeil
-{
+namespace trompeloeil {
 
-template <typename M>
-class not_matcher : public matcher
-{
-public:
-  template <typename U,
-    typename = decltype(can_match_parameter<detail::remove_reference_t<decltype(std::declval<U>())>>(std::declval<M>()))>
-  operator U() const { return {}; }
+template<typename M>
+class not_matcher : public matcher {
+   public:
+    template<typename U,
+             typename =
+                 decltype(can_match_parameter<detail::remove_reference_t<
+                              decltype(std::declval<U>())>>(std::declval<M>()))>
+    operator U() const {
+        return {};
+    }
 
-  template <typename U>
-  explicit
-  not_matcher(
-    U&& m_)
-    : m( std::forward<U>(m_) )
-  {}
+    template<typename U>
+    explicit not_matcher(U&& m_) : m(std::forward<U>(m_)) {}
 
-  template <typename U>
-  bool
-  matches(
-    const U& u)
-  const
-  noexcept(noexcept(!std::declval<M>().matches(u)))
-  {
-    return !m.matches(u);
-  }
+    template<typename U>
+    bool matches(const U& u) const
+        noexcept(noexcept(!std::declval<M>().matches(u))) {
+        return !m.matches(u);
+    }
 
-  friend
-  std::ostream&
-  operator<<(
-    std::ostream& os,
-    not_matcher<M> const& p)
-  {
-    return os << p.m;
-  }
-  friend
-  std::string
-  param_name_prefix(
-    const not_matcher*)
-  {
-    return "not " + param_name_prefix(static_cast<M*>(nullptr));
-  }
+    friend std::ostream& operator<<(std::ostream& os, not_matcher<M> const& p) {
+        return os << p.m;
+    }
+    friend std::string param_name_prefix(const not_matcher*) {
+        return "not " + param_name_prefix(static_cast<M*>(nullptr));
+    }
 
-private:
-  M m;
+   private:
+    M m;
 };
 
-
-template <typename M,
-  typename = detail::enable_if_t<::trompeloeil::is_matcher<M>::value>>
-inline
-::trompeloeil::not_matcher<detail::decay_t<M>>
-operator!(
-  M&& m)
-{
-  return ::trompeloeil::not_matcher<detail::decay_t<M>>{std::forward<M>(m)};
+template<typename M,
+         typename = detail::enable_if_t<::trompeloeil::is_matcher<M>::value>>
+inline ::trompeloeil::not_matcher<detail::decay_t<M>> operator!(M&& m) {
+    return ::trompeloeil::not_matcher<detail::decay_t<M>>{std::forward<M>(m)};
 }
 
-}
-#endif //TROMPELOEIL_NOT_HPP
+}  // namespace trompeloeil
+#endif  // TROMPELOEIL_NOT_HPP

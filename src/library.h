@@ -1,10 +1,15 @@
 #pragma once
 
-#if __has_include(<expected>) && defined(__cpp_lib_expected)
+#if __has_include(<expected>)
 #include <expected>
+#if defined(__cpp_lib_expected)
 namespace ah_std = std;
 #else
-#include "../../expected.hpp"
+#include "../expected.hpp"
+namespace ah_std = tl;  // fallback to tl::expected/unexpected
+#endif
+#else
+#include "../expected.hpp"
 namespace ah_std = tl;  // fallback to tl::expected/unexpected
 #endif
 #include <map>

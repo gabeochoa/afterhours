@@ -116,14 +116,16 @@ inline float measure_text_internal(const char *content, const float size) {
     return static_cast<float>(
         raylib::MeasureText(content, static_cast<int>(size)));
 }
-inline raylib::Vector2 measure_text(const raylib::Font font, const char *content,
-                         const float size, const float spacing) {
+inline raylib::Vector2 measure_text(const raylib::Font font,
+                                    const char *content, const float size,
+                                    const float spacing) {
     return raylib::MeasureTextEx(font, content, size, spacing);
 }
 
 // Add proper UTF-8 text measurement for CJK support
-inline raylib::Vector2 measure_text_utf8(const raylib::Font font, const char *content,
-                              const float size, const float spacing) {
+inline raylib::Vector2 measure_text_utf8(const raylib::Font font,
+                                         const char *content, const float size,
+                                         const float spacing) {
     if (!content) {
         log_warn("Null content passed to measure_text_utf8");
         return raylib::Vector2{0, 0};
