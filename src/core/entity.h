@@ -29,9 +29,18 @@ template <typename Base, typename Derived> bool child_of(Derived *derived) {
 
 using ComponentBitSet = std::bitset<max_num_components>;
 
-static std::atomic_int ENTITY_ID_GEN = 0;
+// Entity ID generator.
+//
+// IMPORTANT: this must be a single definition across the program.
+// Using `static` in a header gives one counter per translation unit, which can
+// produce duplicate IDs.
+inline static std::atomic_int ENTITY_ID_GEN{0};
 
 struct Entity {
+  // World-bound component storage for this entity.
+  // If null, falls back to the process-default ComponentStore.
+  ComponentStore *ah_store = nullptr;
+
   EntityID id;
   int entity_type = 0;
 
@@ -45,11 +54,20 @@ struct Entity {
   TagBitset tags{};
   bool cleanup = false;
 
-  Entity() : id(ENTITY_ID_GEN++) {}
+  Entity() : ah_store(&ComponentStore::get()), id(ENTITY_ID_GEN++) {}
+  Entity(ComponentStore &store, const EntityID id_in)
+      : ah_store(&store), id(id_in) {}
   Entity(const Entity &) = delete;
   Entity(Entity &&other) noexcept = default;
 
   virtual ~Entity() {}
+
+  [[nodiscard]] ComponentStore &component_store() {
+    return ah_store ? *ah_store : ComponentStore::get();
+  }
+  [[nodiscard]] const ComponentStore &component_store() const {
+    return ah_store ? *ah_store : ComponentStore::get();
+  }
 
   template <typename T> [[nodiscard]] bool has() const {
     const bool result = componentSet[components::get_type_id<T>()];
@@ -71,7 +89,7 @@ struct Entity {
       if (!componentSet[cid])
         continue;
       const BaseComponent *cmp =
-          ComponentStore::get().try_get_base(cid, this->id);
+          component_store().try_get_base(cid, this->id);
       if (!cmp)
         continue;
       if (child_of<T>(cmp))
@@ -109,7 +127,7 @@ struct Entity {
       return;
     }
     componentSet[components::get_type_id<T>()] = false;
-    ComponentStore::get().remove_for<T>(this->id);
+    component_store().remove_for<T>(this->id);
   }
 
   template <typename T, typename... TArgs> T &addComponent(TArgs &&...args) {
@@ -128,8 +146,8 @@ struct Entity {
 #endif
 
     componentSet[components::get_type_id<T>()] = true;
-    return ComponentStore::get().emplace_for<T>(this->id,
-                                                std::forward<TArgs>(args)...);
+    return component_store().emplace_for<T>(this->id,
+                                            std::forward<TArgs>(args)...);
   }
 
   template <typename T, typename... TArgs>
@@ -179,7 +197,7 @@ struct Entity {
     for (ComponentID cid = 0; cid < max_num_components; ++cid) {
       if (!componentSet[cid])
         continue;
-      BaseComponent *cmp = ComponentStore::get().try_get_base(cid, this->id);
+      BaseComponent *cmp = component_store().try_get_base(cid, this->id);
       if (!cmp)
         continue;
       if (auto *as_t = dynamic_cast<T *>(cmp)) {
@@ -201,7 +219,7 @@ struct Entity {
       if (!componentSet[cid])
         continue;
       const BaseComponent *cmp =
-          ComponentStore::get().try_get_base(cid, this->id);
+          component_store().try_get_base(cid, this->id);
       if (!cmp)
         continue;
       if (const auto *as_t = dynamic_cast<const T *>(cmp)) {
@@ -213,12 +231,12 @@ struct Entity {
 
   template <typename T> [[nodiscard]] T &get() {
     warnIfMissingComponent<T>();
-    return ComponentStore::get().get_for<T>(this->id);
+    return component_store().get_for<T>(this->id);
   }
 
   template <typename T> [[nodiscard]] const T &get() const {
     warnIfMissingComponent<T>();
-    return ComponentStore::get().get_for<T>(this->id);
+    return component_store().get_for<T>(this->id);
   }
 
   void enableTag(const TagId tag_id) {

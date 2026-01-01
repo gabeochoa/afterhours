@@ -4,20 +4,25 @@
 #include <type_traits>
 #include <vector>
 
-#include "../singleton.h"
 #include "base_component.h"
 #include "component_pool.h"
 
 namespace afterhours {
 
 struct Entity;
+struct ComponentStore;
 
-SINGLETON_FWD(ComponentStore)
+// Legacy/global accessors (defined in ecs_world.h).
+ComponentStore &global_component_store();
+
 struct ComponentStore {
-  SINGLETON(ComponentStore)
-
   // `Entity` is allowed to use the internal RTTI/derived access path.
   friend struct Entity;
+
+  // Legacy/global access path (process-default world).
+  // Multi-world callers should prefer owning a ComponentStore per world and
+  // routing Entity operations through that world.
+  static ComponentStore &get() { return global_component_store(); }
 
   struct IPool {
     virtual ~IPool() = default;

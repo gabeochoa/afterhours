@@ -1,13 +1,14 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <functional>
+#include <map>
 #include <memory>
 #include <set>
 #include <vector>
 
 #include "../debug_allocator.h"
-#include "../singleton.h"
 #include "component_store.h"
 #include "entity.h"
 
@@ -24,9 +25,34 @@ using Entities = std::vector<EntityType, EntityAllocator>;
 
 using RefEntities = std::vector<RefEntity>;
 
-SINGLETON_FWD(EntityHelper)
+struct EntityHelper;
+// Legacy/global accessor (defined in ecs_world.h).
+EntityHelper &global_entity_helper();
+
 struct EntityHelper {
-  SINGLETON(EntityHelper)
+  // Legacy/global access path (process-default world).
+  // Multi-world callers should prefer owning an EntityHelper per world.
+  static EntityHelper &get() { return global_entity_helper(); }
+
+  // Bind this helper to a specific world instance (component storage + id gen).
+  void bind(ComponentStore &store, std::atomic_int &entity_id_gen) {
+    store_ = &store;
+    entity_id_gen_ = &entity_id_gen;
+  }
+
+  [[nodiscard]] ComponentStore &component_store() {
+    return store_ ? *store_ : ComponentStore::get();
+  }
+  [[nodiscard]] const ComponentStore &component_store() const {
+    return store_ ? *store_ : ComponentStore::get();
+  }
+
+  [[nodiscard]] EntityID next_entity_id() {
+    if (!entity_id_gen_) {
+      return static_cast<EntityID>(ENTITY_ID_GEN.fetch_add(1));
+    }
+    return static_cast<EntityID>(entity_id_gen_->fetch_add(1));
+  }
 
   Entities entities_DO_NOT_USE;
   Entities temp_entities;
@@ -221,11 +247,13 @@ struct EntityHelper {
     if (get_temp().capacity() == 0) [[unlikely]]
       reserve_temp_space();
 
-    std::shared_ptr<Entity> e(new Entity());
+    auto &self = EntityHelper::get();
+    std::shared_ptr<Entity> e(
+        new Entity(ComponentStore::get(), self.next_entity_id()));
     get_temp().push_back(e);
 
     if (options.is_permanent) {
-      EntityHelper::get().permanant_ids.insert(e->id);
+      self.permanant_ids.insert(e->id);
     }
 
     return *e;
@@ -458,6 +486,10 @@ struct EntityHelper {
     auto opt_ent = getEntityForID(id);
     return opt_ent.asE();
   }
+
+private:
+  ComponentStore *store_ = nullptr;
+  std::atomic_int *entity_id_gen_ = nullptr;
 };
 
 } // namespace afterhours
