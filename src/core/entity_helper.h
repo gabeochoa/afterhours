@@ -26,7 +26,7 @@ using Entities = std::vector<EntityType, EntityAllocator>;
 using RefEntities = std::vector<RefEntity>;
 
 struct EntityHelper;
-// Legacy/global accessor (defined in ecs_world.h).
+// Legacy/global accessor (defined in entity_collection.h).
 EntityHelper &global_entity_helper();
 
 struct EntityHelper {

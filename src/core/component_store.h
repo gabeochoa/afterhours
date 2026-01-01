@@ -12,16 +12,16 @@ namespace afterhours {
 struct Entity;
 struct ComponentStore;
 
-// World-bound global accessor (defined in ecs_world.h).
-// Requires an active world to be set (see `ScopedWorld`).
+// Collection-bound global accessor (defined in entity_collection.h).
+// Requires an active EntityCollection to be set (see `ScopedEntityCollection`).
 ComponentStore &global_component_store();
 
 struct ComponentStore {
   // `Entity` is allowed to use the internal RTTI/derived access path.
   friend struct Entity;
 
-  // Global access path (world-bound).
-  // Requires an active world to be set (see `ScopedWorld`).
+  // Global access path (collection-bound).
+  // Requires an active EntityCollection to be set (see `ScopedEntityCollection`).
   static ComponentStore &get() { return global_component_store(); }
 
   struct IPool {
