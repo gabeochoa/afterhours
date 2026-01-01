@@ -1,4 +1,3 @@
-
 #pragma once
 
 #if defined(AFTER_HOURS_MAX_COMPONENTS)
