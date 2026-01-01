@@ -12,16 +12,16 @@ namespace afterhours {
 struct Entity;
 struct ComponentStore;
 
-// Legacy/global accessors (defined in ecs_world.h).
+// World-bound global accessor (defined in ecs_world.h).
+// Requires an active world to be set (see `ScopedWorld`).
 ComponentStore &global_component_store();
 
 struct ComponentStore {
   // `Entity` is allowed to use the internal RTTI/derived access path.
   friend struct Entity;
 
-  // Legacy/global access path (process-default world).
-  // Multi-world callers should prefer owning a ComponentStore per world and
-  // routing Entity operations through that world.
+  // Global access path (world-bound).
+  // Requires an active world to be set (see `ScopedWorld`).
   static ComponentStore &get() { return global_component_store(); }
 
   struct IPool {

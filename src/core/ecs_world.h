@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cassert>
 
 #include "component_store.h"
 #include "entity_helper.h"
@@ -22,21 +23,10 @@ struct EcsWorld {
   }
 };
 
-// Process-default world for legacy APIs.
-// Prefer passing/owning an EcsWorld explicitly when you need isolation.
-[[nodiscard]] inline EcsWorld &default_world() {
-  static EcsWorld w{};
-  return w;
-}
-
 // Thread-local "current world" pointer.
-// This is the minimal way to make the legacy `::get()` APIs world-aware without
-// forcing a world parameter through every call site.
+// There is intentionally NO process-default fallback: callers must bind a world
+// explicitly (including tests/examples).
 inline thread_local EcsWorld *g_world = nullptr;
-
-[[nodiscard]] inline EcsWorld &current_world() {
-  return g_world ? *g_world : default_world();
-}
 
 // RAII helper for temporarily switching the current world (per-thread).
 struct ScopedWorld {
@@ -49,10 +39,12 @@ struct ScopedWorld {
 
 // Legacy/global accessors used by the static ::get() APIs.
 [[nodiscard]] inline ComponentStore &global_component_store() {
-  return current_world().component_store;
+  assert(g_world && "afterhours: no current world set (use ScopedWorld)");
+  return g_world->component_store;
 }
 [[nodiscard]] inline EntityHelper &global_entity_helper() {
-  return current_world().entity_helper;
+  assert(g_world && "afterhours: no current world set (use ScopedWorld)");
+  return g_world->entity_helper;
 }
 
 inline EcsWorld::EcsWorld() {

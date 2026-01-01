@@ -79,6 +79,9 @@ struct EntityIDConflictTest : System<UIContext<InputAction>> {
 int main(int, char **) {
   using namespace afterhours;
 
+  afterhours::EcsWorld world;
+  afterhours::ScopedWorld _w(world);
+
   {
     auto &entity = EntityHelper::createEntity();
     ui::add_singleton_components<InputAction>(entity);

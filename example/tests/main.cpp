@@ -15,6 +15,10 @@
 
 namespace afterhours {
 namespace ui {
+static afterhours::EcsWorld g_test_world{};
+// Bind the ECS "current world" for the entire test binary.
+static afterhours::ScopedWorld g_test_world_scope(g_test_world);
+
 TEST_CASE("UIComponentTest", "[UIComponent]") {
   UIComponent cmp(-1);
   REQUIRE(cmp.flex_direction == FlexDirection::Column);
