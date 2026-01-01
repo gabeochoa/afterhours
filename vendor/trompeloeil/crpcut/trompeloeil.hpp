@@ -11,7 +11,6 @@
  * Project home: https://github.com/rollbear/trompeloeil
  */
 
-
 #ifndef TROMPELOEIL_CRPCUT_HPP_
 #define TROMPELOEIL_CRPCUT_HPP_
 
@@ -21,26 +20,21 @@
 
 #include "../trompeloeil.hpp"
 
-namespace trompeloeil
-{
-  template <>
-  inline void reporter<specialized>::send(
-    severity,
-    char const *file,
-    unsigned long line,
-    const char* msg)
-  {
+namespace trompeloeil {
+template<>
+inline void reporter<specialized>::send(severity, char const* file,
+                                        unsigned long line, const char* msg) {
     std::ostringstream os;
     os << file << ':' << line;
     auto loc = os.str();
-    auto location = line == 0U
-                    ? ::crpcut::crpcut_test_monitor::current_test()->get_location()
-                    : ::crpcut::datatypes::fixed_string::make(loc.c_str(), loc.length());
-    ::crpcut::comm::report(::crpcut::comm::exit_fail,
-                           std::ostringstream(msg),
+    auto location =
+        line == 0U
+            ? ::crpcut::crpcut_test_monitor::current_test()->get_location()
+            : ::crpcut::datatypes::fixed_string::make(loc.c_str(),
+                                                      loc.length());
+    ::crpcut::comm::report(::crpcut::comm::exit_fail, std::ostringstream(msg),
                            location);
-  }
 }
+}  // namespace trompeloeil
 
-
-#endif //TROMPELOEIL_CRPCUT_HPP_
+#endif  // TROMPELOEIL_CRPCUT_HPP_

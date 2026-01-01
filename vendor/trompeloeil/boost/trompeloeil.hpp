@@ -11,7 +11,6 @@
  * Project home: https://github.com/rollbear/trompeloeil
  */
 
-
 #ifndef TROMPELOEIL_BOOST_HPP_
 #define TROMPELOEIL_BOOST_HPP_
 
@@ -21,24 +20,18 @@
 
 #include "../trompeloeil.hpp"
 
-namespace trompeloeil
-{
-  template <>
-  inline void reporter<specialized>::send(
-    severity s,
-    char const *file,
-    unsigned long line,
-    const char* msg)
-  {
+namespace trompeloeil {
+template<>
+inline void reporter<specialized>::send(severity s, char const* file,
+                                        unsigned long line, const char* msg) {
     std::ostringstream os;
     if (line != 0U) os << file << ':' << line << '\n';
     auto text = os.str() + msg;
     if (s == severity::fatal)
-      BOOST_FAIL(text);
+        BOOST_FAIL(text);
     else
-      BOOST_ERROR(text);
-  }
+        BOOST_ERROR(text);
 }
+}  // namespace trompeloeil
 
-
-#endif //TROMPELOEIL_BOOST_HPP_
+#endif  // TROMPELOEIL_BOOST_HPP_

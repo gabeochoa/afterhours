@@ -14,24 +14,22 @@
 #ifndef TROMPELOEIL_HPP_
 #define TROMPELOEIL_HPP_
 
-
 // trompe l'oeil noun    (Concise Encyclopedia)
 // Style of representation in which a painted object is intended
 // to deceive the viewer into believing it is the object itself...
 
 // project home: https://github.com/rollbear/trompeloeil
 
-
 // Deficiencies and missing features
 // * Mocking function templates is not supported
 // * If a macro kills a kitten, this threatens extinction of all felines!
 
-#include "trompeloeil/mock.hpp"
 #include "trompeloeil/lifetime.hpp"
 #include "trompeloeil/matcher.hpp"
 #include "trompeloeil/matcher/any.hpp"
 #include "trompeloeil/matcher/compare.hpp"
 #include "trompeloeil/matcher/deref.hpp"
+#include "trompeloeil/mock.hpp"
 #if TROMPELOEIL_CPLUSPLUS >= 201402L
 #include "trompeloeil/matcher/member_is.hpp"
 #endif
@@ -46,4 +44,4 @@
 #ifdef __cpp_impl_coroutine
 #include "trompeloeil/coro.hpp"
 #endif
-#endif // include guard
+#endif  // include guard

@@ -11,7 +11,6 @@
  * Project home: https://github.com/rollbear/trompeloeil
  */
 
-
 #ifndef TROMPELOEIL_DOCTEST_HPP_
 #define TROMPELOEIL_DOCTEST_HPP_
 
@@ -21,38 +20,29 @@
 
 #include "../trompeloeil.hpp"
 
-namespace trompeloeil
-{
-  template <>
-  inline void reporter<specialized>::send(
-    severity s,
-    const char* file,
-    unsigned long line,
-    const char* msg)
-  {
+namespace trompeloeil {
+template<>
+inline void reporter<specialized>::send(severity s, const char* file,
+                                        unsigned long line, const char* msg) {
     doctest::String msgstr(msg);
     auto f = line ? file : "[file/line unavailable]";
-    if (s == severity::fatal)
-    {
-      DOCTEST_ADD_FAIL_AT(f, line, msgstr);
+    if (s == severity::fatal) {
+        DOCTEST_ADD_FAIL_AT(f, line, msgstr);
+    } else {
+        DOCTEST_ADD_FAIL_CHECK_AT(f, line, msgstr);
     }
-    else
-    {
-      DOCTEST_ADD_FAIL_CHECK_AT(f, line, msgstr);
-    }
-  }
+}
 
-  template <>
-  inline void reporter<specialized>::sendOk(
-    const char* trompeloeil_mock_calls_done_correctly)
-  {
+template<>
+inline void reporter<specialized>::sendOk(
+    const char* trompeloeil_mock_calls_done_correctly) {
 #ifdef DOCTEST_CONFIG_TREAT_CHAR_STAR_AS_STRING
     DOCTEST_REQUIRE_UNARY(trompeloeil_mock_calls_done_correctly);
 #else
-    DOCTEST_REQUIRE_NE(doctest::String(trompeloeil_mock_calls_done_correctly), "");
+    DOCTEST_REQUIRE_NE(doctest::String(trompeloeil_mock_calls_done_correctly),
+                       "");
 #endif
-  }
 }
+}  // namespace trompeloeil
 
-
-#endif //TROMPELOEIL_DOCTEST_HPP_
+#endif  // TROMPELOEIL_DOCTEST_HPP_

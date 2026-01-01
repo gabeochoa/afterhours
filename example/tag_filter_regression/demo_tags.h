@@ -10,12 +10,11 @@ namespace afterhours {
 enum struct DemoTag : std::uint8_t { Runner = 0, Chaser = 1, Store = 2 };
 
 struct TagTestTransform : BaseComponent {
-  int x = 0;
+    int x = 0;
 };
 
 struct TagTestHealth : BaseComponent {
-  int hp = 100;
+    int hp = 100;
 };
 
-} // namespace afterhours
-
+}  // namespace afterhours

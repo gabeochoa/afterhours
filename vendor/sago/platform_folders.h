@@ -426,7 +426,7 @@ class FreeCoTaskMemory {
     LPWSTR pointer = NULL;
 
    public:
-    explicit FreeCoTaskMemory(LPWSTR pointer) : pointer(pointer){};
+    explicit FreeCoTaskMemory(LPWSTR pointer) : pointer(pointer) {};
     ~FreeCoTaskMemory() { CoTaskMemFree(pointer); }
 };
 
