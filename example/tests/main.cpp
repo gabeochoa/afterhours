@@ -15,6 +15,10 @@
 
 namespace afterhours {
 namespace ui {
+static afterhours::EntityCollection g_test_collection{};
+// Bind the ECS "current collection" for the entire test binary.
+static afterhours::ScopedEntityCollection g_test_collection_scope(g_test_collection);
+
 TEST_CASE("UIComponentTest", "[UIComponent]") {
   UIComponent cmp(-1);
   REQUIRE(cmp.flex_direction == FlexDirection::Column);

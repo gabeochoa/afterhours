@@ -4,20 +4,25 @@
 #include <type_traits>
 #include <vector>
 
-#include "../singleton.h"
 #include "base_component.h"
 #include "component_pool.h"
 
 namespace afterhours {
 
 struct Entity;
+struct ComponentStore;
 
-SINGLETON_FWD(ComponentStore)
+// Collection-bound global accessor (defined in entity_collection.h).
+// Requires an active EntityCollection to be set (see `ScopedEntityCollection`).
+ComponentStore &global_component_store();
+
 struct ComponentStore {
-  SINGLETON(ComponentStore)
-
   // `Entity` is allowed to use the internal RTTI/derived access path.
   friend struct Entity;
+
+  // Global access path (collection-bound).
+  // Requires an active EntityCollection to be set (see `ScopedEntityCollection`).
+  static ComponentStore &get() { return global_component_store(); }
 
   struct IPool {
     virtual ~IPool() = default;
