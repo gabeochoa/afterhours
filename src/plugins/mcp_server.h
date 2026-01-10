@@ -2,10 +2,13 @@
 
 #ifdef AFTER_HOURS_ENABLE_MCP
 
+#include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #ifdef _WIN32
@@ -66,106 +69,101 @@ inline std::string base64_encode(const std::vector<uint8_t> &data) {
 }
 
 inline int key_name_to_code(const std::string &key) {
-  if (key == "a" || key == "A")
-    return 65;
-  if (key == "b" || key == "B")
-    return 66;
-  if (key == "c" || key == "C")
-    return 67;
-  if (key == "d" || key == "D")
-    return 68;
-  if (key == "e" || key == "E")
-    return 69;
-  if (key == "f" || key == "F")
-    return 70;
-  if (key == "g" || key == "G")
-    return 71;
-  if (key == "h" || key == "H")
-    return 72;
-  if (key == "i" || key == "I")
-    return 73;
-  if (key == "j" || key == "J")
-    return 74;
-  if (key == "k" || key == "K")
-    return 75;
-  if (key == "l" || key == "L")
-    return 76;
-  if (key == "m" || key == "M")
-    return 77;
-  if (key == "n" || key == "N")
-    return 78;
-  if (key == "o" || key == "O")
-    return 79;
-  if (key == "p" || key == "P")
-    return 80;
-  if (key == "q" || key == "Q")
-    return 81;
-  if (key == "r" || key == "R")
-    return 82;
-  if (key == "s" || key == "S")
-    return 83;
-  if (key == "t" || key == "T")
-    return 84;
-  if (key == "u" || key == "U")
-    return 85;
-  if (key == "v" || key == "V")
-    return 86;
-  if (key == "w" || key == "W")
-    return 87;
-  if (key == "x" || key == "X")
-    return 88;
-  if (key == "y" || key == "Y")
-    return 89;
-  if (key == "z" || key == "Z")
-    return 90;
-  if (key == "0")
-    return 48;
-  if (key == "1")
-    return 49;
-  if (key == "2")
-    return 50;
-  if (key == "3")
-    return 51;
-  if (key == "4")
-    return 52;
-  if (key == "5")
-    return 53;
-  if (key == "6")
-    return 54;
-  if (key == "7")
-    return 55;
-  if (key == "8")
-    return 56;
-  if (key == "9")
-    return 57;
-  if (key == "space")
-    return 32;
-  if (key == "enter" || key == "return")
-    return 257;
-  if (key == "escape" || key == "esc")
-    return 256;
-  if (key == "tab")
-    return 258;
-  if (key == "backspace")
-    return 259;
-  if (key == "up")
-    return 265;
-  if (key == "down")
-    return 264;
-  if (key == "left")
-    return 263;
-  if (key == "right")
-    return 262;
-  if (key == "shift")
-    return 340;
-  if (key == "ctrl" || key == "control")
-    return 341;
-  if (key == "alt")
-    return 342;
-  if (key == "period" || key == ".")
-    return 46;  // GLFW_KEY_PERIOD
-  if (key == "comma" || key == ",")
-    return 44;  // GLFW_KEY_COMMA
+  // Static map of all GLFW key codes - built once on first call
+  static const std::unordered_map<std::string, int> key_map = {
+      // Letters (case insensitive handled below)
+      {"a", 65}, {"b", 66}, {"c", 67}, {"d", 68}, {"e", 69}, {"f", 70},
+      {"g", 71}, {"h", 72}, {"i", 73}, {"j", 74}, {"k", 75}, {"l", 76},
+      {"m", 77}, {"n", 78}, {"o", 79}, {"p", 80}, {"q", 81}, {"r", 82},
+      {"s", 83}, {"t", 84}, {"u", 85}, {"v", 86}, {"w", 87}, {"x", 88},
+      {"y", 89}, {"z", 90},
+      
+      // Numbers
+      {"0", 48}, {"1", 49}, {"2", 50}, {"3", 51}, {"4", 52},
+      {"5", 53}, {"6", 54}, {"7", 55}, {"8", 56}, {"9", 57},
+      
+      // Punctuation and symbols
+      {"space", 32}, {" ", 32},
+      {"apostrophe", 39}, {"'", 39},
+      {"comma", 44}, {",", 44},
+      {"minus", 45}, {"-", 45},
+      {"period", 46}, {".", 46},
+      {"slash", 47}, {"/", 47},
+      {"semicolon", 59}, {";", 59},
+      {"equal", 61}, {"=", 61},
+      {"left_bracket", 91}, {"[", 91},
+      {"backslash", 92}, {"\\", 92},
+      {"right_bracket", 93}, {"]", 93},
+      {"grave", 96}, {"grave_accent", 96}, {"`", 96},
+      
+      // Function keys
+      {"escape", 256}, {"esc", 256},
+      {"enter", 257}, {"return", 257},
+      {"tab", 258},
+      {"backspace", 259},
+      {"insert", 260},
+      {"delete", 261},
+      {"right", 262},
+      {"left", 263},
+      {"down", 264},
+      {"up", 265},
+      {"page_up", 266}, {"pageup", 266},
+      {"page_down", 267}, {"pagedown", 267},
+      {"home", 268},
+      {"end", 269},
+      {"caps_lock", 280}, {"capslock", 280},
+      {"scroll_lock", 281}, {"scrolllock", 281},
+      {"num_lock", 282}, {"numlock", 282},
+      {"print_screen", 283}, {"printscreen", 283},
+      {"pause", 284},
+      
+      // F keys
+      {"f1", 290}, {"f2", 291}, {"f3", 292}, {"f4", 293}, {"f5", 294},
+      {"f6", 295}, {"f7", 296}, {"f8", 297}, {"f9", 298}, {"f10", 299},
+      {"f11", 300}, {"f12", 301}, {"f13", 302}, {"f14", 303}, {"f15", 304},
+      {"f16", 305}, {"f17", 306}, {"f18", 307}, {"f19", 308}, {"f20", 309},
+      {"f21", 310}, {"f22", 311}, {"f23", 312}, {"f24", 313}, {"f25", 314},
+      
+      // Keypad
+      {"kp_0", 320}, {"kp0", 320}, {"numpad0", 320},
+      {"kp_1", 321}, {"kp1", 321}, {"numpad1", 321},
+      {"kp_2", 322}, {"kp2", 322}, {"numpad2", 322},
+      {"kp_3", 323}, {"kp3", 323}, {"numpad3", 323},
+      {"kp_4", 324}, {"kp4", 324}, {"numpad4", 324},
+      {"kp_5", 325}, {"kp5", 325}, {"numpad5", 325},
+      {"kp_6", 326}, {"kp6", 326}, {"numpad6", 326},
+      {"kp_7", 327}, {"kp7", 327}, {"numpad7", 327},
+      {"kp_8", 328}, {"kp8", 328}, {"numpad8", 328},
+      {"kp_9", 329}, {"kp9", 329}, {"numpad9", 329},
+      {"kp_decimal", 330}, {"numpad_decimal", 330},
+      {"kp_divide", 331}, {"numpad_divide", 331},
+      {"kp_multiply", 332}, {"numpad_multiply", 332},
+      {"kp_subtract", 333}, {"numpad_subtract", 333},
+      {"kp_add", 334}, {"numpad_add", 334},
+      {"kp_enter", 335}, {"numpad_enter", 335},
+      {"kp_equal", 336}, {"numpad_equal", 336},
+      
+      // Modifier keys
+      {"left_shift", 340}, {"lshift", 340}, {"shift", 340},
+      {"left_control", 341}, {"lctrl", 341}, {"ctrl", 341}, {"control", 341},
+      {"left_alt", 342}, {"lalt", 342}, {"alt", 342},
+      {"left_super", 343}, {"lsuper", 343}, {"super", 343}, {"cmd", 343}, {"command", 343}, {"win", 343}, {"windows", 343},
+      {"right_shift", 344}, {"rshift", 344},
+      {"right_control", 345}, {"rctrl", 345},
+      {"right_alt", 346}, {"ralt", 346},
+      {"right_super", 347}, {"rsuper", 347},
+      {"menu", 348},
+  };
+  
+  // Convert key to lowercase for case-insensitive lookup
+  std::string lower_key = key;
+  std::transform(lower_key.begin(), lower_key.end(), lower_key.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+  
+  auto it = key_map.find(lower_key);
+  if (it != key_map.end()) {
+    return it->second;
+  }
   return -1;
 }
 
