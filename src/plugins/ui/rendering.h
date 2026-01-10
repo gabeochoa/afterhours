@@ -489,6 +489,18 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                              col, corner_settings);
     }
 
+    if (entity.has<HasBorder>()) {
+      const Border &border = entity.template get<HasBorder>().border;
+      if (border.has_border()) {
+        Color border_col = border.color;
+        if (effective_opacity < 1.0f) {
+          border_col = colors::opacity_pct(border_col, effective_opacity);
+        }
+        draw_rectangle_rounded_lines(draw_rect, 0.5f, 8, border_col,
+                                     corner_settings);
+      }
+    }
+
     if (entity.has<HasLabel>()) {
       const HasLabel &hasLabel = entity.get<HasLabel>();
       Color font_col;

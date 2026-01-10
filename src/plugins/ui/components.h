@@ -241,6 +241,21 @@ struct HasShadow : BaseComponent {
   explicit HasShadow(const Shadow &s) : shadow(s) {}
 };
 
+// Border configuration for UI elements
+struct Border {
+  Color color = Color{0, 0, 0, 0}; // Transparent = no border
+  float thickness = 2.0f;
+
+  bool has_border() const { return thickness > 0.0f && color.a > 0; }
+};
+
+// Component for entities that have borders
+struct HasBorder : BaseComponent {
+  Border border;
+  HasBorder() = default;
+  explicit HasBorder(const Border &b) : border(b) {}
+};
+
 } // namespace ui
 
 } // namespace afterhours

@@ -117,6 +117,9 @@ struct ComponentConfig {
   // Shadow configuration
   std::optional<Shadow> shadow_config;
 
+  // Border configuration
+  std::optional<Border> border_config;
+
   ComponentConfig &with_label(const std::string &lbl) {
     label = lbl;
     return *this;
@@ -147,6 +150,10 @@ struct ComponentConfig {
                       .left = gap_size,
                       .bottom = gap_size,
                       .right = gap_size};
+    return *this;
+  }
+  ComponentConfig &with_border(Color color, float thickness = 2.0f) {
+    border_config = Border{color, thickness};
     return *this;
   }
   // NEW: Explicit background color APIs
@@ -317,6 +324,7 @@ struct ComponentConfig {
   bool has_texture() const { return texture_config.has_value(); }
   bool has_image_alignment() const { return image_alignment.has_value(); }
   bool has_shadow() const { return shadow_config.has_value(); }
+  bool has_border() const { return border_config.has_value(); }
   bool is_disabled() const { return disabled; }
   bool is_hidden() const { return hidden; }
   bool skips_when_tabbing() const { return skip_when_tabbing; }
@@ -737,6 +745,16 @@ static void apply_shadow(Entity &entity, const ComponentConfig &config) {
   hs.shadow = shadow;
 }
 
+static void apply_border(Entity &entity, const ComponentConfig &config) {
+  if (!config.has_border()) {
+    entity.removeComponentIfExists<HasBorder>();
+    return;
+  }
+  const Border &border = config.border_config.value();
+  auto &hb = entity.addComponentIfMissing<HasBorder>(border);
+  hb.border = border;
+}
+
 static void apply_visuals(HasUIContext auto &ctx, Entity &entity,
                           const ComponentConfig &config) {
   if (config.rounded_corners.has_value() &&
@@ -813,6 +831,7 @@ static bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
   apply_label(ctx, entity, config);
   apply_texture(entity, config);
   apply_shadow(entity, config);
+  apply_border(entity, config);
 
   ctx.queue_render(RenderInfo{entity.id, config.render_layer});
   return created;
