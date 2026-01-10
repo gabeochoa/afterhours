@@ -53,6 +53,18 @@ static Color darken(const Color &color, const float factor = 0.8f) {
     return darkerColor;
 }
 
+static Color lighten(const Color &color, const float amount = 0.2f) {
+    Color lighterColor;
+    lighterColor.r = static_cast<unsigned char>(
+        std::min(255, static_cast<int>(color.r + (255 - color.r) * amount)));
+    lighterColor.g = static_cast<unsigned char>(
+        std::min(255, static_cast<int>(color.g + (255 - color.g) * amount)));
+    lighterColor.b = static_cast<unsigned char>(
+        std::min(255, static_cast<int>(color.b + (255 - color.b) * amount)));
+    lighterColor.a = color.a;
+    return lighterColor;
+}
+
 static Color increase(const Color &color, const int factor = 10) {
     Color darkerColor;
     darkerColor.r = static_cast<unsigned char>(color.r + factor);
