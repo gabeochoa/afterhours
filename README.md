@@ -34,6 +34,16 @@ AFTER_HOURS_INPUT_VALIDATION_<>
 AFTER_HOURS_ENTITY_ALLOC_DEBUG
 - turns on log_warn whenever Entities deallocates (and theoretically allocates but unlikely) 
 
+AFTER_HOURS_ENABLE_MCP
+- enables the MCP (Model Context Protocol) server for external tool integration
+- allows screenshot capture, input injection, UI tree inspection via JSON-RPC
+- useful for automated testing and AI-assisted development
+
+AFTERHOURS_ENFORCE_MIN_FONT_SIZE
+- enables minimum accessible font size enforcement in the UI plugin
+- logs a warning when font sizes are below TypographyScale::MIN_ACCESSIBLE_SIZE_720P (18.67px)
+- automatically clamps font sizes to the minimum to ensure accessibility
+
 
 ## Plugins
 

@@ -7,6 +7,7 @@
 #include <string>
 
 #include "../../core/entity.h"
+#include "../../logging.h"
 #include "../autolayout.h"
 #include "../color.h"
 #include "../texture_manager.h"
@@ -606,8 +607,21 @@ static void apply_visuals(HasUIContext auto &ctx, Entity &entity,
     }
 
     if (config.font_name != UIComponent::UNSET_FONT) {
+        float effective_font_size = config.font_size;
+        
+#ifdef AFTERHOURS_ENFORCE_MIN_FONT_SIZE
+        // Warn and enforce minimum accessible font size
+        if (config.font_size < TypographyScale::MIN_ACCESSIBLE_SIZE_720P) {
+            log_warn("Font size {:.1f}px is below minimum accessible size "
+                     "{:.1f}px for component '{}' - clamping to minimum",
+                     config.font_size,
+                     TypographyScale::MIN_ACCESSIBLE_SIZE_720P,
+                     config.debug_name.empty() ? "(unnamed)" : config.debug_name);
+            effective_font_size = TypographyScale::MIN_ACCESSIBLE_SIZE_720P;
+        }
+#endif
         entity.get<UIComponent>().enable_font(config.font_name,
-                                              config.font_size);
+                                              effective_font_size);
     }
 
     if (Theme::is_valid(config.color_usage)) {
