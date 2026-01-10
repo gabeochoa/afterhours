@@ -30,13 +30,16 @@ struct MCPConfig {
   std::function<void(int keycode)> key_down = nullptr;
   std::function<void(int keycode)> key_up = nullptr;
   std::function<std::vector<uint8_t>()> capture_screenshot = nullptr;
+  std::function<std::string()> dump_ui_tree = nullptr;
 };
 
 namespace detail {
 
 inline MCPConfig g_config;
 inline bool g_initialized = false;
+inline bool g_exit_requested = false;
 inline std::string g_input_buffer;
+inline int g_stdout_fd = -1;  // Can be set to use a different fd for output
 
 inline std::string base64_encode(const std::vector<uint8_t> &data) {
   static const char *chars =
@@ -208,13 +211,18 @@ inline void write_stdout(const std::string &data) {
   DWORD written = 0;
   WriteFile(h, data.c_str(), static_cast<DWORD>(data.size()), &written, NULL);
 #else
-  ssize_t result = write(STDOUT_FILENO, data.c_str(), data.size());
+  // Use saved fd if available (for when stdout has been redirected)
+  int fd = (g_stdout_fd >= 0) ? g_stdout_fd : STDOUT_FILENO;
+  ssize_t result = write(fd, data.c_str(), data.size());
   (void)result;
 #endif
 }
 
 inline nlohmann::json get_tools_list() {
   return nlohmann::json::array({
+      {{"name", "ping"},
+       {"description", "Check if the MCP server is running and responsive"},
+       {"inputSchema", {{"type", "object"}, {"properties", nlohmann::json::object()}}}},
       {{"name", "screenshot"},
        {"description", "Capture a screenshot of the current game frame"},
        {"inputSchema", {{"type", "object"}, {"properties", nlohmann::json::object()}}}},
@@ -263,6 +271,12 @@ inline nlohmann::json get_tools_list() {
       {{"name", "get_screen_size"},
        {"description", "Get the current game screen dimensions"},
        {"inputSchema", {{"type", "object"}, {"properties", nlohmann::json::object()}}}},
+      {{"name", "exit"},
+       {"description", "Request the application to close gracefully"},
+       {"inputSchema", {{"type", "object"}, {"properties", nlohmann::json::object()}}}},
+      {{"name", "dump_ui_tree"},
+       {"description", "Dump the UI component tree showing positions, sizes, and hierarchy"},
+       {"inputSchema", {{"type", "object"}, {"properties", nlohmann::json::object()}}}},
   });
 }
 
@@ -298,6 +312,12 @@ inline nlohmann::json handle_request(const nlohmann::json &request) {
     auto params = request.value("params", nlohmann::json::object());
     std::string tool_name = params.value("name", "");
     auto arguments = params.value("arguments", nlohmann::json::object());
+
+    if (tool_name == "ping") {
+      response["result"] = {
+          {"content", {{{"type", "text"}, {"text", "pong"}}}}};
+      return response;
+    }
 
     if (tool_name == "screenshot") {
       if (g_config.capture_screenshot) {
@@ -410,6 +430,25 @@ inline nlohmann::json handle_request(const nlohmann::json &request) {
       return response;
     }
 
+    if (tool_name == "exit") {
+      g_exit_requested = true;
+      response["result"] = {
+          {"content", {{{"type", "text"}, {"text", "Exit requested"}}}}};
+      return response;
+    }
+
+    if (tool_name == "dump_ui_tree") {
+      if (g_config.dump_ui_tree) {
+        std::string tree_dump = g_config.dump_ui_tree();
+        response["result"] = {
+            {"content", {{{"type", "text"}, {"text", tree_dump}}}}};
+      } else {
+        response["result"] = {
+            {"content", {{{"type", "text"}, {"text", "UI tree dump not available"}}}}};
+      }
+      return response;
+    }
+
     response["error"] = {{"code", -32601}, {"message", "Unknown tool: " + tool_name}};
     return response;
   }
@@ -437,9 +476,10 @@ inline void process_message(const std::string &message) {
 
 } // namespace detail
 
-inline void init(const MCPConfig &config) {
+inline void init(const MCPConfig &config, int stdout_fd = -1) {
   detail::g_config = config;
   detail::g_initialized = true;
+  detail::g_stdout_fd = stdout_fd;
 
 #ifndef _WIN32
   int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
@@ -471,6 +511,10 @@ inline void update() {
 inline void shutdown() {
   detail::g_initialized = false;
   detail::g_input_buffer.clear();
+}
+
+inline bool exit_requested() {
+  return detail::g_exit_requested;
 }
 
 } // namespace mcp
