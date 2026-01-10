@@ -17,6 +17,7 @@
 #include "rounded_corners.h"
 #include "theme.h"
 #include "theme_defaults.h"
+#include "validation_config.h"
 
 namespace afterhours {
 
@@ -498,6 +499,9 @@ struct UIStylingDefaults {
   float default_font_size = 16.f;
   bool enable_grid_snapping = false;
 
+  // Validation configuration for design rule enforcement
+  ValidationConfig validation;
+
   UIStylingDefaults() = default;
 
   // Theme configuration methods
@@ -533,6 +537,33 @@ struct UIStylingDefaults {
     enable_grid_snapping = enabled;
     return *this;
   }
+
+  // Validation configuration methods
+  UIStylingDefaults &set_validation_mode(ValidationMode mode) {
+    validation.mode = mode;
+    return *this;
+  }
+
+  UIStylingDefaults &enable_development_validation() {
+    validation.enable_development_mode();
+    return *this;
+  }
+
+  UIStylingDefaults &enable_strict_validation() {
+    validation.enable_strict_mode();
+    return *this;
+  }
+
+  UIStylingDefaults &enable_tv_safe_validation() {
+    validation.enable_tv_safe_mode();
+    return *this;
+  }
+
+  // Get current validation config (const reference)
+  const ValidationConfig &get_validation_config() const { return validation; }
+
+  // Get mutable validation config for direct modification
+  ValidationConfig &get_validation_config_mut() { return validation; }
 
   // Singleton pattern
   static UIStylingDefaults &get() {
