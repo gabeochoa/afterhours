@@ -75,8 +75,13 @@ struct ComponentConfig {
   bool is_absolute = false;
   FlexDirection flex_direction = FlexDirection::Column;
 
+  // Background color settings
   Theme::Usage color_usage = Theme::Usage::Default;
   std::optional<Color> custom_color;
+
+  // Text color settings (explicit override)
+  Theme::Usage text_color_usage = Theme::Usage::Default;
+  std::optional<Color> custom_text_color;
 
   // When enabled, text color is automatically selected for best contrast
   // against the background color (uses auto_text_color).
@@ -143,15 +148,38 @@ struct ComponentConfig {
                       .right = gap_size};
     return *this;
   }
-  ComponentConfig &with_color_usage(Theme::Usage usage) {
+  // NEW: Explicit background color APIs
+  ComponentConfig &with_background(Theme::Usage usage) {
     color_usage = usage;
     return *this;
   }
-  ComponentConfig &with_custom_color(Color color) {
+  ComponentConfig &with_custom_background(Color color) {
     color_usage = Theme::Usage::Custom;
     custom_color = color;
     return *this;
   }
+
+  // DEPRECATED: Keep for backwards compatibility
+  [[deprecated("Use with_background() instead")]]
+  ComponentConfig &with_color_usage(Theme::Usage usage) {
+    return with_background(usage);
+  }
+  [[deprecated("Use with_custom_background() instead")]]
+  ComponentConfig &with_custom_color(Color color) {
+    return with_custom_background(color);
+  }
+
+  // NEW: Explicit text color APIs
+  ComponentConfig &with_text_color(Theme::Usage usage) {
+    text_color_usage = usage;
+    return *this;
+  }
+  ComponentConfig &with_custom_text_color(Color color) {
+    text_color_usage = Theme::Usage::Custom;
+    custom_text_color = color;
+    return *this;
+  }
+
   ComponentConfig &with_auto_text_color(bool enabled = true) {
     auto_text_color = enabled;
     return *this;
@@ -635,6 +663,17 @@ static void apply_label(HasUIContext auto &ctx, Entity &entity,
   lbl.set_label(config.label)
       .set_disabled(config.disabled)
       .set_alignment(config.label_alignment);
+
+  // Set explicit text color if specified via with_text_color()
+  if (config.text_color_usage == Theme::Usage::Custom &&
+      config.custom_text_color.has_value()) {
+    lbl.set_explicit_text_color(config.custom_text_color.value());
+  } else if (Theme::is_valid(config.text_color_usage)) {
+    lbl.set_explicit_text_color(
+        ctx.theme.from_usage(config.text_color_usage, config.disabled));
+  } else {
+    lbl.clear_explicit_text_color();
+  }
 
   // Set background_hint for auto-contrast text color (Garnish integration)
   if (config.auto_text_color && entity.has<HasColor>()) {

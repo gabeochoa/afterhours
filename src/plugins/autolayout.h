@@ -522,6 +522,10 @@ struct HasLabel : BaseComponent {
   // the best text color for readability against this background.
   std::optional<Color> background_hint;
 
+  // Explicit text color override (set via with_text_color())
+  // When set, this color is used instead of theme font color or auto-contrast.
+  std::optional<Color> explicit_text_color;
+
   HasLabel(const std::string &str, bool is_disabled_ = false)
       : label(str), is_disabled(is_disabled_) {}
   HasLabel() : label(""), is_disabled(false) {}
@@ -548,6 +552,16 @@ struct HasLabel : BaseComponent {
 
   auto &clear_background_hint() {
     background_hint = std::nullopt;
+    return *this;
+  }
+
+  auto &set_explicit_text_color(Color color) {
+    explicit_text_color = color;
+    return *this;
+  }
+
+  auto &clear_explicit_text_color() {
+    explicit_text_color = std::nullopt;
     return *this;
   }
 };

@@ -493,7 +493,13 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       const HasLabel &hasLabel = entity.get<HasLabel>();
       Color font_col;
 
-      if (hasLabel.background_hint.has_value()) {
+      if (hasLabel.explicit_text_color.has_value()) {
+        // Explicit text color set via with_text_color()
+        font_col = hasLabel.explicit_text_color.value();
+        if (hasLabel.is_disabled) {
+          font_col = colors::darken(font_col, 0.5f);
+        }
+      } else if (hasLabel.background_hint.has_value()) {
         // Garnish auto-contrast: pick best text color for readability
         font_col =
             colors::auto_text_color(hasLabel.background_hint.value(),
