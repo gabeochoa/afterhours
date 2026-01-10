@@ -203,6 +203,217 @@ static Color get_highlighted(const Color &color) {
     return color;
 }
 #endif
+
+
+// Accessibility and contrast utilities inspired by Aether's Garnish library
+// https://github.com/Aeastr/Garnish
+
+// ============================================================
+// Luminance and Brightness (Garnish-inspired)
+// ============================================================
+
+// Helper: linearize a single sRGB component for luminance calculation
+static float linearize_srgb_component(unsigned char component) {
+    float c = static_cast<float>(component) / 255.0f;
+    if (c <= 0.04045f) {
+        return c / 12.92f;
+    }
+    return std::pow((c + 0.055f) / 1.055f, 2.4f);
+}
+
+// Relative luminance per WCAG 2.1 (returns 0.0 to 1.0)
+// Uses sRGB linearization as specified by WCAG
+static float luminance(const Color &color) {
+    float r = linearize_srgb_component(color.r);
+    float g = linearize_srgb_component(color.g);
+    float b = linearize_srgb_component(color.b);
+    return 0.2126f * r + 0.7152f * g + 0.0722f * b;
+}
+
+// Perceived brightness (0.0 to 1.0) - simpler weighted average
+// Formula: (0.299*R + 0.587*G + 0.114*B) / 255
+static float brightness(const Color &color) {
+    return (0.299f * static_cast<float>(color.r) +
+            0.587f * static_cast<float>(color.g) +
+            0.114f * static_cast<float>(color.b)) /
+           255.0f;
+}
+
+// Classification: is the color perceived as light?
+static bool is_light(const Color &color, float threshold = 0.5f) {
+    return luminance(color) >= threshold;
+}
+
+// Classification: is the color perceived as dark?
+static bool is_dark(const Color &color, float threshold = 0.5f) {
+    return luminance(color) < threshold;
+}
+
+// ============================================================
+// Contrast Ratio (WCAG 2.1)
+// ============================================================
+
+// Returns contrast ratio between two colors (1:1 to 21:1)
+// Formula: (L1 + 0.05) / (L2 + 0.05) where L1 >= L2
+static float contrast_ratio(const Color &foreground, const Color &background) {
+    float l1 = luminance(foreground);
+    float l2 = luminance(background);
+    // Ensure l1 is the lighter luminance
+    if (l1 < l2) {
+        std::swap(l1, l2);
+    }
+    return (l1 + 0.05f) / (l2 + 0.05f);
+}
+
+// ============================================================
+// WCAG Compliance Levels
+// ============================================================
+
+enum struct WCAGLevel {
+    Fail,      // < 3:1
+    AALarge,   // >= 3:1 (large text: 18pt+ or 14pt bold)
+    AA,        // >= 4.5:1 (normal text)
+    AAALarge,  // >= 4.5:1 (large text enhanced)
+    AAA        // >= 7:1 (normal text enhanced)
+};
+
+// Determine WCAG compliance level for a color pair
+static WCAGLevel wcag_compliance(const Color &foreground,
+                                 const Color &background) {
+    float ratio = contrast_ratio(foreground, background);
+    if (ratio >= 7.0f) {
+        return WCAGLevel::AAA;
+    }
+    if (ratio >= 4.5f) {
+        return WCAGLevel::AA;
+    }
+    if (ratio >= 3.0f) {
+        return WCAGLevel::AALarge;
+    }
+    return WCAGLevel::Fail;
+}
+
+// Check if color pair meets WCAG AA (4.5:1 for normal text)
+static bool meets_wcag_aa(const Color &foreground, const Color &background) {
+    return contrast_ratio(foreground, background) >= 4.5f;
+}
+
+// Check if color pair meets WCAG AAA (7:1 for normal text)
+static bool meets_wcag_aaa(const Color &foreground, const Color &background) {
+    return contrast_ratio(foreground, background) >= 7.0f;
+}
+
+// ============================================================
+// Auto-Contrast Text Generation (Core Garnish Feature)
+// ============================================================
+
+// Monochromatic: Returns white or black text based on background luminance
+static Color auto_text_color(const Color &background) {
+    // Use luminance threshold of ~0.179 (W3C recommendation for text)
+    // This is derived from the contrast ratio formula
+    if (luminance(background) > 0.179f) {
+        return UI_BLACK;
+    }
+    return UI_WHITE;
+}
+
+// Bi-chromatic: Returns one of two provided colors for best contrast
+static Color auto_text_color(const Color &background, const Color &light_option,
+                             const Color &dark_option) {
+    float light_contrast = contrast_ratio(light_option, background);
+    float dark_contrast = contrast_ratio(dark_option, background);
+    return (light_contrast > dark_contrast) ? light_option : dark_option;
+}
+
+// ============================================================
+// Color Harmony Utilities
+// ============================================================
+
+// Mix two colors with weighted blend (weight 0.0 = all a, 1.0 = all b)
+static Color mix(const Color &a, const Color &b, float weight = 0.5f) {
+    weight = std::clamp(weight, 0.0f, 1.0f);
+    float inv_weight = 1.0f - weight;
+    return Color{
+        static_cast<unsigned char>(a.r * inv_weight + b.r * weight),
+        static_cast<unsigned char>(a.g * inv_weight + b.g * weight),
+        static_cast<unsigned char>(a.b * inv_weight + b.b * weight),
+        static_cast<unsigned char>(a.a * inv_weight + b.a * weight),
+    };
+}
+
+// Adjust color luminance to achieve target contrast against background
+static Color ensure_contrast(const Color &color, const Color &background,
+                             float min_contrast = 4.5f) {
+    float current = contrast_ratio(color, background);
+    if (current >= min_contrast) {
+        return color;  // Already meets requirement
+    }
+
+    // Determine if we should lighten or darken the color
+    float bg_lum = luminance(background);
+    bool should_lighten = bg_lum < 0.5f;
+
+    // Binary search for the right adjustment amount
+    Color result = color;
+    float lo = 0.0f, hi = 1.0f;
+    for (int i = 0; i < 16; ++i) {  // 16 iterations for precision
+        float mid = (lo + hi) / 2.0f;
+        Color candidate =
+            should_lighten ? lighten(color, mid) : darken(color, 1.0f - mid);
+        float ratio = contrast_ratio(candidate, background);
+        if (ratio >= min_contrast) {
+            result = candidate;
+            hi = mid;  // Try less adjustment
+        } else {
+            lo = mid;  // Need more adjustment
+        }
+    }
+    return result;
+}
+
+// Generate an optimal contrasting shade of the input color
+static Color contrasting_shade(const Color &color, float target_contrast = 4.5f) {
+    // Create a contrasting version by adjusting luminance significantly
+    float lum = luminance(color);
+    if (lum > 0.5f) {
+        // Color is light, create a dark shade
+        return ensure_contrast(darken(color, 0.3f), color, target_contrast);
+    } else {
+        // Color is dark, create a light shade
+        return ensure_contrast(lighten(color, 0.5f), color, target_contrast);
+    }
+}
+
+// ============================================================
+// Font Weight Optimization
+// ============================================================
+
+enum struct FontWeight {
+    Light = 300,
+    Regular = 400,
+    Medium = 500,
+    SemiBold = 600,
+    Bold = 700
+};
+
+// Suggests minimum font weight for readability given contrast ratio
+// Lower contrast requires bolder fonts for legibility
+static FontWeight suggested_font_weight(const Color &foreground,
+                                        const Color &background) {
+    float ratio = contrast_ratio(foreground, background);
+    if (ratio >= 7.0f) {
+        return FontWeight::Light;  // High contrast, any weight works
+    }
+    if (ratio >= 4.5f) {
+        return FontWeight::Regular;  // AA compliant, normal weight
+    }
+    if (ratio >= 3.0f) {
+        return FontWeight::Medium;  // Large text threshold, bump weight
+    }
+    // Below AA, recommend bolder fonts for readability
+    return FontWeight::Bold;
+}
+
 }  // namespace colors
 
 struct HasColor : BaseComponent {

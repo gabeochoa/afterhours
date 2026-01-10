@@ -151,6 +151,20 @@ struct Theme {
         return color;
     }
 
+    // Automatically pick the best font color for a given background usage
+    // Uses the theme's font/darkfont and picks whichever has better contrast
+    Color auto_font_for(Usage background_usage) const {
+        Color bg = from_usage(background_usage);
+        return colors::auto_text_color(bg, font, darkfont);
+    }
+
+    // Validate that the theme meets WCAG AA accessibility standards
+    // Checks font on background and darkfont on surface
+    bool validate_accessibility() const {
+        return colors::meets_wcag_aa(font, background) &&
+               colors::meets_wcag_aa(darkfont, surface);
+    }
+
     std::bitset<4> rounded_corners = std::bitset<4>().set();
 };
 
