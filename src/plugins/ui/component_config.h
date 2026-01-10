@@ -78,6 +78,11 @@ struct ComponentConfig {
     Theme::Usage color_usage = Theme::Usage::Default;
     std::optional<Color> custom_color;
 
+    // When enabled, text color is automatically selected for best contrast
+    // against the background color (uses auto_text_color).
+    // Default: false (uses theme font color as before)
+    bool auto_text_color = false;
+
     std::optional<TextureConfig> texture_config;
     std::optional<texture_manager::HasTexture::Alignment> image_alignment;
     std::optional<std::bitset<4>> rounded_corners;
@@ -142,6 +147,10 @@ struct ComponentConfig {
     ComponentConfig &with_custom_color(Color color) {
         color_usage = Theme::Usage::Custom;
         custom_color = color;
+        return *this;
+    }
+    ComponentConfig &with_auto_text_color(bool enabled = true) {
+        auto_text_color = enabled;
         return *this;
     }
     ComponentConfig &with_alignment(TextAlignment align) {
@@ -580,13 +589,24 @@ static void apply_layout(Entity &entity, const ComponentConfig &config) {
     if (config.is_absolute) entity.get<UIComponent>().make_absolute();
 }
 
-static void apply_label(Entity &entity, const ComponentConfig &config) {
+static void apply_label(HasUIContext auto &ctx, Entity &entity,
+                        const ComponentConfig &config) {
     if (config.label.empty()) return;
     auto &lbl = entity.addComponentIfMissing<ui::HasLabel>(config.label,
                                                            config.disabled);
     lbl.set_label(config.label)
         .set_disabled(config.disabled)
         .set_alignment(config.label_alignment);
+
+    // Set background_hint for auto-contrast text color (Garnish integration)
+    if (config.auto_text_color && entity.has<HasColor>()) {
+        lbl.set_background_hint(entity.get<HasColor>().color());
+    } else if (config.auto_text_color) {
+        // No explicit color, use theme background
+        lbl.set_background_hint(ctx.theme.background);
+    } else {
+        lbl.clear_background_hint();
+    }
 }
 
 static void apply_texture(Entity &entity, const ComponentConfig &config) {
@@ -672,7 +692,7 @@ static bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
     apply_flags(entity, config);
     apply_layout(entity, config);
     apply_visuals(ctx, entity, config);
-    apply_label(entity, config);
+    apply_label(ctx, entity, config);
     apply_texture(entity, config);
 
     ctx.queue_render(RenderInfo{entity.id, config.render_layer});

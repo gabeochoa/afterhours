@@ -4,6 +4,7 @@
 #include "../developer.h"
 #include "../ecs.h"
 #include "../font_helper.h"
+#include "color.h"
 #include "window_manager.h"
 
 namespace afterhours {
@@ -524,6 +525,11 @@ struct HasLabel : BaseComponent {
     std::string font_name = UIComponent::UNSET_FONT;
     bool is_disabled = false;
 
+    // For auto-contrast text color calculation 
+    // When set, the renderer will use colors::auto_text_color() to pick
+    // the best text color for readability against this background.
+    std::optional<Color> background_hint;
+
     HasLabel(const std::string &str, bool is_disabled_ = false)
         : label(str), is_disabled(is_disabled_) {}
     HasLabel() : label(""), is_disabled(false) {}
@@ -540,6 +546,16 @@ struct HasLabel : BaseComponent {
 
     auto &set_disabled(bool dis_) {
         is_disabled = dis_;
+        return *this;
+    }
+
+    auto &set_background_hint(Color bg) {
+        background_hint = bg;
+        return *this;
+    }
+
+    auto &clear_background_hint() {
+        background_hint = std::nullopt;
         return *this;
     }
 };

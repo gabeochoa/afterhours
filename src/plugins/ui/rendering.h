@@ -440,8 +440,22 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
         if (entity.has<HasLabel>()) {
             const HasLabel &hasLabel = entity.get<HasLabel>();
-            Color font_col = context.theme.from_usage(Theme::Usage::Font,
-                                                      hasLabel.is_disabled);
+            Color font_col;
+
+            if (hasLabel.background_hint.has_value()) {
+                // Garnish auto-contrast: pick best text color for readability
+                font_col = colors::auto_text_color(
+                    hasLabel.background_hint.value(), context.theme.font,
+                    context.theme.darkfont);
+                if (hasLabel.is_disabled) {
+                    font_col = colors::darken(font_col, 0.5f);
+                }
+            } else {
+                // Default: use theme font color (unchanged behavior)
+                font_col = context.theme.from_usage(Theme::Usage::Font,
+                                                    hasLabel.is_disabled);
+            }
+
             if (effective_opacity < 1.0f) {
                 font_col = colors::opacity_pct(font_col, effective_opacity);
             }

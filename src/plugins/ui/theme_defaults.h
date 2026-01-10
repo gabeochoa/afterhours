@@ -65,6 +65,20 @@ struct ThemeDefaults {
     }
 
     Theme get_theme() const { return theme; }
+
+    // Validate that the current theme meets WCAG AA accessibility standards.
+    // Returns true if the theme passes, false otherwise.
+    // This is an optional utility - not enforced automatically.
+    bool validate_theme_accessibility() const {
+        bool valid = theme.validate_accessibility();
+        if (!valid) {
+            log_warn(
+                "Theme does not meet WCAG AA contrast requirements. "
+                "Consider adjusting font/background colors for better "
+                "accessibility.");
+        }
+        return valid;
+    }
 };
 
 }  // namespace imm
