@@ -162,6 +162,10 @@ inline int key_name_to_code(const std::string &key) {
     return 341;
   if (key == "alt")
     return 342;
+  if (key == "period" || key == ".")
+    return 46;  // GLFW_KEY_PERIOD
+  if (key == "comma" || key == ",")
+    return 44;  // GLFW_KEY_COMMA
   return -1;
 }
 
