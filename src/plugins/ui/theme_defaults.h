@@ -37,11 +37,17 @@ struct ThemeDefaults {
             case Theme::Usage::Background:
                 theme.background = color;
                 break;
+            case Theme::Usage::Surface:
+                theme.surface = color;
+                break;
             case Theme::Usage::Font:
                 theme.font = color;
                 break;
             case Theme::Usage::DarkFont:
                 theme.darkfont = color;
+                break;
+            case Theme::Usage::FontMuted:
+                theme.font_muted = color;
                 break;
             case Theme::Usage::Error:
                 theme.error = color;
@@ -49,6 +55,12 @@ struct ThemeDefaults {
             default:
                 break;
         }
+        return *this;
+    }
+
+    // Set the entire theme at once
+    ThemeDefaults &set_theme(const Theme &new_theme) {
+        theme = new_theme;
         return *this;
     }
 
