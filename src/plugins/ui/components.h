@@ -214,6 +214,38 @@ struct HasUIModifiers : BaseComponent {
     }
 };
 
+// Shadow styles for UI elements
+enum struct ShadowStyle {
+    Hard,  // Sharp offset shadow (retro/flat design)
+    Soft   // Blurred/layered shadow (modern/soft design)
+};
+
+// Shadow configuration (plain struct like Margin/Padding)
+struct Shadow {
+    ShadowStyle style = ShadowStyle::Soft;
+    float offset_x = 4.0f;
+    float offset_y = 4.0f;
+    float blur_radius = 8.0f;
+    Color color = Color{0, 0, 0, 80};
+
+    static Shadow hard(float ox = 4.0f, float oy = 4.0f,
+                       Color c = Color{0, 0, 0, 120}) {
+        return Shadow{ShadowStyle::Hard, ox, oy, 0.0f, c};
+    }
+
+    static Shadow soft(float ox = 4.0f, float oy = 6.0f,
+                       float blur = 12.0f, Color c = Color{0, 0, 0, 60}) {
+        return Shadow{ShadowStyle::Soft, ox, oy, blur, c};
+    }
+};
+
+// Component for entities that have shadows
+struct HasShadow : BaseComponent {
+    Shadow shadow;
+    HasShadow() = default;
+    explicit HasShadow(const Shadow &s) : shadow(s) {}
+};
+
 }  // namespace ui
 
 }  // namespace afterhours

@@ -108,6 +108,9 @@ struct ComponentConfig {
     float font_size = 50.f;
     bool is_internal = false;
 
+    // Shadow configuration
+    std::optional<Shadow> shadow_config;
+
     ComponentConfig &with_label(const std::string &lbl) {
         label = lbl;
         return *this;
@@ -240,6 +243,32 @@ struct ComponentConfig {
         return *this;
     }
 
+    // Shadow configuration methods
+    ComponentConfig &with_shadow(const Shadow &shadow) {
+        shadow_config = shadow;
+        return *this;
+    }
+
+    ComponentConfig &with_shadow(ShadowStyle style, float offset_x = 4.0f,
+                                 float offset_y = 4.0f, float blur = 8.0f,
+                                 Color color = Color{0, 0, 0, 80}) {
+        shadow_config = Shadow{style, offset_x, offset_y, blur, color};
+        return *this;
+    }
+
+    ComponentConfig &with_hard_shadow(float offset_x = 4.0f, float offset_y = 4.0f,
+                                      Color color = Color{0, 0, 0, 120}) {
+        shadow_config = Shadow::hard(offset_x, offset_y, color);
+        return *this;
+    }
+
+    ComponentConfig &with_soft_shadow(float offset_x = 4.0f, float offset_y = 6.0f,
+                                      float blur = 12.0f,
+                                      Color color = Color{0, 0, 0, 60}) {
+        shadow_config = Shadow::soft(offset_x, offset_y, blur, color);
+        return *this;
+    }
+
     bool has_padding() const {
         return padding.top.value > 0 || padding.left.value > 0 ||
                padding.bottom.value > 0 || padding.right.value > 0;
@@ -258,6 +287,7 @@ struct ComponentConfig {
     }
     bool has_texture() const { return texture_config.has_value(); }
     bool has_image_alignment() const { return image_alignment.has_value(); }
+    bool has_shadow() const { return shadow_config.has_value(); }
     bool is_disabled() const { return disabled; }
     bool is_hidden() const { return hidden; }
     bool skips_when_tabbing() const { return skip_when_tabbing; }
@@ -618,6 +648,16 @@ static void apply_texture(Entity &entity, const ComponentConfig &config) {
     ht.alignment = conf.alignment;
 }
 
+static void apply_shadow(Entity &entity, const ComponentConfig &config) {
+    if (!config.has_shadow()) {
+        entity.removeComponentIfExists<HasShadow>();
+        return;
+    }
+    const Shadow &shadow = config.shadow_config.value();
+    auto &hs = entity.addComponentIfMissing<HasShadow>(shadow);
+    hs.shadow = shadow;
+}
+
 static void apply_visuals(HasUIContext auto &ctx, Entity &entity,
                           const ComponentConfig &config) {
     if (config.rounded_corners.has_value() &&
@@ -694,6 +734,7 @@ static bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
     apply_visuals(ctx, entity, config);
     apply_label(ctx, entity, config);
     apply_texture(entity, config);
+    apply_shadow(entity, config);
 
     ctx.queue_render(RenderInfo{entity.id, config.render_layer});
     return created;

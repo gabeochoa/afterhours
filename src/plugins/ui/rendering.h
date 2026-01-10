@@ -384,6 +384,62 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         this->include_derived_children = true;
     }
 
+    void render_shadow(const Entity &entity, RectangleType draw_rect,
+                       const std::bitset<4> &corner_settings,
+                       float effective_opacity) const {
+        if (!entity.has<HasShadow>()) return;
+
+        const Shadow &shadow = entity.get<HasShadow>().shadow;
+        Color shadow_color = shadow.color;
+        if (effective_opacity < 1.0f) {
+            shadow_color.a = static_cast<unsigned char>(
+                shadow_color.a * effective_opacity);
+        }
+
+        if (shadow.style == ShadowStyle::Hard) {
+            // Hard shadow: single offset rectangle
+            RectangleType shadow_rect = {
+                draw_rect.x + shadow.offset_x,
+                draw_rect.y + shadow.offset_y,
+                draw_rect.width,
+                draw_rect.height
+            };
+            if (corner_settings.any()) {
+                draw_rectangle_rounded(shadow_rect, 0.5f, 8, shadow_color,
+                                       corner_settings);
+            } else {
+                draw_rectangle(shadow_rect, shadow_color);
+            }
+        } else {
+            // Soft shadow: layered rectangles for blur effect
+            int layers = static_cast<int>(shadow.blur_radius / 2.0f);
+            layers = std::max(3, std::min(layers, 8)); // Clamp between 3-8 layers
+
+            for (int i = layers; i >= 0; --i) {
+                float spread = shadow.blur_radius * (static_cast<float>(i) / static_cast<float>(layers));
+                float alpha_factor = 1.0f - (static_cast<float>(i) / static_cast<float>(layers + 1));
+
+                RectangleType shadow_rect = {
+                    draw_rect.x + shadow.offset_x - spread * 0.5f,
+                    draw_rect.y + shadow.offset_y - spread * 0.5f,
+                    draw_rect.width + spread,
+                    draw_rect.height + spread
+                };
+
+                Color layer_color = shadow_color;
+                layer_color.a = static_cast<unsigned char>(
+                    static_cast<float>(shadow_color.a) * alpha_factor * (1.0f / static_cast<float>(layers)));
+
+                if (corner_settings.any()) {
+                    draw_rectangle_rounded(shadow_rect, 0.5f, 8, layer_color,
+                                           corner_settings);
+                } else {
+                    draw_rectangle(shadow_rect, layer_color);
+                }
+            }
+        }
+    }
+
     void render_me(const UIContext<InputAction> &context,
                    const FontManager &font_manager,
                    const Entity &entity) const {
@@ -398,6 +454,9 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         auto corner_settings = entity.has<HasRoundedCorners>()
                                    ? entity.get<HasRoundedCorners>().get()
                                    : std::bitset<4>().reset();
+
+        // Draw shadow first (behind the element)
+        render_shadow(entity, draw_rect, corner_settings, effective_opacity);
 
         if (context.visual_focus_id == entity.id) {
             Color focus_col = context.theme.from_usage(Theme::Usage::Accent);
