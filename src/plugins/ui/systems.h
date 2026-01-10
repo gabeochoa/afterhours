@@ -170,12 +170,16 @@ struct TrackIfComponentWillBeRendered : System<> {
     if (entity.is_missing<UIContext<InputAction>>())
       return;
 
-    // Set visibility for all UIComponents, not just those in render_cmds
-    // render_cmds are cleared at the end of render phase, so we can't rely
-    // on them Instead, we check all components that have valid dimensions
-    // after layout
-    auto comps = EntityQuery().whereHasComponent<UIComponent>().gen();
-    for (Entity &ent : comps) {
+    auto &context = entity.get<UIContext<InputAction>>();
+
+    // Only mark entities as visible if they were queued for render this frame.
+    // This ensures that UI elements from inactive screens (which don't call
+    // their div/button functions) are not marked as visible.
+    for (const auto &cmd : context.render_cmds) {
+      OptEntity opt_ent = EntityHelper::getEntityForID(cmd.id);
+      if (!opt_ent.valid())
+        continue;
+      Entity &ent = opt_ent.asE();
       if (ent.has<UIComponent>()) {
         set_visibility(ent.get<UIComponent>());
       }
