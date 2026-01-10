@@ -17,30 +17,30 @@ namespace afterhours {
 // - We already have `RefEntity` (reference_wrapper) and `OptEntity` (optional
 //   reference_wrapper). This type is the "optional entity handle" equivalent.
 struct OptEntityHandle {
-    EntityID id = -1;
-    EntityHandle handle = EntityHandle::invalid();
+  EntityID id = -1;
+  EntityHandle handle = EntityHandle::invalid();
 
-    static OptEntityHandle from_entity(const Entity &e) {
-        OptEntityHandle r;
-        r.id = e.id;
-        r.handle = EntityHelper::handle_for(e);
-        return r;
-    }
+  static OptEntityHandle from_entity(const Entity &e) {
+    OptEntityHandle r;
+    r.id = e.id;
+    r.handle = EntityHelper::handle_for(e);
+    return r;
+  }
 
-    [[nodiscard]] OptEntity resolve() const {
-        if (handle.valid()) {
-            if (auto e = EntityHelper::resolve(handle); e.valid()) {
-                return e;
-            }
-        }
-        // Fallback for cases where a handle wasn't available (e.g. temp
-        // pre-merge) or was invalidated; ID lookup is O(1) under the handle
-        // store.
-        if (id >= 0) {
-            return EntityHelper::getEntityForID(id);
-        }
-        return {};
+  [[nodiscard]] OptEntity resolve() const {
+    if (handle.valid()) {
+      if (auto e = EntityHelper::resolve(handle); e.valid()) {
+        return e;
+      }
     }
+    // Fallback for cases where a handle wasn't available (e.g. temp
+    // pre-merge) or was invalidated; ID lookup is O(1) under the handle
+    // store.
+    if (id >= 0) {
+      return EntityHelper::getEntityForID(id);
+    }
+    return {};
+  }
 };
 
-}  // namespace afterhours
+} // namespace afterhours
