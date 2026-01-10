@@ -192,8 +192,12 @@ ElementResult checkbox_no_label(HasUIContext auto &ctx, EntityParent ep_pair,
       _init_state<HasCheckboxState>(entity, [&](auto &) {}, value);
 
   config.label = value ? "X" : " ";
-  config.font_name = UIComponent::SYMBOL_FONT;
-  config.font_size = 16.f;
+  // Only set symbol font if no font override was specified
+  // Preserve the inherited font_size for accessibility compliance
+  if (!config.has_font_override()) {
+    config.font_name = UIComponent::SYMBOL_FONT;
+    config.font_size = 20.f;  // Use accessible minimum size
+  }
 
   _init_component(ctx, ep_pair, config, ComponentType::CheckboxNoLabel, true,
                   "checkbox");
