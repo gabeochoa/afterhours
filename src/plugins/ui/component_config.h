@@ -44,8 +44,8 @@ struct ComponentConfig {
 
   // When enabled, text color is automatically selected for best contrast
   // against the background color (uses auto_text_color).
-  // Default: false (uses theme font color as before)
-  bool auto_text_color = false;
+  // Default: true (ensures accessible text on any background)
+  bool auto_text_color = true;
 
   std::optional<TextureConfig> texture_config;
   std::optional<texture_manager::HasTexture::Alignment> image_alignment;

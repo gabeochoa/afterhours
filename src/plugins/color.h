@@ -317,11 +317,25 @@ static Color auto_text_color(const Color &background) {
 }
 
 // Bi-chromatic: Returns one of two provided colors for best contrast
+// Falls back to pure white/black if neither option achieves minimum contrast
 static Color auto_text_color(const Color &background, const Color &light_option,
-                             const Color &dark_option) {
+                             const Color &dark_option,
+                             float min_contrast = 4.5f) {
   float light_contrast = contrast_ratio(light_option, background);
   float dark_contrast = contrast_ratio(dark_option, background);
-  return (light_contrast > dark_contrast) ? light_option : dark_option;
+
+  // Pick the better of the two provided options
+  Color best_option = (light_contrast > dark_contrast) ? light_option : dark_option;
+  float best_contrast = std::max(light_contrast, dark_contrast);
+
+  // If neither achieves minimum contrast, fall back to pure white/black
+  if (best_contrast < min_contrast) {
+    float white_contrast = contrast_ratio(UI_WHITE, background);
+    float black_contrast = contrast_ratio(UI_BLACK, background);
+    return (white_contrast > black_contrast) ? UI_WHITE : UI_BLACK;
+  }
+
+  return best_option;
 }
 
 // ============================================================

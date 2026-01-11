@@ -29,7 +29,9 @@ struct DefaultSpacing {
 struct TypographyScale {
   static constexpr float BASE_SIZE_720P = 16.0f;
   static constexpr float RATIO = 1.25f;
-  static constexpr float MIN_ACCESSIBLE_SIZE_720P = 18.67f;
+  // Lowered from 18.67 to allow decorative/secondary text at smaller sizes
+  // while still ensuring body text remains readable
+  static constexpr float MIN_ACCESSIBLE_SIZE_720P = 12.0f;
 
   static Size size(int level) {
     float px_size = BASE_SIZE_720P * std::pow(RATIO, level);

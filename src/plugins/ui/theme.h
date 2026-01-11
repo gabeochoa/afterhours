@@ -61,16 +61,17 @@ struct Theme {
     return false;
   }
 
-  Color font;
-  Color darkfont;
-  Color font_muted; // New: for secondary/less prominent text
-  Color background;
-  Color surface; // New: for cards/panels
+  // Default to pure white/black for auto_text_color to work properly
+  Color font{255, 255, 255, 255};         // White - for dark backgrounds
+  Color darkfont{30, 30, 30, 255};        // Near-black - for light backgrounds
+  Color font_muted{150, 150, 150, 255};   // Gray - for secondary text
+  Color background{45, 45, 55, 255};      // Dark gray
+  Color surface{60, 60, 70, 255};         // Slightly lighter gray
 
-  Color primary;
-  Color secondary;
-  Color accent;
-  Color error;
+  Color primary{100, 140, 200, 255};      // Blue
+  Color secondary{80, 100, 140, 255};     // Dark blue
+  Color accent{200, 160, 100, 255};       // Gold
+  Color error{200, 80, 80, 255};          // Red
 
   // ===== Font configuration =====
   // Per-language font configuration

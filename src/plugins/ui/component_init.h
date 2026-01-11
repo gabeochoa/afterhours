@@ -136,11 +136,15 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
   }
 
   // Set background_hint for auto-contrast text color (Garnish integration)
-  if (config.auto_text_color && entity.has<HasColor>()) {
-    lbl.set_background_hint(entity.get<HasColor>().color());
-  } else if (config.auto_text_color) {
-    // No explicit color, use theme background
-    lbl.set_background_hint(ctx.theme.background);
+  // Note: Check config directly since HasColor is added later in apply_config()
+  if (config.auto_text_color) {
+    if (config.color_usage == Theme::Usage::Custom && config.custom_color.has_value()) {
+      lbl.set_background_hint(config.custom_color.value());
+    } else if (Theme::is_valid(config.color_usage)) {
+      lbl.set_background_hint(ctx.theme.from_usage(config.color_usage));
+    } else {
+      lbl.set_background_hint(ctx.theme.background);
+    }
   } else {
     lbl.clear_background_hint();
   }
