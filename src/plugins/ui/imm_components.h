@@ -43,6 +43,146 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
   return {true, entity};
 }
 
+/// Orientation for separator widgets
+enum struct SeparatorOrientation {
+  Horizontal,  // Thin horizontal line (default)
+  Vertical,    // Thin vertical line
+};
+
+/// Creates a visual separator line between UI sections.
+///
+/// @param ctx The UI context
+/// @param ep_pair Entity-parent pair for hierarchy
+/// @param orientation Horizontal (thin height) or Vertical (thin width)
+/// @param config Component configuration
+///
+/// Features:
+/// - Horizontal line by default (fills parent width, thin height)
+/// - Vertical orientation available
+/// - Uses Theme::Usage::Secondary by default for subtle appearance
+/// - Optional label creates "--- Label ---" style separator
+///
+/// Usage:
+/// ```cpp
+/// // Simple horizontal separator
+/// separator(ctx, mk(parent));
+///
+/// // Vertical separator
+/// separator(ctx, mk(parent), SeparatorOrientation::Vertical);
+///
+/// // Labeled separator (section divider)
+/// separator(ctx, mk(parent), SeparatorOrientation::Horizontal,
+///           ComponentConfig{}.with_label("Settings"));
+/// ```
+ElementResult separator(HasUIContext auto &ctx, EntityParent ep_pair,
+                        SeparatorOrientation orientation =
+                            SeparatorOrientation::Horizontal,
+                        ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+
+  // Use styling defaults if available, otherwise use resolution-scaled default
+  // Default: 1/4 of tiny spacing (8px/4 = 2px at 720p baseline)
+  auto &styling_defaults = UIStylingDefaults::get();
+  Size separator_thickness = h720(DefaultSpacing::tiny().value * 0.25f);
+
+  if (auto def = styling_defaults.get_component_config(ComponentType::Separator);
+      def.has_value()) {
+    // Use configured thickness from styling defaults
+    if (!def->size.is_default) {
+      separator_thickness = orientation == SeparatorOrientation::Horizontal
+                                ? def->size.y_axis
+                                : def->size.x_axis;
+    }
+  }
+
+  // Set default size based on orientation
+  if (config.size.is_default) {
+    if (orientation == SeparatorOrientation::Horizontal) {
+      // Horizontal: fill width, thin height
+      config.with_size(ComponentSize{percent(1.0f), separator_thickness});
+    } else {
+      // Vertical: thin width, fill height
+      config.with_size(ComponentSize{separator_thickness, percent(1.0f)});
+    }
+  }
+
+  // Default to Secondary color for subtle appearance if not specified
+  if (config.color_usage == Theme::Usage::Default) {
+    config.with_background(Theme::Usage::Secondary);
+  }
+
+  // Add small default margin if none specified
+  if (!config.has_margin()) {
+    if (orientation == SeparatorOrientation::Horizontal) {
+      config.with_margin(Margin{.top = DefaultSpacing::small(),
+                                .bottom = DefaultSpacing::small()});
+    } else {
+      config.with_margin(Margin{.left = DefaultSpacing::small(),
+                                .right = DefaultSpacing::small()});
+    }
+  }
+
+  // If there's a label, create a labeled separator: [line] Label [line]
+  if (!config.label.empty()) {
+    std::string label_text = config.label;
+    config.label = "";  // Clear label from main container
+
+    // Container should use Row layout for horizontal, Column for vertical
+    config.with_flex_direction(orientation == SeparatorOrientation::Horizontal
+                                   ? FlexDirection::Row
+                                   : FlexDirection::Column);
+    config.with_background(Theme::Usage::None);
+
+    // Adjust container size to fit content
+    if (orientation == SeparatorOrientation::Horizontal) {
+      config.with_size(ComponentSize{percent(1.0f), children()});
+    } else {
+      config.with_size(ComponentSize{children(), percent(1.0f)});
+    }
+
+    _init_component(ctx, ep_pair, config, ComponentType::Separator, false,
+                    "separator_labeled");
+
+    // Create line - label - line structure
+    auto line_size = orientation == SeparatorOrientation::Horizontal
+                         ? ComponentSize{percent(0.3f), separator_thickness}
+                         : ComponentSize{separator_thickness, percent(0.3f)};
+
+    // First line
+    div(ctx, mk(entity),
+        ComponentConfig::inherit_from(config, "separator_line_1")
+            .with_size(line_size)
+            .with_background(Theme::Usage::Secondary)
+            .with_margin(Margin{}));
+
+    // Label in the middle
+    div(ctx, mk(entity),
+        ComponentConfig::inherit_from(config, "separator_label")
+            .with_size(ComponentSize{children(), children()})
+            .with_label(label_text)
+            .with_background(Theme::Usage::None)
+            .with_padding(Padding{.left = DefaultSpacing::small(),
+                                  .right = DefaultSpacing::small()})
+            .with_margin(Margin{}));
+
+    // Second line
+    div(ctx, mk(entity),
+        ComponentConfig::inherit_from(config, "separator_line_2")
+            .with_size(line_size)
+            .with_background(Theme::Usage::Secondary)
+            .with_margin(Margin{}));
+
+    return {false, entity};
+  }
+
+  // Simple separator line (no label)
+  config.with_skip_tabbing(true);  // Separators shouldn't be focusable
+  _init_component(ctx, ep_pair, config, ComponentType::Separator, false,
+                  "separator");
+
+  return {false, entity};
+}
+
 ElementResult image(HasUIContext auto &ctx, EntityParent ep_pair,
                     ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);

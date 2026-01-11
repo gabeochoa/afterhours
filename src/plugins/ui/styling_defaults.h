@@ -66,6 +66,7 @@ enum struct ComponentType {
   NavigationBar,
   CheckboxGroup,
   Image,
+  Separator,
 };
 
 // Forward declaration - ComponentConfig is defined in component_config.h
