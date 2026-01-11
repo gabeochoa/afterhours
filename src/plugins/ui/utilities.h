@@ -129,6 +129,8 @@ static void register_after_ui_updates(SystemManager &sm) {
         std::make_unique<ui::HandleTabbing<InputAction>>());
     sm.register_update_system(
         std::make_unique<ui::HandleClicks<InputAction>>());
+    sm.register_update_system(
+        std::make_unique<ui::CloseDropdownOnClickOutside<InputAction>>());
     sm.register_update_system(std::make_unique<ui::HandleDrags<InputAction>>());
     sm.register_update_system(
         std::make_unique<ui::HandleLeftRight<InputAction>>());

@@ -339,6 +339,75 @@ private:
   }
 };
 
+// Helper function to check if a point is inside an entity's rect (including
+// children)
+inline bool is_point_inside_entity_tree(EntityID entity_id,
+                                        const input::MousePosition &pos) {
+  OptEntity opt = EntityHelper::getEntityForID(entity_id);
+  if (!opt.has_value())
+    return false;
+
+  Entity &entity = opt.asE();
+  if (!entity.has<UIComponent>())
+    return false;
+
+  const UIComponent &cmp = entity.get<UIComponent>();
+
+  // Check if point is inside this entity's rect
+  RectangleType rect = cmp.rect();
+  if (entity.has<HasUIModifiers>()) {
+    rect = entity.get<HasUIModifiers>().apply_modifier(rect);
+  }
+  if (is_mouse_inside(pos, rect))
+    return true;
+
+  // Check children recursively
+  for (EntityID child_id : cmp.children) {
+    if (is_point_inside_entity_tree(child_id, pos))
+      return true;
+  }
+
+  return false;
+}
+
+template <typename InputAction>
+struct CloseDropdownOnClickOutside : System<HasDropdownState, UIComponent> {
+  UIContext<InputAction> *context;
+  bool prev_mouse_down = false;
+  bool should_close_dropdowns = false;
+  input::MousePosition click_pos;
+
+  virtual void once(float) override {
+    this->context =
+        EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+
+    // Detect click: mouse was down last frame, now it's up
+    should_close_dropdowns = prev_mouse_down && !context->mouseLeftDown;
+    click_pos = context->mouse_pos;
+
+    // Track mouse state for next frame
+    prev_mouse_down = context->mouseLeftDown;
+  }
+
+  virtual void for_each_with(Entity &entity, HasDropdownState &dropdownState,
+                             UIComponent &, float) override {
+    // Only process open dropdowns
+    if (!dropdownState.on)
+      return;
+
+    // Only process if a click just happened
+    if (!should_close_dropdowns)
+      return;
+
+    // Check if the click was inside this dropdown or any of its children
+    if (is_point_inside_entity_tree(entity.id, click_pos))
+      return;
+
+    // Click was outside - close the dropdown
+    dropdownState.on = false;
+  }
+};
+
 template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
   UIContext<InputAction> *context;
 
