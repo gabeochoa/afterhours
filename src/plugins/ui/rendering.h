@@ -41,11 +41,32 @@ static inline float _compute_effective_opacity(const Entity &entity) {
   }
   return std::clamp(result, 0.0f, 1.0f);
 }
-static inline RectangleType position_text(const ui::FontManager &fm,
-                                          const std::string &text,
-                                          RectangleType container,
-                                          TextAlignment alignment,
-                                          Vector2Type margin_px) {
+// Minimum font size to prevent invalid rendering (font size 0)
+// This ensures text always attempts to render, even if too small to read
+constexpr float MIN_FONT_SIZE = 1.0f;
+// Font size threshold for debug visualization - text is likely unreadable
+constexpr float DEBUG_FONT_SIZE_THRESHOLD = 8.0f;
+
+// Enable visual debug indicators for text that can't fit in containers
+// Define AFTERHOURS_DEBUG_TEXT_OVERFLOW to show red corner indicators
+#ifdef AFTERHOURS_DEBUG_TEXT_OVERFLOW
+constexpr bool SHOW_TEXT_OVERFLOW_DEBUG = true;
+#else
+constexpr bool SHOW_TEXT_OVERFLOW_DEBUG = false;
+#endif
+
+
+// Result struct for position_text that includes whether text fits properly
+struct TextPositionResult {
+  RectangleType rect;
+  bool text_fits; // false if font was clamped to minimum (text won't fit)
+};
+
+static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
+                                                  const std::string &text,
+                                                  RectangleType container,
+                                                  TextAlignment alignment,
+                                                  Vector2Type margin_px) {
   Font font = fm.get_active_font();
 
   // Calculate the maximum text size based on the container size and margins
@@ -53,6 +74,24 @@ static inline RectangleType position_text(const ui::FontManager &fm,
       .x = container.width - 2 * margin_px.x,
       .y = container.height - 2 * margin_px.y,
   };
+
+  // Check for invalid container (negative or zero usable space)
+  if (max_text_size.x <= 0 || max_text_size.y <= 0) {
+    log_warn("Container too small for text: container={}x{}, margins={}x{}, "
+             "text='{}'",
+             container.width, container.height, margin_px.x, margin_px.y,
+             text.length() > 20 ? text.substr(0, 20) + "..." : text);
+    return TextPositionResult{
+        .rect =
+            RectangleType{
+                .x = container.x + margin_px.x,
+                .y = container.y + margin_px.y,
+                .width = MIN_FONT_SIZE,
+                .height = MIN_FONT_SIZE,
+            },
+        .text_fits = false,
+    };
+  }
 
   // TODO add some caching here?
 
@@ -67,6 +106,20 @@ static inline RectangleType position_text(const ui::FontManager &fm,
     font_size++;
   }
   font_size--; // Decrease font size by 1 to ensure it fits
+
+  // Clamp to minimum font size to prevent invalid rendering
+  bool text_fits = font_size >= MIN_FONT_SIZE;
+  if (font_size < MIN_FONT_SIZE) {
+    log_warn("Text '{}' cannot fit in container {}x{} with margins {}x{} - "
+             "clamping font size from {} to {}",
+             text.length() > 20 ? text.substr(0, 20) + "..." : text,
+             container.width, container.height, margin_px.x, margin_px.y,
+             font_size, MIN_FONT_SIZE);
+    font_size = MIN_FONT_SIZE;
+  }
+
+  // Re-measure with final clamped font size for accurate positioning
+  text_size = measure_text(font, text.c_str(), font_size, 1.f);
 
   // Calculate the text position based on the alignment and margins
   Vector2Type position;
@@ -98,20 +151,58 @@ static inline RectangleType position_text(const ui::FontManager &fm,
     break;
   }
 
-  return RectangleType{
-      .x = position.x,
-      .y = position.y,
-      .width = font_size,
-      .height = font_size,
+  return TextPositionResult{
+      .rect =
+          RectangleType{
+              .x = position.x,
+              .y = position.y,
+              .width = font_size,
+              .height = font_size,
+          },
+      .text_fits = text_fits,
   };
+}
+
+// Backwards-compatible wrapper that returns just the rectangle
+static inline RectangleType position_text(const ui::FontManager &fm,
+                                          const std::string &text,
+                                          RectangleType container,
+                                          TextAlignment alignment,
+                                          Vector2Type margin_px) {
+  return position_text_ex(fm, text, container, alignment, margin_px).rect;
 }
 
 static inline void draw_text_in_rect(const ui::FontManager &fm,
                                      const std::string &text,
                                      RectangleType rect,
-                                     TextAlignment alignment, Color color) {
-  RectangleType sizing =
-      position_text(fm, text, rect, alignment, Vector2Type{5.f, 5.f});
+                                     TextAlignment alignment, Color color,
+                                     bool show_debug_indicator = false) {
+  TextPositionResult result =
+      position_text_ex(fm, text, rect, alignment, Vector2Type{5.f, 5.f});
+
+  // Draw visual debug indicator if text doesn't fit and debug is enabled
+  // The indicator is a small red triangle in the corner of the container
+  if (show_debug_indicator && !result.text_fits) {
+    // Draw a small warning indicator (red corner triangle)
+    Color warning_color = Color{255, 50, 50, 200}; // Semi-transparent red
+    float indicator_size = std::min(8.0f, std::min(rect.width, rect.height));
+    // Draw as a small rectangle in top-right corner
+    draw_rectangle(
+        RectangleType{
+            .x = rect.x + rect.width - indicator_size,
+            .y = rect.y,
+            .width = indicator_size,
+            .height = indicator_size,
+        },
+        warning_color);
+  }
+
+  // Don't attempt to render if font size is effectively zero
+  if (result.rect.height < MIN_FONT_SIZE) {
+    return;
+  }
+
+  RectangleType sizing = result.rect;
 
   // Check if text contains CJK characters and use appropriate rendering
   if (afterhours::ui::text_utils::contains_cjk(text)) {
@@ -532,7 +623,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         font_col = colors::opacity_pct(font_col, effective_opacity);
       }
       draw_text_in_rect(font_manager, hasLabel.label.c_str(), draw_rect,
-                        hasLabel.alignment, font_col);
+                        hasLabel.alignment, font_col, SHOW_TEXT_OVERFLOW_DEBUG);
     }
 
     if (entity.has<texture_manager::HasTexture>()) {
