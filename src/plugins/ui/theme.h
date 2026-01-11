@@ -198,6 +198,8 @@ struct Theme {
   }
 
   std::bitset<4> rounded_corners = std::bitset<4>().set();
+  float roundness = 0.5f; // 0.0 = sharp corners, 1.0 = fully rounded
+  int segments = 8;       // Number of segments per rounded corner
 };
 
 } // namespace ui

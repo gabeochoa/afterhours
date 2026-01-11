@@ -151,8 +151,19 @@ struct HasNavigationBarState : ui::HasDropdownState {
 
 struct HasRoundedCorners : BaseComponent {
   std::bitset<4> rounded_corners = std::bitset<4>().reset();
+  float roundness = 0.5f; // 0.0 = sharp, 1.0 = fully rounded
+  int segments = 8;       // Number of segments per corner
+
   auto &set(std::bitset<4> input) {
     rounded_corners = input;
+    return *this;
+  }
+  auto &set_roundness(float r) {
+    roundness = r;
+    return *this;
+  }
+  auto &set_segments(int s) {
+    segments = s;
     return *this;
   }
   auto &get() const { return rounded_corners; }

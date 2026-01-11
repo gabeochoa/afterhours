@@ -92,6 +92,8 @@ struct ComponentConfig {
   std::optional<TextureConfig> texture_config;
   std::optional<texture_manager::HasTexture::Alignment> image_alignment;
   std::optional<std::bitset<4>> rounded_corners;
+  std::optional<float> roundness;   // If unset, uses theme.roundness
+  std::optional<int> segments;      // If unset, uses theme.segments
 
   // TODO should everything be inheritable?
   // inheritable options
@@ -202,6 +204,14 @@ struct ComponentConfig {
   }
   ComponentConfig &with_rounded_corners(const RoundedCorners &corners) {
     rounded_corners = corners.get();
+    return *this;
+  }
+  ComponentConfig &with_roundness(float r) {
+    roundness = r;
+    return *this;
+  }
+  ComponentConfig &with_segments(int s) {
+    segments = s;
     return *this;
   }
   ComponentConfig &disable_rounded_corners() {
@@ -656,6 +666,12 @@ ComponentConfig _overwrite_defaults(HasUIContext auto &ctx,
   if (!config.rounded_corners.has_value()) {
     config.with_rounded_corners(ctx.theme.rounded_corners);
   }
+  if (!config.roundness.has_value()) {
+    config.roundness = ctx.theme.roundness;
+  }
+  if (!config.segments.has_value()) {
+    config.segments = ctx.theme.segments;
+  }
   return config;
 }
 
@@ -759,8 +775,10 @@ static void apply_visuals(HasUIContext auto &ctx, Entity &entity,
                           const ComponentConfig &config) {
   if (config.rounded_corners.has_value() &&
       config.rounded_corners.value().any()) {
-    entity.addComponentIfMissing<HasRoundedCorners>().set(
-        config.rounded_corners.value());
+    entity.addComponentIfMissing<HasRoundedCorners>()
+        .set(config.rounded_corners.value())
+        .set_roundness(config.roundness.value_or(0.5f))
+        .set_segments(config.segments.value_or(8));
   }
 
   if (config.font_name != UIComponent::UNSET_FONT) {

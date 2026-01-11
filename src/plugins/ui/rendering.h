@@ -382,7 +382,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
   void render_shadow(const Entity &entity, RectangleType draw_rect,
                      const std::bitset<4> &corner_settings,
-                     float effective_opacity) const {
+                     float effective_opacity, float roundness = 0.5f,
+                     int segments = 8) const {
     if (!entity.has<HasShadow>())
       return;
 
@@ -399,7 +400,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                                    draw_rect.y + shadow.offset_y,
                                    draw_rect.width, draw_rect.height};
       if (corner_settings.any()) {
-        draw_rectangle_rounded(shadow_rect, 0.5f, 8, shadow_color,
+        draw_rectangle_rounded(shadow_rect, roundness, segments, shadow_color,
                                corner_settings);
       } else {
         draw_rectangle(shadow_rect, shadow_color);
@@ -426,7 +427,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
             (1.0f / static_cast<float>(layers)));
 
         if (corner_settings.any()) {
-          draw_rectangle_rounded(shadow_rect, 0.5f, 8, layer_color,
+          draw_rectangle_rounded(shadow_rect, roundness, segments, layer_color,
                                  corner_settings);
         } else {
           draw_rectangle(shadow_rect, layer_color);
@@ -448,9 +449,16 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     auto corner_settings = entity.has<HasRoundedCorners>()
                                ? entity.get<HasRoundedCorners>().get()
                                : std::bitset<4>().reset();
+    float roundness = entity.has<HasRoundedCorners>()
+                          ? entity.get<HasRoundedCorners>().roundness
+                          : 0.5f;
+    int segments = entity.has<HasRoundedCorners>()
+                       ? entity.get<HasRoundedCorners>().segments
+                       : 8;
 
     // Draw shadow first (behind the element)
-    render_shadow(entity, draw_rect, corner_settings, effective_opacity);
+    render_shadow(entity, draw_rect, corner_settings, effective_opacity,
+                  roundness, segments);
 
     if (context.visual_focus_id == entity.id) {
       Color focus_col = context.theme.from_usage(Theme::Usage::Accent);
@@ -463,10 +471,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         focus_rect = entity.get<HasUIModifiers>().apply_modifier(focus_rect);
       }
       if (corner_settings.any()) {
-        draw_rectangle_rounded(focus_rect,
-                               0.5f, // roundness
-                               8,    // segments
-                               focus_col, corner_settings);
+        draw_rectangle_rounded(focus_rect, roundness, segments, focus_col,
+                               corner_settings);
       } else {
         draw_rectangle_outline(focus_rect, focus_col);
       }
@@ -483,10 +489,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         col = colors::opacity_pct(col, effective_opacity);
       }
 
-      draw_rectangle_rounded(draw_rect,
-                             0.5f, // roundness
-                             8,    // segments
-                             col, corner_settings);
+      draw_rectangle_rounded(draw_rect, roundness, segments, col, corner_settings);
     }
 
     if (entity.has<HasBorder>()) {
@@ -496,7 +499,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         if (effective_opacity < 1.0f) {
           border_col = colors::opacity_pct(border_col, effective_opacity);
         }
-        draw_rectangle_rounded_lines(draw_rect, 0.5f, 8, border_col,
+        draw_rectangle_rounded_lines(draw_rect, roundness, segments, border_col,
                                      corner_settings);
       }
     }
