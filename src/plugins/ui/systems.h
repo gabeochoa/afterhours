@@ -11,7 +11,7 @@
 #include "../window_manager.h"
 #include "components.h"
 #include "context.h"
-#include "theme_defaults.h"
+#include "theme.h"
 #if __has_include(<magic_enum/magic_enum.hpp>)
 #include <magic_enum/magic_enum.hpp>
 #else

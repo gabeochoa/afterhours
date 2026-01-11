@@ -31,7 +31,7 @@
 #include "component_config.h"
 #include "components.h"
 #include "context.h"
-#include "theme_defaults.h"
+#include "theme.h"
 #include "validation_config.h"
 
 namespace afterhours {

@@ -7,7 +7,6 @@
 
 #include "../autolayout.h"
 #include "theme.h"
-#include "theme_defaults.h"
 #include "validation_config.h"
 
 namespace afterhours {
