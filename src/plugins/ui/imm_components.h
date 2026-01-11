@@ -366,8 +366,6 @@ ElementResult checkbox_no_label(HasUIContext auto &ctx, EntityParent ep_pair,
   return result;
 }
 
-// TODO the focus ring is not correct because the actual clickable area is the
-// checkbox_no_label element, not the checkbox element.
 ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
                        bool &value,
                        ComponentConfig config = ComponentConfig()) {
@@ -410,8 +408,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
       label_config.with_color_usage(Theme::Usage::Primary)
           .with_rounded_corners(RoundedCorners().right_sharp());
 
-    auto label_ent = div(ctx, mk(entity), label_config);
-    label_ent.ent().template addComponentIfMissing<InFocusCluster>();
+    div(ctx, mk(entity), label_config);
   }
 
   // 2025-08-11: explicitly propagate the responsive size to the clickable
@@ -428,14 +425,11 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   bool changed = false;
   auto checkbox_ent =
       checkbox_no_label(ctx, mk(entity), value, checkbox_config);
-  checkbox_ent.ent().template addComponentIfMissing<InFocusCluster>();
+  // Focus ring is drawn on the actual clickable element (checkbox_no_label),
+  // not on the container row, so no FocusClusterRoot/InFocusCluster needed.
   if (checkbox_ent) {
     changed = true;
   }
-
-  // Mark the container row as the focus cluster root so focus ring surrounds
-  // both the label (if present) and the checkbox box.
-  entity.template addComponentIfMissing<FocusClusterRoot>();
 
   return {changed, entity, value};
 }
