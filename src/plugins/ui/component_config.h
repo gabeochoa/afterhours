@@ -33,6 +33,8 @@ struct ComponentConfig {
   std::string label;
   bool is_absolute = false;
   FlexDirection flex_direction = FlexDirection::Column;
+  JustifyContent justify_content = JustifyContent::FlexStart;
+  AlignItems align_items = AlignItems::FlexStart;
 
   // Background color settings
   Theme::Usage color_usage = Theme::Usage::Default;
@@ -213,6 +215,14 @@ struct ComponentConfig {
     flex_direction = dir;
     return *this;
   }
+  ComponentConfig &with_justify_content(JustifyContent jc) {
+    justify_content = jc;
+    return *this;
+  }
+  ComponentConfig &with_align_items(AlignItems ai) {
+    align_items = ai;
+    return *this;
+  }
   ComponentConfig &with_font(const std::string &font_name_, float font_size_) {
     font_name = font_name_;
     font_size = font_size_;
@@ -368,6 +378,12 @@ struct ComponentConfig {
       merged.render_layer = overrides.render_layer;
     if (!overrides.debug_name.empty())
       merged.debug_name = overrides.debug_name;
+
+    // Flexbox alignment properties
+    if (overrides.justify_content != JustifyContent::FlexStart)
+      merged.justify_content = overrides.justify_content;
+    if (overrides.align_items != AlignItems::FlexStart)
+      merged.align_items = overrides.align_items;
 
     return merged;
   }

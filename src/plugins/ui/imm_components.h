@@ -32,6 +32,14 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
                   ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
+  // Always print debug name for tracking
+  static int div_count = 0;
+  if (++div_count < 100) {
+    fprintf(stderr, "DIV[%d]: jc=%d debug=%s\n", 
+            div_count, static_cast<int>(config.justify_content), config.debug_name.c_str());
+    fflush(stderr);
+  }
+
   if (config.size.is_default && config.label.empty())
     config.with_size(ComponentSize{children(), children()});
   if (config.size.is_default && !config.label.empty())

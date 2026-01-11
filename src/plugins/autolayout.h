@@ -799,16 +799,74 @@ struct AutoLayout {
           snap_to_8pt_grid(widget.computed[Axis::Y], Axis::Y);
     }
 
+    // Container content area for child layout
+    // computed[X/Y] is the component size (content area)
+    float container_w = widget.computed[Axis::X];
+    float container_h = widget.computed[Axis::Y];
+
+    // Legacy sx/sy for wrapping calculations
     float sx = widget.computed[Axis::X] + widget.computed_padd[Axis::X];
     float sy = widget.computed[Axis::Y] + widget.computed_padd[Axis::Y];
 
-    // this is 0 instead of margin, because the margin will be added in
-    // compute rect
-    float offx = 0;
-    float offy = 0;
+    // Determine layout direction
+    bool is_column = static_cast<bool>(widget.flex_direction & FlexDirection::Column);
+    bool is_row = static_cast<bool>(widget.flex_direction & FlexDirection::Row);
 
-    // Represents the current wrap's largest
-    // ex. on Column mode we only care about where to start the next column
+    // Count layout children and calculate total size along main axis
+    size_t num_layout_children = 0;
+    float total_main_size = 0.f;
+
+    for (EntityID child_id : widget.children) {
+      UIComponent &child = this->to_cmp(child_id);
+      if (child.absolute || child.should_hide)
+        continue;
+
+      num_layout_children++;
+
+      // Use the child's full size (computed + margin) for layout
+      float cx = child.computed[Axis::X] + child.computed_margin[Axis::X];
+      float cy = child.computed[Axis::Y] + child.computed_margin[Axis::Y];
+
+      if (is_column) {
+        total_main_size += cy;
+      } else if (is_row) {
+        total_main_size += cx;
+      }
+    }
+
+    // Calculate justify_content parameters
+    float main_axis_size = is_column ? container_h : container_w;
+    float cross_axis_size = is_column ? container_w : container_h;
+    float remaining_space = main_axis_size - total_main_size;
+
+    float start_offset = 0.f;
+    float gap = 0.f;
+
+    if (remaining_space > 0.f && num_layout_children > 0) {
+      switch (widget.justify_content) {
+      case JustifyContent::FlexStart:
+        break;
+      case JustifyContent::FlexEnd:
+        start_offset = remaining_space;
+        break;
+      case JustifyContent::Center:
+        start_offset = remaining_space / 2.f;
+        break;
+      case JustifyContent::SpaceBetween:
+        if (num_layout_children > 1) {
+          gap = remaining_space / static_cast<float>(num_layout_children - 1);
+        }
+        break;
+      case JustifyContent::SpaceAround:
+        gap = remaining_space / static_cast<float>(num_layout_children);
+        start_offset = gap / 2.f;
+        break;
+      }
+    }
+
+    // Position children
+    float offx = is_row ? start_offset : 0.f;
+    float offy = is_column ? start_offset : 0.f;
     float col_w = 0.f;
     float col_h = 0.f;
 
@@ -836,11 +894,8 @@ struct AutoLayout {
       float cx = child.computed[Axis::X] + child.computed_padd[Axis::X];
       float cy = child.computed[Axis::Y] + child.computed_padd[Axis::Y];
 
-      bool will_hit_max_x = false;
-      bool will_hit_max_y = false;
-
-      will_hit_max_x = cx + offx > sx;
-      will_hit_max_y = cy + offy > sy;
+      bool will_hit_max_x = cx + offx > sx;
+      bool will_hit_max_y = cy + offy > sy;
 
       bool no_flex = child.flex_direction == FlexDirection::None;
       // We cant flex and are going over the limit
@@ -866,12 +921,37 @@ struct AutoLayout {
         col_h = cy;
       }
 
+      // Calculate align_items cross-axis offset
+      float cross_offset = 0.f;
+      float child_cross = is_column ? cx : cy;
+      float cross_remaining = cross_axis_size - child_cross;
+
+      if (cross_remaining > 0.f) {
+        switch (widget.align_items) {
+        case AlignItems::FlexStart:
+          break;
+        case AlignItems::FlexEnd:
+          cross_offset = cross_remaining;
+          break;
+        case AlignItems::Center:
+          cross_offset = cross_remaining / 2.f;
+          break;
+        case AlignItems::Stretch:
+          // Stretch is handled in size calculation, not positioning
+          break;
+        }
+      }
+
+      // Apply positions
+      float final_x = is_column ? (offx + cross_offset) : offx;
+      float final_y = is_column ? offy : (offy + cross_offset);
+
       if (enable_grid_snapping) {
-        child.computed_rel[Axis::X] = snap_to_8pt_grid(offx, Axis::X);
-        child.computed_rel[Axis::Y] = snap_to_8pt_grid(offy, Axis::Y);
+        child.computed_rel[Axis::X] = snap_to_8pt_grid(final_x, Axis::X);
+        child.computed_rel[Axis::Y] = snap_to_8pt_grid(final_y, Axis::Y);
       } else {
-        child.computed_rel[Axis::X] = offx;
-        child.computed_rel[Axis::Y] = offy;
+        child.computed_rel[Axis::X] = final_x;
+        child.computed_rel[Axis::Y] = final_y;
       }
 
       constexpr float GRID_UNIT_720P = 4.0f;
@@ -880,17 +960,17 @@ struct AutoLayout {
       float grid_unit_x =
           GRID_UNIT_720P * (fetch_screen_value_(Axis::X) / 720.0f);
 
-      // Setup for next child placement
-      if (widget.flex_direction & FlexDirection::Column) {
-        float next_y = offy + cy;
+      // Setup for next child placement (include gap for justify)
+      if (is_column) {
+        float next_y = offy + cy + gap;
         if (enable_grid_snapping) {
           next_y += grid_unit_y;
           next_y = snap_to_8pt_grid(next_y, Axis::Y);
         }
         offy = next_y;
       }
-      if (widget.flex_direction & FlexDirection::Row) {
-        float next_x = offx + cx;
+      if (is_row) {
+        float next_x = offx + cx + gap;
         if (enable_grid_snapping) {
           next_x += grid_unit_x;
           next_x = snap_to_8pt_grid(next_x, Axis::X);

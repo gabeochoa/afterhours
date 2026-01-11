@@ -108,7 +108,10 @@ inline void apply_layout(Entity &entity, const ComponentConfig &config) {
       .set_desired_width(config.size.x_axis)
       .set_desired_height(config.size.y_axis)
       .set_desired_padding(config.padding)
-      .set_desired_margin(config.margin);
+      .set_desired_margin(config.margin)
+      .set_justify_content(config.justify_content)
+      .set_align_items(config.align_items)
+      .set_flex_direction(config.flex_direction);
 
   if (config.is_absolute)
     entity.get<UIComponent>().make_absolute();

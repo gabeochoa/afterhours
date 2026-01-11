@@ -179,6 +179,25 @@ enum struct FlexDirection {
   Column = 1 << 2,
 };
 
+/// Controls how children are distributed along the main axis (flex direction).
+/// Default: FlexStart preserves current behavior (pack items at start).
+enum struct JustifyContent {
+  FlexStart,    // Pack items at start (default - current behavior)
+  FlexEnd,      // Pack items at end
+  Center,       // Center items
+  SpaceBetween, // Distribute space between items (first and last at edges)
+  SpaceAround,  // Distribute space around items (equal space on both sides)
+};
+
+/// Controls how children are aligned along the cross axis.
+/// Default: FlexStart preserves current behavior.
+enum struct AlignItems {
+  FlexStart, // Align to start of cross axis (default - current behavior)
+  FlexEnd,   // Align to end of cross axis
+  Center,    // Center on cross axis
+  Stretch,   // Stretch to fill (for items without explicit cross-axis size)
+};
+
 enum struct Axis {
   X = 0,
   Y = 1,

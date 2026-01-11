@@ -74,6 +74,8 @@ struct UIComponent : BaseComponent {
   AxisArray<Size, 6> desired_margin;
 
   FlexDirection flex_direction = FlexDirection::Column;
+  JustifyContent justify_content = JustifyContent::FlexStart;
+  AlignItems align_items = AlignItems::FlexStart;
 
   bool should_hide = false;
   bool was_rendered_to_screen = false;
@@ -220,6 +222,16 @@ struct UIComponent : BaseComponent {
 
   auto &set_flex_direction(FlexDirection flex) {
     flex_direction = flex;
+    return *this;
+  }
+
+  auto &set_justify_content(JustifyContent jc) {
+    justify_content = jc;
+    return *this;
+  }
+
+  auto &set_align_items(AlignItems ai) {
+    align_items = ai;
     return *this;
   }
 
