@@ -393,6 +393,9 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
     }
   }
   bool has_label_child = !label.empty();
+  // Check if user provided custom corner configuration
+  bool user_specified_corners = config.rounded_corners.has_value();
+
   if (has_label_child) {
     config.size = config.size._scale_x(0.5f);
 
@@ -402,11 +405,14 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_size(config.size)
             .with_label(label);
 
-    // TODO - if the user wants to mess with the corners, how can we merge
-    // these
-    if (config.color_usage == Theme::Usage::Default)
-      label_config.with_color_usage(Theme::Usage::Primary)
-          .with_rounded_corners(RoundedCorners().right_sharp());
+    // Apply default styling only if user hasn't specified custom settings
+    if (config.color_usage == Theme::Usage::Default) {
+      label_config.with_color_usage(Theme::Usage::Primary);
+      // Only apply default corners if user didn't specify their own
+      if (!user_specified_corners) {
+        label_config.with_rounded_corners(RoundedCorners().right_sharp());
+      }
+    }
 
     div(ctx, mk(entity), label_config);
   }
@@ -418,9 +424,13 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
           config, fmt::format("checkbox indiv from {}", config.debug_name))
           .with_size(config.size);
 
-  if (config.color_usage == Theme::Usage::Default)
-    checkbox_config.with_color_usage(Theme::Usage::Primary)
-        .with_rounded_corners(RoundedCorners().left_sharp());
+  if (config.color_usage == Theme::Usage::Default) {
+    checkbox_config.with_color_usage(Theme::Usage::Primary);
+    // Only apply default corners if user didn't specify their own
+    if (!user_specified_corners) {
+      checkbox_config.with_rounded_corners(RoundedCorners().left_sharp());
+    }
+  }
 
   bool changed = false;
   auto checkbox_ent =
