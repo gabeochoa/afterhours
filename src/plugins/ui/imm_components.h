@@ -1016,6 +1016,107 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
                        navState.current_index()};
 }
 
+// Progress bar display options
+enum class ProgressBarLabelStyle {
+  None,       // No label
+  Percentage, // Show "75%"
+  Fraction,   // Show "75/100"
+  Custom      // Use config.label as-is
+};
+
+// Progress bar - displays a value from 0.0 to 1.0 (or custom range)
+// Unlike slider, this is read-only (no interaction)
+ElementResult progress_bar(HasUIContext auto &ctx, EntityParent ep_pair,
+                           float value, ComponentConfig config = ComponentConfig(),
+                           ProgressBarLabelStyle label_style =
+                               ProgressBarLabelStyle::Percentage,
+                           float min_value = 0.f, float max_value = 1.f) {
+  auto [entity, parent] = deref(ep_pair);
+
+  std::string original_label = config.label;
+  config.label = "";
+
+  // Initialize as a non-interactive div
+  _init_component(ctx, ep_pair, config, ComponentType::Div, false,
+                  "progress_bar");
+
+  // Normalize value to 0-1 range
+  float normalized = (max_value > min_value)
+                         ? std::clamp((value - min_value) / (max_value - min_value), 0.f, 1.f)
+                         : 0.f;
+
+  // Generate label text
+  std::string label_text;
+  switch (label_style) {
+  case ProgressBarLabelStyle::Percentage:
+    label_text = fmt::format("{}%", static_cast<int>(normalized * 100));
+    break;
+  case ProgressBarLabelStyle::Fraction:
+    label_text = fmt::format("{}/{}", static_cast<int>(value),
+                             static_cast<int>(max_value));
+    break;
+  case ProgressBarLabelStyle::Custom:
+    label_text = original_label;
+    break;
+  case ProgressBarLabelStyle::None:
+  default:
+    break;
+  }
+
+  // If there's an original label, prepend it
+  if (!original_label.empty() && label_style != ProgressBarLabelStyle::Custom &&
+      label_style != ProgressBarLabelStyle::None) {
+    label_text = original_label + ": " + label_text;
+  }
+
+  // Create background track
+  auto track_corners = config.rounded_corners.value_or(RoundedCorners().get());
+  auto track = div(ctx, mk(entity, 0),
+                   ComponentConfig::inherit_from(config, "progress_track")
+                       .with_size(config.size)
+                       .with_color_usage(Theme::Usage::Secondary)
+                       .with_rounded_corners(RoundedCorners(track_corners))
+                       .with_skip_tabbing(true)
+                       .with_render_layer(config.render_layer));
+
+  // Create fill bar (width based on normalized value)
+  const auto x_axis = config.size.x_axis;
+  Size fill_width{x_axis.dim, x_axis.value * normalized, x_axis.strictness};
+
+  // Only render fill if there's something to show
+  if (normalized > 0.001f) {
+    auto fill_corners = RoundedCorners(track_corners);
+    // If not fully filled, make right side sharp for clean edge
+    if (normalized < 0.99f) {
+      fill_corners.sharp(TOP_RIGHT).sharp(BOTTOM_RIGHT);
+    }
+
+    div(ctx, mk(track.ent(), 0),
+        ComponentConfig::inherit_from(config, "progress_fill")
+            .with_size(ComponentSize{fill_width, config.size.y_axis})
+            .with_absolute_position()
+            .with_color_usage(Theme::Usage::Primary)
+            .with_rounded_corners(fill_corners)
+            .with_skip_tabbing(true)
+            .with_render_layer(config.render_layer + 1));
+  }
+
+  // Add label on top if specified
+  if (!label_text.empty()) {
+    div(ctx, mk(track.ent(), 1),
+        ComponentConfig::inherit_from(config, "progress_label")
+            .with_size(config.size)
+            .with_label(label_text)
+            .with_absolute_position()
+            .with_color_usage(Theme::Usage::None)
+            .with_auto_text_color(true)
+            .with_skip_tabbing(true)
+            .with_render_layer(config.render_layer + 2));
+  }
+
+  return ElementResult{false, entity, normalized};
+}
+
 } // namespace imm
 
 } // namespace ui
