@@ -46,8 +46,31 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
     auto &theme_defaults = imm::ThemeDefaults::get();
     context.theme = theme_defaults.get_theme();
 
-    context.mouse_pos = input::get_mouse_position();
-    context.mouseLeftDown = input::is_mouse_button_down(0);
+    // Mouse input handling
+    {
+      context.mouse.pos = input::get_mouse_position();
+      const bool prev_mouse_down = context.mouse.left_down;
+      context.mouse.left_down = input::is_mouse_button_down(0);
+      context.mouse.just_pressed = !prev_mouse_down && context.mouse.left_down;
+      context.mouse.just_released = prev_mouse_down && !context.mouse.left_down;
+
+      if (context.mouse.just_pressed) {
+        context.mouse.press_pos = context.mouse.pos;
+        context.mouse.press_moved = false;
+      }
+
+      if (!context.mouse.left_down) {
+        context.mouse.press_moved = false;
+      } else if (!context.mouse.press_moved) {
+        const float dx = context.mouse.pos.x - context.mouse.press_pos.x;
+        const float dy = context.mouse.pos.y - context.mouse.press_pos.y;
+        const float dist_sq = (dx * dx) + (dy * dy);
+        const float threshold = MousePointerState::press_drag_threshold_px;
+        if (dist_sq > (threshold * threshold)) {
+          context.mouse.press_moved = true;
+        }
+      }
+    }
 
     {
       input::PossibleInputCollector inpc = input::get_input_collector();
@@ -194,7 +217,7 @@ struct EndUIContextManager : System<UIContext<InputAction>> {
     if (context.focus_id == context.ROOT)
       return;
 
-    if (context.mouseLeftDown) {
+    if (context.mouse.left_down) {
       if (context.is_active(context.ROOT)) {
         context.set_active(context.FAKE);
       }
@@ -281,7 +304,7 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
       hasClickListener.down = true;
     }
 
-    if (context->is_mouse_click(entity.id)) {
+    if (context->mouse_activates(entity.id)) {
       context->set_focus(entity.id);
       hasClickListener.cb(entity);
       hasClickListener.down = true;
@@ -328,7 +351,7 @@ private:
         child_hasClickListener.down = true;
       }
 
-      if (context->is_mouse_click(child.id)) {
+      if (context->mouse_activates(child.id)) {
         context->set_focus(child.id);
         child_hasClickListener.cb(child);
         child_hasClickListener.down = true;
@@ -382,11 +405,11 @@ struct CloseDropdownOnClickOutside : System<HasDropdownState, UIComponent> {
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
 
     // Detect click: mouse was down last frame, now it's up
-    should_close_dropdowns = prev_mouse_down && !context->mouseLeftDown;
-    click_pos = context->mouse_pos;
+    should_close_dropdowns = prev_mouse_down && !context->mouse.left_down;
+    click_pos = context->mouse.pos;
 
     // Track mouse state for next frame
-    prev_mouse_down = context->mouseLeftDown;
+    prev_mouse_down = context->mouse.left_down;
   }
 
   virtual void for_each_with(Entity &entity, HasDropdownState &dropdownState,

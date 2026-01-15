@@ -91,6 +91,13 @@ struct UIStylingDefaults {
     return *this;
   }
 
+  UIStylingDefaults &
+  set_click_activation_mode(ClickActivationMode activation_mode) {
+    auto &theme_defaults = ThemeDefaults::get();
+    theme_defaults.set_click_activation_mode(activation_mode);
+    return *this;
+  }
+
   // Helper methods for common theme colors
   UIStylingDefaults &set_primary_color(const Color &color) {
     return set_theme_color(Theme::Usage::Primary, color);
@@ -183,4 +190,3 @@ concept HasUIContext = requires(T a) {
 } // namespace ui
 
 } // namespace afterhours
-

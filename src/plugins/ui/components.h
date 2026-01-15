@@ -15,6 +15,7 @@
 #include "../../drawing_helpers.h"
 #include "../../ecs.h"
 #include "../../logging.h"
+#include "theme.h"
 
 namespace afterhours {
 
@@ -54,6 +55,12 @@ struct HasClickListener : BaseComponent {
   std::function<void(Entity &)> cb;
   HasClickListener(const std::function<void(Entity &)> &callback)
       : cb(callback) {}
+};
+
+struct HasClickActivationMode : BaseComponent {
+  ClickActivationMode mode = ClickActivationMode::Default;
+  HasClickActivationMode() = default;
+  explicit HasClickActivationMode(ClickActivationMode mode_) : mode(mode_) {}
 };
 
 struct HasDragListener : BaseComponent {

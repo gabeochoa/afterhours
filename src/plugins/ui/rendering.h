@@ -55,7 +55,6 @@ constexpr bool SHOW_TEXT_OVERFLOW_DEBUG = true;
 constexpr bool SHOW_TEXT_OVERFLOW_DEBUG = false;
 #endif
 
-
 // Result struct for position_text that includes whether text fits properly
 struct TextPositionResult {
   RectangleType rect;
@@ -340,8 +339,8 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     this->context =
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
 
-    draw_text(fmt::format("mouse({}, {})", this->context->mouse_pos.x,
-                          this->context->mouse_pos.y)
+    draw_text(fmt::format("mouse({}, {})", this->context->mouse.pos.x,
+                          this->context->mouse.pos.y)
                   .c_str(),
               0.0f, 0.0f, fontSize,
               this->context->theme.from_usage(Theme::Usage::Font));
@@ -391,7 +390,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
         Rectangle{x, y, text_width, fontSize};
 
     const bool is_hovered =
-        is_mouse_inside(this->context->mouse_pos, debug_label_location);
+        is_mouse_inside(this->context->mouse.pos, debug_label_location);
     bool show = true;
     if (isolate_enabled) {
       if (entity.id == isolated_id) {
@@ -580,7 +579,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         col = colors::opacity_pct(col, effective_opacity);
       }
 
-      draw_rectangle_rounded(draw_rect, roundness, segments, col, corner_settings);
+      draw_rectangle_rounded(draw_rect, roundness, segments, col,
+                             corner_settings);
     }
 
     if (entity.has<HasBorder>()) {

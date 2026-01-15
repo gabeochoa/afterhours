@@ -12,6 +12,12 @@ namespace afterhours {
 
 namespace ui {
 
+enum class ClickActivationMode {
+  Default,
+  Press,
+  Release,
+};
+
 // Font configuration for a specific language
 struct FontConfig {
   // TODO: Investigate using FontID enum instead of strings for type safety
@@ -62,16 +68,18 @@ struct Theme {
   }
 
   // Default to pure white/black for auto_text_color to work properly
-  Color font{255, 255, 255, 255};         // White - for dark backgrounds
-  Color darkfont{30, 30, 30, 255};        // Near-black - for light backgrounds
-  Color font_muted{150, 150, 150, 255};   // Gray - for secondary text
-  Color background{45, 45, 55, 255};      // Dark gray
-  Color surface{60, 60, 70, 255};         // Slightly lighter gray
+  Color font{255, 255, 255, 255};       // White - for dark backgrounds
+  Color darkfont{30, 30, 30, 255};      // Near-black - for light backgrounds
+  Color font_muted{150, 150, 150, 255}; // Gray - for secondary text
+  Color background{45, 45, 55, 255};    // Dark gray
+  Color surface{60, 60, 70, 255};       // Slightly lighter gray
 
-  Color primary{100, 140, 200, 255};      // Blue
-  Color secondary{80, 100, 140, 255};     // Dark blue
-  Color accent{200, 160, 100, 255};       // Gold
-  Color error{200, 80, 80, 255};          // Red
+  Color primary{100, 140, 200, 255};  // Blue
+  Color secondary{80, 100, 140, 255}; // Dark blue
+  Color accent{200, 160, 100, 255};   // Gold
+  Color error{200, 80, 80, 255};      // Red
+
+  ClickActivationMode click_activation_mode = ClickActivationMode::Press;
 
   // ===== Font configuration =====
   // Per-language font configuration
@@ -260,6 +268,11 @@ struct ThemeDefaults {
   // Set the entire theme at once
   ThemeDefaults &set_theme(const Theme &new_theme) {
     theme = new_theme;
+    return *this;
+  }
+
+  ThemeDefaults &set_click_activation_mode(ClickActivationMode mode) {
+    theme.click_activation_mode = mode;
     return *this;
   }
 

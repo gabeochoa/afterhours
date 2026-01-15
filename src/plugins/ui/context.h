@@ -14,6 +14,7 @@
 #include "../../ecs.h"
 #include "../../logging.h"
 #include "../input_system.h"
+#include "components.h"
 #include "theme.h"
 
 namespace afterhours {
@@ -29,6 +30,16 @@ static inline bool is_mouse_inside(const input::MousePosition &mouse_pos,
 struct RenderInfo {
   EntityID id;
   int layer = 0;
+};
+
+struct MousePointerState {
+  input::MousePosition pos{};
+  bool left_down = false;
+  bool just_pressed = false;
+  bool just_released = false;
+  input::MousePosition press_pos{};
+  bool press_moved = false;
+  static constexpr float press_drag_threshold_px = 6.0f;
 };
 
 template <typename InputAction> struct UIContext : BaseComponent {
@@ -50,8 +61,7 @@ template <typename InputAction> struct UIContext : BaseComponent {
   EntityID last_processed =
       ROOT; // last element that was processed (used for reverse tabbing)
 
-  input::MousePosition mouse_pos;
-  bool mouseLeftDown;
+  MousePointerState mouse;
   InputAction last_action;
   InputBitset all_actions;
 
@@ -68,9 +78,9 @@ template <typename InputAction> struct UIContext : BaseComponent {
   void set_focus(EntityID id) { focus_id = id; }
 
   void active_if_mouse_inside(EntityID id, RectangleType rect) {
-    if (is_mouse_inside(mouse_pos, rect)) {
+    if (is_mouse_inside(mouse.pos, rect)) {
       set_hot(id);
-      if (is_active(ROOT) && mouseLeftDown) {
+      if (is_active(ROOT) && mouse.left_down) {
         set_active(id);
       }
     }
@@ -93,11 +103,27 @@ template <typename InputAction> struct UIContext : BaseComponent {
     }
   }
 
-  [[nodiscard]] bool is_mouse_click(EntityID id) {
-    bool let_go = !mouseLeftDown;
-    bool was_click = let_go && is_active(id) && is_hot(id);
+  [[nodiscard]] bool is_mouse_press(EntityID id) const {
+    bool was_press =
+        mouse.just_pressed && is_active(id) && is_hot(id) && !mouse.press_moved;
+    return was_press;
+  }
+
+  [[nodiscard]] bool is_mouse_click(EntityID id) const {
+    bool was_click = mouse.just_released && is_active(id) && is_hot(id) &&
+                     !mouse.press_moved;
     // if(was_click){play_sound();}
     return was_click;
+  }
+
+  [[nodiscard]] bool mouse_activates(EntityID id) const {
+    ClickActivationMode activation_mode = theme.click_activation_mode;
+    if (OptEntity opt_ent = EntityHelper::getEntityForID(id);
+        opt_ent.has_value() && opt_ent.asE().has<HasClickActivationMode>()) {
+      activation_mode = opt_ent.asE().get<HasClickActivationMode>().mode;
+    }
+    return activation_mode == ClickActivationMode::Press ? is_mouse_press(id)
+                                                         : is_mouse_click(id);
   }
 
   [[nodiscard]] bool pressed(const InputAction &name) {

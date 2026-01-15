@@ -52,8 +52,8 @@ struct ComponentConfig {
   std::optional<TextureConfig> texture_config;
   std::optional<texture_manager::HasTexture::Alignment> image_alignment;
   std::optional<std::bitset<4>> rounded_corners;
-  std::optional<float> roundness;   // If unset, uses theme.roundness
-  std::optional<int> segments;      // If unset, uses theme.segments
+  std::optional<float> roundness; // If unset, uses theme.roundness
+  std::optional<int> segments;    // If unset, uses theme.segments
 
   // TODO should everything be inheritable?
   // inheritable options
@@ -62,6 +62,8 @@ struct ComponentConfig {
   bool disabled = false;
   bool hidden = false;
   bool select_on_focus = false;
+
+  ClickActivationMode click_activation = ClickActivationMode::Default;
 
   // ui modifiers
   float opacity = 1.0f;
@@ -202,6 +204,10 @@ struct ComponentConfig {
     select_on_focus = select;
     return *this;
   }
+  ComponentConfig &with_click_activation(ClickActivationMode mode) {
+    click_activation = mode;
+    return *this;
+  }
   ComponentConfig &with_translate(float x, float y) {
     translate_x = x;
     translate_y = y;
@@ -307,6 +313,9 @@ struct ComponentConfig {
   bool is_hidden() const { return hidden; }
   bool skips_when_tabbing() const { return skip_when_tabbing; }
   bool selects_on_focus() const { return select_on_focus; }
+  bool has_click_activation_override() const {
+    return click_activation != ClickActivationMode::Default;
+  }
 
   ComponentConfig &apply_automatic_defaults() {
     if (!has_padding()) {
@@ -359,6 +368,8 @@ struct ComponentConfig {
       merged.skip_when_tabbing = overrides.skip_when_tabbing;
     if (overrides.selects_on_focus())
       merged.select_on_focus = overrides.select_on_focus;
+    if (overrides.has_click_activation_override())
+      merged.click_activation = overrides.click_activation;
 
     if (overrides.has_font_override()) {
       merged.font_name = overrides.font_name;
@@ -403,6 +414,7 @@ struct ComponentConfig {
     hidden = parent.hidden;
     skip_when_tabbing = parent.skip_when_tabbing;
     select_on_focus = parent.select_on_focus;
+    click_activation = parent.click_activation;
     font_name = parent.font_name;
     font_size = parent.font_size;
     is_internal = parent.is_internal;

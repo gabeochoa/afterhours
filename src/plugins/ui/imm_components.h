@@ -32,14 +32,6 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
                   ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
-  // Always print debug name for tracking
-  static int div_count = 0;
-  if (++div_count < 100) {
-    fprintf(stderr, "DIV[%d]: jc=%d debug=%s\n", 
-            div_count, static_cast<int>(config.justify_content), config.debug_name.c_str());
-    fflush(stderr);
-  }
-
   if (config.size.is_default && config.label.empty())
     config.with_size(ComponentSize{children(), children()});
   if (config.size.is_default && !config.label.empty())
@@ -53,8 +45,8 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
 
 /// Orientation for separator widgets
 enum struct SeparatorOrientation {
-  Horizontal,  // Thin horizontal line (default)
-  Vertical,    // Thin vertical line
+  Horizontal, // Thin horizontal line (default)
+  Vertical,   // Thin vertical line
 };
 
 /// Creates a visual separator line between UI sections.
@@ -82,10 +74,10 @@ enum struct SeparatorOrientation {
 /// separator(ctx, mk(parent), SeparatorOrientation::Horizontal,
 ///           ComponentConfig{}.with_label("Settings"));
 /// ```
-ElementResult separator(HasUIContext auto &ctx, EntityParent ep_pair,
-                        SeparatorOrientation orientation =
-                            SeparatorOrientation::Horizontal,
-                        ComponentConfig config = ComponentConfig()) {
+ElementResult
+separator(HasUIContext auto &ctx, EntityParent ep_pair,
+          SeparatorOrientation orientation = SeparatorOrientation::Horizontal,
+          ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
   // Use styling defaults if available, otherwise use resolution-scaled default
@@ -93,7 +85,8 @@ ElementResult separator(HasUIContext auto &ctx, EntityParent ep_pair,
   auto &styling_defaults = UIStylingDefaults::get();
   Size separator_thickness = h720(DefaultSpacing::tiny().value * 0.25f);
 
-  if (auto def = styling_defaults.get_component_config(ComponentType::Separator);
+  if (auto def =
+          styling_defaults.get_component_config(ComponentType::Separator);
       def.has_value()) {
     // Use configured thickness from styling defaults
     if (!def->size.is_default) {
@@ -133,7 +126,7 @@ ElementResult separator(HasUIContext auto &ctx, EntityParent ep_pair,
   // If there's a label, create a labeled separator: [line] Label [line]
   if (!config.label.empty()) {
     std::string label_text = config.label;
-    config.label = "";  // Clear label from main container
+    config.label = ""; // Clear label from main container
 
     // Container should use Row layout for horizontal, Column for vertical
     config.with_flex_direction(orientation == SeparatorOrientation::Horizontal
@@ -184,7 +177,7 @@ ElementResult separator(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   // Simple separator line (no label)
-  config.with_skip_tabbing(true);  // Separators shouldn't be focusable
+  config.with_skip_tabbing(true); // Separators shouldn't be focusable
   _init_component(ctx, ep_pair, config, ComponentType::Separator, false,
                   "separator");
 
@@ -344,7 +337,7 @@ ElementResult checkbox_no_label(HasUIContext auto &ctx, EntityParent ep_pair,
   // Preserve the inherited font_size for accessibility compliance
   if (!config.has_font_override()) {
     config.font_name = UIComponent::SYMBOL_FONT;
-    config.font_size = 20.f;  // Use accessible minimum size
+    config.font_size = 20.f; // Use accessible minimum size
   }
 
   _init_component(ctx, ep_pair, config, ComponentType::CheckboxNoLabel, true,
@@ -1026,11 +1019,11 @@ enum class ProgressBarLabelStyle {
 
 // Progress bar - displays a value from 0.0 to 1.0 (or custom range)
 // Unlike slider, this is read-only (no interaction)
-ElementResult progress_bar(HasUIContext auto &ctx, EntityParent ep_pair,
-                           float value, ComponentConfig config = ComponentConfig(),
-                           ProgressBarLabelStyle label_style =
-                               ProgressBarLabelStyle::Percentage,
-                           float min_value = 0.f, float max_value = 1.f) {
+ElementResult progress_bar(
+    HasUIContext auto &ctx, EntityParent ep_pair, float value,
+    ComponentConfig config = ComponentConfig(),
+    ProgressBarLabelStyle label_style = ProgressBarLabelStyle::Percentage,
+    float min_value = 0.f, float max_value = 1.f) {
   auto [entity, parent] = deref(ep_pair);
 
   std::string original_label = config.label;
@@ -1041,9 +1034,10 @@ ElementResult progress_bar(HasUIContext auto &ctx, EntityParent ep_pair,
                   "progress_bar");
 
   // Normalize value to 0-1 range
-  float normalized = (max_value > min_value)
-                         ? std::clamp((value - min_value) / (max_value - min_value), 0.f, 1.f)
-                         : 0.f;
+  float normalized =
+      (max_value > min_value)
+          ? std::clamp((value - min_value) / (max_value - min_value), 0.f, 1.f)
+          : 0.f;
 
   // Generate label text
   std::string label_text;

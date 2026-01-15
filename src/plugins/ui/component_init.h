@@ -95,6 +95,12 @@ inline void apply_flags(Entity &entity, const ComponentConfig &config) {
     entity.addComponentIfMissing<SkipWhenTabbing>();
   if (config.select_on_focus)
     entity.addComponentIfMissing<SelectOnFocus>();
+  if (config.has_click_activation_override()) {
+    entity.addComponentIfMissing<HasClickActivationMode>(
+        config.click_activation);
+  } else {
+    entity.removeComponentIfExists<HasClickActivationMode>();
+  }
 
   if (config.hidden) {
     entity.addComponentIfMissing<ShouldHide>();
@@ -141,7 +147,8 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
   // Set background_hint for auto-contrast text color (Garnish integration)
   // Note: Check config directly since HasColor is added later in apply_config()
   if (config.auto_text_color) {
-    if (config.color_usage == Theme::Usage::Custom && config.custom_color.has_value()) {
+    if (config.color_usage == Theme::Usage::Custom &&
+        config.custom_color.has_value()) {
       lbl.set_background_hint(config.custom_color.value());
     } else if (Theme::is_valid(config.color_usage)) {
       lbl.set_background_hint(ctx.theme.from_usage(config.color_usage));
@@ -292,4 +299,3 @@ Component &_init_state(Entity &entity,
 } // namespace ui
 
 } // namespace afterhours
-

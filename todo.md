@@ -99,6 +99,7 @@ This document contains all TODO, FIXME, HACK, XXX, and NOTE comments found in th
 #### UI Systems (`src/plugins/ui/systems.h`)
 - **Line 27**: **Architecture - Code Organization** - UI system code should live inside input_system
 - **Line 176**: **Template System Limitation** - Likes current approach but wishes it worked better with Tags
+- **New**: **Feature - Mobile Input Support** - Define a mobile gesture model for act-on-press that preserves scroll/drag interactions when mobile support is added
 
 #### UI Providers (`src/plugins/ui/providers.h`)
 - **Line 88**: **Documentation Reference** - References message above for context (incomplete TODO)
@@ -183,9 +184,9 @@ This document contains all TODO, FIXME, HACK, XXX, and NOTE comments found in th
 - **Configurable gamepad deadzone** (`src/plugins/input_system.h:443`)
 - **API design improvements** (`src/entity_query.h:39-44`)
 
-**Total TODOs Found**: 45  
+**Total TODOs Found**: 46  
 **Total Notes Found**: 6  
 **Critical Issues**: 4  
 **Performance Issues**: 6  
-**Feature Requests**: 12  
-**Last Updated**: December 2024
+**Feature Requests**: 13  
+**Last Updated**: January 2026
