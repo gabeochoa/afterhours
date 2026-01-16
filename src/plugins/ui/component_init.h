@@ -165,6 +165,13 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
   } else {
     lbl.clear_text_stroke();
   }
+
+  // Set text shadow if configured
+  if (config.has_text_shadow()) {
+    lbl.set_text_shadow(config.text_shadow_config.value());
+  } else {
+    lbl.clear_text_shadow();
+  }
 }
 
 inline void apply_texture(Entity &entity, const ComponentConfig &config) {

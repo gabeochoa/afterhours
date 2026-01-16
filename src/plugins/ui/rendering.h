@@ -171,7 +171,8 @@ static inline RectangleType position_text(const ui::FontManager &fm,
   return position_text_ex(fm, text, container, alignment, margin_px).rect;
 }
 
-// Internal helper to draw text at a specific position (used by stroke and main text)
+// Internal helper to draw text at a specific position (used by stroke, shadow, and main text)
+// The 'sizing' rect contains any offset (shadow/stroke) that should be applied
 static inline void _draw_text_at_position(const ui::FontManager &fm,
                                           const std::string &text,
                                           RectangleType rect,
@@ -182,12 +183,17 @@ static inline void _draw_text_at_position(const ui::FontManager &fm,
   float fontSize = sizing.height;
   float spacing = 1.0f;
 
+  // Calculate offset between sizing and original rect (for shadow/stroke)
+  float offset_x = sizing.x - rect.x;
+  float offset_y = sizing.y - rect.y;
+
   Vector2Type startPos = {sizing.x, sizing.y};
   if (alignment == TextAlignment::Center) {
     Vector2Type textSize =
         measure_text_utf8(font, text.c_str(), fontSize, spacing);
-    startPos.x = rect.x + (rect.width - textSize.x) / 2.0f;
-    startPos.y = rect.y + (rect.height - textSize.y) / 2.0f;
+    // Apply centering within rect, THEN add the offset
+    startPos.x = rect.x + (rect.width - textSize.x) / 2.0f + offset_x;
+    startPos.y = rect.y + (rect.height - textSize.y) / 2.0f + offset_y;
   }
   draw_text_ex(font, text.c_str(), startPos, fontSize, spacing, color);
 }
@@ -197,7 +203,8 @@ static inline void draw_text_in_rect(const ui::FontManager &fm,
                                      RectangleType rect,
                                      TextAlignment alignment, Color color,
                                      bool show_debug_indicator = false,
-                                     const std::optional<TextStroke> &stroke = std::nullopt) {
+                                     const std::optional<TextStroke> &stroke = std::nullopt,
+                                     const std::optional<TextShadow> &shadow = std::nullopt) {
   TextPositionResult result =
       position_text_ex(fm, text, rect, alignment, Vector2Type{5.f, 5.f});
 
@@ -224,6 +231,15 @@ static inline void draw_text_in_rect(const ui::FontManager &fm,
   }
 
   RectangleType sizing = result.rect;
+
+  // Draw text shadow first (behind everything)
+  // Renders text at a single offset position to create a drop shadow effect
+  if (shadow.has_value() && shadow->has_shadow()) {
+    RectangleType shadow_sizing = sizing;
+    shadow_sizing.x += shadow->offset_x;
+    shadow_sizing.y += shadow->offset_y;
+    _draw_text_at_position(fm, text, rect, alignment, shadow_sizing, shadow->color);
+  }
 
   // Draw text stroke/outline if configured
   // Renders text at 8 offset positions to create an outline effect
@@ -649,9 +665,15 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         stroke->color = colors::opacity_pct(stroke->color, effective_opacity);
       }
 
+      // Prepare text shadow with opacity applied if needed
+      std::optional<TextShadow> shadow = hasLabel.text_shadow;
+      if (shadow.has_value() && effective_opacity < 1.0f) {
+        shadow->color = colors::opacity_pct(shadow->color, effective_opacity);
+      }
+
       draw_text_in_rect(font_manager, hasLabel.label.c_str(), draw_rect,
                         hasLabel.alignment, font_col, SHOW_TEXT_OVERFLOW_DEBUG,
-                        stroke);
+                        stroke, shadow);
     }
 
     if (entity.has<texture_manager::HasTexture>()) {

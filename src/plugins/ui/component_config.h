@@ -87,6 +87,9 @@ struct ComponentConfig {
   // Text stroke/outline configuration
   std::optional<TextStroke> text_stroke_config;
 
+  // Text drop shadow configuration
+  std::optional<TextShadow> text_shadow_config;
+
   ComponentConfig &with_label(const std::string &lbl) {
     label = lbl;
     return *this;
@@ -306,6 +309,35 @@ struct ComponentConfig {
   bool has_text_stroke() const {
     return text_stroke_config.has_value() &&
            text_stroke_config->has_stroke();
+  }
+
+  // Text drop shadow configuration methods
+  ComponentConfig &with_text_shadow(const TextShadow &shadow) {
+    text_shadow_config = shadow;
+    return *this;
+  }
+
+  ComponentConfig &with_text_shadow(Color color, float offset_x = 2.0f,
+                                    float offset_y = 2.0f) {
+    text_shadow_config = TextShadow{color, offset_x, offset_y};
+    return *this;
+  }
+
+  ComponentConfig &with_soft_text_shadow(float offset_x = 2.0f,
+                                         float offset_y = 2.0f) {
+    text_shadow_config = TextShadow::soft(offset_x, offset_y);
+    return *this;
+  }
+
+  ComponentConfig &with_hard_text_shadow(float offset_x = 2.0f,
+                                         float offset_y = 2.0f) {
+    text_shadow_config = TextShadow::hard(offset_x, offset_y);
+    return *this;
+  }
+
+  bool has_text_shadow() const {
+    return text_shadow_config.has_value() &&
+           text_shadow_config->has_shadow();
   }
 
   bool has_padding() const {

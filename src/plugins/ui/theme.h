@@ -32,6 +32,29 @@ struct TextStroke {
   }
 };
 
+// Text drop shadow configuration for labels
+// Renders a shadow behind text by drawing the text at an offset
+struct TextShadow {
+  Color color = Color{0, 0, 0, 128};
+  float offset_x = 2.0f;
+  float offset_y = 2.0f;
+
+  bool has_shadow() const { return color.a > 0; }
+
+  // Factory methods for common use cases
+  static TextShadow with_color(Color c, float ox = 2.0f, float oy = 2.0f) {
+    return TextShadow{c, ox, oy};
+  }
+
+  static TextShadow soft(float ox = 2.0f, float oy = 2.0f) {
+    return TextShadow{Color{0, 0, 0, 80}, ox, oy};
+  }
+
+  static TextShadow hard(float ox = 2.0f, float oy = 2.0f) {
+    return TextShadow{Color{0, 0, 0, 180}, ox, oy};
+  }
+};
+
 // Font configuration for a specific language
 struct FontConfig {
   // TODO: Investigate using FontID enum instead of strings for type safety

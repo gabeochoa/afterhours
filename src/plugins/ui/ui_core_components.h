@@ -331,6 +331,10 @@ struct HasLabel : BaseComponent {
   // When set, renders text outline behind the main text for better visibility
   std::optional<TextStroke> text_stroke;
 
+  // Text drop shadow configuration
+  // When set, renders a shadow behind the text for depth/legibility
+  std::optional<TextShadow> text_shadow;
+
   HasLabel(const std::string &str, bool is_disabled_ = false)
       : label(str), is_disabled(is_disabled_) {}
   HasLabel() : label(""), is_disabled(false) {}
@@ -387,6 +391,26 @@ struct HasLabel : BaseComponent {
 
   bool has_text_stroke() const {
     return text_stroke.has_value() && text_stroke->has_stroke();
+  }
+
+  auto &set_text_shadow(const TextShadow &shadow) {
+    text_shadow = shadow;
+    return *this;
+  }
+
+  auto &set_text_shadow(Color color, float offset_x = 2.0f,
+                        float offset_y = 2.0f) {
+    text_shadow = TextShadow{color, offset_x, offset_y};
+    return *this;
+  }
+
+  auto &clear_text_shadow() {
+    text_shadow = std::nullopt;
+    return *this;
+  }
+
+  bool has_text_shadow() const {
+    return text_shadow.has_value() && text_shadow->has_shadow();
   }
 };
 
