@@ -18,6 +18,20 @@ enum class ClickActivationMode {
   Release,
 };
 
+// Text stroke/outline configuration for labels
+// Renders text with an outline effect by drawing the text at offsets
+struct TextStroke {
+  Color color = Color{0, 0, 0, 255};
+  float thickness = 2.0f;
+
+  bool has_stroke() const { return thickness > 0.0f && color.a > 0; }
+
+  // Factory method for common use case
+  static TextStroke with_color(Color c, float t = 2.0f) {
+    return TextStroke{c, t};
+  }
+};
+
 // Font configuration for a specific language
 struct FontConfig {
   // TODO: Investigate using FontID enum instead of strings for type safety

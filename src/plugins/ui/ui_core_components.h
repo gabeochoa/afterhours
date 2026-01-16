@@ -12,6 +12,7 @@
 #include "../../logging.h"
 #include "../color.h"
 #include "layout_types.h"
+#include "theme.h"
 
 namespace afterhours {
 
@@ -326,6 +327,10 @@ struct HasLabel : BaseComponent {
   // When set, this color is used instead of theme font color or auto-contrast.
   std::optional<Color> explicit_text_color;
 
+  // Text stroke/outline configuration
+  // When set, renders text outline behind the main text for better visibility
+  std::optional<TextStroke> text_stroke;
+
   HasLabel(const std::string &str, bool is_disabled_ = false)
       : label(str), is_disabled(is_disabled_) {}
   HasLabel() : label(""), is_disabled(false) {}
@@ -363,6 +368,25 @@ struct HasLabel : BaseComponent {
   auto &clear_explicit_text_color() {
     explicit_text_color = std::nullopt;
     return *this;
+  }
+
+  auto &set_text_stroke(const TextStroke &stroke) {
+    text_stroke = stroke;
+    return *this;
+  }
+
+  auto &set_text_stroke(Color color, float thickness = 2.0f) {
+    text_stroke = TextStroke{color, thickness};
+    return *this;
+  }
+
+  auto &clear_text_stroke() {
+    text_stroke = std::nullopt;
+    return *this;
+  }
+
+  bool has_text_stroke() const {
+    return text_stroke.has_value() && text_stroke->has_stroke();
   }
 };
 

@@ -84,6 +84,9 @@ struct ComponentConfig {
   // Border configuration
   std::optional<Border> border_config;
 
+  // Text stroke/outline configuration
+  std::optional<TextStroke> text_stroke_config;
+
   ComponentConfig &with_label(const std::string &lbl) {
     label = lbl;
     return *this;
@@ -287,6 +290,22 @@ struct ComponentConfig {
                                     Color color = Color{0, 0, 0, 60}) {
     shadow_config = Shadow::soft(offset_x, offset_y, blur, color);
     return *this;
+  }
+
+  // Text stroke/outline configuration methods
+  ComponentConfig &with_text_stroke(const TextStroke &stroke) {
+    text_stroke_config = stroke;
+    return *this;
+  }
+
+  ComponentConfig &with_text_stroke(Color color, float thickness = 2.0f) {
+    text_stroke_config = TextStroke{color, thickness};
+    return *this;
+  }
+
+  bool has_text_stroke() const {
+    return text_stroke_config.has_value() &&
+           text_stroke_config->has_stroke();
   }
 
   bool has_padding() const {

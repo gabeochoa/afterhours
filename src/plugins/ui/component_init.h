@@ -158,6 +158,13 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
   } else {
     lbl.clear_background_hint();
   }
+
+  // Set text stroke if configured
+  if (config.has_text_stroke()) {
+    lbl.set_text_stroke(config.text_stroke_config.value());
+  } else {
+    lbl.clear_text_stroke();
+  }
 }
 
 inline void apply_texture(Entity &entity, const ComponentConfig &config) {

@@ -171,11 +171,33 @@ static inline RectangleType position_text(const ui::FontManager &fm,
   return position_text_ex(fm, text, container, alignment, margin_px).rect;
 }
 
+// Internal helper to draw text at a specific position (used by stroke and main text)
+static inline void _draw_text_at_position(const ui::FontManager &fm,
+                                          const std::string &text,
+                                          RectangleType rect,
+                                          TextAlignment alignment,
+                                          RectangleType sizing, Color color) {
+  // Always use UTF-8 aware rendering (works for all text including CJK)
+  Font font = fm.get_active_font();
+  float fontSize = sizing.height;
+  float spacing = 1.0f;
+
+  Vector2Type startPos = {sizing.x, sizing.y};
+  if (alignment == TextAlignment::Center) {
+    Vector2Type textSize =
+        measure_text_utf8(font, text.c_str(), fontSize, spacing);
+    startPos.x = rect.x + (rect.width - textSize.x) / 2.0f;
+    startPos.y = rect.y + (rect.height - textSize.y) / 2.0f;
+  }
+  draw_text_ex(font, text.c_str(), startPos, fontSize, spacing, color);
+}
+
 static inline void draw_text_in_rect(const ui::FontManager &fm,
                                      const std::string &text,
                                      RectangleType rect,
                                      TextAlignment alignment, Color color,
-                                     bool show_debug_indicator = false) {
+                                     bool show_debug_indicator = false,
+                                     const std::optional<TextStroke> &stroke = std::nullopt) {
   TextPositionResult result =
       position_text_ex(fm, text, rect, alignment, Vector2Type{5.f, 5.f});
 
@@ -203,31 +225,29 @@ static inline void draw_text_in_rect(const ui::FontManager &fm,
 
   RectangleType sizing = result.rect;
 
-  // Check if text contains CJK characters and use appropriate rendering
-  if (afterhours::ui::text_utils::contains_cjk(text)) {
-    // For CJK text, we need to handle UTF-8 properly
-    // Use the font's active font and render with proper spacing
-    Font font = fm.get_active_font();
-    float fontSize = sizing.height;
-    float spacing = 1.0f;
+  // Draw text stroke/outline if configured
+  // Renders text at 8 offset positions to create an outline effect
+  if (stroke.has_value() && stroke->has_stroke()) {
+    float t = stroke->thickness;
+    Color stroke_color = stroke->color;
 
-    // Calculate starting position based on alignment
-    Vector2Type startPos = {sizing.x, sizing.y};
-    if (alignment == TextAlignment::Center) {
-      // Center the text within the rectangle
-      Vector2Type textSize =
-          measure_text_utf8(font, text.c_str(), fontSize, spacing);
-      startPos.x = rect.x + (rect.width - textSize.x) / 2.0f;
-      startPos.y = rect.y + (rect.height - textSize.y) / 2.0f;
+    // 8-direction offsets for stroke rendering
+    const std::array<std::pair<float, float>, 8> offsets = {{
+        {-t, -t}, {0, -t}, {t, -t},
+        {-t, 0},          {t, 0},
+        {-t, t},  {0, t},  {t, t}
+    }};
+
+    for (const auto &[ox, oy] : offsets) {
+      RectangleType offset_sizing = sizing;
+      offset_sizing.x += ox;
+      offset_sizing.y += oy;
+      _draw_text_at_position(fm, text, rect, alignment, offset_sizing, stroke_color);
     }
-
-    // Draw the text using draw_text_ex which handles UTF-8 properly
-    draw_text_ex(font, text.c_str(), startPos, fontSize, spacing, color);
-  } else {
-    // For non-CJK text, use the existing method
-    draw_text_ex(fm.get_active_font(), text.c_str(),
-                 Vector2Type{sizing.x, sizing.y}, sizing.height, 1.f, color);
   }
+
+  // Draw main text on top
+  _draw_text_at_position(fm, text, rect, alignment, sizing, color);
 }
 
 static inline Vector2Type
@@ -622,8 +642,16 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       if (effective_opacity < 1.0f) {
         font_col = colors::opacity_pct(font_col, effective_opacity);
       }
+
+      // Prepare text stroke with opacity applied if needed
+      std::optional<TextStroke> stroke = hasLabel.text_stroke;
+      if (stroke.has_value() && effective_opacity < 1.0f) {
+        stroke->color = colors::opacity_pct(stroke->color, effective_opacity);
+      }
+
       draw_text_in_rect(font_manager, hasLabel.label.c_str(), draw_rect,
-                        hasLabel.alignment, font_col, SHOW_TEXT_OVERFLOW_DEBUG);
+                        hasLabel.alignment, font_col, SHOW_TEXT_OVERFLOW_DEBUG,
+                        stroke);
     }
 
     if (entity.has<texture_manager::HasTexture>()) {
