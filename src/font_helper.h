@@ -12,7 +12,9 @@ namespace afterhours {
 using Font = raylib::Font;
 using vec2 = raylib::Vector2;
 inline raylib::Font load_font_from_file(const char *file) {
-  return raylib::LoadFont(file);
+  raylib::Font font = raylib::LoadFont(file);
+  raylib::SetTextureFilter(font.texture, raylib::TEXTURE_FILTER_BILINEAR);
+  return font;
 }
 
 // Add codepoint-based font loading for CJK support
@@ -26,7 +28,9 @@ inline raylib::Font load_font_from_file_with_codepoints(const char *file,
               codepoint_count);
     return raylib::GetFontDefault();
   }
-  return raylib::LoadFontEx(file, 32, codepoints, codepoint_count);
+  raylib::Font font = raylib::LoadFontEx(file, 32, codepoints, codepoint_count);
+  raylib::SetTextureFilter(font.texture, raylib::TEXTURE_FILTER_BILINEAR);
+  return font;
 }
 
 // Utility function to remove duplicate codepoints from an array
@@ -103,6 +107,7 @@ inline raylib::Font load_font_for_string(const std::string &content,
 
   raylib::Font font = raylib::LoadFontEx(
       font_filename.c_str(), size, codepointsNoDups, codepointNoDupsCounts);
+  raylib::SetTextureFilter(font.texture, raylib::TEXTURE_FILTER_BILINEAR);
 
   // Free the deduplicated codepoints array
   free(codepointsNoDups);
