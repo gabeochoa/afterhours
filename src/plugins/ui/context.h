@@ -65,6 +65,11 @@ template <typename InputAction> struct UIContext : BaseComponent {
   InputAction last_action;
   InputBitset all_actions;
 
+  std::vector<EntityID> modal_stack;
+  size_t modal_sequence = 0;
+  std::vector<int> render_layer_stack;
+  int render_layer_offset = 0;
+
   Theme theme;
   // TODO: Add styling defaults back when circular dependency is resolved
   // imm::UIStylingDefaults styling_defaults;
@@ -94,6 +99,31 @@ template <typename InputAction> struct UIContext : BaseComponent {
     active_id = ROOT;
     focused_ids.clear();
     render_cmds.clear();
+  }
+
+  void begin_frame() {
+    modal_stack.clear();
+    modal_sequence = 0;
+    render_layer_stack.clear();
+    render_layer_offset = 0;
+  }
+
+  [[nodiscard]] bool is_modal_active() const { return !modal_stack.empty(); }
+  [[nodiscard]] EntityID top_modal() const {
+    return modal_stack.empty() ? ROOT : modal_stack.back();
+  }
+
+  void push_render_layer_offset(int offset) {
+    render_layer_stack.push_back(render_layer_offset);
+    render_layer_offset = offset;
+  }
+  void pop_render_layer_offset() {
+    if (render_layer_stack.empty()) {
+      render_layer_offset = 0;
+      return;
+    }
+    render_layer_offset = render_layer_stack.back();
+    render_layer_stack.pop_back();
   }
 
   void try_to_grab(EntityID id) {

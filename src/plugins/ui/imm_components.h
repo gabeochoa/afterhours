@@ -9,6 +9,7 @@
 
 #include "../../ecs.h"
 #include "../input_system.h"
+#include "../window_manager.h"
 #include "component_init.h"
 #include "components.h"
 #include "element_result.h"
@@ -1349,6 +1350,405 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   text = state.text();
   entity.template addComponentIfMissing<FocusClusterRoot>();
   return ElementResult{state.changed_since, entity};
+}
+
+template <typename InputAction>
+inline bool is_modal_active(const UIContext<InputAction> &ctx) {
+  return ctx.is_modal_active();
+}
+
+template <typename InputAction>
+inline EntityID get_top_modal(const UIContext<InputAction> &ctx) {
+  return ctx.top_modal();
+}
+
+inline void _push_modal_stack(HasUIContext auto &ctx, EntityID entity_id) {
+  if (std::find(ctx.modal_stack.begin(), ctx.modal_stack.end(), entity_id) ==
+      ctx.modal_stack.end()) {
+    ctx.modal_stack.push_back(entity_id);
+  }
+}
+
+inline void _pop_modal_stack(HasUIContext auto &ctx, EntityID entity_id) {
+  auto it =
+      std::find(ctx.modal_stack.begin(), ctx.modal_stack.end(), entity_id);
+  if (it != ctx.modal_stack.end())
+    ctx.modal_stack.erase(it);
+}
+
+// TODO this is a function we expect people to call and it should be public 
+inline void _close_modal(HasUIContext auto &ctx, EntityID entity_id,
+                         DialogResult result = DialogResult::Dismissed) {
+  OptEntity opt = EntityHelper::getEntityForID(entity_id);
+  if (!opt.has_value())
+    return;
+  Entity &entity = opt.asE();
+  if (!entity.has<DialogState>() || !entity.has<IsModal>()) {
+    log_warn("close_modal: entity_id passed in is not a modal ({})", entity_id);
+    return;
+  }
+
+  entity.get<DialogState>().result = result;
+  entity.get<IsModal>().active = false;
+
+  _pop_modal_stack(ctx, entity.id);
+}
+
+inline void _close_modal(HasUIContext auto &ctx, EntityParent ep_pair,
+                         DialogResult result = DialogResult::Dismissed) {
+  auto [entity, parent] = deref(ep_pair);
+  _close_modal(ctx, entity.id, result);
+}
+
+inline void _end_modal() {}
+
+// TODO does this actually scale with the window size?
+inline Vector2Type _modal_size(float base_width, float base_height) {
+  auto res = window_manager::fetch_current_resolution();
+  return {static_cast<float>(res.width) * (base_width / 1280.0f),
+          static_cast<float>(res.height) * (base_height / 720.0f)};
+}
+
+inline ElementResult begin_modal(HasUIContext auto &ctx, EntityParent ep_pair,
+                                 const std::string &title,
+                                 ModalOptions options = ModalOptions()) {
+  auto [entity, parent] = deref(ep_pair);
+  auto &modal = entity.addComponentIfMissing<IsModal>(options);
+  auto &state = entity.addComponentIfMissing<DialogState>();
+
+  modal.apply_options(options);
+  modal.open_order = ctx.modal_sequence++;
+
+  if (state.result != DialogResult::Pending) {
+    modal.active = false;
+    return ElementResult{false, entity};
+  }
+
+  modal.active = true;
+  _push_modal_stack(ctx, entity.id);
+
+  // Push render layer offset so all modal content renders above non-modal UI
+  ctx.push_render_layer_offset(options.render_layer);
+
+  ComponentConfig modal_config;
+  if (options.auto_size) {
+    modal_config.with_size(ComponentSize{children(), children()});
+  } else {
+    modal_config.with_size(
+        ComponentSize{pixels(options.size.x), pixels(options.size.y)});
+  }
+
+  Vector2Type pos = options.position;
+  bool should_center = options.center_on_screen;
+  if (options.draggable && entity.has<ModalDragState>() &&
+      entity.get<ModalDragState>().has_dragged) {
+    should_center = false;
+  }
+
+  if (should_center) {
+    auto res = window_manager::fetch_current_resolution();
+    pos.x = (static_cast<float>(res.width) - options.size.x) * 0.5f;
+    pos.y = (static_cast<float>(res.height) - options.size.y) * 0.5f;
+  }
+
+  modal_config.with_absolute_position()
+      .with_flex_direction(FlexDirection::Column)
+      .with_padding(Spacing::md)
+      .with_background(Theme::Usage::Surface)
+      .with_roundness(0.08f)
+      .with_debug_name("modal_root");
+
+  if (should_center) {
+    modal_config.with_translate(pos.x, pos.y);
+  }
+
+  auto modal_root = div(ctx, ep_pair, modal_config);
+
+  auto header = div(ctx, mk(modal_root.ent(), 0),
+                    ComponentConfig::inherit_from(modal_config, "modal_header")
+                        .with_size(ComponentSize{percent(1.0f), pixels(40)})
+                        .with_background(Theme::Usage::Secondary)
+                        .with_flex_direction(FlexDirection::Row)
+                        .with_align_items(AlignItems::Center)
+                        .with_justify_content(JustifyContent::SpaceBetween)
+                        .with_padding(Spacing::sm)
+                        .with_debug_name("modal_header"));
+
+  // Use flex_grow via percent width minus space for close button
+  Size title_width = options.show_close_button ? percent(0.9f) : percent(1.0f);
+  div(ctx, mk(header.ent(), 0),
+      ComponentConfig::inherit_from(modal_config, "modal_title")
+          .with_size(ComponentSize{title_width, percent(1.0f)})
+          .with_label(title)
+          .with_background(Theme::Usage::None)
+          .with_alignment(TextAlignment::Left)
+          .with_auto_text_color(true)
+          .with_skip_tabbing(true)
+          .with_debug_name("modal_title"));
+
+  if (options.show_close_button) {
+    if (button(ctx, mk(header.ent(), 1),
+               ComponentConfig::inherit_from(modal_config, "modal_close")
+                   .with_label("X")
+                   .with_size(ComponentSize{pixels(32), pixels(32)})
+                   .with_background(Theme::Usage::Accent)
+                   .with_skip_tabbing(true)
+                   .with_debug_name("modal_close_btn"))) {
+      _close_modal(ctx, ep_pair, DialogResult::Dismissed);
+    }
+  }
+
+  if (options.draggable) {
+    modal_root.ent().template addComponentIfMissing<ModalDragState>();
+    header.ent().template addComponentIfMissing<HasDragListener>(
+        [&ctx, modal_id = entity.id](Entity &) {
+          auto &modal_ent = EntityHelper::getEntityForIDEnforce(modal_id);
+          auto &drag = modal_ent.addComponentIfMissing<ModalDragState>();
+          auto &mods = modal_ent.addComponentIfMissing<HasUIModifiers>();
+          if (!drag.dragging) {
+            drag.dragging = true;
+            drag.has_dragged = true;
+            drag.last_mouse = ctx.mouse.pos;
+            return;
+          }
+          float dx = ctx.mouse.pos.x - drag.last_mouse.x;
+          float dy = ctx.mouse.pos.y - drag.last_mouse.y;
+          mods.translate_x += dx;
+          mods.translate_y += dy;
+          drag.last_mouse = ctx.mouse.pos;
+        });
+  }
+
+  Size body_height = options.auto_size ? children() : percent(1.0f);
+  auto body = div(ctx, mk(modal_root.ent(), 1),
+                  ComponentConfig::inherit_from(modal_config, "modal_body")
+                      .with_size(ComponentSize{percent(1.0f), body_height})
+                      .with_background(Theme::Usage::None)
+                      .with_padding(Spacing::md)
+                      .with_debug_name("modal_body"));
+
+  return ElementResult{true, body.ent()};
+}
+
+inline ElementResult message_box(HasUIContext auto &ctx, EntityParent ep_pair,
+                                 const std::string &title,
+                                 const std::string &message,
+                                 DialogResult &out_result) {
+  auto [entity, parent] = deref(ep_pair);
+  auto &state = entity.addComponentIfMissing<DialogState>();
+
+  if (state.result != DialogResult::Pending) {
+    out_result = state.result;
+    return ElementResult{true, entity};
+  }
+
+  ModalOptions options;
+  options.size = _modal_size(420.0f, 200.0f);
+  auto body = begin_modal(ctx, ep_pair, title, options);
+  if (!body) {
+    out_result = state.result;
+    return ElementResult{state.result != DialogResult::Pending, entity};
+  }
+
+  div(ctx, mk(body.ent(), 0),
+      ComponentConfig{}
+          .with_label(message)
+          .with_size(ComponentSize{percent(1.0f), h720(24)})
+          .with_background(Theme::Usage::None)
+          .with_alignment(TextAlignment::Left)
+          .with_auto_text_color(true)
+          .with_debug_name("message_box_text"));
+
+  auto actions = div(ctx, mk(body.ent(), 1),
+                     ComponentConfig{}
+                         .with_size(ComponentSize{percent(1.0f), pixels(50)})
+                         .with_flex_direction(FlexDirection::Row)
+                         .with_justify_content(JustifyContent::FlexEnd)
+                         .with_align_items(AlignItems::Center)
+                         .with_background(Theme::Usage::None)
+                         .with_debug_name("message_box_actions"));
+
+  if (button(ctx, mk(actions.ent(), 0),
+             ComponentConfig{}
+                 .with_label("OK")
+                 .with_size(ComponentSize{pixels(120), pixels(36)})
+                 .with_background(Theme::Usage::Accent)
+                 .with_debug_name("message_box_ok"))) {
+    _close_modal(ctx, ep_pair, DialogResult::Confirmed);
+  }
+
+  using InputAction =
+      typename std::remove_reference_t<decltype(ctx)>::value_type;
+  if (ctx.top_modal() == entity.id && ctx.pressed(InputAction::WidgetPress)) {
+    _close_modal(ctx, ep_pair, DialogResult::Confirmed);
+  }
+
+  out_result = state.result;
+  return ElementResult{state.result != DialogResult::Pending, entity};
+}
+
+inline ElementResult confirm_dialog(HasUIContext auto &ctx, EntityParent ep_pair,
+                                    const std::string &title,
+                                    const std::string &message,
+                                    bool yes_no_buttons,
+                                    DialogResult &out_result) {
+  auto [entity, parent] = deref(ep_pair);
+  auto &state = entity.addComponentIfMissing<DialogState>();
+
+  if (state.result != DialogResult::Pending) {
+    out_result = state.result;
+    return ElementResult{true, entity};
+  }
+
+  ModalOptions options;
+  options.size = _modal_size(440.0f, 220.0f);
+  auto body = begin_modal(ctx, ep_pair, title, options);
+  if (!body) {
+    out_result = state.result;
+    return ElementResult{state.result != DialogResult::Pending, entity};
+  }
+
+  div(ctx, mk(body.ent(), 0),
+      ComponentConfig{}
+          .with_label(message)
+          .with_size(ComponentSize{percent(1.0f), h720(24)})
+          .with_background(Theme::Usage::None)
+          .with_alignment(TextAlignment::Left)
+          .with_auto_text_color(true)
+          .with_debug_name("confirm_dialog_text"));
+
+  auto actions = div(ctx, mk(body.ent(), 1),
+                     ComponentConfig{}
+                         .with_size(ComponentSize{percent(1.0f), pixels(50)})
+                         .with_flex_direction(FlexDirection::Row)
+                         .with_justify_content(JustifyContent::FlexEnd)
+                         .with_align_items(AlignItems::Center)
+                         .with_background(Theme::Usage::None)
+                         .with_debug_name("confirm_dialog_actions"));
+
+  // TODO translate
+  const std::string ok_label = yes_no_buttons ? "Yes" : "OK";
+  const std::string cancel_label = yes_no_buttons ? "No" : "Cancel";
+
+  if (button(ctx, mk(actions.ent(), 0),
+             ComponentConfig{}
+                 .with_label(ok_label)
+                 .with_size(ComponentSize{pixels(120), pixels(36)})
+                 .with_background(Theme::Usage::Accent)
+                 .with_margin(Margin{.right = DefaultSpacing::small()})
+                 .with_debug_name("confirm_dialog_ok"))) {
+    _close_modal(ctx, ep_pair, DialogResult::Confirmed);
+  }
+
+  if (button(ctx, mk(actions.ent(), 1),
+             ComponentConfig{}
+                 .with_label(cancel_label)
+                 .with_size(ComponentSize{pixels(120), pixels(36)})
+                 .with_background(Theme::Usage::Secondary)
+                 .with_debug_name("confirm_dialog_cancel"))) {
+    _close_modal(ctx, ep_pair, DialogResult::Cancelled);
+  }
+
+  using InputAction =
+      typename std::remove_reference_t<decltype(ctx)>::value_type;
+  if (ctx.top_modal() == entity.id && ctx.pressed(InputAction::WidgetPress)) {
+    _close_modal(ctx, ep_pair, DialogResult::Confirmed);
+  }
+
+  out_result = state.result;
+  return ElementResult{state.result != DialogResult::Pending, entity};
+}
+
+inline ElementResult input_dialog(HasUIContext auto &ctx, EntityParent ep_pair,
+                                  const std::string &title,
+                                  const std::string &prompt,
+                                  std::string &in_out_value,
+                                  DialogResult &out_result) {
+  auto [entity, parent] = deref(ep_pair);
+  auto &state = entity.addComponentIfMissing<DialogState>();
+
+  if (!state.input_initialized) {
+    state.input_value = in_out_value;
+    state.input_initialized = true;
+  }
+
+  if (state.result != DialogResult::Pending) {
+    out_result = state.result;
+    if (state.result == DialogResult::Confirmed) {
+      in_out_value = state.input_value;
+    }
+    return ElementResult{true, entity};
+  }
+
+  ModalOptions options;
+  options.size = _modal_size(460.0f, 240.0f);
+  auto body = begin_modal(ctx, ep_pair, title, options);
+  if (!body) {
+    out_result = state.result;
+    return ElementResult{state.result != DialogResult::Pending, entity};
+  }
+
+  div(ctx, mk(body.ent(), 0),
+      ComponentConfig{}
+          .with_label(prompt)
+          .with_size(ComponentSize{percent(1.0f), h720(24)})
+          .with_background(Theme::Usage::None)
+          .with_alignment(TextAlignment::Left)
+          .with_auto_text_color(true)
+          .with_debug_name("input_dialog_prompt"));
+
+  auto input_row = div(ctx, mk(body.ent(), 1),
+                       ComponentConfig{}
+                           .with_size(ComponentSize{percent(1.0f), pixels(50)})
+                           .with_flex_direction(FlexDirection::Column)
+                           .with_background(Theme::Usage::None)
+                           .with_debug_name("input_dialog_field"));
+
+  auto input_result =
+      text_input(ctx, mk(input_row.ent(), 0), state.input_value,
+                 ComponentConfig{}
+                     .with_size(ComponentSize{percent(1.0f), pixels(45)})
+                     .with_background(Theme::Usage::Primary)
+                     .with_debug_name("input_dialog_text_input"));
+
+  input_result.ent().template addComponentIfMissing<HasTextInputListener>(
+      nullptr, [&ctx, entity_id = entity.id](Entity &) {
+        _close_modal(ctx, entity_id, DialogResult::Confirmed);
+      });
+
+  auto actions = div(ctx, mk(body.ent(), 2),
+                     ComponentConfig{}
+                         .with_size(ComponentSize{percent(1.0f), pixels(50)})
+                         .with_flex_direction(FlexDirection::Row)
+                         .with_justify_content(JustifyContent::FlexEnd)
+                         .with_align_items(AlignItems::Center)
+                         .with_background(Theme::Usage::None)
+                         .with_debug_name("input_dialog_actions"));
+
+  if (button(ctx, mk(actions.ent(), 0),
+             ComponentConfig{}
+                 .with_label("OK")
+                 .with_size(ComponentSize{pixels(120), pixels(36)})
+                 .with_background(Theme::Usage::Accent)
+                 .with_margin(Margin{.right = DefaultSpacing::small()})
+                 .with_debug_name("input_dialog_ok"))) {
+    _close_modal(ctx, ep_pair, DialogResult::Confirmed);
+  }
+
+  if (button(ctx, mk(actions.ent(), 1),
+             ComponentConfig{}
+                 .with_label("Cancel")
+                 .with_size(ComponentSize{pixels(120), pixels(36)})
+                 .with_background(Theme::Usage::Secondary)
+                 .with_debug_name("input_dialog_cancel"))) {
+    _close_modal(ctx, ep_pair, DialogResult::Cancelled);
+  }
+
+  out_result = state.result;
+  if (state.result == DialogResult::Confirmed) {
+    in_out_value = state.input_value;
+  }
+  return ElementResult{state.result != DialogResult::Pending, entity};
 }
 
 } // namespace imm

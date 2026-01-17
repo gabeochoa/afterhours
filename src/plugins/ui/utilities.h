@@ -77,6 +77,12 @@ constexpr static InputValidationMode validation_mode =
     }                                                                          \
   } while (0);
 
+template <typename InputAction> static inline bool should_close_on_escape() {
+  auto *ui_context =
+      EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+  return !ui_context || !ui_context->is_modal_active();
+}
+
 template <typename InputAction>
 static void add_singleton_components(Entity &entity) {
   entity.addComponent<UIContext<InputAction>>();
@@ -124,6 +130,8 @@ static void register_after_ui_updates(SystemManager &sm) {
     sm.register_update_system(std::make_unique<ui::RunAutoLayout>());
     sm.register_update_system(
         std::make_unique<ui::TrackIfComponentWillBeRendered<InputAction>>());
+    sm.register_update_system(
+        std::make_unique<ui::HandleModalDismiss<InputAction>>());
     //
     sm.register_update_system(
         std::make_unique<ui::HandleTabbing<InputAction>>());
