@@ -151,6 +151,7 @@ inline void DrawRectangleCustom(const Rectangle rec,
   }
 }
 
+
 } // namespace raylib
 #endif
 
@@ -244,6 +245,27 @@ inline void draw_texture_npatch(const raylib::Texture2D texture,
                             raylib::Vector2{0.0f, 0.0f}, 0.0f, tint);
 }
 
+// Draw a ring segment (arc with thickness)
+// centerX, centerY: center of the ring
+// innerRadius, outerRadius: inner and outer radii
+// startAngle, endAngle: angles in degrees (0 = right, counterclockwise)
+// segments: smoothness (more = smoother)
+inline void draw_ring_segment(float centerX, float centerY, float innerRadius,
+                              float outerRadius, float startAngle,
+                              float endAngle, int segments, Color color) {
+  // Use raylib's DrawRing with start/end angles for arc
+  raylib::DrawRing(raylib::Vector2{centerX, centerY}, innerRadius, outerRadius,
+                   startAngle, endAngle, segments, color);
+}
+
+// Draw a full ring (circle with hole)
+inline void draw_ring(float centerX, float centerY, float innerRadius,
+                      float outerRadius, int segments, Color color) {
+  // Full circle: 0 to 360 degrees
+  raylib::DrawRing(raylib::Vector2{centerX, centerY}, innerRadius, outerRadius,
+                   0.0f, 360.0f, segments, color);
+}
+
 inline raylib::Font get_default_font() { return raylib::GetFontDefault(); }
 inline raylib::Font get_unset_font() { return raylib::GetFontDefault(); }
 
@@ -264,6 +286,9 @@ inline void draw_rectangle_rounded_lines(const RectangleType, const float,
                                          const std::bitset<4>) {}
 inline void draw_texture_npatch(const afterhours::Texture, const RectangleType,
                                 int, int, int, int, const Color) {}
+inline void draw_ring_segment(float, float, float, float, float, float, int,
+                              Color) {}
+inline void draw_ring(float, float, float, float, int, Color) {}
 inline afterhours::Font get_default_font() { return afterhours::Font(); }
 inline afterhours::Font get_unset_font() { return afterhours::Font(); }
 #endif

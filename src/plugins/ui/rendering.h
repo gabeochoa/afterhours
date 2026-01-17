@@ -625,6 +625,46 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                         nine_slice.right, nine_slice.bottom, tint);
   }
 
+  void render_circular_progress(const Entity &entity, RectangleType draw_rect,
+                                float effective_opacity) const {
+    if (!entity.has<HasCircularProgressState>()) {
+      return;
+    }
+
+    const HasCircularProgressState &state =
+        entity.get<HasCircularProgressState>();
+
+    // Calculate center and radius from the draw_rect
+    float centerX = draw_rect.x + draw_rect.width / 2.0f;
+    float centerY = draw_rect.y + draw_rect.height / 2.0f;
+    float outerRadius = std::min(draw_rect.width, draw_rect.height) / 2.0f;
+    float innerRadius = outerRadius - state.thickness;
+    if (innerRadius < 0.0f)
+      innerRadius = 0.0f;
+
+    // Apply opacity to colors
+    Color track_color = state.track_color;
+    Color fill_color = state.fill_color;
+    if (effective_opacity < 1.0f) {
+      track_color = colors::opacity_pct(track_color, effective_opacity);
+      fill_color = colors::opacity_pct(fill_color, effective_opacity);
+    }
+
+    // Calculate segments based on radius for smoothness
+    int segments = std::max(32, static_cast<int>(outerRadius * 0.5f));
+
+    // Draw background track (full circle)
+    draw_ring(centerX, centerY, innerRadius, outerRadius, segments,
+              track_color);
+
+    // Draw progress fill (arc from start_angle)
+    if (state.value > 0.001f) {
+      float end_angle = state.start_angle + (state.value * 360.0f);
+      draw_ring_segment(centerX, centerY, innerRadius, outerRadius,
+                        state.start_angle, end_angle, segments, fill_color);
+    }
+  }
+
   void render_bevel(const Entity &entity, RectangleType draw_rect,
                     float effective_opacity) const {
     if (!entity.has<HasBevelBorder>())
@@ -699,6 +739,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
     }
 
+
     auto corner_settings = entity.has<HasRoundedCorners>()
                                ? entity.get<HasRoundedCorners>().get()
                                : std::bitset<4>().reset();
@@ -753,6 +794,9 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     }
 
     render_bevel(entity, draw_rect, effective_opacity);
+
+    // Render circular progress if present (uses ring primitives instead of rectangles)
+    render_circular_progress(entity, draw_rect, effective_opacity);
 
     if (entity.has<HasBorder>()) {
       const Border &border = entity.template get<HasBorder>().border;
@@ -869,7 +913,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     if (entity.has<HasColor>() || entity.has<HasLabel>() ||
         entity.has<ui::HasImage>() ||
         entity.has<texture_manager::HasTexture>() ||
-        entity.has<FocusClusterRoot>()) {
+        entity.has<FocusClusterRoot>() ||
+        entity.has<HasCircularProgressState>()) {
       render_me(context, font_manager, entity);
     }
 

@@ -1115,6 +1115,78 @@ ElementResult progress_bar(
   return ElementResult{false, entity, normalized};
 }
 
+// Circular/radial progress indicator - displays a value from 0.0 to 1.0 as an arc
+// Unlike progress_bar, this renders as a circular ring that fills clockwise
+//
+// Usage:
+// ```cpp
+// circular_progress(ctx, mk(parent),
+//     0.75f,  // value 0-1
+//     ComponentConfig{}
+//         .with_size(pixels(80), pixels(80))
+//         .with_custom_background(fill_color)
+//         .with_border(track_color, 8.0f));  // border thickness = ring thickness
+// ```
+ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
+                                float value,
+                                ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+
+  // Default to square size if not specified
+  // Use styling defaults if available, otherwise scale to 720p baseline (50px)
+  if (config.size.is_default) {
+    auto &styling_defaults = UIStylingDefaults::get();
+    if (auto def = styling_defaults.get_component_config(
+            ComponentType::CircularProgress)) {
+      config.size = def->size;
+    } else {
+      // Square aspect ratio, scales with resolution
+      Size ring_size = h720(50.0f);
+      config.with_size(ComponentSize{ring_size, ring_size});
+    }
+  }
+
+  // Initialize component
+  _init_component(ctx, ep_pair, config, ComponentType::CircularProgress, false,
+                  "circular_progress");
+
+  // Clamp value
+  float normalized = std::clamp(value, 0.0f, 1.0f);
+
+  // Determine colors from config
+  // Background color (from with_custom_background) = fill color
+  // Border color (from with_border) = track color
+  Color fill_color = colors::UI_GREEN;
+  Color track_color = Color{128, 128, 128, 100};
+  float thickness = 8.0f;
+
+  if (config.color_usage == Theme::Usage::Custom && config.custom_color.has_value()) {
+    fill_color = config.custom_color.value();
+  } else if (Theme::is_valid(config.color_usage)) {
+    fill_color = ctx.theme.from_usage(config.color_usage);
+  }
+
+  if (config.border_config.has_value()) {
+    track_color = config.border_config->color;
+    thickness = config.border_config->thickness;
+  }
+
+  // Store state on entity for rendering
+  auto &state = entity.template addComponentIfMissing<HasCircularProgressState>(
+      normalized, thickness);
+  state.set_value(normalized)
+      .set_thickness(thickness)
+      .set_fill_color(fill_color)
+      .set_track_color(track_color);
+
+  // Remove HasColor so the regular rectangle rendering doesn't draw a background
+  entity.removeComponentIfExists<HasColor>();
+  // Also remove border so it doesn't render a rectangle border
+  entity.removeComponentIfExists<HasBorder>();
+
+  return ElementResult{false, entity, normalized};
+}
+
 /// Creates a single-line text input field.
 ///
 /// @param ctx The UI context

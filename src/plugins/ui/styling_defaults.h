@@ -68,6 +68,7 @@ enum struct ComponentType {
   Image,
   Separator,
   TextInput,
+  CircularProgress,
 };
 
 // Forward declaration - ComponentConfig is defined in component_config.h

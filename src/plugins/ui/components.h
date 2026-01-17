@@ -21,6 +21,27 @@ namespace afterhours {
 
 namespace ui {
 
+// Type-safe angle wrapper to prevent radians/degrees confusion
+// Use degrees() helper to construct: degrees(-90.0f)
+struct Degrees {
+  float value = 0.0f;
+
+  constexpr Degrees() = default;
+  constexpr explicit Degrees(float v) : value(v) {}
+
+  // Implicit conversion to float for compatibility with drawing functions
+  constexpr operator float() const { return value; }
+
+  // Common angle presets
+  static constexpr Degrees top() { return Degrees(-90.0f); }
+  static constexpr Degrees right() { return Degrees(0.0f); }
+  static constexpr Degrees bottom() { return Degrees(90.0f); }
+  static constexpr Degrees left() { return Degrees(180.0f); }
+};
+
+// Helper function for cleaner syntax: degrees(-90.0f)
+constexpr Degrees degrees(float v) { return Degrees(v); }
+
 struct UIComponentDebug : BaseComponent {
   enum struct Type {
     unknown,
@@ -409,6 +430,41 @@ struct HasTextInputListener : BaseComponent {
       std::function<void(Entity &, const std::string &)> change_cb = nullptr,
       std::function<void(Entity &)> submit_cb = nullptr)
       : on_change(std::move(change_cb)), on_submit(std::move(submit_cb)) {}
+};
+
+// Circular progress indicator state
+// Stores value (0-1) and visual configuration
+struct HasCircularProgressState : BaseComponent {
+  float value = 0.0f;                        // Progress value 0.0 to 1.0
+  float thickness = 8.0f;                    // Ring thickness in pixels
+  Degrees start_angle = Degrees::top();      // Start angle (top = -90°)
+  Color track_color = Color{128, 128, 128, 100}; // Background track color
+  Color fill_color = Color{100, 200, 100, 255};  // Progress fill color
+
+  HasCircularProgressState() = default;
+  explicit HasCircularProgressState(float val, float thick = 8.0f)
+      : value(val), thickness(thick) {}
+
+  HasCircularProgressState &set_value(float v) {
+    value = std::clamp(v, 0.0f, 1.0f);
+    return *this;
+  }
+  HasCircularProgressState &set_thickness(float t) {
+    thickness = t;
+    return *this;
+  }
+  HasCircularProgressState &set_start_angle(Degrees angle) {
+    start_angle = angle;
+    return *this;
+  }
+  HasCircularProgressState &set_track_color(Color c) {
+    track_color = c;
+    return *this;
+  }
+  HasCircularProgressState &set_fill_color(Color c) {
+    fill_color = c;
+    return *this;
+  }
 };
 
 } // namespace ui
