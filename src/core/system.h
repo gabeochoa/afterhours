@@ -330,6 +330,7 @@ struct SystemManager {
   std::vector<std::unique_ptr<SystemBase>> update_systems_;
   std::vector<std::unique_ptr<SystemBase>> fixed_update_systems_;
   std::vector<std::unique_ptr<SystemBase>> render_systems_;
+  std::vector<bool> render_system_is_mutable_;  // Tracks which render systems need mutable access
 
   void register_update_system(std::unique_ptr<SystemBase> system) {
     update_systems_.emplace_back(std::move(system));
@@ -341,6 +342,14 @@ struct SystemManager {
 
   void register_render_system(std::unique_ptr<SystemBase> system) {
     render_systems_.emplace_back(std::move(system));
+    render_system_is_mutable_.push_back(false);
+  }
+
+  // Register a render system that needs mutable access to entities/components.
+  // Use this for immediate-mode UI systems that update state during the render pass.
+  void register_mutable_render_system(std::unique_ptr<SystemBase> system) {
+    render_systems_.emplace_back(std::move(system));
+    render_system_is_mutable_.push_back(true);
   }
 
   void register_update_system(const std::function<void(float)> &cb) {
@@ -390,22 +399,39 @@ struct SystemManager {
     }
   }
 
-  void render(const Entities &entities, const float dt) {
-    for (const auto &system : render_systems_) {
+  void render(Entities &entities, const float dt) {
+    for (size_t i = 0; i < render_systems_.size(); ++i) {
+      auto &system = render_systems_[i];
       if (!system->should_run(dt))
         continue;
-      const SystemBase &sys = *system;
-      sys.once(dt);
-      for (std::shared_ptr<Entity> entity : entities) {
-        if (!entity)
-          continue;
-        const Entity &e = *entity;
-        if (sys.include_derived_children)
-          sys.for_each_derived(e, dt);
-        else
-          sys.for_each(e, dt);
+      
+      if (render_system_is_mutable_[i]) {
+        // Mutable path - same as tick(), calls non-const for_each_with
+        system->once(dt);
+        for (std::shared_ptr<Entity> entity : entities) {
+          if (!entity)
+            continue;
+          if (system->include_derived_children)
+            system->for_each_derived(*entity, dt);
+          else
+            system->for_each(*entity, dt);
+        }
+        system->after(dt);
+      } else {
+        // Const path - existing behavior, calls const for_each_with
+        const SystemBase &sys = *system;
+        sys.once(dt);
+        for (std::shared_ptr<Entity> entity : entities) {
+          if (!entity)
+            continue;
+          const Entity &e = *entity;
+          if (sys.include_derived_children)
+            sys.for_each_derived(e, dt);
+          else
+            sys.for_each(e, dt);
+        }
+        sys.after(dt);
       }
-      sys.after(dt);
     }
   }
 
@@ -423,7 +449,8 @@ struct SystemManager {
   }
 
   void render_all(const float dt) {
-    const auto &entities = EntityHelper::get_entities();
+    // Use mutable entities to support mutable render systems
+    auto &entities = EntityHelper::get_entities_for_mod();
     render(entities, dt);
   }
 
