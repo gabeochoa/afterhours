@@ -95,6 +95,68 @@ struct SelectOnFocus : BaseComponent {};
 struct FocusClusterRoot : BaseComponent {};
 struct InFocusCluster : BaseComponent {};
 
+enum class DialogResult {
+  Pending,
+  Confirmed,
+  Cancelled,
+  Dismissed,
+  Custom,
+};
+
+struct DialogState : BaseComponent {
+  DialogResult result = DialogResult::Pending;
+  int custom_result = -1;
+  std::string input_value;
+  bool input_initialized = false;
+};
+
+struct ModalOptions {
+  Vector2Type size = {400, 200};
+  bool auto_size = false;
+  bool center_on_screen = true;
+  Vector2Type position = {0, 0};
+  bool close_on_escape = true;
+  bool close_on_backdrop_click = false;
+  bool show_close_button = true;
+  bool draggable = false;
+  Color backdrop_color = {0, 0, 0, 128};
+  int render_layer = 1000;
+};
+
+struct IsModal : BaseComponent {
+  bool active = true;
+  bool close_on_backdrop_click = false;
+  bool close_on_escape = true;
+  bool show_close_button = true;
+  bool draggable = false;
+  Color backdrop_color = {0, 0, 0, 128};
+  int render_layer = 1000;
+  size_t open_order = 0;
+
+  IsModal() = default;
+  explicit IsModal(const ModalOptions &options)
+      : active(true), close_on_backdrop_click(options.close_on_backdrop_click),
+        close_on_escape(options.close_on_escape),
+        show_close_button(options.show_close_button),
+        draggable(options.draggable), backdrop_color(options.backdrop_color),
+        render_layer(options.render_layer) {}
+
+  void apply_options(const ModalOptions &options) {
+    close_on_backdrop_click = options.close_on_backdrop_click;
+    close_on_escape = options.close_on_escape;
+    show_close_button = options.show_close_button;
+    draggable = options.draggable;
+    backdrop_color = options.backdrop_color;
+    render_layer = options.render_layer;
+  }
+};
+
+struct ModalDragState : BaseComponent {
+  Vector2Type last_mouse = {0, 0};
+  bool dragging = false;
+  bool has_dragged = false;
+};
+
 struct HasChildrenComponent : BaseComponent {
   std::vector<EntityID> children;
   std::function<void(Entity &)> on_child_add;

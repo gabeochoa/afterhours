@@ -276,6 +276,10 @@ inline bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
     entity.addComponent<UIComponentDebug>(debug_name);
 
     created = true;
+  } else {
+    // Always update parent in case it changed (e.g., entity reused with
+    // different parent)
+    entity.get<UIComponent>().set_parent(parent.id);
   }
 
   if (!config.debug_name.empty()) {
@@ -294,7 +298,8 @@ inline bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
   apply_border(entity, config);
   apply_bevel(entity, config);
 
-  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
+  ctx.queue_render(
+      RenderInfo{entity.id, config.render_layer + ctx.render_layer_offset});
   return created;
 }
 

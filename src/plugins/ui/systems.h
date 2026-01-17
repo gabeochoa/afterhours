@@ -11,6 +11,7 @@
 #include "../window_manager.h"
 #include "components.h"
 #include "context.h"
+#include "ui_modifiers.h"
 #include "theme.h"
 #if __has_include(<magic_enum/magic_enum.hpp>)
 #include <magic_enum/magic_enum.hpp>
@@ -45,6 +46,7 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
     // Apply theme defaults first
     auto &theme_defaults = imm::ThemeDefaults::get();
     context.theme = theme_defaults.get_theme();
+    context.begin_frame();
 
     // Mouse input handling
     {
@@ -288,12 +290,13 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
     if (entity.has<HasLabel>() && entity.get<HasLabel>().is_disabled)
       return;
 
+    if (!should_process_for_modal(context, entity.id))
+      return;
+
     // Apply translation if present (with_translate applies via
     // HasUIModifiers)
-    RectangleType rect = component.rect();
-    if (entity.has<HasUIModifiers>()) {
-      rect = entity.get<HasUIModifiers>().apply_modifier(rect);
-    }
+    RectangleType rect =
+        apply_ui_modifiers_recursive(entity.id, component.rect());
 
     context->active_if_mouse_inside(entity.id, rect);
 
@@ -342,7 +345,13 @@ private:
       if (child.has<HasLabel>() && child.get<HasLabel>().is_disabled)
         continue;
 
-      context->active_if_mouse_inside(child.id, child_component.rect());
+      if (!should_process_for_modal(context, child.id))
+        continue;
+
+      RectangleType child_rect =
+          apply_ui_modifiers_recursive(child.id, child_component.rect());
+
+      context->active_if_mouse_inside(child.id, child_rect);
 
       if (context->has_focus(child.id) &&
           context->pressed(InputAction::WidgetPress)) {
@@ -377,10 +386,7 @@ inline bool is_point_inside_entity_tree(EntityID entity_id,
   const UIComponent &cmp = entity.get<UIComponent>();
 
   // Check if point is inside this entity's rect
-  RectangleType rect = cmp.rect();
-  if (entity.has<HasUIModifiers>()) {
-    rect = entity.get<HasUIModifiers>().apply_modifier(rect);
-  }
+  RectangleType rect = apply_ui_modifiers_recursive(entity.id, cmp.rect());
   if (is_mouse_inside(pos, rect))
     return true;
 
@@ -392,6 +398,120 @@ inline bool is_point_inside_entity_tree(EntityID entity_id,
 
   return false;
 }
+
+inline bool is_entity_in_tree(EntityID root_id, EntityID entity_id) {
+  if (root_id < 0 || entity_id < 0)
+    return false;
+  if (root_id == entity_id)
+    return true;
+
+  OptEntity opt = EntityHelper::getEntityForID(entity_id);
+  if (!opt.has_value())
+    return false;
+
+  Entity *current = &opt.asE();
+  int guard = 0;
+  while (current && current->has<UIComponent>()) {
+    EntityID parent_id = current->get<UIComponent>().parent;
+    if (parent_id == root_id)
+      return true;
+    if (parent_id < 0 || parent_id == current->id)
+      break;
+    OptEntity parent_opt = EntityHelper::getEntityForID(parent_id);
+    if (!parent_opt.has_value())
+      break;
+    current = &parent_opt.asE();
+    if (++guard > 64)
+      break;
+  }
+  return false;
+}
+
+template <typename InputAction>
+inline bool should_process_for_modal(UIContext<InputAction> *context,
+                                     EntityID entity_id) {
+  if (!context || !context->is_modal_active())
+    return true;
+  return is_entity_in_tree(context->top_modal(), entity_id);
+}
+
+template <typename InputAction>
+struct HandleModalDismiss : System<UIContext<InputAction>> {
+  bool prev_mouse_down = false;
+  bool should_check_backdrop = false;
+  input::MousePosition click_pos{};
+  input::MousePosition press_pos{};
+  bool modal_active_on_press = false;
+
+  virtual void for_each_with(Entity &, UIContext<InputAction> &context,
+                             float) override {
+    if (context.mouse.just_pressed) {
+      modal_active_on_press = context.is_modal_active();
+      press_pos = context.mouse.pos;
+    }
+    should_check_backdrop = prev_mouse_down && !context.mouse.left_down;
+    click_pos = context.mouse.pos;
+    prev_mouse_down = context.mouse.left_down;
+
+    if (!context.is_modal_active())
+      return;
+
+    EntityID modal_id = context.top_modal();
+    OptEntity modal_opt = EntityHelper::getEntityForID(modal_id);
+    if (!modal_opt.has_value())
+      return;
+
+    Entity &modal_ent = modal_opt.asE();
+    if (!modal_ent.has<IsModal>())
+      return;
+
+    auto &modal = modal_ent.get<IsModal>();
+    if (!modal.active)
+      return;
+
+    if (!context.mouse.left_down && modal_ent.has<ModalDragState>()) {
+      modal_ent.get<ModalDragState>().dragging = false;
+    }
+
+    bool escape_pressed = false;
+    if constexpr (magic_enum::enum_contains<InputAction>("MenuBack")) {
+      escape_pressed = escape_pressed || context.pressed(InputAction::MenuBack);
+    }
+    if constexpr (magic_enum::enum_contains<InputAction>("PauseButton")) {
+      escape_pressed =
+          escape_pressed || context.pressed(InputAction::PauseButton);
+    }
+
+    if (modal.close_on_escape && escape_pressed) {
+      if (modal_ent.has<DialogState>()) {
+        auto &state = modal_ent.get<DialogState>();
+        if (state.result == DialogResult::Pending)
+          state.result = DialogResult::Cancelled;
+      }
+      modal.active = false;
+      return;
+    }
+
+    if (!modal.close_on_backdrop_click || !should_check_backdrop)
+      return;
+
+    if (!modal_active_on_press)
+      return;
+
+    if (is_point_inside_entity_tree(modal_id, press_pos))
+      return;
+
+    if (is_point_inside_entity_tree(modal_id, click_pos))
+      return;
+
+    if (modal_ent.has<DialogState>()) {
+      auto &state = modal_ent.get<DialogState>();
+      if (state.result == DialogResult::Pending)
+        state.result = DialogResult::Dismissed;
+    }
+    modal.active = false;
+  }
+};
 
 template <typename InputAction>
 struct CloseDropdownOnClickOutside : System<HasDropdownState, UIComponent> {
@@ -416,6 +536,9 @@ struct CloseDropdownOnClickOutside : System<HasDropdownState, UIComponent> {
                              UIComponent &, float) override {
     // Only process open dropdowns
     if (!dropdownState.on)
+      return;
+
+    if (!should_process_for_modal(context, entity.id))
       return;
 
     // Only process if a click just happened
@@ -453,6 +576,9 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
     if (!component.was_rendered_to_screen)
       return;
 
+    if (!should_process_for_modal(context, entity.id))
+      return;
+
     // Valid things to tab to...
     context->try_to_grab(entity.id);
     context->process_tabbing(entity.id);
@@ -471,7 +597,14 @@ struct HandleDrags : SystemWithUIContext<ui::HasDragListener> {
 
   virtual void for_each_with(Entity &entity, UIComponent &component,
                              HasDragListener &hasDragListener, float) override {
-    context->active_if_mouse_inside(entity.id, component.rect());
+    if (!should_process_for_modal(context, entity.id))
+      return;
+
+    // Apply translation if present (with_translate applies via HasUIModifiers)
+    RectangleType rect =
+        apply_ui_modifiers_recursive(entity.id, component.rect());
+
+    context->active_if_mouse_inside(entity.id, rect);
 
     if (context->has_focus(entity.id) &&
         context->pressed(InputAction::WidgetPress)) {
@@ -500,6 +633,9 @@ struct HandleLeftRight : SystemWithUIContext<ui::HasLeftRightListener> {
   virtual void for_each_with(Entity &entity, UIComponent &component,
                              HasLeftRightListener &listener, float) {
     if (!component.was_rendered_to_screen)
+      return;
+
+    if (!should_process_for_modal(context, entity.id))
       return;
 
     if (!context->has_focus(entity.id))
@@ -542,6 +678,9 @@ private:
       if (!child_component.was_rendered_to_screen)
         continue;
 
+      if (!should_process_for_modal(context, child.id))
+        continue;
+
       if (!context->has_focus(child.id))
         continue;
 
@@ -578,6 +717,9 @@ struct HandleSelectOnFocus
                              SelectOnFocus &selectOnFocus,
                              HasClickListener &hasClickListener, float) {
     if (!component.was_rendered_to_screen)
+      return;
+
+    if (!should_process_for_modal(context, entity.id))
       return;
 
     // Check if this entity just gained focus
@@ -624,6 +766,9 @@ private:
       auto &child_hasClickListener = child.get<ui::HasClickListener>();
 
       if (!child_component.was_rendered_to_screen)
+        continue;
+
+      if (!should_process_for_modal(context, child.id))
         continue;
 
       // Check if this entity just gained focus

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <vector>
 
 #include "../../drawing_helpers.h"
@@ -11,11 +12,13 @@
 #include "../animation.h"
 #include "../input_system.h"
 #include "../texture_manager.h"
+#include "../window_manager.h"
 #include "animation_keys.h"
 #include "components.h"
 #include "context.h"
 #include "fmt/format.h"
 #include "systems.h"
+#include "ui_modifiers.h"
 #include "text_utils.h"
 #include "theme.h"
 
@@ -651,9 +654,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     const float effective_opacity = _compute_effective_opacity(entity);
     RectangleType draw_rect = cmp.rect();
 
-    if (entity.has<HasUIModifiers>()) {
-      draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
-    }
+    draw_rect = apply_ui_modifiers_recursive(entity.id, draw_rect);
 
     auto corner_settings = entity.has<HasRoundedCorners>()
                                ? entity.get<HasRoundedCorners>().get()
@@ -676,9 +677,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         focus_col = colors::opacity_pct(focus_col, effective_focus_opacity);
       }
       RectangleType focus_rect = cmp.focus_rect();
-      if (entity.has<HasUIModifiers>()) {
-        focus_rect = entity.get<HasUIModifiers>().apply_modifier(focus_rect);
-      }
+      focus_rect = apply_ui_modifiers_recursive(entity.id, focus_rect);
       if (corner_settings.any()) {
         draw_rectangle_rounded(focus_rect, roundness, segments, focus_col,
                                corner_settings);
@@ -843,10 +842,65 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     });
 #endif
 
-    for (auto &cmd : context.render_cmds) {
-      auto id = cmd.id;
-      auto &ent = EntityHelper::getEntityForIDEnforce(id);
-      render(context, font_manager, ent);
+    if (!context.is_modal_active()) {
+      for (auto &cmd : context.render_cmds) {
+        auto id = cmd.id;
+        auto &ent = EntityHelper::getEntityForIDEnforce(id);
+        render(context, font_manager, ent);
+      }
+    } else {
+      std::vector<RenderInfo> non_modal_cmds;
+      std::map<EntityID, std::vector<RenderInfo>> modal_cmds;
+
+      for (auto &cmd : context.render_cmds) {
+        EntityID modal_owner = context.ROOT;
+        for (auto it = context.modal_stack.rbegin();
+             it != context.modal_stack.rend(); ++it) {
+          if (is_entity_in_tree(*it, cmd.id)) {
+            modal_owner = *it;
+            break;
+          }
+        }
+
+        if (modal_owner == context.ROOT) {
+          non_modal_cmds.push_back(cmd);
+        } else {
+          modal_cmds[modal_owner].push_back(cmd);
+        }
+      }
+
+      for (auto &cmd : non_modal_cmds) {
+        auto id = cmd.id;
+        auto &ent = EntityHelper::getEntityForIDEnforce(id);
+        render(context, font_manager, ent);
+      }
+
+      for (auto modal_id : context.modal_stack) {
+        OptEntity modal_opt = EntityHelper::getEntityForID(modal_id);
+        if (!modal_opt.has_value())
+          continue;
+        Entity &modal_ent = modal_opt.asE();
+        if (!modal_ent.has<IsModal>())
+          continue;
+
+        const auto &modal = modal_ent.get<IsModal>();
+        if (!modal.active)
+          continue;
+
+        auto res = window_manager::fetch_current_resolution();
+        draw_rectangle(RectangleType{0, 0, static_cast<float>(res.width),
+                                     static_cast<float>(res.height)},
+                       modal.backdrop_color);
+
+        auto it = modal_cmds.find(modal_id);
+        if (it == modal_cmds.end())
+          continue;
+        for (auto &cmd : it->second) {
+          auto id = cmd.id;
+          auto &ent = EntityHelper::getEntityForIDEnforce(id);
+          render(context, font_manager, ent);
+        }
+      }
     }
     context.render_cmds.clear();
   }
