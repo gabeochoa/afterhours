@@ -46,8 +46,12 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
     auto &theme_defaults = imm::ThemeDefaults::get();
     context.theme = theme_defaults.get_theme();
 
-    // Mouse input handling
-    {
+    // Mouse input handling - use InputProvider if set, otherwise use global input
+    if (context.input_provider_ptr != nullptr) {
+      // Use the custom InputProvider set on this context
+      context.update_mouse_from_provider();
+    } else {
+      // Use global input functions (which delegate to input_provider::get())
       context.mouse.pos = input::get_mouse_position();
       const bool prev_mouse_down = context.mouse.left_down;
       context.mouse.left_down = input::is_mouse_button_down(0);
