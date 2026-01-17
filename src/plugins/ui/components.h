@@ -274,6 +274,28 @@ struct HasBorder : BaseComponent {
   explicit HasBorder(const Border &b) : border(b) {}
 };
 
+// Bevel styles for classic raised/sunken borders
+enum class BevelStyle { None, Raised, Sunken };
+
+// Bevel border configuration
+struct BevelBorder {
+  Color light_color = Color{255, 255, 255, 255};
+  Color dark_color = Color{128, 128, 128, 255};
+  float thickness = 1.0f;
+  BevelStyle style = BevelStyle::Raised;
+
+  bool has_bevel() const {
+    return thickness > 0.0f && style != BevelStyle::None;
+  }
+};
+
+// Component for entities that have bevel borders
+struct HasBevelBorder : BaseComponent {
+  BevelBorder bevel;
+  HasBevelBorder() = default;
+  explicit HasBevelBorder(const BevelBorder &b) : bevel(b) {}
+};
+
 // Concept for pluggable text storage backends (e.g., gap buffer, rope)
 // Allows custom implementations for large text editing (word processors, etc.)
 template <typename T>

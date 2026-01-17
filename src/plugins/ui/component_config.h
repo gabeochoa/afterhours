@@ -93,6 +93,9 @@ struct ComponentConfig {
   // Border configuration
   std::optional<Border> border_config;
 
+  // Bevel border configuration
+  std::optional<BevelBorder> bevel_config;
+
   // Text stroke/outline configuration
   std::optional<TextStroke> text_stroke_config;
 
@@ -136,6 +139,17 @@ struct ComponentConfig {
   }
   ComponentConfig &with_border(Color color, float thickness = 2.0f) {
     border_config = Border{color, thickness};
+    return *this;
+  }
+  ComponentConfig &with_bevel(const BevelBorder &bevel) {
+    bevel_config = bevel;
+    return *this;
+  }
+  ComponentConfig &with_bevel(BevelStyle style,
+                              Color light = Color{255, 255, 255, 255},
+                              Color dark = Color{128, 128, 128, 255},
+                              float thickness = 1.0f) {
+    bevel_config = BevelBorder{light, dark, thickness, style};
     return *this;
   }
   // NEW: Explicit background color APIs
@@ -373,6 +387,9 @@ struct ComponentConfig {
   bool has_image_alignment() const { return image_alignment.has_value(); }
   bool has_shadow() const { return shadow_config.has_value(); }
   bool has_border() const { return border_config.has_value(); }
+  bool has_bevel() const {
+    return bevel_config.has_value() && bevel_config->has_bevel();
+  }
   bool is_disabled() const { return disabled; }
   bool is_hidden() const { return hidden; }
   bool skips_when_tabbing() const { return skip_when_tabbing; }

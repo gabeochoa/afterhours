@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <vector>
 
 #include "../../drawing_helpers.h"
@@ -66,7 +67,8 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
                                                   RectangleType container,
                                                   TextAlignment alignment,
                                                   Vector2Type margin_px) {
-  // Early return for empty text - prevents infinite loop in font size calculation
+  // Early return for empty text - prevents infinite loop in font size
+  // calculation
   if (text.empty()) {
     return TextPositionResult{
         .rect =
@@ -105,7 +107,7 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
         .text_fits = false,
     };
   }
-  // TODO add some caching here? 
+  // TODO add some caching here?
 
   // Use binary search to find largest font size that fits
   float low = MIN_FONT_SIZE;
@@ -189,8 +191,9 @@ static inline RectangleType position_text(const ui::FontManager &fm,
   return position_text_ex(fm, text, container, alignment, margin_px).rect;
 }
 
-// Internal helper to draw text at a specific position (used by stroke, shadow, and main text)
-// The 'sizing' rect contains any offset (shadow/stroke) that should be applied
+// Internal helper to draw text at a specific position (used by stroke, shadow,
+// and main text) The 'sizing' rect contains any offset (shadow/stroke) that
+// should be applied
 static inline void _draw_text_at_position(const ui::FontManager &fm,
                                           const std::string &text,
                                           RectangleType rect,
@@ -216,13 +219,12 @@ static inline void _draw_text_at_position(const ui::FontManager &fm,
   draw_text_ex(font, text.c_str(), startPos, fontSize, spacing, color);
 }
 
-static inline void draw_text_in_rect(const ui::FontManager &fm,
-                                     const std::string &text,
-                                     RectangleType rect,
-                                     TextAlignment alignment, Color color,
-                                     bool show_debug_indicator = false,
-                                     const std::optional<TextStroke> &stroke = std::nullopt,
-                                     const std::optional<TextShadow> &shadow = std::nullopt) {
+static inline void
+draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
+                  RectangleType rect, TextAlignment alignment, Color color,
+                  bool show_debug_indicator = false,
+                  const std::optional<TextStroke> &stroke = std::nullopt,
+                  const std::optional<TextShadow> &shadow = std::nullopt) {
   TextPositionResult result =
       position_text_ex(fm, text, rect, alignment, Vector2Type{5.f, 5.f});
 
@@ -256,7 +258,8 @@ static inline void draw_text_in_rect(const ui::FontManager &fm,
     RectangleType shadow_sizing = sizing;
     shadow_sizing.x += shadow->offset_x;
     shadow_sizing.y += shadow->offset_y;
-    _draw_text_at_position(fm, text, rect, alignment, shadow_sizing, shadow->color);
+    _draw_text_at_position(fm, text, rect, alignment, shadow_sizing,
+                           shadow->color);
   }
 
   // Draw text stroke/outline if configured
@@ -266,17 +269,15 @@ static inline void draw_text_in_rect(const ui::FontManager &fm,
     Color stroke_color = stroke->color;
 
     // 8-direction offsets for stroke rendering
-    const std::array<std::pair<float, float>, 8> offsets = {{
-        {-t, -t}, {0, -t}, {t, -t},
-        {-t, 0},          {t, 0},
-        {-t, t},  {0, t},  {t, t}
-    }};
+    const std::array<std::pair<float, float>, 8> offsets = {
+        {{-t, -t}, {0, -t}, {t, -t}, {-t, 0}, {t, 0}, {-t, t}, {0, t}, {t, t}}};
 
     for (const auto &[ox, oy] : offsets) {
       RectangleType offset_sizing = sizing;
       offset_sizing.x += ox;
       offset_sizing.y += oy;
-      _draw_text_at_position(fm, text, rect, alignment, offset_sizing, stroke_color);
+      _draw_text_at_position(fm, text, rect, alignment, offset_sizing,
+                             stroke_color);
     }
   }
 
@@ -580,6 +581,70 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     }
   }
 
+  void render_bevel(const Entity &entity, RectangleType draw_rect,
+                    float effective_opacity) const {
+    if (!entity.has<HasBevelBorder>())
+      return;
+
+    const BevelBorder &bevel = entity.get<HasBevelBorder>().bevel;
+    if (!bevel.has_bevel())
+      return;
+
+    Color light = bevel.light_color;
+    Color dark = bevel.dark_color;
+    if (effective_opacity < 1.0f) {
+      light = colors::opacity_pct(light, effective_opacity);
+      dark = colors::opacity_pct(dark, effective_opacity);
+    }
+
+    Color base_fill = colors::UI_WHITE;
+    if (entity.has<HasColor>()) {
+      base_fill = entity.get<HasColor>().color();
+    }
+    if (effective_opacity < 1.0f) {
+      base_fill = colors::opacity_pct(base_fill, effective_opacity);
+    }
+
+    const Color strong_light = light;
+    const Color strong_dark = dark;
+    const Color mid_light = colors::lighten(base_fill, 0.35f);
+    const Color mid_dark = colors::darken(base_fill, 0.35f);
+
+    const Color base_top_left =
+        bevel.style == BevelStyle::Raised ? strong_light : strong_dark;
+    const Color base_bottom_right =
+        bevel.style == BevelStyle::Raised ? strong_dark : strong_light;
+    const Color inner_top_left =
+        bevel.style == BevelStyle::Raised ? mid_light : mid_dark;
+    const Color inner_bottom_right =
+        bevel.style == BevelStyle::Raised ? mid_dark : mid_light;
+
+    int layers = std::max(1, static_cast<int>(std::ceil(bevel.thickness)));
+    for (int i = 0; i < layers; ++i) {
+      bool inner = i > 0;
+      Color top_left = inner ? inner_top_left : base_top_left;
+      Color bottom_right = inner ? inner_bottom_right : base_bottom_right;
+
+      float inset = static_cast<float>(i);
+      float w = draw_rect.width - (inset * 2.0f);
+      float h = draw_rect.height - (inset * 2.0f);
+      if (w <= 0.0f || h <= 0.0f)
+        break;
+
+      RectangleType top = {draw_rect.x + inset, draw_rect.y + inset, w, 1.0f};
+      RectangleType left = {draw_rect.x + inset, draw_rect.y + inset, 1.0f, h};
+      RectangleType bottom = {draw_rect.x + inset,
+                              draw_rect.y + inset + h - 1.0f, w, 1.0f};
+      RectangleType right = {draw_rect.x + inset + w - 1.0f,
+                             draw_rect.y + inset, 1.0f, h};
+
+      draw_rectangle(top, top_left);
+      draw_rectangle(left, top_left);
+      draw_rectangle(bottom, bottom_right);
+      draw_rectangle(right, bottom_right);
+    }
+  }
+
   void render_me(const UIContext<InputAction> &context,
                  const FontManager &font_manager, const Entity &entity) const {
     const UIComponent &cmp = entity.get<UIComponent>();
@@ -636,6 +701,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       draw_rectangle_rounded(draw_rect, roundness, segments, col,
                              corner_settings);
     }
+
+    render_bevel(entity, draw_rect, effective_opacity);
 
     if (entity.has<HasBorder>()) {
       const Border &border = entity.template get<HasBorder>().border;

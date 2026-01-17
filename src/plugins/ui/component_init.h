@@ -204,6 +204,15 @@ inline void apply_border(Entity &entity, const ComponentConfig &config) {
   hb.border = border;
 }
 
+inline void apply_bevel(Entity &entity, const ComponentConfig &config) {
+  if (!config.has_bevel()) {
+    entity.removeComponentIfExists<HasBevelBorder>();
+    return;
+  }
+  const BevelBorder &bevel = config.bevel_config.value();
+  entity.addComponentIfMissing<HasBevelBorder>(bevel);
+}
+
 inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
                           const ComponentConfig &config) {
   if (config.rounded_corners.has_value() &&
@@ -283,6 +292,7 @@ inline bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
   apply_texture(entity, config);
   apply_shadow(entity, config);
   apply_border(entity, config);
+  apply_bevel(entity, config);
 
   ctx.queue_render(RenderInfo{entity.id, config.render_layer});
   return created;
