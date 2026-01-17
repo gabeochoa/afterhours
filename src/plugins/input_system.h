@@ -9,6 +9,7 @@
 #include "../core/entity_query.h"
 #include "../core/system.h"
 #include "../developer.h"
+#include "input_provider.h"
 #include "window_manager.h"
 
 namespace afterhours {
@@ -26,7 +27,9 @@ struct input : developer::Plugin {
   using GamepadButton = raylib::GamepadButton;
 
   static MousePosition get_mouse_position() {
-    const raylib::Vector2 raw = raylib::GetMousePosition();
+    // Use input_provider for testability
+    auto raw_provider = input_provider::get_mouse_position();
+    const raylib::Vector2 raw = {raw_provider.x, raw_provider.y};
 
     const int window_w = raylib::GetScreenWidth();
     const int window_h = raylib::GetScreenHeight();
@@ -69,27 +72,27 @@ struct input : developer::Plugin {
     return {(raw.x - min_x) * scale_x, (raw.y - min_y) * scale_y};
   }
   static bool is_mouse_button_up(const MouseButton button) {
-    return raylib::IsMouseButtonUp(button);
+    return input_provider::is_mouse_button_up(button);
   }
   static bool is_mouse_button_down(const MouseButton button) {
-    return raylib::IsMouseButtonDown(button);
+    return input_provider::is_mouse_button_down(button);
   }
   static bool is_mouse_button_pressed(const MouseButton button) {
-    return raylib::IsMouseButtonPressed(button);
+    return input_provider::is_mouse_button_pressed(button);
   }
   static bool is_mouse_button_released(const MouseButton button) {
-    return raylib::IsMouseButtonReleased(button);
+    return input_provider::is_mouse_button_released(button);
   }
   static bool is_gamepad_available(const GamepadID id) {
     return raylib::IsGamepadAvailable(id);
   }
   static bool is_key_pressed(const KeyCode keycode) {
-    return raylib::IsKeyPressed(keycode);
+    return input_provider::is_key_pressed(keycode);
   }
   static bool is_key_down(const KeyCode keycode) {
-    return raylib::IsKeyDown(keycode);
+    return input_provider::is_key_down(keycode);
   }
-  static int get_char_pressed() { return raylib::GetCharPressed(); }
+  static int get_char_pressed() { return input_provider::get_char_pressed(); }
   static float get_gamepad_axis_mvt(const GamepadID gamepad_id,
                                     const GamepadAxis axis) {
     return raylib::GetGamepadAxisMovement(gamepad_id, axis);

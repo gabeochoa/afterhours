@@ -13,6 +13,7 @@
 #include "../../drawing_helpers.h"
 #include "../../ecs.h"
 #include "../../logging.h"
+#include "../input_provider.h"
 #include "../input_system.h"
 #include "components.h"
 #include "theme.h"
@@ -68,6 +69,52 @@ template <typename InputAction> struct UIContext : BaseComponent {
   Theme theme;
   // TODO: Add styling defaults back when circular dependency is resolved
   // imm::UIStylingDefaults styling_defaults;
+
+  // Optional input provider for pluggable input backends (testing, etc.)
+  // If nullptr, uses the global input_provider::get()
+  input_provider::InputProvider* input_provider_ptr = nullptr;
+
+  /// Set a custom input provider for this context
+  void set_input_provider(input_provider::InputProvider* provider) {
+    input_provider_ptr = provider;
+  }
+
+  /// Get the input provider (custom if set, otherwise global)
+  input_provider::InputProvider& get_input_provider() {
+    if (input_provider_ptr) {
+      return *input_provider_ptr;
+    }
+    return input_provider::get();
+  }
+
+  /// Update mouse state from the current input provider
+  void update_mouse_from_provider() {
+    auto& provider = get_input_provider();
+    auto pos = provider.get_mouse_position();
+    
+    // Convert to input::MousePosition
+    input::MousePosition new_pos;
+    new_pos.x = pos.x;
+    new_pos.y = pos.y;
+    
+    bool was_down = mouse.left_down;
+    mouse.left_down = provider.is_mouse_button_down(0);
+    mouse.just_pressed = !was_down && mouse.left_down;
+    mouse.just_released = was_down && !mouse.left_down;
+    
+    if (mouse.just_pressed) {
+      mouse.press_pos = new_pos;
+      mouse.press_moved = false;
+    } else if (mouse.left_down) {
+      float dx = new_pos.x - mouse.press_pos.x;
+      float dy = new_pos.y - mouse.press_pos.y;
+      if (dx * dx + dy * dy > mouse.press_drag_threshold_px * mouse.press_drag_threshold_px) {
+        mouse.press_moved = true;
+      }
+    }
+    
+    mouse.pos = new_pos;
+  }
 
   [[nodiscard]] bool is_hot(EntityID id) const { return hot_id == id; };
   [[nodiscard]] bool is_active(EntityID id) const { return active_id == id; };
