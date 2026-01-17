@@ -105,6 +105,9 @@ struct ComponentConfig {
   // Text input: character to display instead of actual text (for passwords)
   std::optional<char> mask_char;
 
+  // Nine-slice border configuration
+  std::optional<NineSliceBorder> nine_slice_config;
+
   ComponentConfig &with_label(const std::string &lbl) {
     label = lbl;
     return *this;
@@ -366,6 +369,28 @@ struct ComponentConfig {
   bool has_text_shadow() const {
     return text_shadow_config.has_value() && text_shadow_config->has_shadow();
   }
+
+  // Nine-slice border configuration methods
+  ComponentConfig &with_nine_slice_border(const NineSliceBorder &nine_slice) {
+    nine_slice_config = nine_slice;
+    return *this;
+  }
+
+  ComponentConfig &with_nine_slice_border(texture_manager::Texture texture,
+                                          int slice_size = 16,
+                                          Color tint = Color{255, 255, 255, 255}) {
+    nine_slice_config = NineSliceBorder::uniform(texture, slice_size, tint);
+    return *this;
+  }
+
+  ComponentConfig &with_nine_slice_border(texture_manager::Texture texture,
+                                          int left, int top, int right, int bottom,
+                                          Color tint = Color{255, 255, 255, 255}) {
+    nine_slice_config = NineSliceBorder::custom(texture, left, top, right, bottom, tint);
+    return *this;
+  }
+
+  bool has_nine_slice() const { return nine_slice_config.has_value(); }
 
   bool has_padding() const {
     return padding.top.value > 0 || padding.left.value > 0 ||

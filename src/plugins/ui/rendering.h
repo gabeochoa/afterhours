@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_set>
 #include <vector>
 
 #include "../../drawing_helpers.h"
@@ -92,10 +93,17 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
 
   // Check for invalid container (negative or zero usable space)
   if (max_text_size.x <= 0 || max_text_size.y <= 0) {
-    log_warn("Container too small for text: container={}x{}, margins={}x{}, "
-             "text='{}'",
-             container.width, container.height, margin_px.x, margin_px.y,
-             text.length() > 20 ? text.substr(0, 20) + "..." : text);
+#ifdef AFTERHOURS_DEBUG_TEXT_OVERFLOW
+    // Only log once per unique text to avoid spamming
+    static std::unordered_set<std::string> logged_texts;
+    if (logged_texts.find(text) == logged_texts.end()) {
+      logged_texts.insert(text);
+      log_warn("Container too small for text: container={}x{}, margins={}x{}, "
+               "text='{}'",
+               container.width, container.height, margin_px.x, margin_px.y,
+               text.length() > 20 ? text.substr(0, 20) + "..." : text);
+    }
+#endif
     return TextPositionResult{
         .rect =
             RectangleType{
@@ -129,11 +137,18 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
   // Clamp to minimum font size to prevent invalid rendering
   bool text_fits = font_size >= MIN_FONT_SIZE;
   if (font_size < MIN_FONT_SIZE) {
-    log_warn("Text '{}' cannot fit in container {}x{} with margins {}x{} - "
-             "clamping font size from {} to {}",
-             text.length() > 20 ? text.substr(0, 20) + "..." : text,
-             container.width, container.height, margin_px.x, margin_px.y,
-             font_size, MIN_FONT_SIZE);
+#ifdef AFTERHOURS_DEBUG_TEXT_OVERFLOW
+    // Only log once per unique text to avoid spamming
+    static std::unordered_set<std::string> logged_texts;
+    if (logged_texts.find(text) == logged_texts.end()) {
+      logged_texts.insert(text);
+      log_warn("Text '{}' cannot fit in container {}x{} with margins {}x{} - "
+               "clamping font size from {} to {}",
+               text.length() > 20 ? text.substr(0, 20) + "..." : text,
+               container.width, container.height, margin_px.x, margin_px.y,
+               font_size, MIN_FONT_SIZE);
+    }
+#endif
     font_size = MIN_FONT_SIZE;
   }
 
@@ -229,20 +244,34 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
       position_text_ex(fm, text, rect, alignment, Vector2Type{5.f, 5.f});
 
   // Draw visual debug indicator if text doesn't fit and debug is enabled
-  // The indicator is a small red triangle in the corner of the container
+  // Shows a semi-transparent red overlay and border around the container
   if (show_debug_indicator && !result.text_fits) {
-    // Draw a small warning indicator (red corner triangle)
-    Color warning_color = Color{255, 50, 50, 200}; // Semi-transparent red
-    float indicator_size = std::min(8.0f, std::min(rect.width, rect.height));
-    // Draw as a small rectangle in top-right corner
+    Color overlay_color = Color{255, 50, 50, 60}; // Semi-transparent red fill
+    Color border_color = Color{255, 50, 50, 200}; // Solid red border
+    float border_thickness = 2.0f;
+
+    // Draw semi-transparent red overlay on the entire container
+    draw_rectangle(rect, overlay_color);
+
+    // Draw red border lines around the container
+    // Top
     draw_rectangle(
-        RectangleType{
-            .x = rect.x + rect.width - indicator_size,
-            .y = rect.y,
-            .width = indicator_size,
-            .height = indicator_size,
-        },
-        warning_color);
+        RectangleType{.x = rect.x, .y = rect.y, .width = rect.width, .height = border_thickness},
+        border_color);
+    // Bottom
+    draw_rectangle(
+        RectangleType{.x = rect.x, .y = rect.y + rect.height - border_thickness,
+                      .width = rect.width, .height = border_thickness},
+        border_color);
+    // Left
+    draw_rectangle(
+        RectangleType{.x = rect.x, .y = rect.y, .width = border_thickness, .height = rect.height},
+        border_color);
+    // Right
+    draw_rectangle(
+        RectangleType{.x = rect.x + rect.width - border_thickness, .y = rect.y,
+                      .width = border_thickness, .height = rect.height},
+        border_color);
   }
 
   // Don't attempt to render if font size is effectively zero
@@ -581,6 +610,21 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     }
   }
 
+  void render_nine_slice(const Entity &entity, RectangleType draw_rect,
+                         float effective_opacity) const {
+    if (!entity.has<HasNineSliceBorder>())
+      return;
+
+    const NineSliceBorder &nine_slice = entity.get<HasNineSliceBorder>().nine_slice;
+    Color tint = nine_slice.tint;
+    if (effective_opacity < 1.0f) {
+      tint.a = static_cast<unsigned char>(tint.a * effective_opacity);
+    }
+
+    draw_texture_npatch(nine_slice.texture, draw_rect, nine_slice.left, nine_slice.top,
+                        nine_slice.right, nine_slice.bottom, tint);
+  }
+
   void render_bevel(const Entity &entity, RectangleType draw_rect,
                     float effective_opacity) const {
     if (!entity.has<HasBevelBorder>())
@@ -669,6 +713,12 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     render_shadow(entity, draw_rect, corner_settings, effective_opacity,
                   roundness, segments);
 
+    // Draw 9-slice border texture if configured
+    // Nine-slice replaces regular background color when present
+    if (entity.has<HasNineSliceBorder>()) {
+      render_nine_slice(entity, draw_rect, effective_opacity);
+    }
+
     if (context.visual_focus_id == entity.id) {
       Color focus_col = context.theme.from_usage(Theme::Usage::Accent);
       float effective_focus_opacity = _compute_effective_opacity(entity);
@@ -756,7 +806,17 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         shadow->color = colors::opacity_pct(shadow->color, effective_opacity);
       }
 
-      draw_text_in_rect(font_manager, hasLabel.label.c_str(), draw_rect,
+      // Inset text rect when there's a 9-slice border to keep text inside
+      RectangleType text_rect = draw_rect;
+      if (entity.has<HasNineSliceBorder>()) {
+        const NineSliceBorder &ns = entity.get<HasNineSliceBorder>().nine_slice;
+        text_rect.x += static_cast<float>(ns.left);
+        text_rect.y += static_cast<float>(ns.top);
+        text_rect.width -= static_cast<float>(ns.left + ns.right);
+        text_rect.height -= static_cast<float>(ns.top + ns.bottom);
+      }
+
+      draw_text_in_rect(font_manager, hasLabel.label.c_str(), text_rect,
                         hasLabel.alignment, font_col, SHOW_TEXT_OVERFLOW_DEBUG,
                         stroke, shadow);
     }

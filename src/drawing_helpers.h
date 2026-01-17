@@ -223,6 +223,27 @@ inline void draw_rectangle_rounded_lines(
   raylib::DrawRectangleRoundedLines(rect, roundness, segments, color);
 }
 
+// Draw a 9-slice (NPatch) texture stretched to fill a rectangle
+// The texture is divided into 9 regions: 4 corners, 4 edges, and 1 center
+// Corners remain at original size, edges stretch in one direction, center stretches in both
+inline void draw_texture_npatch(const raylib::Texture2D texture,
+                                const RectangleType dest,
+                                int left, int top, int right, int bottom,
+                                const Color tint = Color{255, 255, 255, 255}) {
+  raylib::NPatchInfo npatch_info = {
+      .source = raylib::Rectangle{0.0f, 0.0f, 
+                                   static_cast<float>(texture.width),
+                                   static_cast<float>(texture.height)},
+      .left = left,
+      .top = top,
+      .right = right,
+      .bottom = bottom,
+      .layout = raylib::NPATCH_NINE_PATCH
+  };
+  raylib::DrawTextureNPatch(texture, npatch_info, dest, 
+                            raylib::Vector2{0.0f, 0.0f}, 0.0f, tint);
+}
+
 inline raylib::Font get_default_font() { return raylib::GetFontDefault(); }
 inline raylib::Font get_unset_font() { return raylib::GetFontDefault(); }
 
@@ -241,6 +262,8 @@ inline void draw_rectangle_rounded(const RectangleType, const float, const int,
 inline void draw_rectangle_rounded_lines(const RectangleType, const float,
                                          const int, const Color,
                                          const std::bitset<4>) {}
+inline void draw_texture_npatch(const afterhours::Texture, const RectangleType,
+                                int, int, int, int, const Color) {}
 inline afterhours::Font get_default_font() { return afterhours::Font(); }
 inline afterhours::Font get_unset_font() { return afterhours::Font(); }
 #endif

@@ -296,6 +296,38 @@ struct HasBevelBorder : BaseComponent {
   explicit HasBevelBorder(const BevelBorder &b) : bevel(b) {}
 };
 
+// Nine-slice border configuration
+// Renders a texture as a 9-slice border that scales properly
+struct NineSliceBorder {
+  texture_manager::Texture texture;
+  int left = 16;   // Source texture slice width (left edge)
+  int top = 16;    // Source texture slice height (top edge)
+  int right = 16;  // Source texture slice width (right edge)
+  int bottom = 16; // Source texture slice height (bottom edge)
+  Color tint = Color{255, 255, 255, 255};
+
+  // Convenience constructor with uniform slice size
+  static NineSliceBorder uniform(texture_manager::Texture tex, int slice_size,
+                                 Color tint_color = Color{255, 255, 255, 255}) {
+    return NineSliceBorder{tex, slice_size, slice_size, slice_size, slice_size,
+                           tint_color};
+  }
+
+  // Convenience constructor with custom slice sizes
+  static NineSliceBorder custom(texture_manager::Texture tex, int left_, int top_,
+                                int right_, int bottom_,
+                                Color tint_color = Color{255, 255, 255, 255}) {
+    return NineSliceBorder{tex, left_, top_, right_, bottom_, tint_color};
+  }
+};
+
+// Component for entities that have 9-slice borders
+struct HasNineSliceBorder : BaseComponent {
+  NineSliceBorder nine_slice;
+  HasNineSliceBorder() = default;
+  explicit HasNineSliceBorder(const NineSliceBorder &n) : nine_slice(n) {}
+};
+
 // Concept for pluggable text storage backends (e.g., gap buffer, rope)
 // Allows custom implementations for large text editing (word processors, etc.)
 template <typename T>

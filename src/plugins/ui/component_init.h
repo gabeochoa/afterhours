@@ -213,6 +213,16 @@ inline void apply_bevel(Entity &entity, const ComponentConfig &config) {
   entity.addComponentIfMissing<HasBevelBorder>(bevel);
 }
 
+inline void apply_nine_slice(Entity &entity, const ComponentConfig &config) {
+  if (!config.has_nine_slice()) {
+    entity.removeComponentIfExists<HasNineSliceBorder>();
+    return;
+  }
+  const NineSliceBorder &nine_slice = config.nine_slice_config.value();
+  auto &hn = entity.addComponentIfMissing<HasNineSliceBorder>(nine_slice);
+  hn.nine_slice = nine_slice;
+}
+
 inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
                           const ComponentConfig &config) {
   if (config.rounded_corners.has_value() &&
@@ -293,6 +303,7 @@ inline bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
   apply_shadow(entity, config);
   apply_border(entity, config);
   apply_bevel(entity, config);
+  apply_nine_slice(entity, config);
 
   ctx.queue_render(RenderInfo{entity.id, config.render_layer});
   return created;
