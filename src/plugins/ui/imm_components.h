@@ -491,10 +491,16 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
   return {changed, entity, values};
 }
 
-/// iOS-style pill toggle. Same as checkbox but pill+knob visual instead of square+X.
+enum struct ToggleSwitchStyle {
+  Pill,   // iOS-style pill with sliding knob (default)
+  Circle, // Single circle with X/checkmark inside
+};
+
+/// Toggle switch with style variants: Pill (iOS-style) or Circle (X/checkmark).
 ElementResult
 toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
-              ComponentConfig config = ComponentConfig()) {
+              ComponentConfig config = ComponentConfig(),
+              ToggleSwitchStyle style = ToggleSwitchStyle::Pill) {
   auto [entity, parent] = deref(ep_pair);
 
   auto label = config.label;
@@ -505,11 +511,13 @@ toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
   HasToggleSwitchState &state =
       _init_state<HasToggleSwitchState>(entity, [&](auto &) {}, value);
 
-  // Animate knob (smooth lerp toward target)
+  // Animate (smooth lerp toward target)
   float target = state.on ? 1.0f : 0.0f;
   state.animation_progress += (target - state.animation_progress) * 0.2f;
 
-  // Label
+  const Theme &theme = ctx.theme;
+
+  // Optional label
   if (!label.empty()) {
     div(ctx, mk(entity),
         ComponentConfig::inherit_from(config, "toggle_label")
@@ -518,37 +526,69 @@ toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
             .with_color_usage(Theme::Usage::None));
   }
 
-  // Colors
-  const Theme &theme = ctx.theme;
-  Color track_color = colors::lerp(theme.secondary, theme.accent, state.animation_progress);
-  Color knob_color = theme.darkfont.a > 0 ? theme.darkfont : Color{255, 255, 255, 255};
+  bool clicked = false;
 
-  // Pill track (clickable via button)
-  float track_w = 40.0f, track_h = 20.0f, knob_sz = 16.0f, pad = 2.0f;
+  if (style == ToggleSwitchStyle::Circle) {
+    // Clean radio-button: filled circle when ON, empty ring when OFF
+    float sz = 18.0f;
+    Color bg = state.on ? theme.accent : theme.background;
+    Color border = state.on ? theme.accent : theme.font_muted;
 
-  auto track_result = button(ctx, mk(entity),
-      ComponentConfig::inherit_from(config, "toggle_track")
-          .with_size(ComponentSize{pixels((int)track_w), pixels((int)track_h)})
-          .with_custom_background(track_color)
-          .with_rounded_corners(RoundedCorners().all_round())
-          .with_roundness(0.5f));
+    auto circ = button(ctx, mk(entity),
+        ComponentConfig::inherit_from(config, "toggle_circle")
+            .with_size(ComponentSize{pixels((int)sz), pixels((int)sz)})
+            .with_custom_background(bg)
+            .with_border(border, 2.0f)
+            .with_rounded_corners(RoundedCorners().all_round())
+            .with_roundness(1.0f));
 
-  if (track_result) {
+    clicked = circ;
+
+    // Checkmark when ON
+    if (state.on) {
+      div(ctx, mk(circ.ent()),
+          ComponentConfig::inherit_from(config, "toggle_check")
+              .with_label("✓")
+              .with_size(ComponentSize{pixels((int)sz - 4), pixels((int)sz - 4)})
+              .with_absolute_position()
+              .with_translate(2.0f, 0.0f)
+              .with_custom_text_color(theme.background)
+              .with_font(UIComponent::DEFAULT_FONT, 12.0f)
+              .with_alignment(TextAlignment::Center)
+              .with_skip_tabbing(true));
+    }
+  } else {
+    // Pill style (default)
+    Color track_color = colors::lerp(theme.secondary, theme.accent, state.animation_progress);
+    Color knob_color = theme.darkfont.a > 0 ? theme.darkfont : Color{255, 255, 255, 255};
+    float track_w = 40.0f, track_h = 20.0f, knob_sz = 16.0f, pad = 2.0f;
+
+    auto track_result = button(ctx, mk(entity),
+        ComponentConfig::inherit_from(config, "toggle_track")
+            .with_size(ComponentSize{pixels((int)track_w), pixels((int)track_h)})
+            .with_custom_background(track_color)
+            .with_rounded_corners(RoundedCorners().all_round())
+            .with_roundness(0.5f));
+
+    clicked = track_result;
+
+    // Sliding knob
+    float knob_x = pad + (track_w - knob_sz - pad * 2) * state.animation_progress;
+    div(ctx, mk(track_result.ent()),
+        ComponentConfig::inherit_from(config, "toggle_knob")
+            .with_size(ComponentSize{pixels((int)knob_sz), pixels((int)knob_sz)})
+            .with_absolute_position()
+            .with_translate(knob_x, pad)
+            .with_custom_background(knob_color)
+            .with_rounded_corners(RoundedCorners().all_round())
+            .with_roundness(1.0f)
+            .with_skip_tabbing(true));
+  }
+
+  if (clicked) {
     state.on = !state.on;
     state.changed_since = true;
   }
-
-  // Sliding knob - child of track so absolute position is relative to track
-  float knob_x = pad + (track_w - knob_sz - pad * 2) * state.animation_progress;
-  div(ctx, mk(track_result.ent()),
-      ComponentConfig::inherit_from(config, "toggle_knob")
-          .with_size(ComponentSize{pixels((int)knob_sz), pixels((int)knob_sz)})
-          .with_absolute_position()
-          .with_translate(knob_x, pad)
-          .with_custom_background(knob_color)
-          .with_rounded_corners(RoundedCorners().all_round())
-          .with_roundness(1.0f)
-          .with_skip_tabbing(true));
 
   value = state.on;
   ElementResult result{state.changed_since, entity, value};
