@@ -67,6 +67,7 @@ enum struct ComponentType {
   CheckboxGroup,
   Image,
   Separator,
+  TextInput,
 };
 
 // Forward declaration - ComponentConfig is defined in component_config.h

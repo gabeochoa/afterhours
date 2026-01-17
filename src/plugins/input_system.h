@@ -89,6 +89,7 @@ struct input : developer::Plugin {
   static bool is_key_down(const KeyCode keycode) {
     return raylib::IsKeyDown(keycode);
   }
+  static int get_char_pressed() { return raylib::GetCharPressed(); }
   static float get_gamepad_axis_mvt(const GamepadID gamepad_id,
                                     const GamepadAxis axis) {
     return raylib::GetGamepadAxisMovement(gamepad_id, axis);

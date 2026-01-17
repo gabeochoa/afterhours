@@ -66,6 +66,20 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
                                                   RectangleType container,
                                                   TextAlignment alignment,
                                                   Vector2Type margin_px) {
+  // Early return for empty text - prevents infinite loop in font size calculation
+  if (text.empty()) {
+    return TextPositionResult{
+        .rect =
+            RectangleType{
+                .x = container.x + margin_px.x,
+                .y = container.y + margin_px.y,
+                .width = MIN_FONT_SIZE,
+                .height = MIN_FONT_SIZE,
+            },
+        .text_fits = true,
+    };
+  }
+
   Font font = fm.get_active_font();
 
   // Calculate the maximum text size based on the container size and margins
@@ -91,20 +105,24 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
         .text_fits = false,
     };
   }
+  // TODO add some caching here? 
 
-  // TODO add some caching here?
-
-  // Find the largest font size that fits within the maximum text size
-  float font_size = 1.f;
+  // Use binary search to find largest font size that fits
+  float low = MIN_FONT_SIZE;
+  float high = std::min(max_text_size.y, 200.f); // Cap at reasonable max
+  float font_size = low;
   Vector2Type text_size;
-  while (true) {
-    text_size = measure_text(font, text.c_str(), font_size, 1.f);
-    if (text_size.x > max_text_size.x || text_size.y > max_text_size.y) {
-      break;
+
+  while (high - low > 0.5f) {
+    float mid = (low + high) / 2.f;
+    text_size = measure_text(font, text.c_str(), mid, 1.f);
+    if (text_size.x <= max_text_size.x && text_size.y <= max_text_size.y) {
+      font_size = mid;
+      low = mid;
+    } else {
+      high = mid;
     }
-    font_size++;
   }
-  font_size--; // Decrease font size by 1 to ensure it fits
 
   // Clamp to minimum font size to prevent invalid rendering
   bool text_fits = font_size >= MIN_FONT_SIZE;

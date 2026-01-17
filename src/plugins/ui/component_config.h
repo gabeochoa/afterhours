@@ -25,6 +25,15 @@ struct TextureConfig {
       texture_manager::HasTexture::Alignment::None;
 };
 
+// TODO: Consider splitting ComponentConfig into concept-constrained configs per
+// component type. Example: TextInputConfig concept would only expose methods
+// relevant to text inputs (with_mask_char, with_max_length, etc.) while hiding
+// irrelevant ones (with_dropdown_options). This would:
+// - Make the API more discoverable for each component
+// - Catch misconfigurations at compile time
+// - Make it obvious which components need new features when adding them
+// See: https://en.cppreference.com/w/cpp/language/constraints
+
 struct ComponentConfig {
   ComponentSize size = ComponentSize(pixels(default_component_size.x),
                                      pixels(default_component_size.y), true);
@@ -90,6 +99,9 @@ struct ComponentConfig {
   // Text drop shadow configuration
   std::optional<TextShadow> text_shadow_config;
 
+  // Text input: character to display instead of actual text (for passwords)
+  std::optional<char> mask_char;
+
   ComponentConfig &with_label(const std::string &lbl) {
     label = lbl;
     return *this;
@@ -147,7 +159,6 @@ struct ComponentConfig {
     return with_custom_background(color);
   }
 
-  // NEW: Explicit text color APIs
   ComponentConfig &with_text_color(Theme::Usage usage) {
     text_color_usage = usage;
     return *this;
@@ -160,6 +171,10 @@ struct ComponentConfig {
 
   ComponentConfig &with_auto_text_color(bool enabled = true) {
     auto_text_color = enabled;
+    return *this;
+  }
+  ComponentConfig &with_mask_char(char c) {
+    mask_char = c;
     return *this;
   }
   ComponentConfig &with_alignment(TextAlignment align) {
@@ -307,8 +322,7 @@ struct ComponentConfig {
   }
 
   bool has_text_stroke() const {
-    return text_stroke_config.has_value() &&
-           text_stroke_config->has_stroke();
+    return text_stroke_config.has_value() && text_stroke_config->has_stroke();
   }
 
   // Text drop shadow configuration methods
@@ -336,8 +350,7 @@ struct ComponentConfig {
   }
 
   bool has_text_shadow() const {
-    return text_shadow_config.has_value() &&
-           text_shadow_config->has_shadow();
+    return text_shadow_config.has_value() && text_shadow_config->has_shadow();
   }
 
   bool has_padding() const {

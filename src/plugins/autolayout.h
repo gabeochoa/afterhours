@@ -809,7 +809,8 @@ struct AutoLayout {
     float sy = widget.computed[Axis::Y] + widget.computed_padd[Axis::Y];
 
     // Determine layout direction
-    bool is_column = static_cast<bool>(widget.flex_direction & FlexDirection::Column);
+    bool is_column =
+        static_cast<bool>(widget.flex_direction & FlexDirection::Column);
     bool is_row = static_cast<bool>(widget.flex_direction & FlexDirection::Row);
 
     // Count layout children and calculate total size along main axis
