@@ -145,8 +145,8 @@ struct ValidateChildContainment : System<AutoLayoutRoot, UIComponent> {
       bool top_overflow = child_rect.y < parent_rect.y;
       bool right_overflow =
           child_rect.x + child_rect.width > parent_rect.x + parent_rect.width;
-      bool bottom_overflow = child_rect.y + child_rect.height >
-                             parent_rect.y + parent_rect.height;
+      bool bottom_overflow =
+          child_rect.y + child_rect.height > parent_rect.y + parent_rect.height;
 
       if (left_overflow || top_overflow || right_overflow || bottom_overflow) {
         std::string edges;
@@ -159,15 +159,15 @@ struct ValidateChildContainment : System<AutoLayoutRoot, UIComponent> {
         if (bottom_overflow)
           edges += "bottom ";
 
-        std::string msg =
-            "Child overflows parent (" + edges + ") child at (" +
-            std::to_string(child_rect.x) + "," + std::to_string(child_rect.y) +
-            ") size " + std::to_string(child_rect.width) + "x" +
-            std::to_string(child_rect.height) + ", parent at (" +
-            std::to_string(parent_rect.x) + "," +
-            std::to_string(parent_rect.y) + ") size " +
-            std::to_string(parent_rect.width) + "x" +
-            std::to_string(parent_rect.height);
+        std::string msg = "Child overflows parent (" + edges + ") child at (" +
+                          std::to_string(child_rect.x) + "," +
+                          std::to_string(child_rect.y) + ") size " +
+                          std::to_string(child_rect.width) + "x" +
+                          std::to_string(child_rect.height) + ", parent at (" +
+                          std::to_string(parent_rect.x) + "," +
+                          std::to_string(parent_rect.y) + ") size " +
+                          std::to_string(parent_rect.width) + "x" +
+                          std::to_string(parent_rect.height);
 
         report_violation(config, "ChildContainment", msg, child.id, 0.8f);
 
@@ -406,4 +406,3 @@ static void register_systems(SystemManager &sm) {
 } // namespace validation
 } // namespace ui
 } // namespace afterhours
-

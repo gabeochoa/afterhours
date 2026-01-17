@@ -330,13 +330,13 @@ struct NineSliceBorder {
   // Convenience constructor with uniform slice size
   static NineSliceBorder uniform(texture_manager::Texture tex, int slice_size,
                                  Color tint_color = Color{255, 255, 255, 255}) {
-    return NineSliceBorder{tex, slice_size, slice_size, slice_size, slice_size,
-                           tint_color};
+    return NineSliceBorder{tex,        slice_size, slice_size,
+                           slice_size, slice_size, tint_color};
   }
 
   // Convenience constructor with custom slice sizes
-  static NineSliceBorder custom(texture_manager::Texture tex, int left_, int top_,
-                                int right_, int bottom_,
+  static NineSliceBorder custom(texture_manager::Texture tex, int left_,
+                                int top_, int right_, int bottom_,
                                 Color tint_color = Color{255, 255, 255, 255}) {
     return NineSliceBorder{tex, left_, top_, right_, bottom_, tint_color};
   }
@@ -435,9 +435,9 @@ struct HasTextInputListener : BaseComponent {
 // Circular progress indicator state
 // Stores value (0-1) and visual configuration
 struct HasCircularProgressState : BaseComponent {
-  float value = 0.0f;                        // Progress value 0.0 to 1.0
-  float thickness = 8.0f;                    // Ring thickness in pixels
-  Degrees start_angle = Degrees::top();      // Start angle (top = -90°)
+  float value = 0.0f;                            // Progress value 0.0 to 1.0
+  float thickness = 8.0f;                        // Ring thickness in pixels
+  Degrees start_angle = Degrees::top();          // Start angle (top = -90°)
   Color track_color = Color{128, 128, 128, 100}; // Background track color
   Color fill_color = Color{100, 200, 100, 255};  // Progress fill color
 

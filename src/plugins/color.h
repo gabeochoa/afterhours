@@ -325,7 +325,8 @@ static Color auto_text_color(const Color &background, const Color &light_option,
   float dark_contrast = contrast_ratio(dark_option, background);
 
   // Pick the better of the two provided options
-  Color best_option = (light_contrast > dark_contrast) ? light_option : dark_option;
+  Color best_option =
+      (light_contrast > dark_contrast) ? light_option : dark_option;
   float best_contrast = std::max(light_contrast, dark_contrast);
 
   // If neither achieves minimum contrast, fall back to pure white/black

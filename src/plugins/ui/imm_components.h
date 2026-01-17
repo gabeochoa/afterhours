@@ -1115,8 +1115,8 @@ ElementResult progress_bar(
   return ElementResult{false, entity, normalized};
 }
 
-// Circular/radial progress indicator - displays a value from 0.0 to 1.0 as an arc
-// Unlike progress_bar, this renders as a circular ring that fills clockwise
+// Circular/radial progress indicator - displays a value from 0.0 to 1.0 as an
+// arc Unlike progress_bar, this renders as a circular ring that fills clockwise
 //
 // Usage:
 // ```cpp
@@ -1125,7 +1125,8 @@ ElementResult progress_bar(
 //     ComponentConfig{}
 //         .with_size(pixels(80), pixels(80))
 //         .with_custom_background(fill_color)
-//         .with_border(track_color, 8.0f));  // border thickness = ring thickness
+//         .with_border(track_color, 8.0f));  // border thickness = ring
+//         thickness
 // ```
 ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
                                 float value,
@@ -1160,7 +1161,8 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
   Color track_color = Color{128, 128, 128, 100};
   float thickness = 8.0f;
 
-  if (config.color_usage == Theme::Usage::Custom && config.custom_color.has_value()) {
+  if (config.color_usage == Theme::Usage::Custom &&
+      config.custom_color.has_value()) {
     fill_color = config.custom_color.value();
   } else if (Theme::is_valid(config.color_usage)) {
     fill_color = ctx.theme.from_usage(config.color_usage);
@@ -1179,7 +1181,8 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
       .set_fill_color(fill_color)
       .set_track_color(track_color);
 
-  // Remove HasColor so the regular rectangle rendering doesn't draw a background
+  // Remove HasColor so the regular rectangle rendering doesn't draw a
+  // background
   entity.removeComponentIfExists<HasColor>();
   // Also remove border so it doesn't render a rectangle border
   entity.removeComponentIfExists<HasBorder>();

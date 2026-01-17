@@ -139,9 +139,8 @@ inline void report_violation(const ValidationConfig &config,
     return;
   }
 
-  std::string full_message =
-      "[UI Validation] " + category + ": " + message +
-      " (entity: " + std::to_string(entity_id) + ")";
+  std::string full_message = "[UI Validation] " + category + ": " + message +
+                             " (entity: " + std::to_string(entity_id) + ")";
 
   if (config.mode == ValidationMode::Warn) {
     // Warn mode: always use log_warn (never asserts)
@@ -177,4 +176,3 @@ inline bool is_pixel_aligned(float value) {
 
 } // namespace ui
 } // namespace afterhours
-

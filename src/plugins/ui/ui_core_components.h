@@ -440,4 +440,3 @@ is_dimension_percent_based(const UIComponent::AxisArray<Size, 6> &desire,
 } // namespace ui
 
 } // namespace afterhours
-

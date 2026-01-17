@@ -46,4 +46,3 @@ inline bool has_text() { return false; }
 
 } // namespace clipboard
 } // namespace afterhours
-

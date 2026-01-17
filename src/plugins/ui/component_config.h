@@ -376,17 +376,19 @@ struct ComponentConfig {
     return *this;
   }
 
-  ComponentConfig &with_nine_slice_border(texture_manager::Texture texture,
-                                          int slice_size = 16,
-                                          Color tint = Color{255, 255, 255, 255}) {
+  ComponentConfig &
+  with_nine_slice_border(texture_manager::Texture texture, int slice_size = 16,
+                         Color tint = Color{255, 255, 255, 255}) {
     nine_slice_config = NineSliceBorder::uniform(texture, slice_size, tint);
     return *this;
   }
 
-  ComponentConfig &with_nine_slice_border(texture_manager::Texture texture,
-                                          int left, int top, int right, int bottom,
-                                          Color tint = Color{255, 255, 255, 255}) {
-    nine_slice_config = NineSliceBorder::custom(texture, left, top, right, bottom, tint);
+  ComponentConfig &
+  with_nine_slice_border(texture_manager::Texture texture, int left, int top,
+                         int right, int bottom,
+                         Color tint = Color{255, 255, 255, 255}) {
+    nine_slice_config =
+        NineSliceBorder::custom(texture, left, top, right, bottom, tint);
     return *this;
   }
 

@@ -255,23 +255,29 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
 
     // Draw red border lines around the container
     // Top
-    draw_rectangle(
-        RectangleType{.x = rect.x, .y = rect.y, .width = rect.width, .height = border_thickness},
-        border_color);
+    draw_rectangle(RectangleType{.x = rect.x,
+                                 .y = rect.y,
+                                 .width = rect.width,
+                                 .height = border_thickness},
+                   border_color);
     // Bottom
-    draw_rectangle(
-        RectangleType{.x = rect.x, .y = rect.y + rect.height - border_thickness,
-                      .width = rect.width, .height = border_thickness},
-        border_color);
+    draw_rectangle(RectangleType{.x = rect.x,
+                                 .y = rect.y + rect.height - border_thickness,
+                                 .width = rect.width,
+                                 .height = border_thickness},
+                   border_color);
     // Left
-    draw_rectangle(
-        RectangleType{.x = rect.x, .y = rect.y, .width = border_thickness, .height = rect.height},
-        border_color);
+    draw_rectangle(RectangleType{.x = rect.x,
+                                 .y = rect.y,
+                                 .width = border_thickness,
+                                 .height = rect.height},
+                   border_color);
     // Right
-    draw_rectangle(
-        RectangleType{.x = rect.x + rect.width - border_thickness, .y = rect.y,
-                      .width = border_thickness, .height = rect.height},
-        border_color);
+    draw_rectangle(RectangleType{.x = rect.x + rect.width - border_thickness,
+                                 .y = rect.y,
+                                 .width = border_thickness,
+                                 .height = rect.height},
+                   border_color);
   }
 
   // Don't attempt to render if font size is effectively zero
@@ -615,14 +621,16 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     if (!entity.has<HasNineSliceBorder>())
       return;
 
-    const NineSliceBorder &nine_slice = entity.get<HasNineSliceBorder>().nine_slice;
+    const NineSliceBorder &nine_slice =
+        entity.get<HasNineSliceBorder>().nine_slice;
     Color tint = nine_slice.tint;
     if (effective_opacity < 1.0f) {
       tint.a = static_cast<unsigned char>(tint.a * effective_opacity);
     }
 
-    draw_texture_npatch(nine_slice.texture, draw_rect, nine_slice.left, nine_slice.top,
-                        nine_slice.right, nine_slice.bottom, tint);
+    draw_texture_npatch(nine_slice.texture, draw_rect, nine_slice.left,
+                        nine_slice.top, nine_slice.right, nine_slice.bottom,
+                        tint);
   }
 
   void render_circular_progress(const Entity &entity, RectangleType draw_rect,
@@ -739,7 +747,6 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
     }
 
-
     auto corner_settings = entity.has<HasRoundedCorners>()
                                ? entity.get<HasRoundedCorners>().get()
                                : std::bitset<4>().reset();
@@ -795,7 +802,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
     render_bevel(entity, draw_rect, effective_opacity);
 
-    // Render circular progress if present (uses ring primitives instead of rectangles)
+    // Render circular progress if present (uses ring primitives instead of
+    // rectangles)
     render_circular_progress(entity, draw_rect, effective_opacity);
 
     if (entity.has<HasBorder>()) {
