@@ -65,6 +65,15 @@ static Color lighten(const Color &color, const float amount = 0.2f) {
   return lighterColor;
 }
 
+static Color lerp(const Color &a, const Color &b, float t) {
+  return Color{
+      static_cast<unsigned char>(a.r + static_cast<int>((b.r - a.r) * t)),
+      static_cast<unsigned char>(a.g + static_cast<int>((b.g - a.g) * t)),
+      static_cast<unsigned char>(a.b + static_cast<int>((b.b - a.b) * t)),
+      static_cast<unsigned char>(a.a + static_cast<int>((b.a - a.a) * t)),
+  };
+}
+
 static Color increase(const Color &color, const int factor = 10) {
   Color darkerColor;
   darkerColor.r = static_cast<unsigned char>(color.r + factor);

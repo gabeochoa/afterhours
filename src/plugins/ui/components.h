@@ -109,6 +109,13 @@ struct HasSliderState : BaseComponent {
   HasSliderState(float val) : value(val) {}
 };
 
+struct HasToggleSwitchState : BaseComponent {
+  bool changed_since = false;
+  bool on;
+  float animation_progress = 0.0f;  // 0.0 = off position, 1.0 = on position
+  HasToggleSwitchState(bool b) : on(b), animation_progress(b ? 1.0f : 0.0f) {}
+};
+
 struct ShouldHide : BaseComponent {};
 struct SkipWhenTabbing : BaseComponent {};
 struct SelectOnFocus : BaseComponent {};

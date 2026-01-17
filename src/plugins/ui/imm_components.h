@@ -491,6 +491,71 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
   return {changed, entity, values};
 }
 
+/// iOS-style pill toggle. Same as checkbox but pill+knob visual instead of square+X.
+ElementResult
+toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
+              ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+
+  auto label = config.label;
+  config.label = "";
+  _init_component(ctx, ep_pair, config, ComponentType::ToggleSwitch, false,
+                  "toggle_switch_row");
+
+  HasToggleSwitchState &state =
+      _init_state<HasToggleSwitchState>(entity, [&](auto &) {}, value);
+
+  // Animate knob (smooth lerp toward target)
+  float target = state.on ? 1.0f : 0.0f;
+  state.animation_progress += (target - state.animation_progress) * 0.2f;
+
+  // Label
+  if (!label.empty()) {
+    div(ctx, mk(entity),
+        ComponentConfig::inherit_from(config, "toggle_label")
+            .with_size(config.size._scale_x(0.7f))
+            .with_label(label)
+            .with_color_usage(Theme::Usage::None));
+  }
+
+  // Colors
+  const Theme &theme = ctx.theme;
+  Color track_color = colors::lerp(theme.secondary, theme.accent, state.animation_progress);
+  Color knob_color = theme.darkfont.a > 0 ? theme.darkfont : Color{255, 255, 255, 255};
+
+  // Pill track (clickable via button)
+  float track_w = 40.0f, track_h = 20.0f, knob_sz = 16.0f, pad = 2.0f;
+
+  auto track_result = button(ctx, mk(entity),
+      ComponentConfig::inherit_from(config, "toggle_track")
+          .with_size(ComponentSize{pixels((int)track_w), pixels((int)track_h)})
+          .with_custom_background(track_color)
+          .with_rounded_corners(RoundedCorners().all_round())
+          .with_roundness(0.5f));
+
+  if (track_result) {
+    state.on = !state.on;
+    state.changed_since = true;
+  }
+
+  // Sliding knob - child of track so absolute position is relative to track
+  float knob_x = pad + (track_w - knob_sz - pad * 2) * state.animation_progress;
+  div(ctx, mk(track_result.ent()),
+      ComponentConfig::inherit_from(config, "toggle_knob")
+          .with_size(ComponentSize{pixels((int)knob_sz), pixels((int)knob_sz)})
+          .with_absolute_position()
+          .with_translate(knob_x, pad)
+          .with_custom_background(knob_color)
+          .with_rounded_corners(RoundedCorners().all_round())
+          .with_roundness(1.0f)
+          .with_skip_tabbing(true));
+
+  value = state.on;
+  ElementResult result{state.changed_since, entity, value};
+  state.changed_since = false;
+  return result;
+}
+
 // Helper function to generate label text based on position and value
 static std::string
 generate_label_text(const std::string &original_label, float value,
