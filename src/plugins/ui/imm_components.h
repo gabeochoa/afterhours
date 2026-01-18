@@ -491,6 +491,88 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
   return {changed, entity, values};
 }
 
+/// Radio button group - single-select with circular indicators
+/// Note: Parent should have FlexDirection::Column for vertical layout
+template <size_t N>
+ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
+                          const std::array<std::string_view, N> &labels,
+                          size_t &selected_index,
+                          ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+
+  bool changed = false;
+  
+  // Circle dimensions - larger for better visibility
+  float circle_sz = 18.0f;
+  float dot_sz = 10.0f;
+  float border_w = 2.0f;
+
+  for (size_t i = 0; i < N; ++i) {
+    bool is_selected = (i == selected_index);
+
+    // Row button - transparent, for click handling
+    auto row = button(ctx, mk(parent, 100 + i),
+        ComponentConfig{}
+            .with_size(config.size)
+            .with_label("")
+            .with_color_usage(Theme::Usage::None)
+            .with_flex_direction(FlexDirection::Row)
+            .with_align_items(AlignItems::Center)
+            .with_padding(Padding{.left = pixels(6)})
+            .with_debug_name(fmt::format("radio_{}", i)));
+
+    if (row) {
+      selected_index = i;
+      changed = true;
+    }
+
+    // Outer circle ring
+    Color ring_color = is_selected ? ctx.theme.accent : ctx.theme.font_muted;
+    auto ring = div(ctx, mk(row.ent(), 0),
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(circle_sz), pixels(circle_sz)})
+            .with_custom_background(ctx.theme.background)
+            .with_border(ring_color, border_w)
+            .with_rounded_corners(RoundedCorners().all_round())
+            .with_roundness(1.0f)
+            .with_margin(Margin{.right = pixels(10)})
+            .with_skip_tabbing(true)
+            .with_debug_name(fmt::format("radio_ring_{}", i)));
+
+    // Inner filled dot when selected
+    if (is_selected) {
+      float offset = (circle_sz - dot_sz) / 2.0f;
+      div(ctx, mk(ring.ent(), 0),
+          ComponentConfig{}
+              .with_size(ComponentSize{pixels(dot_sz), pixels(dot_sz)})
+              .with_absolute_position()
+              .with_translate(offset, offset)
+              .with_custom_background(ctx.theme.accent)
+              .with_rounded_corners(RoundedCorners().all_round())
+              .with_roundness(1.0f)
+              .with_skip_tabbing(true)
+              .with_debug_name(fmt::format("radio_dot_{}", i)));
+    }
+
+    // Label - positioned after circle
+    auto label_ent = div(ctx, mk(row.ent(), 1),
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(150), config.size.y_axis})
+            .with_label(std::string(labels[i]))
+            .with_font(config.font_name, config.font_size)
+            .with_custom_text_color(ctx.theme.font)
+            .with_skip_tabbing(true)
+            .with_debug_name(fmt::format("radio_label_{}", i)));
+    
+    // Force left alignment
+    if (label_ent.ent().template has<HasLabel>()) {
+      label_ent.ent().template get<HasLabel>().set_alignment(TextAlignment::Left);
+    }
+  }
+
+  return {changed, parent, static_cast<int>(selected_index)};
+}
+
 enum struct ToggleSwitchStyle {
   Pill,   // iOS-style pill with sliding knob (default)
   Circle, // Single circle with X/checkmark inside
@@ -529,16 +611,17 @@ toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
   bool clicked = false;
 
   if (style == ToggleSwitchStyle::Circle) {
-    // Clean radio-button: filled circle when ON, empty ring when OFF
-    float sz = 18.0f;
+    // Clean checkbox: filled circle when ON, empty ring when OFF
+    Size sz = h720(18.0f);
+    float border_w = h720(2.0f).value;
     Color bg = state.on ? theme.accent : theme.background;
-    Color border = state.on ? theme.accent : theme.font_muted;
+    Color border_color = state.on ? theme.accent : theme.font_muted;
 
     auto circ = button(ctx, mk(entity),
         ComponentConfig::inherit_from(config, "toggle_circle")
-            .with_size(ComponentSize{pixels((int)sz), pixels((int)sz)})
+            .with_size(ComponentSize{sz, sz})
             .with_custom_background(bg)
-            .with_border(border, 2.0f)
+            .with_border(border_color, border_w)
             .with_rounded_corners(RoundedCorners().all_round())
             .with_roundness(1.0f));
 
@@ -546,30 +629,31 @@ toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
 
     // Checkmark when ON
     if (state.on) {
+      Size check_sz = h720(14.0f);
+      float check_offset = (sz.value - check_sz.value) / 2.0f;
       div(ctx, mk(circ.ent()),
           ComponentConfig::inherit_from(config, "toggle_check")
               .with_label("✓")
-              .with_size(ComponentSize{pixels((int)sz - 4), pixels((int)sz - 4)})
+              .with_size(ComponentSize{check_sz, check_sz})
               .with_absolute_position()
-              .with_translate(2.0f, 0.0f)
+              .with_translate(check_offset, 0.0f)
               .with_custom_text_color(theme.background)
-              .with_font(UIComponent::DEFAULT_FONT, 12.0f)
+              .with_font(UIComponent::DEFAULT_FONT, h720(12.0f).value)
               .with_alignment(TextAlignment::Center)
               .with_skip_tabbing(true));
     }
   } else {
-    // Pill style (default)
+    // Pill style (default) - responsive sizing at 720p baseline
     Color track_color = colors::lerp(theme.secondary, theme.accent, state.animation_progress);
-    // Knob color indicates state - accent when ON, light grey when OFF
-    // This ensures state is visible even when track is overridden by hover
-    Color knob_off = theme.accent;
-    Color knob_on = theme.accent;
-    Color knob_color = colors::lerp(knob_off, knob_on, state.animation_progress);
-    float track_w = 40.0f, track_h = 20.0f, knob_sz = 16.0f, pad = 2.0f;
+    // Knob is white or uses darkfont if available for contrast
+    Color knob_color = theme.darkfont.a > 0 ? theme.darkfont : Color{255, 255, 255, 255};
+    // Responsive sizing at 720p baseline
+    Size track_w = h720(40.0f), track_h = h720(20.0f), knob_sz = h720(16.0f);
+    float pad = h720(2.0f).value;
 
     auto track_result = button(ctx, mk(entity),
         ComponentConfig::inherit_from(config, "toggle_track")
-            .with_size(ComponentSize{pixels((int)track_w), pixels((int)track_h)})
+            .with_size(ComponentSize{track_w, track_h})
             .with_custom_background(track_color)
             .with_rounded_corners(RoundedCorners().all_round())
             .with_roundness(0.5f));
@@ -577,10 +661,10 @@ toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
     clicked = track_result;
 
     // Sliding knob
-    float knob_x = pad + (track_w - knob_sz - pad * 2) * state.animation_progress;
+    float knob_x = pad + (track_w.value - knob_sz.value - pad * 2) * state.animation_progress;
     div(ctx, mk(track_result.ent()),
         ComponentConfig::inherit_from(config, "toggle_knob")
-            .with_size(ComponentSize{pixels((int)knob_sz), pixels((int)knob_sz)})
+            .with_size(ComponentSize{knob_sz, knob_sz})
             .with_absolute_position()
             .with_translate(knob_x, pad)
             .with_custom_background(knob_color)

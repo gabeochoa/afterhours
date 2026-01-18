@@ -308,7 +308,7 @@ enum struct TextAlignment {
   Left,
   Center,
   Right,
-  None = Left,
+  None,
 };
 
 struct HasLabel : BaseComponent {
