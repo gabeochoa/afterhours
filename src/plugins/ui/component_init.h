@@ -117,6 +117,7 @@ inline void apply_layout(Entity &entity, const ComponentConfig &config) {
       .set_desired_margin(config.margin)
       .set_justify_content(config.justify_content)
       .set_align_items(config.align_items)
+      .set_self_align(config.self_align)
       .set_flex_direction(config.flex_direction);
 
   if (config.is_absolute)

@@ -198,6 +198,16 @@ enum struct AlignItems {
   Stretch,   // Stretch to fill (for items without explicit cross-axis size)
 };
 
+/// Controls how an individual element aligns itself within its parent.
+/// Overrides the parent's align_items for this specific element.
+/// Auto means inherit from parent's align_items setting.
+enum struct SelfAlign {
+  Auto,      // Inherit from parent's align_items (default)
+  FlexStart, // Align to start of cross axis
+  FlexEnd,   // Align to end of cross axis
+  Center,    // Center on cross axis - common for centering content containers
+};
+
 enum struct Axis {
   X = 0,
   Y = 1,

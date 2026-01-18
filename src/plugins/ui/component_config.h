@@ -44,6 +44,7 @@ struct ComponentConfig {
   FlexDirection flex_direction = FlexDirection::Column;
   JustifyContent justify_content = JustifyContent::FlexStart;
   AlignItems align_items = AlignItems::FlexStart;
+  SelfAlign self_align = SelfAlign::Auto;
 
   // Background color settings
   Theme::Usage color_usage = Theme::Usage::Default;
@@ -265,6 +266,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_align_items(AlignItems ai) {
     align_items = ai;
+    return *this;
+  }
+  ComponentConfig &with_self_align(SelfAlign sa) {
+    self_align = sa;
     return *this;
   }
   ComponentConfig &with_font(const std::string &font_name_, float font_size_) {
@@ -509,6 +514,8 @@ struct ComponentConfig {
       merged.justify_content = overrides.justify_content;
     if (overrides.align_items != AlignItems::FlexStart)
       merged.align_items = overrides.align_items;
+    if (overrides.self_align != SelfAlign::Auto)
+      merged.self_align = overrides.self_align;
 
     return merged;
   }

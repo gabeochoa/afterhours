@@ -922,24 +922,44 @@ struct AutoLayout {
         col_h = cy;
       }
 
-      // Calculate align_items cross-axis offset
+      // Calculate cross-axis offset
+      // Check if child has self_align override, otherwise use parent's align_items
       float cross_offset = 0.f;
       float child_cross = is_column ? cx : cy;
       float cross_remaining = cross_axis_size - child_cross;
 
       if (cross_remaining > 0.f) {
-        switch (widget.align_items) {
-        case AlignItems::FlexStart:
-          break;
-        case AlignItems::FlexEnd:
-          cross_offset = cross_remaining;
-          break;
-        case AlignItems::Center:
-          cross_offset = cross_remaining / 2.f;
-          break;
-        case AlignItems::Stretch:
-          // Stretch is handled in size calculation, not positioning
-          break;
+        // Determine effective alignment: self_align overrides parent's align_items
+        // if child.self_align != Auto
+        if (child.self_align != SelfAlign::Auto) {
+          switch (child.self_align) {
+          case SelfAlign::Auto:
+            // Shouldn't reach here, but treat as FlexStart
+            break;
+          case SelfAlign::FlexStart:
+            break;
+          case SelfAlign::FlexEnd:
+            cross_offset = cross_remaining;
+            break;
+          case SelfAlign::Center:
+            cross_offset = cross_remaining / 2.f;
+            break;
+          }
+        } else {
+          // Use parent's align_items
+          switch (widget.align_items) {
+          case AlignItems::FlexStart:
+            break;
+          case AlignItems::FlexEnd:
+            cross_offset = cross_remaining;
+            break;
+          case AlignItems::Center:
+            cross_offset = cross_remaining / 2.f;
+            break;
+          case AlignItems::Stretch:
+            // Stretch is handled in size calculation, not positioning
+            break;
+          }
         }
       }
 

@@ -77,6 +77,7 @@ struct UIComponent : BaseComponent {
   FlexDirection flex_direction = FlexDirection::Column;
   JustifyContent justify_content = JustifyContent::FlexStart;
   AlignItems align_items = AlignItems::FlexStart;
+  SelfAlign self_align = SelfAlign::Auto; // Override parent's align_items for this element
 
   bool should_hide = false;
   bool was_rendered_to_screen = false;
@@ -233,6 +234,11 @@ struct UIComponent : BaseComponent {
 
   auto &set_align_items(AlignItems ai) {
     align_items = ai;
+    return *this;
+  }
+
+  auto &set_self_align(SelfAlign sa) {
+    self_align = sa;
     return *this;
   }
 
