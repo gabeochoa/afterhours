@@ -90,7 +90,7 @@ static inline RectangleType _get_scroll_scissor_rect(const Entity &entity) {
   return {0, 0, 0, 0};
 }
 
-// Recompute children's Y positions for scroll view containers
+// Recompute children's positions for scroll view containers
 // The layout system constrains children to parent bounds, which stacks overflow
 // items at the same position. This function fixes that by sequentially positioning
 // children based on their sizes.
@@ -99,38 +99,58 @@ static inline void _fix_scroll_view_child_positions(Entity &entity) {
     return;
 
   UIComponent &cmp = entity.get<UIComponent>();
+  HasScrollView &scroll = entity.get<HasScrollView>();
   RectangleType parent_rect = cmp.rect();
-  
+
   // Starting position for children (inside parent's content area)
-  float current_y = parent_rect.y + cmp.computed_padd[Axis::top];
   float content_x = parent_rect.x + cmp.computed_padd[Axis::left];
+  float content_y = parent_rect.y + cmp.computed_padd[Axis::top];
+
+  // Determine layout direction based on which scrolling is enabled
+  // If horizontal scrolling enabled, assume row layout
+  bool is_row_layout = scroll.horizontal_enabled && !scroll.vertical_enabled;
+
+  float current_x = content_x;
+  float current_y = content_y;
 
   for (EntityID child_id : cmp.children) {
     OptEntity child_opt = EntityHelper::getEntityForID(child_id);
-    if (!child_opt.valid()) continue;
-    
+    if (!child_opt.valid())
+      continue;
+
     Entity &child = child_opt.asE();
     if (!child.has<UIComponent>())
       continue;
 
     UIComponent &child_cmp = child.get<UIComponent>();
-    
-    // Position this child at the current offset
+
     float child_margin_top = child_cmp.computed_margin[Axis::top];
     float child_margin_left = child_cmp.computed_margin[Axis::left];
-    
-    child_cmp.computed_rel[Axis::X] = content_x + child_margin_left;
-    child_cmp.computed_rel[Axis::Y] = current_y + child_margin_top;
-    
-    // Move down for next child
-    float child_height = child_cmp.computed[Axis::Y];
     float child_margin_bottom = child_cmp.computed_margin[Axis::bottom];
-    current_y += child_margin_top + child_height + child_margin_bottom;
+    float child_margin_right = child_cmp.computed_margin[Axis::right];
+
+    if (is_row_layout) {
+      // Row layout: position horizontally
+      child_cmp.computed_rel[Axis::X] = current_x + child_margin_left;
+      child_cmp.computed_rel[Axis::Y] = content_y + child_margin_top;
+
+      // Move right for next child
+      float child_width = child_cmp.computed[Axis::X];
+      current_x += child_margin_left + child_width + child_margin_right;
+    } else {
+      // Column layout: position vertically
+      child_cmp.computed_rel[Axis::X] = content_x + child_margin_left;
+      child_cmp.computed_rel[Axis::Y] = current_y + child_margin_top;
+
+      // Move down for next child
+      float child_height = child_cmp.computed[Axis::Y];
+      current_y += child_margin_top + child_height + child_margin_bottom;
+    }
   }
 }
 
 // Compute content size for a scroll view from its children's sizes
-// For scroll views, we sum children's heights instead of using screen positions
+// For scroll views, we sum children's sizes instead of using screen positions
 // because the layout system constrains children to the viewport
 static inline void _update_scroll_view_content_size(Entity &entity) {
   if (!entity.has<HasScrollView>() || !entity.has<UIComponent>())
@@ -146,37 +166,53 @@ static inline void _update_scroll_view_content_size(Entity &entity) {
   RectangleType parent_rect = cmp.rect();
   scroll.viewport_size = {parent_rect.width, parent_rect.height};
 
-  // For column layout scroll views, sum up children's heights + margins
-  // This gives us the "natural" content height if no constraints applied
+  // Determine layout direction based on which scrolling is enabled
+  bool is_row_layout = scroll.horizontal_enabled && !scroll.vertical_enabled;
+
+  float total_width = 0.0f;
   float total_height = 0.0f;
   float max_width = 0.0f;
+  float max_height = 0.0f;
 
   for (EntityID child_id : cmp.children) {
     OptEntity child_opt = EntityHelper::getEntityForID(child_id);
-    if (!child_opt.valid()) continue;
-    
+    if (!child_opt.valid())
+      continue;
+
     Entity &child = child_opt.asE();
     if (!child.has<UIComponent>())
       continue;
 
     const UIComponent &child_cmp = child.get<UIComponent>();
-    
-    // Use computed size (actual rendered height) + margins
-    float child_height = child_cmp.computed[Axis::Y];
-    float child_margin_top = child_cmp.computed_margin[Axis::top];
-    float child_margin_bottom = child_cmp.computed_margin[Axis::bottom];
-    float child_total_height = child_height + child_margin_top + child_margin_bottom;
-    
-    total_height += child_total_height;
-    
-    // For width, take the maximum
+
     float child_width = child_cmp.computed[Axis::X];
+    float child_height = child_cmp.computed[Axis::Y];
     float child_margin_left = child_cmp.computed_margin[Axis::left];
     float child_margin_right = child_cmp.computed_margin[Axis::right];
-    max_width = std::max(max_width, child_width + child_margin_left + child_margin_right);
+    float child_margin_top = child_cmp.computed_margin[Axis::top];
+    float child_margin_bottom = child_cmp.computed_margin[Axis::bottom];
+
+    float child_total_width =
+        child_width + child_margin_left + child_margin_right;
+    float child_total_height =
+        child_height + child_margin_top + child_margin_bottom;
+
+    if (is_row_layout) {
+      // Row layout: sum widths, take max height
+      total_width += child_total_width;
+      max_height = std::max(max_height, child_total_height);
+    } else {
+      // Column layout: sum heights, take max width
+      total_height += child_total_height;
+      max_width = std::max(max_width, child_total_width);
+    }
   }
 
-  scroll.content_size = {max_width, total_height};
+  if (is_row_layout) {
+    scroll.content_size = {total_width, max_height};
+  } else {
+    scroll.content_size = {max_width, total_height};
+  }
   scroll.clamp_scroll();
 }
 // Minimum font size to prevent invalid rendering (font size 0)

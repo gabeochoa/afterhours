@@ -1682,18 +1682,35 @@ ElementResult scroll_view(HasUIContext auto &ctx, EntityParent ep_pair,
   bool mouse_inside = has_valid_rect && is_mouse_inside(ctx.mouse.pos, rect);
 
   bool scrolled = false;
-  if (mouse_inside && scroll_state.vertical_enabled) {
-    float wheel = input::get_mouse_wheel_move();
-    if (wheel != 0.0f) {
+  if (mouse_inside) {
+    // Use wheel vector for both vertical and horizontal scrolling
+    // Trackpads and some mice provide both axes
+    Vector2Type wheel_v = input::get_mouse_wheel_move_v();
+
+    // Direction multiplier: natural scrolling (default) vs inverted
+    float direction = scroll_state.invert_scroll ? 1.0f : -1.0f;
+
+    // Vertical scrolling
+    if (scroll_state.vertical_enabled && wheel_v.y != 0.0f) {
       float old_offset = scroll_state.scroll_offset.y;
-      // Scroll up = positive wheel = negative offset (scroll towards start)
-      scroll_state.scroll_offset.y -= wheel * scroll_state.scroll_speed;
+      scroll_state.scroll_offset.y += direction * wheel_v.y * scroll_state.scroll_speed;
       // Prevent scrolling past the start (full clamping happens in render
       // after content_size is computed)
       if (scroll_state.scroll_offset.y < 0.0f) {
         scroll_state.scroll_offset.y = 0.0f;
       }
-      scrolled = (scroll_state.scroll_offset.y != old_offset);
+      scrolled = scrolled || (scroll_state.scroll_offset.y != old_offset);
+    }
+
+    // Horizontal scrolling
+    if (scroll_state.horizontal_enabled && wheel_v.x != 0.0f) {
+      float old_offset = scroll_state.scroll_offset.x;
+      scroll_state.scroll_offset.x += direction * wheel_v.x * scroll_state.scroll_speed;
+      // Prevent scrolling past the start
+      if (scroll_state.scroll_offset.x < 0.0f) {
+        scroll_state.scroll_offset.x = 0.0f;
+      }
+      scrolled = scrolled || (scroll_state.scroll_offset.x != old_offset);
     }
   }
 

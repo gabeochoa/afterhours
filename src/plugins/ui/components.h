@@ -482,9 +482,13 @@ struct HasScrollView : BaseComponent {
   Vector2Type viewport_size = {0, 0};  // Visible area size
   float scroll_speed = 20.0f;          // Pixels per scroll wheel notch
   bool vertical_enabled = true;        // Allow vertical scrolling
+  bool horizontal_enabled = false;     // Allow horizontal scrolling
+  bool invert_scroll = false;          // Invert scroll direction (non-natural)
 
   HasScrollView() = default;
   explicit HasScrollView(float speed) : scroll_speed(speed) {}
+  HasScrollView(bool vert, bool horiz)
+      : vertical_enabled(vert), horizontal_enabled(horiz) {}
 
   // Clamp scroll offset to valid bounds (0 to max scrollable distance)
   void clamp_scroll() {
