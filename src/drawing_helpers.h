@@ -264,6 +264,15 @@ inline void draw_ring(float centerX, float centerY, float innerRadius,
                    0.0f, 360.0f, segments, color);
 }
 
+// Begin scissor mode (clipping rectangle)
+// All drawing after this call will be clipped to the specified rectangle
+inline void begin_scissor_mode(int x, int y, int width, int height) {
+  raylib::BeginScissorMode(x, y, width, height);
+}
+
+// End scissor mode (stop clipping)
+inline void end_scissor_mode() { raylib::EndScissorMode(); }
+
 inline raylib::Font get_default_font() { return raylib::GetFontDefault(); }
 inline raylib::Font get_unset_font() { return raylib::GetFontDefault(); }
 
@@ -287,6 +296,8 @@ inline void draw_texture_npatch(const afterhours::Texture, const RectangleType,
 inline void draw_ring_segment(float, float, float, float, float, float, int,
                               Color) {}
 inline void draw_ring(float, float, float, float, int, Color) {}
+inline void begin_scissor_mode(int, int, int, int) {}
+inline void end_scissor_mode() {}
 inline afterhours::Font get_default_font() { return afterhours::Font(); }
 inline afterhours::Font get_unset_font() { return afterhours::Font(); }
 #endif

@@ -1626,6 +1626,80 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   return ElementResult{state.changed_since, entity};
 }
 
+/// Creates a scrollable container that clips content and handles mouse wheel
+/// input.
+///
+/// @param ctx The UI context
+/// @param ep_pair Entity-parent pair for hierarchy
+/// @param config Component configuration (size defines the viewport)
+///
+/// Features:
+/// - Vertical scrolling via mouse wheel when hovered
+/// - Content clipping to viewport bounds
+/// - Automatic content size detection from children
+///
+/// Usage:
+/// ```cpp
+/// auto scroll = scroll_view(ctx, mk(parent),
+///     ComponentConfig{}.with_size(pixels(300), pixels(200)));
+///
+/// // Add children - they can exceed the viewport height
+/// for (int i = 0; i < 20; i++) {
+///   div(ctx, mk(scroll.ent(), i),
+///       ComponentConfig{}.with_size(percent(1.0f), pixels(40))
+///                        .with_label(fmt::format("Item {}", i)));
+/// }
+/// ```
+ElementResult scroll_view(HasUIContext auto &ctx, EntityParent ep_pair,
+                          ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+
+  // Default to children-sized container if no size specified
+  if (config.size.is_default) {
+    config.with_size(ComponentSize{percent(1.0f), percent(1.0f)});
+  }
+
+  // Ensure column layout for vertical scrolling
+  if (config.flex_direction == FlexDirection::None) {
+    config.with_flex_direction(FlexDirection::Column);
+  }
+
+  _init_component(ctx, ep_pair, config, ComponentType::Div, false,
+                  "scroll_view");
+
+  // Initialize or get scroll state
+  auto &scroll_state = entity.template addComponentIfMissing<HasScrollView>();
+
+  // Update viewport size from computed layout
+  UIComponent &cmp = entity.template get<UIComponent>();
+  scroll_state.viewport_size = {cmp.computed[Axis::X], cmp.computed[Axis::Y]};
+
+  // Handle mouse wheel input when mouse is inside the scroll view
+  // Note: rect uses computed values from the previous frame's layout.
+  // On the first frame, rect may be empty - we skip input handling then.
+  Rectangle rect = cmp.rect();
+  bool has_valid_rect = rect.width > 0.0f && rect.height > 0.0f;
+  bool mouse_inside = has_valid_rect && is_mouse_inside(ctx.mouse.pos, rect);
+
+  bool scrolled = false;
+  if (mouse_inside && scroll_state.vertical_enabled) {
+    float wheel = input::get_mouse_wheel_move();
+    if (wheel != 0.0f) {
+      float old_offset = scroll_state.scroll_offset.y;
+      // Scroll up = positive wheel = negative offset (scroll towards start)
+      scroll_state.scroll_offset.y -= wheel * scroll_state.scroll_speed;
+      // Prevent scrolling past the start (full clamping happens in render
+      // after content_size is computed)
+      if (scroll_state.scroll_offset.y < 0.0f) {
+        scroll_state.scroll_offset.y = 0.0f;
+      }
+      scrolled = (scroll_state.scroll_offset.y != old_offset);
+    }
+  }
+
+  return {scrolled, entity};
+}
+
 } // namespace imm
 
 } // namespace ui

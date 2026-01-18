@@ -6,6 +6,7 @@
 #else
 #include "../../../vendor/magic_enum/magic_enum.hpp"
 #endif
+#include <algorithm>
 #include <functional>
 #include <magic_enum/magic_enum.hpp>
 #include <optional>
@@ -472,6 +473,31 @@ struct HasCircularProgressState : BaseComponent {
     fill_color = c;
     return *this;
   }
+};
+
+// Scroll view state - enables scrolling content within a clipped viewport
+struct HasScrollView : BaseComponent {
+  Vector2Type scroll_offset = {0, 0};  // Current scroll position
+  Vector2Type content_size = {0, 0};   // Total size of all children (computed)
+  Vector2Type viewport_size = {0, 0};  // Visible area size
+  float scroll_speed = 20.0f;          // Pixels per scroll wheel notch
+  bool vertical_enabled = true;        // Allow vertical scrolling
+
+  HasScrollView() = default;
+  explicit HasScrollView(float speed) : scroll_speed(speed) {}
+
+  // Clamp scroll offset to valid bounds (0 to max scrollable distance)
+  void clamp_scroll() {
+    float max_scroll_y = std::max(0.0f, content_size.y - viewport_size.y);
+    scroll_offset.y = std::clamp(scroll_offset.y, 0.0f, max_scroll_y);
+    // Horizontal scrolling (not enabled in MVP but structure is here)
+    float max_scroll_x = std::max(0.0f, content_size.x - viewport_size.x);
+    scroll_offset.x = std::clamp(scroll_offset.x, 0.0f, max_scroll_x);
+  }
+
+  // Check if content exceeds viewport (scrolling needed)
+  bool needs_scroll_y() const { return content_size.y > viewport_size.y; }
+  bool needs_scroll_x() const { return content_size.x > viewport_size.x; }
 };
 
 } // namespace ui

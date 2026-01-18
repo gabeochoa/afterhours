@@ -90,6 +90,11 @@ struct input : developer::Plugin {
     return raylib::IsKeyDown(keycode);
   }
   static int get_char_pressed() { return raylib::GetCharPressed(); }
+  static float get_mouse_wheel_move() { return raylib::GetMouseWheelMove(); }
+  static MousePosition get_mouse_wheel_move_v() {
+    raylib::Vector2 v = raylib::GetMouseWheelMoveV();
+    return {v.x, v.y};
+  }
   static float get_gamepad_axis_mvt(const GamepadID gamepad_id,
                                     const GamepadAxis axis) {
     return raylib::GetGamepadAxisMovement(gamepad_id, axis);
@@ -431,6 +436,8 @@ struct input : developer::Plugin {
   static bool is_mouse_button_down(const MouseButton) { return false; }
   static bool is_mouse_button_pressed(const MouseButton) { return false; }
   static bool is_mouse_button_released(const MouseButton) { return false; }
+  static float get_mouse_wheel_move() { return 0.f; }
+  static MousePosition get_mouse_wheel_move_v() { return {0, 0}; }
   static
 
       bool

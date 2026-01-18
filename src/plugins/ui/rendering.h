@@ -43,6 +43,142 @@ static inline float _compute_effective_opacity(const Entity &entity) {
   }
   return std::clamp(result, 0.0f, 1.0f);
 }
+
+// Find the nearest ancestor with HasScrollView
+// Returns invalid OptEntity if no scroll view ancestor exists
+static inline OptEntity _find_scroll_view_ancestor(const Entity &entity) {
+  if (!entity.has<UIComponent>())
+    return {};
+
+  const UIComponent &cmp = entity.get<UIComponent>();
+  EntityID pid = cmp.parent;
+  
+  int guard = 0;
+  while (pid >= 0 && guard < 64) {
+    OptEntity opt_parent = EntityHelper::getEntityForID(pid);
+    if (!opt_parent.valid()) {
+      break;
+    }
+    Entity &parent = opt_parent.asE();
+    
+    if (parent.has<HasScrollView>()) {
+      return opt_parent;
+    }
+    if (!parent.has<UIComponent>())
+      break;
+    pid = parent.get<UIComponent>().parent;
+    ++guard;
+  }
+  return {};
+}
+
+// Get scroll offset from ancestor scroll view, returns {0,0} if none
+static inline Vector2Type _get_scroll_offset(const Entity &entity) {
+  OptEntity scroll_ancestor = _find_scroll_view_ancestor(entity);
+  if (scroll_ancestor.valid() && scroll_ancestor->has<HasScrollView>()) {
+    return scroll_ancestor->get<HasScrollView>().scroll_offset;
+  }
+  return {0.0f, 0.0f};
+}
+
+// Get the scissor rect from a scroll view ancestor (viewport bounds)
+static inline RectangleType _get_scroll_scissor_rect(const Entity &entity) {
+  OptEntity scroll_ancestor = _find_scroll_view_ancestor(entity);
+  if (scroll_ancestor.valid() && scroll_ancestor->has<UIComponent>()) {
+    return scroll_ancestor->get<UIComponent>().rect();
+  }
+  return {0, 0, 0, 0};
+}
+
+// Recompute children's Y positions for scroll view containers
+// The layout system constrains children to parent bounds, which stacks overflow
+// items at the same position. This function fixes that by sequentially positioning
+// children based on their sizes.
+static inline void _fix_scroll_view_child_positions(Entity &entity) {
+  if (!entity.has<HasScrollView>() || !entity.has<UIComponent>())
+    return;
+
+  UIComponent &cmp = entity.get<UIComponent>();
+  RectangleType parent_rect = cmp.rect();
+  
+  // Starting position for children (inside parent's content area)
+  float current_y = parent_rect.y + cmp.computed_padd[Axis::top];
+  float content_x = parent_rect.x + cmp.computed_padd[Axis::left];
+
+  for (EntityID child_id : cmp.children) {
+    OptEntity child_opt = EntityHelper::getEntityForID(child_id);
+    if (!child_opt.valid()) continue;
+    
+    Entity &child = child_opt.asE();
+    if (!child.has<UIComponent>())
+      continue;
+
+    UIComponent &child_cmp = child.get<UIComponent>();
+    
+    // Position this child at the current offset
+    float child_margin_top = child_cmp.computed_margin[Axis::top];
+    float child_margin_left = child_cmp.computed_margin[Axis::left];
+    
+    child_cmp.computed_rel[Axis::X] = content_x + child_margin_left;
+    child_cmp.computed_rel[Axis::Y] = current_y + child_margin_top;
+    
+    // Move down for next child
+    float child_height = child_cmp.computed[Axis::Y];
+    float child_margin_bottom = child_cmp.computed_margin[Axis::bottom];
+    current_y += child_margin_top + child_height + child_margin_bottom;
+  }
+}
+
+// Compute content size for a scroll view from its children's sizes
+// For scroll views, we sum children's heights instead of using screen positions
+// because the layout system constrains children to the viewport
+static inline void _update_scroll_view_content_size(Entity &entity) {
+  if (!entity.has<HasScrollView>() || !entity.has<UIComponent>())
+    return;
+
+  // First fix child positions that may have been constrained by layout
+  _fix_scroll_view_child_positions(entity);
+
+  HasScrollView &scroll = entity.get<HasScrollView>();
+  const UIComponent &cmp = entity.get<UIComponent>();
+
+  // Start with viewport size from the rect (accounts for margins/padding)
+  RectangleType parent_rect = cmp.rect();
+  scroll.viewport_size = {parent_rect.width, parent_rect.height};
+
+  // For column layout scroll views, sum up children's heights + margins
+  // This gives us the "natural" content height if no constraints applied
+  float total_height = 0.0f;
+  float max_width = 0.0f;
+
+  for (EntityID child_id : cmp.children) {
+    OptEntity child_opt = EntityHelper::getEntityForID(child_id);
+    if (!child_opt.valid()) continue;
+    
+    Entity &child = child_opt.asE();
+    if (!child.has<UIComponent>())
+      continue;
+
+    const UIComponent &child_cmp = child.get<UIComponent>();
+    
+    // Use computed size (actual rendered height) + margins
+    float child_height = child_cmp.computed[Axis::Y];
+    float child_margin_top = child_cmp.computed_margin[Axis::top];
+    float child_margin_bottom = child_cmp.computed_margin[Axis::bottom];
+    float child_total_height = child_height + child_margin_top + child_margin_bottom;
+    
+    total_height += child_total_height;
+    
+    // For width, take the maximum
+    float child_width = child_cmp.computed[Axis::X];
+    float child_margin_left = child_cmp.computed_margin[Axis::left];
+    float child_margin_right = child_cmp.computed_margin[Axis::right];
+    max_width = std::max(max_width, child_width + child_margin_left + child_margin_right);
+  }
+
+  scroll.content_size = {max_width, total_height};
+  scroll.clamp_scroll();
+}
 // Minimum font size to prevent invalid rendering (font size 0)
 // This ensures text always attempts to render, even if too small to read
 constexpr float MIN_FONT_SIZE = 1.0f;
@@ -743,6 +879,20 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     const float effective_opacity = _compute_effective_opacity(entity);
     RectangleType draw_rect = cmp.rect();
 
+    // Check if this entity is inside a scroll view (but not the scroll view
+    // itself)
+    OptEntity scroll_ancestor = _find_scroll_view_ancestor(entity);
+    bool inside_scroll_view =
+        scroll_ancestor.valid() && !entity.has<HasScrollView>();
+
+    // Apply scroll offset to draw_rect if inside a scroll view
+    if (inside_scroll_view) {
+      Vector2Type scroll_offset =
+          scroll_ancestor->get<HasScrollView>().scroll_offset;
+      draw_rect.y -= scroll_offset.y;
+      draw_rect.x -= scroll_offset.x;
+    }
+
     if (entity.has<HasUIModifiers>()) {
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
     }
@@ -918,12 +1068,36 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       const_cast<FontManager &>(font_manager).set_active(cmp.font_name);
     }
 
+    // Check if we need scissor clipping for scroll view
+    OptEntity scroll_ancestor = _find_scroll_view_ancestor(entity);
+    bool needs_scissor =
+        scroll_ancestor.valid() && !entity.has<HasScrollView>();
+
+    if (needs_scissor) {
+      RectangleType scissor_rect =
+          scroll_ancestor->get<UIComponent>().rect();
+      begin_scissor_mode(static_cast<int>(scissor_rect.x),
+                         static_cast<int>(scissor_rect.y),
+                         static_cast<int>(scissor_rect.width),
+                         static_cast<int>(scissor_rect.height));
+    }
+
+    // Update scroll view content size before rendering (after layout is done)
+    if (entity.has<HasScrollView>()) {
+      _update_scroll_view_content_size(const_cast<Entity &>(entity));
+    }
+
     if (entity.has<HasColor>() || entity.has<HasLabel>() ||
         entity.has<ui::HasImage>() ||
         entity.has<texture_manager::HasTexture>() ||
         entity.has<FocusClusterRoot>() ||
-        entity.has<HasCircularProgressState>()) {
+        entity.has<HasCircularProgressState>() ||
+        entity.has<HasScrollView>()) {
       render_me(context, font_manager, entity);
+    }
+
+    if (needs_scissor) {
+      end_scissor_mode();
     }
 
     // NOTE: i dont think we need this TODO
