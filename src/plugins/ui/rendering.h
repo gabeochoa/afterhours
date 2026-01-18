@@ -334,6 +334,10 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
   // Calculate the text position based on the alignment and margins
   Vector2Type position;
   switch (alignment) {
+  default: 
+    log_warn("Unknown alignment: {}", static_cast<int>(alignment));
+    [[fallthrough]];
+  case TextAlignment::None: // None defaults to Left alignment
   case TextAlignment::Left:
     position = Vector2Type{
         .x = container.x + margin_px.x,
@@ -355,9 +359,6 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
         .y = container.y + margin_px.y +
              (container.height - 2 * margin_px.y - text_size.y) / 2,
     };
-    break;
-  default:
-    // Handle unknown alignment (shouldn't happen)
     break;
   }
 
