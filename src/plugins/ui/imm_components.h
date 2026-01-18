@@ -662,34 +662,41 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   std::string original_label = config.label;
   config.label = "";
 
+  // Compact mode: skip label area when no label provided
+  bool compact = original_label.empty();
+
   auto original_color_usage = config.color_usage;
   config.with_color_usage(Theme::Usage::None);
   _init_component(ctx, ep_pair, config, ComponentType::Slider, true, "slider");
   config.color_usage = original_color_usage;
 
-  // Create main label
-  std::string main_label_text =
-      generate_label_text(original_label, owned_value, handle_label_position);
-  auto label_corners = RoundedCorners(config.rounded_corners.value())
-                           .sharp(TOP_RIGHT)
-                           .sharp(BOTTOM_RIGHT);
+  // Create main label (only when label is provided)
+  if (!compact) {
+    std::string main_label_text =
+        generate_label_text(original_label, owned_value, handle_label_position);
+    auto label_corners = RoundedCorners(config.rounded_corners.value())
+                             .sharp(TOP_RIGHT)
+                             .sharp(BOTTOM_RIGHT);
 
-  auto label = div(ctx, mk(entity, entity.id + 0),
-                   ComponentConfig::inherit_from(config, "slider_text")
-                       .with_size(config.size)
-                       .with_label(main_label_text)
-                       .with_color_usage(Theme::Usage::Primary)
-                       .with_rounded_corners(label_corners)
-                       .with_render_layer(config.render_layer + 0));
-  label.ent()
-      .template get<UIComponent>()
-      .set_desired_width(config.size._scale_x(0.5f).x_axis)
-      .set_desired_height(config.size.y_axis);
-  label.ent().template addComponentIfMissing<InFocusCluster>();
+    auto label = div(ctx, mk(entity, entity.id + 0),
+                     ComponentConfig::inherit_from(config, "slider_text")
+                         .with_size(config.size)
+                         .with_label(main_label_text)
+                         .with_color_usage(Theme::Usage::Primary)
+                         .with_rounded_corners(label_corners)
+                         .with_render_layer(config.render_layer + 0));
+    label.ent()
+        .template get<UIComponent>()
+        .set_desired_width(config.size._scale_x(0.5f).x_axis)
+        .set_desired_height(config.size.y_axis);
+    label.ent().template addComponentIfMissing<InFocusCluster>();
+  }
 
   // Create slider background
-  auto elem_corners =
-      RoundedCorners(config.rounded_corners.value()).left_sharp();
+  // In compact mode, use full rounded corners; otherwise sharp on left
+  auto elem_corners = compact
+      ? RoundedCorners(config.rounded_corners.value())
+      : RoundedCorners(config.rounded_corners.value()).left_sharp();
   auto elem = div(ctx, mk(entity, parent.id + entity.id + 0),
                   ComponentConfig::inherit_from(config, "slider_background")
                       .with_size(config.size)

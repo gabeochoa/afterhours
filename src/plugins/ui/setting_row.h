@@ -50,11 +50,11 @@ struct SettingRowConfig {
   std::optional<Color> icon_bg_color;        // Icon background color
 
   // Row styling
-  float row_height = 52.0f;
-  float icon_size = 30.0f;
-  float icon_margin = 10.0f;
-  float label_gap = 14.0f;
-  float row_spacing = 10.0f;  // Vertical gap between rows
+  float row_height = 44.0f;
+  float icon_size = 28.0f;
+  float icon_margin = 8.0f;
+  float label_gap = 12.0f;
+  float row_spacing = 6.0f;  // Vertical gap between rows
 
   // Toggle-specific styling
   float toggle_track_width = 44.0f;
@@ -68,8 +68,8 @@ struct SettingRowConfig {
   float stepper_value_width = 80.0f;
 
   // Slider-specific styling
-  float slider_width = 200.0f;  // Wider to make track more usable (label takes 50%)
-  float slider_height = 20.0f;
+  float slider_width = 200.0f;  // Wider to make track more usable
+  float slider_height = 28.0f;  // Taller to align better with label text
 
   // Slot config overrides (only specify what you want to change)
   // These merge with the sensible defaults - no need to specify everything
@@ -350,8 +350,7 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
   case SettingRowControlType::Slider: {
     // Expect float* value
     if constexpr (std::is_same_v<ValueT, float *>) {
-      // Build slider - the slider component will show the percentage value
-      // internally via WithLabel position, so we pass an empty label
+      // Build slider - no label means compact mode (no left label area)
       auto slider_cfg =
           ComponentConfig{}
               .with_size(ComponentSize{pixels((int)row_config.slider_width),
@@ -364,7 +363,7 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
       }
 
       float slider_value = *value;
-      // Use OnHandle to show value on the slider handle
+      // Show value on handle
       if (auto result = slider(ctx, mk(entity), slider_value, slider_cfg,
                                SliderHandleValueLabelPosition::OnHandle);
           result) {
