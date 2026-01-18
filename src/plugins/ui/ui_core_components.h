@@ -78,6 +78,8 @@ struct UIComponent : BaseComponent {
   JustifyContent justify_content = JustifyContent::FlexStart;
   AlignItems align_items = AlignItems::FlexStart;
   SelfAlign self_align = SelfAlign::Auto; // Override parent's align_items for this element
+  FlexWrap flex_wrap = FlexWrap::Wrap;    // Controls wrapping behavior
+  bool debug_wrap = false;                // Opt-in wrap debugging
 
   bool should_hide = false;
   bool was_rendered_to_screen = false;
@@ -239,6 +241,16 @@ struct UIComponent : BaseComponent {
 
   auto &set_self_align(SelfAlign sa) {
     self_align = sa;
+    return *this;
+  }
+
+  auto &set_flex_wrap(FlexWrap fw) {
+    flex_wrap = fw;
+    return *this;
+  }
+
+  auto &set_debug_wrap(bool enabled) {
+    debug_wrap = enabled;
     return *this;
   }
 

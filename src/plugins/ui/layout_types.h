@@ -208,6 +208,13 @@ enum struct SelfAlign {
   Center,    // Center on cross axis - common for centering content containers
 };
 
+/// Controls whether children wrap to new rows/columns when they exceed container size.
+/// NoWrap prevents wrapping and generates warnings when overflow would occur.
+enum struct FlexWrap {
+  Wrap,   // Allow wrapping to new row/column (default behavior)
+  NoWrap, // Never wrap - overflow/clip instead, warn if would overflow
+};
+
 enum struct Axis {
   X = 0,
   Y = 1,

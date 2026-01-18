@@ -45,6 +45,8 @@ struct ComponentConfig {
   JustifyContent justify_content = JustifyContent::FlexStart;
   AlignItems align_items = AlignItems::FlexStart;
   SelfAlign self_align = SelfAlign::Auto;
+  FlexWrap flex_wrap = FlexWrap::Wrap;
+  bool debug_wrap = false;
 
   // Background color settings
   Theme::Usage color_usage = Theme::Usage::Default;
@@ -270,6 +272,18 @@ struct ComponentConfig {
   }
   ComponentConfig &with_self_align(SelfAlign sa) {
     self_align = sa;
+    return *this;
+  }
+  ComponentConfig &with_no_wrap() {
+    flex_wrap = FlexWrap::NoWrap;
+    return *this;
+  }
+  ComponentConfig &with_flex_wrap(FlexWrap fw) {
+    flex_wrap = fw;
+    return *this;
+  }
+  ComponentConfig &with_debug_wrap(bool enabled = true) {
+    debug_wrap = enabled;
     return *this;
   }
   ComponentConfig &with_font(const std::string &font_name_, float font_size_) {
@@ -516,6 +530,10 @@ struct ComponentConfig {
       merged.align_items = overrides.align_items;
     if (overrides.self_align != SelfAlign::Auto)
       merged.self_align = overrides.self_align;
+    if (overrides.flex_wrap != FlexWrap::Wrap)
+      merged.flex_wrap = overrides.flex_wrap;
+    if (overrides.debug_wrap)
+      merged.debug_wrap = overrides.debug_wrap;
 
     return merged;
   }

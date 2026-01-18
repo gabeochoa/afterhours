@@ -1,6 +1,7 @@
 #pragma once
 
 // Re-export layout types and core components for backwards compatibility
+#include "ui/components.h"
 #include "ui/layout_types.h"
 #include "ui/ui_core_components.h"
 
@@ -891,9 +892,9 @@ struct AutoLayout {
         continue;
       }
 
-      // computed bounds
-      float cx = child.computed[Axis::X] + child.computed_padd[Axis::X];
-      float cy = child.computed[Axis::Y] + child.computed_padd[Axis::Y];
+      // computed bounds - use margin for layout spacing
+      float cx = child.computed[Axis::X] + child.computed_margin[Axis::X];
+      float cy = child.computed[Axis::Y] + child.computed_margin[Axis::Y];
 
       bool will_hit_max_x = cx + offx > sx;
       bool will_hit_max_y = cy + offy > sy;
@@ -906,31 +907,88 @@ struct AutoLayout {
         continue;
       }
 
+      // Helper to get child debug name
+      auto get_child_debug_name = [this, child_id]() -> std::string {
+        Entity &ent = this->to_ent(child_id);
+        if (ent.has<UIComponentDebug>()) {
+          return ent.get<UIComponentDebug>().name();
+        }
+        return fmt::format("entity_{}", child_id);
+      };
+
+      // Helper to get parent debug name
+      auto get_parent_debug_name = [this, &widget]() -> std::string {
+        Entity &ent = this->to_ent(widget.id);
+        if (ent.has<UIComponentDebug>()) {
+          return ent.get<UIComponentDebug>().name();
+        }
+        return fmt::format("entity_{}", widget.id);
+      };
+
       // We can flex vertically and current child will push us over height
       // lets wrap
-      if (child.flex_direction & FlexDirection::Column && cy + offy > sy) {
-        offy = 0;
-        offx += col_w;
-        col_w = cx;
+      // Wrap detection should be based on PARENT's flex direction, not child's
+      bool will_wrap_column = is_column && cy + offy > sy;
+      bool will_wrap_row = is_row && cx + offx > sx;
+
+      // Check for smart wrap warning conditions
+      if (will_wrap_column || will_wrap_row) {
+        bool should_warn = false;
+        std::string warn_reason;
+
+        // Condition 1: NoWrap set but would overflow
+        if (child.flex_wrap == FlexWrap::NoWrap) {
+          should_warn = true;
+          warn_reason = "NoWrap set but would overflow";
+        }
+        // Condition 2: Child FlexDirection matches parent
+        else if (child.flex_direction == widget.flex_direction) {
+          should_warn = true;
+          warn_reason = fmt::format(
+              "Child FlexDirection matches parent ({}) - may cause unexpected "
+              "wrap",
+              is_column ? "Column" : "Row");
+        }
+        // Condition 4: Debug flag enabled
+        else if (child.debug_wrap) {
+          should_warn = true;
+          warn_reason = "debug_wrap enabled";
+        }
+
+        if (should_warn) {
+          log_warn("Layout wrap: '{}' in parent '{}' - {} (child_size={:.1f}, "
+                   "offset={:.1f}, container={:.1f})",
+                   get_child_debug_name(), get_parent_debug_name(), warn_reason,
+                   will_wrap_column ? cy : cx, will_wrap_column ? offy : offx,
+                   will_wrap_column ? sy : sx);
+        }
       }
 
-      // We can flex horizontally and current child will push us over
-      // width lets wrap
-      if (child.flex_direction & FlexDirection::Row && cx + offx > sx) {
-        offx = 0;
-        offy += col_h;
-        col_h = cy;
+      // If NoWrap is set, skip the wrap entirely
+      if (child.flex_wrap == FlexWrap::NoWrap) {
+        // Don't wrap - item will overflow/clip
+      } else {
+        // Execute wrap logic
+        if (will_wrap_column) {
+          offy = 0;
+          offx += col_w;
+          col_w = cx;
+        }
+
+        if (will_wrap_row) {
+          offx = 0;
+          offy += col_h;
+          col_h = cy;
+        }
       }
 
-      // Calculate cross-axis offset
-      // Check if child has self_align override, otherwise use parent's align_items
+      // Calculate cross-axis offset (self_align overrides parent's align_items)
       float cross_offset = 0.f;
       float child_cross = is_column ? cx : cy;
       float cross_remaining = cross_axis_size - child_cross;
 
       if (cross_remaining > 0.f) {
-        // Determine effective alignment: self_align overrides parent's align_items
-        // if child.self_align != Auto
+        // Use child's self_align if set, otherwise fall back to parent's align_items
         if (child.self_align != SelfAlign::Auto) {
           switch (child.self_align) {
           case SelfAlign::Auto:
@@ -975,6 +1033,21 @@ struct AutoLayout {
         child.computed_rel[Axis::Y] = final_y;
       }
 
+      // Condition 3: Check if child overflows parent bounds after positioning
+      float child_end_x = child.computed_rel[Axis::X] + cx;
+      float child_end_y = child.computed_rel[Axis::Y] + cy;
+      bool overflows_x = child_end_x > sx;
+      bool overflows_y = child_end_y > sy;
+      if (overflows_x || overflows_y) {
+        log_warn("Layout overflow: '{}' extends outside parent '{}' bounds "
+                 "(child_rel=[{:.1f},{:.1f}], child_size=[{:.1f},{:.1f}], "
+                 "child_end=[{:.1f},{:.1f}], parent_size=[{:.1f},{:.1f}], "
+                 "gap={:.1f}, start_offset={:.1f})",
+                 get_child_debug_name(), get_parent_debug_name(),
+                 child.computed_rel[Axis::X], child.computed_rel[Axis::Y], cx,
+                 cy, child_end_x, child_end_y, sx, sy, gap, start_offset);
+      }
+
       constexpr float GRID_UNIT_720P = 4.0f;
       float grid_unit_y =
           GRID_UNIT_720P * (fetch_screen_value_(Axis::Y) / 720.0f);
@@ -984,16 +1057,20 @@ struct AutoLayout {
       // Setup for next child placement (include gap for justify)
       if (is_column) {
         float next_y = offy + cy + gap;
+        // Note: We no longer add grid_unit_y here - it was causing
+        // accumulated offset that breaks justify calculations.
+        // Grid snapping now only affects final position, not child spacing.
         if (enable_grid_snapping) {
-          next_y += grid_unit_y;
           next_y = snap_to_8pt_grid(next_y, Axis::Y);
         }
         offy = next_y;
       }
       if (is_row) {
         float next_x = offx + cx + gap;
+        // Note: We no longer add grid_unit_x here - it was causing
+        // accumulated offset that breaks justify calculations.
+        // Grid snapping now only affects final position, not child spacing.
         if (enable_grid_snapping) {
-          next_x += grid_unit_x;
           next_x = snap_to_8pt_grid(next_x, Axis::X);
         }
         offx = next_x;
