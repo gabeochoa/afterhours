@@ -560,7 +560,11 @@ toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
   } else {
     // Pill style (default)
     Color track_color = colors::lerp(theme.secondary, theme.accent, state.animation_progress);
-    Color knob_color = theme.darkfont.a > 0 ? theme.darkfont : Color{255, 255, 255, 255};
+    // Knob color indicates state - accent when ON, light grey when OFF
+    // This ensures state is visible even when track is overridden by hover
+    Color knob_off = theme.accent;
+    Color knob_on = theme.accent;
+    Color knob_color = colors::lerp(knob_off, knob_on, state.animation_progress);
     float track_w = 40.0f, track_h = 20.0f, knob_sz = 16.0f, pad = 2.0f;
 
     auto track_result = button(ctx, mk(entity),

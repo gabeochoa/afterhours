@@ -459,6 +459,12 @@ struct ComponentConfig {
       merged.custom_color = overrides.custom_color;
     }
 
+    // Text color overrides
+    if (overrides.text_color_usage != Theme::Usage::Default) {
+      merged.text_color_usage = overrides.text_color_usage;
+      merged.custom_text_color = overrides.custom_text_color;
+    }
+
     if (overrides.has_label_alignment_override())
       merged.label_alignment = overrides.label_alignment;
 

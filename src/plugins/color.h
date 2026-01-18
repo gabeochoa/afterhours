@@ -44,6 +44,14 @@ static const Color isabelline = Color{237, 230, 227, 255};
 static const Color tea_green =
     Color{166, 185, 189, 255}; // 195, 232, 189, 255};
 
+// Soft UI colors for settings/icons
+static const Color soft_green = Color{85, 175, 125, 255};
+static const Color soft_blue = Color{65, 145, 215, 255};
+static const Color soft_purple = Color{145, 95, 185, 255};
+static const Color soft_red = Color{215, 85, 85, 255};
+static const Color soft_orange = Color{235, 155, 65, 255};
+static const Color soft_yellow = Color{215, 155, 65, 255};
+
 static Color darken(const Color &color, const float factor = 0.8f) {
   Color darkerColor;
   darkerColor.r = static_cast<unsigned char>(color.r * factor);
