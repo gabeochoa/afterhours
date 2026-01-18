@@ -2,6 +2,7 @@
 #pragma once
 
 #include <cmath>
+#include <concepts>
 #include <functional>
 #include <memory>
 #include <type_traits>
@@ -59,6 +60,9 @@ public:
   virtual void for_each_derived(Entity &, const float) = 0;
   virtual void for_each_derived(const Entity &, const float) const = 0;
 };
+
+template <typename S>
+concept IsSystem = std::is_base_of_v<SystemBase, S>;
 
 template <typename List> struct SystemForEachBase;
 template <typename... Cs> struct SystemForEachBase<type_list<Cs...>> {

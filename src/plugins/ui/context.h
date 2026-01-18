@@ -1,5 +1,12 @@
 #pragma once
 
+// TODO: Consider using C++20 concepts for type constraints in this plugin.
+// See e2e_testing/concepts.h for examples (HasPosition, MouseStateLike, etc.)
+// Potential uses:
+// - Concept for mouse position types (instead of hard-coding input::MousePosition)
+// - Concept for rectangle types (instead of RectangleType)
+// - Concept for input action enums (instead of template parameter)
+
 #include <algorithm>
 #include <bitset>
 #if __has_include(<magic_enum/magic_enum.hpp>)

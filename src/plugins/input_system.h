@@ -11,6 +11,10 @@
 #include "../developer.h"
 #include "window_manager.h"
 
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+#include "e2e_testing/test_input.h"
+#endif
+
 namespace afterhours {
 
 struct input : developer::Plugin {
@@ -84,12 +88,26 @@ struct input : developer::Plugin {
     return raylib::IsGamepadAvailable(id);
   }
   static bool is_key_pressed(const KeyCode keycode) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return testing::test_input::is_key_pressed(keycode, raylib::IsKeyPressed);
+#else
     return raylib::IsKeyPressed(keycode);
+#endif
   }
   static bool is_key_down(const KeyCode keycode) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return testing::test_input::is_key_down(keycode, raylib::IsKeyDown);
+#else
     return raylib::IsKeyDown(keycode);
+#endif
   }
-  static int get_char_pressed() { return raylib::GetCharPressed(); }
+  static int get_char_pressed() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return testing::test_input::get_char_pressed(raylib::GetCharPressed);
+#else
+    return raylib::GetCharPressed();
+#endif
+  }
   static float get_mouse_wheel_move() { return raylib::GetMouseWheelMove(); }
   static MousePosition get_mouse_wheel_move_v() {
     raylib::Vector2 v = raylib::GetMouseWheelMoveV();

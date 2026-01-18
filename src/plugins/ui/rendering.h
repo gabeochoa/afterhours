@@ -10,6 +10,10 @@
 #include "../../font_helper.h"
 #include "../../logging.h"
 #include "../animation.h"
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+#include "../e2e_testing/test_input.h"
+#include "../e2e_testing/visible_text.h"
+#endif
 #include "../input_system.h"
 #include "../texture_manager.h"
 #include "animation_keys.h"
@@ -412,6 +416,13 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
                   bool show_debug_indicator = false,
                   const std::optional<TextStroke> &stroke = std::nullopt,
                   const std::optional<TextShadow> &shadow = std::nullopt) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+  // Register text for E2E testing assertions (only when test mode is active)
+  if (testing::test_input::detail::test_mode) {
+    testing::VisibleTextRegistry::instance().register_text(text);
+  }
+#endif
+
   TextPositionResult result =
       position_text_ex(fm, text, rect, alignment, Vector2Type{5.f, 5.f});
 

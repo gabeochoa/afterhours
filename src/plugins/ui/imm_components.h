@@ -1,5 +1,10 @@
 #pragma once
 
+// TODO: Move internal helper functions to a detail:: namespace to clearly
+// separate public API from implementation details. Functions like prev_index,
+// next_index, and other internal utilities should not be part of the public API.
+// See e2e_testing/input_injector.h for an example of this pattern.
+
 #include <algorithm>
 #include <array>
 #include <bitset>
