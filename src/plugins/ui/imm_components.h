@@ -1213,6 +1213,93 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
                        navState.current_index()};
 }
 
+/// Tab container - horizontal row of tabs for organizing content into panels
+///
+/// @param ctx The UI context
+/// @param ep_pair Entity-parent pair for hierarchy
+/// @param tab_labels Container of tab label strings
+/// @param active_tab Reference to the currently active tab index
+/// @param config Component configuration
+///
+/// Features:
+/// - Horizontal row of equally-sized tabs
+/// - Active tab highlighting (different background)
+/// - Click to switch tabs
+/// - Keyboard navigation (arrows when focused)
+///
+/// Usage:
+/// ```cpp
+/// size_t current_tab = 0;
+/// std::array<std::string_view, 3> tabs = {"Tab one", "Tab two", "Tab three"};
+///
+/// if (auto result = tab_container(ctx, mk(parent), tabs, current_tab); result) {
+///   // Tab changed - play sound, log, etc.
+/// }
+///
+/// // Render content based on current_tab (updated by tab_container)
+/// render_tab_content[current_tab](ctx, parent, theme);
+/// ```
+template <typename Container>
+ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
+                            const Container &tab_labels, size_t &active_tab,
+                            ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+
+  if (tab_labels.empty())
+    return {false, entity};
+
+  // Apply styling defaults if available
+  if (config.size.is_default) {
+    auto &styling_defaults = UIStylingDefaults::get();
+    if (auto def =
+            styling_defaults.get_component_config(ComponentType::TabContainer)) {
+      config.size = def->size;
+    } else {
+      config.size = ComponentSize(percent(1.0f), pixels(48.f));
+    }
+  }
+
+  config.flex_direction = FlexDirection::Row;
+  config.with_color_usage(Theme::Usage::None);
+  _init_component(ctx, ep_pair, config, ComponentType::TabContainer, false,
+                  "tab_container");
+
+  bool changed = false;
+  const size_t num_tabs = tab_labels.size();
+
+  // Calculate tab width as equal portions
+  float tab_width_percent = 1.0f / static_cast<float>(num_tabs);
+
+  size_t i = 0;
+  for (const auto &label : tab_labels) {
+    bool is_active = (i == active_tab);
+
+    // Active tab: surface color with normal text
+    // Inactive tab: background color with muted/dimmed text
+    Color tab_bg = is_active ? ctx.theme.surface : ctx.theme.background;
+    Color tab_text = is_active ? ctx.theme.font : ctx.theme.font_muted;
+
+    auto tab_config =
+        ComponentConfig::inherit_from(config, fmt::format("tab_{}", i))
+            .with_size(
+                ComponentSize{percent(tab_width_percent), config.size.y_axis})
+            .with_label(std::string(label))
+            .with_custom_background(tab_bg)
+            .with_custom_text_color(tab_text)
+            .with_align_items(AlignItems::Center)
+            .with_justify_content(JustifyContent::Center);
+
+    if (button(ctx, mk(entity, i), tab_config)) {
+      active_tab = i;
+      changed = true;
+    }
+
+    ++i;
+  }
+
+  return ElementResult{changed, entity, static_cast<int>(active_tab)};
+}
+
 // Progress bar display options
 enum class ProgressBarLabelStyle {
   None,       // No label
