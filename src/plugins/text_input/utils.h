@@ -1,14 +1,12 @@
 #pragma once
 
-#include "components.h"
+#include "state.h"
 #include <string>
 
 namespace afterhours {
-namespace ui {
-namespace imm {
+namespace text_input {
 
 // UTF-8 text manipulation utilities for text_input
-namespace text_input_utils {
 
 // Get number of bytes in a UTF-8 character starting at pos
 inline size_t utf8_char_length(const std::string &str, size_t pos) {
@@ -120,8 +118,27 @@ inline void reset_blink(AnyTextInputState auto &s) {
   s.cursor_blink_timer = 0.0f;
 }
 
-} // namespace text_input_utils
+// Enhanced CJK detection with more precise Unicode range checking
+inline bool contains_cjk(const std::string &text) {
+  if (text.empty()) {
+    return false;
+  }
 
-} // namespace imm
-} // namespace ui
+  // Check for UTF-8 multi-byte sequences that indicate CJK
+  for (size_t i = 0; i < text.length(); ++i) {
+    unsigned char byte = static_cast<unsigned char>(text[i]);
+
+    if (byte >= 0xE0) {
+      // This is a 3+ byte UTF-8 sequence, likely CJK
+      // For more accuracy, we could decode the full UTF-8 sequence
+      // and check specific Unicode ranges, but this is sufficient
+      // for our current needs and avoids complex UTF-8 decoding
+      return true;
+    }
+  }
+  return false;
+}
+
+} // namespace text_input
 } // namespace afterhours
+

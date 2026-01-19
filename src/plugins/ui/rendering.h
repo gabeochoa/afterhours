@@ -21,7 +21,6 @@
 #include "context.h"
 #include "fmt/format.h"
 #include "systems.h"
-#include "text_utils.h"
 #include "theme.h"
 
 namespace afterhours {
