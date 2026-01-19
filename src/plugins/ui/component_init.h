@@ -5,6 +5,7 @@
 #include "../../ecs.h"
 #include "../color.h"
 #include "../texture_manager.h"
+#include "../window_manager.h"
 #include "component_config.h"
 #include "components.h"
 #include "context.h"
@@ -258,10 +259,16 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   }
   entity.addComponentIfMissing<HasOpacity>().value =
       std::clamp(config.opacity, 0.0f, 1.0f);
-  if (config.translate_x != 0.0f || config.translate_y != 0.0f) {
+  if (config.translate_x.value != 0.0f || config.translate_y.value != 0.0f) {
     auto &mods = entity.addComponentIfMissing<HasUIModifiers>();
-    mods.translate_x = config.translate_x;
-    mods.translate_y = config.translate_y;
+    // Resolve Size to pixels using screen height (default 720p baseline)
+    float screen_height = 720.f;
+    if (auto *pcr = EntityHelper::get_singleton_cmp<
+            window_manager::ProvidesCurrentResolution>()) {
+      screen_height = static_cast<float>(pcr->current_resolution.height);
+    }
+    mods.translate_x = resolve_to_pixels(config.translate_x, screen_height);
+    mods.translate_y = resolve_to_pixels(config.translate_y, screen_height);
   }
 }
 

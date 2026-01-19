@@ -92,7 +92,7 @@ separator(HasUIContext auto &ctx, EntityParent ep_pair,
   // Use styling defaults if available, otherwise use resolution-scaled default
   // Default: 1/4 of tiny spacing (8px/4 = 2px at 720p baseline)
   auto &styling_defaults = UIStylingDefaults::get();
-  Size separator_thickness = h720(DefaultSpacing::tiny().value * 0.25f);
+  Size separator_thickness = h720(8.0f * 0.25f);  // 2px at 720p
 
   if (auto def =
           styling_defaults.get_component_config(ComponentType::Separator);
@@ -645,7 +645,7 @@ toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
   if (style == ToggleSwitchStyle::Circle) {
     // Clean checkbox: filled circle when ON, empty ring when OFF
     Size sz = h720(18.0f);
-    float border_w = h720(2.0f).value;
+    Size border_w = h720(2.0f);
     Color bg = state.on ? theme.accent : theme.background;
     Color border_color = state.on ? theme.accent : theme.font_muted;
 
@@ -662,13 +662,14 @@ toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
     // Checkmark when ON
     if (state.on) {
       Size check_sz = h720(14.0f);
-      float check_offset = (sz.value - check_sz.value) / 2.0f;
+      // Offset = (18px - 14px) / 2 = 2px at 720p baseline
+      Size check_offset = h720((18.0f - 14.0f) / 2.0f);
       div(ctx, mk(circ.ent()),
           ComponentConfig::inherit_from(config, "toggle_check")
               .with_label("✓")
               .with_size(ComponentSize{check_sz, check_sz})
               .with_absolute_position()
-              .with_translate(check_offset, 0.0f)
+              .with_translate(check_offset, pixels(0.0f))
               .with_custom_text_color(theme.background)
               .with_font(UIComponent::DEFAULT_FONT, h720(12.0f))
               .with_alignment(TextAlignment::Center)
@@ -679,9 +680,10 @@ toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
     Color track_color = colors::lerp(theme.secondary, theme.accent, state.animation_progress);
     // Knob is white or uses darkfont if available for contrast
     Color knob_color = theme.darkfont.a > 0 ? theme.darkfont : Color{255, 255, 255, 255};
-    // Responsive sizing at 720p baseline
-    Size track_w = h720(40.0f), track_h = h720(20.0f), knob_sz = h720(16.0f);
-    float pad = h720(2.0f).value;
+    // Responsive sizing at 720p baseline (values in 720p pixels)
+    constexpr float track_w_px = 40.0f, track_h_px = 20.0f, knob_sz_px = 16.0f, pad_px = 2.0f;
+    Size track_w = h720(track_w_px), track_h = h720(track_h_px), knob_sz = h720(knob_sz_px);
+    Size pad = h720(pad_px);
 
     auto track_result = button(ctx, mk(entity),
         ComponentConfig::inherit_from(config, "toggle_track")
@@ -692,13 +694,13 @@ toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
 
     clicked = track_result;
 
-    // Sliding knob
-    float knob_x = pad + (track_w.value - knob_sz.value - pad * 2) * state.animation_progress;
+    // Sliding knob - calculate position using 720p pixel values, then wrap in h720
+    float knob_x_px = pad_px + (track_w_px - knob_sz_px - pad_px * 2) * state.animation_progress;
     div(ctx, mk(track_result.ent()),
         ComponentConfig::inherit_from(config, "toggle_knob")
             .with_size(ComponentSize{knob_sz, knob_sz})
             .with_absolute_position()
-            .with_translate(knob_x, pad)
+            .with_translate(h720(knob_x_px), pad)
             .with_custom_background(knob_color)
             .with_rounded_corners(RoundedCorners().all_round())
             .with_roundness(1.0f)
@@ -1496,7 +1498,13 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
 
   if (config.border_config.has_value()) {
     track_color = config.border_config->color;
-    thickness = config.border_config->thickness;
+    // Resolve Size to pixels for thickness
+    float screen_height = 720.f;
+    if (auto *pcr = EntityHelper::get_singleton_cmp<
+            window_manager::ProvidesCurrentResolution>()) {
+      screen_height = static_cast<float>(pcr->current_resolution.height);
+    }
+    thickness = resolve_to_pixels(config.border_config->thickness, screen_height);
   }
 
   // Store state on entity for rendering

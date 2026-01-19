@@ -16,6 +16,7 @@
 #include "../../drawing_helpers.h"
 #include "../../ecs.h"
 #include "../../logging.h"
+#include "layout_types.h"
 #include "theme.h"
 
 namespace afterhours {
@@ -291,9 +292,9 @@ struct HasShadow : BaseComponent {
 // Border configuration for UI elements
 struct Border {
   Color color = Color{0, 0, 0, 0}; // Transparent = no border
-  float thickness = 2.0f;
+  Size thickness = pixels(2.0f);
 
-  bool has_border() const { return thickness > 0.0f && color.a > 0; }
+  bool has_border() const { return thickness.value > 0.0f && color.a > 0; }
 };
 
 // Component for entities that have borders

@@ -79,8 +79,8 @@ struct ComponentConfig {
 
   // ui modifiers
   float opacity = 1.0f;
-  float translate_x = 0.0f;
-  float translate_y = 0.0f;
+  Size translate_x = pixels(0.0f);
+  Size translate_y = pixels(0.0f);
 
   // debugs
   std::string debug_name = "";
@@ -143,7 +143,13 @@ struct ComponentConfig {
                       .right = gap_size};
     return *this;
   }
+  // Float overload for backwards compatibility
   ComponentConfig &with_border(Color color, float thickness = 2.0f) {
+    border_config = Border{color, pixels(thickness)};
+    return *this;
+  }
+  // Size overload for resolution-scaled border thickness
+  ComponentConfig &with_border(Color color, Size thickness) {
     border_config = Border{color, thickness};
     return *this;
   }
@@ -249,7 +255,14 @@ struct ComponentConfig {
     click_activation = mode;
     return *this;
   }
+  // Float overload for backwards compatibility
   ComponentConfig &with_translate(float x, float y) {
+    translate_x = pixels(x);
+    translate_y = pixels(y);
+    return *this;
+  }
+  // Size overload for resolution-scaled translation
+  ComponentConfig &with_translate(Size x, Size y) {
     translate_x = x;
     translate_y = y;
     return *this;
