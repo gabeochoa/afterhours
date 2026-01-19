@@ -973,6 +973,10 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Use styling defaults for size if none provided
   config.flex_direction = FlexDirection::Row;
+  // Only prevent wrapping if caller hasn't explicitly configured wrap behavior
+  if (config.flex_wrap == FlexWrap::Wrap) {
+    config.with_no_wrap();
+  }
 
   std::string label_str = config.label;
   config.label = "";
@@ -989,6 +993,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                                        config.size.y_axis})
               .with_label("<")
               .with_font(UIComponent::SYMBOL_FONT, 16.f)
+              .with_no_wrap()
               .with_render_layer(config.render_layer))) {
     on_option_click(entity, prev_index(option_index - 1, options.size()));
   }
@@ -1001,6 +1006,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                 .with_size(ComponentSize{pixels(default_component_size.x / 2.f),
                                          config.size.y_axis})
                 .with_label(std::string(options[i]))
+                .with_no_wrap()
                 .with_render_layer(config.render_layer + 1))) {
       on_option_click(entity, i + 1);
     }
@@ -1013,6 +1019,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                                        config.size.y_axis})
               .with_label(">")
               .with_font(UIComponent::SYMBOL_FONT, 16.f)
+              .with_no_wrap()
               .with_render_layer(config.render_layer))) {
     on_option_click(entity, next_index(option_index, options.size()));
   }
