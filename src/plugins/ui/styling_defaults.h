@@ -80,7 +80,7 @@ struct ComponentConfig;
 struct UIStylingDefaults {
   std::map<ComponentType, ComponentConfig> component_configs;
   std::string default_font_name = UIComponent::UNSET_FONT;
-  float default_font_size = 16.f;
+  Size default_font_size = pixels(16.f);
   bool enable_grid_snapping = false;
 
   // Validation configuration for design rule enforcement
@@ -117,10 +117,16 @@ struct UIStylingDefaults {
 
   // Font configuration methods
   UIStylingDefaults &set_default_font(const std::string &font_name,
-                                      float font_size) {
+                                      Size font_size) {
     default_font_name = font_name;
     default_font_size = font_size;
     return *this;
+  }
+
+  // Float overload for backwards compatibility
+  UIStylingDefaults &set_default_font(const std::string &font_name,
+                                      float font_size_px) {
+    return set_default_font(font_name, pixels(font_size_px));
   }
 
   // Layout configuration methods

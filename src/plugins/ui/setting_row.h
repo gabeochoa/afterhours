@@ -185,7 +185,7 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
   config.with_margin(Margin{.bottom = pixels(row_config.row_spacing)});
 
   // Set appropriate font size for settings UI (larger for readability)
-  config.font_size = 22.0f;
+  config.font_size = pixels(22.0f);
 
   // Use row layout with FlexStart - items flow left to right
   config.flex_direction = FlexDirection::Row;

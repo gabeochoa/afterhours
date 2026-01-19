@@ -81,6 +81,26 @@ inline Size children(const float value = -1) {
 inline Size h720(const float px) { return screen_pct(px / 720.f); }
 inline Size w1280(const float px) { return screen_pct(px / 1280.f); }
 
+// Resolve a Size to pixels given a screen dimension (height for h720, width
+// for w1280)
+inline float resolve_to_pixels(const Size &size, float screen_dimension) {
+  switch (size.dim) {
+  case Dim::Pixels:
+    return size.value;
+  case Dim::ScreenPercent:
+    return size.value * screen_dimension;
+  case Dim::Percent:
+  case Dim::Children:
+  case Dim::Text:
+  case Dim::None:
+    // For these types, just return the raw value as a fallback
+    // In practice, Percent/Children/Text should only be used for layout
+    log_warn("Cannot resolve {} to pixels - using raw value", size);
+    return size.value;
+  }
+  return size.value;
+}
+
 enum struct Spacing {
   xs, // Extra small: 0.01f (7.2px at 720p)
   sm, // Small: 0.02f (14.4px at 720p)

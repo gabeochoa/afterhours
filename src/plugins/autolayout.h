@@ -85,7 +85,9 @@ struct AutoLayout {
       return 0;
     }
     const std::string &content = ent.get<HasLabel>().label;
-    float font_size = widget.font_size;
+    // Resolve font_size to pixels using screen height
+    float screen_height = fetch_screen_value_(Axis::Y);
+    float font_size = resolve_to_pixels(widget.font_size, screen_height);
     float spacing = 1.f;
 
     Vector2Type result;

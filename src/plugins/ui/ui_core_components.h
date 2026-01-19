@@ -93,20 +93,26 @@ struct UIComponent : BaseComponent {
   std::vector<EntityID> children;
 
   std::string font_name = UNSET_FONT;
-  float font_size = 50.f;
+  Size font_size = pixels(50.f);
 
-  auto &enable_font(const std::string &font_name_, float fs) {
+  auto &enable_font(const std::string &font_name_, Size fs) {
     font_name = font_name_;
     font_size = fs;
     return *this;
+  }
+
+  // Float overload for backwards compatibility
+  auto &enable_font(const std::string &font_name_, float fs) {
+    return enable_font(font_name_, pixels(fs));
   }
 
   Rectangle rect() const {
     return Rectangle{
         .x = computed_rel[Axis::X] + computed_margin[Axis::left],
         .y = computed_rel[Axis::Y] + computed_margin[Axis::top],
-        .width = computed[Axis::X] - computed_margin[Axis::X],
-        .height = computed[Axis::Y] - computed_margin[Axis::Y],
+        // Clamp to 0 to prevent negative dimensions from margin overflow
+        .width = fmaxf(0.f, computed[Axis::X] - computed_margin[Axis::X]),
+        .height = fmaxf(0.f, computed[Axis::Y] - computed_margin[Axis::Y]),
     };
   };
 

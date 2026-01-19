@@ -307,9 +307,11 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
   _init_component(ctx, ep_pair, config, ComponentType::ButtonGroup, false,
                   "button_group");
 
+  // For Row: divide width among buttons
+  // For Column: use percent(1.0f) width to fill parent (avoids hardcoded 200px)
   config.size.x_axis = config.flex_direction == FlexDirection::Row
                            ? pixels(max_width.value / labels.size())
-                           : max_width;
+                           : percent(1.0f);
   config.size.y_axis = config.flex_direction == FlexDirection::Row
                            ? max_height
                            : children(max_height.value);
@@ -346,7 +348,7 @@ ElementResult checkbox_no_label(HasUIContext auto &ctx, EntityParent ep_pair,
   // Preserve the inherited font_size for accessibility compliance
   if (!config.has_font_override()) {
     config.font_name = UIComponent::SYMBOL_FONT;
-    config.font_size = 20.f; // Use accessible minimum size
+    config.font_size = pixels(20.f); // Use accessible minimum size
   }
 
   _init_component(ctx, ep_pair, config, ComponentType::CheckboxNoLabel, true,
@@ -668,7 +670,7 @@ toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
               .with_absolute_position()
               .with_translate(check_offset, 0.0f)
               .with_custom_text_color(theme.background)
-              .with_font(UIComponent::DEFAULT_FONT, h720(12.0f).value)
+              .with_font(UIComponent::DEFAULT_FONT, h720(12.0f))
               .with_alignment(TextAlignment::Center)
               .with_skip_tabbing(true));
     }
@@ -1648,8 +1650,15 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     auto font_manager = EntityHelper::get_singleton_cmp<FontManager>();
 
     float cursor_x = 5.f; // Default: text margin from position_text_ex
-    float cursor_height = std::max(config.font_size * 0.9f, 16.f);
-    float actual_font_size = config.font_size;
+    // Resolve font_size to pixels using screen height
+    float screen_height = 720.f; // Default to 720p
+    if (auto *pcr = EntityHelper::get_singleton_cmp<
+            window_manager::ProvidesCurrentResolution>()) {
+      screen_height = static_cast<float>(pcr->current_resolution.height);
+    }
+    float resolved_font_size = resolve_to_pixels(config.font_size, screen_height);
+    float cursor_height = std::max(resolved_font_size * 0.9f, 16.f);
+    float actual_font_size = resolved_font_size;
 
     if (font_manager) {
       // Get the actual rendered font size by calling position_text_ex on the

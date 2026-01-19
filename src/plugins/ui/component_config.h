@@ -87,7 +87,7 @@ struct ComponentConfig {
   int render_layer = 0;
 
   std::string font_name = UIComponent::UNSET_FONT;
-  float font_size = 50.f;
+  Size font_size = pixels(50.f);
   bool is_internal = false;
 
   // Shadow configuration
@@ -286,10 +286,15 @@ struct ComponentConfig {
     debug_wrap = enabled;
     return *this;
   }
-  ComponentConfig &with_font(const std::string &font_name_, float font_size_) {
+  ComponentConfig &with_font(const std::string &font_name_, Size font_size_) {
     font_name = font_name_;
     font_size = font_size_;
     return *this;
+  }
+
+  // Float overload for backwards compatibility - converts to pixels
+  ComponentConfig &with_font(const std::string &font_name_, float font_size_px) {
+    return with_font(font_name_, pixels(font_size_px));
   }
 
   ComponentConfig &with_absolute_position() {
@@ -458,7 +463,7 @@ struct ComponentConfig {
                       .right = DefaultSpacing::small()};
     }
     if (!has_font_override()) {
-      font_size = TypographyScale::BASE_SIZE_720P;
+      font_size = TypographyScale::base();
     }
     return *this;
   }
@@ -582,7 +587,7 @@ inline ComponentConfig magazine_style() {
                           .left = DefaultSpacing::medium(),
                           .bottom = DefaultSpacing::medium(),
                           .right = DefaultSpacing::medium()});
-  config.font_size = TypographyScale::BASE_SIZE_720P;
+  config.font_size = TypographyScale::base();
   return config;
 }
 
@@ -597,7 +602,7 @@ inline ComponentConfig card_style() {
                           .left = DefaultSpacing::small(),
                           .bottom = DefaultSpacing::small(),
                           .right = DefaultSpacing::small()});
-  config.font_size = TypographyScale::BASE_SIZE_720P;
+  config.font_size = TypographyScale::base();
   return config;
 }
 
@@ -612,7 +617,7 @@ inline ComponentConfig form_style() {
                           .left = DefaultSpacing::tiny(),
                           .bottom = DefaultSpacing::tiny(),
                           .right = DefaultSpacing::tiny()});
-  config.font_size = TypographyScale::BASE_SIZE_720P;
+  config.font_size = TypographyScale::base();
   return config;
 }
 
