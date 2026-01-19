@@ -111,8 +111,10 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
     } else if (cmd.name == "key" || cmd.name == "select_all") {
       std::string arg;
       iss >> arg;
-      if (cmd.name == "select_all")
+      if (cmd.name == "select_all") {
         arg = "CTRL+A";
+        cmd.name = "key";  // Normalize to key command
+      }
       cmd.args.push_back(arg);
       cmd.wait_seconds = 3 * frame;
     } else if (detail::contains(detail::coord_commands, cmd.name)) {
@@ -383,10 +385,11 @@ private:
       if (actual == cmd.args[1]) {
         pending.consume();
       } else {
-        pending.fail("Expected " + cmd.args[0] + "=" + cmd.args[1] + ", got " +
-                     actual);
+        log_warn("[E2E ERROR] validate (line {}): Expected {}={}, got {}",
+                 cmd.line_number, cmd.args[0], cmd.args[1], actual);
         failed_ = true;
         current_script_errors_++;
+        pending.consume();  // Mark as handled (failed validation is still "consumed")
       }
     }
 
@@ -402,9 +405,11 @@ private:
       if (clear_fn_)
         clear_fn_();
       test_input::reset_all();
+      key_release_detail::reset();  // Clear pending key releases
       VisibleTextRegistry::instance().clear();
       current_script_idx_++;
       current_script_errors_ = 0;
+      elapsed_time_ = 0.0f;  // Reset timeout for next script
       pending.consume();
     }
   }

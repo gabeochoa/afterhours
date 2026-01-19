@@ -35,6 +35,53 @@ struct HandleTypeCommand : System<PendingE2ECommand> {
 };
 
 // Handle 'key COMBO' command - presses key combo
+// Helper to track pending key releases across frames
+namespace key_release_detail {
+  inline bool pending_ctrl = false;
+  inline bool pending_shift = false;
+  inline bool pending_alt = false;
+  inline int pending_key = 0;
+  inline int release_countdown = 0;
+  
+  inline void reset() {
+    pending_ctrl = false;
+    pending_shift = false;
+    pending_alt = false;
+    pending_key = 0;
+    release_countdown = 0;
+  }
+}
+
+// System to release keys after the app has processed them
+// This runs every frame and counts down to release
+struct HandleKeyReleaseSystem : System<> {
+  virtual void once(float) override {
+    using namespace key_release_detail;
+    if (release_countdown > 0) {
+      release_countdown--;
+      if (release_countdown == 0) {
+        // Release all pending keys
+        if (pending_ctrl) {
+          input_injector::set_key_up(keys::LEFT_CONTROL);
+          pending_ctrl = false;
+        }
+        if (pending_shift) {
+          input_injector::set_key_up(keys::LEFT_SHIFT);
+          pending_shift = false;
+        }
+        if (pending_alt) {
+          input_injector::set_key_up(keys::LEFT_ALT);
+          pending_alt = false;
+        }
+        if (pending_key > 0) {
+          input_injector::set_key_up(pending_key);
+          pending_key = 0;
+        }
+      }
+    }
+  }
+};
+
 struct HandleKeyCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("key"))
@@ -44,15 +91,30 @@ struct HandleKeyCommand : System<PendingE2ECommand> {
       return;
     }
 
+    using namespace key_release_detail;
+    
     auto combo = parse_key_combo(cmd.args[0]);
+    
+    // Set modifiers down for this frame
     if (combo.ctrl)
       input_injector::set_key_down(keys::LEFT_CONTROL);
     if (combo.shift)
       input_injector::set_key_down(keys::LEFT_SHIFT);
     if (combo.alt)
       input_injector::set_key_down(keys::LEFT_ALT);
-    input_injector::set_key_down(combo.key);
+    
+    // Push the key to queue (for polling APIs)
     test_input::push_key(combo.key);
+    
+    // Mark key as pressed (for synthetic press detection)
+    input_injector::set_key_down(combo.key);
+
+    // Schedule release in 2 frames (gives app time to process)
+    pending_ctrl = combo.ctrl;
+    pending_shift = combo.shift;
+    pending_alt = combo.alt;
+    pending_key = combo.key;
+    release_countdown = 2;
 
     cmd.consume();
   }
@@ -197,6 +259,7 @@ struct HandleResetTestStateCommand : System<PendingE2ECommand> {
       on_reset_();
     }
     test_input::reset_all();
+    key_release_detail::reset();  
     VisibleTextRegistry::instance().clear();
     cmd.consume();
   }

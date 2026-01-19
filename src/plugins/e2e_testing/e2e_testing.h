@@ -49,6 +49,7 @@ void register_before_builtins(SystemManager &sm, std::unique_ptr<S> sys) {
 // Register built-in command handlers (type, click, key, wait, expect_text,
 // etc.)
 inline void register_builtin_handlers(SystemManager &sm) {
+  sm.register_update_system(std::make_unique<HandleKeyReleaseSystem>());  // Must be first to release before new presses
   sm.register_update_system(std::make_unique<HandleTypeCommand>());
   sm.register_update_system(std::make_unique<HandleKeyCommand>());
   sm.register_update_system(std::make_unique<HandleClickCommand>());
