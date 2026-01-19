@@ -212,8 +212,15 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
 
         // Measure text width to position cursor using configured font size
         if (!text_before_cursor.empty()) {
+          // Resolve font_size to pixels
+          float screen_height = 720.f;
+          if (auto *pcr = EntityHelper::get_singleton_cmp<
+                  window_manager::ProvidesCurrentResolution>()) {
+            screen_height = static_cast<float>(pcr->current_resolution.height);
+          }
+          float resolved_font_size = resolve_to_pixels(config.font_size, screen_height);
           Vector2Type text_size =
-              measure_text(font, text_before_cursor.c_str(), config.font_size, 1.f);
+              measure_text(font, text_before_cursor.c_str(), resolved_font_size, 1.f);
           cursor_x = pad_left + text_size.x;
         }
       }

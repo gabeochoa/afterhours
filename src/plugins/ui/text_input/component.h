@@ -148,8 +148,15 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     auto font_manager = EntityHelper::get_singleton_cmp<FontManager>();
 
     float cursor_x = 5.f; // Default: text margin from position_text_ex
-    float cursor_height = std::max(config.font_size * 0.9f, 16.f);
-    float actual_font_size = config.font_size;
+    // Resolve font_size to pixels using screen height
+    float screen_height = 720.f; // Default to 720p
+    if (auto *pcr = EntityHelper::get_singleton_cmp<
+            window_manager::ProvidesCurrentResolution>()) {
+      screen_height = static_cast<float>(pcr->current_resolution.height);
+    }
+    float resolved_font_size = resolve_to_pixels(config.font_size, screen_height);
+    float cursor_height = std::max(resolved_font_size * 0.9f, 16.f);
+    float actual_font_size = resolved_font_size;
 
     if (font_manager) {
       // Get the actual rendered font size by calling position_text_ex on the
