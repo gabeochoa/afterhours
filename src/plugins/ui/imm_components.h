@@ -2,8 +2,8 @@
 
 // TODO: Move internal helper functions to a detail:: namespace to clearly
 // separate public API from implementation details. Functions like prev_index,
-// next_index, and other internal utilities should not be part of the public API.
-// See e2e_testing/input_injector.h for an example of this pattern.
+// next_index, and other internal utilities should not be part of the public
+// API. See e2e_testing/input_injector.h for an example of this pattern.
 
 #include <algorithm>
 #include <array>
@@ -92,7 +92,7 @@ separator(HasUIContext auto &ctx, EntityParent ep_pair,
   // Use styling defaults if available, otherwise use resolution-scaled default
   // Default: 1/4 of tiny spacing (8px/4 = 2px at 720p baseline)
   auto &styling_defaults = UIStylingDefaults::get();
-  Size separator_thickness = h720(8.0f * 0.25f);  // 2px at 720p
+  Size separator_thickness = h720(8.0f * 0.25f); // 2px at 720p
 
   if (auto def =
           styling_defaults.get_component_config(ComponentType::Separator);
@@ -378,16 +378,12 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   auto label = config.label;
   config.label = "";
 
-  // Ensure checkbox row uses Row layout to place label and checkbox side-by-side
-  // Only set flex direction if not already specified by caller
-  if (config.flex_direction == FlexDirection::Column) {
-    config.with_flex_direction(FlexDirection::Row);
-  }
-  config.with_align_items(AlignItems::Center);
-  // Only prevent wrapping if caller hasn't explicitly configured wrap behavior
-  if (config.flex_wrap == FlexWrap::Wrap) {
-    config.with_no_wrap();
-  }
+  // Ensure checkbox row uses Row layout to place label and checkbox
+  // side-by-side Checkboxes MUST use Row layout and NoWrap to prevent
+  // label/checkbox wrapping
+  config.with_flex_direction(FlexDirection::Row)
+      .with_align_items(AlignItems::Center)
+      .with_no_wrap();
   _init_component(ctx, ep_pair, config, ComponentType::Div, false,
                   "checkbox_row");
 
@@ -395,7 +391,8 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   // and button scale with resolution. Previously, only the label used a
   // responsive size, causing the button to remain tiny at higher
   // DPIs/resolutions.
-  {
+  // Only apply defaults if user hasn't explicitly specified a size.
+  if (config.size.is_default) {
     auto &styling_defaults = UIStylingDefaults::get();
     if (auto def =
             styling_defaults.get_component_config(ComponentType::Checkbox);
@@ -523,7 +520,7 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
   auto [entity, parent] = deref(ep_pair);
 
   bool changed = false;
-  
+
   // Circle dimensions - larger for better visibility
   float circle_sz = 18.0f;
   float dot_sz = 10.0f;
@@ -534,14 +531,14 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Row button - transparent, for click handling
     auto row = button(ctx, mk(parent, 100 + i),
-        ComponentConfig{}
-            .with_size(config.size)
-            .with_label("")
-            .with_color_usage(Theme::Usage::None)
-            .with_flex_direction(FlexDirection::Row)
-            .with_align_items(AlignItems::Center)
-            .with_padding(Padding{.left = pixels(6)})
-            .with_debug_name(fmt::format("radio_{}", i)));
+                      ComponentConfig{}
+                          .with_size(config.size)
+                          .with_label("")
+                          .with_color_usage(Theme::Usage::None)
+                          .with_flex_direction(FlexDirection::Row)
+                          .with_align_items(AlignItems::Center)
+                          .with_padding(Padding{.left = pixels(6)})
+                          .with_debug_name(fmt::format("radio_{}", i)));
 
     if (row) {
       selected_index = i;
@@ -550,16 +547,17 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Outer circle ring
     Color ring_color = is_selected ? ctx.theme.accent : ctx.theme.font_muted;
-    auto ring = div(ctx, mk(row.ent(), 0),
-        ComponentConfig{}
-            .with_size(ComponentSize{pixels(circle_sz), pixels(circle_sz)})
-            .with_custom_background(ctx.theme.background)
-            .with_border(ring_color, border_w)
-            .with_rounded_corners(RoundedCorners().all_round())
-            .with_roundness(1.0f)
-            .with_margin(Margin{.right = pixels(10)})
-            .with_skip_tabbing(true)
-            .with_debug_name(fmt::format("radio_ring_{}", i)));
+    auto ring =
+        div(ctx, mk(row.ent(), 0),
+            ComponentConfig{}
+                .with_size(ComponentSize{pixels(circle_sz), pixels(circle_sz)})
+                .with_custom_background(ctx.theme.background)
+                .with_border(ring_color, border_w)
+                .with_rounded_corners(RoundedCorners().all_round())
+                .with_roundness(1.0f)
+                .with_margin(Margin{.right = pixels(10)})
+                .with_skip_tabbing(true)
+                .with_debug_name(fmt::format("radio_ring_{}", i)));
 
     // Inner filled dot when selected
     if (is_selected) {
@@ -577,18 +575,20 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
     }
 
     // Label - positioned after circle
-    auto label_ent = div(ctx, mk(row.ent(), 1),
-        ComponentConfig{}
-            .with_size(ComponentSize{pixels(150), config.size.y_axis})
-            .with_label(std::string(labels[i]))
-            .with_font(config.font_name, config.font_size)
-            .with_custom_text_color(ctx.theme.font)
-            .with_skip_tabbing(true)
-            .with_debug_name(fmt::format("radio_label_{}", i)));
-    
+    auto label_ent =
+        div(ctx, mk(row.ent(), 1),
+            ComponentConfig{}
+                .with_size(ComponentSize{pixels(150), config.size.y_axis})
+                .with_label(std::string(labels[i]))
+                .with_font(config.font_name, config.font_size)
+                .with_custom_text_color(ctx.theme.font)
+                .with_skip_tabbing(true)
+                .with_debug_name(fmt::format("radio_label_{}", i)));
+
     // Force left alignment
     if (label_ent.ent().template has<HasLabel>()) {
-      label_ent.ent().template get<HasLabel>().set_alignment(TextAlignment::Left);
+      label_ent.ent().template get<HasLabel>().set_alignment(
+          TextAlignment::Left);
     }
   }
 
@@ -601,10 +601,10 @@ enum struct ToggleSwitchStyle {
 };
 
 /// Toggle switch with style variants: Pill (iOS-style) or Circle (X/checkmark).
-ElementResult
-toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
-              ComponentConfig config = ComponentConfig(),
-              ToggleSwitchStyle style = ToggleSwitchStyle::Pill) {
+ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
+                            bool &value,
+                            ComponentConfig config = ComponentConfig(),
+                            ToggleSwitchStyle style = ToggleSwitchStyle::Pill) {
   auto [entity, parent] = deref(ep_pair);
 
   auto label = config.label;
@@ -650,12 +650,12 @@ toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
     Color border_color = state.on ? theme.accent : theme.font_muted;
 
     auto circ = button(ctx, mk(entity),
-        ComponentConfig::inherit_from(config, "toggle_circle")
-            .with_size(ComponentSize{sz, sz})
-            .with_custom_background(bg)
-            .with_border(border_color, border_w)
-            .with_rounded_corners(RoundedCorners().all_round())
-            .with_roundness(1.0f));
+                       ComponentConfig::inherit_from(config, "toggle_circle")
+                           .with_size(ComponentSize{sz, sz})
+                           .with_custom_background(bg)
+                           .with_border(border_color, border_w)
+                           .with_rounded_corners(RoundedCorners().all_round())
+                           .with_roundness(1.0f));
 
     clicked = circ;
 
@@ -677,25 +677,32 @@ toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
     }
   } else {
     // Pill style (default) - responsive sizing at 720p baseline
-    Color track_color = colors::lerp(theme.secondary, theme.accent, state.animation_progress);
+    Color track_color =
+        colors::lerp(theme.secondary, theme.accent, state.animation_progress);
     // Knob is white or uses darkfont if available for contrast
-    Color knob_color = theme.darkfont.a > 0 ? theme.darkfont : Color{255, 255, 255, 255};
+    Color knob_color =
+        theme.darkfont.a > 0 ? theme.darkfont : Color{255, 255, 255, 255};
     // Responsive sizing at 720p baseline (values in 720p pixels)
-    constexpr float track_w_px = 40.0f, track_h_px = 20.0f, knob_sz_px = 16.0f, pad_px = 2.0f;
-    Size track_w = h720(track_w_px), track_h = h720(track_h_px), knob_sz = h720(knob_sz_px);
+    constexpr float track_w_px = 40.0f, track_h_px = 20.0f, knob_sz_px = 16.0f,
+                    pad_px = 2.0f;
+    Size track_w = h720(track_w_px), track_h = h720(track_h_px),
+         knob_sz = h720(knob_sz_px);
     Size pad = h720(pad_px);
 
-    auto track_result = button(ctx, mk(entity),
-        ComponentConfig::inherit_from(config, "toggle_track")
-            .with_size(ComponentSize{track_w, track_h})
-            .with_custom_background(track_color)
-            .with_rounded_corners(RoundedCorners().all_round())
-            .with_roundness(0.5f));
+    auto track_result =
+        button(ctx, mk(entity),
+               ComponentConfig::inherit_from(config, "toggle_track")
+                   .with_size(ComponentSize{track_w, track_h})
+                   .with_custom_background(track_color)
+                   .with_rounded_corners(RoundedCorners().all_round())
+                   .with_roundness(0.5f));
 
     clicked = track_result;
 
-    // Sliding knob - calculate position using 720p pixel values, then wrap in h720
-    float knob_x_px = pad_px + (track_w_px - knob_sz_px - pad_px * 2) * state.animation_progress;
+    // Sliding knob - calculate position using 720p pixel values, then wrap in
+    // h720
+    float knob_x_px = pad_px + (track_w_px - knob_sz_px - pad_px * 2) *
+                                   state.animation_progress;
     div(ctx, mk(track_result.ent()),
         ComponentConfig::inherit_from(config, "toggle_knob")
             .with_size(ComponentSize{knob_sz, knob_sz})
@@ -815,9 +822,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   // TODO: slider_background can overflow by ~1-2px when parent is constrained
   // by layout. Percent sizing doesn't work because it resolves against
   // configured size, not laid-out size. Need layout system fix or tolerance.
-  auto elem_corners = compact
-      ? RoundedCorners(config.rounded_corners.value())
-      : RoundedCorners(config.rounded_corners.value()).left_sharp();
+  auto elem_corners =
+      compact ? RoundedCorners(config.rounded_corners.value())
+              : RoundedCorners(config.rounded_corners.value()).left_sharp();
   auto elem = div(ctx, mk(entity, parent.id + entity.id + 0),
                   ComponentConfig::inherit_from(config, "slider_background")
                       .with_size(config.size)
@@ -1276,7 +1283,8 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
 /// size_t current_tab = 0;
 /// std::array<std::string_view, 3> tabs = {"Tab one", "Tab two", "Tab three"};
 ///
-/// if (auto result = tab_container(ctx, mk(parent), tabs, current_tab); result) {
+/// if (auto result = tab_container(ctx, mk(parent), tabs, current_tab); result)
+/// {
 ///   // Tab changed - play sound, log, etc.
 /// }
 ///
@@ -1295,8 +1303,8 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
   // Apply styling defaults if available
   if (config.size.is_default) {
     auto &styling_defaults = UIStylingDefaults::get();
-    if (auto def =
-            styling_defaults.get_component_config(ComponentType::TabContainer)) {
+    if (auto def = styling_defaults.get_component_config(
+            ComponentType::TabContainer)) {
       config.size = def->size;
     } else {
       config.size = ComponentSize(percent(1.0f), pixels(48.f));
@@ -1507,7 +1515,8 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
             window_manager::ProvidesCurrentResolution>()) {
       screen_height = static_cast<float>(pcr->current_resolution.height);
     }
-    thickness = resolve_to_pixels(config.border_config->thickness, screen_height);
+    thickness =
+        resolve_to_pixels(config.border_config->thickness, screen_height);
   }
 
   // Store state on entity for rendering
@@ -1667,7 +1676,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
             window_manager::ProvidesCurrentResolution>()) {
       screen_height = static_cast<float>(pcr->current_resolution.height);
     }
-    float resolved_font_size = resolve_to_pixels(config.font_size, screen_height);
+    float resolved_font_size =
+        resolve_to_pixels(config.font_size, screen_height);
     float cursor_height = std::max(resolved_font_size * 0.9f, 16.f);
     float actual_font_size = resolved_font_size;
 
@@ -1837,7 +1847,8 @@ ElementResult scroll_view(HasUIContext auto &ctx, EntityParent ep_pair,
     // Vertical scrolling
     if (scroll_state.vertical_enabled && wheel_v.y != 0.0f) {
       float old_offset = scroll_state.scroll_offset.y;
-      scroll_state.scroll_offset.y += direction * wheel_v.y * scroll_state.scroll_speed;
+      scroll_state.scroll_offset.y +=
+          direction * wheel_v.y * scroll_state.scroll_speed;
       // Prevent scrolling past the start (full clamping happens in render
       // after content_size is computed)
       if (scroll_state.scroll_offset.y < 0.0f) {
@@ -1849,7 +1860,8 @@ ElementResult scroll_view(HasUIContext auto &ctx, EntityParent ep_pair,
     // Horizontal scrolling
     if (scroll_state.horizontal_enabled && wheel_v.x != 0.0f) {
       float old_offset = scroll_state.scroll_offset.x;
-      scroll_state.scroll_offset.x += direction * wheel_v.x * scroll_state.scroll_speed;
+      scroll_state.scroll_offset.x +=
+          direction * wheel_v.x * scroll_state.scroll_speed;
       // Prevent scrolling past the start
       if (scroll_state.scroll_offset.x < 0.0f) {
         scroll_state.scroll_offset.x = 0.0f;
