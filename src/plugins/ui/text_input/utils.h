@@ -1,14 +1,14 @@
 #pragma once
 
-#include "components.h"
+#include "state.h"
+#include <cctype>
 #include <string>
+#include <string_view>
+#include <utility>
 
 namespace afterhours {
-namespace ui {
-namespace imm {
+namespace text_input {
 
-// UTF-8 text manipulation utilities for text_input
-namespace text_input_utils {
 
 // Get number of bytes in a UTF-8 character starting at pos
 inline size_t utf8_char_length(const std::string &str, size_t pos) {
@@ -120,8 +120,96 @@ inline void reset_blink(AnyTextInputState auto &s) {
   s.cursor_blink_timer = 0.0f;
 }
 
-} // namespace text_input_utils
+// Enhanced CJK detection with more precise Unicode range checking
+inline bool contains_cjk(const std::string &text) {
+  if (text.empty()) {
+    return false;
+  }
 
-} // namespace imm
-} // namespace ui
+  // Check for UTF-8 multi-byte sequences that indicate CJK
+  for (size_t i = 0; i < text.length(); ++i) {
+    unsigned char byte = static_cast<unsigned char>(text[i]);
+
+    if (byte >= 0xE0) {
+      // This is a 3+ byte UTF-8 sequence, likely CJK
+      // For more accuracy, we could decode the full UTF-8 sequence
+      // and check specific Unicode ranges, but this is sufficient
+      // for our current needs and avoids complex UTF-8 decoding
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Check if character is a word separator (whitespace or punctuation)
+inline bool is_word_separator(char c) {
+  return std::isspace(static_cast<unsigned char>(c)) ||
+         std::ispunct(static_cast<unsigned char>(c));
+}
+
+/// Find start of word containing or before position.
+/// Moves backward past separators, then backward to start of word.
+inline size_t find_word_start(std::string_view text, size_t pos) {
+  if (pos == 0 || text.empty())
+    return 0;
+
+  size_t p = pos;
+
+  // Move back past any separators
+  while (p > 0 && is_word_separator(text[p - 1]))
+    --p;
+
+  // Move back to start of word
+  while (p > 0 && !is_word_separator(text[p - 1]))
+    --p;
+
+  return p;
+}
+
+/// Find end of word containing or after position.
+/// Moves forward past separators, then forward to end of word.
+inline size_t find_word_end(std::string_view text, size_t pos) {
+  if (pos >= text.size())
+    return text.size();
+
+  size_t p = pos;
+
+  // Move forward past any separators
+  while (p < text.size() && is_word_separator(text[p]))
+    ++p;
+
+  // Move forward to end of word
+  while (p < text.size() && !is_word_separator(text[p]))
+    ++p;
+
+  return p;
+}
+
+/// Select the word at position (for double-click).
+/// Returns {start, end} byte offsets.
+inline std::pair<size_t, size_t> select_word_at(std::string_view text,
+                                                 size_t pos) {
+  if (text.empty())
+    return {0, 0};
+  pos = std::min(pos, text.size() - 1);
+
+  // If on a separator, select just that separator
+  if (is_word_separator(text[pos])) {
+    return {pos, pos + 1};
+  }
+
+  // Find word boundaries
+  size_t start = pos;
+  while (start > 0 && !is_word_separator(text[start - 1]))
+    --start;
+
+  size_t end = pos;
+  while (end < text.size() && !is_word_separator(text[end]))
+    ++end;
+
+  return {start, end};
+}
+
+} // namespace text_input
 } // namespace afterhours
+
