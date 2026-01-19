@@ -376,6 +376,16 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   auto label = config.label;
   config.label = "";
 
+  // Ensure checkbox row uses Row layout to place label and checkbox side-by-side
+  // Only set flex direction if not already specified by caller
+  if (config.flex_direction == FlexDirection::Column) {
+    config.with_flex_direction(FlexDirection::Row);
+  }
+  config.with_align_items(AlignItems::Center);
+  // Only prevent wrapping if caller hasn't explicitly configured wrap behavior
+  if (config.flex_wrap == FlexWrap::Wrap) {
+    config.with_no_wrap();
+  }
   _init_component(ctx, ep_pair, config, ComponentType::Div, false,
                   "checkbox_row");
 
@@ -457,6 +467,11 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
 
   auto max_height = config.size.y_axis;
   config.size.y_axis = children();
+  // Only prevent wrapping if caller hasn't explicitly configured wrap behavior
+  // Default behavior prevents unexpected horizontal wrapping in Column layouts
+  if (config.flex_wrap == FlexWrap::Wrap) {
+    config.with_no_wrap();
+  }
   _init_component(ctx, ep_pair, config, ComponentType::CheckboxGroup, false,
                   "checkbox_group");
   config.size.y_axis = max_height;
@@ -592,6 +607,16 @@ toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
 
   auto label = config.label;
   config.label = "";
+  // Ensure toggle row uses Row layout to place label and toggle side-by-side
+  // Only set flex direction if not already specified by caller
+  if (config.flex_direction == FlexDirection::Column) {
+    config.with_flex_direction(FlexDirection::Row);
+  }
+  config.with_align_items(AlignItems::Center);
+  // Only prevent wrapping if caller hasn't explicitly configured wrap behavior
+  if (config.flex_wrap == FlexWrap::Wrap) {
+    config.with_no_wrap();
+  }
   _init_component(ctx, ep_pair, config, ComponentType::ToggleSwitch, false,
                   "toggle_switch_row");
 
