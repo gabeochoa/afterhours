@@ -419,6 +419,11 @@ private:
         current_script_idx_ >= script_results_.size())
       return;
 
+    // Sync with command handler error count (from E2ECommandCleanupSystem)
+    int command_errors = get_command_error_count();
+    current_script_errors_ += command_errors;
+    reset_command_error_count();  // Reset for next script
+
     auto &result = script_results_[current_script_idx_];
     result.error_count = current_script_errors_;
     bool actually_passed = (current_script_errors_ == 0);
