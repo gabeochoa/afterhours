@@ -256,6 +256,15 @@ struct ValidateComponentContrast : System<UIComponent, HasColor, HasLabel> {
 
 // Validates minimum font size for readability
 struct ValidateMinFontSize : System<UIComponent, HasLabel> {
+  float screen_height = 720.f;
+
+  virtual void once(float) override {
+    if (auto *pcr = EntityHelper::get_singleton_cmp<
+            window_manager::ProvidesCurrentResolution>()) {
+      screen_height = static_cast<float>(pcr->current_resolution.height);
+    }
+  }
+
   virtual void for_each_with(Entity &entity, UIComponent &cmp, HasLabel &,
                              float) override {
     auto &styling_defaults = imm::UIStylingDefaults::get();
@@ -267,7 +276,7 @@ struct ValidateMinFontSize : System<UIComponent, HasLabel> {
     if (!cmp.was_rendered_to_screen || cmp.should_hide)
       return;
 
-    float font_size = cmp.font_size;
+    float font_size = resolve_to_pixels(cmp.font_size, screen_height);
 
     if (font_size < config.min_font_size) {
       std::string msg = "Font size " + std::to_string(font_size) +

@@ -2,8 +2,8 @@
 
 // TODO: Move internal helper functions to a detail:: namespace to clearly
 // separate public API from implementation details. Functions like prev_index,
-// next_index, and other internal utilities should not be part of the public API.
-// See e2e_testing/input_injector.h for an example of this pattern.
+// next_index, and other internal utilities should not be part of the public
+// API. See e2e_testing/input_injector.h for an example of this pattern.
 
 #include <algorithm>
 #include <array>
@@ -91,7 +91,7 @@ separator(HasUIContext auto &ctx, EntityParent ep_pair,
   // Use styling defaults if available, otherwise use resolution-scaled default
   // Default: 1/4 of tiny spacing (8px/4 = 2px at 720p baseline)
   auto &styling_defaults = UIStylingDefaults::get();
-  Size separator_thickness = h720(DefaultSpacing::tiny().value * 0.25f);
+  Size separator_thickness = h720(8.0f * 0.25f); // 2px at 720p
 
   if (auto def =
           styling_defaults.get_component_config(ComponentType::Separator);
@@ -306,9 +306,11 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
   _init_component(ctx, ep_pair, config, ComponentType::ButtonGroup, false,
                   "button_group");
 
+  // For Row: divide width among buttons
+  // For Column: use percent(1.0f) width to fill parent (avoids hardcoded 200px)
   config.size.x_axis = config.flex_direction == FlexDirection::Row
                            ? pixels(max_width.value / labels.size())
-                           : max_width;
+                           : percent(1.0f);
   config.size.y_axis = config.flex_direction == FlexDirection::Row
                            ? max_height
                            : children(max_height.value);
@@ -345,7 +347,7 @@ ElementResult checkbox_no_label(HasUIContext auto &ctx, EntityParent ep_pair,
   // Preserve the inherited font_size for accessibility compliance
   if (!config.has_font_override()) {
     config.font_name = UIComponent::SYMBOL_FONT;
-    config.font_size = 20.f; // Use accessible minimum size
+    config.font_size = pixels(20.f); // Use accessible minimum size
   }
 
   _init_component(ctx, ep_pair, config, ComponentType::CheckboxNoLabel, true,
@@ -375,6 +377,12 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   auto label = config.label;
   config.label = "";
 
+  // Ensure checkbox row uses Row layout to place label and checkbox
+  // side-by-side Checkboxes MUST use Row layout and NoWrap to prevent
+  // label/checkbox wrapping
+  config.with_flex_direction(FlexDirection::Row)
+      .with_align_items(AlignItems::Center)
+      .with_no_wrap();
   _init_component(ctx, ep_pair, config, ComponentType::Div, false,
                   "checkbox_row");
 
@@ -382,7 +390,8 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   // and button scale with resolution. Previously, only the label used a
   // responsive size, causing the button to remain tiny at higher
   // DPIs/resolutions.
-  {
+  // Only apply defaults if user hasn't explicitly specified a size.
+  if (config.size.is_default) {
     auto &styling_defaults = UIStylingDefaults::get();
     if (auto def =
             styling_defaults.get_component_config(ComponentType::Checkbox);
@@ -456,6 +465,11 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
 
   auto max_height = config.size.y_axis;
   config.size.y_axis = children();
+  // Only prevent wrapping if caller hasn't explicitly configured wrap behavior
+  // Default behavior prevents unexpected horizontal wrapping in Column layouts
+  if (config.flex_wrap == FlexWrap::Wrap) {
+    config.with_no_wrap();
+  }
   _init_component(ctx, ep_pair, config, ComponentType::CheckboxGroup, false,
                   "checkbox_group");
   config.size.y_axis = max_height;
@@ -505,7 +519,7 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
   auto [entity, parent] = deref(ep_pair);
 
   bool changed = false;
-  
+
   // Circle dimensions - larger for better visibility
   float circle_sz = 18.0f;
   float dot_sz = 10.0f;
@@ -516,14 +530,14 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Row button - transparent, for click handling
     auto row = button(ctx, mk(parent, 100 + i),
-        ComponentConfig{}
-            .with_size(config.size)
-            .with_label("")
-            .with_color_usage(Theme::Usage::None)
-            .with_flex_direction(FlexDirection::Row)
-            .with_align_items(AlignItems::Center)
-            .with_padding(Padding{.left = pixels(6)})
-            .with_debug_name(fmt::format("radio_{}", i)));
+                      ComponentConfig{}
+                          .with_size(config.size)
+                          .with_label("")
+                          .with_color_usage(Theme::Usage::None)
+                          .with_flex_direction(FlexDirection::Row)
+                          .with_align_items(AlignItems::Center)
+                          .with_padding(Padding{.left = pixels(6)})
+                          .with_debug_name(fmt::format("radio_{}", i)));
 
     if (row) {
       selected_index = i;
@@ -532,16 +546,17 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Outer circle ring
     Color ring_color = is_selected ? ctx.theme.accent : ctx.theme.font_muted;
-    auto ring = div(ctx, mk(row.ent(), 0),
-        ComponentConfig{}
-            .with_size(ComponentSize{pixels(circle_sz), pixels(circle_sz)})
-            .with_custom_background(ctx.theme.background)
-            .with_border(ring_color, border_w)
-            .with_rounded_corners(RoundedCorners().all_round())
-            .with_roundness(1.0f)
-            .with_margin(Margin{.right = pixels(10)})
-            .with_skip_tabbing(true)
-            .with_debug_name(fmt::format("radio_ring_{}", i)));
+    auto ring =
+        div(ctx, mk(row.ent(), 0),
+            ComponentConfig{}
+                .with_size(ComponentSize{pixels(circle_sz), pixels(circle_sz)})
+                .with_custom_background(ctx.theme.background)
+                .with_border(ring_color, border_w)
+                .with_rounded_corners(RoundedCorners().all_round())
+                .with_roundness(1.0f)
+                .with_margin(Margin{.right = pixels(10)})
+                .with_skip_tabbing(true)
+                .with_debug_name(fmt::format("radio_ring_{}", i)));
 
     // Inner filled dot when selected
     if (is_selected) {
@@ -559,18 +574,20 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
     }
 
     // Label - positioned after circle
-    auto label_ent = div(ctx, mk(row.ent(), 1),
-        ComponentConfig{}
-            .with_size(ComponentSize{pixels(150), config.size.y_axis})
-            .with_label(std::string(labels[i]))
-            .with_font(config.font_name, config.font_size)
-            .with_custom_text_color(ctx.theme.font)
-            .with_skip_tabbing(true)
-            .with_debug_name(fmt::format("radio_label_{}", i)));
-    
+    auto label_ent =
+        div(ctx, mk(row.ent(), 1),
+            ComponentConfig{}
+                .with_size(ComponentSize{pixels(150), config.size.y_axis})
+                .with_label(std::string(labels[i]))
+                .with_font(config.font_name, config.font_size)
+                .with_custom_text_color(ctx.theme.font)
+                .with_skip_tabbing(true)
+                .with_debug_name(fmt::format("radio_label_{}", i)));
+
     // Force left alignment
     if (label_ent.ent().template has<HasLabel>()) {
-      label_ent.ent().template get<HasLabel>().set_alignment(TextAlignment::Left);
+      label_ent.ent().template get<HasLabel>().set_alignment(
+          TextAlignment::Left);
     }
   }
 
@@ -583,14 +600,24 @@ enum struct ToggleSwitchStyle {
 };
 
 /// Toggle switch with style variants: Pill (iOS-style) or Circle (X/checkmark).
-ElementResult
-toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
-              ComponentConfig config = ComponentConfig(),
-              ToggleSwitchStyle style = ToggleSwitchStyle::Pill) {
+ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
+                            bool &value,
+                            ComponentConfig config = ComponentConfig(),
+                            ToggleSwitchStyle style = ToggleSwitchStyle::Pill) {
   auto [entity, parent] = deref(ep_pair);
 
   auto label = config.label;
   config.label = "";
+  // Ensure toggle row uses Row layout to place label and toggle side-by-side
+  // Only set flex direction if not already specified by caller
+  if (config.flex_direction == FlexDirection::Column) {
+    config.with_flex_direction(FlexDirection::Row);
+  }
+  config.with_align_items(AlignItems::Center);
+  // Only prevent wrapping if caller hasn't explicitly configured wrap behavior
+  if (config.flex_wrap == FlexWrap::Wrap) {
+    config.with_no_wrap();
+  }
   _init_component(ctx, ep_pair, config, ComponentType::ToggleSwitch, false,
                   "toggle_switch_row");
 
@@ -617,60 +644,69 @@ toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair, bool &value,
   if (style == ToggleSwitchStyle::Circle) {
     // Clean checkbox: filled circle when ON, empty ring when OFF
     Size sz = h720(18.0f);
-    float border_w = h720(2.0f).value;
+    Size border_w = h720(2.0f);
     Color bg = state.on ? theme.accent : theme.background;
     Color border_color = state.on ? theme.accent : theme.font_muted;
 
     auto circ = button(ctx, mk(entity),
-        ComponentConfig::inherit_from(config, "toggle_circle")
-            .with_size(ComponentSize{sz, sz})
-            .with_custom_background(bg)
-            .with_border(border_color, border_w)
-            .with_rounded_corners(RoundedCorners().all_round())
-            .with_roundness(1.0f));
+                       ComponentConfig::inherit_from(config, "toggle_circle")
+                           .with_size(ComponentSize{sz, sz})
+                           .with_custom_background(bg)
+                           .with_border(border_color, border_w)
+                           .with_rounded_corners(RoundedCorners().all_round())
+                           .with_roundness(1.0f));
 
     clicked = circ;
 
     // Checkmark when ON
     if (state.on) {
       Size check_sz = h720(14.0f);
-      float check_offset = (sz.value - check_sz.value) / 2.0f;
+      // Offset = (18px - 14px) / 2 = 2px at 720p baseline
+      Size check_offset = h720((18.0f - 14.0f) / 2.0f);
       div(ctx, mk(circ.ent()),
           ComponentConfig::inherit_from(config, "toggle_check")
               .with_label("✓")
               .with_size(ComponentSize{check_sz, check_sz})
               .with_absolute_position()
-              .with_translate(check_offset, 0.0f)
+              .with_translate(check_offset, pixels(0.0f))
               .with_custom_text_color(theme.background)
-              .with_font(UIComponent::DEFAULT_FONT, h720(12.0f).value)
+              .with_font(UIComponent::DEFAULT_FONT, h720(12.0f))
               .with_alignment(TextAlignment::Center)
               .with_skip_tabbing(true));
     }
   } else {
     // Pill style (default) - responsive sizing at 720p baseline
-    Color track_color = colors::lerp(theme.secondary, theme.accent, state.animation_progress);
+    Color track_color =
+        colors::lerp(theme.secondary, theme.accent, state.animation_progress);
     // Knob is white or uses darkfont if available for contrast
-    Color knob_color = theme.darkfont.a > 0 ? theme.darkfont : Color{255, 255, 255, 255};
-    // Responsive sizing at 720p baseline
-    Size track_w = h720(40.0f), track_h = h720(20.0f), knob_sz = h720(16.0f);
-    float pad = h720(2.0f).value;
+    Color knob_color =
+        theme.darkfont.a > 0 ? theme.darkfont : Color{255, 255, 255, 255};
+    // Responsive sizing at 720p baseline (values in 720p pixels)
+    constexpr float track_w_px = 40.0f, track_h_px = 20.0f, knob_sz_px = 16.0f,
+                    pad_px = 2.0f;
+    Size track_w = h720(track_w_px), track_h = h720(track_h_px),
+         knob_sz = h720(knob_sz_px);
+    Size pad = h720(pad_px);
 
-    auto track_result = button(ctx, mk(entity),
-        ComponentConfig::inherit_from(config, "toggle_track")
-            .with_size(ComponentSize{track_w, track_h})
-            .with_custom_background(track_color)
-            .with_rounded_corners(RoundedCorners().all_round())
-            .with_roundness(0.5f));
+    auto track_result =
+        button(ctx, mk(entity),
+               ComponentConfig::inherit_from(config, "toggle_track")
+                   .with_size(ComponentSize{track_w, track_h})
+                   .with_custom_background(track_color)
+                   .with_rounded_corners(RoundedCorners().all_round())
+                   .with_roundness(0.5f));
 
     clicked = track_result;
 
-    // Sliding knob
-    float knob_x = pad + (track_w.value - knob_sz.value - pad * 2) * state.animation_progress;
+    // Sliding knob - calculate position using 720p pixel values, then wrap in
+    // h720
+    float knob_x_px = pad_px + (track_w_px - knob_sz_px - pad_px * 2) *
+                                   state.animation_progress;
     div(ctx, mk(track_result.ent()),
         ComponentConfig::inherit_from(config, "toggle_knob")
             .with_size(ComponentSize{knob_sz, knob_sz})
             .with_absolute_position()
-            .with_translate(knob_x, pad)
+            .with_translate(h720(knob_x_px), pad)
             .with_custom_background(knob_color)
             .with_rounded_corners(RoundedCorners().all_round())
             .with_roundness(1.0f)
@@ -782,9 +818,12 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Create slider background
   // In compact mode, use full rounded corners; otherwise sharp on left
-  auto elem_corners = compact
-      ? RoundedCorners(config.rounded_corners.value())
-      : RoundedCorners(config.rounded_corners.value()).left_sharp();
+  // TODO: slider_background can overflow by ~1-2px when parent is constrained
+  // by layout. Percent sizing doesn't work because it resolves against
+  // configured size, not laid-out size. Need layout system fix or tolerance.
+  auto elem_corners =
+      compact ? RoundedCorners(config.rounded_corners.value())
+              : RoundedCorners(config.rounded_corners.value()).left_sharp();
   auto elem = div(ctx, mk(entity, parent.id + entity.id + 0),
                   ComponentConfig::inherit_from(config, "slider_background")
                       .with_size(config.size)
@@ -947,6 +986,10 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Use styling defaults for size if none provided
   config.flex_direction = FlexDirection::Row;
+  // Only prevent wrapping if caller hasn't explicitly configured wrap behavior
+  if (config.flex_wrap == FlexWrap::Wrap) {
+    config.with_no_wrap();
+  }
 
   std::string label_str = config.label;
   config.label = "";
@@ -963,6 +1006,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                                        config.size.y_axis})
               .with_label("<")
               .with_font(UIComponent::SYMBOL_FONT, 16.f)
+              .with_no_wrap()
               .with_render_layer(config.render_layer))) {
     on_option_click(entity, prev_index(option_index - 1, options.size()));
   }
@@ -975,6 +1019,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                 .with_size(ComponentSize{pixels(default_component_size.x / 2.f),
                                          config.size.y_axis})
                 .with_label(std::string(options[i]))
+                .with_no_wrap()
                 .with_render_layer(config.render_layer + 1))) {
       on_option_click(entity, i + 1);
     }
@@ -987,6 +1032,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                                        config.size.y_axis})
               .with_label(">")
               .with_font(UIComponent::SYMBOL_FONT, 16.f)
+              .with_no_wrap()
               .with_render_layer(config.render_layer))) {
     on_option_click(entity, next_index(option_index, options.size()));
   }
@@ -1236,7 +1282,8 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
 /// size_t current_tab = 0;
 /// std::array<std::string_view, 3> tabs = {"Tab one", "Tab two", "Tab three"};
 ///
-/// if (auto result = tab_container(ctx, mk(parent), tabs, current_tab); result) {
+/// if (auto result = tab_container(ctx, mk(parent), tabs, current_tab); result)
+/// {
 ///   // Tab changed - play sound, log, etc.
 /// }
 ///
@@ -1255,8 +1302,8 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
   // Apply styling defaults if available
   if (config.size.is_default) {
     auto &styling_defaults = UIStylingDefaults::get();
-    if (auto def =
-            styling_defaults.get_component_config(ComponentType::TabContainer)) {
+    if (auto def = styling_defaults.get_component_config(
+            ComponentType::TabContainer)) {
       config.size = def->size;
     } else {
       config.size = ComponentSize(percent(1.0f), pixels(48.f));
@@ -1461,7 +1508,14 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
 
   if (config.border_config.has_value()) {
     track_color = config.border_config->color;
-    thickness = config.border_config->thickness;
+    // Resolve Size to pixels for thickness
+    float screen_height = 720.f;
+    if (auto *pcr = EntityHelper::get_singleton_cmp<
+            window_manager::ProvidesCurrentResolution>()) {
+      screen_height = static_cast<float>(pcr->current_resolution.height);
+    }
+    thickness =
+        resolve_to_pixels(config.border_config->thickness, screen_height);
   }
 
   // Store state on entity for rendering
@@ -1481,6 +1535,273 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
   return ElementResult{false, entity, normalized};
 }
 
+/// Frame style variants for decorative_frame()
+enum struct DecorativeFrameStyle {
+  KraftPaper, // Layered borders with corner accents (scrapbook feel)
+  Simple,     // Single border with background
+  Inset,      // Inset/sunken effect with shadow
+};
+
+/// Creates a decorative frame/border around content.
+///
+/// @param ctx The UI context
+/// @param ep_pair Entity-parent pair for hierarchy
+/// @param config Component configuration
+/// @param style Frame style variant (default: KraftPaper)
+///
+/// Features:
+/// - Multiple layered borders for depth
+/// - Corner accent decorations
+/// - Configurable colors via theme or custom
+/// - Non-interactive (purely decorative)
+///
+/// Usage:
+/// ```cpp
+/// // Simple kraft-paper style frame using theme colors
+/// auto frame = decorative_frame(ctx, mk(parent),
+///     ComponentConfig{}
+///         .with_size(pixels(400), pixels(300))
+///         .with_background(Theme::Usage::Secondary));
+///
+/// // Custom colored frame
+/// auto frame = decorative_frame(ctx, mk(parent),
+///     ComponentConfig{}
+///         .with_size(pixels(400), pixels(300))
+///         .with_custom_background(kraft_tan)
+///         .with_border(frame_brown, 12.0f));
+/// ```
+ElementResult decorative_frame(HasUIContext auto &ctx, EntityParent ep_pair,
+                               ComponentConfig config = ComponentConfig(),
+                               DecorativeFrameStyle style =
+                                   DecorativeFrameStyle::KraftPaper) {
+  auto [entity, parent] = deref(ep_pair);
+
+  // Apply styling defaults if available
+  if (config.size.is_default) {
+    auto &styling_defaults = UIStylingDefaults::get();
+    if (auto def = styling_defaults.get_component_config(
+            ComponentType::DecorativeFrame)) {
+      config.size = def->size;
+    } else {
+      config.size = ComponentSize(percent(1.0f), percent(1.0f));
+    }
+  }
+
+  // Resolve screen height for sizing
+  float screen_height = 720.f;
+  if (auto *pcr = EntityHelper::get_singleton_cmp<
+          window_manager::ProvidesCurrentResolution>()) {
+    screen_height = static_cast<float>(pcr->current_resolution.height);
+  }
+
+  // Get frame thickness from border config or use responsive default
+  Size frame_thickness_size = config.border_config.has_value()
+                                  ? config.border_config->thickness
+                                  : h720(12.0f);
+  float frame_thickness = resolve_to_pixels(frame_thickness_size, screen_height);
+
+  // Determine colors
+  // Frame color: from border config, or derive from theme
+  // Background color: from custom_color or theme
+  Color frame_color = config.border_config.has_value()
+                          ? config.border_config->color
+                          : ctx.theme.secondary;
+  Color bg_color = config.custom_color.value_or(ctx.theme.surface);
+
+  // Initialize main container (no background - children will draw it)
+  config.with_color_usage(Theme::Usage::None);
+  _init_component(ctx, ep_pair, config, ComponentType::DecorativeFrame, false,
+                  "decorative_frame");
+
+  // Get computed size for positioning edge elements (corners, highlights)
+  // Note: On first frame, computed values may be 0 - edge elements skip rendering
+  UIComponent &cmp = entity.template get<UIComponent>();
+  float w = cmp.computed[Axis::X];
+  float h = cmp.computed[Axis::Y];
+  bool has_computed_size = w > 0 && h > 0;
+
+  // Inner layers fill the decorative_frame using computed pixel values
+  // This avoids percentage compounding issues across nested elements
+  float fill_w = w > 0 ? w : 100.f;
+  float fill_h = h > 0 ? h : 100.f;
+  ComponentSize fill_size{pixels(fill_w), pixels(fill_h)};
+
+  if (style == DecorativeFrameStyle::KraftPaper) {
+    // Kraft paper style: multiple layered borders with corner accents
+
+    // Outer dark border (fills the whole frame area)
+    div(ctx, mk(entity, 0),
+        ComponentConfig{}
+            .with_size(fill_size)
+            .with_custom_background(frame_color)
+            .with_skip_tabbing(true)
+            .with_debug_name("frame_outer"));
+
+    // Inner lighter border (creates depth)
+    Color lighter_frame = colors::lighten(frame_color, 0.1f);
+
+    Size inset1 = pixels(frame_thickness * 0.3f);
+    div(ctx, mk(entity, 1),
+        ComponentConfig{}
+            .with_size(fill_size)
+            .with_absolute_position()
+            .with_translate(inset1, inset1)
+            .with_margin(Margin{.top = inset1,
+                                .bottom = inset1,
+                                .left = inset1,
+                                .right = inset1})
+            .with_custom_background(lighter_frame)
+            .with_skip_tabbing(true)
+            .with_debug_name("frame_inner1"));
+
+    // Main background
+    Size inset2 = pixels(frame_thickness);
+    div(ctx, mk(entity, 2),
+        ComponentConfig{}
+            .with_size(fill_size)
+            .with_absolute_position()
+            .with_translate(inset2, inset2)
+            .with_margin(Margin{.top = inset2,
+                                .bottom = inset2,
+                                .left = inset2,
+                                .right = inset2})
+            .with_custom_background(bg_color)
+            .with_skip_tabbing(true)
+            .with_debug_name("frame_bg"));
+
+    // Corner accents for "hand-made" feel (only render when size is computed)
+    if (has_computed_size) {
+      Size corner_size = h720(8.0f);
+      Size corner_offset = h720(2.0f);
+      float corner_size_px = resolve_to_pixels(corner_size, screen_height);
+      float corner_offset_px = resolve_to_pixels(corner_offset, screen_height);
+      Color corner_color = colors::darken(frame_color, 0.85f);
+
+      // Top-left corner
+      div(ctx, mk(entity, 3),
+          ComponentConfig{}
+              .with_size(ComponentSize{corner_size, corner_size})
+              .with_absolute_position()
+              .with_translate(corner_offset, corner_offset)
+              .with_custom_background(corner_color)
+              .with_skip_tabbing(true)
+              .with_debug_name("corner_tl"));
+
+      // Top-right corner
+      div(ctx, mk(entity, 4),
+          ComponentConfig{}
+              .with_size(ComponentSize{corner_size, corner_size})
+              .with_absolute_position()
+              .with_translate(w - corner_size_px - corner_offset_px, corner_offset_px)
+              .with_custom_background(corner_color)
+              .with_skip_tabbing(true)
+              .with_debug_name("corner_tr"));
+
+      // Bottom-left corner
+      div(ctx, mk(entity, 5),
+          ComponentConfig{}
+              .with_size(ComponentSize{corner_size, corner_size})
+              .with_absolute_position()
+              .with_translate(corner_offset_px, h - corner_size_px - corner_offset_px)
+              .with_custom_background(corner_color)
+              .with_skip_tabbing(true)
+              .with_debug_name("corner_bl"));
+
+      // Bottom-right corner
+      div(ctx, mk(entity, 6),
+          ComponentConfig{}
+              .with_size(ComponentSize{corner_size, corner_size})
+              .with_absolute_position()
+              .with_translate(w - corner_size_px - corner_offset_px,
+                              h - corner_size_px - corner_offset_px)
+              .with_custom_background(corner_color)
+              .with_skip_tabbing(true)
+              .with_debug_name("corner_br"));
+    }
+
+  } else if (style == DecorativeFrameStyle::Simple) {
+    // Simple style: just background with border
+    div(ctx, mk(entity, 0),
+        ComponentConfig{}
+            .with_size(fill_size)
+            .with_custom_background(bg_color)
+            .with_border(frame_color, frame_thickness)
+            .with_skip_tabbing(true)
+            .with_debug_name("frame_simple"));
+
+  } else if (style == DecorativeFrameStyle::Inset) {
+    // Inset style: sunken effect with shadow
+    Color shadow_color = colors::opacity_pct(colors::darken(frame_color, 0.8f), 0.6f);
+    Color highlight_color = colors::lighten(frame_color, 0.2f);
+
+    // Outer frame
+    div(ctx, mk(entity, 0),
+        ComponentConfig{}
+            .with_size(fill_size)
+            .with_custom_background(frame_color)
+            .with_skip_tabbing(true)
+            .with_debug_name("frame_outer"));
+
+    // Shadow edge (top-left)
+    Size edge = h720(3.0f);
+    float edge_px = resolve_to_pixels(edge, screen_height);
+    div(ctx, mk(entity, 1),
+        ComponentConfig{}
+            .with_size(ComponentSize{percent(1.0f), edge})
+            .with_absolute_position()
+            .with_translate(pixels(0.0f), pixels(0.0f))
+            .with_custom_background(shadow_color)
+            .with_skip_tabbing(true)
+            .with_debug_name("frame_shadow_top"));
+
+    div(ctx, mk(entity, 2),
+        ComponentConfig{}
+            .with_size(ComponentSize{edge, percent(1.0f)})
+            .with_absolute_position()
+            .with_translate(pixels(0.0f), pixels(0.0f))
+            .with_custom_background(shadow_color)
+            .with_skip_tabbing(true)
+            .with_debug_name("frame_shadow_left"));
+
+    // Highlight edge (bottom-right) - only render when size is computed
+    if (has_computed_size) {
+      div(ctx, mk(entity, 3),
+          ComponentConfig{}
+              .with_size(ComponentSize{percent(1.0f), edge})
+              .with_absolute_position()
+              .with_translate(0.0f, h - edge_px)
+              .with_custom_background(highlight_color)
+              .with_skip_tabbing(true)
+              .with_debug_name("frame_highlight_bottom"));
+
+      div(ctx, mk(entity, 4),
+          ComponentConfig{}
+              .with_size(ComponentSize{edge, percent(1.0f)})
+              .with_absolute_position()
+              .with_translate(w - edge_px, 0.0f)
+              .with_custom_background(highlight_color)
+              .with_skip_tabbing(true)
+              .with_debug_name("frame_highlight_right"));
+    }
+
+    // Inner background
+    Size inset = pixels(frame_thickness);
+    div(ctx, mk(entity, 5),
+        ComponentConfig{}
+            .with_size(fill_size)
+            .with_absolute_position()
+            .with_translate(inset, inset)
+            .with_margin(Margin{.top = inset,
+                                .bottom = inset,
+                                .left = inset,
+                                .right = inset})
+            .with_custom_background(bg_color)
+            .with_skip_tabbing(true)
+            .with_debug_name("frame_bg"));
+  }
+
+  return ElementResult{false, entity};
+}
 
 /// Creates a scrollable container that clips content and handles mouse wheel
 /// input.
@@ -1549,7 +1870,8 @@ ElementResult scroll_view(HasUIContext auto &ctx, EntityParent ep_pair,
     // Vertical scrolling
     if (scroll_state.vertical_enabled && wheel_v.y != 0.0f) {
       float old_offset = scroll_state.scroll_offset.y;
-      scroll_state.scroll_offset.y += direction * wheel_v.y * scroll_state.scroll_speed;
+      scroll_state.scroll_offset.y +=
+          direction * wheel_v.y * scroll_state.scroll_speed;
       // Prevent scrolling past the start (full clamping happens in render
       // after content_size is computed)
       if (scroll_state.scroll_offset.y < 0.0f) {
@@ -1561,7 +1883,8 @@ ElementResult scroll_view(HasUIContext auto &ctx, EntityParent ep_pair,
     // Horizontal scrolling
     if (scroll_state.horizontal_enabled && wheel_v.x != 0.0f) {
       float old_offset = scroll_state.scroll_offset.x;
-      scroll_state.scroll_offset.x += direction * wheel_v.x * scroll_state.scroll_speed;
+      scroll_state.scroll_offset.x +=
+          direction * wheel_v.x * scroll_state.scroll_speed;
       // Prevent scrolling past the start
       if (scroll_state.scroll_offset.x < 0.0f) {
         scroll_state.scroll_offset.x = 0.0f;

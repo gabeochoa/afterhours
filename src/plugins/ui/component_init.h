@@ -5,6 +5,7 @@
 #include "../../ecs.h"
 #include "../color.h"
 #include "../texture_manager.h"
+#include "../window_manager.h"
 #include "component_config.h"
 #include "components.h"
 #include "context.h"
@@ -237,20 +238,7 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   }
 
   if (config.font_name != UIComponent::UNSET_FONT) {
-    float effective_font_size = config.font_size;
-
-#ifdef AFTERHOURS_ENFORCE_MIN_FONT_SIZE
-    // Warn and enforce minimum accessible font size
-    if (config.font_size < TypographyScale::MIN_ACCESSIBLE_SIZE_720P) {
-      log_warn("Font size {:.1f}px is below minimum accessible size "
-               "{:.1f}px for component '{}' - clamping to minimum",
-               config.font_size, TypographyScale::MIN_ACCESSIBLE_SIZE_720P,
-               config.debug_name.empty() ? "(unnamed)" : config.debug_name);
-      effective_font_size = TypographyScale::MIN_ACCESSIBLE_SIZE_720P;
-    }
-#endif
-    entity.get<UIComponent>().enable_font(config.font_name,
-                                          effective_font_size);
+    entity.get<UIComponent>().enable_font(config.font_name, config.font_size);
   }
 
   if (Theme::is_valid(config.color_usage)) {
@@ -271,10 +259,16 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   }
   entity.addComponentIfMissing<HasOpacity>().value =
       std::clamp(config.opacity, 0.0f, 1.0f);
-  if (config.translate_x != 0.0f || config.translate_y != 0.0f) {
+  if (config.translate_x.value != 0.0f || config.translate_y.value != 0.0f) {
     auto &mods = entity.addComponentIfMissing<HasUIModifiers>();
-    mods.translate_x = config.translate_x;
-    mods.translate_y = config.translate_y;
+    // Resolve Size to pixels using screen height (default 720p baseline)
+    float screen_height = 720.f;
+    if (auto *pcr = EntityHelper::get_singleton_cmp<
+            window_manager::ProvidesCurrentResolution>()) {
+      screen_height = static_cast<float>(pcr->current_resolution.height);
+    }
+    mods.translate_x = resolve_to_pixels(config.translate_x, screen_height);
+    mods.translate_y = resolve_to_pixels(config.translate_y, screen_height);
   }
 }
 

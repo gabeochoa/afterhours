@@ -185,7 +185,7 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
   config.with_margin(Margin{.bottom = pixels(row_config.row_spacing)});
 
   // Set appropriate font size for settings UI (larger for readability)
-  config.font_size = 22.0f;
+  config.font_size = pixels(22.0f);
 
   // Use row layout with FlexStart - items flow left to right
   config.flex_direction = FlexDirection::Row;
@@ -265,10 +265,11 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
     // Expect bool* value
     if constexpr (std::is_same_v<ValueT, bool *>) {
       // Build toggle with sensible defaults
+      // Use children() sizing to let the container fit the toggle_switch's
+      // internal sizing (which uses h720() for resolution scaling)
       auto toggle_cfg =
           ComponentConfig{}
-              .with_size(ComponentSize{pixels((int)row_config.toggle_track_width),
-                                       pixels((int)row_config.toggle_track_height)})
+              .with_size(ComponentSize{children(), children()})
               .with_debug_name("setting_row_toggle");
 
       // Apply user override if provided

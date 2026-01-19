@@ -79,15 +79,15 @@ struct ComponentConfig {
 
   // ui modifiers
   float opacity = 1.0f;
-  float translate_x = 0.0f;
-  float translate_y = 0.0f;
+  Size translate_x = pixels(0.0f);
+  Size translate_y = pixels(0.0f);
 
   // debugs
   std::string debug_name = "";
   int render_layer = 0;
 
   std::string font_name = UIComponent::UNSET_FONT;
-  float font_size = 50.f;
+  Size font_size = pixels(50.f);
   bool is_internal = false;
 
   // Shadow configuration
@@ -148,7 +148,13 @@ struct ComponentConfig {
                       .right = gap_size};
     return *this;
   }
+  // Float overload for backwards compatibility
   ComponentConfig &with_border(Color color, float thickness = 2.0f) {
+    border_config = Border{color, pixels(thickness)};
+    return *this;
+  }
+  // Size overload for resolution-scaled border thickness
+  ComponentConfig &with_border(Color color, Size thickness) {
     border_config = Border{color, thickness};
     return *this;
   }
@@ -268,7 +274,14 @@ struct ComponentConfig {
     click_activation = mode;
     return *this;
   }
+  // Float overload for backwards compatibility
   ComponentConfig &with_translate(float x, float y) {
+    translate_x = pixels(x);
+    translate_y = pixels(y);
+    return *this;
+  }
+  // Size overload for resolution-scaled translation
+  ComponentConfig &with_translate(Size x, Size y) {
     translate_x = x;
     translate_y = y;
     return *this;
@@ -305,10 +318,15 @@ struct ComponentConfig {
     debug_wrap = enabled;
     return *this;
   }
-  ComponentConfig &with_font(const std::string &font_name_, float font_size_) {
+  ComponentConfig &with_font(const std::string &font_name_, Size font_size_) {
     font_name = font_name_;
     font_size = font_size_;
     return *this;
+  }
+
+  // Float overload for backwards compatibility - converts to pixels
+  ComponentConfig &with_font(const std::string &font_name_, float font_size_px) {
+    return with_font(font_name_, pixels(font_size_px));
   }
 
   ComponentConfig &with_absolute_position() {
@@ -477,7 +495,7 @@ struct ComponentConfig {
                       .right = DefaultSpacing::small()};
     }
     if (!has_font_override()) {
-      font_size = TypographyScale::BASE_SIZE_720P;
+      font_size = TypographyScale::base();
     }
     return *this;
   }
@@ -601,7 +619,7 @@ inline ComponentConfig magazine_style() {
                           .left = DefaultSpacing::medium(),
                           .bottom = DefaultSpacing::medium(),
                           .right = DefaultSpacing::medium()});
-  config.font_size = TypographyScale::BASE_SIZE_720P;
+  config.font_size = TypographyScale::base();
   return config;
 }
 
@@ -616,7 +634,7 @@ inline ComponentConfig card_style() {
                           .left = DefaultSpacing::small(),
                           .bottom = DefaultSpacing::small(),
                           .right = DefaultSpacing::small()});
-  config.font_size = TypographyScale::BASE_SIZE_720P;
+  config.font_size = TypographyScale::base();
   return config;
 }
 
@@ -631,7 +649,7 @@ inline ComponentConfig form_style() {
                           .left = DefaultSpacing::tiny(),
                           .bottom = DefaultSpacing::tiny(),
                           .right = DefaultSpacing::tiny()});
-  config.font_size = TypographyScale::BASE_SIZE_720P;
+  config.font_size = TypographyScale::base();
   return config;
 }
 

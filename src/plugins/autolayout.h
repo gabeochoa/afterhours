@@ -85,7 +85,9 @@ struct AutoLayout {
       return 0;
     }
     const std::string &content = ent.get<HasLabel>().label;
-    float font_size = widget.font_size;
+    // Resolve font_size to pixels using screen height
+    float screen_height = fetch_screen_value_(Axis::Y);
+    float font_size = resolve_to_pixels(widget.font_size, screen_height);
     float spacing = 1.f;
 
     Vector2Type result;
@@ -932,12 +934,14 @@ struct AutoLayout {
       bool will_wrap_row = is_row && cx + offx > sx;
 
       // Check for smart wrap warning conditions
-      if (will_wrap_column || will_wrap_row) {
+      // Skip warnings for scroll containers - wrap/overflow is expected
+      bool parent_is_scroll_view = to_ent(widget.id).has<HasScrollView>();
+      if ((will_wrap_column || will_wrap_row) && !parent_is_scroll_view) {
         bool should_warn = false;
         std::string warn_reason;
 
-        // Condition 1: NoWrap set but would overflow
-        if (child.flex_wrap == FlexWrap::NoWrap) {
+        // Condition 1: Parent has NoWrap set but would overflow
+        if (widget.flex_wrap == FlexWrap::NoWrap) {
           should_warn = true;
           warn_reason = "NoWrap set but would overflow";
         }
@@ -964,9 +968,9 @@ struct AutoLayout {
         }
       }
 
-      // If NoWrap is set, skip the wrap entirely
-      if (child.flex_wrap == FlexWrap::NoWrap) {
-        // Don't wrap - item will overflow/clip
+      // If parent has NoWrap set, skip the wrap entirely
+      if (widget.flex_wrap == FlexWrap::NoWrap) {
+        // Don't wrap - items will overflow/clip
       } else {
         // Execute wrap logic
         if (will_wrap_column) {
@@ -1034,11 +1038,12 @@ struct AutoLayout {
       }
 
       // Condition 3: Check if child overflows parent bounds after positioning
+      // Skip warning for scroll containers - overflow is expected behavior
       float child_end_x = child.computed_rel[Axis::X] + cx;
       float child_end_y = child.computed_rel[Axis::Y] + cy;
       bool overflows_x = child_end_x > sx;
       bool overflows_y = child_end_y > sy;
-      if (overflows_x || overflows_y) {
+      if ((overflows_x || overflows_y) && !parent_is_scroll_view) {
         log_warn("Layout overflow: '{}' extends outside parent '{}' bounds "
                  "(child_rel=[{:.1f},{:.1f}], child_size=[{:.1f},{:.1f}], "
                  "child_end=[{:.1f},{:.1f}], parent_size=[{:.1f},{:.1f}], "
