@@ -204,6 +204,9 @@ struct modal : developer::Plugin {
         return size.value * static_cast<float>(screen_h);
       case ui::Dim::Percent:
         return size.value * static_cast<float>(screen_w);
+      case ui::Dim::None:
+      case ui::Dim::Text:
+      case ui::Dim::Children:
       default:
         return size.value;
       }

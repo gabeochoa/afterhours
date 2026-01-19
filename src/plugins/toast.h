@@ -38,6 +38,9 @@ struct toast : developer::Plugin {
       return size.value * static_cast<float>(screen_h);
     case ui::Dim::Percent:
       return size.value * static_cast<float>(screen_w);
+    case ui::Dim::None:
+    case ui::Dim::Text:
+    case ui::Dim::Children:
     default:
       return size.value;
     }
@@ -258,13 +261,11 @@ struct toast : developer::Plugin {
       float gap_px = resolve_size(TOAST_GAP, screen_w, screen_h);
 
       int index = 0;
-      int toast_count = 0;
 
       for (Entity &entity : EntityQuery()
                                 .whereHasComponent<Toast>()
                                 .whereHasComponent<ui::UIComponent>()
                                 .gen()) {
-        toast_count++;
         Toast &t = entity.get<Toast>();
         ui::UIComponent &ui = entity.get<ui::UIComponent>();
 
