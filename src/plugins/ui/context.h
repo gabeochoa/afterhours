@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <bitset>
+#include <functional>
 #if __has_include(<magic_enum/magic_enum.hpp>)
 #include <magic_enum/magic_enum.hpp>
 #else
@@ -76,6 +77,33 @@ template <typename InputAction> struct UIContext : BaseComponent {
   // TODO: Add styling defaults back when circular dependency is resolved
   // imm::UIStylingDefaults styling_defaults;
 
+  // Input gates - systems can register functions that control whether
+  // an entity should receive input. All gates must return true for input
+  // to be allowed. Use add_input_gate/remove_input_gate to manage.
+  using InputGate = std::function<bool(EntityID)>;
+  std::vector<std::pair<std::string, InputGate>> input_gates;
+
+  // Add a named input gate (returns false to block input for an entity)
+  void add_input_gate(const std::string &name, InputGate gate) {
+    // Remove existing gate with same name first to avoid duplicates
+    remove_input_gate(name);
+    input_gates.emplace_back(name, std::move(gate));
+  }
+
+  // Remove an input gate by name
+  void remove_input_gate(const std::string &name) {
+    input_gates.erase(
+        std::remove_if(input_gates.begin(), input_gates.end(),
+                       [&](const auto &pair) { return pair.first == name; }),
+        input_gates.end());
+  }
+
+  // Check if all gates allow input for this entity
+  [[nodiscard]] bool is_input_allowed(EntityID id) const {
+    return std::all_of(input_gates.begin(), input_gates.end(),
+                       [id](const auto &pair) { return pair.second(id); });
+  }
+
   [[nodiscard]] bool is_hot(EntityID id) const { return hot_id == id; };
   [[nodiscard]] bool is_active(EntityID id) const { return active_id == id; };
   void set_hot(EntityID id) { hot_id = id; }
@@ -85,6 +113,11 @@ template <typename InputAction> struct UIContext : BaseComponent {
   void set_focus(EntityID id) { focus_id = id; }
 
   void active_if_mouse_inside(EntityID id, RectangleType rect) {
+    // Check if input is blocked for this element (e.g., by a modal)
+    if (!is_input_allowed(id)) {
+      return;
+    }
+
     if (is_mouse_inside(mouse.pos, rect)) {
       set_hot(id);
       if (is_active(ROOT) && mouse.left_down) {
