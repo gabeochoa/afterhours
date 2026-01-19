@@ -803,6 +803,10 @@ struct modal : developer::Plugin {
   // Registration (Public)
   // ============================================================
 
+  static void add_singleton_components(Entity &singleton) {
+    detail::init_singleton(singleton);
+  }
+
   static void enforce_singletons(SystemManager &) {
     // Check directly without going through get_modal_root() which throws
     auto *existing = EntityHelper::get_singleton_cmp<ModalRoot>();
@@ -810,6 +814,12 @@ struct modal : developer::Plugin {
       Entity &singleton = EntityHelper::createEntity();
       detail::init_singleton(singleton);
     }
+  }
+
+  // Non-templated version for PluginCore concept compatibility
+  static void register_update_systems(SystemManager &) {
+    // Note: For actual modal functionality, use the templated version:
+    // modal::register_update_systems<YourInputAction>(sm);
   }
 
   template <InputActionLike InputAction>
@@ -892,5 +902,10 @@ modal_with_result(ui::imm::HasUIContext auto &ctx,
 
   return {result, dialog_result};
 }
+
+// Compile-time verification that modal satisfies the PluginCore concept
+// Note: Using struct keyword to disambiguate from the free function 'modal'
+static_assert(developer::PluginCore<struct modal>,
+              "modal must implement the core plugin interface");
 
 } // namespace afterhours

@@ -109,4 +109,8 @@ struct timer : developer::Plugin {
   }
 };
 
+// Compile-time verification that timer satisfies the PluginCore concept
+static_assert(developer::PluginCore<timer>,
+              "timer must implement the core plugin interface");
+
 } // namespace afterhours

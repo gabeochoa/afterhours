@@ -295,10 +295,27 @@ struct animation : developer::Plugin {
     fn(anim(base, index));
   }
 
+  // No singleton components needed for animation plugin
+  static void add_singleton_components(Entity &) {}
+
+  // No singleton enforcement needed for animation plugin
+  static void enforce_singletons(SystemManager &) {}
+
+  // Non-templated version for PluginCore concept compatibility
+  static void register_update_systems(SystemManager &) {
+    // Note: For actual animation updates, use the templated version:
+    // animation::register_update_systems<YourKeyEnum>(sm);
+  }
+
+  // Templated version for registering animation updates with a specific key type
   template <typename Key>
   static inline void register_update_systems(SystemManager &sm) {
     sm.register_update_system([](float dt) { manager<Key>().update(dt); });
   }
 };
+
+// Compile-time verification that animation satisfies the PluginCore concept
+static_assert(developer::PluginCore<animation>,
+              "animation must implement the core plugin interface");
 
 } // namespace afterhours

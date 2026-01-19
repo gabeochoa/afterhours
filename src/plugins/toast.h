@@ -306,6 +306,10 @@ struct toast : developer::Plugin {
     }
   };
 
+  static void add_singleton_components(Entity &singleton) {
+    detail::init_singleton(singleton);
+  }
+
   static void enforce_singletons(SystemManager &) {
     // Create singleton immediately if it doesn't exist
     auto *root = EntityHelper::get_singleton_cmp<ToastRoot>();
@@ -325,5 +329,9 @@ struct toast : developer::Plugin {
         std::make_unique<ToastLayoutSystem<InputAction>>());
   }
 };
+
+// Compile-time verification that toast satisfies the PluginCore concept
+static_assert(developer::PluginCore<toast>,
+              "toast must implement the core plugin interface");
 
 } // namespace afterhours

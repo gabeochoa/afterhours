@@ -500,4 +500,8 @@ struct pathfinding : developer::Plugin {
   }
 };
 
+// Compile-time verification that pathfinding satisfies the PluginCore concept
+static_assert(developer::PluginCore<pathfinding>,
+              "pathfinding must implement the core plugin interface");
+
 } // namespace afterhours

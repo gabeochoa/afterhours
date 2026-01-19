@@ -750,6 +750,20 @@ struct input : developer::Plugin {
         std::make_unique<developer::EnforceSingleton<ProvidesInputMapping>>());
   }
 
+  // Default overload for PluginCore concept compatibility
+  static void add_singleton_components(Entity &entity) {
+    // Note: This creates an empty input mapping. For actual usage, use the
+    // overload that takes a GameMapping parameter.
+    entity.addComponent<InputCollector>();
+    entity.addComponent<input::ProvidesMaxGamepadID>();
+    entity.addComponent<input::ProvidesInputMapping>(
+        ProvidesInputMapping::GameMapping{});
+
+    EntityHelper::registerSingleton<InputCollector>(entity);
+    EntityHelper::registerSingleton<input::ProvidesMaxGamepadID>(entity);
+    EntityHelper::registerSingleton<input::ProvidesInputMapping>(entity);
+  }
+
   static void register_update_systems(SystemManager &sm) {
     sm.register_update_system(
         std::make_unique<afterhours::input::InputSystem>());
@@ -758,4 +772,9 @@ struct input : developer::Plugin {
   // Renderer Systems:
   // RenderConnectedGamepads
 };
+
+// Compile-time verification that input satisfies the PluginCore concept
+static_assert(developer::PluginCore<input>,
+              "input must implement the core plugin interface");
+
 } // namespace afterhours

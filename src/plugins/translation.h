@@ -157,6 +157,12 @@ struct translation_plugin : developer::Plugin {
     }
   };
 
+  // Non-templated version for PluginCore concept compatibility
+  static void add_singleton_components(Entity &) {
+    // Note: For actual translation functionality, use the overload
+    // that takes translations and language parameters.
+  }
+
   static void add_singleton_components(
       Entity &entity, const LanguageMap &translations,
       const Language &default_language = Language::English,
@@ -171,7 +177,7 @@ struct translation_plugin : developer::Plugin {
         std::make_unique<developer::EnforceSingleton<ProvidesTranslation>>());
   }
 
-  static void register_update_systems(SystemManager &sm) {}
+  static void register_update_systems(SystemManager &) {}
 
   static std::string get_string(StringKeyEnum key) {
     auto *provides = EntityHelper::get_singleton_cmp<ProvidesTranslation>();
@@ -325,6 +331,13 @@ struct translation_plugin : developer::Plugin {
     }
   }
 };
+
+// Note: translation_plugin is a template struct. To verify it satisfies
+// PluginCore, instantiate the static_assert with your specific types:
+//   static_assert(developer::PluginCore<
+//       translation::translation_plugin<MyStringKey, MyParam, MyFontID,
+//       MyFontNameGetter>>, "translation_plugin must implement the core plugin
+//       interface");
 
 } // namespace translation
 } // namespace afterhours

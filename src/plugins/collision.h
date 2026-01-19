@@ -249,7 +249,17 @@ struct collision : developer::Plugin {
     }
   };
 
-  static void register_update_systems(SystemManager &sm) {}
+  // No singleton components needed for collision plugin
+  static void add_singleton_components(Entity &) {}
+
+  // No singleton enforcement needed for collision plugin
+  static void enforce_singletons(SystemManager &) {}
+
+  static void register_update_systems(SystemManager &) {}
 };
+
+// Compile-time verification that collision satisfies the PluginCore concept
+static_assert(developer::PluginCore<collision>,
+              "collision must implement the core plugin interface");
 
 } // namespace afterhours

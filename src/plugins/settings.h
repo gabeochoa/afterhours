@@ -307,6 +307,12 @@ struct settings : developer::Plugin {
     }
   };
 
+  // Non-templated versions for PluginCore concept compatibility
+  // Note: For actual settings functionality, use the templated versions.
+  static void add_singleton_components(Entity &) {}
+  static void enforce_singletons(SystemManager &) {}
+  static void register_update_systems(SystemManager &) {}
+
   template <typename SettingsData>
   static void add_singleton_components(Entity &entity,
                                        const SettingsData &default_data,
@@ -484,5 +490,9 @@ struct settings : developer::Plugin {
     return fs::current_path();
   }
 };
+
+// Compile-time verification that settings satisfies the PluginCore concept
+static_assert(developer::PluginCore<settings>,
+              "settings must implement the core plugin interface");
 
 } // namespace afterhours

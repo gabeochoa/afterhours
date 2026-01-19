@@ -216,6 +216,11 @@ struct window_manager : developer::Plugin {
     }
   };
 
+  // Default overload for PluginCore concept compatibility (uses 60 FPS default)
+  static void add_singleton_components(Entity &entity) {
+    add_singleton_components(entity, 60);
+  }
+
   static void add_singleton_components(Entity &entity, const int target_fps) {
     entity.addComponent<ProvidesTargetFPS>(target_fps);
     entity.addComponent<ProvidesCurrentResolution>();
@@ -266,4 +271,9 @@ struct window_manager : developer::Plugin {
     sm.register_update_system(std::make_unique<CollectAvailableResolutions>());
   }
 };
+
+// Compile-time verification that window_manager satisfies the PluginCore concept
+static_assert(developer::PluginCore<window_manager>,
+              "window_manager must implement the core plugin interface");
+
 } // namespace afterhours

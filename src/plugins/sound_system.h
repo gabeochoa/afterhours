@@ -382,4 +382,8 @@ struct sound_system : developer::Plugin {
   static float get_music_volume() { return MusicLibrary::get().get_volume(); }
 };
 
+// Compile-time verification that sound_system satisfies the PluginCore concept
+static_assert(developer::PluginCore<sound_system>,
+              "sound_system must implement the core plugin interface");
+
 } // namespace afterhours

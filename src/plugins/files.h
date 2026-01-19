@@ -65,6 +65,13 @@ struct files : developer::Plugin {
     bool ensure_directory_exists(const fs::path &path);
   };
 
+  // Non-templated version for PluginCore concept compatibility
+  // Note: For actual files functionality, use the overload with game_name.
+  static void add_singleton_components(Entity &entity) {
+    // Default initialization with empty game name
+    add_singleton_components(entity, "", "resources");
+  }
+
   // Implementation in files.cpp
   static void
   add_singleton_components(Entity &entity, const std::string &game_name,
@@ -97,5 +104,9 @@ struct files : developer::Plugin {
 
   static bool ensure_directory_exists(const fs::path &path);
 };
+
+// Compile-time verification that files satisfies the PluginCore concept
+static_assert(developer::PluginCore<files>,
+              "files must implement the core plugin interface");
 
 } // namespace afterhours

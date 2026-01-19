@@ -91,4 +91,8 @@ struct camera : developer::Plugin {
 #endif
 };
 
+// Compile-time verification that camera satisfies the PluginCore concept
+static_assert(developer::PluginCore<camera>,
+              "camera must implement the core plugin interface");
+
 } // namespace afterhours

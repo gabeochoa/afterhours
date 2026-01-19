@@ -2,6 +2,79 @@
 
 This document defines the public API boundary for afterhours plugins. Plugins must only use the public APIs documented here and must not access private internals.
 
+## Plugin Concepts (C++20)
+
+Afterhours provides C++20 concepts to enforce plugin interface requirements at compile-time. These concepts are defined in `developer.h`.
+
+### PluginCore
+
+The core concept that all plugins must satisfy. Requires three static methods:
+
+```cpp
+template <typename T>
+concept PluginCore = requires(Entity &e, SystemManager &sm) {
+  { T::add_singleton_components(e) } -> std::same_as<void>;
+  { T::enforce_singletons(sm) } -> std::same_as<void>;
+  { T::register_update_systems(sm) } -> std::same_as<void>;
+};
+```
+
+### PluginWithRender
+
+For plugins that also provide render systems:
+
+```cpp
+template <typename T>
+concept PluginWithRender = PluginCore<T> && requires(SystemManager &sm) {
+  { T::register_render_systems(sm) } -> std::same_as<void>;
+};
+```
+
+### PluginTemplated
+
+For plugins with templated registration methods (like `modal`, `toast`):
+
+```cpp
+template <typename T, typename InputAction>
+concept PluginTemplated = requires(SystemManager &sm) {
+  { T::template enforce_singletons<InputAction>(sm) } -> std::same_as<void>;
+  { T::template register_update_systems<InputAction>(sm) } -> std::same_as<void>;
+};
+```
+
+### Using Concepts
+
+Add a static_assert at the end of your plugin to verify it satisfies the concept:
+
+```cpp
+struct my_plugin : developer::Plugin {
+  static void add_singleton_components(Entity &entity);
+  static void enforce_singletons(SystemManager &sm);
+  static void register_update_systems(SystemManager &sm);
+};
+
+// Compile-time verification
+static_assert(developer::PluginCore<my_plugin>,
+              "my_plugin must implement the core plugin interface");
+```
+
+You can also use the helper variable template for cleaner assertions:
+
+```cpp
+static_assert(developer::plugin_ok<my_plugin>);
+```
+
+## Plugin Categories
+
+Plugins in afterhours fall into different categories:
+
+| Category | Description | Examples |
+|----------|-------------|----------|
+| **Full Plugins** | Implement `PluginCore` concept | `timer`, `camera`, `input`, `pathfinding` |
+| **Templated Plugins** | Have templated registration methods | `modal`, `toast`, `animation`, `settings` |
+| **Utility Namespaces** | Not true plugins, just helper functions | `clipboard`, `colors` |
+| **Core Algorithms** | Internal implementation details | `autolayout` |
+
 ## Public Headers
 
 Plugins may include the following headers:
@@ -88,6 +161,10 @@ struct my_plugin : developer::Plugin {
   static void register_update_systems(SystemManager &sm);
 };
 
+// Verify the plugin satisfies the concept
+static_assert(developer::PluginCore<my_plugin>,
+              "my_plugin must implement the core plugin interface");
+
 } // namespace afterhours
 ```
 
@@ -172,4 +249,34 @@ auto *component = EntityHelper::get_singleton_cmp<MySingleton>();
 ✅ **Do** use `EntityQuery` for querying entities
 ✅ **Do** use `EntityHelper::createEntity()` for entity creation
 ✅ **Do** include `ecs.h` for ECS functionality
+✅ **Do** add `static_assert(developer::PluginCore<YourPlugin>, ...)` to verify your plugin
 
+## Templated Plugin Pattern
+
+Some plugins require a template parameter (typically `InputAction`) for their registration methods. These plugins provide:
+
+1. **Non-templated stubs** for `PluginCore` concept compatibility
+2. **Templated versions** for actual functionality
+
+Example usage:
+
+```cpp
+// For templated plugins like modal, toast, animation:
+
+// Non-templated (satisfies PluginCore, but doesn't do anything useful)
+modal::register_update_systems(sm);  // No-op
+
+// Templated (actual functionality)
+modal::register_update_systems<MyInputAction>(sm);  // Registers real systems
+toast::register_layout_systems<MyInputAction>(sm);
+animation::register_update_systems<MyAnimKey>(sm);
+```
+
+## Plugins Requiring External Compilation
+
+Some plugins have implementations in `.cpp` files that must be compiled:
+
+- `settings.cpp` - Settings persistence
+- `files.cpp` - File system utilities
+
+If you see linker errors about missing symbols from these plugins, ensure you compile the corresponding `.cpp` file.
