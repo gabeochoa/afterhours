@@ -1536,6 +1536,274 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
   return ElementResult{false, entity, normalized};
 }
 
+/// Frame style variants for decorative_frame()
+enum struct DecorativeFrameStyle {
+  KraftPaper, // Layered borders with corner accents (scrapbook feel)
+  Simple,     // Single border with background
+  Inset,      // Inset/sunken effect with shadow
+};
+
+/// Creates a decorative frame/border around content.
+///
+/// @param ctx The UI context
+/// @param ep_pair Entity-parent pair for hierarchy
+/// @param config Component configuration
+/// @param style Frame style variant (default: KraftPaper)
+///
+/// Features:
+/// - Multiple layered borders for depth
+/// - Corner accent decorations
+/// - Configurable colors via theme or custom
+/// - Non-interactive (purely decorative)
+///
+/// Usage:
+/// ```cpp
+/// // Simple kraft-paper style frame using theme colors
+/// auto frame = decorative_frame(ctx, mk(parent),
+///     ComponentConfig{}
+///         .with_size(pixels(400), pixels(300))
+///         .with_background(Theme::Usage::Secondary));
+///
+/// // Custom colored frame
+/// auto frame = decorative_frame(ctx, mk(parent),
+///     ComponentConfig{}
+///         .with_size(pixels(400), pixels(300))
+///         .with_custom_background(kraft_tan)
+///         .with_border(frame_brown, 12.0f));
+/// ```
+ElementResult decorative_frame(HasUIContext auto &ctx, EntityParent ep_pair,
+                               ComponentConfig config = ComponentConfig(),
+                               DecorativeFrameStyle style =
+                                   DecorativeFrameStyle::KraftPaper) {
+  auto [entity, parent] = deref(ep_pair);
+
+  // Apply styling defaults if available
+  if (config.size.is_default) {
+    auto &styling_defaults = UIStylingDefaults::get();
+    if (auto def = styling_defaults.get_component_config(
+            ComponentType::DecorativeFrame)) {
+      config.size = def->size;
+    } else {
+      config.size = ComponentSize(percent(1.0f), percent(1.0f));
+    }
+  }
+
+  // Resolve screen height for sizing
+  float screen_height = 720.f;
+  if (auto *pcr = EntityHelper::get_singleton_cmp<
+          window_manager::ProvidesCurrentResolution>()) {
+    screen_height = static_cast<float>(pcr->current_resolution.height);
+  }
+
+  // Get frame thickness from border config or use responsive default
+  Size frame_thickness_size = config.border_config.has_value()
+                                  ? config.border_config->thickness
+                                  : h720(12.0f);
+  float frame_thickness = resolve_to_pixels(frame_thickness_size, screen_height);
+
+  // Determine colors
+  // Frame color: from border config, or derive from theme
+  // Background color: from custom_color or theme
+  Color frame_color = config.border_config.has_value()
+                          ? config.border_config->color
+                          : ctx.theme.secondary;
+  Color bg_color = config.custom_color.value_or(ctx.theme.surface);
+
+  // Initialize main container (no background - children will draw it)
+  config.with_color_usage(Theme::Usage::None);
+  _init_component(ctx, ep_pair, config, ComponentType::DecorativeFrame, false,
+                  "decorative_frame");
+
+  // Get computed size for positioning edge elements (corners, highlights)
+  // Note: On first frame, computed values may be 0 - edge elements skip rendering
+  UIComponent &cmp = entity.template get<UIComponent>();
+  float w = cmp.computed[Axis::X];
+  float h = cmp.computed[Axis::Y];
+  bool has_computed_size = w > 0 && h > 0;
+
+  // Inner layers fill the decorative_frame using computed pixel values
+  // This avoids percentage compounding issues across nested elements
+  float fill_w = w > 0 ? w : 100.f;
+  float fill_h = h > 0 ? h : 100.f;
+  ComponentSize fill_size{pixels(fill_w), pixels(fill_h)};
+
+  if (style == DecorativeFrameStyle::KraftPaper) {
+    // Kraft paper style: multiple layered borders with corner accents
+
+    // Outer dark border (fills the whole frame area)
+    div(ctx, mk(entity, 0),
+        ComponentConfig{}
+            .with_size(fill_size)
+            .with_custom_background(frame_color)
+            .with_skip_tabbing(true)
+            .with_debug_name("frame_outer"));
+
+    // Inner lighter border (creates depth)
+    Color lighter_frame = colors::lighten(frame_color, 0.1f);
+
+    Size inset1 = pixels(frame_thickness * 0.3f);
+    div(ctx, mk(entity, 1),
+        ComponentConfig{}
+            .with_size(fill_size)
+            .with_absolute_position()
+            .with_translate(inset1, inset1)
+            .with_margin(Margin{.top = inset1,
+                                .bottom = inset1,
+                                .left = inset1,
+                                .right = inset1})
+            .with_custom_background(lighter_frame)
+            .with_skip_tabbing(true)
+            .with_debug_name("frame_inner1"));
+
+    // Main background
+    Size inset2 = pixels(frame_thickness);
+    div(ctx, mk(entity, 2),
+        ComponentConfig{}
+            .with_size(fill_size)
+            .with_absolute_position()
+            .with_translate(inset2, inset2)
+            .with_margin(Margin{.top = inset2,
+                                .bottom = inset2,
+                                .left = inset2,
+                                .right = inset2})
+            .with_custom_background(bg_color)
+            .with_skip_tabbing(true)
+            .with_debug_name("frame_bg"));
+
+    // Corner accents for "hand-made" feel (only render when size is computed)
+    if (has_computed_size) {
+      Size corner_size = h720(8.0f);
+      Size corner_offset = h720(2.0f);
+      float corner_size_px = resolve_to_pixels(corner_size, screen_height);
+      float corner_offset_px = resolve_to_pixels(corner_offset, screen_height);
+      Color corner_color = colors::darken(frame_color, 0.85f);
+
+      // Top-left corner
+      div(ctx, mk(entity, 3),
+          ComponentConfig{}
+              .with_size(ComponentSize{corner_size, corner_size})
+              .with_absolute_position()
+              .with_translate(corner_offset, corner_offset)
+              .with_custom_background(corner_color)
+              .with_skip_tabbing(true)
+              .with_debug_name("corner_tl"));
+
+      // Top-right corner
+      div(ctx, mk(entity, 4),
+          ComponentConfig{}
+              .with_size(ComponentSize{corner_size, corner_size})
+              .with_absolute_position()
+              .with_translate(w - corner_size_px - corner_offset_px, corner_offset_px)
+              .with_custom_background(corner_color)
+              .with_skip_tabbing(true)
+              .with_debug_name("corner_tr"));
+
+      // Bottom-left corner
+      div(ctx, mk(entity, 5),
+          ComponentConfig{}
+              .with_size(ComponentSize{corner_size, corner_size})
+              .with_absolute_position()
+              .with_translate(corner_offset_px, h - corner_size_px - corner_offset_px)
+              .with_custom_background(corner_color)
+              .with_skip_tabbing(true)
+              .with_debug_name("corner_bl"));
+
+      // Bottom-right corner
+      div(ctx, mk(entity, 6),
+          ComponentConfig{}
+              .with_size(ComponentSize{corner_size, corner_size})
+              .with_absolute_position()
+              .with_translate(w - corner_size_px - corner_offset_px,
+                              h - corner_size_px - corner_offset_px)
+              .with_custom_background(corner_color)
+              .with_skip_tabbing(true)
+              .with_debug_name("corner_br"));
+    }
+
+  } else if (style == DecorativeFrameStyle::Simple) {
+    // Simple style: just background with border
+    div(ctx, mk(entity, 0),
+        ComponentConfig{}
+            .with_size(fill_size)
+            .with_custom_background(bg_color)
+            .with_border(frame_color, frame_thickness)
+            .with_skip_tabbing(true)
+            .with_debug_name("frame_simple"));
+
+  } else if (style == DecorativeFrameStyle::Inset) {
+    // Inset style: sunken effect with shadow
+    Color shadow_color = colors::opacity_pct(colors::darken(frame_color, 0.8f), 0.6f);
+    Color highlight_color = colors::lighten(frame_color, 0.2f);
+
+    // Outer frame
+    div(ctx, mk(entity, 0),
+        ComponentConfig{}
+            .with_size(fill_size)
+            .with_custom_background(frame_color)
+            .with_skip_tabbing(true)
+            .with_debug_name("frame_outer"));
+
+    // Shadow edge (top-left)
+    Size edge = h720(3.0f);
+    float edge_px = resolve_to_pixels(edge, screen_height);
+    div(ctx, mk(entity, 1),
+        ComponentConfig{}
+            .with_size(ComponentSize{percent(1.0f), edge})
+            .with_absolute_position()
+            .with_translate(pixels(0.0f), pixels(0.0f))
+            .with_custom_background(shadow_color)
+            .with_skip_tabbing(true)
+            .with_debug_name("frame_shadow_top"));
+
+    div(ctx, mk(entity, 2),
+        ComponentConfig{}
+            .with_size(ComponentSize{edge, percent(1.0f)})
+            .with_absolute_position()
+            .with_translate(pixels(0.0f), pixels(0.0f))
+            .with_custom_background(shadow_color)
+            .with_skip_tabbing(true)
+            .with_debug_name("frame_shadow_left"));
+
+    // Highlight edge (bottom-right) - only render when size is computed
+    if (has_computed_size) {
+      div(ctx, mk(entity, 3),
+          ComponentConfig{}
+              .with_size(ComponentSize{percent(1.0f), edge})
+              .with_absolute_position()
+              .with_translate(0.0f, h - edge_px)
+              .with_custom_background(highlight_color)
+              .with_skip_tabbing(true)
+              .with_debug_name("frame_highlight_bottom"));
+
+      div(ctx, mk(entity, 4),
+          ComponentConfig{}
+              .with_size(ComponentSize{edge, percent(1.0f)})
+              .with_absolute_position()
+              .with_translate(w - edge_px, 0.0f)
+              .with_custom_background(highlight_color)
+              .with_skip_tabbing(true)
+              .with_debug_name("frame_highlight_right"));
+    }
+
+    // Inner background
+    Size inset = pixels(frame_thickness);
+    div(ctx, mk(entity, 5),
+        ComponentConfig{}
+            .with_size(fill_size)
+            .with_absolute_position()
+            .with_translate(inset, inset)
+            .with_margin(Margin{.top = inset,
+                                .bottom = inset,
+                                .left = inset,
+                                .right = inset})
+            .with_custom_background(bg_color)
+            .with_skip_tabbing(true)
+            .with_debug_name("frame_bg"));
+  }
+
+  return ElementResult{false, entity};
+}
+
 /// Creates a single-line text input field.
 ///
 /// @param ctx The UI context

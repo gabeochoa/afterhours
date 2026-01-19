@@ -71,6 +71,7 @@ enum struct ComponentType {
   CircularProgress,
   ToggleSwitch,
   TabContainer,
+  DecorativeFrame,
 };
 
 // Forward declaration - ComponentConfig is defined in component_config.h
