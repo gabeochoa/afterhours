@@ -1,50 +1,47 @@
 
 #pragma once
 
-#include <cstdarg>
+#include <format>
 #include <iostream>
+#include <string_view>
 
 #if !defined(AFTER_HOURS_REPLACE_LOGGING)
-// TODO move to a log.h file and include them in the other parts of the library
 
-inline void log_trace(...) {
+// C++20 format-based logging with {} placeholders
+
+template <typename... Args>
+inline void log_trace(std::format_string<Args...>, Args &&...) {
   // For now, trace logging is disabled
 }
 
-inline void log_info(const char *format, ...) {
-  std::cout << "[INFO] ";
-  va_list args;
-  va_start(args, format);
-  vprintf(format, args);
-  va_end(args);
-  std::cout << std::endl;
+template <typename... Args>
+inline void log_info(std::format_string<Args...> fmt, Args &&...args) {
+  std::cout << "[INFO] " << std::format(fmt, std::forward<Args>(args)...)
+            << std::endl;
 }
 
-inline void log_warn(const char *format, ...) {
-  std::cout << "[WARN] ";
-  va_list args;
-  va_start(args, format);
-  vprintf(format, args);
-  va_end(args);
-  std::cout << std::endl;
+template <typename... Args>
+inline void log_warn(std::format_string<Args...> fmt, Args &&...args) {
+  std::cout << "[WARN] " << std::format(fmt, std::forward<Args>(args)...)
+            << std::endl;
 }
 
-inline void log_error(const char *format, ...) {
-  std::cerr << "[ERROR] ";
-  va_list args;
-  va_start(args, format);
-  vfprintf(stderr, format, args);
-  va_end(args);
-  std::cerr << std::endl;
+template <typename... Args>
+inline void log_error(std::format_string<Args...> fmt, Args &&...args) {
+  std::cerr << "[ERROR] " << std::format(fmt, std::forward<Args>(args)...)
+            << std::endl;
 }
 
-inline void log_clean(...) {
+template <typename... Args>
+inline void log_clean(std::format_string<Args...>, Args &&...) {
   // For now, clean logging is disabled
 }
 
-inline void log_once_per(...) {
+template <typename Duration, typename... Args>
+inline void log_once_per(Duration, int, std::format_string<Args...>, Args &&...) {
   // For now, once per logging is disabled
 }
+
 #endif
 
 enum {

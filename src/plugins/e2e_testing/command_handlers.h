@@ -9,7 +9,7 @@
 #include "../../logging.h"
 
 #include <atomic>
-#include <fmt/format.h>
+#include <format>
 #include <functional>
 
 namespace afterhours {
@@ -249,11 +249,11 @@ struct E2ECommandCleanupSystem : System<PendingE2ECommand> {
       if (cmd.name == "expect_text" && !cmd.args.empty()) {
         // Provide more helpful error for expect_text timeout
         auto &registry = VisibleTextRegistry::instance();
-        error_msg = fmt::format(
+        error_msg = std::format(
             "Text not found: '{}'. Visible: {:.200}", cmd.args[0],
             registry.get_all().empty() ? "(empty)" : registry.get_all());
       } else {
-        error_msg = fmt::format("Command '{}' timed out after {} frames",
+        error_msg = std::format("Command '{}' timed out after {} frames",
                                 cmd.name, PendingE2ECommand::MAX_FRAMES);
       }
       cmd.fail(error_msg);

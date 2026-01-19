@@ -11,7 +11,7 @@
 #include "../ui/components.h"
 #include "../ui/context.h"
 
-#include <fmt/format.h>
+#include <format>
 #include <magic_enum/magic_enum.hpp>
 
 namespace afterhours {
@@ -78,7 +78,7 @@ struct HandleClickUICommand : System<PendingE2ECommand> {
       test_input::simulate_click(pos->x, pos->y);
       cmd.consume();
     } else {
-      cmd.fail(fmt::format("UI component not found: {}", cmd.arg(0)));
+      cmd.fail(std::format("UI component not found: {}", cmd.arg(0)));
     }
   }
 };
@@ -99,7 +99,7 @@ struct HandleClickTextCommand : System<PendingE2ECommand> {
       test_input::simulate_click(pos->x, pos->y);
       cmd.consume();
     } else {
-      cmd.fail(fmt::format("No UI with text: {}", cmd.arg(0)));
+      cmd.fail(std::format("No UI with text: {}", cmd.arg(0)));
     }
   }
 };
@@ -134,7 +134,7 @@ struct HandleFocusUICommand : System<PendingE2ECommand> {
         return;
       }
     }
-    cmd.fail(fmt::format("UI component not found: {}", cmd.arg(0)));
+    cmd.fail(std::format("UI component not found: {}", cmd.arg(0)));
   }
 };
 
@@ -204,7 +204,7 @@ struct HandleArrowCommand : System<PendingE2ECommand> {
     else if (dir == "right")
       key = keys::RIGHT;
     else {
-      cmd.fail(fmt::format("Invalid arrow direction: {}", dir));
+      cmd.fail(std::format("Invalid arrow direction: {}", dir));
       return;
     }
 
@@ -245,11 +245,11 @@ struct HandleExpectFocusedCommand : System<PendingE2ECommand> {
         cmd.consume();
         return;
       } else {
-        cmd.fail(fmt::format("Component '{}' is not focused", name));
+        cmd.fail(std::format("Component '{}' is not focused", name));
         return;
       }
     }
-    cmd.fail(fmt::format("UI component not found: {}", cmd.arg(0)));
+    cmd.fail(std::format("UI component not found: {}", cmd.arg(0)));
   }
 };
 
@@ -285,7 +285,7 @@ struct HandleClickButtonCommand : System<PendingE2ECommand> {
       cmd.consume();
       return;
     }
-    cmd.fail(fmt::format("Button not found: {}", cmd.arg(0)));
+    cmd.fail(std::format("Button not found: {}", cmd.arg(0)));
   }
 };
 
@@ -319,7 +319,7 @@ struct HandleToggleCheckboxCommand : System<PendingE2ECommand> {
       cmd.consume();
       return;
     }
-    cmd.fail(fmt::format("Checkbox not found: {}", cmd.arg(0)));
+    cmd.fail(std::format("Checkbox not found: {}", cmd.arg(0)));
   }
 };
 
@@ -336,7 +336,7 @@ struct HandleSetSliderCommand : System<PendingE2ECommand> {
 
     auto value = cmd.maybe_arg_as<float>(1);
     if (!value) {
-      cmd.fail(fmt::format("Invalid slider value: {}", cmd.arg(1)));
+      cmd.fail(std::format("Invalid slider value: {}", cmd.arg(1)));
       return;
     }
 
@@ -363,7 +363,7 @@ struct HandleSetSliderCommand : System<PendingE2ECommand> {
       cmd.consume();
       return;
     }
-    cmd.fail(fmt::format("Slider not found: {}", cmd.arg(0)));
+    cmd.fail(std::format("Slider not found: {}", cmd.arg(0)));
   }
 };
 
@@ -400,7 +400,7 @@ struct HandleSelectDropdownCommand : System<PendingE2ECommand> {
       cmd.consume();
       return;
     }
-    cmd.fail(fmt::format("Dropdown not found: {}", cmd.arg(0)));
+    cmd.fail(std::format("Dropdown not found: {}", cmd.arg(0)));
   }
 };
 
@@ -434,13 +434,13 @@ struct HandleExpectCheckboxCommand : System<PendingE2ECommand> {
         cmd.consume();
         return;
       } else {
-        cmd.fail(fmt::format("Checkbox '{}' is {}, expected {}", name,
+        cmd.fail(std::format("Checkbox '{}' is {}, expected {}", name,
                              checkbox.on ? "checked" : "unchecked",
                              cmd.arg(1)));
         return;
       }
     }
-    cmd.fail(fmt::format("Checkbox not found: {}", cmd.arg(0)));
+    cmd.fail(std::format("Checkbox not found: {}", cmd.arg(0)));
   }
 };
 
@@ -457,7 +457,7 @@ struct HandleExpectSliderCommand : System<PendingE2ECommand> {
 
     auto expected = cmd.maybe_arg_as<float>(1);
     if (!expected) {
-      cmd.fail(fmt::format("Invalid slider value: {}", cmd.arg(1)));
+      cmd.fail(std::format("Invalid slider value: {}", cmd.arg(1)));
       return;
     }
     float tolerance = cmd.arg_as<float>(2, 0.01f);
@@ -478,12 +478,12 @@ struct HandleExpectSliderCommand : System<PendingE2ECommand> {
         cmd.consume();
         return;
       } else {
-        cmd.fail(fmt::format("Slider '{}' is {}, expected {}", name,
+        cmd.fail(std::format("Slider '{}' is {}, expected {}", name,
                              slider.value, *expected));
         return;
       }
     }
-    cmd.fail(fmt::format("Slider not found: {}", cmd.arg(0)));
+    cmd.fail(std::format("Slider not found: {}", cmd.arg(0)));
   }
 };
 
@@ -508,7 +508,7 @@ struct HandleActionCommand : System<PendingE2ECommand> {
     // Parse action name using magic_enum
     auto action = magic_enum::enum_cast<InputAction>(cmd.arg(0));
     if (!action) {
-      cmd.fail(fmt::format("Unknown action: {}. Valid actions: {}, ...",
+      cmd.fail(std::format("Unknown action: {}. Valid actions: {}, ...",
                            cmd.arg(0),
                            magic_enum::enum_names<InputAction>()[0]));
       return;
@@ -538,7 +538,7 @@ struct HandleHoldActionCommand : System<PendingE2ECommand> {
 
     auto action = magic_enum::enum_cast<InputAction>(cmd.arg(0));
     if (!action) {
-      cmd.fail(fmt::format("Unknown action: {}", cmd.arg(0)));
+      cmd.fail(std::format("Unknown action: {}", cmd.arg(0)));
       return;
     }
 
@@ -569,7 +569,7 @@ struct HandleReleaseActionCommand : System<PendingE2ECommand> {
 
     auto action = magic_enum::enum_cast<InputAction>(cmd.arg(0));
     if (!action) {
-      cmd.fail(fmt::format("Unknown action: {}", cmd.arg(0)));
+      cmd.fail(std::format("Unknown action: {}", cmd.arg(0)));
       return;
     }
 
