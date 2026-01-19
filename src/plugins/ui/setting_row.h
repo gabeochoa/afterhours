@@ -265,10 +265,11 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
     // Expect bool* value
     if constexpr (std::is_same_v<ValueT, bool *>) {
       // Build toggle with sensible defaults
+      // Use children() sizing to let the container fit the toggle_switch's
+      // internal sizing (which uses h720() for resolution scaling)
       auto toggle_cfg =
           ComponentConfig{}
-              .with_size(ComponentSize{pixels((int)row_config.toggle_track_width),
-                                       pixels((int)row_config.toggle_track_height)})
+              .with_size(ComponentSize{children(), children()})
               .with_debug_name("setting_row_toggle");
 
       // Apply user override if provided

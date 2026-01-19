@@ -812,6 +812,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Create slider background
   // In compact mode, use full rounded corners; otherwise sharp on left
+  // TODO: slider_background can overflow by ~1-2px when parent is constrained
+  // by layout. Percent sizing doesn't work because it resolves against
+  // configured size, not laid-out size. Need layout system fix or tolerance.
   auto elem_corners = compact
       ? RoundedCorners(config.rounded_corners.value())
       : RoundedCorners(config.rounded_corners.value()).left_sharp();
