@@ -1,5 +1,6 @@
 #pragma once
 
+#include "concepts.h"
 #include "storage.h"
 #include "../../../ecs.h"
 #include <functional>
@@ -34,20 +35,6 @@ struct HasTextInputStateT : BaseComponent {
 
 // Default alias for simple std::string-based text input
 using HasTextInputState = HasTextInputStateT<StringStorage>;
-
-// Concept for any text input state (used for abbreviated function template
-// syntax)
-template <typename T>
-concept AnyTextInputState = requires(T t, const T ct) {
-  { t.storage };
-  { t.cursor_position } -> std::convertible_to<size_t>;
-  { t.changed_since } -> std::convertible_to<bool>;
-  { t.max_length } -> std::convertible_to<size_t>;
-  { t.cursor_blink_timer } -> std::convertible_to<float>;
-  { t.cursor_blink_rate } -> std::convertible_to<float>;
-  { ct.text() } -> std::convertible_to<std::string>;
-  { ct.text_size() } -> std::convertible_to<size_t>;
-};
 
 // Listener for text input events (character typing)
 struct HasTextInputListener : BaseComponent {

@@ -108,6 +108,11 @@ struct ComponentConfig {
   // Text input: character to display instead of actual text (for passwords)
   std::optional<char> mask_char;
 
+  // Text area (multiline) configuration
+  std::optional<Size> text_area_line_height;  // Line height (default: 20px)
+  bool text_area_word_wrap = true;            // Enable word wrapping
+  size_t text_area_max_lines = 0;             // Max lines (0 = unlimited)
+
   // Nine-slice border configuration
   std::optional<NineSliceBorder> nine_slice_config;
 
@@ -195,6 +200,20 @@ struct ComponentConfig {
   }
   ComponentConfig &with_mask_char(char c) {
     mask_char = c;
+    return *this;
+  }
+
+  // Text area (multiline) configuration methods
+  ComponentConfig &with_line_height(Size height) {
+    text_area_line_height = height;
+    return *this;
+  }
+  ComponentConfig &with_word_wrap(bool enabled) {
+    text_area_word_wrap = enabled;
+    return *this;
+  }
+  ComponentConfig &with_max_lines(size_t max) {
+    text_area_max_lines = max;
     return *this;
   }
   ComponentConfig &with_alignment(TextAlignment align) {

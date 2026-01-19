@@ -1,5 +1,7 @@
 #pragma once
 
+#include "concepts.h"
+#include "line_index.h"
 #include "state.h"
 #include <cctype>
 #include <string>
@@ -208,6 +210,140 @@ inline std::pair<size_t, size_t> select_word_at(std::string_view text,
     ++end;
 
   return {start, end};
+}
+
+// ============ Multiline Text Area Utilities ============
+
+/// Insert a newline at cursor position.
+/// Returns true if newline was inserted.
+/// Respects max_lines limit if set in area_config.
+inline bool insert_newline(AnyTextAreaState auto &s) {
+  // Check max_lines limit
+  if (s.area_config.max_lines > 0 &&
+      s.line_count() >= s.area_config.max_lines) {
+    return false;
+  }
+
+  // Insert newline character
+  s.storage.insert(s.cursor_position, "\n");
+  s.cursor_position += 1;
+  s.changed_since = true;
+
+  // Rebuild line index after inserting newline
+  s.rebuild_line_index();
+
+  // Reset preferred column for up/down navigation
+  s.preferred_column = 0;
+
+  return true;
+}
+
+/// Move cursor up one line, preserving column position.
+/// Uses preferred_column to maintain horizontal position across lines.
+inline void move_cursor_up(AnyTextAreaState auto &s) {
+  auto pos = s.cursor_position_rc();
+
+  // Can't move up if on first line
+  if (pos.row == 0)
+    return;
+
+  // On first up/down, set preferred column to current column
+  if (s.preferred_column == 0 || s.preferred_column < pos.column) {
+    s.preferred_column = pos.column;
+  }
+
+  // Move to previous row, clamping column to line length
+  size_t target_row = pos.row - 1;
+  size_t target_col = s.line_index.clamp_column(target_row, s.preferred_column);
+  s.cursor_position = s.line_index.position_to_offset(target_row, target_col);
+}
+
+/// Move cursor down one line, preserving column position.
+/// Uses preferred_column to maintain horizontal position across lines.
+inline void move_cursor_down(AnyTextAreaState auto &s) {
+  auto pos = s.cursor_position_rc();
+
+  // Can't move down if on last line
+  if (pos.row >= s.line_count() - 1)
+    return;
+
+  // On first up/down, set preferred column to current column
+  if (s.preferred_column == 0 || s.preferred_column < pos.column) {
+    s.preferred_column = pos.column;
+  }
+
+  // Move to next row, clamping column to line length
+  size_t target_row = pos.row + 1;
+  size_t target_col = s.line_index.clamp_column(target_row, s.preferred_column);
+  s.cursor_position = s.line_index.position_to_offset(target_row, target_col);
+}
+
+/// Move cursor to the start of the current line.
+inline void move_to_line_start(AnyTextAreaState auto &s) {
+  auto pos = s.cursor_position_rc();
+  s.cursor_position = s.line_index.line_start(pos.row);
+  s.preferred_column = 0;
+}
+
+/// Move cursor to the end of the current line.
+inline void move_to_line_end(AnyTextAreaState auto &s) {
+  auto pos = s.cursor_position_rc();
+  s.cursor_position = s.line_index.line_end(pos.row);
+  s.preferred_column = s.line_index.line_length(pos.row);
+}
+
+/// Reset preferred column when moving left/right.
+/// Call this after move_cursor_left/right to reset up/down behavior.
+inline void reset_preferred_column(AnyTextAreaState auto &s) {
+  s.preferred_column = 0;
+}
+
+/// Delete character before cursor (backspace) for text area.
+/// Also rebuilds line index if a newline was deleted.
+inline bool delete_before_cursor_multiline(AnyTextAreaState auto &s) {
+  if (s.cursor_position == 0 || s.text_size() == 0)
+    return false;
+
+  std::string txt = s.text();
+  size_t prev = utf8_prev_char_start(txt, s.cursor_position);
+
+  // Check if we're deleting a newline
+  bool deleting_newline = (txt[prev] == '\n');
+
+  s.storage.erase(prev, s.cursor_position - prev);
+  s.cursor_position = prev;
+  s.changed_since = true;
+
+  // Rebuild line index if we deleted a newline
+  if (deleting_newline) {
+    s.rebuild_line_index();
+  }
+
+  s.preferred_column = 0;
+  return true;
+}
+
+/// Delete character at cursor (delete key) for text area.
+/// Also rebuilds line index if a newline was deleted.
+inline bool delete_at_cursor_multiline(AnyTextAreaState auto &s) {
+  if (s.cursor_position >= s.text_size())
+    return false;
+
+  std::string txt = s.text();
+
+  // Check if we're deleting a newline
+  bool deleting_newline = (txt[s.cursor_position] == '\n');
+
+  s.storage.erase(s.cursor_position, utf8_char_length(txt, s.cursor_position));
+  s.changed_since = true;
+
+  // Rebuild line index if we deleted a newline
+  if (deleting_newline) {
+    s.rebuild_line_index();
+  }
+
+  s.preferred_column = 0;
+  return true;
 }
 
 } // namespace text_input
