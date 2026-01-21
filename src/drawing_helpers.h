@@ -279,6 +279,86 @@ inline void begin_scissor_mode(int x, int y, int width, int height) {
 // End scissor mode (stop clipping)
 inline void end_scissor_mode() { raylib::EndScissorMode(); }
 
+// Line drawing primitives
+inline void draw_line(int x1, int y1, int x2, int y2, Color color) {
+  raylib::DrawLine(x1, y1, x2, y2, color);
+}
+
+inline void draw_line_ex(Vector2Type start, Vector2Type end, float thickness,
+                         Color color) {
+  raylib::DrawLineEx(start, end, thickness, color);
+}
+
+inline void draw_line_strip(Vector2Type *points, int point_count, Color color) {
+  raylib::DrawLineStrip(points, point_count, color);
+}
+
+// Circle drawing primitives
+inline void draw_circle(int centerX, int centerY, float radius, Color color) {
+  raylib::DrawCircle(centerX, centerY, radius, color);
+}
+
+inline void draw_circle_v(Vector2Type center, float radius, Color color) {
+  raylib::DrawCircleV(center, radius, color);
+}
+
+inline void draw_circle_lines(int centerX, int centerY, float radius,
+                              Color color) {
+  raylib::DrawCircleLines(centerX, centerY, radius, color);
+}
+
+inline void draw_circle_sector(Vector2Type center, float radius,
+                               float startAngle, float endAngle, int segments,
+                               Color color) {
+  raylib::DrawCircleSector(center, radius, startAngle, endAngle, segments,
+                           color);
+}
+
+inline void draw_circle_sector_lines(Vector2Type center, float radius,
+                                     float startAngle, float endAngle,
+                                     int segments, Color color) {
+  raylib::DrawCircleSectorLines(center, radius, startAngle, endAngle, segments,
+                                color);
+}
+
+// Ellipse drawing primitives
+inline void draw_ellipse(int centerX, int centerY, float radiusH, float radiusV,
+                         Color color) {
+  raylib::DrawEllipse(centerX, centerY, radiusH, radiusV, color);
+}
+
+inline void draw_ellipse_lines(int centerX, int centerY, float radiusH,
+                               float radiusV, Color color) {
+  raylib::DrawEllipseLines(centerX, centerY, radiusH, radiusV, color);
+}
+
+// Triangle drawing primitives
+inline void draw_triangle(Vector2Type v1, Vector2Type v2, Vector2Type v3,
+                          Color color) {
+  raylib::DrawTriangle(v1, v2, v3, color);
+}
+
+inline void draw_triangle_lines(Vector2Type v1, Vector2Type v2, Vector2Type v3,
+                                Color color) {
+  raylib::DrawTriangleLines(v1, v2, v3, color);
+}
+
+// Polygon drawing primitives
+inline void draw_poly(Vector2Type center, int sides, float radius, float rotation,
+                      Color color) {
+  raylib::DrawPoly(center, sides, radius, rotation, color);
+}
+
+inline void draw_poly_lines(Vector2Type center, int sides, float radius,
+                            float rotation, Color color) {
+  raylib::DrawPolyLines(center, sides, radius, rotation, color);
+}
+
+inline void draw_poly_lines_ex(Vector2Type center, int sides, float radius,
+                               float rotation, float lineThick, Color color) {
+  raylib::DrawPolyLinesEx(center, sides, radius, rotation, lineThick, color);
+}
+
 inline raylib::Font get_default_font() { return raylib::GetFontDefault(); }
 inline raylib::Font get_unset_font() { return raylib::GetFontDefault(); }
 
@@ -305,6 +385,22 @@ inline void draw_ring_segment(float, float, float, float, float, float, int,
 inline void draw_ring(float, float, float, float, int, Color) {}
 inline void begin_scissor_mode(int, int, int, int) {}
 inline void end_scissor_mode() {}
+inline void draw_line(int, int, int, int, Color) {}
+inline void draw_line_ex(Vector2Type, Vector2Type, float, Color) {}
+inline void draw_line_strip(Vector2Type *, int, Color) {}
+inline void draw_circle(int, int, float, Color) {}
+inline void draw_circle_v(Vector2Type, float, Color) {}
+inline void draw_circle_lines(int, int, float, Color) {}
+inline void draw_circle_sector(Vector2Type, float, float, float, int, Color) {}
+inline void draw_circle_sector_lines(Vector2Type, float, float, float, int,
+                                     Color) {}
+inline void draw_ellipse(int, int, float, float, Color) {}
+inline void draw_ellipse_lines(int, int, float, float, Color) {}
+inline void draw_triangle(Vector2Type, Vector2Type, Vector2Type, Color) {}
+inline void draw_triangle_lines(Vector2Type, Vector2Type, Vector2Type, Color) {}
+inline void draw_poly(Vector2Type, int, float, float, Color) {}
+inline void draw_poly_lines(Vector2Type, int, float, float, Color) {}
+inline void draw_poly_lines_ex(Vector2Type, int, float, float, float, Color) {}
 inline afterhours::Font get_default_font() { return afterhours::Font(); }
 inline afterhours::Font get_unset_font() { return afterhours::Font(); }
 #endif
