@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -114,6 +115,68 @@ struct CommandHistory {
     redo_stack.clear();
   }
 };
+
+/// Simple command using lambdas (for when you don't need a full class).
+/// Useful for prototyping, simple state changes, or one-off commands.
+///
+/// Example:
+/// @code
+///   CommandHistory<GameState> history;
+///   int old_health = player.health;
+///   history.execute(
+///     make_command<GameState>(
+///       [&](GameState& s) { player.health = 100; },
+///       [&, old_health](GameState& s) { player.health = old_health; },
+///       "Set health to 100"
+///     ),
+///     game_state
+///   );
+/// @endcode
+template <typename State>
+class LambdaCommand : public Command<State> {
+public:
+  LambdaCommand(std::function<void(State &)> do_fn,
+                std::function<void(State &)> undo_fn,
+                std::string desc)
+      : do_fn_(std::move(do_fn)), undo_fn_(std::move(undo_fn)),
+        description_(std::move(desc)) {}
+
+  void execute(State &state) override { do_fn_(state); }
+  void undo(State &state) override { undo_fn_(state); }
+  std::string description() const override { return description_; }
+
+private:
+  std::function<void(State &)> do_fn_;
+  std::function<void(State &)> undo_fn_;
+  std::string description_;
+};
+
+/// Helper factory function to create lambda commands.
+/// Simplifies creation of simple commands without defining a class.
+///
+/// @param do_fn Lambda that performs the action (receives State&)
+/// @param undo_fn Lambda that reverses the action (receives State&)
+/// @param desc Human-readable description for UI
+/// @return Unique pointer to Command<State>
+///
+/// Example:
+/// @code
+///   auto cmd = make_command<EditorState>(
+///     [](auto& s) { s.cursor_x++; },
+///     [](auto& s) { s.cursor_x--; },
+///     "Move cursor right"
+///   );
+///   history.execute(std::move(cmd), editor_state);
+/// @endcode
+template <typename State>
+inline std::unique_ptr<Command<State>>
+make_command(std::function<void(State &)> do_fn,
+             std::function<void(State &)> undo_fn,
+             std::string desc) {
+  return std::make_unique<LambdaCommand<State>>(std::move(do_fn),
+                                                 std::move(undo_fn),
+                                                 std::move(desc));
+}
 
 } // namespace afterhours
 
