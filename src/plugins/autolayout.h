@@ -566,18 +566,21 @@ struct AutoLayout {
   }
 
   void tax_refund(UIComponent &widget, Axis axis, float error) {
-    int num_eligible_children = 0;
+    // Build cached list of layout children (non-absolute, non-hidden) once
+    std::vector<UIComponent *> layout_children;
+    layout_children.reserve(widget.children.size());
     for (EntityID child_id : widget.children) {
       UIComponent &child = this->to_cmp(child_id);
       // Dont worry about any children that are absolutely positioned
-      if (child.absolute)
-        continue;
       // Ignore anything that should be hidden
-      if (child.should_hide)
+      if (child.absolute || child.should_hide)
         continue;
+      layout_children.push_back(&child);
+    }
 
-      Size exp = child.desired[axis];
-      if (exp.strictness == 0.f) {
+    int num_eligible_children = 0;
+    for (UIComponent *child : layout_children) {
+      if (child->desired[axis].strictness == 0.f) {
         num_eligible_children++;
       }
     }
@@ -588,21 +591,11 @@ struct AutoLayout {
     }
 
     float indiv_refund = error / num_eligible_children;
-    for (EntityID child_id : widget.children) {
-      UIComponent &child = this->to_cmp(child_id);
-
-      // Dont worry about any children that are absolutely positioned
-      if (child.absolute)
-        continue;
-      // Ignore anything that should be hidden
-      if (child.should_hide)
-        continue;
-
-      Size exp = child.desired[axis];
-      if (exp.strictness == 0.f) {
-        child.computed[axis] += abs(indiv_refund);
+    for (UIComponent *child : layout_children) {
+      if (child->desired[axis].strictness == 0.f) {
+        child->computed[axis] += abs(indiv_refund);
         log_trace("Just gave back, time for trickle down");
-        tax_refund(child, axis, indiv_refund);
+        tax_refund(*child, axis, indiv_refund);
       }
       // TODO idk if we should do this for all non 1.f children?
       // if (exp.strictness == 1.f || child->ignore_size) {
@@ -615,67 +608,50 @@ struct AutoLayout {
     // we dont care if its less than a pixel
     const float ACCEPTABLE_ERROR = 1.f;
 
-    size_t num_children = 0;
-    for (EntityID child : widget.children) {
-      if (this->to_cmp(child).absolute)
-        continue;
+    // Build cached list of layout children (non-absolute, non-hidden) once
+    // to avoid repeated to_cmp lookups and predicate checks
+    std::vector<UIComponent *> layout_children;
+    layout_children.reserve(widget.children.size());
+    for (EntityID child_id : widget.children) {
+      UIComponent &child_cmp = this->to_cmp(child_id);
+      // Dont worry about any children that are absolutely positioned
       // Ignore anything that should be hidden
-      if (this->to_cmp(child).should_hide)
+      if (child_cmp.absolute || child_cmp.should_hide)
         continue;
-      num_children++;
+      layout_children.push_back(&child_cmp);
     }
+
+    const size_t num_children = layout_children.size();
     if (num_children == 0)
       return;
 
     // me -> left -> right
 
-    const auto _total_child = [this, &widget](Axis axis) {
+    const auto _total_child = [&layout_children](Axis axis) {
       float sum = 0.f;
       // TODO support flexing
-      for (EntityID child : widget.children) {
-        // Dont worry about any children that are absolutely positioned
-        if (this->to_cmp(child).absolute)
-          continue;
-        // Ignore anything that should be hidden
-        if (this->to_cmp(child).should_hide)
-          continue;
-        sum += this->to_cmp(child).computed[axis];
+      for (UIComponent *child : layout_children) {
+        sum += child->computed[axis];
       }
       return sum;
     };
 
-    const auto _solve_error_optional = [this, &widget](Axis axis,
-                                                       float *error) {
+    const auto _solve_error_optional = [&layout_children](Axis axis,
+                                                          float *error) {
       int num_optional_children = 0;
-      for (EntityID child : widget.children) {
-        // TODO Dont worry about absolute positioned children
-        if (this->to_cmp(child).absolute)
-          continue;
-        // Ignore anything that should be hidden
-        if (this->to_cmp(child).should_hide)
-          continue;
-
-        Size exp = this->to_cmp(child).desired[axis];
-        if (exp.strictness == 0.f) {
+      for (UIComponent *child : layout_children) {
+        if (child->desired[axis].strictness == 0.f) {
           num_optional_children++;
         }
       }
       // were there any children who dont care about their size?
       if (num_optional_children != 0) {
         float approx_epc = *error / num_optional_children;
-        for (EntityID child : widget.children) {
-          UIComponent &child_cmp = this->to_cmp(child);
-          // Dont worry about absolute positioned children
-          if (child_cmp.absolute)
-            continue;
-          // Ignore anything that should be hidden
-          if (this->to_cmp(child).should_hide)
-            continue;
-
-          Size exp = child_cmp.desired[axis];
+        for (UIComponent *child : layout_children) {
+          Size exp = child->desired[axis];
           if (exp.strictness == 0.f) {
-            float cur_size = child_cmp.computed[axis];
-            child_cmp.computed[axis] = fmaxf(0, cur_size - approx_epc);
+            float cur_size = child->computed[axis];
+            child->computed[axis] = fmaxf(0, cur_size - approx_epc);
             if (cur_size > approx_epc)
               *error -= approx_epc;
           }
@@ -683,32 +659,24 @@ struct AutoLayout {
       }
     };
 
-    const auto fix_violating_children = [num_children, this,
-                                         &widget](Axis axis, float error) {
+    const auto fix_violating_children = [num_children,
+                                         &layout_children](Axis axis,
+                                                           float error) {
       VALIDATE(num_children != 0, "Should never have zero children");
 
       size_t num_strict_children = 0;
-      size_t num_ignorable_children = 0;
-
-      for (EntityID child : widget.children) {
-        Size exp = this->to_cmp(child).desired[axis];
-        if (exp.strictness == 1.f) {
+      for (UIComponent *child : layout_children) {
+        if (child->desired[axis].strictness == 1.f) {
           num_strict_children++;
-        }
-        if (this->to_cmp(child).absolute) {
-          num_ignorable_children++;
-        }
-        // Ignore anything that should be hidden
-        if (this->to_cmp(child).should_hide) {
-          num_ignorable_children++;
         }
       }
 
       // If there is any error left,
       // we have to take away from the allowed children;
+      // Note: num_ignorable_children is 0 since layout_children already
+      // excludes absolute and should_hide
 
-      size_t num_resizeable_children =
-          num_children - num_strict_children - num_ignorable_children;
+      size_t num_resizeable_children = num_children - num_strict_children;
 
       /* support flex flags
       // TODO we cannot enforce the assert below in the case of wrapping
@@ -730,25 +698,23 @@ struct AutoLayout {
 
       float approx_epc =
           error / (1.f * std::max(1, (int)num_resizeable_children));
-      for (EntityID child : widget.children) {
-        UIComponent &child_cmp = this->to_cmp(child);
-        Size exp = child_cmp.desired[axis];
-        if (exp.strictness == 1.f || child_cmp.absolute ||
-            child_cmp.should_hide) {
+      for (UIComponent *child : layout_children) {
+        Size exp = child->desired[axis];
+        if (exp.strictness == 1.f) {
           continue;
         }
         float portion_of_error = (1.f - exp.strictness) * approx_epc;
-        float cur_size = child_cmp.computed[axis];
-        child_cmp.computed[axis] = fmaxf(0, cur_size - portion_of_error);
+        float cur_size = child->computed[axis];
+        child->computed[axis] = fmaxf(0, cur_size - portion_of_error);
         // Reduce strictness every round
         // so that eventually we will get there
         exp.strictness = fmaxf(0.f, exp.strictness - 0.05f);
-        child_cmp.desired[axis] = exp;
+        child->desired[axis] = exp;
       }
     };
 
-    const auto compute_error = [ACCEPTABLE_ERROR, _total_child,
-                                _solve_error_optional, fix_violating_children,
+    const auto compute_error = [ACCEPTABLE_ERROR, &_total_child,
+                                &_solve_error_optional, &fix_violating_children,
                                 &widget](Axis axis) -> float {
       float my_size = widget.computed[axis];
       float all_children = _total_child(axis);
@@ -782,9 +748,9 @@ struct AutoLayout {
       tax_refund(widget, Axis::Y, error_y);
     }
 
-    // Solve for children
-    for (EntityID child : widget.children) {
-      solve_violations(this->to_cmp(child));
+    // Solve for children - use cached layout_children to avoid to_cmp lookups
+    for (UIComponent *child : layout_children) {
+      solve_violations(*child);
     }
   }
 
