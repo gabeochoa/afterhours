@@ -41,6 +41,19 @@ if (lastID >= max_num_components) {
 
 ## 📁 Test Examples Overview
 
+### 0. `arena_usage/` - Arena Allocator Smoke Test
+**Purpose:** Quick sanity check for the arena allocator and arena-backed helpers
+
+**What it tests:**
+- ✅ Basic arena allocation and reset safety
+- ✅ `ArenaVector` growth behavior
+- ✅ `ArenaEntityMap` get/create behavior
+
+How to run:
+```bash
+cd example/arena_usage && make
+```
+
 ### 1. `logging_test/` - Logging System Verification
 **Purpose:** Comprehensive test of the newly implemented logging system
 
