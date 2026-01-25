@@ -227,6 +227,11 @@ struct EndUIContextManager : System<UIContext<InputAction>> {
     if (!context.focused_ids.contains(context.focus_id))
       context.focus_id = context.ROOT;
     context.focused_ids.clear();
+
+    if (auto *text_cache =
+            EntityHelper::get_singleton_cmp<ui::TextMeasureCache>()) {
+      text_cache->end_frame();
+    }
   }
 };
 

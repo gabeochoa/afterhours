@@ -6,6 +6,7 @@
 #include "ui/ui_core_components.h"
 
 #include "../bitwise.h"
+#include "../core/text_cache.h"
 #include "../developer.h"
 #include "window_manager.h"
 
@@ -93,6 +94,9 @@ struct AutoLayout {
     Vector2Type result;
     if (external_measure_text) {
       result = external_measure_text(font_name, content, font_size, spacing);
+    } else if (auto *text_cache =
+                   EntityHelper::get_singleton_cmp<ui::TextMeasureCache>()) {
+      result = text_cache->measure(content, font_name, font_size, spacing);
     } else {
       auto font_manager = EntityHelper::get_singleton_cmp<FontManager>();
       auto font = font_manager->get_font(font_name);

@@ -7,6 +7,7 @@
 #include <string_view>
 #include <unordered_map>
 
+#include "base_component.h"
 #include "../developer.h"
 
 namespace afterhours {
@@ -24,7 +25,7 @@ concept TextMeasureFn = requires(F fn, std::string_view text,
   { fn(text, font_name, font_size, spacing) } -> std::same_as<Vector2Type>;
 };
 
-class TextMeasureCache {
+class TextMeasureCache : public BaseComponent {
 public:
   static constexpr uint32_t DEFAULT_PRUNE_INTERVAL = 60;
   static constexpr uint32_t DEFAULT_MAX_AGE = 120;

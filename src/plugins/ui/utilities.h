@@ -2,6 +2,7 @@
 
 #include <format>
 #include <iostream>
+#include <string>
 #if __has_include(<magic_enum/magic_enum.hpp>)
 #include <magic_enum/magic_enum.hpp>
 #else
@@ -11,6 +12,8 @@
 #include "../../developer.h"
 #include "../../ecs.h"
 #include "../../logging.h"
+#include "../../core/text_cache.h"
+#include "../../font_helper.h"
 #include "../autolayout.h"
 #include "../window_manager.h"
 #include "components.h"
@@ -87,6 +90,21 @@ static void add_singleton_components(Entity &entity) {
       .load_font(UIComponent::SYMBOL_FONT, get_default_font())
       .load_font(UIComponent::UNSET_FONT, get_unset_font());
   EntityHelper::registerSingleton<ui::FontManager>(entity);
+
+  auto &text_cache = entity.addComponent<ui::TextMeasureCache>();
+  text_cache.set_measure_function(
+      [](std::string_view text, std::string_view font_name, float font_size,
+         float spacing) {
+        auto font_manager = EntityHelper::get_singleton_cmp<ui::FontManager>();
+        if (!font_manager) {
+          return Vector2Type{0.0f, 0.0f};
+        }
+        const std::string font_name_str(font_name);
+        const std::string text_str(text);
+        Font font = font_manager->get_font(font_name_str);
+        return measure_text(font, text_str.c_str(), font_size, spacing);
+      });
+  EntityHelper::registerSingleton<ui::TextMeasureCache>(entity);
 }
 
 template <typename InputAction>
@@ -104,6 +122,8 @@ static void enforce_singletons(SystemManager &sm) {
       std::make_unique<developer::EnforceSingleton<UIContext<InputAction>>>());
   sm.register_update_system(
       std::make_unique<developer::EnforceSingleton<ui::FontManager>>());
+  sm.register_update_system(
+      std::make_unique<developer::EnforceSingleton<ui::TextMeasureCache>>());
 }
 
 template <typename InputAction>
