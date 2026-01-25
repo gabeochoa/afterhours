@@ -1,6 +1,8 @@
 #pragma once
 
+#include <format>
 #include <iostream>
+#include <string_view>
 
 #include "../../logging.h"
 
@@ -52,6 +54,57 @@ inline std::ostream &operator<<(std::ostream &os, const Size &size) {
      << ", strictness: " << size.strictness << ")";
   return os;
 }
+
+} // namespace ui
+} // namespace afterhours
+
+// Define formatters for Dim and Size BEFORE they are used in log statements
+namespace std {
+template <>
+struct formatter<afterhours::ui::Dim> {
+  constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+  auto format(afterhours::ui::Dim dim, std::format_context &ctx) const {
+    std::string_view name = "Unknown";
+    switch (dim) {
+    case afterhours::ui::Dim::None:
+      name = "None";
+      break;
+    case afterhours::ui::Dim::Pixels:
+      name = "Pixels";
+      break;
+    case afterhours::ui::Dim::Text:
+      name = "Text";
+      break;
+    case afterhours::ui::Dim::Percent:
+      name = "Percent";
+      break;
+    case afterhours::ui::Dim::Children:
+      name = "Children";
+      break;
+    case afterhours::ui::Dim::ScreenPercent:
+      name = "ScreenPercent";
+      break;
+    }
+    return std::format_to(ctx.out(), "{}", name);
+  }
+};
+
+template <>
+struct formatter<afterhours::ui::Size> {
+  constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+  auto format(const afterhours::ui::Size &size,
+              std::format_context &ctx) const {
+    return std::format_to(ctx.out(), "Size(dim: {}, value: {}, strictness: {})",
+                          size.dim, size.value, size.strictness);
+  }
+};
+} // namespace std
+
+// Reopen namespace to continue with functions that use logging
+namespace afterhours {
+namespace ui {
 
 inline Size pixels(const float value, const float strictness = 1.f) {
   return ui::Size{
@@ -287,3 +340,36 @@ struct Margin {
 } // namespace ui
 
 } // namespace afterhours
+
+// std::formatter specialization for Axis to support std::format/log_* macros
+namespace std {
+template <>
+struct formatter<afterhours::ui::Axis> {
+  constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
+  auto format(afterhours::ui::Axis axis, std::format_context &ctx) const {
+    std::string_view name = "Unknown";
+    switch (axis) {
+    case afterhours::ui::Axis::X:
+      name = "X-Axis";
+      break;
+    case afterhours::ui::Axis::Y:
+      name = "Y-Axis";
+      break;
+    case afterhours::ui::Axis::left:
+      name = "left";
+      break;
+    case afterhours::ui::Axis::top:
+      name = "top";
+      break;
+    case afterhours::ui::Axis::right:
+      name = "right";
+      break;
+    case afterhours::ui::Axis::bottom:
+      name = "bottom";
+      break;
+    }
+    return std::format_to(ctx.out(), "{}", name);
+  }
+};
+} // namespace std
