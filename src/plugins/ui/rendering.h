@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <unordered_set>
 #include <vector>
 
@@ -22,6 +23,8 @@
 #include "fmt/format.h"
 #include "systems.h"
 #include "theme.h"
+#include "../../memory/arena.h"
+#include "render_primitives.h"
 
 namespace afterhours {
 
@@ -424,7 +427,16 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
 #endif
 
   TextPositionResult result =
-      position_text_ex(fm, text, rect, alignment, Vector2Type{5.f, 5.f});
+      [&]() {
+        Vector2Type margin_px{5.f, 5.f};
+        if (rect.width <= 0.0f || rect.height <= 0.0f) {
+          margin_px = Vector2Type{0.0f, 0.0f};
+        } else {
+          margin_px.x = std::min(margin_px.x, rect.width * 0.4f);
+          margin_px.y = std::min(margin_px.y, rect.height * 0.4f);
+        }
+        return position_text_ex(fm, text, rect, alignment, margin_px);
+      }();
 
   // Draw visual debug indicator if text doesn't fit and debug is enabled
   // Shows a semi-transparent red overlay and border around the container
@@ -1183,6 +1195,471 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       render(context, font_manager, ent);
     }
     context.render_cmds.clear();
+  }
+};
+
+// Batched renderer system - collects render commands into a buffer
+// then executes them all at once for better batching opportunities
+template <typename InputAction>
+struct RenderBatched : System<UIContext<InputAction>, FontManager> {
+  RenderBatched() : System<UIContext<InputAction>, FontManager>() {
+    this->include_derived_children = true;
+  }
+
+  void collect_shadow(RenderCommandBuffer& buffer,
+                      const Entity &entity, RectangleType draw_rect,
+                      const std::bitset<4> &corner_settings,
+                      float effective_opacity, int layer,
+                      float roundness = 0.5f, int segments = 8) const {
+    if (!entity.has<HasShadow>())
+      return;
+
+    const Shadow &shadow = entity.get<HasShadow>().shadow;
+    Color shadow_color = shadow.color;
+    if (effective_opacity < 1.0f) {
+      shadow_color.a =
+          static_cast<unsigned char>(shadow_color.a * effective_opacity);
+    }
+
+    if (shadow.style == ShadowStyle::Hard) {
+      RectangleType shadow_rect = {draw_rect.x + shadow.offset_x,
+                                   draw_rect.y + shadow.offset_y,
+                                   draw_rect.width, draw_rect.height};
+      if (corner_settings.any()) {
+        buffer.add_rounded_rectangle(shadow_rect, shadow_color, roundness,
+                                     segments, corner_settings, layer, entity.id);
+      } else {
+        buffer.add_rectangle(shadow_rect, shadow_color, layer, entity.id);
+      }
+    } else {
+      int layers = static_cast<int>(shadow.blur_radius / 2.0f);
+      layers = std::max(3, std::min(layers, 8));
+
+      for (int i = layers; i >= 0; --i) {
+        float spread = shadow.blur_radius *
+                       (static_cast<float>(i) / static_cast<float>(layers));
+        float alpha_factor =
+            1.0f - (static_cast<float>(i) / static_cast<float>(layers + 1));
+
+        RectangleType shadow_rect = {
+            draw_rect.x + shadow.offset_x - spread * 0.5f,
+            draw_rect.y + shadow.offset_y - spread * 0.5f,
+            draw_rect.width + spread, draw_rect.height + spread};
+
+        Color layer_color = shadow_color;
+        layer_color.a = static_cast<unsigned char>(
+            static_cast<float>(shadow_color.a) * alpha_factor *
+            (1.0f / static_cast<float>(layers)));
+
+        if (corner_settings.any()) {
+          buffer.add_rounded_rectangle(shadow_rect, layer_color, roundness,
+                                       segments, corner_settings, layer, entity.id);
+        } else {
+          buffer.add_rectangle(shadow_rect, layer_color, layer, entity.id);
+        }
+      }
+    }
+  }
+
+  void collect_nine_slice(RenderCommandBuffer& buffer,
+                          const Entity &entity, RectangleType draw_rect,
+                          float effective_opacity, int layer) const {
+    if (!entity.has<HasNineSliceBorder>())
+      return;
+
+    const NineSliceBorder &nine_slice =
+        entity.get<HasNineSliceBorder>().nine_slice;
+    Color tint = nine_slice.tint;
+    if (effective_opacity < 1.0f) {
+      tint.a = static_cast<unsigned char>(tint.a * effective_opacity);
+    }
+
+    buffer.add_nine_slice(draw_rect, nine_slice.texture, nine_slice.left,
+                          nine_slice.top, nine_slice.right, nine_slice.bottom,
+                          tint, layer, entity.id);
+  }
+
+  void collect_circular_progress(RenderCommandBuffer& buffer,
+                                 const Entity &entity, RectangleType draw_rect,
+                                 float effective_opacity, int layer) const {
+    if (!entity.has<HasCircularProgressState>()) {
+      return;
+    }
+
+    const HasCircularProgressState &state =
+        entity.get<HasCircularProgressState>();
+
+    float centerX = draw_rect.x + draw_rect.width / 2.0f;
+    float centerY = draw_rect.y + draw_rect.height / 2.0f;
+    float outerRadius = std::min(draw_rect.width, draw_rect.height) / 2.0f;
+    float innerRadius = outerRadius - state.thickness;
+    if (innerRadius < 0.0f)
+      innerRadius = 0.0f;
+
+    Color track_color = state.track_color;
+    Color fill_color = state.fill_color;
+    if (effective_opacity < 1.0f) {
+      track_color = colors::opacity_pct(track_color, effective_opacity);
+      fill_color = colors::opacity_pct(fill_color, effective_opacity);
+    }
+
+    int segments = std::max(32, static_cast<int>(outerRadius * 0.5f));
+
+    // Background track
+    buffer.add_ring(centerX, centerY, innerRadius, outerRadius, segments,
+                    track_color, layer, entity.id);
+
+    // Progress fill
+    if (state.value > 0.001f) {
+      float end_angle = state.start_angle + (state.value * 360.0f);
+      buffer.add_ring_segment(centerX, centerY, innerRadius, outerRadius,
+                              state.start_angle, end_angle, segments,
+                              fill_color, layer, entity.id);
+    }
+  }
+
+  void collect_bevel(RenderCommandBuffer& buffer,
+                     const Entity &entity, RectangleType draw_rect,
+                     float effective_opacity, int layer) const {
+    if (!entity.has<HasBevelBorder>())
+      return;
+
+    const BevelBorder &bevel = entity.get<HasBevelBorder>().bevel;
+    if (!bevel.has_bevel())
+      return;
+
+    Color light = bevel.light_color;
+    Color dark = bevel.dark_color;
+    if (effective_opacity < 1.0f) {
+      light = colors::opacity_pct(light, effective_opacity);
+      dark = colors::opacity_pct(dark, effective_opacity);
+    }
+
+    Color base_fill = colors::UI_WHITE;
+    if (entity.has<HasColor>()) {
+      base_fill = entity.get<HasColor>().color();
+    }
+    if (effective_opacity < 1.0f) {
+      base_fill = colors::opacity_pct(base_fill, effective_opacity);
+    }
+
+    const Color strong_light = light;
+    const Color strong_dark = dark;
+    const Color mid_light = colors::lighten(base_fill, 0.35f);
+    const Color mid_dark = colors::darken(base_fill, 0.35f);
+
+    const Color base_top_left =
+        bevel.style == BevelStyle::Raised ? strong_light : strong_dark;
+    const Color base_bottom_right =
+        bevel.style == BevelStyle::Raised ? strong_dark : strong_light;
+    const Color inner_top_left =
+        bevel.style == BevelStyle::Raised ? mid_light : mid_dark;
+    const Color inner_bottom_right =
+        bevel.style == BevelStyle::Raised ? mid_dark : mid_light;
+
+    int layers = std::max(1, static_cast<int>(std::ceil(bevel.thickness)));
+    for (int i = 0; i < layers; ++i) {
+      bool inner = i > 0;
+      Color top_left = inner ? inner_top_left : base_top_left;
+      Color bottom_right = inner ? inner_bottom_right : base_bottom_right;
+
+      float inset = static_cast<float>(i);
+      float w = draw_rect.width - (inset * 2.0f);
+      float h = draw_rect.height - (inset * 2.0f);
+      if (w <= 0.0f || h <= 0.0f)
+        break;
+
+      RectangleType top = {draw_rect.x + inset, draw_rect.y + inset, w, 1.0f};
+      RectangleType left = {draw_rect.x + inset, draw_rect.y + inset, 1.0f, h};
+      RectangleType bottom = {draw_rect.x + inset,
+                              draw_rect.y + inset + h - 1.0f, w, 1.0f};
+      RectangleType right = {draw_rect.x + inset + w - 1.0f,
+                             draw_rect.y + inset, 1.0f, h};
+
+      buffer.add_rectangle(top, top_left, layer, entity.id);
+      buffer.add_rectangle(left, top_left, layer, entity.id);
+      buffer.add_rectangle(bottom, bottom_right, layer, entity.id);
+      buffer.add_rectangle(right, bottom_right, layer, entity.id);
+    }
+  }
+
+  void collect_me(RenderCommandBuffer& buffer,
+                  const UIContext<InputAction> &context,
+                  const FontManager &font_manager, const Entity &entity,
+                  int layer) const {
+    const UIComponent &cmp = entity.get<UIComponent>();
+    const float effective_opacity = _compute_effective_opacity(entity);
+    RectangleType draw_rect = cmp.rect();
+
+    OptEntity scroll_ancestor = _find_scroll_view_ancestor(entity);
+    bool inside_scroll_view =
+        scroll_ancestor.valid() && !entity.has<HasScrollView>();
+
+    if (inside_scroll_view) {
+      Vector2Type scroll_offset =
+          scroll_ancestor->get<HasScrollView>().scroll_offset;
+      draw_rect.y -= scroll_offset.y;
+      draw_rect.x -= scroll_offset.x;
+    }
+
+    if (entity.has<HasUIModifiers>()) {
+      draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
+    }
+
+    auto corner_settings = entity.has<HasRoundedCorners>()
+                               ? entity.get<HasRoundedCorners>().get()
+                               : std::bitset<4>().reset();
+    float roundness = entity.has<HasRoundedCorners>()
+                          ? entity.get<HasRoundedCorners>().roundness
+                          : 0.5f;
+    int segments = entity.has<HasRoundedCorners>()
+                       ? entity.get<HasRoundedCorners>().segments
+                       : 8;
+
+    // Shadow first
+    collect_shadow(buffer, entity, draw_rect, corner_settings,
+                   effective_opacity, layer, roundness, segments);
+
+    // Nine-slice border
+    if (entity.has<HasNineSliceBorder>()) {
+      collect_nine_slice(buffer, entity, draw_rect, effective_opacity, layer);
+    }
+
+    // Focus indicator
+    if (context.visual_focus_id == entity.id) {
+      Color focus_col = context.theme.from_usage(Theme::Usage::Accent);
+      float effective_focus_opacity = _compute_effective_opacity(entity);
+      if (effective_focus_opacity < 1.0f) {
+        focus_col = colors::opacity_pct(focus_col, effective_focus_opacity);
+      }
+      RectangleType focus_rect = cmp.focus_rect();
+      if (entity.has<HasUIModifiers>()) {
+        focus_rect = entity.get<HasUIModifiers>().apply_modifier(focus_rect);
+      }
+      if (corner_settings.any()) {
+        buffer.add_rounded_rectangle(focus_rect, focus_col, roundness, segments,
+                                     corner_settings, layer, entity.id);
+      } else {
+        buffer.add_rectangle_outline(focus_rect, focus_col, layer, entity.id);
+      }
+    }
+
+    // Background color
+    if (entity.has<HasColor>()) {
+      Color col = entity.template get<HasColor>().color();
+
+      if (context.is_hot(entity.id)) {
+        col = context.theme.from_usage(Theme::Usage::Background);
+      }
+
+      if (effective_opacity < 1.0f) {
+        col = colors::opacity_pct(col, effective_opacity);
+      }
+
+      buffer.add_rounded_rectangle(draw_rect, col, roundness, segments,
+                                   corner_settings, layer, entity.id);
+    }
+
+    // Bevel border
+    collect_bevel(buffer, entity, draw_rect, effective_opacity, layer);
+
+    // Circular progress
+    collect_circular_progress(buffer, entity, draw_rect, effective_opacity, layer);
+
+    // Border
+    if (entity.has<HasBorder>()) {
+      const Border &border = entity.template get<HasBorder>().border;
+      if (border.has_border()) {
+        Color border_col = border.color;
+        if (effective_opacity < 1.0f) {
+          border_col = colors::opacity_pct(border_col, effective_opacity);
+        }
+        buffer.add_rounded_rectangle_outline(draw_rect, border_col, roundness,
+                                             segments, corner_settings, layer, entity.id);
+      }
+    }
+
+    // Label/text
+    if (entity.has<HasLabel>()) {
+      const HasLabel &hasLabel = entity.get<HasLabel>();
+      Color font_col;
+
+      if (hasLabel.explicit_text_color.has_value()) {
+        font_col = hasLabel.explicit_text_color.value();
+        if (hasLabel.is_disabled) {
+          font_col = colors::darken(font_col, 0.5f);
+        }
+      } else if (hasLabel.background_hint.has_value()) {
+        font_col =
+            colors::auto_text_color(hasLabel.background_hint.value(),
+                                    context.theme.font, context.theme.darkfont);
+        if (hasLabel.is_disabled) {
+          font_col = colors::darken(font_col, 0.5f);
+        }
+      } else {
+        font_col =
+            context.theme.from_usage(Theme::Usage::Font, hasLabel.is_disabled);
+      }
+
+      if (effective_opacity < 1.0f) {
+        font_col = colors::opacity_pct(font_col, effective_opacity);
+      }
+
+      std::optional<TextStroke> stroke = hasLabel.text_stroke;
+      if (stroke.has_value() && effective_opacity < 1.0f) {
+        stroke->color = colors::opacity_pct(stroke->color, effective_opacity);
+      }
+
+      std::optional<TextShadow> shadow = hasLabel.text_shadow;
+      if (shadow.has_value() && effective_opacity < 1.0f) {
+        shadow->color = colors::opacity_pct(shadow->color, effective_opacity);
+      }
+
+      RectangleType text_rect = draw_rect;
+      if (entity.has<HasNineSliceBorder>()) {
+        const NineSliceBorder &ns = entity.get<HasNineSliceBorder>().nine_slice;
+        text_rect.x += static_cast<float>(ns.left);
+        text_rect.y += static_cast<float>(ns.top);
+        text_rect.width -= static_cast<float>(ns.left + ns.right);
+        text_rect.height -= static_cast<float>(ns.top + ns.bottom);
+      }
+
+      // Position text to get font size
+      TextPositionResult result =
+          position_text_ex(font_manager, hasLabel.label.c_str(), text_rect,
+                          hasLabel.alignment, Vector2Type{5.f, 5.f});
+
+      if (result.rect.height >= MIN_FONT_SIZE) {
+        buffer.add_text(result.rect, hasLabel.label, cmp.font_name,
+                        result.rect.height, font_col, hasLabel.alignment,
+                        layer, entity.id, stroke, shadow);
+      }
+    }
+
+    // Texture
+    if (entity.has<texture_manager::HasTexture>()) {
+      const texture_manager::HasTexture &texture =
+          entity.get<texture_manager::HasTexture>();
+      float scale = (float)texture.texture.height / draw_rect.height;
+      Vector2Type size = {
+          (float)texture.texture.width / scale,
+          (float)texture.texture.height / scale,
+      };
+      Vector2Type location =
+          position_texture(texture.texture, size, draw_rect, texture.alignment);
+      RectangleType dest = {location.x, location.y, size.x, size.y};
+      RectangleType src = {0.0f, 0.0f, (float)texture.texture.width,
+                           (float)texture.texture.height};
+      buffer.add_image(dest, src, texture.texture, colors::UI_WHITE, layer, entity.id);
+    } else if (entity.has<ui::HasImage>()) {
+      const ui::HasImage &img = entity.get<ui::HasImage>();
+      texture_manager::Rectangle src =
+          img.source_rect.value_or(texture_manager::Rectangle{
+              0.0f, 0.0f, (float)img.texture.width, (float)img.texture.height});
+
+      float scale = src.height / draw_rect.height;
+      Vector2Type size = {src.width / scale, src.height / scale};
+      Vector2Type location =
+          position_texture(img.texture, size, draw_rect, img.alignment);
+
+      Color img_col = colors::UI_WHITE;
+      if (effective_opacity < 1.0f) {
+        img_col = colors::opacity_pct(img_col, effective_opacity);
+      }
+
+      RectangleType dest = {location.x, location.y, size.x, size.y};
+      buffer.add_image(dest, src, img.texture, img_col, layer, entity.id);
+    }
+  }
+
+  void collect(RenderCommandBuffer& buffer,
+               const UIContext<InputAction> &context,
+               const FontManager &font_manager, const Entity &entity,
+               int layer) const {
+    const UIComponent &cmp = entity.get<UIComponent>();
+    if (cmp.should_hide || entity.has<ShouldHide>())
+      return;
+
+    if (cmp.font_name != UIComponent::UNSET_FONT) {
+      const_cast<FontManager &>(font_manager).set_active(cmp.font_name);
+    }
+
+    // Check if we need scissor clipping for scroll view
+    OptEntity scroll_ancestor = _find_scroll_view_ancestor(entity);
+    bool needs_scissor =
+        scroll_ancestor.valid() && !entity.has<HasScrollView>();
+
+    if (needs_scissor) {
+      RectangleType scissor_rect =
+          scroll_ancestor->get<UIComponent>().rect();
+      buffer.add_scissor_start(static_cast<int>(scissor_rect.x),
+                               static_cast<int>(scissor_rect.y),
+                               static_cast<int>(scissor_rect.width),
+                               static_cast<int>(scissor_rect.height),
+                               layer, entity.id);
+    }
+
+    // Update scroll view content size
+    if (entity.has<HasScrollView>()) {
+      _update_scroll_view_content_size(const_cast<Entity &>(entity));
+    }
+
+    if (entity.has<HasColor>() || entity.has<HasLabel>() ||
+        entity.has<ui::HasImage>() ||
+        entity.has<texture_manager::HasTexture>() ||
+        entity.has<FocusClusterRoot>() ||
+        entity.has<HasCircularProgressState>() ||
+        entity.has<HasScrollView>()) {
+      collect_me(buffer, context, font_manager, entity, layer);
+    }
+
+    if (needs_scissor) {
+      buffer.add_scissor_end(layer, entity.id);
+    }
+  }
+
+  virtual void for_each_with_derived(const Entity &,
+                                     const UIContext<InputAction> &context,
+                                     const FontManager &font_manager,
+                                     float) const override {
+    // Reset arena for new frame
+    Arena& arena = get_render_arena();
+    arena.reset();
+
+    // Create command buffer
+    RenderCommandBuffer buffer(arena);
+
+    // Sort render commands by layer
+#if __WIN32
+    for (size_t i = 0; i < context.render_cmds.size(); ++i) {
+      for (size_t j = i + 1; j < context.render_cmds.size(); ++j) {
+        if ((context.render_cmds[i].layer > context.render_cmds[j].layer) ||
+            (context.render_cmds[i].layer == context.render_cmds[j].layer &&
+             context.render_cmds[i].id > context.render_cmds[j].id)) {
+          std::swap(context.render_cmds[i], context.render_cmds[j]);
+        }
+      }
+    }
+#else
+    std::ranges::sort(context.render_cmds, [](RenderInfo a, RenderInfo b) {
+      if (a.layer == b.layer)
+        return a.id < b.id;
+      return a.layer < b.layer;
+    });
+#endif
+
+    // Collect all commands
+    for (const auto &cmd : context.render_cmds) {
+      auto id = cmd.id;
+      auto layer = cmd.layer;
+      auto &ent = EntityHelper::getEntityForIDEnforce(id);
+      collect(buffer, context, font_manager, ent, layer);
+    }
+    context.render_cmds.clear();
+
+    // Execute all commands with batching
+    BatchedRenderer renderer;
+    renderer.render(buffer, const_cast<FontManager&>(font_manager));
   }
 };
 

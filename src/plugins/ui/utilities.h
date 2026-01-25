@@ -174,6 +174,16 @@ register_render_systems(SystemManager &sm,
           toggle_debug));
 }
 
+template <typename InputAction>
+static void
+register_batched_render_systems(SystemManager &sm,
+                                InputAction toggle_debug = InputAction::None) {
+  sm.register_render_system(std::make_unique<ui::RenderBatched<InputAction>>());
+  sm.register_render_system(
+      std::make_unique<ui::RenderDebugAutoLayoutRoots<InputAction>>(
+          toggle_debug));
+}
+
 } // namespace ui
 
 } // namespace afterhours

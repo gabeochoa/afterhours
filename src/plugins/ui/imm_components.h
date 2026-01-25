@@ -298,22 +298,35 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
                            ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
+  const bool size_default = config.size.is_default;
   auto max_height = config.size.y_axis;
-  config.size.y_axis = children(max_height.value);
   auto max_width = config.size.x_axis;
-  config.size.x_axis = children(max_width.value);
+  if (size_default) {
+    config.size.y_axis = children(max_height.value);
+    config.size.x_axis = children(max_width.value);
+  }
 
   _init_component(ctx, ep_pair, config, ComponentType::ButtonGroup, false,
                   "button_group");
 
   // For Row: divide width among buttons
   // For Column: use percent(1.0f) width to fill parent (avoids hardcoded 200px)
-  config.size.x_axis = config.flex_direction == FlexDirection::Row
-                           ? pixels(max_width.value / labels.size())
-                           : percent(1.0f);
-  config.size.y_axis = config.flex_direction == FlexDirection::Row
-                           ? max_height
-                           : children(max_height.value);
+  if (config.flex_direction == FlexDirection::Row) {
+    if (max_width.dim == Dim::Pixels) {
+      config.size.x_axis = pixels(max_width.value / labels.size());
+    } else if (max_width.dim == Dim::Percent ||
+               max_width.dim == Dim::ScreenPercent) {
+      config.size.x_axis =
+          Size{max_width.dim, max_width.value / labels.size(),
+               max_width.strictness};
+    } else {
+      config.size.x_axis = max_width;
+    }
+    config.size.y_axis = max_height;
+  } else {
+    config.size.x_axis = percent(1.0f);
+    config.size.y_axis = size_default ? children(max_height.value) : max_height;
+  }
 
   entity.get<UIComponent>().flex_direction = config.flex_direction;
 
@@ -824,14 +837,22 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   auto elem_corners =
       compact ? RoundedCorners(config.rounded_corners.value())
               : RoundedCorners(config.rounded_corners.value()).left_sharp();
+  ComponentSize bg_size = config.size;
+  if (bg_size.x_axis.dim == Dim::Pixels) {
+    bg_size.x_axis.value = std::max(0.0f, bg_size.x_axis.value - 4.0f);
+  } else if (bg_size.x_axis.dim == Dim::Percent ||
+             bg_size.x_axis.dim == Dim::ScreenPercent) {
+    bg_size = bg_size._scale_x(0.95f);
+  }
+
   auto elem = div(ctx, mk(entity, parent.id + entity.id + 0),
                   ComponentConfig::inherit_from(config, "slider_background")
-                      .with_size(config.size)
+                      .with_size(bg_size)
                       .with_color_usage(Theme::Usage::Secondary)
                       .with_rounded_corners(elem_corners)
                       .with_render_layer(config.render_layer + 1));
 
-  elem.ent().template get<UIComponent>().set_desired_width(config.size.x_axis);
+  elem.ent().template get<UIComponent>().set_desired_width(bg_size.x_axis);
 
   Entity &slider_bg = elem.ent();
   slider_bg.template addComponentIfMissing<InFocusCluster>();
@@ -1168,6 +1189,8 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   if (auto result = button_group(
           ctx, mk(entity), options,
           ComponentConfig::inherit_from(config, "dropdown button group")
+              .with_size(config.size)
+              .with_flex_direction(FlexDirection::Column)
               .with_hidden(config.hidden || !dropdownState.on)
               .with_render_layer(config.render_layer + 1));
       result) {

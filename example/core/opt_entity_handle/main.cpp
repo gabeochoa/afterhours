@@ -10,6 +10,8 @@ using namespace afterhours;
 struct Position : BaseComponent {
   float x = 0.0f;
   float y = 0.0f;
+  Position() = default;
+  Position(float x_, float y_) : x(x_), y(y_) {}
 };
 
 int main() {
@@ -19,7 +21,7 @@ int main() {
 
   // Create an entity and capture an optional handle.
   Entity &entity = EntityHelper::createEntity();
-  entity.addComponent<Position>(Position{3.0f, 4.0f});
+  entity.addComponent<Position>(Position(3.0f, 4.0f));
   EntityHelper::merge_entity_arrays();
 
   OptEntityHandle handle = OptEntityHandle::from_entity(entity);
