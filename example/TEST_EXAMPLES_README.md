@@ -54,6 +54,19 @@ How to run:
 cd example/arena_usage && make
 ```
 
+### 0.1 `text_cache_usage/` - Text Measurement Cache Smoke Test
+**Purpose:** Quick sanity check for the text measurement cache API and stats
+
+**What it tests:**
+- ✅ Cache hit/miss tracking
+- ✅ `std::string_view`-based measurement
+- ✅ Generation advance via `end_frame()`
+
+How to run:
+```bash
+cd example/text_cache_usage && make
+```
+
 ### 1. `logging_test/` - Logging System Verification
 **Purpose:** Comprehensive test of the newly implemented logging system
 
