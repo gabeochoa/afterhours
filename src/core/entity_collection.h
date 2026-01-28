@@ -262,6 +262,11 @@ struct EntityCollection {
     return &(ent.get<Component>());
   }
 
+  template <typename Component> const Component *get_singleton_cmp_const() const {
+    Entity &ent = get_singleton<Component>();
+    return &(ent.get<Component>());
+  }
+
   template <typename Component> bool has_singleton() const {
     const ComponentID id = components::get_type_id<Component>();
     return singletonMap.contains(id);
