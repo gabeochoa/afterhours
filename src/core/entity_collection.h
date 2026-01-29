@@ -267,6 +267,17 @@ struct EntityCollection {
     return &(ent.get<Component>());
   }
 
+  template <typename Component> Component &get_singleton_cmp_enforce() const {
+    const ComponentID id = components::get_type_id<Component>();
+    if (!singletonMap.contains(id)) {
+      log_error("get_singleton_cmp_enforce: Missing required singleton {} ({})",
+                id, type_name<Component>());
+      std::abort();
+    }
+    Entity &ent = *singletonMap.at(id);
+    return ent.get<Component>();
+  }
+
   template <typename Component> bool has_singleton() const {
     const ComponentID id = components::get_type_id<Component>();
     return singletonMap.contains(id);
