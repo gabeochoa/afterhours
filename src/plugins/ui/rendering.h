@@ -30,8 +30,27 @@ namespace afterhours {
 
 namespace ui {
 
-// Offset to account for font glyph left-side bearing
-// Prevents text from rendering outside container left edge
+// TODO: Replace hardcoded offset with actual font glyph left-side bearing (LSB)
+//
+// PROBLEM: When text is positioned at x=100, the first visible pixel may not
+// appear until x=108 due to the glyph's left-side bearing (empty space before
+// the glyph). MeasureText returns advance width, not accounting for LSB.
+// This causes text to appear shifted right and get clipped on container edges.
+//
+// CURRENT FIX: Hardcoded 8px approximation that works for most fonts.
+//
+// PROPER FIX: Query the actual LSB for the first character:
+//   1. Get first codepoint: int cp = GetCodepoint(text, &bytesProcessed);
+//   2. Get glyph info: GlyphInfo info = GetGlyphInfo(font, cp);
+//   3. Use info.offsetX as the left-side bearing
+//
+// This would need to be done in:
+//   - position_text_ex() when calculating text position
+//   - render_text() in render_primitives.h for batched rendering
+//
+// Note: LSB varies per font AND per glyph (e.g., "W" vs "I" have different
+// bearings), so this must be calculated per-string, not once globally.
+//
 constexpr float TEXT_LEFT_BEARING_OFFSET = 8.0f;
 
 static inline float _compute_effective_opacity(const Entity &entity) {
