@@ -1062,16 +1062,21 @@ struct AutoLayout {
     Vector2Type offset = Vector2Type{0.f, 0.f};
     if (widget.parent != -1) {
       UIComponent &parent = this->to_cmp(widget.parent);
+      // Include parent's position, margin, AND padding to position child
+      // within parent's content area (after padding)
       offset = Vector2Type{
-          parent.computed_rel[Axis::X] + parent.computed_margin[Axis::left],
-          parent.computed_rel[Axis::Y] + parent.computed_margin[Axis::top],
+          parent.computed_rel[Axis::X] + parent.computed_margin[Axis::left] +
+              parent.computed_padd[Axis::left],
+          parent.computed_rel[Axis::Y] + parent.computed_margin[Axis::top] +
+              parent.computed_padd[Axis::top],
       };
       widget.computed_rel[Axis::X] += offset.x;
       widget.computed_rel[Axis::Y] += offset.y;
     }
 
-    widget.computed_rel[Axis::X] += (widget.computed_padd[Axis::left]);
-    widget.computed_rel[Axis::Y] += (widget.computed_padd[Axis::top]);
+    // Note: Widget's own padding affects its children, not its own position.
+    // The padding is included in the offset calculation above when children
+    // compute their bounds.
 
     for (EntityID child : widget.children) {
       compute_rect_bounds(this->to_cmp(child));
