@@ -72,6 +72,10 @@ struct input : developer::Plugin {
     const float scale_y = content_h / static_cast<float>(dest_h);
     return {(raw.x - min_x) * scale_x, (raw.y - min_y) * scale_y};
   }
+  static MousePosition get_mouse_delta() {
+    raylib::Vector2 v = raylib::GetMouseDelta();
+    return {v.x, v.y};
+  }
   static bool is_mouse_button_up(const MouseButton button) {
     return raylib::IsMouseButtonUp(button);
   }
@@ -450,6 +454,7 @@ struct input : developer::Plugin {
 
   // TODO good luck ;)
   static MousePosition get_mouse_position() { return {0, 0}; }
+  static MousePosition get_mouse_delta() { return {0, 0}; }
   static bool is_mouse_button_up(const MouseButton) { return false; }
   static bool is_mouse_button_down(const MouseButton) { return false; }
   static bool is_mouse_button_pressed(const MouseButton) { return false; }
