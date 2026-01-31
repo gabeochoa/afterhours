@@ -1051,10 +1051,11 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
             ctx, mk(entity, child_index + i),
             ComponentConfig::inherit_from(config,
                                           fmt::format("option {}", i + 1))
-                .with_size(ComponentSize{pixels(default_component_size.x / 2.f),
+                .with_size(ComponentSize{pixels(default_component_size.x * 0.75f),
                                          config.size.y_axis})
                 .with_label(std::string(options[i]))
                 .with_no_wrap()
+                .with_padding(Spacing::md)
                 .with_render_layer(config.render_layer + 1))) {
       on_option_click(entity, i + 1);
     }

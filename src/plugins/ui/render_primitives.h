@@ -566,11 +566,15 @@ private:
     // Handle alignment
     if (cmd.data.text.alignment == TextAlignment::Center) {
       Vector2Type textSize = measure_text_utf8(font, cmd.data.text.text, fontSize, spacing);
-      startPos.x = cmd.data.text.rect.x + (cmd.data.text.rect.width - textSize.x) / 2.0f;
+      // Calculate centered position, clamping to prevent text starting before container left edge
+      float centered_x = cmd.data.text.rect.x + (cmd.data.text.rect.width - textSize.x) / 2.0f;
+      startPos.x = std::max(cmd.data.text.rect.x, centered_x);
       startPos.y = cmd.data.text.rect.y + (cmd.data.text.rect.height - textSize.y) / 2.0f;
     } else if (cmd.data.text.alignment == TextAlignment::Right) {
       Vector2Type textSize = measure_text_utf8(font, cmd.data.text.text, fontSize, spacing);
-      startPos.x = cmd.data.text.rect.x + cmd.data.text.rect.width - textSize.x;
+      // Clamp right-aligned text to not start before container left edge
+      float right_x = cmd.data.text.rect.x + cmd.data.text.rect.width - textSize.x;
+      startPos.x = std::max(cmd.data.text.rect.x, right_x);
     }
 
     // Draw shadow first

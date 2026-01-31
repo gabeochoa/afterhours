@@ -30,6 +30,10 @@ namespace afterhours {
 
 namespace ui {
 
+// Offset to account for font glyph left-side bearing
+// Prevents text from rendering outside container left edge
+constexpr float TEXT_LEFT_BEARING_OFFSET = 8.0f;
+
 static inline float _compute_effective_opacity(const Entity &entity) {
   float result = 1.0f;
   const Entity *cur = &entity;
@@ -342,19 +346,24 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
   case TextAlignment::None: // None defaults to Left alignment
   case TextAlignment::Left:
     position = Vector2Type{
-        .x = container.x + margin_px.x,
+        .x = container.x + margin_px.x + TEXT_LEFT_BEARING_OFFSET,
         .y = container.y + margin_px.y +
              (container.height - 2 * margin_px.y - text_size.y) / 2,
     };
     break;
-  case TextAlignment::Center:
+  case TextAlignment::Center: {
+    // Calculate centered position, but clamp to prevent starting before container left edge
+    float centered_offset = (container.width - 2 * margin_px.x - text_size.x) / 2;
+    float text_x = container.x + margin_px.x + centered_offset + (TEXT_LEFT_BEARING_OFFSET / 2);
+    // Clamp so text never starts before container left edge
+    text_x = std::max(container.x + margin_px.x, text_x);
     position = Vector2Type{
-        .x = container.x + margin_px.x +
-             (container.width - 2 * margin_px.x - text_size.x) / 2,
+        .x = text_x,
         .y = container.y + margin_px.y +
              (container.height - 2 * margin_px.y - text_size.y) / 2,
     };
     break;
+  }
   case TextAlignment::Right:
     position = Vector2Type{
         .x = container.x + container.width - margin_px.x - text_size.x,
@@ -407,7 +416,9 @@ static inline void _draw_text_at_position(const ui::FontManager &fm,
     Vector2Type textSize =
         measure_text_utf8(font, text.c_str(), fontSize, spacing);
     // Apply centering within rect, THEN add the offset
-    startPos.x = rect.x + (rect.width - textSize.x) / 2.0f + offset_x;
+    // Clamp to prevent text from starting before container left edge
+    float centered_x = rect.x + (rect.width - textSize.x) / 2.0f + offset_x;
+    startPos.x = std::max(rect.x, centered_x);
     startPos.y = rect.y + (rect.height - textSize.y) / 2.0f + offset_y;
   }
   draw_text_ex(font, text.c_str(), startPos, fontSize, spacing, color);
@@ -1530,7 +1541,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                           hasLabel.alignment, Vector2Type{5.f, 5.f});
 
       if (result.rect.height >= MIN_FONT_SIZE) {
-        buffer.add_text(result.rect, hasLabel.label, cmp.font_name,
+        // Pass the container rect (text_rect) not the position rect (result.rect)
+        // render_text will handle centering within the container
+        buffer.add_text(text_rect, hasLabel.label, cmp.font_name,
                         result.rect.height, font_col, hasLabel.alignment,
                         layer, entity.id, stroke, shadow);
       }
