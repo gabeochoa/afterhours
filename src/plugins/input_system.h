@@ -544,6 +544,58 @@ struct input : developer::Plugin {
     return is_gamepad_button_down(id, button) ? 1.f : 0.f;
   }
 
+  static std::pair<DeviceMedium, float>
+  check_single_action_pressed(const GamepadID id,
+                              const ValidInputs& valid_inputs) {
+    DeviceMedium medium = DeviceMedium::None;
+    float value = 0.f;
+    for (const auto &input : valid_inputs) {
+      DeviceMedium temp_medium = DeviceMedium::None;
+      float temp = 0.f;
+      if (input.index() == 0) {
+        temp_medium = DeviceMedium::Keyboard;
+        temp = is_key_pressed(std::get<0>(input)) ? 1.f : 0.f;
+      } else if (input.index() == 1) {
+        temp_medium = DeviceMedium::GamepadAxis;
+        temp = visit_axis(id, std::get<1>(input));
+      } else if (input.index() == 2) {
+        temp_medium = DeviceMedium::GamepadButton;
+        temp = is_gamepad_button_pressed(id, std::get<2>(input)) ? 1.f : 0.f;
+      }
+      if (temp > value) {
+        value = temp;
+        medium = temp_medium;
+      }
+    }
+    return {medium, value};
+  }
+
+  static std::pair<DeviceMedium, float>
+  check_single_action_down(const GamepadID id,
+                           const ValidInputs& valid_inputs) {
+    DeviceMedium medium = DeviceMedium::None;
+    float value = 0.f;
+    for (const auto &input : valid_inputs) {
+      DeviceMedium temp_medium = DeviceMedium::None;
+      float temp = 0.f;
+      if (input.index() == 0) {
+        temp_medium = DeviceMedium::Keyboard;
+        temp = visit_key_down(std::get<0>(input));
+      } else if (input.index() == 1) {
+        temp_medium = DeviceMedium::GamepadAxis;
+        temp = visit_axis(id, std::get<1>(input));
+      } else if (input.index() == 2) {
+        temp_medium = DeviceMedium::GamepadButton;
+        temp = visit_button_down(id, std::get<2>(input));
+      }
+      if (temp > value) {
+        value = temp;
+        medium = temp_medium;
+      }
+    }
+    return {medium, value};
+  }
+
   struct InputCollector : public BaseComponent {
     std::vector<input::ActionDone> inputs;
     std::vector<input::ActionDone> inputs_pressed;
@@ -626,68 +678,6 @@ struct input : developer::Plugin {
       return result;
     }
 
-    std::pair<DeviceMedium, float>
-    check_single_action_pressed(const GamepadID id,
-                                const input::ValidInputs valid_inputs) {
-      DeviceMedium medium;
-      float value = 0.f;
-      for (const auto &input : valid_inputs) {
-        DeviceMedium temp_medium = DeviceMedium::None;
-        float temp = 0.f;
-        // Use index-based access to avoid ambiguity with duplicate
-        // types
-        if (input.index() == 0) {
-          // KeyCode (int)
-          temp_medium = DeviceMedium::Keyboard;
-          temp = is_key_pressed(std::get<0>(input)) ? 1.f : 0.f;
-        } else if (input.index() == 1) {
-          // GamepadAxisWithDir
-          temp_medium = DeviceMedium::GamepadAxis;
-          temp = visit_axis(id, std::get<1>(input));
-        } else if (input.index() == 2) {
-          // GamepadButton
-          temp_medium = DeviceMedium::GamepadButton;
-          temp = is_gamepad_button_pressed(id, std::get<2>(input)) ? 1.f : 0.f;
-        }
-        if (temp > value) {
-          value = temp;
-          medium = temp_medium;
-        }
-      }
-      return {medium, value};
-    }
-
-    std::pair<DeviceMedium, float>
-    check_single_action_down(const GamepadID id,
-                             const input::ValidInputs valid_inputs) {
-      DeviceMedium medium;
-      float value = 0.f;
-      for (const auto &input : valid_inputs) {
-        DeviceMedium temp_medium = DeviceMedium::None;
-        float temp = 0.f;
-        // Use index-based access to avoid ambiguity with duplicate
-        // types
-        if (input.index() == 0) {
-          // KeyCode (int)
-          temp_medium = DeviceMedium::Keyboard;
-          temp = visit_key_down(std::get<0>(input));
-        } else if (input.index() == 1) {
-          // GamepadAxisWithDir
-          temp_medium = DeviceMedium::GamepadAxis;
-          temp = visit_axis(id, std::get<1>(input));
-        } else if (input.index() == 2) {
-          // GamepadButton
-          temp_medium = DeviceMedium::GamepadButton;
-          temp = visit_button_down(id, std::get<2>(input));
-        }
-        if (temp > value) {
-          value = temp;
-          medium = temp_medium;
-        }
-      }
-      return {medium, value};
-    }
-
     virtual void for_each_with(Entity &, InputCollector &collector,
                                ProvidesMaxGamepadID &mxGamepadID,
                                ProvidesInputMapping &input_mapper,
@@ -704,7 +694,7 @@ struct input : developer::Plugin {
         do {
           // down
           {
-            const auto [medium, amount] = check_single_action_down(i, vis);
+            const auto [medium, amount] = input::check_single_action_down(i, vis);
             if (amount > 0.f) {
               collector.inputs.push_back(
                   ActionDone(medium, i, action, amount, dt));
@@ -712,7 +702,7 @@ struct input : developer::Plugin {
           }
           // pressed
           {
-            const auto [medium, amount] = check_single_action_pressed(i, vis);
+            const auto [medium, amount] = input::check_single_action_pressed(i, vis);
             if (amount > 0.f) {
               collector.inputs_pressed.push_back(
                   ActionDone(medium, i, action, amount, dt));
@@ -776,5 +766,157 @@ struct input : developer::Plugin {
 // Compile-time verification that input satisfies the PluginCore concept
 static_assert(developer::PluginCore<input>,
               "input must implement the core plugin interface");
+
+// Templated on project's layer enum (e.g., menu::State)
+template<typename LayerEnum>
+struct ProvidesLayeredInputMapping : public BaseComponent {
+  using LayerMapping = std::map<int, input::ValidInputs>;  // action_id -> bindings
+
+  std::map<LayerEnum, LayerMapping> layers;
+  LayerEnum active_layer{};
+
+  ProvidesLayeredInputMapping() = default;
+
+  ProvidesLayeredInputMapping(
+      const std::map<LayerEnum, LayerMapping>& initial_layers,
+      LayerEnum starting_layer)
+      : layers(initial_layers), active_layer(starting_layer) {}
+
+  // Get bindings for an action in the active layer
+  const input::ValidInputs& get_bindings(int action) const {
+    static const input::ValidInputs empty{};
+    auto layer_it = layers.find(active_layer);
+    if (layer_it == layers.end()) return empty;
+    auto action_it = layer_it->second.find(action);
+    if (action_it == layer_it->second.end()) return empty;
+    return action_it->second;
+  }
+
+  void set_active_layer(LayerEnum layer) { active_layer = layer; }
+  LayerEnum get_active_layer() const { return active_layer; }
+
+  // Modify a binding at runtime (for settings/remapping)
+  void set_binding(LayerEnum layer, int action, const input::ValidInputs& inputs) {
+    layers[layer][action] = inputs;
+  }
+
+  void clear_binding(LayerEnum layer, int action) {
+    auto layer_it = layers.find(layer);
+    if (layer_it != layers.end()) {
+      layer_it->second.erase(action);
+    }
+  }
+};
+
+template<typename LayerEnum>
+struct LayeredInputSystem
+    : System<input::InputCollector, input::ProvidesMaxGamepadID,
+             ProvidesLayeredInputMapping<LayerEnum>> {
+
+  int fetch_max_gamepad_id() {
+    int result = -1;
+    for (int i = 0; i < input::MAX_GAMEPAD_ID; i++) {
+      if (!input::is_gamepad_available(i)) {
+        result = i - 1;
+        break;
+      }
+    }
+    return result;
+  }
+
+  virtual void for_each_with(
+      Entity&,
+      input::InputCollector& collector,
+      input::ProvidesMaxGamepadID& maxGamepad,
+      ProvidesLayeredInputMapping<LayerEnum>& mapper,
+      float dt) override {
+
+    maxGamepad.max_gamepad_available = std::max(0, fetch_max_gamepad_id());
+    collector.inputs.clear();
+    collector.inputs_pressed.clear();
+
+    // Get the active layer's mapping
+    auto layer_it = mapper.layers.find(mapper.active_layer);
+    if (layer_it == mapper.layers.end()) {
+      // No mapping for this layer, nothing to poll
+      if (collector.inputs.empty()) {
+        collector.since_last_input += dt;
+      }
+      return;
+    }
+
+    for (const auto& [action, valid_inputs] : layer_it->second) {
+      for (int gamepad_id = 0;
+           gamepad_id <= maxGamepad.max_gamepad_available;
+           gamepad_id++) {
+        // Check "down" state
+        {
+          const auto [down_medium, down_amount] =
+              input::check_single_action_down(gamepad_id, valid_inputs);
+          if (down_amount > 0.f) {
+            collector.inputs.push_back(
+                input::ActionDone(down_medium, gamepad_id, action, down_amount, dt));
+          }
+        }
+        // Check "pressed" state (just this frame)
+        {
+          const auto [pressed_medium, pressed_amount] =
+              input::check_single_action_pressed(gamepad_id, valid_inputs);
+          if (pressed_amount > 0.f) {
+            collector.inputs_pressed.push_back(
+                input::ActionDone(pressed_medium, gamepad_id, action, pressed_amount, dt));
+          }
+        }
+      }
+    }
+
+    if (collector.inputs.empty()) {
+      collector.since_last_input += dt;
+    } else {
+      collector.since_last_input = 0.f;
+    }
+  }
+};
+
+// Plugin registration helper for layered input
+template<typename LayerEnum>
+struct layered_input : developer::Plugin {
+
+  static void add_singleton_components(
+      Entity& entity,
+      const std::map<LayerEnum, std::map<int, input::ValidInputs>>& mapping,
+      LayerEnum starting_layer) {
+
+    entity.addComponent<input::InputCollector>();
+    entity.addComponent<input::ProvidesMaxGamepadID>();
+    entity.addComponent<ProvidesLayeredInputMapping<LayerEnum>>(
+        mapping, starting_layer);
+
+    EntityHelper::registerSingleton<input::InputCollector>(entity);
+    EntityHelper::registerSingleton<input::ProvidesMaxGamepadID>(entity);
+    EntityHelper::registerSingleton<ProvidesLayeredInputMapping<LayerEnum>>(entity);
+  }
+
+  // Default overload for PluginCore concept compatibility (empty mapping)
+  static void add_singleton_components(Entity& entity) {
+    add_singleton_components(
+        entity,
+        std::map<LayerEnum, std::map<int, input::ValidInputs>>{},
+        LayerEnum{});
+  }
+
+  static void register_update_systems(SystemManager& sm) {
+    sm.register_update_system(
+        std::make_unique<LayeredInputSystem<LayerEnum>>());
+  }
+
+  static void enforce_singletons(SystemManager& sm) {
+    sm.register_update_system(
+        std::make_unique<developer::EnforceSingleton<input::InputCollector>>());
+    sm.register_update_system(
+        std::make_unique<developer::EnforceSingleton<input::ProvidesMaxGamepadID>>());
+    // Note: Can't enforce ProvidesLayeredInputMapping without knowing LayerEnum at compile time
+  }
+};
 
 } // namespace afterhours

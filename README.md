@@ -61,8 +61,45 @@ Components:
 Update Systems: 
 - InputSystem => does all the heavy lifting
 
-Render Systems: 
+Render Systems:
 - RenderConnectedGamepads => renders the number of gamepads connected
+
+
+### layered_input (requires raylib)
+Layered input mapping - different key bindings per game state (e.g., menu vs gameplay).
+
+Components:
+- ProvidesLayeredInputMapping<LayerEnum> => Stores per-layer action->key mappings
+
+Update Systems:
+- LayeredInputSystem<LayerEnum> => Polls input for the active layer only
+
+Usage:
+```cpp
+// Define your layer enum
+enum class GameLayer { Menu, Playing, Paused };
+
+// Define action enum
+enum Action { MoveUp, Confirm, Pause };
+
+// Build mapping
+std::map<GameLayer, std::map<int, afterhours::input::ValidInputs>> mapping;
+mapping[GameLayer::Menu][Action::MoveUp] = {raylib::KEY_UP};
+mapping[GameLayer::Playing][Action::MoveUp] = {raylib::KEY_W};
+
+// Register
+afterhours::layered_input<GameLayer>::add_singleton_components(
+    entity, mapping, GameLayer::Menu);
+afterhours::layered_input<GameLayer>::register_update_systems(systems);
+
+// Switch layers at runtime
+auto* mapper = EntityHelper::get_singleton_cmp<
+    afterhours::ProvidesLayeredInputMapping<GameLayer>>();
+mapper->set_active_layer(GameLayer::Playing);
+
+// Get bindings for current layer
+const auto& bindings = mapper->get_bindings(Action::MoveUp);
+```
 
 
 ### window_manager (desires raylib)
