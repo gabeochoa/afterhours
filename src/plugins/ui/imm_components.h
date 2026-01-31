@@ -1264,7 +1264,8 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
                  .with_size(arrow_size)
                  .with_label("<")
                  .with_font(UIComponent::SYMBOL_FONT, 16.f)
-                 .with_rounded_corners(RoundedCorners().left_round()))) {
+                 .with_rounded_corners(RoundedCorners().left_round())
+                 .with_margin(Margin{}))) {
     clicked = true;
     new_index = prev_index(navState.current_index(), options.size());
   }
@@ -1275,14 +1276,16 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
           .with_label(std::string(options[navState.current_index()]))
           .with_color_usage(Theme::Usage::Primary)
           .with_rounded_corners(RoundedCorners().all_sharp())
-          .with_skip_tabbing(true));
+          .with_skip_tabbing(true)
+          .with_margin(Margin{}));
 
   if (button(ctx, mk(entity),
              ComponentConfig::inherit_from(config, "right_arrow")
                  .with_size(arrow_size)
                  .with_label(">")
                  .with_font(UIComponent::SYMBOL_FONT, 16.f)
-                 .with_rounded_corners(RoundedCorners().right_round()))) {
+                 .with_rounded_corners(RoundedCorners().right_round())
+                 .with_margin(Margin{}))) {
     clicked = true;
     new_index = next_index(navState.current_index(), options.size());
   }
