@@ -399,6 +399,9 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   _init_component(ctx, ep_pair, config, ComponentType::Div, false,
                   "checkbox_row");
 
+  // Add FocusClusterRoot to container for consistent focus ring on entire row
+  entity.template addComponentIfMissing<FocusClusterRoot>();
+
   // 2025-08-11: ensure checkbox row uses responsive defaults so both label
   // and button scale with resolution. Previously, only the label used a
   // responsive size, causing the button to remain tiny at higher
@@ -437,7 +440,9 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
       }
     }
 
-    div(ctx, mk(entity), label_config);
+    div(ctx, mk(entity), label_config)
+        .ent()
+        .template addComponentIfMissing<InFocusCluster>();
   }
 
   // 2025-08-11: explicitly propagate the responsive size to the clickable
@@ -458,8 +463,8 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   bool changed = false;
   auto checkbox_ent =
       checkbox_no_label(ctx, mk(entity), value, checkbox_config);
-  // Focus ring is drawn on the actual clickable element (checkbox_no_label),
-  // not on the container row, so no FocusClusterRoot/InFocusCluster needed.
+  // Mark checkbox as part of focus cluster so focus ring shows on entire row
+  checkbox_ent.ent().template addComponentIfMissing<InFocusCluster>();
   if (checkbox_ent) {
     changed = true;
   }
@@ -634,6 +639,9 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
   _init_component(ctx, ep_pair, config, ComponentType::ToggleSwitch, false,
                   "toggle_switch_row");
 
+  // Add FocusClusterRoot to container for consistent focus ring on entire row
+  entity.template addComponentIfMissing<FocusClusterRoot>();
+
   HasToggleSwitchState &state =
       _init_state<HasToggleSwitchState>(entity, [&](auto &) {}, value);
 
@@ -649,7 +657,9 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
         ComponentConfig::inherit_from(config, "toggle_label")
             .with_size(config.size._scale_x(0.7f))
             .with_label(label)
-            .with_color_usage(Theme::Usage::None));
+            .with_color_usage(Theme::Usage::None))
+        .ent()
+        .template addComponentIfMissing<InFocusCluster>();
   }
 
   bool clicked = false;
@@ -669,6 +679,8 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
                            .with_rounded_corners(RoundedCorners().all_round())
                            .with_roundness(1.0f));
 
+    // Mark button as part of focus cluster so focus ring shows on entire row
+    circ.ent().template addComponentIfMissing<InFocusCluster>();
     clicked = circ;
 
     // Checkmark when ON
@@ -709,6 +721,8 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
                    .with_rounded_corners(RoundedCorners().all_round())
                    .with_roundness(0.5f));
 
+    // Mark button as part of focus cluster so focus ring shows on entire row
+    track_result.ent().template addComponentIfMissing<InFocusCluster>();
     clicked = track_result;
 
     // Sliding knob - calculate position using 720p pixel values, then wrap in
