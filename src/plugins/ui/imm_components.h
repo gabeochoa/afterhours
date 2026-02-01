@@ -1783,41 +1783,46 @@ ElementResult decorative_frame(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_skip_tabbing(true)
             .with_debug_name("frame_outer"));
 
-    // Shadow edge (top-left)
-    Size edge = h720(3.0f);
-    float edge_px = resolve_to_pixels(edge, screen_height);
-    div(ctx, mk(entity, 1),
-        ComponentConfig{}
-            .with_size(ComponentSize{percent(1.0f), edge})
-            .with_absolute_position()
-            .with_translate(pixels(0.0f), pixels(0.0f))
-            .with_custom_background(shadow_color)
-            .with_skip_tabbing(true)
-            .with_debug_name("frame_shadow_top"));
-
-    div(ctx, mk(entity, 2),
-        ComponentConfig{}
-            .with_size(ComponentSize{edge, percent(1.0f)})
-            .with_absolute_position()
-            .with_translate(pixels(0.0f), pixels(0.0f))
-            .with_custom_background(shadow_color)
-            .with_skip_tabbing(true)
-            .with_debug_name("frame_shadow_left"));
-
-    // Highlight edge (bottom-right) - only render when size is computed
+    // Shadow/highlight edges - only render when size is computed
+    // (uses fixed pixel sizes to ensure edges stay within bounds)
     if (has_computed_size) {
+      Size edge = h720(3.0f);
+      float edge_px = resolve_to_pixels(edge, screen_height);
+
+      // Shadow edge top (spans full width)
+      div(ctx, mk(entity, 1),
+          ComponentConfig{}
+              .with_size(ComponentSize{pixels(w), edge})
+              .with_absolute_position()
+              .with_translate(0.0f, 0.0f)
+              .with_custom_background(shadow_color)
+              .with_skip_tabbing(true)
+              .with_debug_name("frame_shadow_top"));
+
+      // Shadow edge left (spans full height)
+      div(ctx, mk(entity, 2),
+          ComponentConfig{}
+              .with_size(ComponentSize{edge, pixels(h)})
+              .with_absolute_position()
+              .with_translate(0.0f, 0.0f)
+              .with_custom_background(shadow_color)
+              .with_skip_tabbing(true)
+              .with_debug_name("frame_shadow_left"));
+
+      // Highlight edge bottom (spans full width)
       div(ctx, mk(entity, 3),
           ComponentConfig{}
-              .with_size(ComponentSize{percent(1.0f), edge})
+              .with_size(ComponentSize{pixels(w), edge})
               .with_absolute_position()
               .with_translate(0.0f, h - edge_px)
               .with_custom_background(highlight_color)
               .with_skip_tabbing(true)
               .with_debug_name("frame_highlight_bottom"));
 
+      // Highlight edge right (spans full height)
       div(ctx, mk(entity, 4),
           ComponentConfig{}
-              .with_size(ComponentSize{edge, percent(1.0f)})
+              .with_size(ComponentSize{edge, pixels(h)})
               .with_absolute_position()
               .with_translate(w - edge_px, 0.0f)
               .with_custom_background(highlight_color)
