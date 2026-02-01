@@ -1043,12 +1043,13 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     }
 
     if (should_draw_focus) {
-      Color focus_col = context.theme.from_usage(Theme::Usage::Accent);
+      Color focus_col = context.theme.from_usage(Theme::Usage::Focus);
       float effective_focus_opacity = _compute_effective_opacity(entity);
       if (effective_focus_opacity < 1.0f) {
         focus_col = colors::opacity_pct(focus_col, effective_focus_opacity);
       }
-      RectangleType focus_rect = cmp.focus_rect();
+      // Use theme's focus ring offset to ensure focus ring is outside component bounds
+      RectangleType focus_rect = cmp.focus_rect(static_cast<int>(context.theme.focus_ring_offset));
       if (entity.has<HasUIModifiers>()) {
         focus_rect = entity.get<HasUIModifiers>().apply_modifier(focus_rect);
       }
@@ -1065,9 +1066,19 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
           ? entity.get<HasRoundedCorners>().segments
           : context.theme.segments;
 
-      // Draw focus ring as a rounded outline
-      draw_rectangle_rounded_lines(focus_rect, focus_roundness, focus_segments, focus_col,
-                                   focus_corner_settings);
+      // Draw focus ring as a rounded outline with configurable thickness
+      // Draw multiple lines for thickness effect since raylib doesn't support thick rounded lines
+      float thickness = context.theme.focus_ring_thickness;
+      for (float t = 0; t < thickness; t += 1.0f) {
+        RectangleType thickRect = {
+          focus_rect.x - t,
+          focus_rect.y - t,
+          focus_rect.width + t * 2.0f,
+          focus_rect.height + t * 2.0f
+        };
+        draw_rectangle_rounded_lines(thickRect, focus_roundness, focus_segments, focus_col,
+                                     focus_corner_settings);
+      }
     }
 
     if (entity.has<HasColor>()) {
@@ -1535,12 +1546,13 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     }
 
     if (should_draw_focus) {
-      Color focus_col = context.theme.from_usage(Theme::Usage::Accent);
+      Color focus_col = context.theme.from_usage(Theme::Usage::Focus);
       float effective_focus_opacity = _compute_effective_opacity(entity);
       if (effective_focus_opacity < 1.0f) {
         focus_col = colors::opacity_pct(focus_col, effective_focus_opacity);
       }
-      RectangleType focus_rect = cmp.focus_rect();
+      // Use theme's focus ring offset to ensure focus ring is outside component bounds
+      RectangleType focus_rect = cmp.focus_rect(static_cast<int>(context.theme.focus_ring_offset));
       if (entity.has<HasUIModifiers>()) {
         focus_rect = entity.get<HasUIModifiers>().apply_modifier(focus_rect);
       }
@@ -1558,8 +1570,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           : context.theme.segments;
 
       // Draw focus ring as a rounded outline - use very high layer to ensure on top of other elements
+      // Pass thickness to the buffer for proper thick line rendering
       buffer.add_rounded_rectangle_outline(focus_rect, focus_col, focus_roundness, focus_segments,
-                                           focus_corner_settings, layer + 200, entity.id);
+                                           focus_corner_settings, layer + 200, entity.id,
+                                           context.theme.focus_ring_thickness);
     }
 
     // Background color
