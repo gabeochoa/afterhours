@@ -130,10 +130,10 @@ struct Theme {
   std::map<translation::Language, FontConfig> language_fonts;
 
   // Base font sizes (in pixels)
-  float font_size_sm = 16.f;
-  float font_size_md = 20.f;
-  float font_size_lg = 32.f;
-  float font_size_xl = 42.f;
+  float font_size_sm = 18.f;
+  float font_size_md = 22.f;
+  float font_size_lg = 36.f;
+  float font_size_xl = 48.f;
 
   // Get font config for a language
   const FontConfig &get_font_config(translation::Language lang) const {
