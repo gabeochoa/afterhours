@@ -538,18 +538,25 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
 
   bool changed = false;
 
-  // Circle dimensions - larger for better visibility
-  float circle_sz = 18.0f;
-  float dot_sz = 10.0f;
-  float border_w = 2.0f;
+  // Circle dimensions - use MIN_TOUCH_TARGET for accessible touch area
+  // The visual circle is smaller but the touch target meets accessibility requirements
+  constexpr float touch_target_sz = MIN_TOUCH_TARGET;
+  constexpr float visual_circle_sz = 24.0f;  // Visual size of the radio circle
+  constexpr float dot_sz = 14.0f;
+  constexpr float border_w = 2.0f;
 
   for (size_t i = 0; i < N; ++i) {
     bool is_selected = (i == selected_index);
 
     // Row button - transparent, for click handling
+    // Ensure minimum touch target height
+    auto row_size = config.size;
+    if (row_size.y_axis.dim == Dim::Pixels && row_size.y_axis.value < touch_target_sz) {
+      row_size.y_axis = pixels(touch_target_sz);
+    }
     auto row = button(ctx, mk(parent, 100 + i),
                       ComponentConfig{}
-                          .with_size(config.size)
+                          .with_size(row_size)
                           .with_label("")
                           .with_color_usage(Theme::Usage::None)
                           .with_flex_direction(FlexDirection::Row)
@@ -562,12 +569,12 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
       changed = true;
     }
 
-    // Outer circle ring
+    // Outer circle ring - visual element centered within touch target
     Color ring_color = is_selected ? ctx.theme.accent : ctx.theme.font_muted;
     auto ring =
         div(ctx, mk(row.ent(), 0),
             ComponentConfig{}
-                .with_size(ComponentSize{pixels(circle_sz), pixels(circle_sz)})
+                .with_size(ComponentSize{pixels(visual_circle_sz), pixels(visual_circle_sz)})
                 .with_custom_background(ctx.theme.background)
                 .with_border(ring_color, border_w)
                 .with_rounded_corners(RoundedCorners().all_round())
@@ -578,7 +585,7 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Inner filled dot when selected
     if (is_selected) {
-      float offset = (circle_sz - dot_sz) / 2.0f;
+      float offset = (visual_circle_sz - dot_sz) / 2.0f;
       div(ctx, mk(ring.ent(), 0),
           ComponentConfig{}
               .with_size(ComponentSize{pixels(dot_sz), pixels(dot_sz)})
@@ -595,7 +602,7 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
     auto label_ent =
         div(ctx, mk(row.ent(), 1),
             ComponentConfig{}
-                .with_size(ComponentSize{pixels(150), config.size.y_axis})
+                .with_size(ComponentSize{pixels(150), row_size.y_axis})
                 .with_label(std::string(labels[i]))
                 .with_font(config.font_name, config.font_size)
                 .with_custom_text_color(ctx.theme.font)
@@ -666,7 +673,8 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
 
   if (style == ToggleSwitchStyle::Circle) {
     // Clean checkbox: filled circle when ON, empty ring when OFF
-    Size sz = h720(18.0f);
+    // Use MIN_TOUCH_TARGET to ensure accessible touch area
+    Size sz = h720(MIN_TOUCH_TARGET);
     Size border_w = h720(2.0f);
     Color bg = state.on ? theme.accent : theme.background;
     Color border_color = state.on ? theme.accent : theme.font_muted;
@@ -685,9 +693,9 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Checkmark when ON
     if (state.on) {
-      Size check_sz = h720(14.0f);
-      // Offset = (18px - 14px) / 2 = 2px at 720p baseline
-      Size check_offset = h720((18.0f - 14.0f) / 2.0f);
+      Size check_sz = h720(28.0f);
+      // Center the checkmark within the touch target
+      Size check_offset = h720((MIN_TOUCH_TARGET - 28.0f) / 2.0f);
       div(ctx, mk(circ.ent()),
           ComponentConfig::inherit_from(config, "toggle_check")
               .with_label("✓")
@@ -695,20 +703,22 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
               .with_absolute_position()
               .with_translate(check_offset, pixels(0.0f))
               .with_custom_text_color(theme.background)
-              .with_font(UIComponent::DEFAULT_FONT, h720(12.0f))
+              .with_font(UIComponent::DEFAULT_FONT, h720(20.0f))
               .with_alignment(TextAlignment::Center)
               .with_skip_tabbing(true));
     }
   } else {
     // Pill style (default) - responsive sizing at 720p baseline
+    // Track height meets MIN_TOUCH_TARGET for accessibility
     Color track_color =
         colors::lerp(theme.secondary, theme.accent, state.animation_progress);
     // Knob is white or uses darkfont if available for contrast
     Color knob_color =
         theme.darkfont.a > 0 ? theme.darkfont : Color{255, 255, 255, 255};
     // Responsive sizing at 720p baseline (values in 720p pixels)
-    constexpr float track_w_px = 40.0f, track_h_px = 20.0f, knob_sz_px = 16.0f,
-                    pad_px = 2.0f;
+    // Track height set to MIN_TOUCH_TARGET to ensure accessible touch area
+    constexpr float track_w_px = 80.0f, track_h_px = MIN_TOUCH_TARGET,
+                    knob_sz_px = 36.0f, pad_px = 4.0f;
     Size track_w = h720(track_w_px), track_h = h720(track_h_px),
          knob_sz = h720(knob_sz_px);
     Size pad = h720(pad_px);
