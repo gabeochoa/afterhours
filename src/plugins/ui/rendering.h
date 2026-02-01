@@ -55,20 +55,23 @@ constexpr float TEXT_LEFT_BEARING_OFFSET = 8.0f;
 
 static inline float _compute_effective_opacity(const Entity &entity) {
   float result = 1.0f;
-  const Entity *cur = &entity;
+  EntityID current_id = entity.id;
   int guard = 0;
-  while (cur) {
-    if (cur->has<HasOpacity>()) {
-      result *= std::clamp(cur->get<HasOpacity>().value, 0.0f, 1.0f);
+  while (current_id >= 0 && guard < 64) {
+    OptEntity opt_cur = EntityHelper::getEntityForID(current_id);
+    if (!opt_cur.valid())
+      break;
+    const Entity &cur = opt_cur.asE();
+    if (cur.has<HasOpacity>()) {
+      result *= std::clamp(cur.get<HasOpacity>().value, 0.0f, 1.0f);
     }
-    if (!cur->has<UIComponent>())
+    if (!cur.has<UIComponent>())
       break;
-    EntityID pid = cur->get<UIComponent>().parent;
-    if (pid < 0 || pid == cur->id)
+    EntityID pid = cur.get<UIComponent>().parent;
+    if (pid < 0 || pid == current_id)
       break;
-    cur = &EntityHelper::getEntityForIDEnforce(pid);
-    if (++guard > 64)
-      break;
+    current_id = pid;
+    ++guard;
   }
   return std::clamp(result, 0.0f, 1.0f);
 }
@@ -675,15 +678,19 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
       return false;
     if (entity.id == isolated_id)
       return false;
-    const Entity *cur = &entity;
+    EntityID current_id = entity.id;
     int guard = 0;
-    while (cur->has<UIComponent>()) {
-      const UIComponent &cur_cmp = cur->get<UIComponent>();
-      if (cur_cmp.parent < 0 || ++guard > 64)
+    while (guard < 64) {
+      OptEntity opt_cur = EntityHelper::getEntityForID(current_id);
+      if (!opt_cur.valid() || !opt_cur.asE().has<UIComponent>())
+        break;
+      const UIComponent &cur_cmp = opt_cur.asE().get<UIComponent>();
+      if (cur_cmp.parent < 0)
         break;
       if (cur_cmp.parent == isolated_id)
         return true;
-      cur = &EntityHelper::getEntityForIDEnforce(cur_cmp.parent);
+      current_id = cur_cmp.parent;
+      ++guard;
     }
     return false;
   }
@@ -969,6 +976,9 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
   void render_me(const UIContext<InputAction> &context,
                  const FontManager &font_manager, const Entity &entity) const {
+    // Defensive check: entity must have UIComponent
+    if (!entity.has<UIComponent>())
+      return;
     const UIComponent &cmp = entity.get<UIComponent>();
     const float effective_opacity = _compute_effective_opacity(entity);
     RectangleType draw_rect = cmp.rect();
@@ -976,8 +986,12 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     // Check if this entity is inside a scroll view (but not the scroll view
     // itself)
     OptEntity scroll_ancestor = _find_scroll_view_ancestor(entity);
+    // Note: _find_clip_ancestor returns entity with HasScrollView OR HasClipChildren
+    // Only apply scroll offset if ancestor actually has HasScrollView
     bool inside_scroll_view =
-        scroll_ancestor.valid() && !entity.has<HasScrollView>();
+        scroll_ancestor.valid() &&
+        scroll_ancestor->has<HasScrollView>() &&
+        !entity.has<HasScrollView>();
 
     // Apply scroll offset to draw_rect if inside a scroll view
     if (inside_scroll_view) {
@@ -1206,6 +1220,9 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
   void render(const UIContext<InputAction> &context,
               const FontManager &font_manager, const Entity &entity) const {
+    // Defensive check: entity must have UIComponent
+    if (!entity.has<UIComponent>())
+      return;
     const UIComponent &cmp = entity.get<UIComponent>();
     if (cmp.should_hide || entity.has<ShouldHide>())
       return;
@@ -1279,8 +1296,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
     for (auto &cmd : context.render_cmds) {
       auto id = cmd.id;
-      auto &ent = EntityHelper::getEntityForIDEnforce(id);
-      render(context, font_manager, ent);
+      OptEntity opt_ent = EntityHelper::getEntityForID(id);
+      if (!opt_ent.valid())
+        continue; // Skip stale entity IDs
+      render(context, font_manager, opt_ent.asE());
     }
     context.render_cmds.clear();
   }
@@ -1475,14 +1494,21 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                   const UIContext<InputAction> &context,
                   const FontManager &font_manager, const Entity &entity,
                   int layer) const {
+    // Defensive check: entity must have UIComponent
+    if (!entity.has<UIComponent>())
+      return;
     const UIComponent &cmp = entity.get<UIComponent>();
 
     const float effective_opacity = _compute_effective_opacity(entity);
     RectangleType draw_rect = cmp.rect();
 
     OptEntity scroll_ancestor = _find_scroll_view_ancestor(entity);
+    // Note: _find_clip_ancestor returns entity with HasScrollView OR HasClipChildren
+    // Only apply scroll offset if ancestor actually has HasScrollView
     bool inside_scroll_view =
-        scroll_ancestor.valid() && !entity.has<HasScrollView>();
+        scroll_ancestor.valid() &&
+        scroll_ancestor->has<HasScrollView>() &&
+        !entity.has<HasScrollView>();
 
     if (inside_scroll_view) {
       Vector2Type scroll_offset =
@@ -1710,6 +1736,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                const UIContext<InputAction> &context,
                const FontManager &font_manager, const Entity &entity,
                int layer) const {
+    // Defensive check: entity must have UIComponent to be rendered
+    if (!entity.has<UIComponent>())
+      return;
     const UIComponent &cmp = entity.get<UIComponent>();
     if (cmp.should_hide || entity.has<ShouldHide>())
       return;
@@ -1787,8 +1816,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     for (const auto &cmd : context.render_cmds) {
       auto id = cmd.id;
       auto layer = cmd.layer;
-      auto &ent = EntityHelper::getEntityForIDEnforce(id);
-      collect(buffer, context, font_manager, ent, layer);
+      OptEntity opt_ent = EntityHelper::getEntityForID(id);
+      if (!opt_ent.valid())
+        continue; // Skip stale entity IDs
+      collect(buffer, context, font_manager, opt_ent.asE(), layer);
     }
     context.render_cmds.clear();
 
