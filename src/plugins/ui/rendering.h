@@ -250,8 +250,8 @@ static inline void _update_scroll_view_content_size(Entity &entity) {
   scroll.clamp_scroll();
 }
 // Minimum font size to prevent invalid rendering (font size 0)
-// This ensures text always attempts to render, even if too small to read
-constexpr float MIN_FONT_SIZE = 1.0f;
+// This ensures text is always readable - 10px is the practical minimum
+constexpr float MIN_FONT_SIZE = 10.0f;
 // Font size threshold for debug visualization - text is likely unreadable
 constexpr float DEBUG_FONT_SIZE_THRESHOLD = 8.0f;
 
