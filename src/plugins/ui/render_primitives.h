@@ -46,6 +46,7 @@ struct RenderPrimitive {
       float roundness;
       int segments;
       std::bitset<4> corners;
+      float thickness;  // Line thickness for outline (0 = default thin line)
     } outline;
 
     struct {
@@ -144,26 +145,30 @@ public:
   }
 
   static RenderPrimitive rectangle_outline(const RectangleType& rect, Color color,
-                                           int layer, EntityID entity_id = -1) {
+                                           int layer, EntityID entity_id = -1,
+                                           float thickness = 0.0f) {
     RenderPrimitive cmd(RenderPrimitiveType::RectangleOutline, layer, entity_id);
     cmd.data.outline.rect = rect;
     cmd.data.outline.color = color;
     cmd.data.outline.roundness = 0.0f;
     cmd.data.outline.segments = 0;
     cmd.data.outline.corners.reset();
+    cmd.data.outline.thickness = thickness;
     return cmd;
   }
 
   static RenderPrimitive rounded_rectangle_outline(const RectangleType& rect, Color color,
                                                    float roundness, int segments,
                                                    const std::bitset<4>& corners,
-                                                   int layer, EntityID entity_id = -1) {
+                                                   int layer, EntityID entity_id = -1,
+                                                   float thickness = 0.0f) {
     RenderPrimitive cmd(RenderPrimitiveType::RoundedRectangleOutline, layer, entity_id);
     cmd.data.outline.rect = rect;
     cmd.data.outline.color = color;
     cmd.data.outline.roundness = roundness;
     cmd.data.outline.segments = segments;
     cmd.data.outline.corners = corners;
+    cmd.data.outline.thickness = thickness;
     return cmd;
   }
 
@@ -270,17 +275,17 @@ public:
 
   // Add rectangle outline
   void add_rectangle_outline(const RectangleType& rect, Color color, int layer,
-                             EntityID entity_id = -1) {
-    commands_.push_back(RenderPrimitive::rectangle_outline(rect, color, layer, entity_id));
+                             EntityID entity_id = -1, float thickness = 0.0f) {
+    commands_.push_back(RenderPrimitive::rectangle_outline(rect, color, layer, entity_id, thickness));
   }
 
   // Add rounded rectangle outline
   void add_rounded_rectangle_outline(const RectangleType& rect, Color color,
                                      float roundness, int segments,
                                      const std::bitset<4>& corners, int layer,
-                                     EntityID entity_id = -1) {
+                                     EntityID entity_id = -1, float thickness = 0.0f) {
     commands_.push_back(RenderPrimitive::rounded_rectangle_outline(
-        rect, color, roundness, segments, corners, layer, entity_id));
+        rect, color, roundness, segments, corners, layer, entity_id, thickness));
   }
 
   // Add text with optional stroke and shadow
@@ -536,7 +541,20 @@ private:
                             size_t start, size_t end) {
     for (size_t i = start; i < end; ++i) {
       const auto& outline = cmds[i].data.outline;
-      draw_rectangle_outline(outline.rect, outline.color);
+      if (outline.thickness > 1.0f) {
+        // Draw multiple outlines for thickness effect
+        for (float t = 0; t < outline.thickness; t += 1.0f) {
+          RectangleType thickRect = {
+            outline.rect.x - t,
+            outline.rect.y - t,
+            outline.rect.width + t * 2.0f,
+            outline.rect.height + t * 2.0f
+          };
+          draw_rectangle_outline(thickRect, outline.color);
+        }
+      } else {
+        draw_rectangle_outline(outline.rect, outline.color);
+      }
     }
   }
 
@@ -544,8 +562,22 @@ private:
                                     size_t start, size_t end) {
     for (size_t i = start; i < end; ++i) {
       const auto& outline = cmds[i].data.outline;
-      draw_rectangle_rounded_lines(outline.rect, outline.roundness,
-                                   outline.segments, outline.color, outline.corners);
+      if (outline.thickness > 1.0f) {
+        // Draw multiple outlines for thickness effect
+        for (float t = 0; t < outline.thickness; t += 1.0f) {
+          RectangleType thickRect = {
+            outline.rect.x - t,
+            outline.rect.y - t,
+            outline.rect.width + t * 2.0f,
+            outline.rect.height + t * 2.0f
+          };
+          draw_rectangle_rounded_lines(thickRect, outline.roundness,
+                                       outline.segments, outline.color, outline.corners);
+        }
+      } else {
+        draw_rectangle_rounded_lines(outline.rect, outline.roundness,
+                                     outline.segments, outline.color, outline.corners);
+      }
     }
   }
 
