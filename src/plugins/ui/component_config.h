@@ -471,6 +471,10 @@ struct ComponentConfig {
   bool has_font_override() const {
     return font_name != UIComponent::UNSET_FONT;
   }
+  bool has_text_color_override() const {
+    return text_color_usage != Theme::Usage::Default ||
+           custom_text_color.has_value();
+  }
   bool has_texture() const { return texture_config.has_value(); }
   bool has_image_alignment() const { return image_alignment.has_value(); }
   bool has_shadow() const { return shadow_config.has_value(); }

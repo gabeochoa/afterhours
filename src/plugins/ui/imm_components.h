@@ -362,6 +362,11 @@ ElementResult checkbox_no_label(HasUIContext auto &ctx, EntityParent ep_pair,
     config.font_name = UIComponent::SYMBOL_FONT;
     config.font_size = pixels(20.f); // Use accessible minimum size
   }
+  // Use auto_text_color to ensure the X indicator is visible
+  // against any background color, unless user explicitly set a text color
+  if (!config.has_text_color_override()) {
+    config.with_auto_text_color(true);
+  }
 
   _init_component(ctx, ep_pair, config, ComponentType::CheckboxNoLabel, true,
                   "checkbox");
@@ -431,13 +436,19 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_size(config.size)
             .with_label(label);
 
-    // Apply default styling only if user hasn't specified custom settings
+    // Apply user's color_usage if specified, otherwise use Primary default
     if (config.color_usage == Theme::Usage::Default) {
       label_config.with_color_usage(Theme::Usage::Primary);
-      // Only apply default corners if user didn't specify their own
-      if (!user_specified_corners) {
-        label_config.with_rounded_corners(RoundedCorners().right_sharp());
+    } else {
+      // Propagate user's custom background color
+      label_config.with_color_usage(config.color_usage);
+      if (config.color_usage == Theme::Usage::Custom && config.custom_color.has_value()) {
+        label_config.with_custom_background(config.custom_color.value());
       }
+    }
+    // Only apply default corners if user didn't specify their own
+    if (!user_specified_corners) {
+      label_config.with_rounded_corners(RoundedCorners().right_sharp());
     }
 
     div(ctx, mk(entity), label_config)
@@ -452,12 +463,19 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
           config, fmt::format("checkbox indiv from {}", config.debug_name))
           .with_size(config.size);
 
+  // Apply user's color_usage if specified, otherwise use Primary default
   if (config.color_usage == Theme::Usage::Default) {
     checkbox_config.with_color_usage(Theme::Usage::Primary);
-    // Only apply default corners if user didn't specify their own
-    if (!user_specified_corners) {
-      checkbox_config.with_rounded_corners(RoundedCorners().left_sharp());
+  } else {
+    // Propagate user's custom background color
+    checkbox_config.with_color_usage(config.color_usage);
+    if (config.color_usage == Theme::Usage::Custom && config.custom_color.has_value()) {
+      checkbox_config.with_custom_background(config.custom_color.value());
     }
+  }
+  // Only apply default corners if user didn't specify their own
+  if (!user_specified_corners) {
+    checkbox_config.with_rounded_corners(RoundedCorners().left_sharp());
   }
 
   bool changed = false;
@@ -673,55 +691,61 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
 
   if (style == ToggleSwitchStyle::Circle) {
     // Clean checkbox: filled circle when ON, empty ring when OFF
-    // Use MIN_TOUCH_TARGET to ensure accessible touch area
-    Size sz = h720(MIN_TOUCH_TARGET);
-    Size border_w = h720(2.0f);
+    // Use explicit pixel size to ensure proper rendering
+    Size sz = pixels(44.0f);  // Fixed pixel size for toggle circle
+    Size border_w = pixels(3.0f);
     Color bg = state.on ? theme.accent : theme.background;
     Color border_color = state.on ? theme.accent : theme.font_muted;
 
+    // Create circle button with explicit fixed size
+    // Use self_align to prevent stretching by parent flex container
     auto circ = button(ctx, mk(entity),
-                       ComponentConfig::inherit_from(config, "toggle_circle")
+                       ComponentConfig{}
+                           .with_debug_name("toggle_circle")
                            .with_size(ComponentSize{sz, sz})
                            .with_custom_background(bg)
                            .with_border(border_color, border_w)
                            .with_rounded_corners(RoundedCorners().all_round())
-                           .with_roundness(1.0f));
+                           .with_roundness(1.0f)
+                           .with_self_align(SelfAlign::Center)
+                           .with_font(config.font_name, config.font_size));
 
     // Mark button as part of focus cluster so focus ring shows on entire row
     circ.ent().template addComponentIfMissing<InFocusCluster>();
     clicked = circ;
 
-    // Checkmark when ON
-    if (state.on) {
-      Size check_sz = h720(28.0f);
-      // Center the checkmark within the touch target
-      Size check_offset = h720((MIN_TOUCH_TARGET - 28.0f) / 2.0f);
-      div(ctx, mk(circ.ent()),
-          ComponentConfig::inherit_from(config, "toggle_check")
-              .with_label("✓")
-              .with_size(ComponentSize{check_sz, check_sz})
-              .with_absolute_position()
-              .with_translate(check_offset, pixels(0.0f))
-              .with_custom_text_color(theme.background)
-              .with_font(UIComponent::DEFAULT_FONT, h720(20.0f))
-              .with_alignment(TextAlignment::Center)
-              .with_skip_tabbing(true));
-    }
+    // Checkmark when ON, X when OFF for clear visual indicator
+    Size indicator_sz = pixels(24.0f);
+    Size indicator_offset = pixels(10.0f);  // (44 - 24) / 2 = 10
+    div(ctx, mk(circ.ent()),
+        ComponentConfig{}
+            .with_debug_name("toggle_indicator")
+            .with_label(state.on ? "V" : "X")
+            .with_size(ComponentSize{indicator_sz, indicator_sz})
+            .with_absolute_position()
+            .with_translate(indicator_offset, indicator_offset)
+            .with_custom_text_color(state.on ? theme.background : theme.font_muted)
+            .with_font(UIComponent::DEFAULT_FONT, pixels(18.0f))
+            .with_alignment(TextAlignment::Center)
+            .with_skip_tabbing(true));
   } else {
     // Pill style (default) - responsive sizing at 720p baseline
     // Track height meets MIN_TOUCH_TARGET for accessibility
-    Color track_color =
-        colors::lerp(theme.secondary, theme.accent, state.animation_progress);
+    // Significantly lighten track colors for visibility on dark backgrounds
+    Color track_off = colors::lighten(theme.secondary, 0.5f);
+    Color track_on = colors::lighten(theme.accent, 0.5f);
+    Color track_color = colors::lerp(track_off, track_on, state.animation_progress);
     // Knob is white or uses darkfont if available for contrast
     Color knob_color =
         theme.darkfont.a > 0 ? theme.darkfont : Color{255, 255, 255, 255};
     // Responsive sizing at 720p baseline (values in 720p pixels)
     // Track height set to MIN_TOUCH_TARGET to ensure accessible touch area
+    // Use pixels() instead of h720() to avoid sizing issues in flex layouts
     constexpr float track_w_px = 80.0f, track_h_px = MIN_TOUCH_TARGET,
                     knob_sz_px = 36.0f, pad_px = 4.0f;
-    Size track_w = h720(track_w_px), track_h = h720(track_h_px),
-         knob_sz = h720(knob_sz_px);
-    Size pad = h720(pad_px);
+    Size track_w = pixels(track_w_px), track_h = pixels(track_h_px),
+         knob_sz = pixels(knob_sz_px);
+    Size pad = pixels(pad_px);
 
     auto track_result =
         button(ctx, mk(entity),
@@ -735,15 +759,14 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
     track_result.ent().template addComponentIfMissing<InFocusCluster>();
     clicked = track_result;
 
-    // Sliding knob - calculate position using 720p pixel values, then wrap in
-    // h720
+    // Sliding knob - calculate position using pixel values directly
     float knob_x_px = pad_px + (track_w_px - knob_sz_px - pad_px * 2) *
                                    state.animation_progress;
     div(ctx, mk(track_result.ent()),
         ComponentConfig::inherit_from(config, "toggle_knob")
             .with_size(ComponentSize{knob_sz, knob_sz})
             .with_absolute_position()
-            .with_translate(h720(knob_x_px), pad)
+            .with_translate(pixels(knob_x_px), pad)
             .with_custom_background(knob_color)
             .with_rounded_corners(RoundedCorners().all_round())
             .with_roundness(1.0f)
@@ -1256,6 +1279,7 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
   }
   // TODO - add default
   config.flex_direction = FlexDirection::Row;
+  config.with_no_wrap();  // Prevent arrow buttons from wrapping to new line
 
   // Prevent the parent navigation bar from getting a background color
   config.with_color_usage(Theme::Usage::None);
