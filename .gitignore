@@ -25,3 +25,8 @@ output/
 # until they are used in the project, hiding the kennynl folder
 art_storage/*
 *.exe
+
+# Example outputs
+examples/graphics_example
+examples/graphics_example_output.png
+examples/graphics_example_captures/
