@@ -77,6 +77,7 @@ struct Theme {
     Secondary,
     Accent,
     Error,
+    Focus, // Dedicated focus ring color for accessibility
 
     //
     Custom,
@@ -95,6 +96,7 @@ struct Theme {
     case Usage::Secondary:
     case Usage::Accent:
     case Usage::Error:
+    case Usage::Focus:
       return true;
     case Usage::Custom:
     case Usage::Default:
@@ -115,6 +117,11 @@ struct Theme {
   Color secondary{80, 100, 140, 255}; // Dark blue
   Color accent{200, 160, 100, 255};   // Gold
   Color error{200, 80, 80, 255};      // Red
+  Color focus{255, 255, 255, 255};    // White - high contrast focus ring
+
+  // Focus ring configuration
+  float focus_ring_thickness = 3.0f;  // Thickness of focus ring outline (2-3px for visibility)
+  float focus_ring_offset = 4.0f;     // Gap between element and focus ring (ensures no clipping)
 
   ClickActivationMode click_activation_mode = ClickActivationMode::Press;
 
@@ -123,10 +130,10 @@ struct Theme {
   std::map<translation::Language, FontConfig> language_fonts;
 
   // Base font sizes (in pixels)
-  float font_size_sm = 14.f;
-  float font_size_md = 18.f;
-  float font_size_lg = 28.f;
-  float font_size_xl = 36.f;
+  float font_size_sm = 16.f;
+  float font_size_md = 20.f;
+  float font_size_lg = 32.f;
+  float font_size_xl = 42.f;
 
   // Get font config for a language
   const FontConfig &get_font_config(translation::Language lang) const {
@@ -161,19 +168,20 @@ struct Theme {
         primary(colors::pacific_blue), secondary(colors::tea_green),
         accent(colors::orange_soda),
         // TODO find a better error color
-        error(colors::red) {}
+        error(colors::red),
+        focus(colors::isabelline) {} // White focus ring for high contrast
 
   // Legacy 7-arg constructor for backwards compatibility
   Theme(Color f, Color df, Color bg, Color p, Color s, Color a, Color e)
       : font(f), darkfont(df), font_muted(colors::darken(f, 0.3f)),
         background(bg), surface(colors::lighten(bg, 0.1f)), primary(p),
-        secondary(s), accent(a), error(e) {}
+        secondary(s), accent(a), error(e), focus(f) {} // Default focus to font color
 
   // Full constructor with all colors
   Theme(Color f, Color df, Color fm, Color bg, Color surf, Color p, Color s,
         Color a, Color e)
       : font(f), darkfont(df), font_muted(fm), background(bg), surface(surf),
-        primary(p), secondary(s), accent(a), error(e) {}
+        primary(p), secondary(s), accent(a), error(e), focus(f) {} // Default focus to font color
 
   Color from_usage(Usage cu, bool disabled = false) const {
     Color color;
@@ -205,6 +213,9 @@ struct Theme {
     case Usage::Error:
       color = error;
       break;
+    case Usage::Focus:
+      color = focus;
+      break;
     case Usage::Default:
       log_warn("You should not be fetching 'default' color usage from "
                "theme, "
@@ -224,7 +235,7 @@ struct Theme {
       break;
     }
     if (disabled) {
-      return colors::darken(color, 0.5f);
+      return colors::darken(color, 0.3f);
     }
     return color;
   }
@@ -295,6 +306,9 @@ struct ThemeDefaults {
       break;
     case Theme::Usage::Error:
       theme.error = color;
+      break;
+    case Theme::Usage::Focus:
+      theme.focus = color;
       break;
     default:
       break;
