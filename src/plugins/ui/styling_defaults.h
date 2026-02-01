@@ -15,6 +15,11 @@ namespace ui {
 
 namespace imm {
 
+// Minimum touch target size for accessibility (WCAG 2.5.5 Target Size)
+// All interactive elements should be at least 44x44px to ensure usability
+// on touch devices and for users with motor impairments.
+static constexpr float MIN_TOUCH_TARGET = 44.0f;
+
 static Vector2Type default_component_size = {200.f, 50.f};
 
 struct DefaultSpacing {
@@ -27,11 +32,11 @@ struct DefaultSpacing {
 };
 
 struct TypographyScale {
-  static constexpr float BASE_SIZE_720P = 16.0f;
+  static constexpr float BASE_SIZE_720P = 18.0f;
   static constexpr float RATIO = 1.25f;
   // Lowered from 18.67 to allow decorative/secondary text at smaller sizes
   // while still ensuring body text remains readable
-  static constexpr float MIN_ACCESSIBLE_SIZE_720P = 12.0f;
+  static constexpr float MIN_ACCESSIBLE_SIZE_720P = 14.0f;
 
   static Size size(int level) {
     float px_size = BASE_SIZE_720P * std::pow(RATIO, level);
