@@ -73,15 +73,15 @@ static inline float _compute_effective_opacity(const Entity &entity) {
   return std::clamp(result, 0.0f, 1.0f);
 }
 
-// Find the nearest ancestor with HasScrollView
-// Returns invalid OptEntity if no scroll view ancestor exists
-static inline OptEntity _find_scroll_view_ancestor(const Entity &entity) {
+// Find the nearest ancestor with HasScrollView or HasClipChildren
+// Returns invalid OptEntity if no clipping ancestor exists
+static inline OptEntity _find_clip_ancestor(const Entity &entity) {
   if (!entity.has<UIComponent>())
     return {};
 
   const UIComponent &cmp = entity.get<UIComponent>();
   EntityID pid = cmp.parent;
-  
+
   int guard = 0;
   while (pid >= 0 && guard < 64) {
     OptEntity opt_parent = EntityHelper::getEntityForID(pid);
@@ -89,8 +89,8 @@ static inline OptEntity _find_scroll_view_ancestor(const Entity &entity) {
       break;
     }
     Entity &parent = opt_parent.asE();
-    
-    if (parent.has<HasScrollView>()) {
+
+    if (parent.has<HasScrollView>() || parent.has<HasClipChildren>()) {
       return opt_parent;
     }
     if (!parent.has<UIComponent>())
@@ -99,6 +99,11 @@ static inline OptEntity _find_scroll_view_ancestor(const Entity &entity) {
     ++guard;
   }
   return {};
+}
+
+// Legacy alias for backwards compatibility
+static inline OptEntity _find_scroll_view_ancestor(const Entity &entity) {
+  return _find_clip_ancestor(entity);
 }
 
 // Get scroll offset from ancestor scroll view, returns {0,0} if none
@@ -1157,14 +1162,15 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       const_cast<FontManager &>(font_manager).set_active(cmp.font_name);
     }
 
-    // Check if we need scissor clipping for scroll view
-    OptEntity scroll_ancestor = _find_scroll_view_ancestor(entity);
-    bool needs_scissor =
-        scroll_ancestor.valid() && !entity.has<HasScrollView>();
+    // Check if we need scissor clipping for scroll view or clip container
+    OptEntity clip_ancestor = _find_clip_ancestor(entity);
+    bool is_clip_container =
+        entity.has<HasScrollView>() || entity.has<HasClipChildren>();
+    bool needs_scissor = clip_ancestor.valid() && !is_clip_container;
 
     if (needs_scissor) {
       RectangleType scissor_rect =
-          scroll_ancestor->get<UIComponent>().rect();
+          clip_ancestor->get<UIComponent>().rect();
       begin_scissor_mode(static_cast<int>(scissor_rect.x),
                          static_cast<int>(scissor_rect.y),
                          static_cast<int>(scissor_rect.width),
@@ -1418,6 +1424,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                   const FontManager &font_manager, const Entity &entity,
                   int layer) const {
     const UIComponent &cmp = entity.get<UIComponent>();
+
     const float effective_opacity = _compute_effective_opacity(entity);
     RectangleType draw_rect = cmp.rect();
 
@@ -1616,14 +1623,15 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       const_cast<FontManager &>(font_manager).set_active(cmp.font_name);
     }
 
-    // Check if we need scissor clipping for scroll view
-    OptEntity scroll_ancestor = _find_scroll_view_ancestor(entity);
-    bool needs_scissor =
-        scroll_ancestor.valid() && !entity.has<HasScrollView>();
+    // Check if we need scissor clipping for scroll view or clip container
+    OptEntity clip_ancestor = _find_clip_ancestor(entity);
+    bool is_clip_container =
+        entity.has<HasScrollView>() || entity.has<HasClipChildren>();
+    bool needs_scissor = clip_ancestor.valid() && !is_clip_container;
 
     if (needs_scissor) {
       RectangleType scissor_rect =
-          scroll_ancestor->get<UIComponent>().rect();
+          clip_ancestor->get<UIComponent>().rect();
       buffer.add_scissor_start(static_cast<int>(scissor_rect.x),
                                static_cast<int>(scissor_rect.y),
                                static_cast<int>(scissor_rect.width),

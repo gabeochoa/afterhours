@@ -422,6 +422,10 @@ struct HasScrollView : BaseComponent {
   bool needs_scroll_x() const { return content_size.x > viewport_size.x; }
 };
 
+// Marker component that enables scissor clipping for children
+// Unlike HasScrollView, this only clips without scroll functionality
+struct HasClipChildren : BaseComponent {};
+
 } // namespace ui
 
 } // namespace afterhours

@@ -237,6 +237,10 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
         .set_segments(config.segments.value_or(8));
   }
 
+  if (config.clip_children) {
+    entity.addComponentIfMissing<HasClipChildren>();
+  }
+
   if (config.font_name != UIComponent::UNSET_FONT) {
     entity.get<UIComponent>().enable_font(config.font_name, config.font_size);
   }

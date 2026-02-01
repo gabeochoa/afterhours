@@ -47,6 +47,7 @@ struct ComponentConfig {
   SelfAlign self_align = SelfAlign::Auto;
   FlexWrap flex_wrap = FlexWrap::Wrap;
   bool debug_wrap = false;
+  bool clip_children = false; // Enable scissor clipping for children
 
   // Background color settings
   Theme::Usage color_usage = Theme::Usage::Default;
@@ -316,6 +317,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_debug_wrap(bool enabled = true) {
     debug_wrap = enabled;
+    return *this;
+  }
+  ComponentConfig &with_clip_children(bool enabled = true) {
+    clip_children = enabled;
     return *this;
   }
   ComponentConfig &with_font(const std::string &font_name_, Size font_size_) {
