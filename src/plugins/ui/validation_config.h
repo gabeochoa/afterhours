@@ -45,7 +45,7 @@ struct ValidationConfig {
   // Enforce minimum font size for readability
   bool enforce_min_font_size = false;
   // Minimum font size in pixels
-  float min_font_size = 12.0f;
+  float min_font_size = 14.0f;
 
   // === Debug Helpers ===
   // Draw red borders around elements with violations
