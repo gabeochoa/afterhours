@@ -80,6 +80,15 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       config.rounded_corners.value_or(ctx.theme.rounded_corners));
   auto field_size = has_label ? config.size._scale_x(0.5f) : config.size;
 
+  // Only add rounded corners component if any corners are actually rounded
+  // This respects intentional square corner designs
+  if (base_corners.get().any()) {
+    auto &corners_cmp = entity.template addComponentIfMissing<HasRoundedCorners>();
+    corners_cmp.rounded_corners = base_corners.get();
+    corners_cmp.roundness = config.roundness.value_or(ctx.theme.roundness);
+    corners_cmp.segments = config.segments.value_or(ctx.theme.segments);
+  }
+
   // Create label
   if (has_label) {
     div(ctx, mk(entity, 0),
