@@ -7,7 +7,7 @@
 #include "pending_command.h"
 #include "test_input.h"
 
-#include "../ui/auto_layout.h"
+#include "../autolayout.h"
 #include "../ui/components.h"
 #include "../ui/context.h"
 
