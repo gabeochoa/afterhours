@@ -5,6 +5,7 @@
 #include "font_helper.h"
 #include "plugins/color.h"
 #include "plugins/texture_manager.h"
+#include "graphics/graphics.h"
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 namespace raylib {
@@ -164,10 +165,14 @@ namespace afterhours {
 inline void draw_text_ex(const raylib::Font font, const char *content,
                          const Vector2Type position, const float font_size,
                          const float spacing, const Color color) {
+    // Skip text rendering in headless mode - font textures may not work correctly
+    if (graphics::is_headless()) return;
     raylib::DrawTextEx(font, content, position, font_size, spacing, color);
 }
 inline void draw_text(const char *content, const float x, const float y,
                       const float font_size, const Color color) {
+    // Skip text rendering in headless mode - font textures may not work correctly
+    if (graphics::is_headless()) return;
     raylib::DrawText(content, static_cast<int>(x), static_cast<int>(y),
                      static_cast<int>(font_size), color);
 }
