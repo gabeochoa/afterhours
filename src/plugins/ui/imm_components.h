@@ -851,6 +851,8 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   auto original_color_usage = config.color_usage;
   config.with_color_usage(Theme::Usage::None);
+  // Use Row layout so label and background sit side-by-side, not stacked
+  config.with_flex_direction(FlexDirection::Row);
   _init_component(ctx, ep_pair, config, ComponentType::Slider, true, "slider");
   config.color_usage = original_color_usage;
 
@@ -1234,11 +1236,16 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   // Mark the main dropdown button as part of the cluster
   main_btn.ent().template addComponentIfMissing<InFocusCluster>();
 
+  // Use absolute positioning for dropdown options to avoid layout overflow
+  // warnings - dropdown menus intentionally extend beyond their parent
   if (auto result = button_group(
           ctx, mk(entity), options,
           ComponentConfig::inherit_from(config, "dropdown button group")
-              .with_size(config.size)
+              .with_size(ComponentSize{config.size.x_axis,
+                                       children(config.size.y_axis.value)})
               .with_flex_direction(FlexDirection::Column)
+              .with_absolute_position()
+              .with_translate(pixels(0), config.size.y_axis)
               .with_hidden(config.hidden || !dropdownState.on)
               .with_render_layer(config.render_layer + 1));
       result) {
@@ -1289,8 +1296,10 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
   bool clicked = false;
   size_t new_index = navState.current_index();
 
+  // Use slightly under 100% total to avoid floating point precision issues
+  // in layout overflow detection (20% + 59% + 20% = 99%)
   constexpr float arrow_ratio = 0.20f;
-  constexpr float label_ratio = 1.f - (arrow_ratio * 2.f); // 60 % for label
+  constexpr float label_ratio = 0.59f;
 
   auto arrow_size = ComponentSize{percent(arrow_ratio), config.size.y_axis};
 
