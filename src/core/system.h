@@ -88,6 +88,10 @@ class SystemBase {
     virtual bool should_run(const float) const { return true; }
     virtual void once(const float) {}
     virtual void once(const float) const {}
+    virtual void on_iteration_begin(const float) {}
+    virtual void on_iteration_begin(const float) const {}
+    virtual void on_iteration_end(const float) {}
+    virtual void on_iteration_end(const float) const {}
     virtual void after(const float) {}
     virtual void after(const float) const {}
     virtual void for_each(Entity &, const float) = 0;
@@ -446,6 +450,7 @@ struct SystemManager {
         for (auto &system : update_systems_) {
             if (!system->should_run(dt)) continue;
             system->once(dt);
+            system->on_iteration_begin(dt);
             for (std::shared_ptr<Entity> entity : entities) {
                 if (!entity) continue;
                 if (system->include_derived_children)
@@ -453,6 +458,7 @@ struct SystemManager {
                 else
                     system->for_each(*entity, dt);
             }
+            system->on_iteration_end(dt);
             system->after(dt);
             EntityHelper::merge_entity_arrays();
         }
@@ -462,6 +468,7 @@ struct SystemManager {
         for (auto &system : fixed_update_systems_) {
             if (!system->should_run(dt)) continue;
             system->once(dt);
+            system->on_iteration_begin(dt);
             for (std::shared_ptr<Entity> entity : entities) {
                 if (!entity) continue;
                 if (system->include_derived_children)
@@ -469,6 +476,7 @@ struct SystemManager {
                 else
                     system->for_each(*entity, dt);
             }
+            system->on_iteration_end(dt);
             system->after(dt);
         }
     }
@@ -478,6 +486,7 @@ struct SystemManager {
             if (!system->should_run(dt)) continue;
             const SystemBase &sys = *system;
             sys.once(dt);
+            sys.on_iteration_begin(dt);
             for (std::shared_ptr<Entity> entity : entities) {
                 if (!entity) continue;
                 const Entity &e = *entity;
@@ -486,6 +495,7 @@ struct SystemManager {
                 else
                     sys.for_each(e, dt);
             }
+            sys.on_iteration_end(dt);
             sys.after(dt);
         }
     }
