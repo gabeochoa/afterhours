@@ -355,7 +355,10 @@ ElementResult checkbox_no_label(HasUIContext auto &ctx, EntityParent ep_pair,
   HasCheckboxState &checkboxState =
       _init_state<HasCheckboxState>(entity, [&](auto &) {}, value);
 
-  config.label = value ? "X" : " ";
+  // Use configurable indicators with sensible defaults (v for checked, space for unchecked)
+  std::string checked_indicator = config.checkbox_checked_indicator.value_or("v");
+  std::string unchecked_indicator = config.checkbox_unchecked_indicator.value_or(" ");
+  config.label = value ? checked_indicator : unchecked_indicator;
   // Only set symbol font if no font override was specified
   // Preserve the inherited font_size for accessibility compliance
   if (!config.has_font_override()) {
@@ -714,18 +717,23 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
     circ.ent().template addComponentIfMissing<InFocusCluster>();
     clicked = circ;
 
+  std::string checked_indicator = config.checkbox_checked_indicator.value_or("v");
+  std::string unchecked_indicator = config.checkbox_unchecked_indicator.value_or("x");
+  auto check_label = state.on ? checked_indicator : unchecked_indicator;
+
     // Checkmark when ON, X when OFF for clear visual indicator
-    Size indicator_sz = pixels(24.0f);
-    Size indicator_offset = pixels(10.0f);  // (44 - 24) / 2 = 10
+    // Increased font size for better readability
+    Size indicator_sz = pixels(28.0f);
+    Size indicator_offset = pixels(8.0f);  // (44 - 28) / 2 = 8
     div(ctx, mk(circ.ent()),
         ComponentConfig{}
             .with_debug_name("toggle_indicator")
-            .with_label(state.on ? "V" : "X")
+            .with_label(check_label)
             .with_size(ComponentSize{indicator_sz, indicator_sz})
             .with_absolute_position()
             .with_translate(indicator_offset, indicator_offset)
             .with_custom_text_color(state.on ? theme.background : theme.font_muted)
-            .with_font(UIComponent::DEFAULT_FONT, pixels(18.0f))
+            .with_font(UIComponent::DEFAULT_FONT, pixels(22.0f))
             .with_alignment(TextAlignment::Center)
             .with_skip_tabbing(true));
   } else {

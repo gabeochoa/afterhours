@@ -109,6 +109,10 @@ struct ComponentConfig {
   // Text input: character to display instead of actual text (for passwords)
   std::optional<char> mask_char;
 
+  // Checkbox indicator characters (default: "v" for checked, " " for unchecked)
+  std::optional<std::string> checkbox_checked_indicator;
+  std::optional<std::string> checkbox_unchecked_indicator;
+
   // Text area (multiline) configuration
   std::optional<Size> text_area_line_height;  // Line height (default: 20px)
   bool text_area_word_wrap = true;            // Enable word wrapping
@@ -207,6 +211,11 @@ struct ComponentConfig {
   }
   ComponentConfig &with_mask_char(char c) {
     mask_char = c;
+    return *this;
+  }
+  ComponentConfig &with_checkbox_indicators(const std::string &checked, const std::string &unchecked = " ") {
+    checkbox_checked_indicator = checked;
+    checkbox_unchecked_indicator = unchecked;
     return *this;
   }
 
