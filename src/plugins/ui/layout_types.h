@@ -17,6 +17,7 @@ enum struct Dim {
   Percent,
   Children,
   ScreenPercent,
+  Expand, // Fill remaining space proportionally by weight (like CSS flex-grow)
 };
 
 inline std::ostream &operator<<(std::ostream &os, const Dim &dim) {
@@ -38,6 +39,9 @@ inline std::ostream &operator<<(std::ostream &os, const Dim &dim) {
     break;
   case Dim::ScreenPercent:
     os << "ScreenPercent";
+    break;
+  case Dim::Expand:
+    os << "Expand";
     break;
   }
   return os;
@@ -85,6 +89,9 @@ struct formatter<afterhours::ui::Dim> {
     case afterhours::ui::Dim::ScreenPercent:
       name = "ScreenPercent";
       break;
+    case afterhours::ui::Dim::Expand:
+      name = "Expand";
+      break;
     }
     return std::format_to(ctx.out(), "{}", name);
   }
@@ -131,6 +138,20 @@ inline Size children(const float value = -1) {
   return ui::Size{.dim = ui::Dim::Children, .value = value};
 }
 
+/// Expand to fill remaining space proportionally by weight.
+/// Like CSS flex-grow: elements with expand(2) get twice the space of expand(1).
+/// Weight must be positive (default 1.0).
+inline Size expand(const float weight = 1.f) {
+  if (weight <= 0.f) {
+    log_warn("Expand weight must be positive, got {}", weight);
+  }
+  return ui::Size{
+      .dim = ui::Dim::Expand, .value = weight, .strictness = 0.f};
+}
+
+/// Alias for expand() matching CSS flex-grow terminology.
+inline Size flex_grow(const float weight = 1.f) { return expand(weight); }
+
 inline Size h720(const float px) { return screen_pct(px / 720.f); }
 inline Size w1280(const float px) { return screen_pct(px / 1280.f); }
 
@@ -146,8 +167,9 @@ inline float resolve_to_pixels(const Size &size, float screen_dimension) {
   case Dim::Children:
   case Dim::Text:
   case Dim::None:
+  case Dim::Expand:
     // For these types, just return the raw value as a fallback
-    // In practice, Percent/Children/Text should only be used for layout
+    // In practice, Percent/Children/Text/Expand should only be used for layout
     log_warn("Cannot resolve {} to pixels - using raw value", size);
     return size.value;
   }
@@ -237,6 +259,7 @@ inline Size half_size(Size size) {
   case Dim::ScreenPercent:
   case Dim::Percent:
   case Dim::Pixels:
+  case Dim::Expand:
     return Size{
         .dim = size.dim,
         .value = size.value / 2.f,

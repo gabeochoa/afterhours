@@ -397,6 +397,105 @@ TEST_CASE("VERIFY: fit_nesting layout", "[verify]") {
     cleanup_entities();
 }
 
+TEST_CASE("VERIFY: expand sizing layout", "[verify]") {
+    // Test expand() distributes space proportionally
+    cleanup_entities();
+
+    auto &root = make_root();
+    auto &container = EntityHelper::createEntity();
+    make_component(container)
+        .set_desired_width(pixels(300.f))  // Fixed width container
+        .set_desired_height(pixels(100.f))
+        .set_flex_direction(FlexDirection::Row)
+        .set_flex_wrap(FlexWrap::NoWrap)
+        .set_parent(root);
+
+    // Create 3 children: expand(1), expand(2), expand(1)
+    // Should get 75px, 150px, 75px respectively
+    auto &child1 = EntityHelper::createEntity();
+    make_component(child1)
+        .set_desired_width(expand(1.f))
+        .set_desired_height(pixels(50.f))
+        .set_parent(container);
+
+    auto &child2 = EntityHelper::createEntity();
+    make_component(child2)
+        .set_desired_width(expand(2.f))  // Gets 2x share
+        .set_desired_height(pixels(50.f))
+        .set_parent(container);
+
+    auto &child3 = EntityHelper::createEntity();
+    make_component(child3)
+        .set_desired_width(expand(1.f))
+        .set_desired_height(pixels(50.f))
+        .set_parent(container);
+
+    run_layout(root);
+
+    std::cout << "\n=== VERIFY: expand sizing ===" << std::endl;
+    std::cout << "Structure: Container(300px wide, horizontal, no-wrap)" << std::endl;
+    std::cout << "           3 children with expand(1), expand(2), expand(1)" << std::endl;
+    std::cout << "\nExpected:" << std::endl;
+    std::cout << "  Container: 300x100" << std::endl;
+    std::cout << "  Child1: w=75 (1/4 of 300)" << std::endl;
+    std::cout << "  Child2: w=150 (2/4 of 300)" << std::endl;
+    std::cout << "  Child3: w=75 (1/4 of 300)" << std::endl;
+    std::cout << "\nActual:" << std::endl;
+    print_component("root", root);
+    print_component("container", container);
+    print_component("child1 (expand=1)", child1);
+    print_component("child2 (expand=2)", child2);
+    print_component("child3 (expand=1)", child3);
+
+    cleanup_entities();
+}
+
+TEST_CASE("VERIFY: nested expand weights layout", "[verify]") {
+    // Test nested containers with different expand weights (1:2)
+    cleanup_entities();
+
+    auto &root = make_root();
+    auto &container = EntityHelper::createEntity();
+    make_component(container)
+        .set_desired_width(pixels(90.f))  // Fixed width: children should get 30:60
+        .set_desired_height(pixels(50.f))
+        .set_flex_direction(FlexDirection::Row)
+        .set_flex_wrap(FlexWrap::NoWrap)
+        .set_parent(root);
+
+    // expand(1) + expand(2) = 3 total weight
+    // child1 gets 1/3 * 90 = 30
+    // child2 gets 2/3 * 90 = 60
+    auto &child1 = EntityHelper::createEntity();
+    make_component(child1)
+        .set_desired_width(expand(1.f))
+        .set_desired_height(pixels(50.f))
+        .set_parent(container);
+
+    auto &child2 = EntityHelper::createEntity();
+    make_component(child2)
+        .set_desired_width(expand(2.f))
+        .set_desired_height(pixels(50.f))
+        .set_parent(container);
+
+    run_layout(root);
+
+    std::cout << "\n=== VERIFY: nested expand weights ===" << std::endl;
+    std::cout << "Structure: Container(90px wide, horizontal)" << std::endl;
+    std::cout << "           2 children with expand(1), expand(2)" << std::endl;
+    std::cout << "\nExpected:" << std::endl;
+    std::cout << "  Container: 90x50" << std::endl;
+    std::cout << "  Child1: w=30 (1/3 of 90)" << std::endl;
+    std::cout << "  Child2: w=60 (2/3 of 90)" << std::endl;
+    std::cout << "\nActual:" << std::endl;
+    print_component("root", root);
+    print_component("container", container);
+    print_component("child1 (expand=1)", child1);
+    print_component("child2 (expand=2)", child2);
+
+    cleanup_entities();
+}
+
 // ============================================================================
 // SUPPORTED BENCHMARKS - These work with current layout features
 // ============================================================================
@@ -777,9 +876,9 @@ TEST_CASE("expand_with_min_constraint - 3001 nodes", "[benchmark][requires-expan
 
 #endif  // expand_with_min_constraint
 
-#if 0  // flex_expand_equal_weights - 15001 nodes
+#if 1  // flex_expand_equal_weights - 15001 nodes
 
-TEST_CASE("flex_expand_equal_weights - 15001 nodes", "[benchmark][requires-expand]") {
+TEST_CASE("flex_expand_equal_weights - 15001 nodes", "[benchmark][supported]") {
     // Width(Pixels(10000)).Height(Pixels(100)).Horizontal()
     // {
     //     Repeat(15000)
@@ -787,14 +886,27 @@ TEST_CASE("flex_expand_equal_weights - 15001 nodes", "[benchmark][requires-expan
     //         Width(Expand(1)).Height(Expand) {}
     //     }
     // }
-    //
-    // Requires: Expand sizing with flex-grow weights
 
     BENCHMARK_ADVANCED("flex_expand_equal_weights")(Catch::Benchmark::Chronometer meter) {
         cleanup_entities();
 
         auto &root = make_root();
-        // TODO: Implement when Expand with weights is available
+        auto &container = EntityHelper::createEntity();
+        make_component(container)
+            .set_desired_width(pixels(10000.f))
+            .set_desired_height(pixels(100.f))
+            .set_flex_direction(FlexDirection::Row)
+            .set_flex_wrap(FlexWrap::NoWrap)
+            .set_parent(root);
+
+        // Create 15,000 children with equal expand weight
+        for (int i = 0; i < 15000; ++i) {
+            auto &child = EntityHelper::createEntity();
+            make_component(child)
+                .set_desired_width(expand(1.f))
+                .set_desired_height(expand(1.f))
+                .set_parent(container);
+        }
 
         meter.measure([&root] {
             run_layout(root);
@@ -807,9 +919,9 @@ TEST_CASE("flex_expand_equal_weights - 15001 nodes", "[benchmark][requires-expan
 
 #endif  // flex_expand_equal_weights
 
-#if 0  // flex_expand_weights - 15001 nodes
+#if 1  // flex_expand_weights - 15001 nodes
 
-TEST_CASE("flex_expand_weights - 15001 nodes", "[benchmark][requires-expand]") {
+TEST_CASE("flex_expand_weights - 15001 nodes", "[benchmark][supported]") {
     // Width(Pixels(10000)).Height(Pixels(100)).Horizontal()
     // {
     //     Repeat(5000)
@@ -821,14 +933,41 @@ TEST_CASE("flex_expand_weights - 15001 nodes", "[benchmark][requires-expand]") {
     //         }
     //     }
     // }
-    //
-    // Requires: Expand sizing with different flex-grow weights (1 vs 2)
 
     BENCHMARK_ADVANCED("flex_expand_weights")(Catch::Benchmark::Chronometer meter) {
         cleanup_entities();
 
         auto &root = make_root();
-        // TODO: Implement when Expand with different weights is available
+        auto &outer = EntityHelper::createEntity();
+        make_component(outer)
+            .set_desired_width(pixels(10000.f))
+            .set_desired_height(pixels(100.f))
+            .set_flex_direction(FlexDirection::Row)
+            .set_flex_wrap(FlexWrap::Wrap)
+            .set_parent(root);
+
+        // Create 5,000 nested containers, each with 2 expand children (1:2 ratio)
+        for (int i = 0; i < 5000; ++i) {
+            auto &container = EntityHelper::createEntity();
+            make_component(container)
+                .set_desired_width(pixels(100.f))
+                .set_desired_height(pixels(100.f))
+                .set_flex_direction(FlexDirection::Row)
+                .set_flex_wrap(FlexWrap::NoWrap)
+                .set_parent(outer);
+
+            auto &child1 = EntityHelper::createEntity();
+            make_component(child1)
+                .set_desired_width(expand(1.f))
+                .set_desired_height(expand(1.f))
+                .set_parent(container);
+
+            auto &child2 = EntityHelper::createEntity();
+            make_component(child2)
+                .set_desired_width(expand(2.f))  // Gets 2x share
+                .set_desired_height(expand(1.f))
+                .set_parent(container);
+        }
 
         meter.measure([&root] {
             run_layout(root);

@@ -134,6 +134,7 @@ struct AutoLayout {
         log_error("Margin by dimension children not supported");
       case Dim::Percent:
       case Dim::None:
+      case Dim::Expand:
         // This is not a standalone widget,
         // so just keep moving along
         return no_change;
@@ -201,6 +202,7 @@ struct AutoLayout {
         // so just keep moving along
       case Dim::Percent:
       case Dim::None:
+      case Dim::Expand:
         return no_change;
       }
       return no_change;
@@ -234,6 +236,7 @@ struct AutoLayout {
       case Dim::Percent:
       case Dim::None:
       case Dim::Children:
+      case Dim::Expand:
         // This is not a standalone widget,
         // so just keep moving along
         return widget.computed[axis];
@@ -301,6 +304,10 @@ struct AutoLayout {
     switch (exp.dim) {
     case Dim::Percent:
       return exp.value * parent_size;
+    case Dim::Expand:
+      // Expand children are sized later in distribute_expand_space()
+      // after all other children have been sized
+      return 0.f;
     case Dim::None:
     case Dim::Text:
     case Dim::ScreenPercent:
@@ -345,6 +352,8 @@ struct AutoLayout {
         log_error("Padding by children not supported");
       case Dim::Text:
         log_error("Padding by dimension text not supported");
+      case Dim::Expand:
+        log_error("Padding by expand not supported");
       case Dim::Percent:
         return exp.value * parent_value;
       // already handled during standalone
@@ -412,6 +421,7 @@ struct AutoLayout {
       case Dim::Text:
       case Dim::ScreenPercent:
       case Dim::Pixels:
+      case Dim::Expand:
         return no_change;
       }
       return no_change;
@@ -584,6 +594,29 @@ struct AutoLayout {
       layout_children.push_back(&child);
     }
 
+    // First, check for Expand children and distribute to them
+    float total_expand_weight = 0.f;
+    for (UIComponent *child : layout_children) {
+      if (child->desired[axis].dim == Dim::Expand) {
+        total_expand_weight += child->desired[axis].value;
+      }
+    }
+
+    if (total_expand_weight > 0.f) {
+      // Distribute remaining space to Expand children proportionally
+      float available_space = std::abs(error);
+      for (UIComponent *child : layout_children) {
+        if (child->desired[axis].dim == Dim::Expand) {
+          float weight = child->desired[axis].value;
+          float share = available_space * (weight / total_expand_weight);
+          child->computed[axis] = share;
+        }
+      }
+      // All extra space was distributed to Expand children
+      return;
+    }
+
+    // No Expand children - fall back to original strictness=0 distribution
     int num_eligible_children = 0;
     for (UIComponent *child : layout_children) {
       if (child->desired[axis].strictness == 0.f) {
