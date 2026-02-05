@@ -292,9 +292,11 @@ struct AutoLayout {
       return no_change;
     }
 
-    // We dont include padding because padding is
-    // around the content, not inside
-    float parent_size = (parent.computed[axis] - parent.computed_margin[axis]);
+    // Content-box model: percent sizing is relative to parent's content area
+    // (after subtracting margin and padding). This matches CSS behavior where
+    // percent(1.f) fills the interior space, not the full box.
+    float parent_size = (parent.computed[axis] - parent.computed_margin[axis] -
+                         parent.computed_padd[axis]);
 
     switch (exp.dim) {
     case Dim::Percent:
@@ -1053,6 +1055,24 @@ struct AutoLayout {
 
       update_max_size(cx, cy);
       compute_relative_positions(child);
+    }
+
+    // Fix for wrapped containers with children() sizing:
+    // If this widget was sized by children() and wrapping occurred,
+    // update the computed size to reflect the actual wrapped dimensions.
+    // After positioning, offy + col_h represents the total wrapped height,
+    // and offx + col_w represents the total wrapped width.
+    if (widget.desired[Axis::Y].dim == Dim::Children && is_row) {
+      float wrapped_height = offy + col_h;
+      if (wrapped_height > widget.computed[Axis::Y]) {
+        widget.computed[Axis::Y] = wrapped_height;
+      }
+    }
+    if (widget.desired[Axis::X].dim == Dim::Children && is_column) {
+      float wrapped_width = offx + col_w;
+      if (wrapped_width > widget.computed[Axis::X]) {
+        widget.computed[Axis::X] = wrapped_width;
+      }
     }
   }
 
