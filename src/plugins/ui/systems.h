@@ -208,6 +208,7 @@ struct TrackIfComponentWillBeRendered : System<> {
   }
 
   virtual void for_each_with(Entity &entity, float) override {
+    // TODO move to a system filter
     if (entity.is_missing<UIContext<InputAction>>())
       return;
 

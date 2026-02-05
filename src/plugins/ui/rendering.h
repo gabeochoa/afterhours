@@ -633,6 +633,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   mutable bool isolate_enabled = false;
   enum struct IsolationMode { NodeOnly, NodeAndDescendants };
   mutable IsolationMode isolation_mode = IsolationMode::NodeOnly;
+  mutable std::map<EntityID, RefEntity> components;
 
   float fontSize = 20.0f;
 
@@ -662,6 +663,13 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     this->context =
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
 
+    // Build entity mapping for fast child lookups
+    this->components.clear();
+    auto ui_entities = EntityQuery().whereHasComponent<UIComponent>().gen();
+    for (Entity &entity : ui_entities) {
+      this->components.emplace(entity.id, entity);
+    }
+
     draw_text(fmt::format("mouse({}, {})", this->context->mouse.pos.x,
                           this->context->mouse.pos.y)
                   .c_str(),
@@ -671,6 +679,14 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     // starting at 1 to avoid the mouse text
     this->level = 1;
     this->indent = 0;
+  }
+
+  Entity &to_ent(EntityID id) const {
+    auto it = components.find(id);
+    if (it == components.end()) {
+      log_error("RenderDebugAutoLayoutRoots: entity {} not in mapping", id);
+    }
+    return it->second.get();
   }
 
   bool is_descendant_of_isolated(const Entity &entity) const {
@@ -778,7 +794,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
 
     indent++;
     for (EntityID child : cmp.children) {
-      render(AutoLayout::to_ent_static(child));
+      render(to_ent(child));
     }
     indent--;
   }
