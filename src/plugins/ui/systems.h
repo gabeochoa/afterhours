@@ -173,6 +173,24 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
 
 template <typename InputAction>
 struct TrackIfComponentWillBeRendered : System<> {
+  std::map<EntityID, RefEntity> components;
+
+  virtual void once(float) override {
+    components.clear();
+    auto ui_entities = EntityQuery().whereHasComponent<UIComponent>().gen();
+    for (Entity &entity : ui_entities) {
+      components.emplace(entity.id, entity);
+    }
+  }
+
+  UIComponent &to_cmp(EntityID id) {
+    auto it = components.find(id);
+    if (it == components.end()) {
+      log_error("TrackIfComponentWillBeRendered: entity {} not in mapping", id);
+    }
+    return it->second.get().template get<UIComponent>();
+  }
+
   void set_visibility(UIComponent &cmp) {
     // Early exit if already processed or hidden
     if (cmp.was_rendered_to_screen || cmp.should_hide)
@@ -180,7 +198,7 @@ struct TrackIfComponentWillBeRendered : System<> {
 
     // Process children first (bottom-up approach for better early exits)
     for (EntityID child : cmp.children) {
-      set_visibility(AutoLayout::to_cmp_static(child));
+      set_visibility(to_cmp(child));
     }
 
     // Only mark visible if component has valid dimensions
