@@ -105,6 +105,9 @@ static void add_singleton_components(Entity &entity) {
         return measure_text(font, text_str.c_str(), font_size, spacing);
       });
   EntityHelper::registerSingleton<ui::TextMeasureCache>(entity);
+
+  entity.addComponent<ui::UIEntityMappingCache>();
+  EntityHelper::registerSingleton<ui::UIEntityMappingCache>(entity);
 }
 
 template <typename InputAction>
@@ -124,6 +127,8 @@ static void enforce_singletons(SystemManager &sm) {
       std::make_unique<developer::EnforceSingleton<ui::FontManager>>());
   sm.register_update_system(
       std::make_unique<developer::EnforceSingleton<ui::TextMeasureCache>>());
+  sm.register_update_system(
+      std::make_unique<developer::EnforceSingleton<ui::UIEntityMappingCache>>());
 }
 
 template <typename InputAction>
@@ -141,6 +146,7 @@ static void register_after_ui_updates(SystemManager &sm) {
 
     //
     sm.register_update_system(std::make_unique<ui::ClearVisibity>());
+    sm.register_update_system(std::make_unique<ui::BuildUIEntityMapping>());
     sm.register_update_system(std::make_unique<ui::RunAutoLayout>());
     sm.register_update_system(
         std::make_unique<ui::TrackIfComponentWillBeRendered<InputAction>>());

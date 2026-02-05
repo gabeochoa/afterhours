@@ -22,6 +22,41 @@ namespace afterhours {
 
 namespace ui {
 
+/// Singleton component that caches entity mappings for fast lookups during
+/// UI tree traversal. Populated once per frame by BuildUIEntityMapping system.
+struct UIEntityMappingCache : BaseComponent {
+  std::map<EntityID, RefEntity> components;
+
+  Entity &to_ent(EntityID id) {
+    auto it = components.find(id);
+    if (it == components.end()) {
+      log_error("UIEntityMappingCache: entity {} not in mapping", id);
+    }
+    return it->second.get();
+  }
+
+  UIComponent &to_cmp(EntityID id) {
+    return to_ent(id).template get<UIComponent>();
+  }
+};
+
+/// System that builds the entity mapping cache once per frame.
+/// Must run before RunAutoLayout and TrackIfComponentWillBeRendered.
+struct BuildUIEntityMapping : System<> {
+  virtual void once(float) override {
+    auto *cache = EntityHelper::get_singleton_cmp<UIEntityMappingCache>();
+    if (!cache) {
+      return; // Singleton not created yet
+    }
+
+    cache->components.clear();
+    auto ui_entities = EntityQuery().whereHasComponent<UIComponent>().gen();
+    for (Entity &entity : ui_entities) {
+      cache->components.emplace(entity.id, entity);
+    }
+  }
+};
+
 template <typename InputAction>
 struct BeginUIContextManager : System<UIContext<InputAction>> {
   using InputBits = UIContext<InputAction>::InputBitset;
@@ -142,15 +177,11 @@ static void print_debug_autolayout_tree(Entity &entity, UIComponent &cmp,
 }
 
 struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
-  std::map<EntityID, RefEntity> components;
+  UIEntityMappingCache *cache = nullptr;
   window_manager::Resolution resolution;
 
   virtual void once(float) override {
-    components.clear();
-    auto comps = EntityQuery().whereHasComponent<UIComponent>().gen();
-    for (Entity &entity : comps) {
-      components.emplace(entity.id, entity);
-    }
+    cache = EntityHelper::get_singleton_cmp<UIEntityMappingCache>();
 
     Entity &e = EntityHelper::get_singleton<
         window_manager::ProvidesCurrentResolution>();
@@ -161,10 +192,14 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
 
   virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
                              float) override {
+    if (!cache) {
+      return; // Cache not ready yet
+    }
+
     auto &styling_defaults = imm::UIStylingDefaults::get();
     bool enable_grid = styling_defaults.enable_grid_snapping;
 
-    AutoLayout::autolayout(cmp, resolution, components, enable_grid);
+    AutoLayout::autolayout(cmp, resolution, cache->components, enable_grid);
 
     // print_debug_autolayout_tree(entity, cmp);
     // log_error("");
@@ -173,22 +208,10 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
 
 template <typename InputAction>
 struct TrackIfComponentWillBeRendered : System<> {
-  std::map<EntityID, RefEntity> components;
+  UIEntityMappingCache *cache = nullptr;
 
   virtual void once(float) override {
-    components.clear();
-    auto ui_entities = EntityQuery().whereHasComponent<UIComponent>().gen();
-    for (Entity &entity : ui_entities) {
-      components.emplace(entity.id, entity);
-    }
-  }
-
-  UIComponent &to_cmp(EntityID id) {
-    auto it = components.find(id);
-    if (it == components.end()) {
-      log_error("TrackIfComponentWillBeRendered: entity {} not in mapping", id);
-    }
-    return it->second.get().template get<UIComponent>();
+    cache = EntityHelper::get_singleton_cmp<UIEntityMappingCache>();
   }
 
   void set_visibility(UIComponent &cmp) {
@@ -198,7 +221,7 @@ struct TrackIfComponentWillBeRendered : System<> {
 
     // Process children first (bottom-up approach for better early exits)
     for (EntityID child : cmp.children) {
-      set_visibility(to_cmp(child));
+      set_visibility(cache->to_cmp(child));
     }
 
     // Only mark visible if component has valid dimensions
@@ -211,6 +234,10 @@ struct TrackIfComponentWillBeRendered : System<> {
     // TODO move to a system filter
     if (entity.is_missing<UIContext<InputAction>>())
       return;
+
+    if (!cache) {
+      return; // Cache not ready yet
+    }
 
     auto &context = entity.get<UIContext<InputAction>>();
 
