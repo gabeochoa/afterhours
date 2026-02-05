@@ -581,6 +581,49 @@ struct AutoLayout {
     widget.computed[Axis::Y] = size_y;
   }
 
+  /// Resolve a constraint Size to pixels for min/max application.
+  /// Returns -1 if the constraint is not applicable (Dim::None).
+  float resolve_constraint(UIComponent &widget, Size constraint, Axis axis) {
+    switch (constraint.dim) {
+    case Dim::None:
+      return -1.f;  // No constraint
+    case Dim::Pixels:
+      return constraint.value;
+    case Dim::ScreenPercent:
+      return constraint.value * (axis == Axis::X ? resolution.width : resolution.height);
+    case Dim::Percent: {
+      // Percent of parent's content area
+      if (widget.parent == -1)
+        return -1.f;
+      UIComponent &parent = this->to_cmp(widget.parent);
+      float parent_size = parent.computed[axis] - parent.computed_margin[axis] -
+                          parent.computed_padd[axis];
+      return constraint.value * parent_size;
+    }
+    case Dim::Children:
+    case Dim::Text:
+    case Dim::Expand:
+      // These don't make sense as min/max constraints
+      return -1.f;
+    }
+    return -1.f;
+  }
+
+  /// Apply min/max constraints to a widget's computed size.
+  void apply_size_constraints(UIComponent &widget) {
+    for (Axis axis : {Axis::X, Axis::Y}) {
+      float min_val = resolve_constraint(widget, widget.min_size[axis], axis);
+      float max_val = resolve_constraint(widget, widget.max_size[axis], axis);
+
+      if (min_val >= 0.f && widget.computed[axis] < min_val) {
+        widget.computed[axis] = min_val;
+      }
+      if (max_val >= 0.f && widget.computed[axis] > max_val) {
+        widget.computed[axis] = max_val;
+      }
+    }
+  }
+
   void tax_refund(UIComponent &widget, Axis axis, float error) {
     // Build cached list of layout children (non-absolute, non-hidden) once
     std::vector<UIComponent *> layout_children;
@@ -787,8 +830,12 @@ struct AutoLayout {
       tax_refund(widget, Axis::Y, error_y);
     }
 
-    // Solve for children - use cached layout_children to avoid to_cmp lookups
+    // Apply min/max constraints after size computation and error distribution
+    apply_size_constraints(widget);
+
+    // Solve for children - apply constraints first, then recurse
     for (UIComponent *child : layout_children) {
+      apply_size_constraints(*child);
       solve_violations(*child);
     }
   }

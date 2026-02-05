@@ -71,6 +71,8 @@ struct UIComponent : BaseComponent {
   };
 
   AxisArray<Size> desired;
+  AxisArray<Size> min_size;  // Minimum size constraint (Dim::None = no constraint)
+  AxisArray<Size> max_size;  // Maximum size constraint (Dim::None = no constraint)
   AxisArray<Size, 6> desired_padding;
   AxisArray<Size, 6> desired_margin;
 
@@ -176,6 +178,26 @@ struct UIComponent : BaseComponent {
 
   auto &set_desired_height(Size s) {
     desired[Axis::Y] = s;
+    return *this;
+  }
+
+  auto &set_min_width(Size s) {
+    min_size[Axis::X] = s;
+    return *this;
+  }
+
+  auto &set_max_width(Size s) {
+    max_size[Axis::X] = s;
+    return *this;
+  }
+
+  auto &set_min_height(Size s) {
+    min_size[Axis::Y] = s;
+    return *this;
+  }
+
+  auto &set_max_height(Size s) {
+    max_size[Axis::Y] = s;
     return *this;
   }
 

@@ -496,6 +496,62 @@ TEST_CASE("VERIFY: nested expand weights layout", "[verify]") {
     cleanup_entities();
 }
 
+TEST_CASE("VERIFY: min/max constraints layout", "[verify]") {
+    // Test min/max size constraints
+    cleanup_entities();
+
+    auto &root = make_root();
+    auto &container = EntityHelper::createEntity();
+    make_component(container)
+        .set_desired_width(pixels(300.f))
+        .set_desired_height(pixels(100.f))
+        .set_flex_direction(FlexDirection::Row)
+        .set_flex_wrap(FlexWrap::NoWrap)
+        .set_parent(root);
+
+    // Child 1: expand but capped at max_width=50
+    auto &child1 = EntityHelper::createEntity();
+    make_component(child1)
+        .set_desired_width(expand(1.f))
+        .set_max_width(pixels(50.f))
+        .set_desired_height(pixels(50.f))
+        .set_parent(container);
+
+    // Child 2: expand with no constraints (gets remaining space)
+    auto &child2 = EntityHelper::createEntity();
+    make_component(child2)
+        .set_desired_width(expand(1.f))
+        .set_desired_height(pixels(50.f))
+        .set_parent(container);
+
+    // Child 3: small size but with min_width=80
+    auto &child3 = EntityHelper::createEntity();
+    make_component(child3)
+        .set_desired_width(pixels(20.f))
+        .set_min_width(pixels(80.f))
+        .set_desired_height(pixels(50.f))
+        .set_parent(container);
+
+    run_layout(root);
+
+    std::cout << "\n=== VERIFY: min/max constraints ===" << std::endl;
+    std::cout << "Structure: Container(300px wide, horizontal)" << std::endl;
+    std::cout << "           Child1: expand(1) with max_width=50" << std::endl;
+    std::cout << "           Child2: expand(1) no constraints" << std::endl;
+    std::cout << "           Child3: pixels(20) with min_width=80" << std::endl;
+    std::cout << "\nExpected:" << std::endl;
+    std::cout << "  Child1: w<=50 (capped by max)" << std::endl;
+    std::cout << "  Child3: w>=80 (enforced by min)" << std::endl;
+    std::cout << "\nActual:" << std::endl;
+    print_component("root", root);
+    print_component("container", container);
+    print_component("child1 (expand+max=50)", child1);
+    print_component("child2 (expand)", child2);
+    print_component("child3 (px=20+min=80)", child3);
+
+    cleanup_entities();
+}
+
 // ============================================================================
 // SUPPORTED BENCHMARKS - These work with current layout features
 // ============================================================================
@@ -744,7 +800,7 @@ TEST_CASE("fit_nesting - 101111 nodes", "[benchmark][supported]") {
         for (int i = 0; i < 10; ++i) {
             auto &level1 = EntityHelper::createEntity();
             make_component(level1)
-                .set_desired_width(percent(1.f))
+                .set_desired_width(expand(1.f))  // Expand to fill parent
                 .set_desired_height(children())
                 .set_flex_direction(FlexDirection::Row)
                 .set_parent(level0);
@@ -753,7 +809,7 @@ TEST_CASE("fit_nesting - 101111 nodes", "[benchmark][supported]") {
             for (int j = 0; j < 10; ++j) {
                 auto &level2 = EntityHelper::createEntity();
                 make_component(level2)
-                    .set_desired_width(percent(0.1f))  // 1/10 of parent
+                    .set_desired_width(expand(1.f))  // Equal share of parent
                     .set_desired_height(children())
                     .set_flex_direction(FlexDirection::Column)
                     .set_parent(level1);
@@ -762,7 +818,7 @@ TEST_CASE("fit_nesting - 101111 nodes", "[benchmark][supported]") {
                 for (int k = 0; k < 10; ++k) {
                     auto &level3 = EntityHelper::createEntity();
                     make_component(level3)
-                        .set_desired_width(percent(1.f))
+                        .set_desired_width(expand(1.f))  // Expand to fill parent
                         .set_desired_height(children())
                         .set_flex_direction(FlexDirection::Row)
                         .set_parent(level2);
@@ -771,7 +827,7 @@ TEST_CASE("fit_nesting - 101111 nodes", "[benchmark][supported]") {
                     for (int l = 0; l < 100; ++l) {
                         auto &leaf = EntityHelper::createEntity();
                         make_component(leaf)
-                            .set_desired_width(percent(0.01f))  // 1/100 of parent
+                            .set_desired_width(expand(1.f))  // Equal share of parent
                             .set_desired_height(pixels(10.f))
                             .set_parent(level3);
                     }
@@ -789,28 +845,31 @@ TEST_CASE("fit_nesting - 101111 nodes", "[benchmark][supported]") {
 }
 
 // ============================================================================
-// STUBBED BENCHMARKS - Require future features (Expand, Min/Max constraints)
+// EXPAND BENCHMARKS - Now enabled with expand() sizing
+// ============================================================================
+
+// ============================================================================
+// STUBBED BENCHMARKS - Require future features (Min/Max constraints, Ratio)
 // ============================================================================
 
 /*
  * TODO: Enable these benchmarks once the following features are implemented:
  *
- * 1. Expand sizing (flex-grow equivalent)
- *    - Width(Expand(1)) - grow to fill available space with weight 1
- *    - Width(Expand(2)) - grow with weight 2 (gets 2x space vs weight 1)
+ * 1. Min/Max size constraints
+ *    - .set_min_width(pixels(x)) - minimum width constraint
+ *    - .set_max_width(pixels(x)) - maximum width constraint
+ *    - .set_min_width(expand(1)) - use expand as minimum constraint
  *
- * 2. Min/Max size constraints
- *    - .MinWidth(Pixels(x)) - minimum width constraint
- *    - .MaxWidth(Pixels(x)) - maximum width constraint
- *    - .MinWidth(Expand(1)) - use expand as minimum constraint
- *
- * 3. Aspect ratio
+ * 2. Aspect ratio
  *    - Height(Ratio(0.5)) - height is 0.5x the width
+ *
+ * ALREADY IMPLEMENTED:
+ * - expand(weight) - flex-grow equivalent, fills available space proportionally
  */
 
-#if 0  // expand_with_max_constraint - 3001 nodes
+#if 1  // expand_with_max_constraint - 3001 nodes
 
-TEST_CASE("expand_with_max_constraint - 3001 nodes", "[benchmark][requires-expand]") {
+TEST_CASE("expand_with_max_constraint - 3001 nodes", "[benchmark][supported]") {
     // Width(Pixels(100)).Height(Fit).Horizontal()
     // {
     //     Repeat(1000)
@@ -822,14 +881,41 @@ TEST_CASE("expand_with_max_constraint - 3001 nodes", "[benchmark][requires-expan
     //         }
     //     }
     // }
-    //
-    // Requires: Expand sizing + MaxWidth constraint
 
     BENCHMARK_ADVANCED("expand_with_max_constraint")(Catch::Benchmark::Chronometer meter) {
         cleanup_entities();
 
         auto &root = make_root();
-        // TODO: Implement when Expand and MaxWidth are available
+        auto &outer = EntityHelper::createEntity();
+        make_component(outer)
+            .set_desired_width(pixels(100.f))
+            .set_desired_height(children())
+            .set_flex_direction(FlexDirection::Row)
+            .set_flex_wrap(FlexWrap::Wrap)
+            .set_parent(root);
+
+        // Create 1000 nested containers with 2 expand children each
+        for (int i = 0; i < 1000; ++i) {
+            auto &container = EntityHelper::createEntity();
+            make_component(container)
+                .set_desired_width(pixels(100.f))
+                .set_desired_height(children())
+                .set_flex_direction(FlexDirection::Row)
+                .set_parent(outer);
+
+            auto &child1 = EntityHelper::createEntity();
+            make_component(child1)
+                .set_desired_width(expand(1.f))
+                .set_desired_height(pixels(10.f))
+                .set_parent(container);
+
+            auto &child2 = EntityHelper::createEntity();
+            make_component(child2)
+                .set_desired_width(expand(1.f))
+                .set_max_width(pixels(40.f))
+                .set_desired_height(pixels(10.f))
+                .set_parent(container);
+        }
 
         meter.measure([&root] {
             run_layout(root);
@@ -842,9 +928,9 @@ TEST_CASE("expand_with_max_constraint - 3001 nodes", "[benchmark][requires-expan
 
 #endif  // expand_with_max_constraint
 
-#if 0  // expand_with_min_constraint - 3001 nodes
+#if 1  // expand_with_min_constraint - 3001 nodes
 
-TEST_CASE("expand_with_min_constraint - 3001 nodes", "[benchmark][requires-expand]") {
+TEST_CASE("expand_with_min_constraint - 3001 nodes", "[benchmark][supported]") {
     // Width(Pixels(100)).Height(Fit).Horizontal()
     // {
     //     Repeat(1000)
@@ -856,14 +942,41 @@ TEST_CASE("expand_with_min_constraint - 3001 nodes", "[benchmark][requires-expan
     //         }
     //     }
     // }
-    //
-    // Requires: Expand sizing + MinWidth constraint
 
     BENCHMARK_ADVANCED("expand_with_min_constraint")(Catch::Benchmark::Chronometer meter) {
         cleanup_entities();
 
         auto &root = make_root();
-        // TODO: Implement when Expand and MinWidth are available
+        auto &outer = EntityHelper::createEntity();
+        make_component(outer)
+            .set_desired_width(pixels(100.f))
+            .set_desired_height(children())
+            .set_flex_direction(FlexDirection::Row)
+            .set_flex_wrap(FlexWrap::Wrap)
+            .set_parent(root);
+
+        // Create 1000 nested containers with 2 expand children each
+        for (int i = 0; i < 1000; ++i) {
+            auto &container = EntityHelper::createEntity();
+            make_component(container)
+                .set_desired_width(pixels(100.f))
+                .set_desired_height(children())
+                .set_flex_direction(FlexDirection::Row)
+                .set_parent(outer);
+
+            auto &child1 = EntityHelper::createEntity();
+            make_component(child1)
+                .set_desired_width(expand(1.f))
+                .set_desired_height(pixels(10.f))
+                .set_parent(container);
+
+            auto &child2 = EntityHelper::createEntity();
+            make_component(child2)
+                .set_desired_width(expand(1.f))
+                .set_min_width(pixels(60.f))
+                .set_desired_height(pixels(10.f))
+                .set_parent(container);
+        }
 
         meter.measure([&root] {
             run_layout(root);
@@ -1010,9 +1123,9 @@ TEST_CASE("percentage_and_ratio - 10001 nodes", "[benchmark][requires-ratio]") {
 
 #endif  // percentage_and_ratio
 
-#if 0  // perpendicular_expand_with_wrap - 12001 nodes
+#if 1  // perpendicular_expand_with_wrap - 12001 nodes
 
-TEST_CASE("perpendicular_expand_with_wrap - 12001 nodes", "[benchmark][requires-expand]") {
+TEST_CASE("perpendicular_expand_with_wrap - 12001 nodes", "[benchmark][supported]") {
     // Width(Pixels(100)).Height(Fit).Wrap(Auto).Horizontal()
     // {
     //     Repeat(1000)
@@ -1032,13 +1145,40 @@ TEST_CASE("perpendicular_expand_with_wrap - 12001 nodes", "[benchmark][requires-
     //     }
     // }
     //
-    // Requires: Expand in cross-axis combined with wrapping
+    // Tests: Expand in cross-axis combined with wrapping
 
     BENCHMARK_ADVANCED("perpendicular_expand_with_wrap")(Catch::Benchmark::Chronometer meter) {
         cleanup_entities();
 
         auto &root = make_root();
-        // TODO: Implement when Expand in cross-axis with wrap is available
+        auto &container = EntityHelper::createEntity();
+        make_component(container)
+            .set_desired_width(pixels(100.f))
+            .set_desired_height(children())
+            .set_flex_direction(FlexDirection::Row)
+            .set_flex_wrap(FlexWrap::Wrap)
+            .set_parent(root);
+
+        // Create 1000 groups of 12 children each
+        for (int i = 0; i < 1000; ++i) {
+            // Pattern: fixed-size element, then expand element, repeat 6 times
+            int sizes[] = {10, 20, 30, 40, 50, 60};
+            for (int j = 0; j < 6; ++j) {
+                // Fixed size element
+                auto &fixed = EntityHelper::createEntity();
+                make_component(fixed)
+                    .set_desired_width(pixels((float)sizes[j]))
+                    .set_desired_height(pixels((float)sizes[j]))
+                    .set_parent(container);
+
+                // Expand element (expands in cross-axis/height)
+                auto &expander = EntityHelper::createEntity();
+                make_component(expander)
+                    .set_desired_width(pixels(1.f))
+                    .set_desired_height(expand(1.f))
+                    .set_parent(container);
+            }
+        }
 
         meter.measure([&root] {
             run_layout(root);
