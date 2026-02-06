@@ -2,6 +2,7 @@
 
 #include <bitset>
 #include <cassert>
+#include <cmath>
 #include <map>
 #include <string>
 
@@ -66,6 +67,78 @@ struct FontConfig {
       : font_name(name), size_scale(scale) {}
 };
 
+// Font sizing with auto-interpolation for missing values
+// Positive values = user-set, negative values = interpolated
+// Call finalize() after setting values to compute interpolated ones
+struct FontSizing {
+  float small = -14.0f;  // Default interpolated
+  float medium = -20.0f; // Default interpolated
+  float large = -28.0f;  // Default interpolated
+  float xl = -38.0f;     // Default interpolated
+
+  enum class Tier { Small, Medium, Large, XL };
+
+  // Returns the font size for a tier (always positive)
+  float get(Tier tier) const {
+    switch (tier) {
+    case Tier::Small:
+      return std::abs(small);
+    case Tier::Medium:
+      return std::abs(medium);
+    case Tier::Large:
+      return std::abs(large);
+    case Tier::XL:
+      return std::abs(xl);
+    }
+    return std::abs(medium);
+  }
+
+  // Check if a value was user-set (positive) vs interpolated (negative)
+  bool is_user_set(Tier tier) const {
+    switch (tier) {
+    case Tier::Small:
+      return small > 0;
+    case Tier::Medium:
+      return medium > 0;
+    case Tier::Large:
+      return large > 0;
+    case Tier::XL:
+      return xl > 0;
+    }
+    return false;
+  }
+
+  // clang-format off
+  // Compute interpolated values from user-set ones
+  FontSizing &finalize() {
+    // Find first and last user-set tier indices
+    int first = (small > 0) ? 0 : (medium > 0) ? 1 : (large > 0) ? 2 : (xl > 0) ? 3 : -1;
+    int last = (xl > 0) ? 3 : (large > 0) ? 2 : (medium > 0) ? 1 : (small > 0) ? 0 : -1;
+
+    if (first < 0) return *this;  // No user values, keep defaults
+
+    float first_val = (first == 0) ? small : (first == 1) ? medium : (first == 2) ? large : xl;
+
+    if (first == last) {  // One value - use for all unset
+      if (small < 0) small = -first_val;
+      if (medium < 0) medium = -first_val;
+      if (large < 0) large = -first_val;
+      if (xl < 0) xl = -first_val;
+      return *this;
+    }
+
+    float last_val = (last == 0) ? small : (last == 1) ? medium : (last == 2) ? large : xl;
+    float step = (last_val - first_val) / float(last - first);
+
+    if (small < 0) small = -(first_val + step * (0 - first));
+    if (medium < 0) medium = -(first_val + step * (1 - first));
+    if (large < 0) large = -(first_val + step * (2 - first));
+    if (xl < 0) xl = -(first_val + step * (3 - first));
+    return *this;
+  }
+  // clang-format on
+};
+
 struct Theme {
   enum struct Usage {
     Font,
@@ -119,9 +192,47 @@ struct Theme {
   Color error{200, 80, 80, 255};      // Red
   Color focus{255, 255, 255, 255};    // White - high contrast focus ring
 
+  // Get a reference to a color by usage
+  // Returns primary for Custom/Default/None (invalid usages)
+  Color &color_ref(Usage cu) {
+    switch (cu) {
+    case Usage::Font:
+      return font;
+    case Usage::DarkFont:
+      return darkfont;
+    case Usage::FontMuted:
+      return font_muted;
+    case Usage::Background:
+      return background;
+    case Usage::Surface:
+      return surface;
+    case Usage::Primary:
+      return primary;
+    case Usage::Secondary:
+      return secondary;
+    case Usage::Accent:
+      return accent;
+    case Usage::Error:
+      return error;
+    case Usage::Focus:
+      return focus;
+    default:
+      return primary;
+    }
+  }
+
+  const Color &color_ref(Usage cu) const {
+    return const_cast<Theme *>(this)->color_ref(cu);
+  }
+
+  // Set a color by usage
+  void set_color(Usage cu, const Color &c) { color_ref(cu) = c; }
+
   // Focus ring configuration
-  float focus_ring_thickness = 3.0f;  // Thickness of focus ring outline (2-3px for visibility)
-  float focus_ring_offset = 4.0f;     // Gap between element and focus ring (ensures no clipping)
+  float focus_ring_thickness =
+      3.0f; // Thickness of focus ring outline (2-3px for visibility)
+  float focus_ring_offset =
+      4.0f; // Gap between element and focus ring (ensures no clipping)
 
   ClickActivationMode click_activation_mode = ClickActivationMode::Press;
 
@@ -129,11 +240,7 @@ struct Theme {
   // Per-language font configuration
   std::map<translation::Language, FontConfig> language_fonts;
 
-  // Base font sizes (in pixels)
-  float font_size_sm = 18.f;
-  float font_size_md = 22.f;
-  float font_size_lg = 36.f;
-  float font_size_xl = 48.f;
+  FontSizing font_sizing;
 
   // Get font config for a language
   const FontConfig &get_font_config(translation::Language lang) const {
@@ -160,80 +267,23 @@ struct Theme {
     return get_font_config(lang).font_name;
   }
 
+  // Default constructor - uses a dark theme with good defaults
   Theme()
       : font(colors::isabelline), darkfont(colors::oxford_blue),
         font_muted(colors::darken(colors::isabelline, 0.3f)),
         background(colors::oxford_blue),
         surface(colors::lighten(colors::oxford_blue, 0.1f)),
         primary(colors::pacific_blue), secondary(colors::tea_green),
-        accent(colors::orange_soda),
-        // TODO find a better error color
-        error(colors::red),
-        focus(colors::isabelline) {} // White focus ring for high contrast
-
-  // Legacy 7-arg constructor for backwards compatibility
-  Theme(Color f, Color df, Color bg, Color p, Color s, Color a, Color e)
-      : font(f), darkfont(df), font_muted(colors::darken(f, 0.3f)),
-        background(bg), surface(colors::lighten(bg, 0.1f)), primary(p),
-        secondary(s), accent(a), error(e), focus(f) {} // Default focus to font color
-
-  // Full constructor with all colors
-  Theme(Color f, Color df, Color fm, Color bg, Color surf, Color p, Color s,
-        Color a, Color e)
-      : font(f), darkfont(df), font_muted(fm), background(bg), surface(surf),
-        primary(p), secondary(s), accent(a), error(e), focus(f) {} // Default focus to font color
+        accent(colors::orange_soda), error(colors::red),
+        focus(colors::isabelline) {}
 
   Color from_usage(Usage cu, bool disabled = false) const {
-    Color color;
-    switch (cu) {
-    case Usage::Font:
-      color = font;
-      break;
-    case Usage::DarkFont:
-      color = darkfont;
-      break;
-    case Usage::FontMuted:
-      color = font_muted;
-      break;
-    case Usage::Background:
-      color = background;
-      break;
-    case Usage::Surface:
-      color = surface;
-      break;
-    case Usage::Primary:
-      color = primary;
-      break;
-    case Usage::Secondary:
-      color = secondary;
-      break;
-    case Usage::Accent:
-      color = accent;
-      break;
-    case Usage::Error:
-      color = error;
-      break;
-    case Usage::Focus:
-      color = focus;
-      break;
-    case Usage::Default:
-      log_warn("You should not be fetching 'default' color usage from "
-               "theme, "
-               "UI library should handle this??");
-      color = primary;
-      break;
-    case Usage::Custom:
-      log_warn("You should not be fetching 'custom' color usage from "
-               "theme, "
-               "UI library should handle this??");
-      color = primary;
-      break;
-    case Usage::None:
-      log_warn("You should not be fetching 'none' color usage from theme, "
-               "UI library should handle this??");
-      color = primary;
-      break;
+    if (!is_valid(cu)) {
+      log_warn("You should not be fetching '{}' color usage from theme, "
+               "UI library should handle this??",
+               magic_enum::enum_name(cu));
     }
+    Color color = color_ref(cu);
     if (disabled) {
       return colors::darken(color, 0.3f);
     }
@@ -257,7 +307,162 @@ struct Theme {
   std::bitset<4> rounded_corners = std::bitset<4>().set();
   float roundness = 0.5f; // 0.0 = sharp corners, 1.0 = fully rounded
   int segments = 8;       // Number of segments per rounded corner
+
+  // Deprecated: use font_sizing.get(Tier) instead
+  // These are kept for backwards compatibility
+  float font_size_sm() const {
+    return font_sizing.get(FontSizing::Tier::Small);
+  }
+  float font_size_md() const {
+    return font_sizing.get(FontSizing::Tier::Medium);
+  }
+  float font_size_lg() const {
+    return font_sizing.get(FontSizing::Tier::Large);
+  }
+  float font_size_xl() const { return font_sizing.get(FontSizing::Tier::XL); }
+
+  // Builder pattern - use Theme::create() to start building
+  class Builder;
+  static Builder create();
 };
+
+// Theme builder for fluent API:
+// auto theme = Theme::create()
+//     .with_palette({.background = {25, 45, 75}, .primary = {85, 145, 215}})
+//     .with_font("MyFont")
+//     .with_font_sizing({.small = 14, .large = 32})
+//     .with_roundness(0.08f);
+class Theme::Builder {
+  Theme theme_;
+
+public:
+  // Color palette - all fields optional, missing ones auto-generated
+  // Use alpha=0 to indicate "not set" (e.g., Color{25, 45, 75} is set,
+  // Color{0,0,0,0} is not)
+  struct Palette {
+    Color background{0, 0, 0, 0};
+    Color surface{0, 0, 0, 0};
+    Color primary{0, 0, 0, 0};
+    Color secondary{0, 0, 0, 0};
+    Color accent{0, 0, 0, 0};
+    Color error{0, 0, 0, 0};
+    Color font{0, 0, 0, 0};
+    Color darkfont{0, 0, 0, 0};
+    Color font_muted{0, 0, 0, 0};
+    Color focus{0, 0, 0, 0};
+
+    bool has(const Color &c) const { return c.a > 0; }
+  };
+
+  Builder() = default;
+
+  // Apply a color palette, auto-generating missing colors
+  Builder &with_palette(const Palette &p) {
+    // Apply explicitly set colors
+    if (p.has(p.background))
+      theme_.background = p.background;
+    if (p.has(p.surface))
+      theme_.surface = p.surface;
+    if (p.has(p.primary))
+      theme_.primary = p.primary;
+    if (p.has(p.secondary))
+      theme_.secondary = p.secondary;
+    if (p.has(p.accent))
+      theme_.accent = p.accent;
+    if (p.has(p.error))
+      theme_.error = p.error;
+    if (p.has(p.font))
+      theme_.font = p.font;
+    if (p.has(p.darkfont))
+      theme_.darkfont = p.darkfont;
+    if (p.has(p.font_muted))
+      theme_.font_muted = p.font_muted;
+    if (p.has(p.focus))
+      theme_.focus = p.focus;
+
+    // Auto-generate missing colors from what we have
+    // Surface from background (lighten 15%)
+    if (!p.has(p.surface) && p.has(p.background)) {
+      theme_.surface = colors::lighten(theme_.background, 0.15f);
+    }
+
+    // Secondary from surface (lighten 20%)
+    if (!p.has(p.secondary)) {
+      theme_.secondary = colors::lighten(theme_.surface, 0.20f);
+    }
+
+    // Error defaults to red
+    if (!p.has(p.error)) {
+      theme_.error = Color{180, 80, 80, 255};
+    }
+
+    // Font colors: auto-pick based on background luminance
+    if (!p.has(p.font) && !p.has(p.darkfont)) {
+      float bg_lum = colors::luminance(theme_.background);
+      if (bg_lum < 0.5f) {
+        // Dark background - light font, dark darkfont
+        theme_.font = Color{235, 240, 245, 255};
+        theme_.darkfont = theme_.background;
+      } else {
+        // Light background - dark font, light darkfont
+        theme_.font = Color{30, 30, 30, 255};
+        theme_.darkfont = Color{235, 240, 245, 255};
+      }
+    }
+
+    // Font muted from font at 60% opacity effect
+    if (!p.has(p.font_muted)) {
+      theme_.font_muted = colors::darken(theme_.font, 0.4f);
+    }
+
+    // Focus defaults to font color
+    if (!p.has(p.focus)) {
+      theme_.focus = theme_.font;
+    }
+
+    return *this;
+  }
+
+  // Set font family name
+  Builder &with_font(const std::string &font_name) {
+    theme_.language_fonts[translation::Language::English] =
+        FontConfig(font_name, 1.0f);
+    return *this;
+  }
+
+  // Set font sizing
+  Builder &with_font_sizing(FontSizing sizing) {
+    sizing.finalize();
+    theme_.font_sizing = sizing;
+    return *this;
+  }
+
+  // Set corner roundness
+  Builder &with_roundness(float r) {
+    theme_.roundness = r;
+    return *this;
+  }
+
+  // Set corner segments
+  Builder &with_segments(int s) {
+    theme_.segments = s;
+    return *this;
+  }
+
+  // Set any color by usage
+  Builder &with_color(Theme::Usage usage, const Color &c) {
+    theme_.set_color(usage, c);
+    return *this;
+  }
+
+  // Implicit conversion to Theme
+  operator Theme() const { return theme_; }
+
+  // Explicit build method
+  Theme build() const { return theme_; }
+};
+
+inline Theme::Builder Theme::create() { return Builder(); }
 
 namespace imm {
 
@@ -279,40 +484,7 @@ struct ThemeDefaults {
 
   // Theme configuration methods
   ThemeDefaults &set_theme_color(Theme::Usage usage, const Color &color) {
-    switch (usage) {
-    case Theme::Usage::Primary:
-      theme.primary = color;
-      break;
-    case Theme::Usage::Secondary:
-      theme.secondary = color;
-      break;
-    case Theme::Usage::Accent:
-      theme.accent = color;
-      break;
-    case Theme::Usage::Background:
-      theme.background = color;
-      break;
-    case Theme::Usage::Surface:
-      theme.surface = color;
-      break;
-    case Theme::Usage::Font:
-      theme.font = color;
-      break;
-    case Theme::Usage::DarkFont:
-      theme.darkfont = color;
-      break;
-    case Theme::Usage::FontMuted:
-      theme.font_muted = color;
-      break;
-    case Theme::Usage::Error:
-      theme.error = color;
-      break;
-    case Theme::Usage::Focus:
-      theme.focus = color;
-      break;
-    default:
-      break;
-    }
+    theme.set_color(usage, color);
     return *this;
   }
 
@@ -344,6 +516,45 @@ struct ThemeDefaults {
 };
 
 } // namespace imm
+
+// ============================================================================
+// Backwards compatibility aliases - remove after migration
+// ============================================================================
+
+// ThemePalette was moved inside Theme::Builder as Theme::Builder::Palette
+using ThemePalette = Theme::Builder::Palette;
+
+// Legacy Theme constructors - use Theme::create() builder instead
+// 7-arg: Theme(font, darkfont, background, primary, secondary, accent, error)
+inline Theme make_theme(Color f, Color df, Color bg, Color p, Color s, Color a,
+                        Color e) {
+  return Theme::create()
+      .with_palette({.background = bg,
+                     .primary = p,
+                     .secondary = s,
+                     .accent = a,
+                     .error = e,
+                     .font = f,
+                     .darkfont = df})
+      .build();
+}
+
+// 9-arg: Theme(font, darkfont, font_muted, background, surface, primary,
+// secondary, accent, error)
+inline Theme make_theme(Color f, Color df, Color fm, Color bg, Color surf,
+                        Color p, Color s, Color a, Color e) {
+  return Theme::create()
+      .with_palette({.background = bg,
+                     .surface = surf,
+                     .primary = p,
+                     .secondary = s,
+                     .accent = a,
+                     .error = e,
+                     .font = f,
+                     .darkfont = df,
+                     .font_muted = fm})
+      .build();
+}
 
 } // namespace ui
 
