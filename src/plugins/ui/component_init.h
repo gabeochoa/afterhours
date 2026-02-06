@@ -72,6 +72,22 @@ inline ComponentConfig _overwrite_defaults(HasUIContext auto &ctx,
 
   config.with_internal(true);
 
+  // Button-specific defaults
+  if (component_type == ComponentType::Button) {
+    // Default size: 120x44 at 720p (44px height is touch target minimum)
+    if (config.size.is_default) {
+      config.with_size(ComponentSize{w1280(120), h720(44)});
+    }
+    // Default padding: Spacing::sm
+    bool padding_is_default = config.padding.top.dim == Dim::None &&
+                              config.padding.left.dim == Dim::None &&
+                              config.padding.bottom.dim == Dim::None &&
+                              config.padding.right.dim == Dim::None;
+    if (padding_is_default) {
+      config.with_padding(Spacing::sm);
+    }
+  }
+
   if (enable_color && config.color_usage == Theme::Usage::Default)
     config.with_color_usage(Theme::Usage::Primary);
 
