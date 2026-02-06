@@ -80,6 +80,7 @@ struct ComponentConfig {
 
   // ui modifiers
   float opacity = 1.0f;
+  float scale = 1.0f;  // Visual scale applied after layout (smooth animations)
   Size translate_x = pixels(0.0f);
   Size translate_y = pixels(0.0f);
 
@@ -298,6 +299,12 @@ struct ComponentConfig {
   }
   ComponentConfig &with_opacity(float v) {
     opacity = v;
+    return *this;
+  }
+  /// Apply visual scale after layout (bypasses layout recalculation).
+  /// Use this for smooth scale animations instead of changing size.
+  ComponentConfig &with_scale(float s) {
+    scale = s;
     return *this;
   }
   ComponentConfig &with_flex_direction(FlexDirection dir) {

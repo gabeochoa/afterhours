@@ -279,8 +279,14 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   }
   entity.addComponentIfMissing<HasOpacity>().value =
       std::clamp(config.opacity, 0.0f, 1.0f);
-  if (config.translate_x.value != 0.0f || config.translate_y.value != 0.0f) {
+  // Apply UI modifiers (scale, translate) if any are non-default
+  bool needs_modifiers = config.scale != 1.0f ||
+                         config.translate_x.value != 0.0f ||
+                         config.translate_y.value != 0.0f;
+  if (needs_modifiers) {
     auto &mods = entity.addComponentIfMissing<HasUIModifiers>();
+    // Apply scale (visual scaling after layout - smooth for animations)
+    mods.scale = config.scale;
     // Resolve Size to pixels using screen height (default 720p baseline)
     float screen_height = 720.f;
     if (auto *pcr = EntityHelper::get_singleton_cmp<
@@ -289,6 +295,14 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
     }
     mods.translate_x = resolve_to_pixels(config.translate_x, screen_height);
     mods.translate_y = resolve_to_pixels(config.translate_y, screen_height);
+  } else {
+    // Reset modifiers if component exists but no modifiers needed
+    if (entity.has<HasUIModifiers>()) {
+      auto &mods = entity.get<HasUIModifiers>();
+      mods.scale = 1.0f;
+      mods.translate_x = 0.0f;
+      mods.translate_y = 0.0f;
+    }
   }
 }
 
