@@ -38,6 +38,7 @@ struct RenderPrimitive {
       float roundness;
       int segments;
       std::bitset<4> corners;
+      float rotation;  // Rotation in degrees (clockwise, around center)
     } rectangle;
 
     struct {
@@ -121,26 +122,30 @@ private:
 public:
   // Factory methods for cleaner construction
   static RenderPrimitive rectangle(const RectangleType& rect, Color fill,
-                                   int layer, EntityID entity_id = -1) {
+                                   int layer, EntityID entity_id = -1,
+                                   float rotation = 0.0f) {
     RenderPrimitive cmd(RenderPrimitiveType::Rectangle, layer, entity_id);
     cmd.data.rectangle.rect = rect;
     cmd.data.rectangle.fill_color = fill;
     cmd.data.rectangle.roundness = 0.0f;
     cmd.data.rectangle.segments = 0;
     cmd.data.rectangle.corners.reset();
+    cmd.data.rectangle.rotation = rotation;
     return cmd;
   }
 
   static RenderPrimitive rounded_rectangle(const RectangleType& rect, Color fill,
                                            float roundness, int segments,
                                            const std::bitset<4>& corners,
-                                           int layer, EntityID entity_id = -1) {
+                                           int layer, EntityID entity_id = -1,
+                                           float rotation = 0.0f) {
     RenderPrimitive cmd(RenderPrimitiveType::RoundedRectangle, layer, entity_id);
     cmd.data.rectangle.rect = rect;
     cmd.data.rectangle.fill_color = fill;
     cmd.data.rectangle.roundness = roundness;
     cmd.data.rectangle.segments = segments;
     cmd.data.rectangle.corners = corners;
+    cmd.data.rectangle.rotation = rotation;
     return cmd;
   }
 
@@ -260,17 +265,17 @@ public:
 
   // Add a filled rectangle
   void add_rectangle(const RectangleType& rect, Color fill, int layer,
-                     EntityID entity_id = -1) {
-    commands_.push_back(RenderPrimitive::rectangle(rect, fill, layer, entity_id));
+                     EntityID entity_id = -1, float rotation = 0.0f) {
+    commands_.push_back(RenderPrimitive::rectangle(rect, fill, layer, entity_id, rotation));
   }
 
   // Add a rounded rectangle
   void add_rounded_rectangle(const RectangleType& rect, Color fill,
                              float roundness, int segments,
                              const std::bitset<4>& corners, int layer,
-                             EntityID entity_id = -1) {
+                             EntityID entity_id = -1, float rotation = 0.0f) {
     commands_.push_back(RenderPrimitive::rounded_rectangle(
-        rect, fill, roundness, segments, corners, layer, entity_id));
+        rect, fill, roundness, segments, corners, layer, entity_id, rotation));
   }
 
   // Add rectangle outline
@@ -524,7 +529,8 @@ private:
                               size_t start, size_t end) {
     for (size_t i = start; i < end; ++i) {
       const auto& rect = cmds[i].data.rectangle;
-      draw_rectangle(rect.rect, rect.fill_color);
+      draw_rectangle_rounded_rotated(rect.rect, 0.0f, 0, rect.fill_color,
+                                     std::bitset<4>().reset(), rect.rotation);
     }
   }
 
@@ -532,8 +538,8 @@ private:
                                       size_t start, size_t end) {
     for (size_t i = start; i < end; ++i) {
       const auto& rect = cmds[i].data.rectangle;
-      draw_rectangle_rounded(rect.rect, rect.roundness, rect.segments,
-                            rect.fill_color, rect.corners);
+      draw_rectangle_rounded_rotated(rect.rect, rect.roundness, rect.segments,
+                                     rect.fill_color, rect.corners, rect.rotation);
     }
   }
 

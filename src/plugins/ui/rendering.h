@@ -1014,6 +1014,11 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
     }
 
+    // Get rotation from modifiers (applied separately since rectangles rotate around center)
+    float rotation = entity.has<HasUIModifiers>()
+                         ? entity.get<HasUIModifiers>().rotation
+                         : 0.0f;
+
     auto corner_settings = entity.has<HasRoundedCorners>()
                                ? entity.get<HasRoundedCorners>().get()
                                : std::bitset<4>().reset();
@@ -1115,8 +1120,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         col = colors::opacity_pct(col, effective_opacity);
       }
 
-      draw_rectangle_rounded(draw_rect, roundness, segments, col,
-                             corner_settings);
+      draw_rectangle_rounded_rotated(draw_rect, roundness, segments, col,
+                                     corner_settings, rotation);
     }
 
     render_bevel(entity, draw_rect, effective_opacity);
@@ -1530,6 +1535,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
     }
 
+    // Get rotation from modifiers (applied separately since rectangles rotate around center)
+    float rotation = entity.has<HasUIModifiers>()
+                         ? entity.get<HasUIModifiers>().rotation
+                         : 0.0f;
+
     auto corner_settings = entity.has<HasRoundedCorners>()
                                ? entity.get<HasRoundedCorners>().get()
                                : std::bitset<4>().reset();
@@ -1624,7 +1634,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       }
 
       buffer.add_rounded_rectangle(draw_rect, col, roundness, segments,
-                                   corner_settings, layer, entity.id);
+                                   corner_settings, layer, entity.id, rotation);
     }
 
     // Bevel border

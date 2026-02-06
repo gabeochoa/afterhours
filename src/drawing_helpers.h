@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include <cmath>
+
 #include "developer.h"
 #include "font_helper.h"
 #include "plugins/color.h"
@@ -233,6 +235,41 @@ inline void draw_rectangle_rounded_lines(
     raylib::DrawRectangleRoundedLines(rect, roundness, segments, color);
 }
 
+// Draw a rotated rounded rectangle
+// rotation: angle in degrees (clockwise)
+// The rectangle rotates around its center
+inline void draw_rectangle_rounded_rotated(
+    const RectangleType rect, const float roundness, const int segments,
+    const Color color, const std::bitset<4> corners, const float rotation) {
+    // Skip rotation if angle is effectively zero
+    if (std::abs(rotation) < 0.001f) {
+        draw_rectangle_rounded(rect, roundness, segments, color, corners);
+        return;
+    }
+
+    // Calculate center of the rectangle
+    float centerX = rect.x + rect.width / 2.0f;
+    float centerY = rect.y + rect.height / 2.0f;
+
+    // Create a rect centered at origin
+    RectangleType centeredRect = {
+        -rect.width / 2.0f,
+        -rect.height / 2.0f,
+        rect.width,
+        rect.height
+    };
+
+    // Apply transformation: translate to center, rotate, then draw
+    raylib::rlPushMatrix();
+    raylib::rlTranslatef(centerX, centerY, 0.0f);
+    raylib::rlRotatef(rotation, 0.0f, 0.0f, 1.0f);
+
+    // Draw the rectangle at origin (now rotated)
+    draw_rectangle_rounded(centeredRect, roundness, segments, color, corners);
+
+    raylib::rlPopMatrix();
+}
+
 // Draw a 9-slice (NPatch) texture stretched to fill a rectangle
 // The texture is divided into 9 regions: 4 corners, 4 edges, and 1 center
 // Corners remain at original size, edges stretch in one direction, center
@@ -379,6 +416,8 @@ inline void draw_rectangle_outline(const RectangleType, const Color,
                                    const float) {}
 inline void draw_rectangle_rounded(const RectangleType, const float, const int,
                                    const Color, const std::bitset<4>) {}
+inline void draw_rectangle_rounded_rotated(const RectangleType, const float, const int,
+                                           const Color, const std::bitset<4>, const float) {}
 inline void draw_rectangle_rounded_lines(const RectangleType, const float,
                                          const int, const Color,
                                          const std::bitset<4>) {}

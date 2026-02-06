@@ -234,6 +234,7 @@ struct HasUIModifiers : BaseComponent {
   float scale = 1.0f;
   float translate_x = 0.f;
   float translate_y = 0.f;
+  float rotation = 0.f;  // Rotation in degrees
 
   RectangleType apply_modifier(RectangleType rect) const {
     // Apply scale first
