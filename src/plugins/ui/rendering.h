@@ -30,28 +30,8 @@ namespace afterhours {
 
 namespace ui {
 
-// TODO: Replace hardcoded offset with actual font glyph left-side bearing (LSB)
-//
-// PROBLEM: When text is positioned at x=100, the first visible pixel may not
-// appear until x=108 due to the glyph's left-side bearing (empty space before
-// the glyph). MeasureText returns advance width, not accounting for LSB.
-// This causes text to appear shifted right and get clipped on container edges.
-//
-// CURRENT FIX: Hardcoded 8px approximation that works for most fonts.
-//
-// PROPER FIX: Query the actual LSB for the first character:
-//   1. Get first codepoint: int cp = GetCodepoint(text, &bytesProcessed);
-//   2. Get glyph info: GlyphInfo info = GetGlyphInfo(font, cp);
-//   3. Use info.offsetX as the left-side bearing
-//
-// This would need to be done in:
-//   - position_text_ex() when calculating text position
-//   - render_text() in render_primitives.h for batched rendering
-//
-// Note: LSB varies per font AND per glyph (e.g., "W" vs "I" have different
-// bearings), so this must be calculated per-string, not once globally.
-//
-constexpr float TEXT_LEFT_BEARING_OFFSET = 8.0f;
+// Left-side bearing is now calculated per-string using get_first_glyph_bearing()
+// in font_helper.h. No more hardcoded offset.
 
 static inline float _compute_effective_opacity(const Entity &entity) {
   float result = 1.0f;
@@ -293,6 +273,7 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
   }
 
   Font font = fm.get_active_font();
+  float bearing = get_first_glyph_bearing(font, text.c_str());
 
   // Calculate the maximum text size based on the container size and margins
   Vector2Type max_text_size = Vector2Type{
@@ -373,7 +354,7 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
   case TextAlignment::None: // None defaults to Left alignment
   case TextAlignment::Left:
     position = Vector2Type{
-        .x = container.x + margin_px.x + TEXT_LEFT_BEARING_OFFSET,
+        .x = container.x + margin_px.x + bearing,
         .y = container.y + margin_px.y +
              (container.height - 2 * margin_px.y - text_size.y) / 2,
     };
@@ -381,7 +362,7 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
   case TextAlignment::Center: {
     // Calculate centered position, but clamp to prevent starting before container left edge
     float centered_offset = (container.width - 2 * margin_px.x - text_size.x) / 2;
-    float text_x = container.x + margin_px.x + centered_offset + (TEXT_LEFT_BEARING_OFFSET / 2);
+    float text_x = container.x + margin_px.x + centered_offset;
     // Clamp so text never starts before container left edge
     text_x = std::max(container.x + margin_px.x, text_x);
     position = Vector2Type{

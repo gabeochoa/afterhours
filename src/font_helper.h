@@ -143,6 +143,17 @@ inline raylib::Vector2 measure_text_utf8(const raylib::Font font,
   // to handle CJK text better with proper glyph spacing
   return raylib::MeasureTextEx(font, content, size, spacing);
 }
+
+// Get the left-side bearing (offsetX) for the first glyph in a string.
+// Returns 0 if the string is empty or the glyph is not found in the font.
+inline float get_first_glyph_bearing(const raylib::Font font, const char *text) {
+  if (!text || text[0] == '\0') return 0.0f;
+  int bytesProcessed = 0;
+  int codepoint = raylib::GetCodepoint(text, &bytesProcessed);
+  int glyphIndex = raylib::GetGlyphIndex(font, codepoint);
+  if (glyphIndex < 0 || glyphIndex >= font.glyphCount) return 0.0f;
+  return static_cast<float>(font.glyphs[glyphIndex].offsetX);
+}
 #else
 using Font = FontType;
 inline Font load_font_from_file(const char *) { return Font(); }
@@ -190,6 +201,10 @@ inline Vector2Type measure_text_utf8(const Font, const char *,
            "AFTER_HOURS_USE_RAYLIB or provide your own through "
            "set_measure_text_fn()");
   return Vector2Type{0, 0};
+}
+
+inline float get_first_glyph_bearing(const Font, const char *) {
+  return 0.0f;
 }
 #endif
 } // namespace afterhours
