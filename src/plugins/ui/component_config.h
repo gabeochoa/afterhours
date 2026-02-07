@@ -371,6 +371,12 @@ struct ComponentConfig {
 
   ComponentConfig &with_absolute_position() {
     is_absolute = true;
+    if (has_margin()) {
+      log_warn("with_absolute_position() used with margins. "
+               "For absolute elements, margins are position offsets only "
+               "(they don't shrink the element). Consider using "
+               "with_translate() for clearer intent.");
+    }
     return *this;
   }
   ComponentConfig &with_internal(bool internal = true) {

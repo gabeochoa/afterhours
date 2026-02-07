@@ -109,6 +109,16 @@ struct UIComponent : BaseComponent {
   }
 
   Rectangle rect() const {
+    if (absolute) {
+      // Absolute positioning: margins are position offsets only, don't shrink size
+      return Rectangle{
+          .x = computed_rel[Axis::X] + computed_margin[Axis::left],
+          .y = computed_rel[Axis::Y] + computed_margin[Axis::top],
+          .width = fmaxf(0.f, computed[Axis::X]),
+          .height = fmaxf(0.f, computed[Axis::Y]),
+      };
+    }
+    // Flow layout: margins reduce available space (standard CSS content-box)
     return Rectangle{
         .x = computed_rel[Axis::X] + computed_margin[Axis::left],
         .y = computed_rel[Axis::Y] + computed_margin[Axis::top],
