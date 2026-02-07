@@ -863,6 +863,21 @@ struct AutoLayout {
     float sx = widget.computed[Axis::X] + widget.computed_padd[Axis::X];
     float sy = widget.computed[Axis::Y] + widget.computed_padd[Axis::Y];
 
+    // Grid snapping tolerance: when grid snapping is enabled, parent sizes are
+    // snapped after children are sized relative to the pre-snap parent. This
+    // can cause children to appear slightly larger than the snapped parent.
+    // We use one grid unit as tolerance for warning checks to avoid spurious
+    // overflow/wrap warnings caused by this rounding discrepancy.
+    float grid_snap_tolerance_x = 0.f;
+    float grid_snap_tolerance_y = 0.f;
+    if (enable_grid_snapping) {
+      constexpr float GST_GRID_UNIT_720P = 4.0f;
+      grid_snap_tolerance_x =
+          GST_GRID_UNIT_720P * (fetch_screen_value_(Axis::X) / 720.0f);
+      grid_snap_tolerance_y =
+          GST_GRID_UNIT_720P * (fetch_screen_value_(Axis::Y) / 720.0f);
+    }
+
     // Determine layout direction
     bool is_column =
         static_cast<bool>(widget.flex_direction & FlexDirection::Column);
@@ -987,8 +1002,14 @@ struct AutoLayout {
 
       // Check for smart wrap warning conditions
       // Skip warnings for scroll containers - wrap/overflow is expected
+      // Use grid snapping tolerance to avoid spurious warnings from snap rounding
       bool parent_is_scroll_view = to_ent(widget.id).has<HasScrollView>();
-      if ((will_wrap_column || will_wrap_row) && !parent_is_scroll_view) {
+      bool should_warn_wrap_column =
+          is_column && (cy + offy > sy + grid_snap_tolerance_y);
+      bool should_warn_wrap_row =
+          is_row && (cx + offx > sx + grid_snap_tolerance_x);
+      if ((should_warn_wrap_column || should_warn_wrap_row) &&
+          !parent_is_scroll_view) {
         bool should_warn = false;
         std::string warn_reason;
 
@@ -1091,10 +1112,11 @@ struct AutoLayout {
 
       // Condition 3: Check if child overflows parent bounds after positioning
       // Skip warning for scroll containers - overflow is expected behavior
+      // Use grid snapping tolerance to avoid spurious warnings from snap rounding
       float child_end_x = child.computed_rel[Axis::X] + cx;
       float child_end_y = child.computed_rel[Axis::Y] + cy;
-      bool overflows_x = child_end_x > sx;
-      bool overflows_y = child_end_y > sy;
+      bool overflows_x = child_end_x > sx + grid_snap_tolerance_x;
+      bool overflows_y = child_end_y > sy + grid_snap_tolerance_y;
       if ((overflows_x || overflows_y) && !parent_is_scroll_view) {
         log_warn("Layout overflow: '{}' extends outside parent '{}' bounds "
                  "(child_rel=[{:.1f},{:.1f}], child_size=[{:.1f},{:.1f}], "
