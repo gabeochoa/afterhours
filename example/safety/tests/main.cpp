@@ -1447,4 +1447,458 @@ TEST_CASE("ECS: cleanup churn handles correctly",
     }
 }
 
+// ============================================================================
+// Group A: markIDForCleanup edge cases (guards Opt 3)
+// ============================================================================
+
+TEST_CASE("ECS: markIDForCleanup only marks the targeted entity",
+          "[ECS][Cleanup]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    Entity &a = EntityHelper::createEntity();
+    Entity &b = EntityHelper::createEntity();
+    Entity &c = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    EntityHelper::markIDForCleanup(b.id);
+
+    REQUIRE_FALSE(a.cleanup);
+    REQUIRE(b.cleanup);
+    REQUIRE_FALSE(c.cleanup);
+}
+
+TEST_CASE("ECS: markIDForCleanup with negative ID is a safe no-op",
+          "[ECS][Cleanup]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    Entity &a = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    // Negative ID should not crash and should not mark anything
+    EntityHelper::markIDForCleanup(-1);
+    EntityHelper::markIDForCleanup(-999);
+
+    REQUIRE_FALSE(a.cleanup);
+}
+
+TEST_CASE("ECS: markIDForCleanup with nonexistent ID is a safe no-op",
+          "[ECS][Cleanup]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    Entity &a = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    // ID that was never assigned should not crash
+    EntityHelper::markIDForCleanup(999999);
+
+    REQUIRE_FALSE(a.cleanup);
+}
+
+TEST_CASE("ECS: markIDForCleanup is idempotent", "[ECS][Cleanup]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    Entity &a = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    EntityHelper::markIDForCleanup(a.id);
+    REQUIRE(a.cleanup);
+
+    // Marking again should not crash or change state
+    EntityHelper::markIDForCleanup(a.id);
+    REQUIRE(a.cleanup);
+}
+
+TEST_CASE("ECS: markIDForCleanup on already-cleaned-up ID is a safe no-op",
+          "[ECS][Cleanup]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    Entity &a = EntityHelper::createEntity();
+    const int id = a.id;
+    EntityHelper::merge_entity_arrays();
+
+    EntityHelper::markIDForCleanup(id);
+    EntityHelper::cleanup();
+
+    // Entity is gone; marking the same ID again should not crash
+    EntityHelper::markIDForCleanup(id);
+
+    // And the entity should still be gone
+    REQUIRE_FALSE(EntityHelper::getEntityForID(id).valid());
+}
+
+TEST_CASE("ECS: markIDForCleanup does not affect unmerged temp entities",
+          "[ECS][Cleanup]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    Entity &temp = EntityHelper::createEntity();
+    const int temp_id = temp.id;
+    // Do NOT merge -- entity is still in temp_entities
+
+    // markIDForCleanup only scans merged entities, so this is a no-op
+    EntityHelper::markIDForCleanup(temp_id);
+
+    // After merge, entity should be alive (not marked) because
+    // markIDForCleanup scans get_entities(), not get_temp()
+    EntityHelper::merge_entity_arrays();
+    REQUIRE(EntityHelper::getEntityForID(temp_id).valid());
+}
+
+// ============================================================================
+// Group B: gen_first / has_values edge cases (guards Opts 1, 2, 7, 9)
+// ============================================================================
+
+struct NobodyHasThis : BaseComponent {};
+
+TEST_CASE("EntityQuery: gen_first returns invalid when nothing matches",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    for (int i = 0; i < 5; ++i)
+        EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    auto result = EntityQuery<>({.ignore_temp_warning = true})
+                      .whereHasComponent<NobodyHasThis>()
+                      .gen_first();
+    REQUIRE_FALSE(result.valid());
+}
+
+TEST_CASE("EntityQuery: has_values returns false on empty result",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    for (int i = 0; i < 5; ++i)
+        EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    bool hv = EntityQuery<>({.ignore_temp_warning = true})
+                  .whereHasComponent<NobodyHasThis>()
+                  .has_values();
+    REQUIRE_FALSE(hv);
+}
+
+TEST_CASE("EntityQuery: has_values returns true when entities exist",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    Entity &a = EntityHelper::createEntity();
+    a.addComponent<CompA>();
+    EntityHelper::merge_entity_arrays();
+
+    bool hv = EntityQuery<>({.ignore_temp_warning = true})
+                  .whereHasComponent<CompA>()
+                  .has_values();
+    REQUIRE(hv);
+}
+
+TEST_CASE("EntityQuery: gen_first finds entity matching only the last filter",
+          "[ECS][EntityQuery]") {
+    // Ensure multi-filter AND logic works correctly in fast path
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    // Entity with only CompA (fails CompB filter)
+    Entity &a = EntityHelper::createEntity();
+    a.addComponent<CompA>();
+
+    // Entity with only CompB (fails CompA filter)
+    Entity &b = EntityHelper::createEntity();
+    b.addComponent<CompB>();
+
+    // Entity with both (passes both filters)
+    Entity &c = EntityHelper::createEntity();
+    c.addComponent<CompA>();
+    c.addComponent<CompB>();
+    c.get<CompA>().value = 77;
+
+    EntityHelper::merge_entity_arrays();
+
+    auto result = EntityQuery<>({.ignore_temp_warning = true})
+                      .whereHasComponent<CompA>()
+                      .whereHasComponent<CompB>()
+                      .gen_first();
+    REQUIRE(result.valid());
+    REQUIRE(result.asE().get<CompA>().value == 77);
+}
+
+TEST_CASE("EntityQuery: gen_first with orderByLambda returns sorted first",
+          "[ECS][EntityQuery]") {
+    // When orderByLambda is set, stop_on_first must be disabled
+    // so we get the correct sorted result, not the iteration-first
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &a = EntityHelper::createEntity();
+    a.addComponent<CompA>().value = 30;
+    Entity &b = EntityHelper::createEntity();
+    b.addComponent<CompA>().value = 10;
+    Entity &c = EntityHelper::createEntity();
+    c.addComponent<CompA>().value = 20;
+
+    EntityHelper::merge_entity_arrays();
+
+    auto result = EntityQuery<>({.ignore_temp_warning = true})
+                      .whereHasComponent<CompA>()
+                      .orderByLambda([](const Entity &x, const Entity &y) {
+                          return x.get<CompA>().value < y.get<CompA>().value;
+                      })
+                      .gen_first();
+    REQUIRE(result.valid());
+    // Should get the entity with smallest value (10), not iteration-first (30)
+    REQUIRE(result.asE().get<CompA>().value == 10);
+}
+
+TEST_CASE("EntityQuery: gen and gen_first agree on empty entity set",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    EntityHelper::merge_entity_arrays();
+
+    auto all = EntityQuery<>({.ignore_temp_warning = true}).gen();
+    auto first = EntityQuery<>({.ignore_temp_warning = true}).gen_first();
+    auto count = EntityQuery<>({.ignore_temp_warning = true}).gen_count();
+
+    REQUIRE(all.empty());
+    REQUIRE_FALSE(first.valid());
+    REQUIRE(count == 0);
+}
+
+TEST_CASE("EntityQuery: filter that rejects all still produces empty result",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    for (int i = 0; i < 10; ++i)
+        EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    // Lambda that rejects everything
+    auto results = EntityQuery<>({.ignore_temp_warning = true})
+                       .whereLambda([](const Entity &) { return false; })
+                       .gen();
+    REQUIRE(results.empty());
+
+    auto first = EntityQuery<>({.ignore_temp_warning = true})
+                     .whereLambda([](const Entity &) { return false; })
+                     .gen_first();
+    REQUIRE_FALSE(first.valid());
+}
+
+// ============================================================================
+// Group C: Singleton survival edge cases (guards Opts 4, 8)
+// ============================================================================
+
+TEST_CASE("ECS: singleton survives cleanup of other entities",
+          "[ECS][Singleton]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &singleton_ent = EntityHelper::createEntity();
+    singleton_ent.addComponent<GameConfig>().difficulty = 9;
+
+    std::vector<int> other_ids;
+    for (int i = 0; i < 10; ++i) {
+        other_ids.push_back(EntityHelper::createEntity().id);
+    }
+    EntityHelper::merge_entity_arrays();
+    EntityHelper::registerSingleton<GameConfig>(singleton_ent);
+
+    // Cleanup all non-singleton entities
+    for (int id : other_ids) {
+        EntityHelper::markIDForCleanup(id);
+    }
+    EntityHelper::cleanup();
+
+    // Singleton must still be accessible and hold correct value
+    REQUIRE(EntityHelper::has_singleton<GameConfig>());
+    auto *cmp = EntityHelper::get_singleton_cmp<GameConfig>();
+    REQUIRE(cmp != nullptr);
+    REQUIRE(cmp->difficulty == 9);
+
+    // Only the singleton entity should remain
+    auto remaining = EntityQuery<>({.ignore_temp_warning = true}).gen();
+    REQUIRE(remaining.size() == 1);
+    REQUIRE(remaining[0].get().id == singleton_ent.id);
+}
+
+TEST_CASE(
+    "ECS: singleton on permanent entity survives delete_all_entities(false)",
+    "[ECS][Singleton]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &perm = EntityHelper::createPermanentEntity();
+    perm.addComponent<GameConfig>().difficulty = 7;
+
+    // Create normal entities too
+    for (int i = 0; i < 5; ++i)
+        EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    EntityHelper::registerSingleton<GameConfig>(perm);
+
+    // Non-inclusive delete: permanent entities survive
+    EntityHelper::delete_all_entities(false);
+
+    REQUIRE(EntityHelper::has_singleton<GameConfig>());
+    REQUIRE(EntityHelper::get_singleton_cmp<GameConfig>()->difficulty == 7);
+    REQUIRE(EntityHelper::getEntityForID(perm.id).valid());
+}
+
+struct AudioConfig : BaseComponent {
+    int volume = 50;
+};
+
+TEST_CASE("ECS: multiple singletons, cleaning up one preserves the other",
+          "[ECS][Singleton]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &game_ent = EntityHelper::createEntity();
+    game_ent.addComponent<GameConfig>().difficulty = 3;
+
+    Entity &audio_ent = EntityHelper::createEntity();
+    audio_ent.addComponent<AudioConfig>().volume = 80;
+
+    EntityHelper::merge_entity_arrays();
+
+    EntityHelper::registerSingleton<GameConfig>(game_ent);
+    EntityHelper::registerSingleton<AudioConfig>(audio_ent);
+
+    // Only clean up the GameConfig singleton entity
+    EntityHelper::markIDForCleanup(game_ent.id);
+    EntityHelper::cleanup();
+
+    // GameConfig singleton should be gone
+    REQUIRE_FALSE(EntityHelper::has_singleton<GameConfig>());
+
+    // AudioConfig singleton should still be alive
+    REQUIRE(EntityHelper::has_singleton<AudioConfig>());
+    REQUIRE(EntityHelper::get_singleton_cmp<AudioConfig>()->volume == 80);
+}
+
+TEST_CASE("ECS: singleton cleanup then re-registration works",
+          "[ECS][Singleton]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    // Register, then cleanup the singleton entity
+    Entity &first = EntityHelper::createEntity();
+    first.addComponent<GameConfig>().difficulty = 1;
+    EntityHelper::merge_entity_arrays();
+    EntityHelper::registerSingleton<GameConfig>(first);
+
+    EntityHelper::markIDForCleanup(first.id);
+    EntityHelper::cleanup();
+    REQUIRE_FALSE(EntityHelper::has_singleton<GameConfig>());
+
+    // Re-register with a new entity
+    Entity &second = EntityHelper::createEntity();
+    second.addComponent<GameConfig>().difficulty = 2;
+    EntityHelper::merge_entity_arrays();
+    EntityHelper::registerSingleton<GameConfig>(second);
+
+    REQUIRE(EntityHelper::has_singleton<GameConfig>());
+    REQUIRE(EntityHelper::get_singleton_cmp<GameConfig>()->difficulty == 2);
+}
+
+// ============================================================================
+// Group D: reserve_temp_space capacity (guards Opt 5)
+// ============================================================================
+
+TEST_CASE("EntityCollection: reserve_temp_space has reasonable capacity",
+          "[ECS][EntityCollection]") {
+    // Use a fresh collection so capacity isn't inflated by prior tests.
+    EntityCollection fresh_coll;
+    REQUIRE(fresh_coll.get_temp().capacity() == 0);
+
+    fresh_coll.reserve_temp_space();
+
+    // sizeof(shared_ptr<Entity>) is typically 16, so the buggy version
+    // reserves 16*100 = 1600 elements. Fixed version should reserve exactly 100.
+    auto cap = fresh_coll.get_temp().capacity();
+    REQUIRE(cap >= 100);
+    REQUIRE(cap <= 200);
+}
+
+// ============================================================================
+// Group E: Query correctness invariants (guards Opts 1, 2, 9, 10)
+// ============================================================================
+
+TEST_CASE("EntityQuery: gen, gen_count, gen_ids all agree",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    for (int i = 0; i < 20; ++i) {
+        Entity &e = EntityHelper::createEntity();
+        if (i % 2 == 0)
+            e.addComponent<CompA>().value = i;
+    }
+    EntityHelper::merge_entity_arrays();
+
+    // Unfiltered
+    {
+        auto all = EntityQuery<>({.ignore_temp_warning = true}).gen();
+        auto count = EntityQuery<>({.ignore_temp_warning = true}).gen_count();
+        auto ids = EntityQuery<>({.ignore_temp_warning = true}).gen_ids();
+        REQUIRE(all.size() == 20);
+        REQUIRE(count == 20);
+        REQUIRE(ids.size() == 20);
+    }
+
+    // Filtered
+    {
+        auto filtered = EntityQuery<>({.ignore_temp_warning = true})
+                            .whereHasComponent<CompA>()
+                            .gen();
+        auto count = EntityQuery<>({.ignore_temp_warning = true})
+                         .whereHasComponent<CompA>()
+                         .gen_count();
+        auto ids = EntityQuery<>({.ignore_temp_warning = true})
+                       .whereHasComponent<CompA>()
+                       .gen_ids();
+        auto first = EntityQuery<>({.ignore_temp_warning = true})
+                         .whereHasComponent<CompA>()
+                         .gen_first();
+        REQUIRE(filtered.size() == 10);
+        REQUIRE(count == 10);
+        REQUIRE(ids.size() == 10);
+        REQUIRE(first.valid());
+
+        // gen_first result should be one of the gen() results
+        bool found = false;
+        for (auto &e : filtered) {
+            if (e.get().id == first.asE().id) {
+                found = true;
+                break;
+            }
+        }
+        REQUIRE(found);
+    }
+}
+
+TEST_CASE("EntityQuery: multiple queries on same entity set are independent",
+          "[ECS][EntityQuery]") {
+    // After Opt 1 (ref instead of copy), queries share the same
+    // underlying data. Ensure they don't interfere with each other.
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    for (int i = 0; i < 10; ++i) {
+        Entity &e = EntityHelper::createEntity();
+        e.addComponent<CompA>().value = i;
+        if (i < 5)
+            e.addComponent<CompB>();
+    }
+    EntityHelper::merge_entity_arrays();
+
+    // Run two different queries and verify they produce correct,
+    // independent results
+    auto q1 = EntityQuery<>({.ignore_temp_warning = true})
+                  .whereHasComponent<CompA>()
+                  .gen();
+    auto q2 = EntityQuery<>({.ignore_temp_warning = true})
+                  .whereHasComponent<CompB>()
+                  .gen();
+
+    REQUIRE(q1.size() == 10);
+    REQUIRE(q2.size() == 5);
+
+    // Mutating results of q1 should not affect q2's result count
+    // (they are independent result sets, even though they share
+    // the underlying entity storage)
+    q1[0].get().get<CompA>().value = 9999;
+
+    // q2 entities that overlap should see the mutation
+    // (same underlying Entity objects, not copies)
+    bool found_mutation = false;
+    for (auto &e : q2) {
+        if (e.get().has<CompA>() && e.get().get<CompA>().value == 9999)
+            found_mutation = true;
+    }
+    // The first entity (value=0, has CompB) was mutated to 9999
+    REQUIRE(found_mutation);
+}
+
 }  // namespace afterhours

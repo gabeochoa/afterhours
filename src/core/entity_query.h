@@ -18,21 +18,59 @@ struct EntityQuery {
   using TReturn =
       std::conditional_t<std::is_same_v<Derived, void>, EntityQuery, Derived>;
 
+  using FilterFn = std::function<bool(const Entity &)>;
+  using OrderByFn = std::function<bool(const Entity &, const Entity &)>;
+
+  // -----------------------------------------------------------------------
+  // Modification base class.
+  //
+  // This is the original virtual-dispatch filter system. It is kept for
+  // backward compatibility so that custom EntityQuery subclasses (e.g.
+  // example/core/custom_queries) can still define their own Modification
+  // subclasses and register them via add_mod().
+  //
+  // >>> MIGRATION NOTICE <<<
+  // The built-in Modification subclasses (Not, Limit, WhereID, etc.) are
+  // deprecated. Prefer using add_filter() with a lambda or std::function
+  // instead, which avoids the virtual-dispatch overhead.
+  //
+  // To opt in to the optimized path now, #define SKIP_ENTITY_QUERY_MODIFICATIONS
+  // before including this header. This removes the built-in struct
+  // definitions and makes the where*() methods use direct lambdas.
+  //
+  // Custom Modification subclasses registered via add_mod() continue to
+  // work regardless of the define.
+  // -----------------------------------------------------------------------
   struct Modification {
     virtual ~Modification() = default;
     virtual bool operator()(const Entity &) const = 0;
   };
 
+  // add_mod: accepts a heap-allocated Modification* and wraps it into a
+  // FilterFn so that the internal filter pipeline is always uniform.
+  // Custom EntityQuery subclasses should continue to use this.
   TReturn &add_mod(Modification *mod) {
-    mods.push_back(std::unique_ptr<Modification>(mod));
+    auto sp = std::shared_ptr<Modification>(mod);
+    mods.push_back([sp](const Entity &e) { return (*sp)(e); });
     return static_cast<TReturn &>(*this);
   }
 
+  // add_filter: preferred way to register filters in new code.
+  TReturn &add_filter(FilterFn fn) {
+    mods.push_back(std::move(fn));
+    return static_cast<TReturn &>(*this);
+  }
+
+  // -----------------------------------------------------------------------
+  // Built-in Modification subclasses (backward-compatible, virtual path).
+  // Define SKIP_ENTITY_QUERY_MODIFICATIONS to remove these and use the
+  // direct-lambda fast path instead.
+  // -----------------------------------------------------------------------
+#ifndef SKIP_ENTITY_QUERY_MODIFICATIONS
+
   struct Not : Modification {
     std::unique_ptr<Modification> mod;
-
     explicit Not(Modification *m) : mod(m) {}
-
     bool operator()(const Entity &entity) const override {
       return !((*mod)(entity));
     }
@@ -42,7 +80,6 @@ struct EntityQuery {
     int amount;
     mutable int amount_taken;
     explicit Limit(const int amt) : amount(amt), amount_taken(0) {}
-
     bool operator()(const Entity &) const override {
       if (amount_taken > amount)
         return false;
@@ -70,7 +107,6 @@ struct EntityQuery {
       return entity.cleanup;
     }
   };
-
   TReturn &whereMarkedForCleanup() {
     return add_mod(new WhereMarkedForCleanup());
   }
@@ -102,6 +138,156 @@ struct EntityQuery {
     return add_mod(new WhereLambda(fn));
   }
 
+  struct WhereHasTag : Modification {
+    TagId id;
+    explicit WhereHasTag(const TagId idIn) : id(idIn) {}
+    bool operator()(const Entity &entity) const override {
+      return entity.hasTag(id);
+    }
+  };
+  TReturn &whereHasTag(const TagId id) { return add_mod(new WhereHasTag(id)); }
+
+  struct WhereHasAllTags : Modification {
+    TagBitset mask;
+    explicit WhereHasAllTags(const TagBitset &m) : mask(m) {}
+    bool operator()(const Entity &entity) const override {
+      return entity.hasAllTags(mask);
+    }
+  };
+  TReturn &whereHasAllTags(const TagBitset &mask) {
+    return add_mod(new WhereHasAllTags(mask));
+  }
+
+  struct WhereHasAnyTag : Modification {
+    TagBitset mask;
+    explicit WhereHasAnyTag(const TagBitset &m) : mask(m) {}
+    bool operator()(const Entity &entity) const override {
+      return entity.hasAnyTag(mask);
+    }
+  };
+  TReturn &whereHasAnyTag(const TagBitset &mask) {
+    return add_mod(new WhereHasAnyTag(mask));
+  }
+
+  struct WhereHasNoTags : Modification {
+    TagBitset mask;
+    explicit WhereHasNoTags(const TagBitset &m) : mask(m) {}
+    bool operator()(const Entity &entity) const override {
+      return entity.hasNoTags(mask);
+    }
+  };
+  TReturn &whereHasNoTags(const TagBitset &mask) {
+    return add_mod(new WhereHasNoTags(mask));
+  }
+
+  TReturn &
+  whereLambdaExistsAndTrue(const std::function<bool(const Entity &)> &fn) {
+    if (fn)
+      return add_mod(new WhereLambda(fn));
+    return static_cast<TReturn &>(*this);
+  }
+
+  struct OrderBy {
+    virtual ~OrderBy() {}
+    virtual bool operator()(const Entity &a, const Entity &b) = 0;
+  };
+
+  struct OrderByLambda : OrderBy {
+    OrderByFn sortFn;
+    explicit OrderByLambda(const OrderByFn &sortFnIn) : sortFn(sortFnIn) {}
+    bool operator()(const Entity &a, const Entity &b) override {
+      return sortFn(a, b);
+    }
+  };
+
+  TReturn &orderByLambda(const OrderByFn &sortfn) {
+    if (orderby) {
+      log_error("We only apply the first order by in a query at the moment");
+      return static_cast<TReturn &>(*this);
+    }
+    orderby = sortfn;
+    return static_cast<TReturn &>(*this);
+  }
+
+#else // SKIP_ENTITY_QUERY_MODIFICATIONS -- optimized direct-lambda path
+
+  TReturn &take(const int amount) {
+    auto taken = std::make_shared<int>(0);
+    return add_filter([amount, taken](const Entity &) {
+      if (*taken > amount)
+        return false;
+      (*taken)++;
+      return true;
+    });
+  }
+  TReturn &first() { return take(1); }
+
+  TReturn &whereID(const int id) {
+    return add_filter([id](const Entity &e) { return e.id == id; });
+  }
+  TReturn &whereNotID(const int id) {
+    return add_filter([id](const Entity &e) { return e.id != id; });
+  }
+
+  TReturn &whereMarkedForCleanup() {
+    return add_filter([](const Entity &e) { return e.cleanup; });
+  }
+  TReturn &whereNotMarkedForCleanup() {
+    return add_filter([](const Entity &e) { return !e.cleanup; });
+  }
+
+  template <typename T> auto &whereHasComponent() {
+    return add_filter([](const Entity &e) { return e.has<T>(); });
+  }
+  template <typename T> auto &whereMissingComponent() {
+    return add_filter([](const Entity &e) { return !e.has<T>(); });
+  }
+
+  TReturn &whereLambda(const std::function<bool(const Entity &)> &fn) {
+    return add_filter(fn);
+  }
+
+  TReturn &whereHasTag(const TagId id) {
+    return add_filter([id](const Entity &e) { return e.hasTag(id); });
+  }
+
+  TReturn &whereHasAllTags(const TagBitset &mask) {
+    return add_filter(
+        [mask](const Entity &e) { return e.hasAllTags(mask); });
+  }
+
+  TReturn &whereHasAnyTag(const TagBitset &mask) {
+    return add_filter(
+        [mask](const Entity &e) { return e.hasAnyTag(mask); });
+  }
+
+  TReturn &whereHasNoTags(const TagBitset &mask) {
+    return add_filter(
+        [mask](const Entity &e) { return e.hasNoTags(mask); });
+  }
+
+  TReturn &
+  whereLambdaExistsAndTrue(const std::function<bool(const Entity &)> &fn) {
+    if (fn)
+      return add_filter(fn);
+    return static_cast<TReturn &>(*this);
+  }
+
+  TReturn &orderByLambda(const OrderByFn &sortfn) {
+    if (orderby) {
+      log_error("We only apply the first order by in a query at the moment");
+      return static_cast<TReturn &>(*this);
+    }
+    orderby = sortfn;
+    return static_cast<TReturn &>(*this);
+  }
+
+#endif // SKIP_ENTITY_QUERY_MODIFICATIONS
+
+  // -----------------------------------------------------------------------
+  // Template tag overloads (shared by both paths, delegate to TagId/Bitset
+  // versions defined above).
+  // -----------------------------------------------------------------------
   template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
   auto &whereHasTag(const TEnum tag_enum) {
     return whereHasTag(static_cast<TagId>(tag_enum));
@@ -154,73 +340,6 @@ struct EntityQuery {
     TagBitset mask;
     mask.set(static_cast<TagId>(TagEnum));
     return whereHasNoTags(mask);
-  }
-  TReturn &
-  whereLambdaExistsAndTrue(const std::function<bool(const Entity &)> &fn) {
-    if (fn)
-      return add_mod(new WhereLambda(fn));
-    return static_cast<TReturn &>(*this);
-  }
-
-  struct WhereHasTag : Modification {
-    TagId id;
-    explicit WhereHasTag(const TagId idIn) : id(idIn) {}
-    bool operator()(const Entity &entity) const override {
-      return entity.hasTag(id);
-    }
-  };
-  TReturn &whereHasTag(const TagId id) { return add_mod(new WhereHasTag(id)); }
-
-  struct WhereHasAllTags : Modification {
-    TagBitset mask;
-    explicit WhereHasAllTags(const TagBitset &m) : mask(m) {}
-    bool operator()(const Entity &entity) const override {
-      return entity.hasAllTags(mask);
-    }
-  };
-  TReturn &whereHasAllTags(const TagBitset &mask) {
-    return add_mod(new WhereHasAllTags(mask));
-  }
-
-  struct WhereHasAnyTag : Modification {
-    TagBitset mask;
-    explicit WhereHasAnyTag(const TagBitset &m) : mask(m) {}
-    bool operator()(const Entity &entity) const override {
-      return entity.hasAnyTag(mask);
-    }
-  };
-  TReturn &whereHasAnyTag(const TagBitset &mask) {
-    return add_mod(new WhereHasAnyTag(mask));
-  }
-
-  struct WhereHasNoTags : Modification {
-    TagBitset mask;
-    explicit WhereHasNoTags(const TagBitset &m) : mask(m) {}
-    bool operator()(const Entity &entity) const override {
-      return entity.hasNoTags(mask);
-    }
-  };
-  TReturn &whereHasNoTags(const TagBitset &mask) {
-    return add_mod(new WhereHasNoTags(mask));
-  }
-
-  using OrderByFn = std::function<bool(const Entity &, const Entity &)>;
-  struct OrderBy {
-    virtual ~OrderBy() {}
-    virtual bool operator()(const Entity &a, const Entity &b) = 0;
-  };
-
-  struct OrderByLambda : OrderBy {
-    OrderByFn sortFn;
-    explicit OrderByLambda(const OrderByFn &sortFnIn) : sortFn(sortFnIn) {}
-
-    bool operator()(const Entity &a, const Entity &b) override {
-      return sortFn(a, b);
-    }
-  };
-
-  TReturn &orderByLambda(const OrderByFn &sortfn) {
-    return static_cast<TReturn &>(set_order_by(new OrderByLambda(sortfn)));
   }
 
   struct UnderlyingOptions {
@@ -365,15 +484,12 @@ struct EntityQuery {
 
   explicit EntityQuery(EntityCollection &collection,
                        const QueryOptions &options = {})
-      : entities(collection.get_entities()) {
+      : entities(init_entities_ref(collection, options)) {
     const size_t size = collection.get_temp().size();
     if (size == 0)
       return;
 
-    if (options.force_merge) {
-      collection.merge_entity_arrays();
-      entities = collection.get_entities();
-    } else if (!options.ignore_temp_warning) {
+    if (!options.force_merge && !options.ignore_temp_warning) {
       const auto &temp_entities = collection.get_temp();
       const size_t num_to_print = std::min(size_t(10), temp_entities.size());
 
@@ -389,46 +505,31 @@ struct EntityQuery {
       log_error("query will miss {} ents in temp", size);
     }
   }
-  explicit EntityQuery(const Entities &entsIn) : entities(entsIn) {
-    entities = entsIn;
-  }
+  explicit EntityQuery(const Entities &entsIn) : entities(entsIn) {}
 
 private:
-  Entities entities;
+  const Entities &entities;
 
-  std::unique_ptr<OrderBy> orderby;
-  std::vector<std::unique_ptr<Modification>> mods;
+  // Helper to initialize the entities reference in the constructor.
+  // If force_merge is requested, merge first, then return the (now-updated)
+  // reference. Otherwise just return the current entities.
+  static const Entities &init_entities_ref(EntityCollection &collection,
+                                           const QueryOptions &options) {
+    if (options.force_merge && !collection.get_temp().empty()) {
+      collection.merge_entity_arrays();
+    }
+    return collection.get_entities();
+  }
+
+  std::optional<OrderByFn> orderby;
+  std::vector<FilterFn> mods;
   mutable RefEntities ents;
   mutable bool ran_query = false;
 
-  EntityQuery &set_order_by(OrderBy *ob) {
-    if (orderby) {
-      log_error("We only apply the first order by in a query at the moment");
-      return static_cast<TReturn &>(*this);
-    }
-    orderby = std::unique_ptr<OrderBy>(ob);
-    return static_cast<TReturn &>(*this);
-  }
-
-  RefEntities filter_mod(const RefEntities &in,
-                         const std::unique_ptr<Modification> &mod) const {
-    RefEntities out;
-    out.reserve(in.size());
-    for (const auto &entity : in) {
-      if ((*mod)(entity)) {
-        out.push_back(entity);
-      }
-    }
-    return out;
-  }
-
   RefEntities run_query(const UnderlyingOptions options) const {
-    RefEntities out;
-    out.reserve(entities.size());
-
     // Fast path: if we only need to know whether *any* entity matches (or
     // to return the first match), we can short-circuit as long as we aren't
-    // ordering results.
+    // ordering results. No upfront allocation needed.
     if (options.stop_on_first && !orderby) {
       for (const auto &e_ptr : entities) {
         if (!e_ptr)
@@ -436,40 +537,39 @@ private:
         const Entity &e = *e_ptr;
         bool ok = true;
         for (const auto &mod : mods) {
-          if (!(*mod)(e)) {
+          if (!mod(e)) {
             ok = false;
             break;
           }
         }
         if (ok) {
-          out.push_back(const_cast<Entity &>(e));
-          return out;
+          RefEntities result;
+          result.push_back(const_cast<Entity &>(e));
+          return result;
         }
       }
-      return out;
+      return {};
     }
+
+    RefEntities out;
+    out.reserve(mods.empty() ? entities.size() : entities.size() / 2);
 
     for (const auto &e_ptr : entities) {
       if (!e_ptr)
         continue;
       Entity &e = *e_ptr;
-      out.push_back(e);
+      bool ok = true;
+      for (const auto &mod : mods) {
+        if (!mod(e)) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok)
+        out.push_back(e);
     }
 
-    auto it = out.end();
-    for (const auto &mod : mods) {
-      it = std::partition(out.begin(), it, [&mod](const auto &entity) {
-        return (*mod)(entity);
-      });
-    }
-
-    out.erase(it, out.end());
-
-    if (out.size() == 1) {
-      return out;
-    }
-
-    if (orderby) {
+    if (orderby && out.size() > 1) {
       std::sort(out.begin(), out.end(), [&](const Entity &a, const Entity &b) {
         return (*orderby)(a, b);
       });

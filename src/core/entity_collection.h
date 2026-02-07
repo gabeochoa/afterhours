@@ -2,7 +2,8 @@
 
 #include <algorithm>
 #include <functional>
-#include <map>
+#include <unordered_map>
+#include <unordered_set>
 #include <memory>
 #include <set>
 #include <vector>
@@ -35,7 +36,7 @@ struct EntityCollection {
   Entities entities_DO_NOT_USE;
   Entities temp_entities;
   std::set<int> permanant_ids;
-  std::map<ComponentID, Entity *> singletonMap;
+  std::unordered_map<ComponentID, Entity *> singletonMap;
 
   // Handle store:
   // - stable slot table + generation counters
@@ -61,7 +62,7 @@ struct EntityCollection {
     return next + static_cast<EntityHandle::Slot>(next == 0);
   }
 
-  void reserve_temp_space() { temp_entities.reserve(sizeof(EntityType) * 100); }
+  void reserve_temp_space() { temp_entities.reserve(100); }
 
   Entities &get_temp() { return temp_entities; }
   const Entities &get_temp() const { return temp_entities; }
@@ -199,7 +200,7 @@ struct EntityCollection {
     if (temp_entities.capacity() == 0) [[unlikely]]
       reserve_temp_space();
 
-    std::shared_ptr<Entity> e(new Entity());
+    auto e = std::make_shared<Entity>();
     temp_entities.push_back(e);
 
     if (options.is_permanent) {
@@ -284,20 +285,40 @@ struct EntityCollection {
   }
 
   void markIDForCleanup(const int e_id) {
-    const auto &entities = get_entities();
-    auto it = entities.begin();
-    while (it != entities.end()) {
-      if ((*it)->id == e_id) {
-        (*it)->cleanup = true;
-        break;
+    if (e_id < 0)
+      return;
+    // Fast path: use the id_to_slot mapping for O(1) lookup.
+    const auto idx = static_cast<std::size_t>(e_id);
+    if (idx < id_to_slot.size()) {
+      const auto slot = id_to_slot[idx];
+      if (slot != EntityHandle::INVALID_SLOT && slot < slots.size()) {
+        if (auto &sp = slots[slot].ent; sp && sp->id == e_id) {
+          sp->cleanup = true;
+          return;
+        }
       }
-      it++;
+    }
+    // Fallback: linear scan (handles edge cases where id_to_slot is stale).
+    for (const auto &sp : get_entities()) {
+      if (sp && sp->id == e_id) {
+        sp->cleanup = true;
+        return;
+      }
     }
   }
 
   void cleanup() {
     merge_entity_arrays();
     Entities &entities = get_entities_for_mod();
+
+    // Build a set of entity pointers that are registered as singletons.
+    // This lets us skip the singletonMap scan for the vast majority of
+    // entities that are not singletons.
+    std::unordered_set<Entity *> singleton_entities;
+    singleton_entities.reserve(singletonMap.size());
+    for (const auto &[_, ptr] : singletonMap) {
+      singleton_entities.insert(ptr);
+    }
 
     std::size_t i = 0;
     while (i < entities.size()) {
@@ -306,9 +327,9 @@ struct EntityCollection {
         ++i;
         continue;
       }
-      // Remove any singleton registrations pointing at this entity.
-      // (We can't leave dangling Entity* in singletonMap.)
-      if (sp) {
+      // Remove any singleton registrations pointing at this entity,
+      // but only if this entity is actually a singleton.
+      if (sp && singleton_entities.count(sp.get())) {
         Entity *removed = sp.get();
         for (auto it = singletonMap.begin(); it != singletonMap.end();) {
           if (it->second == removed) {
@@ -317,6 +338,7 @@ struct EntityCollection {
             ++it;
           }
         }
+        singleton_entities.erase(removed);
       }
       // invalidate removed entity slot/id mapping
       invalidate_entity_slot_if_any(entities[i]);
@@ -353,6 +375,14 @@ struct EntityCollection {
     }
 
     Entities &entities = get_entities_for_mod();
+
+    // Build singleton membership set for fast skip.
+    std::unordered_set<Entity *> singleton_entities;
+    singleton_entities.reserve(singletonMap.size());
+    for (const auto &[_, ptr] : singletonMap) {
+      singleton_entities.insert(ptr);
+    }
+
     std::size_t i = 0;
     while (i < entities.size()) {
       const auto &sp = entities[i];
@@ -362,9 +392,8 @@ struct EntityCollection {
         continue;
       }
 
-      // Remove singleton registrations pointing to the entity we're
-      // deleting.
-      if (sp) {
+      // Remove singleton registrations only if this entity is a singleton.
+      if (sp && singleton_entities.count(sp.get())) {
         Entity *removed = sp.get();
         for (auto it = singletonMap.begin(); it != singletonMap.end();) {
           if (it->second == removed) {
@@ -373,6 +402,7 @@ struct EntityCollection {
             ++it;
           }
         }
+        singleton_entities.erase(removed);
       }
 
       // Invalidate slot/id mapping so lookups and handles don't retain

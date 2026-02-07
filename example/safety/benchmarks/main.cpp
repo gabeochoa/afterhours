@@ -27,6 +27,8 @@
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_ENTITY_QUERY
 #define AFTER_HOURS_SYSTEM
+// Use the optimized direct-lambda query path (no virtual Modification structs).
+#define SKIP_ENTITY_QUERY_MODIFICATIONS
 #include "../../../ah.h"
 #include "../../../src/core/opt_entity_handle.h"
 #include "../../../src/core/snapshot.h"
