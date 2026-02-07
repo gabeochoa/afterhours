@@ -863,11 +863,12 @@ struct AutoLayout {
     float sx = widget.computed[Axis::X] + widget.computed_padd[Axis::X];
     float sy = widget.computed[Axis::Y] + widget.computed_padd[Axis::Y];
 
-    // Grid snapping tolerance: when grid snapping is enabled, parent sizes are
-    // snapped after children are sized relative to the pre-snap parent. This
-    // can cause children to appear slightly larger than the snapped parent.
-    // We use one grid unit as tolerance for warning checks to avoid spurious
-    // overflow/wrap warnings caused by this rounding discrepancy.
+    // Grid snapping tolerance: when grid snapping is enabled, each child's
+    // position is snapped to the grid, which can accumulate rounding errors
+    // across multiple children. We use one grid unit as tolerance for the
+    // actual wrap logic (prevents single-snap-induced wrapping), and a
+    // larger accumulated tolerance for warning checks (proportional to
+    // child count) for children()-sized containers.
     float grid_snap_tolerance_x = 0.f;
     float grid_snap_tolerance_y = 0.f;
     if (enable_grid_snapping) {
@@ -935,6 +936,25 @@ struct AutoLayout {
       }
     }
 
+    // Accumulated grid snap tolerance for warning checks:
+    // Each child's position snap can introduce up to half a grid unit of
+    // rounding error. For children()-sized containers, this accumulates
+    // across all children, so we scale the warning tolerance accordingly.
+    float accumulated_snap_tolerance_x = grid_snap_tolerance_x;
+    float accumulated_snap_tolerance_y = grid_snap_tolerance_y;
+    if (enable_grid_snapping && num_layout_children > 2) {
+      if (widget.desired[Axis::X].dim == Dim::Children) {
+        accumulated_snap_tolerance_x = std::max(
+            grid_snap_tolerance_x,
+            num_layout_children * grid_snap_tolerance_x / 2.0f);
+      }
+      if (widget.desired[Axis::Y].dim == Dim::Children) {
+        accumulated_snap_tolerance_y = std::max(
+            grid_snap_tolerance_y,
+            num_layout_children * grid_snap_tolerance_y / 2.0f);
+      }
+    }
+
     // Position children
     float offx = is_row ? start_offset : 0.f;
     float offy = is_column ? start_offset : 0.f;
@@ -994,20 +1014,21 @@ struct AutoLayout {
         return fmt::format("entity_{}", widget.id);
       };
 
-      // We can flex vertically and current child will push us over height
-      // lets wrap
-      // Wrap detection should be based on PARENT's flex direction, not child's
-      bool will_wrap_column = is_column && cy + offy > sy;
-      bool will_wrap_row = is_row && cx + offx > sx;
+      // Wrap detection: use one-grid-unit tolerance to prevent wrapping
+      // caused by grid snapping rounding errors (e.g., 3 buttons that fit
+      // mathematically but wrap due to accumulated position snapping)
+      bool will_wrap_column =
+          is_column && cy + offy > sy + grid_snap_tolerance_y;
+      bool will_wrap_row = is_row && cx + offx > sx + grid_snap_tolerance_x;
 
-      // Check for smart wrap warning conditions
-      // Skip warnings for scroll containers - wrap/overflow is expected
-      // Use grid snapping tolerance to avoid spurious warnings from snap rounding
+      // Warning checks use accumulated tolerance (scaled by child count
+      // for children()-sized containers) to avoid false positives from
+      // accumulated grid snapping across many children
       bool parent_is_scroll_view = to_ent(widget.id).has<HasScrollView>();
       bool should_warn_wrap_column =
-          is_column && (cy + offy > sy + grid_snap_tolerance_y);
+          is_column && (cy + offy > sy + accumulated_snap_tolerance_y);
       bool should_warn_wrap_row =
-          is_row && (cx + offx > sx + grid_snap_tolerance_x);
+          is_row && (cx + offx > sx + accumulated_snap_tolerance_x);
       if ((should_warn_wrap_column || should_warn_wrap_row) &&
           !parent_is_scroll_view) {
         bool should_warn = false;
@@ -1112,11 +1133,11 @@ struct AutoLayout {
 
       // Condition 3: Check if child overflows parent bounds after positioning
       // Skip warning for scroll containers - overflow is expected behavior
-      // Use grid snapping tolerance to avoid spurious warnings from snap rounding
+      // Use accumulated tolerance to handle grid snapping rounding errors
       float child_end_x = child.computed_rel[Axis::X] + cx;
       float child_end_y = child.computed_rel[Axis::Y] + cy;
-      bool overflows_x = child_end_x > sx + grid_snap_tolerance_x;
-      bool overflows_y = child_end_y > sy + grid_snap_tolerance_y;
+      bool overflows_x = child_end_x > sx + accumulated_snap_tolerance_x;
+      bool overflows_y = child_end_y > sy + accumulated_snap_tolerance_y;
       if ((overflows_x || overflows_y) && !parent_is_scroll_view) {
         log_warn("Layout overflow: '{}' extends outside parent '{}' bounds "
                  "(child_rel=[{:.1f},{:.1f}], child_size=[{:.1f},{:.1f}], "

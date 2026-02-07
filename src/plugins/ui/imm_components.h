@@ -1247,13 +1247,16 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   main_btn.ent().template addComponentIfMissing<InFocusCluster>();
 
   // Use absolute positioning for dropdown options to avoid layout overflow
-  // warnings - dropdown menus intentionally extend beyond their parent
+  // warnings - dropdown menus intentionally extend beyond their parent.
+  // NoWrap prevents grid-snap-induced wrapping of dropdown items to
+  // new columns when accumulated position rounding exceeds container size.
   if (auto result = button_group(
           ctx, mk(entity), options,
           ComponentConfig::inherit_from(config, "dropdown button group")
               .with_size(ComponentSize{config.size.x_axis,
                                        children(config.size.y_axis.value)})
               .with_flex_direction(FlexDirection::Column)
+              .with_no_wrap()
               .with_absolute_position()
               .with_translate(pixels(0), config.size.y_axis)
               .with_hidden(config.hidden || !dropdownState.on)
