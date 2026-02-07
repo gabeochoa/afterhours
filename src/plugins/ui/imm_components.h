@@ -740,8 +740,8 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
     // Pill style (default) - responsive sizing at 720p baseline
     // Track height meets MIN_TOUCH_TARGET for accessibility
     // Significantly lighten track colors for visibility on dark backgrounds
-    Color track_off = colors::lighten(theme.secondary, 0.5f);
-    Color track_on = colors::lighten(theme.accent, 0.5f);
+    Color track_off = colors::darken(theme.secondary, 0.3f);
+    Color track_on = colors::lighten(theme.accent, 0.3f);
     Color track_color = colors::lerp(track_off, track_on, state.animation_progress);
     // Knob is white or uses darkfont if available for contrast
     Color knob_color =
