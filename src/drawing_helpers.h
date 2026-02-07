@@ -164,13 +164,26 @@ inline void DrawRectangleCustom(const Rectangle rec,
 namespace afterhours {
 #ifdef AFTER_HOURS_USE_RAYLIB
 
+// Draw text with optional rotation support
+// When rotation is non-zero, uses DrawTextPro to rotate around (centerX, centerY)
+// When rotation is zero, uses standard DrawTextEx
 inline void draw_text_ex(const raylib::Font font, const char *content,
                          const Vector2Type position, const float font_size,
-                         const float spacing, const Color color) {
-    // Skip text rendering in headless mode - font textures may not work correctly
+                         const float spacing, const Color color,
+                         const float rotation = 0.0f,
+                         const float centerX = 0.0f, const float centerY = 0.0f) {
     if (graphics::is_headless()) return;
-    raylib::DrawTextEx(font, content, position, font_size, spacing, color);
+    if (std::abs(rotation) < 0.001f) {
+        raylib::DrawTextEx(font, content, position, font_size, spacing, color);
+        return;
+    }
+    // Use DrawTextPro for rotated text
+    // Origin is the offset from position to the rotation center
+    raylib::Vector2 origin = {centerX - position.x, centerY - position.y};
+    raylib::Vector2 drawPos = {centerX, centerY};
+    raylib::DrawTextPro(font, content, drawPos, origin, rotation, font_size, spacing, color);
 }
+
 inline void draw_text(const char *content, const float x, const float y,
                       const float font_size, const Color color) {
     // Skip text rendering in headless mode - font textures may not work correctly
@@ -321,6 +334,23 @@ inline void begin_scissor_mode(int x, int y, int width, int height) {
 // End scissor mode (stop clipping)
 inline void end_scissor_mode() { raylib::EndScissorMode(); }
 
+// Push rotation transform - rotates all subsequent drawing around the specified center
+// rotation: angle in degrees (clockwise)
+// Must be paired with pop_rotation()
+inline void push_rotation(float centerX, float centerY, float rotation) {
+    raylib::rlPushMatrix();
+    if (std::abs(rotation) >= 0.001f) {
+        raylib::rlTranslatef(centerX, centerY, 0.0f);
+        raylib::rlRotatef(rotation, 0.0f, 0.0f, 1.0f);
+        raylib::rlTranslatef(-centerX, -centerY, 0.0f);
+    }
+}
+
+// Pop rotation transform - must be called after push_rotation
+inline void pop_rotation() {
+    raylib::rlPopMatrix();
+}
+
 // Line drawing primitives
 inline void draw_line(int x1, int y1, int x2, int y2, Color color) {
   raylib::DrawLine(x1, y1, x2, y2, color);
@@ -407,7 +437,8 @@ inline raylib::Font get_unset_font() { return raylib::GetFontDefault(); }
 #else
 inline void draw_text_ex(const afterhours::Font, const char *,
                          const Vector2Type, const float, const float,
-                         const Color) {}
+                         const Color, const float = 0.0f,
+                         const float = 0.0f, const float = 0.0f) {}
 inline void draw_text(const char *, const float, const float, const float,
                       const Color) {}
 inline void draw_rectangle(const RectangleType, const Color) {}
@@ -429,6 +460,8 @@ inline void draw_ring_segment(float, float, float, float, float, float, int,
 inline void draw_ring(float, float, float, float, int, Color) {}
 inline void begin_scissor_mode(int, int, int, int) {}
 inline void end_scissor_mode() {}
+inline void push_rotation(float, float, float) {}
+inline void pop_rotation() {}
 inline void draw_line(int, int, int, int, Color) {}
 inline void draw_line_ex(Vector2Type, Vector2Type, float, Color) {}
 inline void draw_line_strip(Vector2Type *, int, Color) {}

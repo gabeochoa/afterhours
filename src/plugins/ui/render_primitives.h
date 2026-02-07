@@ -57,6 +57,10 @@ struct RenderPrimitive {
       float font_size;
       Color color;
       TextAlignment alignment;
+      // Rotation data (for rotating text with its parent component)
+      float rotation;      // Rotation angle in degrees
+      float rot_center_x;  // Rotation center X (component center)
+      float rot_center_y;  // Rotation center Y (component center)
       // Optional stroke/shadow data
       bool has_stroke;
       float stroke_thickness;
@@ -298,7 +302,10 @@ public:
                 const std::string& font_name, float font_size, Color color,
                 TextAlignment alignment, int layer, EntityID entity_id = -1,
                 const std::optional<TextStroke>& stroke = std::nullopt,
-                const std::optional<TextShadow>& shadow = std::nullopt) {
+                const std::optional<TextShadow>& shadow = std::nullopt,
+                float rotation = 0.0f,
+                float rot_center_x = 0.0f,
+                float rot_center_y = 0.0f) {
     // Copy strings to arena for stable pointers
     char* text_copy = arena_->create_array_uninitialized<char>(text.size() + 1);
     if (text_copy) {
@@ -322,6 +329,9 @@ public:
     cmd.data.text.font_size = font_size;
     cmd.data.text.color = color;
     cmd.data.text.alignment = alignment;
+    cmd.data.text.rotation = rotation;
+    cmd.data.text.rot_center_x = rot_center_x;
+    cmd.data.text.rot_center_y = rot_center_y;
 
     // Stroke data
     cmd.data.text.has_stroke = stroke.has_value() && stroke->has_stroke();
@@ -615,12 +625,17 @@ private:
       startPos.x = std::max(cmd.data.text.rect.x, right_x);
     }
 
+    // Get rotation parameters
+    float rotation = cmd.data.text.rotation;
+    float rot_cx = cmd.data.text.rot_center_x;
+    float rot_cy = cmd.data.text.rot_center_y;
+
     // Draw shadow first
     if (cmd.data.text.has_shadow) {
       Vector2Type shadowPos = {startPos.x + cmd.data.text.shadow_offset_x,
                                startPos.y + cmd.data.text.shadow_offset_y};
       draw_text_ex(font, cmd.data.text.text, shadowPos, fontSize, spacing,
-                   cmd.data.text.shadow_color);
+                   cmd.data.text.shadow_color, rotation, rot_cx, rot_cy);
     }
 
     // Draw stroke (8 directions)
@@ -632,13 +647,13 @@ private:
       for (const auto& offset : offsets) {
         Vector2Type strokePos = {startPos.x + offset[0], startPos.y + offset[1]};
         draw_text_ex(font, cmd.data.text.text, strokePos, fontSize, spacing,
-                     cmd.data.text.stroke_color);
+                     cmd.data.text.stroke_color, rotation, rot_cx, rot_cy);
       }
     }
 
     // Draw main text
     draw_text_ex(font, cmd.data.text.text, startPos, fontSize, spacing,
-                 cmd.data.text.color);
+                 cmd.data.text.color, rotation, rot_cx, rot_cy);
   }
 
   void render_image(const RenderPrimitive& cmd) {

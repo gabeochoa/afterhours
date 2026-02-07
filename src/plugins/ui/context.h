@@ -62,10 +62,12 @@ template <typename InputAction> struct UIContext : BaseComponent {
   std::set<EntityID> focused_ids;
 
   EntityID hot_id = ROOT;          // hot means the mouse is over this element
+  EntityID prev_hot_id = ROOT;     // previous frame's hot_id (for animations)
   EntityID focus_id = ROOT;        // current actual focused element
   EntityID visual_focus_id = ROOT; // the element the ring should be drawn on
   EntityID active_id =
       ROOT; // active means the element is being interacted with
+  EntityID prev_active_id = ROOT;  // previous frame's active_id (for animations)
   EntityID last_processed =
       ROOT; // last element that was processed (used for reverse tabbing)
 
@@ -76,6 +78,9 @@ template <typename InputAction> struct UIContext : BaseComponent {
   Theme theme;
   // TODO: Add styling defaults back when circular dependency is resolved
   // imm::UIStylingDefaults styling_defaults;
+
+  // Delta time for animation updates (set each frame)
+  float dt = 0.0f;
 
   // Input gates - systems can register functions that control whether
   // an entity should receive input. All gates must return true for input
@@ -106,6 +111,10 @@ template <typename InputAction> struct UIContext : BaseComponent {
 
   [[nodiscard]] bool is_hot(EntityID id) const { return hot_id == id; };
   [[nodiscard]] bool is_active(EntityID id) const { return active_id == id; };
+  // For animations: check previous frame's state (since current frame state
+  // isn't set until HandleClicks runs after screen rendering)
+  [[nodiscard]] bool was_hot(EntityID id) const { return prev_hot_id == id; };
+  [[nodiscard]] bool was_active(EntityID id) const { return prev_active_id == id; };
   void set_hot(EntityID id) { hot_id = id; }
   void set_active(EntityID id) { active_id = id; }
 

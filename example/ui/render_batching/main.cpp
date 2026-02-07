@@ -104,6 +104,10 @@ struct RenderPrimitive {
       float font_size;
       Color color;
       TextAlignment alignment;
+      // Rotation data (for rotating text with its parent component)
+      float rotation;      // Rotation angle in degrees
+      float rot_center_x;  // Rotation center X (component center)
+      float rot_center_y;  // Rotation center Y (component center)
       bool has_stroke;
       float stroke_thickness;
       Color stroke_color;
@@ -229,6 +233,9 @@ public:
     cmd.data.text.font_size = font_size;
     cmd.data.text.color = color;
     cmd.data.text.alignment = alignment;
+    cmd.data.text.rotation = 0.0f;
+    cmd.data.text.rot_center_x = 0.0f;
+    cmd.data.text.rot_center_y = 0.0f;
     cmd.data.text.has_stroke = false;
     cmd.data.text.has_shadow = false;
   }

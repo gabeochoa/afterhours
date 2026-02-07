@@ -306,6 +306,104 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   }
 }
 
+inline void apply_animations(HasUIContext auto &ctx, Entity &entity,
+                             const ComponentConfig &config) {
+  if (config.animations.empty())
+    return;
+
+  auto &state = entity.addComponentIfMissing<HasAnimationState>();
+  // Clamp dt to prevent huge jumps on first frame or after pauses
+  float dt = std::min(ctx.dt, 1.0f / 200.0f);
+
+  // Handle OnAppear trigger (first time we see this entity with animations)
+  if (!state.has_appeared) {
+    state.has_appeared = true;
+    for (const auto &anim_def : config.animations) {
+      if (anim_def.trigger == AnimTrigger::OnAppear) {
+        auto &track = state.get(anim_def.property);
+        anim::start(track, anim_def.from_value, anim_def.to_value);
+      }
+    }
+    // Skip update on first frame - let it render at from_value first
+    goto apply_values;
+  }
+
+  // Process each animation definition
+  for (const auto &anim_def : config.animations) {
+    auto &track = state.get(anim_def.property);
+
+    // OnAppear: already started above, just update
+    if (anim_def.trigger == AnimTrigger::OnAppear) {
+      anim::update(track, anim_def, dt);
+      continue;
+    }
+
+    // Loop: ping-pong when animation completes
+    if (anim_def.trigger == AnimTrigger::Loop) {
+      if (!track.is_active) {
+        float next_from = track.target;
+        float next_to = (track.target == anim_def.to_value)
+                            ? anim_def.from_value
+                            : anim_def.to_value;
+        anim::start(track, next_from, next_to);
+      }
+      anim::update(track, anim_def, dt);
+      continue;
+    }
+
+    // Edge-triggered animations: OnClick, OnHover, OnFocus
+    // Use was_hot/was_active since current frame's state isn't set until
+    // HandleClicks runs after screen rendering
+    bool trigger_active = false;
+    switch (anim_def.trigger) {
+    case AnimTrigger::OnClick:
+      trigger_active = ctx.was_active(entity.id);
+      break;
+    case AnimTrigger::OnHover:
+      trigger_active = ctx.was_hot(entity.id);
+      break;
+    case AnimTrigger::OnFocus:
+      trigger_active = ctx.has_focus(entity.id);
+      break;
+    default:
+      break;
+    }
+
+    // Start on rising edge, reverse on falling edge
+    if (trigger_active && !track.triggered) {
+      anim::start_to(track, anim_def.to_value);
+    } else if (!trigger_active && track.triggered) {
+      anim::start_to(track, anim_def.from_value);
+    }
+    track.triggered = trigger_active;
+
+    anim::update(track, anim_def, dt);
+  }
+
+apply_values:
+  // Apply animated values to modifiers (additive)
+  auto &mods = entity.addComponentIfMissing<HasUIModifiers>();
+
+  // Scale is multiplicative
+  if (state.scale.is_active || state.scale.current != 1.0f) {
+    mods.scale *= state.scale.current;
+  }
+
+  // Translate is additive
+  mods.translate_x += state.translate_x.current;
+  mods.translate_y += state.translate_y.current;
+
+  // Rotation is additive (in degrees)
+  mods.rotation += state.rotation.current;
+
+  // Opacity (apply to HasOpacity component)
+  if (state.opacity.is_active || state.opacity.current != 1.0f) {
+    if (entity.has<HasOpacity>()) {
+      entity.get<HasOpacity>().value *= state.opacity.current;
+    }
+  }
+}
+
 inline bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
                                     Entity &parent, ComponentConfig config,
                                     const std::string &debug_name = "") {
@@ -329,6 +427,7 @@ inline bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
   apply_flags(entity, config);
   apply_layout(entity, config);
   apply_visuals(ctx, entity, config);
+  apply_animations(ctx, entity, config);
   apply_label(ctx, entity, config);
   apply_texture(entity, config);
   apply_shadow(entity, config);

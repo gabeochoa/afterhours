@@ -117,6 +117,9 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
       }
     }
 
+    // Save previous frame's state for animations before resetting
+    context.prev_hot_id = context.hot_id;
+    context.prev_active_id = context.active_id;
     context.hot_id = context.ROOT;
   }
 };

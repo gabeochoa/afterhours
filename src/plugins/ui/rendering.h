@@ -428,7 +428,10 @@ static inline void _draw_text_at_position(const ui::FontManager &fm,
                                           const std::string &text,
                                           RectangleType rect,
                                           TextAlignment alignment,
-                                          RectangleType sizing, Color color) {
+                                          RectangleType sizing, Color color,
+                                          float rotation = 0.0f,
+                                          float rot_center_x = 0.0f,
+                                          float rot_center_y = 0.0f) {
   // Always use UTF-8 aware rendering (works for all text including CJK)
   Font font = fm.get_active_font();
   float fontSize = sizing.height;
@@ -448,7 +451,16 @@ static inline void _draw_text_at_position(const ui::FontManager &fm,
     startPos.x = std::max(rect.x, centered_x);
     startPos.y = rect.y + (rect.height - textSize.y) / 2.0f + offset_y;
   }
-  draw_text_ex(font, text.c_str(), startPos, fontSize, spacing, color);
+
+  // Use provided rotation center (component center), or default to text rect center
+  float centerX = (rot_center_x != 0.0f || rot_center_y != 0.0f)
+                  ? rot_center_x
+                  : rect.x + rect.width / 2.0f;
+  float centerY = (rot_center_x != 0.0f || rot_center_y != 0.0f)
+                  ? rot_center_y
+                  : rect.y + rect.height / 2.0f;
+  draw_text_ex(font, text.c_str(), startPos, fontSize, spacing, color,
+               rotation, centerX, centerY);
 }
 
 static inline void
@@ -456,7 +468,10 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
                   RectangleType rect, TextAlignment alignment, Color color,
                   bool show_debug_indicator = false,
                   const std::optional<TextStroke> &stroke = std::nullopt,
-                  const std::optional<TextShadow> &shadow = std::nullopt) {
+                  const std::optional<TextShadow> &shadow = std::nullopt,
+                  float rotation = 0.0f,
+                  float rot_center_x = 0.0f,
+                  float rot_center_y = 0.0f) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
   // Register text for E2E testing assertions (only when test mode is active)
   if (testing::test_input::detail::test_mode) {
@@ -527,7 +542,7 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
     shadow_sizing.x += shadow->offset_x;
     shadow_sizing.y += shadow->offset_y;
     _draw_text_at_position(fm, text, rect, alignment, shadow_sizing,
-                           shadow->color);
+                           shadow->color, rotation, rot_center_x, rot_center_y);
   }
 
   // Draw text stroke/outline if configured
@@ -545,12 +560,12 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
       offset_sizing.x += ox;
       offset_sizing.y += oy;
       _draw_text_at_position(fm, text, rect, alignment, offset_sizing,
-                             stroke_color);
+                             stroke_color, rotation, rot_center_x, rot_center_y);
     }
   }
 
   // Draw main text on top
-  _draw_text_at_position(fm, text, rect, alignment, sizing, color);
+  _draw_text_at_position(fm, text, rect, alignment, sizing, color, rotation, rot_center_x, rot_center_y);
 }
 
 static inline Vector2Type
@@ -1029,6 +1044,11 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                        ? entity.get<HasRoundedCorners>().segments
                        : 8;
 
+    // Push rotation transform - all subsequent drawing will be rotated around component center
+    float centerX = draw_rect.x + draw_rect.width / 2.0f;
+    float centerY = draw_rect.y + draw_rect.height / 2.0f;
+    push_rotation(centerX, centerY, rotation);
+
     // Draw shadow first (behind the element)
     render_shadow(entity, draw_rect, corner_settings, effective_opacity,
                   roundness, segments);
@@ -1120,8 +1140,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         col = colors::opacity_pct(col, effective_opacity);
       }
 
-      draw_rectangle_rounded_rotated(draw_rect, roundness, segments, col,
-                                     corner_settings, rotation);
+      draw_rectangle_rounded(draw_rect, roundness, segments, col,
+                             corner_settings);
     }
 
     render_bevel(entity, draw_rect, effective_opacity);
@@ -1194,7 +1214,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
       draw_text_in_rect(font_manager, hasLabel.label.c_str(), text_rect,
                         hasLabel.alignment, font_col, SHOW_TEXT_OVERFLOW_DEBUG,
-                        stroke, shadow);
+                        stroke, shadow, rotation, centerX, centerY);
     }
 
     if (entity.has<texture_manager::HasTexture>()) {
@@ -1230,6 +1250,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                                         },
                                         size, 0.f, img_col);
     }
+
+    pop_rotation();
   }
 
   void render(const UIContext<InputAction> &context,
@@ -1709,9 +1731,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       if (result.rect.height >= MIN_FONT_SIZE) {
         // Pass the container rect (text_rect) not the position rect (result.rect)
         // render_text will handle centering within the container
+        float centerX = draw_rect.x + draw_rect.width / 2.0f;
+        float centerY = draw_rect.y + draw_rect.height / 2.0f;
         buffer.add_text(text_rect, hasLabel.label, cmp.font_name,
                         result.rect.height, font_col, hasLabel.alignment,
-                        layer, entity.id, stroke, shadow);
+                        layer, entity.id, stroke, shadow,
+                        rotation, centerX, centerY);
       }
     }
 
