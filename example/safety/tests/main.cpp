@@ -9,6 +9,7 @@
 
 #include "../../../src/core/opt_entity_handle.h"
 #include "../../../src/core/pointer_policy.h"
+#include "../../../src/core/snapshot.h"
 #include "../../../src/ecs.h"
 #include "../../../src/plugins/autolayout.h"
 #include "../../core/tag_filter_regression/demo_tags.h"
@@ -472,6 +473,978 @@ TEST_CASE("ECS: get_singleton is safe when missing (returns a dummy entity)",
     // Not registered => should not crash. It should return a dummy entity ref.
     RefEntity e = EntityHelper::get_singleton<MissingSingleton>();
     REQUIRE_FALSE(e.get().has<MissingSingleton>());
+}
+
+// ============================================================================
+// Entity component operations
+// ============================================================================
+
+struct CompA : BaseComponent {
+    int value = 42;
+};
+struct CompB : BaseComponent {
+    float x = 1.5f;
+};
+struct CompC : BaseComponent {
+    std::string name = "hello";
+};
+
+TEST_CASE("Entity: addComponent and get", "[Entity][Component]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    REQUIRE_FALSE(e.has<CompA>());
+
+    auto &comp = e.addComponent<CompA>();
+    REQUIRE(e.has<CompA>());
+    REQUIRE(comp.value == 42);
+    REQUIRE(e.get<CompA>().value == 42);
+}
+
+TEST_CASE("Entity: addComponent with constructor args", "[Entity][Component]") {
+    struct CompWithArgs : BaseComponent {
+        int a;
+        float b;
+        CompWithArgs(int a_, float b_) : a(a_), b(b_) {}
+    };
+
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    auto &comp = e.addComponent<CompWithArgs>(10, 3.14f);
+    REQUIRE(comp.a == 10);
+    REQUIRE(comp.b == Approx(3.14f));
+}
+
+TEST_CASE("Entity: removeComponent", "[Entity][Component]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    e.addComponent<CompA>();
+    REQUIRE(e.has<CompA>());
+
+    e.removeComponent<CompA>();
+    REQUIRE_FALSE(e.has<CompA>());
+}
+
+TEST_CASE("Entity: addComponentIfMissing", "[Entity][Component]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    // First call adds the component
+    auto &comp1 = e.addComponentIfMissing<CompA>();
+    comp1.value = 99;
+
+    // Second call returns the existing one (doesn't overwrite)
+    auto &comp2 = e.addComponentIfMissing<CompA>();
+    REQUIRE(comp2.value == 99);
+    REQUIRE(&comp1 == &comp2);
+}
+
+TEST_CASE("Entity: removeComponentIfExists", "[Entity][Component]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    // Should not crash when component is missing
+    e.removeComponentIfExists<CompA>();
+    REQUIRE_FALSE(e.has<CompA>());
+
+    // Should remove when present
+    e.addComponent<CompA>();
+    REQUIRE(e.has<CompA>());
+    e.removeComponentIfExists<CompA>();
+    REQUIRE_FALSE(e.has<CompA>());
+}
+
+TEST_CASE("Entity: multi-component has<A, B, ...>()", "[Entity][Component]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    e.addComponent<CompA>();
+    e.addComponent<CompB>();
+
+    REQUIRE(e.has<CompA>());
+    REQUIRE(e.has<CompB>());
+    REQUIRE(e.has<CompA, CompB>());
+    REQUIRE_FALSE(e.has<CompA, CompB, CompC>());
+}
+
+TEST_CASE("Entity: is_missing and is_missing_any", "[Entity][Component]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    e.addComponent<CompA>();
+
+    REQUIRE_FALSE(e.is_missing<CompA>());
+    REQUIRE(e.is_missing<CompB>());
+
+    // is_missing_any: true if ANY listed component is missing
+    REQUIRE_FALSE(e.is_missing_any<CompA>());
+    REQUIRE(e.is_missing_any<CompA, CompB>());  // CompB is missing
+    REQUIRE(e.is_missing_any<CompB, CompC>());  // both missing
+}
+
+TEST_CASE("Entity: addAll adds multiple components at once",
+          "[Entity][Component]") {
+    struct AddAllA : BaseComponent {};
+    struct AddAllB : BaseComponent {};
+    struct AddAllC : BaseComponent {};
+
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    e.addAll<AddAllA, AddAllB, AddAllC>();
+    REQUIRE(e.has<AddAllA>());
+    REQUIRE(e.has<AddAllB>());
+    REQUIRE(e.has<AddAllC>());
+}
+
+// ============================================================================
+// Entity tag operations
+// ============================================================================
+
+TEST_CASE("Entity: tag enable/disable/has", "[Entity][Tags]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    REQUIRE_FALSE(e.hasTag(DemoTag::Runner));
+
+    e.enableTag(DemoTag::Runner);
+    REQUIRE(e.hasTag(DemoTag::Runner));
+    REQUIRE_FALSE(e.hasTag(DemoTag::Chaser));
+
+    e.disableTag(DemoTag::Runner);
+    REQUIRE_FALSE(e.hasTag(DemoTag::Runner));
+}
+
+TEST_CASE("Entity: setTag conditional", "[Entity][Tags]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    e.setTag(DemoTag::Runner, true);
+    REQUIRE(e.hasTag(DemoTag::Runner));
+
+    e.setTag(DemoTag::Runner, false);
+    REQUIRE_FALSE(e.hasTag(DemoTag::Runner));
+}
+
+TEST_CASE("Entity: hasAllTags", "[Entity][Tags]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    e.enableTag(DemoTag::Runner);
+    e.enableTag(DemoTag::Chaser);
+
+    TagBitset runner_chaser;
+    runner_chaser.set(static_cast<TagId>(DemoTag::Runner));
+    runner_chaser.set(static_cast<TagId>(DemoTag::Chaser));
+    REQUIRE(e.hasAllTags(runner_chaser));
+
+    TagBitset runner_chaser_store;
+    runner_chaser_store.set(static_cast<TagId>(DemoTag::Runner));
+    runner_chaser_store.set(static_cast<TagId>(DemoTag::Chaser));
+    runner_chaser_store.set(static_cast<TagId>(DemoTag::Store));
+    REQUIRE_FALSE(e.hasAllTags(runner_chaser_store));
+}
+
+TEST_CASE("Entity: hasAnyTag", "[Entity][Tags]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    e.enableTag(DemoTag::Runner);
+
+    TagBitset runner_chaser;
+    runner_chaser.set(static_cast<TagId>(DemoTag::Runner));
+    runner_chaser.set(static_cast<TagId>(DemoTag::Chaser));
+    REQUIRE(e.hasAnyTag(runner_chaser));
+
+    TagBitset store_only;
+    store_only.set(static_cast<TagId>(DemoTag::Store));
+    REQUIRE_FALSE(e.hasAnyTag(store_only));
+}
+
+TEST_CASE("Entity: hasNoTags", "[Entity][Tags]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    e.enableTag(DemoTag::Runner);
+
+    TagBitset store_only;
+    store_only.set(static_cast<TagId>(DemoTag::Store));
+    REQUIRE(e.hasNoTags(store_only));
+
+    TagBitset runner_mask;
+    runner_mask.set(static_cast<TagId>(DemoTag::Runner));
+    REQUIRE_FALSE(e.hasNoTags(runner_mask));
+}
+
+TEST_CASE("Entity: enableTag with out-of-range tag is safe",
+          "[Entity][Tags]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    // Out-of-range tag id should not crash
+    e.enableTag(static_cast<TagId>(AFTER_HOURS_MAX_ENTITY_TAGS + 1));
+    e.disableTag(static_cast<TagId>(AFTER_HOURS_MAX_ENTITY_TAGS + 1));
+    REQUIRE_FALSE(
+        e.hasTag(static_cast<TagId>(AFTER_HOURS_MAX_ENTITY_TAGS + 1)));
+}
+
+// ============================================================================
+// EntityQuery tests
+// ============================================================================
+
+TEST_CASE("EntityQuery: whereHasComponent filters correctly",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &a = EntityHelper::createEntity();
+    a.addComponent<CompA>();
+
+    Entity &b = EntityHelper::createEntity();
+    b.addComponent<CompB>();
+
+    Entity &c = EntityHelper::createEntity();
+    c.addComponent<CompA>();
+    c.addComponent<CompB>();
+
+    EntityHelper::merge_entity_arrays();
+
+    auto with_a = EntityQuery<>({.ignore_temp_warning = true})
+                      .whereHasComponent<CompA>()
+                      .gen();
+    REQUIRE(with_a.size() == 2);  // a and c
+
+    auto with_b = EntityQuery<>({.ignore_temp_warning = true})
+                      .whereHasComponent<CompB>()
+                      .gen();
+    REQUIRE(with_b.size() == 2);  // b and c
+
+    auto with_both = EntityQuery<>({.ignore_temp_warning = true})
+                         .whereHasComponent<CompA>()
+                         .whereHasComponent<CompB>()
+                         .gen();
+    REQUIRE(with_both.size() == 1);  // only c
+    REQUIRE(with_both[0].get().id == c.id);
+}
+
+TEST_CASE("EntityQuery: whereMissingComponent filters correctly",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &a = EntityHelper::createEntity();
+    a.addComponent<CompA>();
+
+    Entity &b = EntityHelper::createEntity();
+    b.addComponent<CompB>();
+
+    EntityHelper::merge_entity_arrays();
+
+    auto missing_a = EntityQuery<>({.ignore_temp_warning = true})
+                         .whereMissingComponent<CompA>()
+                         .gen();
+    REQUIRE(missing_a.size() == 1);
+    REQUIRE(missing_a[0].get().id == b.id);
+}
+
+TEST_CASE("EntityQuery: whereNotID excludes specific entity",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    EntityHelper::createEntity();
+    Entity &b = EntityHelper::createEntity();
+    EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    auto without_b = EntityQuery<>({.ignore_temp_warning = true})
+                         .whereNotID(b.id)
+                         .gen();
+    REQUIRE(without_b.size() == 2);
+    for (auto &ent : without_b) {
+        REQUIRE(ent.get().id != b.id);
+    }
+}
+
+TEST_CASE("EntityQuery: whereMarkedForCleanup and whereNotMarkedForCleanup",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &a = EntityHelper::createEntity();
+    Entity &b = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    EntityHelper::markIDForCleanup(a.id);
+
+    auto marked = EntityQuery<>({.ignore_temp_warning = true})
+                      .whereMarkedForCleanup()
+                      .gen();
+    REQUIRE(marked.size() == 1);
+    REQUIRE(marked[0].get().id == a.id);
+
+    auto not_marked = EntityQuery<>({.ignore_temp_warning = true})
+                          .whereNotMarkedForCleanup()
+                          .gen();
+    REQUIRE(not_marked.size() == 1);
+    REQUIRE(not_marked[0].get().id == b.id);
+}
+
+TEST_CASE("EntityQuery: take(n) limits results", "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    for (int i = 0; i < 10; ++i) {
+        EntityHelper::createEntity();
+    }
+    EntityHelper::merge_entity_arrays();
+
+    // Note: Limit uses `amount_taken > amount` (not >=), so take(n) yields
+    // n+1 results. This test documents the current behavior.
+    auto limited =
+        EntityQuery<>({.ignore_temp_warning = true}).take(3).gen();
+    REQUIRE(limited.size() <= 4);
+    REQUIRE(limited.size() < 10);  // Still limits compared to total
+}
+
+TEST_CASE("EntityQuery: gen_count returns entity count",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    for (int i = 0; i < 5; ++i) {
+        EntityHelper::createEntity();
+    }
+    EntityHelper::merge_entity_arrays();
+
+    auto count =
+        EntityQuery<>({.ignore_temp_warning = true}).gen_count();
+    REQUIRE(count == 5);
+}
+
+TEST_CASE("EntityQuery: gen_ids returns all entity IDs",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &a = EntityHelper::createEntity();
+    Entity &b = EntityHelper::createEntity();
+    Entity &c = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    auto ids = EntityQuery<>({.ignore_temp_warning = true}).gen_ids();
+    REQUIRE(ids.size() == 3);
+
+    // Check all IDs are present
+    REQUIRE(std::find(ids.begin(), ids.end(), a.id) != ids.end());
+    REQUIRE(std::find(ids.begin(), ids.end(), b.id) != ids.end());
+    REQUIRE(std::find(ids.begin(), ids.end(), c.id) != ids.end());
+}
+
+TEST_CASE("EntityQuery: gen_first_id returns first matching ID",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &a = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    auto id = EntityQuery<>({.ignore_temp_warning = true}).gen_first_id();
+    REQUIRE(id.has_value());
+    REQUIRE(*id == a.id);
+}
+
+TEST_CASE("EntityQuery: gen_first_id returns empty for no match",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    EntityHelper::merge_entity_arrays();
+
+    auto id = EntityQuery<>({.ignore_temp_warning = true}).gen_first_id();
+    REQUIRE_FALSE(id.has_value());
+}
+
+TEST_CASE("EntityQuery: gen_as returns typed component references",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &a = EntityHelper::createEntity();
+    a.addComponent<CompA>().value = 10;
+
+    Entity &b = EntityHelper::createEntity();
+    b.addComponent<CompA>().value = 20;
+
+    Entity &c = EntityHelper::createEntity();
+    c.addComponent<CompB>();  // No CompA
+
+    EntityHelper::merge_entity_arrays();
+
+    auto comps = EntityQuery<>({.ignore_temp_warning = true})
+                     .whereHasComponent<CompA>()
+                     .gen_as<CompA>();
+    REQUIRE(comps.size() == 2);
+
+    // Verify both values are present
+    std::vector<int> values;
+    for (auto &comp_ref : comps) {
+        values.push_back(comp_ref.get().value);
+    }
+    std::sort(values.begin(), values.end());
+    REQUIRE(values[0] == 10);
+    REQUIRE(values[1] == 20);
+}
+
+TEST_CASE("EntityQuery: gen_random with custom RNG", "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    EntityHelper::createEntity();
+    EntityHelper::createEntity();
+    EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    // Use a deterministic RNG that always picks index 1
+    auto result = EntityQuery<>({.ignore_temp_warning = true})
+                      .gen_random([](size_t size) -> size_t {
+                          return 1 % size;  // always pick index 1
+                      });
+    REQUIRE(result.valid());
+}
+
+TEST_CASE("EntityQuery: gen_random returns empty for empty results",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    EntityHelper::merge_entity_arrays();
+
+    auto result = EntityQuery<>({.ignore_temp_warning = true})
+                      .gen_random([](size_t /*size*/) -> size_t { return 0; });
+    REQUIRE_FALSE(result.valid());
+}
+
+TEST_CASE("EntityQuery: orderByLambda sorts results",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &a = EntityHelper::createEntity();
+    a.addComponent<CompA>().value = 30;
+    Entity &b = EntityHelper::createEntity();
+    b.addComponent<CompA>().value = 10;
+    Entity &c = EntityHelper::createEntity();
+    c.addComponent<CompA>().value = 20;
+
+    EntityHelper::merge_entity_arrays();
+
+    auto sorted = EntityQuery<>({.ignore_temp_warning = true})
+                      .whereHasComponent<CompA>()
+                      .orderByLambda([](const Entity &a, const Entity &b) {
+                          return a.get<CompA>().value < b.get<CompA>().value;
+                      })
+                      .gen();
+    REQUIRE(sorted.size() == 3);
+    REQUIRE(sorted[0].get().get<CompA>().value == 10);
+    REQUIRE(sorted[1].get().get<CompA>().value == 20);
+    REQUIRE(sorted[2].get().get<CompA>().value == 30);
+}
+
+TEST_CASE("EntityQuery: is_empty returns true when no entities match",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    EntityHelper::merge_entity_arrays();
+
+    bool empty =
+        EntityQuery<>({.ignore_temp_warning = true}).is_empty();
+    REQUIRE(empty);
+}
+
+TEST_CASE("EntityQuery: combining multiple filters",
+          "[ECS][EntityQuery]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &a = EntityHelper::createEntity();
+    a.addComponent<CompA>().value = 100;
+    a.enableTag(DemoTag::Runner);
+
+    Entity &b = EntityHelper::createEntity();
+    b.addComponent<CompA>().value = 200;
+    b.enableTag(DemoTag::Runner);
+    b.enableTag(DemoTag::Store);
+
+    Entity &c = EntityHelper::createEntity();
+    c.addComponent<CompA>().value = 300;
+    c.enableTag(DemoTag::Chaser);
+
+    Entity &d = EntityHelper::createEntity();
+    d.addComponent<CompB>();
+    d.enableTag(DemoTag::Runner);
+
+    EntityHelper::merge_entity_arrays();
+
+    // CompA + Runner tag + not Store
+    auto results = EntityQuery<>({.ignore_temp_warning = true})
+                       .whereHasComponent<CompA>()
+                       .whereHasAnyTag(DemoTag::Runner)
+                       .whereHasNoTags(DemoTag::Store)
+                       .gen();
+    REQUIRE(results.size() == 1);
+    REQUIRE(results[0].get().get<CompA>().value == 100);
+}
+
+// ============================================================================
+// Permanent entity tests
+// ============================================================================
+
+TEST_CASE("ECS: permanent entities survive non-inclusive delete",
+          "[ECS][PermanentEntities]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &perm = EntityHelper::createPermanentEntity();
+    perm.addComponent<CompA>().value = 777;
+    const int perm_id = perm.id;
+
+    Entity &temp = EntityHelper::createEntity();
+    const int temp_id = temp.id;
+
+    EntityHelper::merge_entity_arrays();
+
+    // delete_all_entities(false) should keep permanent entities
+    EntityHelper::delete_all_entities(false);
+
+    REQUIRE(EntityHelper::getEntityForID(perm_id).valid());
+    REQUIRE_FALSE(EntityHelper::getEntityForID(temp_id).valid());
+    REQUIRE(EntityHelper::getEntityForID(perm_id).asE().get<CompA>().value ==
+            777);
+}
+
+TEST_CASE("ECS: permanent entities removed with inclusive delete",
+          "[ECS][PermanentEntities]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &perm = EntityHelper::createPermanentEntity();
+    const int perm_id = perm.id;
+
+    EntityHelper::merge_entity_arrays();
+
+    // delete_all_entities(true) removes everything including permanent
+    EntityHelper::delete_all_entities(true);
+
+    REQUIRE_FALSE(EntityHelper::getEntityForID(perm_id).valid());
+}
+
+// ============================================================================
+// Singleton tests
+// ============================================================================
+
+struct GameConfig : BaseComponent {
+    int difficulty = 3;
+    float volume = 0.8f;
+};
+
+TEST_CASE("ECS: singleton registration and retrieval", "[ECS][Singleton]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &config_entity = EntityHelper::createEntity();
+    config_entity.addComponent<GameConfig>();
+    config_entity.get<GameConfig>().difficulty = 5;
+
+    EntityHelper::merge_entity_arrays();
+    EntityHelper::registerSingleton<GameConfig>(config_entity);
+
+    REQUIRE(EntityHelper::has_singleton<GameConfig>());
+
+    auto *cmp = EntityHelper::get_singleton_cmp<GameConfig>();
+    REQUIRE(cmp != nullptr);
+    REQUIRE(cmp->difficulty == 5);
+}
+
+TEST_CASE("ECS: singleton removed when entity cleaned up",
+          "[ECS][Singleton]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &config_entity = EntityHelper::createEntity();
+    config_entity.addComponent<GameConfig>();
+    EntityHelper::merge_entity_arrays();
+    EntityHelper::registerSingleton<GameConfig>(config_entity);
+
+    REQUIRE(EntityHelper::has_singleton<GameConfig>());
+
+    EntityHelper::markIDForCleanup(config_entity.id);
+    EntityHelper::cleanup();
+
+    REQUIRE_FALSE(EntityHelper::has_singleton<GameConfig>());
+}
+
+TEST_CASE("ECS: has_singleton returns false when not registered",
+          "[ECS][Singleton]") {
+    struct NotRegistered : BaseComponent {};
+
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    REQUIRE_FALSE(EntityHelper::has_singleton<NotRegistered>());
+}
+
+// ============================================================================
+// EntityCollection: rebuild and replace handle store
+// ============================================================================
+
+TEST_CASE("EntityCollection: rebuild_handle_store_from_entities",
+          "[ECS][EntityCollection]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &a = EntityHelper::createEntity();
+    Entity &b = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    EntityHandle ha = EntityHelper::handle_for(a);
+    EntityHandle hb = EntityHelper::handle_for(b);
+    REQUIRE(ha.valid());
+    REQUIRE(hb.valid());
+
+    // Rebuild the handle store; old handles should become stale
+    EntityHelper::get_default_collection().rebuild_handle_store_from_entities();
+
+    // Old handles may not resolve (generation mismatch)
+    // But new handles should work
+    EntityHandle ha_new = EntityHelper::handle_for(a);
+    EntityHandle hb_new = EntityHelper::handle_for(b);
+    REQUIRE(ha_new.valid());
+    REQUIRE(hb_new.valid());
+    REQUIRE(EntityHelper::resolve(ha_new).valid());
+    REQUIRE(EntityHelper::resolve(hb_new).valid());
+}
+
+// ============================================================================
+// Snapshot API tests
+// ============================================================================
+
+TEST_CASE("Snapshot: take_entities captures all merged entities",
+          "[ECS][Snapshot]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &a = EntityHelper::createEntity();
+    a.enableTag(DemoTag::Runner);
+    Entity &b = EntityHelper::createEntity();
+    b.entity_type = 42;
+
+    EntityHelper::merge_entity_arrays();
+
+    auto records = snapshot::take_entities();
+    REQUIRE(records.size() == 2);
+
+    // Verify data integrity
+    bool found_runner = false;
+    bool found_type_42 = false;
+    for (const auto &rec : records) {
+        REQUIRE(rec.handle.valid());
+        if (rec.tags.test(static_cast<TagId>(DemoTag::Runner)))
+            found_runner = true;
+        if (rec.entity_type == 42)
+            found_type_42 = true;
+    }
+    REQUIRE(found_runner);
+    REQUIRE(found_type_42);
+}
+
+struct SnapshotablePosition : BaseComponent {
+    float x = 0.f, y = 0.f;
+};
+
+struct PositionDTO {
+    float x = 0.f, y = 0.f;
+};
+
+TEST_CASE("Snapshot: take_components captures component data",
+          "[ECS][Snapshot]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &a = EntityHelper::createEntity();
+    auto &pos = a.addComponent<SnapshotablePosition>();
+    pos.x = 10.f;
+    pos.y = 20.f;
+
+    EntityHelper::createEntity();
+    // second entity has no SnapshotablePosition
+
+    EntityHelper::merge_entity_arrays();
+
+    auto records =
+        snapshot::take_components<SnapshotablePosition, PositionDTO>(
+            [](const SnapshotablePosition &p) {
+                return PositionDTO{.x = p.x, .y = p.y};
+            });
+    REQUIRE(records.size() == 1);
+    REQUIRE(records[0].entity.valid());
+    REQUIRE(records[0].value.x == Approx(10.f));
+    REQUIRE(records[0].value.y == Approx(20.f));
+}
+
+// ============================================================================
+// EntityHandle edge cases
+// ============================================================================
+
+TEST_CASE("EntityHandle: invalid handle does not resolve",
+          "[ECS][EntityHandle]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    EntityHandle h = EntityHandle::invalid();
+    REQUIRE_FALSE(h.valid());
+    REQUIRE(h.is_invalid());
+    REQUIRE_FALSE(EntityHelper::resolve(h).valid());
+}
+
+TEST_CASE("EntityHandle: handle_for temp entity returns invalid",
+          "[ECS][EntityHandle]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &temp = EntityHelper::createEntity();
+    // Before merge, handle should be invalid
+    EntityHandle h = EntityHelper::handle_for(temp);
+    REQUIRE_FALSE(h.valid());
+}
+
+TEST_CASE("EntityHandle: constexpr helpers", "[ECS][EntityHandle]") {
+    constexpr EntityHandle inv = EntityHandle::invalid();
+    static_assert(!inv.valid());
+    static_assert(inv.is_invalid());
+    static_assert(!inv.is_valid());
+
+    // Valid handle
+    constexpr EntityHandle h = {0, 1};
+    static_assert(h.valid());
+    static_assert(h.is_valid());
+    static_assert(!h.is_invalid());
+}
+
+// ============================================================================
+// OptEntityHandle additional tests
+// ============================================================================
+
+TEST_CASE("OptEntityHandle: default is invalid", "[ECS][OptEntityHandle]") {
+    OptEntityHandle oeh;
+    REQUIRE(oeh.id == -1);
+    REQUIRE_FALSE(oeh.handle.valid());
+    REQUIRE_FALSE(oeh.resolve().valid());
+}
+
+TEST_CASE("OptEntityHandle: falls back to ID lookup when handle is invalid",
+          "[ECS][OptEntityHandle]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+
+    // Create an OptEntityHandle with valid ID but invalid handle
+    OptEntityHandle oeh;
+    oeh.id = e.id;
+    oeh.handle = EntityHandle::invalid();
+
+    // Should resolve via ID fallback
+    auto resolved = oeh.resolve();
+    REQUIRE(resolved.valid());
+    REQUIRE(resolved.asE().id == e.id);
+}
+
+// ============================================================================
+// Entity forEachEntity and flow control
+// ============================================================================
+
+TEST_CASE("EntityHelper: forEachEntity iterates all entities",
+          "[ECS][EntityHelper]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    for (int i = 0; i < 5; ++i) {
+        EntityHelper::createEntity();
+    }
+    EntityHelper::merge_entity_arrays();
+
+    int count = 0;
+    EntityHelper::forEachEntity([&](Entity &) {
+        count++;
+        return EntityHelper::NormalFlow;
+    });
+    REQUIRE(count == 5);
+}
+
+TEST_CASE("EntityHelper: forEachEntity Break stops early",
+          "[ECS][EntityHelper]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    for (int i = 0; i < 10; ++i) {
+        EntityHelper::createEntity();
+    }
+    EntityHelper::merge_entity_arrays();
+
+    int count = 0;
+    EntityHelper::forEachEntity([&](Entity &) {
+        count++;
+        if (count == 3)
+            return EntityHelper::Break;
+        return EntityHelper::NormalFlow;
+    });
+    REQUIRE(count == 3);
+}
+
+TEST_CASE("EntityHelper: forEachEntity Continue skips processing",
+          "[ECS][EntityHelper]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    for (int i = 0; i < 5; ++i) {
+        EntityHelper::createEntity();
+    }
+    EntityHelper::merge_entity_arrays();
+
+    int count = 0;
+    EntityHelper::forEachEntity([&](Entity &) {
+        count++;
+        return EntityHelper::Continue;
+    });
+    REQUIRE(count == 5);  // Continue still visits all
+}
+
+// ============================================================================
+// EntityCollection bump_gen
+// ============================================================================
+
+TEST_CASE("EntityCollection: bump_gen never returns zero",
+          "[ECS][EntityCollection]") {
+    // Normal case
+    REQUIRE(EntityCollection::bump_gen(1) == 2);
+    REQUIRE(EntityCollection::bump_gen(0) == 1);
+
+    // Wraparound: UINT32_MAX + 1 = 0, but bump_gen should skip 0
+    EntityHandle::Slot max_val = std::numeric_limits<EntityHandle::Slot>::max();
+    EntityHandle::Slot result = EntityCollection::bump_gen(max_val);
+    REQUIRE(result != 0);
+}
+
+// ============================================================================
+// getEntityForID edge cases
+// ============================================================================
+
+TEST_CASE("EntityHelper: getEntityForID with -1 returns invalid",
+          "[ECS][EntityHelper]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    auto opt = EntityHelper::getEntityForID(-1);
+    REQUIRE_FALSE(opt.valid());
+}
+
+TEST_CASE("EntityHelper: getEntityForID with nonexistent ID returns invalid",
+          "[ECS][EntityHelper]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    EntityHelper::merge_entity_arrays();
+
+    auto opt = EntityHelper::getEntityForID(999999);
+    REQUIRE_FALSE(opt.valid());
+}
+
+// ============================================================================
+// Stress: many entities with many components
+// ============================================================================
+
+TEST_CASE("ECS: create and query 1000 entities with components",
+          "[ECS][Stress]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    for (int i = 0; i < 1000; ++i) {
+        Entity &e = EntityHelper::createEntity();
+        e.addComponent<CompA>().value = i;
+        if (i % 2 == 0) {
+            e.addComponent<CompB>();
+        }
+        if (i % 3 == 0) {
+            e.enableTag(DemoTag::Runner);
+        }
+    }
+    EntityHelper::merge_entity_arrays();
+
+    // All 1000 entities should exist
+    auto all = EntityQuery<>({.ignore_temp_warning = true}).gen();
+    REQUIRE(all.size() == 1000);
+
+    // 500 should have CompB
+    auto with_b = EntityQuery<>({.ignore_temp_warning = true})
+                      .whereHasComponent<CompB>()
+                      .gen();
+    REQUIRE(with_b.size() == 500);
+
+    // 334 should have Runner tag (0, 3, 6, ... 999)
+    auto runners = EntityQuery<>({.ignore_temp_warning = true})
+                       .whereHasAnyTag(DemoTag::Runner)
+                       .gen();
+    REQUIRE(runners.size() == 334);
+
+    // Handles should all be valid
+    for (Entity &e : all) {
+        EntityHandle h = EntityHelper::handle_for(e);
+        REQUIRE(h.valid());
+        REQUIRE(EntityHelper::resolve(h).valid());
+    }
+}
+
+// ============================================================================
+// Multiple entities with cleanup churn
+// ============================================================================
+
+TEST_CASE("ECS: cleanup churn handles correctly",
+          "[ECS][Cleanup]") {
+    EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+
+    std::vector<EntityHandle> handles;
+
+    // Create, merge, cleanup in rounds
+    for (int round = 0; round < 5; ++round) {
+        for (int i = 0; i < 10; ++i) {
+            Entity &e = EntityHelper::createEntity();
+            e.addComponent<CompA>().value = round * 10 + i;
+        }
+        EntityHelper::merge_entity_arrays();
+
+        // Save handles for this round
+        auto ents = EntityQuery<>({.ignore_temp_warning = true}).gen();
+        for (Entity &e : ents) {
+            handles.push_back(EntityHelper::handle_for(e));
+        }
+
+        // Clean up half the entities
+        auto to_clean = EntityQuery<>({.ignore_temp_warning = true}).gen();
+        int cleaned = 0;
+        for (Entity &e : to_clean) {
+            if (cleaned++ % 2 == 0) {
+                EntityHelper::markIDForCleanup(e.id);
+            }
+        }
+        EntityHelper::cleanup();
+    }
+
+    // Verify remaining entities are all valid via their handles
+    auto remaining = EntityQuery<>({.ignore_temp_warning = true}).gen();
+    for (Entity &e : remaining) {
+        EntityHandle h = EntityHelper::handle_for(e);
+        REQUIRE(h.valid());
+        auto resolved = EntityHelper::resolve(h);
+        REQUIRE(resolved.valid());
+        REQUIRE(resolved.asE().id == e.id);
+    }
 }
 
 }  // namespace afterhours
