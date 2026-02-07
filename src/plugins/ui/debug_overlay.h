@@ -31,7 +31,7 @@ struct LayoutDebugOverlay : SystemWithUIContext<UIComponent> {
   float enableCooldown = 0.f;
   float enableCooldownReset = 0.2f;
 
-  mutable UIContext<InputAction> *context;
+  UIContext<InputAction> *context;
 
   LayoutDebugOverlay(InputAction toggle_kp) : toggle_action(toggle_kp) {
     this->include_derived_children = true;
@@ -55,7 +55,7 @@ struct LayoutDebugOverlay : SystemWithUIContext<UIComponent> {
     return enabled;
   }
 
-  virtual void once(float) const override {
+  virtual void once(float) override {
     this->context =
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
 
@@ -93,8 +93,8 @@ struct LayoutDebugOverlay : SystemWithUIContext<UIComponent> {
               this->context->theme.font);
   }
 
-  void for_each_with(const Entity &entity, const UIComponent &cmp,
-                     float) const override {
+  void for_each_with(Entity &entity, UIComponent &cmp,
+                     float) override {
     if (cmp.should_hide)
       return;
 

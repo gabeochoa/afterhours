@@ -640,15 +640,15 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   float enableCooldown = 0.f;
   float enableCooldownReset = 0.2f;
 
-  mutable UIContext<InputAction> *context;
+  UIContext<InputAction> *context;
 
-  mutable int level = 0;
-  mutable int indent = 0;
-  mutable EntityID isolated_id = -1;
-  mutable bool isolate_enabled = false;
+  int level = 0;
+  int indent = 0;
+  EntityID isolated_id = -1;
+  bool isolate_enabled = false;
   enum struct IsolationMode { NodeOnly, NodeAndDescendants };
-  mutable IsolationMode isolation_mode = IsolationMode::NodeOnly;
-  mutable UIEntityMappingCache *cache = nullptr;
+  IsolationMode isolation_mode = IsolationMode::NodeOnly;
+  UIEntityMappingCache *cache = nullptr;
 
   float fontSize = 20.0f;
 
@@ -679,7 +679,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     return enabled;
   }
 
-  virtual void once(float) const override {
+  virtual void once(float) override {
     this->context =
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
 
@@ -719,7 +719,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     return false;
   }
 
-  void render_me(const Entity &entity) const {
+  void render_me(const Entity &entity) {
     const UIComponent &cmp = entity.get<UIComponent>();
 
     const float x = 10 * indent;
@@ -790,7 +790,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     }
   }
 
-  void render(const Entity &entity) const {
+  void render(const Entity &entity) {
     const UIComponent &cmp = entity.get<UIComponent>();
     if (cmp.should_hide)
       return;
@@ -807,8 +807,8 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     indent--;
   }
 
-  virtual void for_each_with_derived(const Entity &entity, const UIComponent &,
-                                     const AutoLayoutRoot &, float) const {
+  virtual void for_each_with_derived(Entity &entity, UIComponent &,
+                                     AutoLayoutRoot &, float) {
     render(entity);
     level += 2;
     indent = 0;
@@ -824,7 +824,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
   void render_shadow(const Entity &entity, RectangleType draw_rect,
                      const std::bitset<4> &corner_settings,
                      float effective_opacity, float roundness = 0.5f,
-                     int segments = 8) const {
+                     int segments = 8) {
     if (!entity.has<HasShadow>())
       return;
 
@@ -878,7 +878,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
   }
 
   void render_nine_slice(const Entity &entity, RectangleType draw_rect,
-                         float effective_opacity) const {
+                         float effective_opacity) {
     if (!entity.has<HasNineSliceBorder>())
       return;
 
@@ -895,7 +895,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
   }
 
   void render_circular_progress(const Entity &entity, RectangleType draw_rect,
-                                float effective_opacity) const {
+                                float effective_opacity) {
     if (!entity.has<HasCircularProgressState>()) {
       return;
     }
@@ -935,7 +935,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
   }
 
   void render_bevel(const Entity &entity, RectangleType draw_rect,
-                    float effective_opacity) const {
+                    float effective_opacity) {
     if (!entity.has<HasBevelBorder>())
       return;
 
@@ -998,8 +998,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     }
   }
 
-  void render_me(const UIContext<InputAction> &context,
-                 const FontManager &font_manager, const Entity &entity) const {
+  void render_me(UIContext<InputAction> &context,
+                 FontManager &font_manager, Entity &entity) {
     // Defensive check: entity must have UIComponent
     if (!entity.has<UIComponent>())
       return;
@@ -1254,8 +1254,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     pop_rotation();
   }
 
-  void render(const UIContext<InputAction> &context,
-              const FontManager &font_manager, const Entity &entity) const {
+  void render(UIContext<InputAction> &context,
+              FontManager &font_manager, Entity &entity) {
     // Defensive check: entity must have UIComponent
     if (!entity.has<UIComponent>())
       return;
@@ -1264,7 +1264,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       return;
 
     if (cmp.font_name != UIComponent::UNSET_FONT) {
-      const_cast<FontManager &>(font_manager).set_active(cmp.font_name);
+      font_manager.set_active(cmp.font_name);
     }
 
     // Check if we need scissor clipping for scroll view or clip container
@@ -1284,7 +1284,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
     // Update scroll view content size before rendering (after layout is done)
     if (entity.has<HasScrollView>()) {
-      _update_scroll_view_content_size(const_cast<Entity &>(entity));
+      _update_scroll_view_content_size(entity);
     }
 
     if (entity.has<HasColor>() || entity.has<HasLabel>() ||
@@ -1306,10 +1306,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     // }
   }
 
-  virtual void for_each_with_derived(const Entity &entity,
-                                     const UIContext<InputAction> &context,
-                                     const FontManager &font_manager,
-                                     float) const override {
+  virtual void for_each_with_derived(Entity &entity,
+                                     UIContext<InputAction> &context,
+                                     FontManager &font_manager,
+                                     float) override {
 #if __WIN32
     // Note we have to do bubble sort here because mingw doesnt support
     // std::ranges::sort
@@ -1353,7 +1353,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                       const Entity &entity, RectangleType draw_rect,
                       const std::bitset<4> &corner_settings,
                       float effective_opacity, int layer,
-                      float roundness = 0.5f, int segments = 8) const {
+                      float roundness = 0.5f, int segments = 8) {
     if (!entity.has<HasShadow>())
       return;
 
@@ -1406,7 +1406,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
   void collect_nine_slice(RenderCommandBuffer& buffer,
                           const Entity &entity, RectangleType draw_rect,
-                          float effective_opacity, int layer) const {
+                          float effective_opacity, int layer) {
     if (!entity.has<HasNineSliceBorder>())
       return;
 
@@ -1424,7 +1424,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
   void collect_circular_progress(RenderCommandBuffer& buffer,
                                  const Entity &entity, RectangleType draw_rect,
-                                 float effective_opacity, int layer) const {
+                                 float effective_opacity, int layer) {
     if (!entity.has<HasCircularProgressState>()) {
       return;
     }
@@ -1463,7 +1463,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
   void collect_bevel(RenderCommandBuffer& buffer,
                      const Entity &entity, RectangleType draw_rect,
-                     float effective_opacity, int layer) const {
+                     float effective_opacity, int layer) {
     if (!entity.has<HasBevelBorder>())
       return;
 
@@ -1527,9 +1527,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
   }
 
   void collect_me(RenderCommandBuffer& buffer,
-                  const UIContext<InputAction> &context,
-                  const FontManager &font_manager, const Entity &entity,
-                  int layer) const {
+                  UIContext<InputAction> &context,
+                  FontManager &font_manager, Entity &entity,
+                  int layer) {
     // Defensive check: entity must have UIComponent
     if (!entity.has<UIComponent>())
       return;
@@ -1777,9 +1777,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
   }
 
   void collect(RenderCommandBuffer& buffer,
-               const UIContext<InputAction> &context,
-               const FontManager &font_manager, const Entity &entity,
-               int layer) const {
+               UIContext<InputAction> &context,
+               FontManager &font_manager, Entity &entity,
+               int layer) {
     // Defensive check: entity must have UIComponent to be rendered
     if (!entity.has<UIComponent>())
       return;
@@ -1788,7 +1788,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       return;
 
     if (cmp.font_name != UIComponent::UNSET_FONT) {
-      const_cast<FontManager &>(font_manager).set_active(cmp.font_name);
+      font_manager.set_active(cmp.font_name);
     }
 
     // Check if we need scissor clipping for scroll view or clip container
@@ -1809,7 +1809,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
     // Update scroll view content size
     if (entity.has<HasScrollView>()) {
-      _update_scroll_view_content_size(const_cast<Entity &>(entity));
+      _update_scroll_view_content_size(entity);
     }
 
     if (entity.has<HasColor>() || entity.has<HasLabel>() ||
@@ -1826,10 +1826,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     }
   }
 
-  virtual void for_each_with_derived(const Entity &,
-                                     const UIContext<InputAction> &context,
-                                     const FontManager &font_manager,
-                                     float) const override {
+  virtual void for_each_with_derived(Entity &,
+                                     UIContext<InputAction> &context,
+                                     FontManager &font_manager,
+                                     float) override {
     // Reset arena for new frame
     Arena& arena = get_render_arena();
     arena.reset();
@@ -1869,7 +1869,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
     // Execute all commands with batching
     BatchedRenderer renderer;
-    renderer.render(buffer, const_cast<FontManager&>(font_manager));
+    renderer.render(buffer, font_manager);
   }
 };
 

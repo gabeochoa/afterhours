@@ -220,7 +220,7 @@ template <typename InputAction> struct UIContext : BaseComponent {
     last_processed = id;
   }
 
-  mutable std::vector<RenderInfo> render_cmds;
+  std::vector<RenderInfo> render_cmds;
 
   void queue_render(RenderInfo &&info) { render_cmds.emplace_back(info); }
 };

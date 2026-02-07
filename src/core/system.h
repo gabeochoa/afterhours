@@ -481,9 +481,22 @@ struct SystemManager {
         }
     }
 
-    void render(const Entities &entities, const float dt) {
-        for (const auto &system : render_systems_) {
+    void render(Entities &entities, const float dt) {
+        for (auto &system : render_systems_) {
             if (!system->should_run(dt)) continue;
+            // Call non-const first
+            system->once(dt);
+            system->on_iteration_begin(dt);
+            for (std::shared_ptr<Entity> entity : entities) {
+                if (!entity) continue;
+                if (system->include_derived_children)
+                    system->for_each_derived(*entity, dt);
+                else
+                    system->for_each(*entity, dt);
+            }
+            system->on_iteration_end(dt);
+            system->after(dt);
+            // Also call const overloads to give time for migration
             const SystemBase &sys = *system;
             sys.once(dt);
             sys.on_iteration_begin(dt);
@@ -514,7 +527,7 @@ struct SystemManager {
     }
 
     void render_all(const float dt) {
-        const auto &entities = EntityHelper::get_entities();
+        auto &entities = EntityHelper::get_entities_for_mod();
         render(entities, dt);
     }
 
