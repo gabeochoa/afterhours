@@ -115,6 +115,10 @@ struct ComponentConfig {
   std::optional<std::string> checkbox_checked_indicator;
   std::optional<std::string> checkbox_unchecked_indicator;
 
+  // Dropdown indicator characters (default: "v" for closed, "^" for open)
+  std::optional<std::string> dropdown_open_indicator;
+  std::optional<std::string> dropdown_closed_indicator;
+
   // Text area (multiline) configuration
   std::optional<Size> text_area_line_height;  // Line height (default: 20px)
   bool text_area_word_wrap = true;            // Enable word wrapping
@@ -221,6 +225,11 @@ struct ComponentConfig {
   ComponentConfig &with_checkbox_indicators(const std::string &checked, const std::string &unchecked = " ") {
     checkbox_checked_indicator = checked;
     checkbox_unchecked_indicator = unchecked;
+    return *this;
+  }
+  ComponentConfig &with_dropdown_indicators(const std::string &closed, const std::string &open) {
+    dropdown_closed_indicator = closed;
+    dropdown_open_indicator = open;
     return *this;
   }
 

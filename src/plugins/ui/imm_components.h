@@ -1206,7 +1206,9 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
 
   auto current_option = std::string(
       options[dropdownState.on ? 0 : dropdownState.last_option_clicked]);
-  auto drop_arrow_icon = dropdownState.on ? " ^" : " V";
+  auto drop_closed = config.dropdown_closed_indicator.value_or(" v");
+  auto drop_open = config.dropdown_open_indicator.value_or(" ^");
+  auto drop_arrow_icon = dropdownState.on ? drop_open : drop_closed;
   auto main_button_label = fmt::format("{}{}", current_option, drop_arrow_icon);
   // TODO hot sibling summary: previously, when a label was present to the
   // left of the dropdown button, we passed that label entity id as a "hot
@@ -1315,7 +1317,7 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
              ComponentConfig::inherit_from(config, "left_arrow")
                  .with_size(arrow_size)
                  .with_label("<")
-                 .with_font(UIComponent::SYMBOL_FONT, 16.f)
+                 .with_font(UIComponent::SYMBOL_FONT, config.font_size)
                  .with_rounded_corners(RoundedCorners().left_round())
                  .with_margin(Margin{}))) {
     clicked = true;
@@ -1335,7 +1337,7 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
              ComponentConfig::inherit_from(config, "right_arrow")
                  .with_size(arrow_size)
                  .with_label(">")
-                 .with_font(UIComponent::SYMBOL_FONT, 16.f)
+                 .with_font(UIComponent::SYMBOL_FONT, config.font_size)
                  .with_rounded_corners(RoundedCorners().right_round())
                  .with_margin(Margin{}))) {
     clicked = true;
