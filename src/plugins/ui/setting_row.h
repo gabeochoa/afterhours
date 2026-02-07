@@ -284,6 +284,22 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
       if (toggle_result) {
         changed = true;
       }
+
+      // ON/OFF status label for clarity
+      const Theme &toggle_theme = ctx.theme;
+      Color status_color = *value
+          ? colors::lighten(toggle_theme.accent, 0.3f)
+          : toggle_theme.font_muted;
+      div(ctx, mk(entity),
+          ComponentConfig{}
+              .with_label(*value ? "ON" : "OFF")
+              .with_size(ComponentSize{pixels(36), pixels((int)row_h - 8)})
+              .with_background(Theme::Usage::None)
+              .with_custom_text_color(status_color)
+              .with_alignment(TextAlignment::Center)
+              .with_font(config.font_name, pixels(16.0f))
+              .with_margin(Margin{.left = pixels(6)})
+              .with_debug_name("setting_row_toggle_status"));
     }
     break;
   }
