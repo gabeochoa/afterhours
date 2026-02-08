@@ -35,6 +35,9 @@ struct TextureConfig {
 // - Make it obvious which components need new features when adding them
 // See: https://en.cppreference.com/w/cpp/language/constraints
 
+enum struct ButtonVariant { Filled, Outline, Ghost };
+enum struct IconPosition { Left, Right };
+
 struct ComponentConfig {
   ComponentSize size = ComponentSize(pixels(default_component_size.x),
                                      pixels(default_component_size.y), true);
@@ -125,6 +128,14 @@ struct ComponentConfig {
   bool text_area_word_wrap = true;            // Enable word wrapping
   size_t text_area_max_lines = 0;             // Max lines (0 = unlimited)
 
+  // Button variant configuration
+  ButtonVariant button_variant = ButtonVariant::Filled;
+
+  // Icon configuration for icon+text buttons
+  std::optional<texture_manager::Texture> icon_texture;
+  std::optional<texture_manager::Rectangle> icon_source_rect;
+  IconPosition icon_position = IconPosition::Left;
+
   // Nine-slice border configuration
   std::optional<NineSliceBorder> nine_slice_config;
 
@@ -184,6 +195,24 @@ struct ComponentConfig {
     bevel_config = BevelBorder{light, dark, thickness, style};
     return *this;
   }
+  // Button variant APIs
+  ComponentConfig &with_button_variant(ButtonVariant variant) {
+    button_variant = variant;
+    return *this;
+  }
+
+  // Icon APIs for icon+text buttons
+  ComponentConfig &with_icon(texture_manager::Texture texture,
+                             texture_manager::Rectangle source_rect) {
+    icon_texture = texture;
+    icon_source_rect = source_rect;
+    return *this;
+  }
+  ComponentConfig &with_icon_position(IconPosition pos) {
+    icon_position = pos;
+    return *this;
+  }
+
   // NEW: Explicit background color APIs
   ComponentConfig &with_background(Theme::Usage usage) {
     color_usage = usage;
@@ -522,6 +551,12 @@ struct ComponentConfig {
   }
 
   bool has_nine_slice() const { return nine_slice_config.has_value(); }
+  bool has_icon() const {
+    return icon_texture.has_value() && icon_source_rect.has_value();
+  }
+  bool has_button_variant_override() const {
+    return button_variant != ButtonVariant::Filled;
+  }
 
   bool has_padding() const {
     return padding.top.value > 0 || padding.left.value > 0 ||
@@ -559,6 +594,17 @@ struct ComponentConfig {
   bool selects_on_focus() const { return select_on_focus; }
   bool has_click_activation_override() const {
     return click_activation != ClickActivationMode::Default;
+  }
+
+  // Resolve the effective background color from color_usage / custom_color.
+  // Falls back to Primary if no usage is set.
+  Color resolve_background_color(const Theme &theme) const {
+    if (color_usage == Theme::Usage::Custom && custom_color.has_value()) {
+      return custom_color.value();
+    }
+    Theme::Usage usage =
+        Theme::is_valid(color_usage) ? color_usage : Theme::Usage::Primary;
+    return theme.from_usage(usage, disabled);
   }
 
   ComponentConfig &apply_automatic_defaults() {

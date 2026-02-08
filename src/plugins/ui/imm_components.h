@@ -280,12 +280,54 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
                      ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
+  // Outline & Ghost: transparent bg, readable text; Outline also adds a border
+  if (config.button_variant != ButtonVariant::Filled) {
+    config.with_custom_background(colors::transparent())
+        .with_auto_text_color(false)
+        .with_custom_text_color(ctx.theme.font);
+
+    if (config.button_variant == ButtonVariant::Outline && !config.has_border()) {
+      config.with_border(config.resolve_background_color(ctx.theme),
+                         h720(2.0f));
+    }
+  }
+
   _init_component(ctx, ep_pair, config, ComponentType::Button, true, "button");
 
   // Apply flex-direction specifically for buttons so they can drive wrapping
   // TODO: this is a hack to get buttons to wrap. We should find a better way
   // to do this.
   entity.get<UIComponent>().flex_direction = config.flex_direction;
+
+  // For icon+text buttons, create child elements for icon and label
+  if (config.has_icon()) {
+    // Set up row layout for icon + text
+    entity.get<UIComponent>().flex_direction =
+        (config.icon_position == IconPosition::Left ||
+         config.icon_position == IconPosition::Right)
+            ? FlexDirection::Row
+            : FlexDirection::Column;
+
+    float icon_w = config.icon_source_rect->width;
+    float icon_h = config.icon_source_rect->height;
+
+    auto make_icon = [&](int child_id) {
+      sprite(ctx, mk(entity, child_id), config.icon_texture.value(),
+             config.icon_source_rect.value(),
+             ComponentConfig{}
+                 .with_size(ComponentSize{pixels(icon_w), pixels(icon_h)})
+                 .with_self_align(SelfAlign::Center)
+                 .with_skip_tabbing(true)
+                 .with_debug_name("btn_icon"));
+    };
+
+    // Label was already applied by _init_component via apply_label,
+    // so child_id 0 = before label, 1 = after label.
+    switch (config.icon_position) {
+      case IconPosition::Left:  make_icon(0); break;
+      case IconPosition::Right: make_icon(1); break;
+    }
+  }
 
   entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
 
