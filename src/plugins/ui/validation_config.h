@@ -47,6 +47,13 @@ struct ValidationConfig {
   // Minimum font size in pixels
   float min_font_size = 14.0f;
 
+  // === Resolution Independence (Design Rules Section G) ===
+  // Flag components using Dim::Pixels instead of resolution-relative units
+  // (screen_pct, h720, percent, etc.)
+  bool enforce_resolution_independence = false;
+  // Pixel values at or below this threshold are allowed (e.g. 1-2px borders)
+  float resolution_independence_pixel_threshold = 4.0f;
+
   // === Debug Helpers ===
   // Draw red borders around elements with violations
   bool highlight_violations = false;
@@ -64,6 +71,7 @@ struct ValidationConfig {
     enforce_child_containment = true;
     enforce_contrast_ratio = true;
     enforce_min_font_size = true;
+    enforce_resolution_independence = true;
     highlight_violations = true;
     return *this;
   }
@@ -78,6 +86,7 @@ struct ValidationConfig {
     enforce_overflow_detection = true;
     enforce_contrast_ratio = true;
     enforce_min_font_size = true;
+    enforce_resolution_independence = true;
     return *this;
   }
 
@@ -94,7 +103,7 @@ struct ValidationConfig {
     return enforce_spacing_rhythm || enforce_pixel_alignment ||
            enforce_screen_bounds || enforce_child_containment ||
            enforce_overflow_detection || enforce_contrast_ratio ||
-           enforce_min_font_size;
+           enforce_min_font_size || enforce_resolution_independence;
   }
 
   // Check if mode allows logging

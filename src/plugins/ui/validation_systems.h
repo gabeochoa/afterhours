@@ -295,6 +295,139 @@ struct ValidateMinFontSize : System<UIComponent, HasLabel> {
   }
 };
 
+// Validates that UI components use resolution-relative sizing (screen_pct,
+// h720, percent) instead of fixed pixels. Components using Dim::Pixels for
+// their size, padding, margin, or font size won't scale correctly across
+// different screen resolutions.
+struct ValidateResolutionIndependence
+    : System<AutoLayoutRoot, UIComponent> {
+
+  static bool is_pixel_dim(const Size &size, float threshold) {
+    return size.dim == Dim::Pixels && size.value > threshold;
+  }
+
+  static std::string dim_location_name(const std::string &field, Axis axis) {
+    switch (axis) {
+    case Axis::X:
+      return field + ".x";
+    case Axis::Y:
+      return field + ".y";
+    case Axis::left:
+      return field + ".left";
+    case Axis::top:
+      return field + ".top";
+    case Axis::right:
+      return field + ".right";
+    case Axis::bottom:
+      return field + ".bottom";
+    }
+    return field;
+  }
+
+  void validate_resolution(UIComponent &cmp, const ValidationConfig &config) {
+    if (!cmp.was_rendered_to_screen || cmp.should_hide)
+      return;
+
+    float threshold = config.resolution_independence_pixel_threshold;
+    std::vector<std::string> violations;
+
+    // Check desired size (width/height)
+    if (is_pixel_dim(cmp.desired[Axis::X], threshold)) {
+      violations.push_back(
+          dim_location_name("size", Axis::X) + "=" +
+          std::to_string(static_cast<int>(cmp.desired[Axis::X].value)) + "px");
+    }
+    if (is_pixel_dim(cmp.desired[Axis::Y], threshold)) {
+      violations.push_back(
+          dim_location_name("size", Axis::Y) + "=" +
+          std::to_string(static_cast<int>(cmp.desired[Axis::Y].value)) + "px");
+    }
+
+    // Check padding
+    for (auto axis : {Axis::top, Axis::left, Axis::bottom, Axis::right}) {
+      if (is_pixel_dim(cmp.desired_padding[axis], threshold)) {
+        violations.push_back(
+            dim_location_name("padding", axis) + "=" +
+            std::to_string(
+                static_cast<int>(cmp.desired_padding[axis].value)) +
+            "px");
+      }
+    }
+
+    // Check margin
+    for (auto axis : {Axis::top, Axis::left, Axis::bottom, Axis::right}) {
+      if (is_pixel_dim(cmp.desired_margin[axis], threshold)) {
+        violations.push_back(
+            dim_location_name("margin", axis) + "=" +
+            std::to_string(
+                static_cast<int>(cmp.desired_margin[axis].value)) +
+            "px");
+      }
+    }
+
+    // Check font size
+    if (is_pixel_dim(cmp.font_size, threshold)) {
+      violations.push_back(
+          "font_size=" +
+          std::to_string(static_cast<int>(cmp.font_size.value)) + "px");
+    }
+
+    if (!violations.empty()) {
+      // Build a single message listing all pixel-based fields
+      std::string fields;
+      for (size_t i = 0; i < violations.size(); ++i) {
+        if (i > 0)
+          fields += ", ";
+        fields += violations[i];
+      }
+
+      // Get component debug name if available
+      std::string name_hint;
+      OptEntity opt_ent = EntityHelper::getEntityForID(cmp.id);
+      if (opt_ent.valid()) {
+        Entity &ent = opt_ent.asE();
+        if (ent.has<UIComponentDebug>()) {
+          name_hint = " [" + ent.get<UIComponentDebug>().name() + "]";
+        }
+      }
+
+      std::string msg =
+          "Uses fixed pixels instead of resolution-relative units" + name_hint +
+          ": " + fields + ". Use h720(), screen_pct(), or percent() instead.";
+
+      report_violation(config, "ResolutionIndependence", msg, cmp.id, 0.7f);
+
+      // Add violation component for visual debugging
+      if (config.highlight_violations) {
+        if (opt_ent.valid()) {
+          Entity &ent = opt_ent.asE();
+          if (!ent.has<ValidationViolation>()) {
+            ent.addComponent<ValidationViolation>(msg,
+                                                  "ResolutionIndependence",
+                                                  0.7f);
+          }
+        }
+      }
+    }
+
+    // Recursively check children
+    for (EntityID child_id : cmp.children) {
+      validate_resolution(AutoLayout::to_cmp_static(child_id), config);
+    }
+  }
+
+  virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
+                             float) override {
+    auto &styling_defaults = imm::UIStylingDefaults::get();
+    const auto &config = styling_defaults.get_validation_config();
+
+    if (!config.enforce_resolution_independence)
+      return;
+
+    validate_resolution(cmp, config);
+  }
+};
+
 // ============================================================
 // Validation Render Overlay
 // ============================================================
@@ -390,6 +523,8 @@ static void register_update_systems(SystemManager &sm) {
   sm.register_update_system(std::make_unique<ValidateChildContainment>());
   sm.register_update_system(std::make_unique<ValidateComponentContrast>());
   sm.register_update_system(std::make_unique<ValidateMinFontSize>());
+  sm.register_update_system(
+      std::make_unique<ValidateResolutionIndependence>());
 }
 
 // Register validation render overlay
@@ -407,6 +542,8 @@ static void register_systems(SystemManager &sm) {
   sm.register_update_system(std::make_unique<ValidateChildContainment>());
   sm.register_update_system(std::make_unique<ValidateComponentContrast>());
   sm.register_update_system(std::make_unique<ValidateMinFontSize>());
+  sm.register_update_system(
+      std::make_unique<ValidateResolutionIndependence>());
 
   // Register render overlay (visual debug)
   sm.register_render_system(std::make_unique<RenderOverlay<InputAction>>());
