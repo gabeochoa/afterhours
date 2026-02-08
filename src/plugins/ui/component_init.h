@@ -15,6 +15,12 @@ namespace afterhours {
 
 namespace ui {
 
+// Definition of UIContext::styling_defaults() (declared in context.h)
+template <typename InputAction>
+imm::UIStylingDefaults &UIContext<InputAction>::styling_defaults() {
+  return imm::UIStylingDefaults::get();
+}
+
 namespace imm {
 
 // Implementation of UIStylingDefaults methods that depend on ComponentConfig
@@ -266,9 +272,7 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
         ctx.theme.from_usage(config.color_usage, config.disabled));
     entity.get<HasColor>().set(
         ctx.theme.from_usage(config.color_usage, config.disabled));
-  }
-
-  if (config.color_usage == Theme::Usage::Custom) {
+  } else if (config.color_usage == Theme::Usage::Custom) {
     if (config.custom_color.has_value()) {
       entity.addComponentIfMissing<HasColor>(config.custom_color.value());
       entity.get<HasColor>().set(config.custom_color.value());
@@ -276,6 +280,12 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
       entity.addComponentIfMissing<HasColor>(colors::UI_PINK);
       entity.get<HasColor>().set(colors::UI_PINK);
     }
+  } else if (config.color_usage == Theme::Usage::Default &&
+             !config.label.empty()) {
+    // Auto-add transparent background for text-only elements so they
+    // render correctly without requiring an explicit background color.
+    entity.addComponentIfMissing<HasColor>(colors::transparent());
+    entity.get<HasColor>().set(colors::transparent());
   }
   entity.addComponentIfMissing<HasOpacity>().value =
       std::clamp(config.opacity, 0.0f, 1.0f);
@@ -439,6 +449,47 @@ inline bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
   return created;
 }
 
+// Validate ComponentConfig for common issues.
+// Only runs when validation mode is Warn or Strict.
+inline void _validate_config(const ComponentConfig &config,
+                             const std::string &debug_name) {
+  const auto &validation = UIStylingDefaults::get().get_validation_config();
+  if (validation.mode == ValidationMode::Silent)
+    return;
+
+  auto warn = [&](const std::string &msg) {
+    std::string name =
+        !config.debug_name.empty()
+            ? config.debug_name
+            : (!debug_name.empty() ? debug_name : "<unnamed>");
+    std::string full = "[UI Config] " + name + ": " + msg;
+    if (validation.mode == ValidationMode::Strict) {
+      log_error("{}", full);
+    } else {
+      log_warn("{}", full);
+    }
+  };
+
+  // Warn: fill_parent on both axes without explicit parent size hint
+  // (This is the most common gotcha for new users)
+  if (config.size.x_axis.dim == Dim::Percent &&
+      config.size.x_axis.value >= 1.0f && config.size.y_axis.dim == Dim::Percent &&
+      config.size.y_axis.value >= 1.0f && config.is_absolute) {
+    warn("fill_parent() with absolute positioning may not reference "
+         "the expected parent. Consider using explicit pixel sizes.");
+  }
+
+  // Warn: text without any font specified and no global default
+  if (!config.label.empty() && !config.has_font_override()) {
+    auto &defaults = UIStylingDefaults::get();
+    if (defaults.default_font_name == UIComponent::UNSET_FONT) {
+      warn("Text element has no font and no global default font is set. "
+           "Call UIStylingDefaults::get().set_default_font() or use "
+           ".with_font().");
+    }
+  }
+}
+
 inline bool _init_component(HasUIContext auto &ctx, EntityParent ep_pair,
                             ComponentConfig &config,
                             ComponentType component_type,
@@ -446,6 +497,7 @@ inline bool _init_component(HasUIContext auto &ctx, EntityParent ep_pair,
                             const std::string &debug_name = "") {
   auto [entity, parent] = ep_pair;
   config = _overwrite_defaults(ctx, config, component_type, enable_color);
+  _validate_config(config, debug_name);
   return _add_missing_components(ctx, entity, parent, config, debug_name);
 }
 

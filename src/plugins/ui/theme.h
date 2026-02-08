@@ -236,6 +236,14 @@ struct Theme {
 
   ClickActivationMode click_activation_mode = ClickActivationMode::Press;
 
+  // Disabled element styling.
+  // When with_disabled(true) is set on a ComponentConfig:
+  //  1. The background color is desaturated using disabled_opacity
+  //  2. The element does NOT respond to hover or click
+  //  3. Focus can still move to disabled elements (for accessibility)
+  //     but they won't activate
+  float disabled_opacity = 0.4f;
+
   // ===== Font configuration =====
   // Per-language font configuration
   std::map<translation::Language, FontConfig> language_fonts;
@@ -285,7 +293,10 @@ struct Theme {
     }
     Color color = color_ref(cu);
     if (disabled) {
-      return colors::darken(color, 0.3f);
+      // Blend toward background and reduce alpha for a clear "disabled" look.
+      Color muted = colors::mix(color, background, 1.0f - disabled_opacity);
+      muted.a = static_cast<unsigned char>(color.a * disabled_opacity);
+      return muted;
     }
     return color;
   }
@@ -452,6 +463,12 @@ public:
   // Set any color by usage
   Builder &with_color(Theme::Usage usage, const Color &c) {
     theme_.set_color(usage, c);
+    return *this;
+  }
+
+  // Set disabled element opacity (0.0 = invisible, 1.0 = fully opaque)
+  Builder &with_disabled_opacity(float opacity) {
+    theme_.disabled_opacity = std::clamp(opacity, 0.0f, 1.0f);
     return *this;
   }
 

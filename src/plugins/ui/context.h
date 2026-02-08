@@ -40,6 +40,12 @@ struct RenderInfo {
   int layer = 0;
 };
 
+// Mark an element as wanting directional input for value adjustment
+// when focused (e.g., sliders, spinboxes). When the focused element
+// has this component, WidgetUp/WidgetDown control the value rather
+// than navigating between widgets.
+struct AcceptsValueInput : BaseComponent {};
+
 struct MousePointerState {
   input::MousePosition pos{};
   bool left_down = false;
@@ -49,6 +55,11 @@ struct MousePointerState {
   bool press_moved = false;
   static constexpr float press_drag_threshold_px = 6.0f;
 };
+
+// Forward declaration - full type in styling_defaults.h
+namespace imm {
+struct UIStylingDefaults;
+} // namespace imm
 
 template <typename InputAction> struct UIContext : BaseComponent {
   using value_type = InputAction;
@@ -76,8 +87,10 @@ template <typename InputAction> struct UIContext : BaseComponent {
   InputBitset all_actions;
 
   Theme theme;
-  // TODO: Add styling defaults back when circular dependency is resolved
-  // imm::UIStylingDefaults styling_defaults;
+
+  // Convenience accessor to the UIStylingDefaults singleton.
+  // Defined in component_init.h (which has the full type).
+  static imm::UIStylingDefaults &styling_defaults();
 
   // Delta time for animation updates (set each frame)
   float dt = 0.0f;
@@ -193,12 +206,17 @@ template <typename InputAction> struct UIContext : BaseComponent {
     return a;
   }
 
-  void process_tabbing(EntityID id) {
-    // TODO How do we handle something that wants to use
-    // Widget Value Down/Up to control the value?
-    // Do we mark the widget type with "nextable"? (tab will always work but
-    // not very discoverable
+  // Check if the currently focused element accepts directional value input.
+  // When true, WidgetUp/WidgetDown should adjust the widget's value
+  // rather than navigate between widgets.
+  [[nodiscard]] bool focused_accepts_value_input() const {
+    if (focus_id == ROOT)
+      return false;
+    OptEntity opt = EntityHelper::getEntityForID(focus_id);
+    return opt.valid() && opt.asE().template has<AcceptsValueInput>();
+  }
 
+  void process_tabbing(EntityID id) {
     if (has_focus(id)) {
       if constexpr (magic_enum::enum_contains<InputAction>("WidgetNext")) {
         if (pressed(InputAction::WidgetNext)) {

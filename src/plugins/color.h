@@ -34,6 +34,56 @@ constexpr Color UI_PINK = {250, 200, 200, 255};
 #endif
 
 namespace colors {
+
+// ============================================================
+// Constexpr Color Constructors
+// ============================================================
+
+// Named basics
+constexpr Color white() { return {255, 255, 255, 255}; }
+constexpr Color black() { return {0, 0, 0, 255}; }
+constexpr Color transparent() { return {0, 0, 0, 0}; }
+
+// Grayscale
+constexpr Color gray(unsigned char value) {
+  return {value, value, value, 255};
+}
+constexpr Color gray_25() { return gray(64); }
+constexpr Color gray_50() { return gray(128); }
+constexpr Color gray_75() { return gray(192); }
+
+// Explicit RGB/RGBA constructors
+constexpr Color rgb(unsigned char r, unsigned char g, unsigned char b) {
+  return {r, g, b, 255};
+}
+constexpr Color rgba(unsigned char r, unsigned char g, unsigned char b,
+                     unsigned char a) {
+  return {r, g, b, a};
+}
+
+// Hex color constructor (0xRRGGBB or 0xRRGGBBAA)
+constexpr Color hex(uint32_t value) {
+  if (value <= 0xFFFFFF) {
+    return {static_cast<unsigned char>((value >> 16) & 0xFF),
+            static_cast<unsigned char>((value >> 8) & 0xFF),
+            static_cast<unsigned char>(value & 0xFF), 255};
+  }
+  return {static_cast<unsigned char>((value >> 24) & 0xFF),
+          static_cast<unsigned char>((value >> 16) & 0xFF),
+          static_cast<unsigned char>((value >> 8) & 0xFF),
+          static_cast<unsigned char>(value & 0xFF)};
+}
+
+// Semantic UI colors
+constexpr Color error() { return hex(0xDC3545); }
+constexpr Color warning() { return hex(0xFFC107); }
+constexpr Color success() { return hex(0x28A745); }
+constexpr Color info() { return hex(0x17A2B8); }
+
+// ============================================================
+// Legacy named color constants (prefer functions above)
+// ============================================================
+
 static const Color red = UI_RED;
 static const Color transleucent_green = Color{0, 250, 50, 5};
 static const Color transleucent_red = Color{250, 0, 50, 5};
@@ -126,6 +176,8 @@ static bool is_empty(const Color &c) {
   return c.r == 0 && c.g == 0 && c.b == 0 && c.a == 0;
 }
 
+// TODO we can probably just have a ifdef VECTOR_TYPE and then we can just use that vector type 
+// then we dont strictly need raylib
 #ifdef AFTER_HOURS_USE_RAYLIB
 // HSL conversion functions (requires Vector3 from raylib)
 static raylib::Vector3 to_hsl(const Color color) {
