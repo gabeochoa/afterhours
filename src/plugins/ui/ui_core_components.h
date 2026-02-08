@@ -76,6 +76,8 @@ struct UIComponent : BaseComponent {
   AxisArray<Size, 6> desired_padding;
   AxisArray<Size, 6> desired_margin;
 
+  int render_layer = 0;
+
   FlexDirection flex_direction = FlexDirection::Column;
   JustifyContent justify_content = JustifyContent::FlexStart;
   AlignItems align_items = AlignItems::FlexStart;

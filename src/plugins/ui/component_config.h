@@ -734,6 +734,7 @@ struct ComponentConfig {
     font_size = parent.font_size;
     font_size_explicitly_set = parent.font_size_explicitly_set;
     is_internal = parent.is_internal;
+    render_layer = std::max(render_layer, parent.render_layer);
     image_alignment = parent.image_alignment.value_or(
         texture_manager::HasTexture::Alignment::Center);
     return *this;

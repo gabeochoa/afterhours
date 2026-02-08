@@ -246,6 +246,15 @@ inline void apply_bevel(Entity &entity, const ComponentConfig &config) {
   entity.addComponentIfMissing<HasBevelBorder>(bevel);
 }
 
+inline void apply_render_layer(HasUIContext auto &ctx, Entity &entity,
+                               Entity &parent, ComponentConfig &config) {
+  // Inherit render layer from parent (child is at least on parent's layer)
+  config.render_layer =
+      std::max(config.render_layer, parent.get<UIComponent>().render_layer);
+  entity.get<UIComponent>().render_layer = config.render_layer;
+  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
+}
+
 inline void apply_nine_slice(Entity &entity, const ComponentConfig &config) {
   if (!config.has_nine_slice()) {
     entity.removeComponentIfExists<HasNineSliceBorder>();
@@ -456,8 +465,7 @@ inline bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
   apply_border(entity, config);
   apply_bevel(entity, config);
   apply_nine_slice(entity, config);
-
-  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
+  apply_render_layer(ctx, entity, parent, config);
   return created;
 }
 
