@@ -428,6 +428,280 @@ struct ValidateResolutionIndependence
   }
 };
 
+// Validates that elements don't resolve to zero width or height
+// (common with percent(1.0) when parent has no size, or children() with none)
+struct ValidateZeroSize : System<AutoLayoutRoot, UIComponent> {
+
+  void validate_zero_size(UIComponent &cmp, const ValidationConfig &config) {
+    if (!cmp.was_rendered_to_screen || cmp.should_hide)
+      return;
+
+    auto rect = cmp.rect();
+    bool zero_w = rect.width < 0.5f;
+    bool zero_h = rect.height < 0.5f;
+
+    if (zero_w || zero_h) {
+      std::string dims;
+      if (zero_w)
+        dims += "width=0 ";
+      if (zero_h)
+        dims += "height=0 ";
+
+      // Get debug name if available
+      std::string name_hint;
+      OptEntity opt_ent = EntityHelper::getEntityForID(cmp.id);
+      if (opt_ent.valid()) {
+        Entity &ent = opt_ent.asE();
+        if (ent.has<UIComponentDebug>()) {
+          name_hint = " [" + ent.get<UIComponentDebug>().name() + "]";
+        }
+      }
+
+      std::string msg =
+          "Element resolved to zero size" + name_hint + ": " + dims +
+          "Check parent has explicit size if using percent(), "
+          "or element has children if using children().";
+
+      report_violation(config, "ZeroSize", msg, cmp.id, 0.8f);
+
+      if (config.highlight_violations && opt_ent.valid()) {
+        Entity &ent = opt_ent.asE();
+        if (!ent.has<ValidationViolation>()) {
+          ent.addComponent<ValidationViolation>(msg, "ZeroSize", 0.8f);
+        }
+      }
+    }
+
+    for (EntityID child_id : cmp.children) {
+      validate_zero_size(AutoLayout::to_cmp_static(child_id), config);
+    }
+  }
+
+  virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
+                             float) override {
+    auto &styling_defaults = imm::UIStylingDefaults::get();
+    const auto &config = styling_defaults.get_validation_config();
+    if (!config.enforce_zero_size_detection)
+      return;
+    validate_zero_size(cmp, config);
+  }
+};
+
+// Validates that absolute-positioned elements don't have non-zero margins
+// (margins on absolute elements act as position offsets, not spacing)
+struct ValidateAbsoluteMarginConflict : System<AutoLayoutRoot, UIComponent> {
+
+  static bool has_nonzero_margin(const UIComponent &cmp) {
+    for (auto axis :
+         {Axis::top, Axis::left, Axis::bottom, Axis::right}) {
+      if (cmp.desired_margin[axis].value > 0.001f &&
+          cmp.desired_margin[axis].dim != Dim::None) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void validate_margin_conflict(UIComponent &cmp,
+                                const ValidationConfig &config) {
+    if (!cmp.was_rendered_to_screen || cmp.should_hide)
+      return;
+
+    if (cmp.absolute && has_nonzero_margin(cmp)) {
+      std::string name_hint;
+      OptEntity opt_ent = EntityHelper::getEntityForID(cmp.id);
+      if (opt_ent.valid()) {
+        Entity &ent = opt_ent.asE();
+        if (ent.has<UIComponentDebug>()) {
+          name_hint = " [" + ent.get<UIComponentDebug>().name() + "]";
+        }
+      }
+
+      std::string msg =
+          "Absolute element has margins" + name_hint +
+          ". On absolute elements, margins are position offsets "
+          "(they don't create spacing). Use with_translate() for "
+          "positioning instead.";
+
+      report_violation(config, "AbsoluteMarginConflict", msg, cmp.id, 0.6f);
+
+      if (config.highlight_violations && opt_ent.valid()) {
+        Entity &ent = opt_ent.asE();
+        if (!ent.has<ValidationViolation>()) {
+          ent.addComponent<ValidationViolation>(
+              msg, "AbsoluteMarginConflict", 0.6f);
+        }
+      }
+    }
+
+    for (EntityID child_id : cmp.children) {
+      validate_margin_conflict(AutoLayout::to_cmp_static(child_id), config);
+    }
+  }
+
+  virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
+                             float) override {
+    auto &styling_defaults = imm::UIStylingDefaults::get();
+    const auto &config = styling_defaults.get_validation_config();
+    if (!config.enforce_absolute_margin_conflict)
+      return;
+    validate_margin_conflict(cmp, config);
+  }
+};
+
+// Validates that elements with labels have a font set
+// (font_name != UNSET_FONT, meaning either explicit or default was applied)
+struct ValidateLabelHasFont : System<UIComponent, HasLabel> {
+  virtual void for_each_with(Entity &entity, UIComponent &cmp, HasLabel &label,
+                             float) override {
+    auto &styling_defaults = imm::UIStylingDefaults::get();
+    const auto &config = styling_defaults.get_validation_config();
+    if (!config.enforce_label_has_font)
+      return;
+    if (!cmp.was_rendered_to_screen || cmp.should_hide)
+      return;
+
+    if (cmp.font_name == UIComponent::UNSET_FONT) {
+      std::string msg =
+          "Element has label \"" + label.label +
+          "\" but no font set. Text may not render. "
+          "Use .with_font(), set_default_font(), or ensure font inheritance.";
+
+      report_violation(config, "LabelNoFont", msg, entity.id, 0.9f);
+
+      if (config.highlight_violations) {
+        if (!entity.has<ValidationViolation>()) {
+          entity.addComponent<ValidationViolation>(msg, "LabelNoFont", 0.9f);
+        }
+      }
+    }
+  }
+};
+
+// Validates that computed margins and padding follow 4/8/16 spacing rhythm
+struct ValidateSpacingRhythm : System<AutoLayoutRoot, UIComponent> {
+
+  void validate_spacing(UIComponent &cmp, const ValidationConfig &config) {
+    if (!cmp.was_rendered_to_screen || cmp.should_hide)
+      return;
+
+    std::vector<std::string> violations;
+
+    // Check computed margins
+    for (auto axis : {Axis::top, Axis::left, Axis::bottom, Axis::right}) {
+      float val = cmp.computed_margin[axis];
+      if (val > 0.001f && !is_valid_spacing(val)) {
+        violations.push_back("margin." + std::string(
+            axis == Axis::top ? "top" : axis == Axis::left ? "left"
+            : axis == Axis::bottom ? "bottom" : "right") +
+            "=" + std::to_string(static_cast<int>(val)) + "px");
+      }
+    }
+
+    // Check computed padding
+    for (auto axis : {Axis::top, Axis::left, Axis::bottom, Axis::right}) {
+      float val = cmp.computed_padd[axis];
+      if (val > 0.001f && !is_valid_spacing(val)) {
+        violations.push_back("padding." + std::string(
+            axis == Axis::top ? "top" : axis == Axis::left ? "left"
+            : axis == Axis::bottom ? "bottom" : "right") +
+            "=" + std::to_string(static_cast<int>(val)) + "px");
+      }
+    }
+
+    if (!violations.empty()) {
+      std::string fields;
+      for (size_t i = 0; i < violations.size(); ++i) {
+        if (i > 0)
+          fields += ", ";
+        fields += violations[i];
+      }
+
+      std::string name_hint;
+      OptEntity opt_ent = EntityHelper::getEntityForID(cmp.id);
+      if (opt_ent.valid() && opt_ent.asE().has<UIComponentDebug>()) {
+        name_hint =
+            " [" + opt_ent.asE().get<UIComponentDebug>().name() + "]";
+      }
+
+      std::string msg = "Spacing not on 4px rhythm" + name_hint + ": " +
+                        fields + ". Use multiples of 4 (4, 8, 12, 16, 24, 32).";
+
+      report_violation(config, "SpacingRhythm", msg, cmp.id, 0.4f);
+
+      if (config.highlight_violations && opt_ent.valid()) {
+        Entity &ent = opt_ent.asE();
+        if (!ent.has<ValidationViolation>()) {
+          ent.addComponent<ValidationViolation>(msg, "SpacingRhythm", 0.4f);
+        }
+      }
+    }
+
+    for (EntityID child_id : cmp.children) {
+      validate_spacing(AutoLayout::to_cmp_static(child_id), config);
+    }
+  }
+
+  virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
+                             float) override {
+    auto &styling_defaults = imm::UIStylingDefaults::get();
+    const auto &config = styling_defaults.get_validation_config();
+    if (!config.enforce_spacing_rhythm)
+      return;
+    validate_spacing(cmp, config);
+  }
+};
+
+// Validates that computed positions are pixel-aligned (no fractional pixels)
+// to prevent blurry rendering on non-retina displays
+struct ValidatePixelAlignment : System<AutoLayoutRoot, UIComponent> {
+
+  void validate_alignment(UIComponent &cmp, const ValidationConfig &config) {
+    if (!cmp.was_rendered_to_screen || cmp.should_hide)
+      return;
+
+    auto rect = cmp.rect();
+    bool x_misaligned = !is_pixel_aligned(rect.x);
+    bool y_misaligned = !is_pixel_aligned(rect.y);
+
+    if (x_misaligned || y_misaligned) {
+      std::string name_hint;
+      OptEntity opt_ent = EntityHelper::getEntityForID(cmp.id);
+      if (opt_ent.valid() && opt_ent.asE().has<UIComponentDebug>()) {
+        name_hint =
+            " [" + opt_ent.asE().get<UIComponentDebug>().name() + "]";
+      }
+
+      std::string msg = "Element not pixel-aligned" + name_hint + " at (" +
+                        std::to_string(rect.x) + ", " +
+                        std::to_string(rect.y) +
+                        "). Fractional positions cause blurry rendering.";
+
+      report_violation(config, "PixelAlignment", msg, cmp.id, 0.3f);
+
+      if (config.highlight_violations && opt_ent.valid()) {
+        Entity &ent = opt_ent.asE();
+        if (!ent.has<ValidationViolation>()) {
+          ent.addComponent<ValidationViolation>(msg, "PixelAlignment", 0.3f);
+        }
+      }
+    }
+
+    for (EntityID child_id : cmp.children) {
+      validate_alignment(AutoLayout::to_cmp_static(child_id), config);
+    }
+  }
+
+  virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
+                             float) override {
+    auto &styling_defaults = imm::UIStylingDefaults::get();
+    const auto &config = styling_defaults.get_validation_config();
+    if (!config.enforce_pixel_alignment)
+      return;
+    validate_alignment(cmp, config);
+  }
+};
+
 // ============================================================
 // Validation Render Overlay
 // ============================================================
@@ -525,6 +799,12 @@ static void register_update_systems(SystemManager &sm) {
   sm.register_update_system(std::make_unique<ValidateMinFontSize>());
   sm.register_update_system(
       std::make_unique<ValidateResolutionIndependence>());
+  sm.register_update_system(std::make_unique<ValidateZeroSize>());
+  sm.register_update_system(
+      std::make_unique<ValidateAbsoluteMarginConflict>());
+  sm.register_update_system(std::make_unique<ValidateLabelHasFont>());
+  sm.register_update_system(std::make_unique<ValidateSpacingRhythm>());
+  sm.register_update_system(std::make_unique<ValidatePixelAlignment>());
 }
 
 // Register validation render overlay
@@ -544,6 +824,12 @@ static void register_systems(SystemManager &sm) {
   sm.register_update_system(std::make_unique<ValidateMinFontSize>());
   sm.register_update_system(
       std::make_unique<ValidateResolutionIndependence>());
+  sm.register_update_system(std::make_unique<ValidateZeroSize>());
+  sm.register_update_system(
+      std::make_unique<ValidateAbsoluteMarginConflict>());
+  sm.register_update_system(std::make_unique<ValidateLabelHasFont>());
+  sm.register_update_system(std::make_unique<ValidateSpacingRhythm>());
+  sm.register_update_system(std::make_unique<ValidatePixelAlignment>());
 
   // Register render overlay (visual debug)
   sm.register_render_system(std::make_unique<RenderOverlay<InputAction>>());

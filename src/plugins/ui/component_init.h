@@ -78,9 +78,9 @@ inline ComponentConfig _overwrite_defaults(HasUIContext auto &ctx,
   auto &styling_defaults = UIStylingDefaults::get();
 
   if (!config.is_internal) {
-    if (styling_defaults.has_component_defaults(component_type)) {
-      config = styling_defaults.merge_with_defaults(component_type, config);
-    }
+    // Always merge with defaults to apply global default font/size,
+    // even if no per-component-type defaults are registered.
+    config = styling_defaults.merge_with_defaults(component_type, config);
   }
 
   config.with_internal(true);

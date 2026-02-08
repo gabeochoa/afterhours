@@ -54,6 +54,16 @@ struct ValidationConfig {
   // Pixel values at or below this threshold are allowed (e.g. 1-2px borders)
   float resolution_independence_pixel_threshold = 4.0f;
 
+  // === Config Conflict Detection (Design Rules Section H) ===
+  // Flag elements that resolved to zero width or height (common with
+  // percent(1.0) when parent has no explicit size, or children() with no kids)
+  bool enforce_zero_size_detection = false;
+  // Flag absolute-positioned elements that also have non-zero margins
+  // (margins on absolute elements are position offsets, not spacing — often a bug)
+  bool enforce_absolute_margin_conflict = false;
+  // Flag elements with a label but no font set (font_name == UNSET_FONT)
+  bool enforce_label_has_font = false;
+
   // === Debug Helpers ===
   // Draw red borders around elements with violations
   bool highlight_violations = false;
@@ -72,6 +82,9 @@ struct ValidationConfig {
     enforce_contrast_ratio = true;
     enforce_min_font_size = true;
     enforce_resolution_independence = true;
+    enforce_zero_size_detection = true;
+    enforce_absolute_margin_conflict = true;
+    enforce_label_has_font = true;
     highlight_violations = true;
     return *this;
   }
@@ -87,6 +100,9 @@ struct ValidationConfig {
     enforce_contrast_ratio = true;
     enforce_min_font_size = true;
     enforce_resolution_independence = true;
+    enforce_zero_size_detection = true;
+    enforce_absolute_margin_conflict = true;
+    enforce_label_has_font = true;
     return *this;
   }
 
@@ -103,7 +119,9 @@ struct ValidationConfig {
     return enforce_spacing_rhythm || enforce_pixel_alignment ||
            enforce_screen_bounds || enforce_child_containment ||
            enforce_overflow_detection || enforce_contrast_ratio ||
-           enforce_min_font_size || enforce_resolution_independence;
+           enforce_min_font_size || enforce_resolution_independence ||
+           enforce_zero_size_detection || enforce_absolute_margin_conflict ||
+           enforce_label_has_font;
   }
 
   // Check if mode allows logging
