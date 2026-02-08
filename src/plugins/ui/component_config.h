@@ -223,6 +223,9 @@ struct ComponentConfig {
     custom_color = color;
     return *this;
   }
+  ComponentConfig &with_transparent_bg() {
+    return with_custom_background(Color{0, 0, 0, 0});
+  }
 
   // DEPRECATED: Keep for backwards compatibility
   [[deprecated("Use with_background() instead")]]
