@@ -115,7 +115,9 @@ struct ComponentConfig {
   // Text input: character to display instead of actual text (for passwords)
   std::optional<char> mask_char;
 
-  // Checkbox indicator characters (default: "v" for checked, " " for unchecked)
+  // Checkbox indicator characters
+  static constexpr const char* DEFAULT_CHECKBOX_CHECKED = "X";
+  static constexpr const char* DEFAULT_CHECKBOX_UNCHECKED = " ";
   std::optional<std::string> checkbox_checked_indicator;
   std::optional<std::string> checkbox_unchecked_indicator;
 

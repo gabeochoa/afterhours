@@ -406,9 +406,8 @@ ElementResult checkbox_no_label(HasUIContext auto &ctx, EntityParent ep_pair,
   HasCheckboxState &checkboxState =
       _init_state<HasCheckboxState>(entity, [&](auto &) {}, value);
 
-  // Use configurable indicators with sensible defaults (v for checked, space for unchecked)
-  std::string checked_indicator = config.checkbox_checked_indicator.value_or("v");
-  std::string unchecked_indicator = config.checkbox_unchecked_indicator.value_or(" ");
+  std::string checked_indicator = config.checkbox_checked_indicator.value_or(ComponentConfig::DEFAULT_CHECKBOX_CHECKED);
+  std::string unchecked_indicator = config.checkbox_unchecked_indicator.value_or(ComponentConfig::DEFAULT_CHECKBOX_UNCHECKED);
   config.label = value ? checked_indicator : unchecked_indicator;
   // Only set symbol font if no font override was specified
   // Preserve the inherited font_size for accessibility compliance
@@ -768,8 +767,8 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
     circ.ent().template addComponentIfMissing<InFocusCluster>();
     clicked = circ;
 
-  std::string checked_indicator = config.checkbox_checked_indicator.value_or("v");
-  std::string unchecked_indicator = config.checkbox_unchecked_indicator.value_or("x");
+  std::string checked_indicator = config.checkbox_checked_indicator.value_or(ComponentConfig::DEFAULT_CHECKBOX_CHECKED);
+  std::string unchecked_indicator = config.checkbox_unchecked_indicator.value_or(ComponentConfig::DEFAULT_CHECKBOX_UNCHECKED);
   auto check_label = state.on ? checked_indicator : unchecked_indicator;
 
     // Checkmark when ON, X when OFF for clear visual indicator
