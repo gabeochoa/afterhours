@@ -1029,9 +1029,11 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   else if (dim == Dim::Percent || dim == Dim::ScreenPercent)
     handle_left_size.value = std::max(0.0f, handle_left_size.value);
 
+  // TODO: Support custom handle height via a dedicated config field
+  // (e.g. with_slider_handle_height) to allow oversized knob-style handles.
   auto handle_config =
       ComponentConfig::inherit_from(config, "slider_handle")
-          .with_size(ComponentSize{handle_width_size, config.size.y_axis})
+          .with_size(ComponentSize{handle_width_size, percent(1.f)})
           .with_padding(Padding{.left = handle_left_size})
           .with_color_usage(Theme::Usage::Primary)
           .with_rounded_corners(config.rounded_corners.value())
@@ -1041,7 +1043,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   auto handle = div(ctx, mk(slider_bg), handle_config);
   handle.cmp()
       .set_desired_width(handle_config.size.x_axis)
-      .set_desired_height(config.size.y_axis);
+      .set_desired_height(percent(1.f));
   handle.ent().template addComponentIfMissing<InFocusCluster>();
 
   // Add handle label if needed
