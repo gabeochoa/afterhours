@@ -203,6 +203,15 @@ ElementResult image(HasUIContext auto &ctx, EntityParent ep_pair,
 
 ElementResult sprite(HasUIContext auto &ctx, EntityParent ep_pair,
                      afterhours::texture_manager::Texture texture,
+                     ComponentConfig config = ComponentConfig()) {
+  afterhours::texture_manager::Rectangle full_rect{
+      0, 0, static_cast<float>(texture.width),
+      static_cast<float>(texture.height)};
+  return sprite(ctx, ep_pair, texture, full_rect, config);
+}
+
+ElementResult sprite(HasUIContext auto &ctx, EntityParent ep_pair,
+                     afterhours::texture_manager::Texture texture,
                      afterhours::texture_manager::Rectangle source_rect,
                      ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
