@@ -425,6 +425,7 @@ struct ComponentConfig {
     return *this;
   }
 
+  // TODO eventually rename this to is_absolute() instead 0
   ComponentConfig &with_absolute_position() {
     is_absolute = true;
     if (has_margin()) {
@@ -434,6 +435,12 @@ struct ComponentConfig {
                "with_translate() for clearer intent.");
     }
     return *this;
+  }
+  ComponentConfig &with_absolute_position(float x, float y) {
+    return with_absolute_position().with_translate(x, y);
+  }
+  ComponentConfig &with_absolute_position(Size x, Size y) {
+    return with_absolute_position().with_translate(x, y);
   }
   ComponentConfig &with_internal(bool internal = true) {
     is_internal = internal;
