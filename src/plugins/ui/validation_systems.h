@@ -265,7 +265,7 @@ struct ValidateMinFontSize : System<UIComponent, HasLabel> {
     }
   }
 
-  virtual void for_each_with(Entity &entity, UIComponent &cmp, HasLabel &,
+  virtual void for_each_with(Entity &entity, UIComponent &cmp, HasLabel &label,
                              float) override {
     auto &styling_defaults = imm::UIStylingDefaults::get();
     const auto &config = styling_defaults.get_validation_config();
@@ -279,9 +279,17 @@ struct ValidateMinFontSize : System<UIComponent, HasLabel> {
     float font_size = resolve_to_pixels(cmp.font_size, screen_height);
 
     if (font_size < config.min_font_size) {
+      std::string label_hint;
+      if (!label.label.empty()) {
+        label_hint = " \"" + label.label.substr(0, 40) + "\"";
+      } else if (entity.has<UIComponentDebug>()) {
+        label_hint = " [" + entity.get<UIComponentDebug>().name() + "]";
+      }
+
       std::string msg = "Font size " + std::to_string(font_size) +
                         "px below minimum " +
-                        std::to_string(config.min_font_size) + "px";
+                        std::to_string(config.min_font_size) + "px" +
+                        label_hint;
 
       report_violation(config, "MinFontSize", msg, entity.id, 0.6f);
 
