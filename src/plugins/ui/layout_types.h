@@ -170,7 +170,8 @@ inline float resolve_to_pixels(const Size &size, float screen_dimension) {
   case Dim::Expand:
     // For these types, just return the raw value as a fallback
     // In practice, Percent/Children/Text/Expand should only be used for layout
-    log_warn("Cannot resolve {} to pixels - using raw value", size);
+    log_warn("Cannot resolve dim {} to pixels - using raw value",
+             static_cast<int>(size.dim));
     return size.value;
   }
   return size.value;
@@ -217,7 +218,7 @@ struct ComponentSize {
     if ((x_axis.dim == ui::Dim::Children && x_axis.value < 0) ||
         x_axis.dim == ui::Dim::Text || x_axis.dim == ui::Dim::None) {
       log_warn("Scaling component size with dim {} may be unsupported",
-               x_axis.dim);
+               static_cast<int>(x_axis.dim));
     }
     x_axis.value *= s;
     return ComponentSize(*this);
@@ -226,7 +227,7 @@ struct ComponentSize {
     if ((y_axis.dim == ui::Dim::Children && y_axis.value < 0) ||
         y_axis.dim == ui::Dim::Text || y_axis.dim == ui::Dim::None) {
       log_warn("Scaling component size with dim {} may be unsupported",
-               y_axis.dim);
+               static_cast<int>(y_axis.dim));
     }
     y_axis.value *= s;
     return ComponentSize(*this);
@@ -254,7 +255,7 @@ inline Size half_size(Size size) {
   case Dim::Children:
   case Dim::Text:
   case Dim::None: {
-    log_warn("half size not supported for dim {}", size.dim);
+    log_warn("half size not supported for dim {}", static_cast<int>(size.dim));
   } break;
   case Dim::ScreenPercent:
   case Dim::Percent:
