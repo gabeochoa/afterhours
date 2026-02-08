@@ -7,3 +7,4 @@
 #include "imm_components.h"
 #include "rounded_corners.h"
 #include "setting_row.h"
+#include "ui_decorators.h"

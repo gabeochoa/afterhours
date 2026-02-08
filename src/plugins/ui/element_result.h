@@ -36,6 +36,27 @@ struct ElementResult {
   Entity &ent() const { return element; }
   UIComponent &cmp() const { return element.get<UIComponent>(); }
 
+  /// Apply a decorator to this element. The decorator is any callable
+  /// that takes an Entity& and adds visual decorations as children.
+  ///
+  /// Plugins can define factory functions that return lambdas:
+  /// ```cpp
+  /// auto with_brackets(auto& ctx, Color c) {
+  ///     return [&ctx, c](Entity& e) { /* add bracket divs */ };
+  /// }
+  /// ```
+  ///
+  /// Usage:
+  /// ```cpp
+  /// button(ctx, mk(parent, 1), config)
+  ///     .decorate(with_brackets(ctx, teal))
+  ///     .decorate(with_grid_bg(ctx, 32.0f, gray));
+  /// ```
+  template <typename Fn> ElementResult &decorate(Fn &&fn) {
+    std::forward<Fn>(fn)(element);
+    return *this;
+  }
+
   template <typename T> T as() const { return std::get<T>(data); }
 
 private:
