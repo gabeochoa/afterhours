@@ -91,6 +91,7 @@ struct ComponentConfig {
 
   std::string font_name = UIComponent::UNSET_FONT;
   Size font_size = pixels(50.f);
+  bool font_size_explicitly_set = false;
   bool is_internal = false;
 
   // Shadow configuration
@@ -361,12 +362,38 @@ struct ComponentConfig {
   ComponentConfig &with_font(const std::string &font_name_, Size font_size_) {
     font_name = font_name_;
     font_size = font_size_;
+    font_size_explicitly_set = true;
     return *this;
   }
 
   // Float overload for backwards compatibility - converts to pixels
   ComponentConfig &with_font(const std::string &font_name_, float font_size_px) {
     return with_font(font_name_, pixels(font_size_px));
+  }
+
+  /// Set only the font size, leaving the font name to be resolved from
+  /// the default font. Use this when you want a custom size but the
+  /// theme/default font name.
+  ComponentConfig &with_font_size(Size font_size_) {
+    font_size = font_size_;
+    font_size_explicitly_set = true;
+    return *this;
+  }
+
+  /// Float overload for backwards compatibility - converts to pixels
+  ComponentConfig &with_font_size(float font_size_px) {
+    return with_font_size(pixels(font_size_px));
+  }
+
+  /// Set the font size from a theme FontSizing tier (Small/Medium/Large/XL).
+  /// Resolves the pixel size from the theme's FontSizing at call time.
+  /// The font name is left to be resolved from the default font.
+  /// Example: .with_font_tier(FontSizing::Tier::Large)
+  ComponentConfig &with_font_tier(FontSizing::Tier tier) {
+    auto &theme = imm::ThemeDefaults::get().theme;
+    font_size = h720(theme.font_sizing.get(tier));
+    font_size_explicitly_set = true;
+    return *this;
   }
 
   ComponentConfig &with_absolute_position() {
@@ -512,6 +539,9 @@ struct ComponentConfig {
   bool has_font_override() const {
     return font_name != UIComponent::UNSET_FONT;
   }
+  bool has_font_size_override() const {
+    return font_size_explicitly_set;
+  }
   bool has_text_color_override() const {
     return text_color_usage != Theme::Usage::Default ||
            custom_text_color.has_value();
@@ -593,7 +623,10 @@ struct ComponentConfig {
 
     if (overrides.has_font_override()) {
       merged.font_name = overrides.font_name;
+    }
+    if (overrides.has_font_override() || overrides.has_font_size_override()) {
       merged.font_size = overrides.font_size;
+      merged.font_size_explicitly_set = overrides.font_size_explicitly_set;
     }
 
     if (overrides.has_texture())
@@ -643,6 +676,7 @@ struct ComponentConfig {
     click_activation = parent.click_activation;
     font_name = parent.font_name;
     font_size = parent.font_size;
+    font_size_explicitly_set = parent.font_size_explicitly_set;
     is_internal = parent.is_internal;
     image_alignment = parent.image_alignment.value_or(
         texture_manager::HasTexture::Alignment::Center);
