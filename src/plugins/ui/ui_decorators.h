@@ -167,8 +167,6 @@ inline auto with_grid_bg(HasUIContext auto &ctx, float cell_size,
 
 /// Configuration for the quote decorator.
 struct QuoteStyle {
-  std::string attribution;          // e.g. "— Elder Sage"
-  bool show_quote_marks = false;
   Color accent_color{200, 160, 100, 255};
   float accent_width = 4.0f;
 };
@@ -198,20 +196,6 @@ inline auto with_quote(HasUIContext auto &ctx,
             .with_rounded_corners(RoundedCorners().all_sharp())
             .with_skip_tabbing(true)
             .with_debug_name("quote_accent"));
-
-    // Attribution (if provided)
-    if (!style.attribution.empty()) {
-      div(ctx, mk(parent, 1),
-          ComponentConfig{}
-              .with_size(ComponentSize{children(), children()})
-              .with_label(style.attribution)
-              .with_alignment(TextAlignment::Left)
-              .with_padding(Spacing::sm)
-              .with_custom_text_color(
-                  colors::opacity_pct(style.accent_color, 0.8f))
-              .with_skip_tabbing(true)
-              .with_debug_name("quote_attribution"));
-    }
   };
 }
 
