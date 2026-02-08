@@ -436,6 +436,11 @@ inline bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
 
   if (!config.debug_name.empty()) {
     entity.get<UIComponentDebug>().set(config.debug_name);
+  } else if (!config.label.empty()) {
+    // Auto-derive debug name from label: "<label> <component_type>"
+    entity.get<UIComponentDebug>().set(
+        debug_name.empty() ? config.label
+                           : fmt::format("{} {}", config.label, debug_name));
   }
 
   UIComponent &parent_cmp = parent.get<UIComponent>();
