@@ -351,6 +351,14 @@ struct Padding {
   Size left;
   Size bottom;
   Size right;
+
+  static Padding all(Size v) { return {v, v, v, v}; }
+  static Padding vertical(Size v) { return {v, {}, v, {}}; }
+  static Padding horizontal(Size v) { return {{}, v, {}, v}; }
+  static Padding Top(Size v) { return {v, {}, {}, {}}; }
+  static Padding Left(Size v) { return {{}, v, {}, {}}; }
+  static Padding Bottom(Size v) { return {{}, {}, v, {}}; }
+  static Padding Right(Size v) { return {{}, {}, {}, v}; }
 };
 
 struct Margin {
@@ -358,6 +366,14 @@ struct Margin {
   Size bottom;
   Size left;
   Size right;
+
+  static Margin all(Size v) { return {v, v, v, v}; }
+  static Margin vertical(Size v) { return {v, v, {}, {}}; }
+  static Margin horizontal(Size v) { return {{}, {}, v, v}; }
+  static Margin Top(Size v) { return {v, {}, {}, {}}; }
+  static Margin Bottom(Size v) { return {{}, v, {}, {}}; }
+  static Margin Left(Size v) { return {{}, {}, v, {}}; }
+  static Margin Right(Size v) { return {{}, {}, {}, v}; }
 };
 
 } // namespace ui
