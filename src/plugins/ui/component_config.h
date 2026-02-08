@@ -150,6 +150,10 @@ struct ComponentConfig {
     size = sz;
     return *this;
   }
+  // Size in 720p reference coordinates (w1280 for width, h720 for height)
+  ComponentConfig &with_720p_size(float w, float h) {
+    return with_size(ComponentSize{w1280(w), h720(h)});
+  }
   ComponentConfig &with_padding(const Padding &padding_) {
     padding = padding_;
     return *this;
