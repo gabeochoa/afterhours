@@ -318,6 +318,7 @@ struct E2ECommandCleanupSystem : System<PendingE2ECommand> {
                                 cmd.name, PendingE2ECommand::MAX_FRAMES);
       }
       cmd.fail(error_msg);
+      detail::command_error_count()++;
       log_warn("[TIMEOUT] {} (line {}): {}", cmd.name, cmd.line_number,
                error_msg);
       e.cleanup = true;
