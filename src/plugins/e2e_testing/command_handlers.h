@@ -268,15 +268,13 @@ private:
   ResetFn on_reset_;
 };
 
-// Warn about unhandled commands (runs after all other handlers)
+// Fail on unhandled commands (runs after all other handlers)
 struct HandleUnknownCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || cmd.is_retry())
       return; // Skip consumed or retry-pending commands
 
-    log_warn("Unhandled E2E command: '{}' (line {})", cmd.name,
-             cmd.line_number);
-    cmd.consume();
+    cmd.fail(std::format("Unknown command: '{}'", cmd.name));
   }
 };
 
