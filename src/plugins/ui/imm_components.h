@@ -805,11 +805,17 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
          knob_sz = pixels(knob_sz_px);
     Size pad = pixels(pad_px);
 
+    // Subtle 1px border for visibility on dark backgrounds
+    Color track_border_color = Color{theme.font_muted.r, theme.font_muted.g,
+                                     theme.font_muted.b,
+                                     static_cast<uint8_t>(theme.font_muted.a / 3)};
+
     auto track_result =
         button(ctx, mk(entity),
                ComponentConfig::inherit_from(config, "toggle_track")
                    .with_size(ComponentSize{track_w, track_h})
                    .with_custom_background(track_color)
+                   .with_border(track_border_color, 1.0f)
                    .with_rounded_corners(RoundedCorners().all_round())
                    .with_roundness(0.5f));
 
@@ -820,6 +826,9 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
     // Sliding knob - calculate position using pixel values directly
     float knob_x_px = pad_px + (track_w_px - knob_sz_px - pad_px * 2) *
                                    state.animation_progress;
+    // ON/OFF indicator text: "I" for ON, "O" for OFF
+    std::string knob_indicator = state.on ? "I" : "O";
+    Color knob_text_color = track_color;
     div(ctx, mk(track_result.ent()),
         ComponentConfig::inherit_from(config, "toggle_knob")
             .with_size(ComponentSize{knob_sz, knob_sz})
@@ -828,6 +837,10 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_custom_background(knob_color)
             .with_rounded_corners(RoundedCorners().all_round())
             .with_roundness(1.0f)
+            .with_label(knob_indicator)
+            .with_font(UIComponent::DEFAULT_FONT, pixels(14.0f))
+            .with_alignment(TextAlignment::Center)
+            .with_custom_text_color(knob_text_color)
             .with_skip_tabbing(true));
   }
 
@@ -1479,20 +1492,40 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
     Color tab_bg = is_active ? ctx.theme.surface : ctx.theme.background;
     Color tab_text = is_active ? ctx.theme.font : ctx.theme.font_muted;
 
+    // Wrapper div for each tab: column layout holding button + underline
+    auto tab_wrapper =
+        div(ctx, mk(entity, i),
+            ComponentConfig::inherit_from(config,
+                                         fmt::format("tab_wrap_{}", i))
+                .with_size(ComponentSize{percent(tab_width_percent),
+                                        config.size.y_axis})
+                .with_flex_direction(FlexDirection::Column)
+                .with_color_usage(Theme::Usage::None));
+
     auto tab_config =
         ComponentConfig::inherit_from(config, fmt::format("tab_{}", i))
-            .with_size(
-                ComponentSize{percent(tab_width_percent), config.size.y_axis})
+            .with_size(ComponentSize{percent(1.0f), expand(1.0f)})
             .with_label(std::string(label))
             .with_custom_background(tab_bg)
             .with_custom_text_color(tab_text)
             .with_align_items(AlignItems::Center)
             .with_justify_content(JustifyContent::Center);
 
-    if (button(ctx, mk(entity, i), tab_config)) {
+    if (button(ctx, mk(tab_wrapper.ent()), tab_config)) {
       active_tab = i;
       changed = true;
     }
+
+    // Active tab underline indicator (3px) or transparent spacer for
+    // consistent sizing
+    Color underline_color =
+        is_active ? ctx.theme.primary : Color{0, 0, 0, 0};
+    div(ctx, mk(tab_wrapper.ent(), 1),
+        ComponentConfig{}
+            .with_debug_name(fmt::format("tab_underline_{}", i))
+            .with_size(ComponentSize{percent(1.0f), pixels(3.0f)})
+            .with_custom_background(underline_color)
+            .with_skip_tabbing(true));
 
     ++i;
   }

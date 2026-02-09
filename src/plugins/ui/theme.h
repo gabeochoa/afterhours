@@ -239,10 +239,11 @@ struct Theme {
   // Disabled element styling.
   // When with_disabled(true) is set on a ComponentConfig:
   //  1. The background color is desaturated using disabled_opacity
-  //  2. The element does NOT respond to hover or click
-  //  3. Focus can still move to disabled elements (for accessibility)
+  //  2. The color is shifted toward grayscale (50% desaturation)
+  //  3. The element does NOT respond to hover or click
+  //  4. Focus can still move to disabled elements (for accessibility)
   //     but they won't activate
-  float disabled_opacity = 0.4f;
+  float disabled_opacity = 0.3f;
 
   // ===== Font configuration =====
   // Per-language font configuration
@@ -296,6 +297,12 @@ struct Theme {
       // Blend toward background and reduce alpha for a clear "disabled" look.
       Color muted = colors::mix(color, background, 1.0f - disabled_opacity);
       muted.a = static_cast<unsigned char>(color.a * disabled_opacity);
+      // Desaturate: shift RGB toward grayscale (50% desaturation) so disabled
+      // elements look clearly "grayed out" rather than just slightly faded.
+      float lum = 0.299f * muted.r + 0.587f * muted.g + 0.114f * muted.b;
+      muted.r = static_cast<unsigned char>(muted.r * 0.5f + lum * 0.5f);
+      muted.g = static_cast<unsigned char>(muted.g * 0.5f + lum * 0.5f);
+      muted.b = static_cast<unsigned char>(muted.b * 0.5f + lum * 0.5f);
       return muted;
     }
     return color;
