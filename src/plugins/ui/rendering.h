@@ -1113,7 +1113,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     if (entity.has<HasColor>()) {
       Color col = entity.template get<HasColor>().color();
 
-      if (context.is_hot(entity.id)) {
+      if (context.is_hot(entity.id) &&
+          !entity.template get<HasColor>().skip_hover_override) {
         col = context.theme.from_usage(Theme::Usage::Background);
       }
 
@@ -1628,7 +1629,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     if (entity.has<HasColor>()) {
       Color col = entity.template get<HasColor>().color();
 
-      if (context.is_hot(entity.id)) {
+      if (context.is_hot(entity.id) &&
+          !entity.template get<HasColor>().skip_hover_override) {
         col = context.theme.from_usage(Theme::Usage::Background);
       }
 

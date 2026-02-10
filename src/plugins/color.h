@@ -508,6 +508,7 @@ public:
   using FetchFn = std::function<Color()>;
   bool is_dynamic = false;
   FetchFn fetch_fn = nullptr;
+  bool skip_hover_override = false;
 
   HasColor(const Color c) : color_(c) {}
   HasColor(const FetchFn &fetch)

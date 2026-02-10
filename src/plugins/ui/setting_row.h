@@ -187,10 +187,10 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
   // Set appropriate font size for settings UI (larger for readability)
   config.font_size = pixels(22.0f);
 
-  // Use row layout with FlexStart - items flow left to right
+  // Use row layout with SpaceBetween - label on left, control on right
   config.flex_direction = FlexDirection::Row;
   config.align_items = AlignItems::Center;
-  config.justify_content = JustifyContent::FlexStart;
+  config.justify_content = JustifyContent::SpaceBetween;
 
   // Initialize the row container
   _init_component(ctx, ep_pair, config, ComponentType::Div, false,
@@ -241,14 +241,15 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // ========== LABEL ==========
   // Build label with sensible defaults
+  // Use children() width so the label only takes as much space as its text.
+  // SpaceBetween on the row pushes the label left and the control right.
   auto label_cfg =
       ComponentConfig{}
-          .with_size(ComponentSize{pixels(200), pixels((int)row_h)})
+          .with_size(ComponentSize{children(), pixels((int)row_h)})
           .with_label(row_config.label)
           .with_alignment(TextAlignment::Left)
           .with_background(Theme::Usage::None)
           .with_font(UIComponent::DEFAULT_FONT, config.font_size)
-          .with_margin(Margin{.right = DefaultSpacing::large()})
           .with_custom_text_color(config.custom_text_color.value_or(ctx.theme.font))
           .with_debug_name("setting_row_label");
 
@@ -278,28 +279,15 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
       }
 
       // Use the built-in toggle_switch component (iOS-style pill)
+      // Add right margin so the focus ring stays inside the row container.
+      toggle_cfg.with_margin(Margin{.right = pixels(4)});
+
       auto toggle_result = toggle_switch(ctx, mk(entity), *value, toggle_cfg,
                                          ToggleSwitchStyle::Pill);
 
       if (toggle_result) {
         changed = true;
       }
-
-      // ON/OFF status label for clarity
-      const Theme &toggle_theme = ctx.theme;
-      Color status_color = *value
-          ? colors::lighten(toggle_theme.accent, 0.3f)
-          : toggle_theme.font_muted;
-      div(ctx, mk(entity),
-          ComponentConfig{}
-              .with_label(*value ? "ON" : "OFF")
-              .with_size(ComponentSize{pixels(36), pixels((int)row_h - 8)})
-              .with_background(Theme::Usage::None)
-              .with_custom_text_color(status_color)
-              .with_alignment(TextAlignment::Center)
-              .with_font(config.font_name, pixels(16.0f))
-              .with_margin(Margin{.left = pixels(6)})
-              .with_debug_name("setting_row_toggle_status"));
     }
     break;
   }
