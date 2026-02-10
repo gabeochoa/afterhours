@@ -26,6 +26,13 @@
 #include <sokol/sokol_time.h>
 #include <sokol/sokol_log.h>
 
+// 2D drawing (immediate-mode GL-style API on top of sokol_gfx)
+#include <sokol/sokol_gl.h>
+
+// Font rendering (fontstash + sokol integration)
+#include <fontstash/fontstash.h>
+#include <sokol/sokol_fontstash.h>
+
 namespace afterhours::graphics {
 
 namespace metal_detail {
@@ -37,6 +44,13 @@ namespace metal_detail {
     inline sg_pass_action g_pass_action{};
     inline bool g_initialized = false;
     inline uint64_t g_start_time = 0;
+
+    // ── Font state ──
+    inline FONScontext* g_fons_ctx = nullptr;
+    static constexpr int MAX_FONTS = 16;
+    inline int g_font_ids[MAX_FONTS] = {};
+    inline int g_font_count = 0;
+    inline int g_active_font = FONS_INVALID;  // currently selected font
 
     // ── Input state ──
     // Sokol keycodes are GLFW-compatible (0-511 range covers all keys).
@@ -117,6 +131,17 @@ namespace metal_detail {
         sg_setup(&desc);
         stm_setup();
         g_start_time = stm_now();
+
+        // Initialize sokol_gl for 2D drawing
+        sgl_desc_t sgl_desc{};
+        sgl_setup(&sgl_desc);
+
+        // Initialize fontstash for text rendering
+        sfons_desc_t sfons_desc{};
+        sfons_desc.width = 1024;
+        sfons_desc.height = 1024;
+        g_fons_ctx = sfons_create(&sfons_desc);
+
         g_initialized = true;
 
         g_pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
@@ -133,6 +158,11 @@ namespace metal_detail {
 
     inline void sokol_cleanup_cb() {
         if (g_cleanup_fn) g_cleanup_fn();
+        if (g_fons_ctx) {
+            sfons_destroy(g_fons_ctx);
+            g_fons_ctx = nullptr;
+        }
+        sgl_shutdown();
         sg_shutdown();
         g_initialized = false;
     }
@@ -241,9 +271,23 @@ struct MetalPlatformAPI {
         pass.action = metal_detail::g_pass_action;
         pass.swapchain = sglue_swapchain();
         sg_begin_pass(&pass);
+
+        // Set up sokol_gl orthographic projection for 2D drawing
+        // Use window (not framebuffer) coordinates so drawing matches mouse coords
+        int w = sapp_width();
+        int h = sapp_height();
+        sgl_defaults();
+        sgl_matrix_mode_projection();
+        sgl_ortho(0.0f, static_cast<float>(w), static_cast<float>(h), 0.0f, -1.0f, 1.0f);
     }
 
     static void end_drawing() {
+        // Flush fontstash texture updates
+        if (metal_detail::g_fons_ctx) {
+            sfons_flush(metal_detail::g_fons_ctx);
+        }
+        // Render all sokol_gl draw calls
+        sgl_draw();
         sg_end_pass();
         sg_commit();
     }
