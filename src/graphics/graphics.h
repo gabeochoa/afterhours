@@ -253,8 +253,20 @@ inline int measure_text(const char* text, int fontSize) { return PlatformAPI::me
 // ── Screenshots ──
 inline void take_screenshot(const char* fileName) { PlatformAPI::take_screenshot(fileName); }
 
-// ── Input ──
+// ── Input: keyboard ──
+inline bool is_key_pressed(int key) { return PlatformAPI::is_key_pressed(key); }
+inline bool is_key_down(int key) { return PlatformAPI::is_key_down(key); }
+inline bool is_key_released(int key) { return PlatformAPI::is_key_released(key); }
 inline bool is_key_pressed_repeat(int key) { return PlatformAPI::is_key_pressed_repeat(key); }
+inline int get_char_pressed() { return PlatformAPI::get_char_pressed(); }
+
+// ── Input: mouse ──
+inline bool is_mouse_button_pressed(int btn) { return PlatformAPI::is_mouse_button_pressed(btn); }
+inline bool is_mouse_button_down(int btn) { return PlatformAPI::is_mouse_button_down(btn); }
+inline bool is_mouse_button_released(int btn) { return PlatformAPI::is_mouse_button_released(btn); }
+inline bool is_mouse_button_up(int btn) { return PlatformAPI::is_mouse_button_up(btn); }
+inline float get_mouse_wheel_move() { return PlatformAPI::get_mouse_wheel_move(); }
+inline auto get_mouse_position() { return PlatformAPI::get_mouse_position(); }
 
 // ── Application control ──
 inline void request_quit() { PlatformAPI::request_quit(); }

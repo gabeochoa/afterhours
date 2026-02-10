@@ -447,10 +447,15 @@ struct input : developer::Plugin {
   using KeyCode = int;
   using GamepadID = int;
   using GamepadAxis = int;
-  using GamepadButton = int;
 
-  struct KeyCodeWrapper { int value; };
-  struct GamepadButtonWrapper { int value; };
+  // GamepadButton must be a distinct type (not int) so that
+  // AnyInput = variant<KeyCode, GamepadAxisWithDir, GamepadButton>
+  // doesn't have duplicate int alternatives.
+  struct GamepadButton {
+      int value = 0;
+      GamepadButton() = default;
+      explicit GamepadButton(int v) : value(v) {}
+  };
 
   static MousePosition get_mouse_position() {
     auto p = graphics::MetalPlatformAPI::get_mouse_position();
@@ -507,10 +512,15 @@ struct input : developer::Plugin {
   using KeyCode = int;
   using GamepadID = int;
   using GamepadAxis = int;
-  using GamepadButton = int;
 
-  struct KeyCodeWrapper { int value; };
-  struct GamepadButtonWrapper { int value; };
+  // GamepadButton must be a distinct type (not int) so that
+  // AnyInput = variant<KeyCode, GamepadAxisWithDir, GamepadButton>
+  // doesn't have duplicate int alternatives.
+  struct GamepadButton {
+      int value = 0;
+      GamepadButton() = default;
+      explicit GamepadButton(int v) : value(v) {}
+  };
 
   // TODO good luck ;)
   static MousePosition get_mouse_position() { log_error("@notimplemented get_mouse_position"); return {0, 0}; }

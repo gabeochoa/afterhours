@@ -91,8 +91,19 @@ concept PlatformBackend = requires {
     // ── Screenshots ──
     { T::take_screenshot((const char*){}) }            -> std::same_as<void>;
 
-    // ── Input ──
+    // ── Input: keyboard ──
+    { T::is_key_pressed(int{}) }                        -> std::same_as<bool>;
+    { T::is_key_down(int{}) }                           -> std::same_as<bool>;
+    { T::is_key_released(int{}) }                       -> std::same_as<bool>;
     { T::is_key_pressed_repeat(int{}) }                -> std::same_as<bool>;
+    { T::get_char_pressed() }                           -> std::same_as<int>;
+
+    // ── Input: mouse ──
+    { T::is_mouse_button_pressed(int{}) }               -> std::same_as<bool>;
+    { T::is_mouse_button_down(int{}) }                  -> std::same_as<bool>;
+    { T::is_mouse_button_released(int{}) }              -> std::same_as<bool>;
+    { T::is_mouse_button_up(int{}) }                    -> std::same_as<bool>;
+    { T::get_mouse_wheel_move() }                       -> std::same_as<float>;
 
     // ── Application control ──
     { T::request_quit() }                               -> std::same_as<void>;

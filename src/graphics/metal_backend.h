@@ -33,24 +33,15 @@
 #include <fontstash/fontstash.h>
 #include <sokol/sokol_fontstash.h>
 
+// Shared state (also used by font_helper.h)
+#include "metal_state.h"
+
 namespace afterhours::graphics {
 
 namespace metal_detail {
 
-    // ── Global callback state ──
-    inline std::function<void()> g_init_fn;
-    inline std::function<void()> g_frame_fn;
-    inline std::function<void()> g_cleanup_fn;
+    // ── Rendering pass action (local to metal_backend) ──
     inline sg_pass_action g_pass_action{};
-    inline bool g_initialized = false;
-    inline uint64_t g_start_time = 0;
-
-    // ── Font state ──
-    inline FONScontext* g_fons_ctx = nullptr;
-    static constexpr int MAX_FONTS = 16;
-    inline int g_font_ids[MAX_FONTS] = {};
-    inline int g_font_count = 0;
-    inline int g_active_font = FONS_INVALID;  // currently selected font
 
     // ── Input state ──
     // Sokol keycodes are GLFW-compatible (0-511 range covers all keys).
@@ -262,8 +253,8 @@ struct MetalPlatformAPI {
     // ── Config (legacy API -- prefer RunConfig fields) ──
     static void set_config_flags(unsigned int) { /* handled via RunConfig.flags */ }
     static void set_target_fps(int) { /* handled via RunConfig.target_fps */ }
-    static void set_exit_key(int) { log_error("@notimplemented set_exit_key"); }
-    static void set_trace_log_level(int) { log_error("@notimplemented set_trace_log_level"); }
+    static void set_exit_key(int) { /* no-op: Metal/Sokol handles quit via sapp */ }
+    static void set_trace_log_level(int) { /* no-op: uses afterhours logging */ }
 
     // ── Frame ──
     static void begin_drawing() {
@@ -314,16 +305,18 @@ struct MetalPlatformAPI {
     }
 
     // ── Text measurement ──
-    static int measure_text(const char*, int) {
-        // TODO: fontstash or stb_truetype
-        log_error("@notimplemented measure_text");
-        return 0;
+    static int measure_text(const char* text, int font_size) {
+        auto* ctx = metal_detail::g_fons_ctx;
+        if (!ctx || metal_detail::g_active_font == FONS_INVALID) return 0;
+        fonsSetFont(ctx, metal_detail::g_active_font);
+        fonsSetSize(ctx, static_cast<float>(font_size));
+        return static_cast<int>(fonsTextBounds(ctx, 0, 0, text, nullptr, nullptr));
     }
 
     // ── Screenshots ──
     static void take_screenshot(const char*) {
         // TODO: read Metal framebuffer pixels -> PNG
-        log_error("@notimplemented take_screenshot");
+        log_warn("take_screenshot not yet implemented for Metal backend");
     }
 
     // ── Input ──

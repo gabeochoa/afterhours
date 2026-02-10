@@ -7,6 +7,11 @@
 
 #include "developer.h"
 
+#ifdef AFTER_HOURS_USE_METAL
+// Shared Metal state (fontstash context, font IDs, etc.)
+#include "graphics/metal_state.h"
+#endif
+
 namespace afterhours {
 #ifdef AFTER_HOURS_USE_RAYLIB
 using Font = raylib::Font;
@@ -154,31 +159,92 @@ inline float get_first_glyph_bearing(const raylib::Font font, const char *text) 
   if (glyphIndex < 0 || glyphIndex >= font.glyphCount) return 0.0f;
   return static_cast<float>(font.glyphs[glyphIndex].offsetX);
 }
-#else
-using Font = FontType;
-inline Font load_font_from_file(const char *) { return Font(); }
-inline Font load_font_from_file_with_codepoints(const char *, int *, int) {
-  log_warn("Codepoint-based font loading not supported without raylib");
-  return Font();
+#elif defined(AFTER_HOURS_USE_METAL)
+// ── Metal / fontstash path ──
+// Font is an int (fontstash font ID).  We wrap it so the type is distinct.
+struct Font {
+  int id = FONS_INVALID;
+};
+
+inline Font load_font_from_file(const char *file) {
+  auto* ctx = graphics::metal_detail::g_fons_ctx;
+  if (!ctx) {
+    log_warn("fontstash context not ready yet (load_font_from_file)");
+    return Font{FONS_INVALID};
+  }
+  int id = fonsAddFont(ctx, file, file);
+  if (id == FONS_INVALID) {
+    log_warn("Failed to load font: {}", file);
+  }
+  return Font{id};
 }
 
-// Utility function to remove duplicate codepoints from an array
-// Returns a newly allocated array that must be freed by the caller
-// The result count is written to codepointsResultCount
-inline int *remove_duplicate_codepoints(int * /*codepoints*/,
-                                        int /*codepointCount*/,
+inline Font load_font_from_file_with_codepoints(const char *file, int *, int) {
+  // fontstash loads full TTF; codepoint filtering not needed
+  return load_font_from_file(file);
+}
+
+inline int *remove_duplicate_codepoints(int *, int,
                                         int *codepointsResultCount) {
-  log_warn("Codepoint deduplication not supported without raylib");
-  if (codepointsResultCount) {
-    *codepointsResultCount = 0;
-  }
+  if (codepointsResultCount) *codepointsResultCount = 0;
   return nullptr;
 }
 
-// Convenience function to load a font with codepoints extracted from a string
+inline Font load_font_for_string(const std::string &, const std::string &font_file,
+                                 int = 96) {
+  return load_font_from_file(font_file.c_str());
+}
+
+inline float measure_text_internal(const char *text, const float size) {
+  auto* ctx = graphics::metal_detail::g_fons_ctx;
+  if (!ctx || graphics::metal_detail::g_active_font == FONS_INVALID) return 0.f;
+  fonsSetFont(ctx, graphics::metal_detail::g_active_font);
+  fonsSetSize(ctx, size);
+  return fonsTextBounds(ctx, 0, 0, text, nullptr, nullptr);
+}
+
+inline Vector2Type measure_text(const Font font, const char *text,
+                                const float size, const float /*spacing*/) {
+  auto* ctx = graphics::metal_detail::g_fons_ctx;
+  if (!ctx) return Vector2Type{0, 0};
+  int fid = (font.id != FONS_INVALID) ? font.id : graphics::metal_detail::g_active_font;
+  if (fid == FONS_INVALID) return Vector2Type{0, 0};
+  fonsSetFont(ctx, fid);
+  fonsSetSize(ctx, size);
+  float bounds[4] = {};
+  fonsTextBounds(ctx, 0, 0, text, nullptr, bounds);
+  float w = bounds[2] - bounds[0];
+  float ascender, descender, lineh;
+  fonsVertMetrics(ctx, &ascender, &descender, &lineh);
+  return Vector2Type{w, lineh};
+}
+
+inline Vector2Type measure_text_utf8(const Font font, const char *text,
+                                     const float size, const float spacing) {
+  return measure_text(font, text, size, spacing);
+}
+
+inline float get_first_glyph_bearing(const Font, const char *) {
+  return 0.0f;
+}
+
+#else
+// ── Generic fallback (no backend) ──
+using Font = FontType;
+inline Font load_font_from_file(const char *) { return Font(); }
+inline Font load_font_from_file_with_codepoints(const char *, int *, int) {
+  log_warn("Codepoint-based font loading not supported without a backend");
+  return Font();
+}
+
+inline int *remove_duplicate_codepoints(int *, int,
+                                        int *codepointsResultCount) {
+  if (codepointsResultCount) *codepointsResultCount = 0;
+  return nullptr;
+}
+
 inline Font load_font_for_string(const std::string &, const std::string &,
                                  int = 96) {
-  log_warn("load_font_for_string not supported without raylib");
   return Font();
 }
 inline float measure_text_internal(const char *, const float) {
@@ -187,19 +253,15 @@ inline float measure_text_internal(const char *, const float) {
            "set_measure_text_fn()");
   return 0.f;
 }
-inline Vector2Type measure_text(const Font, const char *, const float /*size*/,
-                                const float /*spacing*/) {
+inline Vector2Type measure_text(const Font, const char *, const float,
+                                const float) {
   log_warn("Text size measuring not supported. Either use "
            "AFTER_HOURS_USE_RAYLIB or provide your own through "
            "set_measure_text_fn()");
   return Vector2Type{0, 0};
 }
-inline Vector2Type measure_text_utf8(const Font, const char *,
-                                     const float /*size*/,
-                                     const float /*spacing*/) {
-  log_warn("UTF-8 text measuring not supported. Either use "
-           "AFTER_HOURS_USE_RAYLIB or provide your own through "
-           "set_measure_text_fn()");
+inline Vector2Type measure_text_utf8(const Font, const char *, const float,
+                                     const float) {
   return Vector2Type{0, 0};
 }
 

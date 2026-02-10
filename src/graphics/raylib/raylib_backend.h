@@ -156,7 +156,8 @@ inline AutoRegister auto_register{};
 // ============================================================================
 
 struct RaylibPlatformAPI {
-    using color_type = afterhours::Color;
+    // Lightweight color type satisfying ColorLike — avoids depending on color.h
+    struct color_type { unsigned char r, g, b, a; };
 
     // ── Constants ──
     static constexpr unsigned int FLAG_WINDOW_RESIZABLE = raylib::FLAG_WINDOW_RESIZABLE;
@@ -204,9 +205,24 @@ struct RaylibPlatformAPI {
         raylib::TakeScreenshot(fileName);
     }
 
-    // ── Input ──
-    static bool is_key_pressed_repeat(int key) {
-        return raylib::IsKeyPressedRepeat(key);
+    // ── Input: keyboard ──
+    static bool is_key_pressed(int key) { return raylib::IsKeyPressed(key); }
+    static bool is_key_down(int key) { return raylib::IsKeyDown(key); }
+    static bool is_key_released(int key) { return raylib::IsKeyReleased(key); }
+    static bool is_key_pressed_repeat(int key) { return raylib::IsKeyPressedRepeat(key); }
+    static int get_char_pressed() { return raylib::GetCharPressed(); }
+
+    // ── Input: mouse ──
+    static bool is_mouse_button_pressed(int btn) { return raylib::IsMouseButtonPressed(btn); }
+    static bool is_mouse_button_down(int btn) { return raylib::IsMouseButtonDown(btn); }
+    static bool is_mouse_button_released(int btn) { return raylib::IsMouseButtonReleased(btn); }
+    static bool is_mouse_button_up(int btn) { return raylib::IsMouseButtonUp(btn); }
+    static float get_mouse_wheel_move() { return raylib::GetMouseWheelMove(); }
+
+    struct Vec2 { float x, y; };
+    static Vec2 get_mouse_position() {
+        auto p = raylib::GetMousePosition();
+        return {p.x, p.y};
     }
 
     // ── Application control ──
