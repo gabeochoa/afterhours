@@ -149,6 +149,68 @@ inline AutoRegister auto_register{};
 
 }  // namespace raylib_backend
 
+// ============================================================================
+// Platform API struct -- satisfies PlatformBackend concept.
+// Application code calls afterhours::graphics::init_window() etc.,
+// which forward to these static functions via #ifdef in graphics.h.
+// ============================================================================
+
+struct RaylibPlatformAPI {
+    using color_type = afterhours::Color;
+
+    // ── Constants ──
+    static constexpr unsigned int FLAG_WINDOW_RESIZABLE = raylib::FLAG_WINDOW_RESIZABLE;
+    static constexpr int LOG_ERROR = raylib::LOG_ERROR;
+    static constexpr int TEXTURE_FILTER_BILINEAR = raylib::TEXTURE_FILTER_BILINEAR;
+
+    // ── Window lifecycle ──
+    static void init_window(int w, int h, const char* title) {
+        raylib::InitWindow(w, h, title);
+    }
+    static void close_window() { raylib::CloseWindow(); }
+    static bool window_should_close() { return raylib::WindowShouldClose(); }
+    static bool is_window_ready() { return raylib::IsWindowReady(); }
+    static bool is_window_fullscreen() { return raylib::IsWindowFullscreen(); }
+    static void toggle_fullscreen() { raylib::ToggleFullscreen(); }
+    static void minimize_window() { raylib::MinimizeWindow(); }
+
+    // ── Config ──
+    static void set_config_flags(unsigned int flags) { raylib::SetConfigFlags(flags); }
+    static void set_target_fps(int fps) { raylib::SetTargetFPS(fps); }
+    static void set_exit_key(int key) { raylib::SetExitKey(key); }
+    static void set_trace_log_level(int level) { raylib::SetTraceLogLevel(level); }
+
+    // ── Frame ──
+    static void begin_drawing() { raylib::BeginDrawing(); }
+    static void end_drawing() { raylib::EndDrawing(); }
+    static void clear_background(afterhours::Color c) { raylib::ClearBackground(c); }
+
+    // ── Screen / timing ──
+    static int get_screen_width() { return raylib::GetScreenWidth(); }
+    static int get_screen_height() { return raylib::GetScreenHeight(); }
+    static float get_frame_time() { return raylib::GetFrameTime(); }
+    static float get_fps() { return static_cast<float>(raylib::GetFPS()); }
+    static double get_time() { return raylib::GetTime(); }
+
+    // ── Text measurement ──
+    static int measure_text(const char* text, int fontSize) {
+        return raylib::MeasureText(text, fontSize);
+    }
+
+    // ── Screenshots ──
+    static void take_screenshot(const char* fileName) {
+        raylib::TakeScreenshot(fileName);
+    }
+
+    // ── Input ──
+    static bool is_key_pressed_repeat(int key) {
+        return raylib::IsKeyPressedRepeat(key);
+    }
+};
+
+static_assert(PlatformBackend<RaylibPlatformAPI>,
+              "RaylibPlatformAPI must satisfy PlatformBackend concept");
+
 }  // namespace afterhours::graphics
 
 #endif  // AFTER_HOURS_USE_RAYLIB
