@@ -123,8 +123,11 @@ namespace metal_detail {
         stm_setup();
         g_start_time = stm_now();
 
-        // Initialize sokol_gl for 2D drawing
+        // Initialize sokol_gl for 2D drawing (generous buffer for complex UIs)
         sgl_desc_t sgl_desc{};
+        sgl_desc.max_vertices = 1 << 18;   // 262144 vertices
+        sgl_desc.max_commands = 1 << 16;   // 65536 commands
+        sgl_desc.logger.func = slog_func;
         sgl_setup(&sgl_desc);
 
         // Initialize fontstash for text rendering
@@ -264,12 +267,14 @@ struct MetalPlatformAPI {
         sg_begin_pass(&pass);
 
         // Set up sokol_gl orthographic projection for 2D drawing
-        // Use window (not framebuffer) coordinates so drawing matches mouse coords
-        int w = sapp_width();
-        int h = sapp_height();
+        // Use LOGICAL window coordinates (not framebuffer pixels) so drawing
+        // matches mouse coords and UI layout.  The Metal layer handles DPI scaling.
+        float dpi = sapp_dpi_scale();
+        float w = static_cast<float>(sapp_width()) / dpi;
+        float h = static_cast<float>(sapp_height()) / dpi;
         sgl_defaults();
         sgl_matrix_mode_projection();
-        sgl_ortho(0.0f, static_cast<float>(w), static_cast<float>(h), 0.0f, -1.0f, 1.0f);
+        sgl_ortho(0.0f, w, h, 0.0f, -1.0f, 1.0f);
     }
 
     static void end_drawing() {
@@ -284,17 +289,36 @@ struct MetalPlatformAPI {
     }
 
     static void clear_background(::afterhours::ColorLike auto c) {
+        // Update pass action so sg_begin_pass clears to this color
         metal_detail::g_pass_action.colors[0].clear_value = {
             static_cast<float>(c.r) / 255.0f,
             static_cast<float>(c.g) / 255.0f,
             static_cast<float>(c.b) / 255.0f,
             static_cast<float>(c.a) / 255.0f,
         };
+        // Draw a full-screen quad in logical coordinates so the first frame
+        // isn't black (pass action only takes effect on the next begin_pass)
+        float dpi = sapp_dpi_scale();
+        float w = static_cast<float>(sapp_width()) / dpi;
+        float h = static_cast<float>(sapp_height()) / dpi;
+        sgl_begin_quads();
+        sgl_c4b(c.r, c.g, c.b, c.a);
+        sgl_v2f(0, 0);
+        sgl_v2f(w, 0);
+        sgl_v2f(w, h);
+        sgl_v2f(0, h);
+        sgl_end();
     }
 
     // ── Screen / timing ──
-    static int get_screen_width() { return sapp_width(); }
-    static int get_screen_height() { return sapp_height(); }
+    static int get_screen_width() {
+        float dpi = sapp_dpi_scale();
+        return static_cast<int>(static_cast<float>(sapp_width()) / dpi);
+    }
+    static int get_screen_height() {
+        float dpi = sapp_dpi_scale();
+        return static_cast<int>(static_cast<float>(sapp_height()) / dpi);
+    }
     static float get_frame_time() { return static_cast<float>(sapp_frame_duration()); }
     static float get_fps() {
         float dt = get_frame_time();
@@ -314,10 +338,8 @@ struct MetalPlatformAPI {
     }
 
     // ── Screenshots ──
-    static void take_screenshot(const char*) {
-        // TODO: read Metal framebuffer pixels -> PNG
-        log_warn("take_screenshot not yet implemented for Metal backend");
-    }
+    // Implemented in sokol_impl.mm via CoreGraphics window capture
+    static void take_screenshot(const char* filename);
 
     // ── Input ──
     static bool is_key_pressed_repeat(int key) {
@@ -419,5 +441,11 @@ static_assert(PlatformBackend<MetalPlatformAPI>,
               "MetalPlatformAPI must satisfy PlatformBackend concept");
 
 }  // namespace afterhours::graphics
+
+// ── Screenshot implementation (needs extern "C" outside class/namespace) ──
+extern "C" void metal_take_screenshot(const char*);
+inline void afterhours::graphics::MetalPlatformAPI::take_screenshot(const char* filename) {
+    metal_take_screenshot(filename);
+}
 
 #endif  // AFTER_HOURS_USE_METAL

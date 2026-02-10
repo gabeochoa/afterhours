@@ -988,6 +988,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     const float effective_opacity = _compute_effective_opacity(entity);
     RectangleType draw_rect = cmp.rect();
 
+    // (debug placeholder)
+
     // Check if this entity is inside a scroll view (but not the scroll view
     // itself)
     OptEntity scroll_ancestor = _find_scroll_view_ancestor(entity);

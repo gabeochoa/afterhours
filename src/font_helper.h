@@ -175,6 +175,15 @@ inline Font load_font_from_file(const char *file) {
   int id = fonsAddFont(ctx, file, file);
   if (id == FONS_INVALID) {
     log_warn("Failed to load font: {}", file);
+  } else {
+    // Track loaded fonts and set the first one as active default
+    auto& md = graphics::metal_detail::g_font_ids;
+    if (graphics::metal_detail::g_font_count < graphics::metal_detail::MAX_FONTS) {
+      md[graphics::metal_detail::g_font_count++] = id;
+    }
+    if (graphics::metal_detail::g_active_font == FONS_INVALID) {
+      graphics::metal_detail::g_active_font = id;
+    }
   }
   return Font{id};
 }

@@ -443,14 +443,16 @@ namespace metal_draw_detail {
     }
 }  // namespace metal_draw_detail
 
-inline void draw_text_ex(const afterhours::Font, const char *content,
+inline void draw_text_ex(const afterhours::Font font, const char *content,
                          const Vector2Type position, const float font_size,
                          const float, const Color color,
                          const float = 0.0f,
                          const float = 0.0f, const float = 0.0f) {
     auto* ctx = graphics::metal_detail::g_fons_ctx;
-    if (!ctx || graphics::metal_detail::g_active_font == FONS_INVALID) return;
-    fonsSetFont(ctx, graphics::metal_detail::g_active_font);
+    if (!ctx) return;
+    int fid = (font.id != FONS_INVALID) ? font.id : graphics::metal_detail::g_active_font;
+    if (fid == FONS_INVALID) return;
+    fonsSetFont(ctx, fid);
     fonsSetSize(ctx, font_size);
     fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
     fonsDrawText(ctx, position.x, position.y + font_size, content, nullptr);
@@ -525,11 +527,16 @@ inline void draw_ring(float, float, float, float, int, Color) {
 }
 
 inline void begin_scissor_mode(int x, int y, int w, int h) {
-    sgl_scissor_rect(x, y, w, h, true);
+    // Scissor operates in framebuffer pixels; scale logical coords by DPI
+    float dpi = sapp_dpi_scale();
+    sgl_scissor_rect(static_cast<int>(static_cast<float>(x) * dpi),
+                     static_cast<int>(static_cast<float>(y) * dpi),
+                     static_cast<int>(static_cast<float>(w) * dpi),
+                     static_cast<int>(static_cast<float>(h) * dpi), true);
 }
 
 inline void end_scissor_mode() {
-    // Reset scissor to full viewport
+    // Reset scissor to full viewport (framebuffer pixels)
     sgl_scissor_rect(0, 0, sapp_width(), sapp_height(), true);
 }
 
