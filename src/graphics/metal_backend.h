@@ -9,11 +9,16 @@
 #ifdef AFTER_HOURS_USE_METAL
 
 #include "graphics_concept.h"
-#include "../plugins/color.h"
 
 // ── Sokol headers (declaration only, no implementation) ──
 // The implementation must be compiled in exactly one .cpp/.mm file
 // with SOKOL_IMPL defined before including these headers.
+// We use SOKOL_NO_ENTRY so we call sapp_run() ourselves from run().
+#ifndef SOKOL_NO_ENTRY
+#define SOKOL_NO_ENTRY
+#endif
+
+// Sokol headers — resolved via -isystem vendor/afterhours/vendor/
 #include <sokol/sokol_app.h>
 #include <sokol/sokol_gfx.h>
 #include <sokol/sokol_glue.h>
@@ -64,7 +69,10 @@ namespace metal_detail {
 }  // namespace metal_detail
 
 struct MetalPlatformAPI {
-    using color_type = afterhours::Color;
+    // Lightweight color struct — satisfies ColorLike without pulling in color.h
+    struct color_type {
+        unsigned char r, g, b, a;
+    };
 
     // ── Constants ──
     static constexpr unsigned int FLAG_WINDOW_RESIZABLE = 0x00000004;
@@ -108,7 +116,7 @@ struct MetalPlatformAPI {
         sg_commit();
     }
 
-    static void clear_background(afterhours::Color c) {
+    static void clear_background(::afterhours::ColorLike auto c) {
         metal_detail::g_pass_action.colors[0].clear_value = {
             static_cast<float>(c.r) / 255.0f,
             static_cast<float>(c.g) / 255.0f,
@@ -145,6 +153,9 @@ struct MetalPlatformAPI {
         // TODO: track from sokol_app key events
         return false;
     }
+
+    // ── Application control ──
+    static void request_quit() { sapp_request_quit(); }
 
     // ── Unified run loop ──
     static void run(const RunConfig& cfg) {

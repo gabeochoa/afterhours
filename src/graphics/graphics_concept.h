@@ -93,6 +93,9 @@ concept PlatformBackend = requires {
 
     // ── Input ──
     { T::is_key_pressed_repeat(int{}) }                -> std::same_as<bool>;
+
+    // ── Application control ──
+    { T::request_quit() }                               -> std::same_as<void>;
 };
 
 /// Configuration for the unified run() entry point.

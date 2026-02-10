@@ -183,7 +183,9 @@ struct RaylibPlatformAPI {
     // ── Frame ──
     static void begin_drawing() { raylib::BeginDrawing(); }
     static void end_drawing() { raylib::EndDrawing(); }
-    static void clear_background(afterhours::Color c) { raylib::ClearBackground(c); }
+    static void clear_background(afterhours::ColorLike auto c) {
+        raylib::ClearBackground(raylib::Color{c.r, c.g, c.b, c.a});
+    }
 
     // ── Screen / timing ──
     static int get_screen_width() { return raylib::GetScreenWidth(); }
@@ -205,6 +207,14 @@ struct RaylibPlatformAPI {
     // ── Input ──
     static bool is_key_pressed_repeat(int key) {
         return raylib::IsKeyPressedRepeat(key);
+    }
+
+    // ── Application control ──
+    static void request_quit() {
+        // Raylib doesn't have a direct quit request — closing the window
+        // is handled by the OS or by WindowShouldClose() returning true.
+        // For the run() loop, we can't force-quit from inside a frame.
+        // This is a no-op under the legacy poll-based API.
     }
 
     // ── Unified run loop ──

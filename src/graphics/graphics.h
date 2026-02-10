@@ -3,7 +3,6 @@
 #include <filesystem>
 
 #include "graphics_backend.h"
-#include "../plugins/color.h"
 
 namespace afterhours::graphics {
 
@@ -201,12 +200,16 @@ inline RenderTextureType& get_render_texture() {
 // They forward to the active backend's static functions selected at compile time.
 // ============================================================================
 
+// Include Metal backend header outside any namespace
+#if defined(AFTER_HOURS_USE_METAL) && !defined(AFTER_HOURS_USE_RAYLIB)
+#include "metal_backend.h"
+#endif
+
 namespace afterhours::graphics {
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 using PlatformAPI = RaylibPlatformAPI;
 #elif defined(AFTER_HOURS_USE_METAL)
-#include "metal_backend.h"
 using PlatformAPI = MetalPlatformAPI;
 #else
 #error "No graphics backend defined. Define AFTER_HOURS_USE_RAYLIB or AFTER_HOURS_USE_METAL."
@@ -235,7 +238,7 @@ inline void set_trace_log_level(int level) { PlatformAPI::set_trace_log_level(le
 // ── Frame ──
 inline void begin_drawing() { PlatformAPI::begin_drawing(); }
 inline void end_drawing() { PlatformAPI::end_drawing(); }
-inline void clear_background(afterhours::Color c) { PlatformAPI::clear_background(c); }
+inline void clear_background(::afterhours::ColorLike auto c) { PlatformAPI::clear_background(c); }
 
 // ── Screen / timing ──
 inline int get_screen_width() { return PlatformAPI::get_screen_width(); }
@@ -252,6 +255,9 @@ inline void take_screenshot(const char* fileName) { PlatformAPI::take_screenshot
 
 // ── Input ──
 inline bool is_key_pressed_repeat(int key) { return PlatformAPI::is_key_pressed_repeat(key); }
+
+// ── Application control ──
+inline void request_quit() { PlatformAPI::request_quit(); }
 
 // ── Unified run loop (preferred API) ──
 // Owns the full lifecycle: window creation, event loop, and teardown.
