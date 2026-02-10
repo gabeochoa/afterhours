@@ -9,6 +9,7 @@
 #ifdef AFTER_HOURS_USE_METAL
 
 #include "graphics_concept.h"
+#include "../logging.h"
 
 // ── Sokol headers (declaration only, no implementation) ──
 // The implementation must be compiled in exactly one .cpp/.mm file
@@ -28,14 +29,86 @@
 namespace afterhours::graphics {
 
 namespace metal_detail {
-    // Global state for the sokol callback bridge.
-    // Sokol uses C callbacks so we store the user's std::functions here.
+
+    // ── Global callback state ──
     inline std::function<void()> g_init_fn;
     inline std::function<void()> g_frame_fn;
     inline std::function<void()> g_cleanup_fn;
     inline sg_pass_action g_pass_action{};
     inline bool g_initialized = false;
     inline uint64_t g_start_time = 0;
+
+    // ── Input state ──
+    // Sokol keycodes are GLFW-compatible (0-511 range covers all keys).
+    static constexpr int MAX_KEYS = 512;
+    static constexpr int MAX_MOUSE_BUTTONS = 4;
+
+    // Per-key state: down tracks held, pressed/released are edge-triggered per frame.
+    struct InputState {
+        bool key_down[MAX_KEYS]{};
+        bool key_pressed[MAX_KEYS]{};      // went down this frame
+        bool key_released[MAX_KEYS]{};     // went up this frame
+        bool key_repeat[MAX_KEYS]{};       // repeat event this frame
+
+        bool mouse_down[MAX_MOUSE_BUTTONS]{};
+        bool mouse_pressed[MAX_MOUSE_BUTTONS]{};
+        bool mouse_released[MAX_MOUSE_BUTTONS]{};
+
+        float mouse_x = 0.f;
+        float mouse_y = 0.f;
+        float mouse_dx = 0.f;
+        float mouse_dy = 0.f;
+        float scroll_x = 0.f;
+        float scroll_y = 0.f;
+
+        // Character input queue (UTF-32 codepoints from CHAR events)
+        static constexpr int CHAR_QUEUE_SIZE = 32;
+        uint32_t char_queue[CHAR_QUEUE_SIZE]{};
+        int char_queue_head = 0;
+        int char_queue_tail = 0;
+    };
+
+    inline InputState& input_state() {
+        static InputState s{};
+        return s;
+    }
+
+    // Call at the start of each frame to clear edge-triggered state.
+    inline void input_begin_frame() {
+        auto& s = input_state();
+        for (int i = 0; i < MAX_KEYS; i++) {
+            s.key_pressed[i] = false;
+            s.key_released[i] = false;
+            s.key_repeat[i] = false;
+        }
+        for (int i = 0; i < MAX_MOUSE_BUTTONS; i++) {
+            s.mouse_pressed[i] = false;
+            s.mouse_released[i] = false;
+        }
+        s.mouse_dx = 0.f;
+        s.mouse_dy = 0.f;
+        s.scroll_x = 0.f;
+        s.scroll_y = 0.f;
+    }
+
+    inline void push_char(uint32_t c) {
+        auto& s = input_state();
+        int next = (s.char_queue_tail + 1) % InputState::CHAR_QUEUE_SIZE;
+        if (next != s.char_queue_head) {
+            s.char_queue[s.char_queue_tail] = c;
+            s.char_queue_tail = next;
+        }
+    }
+
+    inline uint32_t pop_char() {
+        auto& s = input_state();
+        if (s.char_queue_head == s.char_queue_tail) return 0;
+        uint32_t c = s.char_queue[s.char_queue_head];
+        s.char_queue_head = (s.char_queue_head + 1) % InputState::CHAR_QUEUE_SIZE;
+        return c;
+    }
+
+    // ── Sokol callbacks ──
 
     inline void sokol_init_cb() {
         sg_desc desc{};
@@ -46,7 +119,6 @@ namespace metal_detail {
         g_start_time = stm_now();
         g_initialized = true;
 
-        // Default clear to black
         g_pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
         g_pass_action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
 
@@ -55,6 +127,8 @@ namespace metal_detail {
 
     inline void sokol_frame_cb() {
         if (g_frame_fn) g_frame_fn();
+        // Clear edge state after the frame callback has had a chance to read it.
+        input_begin_frame();
     }
 
     inline void sokol_cleanup_cb() {
@@ -63,8 +137,66 @@ namespace metal_detail {
         g_initialized = false;
     }
 
-    inline void sokol_event_cb(const sapp_event* /*ev*/) {
-        // TODO: translate sokol events to afterhours input system
+    inline void sokol_event_cb(const sapp_event* ev) {
+        auto& s = input_state();
+        const int kc = static_cast<int>(ev->key_code);
+
+        switch (ev->type) {
+        case SAPP_EVENTTYPE_KEY_DOWN:
+            if (kc > 0 && kc < MAX_KEYS) {
+                if (!s.key_down[kc]) {
+                    s.key_pressed[kc] = true;
+                }
+                s.key_down[kc] = true;
+                if (ev->key_repeat) {
+                    s.key_repeat[kc] = true;
+                }
+            }
+            break;
+        case SAPP_EVENTTYPE_KEY_UP:
+            if (kc > 0 && kc < MAX_KEYS) {
+                s.key_down[kc] = false;
+                s.key_released[kc] = true;
+            }
+            break;
+        case SAPP_EVENTTYPE_CHAR:
+            if (ev->char_code > 0) {
+                push_char(ev->char_code);
+            }
+            break;
+        case SAPP_EVENTTYPE_MOUSE_DOWN: {
+            int btn = static_cast<int>(ev->mouse_button);
+            if (btn >= 0 && btn < MAX_MOUSE_BUTTONS) {
+                s.mouse_down[btn] = true;
+                s.mouse_pressed[btn] = true;
+            }
+            s.mouse_x = ev->mouse_x;
+            s.mouse_y = ev->mouse_y;
+            break;
+        }
+        case SAPP_EVENTTYPE_MOUSE_UP: {
+            int btn = static_cast<int>(ev->mouse_button);
+            if (btn >= 0 && btn < MAX_MOUSE_BUTTONS) {
+                s.mouse_down[btn] = false;
+                s.mouse_released[btn] = true;
+            }
+            s.mouse_x = ev->mouse_x;
+            s.mouse_y = ev->mouse_y;
+            break;
+        }
+        case SAPP_EVENTTYPE_MOUSE_MOVE:
+            s.mouse_x = ev->mouse_x;
+            s.mouse_y = ev->mouse_y;
+            s.mouse_dx += ev->mouse_dx;
+            s.mouse_dy += ev->mouse_dy;
+            break;
+        case SAPP_EVENTTYPE_MOUSE_SCROLL:
+            s.scroll_x += ev->scroll_x;
+            s.scroll_y += ev->scroll_y;
+            break;
+        default:
+            break;
+        }
     }
 }  // namespace metal_detail
 
@@ -95,13 +227,13 @@ struct MetalPlatformAPI {
     static bool is_window_ready() { return metal_detail::g_initialized; }
     static bool is_window_fullscreen() { return sapp_is_fullscreen(); }
     static void toggle_fullscreen() { sapp_toggle_fullscreen(); }
-    static void minimize_window() { /* not supported by sokol */ }
+    static void minimize_window() { log_error("@notimplemented minimize_window"); }
 
     // ── Config (legacy API -- prefer RunConfig fields) ──
     static void set_config_flags(unsigned int) { /* handled via RunConfig.flags */ }
     static void set_target_fps(int) { /* handled via RunConfig.target_fps */ }
-    static void set_exit_key(int) { /* TODO: map to sokol event handling */ }
-    static void set_trace_log_level(int) { /* TODO */ }
+    static void set_exit_key(int) { log_error("@notimplemented set_exit_key"); }
+    static void set_trace_log_level(int) { log_error("@notimplemented set_trace_log_level"); }
 
     // ── Frame ──
     static void begin_drawing() {
@@ -140,18 +272,80 @@ struct MetalPlatformAPI {
     // ── Text measurement ──
     static int measure_text(const char*, int) {
         // TODO: fontstash or stb_truetype
+        log_error("@notimplemented measure_text");
         return 0;
     }
 
     // ── Screenshots ──
     static void take_screenshot(const char*) {
         // TODO: read Metal framebuffer pixels -> PNG
+        log_error("@notimplemented take_screenshot");
     }
 
     // ── Input ──
-    static bool is_key_pressed_repeat(int) {
-        // TODO: track from sokol_app key events
-        return false;
+    static bool is_key_pressed_repeat(int key) {
+        if (key <= 0 || key >= metal_detail::MAX_KEYS) return false;
+        auto& s = metal_detail::input_state();
+        return s.key_pressed[key] || s.key_repeat[key];
+    }
+
+    static bool is_key_pressed(int key) {
+        if (key <= 0 || key >= metal_detail::MAX_KEYS) return false;
+        return metal_detail::input_state().key_pressed[key];
+    }
+
+    static bool is_key_down(int key) {
+        if (key <= 0 || key >= metal_detail::MAX_KEYS) return false;
+        return metal_detail::input_state().key_down[key];
+    }
+
+    static bool is_key_released(int key) {
+        if (key <= 0 || key >= metal_detail::MAX_KEYS) return false;
+        return metal_detail::input_state().key_released[key];
+    }
+
+    static int get_char_pressed() {
+        return static_cast<int>(metal_detail::pop_char());
+    }
+
+    static bool is_mouse_button_pressed(int btn) {
+        if (btn < 0 || btn >= metal_detail::MAX_MOUSE_BUTTONS) return false;
+        return metal_detail::input_state().mouse_pressed[btn];
+    }
+
+    static bool is_mouse_button_down(int btn) {
+        if (btn < 0 || btn >= metal_detail::MAX_MOUSE_BUTTONS) return false;
+        return metal_detail::input_state().mouse_down[btn];
+    }
+
+    static bool is_mouse_button_released(int btn) {
+        if (btn < 0 || btn >= metal_detail::MAX_MOUSE_BUTTONS) return false;
+        return metal_detail::input_state().mouse_released[btn];
+    }
+
+    static bool is_mouse_button_up(int btn) {
+        return !is_mouse_button_down(btn);
+    }
+
+    struct Vec2 { float x, y; };
+
+    static Vec2 get_mouse_position() {
+        auto& s = metal_detail::input_state();
+        return {s.mouse_x, s.mouse_y};
+    }
+
+    static Vec2 get_mouse_delta() {
+        auto& s = metal_detail::input_state();
+        return {s.mouse_dx, s.mouse_dy};
+    }
+
+    static float get_mouse_wheel_move() {
+        return metal_detail::input_state().scroll_y;
+    }
+
+    static Vec2 get_mouse_wheel_move_v() {
+        auto& s = metal_detail::input_state();
+        return {s.scroll_x, s.scroll_y};
     }
 
     // ── Application control ──
