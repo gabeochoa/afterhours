@@ -2,6 +2,7 @@
 
 #include <concepts>
 #include <filesystem>
+#include <functional>
 #include <string>
 
 #include "graphics_types.h"
@@ -92,6 +93,21 @@ concept PlatformBackend = requires {
 
     // ── Input ──
     { T::is_key_pressed_repeat(int{}) }                -> std::same_as<bool>;
+};
+
+/// Configuration for the unified run() entry point.
+/// Provides callbacks for init, frame, and cleanup so the backend
+/// can own the event loop (required by Sokol/Metal, optional for raylib).
+struct RunConfig {
+    int width = 1280;
+    int height = 720;
+    const char* title = "Afterhours Replace Me";
+    int target_fps = 60;
+    unsigned int flags = 0;
+
+    std::function<void()> init = nullptr;
+    std::function<void()> frame = nullptr;
+    std::function<void()> cleanup = nullptr;
 };
 
 }  // namespace afterhours::graphics

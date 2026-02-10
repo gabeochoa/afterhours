@@ -206,6 +206,19 @@ struct RaylibPlatformAPI {
     static bool is_key_pressed_repeat(int key) {
         return raylib::IsKeyPressedRepeat(key);
     }
+
+    // ── Unified run loop ──
+    static void run(const RunConfig& cfg) {
+        if (cfg.flags) set_config_flags(cfg.flags);
+        init_window(cfg.width, cfg.height, cfg.title);
+        if (cfg.target_fps > 0) set_target_fps(cfg.target_fps);
+        if (cfg.init) cfg.init();
+        while (!window_should_close()) {
+            if (cfg.frame) cfg.frame();
+        }
+        if (cfg.cleanup) cfg.cleanup();
+        close_window();
+    }
 };
 
 static_assert(PlatformBackend<RaylibPlatformAPI>,

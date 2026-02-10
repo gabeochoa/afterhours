@@ -253,4 +253,11 @@ inline void take_screenshot(const char* fileName) { PlatformAPI::take_screenshot
 // ── Input ──
 inline bool is_key_pressed_repeat(int key) { return PlatformAPI::is_key_pressed_repeat(key); }
 
+// ── Unified run loop (preferred API) ──
+// Owns the full lifecycle: window creation, event loop, and teardown.
+// Works identically across all backends.
+// The legacy init_window/window_should_close/close_window API still works
+// under raylib for backwards compatibility.
+inline void run(const RunConfig& cfg) { PlatformAPI::run(cfg); }
+
 }  // namespace afterhours::graphics
