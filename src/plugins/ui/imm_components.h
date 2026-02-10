@@ -1503,9 +1503,11 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
   for (const auto &label : tab_labels) {
     bool is_active = (i == active_tab);
 
-    // Active tab: surface color with normal text
-    // Inactive tab: background color with muted/dimmed text
-    Color tab_bg = is_active ? ctx.theme.surface : ctx.theme.background;
+    // Active tab: surface color with bold text
+    // Inactive tab: slightly darkened background with muted text
+    Color tab_bg = is_active
+                       ? ctx.theme.surface
+                       : afterhours::colors::darken(ctx.theme.background, 0.92f);
     Color tab_text = is_active ? ctx.theme.font : ctx.theme.font_muted;
 
     // Wrapper div for each tab: column layout holding button + underline
@@ -1532,14 +1534,16 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
       changed = true;
     }
 
-    // Active tab underline indicator (3px) or transparent spacer for
-    // consistent sizing
+    // Active tab: bold accent underline (4px)
+    // Inactive tab: subtle muted line to separate from content
     Color underline_color =
-        is_active ? ctx.theme.primary : Color{0, 0, 0, 0};
+        is_active ? ctx.theme.accent
+                  : afterhours::colors::darken(ctx.theme.background, 0.80f);
+    float underline_h = is_active ? 4.0f : 1.0f;
     div(ctx, mk(tab_wrapper.ent(), 1),
         ComponentConfig{}
             .with_debug_name(fmt::format("tab_underline_{}", i))
-            .with_size(ComponentSize{percent(1.0f), pixels(3.0f)})
+            .with_size(ComponentSize{percent(1.0f), pixels(underline_h)})
             .with_custom_background(underline_color)
             .with_skip_tabbing(true));
 
