@@ -8,9 +8,9 @@
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 
-#include "../graphics_backend.h"
-#include "raylib_headless.h"
-#include "raylib_windowed.h"
+#include "../../graphics_common.h"
+#include "headless.h"
+#include "windowed.h"
 
 #include <variant>
 
@@ -148,12 +148,6 @@ inline AutoRegister auto_register{};
 }  // namespace detail
 
 }  // namespace raylib_backend
-
-// ============================================================================
-// Platform API struct -- satisfies PlatformBackend concept.
-// Application code calls afterhours::graphics::init_window() etc.,
-// which forward to these static functions via #ifdef in graphics.h.
-// ============================================================================
 
 struct RaylibPlatformAPI {
     // Lightweight color type satisfying ColorLike — avoids depending on color.h

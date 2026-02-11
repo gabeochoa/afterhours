@@ -12,7 +12,7 @@
 #include "window_manager.h"
 
 #ifdef AFTER_HOURS_USE_METAL
-#include "../graphics/metal_backend.h"
+#include "../backends/sokol/backend.h"
 #endif
 
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING

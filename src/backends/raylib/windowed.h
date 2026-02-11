@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <string>
 
-#include "../graphics_concept.h"
+#include "../../graphics_common.h"
 
 namespace afterhours::graphics {
 

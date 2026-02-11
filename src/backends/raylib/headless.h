@@ -5,8 +5,8 @@
 #include <filesystem>
 #include <string>
 
-#include "../graphics_concept.h"
-#include "../platform/headless_gl.h"
+#include "../../graphics_common.h"
+#include "../../graphics/platform/headless_gl.h"
 
 namespace afterhours::graphics {
 

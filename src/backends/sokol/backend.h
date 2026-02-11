@@ -8,10 +8,9 @@
 
 #ifdef AFTER_HOURS_USE_METAL
 
-#include "graphics_concept.h"
-#include "../logging.h"
+#include "../../graphics_common.h"
+#include "../../logging.h"
 
-// ── Sokol headers (declaration only, no implementation) ──
 // The implementation must be compiled in exactly one .cpp/.mm file
 // with SOKOL_IMPL defined before including these headers.
 // We use SOKOL_NO_ENTRY so we call sapp_run() ourselves from run().
@@ -443,7 +442,6 @@ static_assert(PlatformBackend<MetalPlatformAPI>,
 
 }  // namespace afterhours::graphics
 
-// ── Screenshot implementation (needs extern "C" outside class/namespace) ──
 extern "C" void metal_take_screenshot(const char*);
 inline void afterhours::graphics::MetalPlatformAPI::take_screenshot(const char* filename) {
     metal_take_screenshot(filename);

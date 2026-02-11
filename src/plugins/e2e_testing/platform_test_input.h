@@ -17,7 +17,7 @@
 #include "input_injector.h"
 #include "visible_text.h"
 
-#include "../../graphics/graphics.h"
+#include "../../graphics.h"
 #include "../../developer.h"
 
 namespace afterhours {
