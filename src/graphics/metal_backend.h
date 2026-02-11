@@ -425,7 +425,12 @@ struct MetalPlatformAPI {
         desc.height = cfg.height;
         desc.window_title = cfg.title;
         desc.logger.func = slog_func;
-        desc.high_dpi = true;
+        // Match Raylib behaviour: do NOT enable high_dpi so that a 1280×720
+        // logical window uses a 1280×720 framebuffer (upscaled by the OS on
+        // Retina).  This keeps UI element sizes consistent with the Raylib
+        // backend.  When we add an explicit HiDPI flag to RunConfig we can
+        // make this configurable.
+        desc.high_dpi = false;
 
         // Map flags
         if (cfg.flags & FLAG_WINDOW_RESIZABLE) {
