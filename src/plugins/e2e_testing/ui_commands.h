@@ -18,6 +18,16 @@ namespace afterhours {
 namespace testing {
 namespace ui_commands {
 
+// Helper: get the screen-space rect of a UI component (applies translate modifiers)
+inline RectangleType get_screen_rect(Entity &entity) {
+  auto &cmp = entity.get<ui::UIComponent>();
+  RectangleType rect = cmp.rect();
+  if (entity.has<ui::HasUIModifiers>()) {
+    rect = entity.get<ui::HasUIModifiers>().apply_modifier(rect);
+  }
+  return rect;
+}
+
 // Find a UI component by its debug name and return its center position
 template <typename InputAction>
 std::optional<Position> find_component_center(const std::string &name) {
@@ -31,9 +41,9 @@ std::optional<Position> find_component_center(const std::string &name) {
                    .first();
 
   for (Entity &entity : query.gen()) {
-    auto &cmp = entity.get<ui::UIComponent>();
-    float cx = cmp.rect().x + cmp.rect().width / 2;
-    float cy = cmp.rect().y + cmp.rect().height / 2;
+    auto rect = get_screen_rect(entity);
+    float cx = rect.x + rect.width / 2;
+    float cy = rect.y + rect.height / 2;
     return Position{cx, cy};
   }
   return std::nullopt;
@@ -54,9 +64,9 @@ std::optional<Position> find_component_with_text(const std::string &text) {
 
   // TODO add a gen_lambda() to do this conversion
   for (Entity &entity : query.gen()) {
-    auto &cmp = entity.get<ui::UIComponent>();
-    float cx = cmp.rect().x + cmp.rect().width / 2;
-    float cy = cmp.rect().y + cmp.rect().height / 2;
+    auto rect = get_screen_rect(entity);
+    float cx = rect.x + rect.width / 2;
+    float cy = rect.y + rect.height / 2;
     return Position{cx, cy};
   }
   return std::nullopt;
@@ -278,9 +288,9 @@ struct HandleClickButtonCommand : System<PendingE2ECommand> {
             .first();
 
     for (Entity &entity : query.gen()) {
-      auto &cmp = entity.get<ui::UIComponent>();
-      float cx = cmp.rect().x + cmp.rect().width / 2;
-      float cy = cmp.rect().y + cmp.rect().height / 2;
+      auto rect = get_screen_rect(entity);
+      float cx = rect.x + rect.width / 2;
+      float cy = rect.y + rect.height / 2;
       test_input::simulate_click(cx, cy);
       cmd.consume();
       return;
@@ -312,9 +322,9 @@ struct HandleToggleCheckboxCommand : System<PendingE2ECommand> {
                      .first();
 
     for (Entity &entity : query.gen()) {
-      auto &cmp = entity.get<ui::UIComponent>();
-      float cx = cmp.rect().x + cmp.rect().width / 2;
-      float cy = cmp.rect().y + cmp.rect().height / 2;
+      auto rect = get_screen_rect(entity);
+      float cx = rect.x + rect.width / 2;
+      float cy = rect.y + rect.height / 2;
       test_input::simulate_click(cx, cy);
       cmd.consume();
       return;
@@ -352,13 +362,12 @@ struct HandleSetSliderCommand : System<PendingE2ECommand> {
                      .first();
 
     for (Entity &entity : query.gen()) {
-      auto &slider = entity.get<ui::HasSliderState>();
-      auto &cmp = entity.get<ui::UIComponent>();
-      // Calculate click position along slider for target value
-      float pct = (*value - slider.min) / (slider.max - slider.min);
-      pct = std::clamp(pct, 0.0f, 1.0f);
-      float x = cmp.rect().x + cmp.rect().width * pct;
-      float y = cmp.rect().y + cmp.rect().height / 2;
+      // Click the center of the slider for now
+      // TODO: calculate pct from slider min/max when HasSliderState supports range
+      (void)value;
+      auto rect = get_screen_rect(entity);
+      float x = rect.x + rect.width / 2;
+      float y = rect.y + rect.height / 2;
       test_input::simulate_click(x, y);
       cmd.consume();
       return;
@@ -390,10 +399,10 @@ struct HandleSelectDropdownCommand : System<PendingE2ECommand> {
                      .first();
 
     for (Entity &entity : query.gen()) {
-      auto &cmp = entity.get<ui::UIComponent>();
       // Click to open dropdown first
-      float cx = cmp.rect().x + cmp.rect().width / 2;
-      float cy = cmp.rect().y + cmp.rect().height / 2;
+      auto rect = get_screen_rect(entity);
+      float cx = rect.x + rect.width / 2;
+      float cy = rect.y + rect.height / 2;
       test_input::simulate_click(cx, cy);
       // Note: Selecting the actual option requires another frame
       // TODO: Add wait + option click logic

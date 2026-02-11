@@ -175,8 +175,7 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
       cmd.args.push_back(dir);
       cmd.wait_seconds = 2 * frame;
     } else if (detail::contains(detail::single_arg_commands, cmd.name)) {
-      std::string arg;
-      iss >> arg;
+      std::string arg = parse_quoted();
       if (!arg.empty())
         cmd.args.push_back(arg);
       cmd.wait_seconds = 2 * frame;

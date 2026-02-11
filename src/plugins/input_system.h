@@ -458,26 +458,50 @@ struct input : developer::Plugin {
   };
 
   static MousePosition get_mouse_position() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return testing::test_input::get_mouse_position<MousePosition>([]() {
+      auto p = graphics::MetalPlatformAPI::get_mouse_position();
+      return MousePosition{p.x, p.y};
+    });
+#else
     auto p = graphics::MetalPlatformAPI::get_mouse_position();
     return {p.x, p.y};
+#endif
   }
   static MousePosition get_mouse_delta() {
     auto d = graphics::MetalPlatformAPI::get_mouse_delta();
     return {d.x, d.y};
   }
   static bool is_mouse_button_up(const MouseButton btn) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return !is_mouse_button_down(btn);
+#else
     return graphics::MetalPlatformAPI::is_mouse_button_up(btn);
+#endif
   }
   static bool is_mouse_button_down(const MouseButton btn) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return testing::test_input::is_mouse_button_down(btn,
+      [](int b) { return graphics::MetalPlatformAPI::is_mouse_button_down(b); });
+#else
     return graphics::MetalPlatformAPI::is_mouse_button_down(btn);
+#endif
   }
   static bool is_mouse_button_pressed(const MouseButton btn) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return testing::test_input::is_mouse_button_pressed(btn,
+      [](int b) { return graphics::MetalPlatformAPI::is_mouse_button_pressed(b); });
+#else
     return graphics::MetalPlatformAPI::is_mouse_button_pressed(btn);
+#endif
   }
   static bool is_mouse_button_released(const MouseButton btn) {
     return graphics::MetalPlatformAPI::is_mouse_button_released(btn);
   }
   static float get_mouse_wheel_move() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    if (testing::test_input::detail::test_mode) return 0.0f;
+#endif
     return graphics::MetalPlatformAPI::get_mouse_wheel_move();
   }
   static MousePosition get_mouse_wheel_move_v() {
@@ -485,13 +509,28 @@ struct input : developer::Plugin {
     return {v.x, v.y};
   }
   static int get_char_pressed() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return testing::test_input::get_char_pressed(
+      []() { return graphics::MetalPlatformAPI::get_char_pressed(); });
+#else
     return graphics::MetalPlatformAPI::get_char_pressed();
+#endif
   }
   static bool is_key_pressed(const KeyCode keycode) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return testing::test_input::is_key_pressed(keycode,
+      [](int k) { return graphics::MetalPlatformAPI::is_key_pressed(k); });
+#else
     return graphics::MetalPlatformAPI::is_key_pressed(keycode);
+#endif
   }
   static bool is_key_down(const KeyCode keycode) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return testing::test_input::is_key_down(keycode,
+      [](int k) { return graphics::MetalPlatformAPI::is_key_down(k); });
+#else
     return graphics::MetalPlatformAPI::is_key_down(keycode);
+#endif
   }
 
   // Gamepad not yet supported on Metal
