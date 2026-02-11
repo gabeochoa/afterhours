@@ -34,6 +34,13 @@ struct input : developer::Plugin {
   using GamepadButton = raylib::GamepadButton;
 
   static MousePosition get_mouse_position() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    if (testing::test_input::detail::test_mode &&
+        testing::input_injector::detail::mouse.active) {
+      auto &m = testing::input_injector::detail::mouse;
+      return {m.pos.x, m.pos.y};
+    }
+#endif
     const raylib::Vector2 raw = raylib::GetMousePosition();
 
     const int window_w = raylib::GetScreenWidth();
@@ -84,6 +91,12 @@ struct input : developer::Plugin {
     return raylib::IsMouseButtonUp(button);
   }
   static bool is_mouse_button_down(const MouseButton button) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    if (button == 0 && testing::test_input::detail::test_mode &&
+        testing::input_injector::detail::mouse.active) {
+      return testing::input_injector::detail::mouse.left_down;
+    }
+#endif
     return raylib::IsMouseButtonDown(button);
   }
   static bool is_mouse_button_pressed(const MouseButton button) {

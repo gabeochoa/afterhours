@@ -1748,6 +1748,14 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                         result.rect.height, font_col, hasLabel.alignment,
                         layer, entity.id, stroke, shadow,
                         rotation, centerX, centerY);
+
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        // Register text for E2E testing assertions (batched renderer path)
+        if (testing::test_input::detail::test_mode) {
+          testing::VisibleTextRegistry::instance().register_text(
+              hasLabel.label);
+        }
+#endif
       }
     }
 
