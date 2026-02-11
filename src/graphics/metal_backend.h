@@ -266,12 +266,11 @@ struct MetalPlatformAPI {
         pass.swapchain = sglue_swapchain();
         sg_begin_pass(&pass);
 
-        // Set up sokol_gl orthographic projection for 2D drawing
-        // Use LOGICAL window coordinates (not framebuffer pixels) so drawing
-        // matches mouse coords and UI layout.  The Metal layer handles DPI scaling.
-        float dpi = sapp_dpi_scale();
-        float w = static_cast<float>(sapp_width()) / dpi;
-        float h = static_cast<float>(sapp_height()) / dpi;
+        // Set up sokol_gl orthographic projection for 2D drawing.
+        // With high_dpi=false the framebuffer matches the logical window size,
+        // so sapp_width()/sapp_height() give us the right dimensions directly.
+        float w = static_cast<float>(sapp_width());
+        float h = static_cast<float>(sapp_height());
         sgl_defaults();
         sgl_matrix_mode_projection();
         sgl_ortho(0.0f, w, h, 0.0f, -1.0f, 1.0f);
@@ -296,11 +295,10 @@ struct MetalPlatformAPI {
             static_cast<float>(c.b) / 255.0f,
             static_cast<float>(c.a) / 255.0f,
         };
-        // Draw a full-screen quad in logical coordinates so the first frame
-        // isn't black (pass action only takes effect on the next begin_pass)
-        float dpi = sapp_dpi_scale();
-        float w = static_cast<float>(sapp_width()) / dpi;
-        float h = static_cast<float>(sapp_height()) / dpi;
+        // Draw a full-screen quad so the first frame isn't black
+        // (pass action only takes effect on the next begin_pass)
+        float w = static_cast<float>(sapp_width());
+        float h = static_cast<float>(sapp_height());
         sgl_begin_quads();
         sgl_c4b(c.r, c.g, c.b, c.a);
         sgl_v2f(0, 0);
@@ -312,12 +310,10 @@ struct MetalPlatformAPI {
 
     // ── Screen / timing ──
     static int get_screen_width() {
-        float dpi = sapp_dpi_scale();
-        return static_cast<int>(static_cast<float>(sapp_width()) / dpi);
+        return sapp_width();
     }
     static int get_screen_height() {
-        float dpi = sapp_dpi_scale();
-        return static_cast<int>(static_cast<float>(sapp_height()) / dpi);
+        return sapp_height();
     }
     static float get_frame_time() { return static_cast<float>(sapp_frame_duration()); }
     static float get_fps() {

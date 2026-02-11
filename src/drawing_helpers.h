@@ -527,12 +527,8 @@ inline void draw_ring(float, float, float, float, int, Color) {
 }
 
 inline void begin_scissor_mode(int x, int y, int w, int h) {
-    // Scissor operates in framebuffer pixels; scale logical coords by DPI
-    float dpi = sapp_dpi_scale();
-    sgl_scissor_rect(static_cast<int>(static_cast<float>(x) * dpi),
-                     static_cast<int>(static_cast<float>(y) * dpi),
-                     static_cast<int>(static_cast<float>(w) * dpi),
-                     static_cast<int>(static_cast<float>(h) * dpi), true);
+    // With high_dpi=false, framebuffer pixels == logical coords, no scaling needed
+    sgl_scissor_rect(x, y, w, h, true);
 }
 
 inline void end_scissor_mode() {
