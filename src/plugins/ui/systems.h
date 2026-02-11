@@ -12,6 +12,7 @@
 #include "components.h"
 #include "context.h"
 #include "theme.h"
+#include "ui_collection.h"
 #if __has_include(<magic_enum/magic_enum.hpp>)
 #include <magic_enum/magic_enum.hpp>
 #else
@@ -50,10 +51,9 @@ struct BuildUIEntityMapping : System<> {
     }
 
     cache->components.clear();
-    EntityCollection *ui = EntityHelper::get_ui_collection();
-    auto ui_entities = ui
-        ? EntityQuery(*ui, {.ignore_temp_warning = true}).whereHasComponent<UIComponent>().gen()
-        : EntityQuery({.ignore_temp_warning = true}).whereHasComponent<UIComponent>().gen();
+    auto &ui_coll = UICollectionHolder::get().collection;
+    auto ui_entities = EntityQuery(ui_coll, {.ignore_temp_warning = true})
+        .whereHasComponent<UIComponent>().gen();
     for (Entity &entity : ui_entities) {
       cache->components.emplace(entity.id, entity);
     }
@@ -262,7 +262,7 @@ struct TrackIfComponentWillBeRendered : System<> {
     // This ensures that UI elements from inactive screens (which don't call
     // their div/button functions) are not marked as visible.
     for (const auto &cmd : context.render_cmds) {
-      OptEntity opt_ent = EntityHelper::getEntityForID(cmd.id);
+      OptEntity opt_ent = UICollectionHolder::getEntityForID(cmd.id);
       if (!opt_ent.valid())
         continue;
       Entity &ent = opt_ent.asE();
@@ -304,7 +304,7 @@ template <typename InputAction> struct ComputeVisualFocusId : System<> {
     ctx->visual_focus_id = ctx->ROOT;
     if (ctx->focus_id == ctx->ROOT)
       return;
-    OptEntity focused = EntityHelper::getEntityForID(ctx->focus_id);
+    OptEntity focused = UICollectionHolder::getEntityForID(ctx->focus_id);
     if (!focused.has_value())
       return;
     Entity &fe = focused.asE();
@@ -315,7 +315,7 @@ template <typename InputAction> struct ComputeVisualFocusId : System<> {
       const UIComponent &cmp = current->get<UIComponent>();
       if (cmp.parent < 0 || ++guard > 64)
         break;
-      Entity &parent = EntityHelper::getEntityForIDEnforce(cmp.parent);
+      Entity &parent = UICollectionHolder::getEntityForIDEnforce(cmp.parent);
       if (parent.has<ui::FocusClusterRoot>()) {
         ctx->visual_focus_id = parent.id;
         return;
@@ -389,7 +389,7 @@ private:
 
     auto &ui_component = parent.get<UIComponent>();
     for (auto child_id : ui_component.children) {
-      auto child_entity = EntityHelper::getEntityForID(child_id);
+      auto child_entity = UICollectionHolder::getEntityForID(child_id);
       if (!child_entity.has_value()) {
         continue;
       }
@@ -434,7 +434,7 @@ private:
 // children)
 inline bool is_point_inside_entity_tree(EntityID entity_id,
                                         const input::MousePosition &pos) {
-  OptEntity opt = EntityHelper::getEntityForID(entity_id);
+  OptEntity opt = UICollectionHolder::getEntityForID(entity_id);
   if (!opt.has_value())
     return false;
 
@@ -594,7 +594,7 @@ private:
 
     auto &ui_component = parent.get<UIComponent>();
     for (auto child_id : ui_component.children) {
-      auto child_entity = EntityHelper::getEntityForID(child_id);
+      auto child_entity = UICollectionHolder::getEntityForID(child_id);
       if (!child_entity.has_value()) {
         continue;
       }
@@ -676,7 +676,7 @@ private:
 
     auto &ui_component = parent.get<UIComponent>();
     for (auto child_id : ui_component.children) {
-      auto child_entity = EntityHelper::getEntityForID(child_id);
+      auto child_entity = UICollectionHolder::getEntityForID(child_id);
       if (!child_entity.has_value()) {
         continue;
       }
@@ -809,7 +809,7 @@ struct UpdateDropdownOptions
     }
 
     for (size_t i = 0; i < options.size(); i++) {
-      Entity &child = EntityHelper::createEntityInUI();
+      Entity &child = UICollectionHolder::get().collection.createEntity();
       child.addComponent<UIComponentDebug>("dropdown_option");
       child.addComponent<UIComponent>(child.id)
           .set_desired_width(ui::Size{
@@ -861,7 +861,7 @@ private
 
   auto &ui_component = parent.get<UIComponent>();
   for (auto child_id : ui_component.children) {
-    auto child_entity = EntityHelper::getEntityForID(child_id);
+    auto child_entity = UICollectionHolder::getEntityForID(child_id);
     if (!child_entity.has_value()) {
       continue;
     }
@@ -932,7 +932,7 @@ private
       }
 
       for (size_t i = 0; i < options.size(); i++) {
-        Entity &grandchild = EntityHelper::createEntityInUI();
+        Entity &grandchild = UICollectionHolder::get().collection.createEntity();
         grandchild.addComponent<UIComponentDebug>("dropdown_option");
         grandchild.addComponent<UIComponent>(grandchild.id)
             .set_desired_width(ui::Size{

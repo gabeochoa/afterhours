@@ -32,6 +32,7 @@
 #include "components.h"
 #include "context.h"
 #include "theme.h"
+#include "ui_collection.h"
 #include "validation_config.h"
 
 namespace afterhours {
@@ -95,7 +96,7 @@ struct ValidateScreenBounds : System<AutoLayoutRoot, UIComponent> {
 
       // Add violation component for visual debugging
       if (config.highlight_violations) {
-        OptEntity opt_ent = EntityHelper::getEntityForID(cmp.id);
+        OptEntity opt_ent = UICollectionHolder::getEntityForID(cmp.id);
         if (opt_ent.valid()) {
           Entity &ent = opt_ent.asE();
           if (!ent.has<ValidationViolation>()) {
@@ -173,7 +174,7 @@ struct ValidateChildContainment : System<AutoLayoutRoot, UIComponent> {
 
         // Add violation component for visual debugging
         if (config.highlight_violations) {
-          OptEntity opt_ent = EntityHelper::getEntityForID(child.id);
+          OptEntity opt_ent = UICollectionHolder::getEntityForID(child.id);
           if (opt_ent.valid()) {
             Entity &ent = opt_ent.asE();
             if (!ent.has<ValidationViolation>()) {
@@ -391,7 +392,7 @@ struct ValidateResolutionIndependence
 
       // Get component debug name if available
       std::string name_hint;
-      OptEntity opt_ent = EntityHelper::getEntityForID(cmp.id);
+      OptEntity opt_ent = UICollectionHolder::getEntityForID(cmp.id);
       if (opt_ent.valid()) {
         Entity &ent = opt_ent.asE();
         if (ent.has<UIComponentDebug>()) {
@@ -457,7 +458,7 @@ struct ValidateZeroSize : System<AutoLayoutRoot, UIComponent> {
 
       // Get debug name if available
       std::string name_hint;
-      OptEntity opt_ent = EntityHelper::getEntityForID(cmp.id);
+      OptEntity opt_ent = UICollectionHolder::getEntityForID(cmp.id);
       if (opt_ent.valid()) {
         Entity &ent = opt_ent.asE();
         if (ent.has<UIComponentDebug>()) {
@@ -517,7 +518,7 @@ struct ValidateAbsoluteMarginConflict : System<AutoLayoutRoot, UIComponent> {
 
     if (cmp.absolute && has_nonzero_margin(cmp)) {
       std::string name_hint;
-      OptEntity opt_ent = EntityHelper::getEntityForID(cmp.id);
+      OptEntity opt_ent = UICollectionHolder::getEntityForID(cmp.id);
       if (opt_ent.valid()) {
         Entity &ent = opt_ent.asE();
         if (ent.has<UIComponentDebug>()) {
@@ -626,7 +627,7 @@ struct ValidateSpacingRhythm : System<AutoLayoutRoot, UIComponent> {
       }
 
       std::string name_hint;
-      OptEntity opt_ent = EntityHelper::getEntityForID(cmp.id);
+      OptEntity opt_ent = UICollectionHolder::getEntityForID(cmp.id);
       if (opt_ent.valid() && opt_ent.asE().has<UIComponentDebug>()) {
         name_hint =
             " [" + opt_ent.asE().get<UIComponentDebug>().name() + "]";
@@ -674,7 +675,7 @@ struct ValidatePixelAlignment : System<AutoLayoutRoot, UIComponent> {
 
     if (x_misaligned || y_misaligned) {
       std::string name_hint;
-      OptEntity opt_ent = EntityHelper::getEntityForID(cmp.id);
+      OptEntity opt_ent = UICollectionHolder::getEntityForID(cmp.id);
       if (opt_ent.valid() && opt_ent.asE().has<UIComponentDebug>()) {
         name_hint =
             " [" + opt_ent.asE().get<UIComponentDebug>().name() + "]";

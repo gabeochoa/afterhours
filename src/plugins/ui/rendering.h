@@ -38,7 +38,7 @@ static inline float _compute_effective_opacity(const Entity &entity) {
   EntityID current_id = entity.id;
   int guard = 0;
   while (current_id >= 0 && guard < 64) {
-    OptEntity opt_cur = EntityHelper::getEntityForID(current_id);
+    OptEntity opt_cur = UICollectionHolder::getEntityForID(current_id);
     if (!opt_cur.valid())
       break;
     const Entity &cur = opt_cur.asE();
@@ -67,7 +67,7 @@ static inline OptEntity _find_clip_ancestor(const Entity &entity) {
 
   int guard = 0;
   while (pid >= 0 && guard < 64) {
-    OptEntity opt_parent = EntityHelper::getEntityForID(pid);
+    OptEntity opt_parent = UICollectionHolder::getEntityForID(pid);
     if (!opt_parent.valid()) {
       break;
     }
@@ -131,7 +131,7 @@ static inline void _fix_scroll_view_child_positions(Entity &entity) {
   float current_y = content_y;
 
   for (EntityID child_id : cmp.children) {
-    OptEntity child_opt = EntityHelper::getEntityForID(child_id);
+    OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
     if (!child_opt.valid())
       continue;
 
@@ -192,7 +192,7 @@ static inline void _update_scroll_view_content_size(Entity &entity) {
   float max_height = 0.0f;
 
   for (EntityID child_id : cmp.children) {
-    OptEntity child_opt = EntityHelper::getEntityForID(child_id);
+    OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
     if (!child_opt.valid())
       continue;
 
@@ -698,7 +698,7 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     EntityID current_id = entity.id;
     int guard = 0;
     while (guard < 64) {
-      OptEntity opt_cur = EntityHelper::getEntityForID(current_id);
+      OptEntity opt_cur = UICollectionHolder::getEntityForID(current_id);
       if (!opt_cur.valid() || !opt_cur.asE().has<UIComponent>())
         break;
       const UIComponent &cur_cmp = opt_cur.asE().get<UIComponent>();
@@ -1069,7 +1069,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
             break;
           }
           // Also check grandchildren (for components with nested children)
-          OptEntity child_opt = EntityHelper::getEntityForID(child_id);
+          OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
           if (child_opt.has_value() && child_opt.asE().has<UIComponent>()) {
             for (EntityID grandchild_id : child_opt.asE().get<UIComponent>().children) {
               if (grandchild_id == context.focus_id) {
@@ -1326,7 +1326,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
     for (auto &cmd : context.render_cmds) {
       auto id = cmd.id;
-      OptEntity opt_ent = EntityHelper::getEntityForID(id);
+      OptEntity opt_ent = UICollectionHolder::getEntityForID(id);
       if (!opt_ent.valid())
         continue; // Skip stale entity IDs
       render(context, font_manager, opt_ent.asE());
@@ -1592,7 +1592,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
             break;
           }
           // Also check grandchildren (for components with nested children)
-          OptEntity child_opt = EntityHelper::getEntityForID(child_id);
+          OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
           if (child_opt.has_value() && child_opt.asE().has<UIComponent>()) {
             for (EntityID grandchild_id : child_opt.asE().get<UIComponent>().children) {
               if (grandchild_id == context.focus_id) {
@@ -1869,7 +1869,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     for (const auto &cmd : context.render_cmds) {
       auto id = cmd.id;
       auto layer = cmd.layer;
-      OptEntity opt_ent = EntityHelper::getEntityForID(id);
+      OptEntity opt_ent = UICollectionHolder::getEntityForID(id);
       if (!opt_ent.valid())
         continue; // Skip stale entity IDs
       collect(buffer, context, font_manager, opt_ent.asE(), layer);

@@ -128,7 +128,7 @@ struct LayoutDebugOverlay : SystemWithUIContext<UIComponent> {
     // Check for overflow - if any child extends beyond this component
     bool has_overflow = false;
     for (EntityID child_id : cmp.children) {
-      Entity &child_ent = EntityHelper::getEntityForIDEnforce(child_id);
+      Entity &child_ent = UICollectionHolder::getEntityForIDEnforce(child_id);
       if (!child_ent.has<UIComponent>())
         continue;
       const UIComponent &child = child_ent.get<UIComponent>();

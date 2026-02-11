@@ -3,6 +3,7 @@
 // Re-export layout types and core components for backwards compatibility
 #include "ui/components.h"
 #include "ui/layout_types.h"
+#include "ui/ui_collection.h"
 #include "ui/ui_core_components.h"
 
 #include "../bitwise.h"
@@ -1256,7 +1257,7 @@ struct AutoLayout {
   }
 
   static Entity &to_ent_static(EntityID id) {
-    return EntityQuery().whereID(id).gen_first_enforce();
+    return ui::UICollectionHolder::getEntityForIDEnforce(id);
   }
 
   static UIComponent &to_cmp_static(EntityID id) {

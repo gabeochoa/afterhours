@@ -23,6 +23,7 @@
 #include "../../logging.h"
 #include "../input_system.h"
 #include "components.h"
+#include "ui_collection.h"
 #include "theme.h"
 
 namespace afterhours {
@@ -185,7 +186,7 @@ template <typename InputAction> struct UIContext : BaseComponent {
 
   [[nodiscard]] bool mouse_activates(EntityID id) const {
     ClickActivationMode activation_mode = theme.click_activation_mode;
-    if (OptEntity opt_ent = EntityHelper::getEntityForID(id);
+    if (OptEntity opt_ent = UICollectionHolder::getEntityForID(id);
         opt_ent.has_value() && opt_ent.asE().has<HasClickActivationMode>()) {
       activation_mode = opt_ent.asE().get<HasClickActivationMode>().mode;
     }
@@ -217,7 +218,7 @@ template <typename InputAction> struct UIContext : BaseComponent {
   [[nodiscard]] bool focused_accepts_value_input() const {
     if (focus_id == ROOT)
       return false;
-    OptEntity opt = EntityHelper::getEntityForID(focus_id);
+    OptEntity opt = UICollectionHolder::getEntityForID(focus_id);
     return opt.valid() && opt.asE().template has<AcceptsValueInput>();
   }
 

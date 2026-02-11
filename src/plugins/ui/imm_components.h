@@ -900,7 +900,7 @@ static void update_label_entity(Entity &entity, const std::string &new_text) {
 static void update_handle_label(Entity &handle_entity, float value) {
   UIComponent &handle_cmp = handle_entity.get<UIComponent>();
   for (EntityID child_id : handle_cmp.children) {
-    Entity &child_entity = EntityHelper::getEntityForIDEnforce(child_id);
+    Entity &child_entity = UICollectionHolder::getEntityForIDEnforce(child_id);
     if (child_entity.has<ui::HasLabel>()) {
       update_label_entity(child_entity,
                           std::to_string(static_cast<int>(value * 100)));
@@ -917,7 +917,7 @@ static void update_main_label(Entity &slider_entity,
   if (!slider_cmp.children.empty()) {
     EntityID main_label_id = slider_cmp.children[0];
     Entity &main_label_entity =
-        EntityHelper::getEntityForIDEnforce(main_label_id);
+        UICollectionHolder::getEntityForIDEnforce(main_label_id);
     std::string new_text = generate_label_text(original_label, value, position);
     update_label_entity(main_label_entity, new_text);
   }
@@ -1011,7 +1011,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
     Rectangle rect = cmp.rect();
     if (!cmp.children.empty()) {
       EntityID child_id = cmp.children[0];
-      Entity &child = EntityHelper::getEntityForIDEnforce(child_id);
+      Entity &child = UICollectionHolder::getEntityForIDEnforce(child_id);
       UIComponent &child_cmp = child.get<UIComponent>();
       child_cmp.set_desired_padding(
           pixels(sliderState.value * 0.75f * rect.width), Axis::left);
@@ -1279,7 +1279,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
     dropdownState.changed_since = true;
 
     EntityID id = entity.get<UIComponent>().children[label_str.empty() ? 0 : 1];
-    Entity &first_child = EntityHelper::getEntityForIDEnforce(id);
+    Entity &first_child = UICollectionHolder::getEntityForIDEnforce(id);
 
     first_child.get<ui::HasLabel>().label = (options[option_index]);
     ctx.set_focus(first_child.id);
