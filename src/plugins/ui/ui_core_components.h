@@ -98,10 +98,13 @@ struct UIComponent : BaseComponent {
 
   std::string font_name = UNSET_FONT;
   Size font_size = pixels(50.f);
+  bool font_size_explicitly_set = false;
 
-  auto &enable_font(const std::string &font_name_, Size fs) {
+  auto &enable_font(const std::string &font_name_, Size fs,
+                     bool explicit_size = false) {
     font_name = font_name_;
     font_size = fs;
+    font_size_explicitly_set = explicit_size;
     return *this;
   }
 

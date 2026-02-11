@@ -86,6 +86,11 @@ template <typename InputAction> struct UIContext : BaseComponent {
   InputAction last_action;
   InputBitset all_actions;
 
+  // Screen dimensions in pixels, set each frame by the layout system.
+  // Used by rendering to resolve ScreenPercent font sizes.
+  float screen_width = 0.f;
+  float screen_height = 0.f;
+
   Theme theme;
 
   // Convenience accessor to the UIStylingDefaults singleton.

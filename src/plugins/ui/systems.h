@@ -50,7 +50,10 @@ struct BuildUIEntityMapping : System<> {
     }
 
     cache->components.clear();
-    auto ui_entities = EntityQuery().whereHasComponent<UIComponent>().gen();
+    EntityCollection *ui = EntityHelper::get_ui_collection();
+    auto ui_entities = ui
+        ? EntityQuery(*ui, {.ignore_temp_warning = true}).whereHasComponent<UIComponent>().gen()
+        : EntityQuery({.ignore_temp_warning = true}).whereHasComponent<UIComponent>().gen();
     for (Entity &entity : ui_entities) {
       cache->components.emplace(entity.id, entity);
     }
@@ -115,6 +118,17 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
           context.last_action = static_cast<InputAction>(actions_done.action);
         }
       }
+    }
+
+    // Update screen dimensions for font size resolution
+    {
+      Entity &res_entity = EntityHelper::get_singleton<
+          window_manager::ProvidesCurrentResolution>();
+      auto &res =
+          res_entity.get<window_manager::ProvidesCurrentResolution>()
+              .current_resolution;
+      context.screen_width = static_cast<float>(res.width);
+      context.screen_height = static_cast<float>(res.height);
     }
 
     // Save previous frame's state for animations before resetting
@@ -795,7 +809,7 @@ struct UpdateDropdownOptions
     }
 
     for (size_t i = 0; i < options.size(); i++) {
-      Entity &child = EntityHelper::createEntity();
+      Entity &child = EntityHelper::createEntityInUI();
       child.addComponent<UIComponentDebug>("dropdown_option");
       child.addComponent<UIComponent>(child.id)
           .set_desired_width(ui::Size{
@@ -918,7 +932,7 @@ private
       }
 
       for (size_t i = 0; i < options.size(); i++) {
-        Entity &grandchild = EntityHelper::createEntity();
+        Entity &grandchild = EntityHelper::createEntityInUI();
         grandchild.addComponent<UIComponentDebug>("dropdown_option");
         grandchild.addComponent<UIComponent>(grandchild.id)
             .set_desired_width(ui::Size{

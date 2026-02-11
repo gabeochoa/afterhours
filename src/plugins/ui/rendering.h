@@ -256,7 +256,8 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
                                                   const std::string &text,
                                                   RectangleType container,
                                                   TextAlignment alignment,
-                                                  Vector2Type margin_px) {
+                                                  Vector2Type margin_px,
+                                                  float explicit_font_size = 0.f) {
   // Early return for empty text - prevents infinite loop in font size
   // calculation
   if (text.empty()) {
@@ -307,43 +308,54 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
   }
   // TODO add some caching here?
 
-  // Use binary search to find largest font size that fits
-  float low = MIN_FONT_SIZE;
-  float high = std::min(max_text_size.y, 200.f); // Cap at reasonable max
-  float font_size = low;
-  Vector2Type text_size;
+  float font_size;
+  bool text_fits;
 
-  while (high - low > 0.5f) {
-    float mid = (low + high) / 2.f;
-    text_size = measure_text(font, text.c_str(), mid, 1.f);
-    if (text_size.x <= max_text_size.x && text_size.y <= max_text_size.y) {
-      font_size = mid;
-      low = mid;
-    } else {
-      high = mid;
+  if (explicit_font_size > 0.f) {
+    // When an explicit font size is provided, use it directly instead of
+    // auto-sizing. Text may overflow the container horizontally; the caller
+    // is responsible for ensuring the size is appropriate.
+    font_size = std::max(explicit_font_size, MIN_FONT_SIZE);
+    text_fits = true;
+  } else {
+    // Use binary search to find largest font size that fits
+    float low = MIN_FONT_SIZE;
+    float high = std::min(max_text_size.y, 200.f); // Cap at reasonable max
+    font_size = low;
+
+    while (high - low > 0.5f) {
+      float mid = (low + high) / 2.f;
+      Vector2Type ts = measure_text(font, text.c_str(), mid, 1.f);
+      if (ts.x <= max_text_size.x && ts.y <= max_text_size.y) {
+        font_size = mid;
+        low = mid;
+      } else {
+        high = mid;
+      }
     }
-  }
 
-  // Clamp to minimum font size to prevent invalid rendering
-  bool text_fits = font_size >= MIN_FONT_SIZE;
-  if (font_size < MIN_FONT_SIZE) {
+    // Clamp to minimum font size to prevent invalid rendering
+    text_fits = font_size >= MIN_FONT_SIZE;
+    if (font_size < MIN_FONT_SIZE) {
 #ifdef AFTERHOURS_DEBUG_TEXT_OVERFLOW
-    // Only log once per unique text to avoid spamming
-    static std::unordered_set<std::string> logged_texts;
-    if (logged_texts.find(text) == logged_texts.end()) {
-      logged_texts.insert(text);
-      log_warn("Text '{}' cannot fit in container {}x{} with margins {}x{} - "
-               "clamping font size from {} to {}",
-               text.length() > 20 ? text.substr(0, 20) + "..." : text,
-               container.width, container.height, margin_px.x, margin_px.y,
-               font_size, MIN_FONT_SIZE);
-    }
+      // Only log once per unique text to avoid spamming
+      static std::unordered_set<std::string> logged_texts;
+      if (logged_texts.find(text) == logged_texts.end()) {
+        logged_texts.insert(text);
+        log_warn(
+            "Text '{}' cannot fit in container {}x{} with margins {}x{} - "
+            "clamping font size from {} to {}",
+            text.length() > 20 ? text.substr(0, 20) + "..." : text,
+            container.width, container.height, margin_px.x, margin_px.y,
+            font_size, MIN_FONT_SIZE);
+      }
 #endif
-    font_size = MIN_FONT_SIZE;
+      font_size = MIN_FONT_SIZE;
+    }
   }
 
-  // Re-measure with final clamped font size for accurate positioning
-  text_size = measure_text(font, text.c_str(), font_size, 1.f);
+  // Measure with final font size for accurate positioning
+  Vector2Type text_size = measure_text(font, text.c_str(), font_size, 1.f);
 
   // Calculate the text position based on the alignment and margins
   Vector2Type position;
@@ -1706,10 +1718,24 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         text_rect.height -= static_cast<float>(ns.top + ns.bottom);
       }
 
+      // When a font size was explicitly set (via with_font / with_font_size),
+      // use it as an upper bound so text doesn't auto-grow beyond that size.
+      // Default font sizes (from UIStylingDefaults) are NOT applied as caps
+      // to preserve the existing auto-fit-to-container behavior.
+      float explicit_fs = 0.f;
+      if (cmp.font_size_explicitly_set) {
+        if (cmp.font_size.dim == Dim::Pixels) {
+          explicit_fs = cmp.font_size.value;
+        } else if (cmp.font_size.dim == Dim::ScreenPercent) {
+          explicit_fs = cmp.font_size.value * context.screen_height;
+        }
+      }
+
       // Position text to get font size
       TextPositionResult result =
           position_text_ex(font_manager, hasLabel.label.c_str(), text_rect,
-                          hasLabel.alignment, Vector2Type{5.f, 5.f});
+                          hasLabel.alignment, Vector2Type{5.f, 5.f},
+                          explicit_fs);
 
       if (result.rect.height >= MIN_FONT_SIZE) {
         // Pass the container rect (text_rect) not the position rect (result.rect)
