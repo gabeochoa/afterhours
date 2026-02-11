@@ -451,7 +451,7 @@ struct SystemManager {
             if (!system->should_run(dt)) continue;
             system->once(dt);
             system->on_iteration_begin(dt);
-            for (std::shared_ptr<Entity> entity : entities) {
+            for (const auto& entity : entities) {
                 if (!entity) continue;
                 if (system->include_derived_children)
                     system->for_each_derived(*entity, dt);
@@ -469,7 +469,7 @@ struct SystemManager {
             if (!system->should_run(dt)) continue;
             system->once(dt);
             system->on_iteration_begin(dt);
-            for (std::shared_ptr<Entity> entity : entities) {
+            for (const auto& entity : entities) {
                 if (!entity) continue;
                 if (system->include_derived_children)
                     system->for_each_derived(*entity, dt);
@@ -484,10 +484,11 @@ struct SystemManager {
     void render(Entities &entities, const float dt) {
         for (auto &system : render_systems_) {
             if (!system->should_run(dt)) continue;
+#ifndef AFTERHOURS_SINGLE_RENDER_PASS
             // Call non-const first
             system->once(dt);
             system->on_iteration_begin(dt);
-            for (std::shared_ptr<Entity> entity : entities) {
+            for (const auto& entity : entities) {
                 if (!entity) continue;
                 if (system->include_derived_children)
                     system->for_each_derived(*entity, dt);
@@ -496,11 +497,12 @@ struct SystemManager {
             }
             system->on_iteration_end(dt);
             system->after(dt);
+#endif
             // Also call const overloads to give time for migration
             const SystemBase &sys = *system;
             sys.once(dt);
             sys.on_iteration_begin(dt);
-            for (std::shared_ptr<Entity> entity : entities) {
+            for (const auto& entity : entities) {
                 if (!entity) continue;
                 const Entity &e = *entity;
                 if (sys.include_derived_children)
