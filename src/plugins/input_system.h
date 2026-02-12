@@ -11,6 +11,10 @@
 #include "../developer.h"
 #include "window_manager.h"
 
+#ifdef AFTER_HOURS_USE_METAL
+#include "../backends/sokol/backend.h"
+#endif
+
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
 #include "e2e_testing/test_input.h"
 #endif
@@ -437,52 +441,147 @@ struct input : developer::Plugin {
     return "";
   }
 
-#else
+#elif defined(AFTER_HOURS_USE_METAL)
+  // ── Metal/Sokol backend — delegates to MetalPlatformAPI input state ──
   using MousePosition = MyVec2;
   using KeyCode = int;
   using GamepadID = int;
   using GamepadAxis = int;
-  using GamepadButton = int;
 
-  // Wrapper types to avoid duplicate int in variant
-  struct KeyCodeWrapper {
-    int value;
+  // GamepadButton must be a distinct type (not int) so that
+  // AnyInput = variant<KeyCode, GamepadAxisWithDir, GamepadButton>
+  // doesn't have duplicate int alternatives.
+  struct GamepadButton {
+      int value = 0;
+      GamepadButton() = default;
+      explicit GamepadButton(int v) : value(v) {}
   };
-  struct GamepadButtonWrapper {
-    int value;
+
+  static MousePosition get_mouse_position() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return testing::test_input::get_mouse_position<MousePosition>([]() {
+      auto p = graphics::MetalPlatformAPI::get_mouse_position();
+      return MousePosition{p.x, p.y};
+    });
+#else
+    auto p = graphics::MetalPlatformAPI::get_mouse_position();
+    return {p.x, p.y};
+#endif
+  }
+  static MousePosition get_mouse_delta() {
+    auto d = graphics::MetalPlatformAPI::get_mouse_delta();
+    return {d.x, d.y};
+  }
+  static bool is_mouse_button_up(const MouseButton btn) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return !is_mouse_button_down(btn);
+#else
+    return graphics::MetalPlatformAPI::is_mouse_button_up(btn);
+#endif
+  }
+  static bool is_mouse_button_down(const MouseButton btn) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return testing::test_input::is_mouse_button_down(btn,
+      [](int b) { return graphics::MetalPlatformAPI::is_mouse_button_down(b); });
+#else
+    return graphics::MetalPlatformAPI::is_mouse_button_down(btn);
+#endif
+  }
+  static bool is_mouse_button_pressed(const MouseButton btn) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return testing::test_input::is_mouse_button_pressed(btn,
+      [](int b) { return graphics::MetalPlatformAPI::is_mouse_button_pressed(b); });
+#else
+    return graphics::MetalPlatformAPI::is_mouse_button_pressed(btn);
+#endif
+  }
+  static bool is_mouse_button_released(const MouseButton btn) {
+    return graphics::MetalPlatformAPI::is_mouse_button_released(btn);
+  }
+  static float get_mouse_wheel_move() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    if (testing::test_input::detail::test_mode) return 0.0f;
+#endif
+    return graphics::MetalPlatformAPI::get_mouse_wheel_move();
+  }
+  static MousePosition get_mouse_wheel_move_v() {
+    auto v = graphics::MetalPlatformAPI::get_mouse_wheel_move_v();
+    return {v.x, v.y};
+  }
+  static int get_char_pressed() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return testing::test_input::get_char_pressed(
+      []() { return graphics::MetalPlatformAPI::get_char_pressed(); });
+#else
+    return graphics::MetalPlatformAPI::get_char_pressed();
+#endif
+  }
+  static bool is_key_pressed(const KeyCode keycode) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return testing::test_input::is_key_pressed(keycode,
+      [](int k) { return graphics::MetalPlatformAPI::is_key_pressed(k); });
+#else
+    return graphics::MetalPlatformAPI::is_key_pressed(keycode);
+#endif
+  }
+  static bool is_key_down(const KeyCode keycode) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return testing::test_input::is_key_down(keycode,
+      [](int k) { return graphics::MetalPlatformAPI::is_key_down(k); });
+#else
+    return graphics::MetalPlatformAPI::is_key_down(keycode);
+#endif
+  }
+
+  // Gamepad not yet supported on Metal
+  static bool is_gamepad_available(const GamepadID) { log_error("@notimplemented is_gamepad_available"); return false; }
+  static float get_gamepad_axis_mvt(const GamepadID, const GamepadAxis) { log_error("@notimplemented get_gamepad_axis_mvt"); return 0.f; }
+  static bool is_gamepad_button_pressed(const GamepadID, const GamepadButton) { log_error("@notimplemented is_gamepad_button_pressed"); return false; }
+  static bool is_gamepad_button_down(const GamepadID, const GamepadButton) { log_error("@notimplemented is_gamepad_button_down"); return false; }
+
+  static void draw_text(const std::string &, const int, const int, const int) { log_error("@notimplemented draw_text"); }
+  static void set_gamepad_mappings(const std::string &) { log_error("@notimplemented set_gamepad_mappings"); }
+  static std::string name_for_button(const GamepadButton) { log_error("@notimplemented name_for_button"); return "unknown"; }
+  static std::string icon_for_button(const GamepadButton) { log_error("@notimplemented icon_for_button"); return "unknown"; }
+  static std::string icon_for_key(const int) { log_error("@notimplemented icon_for_key"); return "unknown"; }
+
+#else
+  // ── No backend — all stubs return defaults ──
+  using MousePosition = MyVec2;
+  using KeyCode = int;
+  using GamepadID = int;
+  using GamepadAxis = int;
+
+  // GamepadButton must be a distinct type (not int) so that
+  // AnyInput = variant<KeyCode, GamepadAxisWithDir, GamepadButton>
+  // doesn't have duplicate int alternatives.
+  struct GamepadButton {
+      int value = 0;
+      GamepadButton() = default;
+      explicit GamepadButton(int v) : value(v) {}
   };
 
   // TODO good luck ;)
-  static MousePosition get_mouse_position() { return {0, 0}; }
-  static MousePosition get_mouse_delta() { return {0, 0}; }
-  static bool is_mouse_button_up(const MouseButton) { return false; }
-  static bool is_mouse_button_down(const MouseButton) { return false; }
-  static bool is_mouse_button_pressed(const MouseButton) { return false; }
-  static bool is_mouse_button_released(const MouseButton) { return false; }
-  static float get_mouse_wheel_move() { return 0.f; }
-  static MousePosition get_mouse_wheel_move_v() { return {0, 0}; }
-  static
-
-      bool
-      is_key_pressed(const KeyCode) {
-    return false;
-  }
-  static bool is_key_down(const KeyCode) { return false; }
-  static bool is_gamepad_available(const GamepadID) { return false; }
-  static float get_gamepad_axis_mvt(const GamepadID, const GamepadAxis) {
-    return 0.f;
-  }
-  static bool is_gamepad_button_pressed(const GamepadID, const GamepadButton) {
-    return false;
-  }
-  static bool is_gamepad_button_down(const GamepadID, const GamepadButton) {
-    return false;
-  }
-  static void draw_text(const std::string &, const int, const int, const int) {}
-  static void set_gamepad_mappings(const std::string &) {}
-  static std::string name_for_button(const GamepadButton) { return "unknown"; }
-  static std::string icon_for_button(const GamepadButton) { return "unknown"; }
-  static std::string icon_for_key(const int) { return "unknown"; }
+  static MousePosition get_mouse_position() { log_error("@notimplemented get_mouse_position"); return {0, 0}; }
+  static MousePosition get_mouse_delta() { log_error("@notimplemented get_mouse_delta"); return {0, 0}; }
+  static bool is_mouse_button_up(const MouseButton) { log_error("@notimplemented is_mouse_button_up"); return false; }
+  static bool is_mouse_button_down(const MouseButton) { log_error("@notimplemented is_mouse_button_down"); return false; }
+  static bool is_mouse_button_pressed(const MouseButton) { log_error("@notimplemented is_mouse_button_pressed"); return false; }
+  static bool is_mouse_button_released(const MouseButton) { log_error("@notimplemented is_mouse_button_released"); return false; }
+  static float get_mouse_wheel_move() { log_error("@notimplemented get_mouse_wheel_move"); return 0.f; }
+  static MousePosition get_mouse_wheel_move_v() { log_error("@notimplemented get_mouse_wheel_move_v"); return {0, 0}; }
+  static int get_char_pressed() { log_error("@notimplemented get_char_pressed"); return 0; }
+  static bool is_key_pressed(const KeyCode) { log_error("@notimplemented is_key_pressed"); return false; }
+  static bool is_key_down(const KeyCode) { log_error("@notimplemented is_key_down"); return false; }
+  static bool is_gamepad_available(const GamepadID) { log_error("@notimplemented is_gamepad_available"); return false; }
+  static float get_gamepad_axis_mvt(const GamepadID, const GamepadAxis) { log_error("@notimplemented get_gamepad_axis_mvt"); return 0.f; }
+  static bool is_gamepad_button_pressed(const GamepadID, const GamepadButton) { log_error("@notimplemented is_gamepad_button_pressed"); return false; }
+  static bool is_gamepad_button_down(const GamepadID, const GamepadButton) { log_error("@notimplemented is_gamepad_button_down"); return false; }
+  static void draw_text(const std::string &, const int, const int, const int) { log_error("@notimplemented draw_text"); }
+  static void set_gamepad_mappings(const std::string &) { log_error("@notimplemented set_gamepad_mappings"); }
+  static std::string name_for_button(const GamepadButton) { log_error("@notimplemented name_for_button"); return "unknown"; }
+  static std::string icon_for_button(const GamepadButton) { log_error("@notimplemented icon_for_button"); return "unknown"; }
+  static std::string icon_for_key(const int) { log_error("@notimplemented icon_for_key"); return "unknown"; }
 #endif
 
   enum struct DeviceMedium {
