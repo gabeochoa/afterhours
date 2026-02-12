@@ -2,6 +2,10 @@
 
 #include "files.h"
 
+// On Emscripten the virtual filesystem provides save/config/resource paths
+// directly — no platform_folders dependency needed.
+#ifndef __EMSCRIPTEN__
+
 #ifdef __APPLE__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
@@ -20,27 +24,42 @@
 #pragma GCC diagnostic pop
 #endif
 
+#endif // !__EMSCRIPTEN__
+
 namespace afterhours {
 
 // Implementation of ProvidesResourcePaths constructor that uses
-// platform_folders This is in a .cpp file to avoid duplicate symbol errors from
-// platform_folders.h
+// platform_folders on native, and Emscripten virtual filesystem paths on web.
 files::ProvidesResourcePaths::ProvidesResourcePaths(
     const std::string &game_name, const std::string &root_folder)
     : game_name(game_name), root_folder(root_folder) {
-  // Initialize paths
+#ifdef __EMSCRIPTEN__
+  // Emscripten virtual filesystem: files preloaded with --preload-file are
+  // available at the mount point. Save/config use in-memory directories.
+  save_folder_path = fs::path("/save") / fs::path(game_name);
+  config_folder_path = fs::path("/config") / fs::path(game_name);
+  resource_folder_path = fs::path("/") / fs::path(root_folder);
+
+  if (!fs::exists(save_folder_path)) {
+    fs::create_directories(save_folder_path);
+  }
+  if (!fs::exists(config_folder_path)) {
+    fs::create_directories(config_folder_path);
+  }
+#else
+  // Native: use platform-specific directories
   const fs::path master_folder(sago::getSaveGamesFolder1());
   save_folder_path = master_folder / fs::path(game_name);
   config_folder_path = sago::getConfigHome() / fs::path(game_name);
   resource_folder_path = fs::current_path() / fs::path(root_folder);
 
-  // Ensure save folder exists
   if (!fs::exists(save_folder_path)) {
     bool was_created = fs::create_directories(save_folder_path);
     if (was_created) {
       log_info("Created save folder: %s", save_folder_path.string().c_str());
     }
   }
+#endif
 }
 
 void files::ProvidesResourcePaths::for_resources_in_group(
