@@ -977,6 +977,358 @@ private
 }
 }; // namespace ui
 
+/// Query the UI collection for the first entity carrying the given DragTag.
+// TODO should we inline these? 
+inline OptEntity find_drag_tagged(DragTag tag) {
+  auto &ui_coll = UICollectionHolder::get().collection;
+  return EntityQuery(ui_coll, {.ignore_temp_warning = true})
+      .whereHasTag(tag)
+      .gen_first();
+}
+
+/// Mark every entity carrying the given DragTag for cleanup.
+inline void cleanup_drag_tagged(DragTag tag) {
+  auto &ui_coll = UICollectionHolder::get().collection;
+  for (Entity &e :
+       EntityQuery(ui_coll, {.ignore_temp_warning = true})
+           .whereHasTag(tag)
+           .gen()) {
+    e.cleanup = true;
+  }
+}
+
+/// Clear the given DragTag from every entity that has it.
+inline void untag_all(DragTag tag) {
+  auto &ui_coll = UICollectionHolder::get().collection;
+  for (Entity &e :
+       EntityQuery(ui_coll, {.ignore_temp_warning = true})
+           .whereHasTag(tag)
+           // TODO we need gen_for_each() or something
+           .gen()) {
+    e.disableTag(tag);
+  }
+}
+
+/// Create or update the floating overlay entity at the given position.
+/// On the first call (no existing overlay), creates a new entity and copies
+/// visual properties from the DragTag::DraggedItem entity.
+/// On subsequent calls, just updates the position of the existing overlay.
+inline void create_or_update_drag_overlay(DragGroupState &state, float mouse_x,
+                                          float mouse_y) {
+  // If an overlay already exists, just reposition it.
+  auto existing = find_drag_tagged(DragTag::Overlay);
+  if (existing && existing.asE().has<UIComponent>()) {
+    auto &cmp = existing.asE().get<UIComponent>();
+    cmp.computed_rel[Axis::X] = mouse_x - state.dragged_width / 2.0f;
+    cmp.computed_rel[Axis::Y] = mouse_y - state.dragged_height / 2.0f;
+    return;
+  }
+
+  // First frame of drag: create overlay from scratch.
+  auto dragged_opt = find_drag_tagged(DragTag::DraggedItem);
+  if (!dragged_opt) return;
+
+  auto &ui_coll = UICollectionHolder::get().collection;
+  Entity &overlay = ui_coll.createEntity();
+  overlay.enableTag(DragTag::Overlay);
+  overlay.addComponent<UIComponentDebug>("drag_overlay");
+  auto &overlay_cmp = overlay.addComponent<UIComponent>(overlay.id);
+  {
+    overlay_cmp.absolute = true;
+    overlay_cmp.render_layer = 1000;
+    overlay_cmp.was_rendered_to_screen = true;
+
+    // Position directly (layout already ran).
+    overlay_cmp.computed[Axis::X] = state.dragged_width;
+    overlay_cmp.computed[Axis::Y] = state.dragged_height;
+    overlay_cmp.computed_rel[Axis::X] = mouse_x - state.dragged_width / 2.0f;
+    overlay_cmp.computed_rel[Axis::Y] = mouse_y - state.dragged_height / 2.0f;
+  }
+
+  // Copy visual properties from the dragged entity.
+  // TODO: Only flat properties (HasLabel, HasColor) are copied. Dragged items
+  //       with children (nested divs, icons, etc.) won't render correctly in
+  //       the overlay. Consider deep-cloning the subtree or re-parenting.
+  Entity &d = dragged_opt.asE();
+  if (d.has<HasLabel>()) {
+    auto &src_label = d.get<HasLabel>();
+    overlay.addComponent<HasLabel>(src_label.label, src_label.is_disabled);
+    auto &src_cmp = d.get<UIComponent>();
+    overlay_cmp.enable_font(src_cmp.font_name, src_cmp.font_size);
+  }
+  if (d.has<HasColor>()) {
+    overlay.addComponent<HasColor>(d.get<HasColor>().color());
+  }
+}
+
+/// Create or reuse a spacer entity sized to match the dragged item, then
+/// insert it into the hover group's children list at the correct position.
+/// The spacer entity is kept alive for the duration of the drag (same
+/// pattern as the overlay) so it stays in the merged entity list and is
+/// always discoverable via getEntityForID.
+inline void create_or_update_drag_spacer(DragGroupState &state) {
+  auto hover_opt = find_drag_tagged(DragTag::HoverGroup);
+  if (!hover_opt || !hover_opt.asE().has<UIComponent>()) return;
+
+  auto dragged_opt = find_drag_tagged(DragTag::DraggedItem);
+  EntityID dragged_id = dragged_opt ? dragged_opt.asE().id : (EntityID)-1;
+
+  auto &group_cmp = hover_opt.asE().get<UIComponent>();
+
+  // --- Reuse existing spacer or create a new one ---
+  auto existing = find_drag_tagged(DragTag::Spacer);
+  Entity *spacer_ptr = nullptr;
+  if (existing && existing.asE().has<UIComponent>()) {
+    spacer_ptr = &existing.asE();
+    auto &spacer_cmp = spacer_ptr->get<UIComponent>();
+    spacer_cmp.set_parent(hover_opt.asE().id);
+    spacer_cmp.set_desired_width(pixels(state.dragged_width));
+    spacer_cmp.set_desired_height(pixels(state.dragged_height));
+  } else {
+    auto &ui_coll = UICollectionHolder::get().collection;
+    Entity &spacer = ui_coll.createEntity();
+    spacer.enableTag(DragTag::Spacer);
+    spacer.addComponent<UIComponentDebug>("drag_spacer");
+    auto &spacer_cmp = spacer.addComponent<UIComponent>(spacer.id);
+    spacer_cmp.set_parent(hover_opt.asE().id);
+    spacer_cmp.set_desired_width(pixels(state.dragged_width));
+    spacer_cmp.set_desired_height(pixels(state.dragged_height));
+    spacer_ptr = &spacer;
+  }
+
+  // Map hover_index (among visible children) to children list position,
+  // skipping the hidden dragged entity.
+  int target_pos = 0;
+  int visible = 0;
+  for (int i = 0; i < static_cast<int>(group_cmp.children.size()); i++) {
+    if (group_cmp.children[i] == dragged_id) {
+      target_pos++;
+      continue;
+    }
+    if (visible == state.hover_index) break;
+    visible++;
+    target_pos++;
+  }
+  target_pos =
+      std::min(target_pos, static_cast<int>(group_cmp.children.size()));
+  group_cmp.children.insert(group_cmp.children.begin() + target_pos,
+                            spacer_ptr->id);
+}
+
+template <typename InputAction>
+struct HandleDragGroupsPreLayout : System<> {
+/// runs BEFORE RunAutoLayout.
+/// - Hides the dragged entity (should_hide) so layout skips it.
+/// - Inserts a spacer entity at the current hover position so the layout
+///   reserves a gap.
+  virtual ~HandleDragGroupsPreLayout() {}
+
+  virtual void once(float) override {
+    auto *state = EntityHelper::get_singleton_cmp<DragGroupState>();
+    if (!state || !state->dragging) return;
+
+    // --- Hide the dragged entity ---
+    auto dragged_opt = find_drag_tagged(DragTag::DraggedItem);
+    if (!dragged_opt || !dragged_opt.asE().has<UIComponent>()) {
+      cleanup_drag_tagged(DragTag::Spacer);
+      cleanup_drag_tagged(DragTag::Overlay);
+      untag_all(DragTag::DraggedItem);
+      untag_all(DragTag::SourceGroup);
+      untag_all(DragTag::HoverGroup);
+      state->reset_drag();
+      return;
+    }
+    dragged_opt.asE().get<UIComponent>().should_hide = true;
+
+    // --- Reuse (or create) spacer and insert at hover position ---
+    // The spacer entity is kept alive for the duration of the drag;
+    // cleanup happens in clear_all_drag_tags when the drag ends.
+    create_or_update_drag_spacer(*state);
+  }
+};
+
+template <typename InputAction>
+struct HandleDragGroupsPostLayout : System<> {
+/// runs AFTER RunAutoLayout and HandleDrags.
+/// - Detects drag start (mouse press inside a drag_group child).
+/// - While dragging: updates hover_group / hover_index, creates an overlay
+///   entity at the mouse cursor (queued to render_cmds for this frame).
+/// - On mouse release: emits a DragGroupState::Event and cleans up.
+
+  virtual ~HandleDragGroupsPostLayout() {}
+
+  /// Remove all drag tags and clean up ephemeral entities.
+  void clear_all_drag_tags(DragGroupState *state) {
+    cleanup_drag_tagged(DragTag::Spacer);
+    cleanup_drag_tagged(DragTag::Overlay);
+    untag_all(DragTag::DraggedItem);
+    untag_all(DragTag::SourceGroup);
+    untag_all(DragTag::HoverGroup);
+    state->reset_drag();
+  }
+
+  virtual void once(float) override {
+    auto *state = EntityHelper::get_singleton_cmp<DragGroupState>();
+    if (!state) return;
+
+    auto *ctx = EntityHelper::get_singleton_cmp<UIContext<InputAction>>();
+    if (!ctx) return;
+
+    auto &ui_coll = UICollectionHolder::get().collection;
+
+    // Note: overlay is reused across frames (not recreated each frame)
+    // because newly created entities aren't in the slot map until the next
+    // merge, making them invisible to getEntityForID at render time.
+
+    // --- Query all drag groups ---
+    auto groups = EntityQuery(ui_coll, {.ignore_temp_warning = true})
+                      .whereHasTag(DragTag::Group)
+                      .whereHasComponent<UIComponent>()
+                      .gen();
+
+    // ---- Not dragging: check for drag start ---------------------------------
+    if (!state->dragging) {
+      if (!ctx->mouse.just_pressed) return;
+
+      for (Entity &group : groups) {
+        auto &group_cmp = group.get<UIComponent>();
+        for (int i = 0; i < static_cast<int>(group_cmp.children.size()); i++) {
+          auto child_opt =
+              EntityQuery(ui_coll, {.ignore_temp_warning = true})
+                  .whereID(group_cmp.children[i])
+                  .whereHasComponent<UIComponent>()
+                  .whereLambda([](const Entity &e) {
+                    return !e.get<UIComponent>().should_hide;
+                  })
+                  .gen_first();
+          if (!child_opt) continue;
+
+          Entity &child = child_opt.asE();
+          auto &child_cmp = child.get<UIComponent>();
+
+          if (is_mouse_inside(ctx->mouse.pos, child_cmp.rect())) {
+            state->dragging = true;
+            state->drag_source_index = i;
+            state->hover_index = i;
+            state->dragged_width = child_cmp.rect().width;
+            state->dragged_height = child_cmp.rect().height;
+
+            // Tag the participants
+            child.enableTag(DragTag::DraggedItem);
+            group.enableTag(DragTag::SourceGroup);
+            group.enableTag(DragTag::HoverGroup);
+
+            // Hide immediately so this frame's render skips it.
+            child_cmp.should_hide = true;
+            break;
+          }
+        }
+        if (state->dragging) break;
+      }
+      return; // overlay will appear next frame
+    }
+
+    // ---- Mouse released: emit event and clean up ----------------------------
+    if (!ctx->mouse.left_down) {
+      auto source_opt = find_drag_tagged(DragTag::SourceGroup);
+      auto hover_opt = find_drag_tagged(DragTag::HoverGroup);
+
+      if (source_opt && hover_opt) {
+        EntityID source_id = source_opt.asE().id;
+        EntityID hover_id = hover_opt.asE().id;
+        if (hover_id != source_id ||
+            state->hover_index != state->drag_source_index) {
+          state->events.push_back(DragGroupState::Event{
+              .source_group = source_id,
+              .source_index = state->drag_source_index,
+              .target_group = hover_id,
+              .target_index = state->hover_index,
+          });
+        }
+      }
+
+      // Unhide dragged entity
+      auto dragged_opt = find_drag_tagged(DragTag::DraggedItem);
+      if (dragged_opt && dragged_opt.asE().has<UIComponent>()) {
+        dragged_opt.asE().get<UIComponent>().should_hide = false;
+      }
+
+      clear_all_drag_tags(state);
+      return;
+    }
+
+    // ---- Still dragging: update hover + create overlay ----------------------
+    auto dragged_opt = find_drag_tagged(DragTag::DraggedItem);
+    if (!dragged_opt) {
+      clear_all_drag_tags(state);
+      return;
+    }
+
+    EntityID dragged_id = dragged_opt.asE().id;
+
+    // Default hover back to source group
+    auto source_opt = find_drag_tagged(DragTag::SourceGroup);
+    untag_all(DragTag::HoverGroup);
+    if (source_opt) {
+      source_opt.asE().enableTag(DragTag::HoverGroup);
+      state->hover_index = state->drag_source_index;
+    }
+
+    for (Entity &group : groups) {
+      auto &group_cmp = group.get<UIComponent>();
+      RectangleType group_rect = group_cmp.rect();
+
+      if (!is_mouse_inside(ctx->mouse.pos, group_rect)) continue;
+
+      // Move hover tag to this group
+      untag_all(DragTag::HoverGroup);
+      group.enableTag(DragTag::HoverGroup);
+
+      // Determine insertion index among visible children.
+      // Use the group's flex direction to pick the correct axis.
+      bool horizontal = group_cmp.flex_direction == FlexDirection::Row;
+      int insert_idx = 0;
+      int visible_count = 0;
+      for (int i = 0; i < static_cast<int>(group_cmp.children.size()); i++) {
+        EntityID child_id = group_cmp.children[i];
+        if (child_id == dragged_id) continue;
+
+        auto child_opt =
+            EntityQuery(ui_coll, {.ignore_temp_warning = true})
+                .whereID(child_id)
+                .whereHasComponent<UIComponent>()
+                .whereLambda([](const Entity &e) {
+                  return !e.hasTag(DragTag::Spacer) &&
+                         !e.get<UIComponent>().should_hide;
+                })
+                .gen_first();
+        if (!child_opt) continue;
+        auto &child_cmp = child_opt.asE().template get<UIComponent>();
+        auto r = child_cmp.rect();
+        float child_mid = horizontal ? (r.x + r.width / 2.0f)
+                                     : (r.y + r.height / 2.0f);
+        float mouse_pos = horizontal ? ctx->mouse.pos.x : ctx->mouse.pos.y;
+        if (mouse_pos > child_mid) {
+          insert_idx = visible_count + 1;
+        }
+        visible_count++;
+      }
+
+      state->hover_index = insert_idx;
+      break;
+    }
+
+    // --- Create or update floating overlay at cursor ---
+    create_or_update_drag_overlay(*state, ctx->mouse.pos.x, ctx->mouse.pos.y);
+
+    // Queue for rendering at a high layer.
+    auto overlay_opt = find_drag_tagged(DragTag::Overlay);
+    if (overlay_opt) {
+      ctx->queue_render(RenderInfo{overlay_opt.asE().id, 1000});
+    }
+  }
+};
+
 } // namespace afterhours
 
 } // namespace afterhours

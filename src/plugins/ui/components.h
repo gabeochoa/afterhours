@@ -427,6 +427,50 @@ struct HasScrollView : BaseComponent {
 // Unlike HasScrollView, this only clips without scroll functionality
 struct HasClipChildren : BaseComponent {};
 
+// Tag IDs for drag-and-drop entity roles.
+// These are set/cleared by the HandleDragGroups systems so that tagged
+// entities can be discovered via queries instead of storing EntityIDs.
+enum class DragTag : TagId {
+  // TODO build more confidence around how to set these number to avoid conflicts
+  // Right now since UI elements are in their own collection, its not an issue as they wont 
+  // conflict with Userspace tags, but something to keep in mind 
+  Group = 50,      // Marker tag attached by drag_group() to its div entity
+  Spacer,          // The gap-filling spacer entity
+  Overlay,         // The floating visual following the cursor
+  DraggedItem,     // The child being dragged
+  SourceGroup,     // The drag_group the item was picked from
+  HoverGroup,      // The drag_group currently under the cursor
+};
+
+// Singleton component tracking drag-and-drop state across drag_group() instances.
+struct DragGroupState : BaseComponent {
+  struct Event {
+    EntityID source_group;
+    int source_index;
+    EntityID target_group;
+    int target_index;
+  };
+
+  bool dragging = false;
+  int drag_source_index = -1;
+  int hover_index = -1;
+
+  // Original size of dragged item (for spacer + overlay)
+  float dragged_width = 0;
+  float dragged_height = 0;
+
+  // Completed events for the screen to consume
+  std::vector<Event> events;
+
+  void reset_drag() {
+    dragging = false;
+    drag_source_index = -1;
+    hover_index = -1;
+    dragged_width = 0;
+    dragged_height = 0;
+  }
+};
+
 } // namespace ui
 
 } // namespace afterhours

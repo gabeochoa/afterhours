@@ -2103,6 +2103,37 @@ ElementResult scroll_view(HasUIContext auto &ctx, EntityParent ep_pair,
   return {scrolled, entity};
 }
 
+/// Creates a drag-and-drop container. Children can be dragged to reorder
+/// within this group or moved between groups.
+///
+/// Usage is identical to div()/scroll_view() -- render children into the
+/// returned entity:
+/// ```cpp
+/// auto group = drag_group(ctx, mk(parent, 0),
+///     ComponentConfig{}.with_size(percent(1.0f), percent(1.0f)));
+/// for (int i = 0; i < items.size(); i++) {
+///   div(ctx, mk(group.ent(), i), ComponentConfig{}.with_label(items[i]));
+/// }
+/// ```
+///
+/// The HandleDragGroups system detects drags and emits DragGroupState::Event
+/// entries. The screen consumes these events to reorder its data.
+ElementResult drag_group(HasUIContext auto &ctx, EntityParent ep_pair,
+                         ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+
+  if (config.size.is_default)
+    config.with_size(ComponentSize{percent(1.0f), children()});
+  if (config.flex_direction == FlexDirection::None)
+    config.with_flex_direction(FlexDirection::Column);
+
+  _init_component(ctx, ep_pair, config, ComponentType::Div, false,
+                  "drag_group");
+  entity.enableTag(DragTag::Group);
+
+  return {true, entity};
+}
+
 } // namespace imm
 
 } // namespace ui

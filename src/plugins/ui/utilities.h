@@ -13,6 +13,10 @@
 #include "../../ecs.h"
 #include "../../logging.h"
 #include "../../core/text_cache.h"
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+#include "../e2e_testing/test_input.h"
+#include "../e2e_testing/visible_text.h"
+#endif
 #include "../../font_helper.h"
 #include "../autolayout.h"
 #include "../window_manager.h"
@@ -141,6 +145,13 @@ static Entity &init_ui_plugin() {
   EntityHelper::registerSingleton<ui::UIEntityMappingCache>(ui_root);
 #endif
 
+  // DragGroupState
+  ui_root.addComponent<ui::DragGroupState>();
+  ui_coll.registerSingleton<ui::DragGroupState>(ui_root);
+#ifndef AFTER_HOURS_UI_SINGLE_COLLECTION
+  EntityHelper::registerSingleton<ui::DragGroupState>(ui_root);
+#endif
+
   // Root UI component
   ui_root.addComponent<ui::AutoLayoutRoot>();
   ui_root.addComponent<ui::UIComponentDebug>("ui_root");
@@ -248,6 +259,11 @@ struct UIPluginPostUpdateBridge : System<> {
     systems.push_back(
         std::make_unique<ui::UpdateDropdownOptions<InputAction>>());
     systems.push_back(std::make_unique<ui::ClearVisibity>());
+    // Pre-layout drag handling: hide dragged entity + insert spacer before
+    // BuildUIEntityMapping so the spacer is included in the mapping cache and
+    // processed by RunAutoLayout.
+    systems.push_back(
+        std::make_unique<ui::HandleDragGroupsPreLayout<InputAction>>());
     systems.push_back(std::make_unique<ui::BuildUIEntityMapping>());
     systems.push_back(std::make_unique<ui::RunAutoLayout>());
     systems.push_back(
@@ -261,6 +277,10 @@ struct UIPluginPostUpdateBridge : System<> {
             ui::CloseDropdownOnClickOutside<InputAction>>());
     systems.push_back(
         std::make_unique<ui::HandleDrags<InputAction>>());
+    // Post-layout drag handling: detect drag start, compute hover position,
+    // create floating overlay.
+    systems.push_back(
+        std::make_unique<ui::HandleDragGroupsPostLayout<InputAction>>());
     systems.push_back(
         std::make_unique<ui::HandleLeftRight<InputAction>>());
     systems.push_back(
@@ -296,6 +316,13 @@ struct UIPluginRenderBridge : System<> {
   }
 
   virtual void once(float dt) override {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    // Clear the visible text registry before each render pass so
+    // expect_text only matches text drawn in the current frame.
+    if (testing::test_input::detail::test_mode) {
+      testing::VisibleTextRegistry::instance().clear();
+    }
+#endif
     run_systems_on_ui_entities(systems, dt, /*is_render=*/true);
   }
 };

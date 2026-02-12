@@ -7,6 +7,7 @@
 #include "visible_text.h"
 
 #include "../../logging.h"
+#include "../window_manager.h"
 
 #include <atomic>
 #include <format>
@@ -14,6 +15,16 @@
 
 namespace afterhours {
 namespace testing {
+
+// Fetch current screen dimensions for resolving %-based coordinates.
+inline std::pair<float, float> e2e_screen_size() {
+  auto *pcr = EntityHelper::get_singleton_cmp<
+      window_manager::ProvidesCurrentResolution>();
+  if (pcr)
+    return {static_cast<float>(pcr->width()),
+            static_cast<float>(pcr->height())};
+  return {1280.f, 720.f}; // fallback
+}
 
 // Handle 'type "text"' command - types characters
 struct HandleTypeCommand : System<PendingE2ECommand> {
@@ -121,6 +132,7 @@ struct HandleKeyCommand : System<PendingE2ECommand> {
 };
 
 // Handle 'click x y' command - clicks at coordinates
+// Coordinates support '%' suffix for screen-relative positioning.
 struct HandleClickCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("click"))
@@ -130,7 +142,8 @@ struct HandleClickCommand : System<PendingE2ECommand> {
       return;
     }
 
-    test_input::simulate_click(cmd.arg_as<float>(0), cmd.arg_as<float>(1));
+    auto [sw, sh] = e2e_screen_size();
+    test_input::simulate_click(cmd.coord_arg(0, sw), cmd.coord_arg(1, sh));
     cmd.consume();
   }
 };
@@ -145,7 +158,8 @@ struct HandleDoubleClickCommand : System<PendingE2ECommand> {
       return;
     }
 
-    test_input::simulate_click(cmd.arg_as<float>(0), cmd.arg_as<float>(1));
+    auto [sw, sh] = e2e_screen_size();
+    test_input::simulate_click(cmd.coord_arg(0, sw), cmd.coord_arg(1, sh));
     // Note: Full double-click needs frame delay; simplified here
     cmd.consume();
   }
@@ -161,9 +175,10 @@ struct HandleDragCommand : System<PendingE2ECommand> {
       return;
     }
 
-    test_input::simulate_click(cmd.arg_as<float>(0), cmd.arg_as<float>(1));
-    input_injector::set_mouse_position(cmd.arg_as<float>(2),
-                                       cmd.arg_as<float>(3));
+    auto [sw, sh] = e2e_screen_size();
+    test_input::simulate_click(cmd.coord_arg(0, sw), cmd.coord_arg(1, sh));
+    input_injector::set_mouse_position(cmd.coord_arg(2, sw),
+                                       cmd.coord_arg(3, sh));
     cmd.consume();
   }
 };
@@ -178,8 +193,98 @@ struct HandleMouseMoveCommand : System<PendingE2ECommand> {
       return;
     }
 
-    test_input::set_mouse_position(cmd.arg_as<float>(0), cmd.arg_as<float>(1));
+    auto [sw, sh] = e2e_screen_size();
+    test_input::set_mouse_position(cmd.coord_arg(0, sw), cmd.coord_arg(1, sh));
     cmd.consume();
+  }
+};
+
+// Handle 'mouse_down x y' command - press mouse at position (no release).
+struct HandleMouseDownCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("mouse_down"))
+      return;
+    if (!cmd.has_args(2)) {
+      cmd.fail("mouse_down requires x y arguments");
+      return;
+    }
+
+    auto [sw, sh] = e2e_screen_size();
+    float x = cmd.coord_arg(0, sw);
+    float y = cmd.coord_arg(1, sh);
+    test_input::set_mouse_position(x, y);
+    auto &m = input_injector::detail::mouse;
+    m.left_down = true;
+    m.just_pressed = true;
+    m.press_frames = 0;
+    m.active = true;
+    cmd.consume();
+  }
+};
+
+// Handle 'mouse_up' command - release mouse button.
+struct HandleMouseUpCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("mouse_up"))
+      return;
+    test_input::simulate_mouse_release();
+    cmd.consume();
+  }
+};
+
+// Handle 'drag_to x1 y1 x2 y2' command - multi-frame press→move→release.
+// Spreads the operation across 3 frames so UI systems see proper state
+// transitions (just_pressed on frame 1, held+moved on frame 2, released on
+// frame 3).
+struct HandleDragToCommand : System<PendingE2ECommand> {
+  int phase = 0; // 0=press, 1=move, 2=release
+
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("drag_to"))
+      return;
+    if (!cmd.has_args(4)) {
+      cmd.fail("drag_to requires x1 y1 x2 y2 arguments");
+      return;
+    }
+
+    // Reset phase for a fresh command (guards against stale state from a
+    // prior drag_to that timed out mid-sequence).
+    if (!cmd.is_retry())
+      phase = 0;
+
+    auto [sw, sh] = e2e_screen_size();
+
+    switch (phase) {
+    case 0: {
+      // Frame 0: press at start position
+      float x1 = cmd.coord_arg(0, sw);
+      float y1 = cmd.coord_arg(1, sh);
+      test_input::set_mouse_position(x1, y1);
+      auto &m = input_injector::detail::mouse;
+      m.left_down = true;
+      m.just_pressed = true;
+      m.press_frames = 0; // no auto-release
+      m.active = true;
+      phase = 1;
+      cmd.retry(); // Mark as in-progress so unknown handler skips it
+      break;
+    }
+    case 1: {
+      // Frame 1: move to end position (mouse still held)
+      float x2 = cmd.coord_arg(2, sw);
+      float y2 = cmd.coord_arg(3, sh);
+      test_input::set_mouse_position(x2, y2);
+      phase = 2;
+      cmd.retry(); // Mark as in-progress so unknown handler skips it
+      break;
+    }
+    case 2:
+      // Frame 2: release
+      test_input::simulate_mouse_release();
+      phase = 0; // reset for next drag_to command
+      cmd.consume();
+      break;
+    }
   }
 };
 

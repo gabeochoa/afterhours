@@ -46,8 +46,8 @@ constexpr bool contains(const std::array<T, N> &arr, std::string_view val) {
 
 // Command categories for argument parsing
 // clang-format off
-constexpr std::array<std::string_view, 3> coord_commands = {
-    "click", "double_click", "mouse_move"
+constexpr std::array<std::string_view, 4> coord_commands = {
+    "click", "double_click", "mouse_move", "mouse_down"
 };
 
 constexpr std::array<std::string_view, 13> single_arg_commands = {
@@ -61,8 +61,9 @@ constexpr std::array<std::string_view, 4> two_arg_commands = {
     "set_slider", "select_dropdown", "expect_slider", "expect_checkbox"
 };
 
-constexpr std::array<std::string_view, 6> no_arg_commands = {
-    "reset_test_state", "reset", "tab", "shift_tab", "enter", "escape"
+constexpr std::array<std::string_view, 7> no_arg_commands = {
+    "reset_test_state", "reset", "tab", "shift_tab", "enter", "escape",
+    "mouse_up"
 };
 // clang-format on
 
@@ -125,14 +126,16 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
       cmd.wait_seconds = (cmd.name == "double_click") ? 4 * frame
                          : (cmd.name == "mouse_move") ? 1 * frame
                                                       : 2 * frame;
-    } else if (cmd.name == "drag") {
+                                                      // TODO add a way for plugins to register their own e2e testing commands using a config 
+    } else if (cmd.name == "drag" || cmd.name == "drag_to") {
       std::string x1, y1, x2, y2;
       iss >> x1 >> y1 >> x2 >> y2;
       cmd.args.push_back(x1);
       cmd.args.push_back(y1);
       cmd.args.push_back(x2);
       cmd.args.push_back(y2);
-      cmd.wait_seconds = 5 * frame;
+      // drag_to needs extra frames for the 3-phase press→move→release cycle
+      cmd.wait_seconds = (cmd.name == "drag_to") ? 10 * frame : 5 * frame;
     } else if (cmd.name == "wait") {
       // Wait in seconds (default 1 second)
       float seconds = 1.0f;

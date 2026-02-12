@@ -156,6 +156,22 @@ struct PendingE2ECommand : BaseComponent {
     }
   }
 
+  // Get a coordinate arg as pixels. If the raw string ends with '%', it is
+  // interpreted as a screen percentage and converted using screen_dim (the
+  // screen width or height depending on the axis).
+  // Usage: cmd.coord_arg(0, screen_w)  // x-axis
+  //        cmd.coord_arg(1, screen_h)  // y-axis
+  float coord_arg(size_t idx, float screen_dim) const {
+    if (idx >= args.size())
+      return 0.f;
+    const std::string &s = args[idx];
+    if (!s.empty() && s.back() == '%') {
+      float pct = std::stof(s.substr(0, s.size() - 1));
+      return (pct / 100.0f) * screen_dim;
+    }
+    return std::stof(s);
+  }
+
 private:
   bool consumed = false;
   bool success = true;
