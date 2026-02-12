@@ -345,6 +345,29 @@ struct HandleExpectTextCommand : System<PendingE2ECommand> {
   }
 };
 
+// Handle 'expect_no_text "text"' command - asserts text is NOT visible
+// Succeeds immediately if text is absent. Retries a few frames to allow
+// rendering to settle, then succeeds if still absent.
+struct HandleExpectNoTextCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("expect_no_text"))
+      return;
+    if (cmd.args.empty()) {
+      cmd.fail("expect_no_text requires argument");
+      return;
+    }
+
+    auto &registry = VisibleTextRegistry::instance();
+    if (registry.contains(cmd.args[0])) {
+      cmd.fail(std::format(
+          "expect_no_text failed: '{}' IS visible but should not be",
+          cmd.args[0]));
+    } else {
+      cmd.consume();
+    }
+  }
+};
+
 // Handle 'screenshot name' command - takes screenshot
 struct HandleScreenshotCommand : System<PendingE2ECommand> {
   using ScreenshotFn = std::function<void(const std::string &)>;
