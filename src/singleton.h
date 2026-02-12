@@ -4,7 +4,7 @@
 
 #define SINGLETON_FWD(type)                                                    \
   struct type;                                                                 \
-  static std::shared_ptr<type> type##_single;
+  inline std::shared_ptr<type> type##_single;
 
 #define SINGLETON(type)                                                        \
   inline static type &create() {                                               \
