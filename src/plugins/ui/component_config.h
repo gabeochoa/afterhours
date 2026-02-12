@@ -51,7 +51,8 @@ struct ComponentConfig {
   SelfAlign self_align = SelfAlign::Auto;
   FlexWrap flex_wrap = FlexWrap::Wrap;
   bool debug_wrap = false;
-  bool clip_children = false; // Enable scissor clipping for children
+  bool clip_children = false;      // Enable scissor clipping for children
+  bool draggable_children = false; // Enable drag-and-drop reordering of children
 
   // Overflow behavior per axis (Visible = default, Hidden = clip, Scroll = clip + scroll)
   Overflow overflow_x = Overflow::Visible;
@@ -417,6 +418,13 @@ struct ComponentConfig {
   ComponentConfig &with_overflow(Overflow overflow) {
     overflow_x = overflow;
     overflow_y = overflow;
+    return *this;
+  }
+
+  /// Enable drag-and-drop reordering of this container's children.
+  /// Equivalent to what drag_group() used to do.
+  ComponentConfig &with_draggable_children(bool enabled = true) {
+    draggable_children = enabled;
     return *this;
   }
   ComponentConfig &with_font(const std::string &font_name_, Size font_size_) {

@@ -296,6 +296,10 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
     }
   }
 
+  if (config.draggable_children) {
+    entity.enableTag(DragTag::Group);
+  }
+
   if (config.font_name != UIComponent::UNSET_FONT) {
     entity.get<UIComponent>().enable_font(config.font_name, config.font_size,
                                            config.font_size_explicitly_set);

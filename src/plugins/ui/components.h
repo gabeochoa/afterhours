@@ -448,7 +448,15 @@ enum class DragTag : TagId {
   HoverGroup,      // The drag_group currently under the cursor
 };
 
-// Singleton component tracking drag-and-drop state across drag_group() instances.
+// Singleton component tracking drag-and-drop state across drag_group instances.
+// TODO: Consider adding named drag groups and accept-list filtering so the
+// engine can prevent drops visually (no spacer in disallowed targets).
+// Options:
+//   - Event could carry a user-defined type/tag so screens can switch on it
+//     instead of comparing EntityIDs.
+//   - with_drag_group_id("shop") + with_drag_accept_from({"shop","loot"})
+//     would let the pre-layout system skip spacer insertion for disallowed
+//     targets, giving proper visual feedback without screen-side workarounds.
 struct DragGroupState : BaseComponent {
   struct Event {
     EntityID source_group;
