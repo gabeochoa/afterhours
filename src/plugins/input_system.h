@@ -129,8 +129,24 @@ struct input : developer::Plugin {
     return raylib::GetCharPressed();
 #endif
   }
-  static float get_mouse_wheel_move() { return raylib::GetMouseWheelMove(); }
+  static float get_mouse_wheel_move() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    if (testing::test_input::detail::test_mode &&
+        testing::input_injector::detail::mouse.active) {
+      auto w = testing::input_injector::consume_wheel();
+      return w.y;
+    }
+#endif
+    return raylib::GetMouseWheelMove();
+  }
   static MousePosition get_mouse_wheel_move_v() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    if (testing::test_input::detail::test_mode &&
+        testing::input_injector::detail::mouse.active) {
+      auto w = testing::input_injector::consume_wheel();
+      return {w.x, w.y};
+    }
+#endif
     raylib::Vector2 v = raylib::GetMouseWheelMoveV();
     return {v.x, v.y};
   }

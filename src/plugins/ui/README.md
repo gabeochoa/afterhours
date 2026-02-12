@@ -28,7 +28,7 @@ void for_each_with(Entity &entity, UIContext<InputAction> &ctx, float) override 
 |--------|--------|-------------|
 | `div` | `imm_components.h` | Container / text label. Defaults to `children()` sizing. |
 | `separator` | `imm_components.h` | Horizontal or vertical line. Optional center label (`"--- OR ---"` style). |
-| `scroll_view` | `imm_components.h` | Scrollable container. Mouse wheel input, content clipping. |
+| `div` + `with_overflow` | `imm_components.h` | Scrollable/clipped container via `config.with_overflow(Overflow::Scroll, Axis::Y)`. |
 | `decorative_frame` | `imm_components.h` | Decorative border. Styles: `KraftPaper`, `Simple`, `Inset`. |
 
 ### Buttons & Selection

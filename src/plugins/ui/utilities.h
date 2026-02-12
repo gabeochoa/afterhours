@@ -273,6 +273,8 @@ struct UIPluginPostUpdateBridge : System<> {
     systems.push_back(
         std::make_unique<ui::HandleClicks<InputAction>>());
     systems.push_back(
+        std::make_unique<ui::HandleScrollInput<InputAction>>());
+    systems.push_back(
         std::make_unique<
             ui::CloseDropdownOnClickOutside<InputAction>>());
     systems.push_back(

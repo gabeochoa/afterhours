@@ -394,6 +394,12 @@ struct HasCircularProgressState : BaseComponent {
   }
 };
 
+// Overflow behavior for a UI box on a given axis.
+//   Visible — children can overflow; no clipping (default).
+//   Hidden  — children are clipped to the box bounds.
+//   Scroll  — children are clipped and the user can scroll.
+enum class Overflow { Visible, Hidden, Scroll };
+
 // Scroll view state - enables scrolling content within a clipped viewport
 struct HasScrollView : BaseComponent {
   Vector2Type scroll_offset = {0, 0};  // Current scroll position

@@ -1329,6 +1329,66 @@ struct HandleDragGroupsPostLayout : System<> {
   }
 };
 
+/// Processes mouse wheel input for all entities with HasScrollView.
+/// Runs after RunAutoLayout so that entity rects reflect the current frame.
+/// Replaces the inline wheel handling that was previously in scroll_view().
+template <typename InputAction>
+struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
+  UIContext<InputAction> *context;
+
+  virtual ~HandleScrollInput() {}
+
+  virtual void once(float) override {
+    this->context =
+        EntityHelper::get_singleton_cmp<UIContext<InputAction>>();
+  }
+
+  virtual void for_each_with(Entity &entity, UIComponent &cmp,
+                             HasScrollView &scroll_state, float) {
+    // TODO can we make this a tag? 
+    if (!cmp.was_rendered_to_screen)
+      return;
+    // TODO can we combine these? 
+    if (cmp.should_hide || entity.has<ShouldHide>())
+      return;
+
+    // Update viewport size from computed layout
+    scroll_state.viewport_size = {cmp.computed[Axis::X], cmp.computed[Axis::Y]};
+
+    // Skip input on the first frame when rect hasn't been computed yet
+    RectangleType rect = cmp.rect();
+    if (rect.width <= 0.0f || rect.height <= 0.0f)
+      return;
+
+    if (!is_mouse_inside(context->mouse.pos, rect))
+      return;
+
+    Vector2Type wheel_v = input::get_mouse_wheel_move_v();
+
+    // TODO add support for customizing this for "natural" scroll
+    // Direction multiplier: natural scrolling (default) vs inverted
+    float direction = scroll_state.invert_scroll ? 1.0f : -1.0f;
+
+    // Vertical scrolling
+    if (scroll_state.vertical_enabled && wheel_v.y != 0.0f) {
+      scroll_state.scroll_offset.y +=
+          direction * wheel_v.y * scroll_state.scroll_speed;
+      if (scroll_state.scroll_offset.y < 0.0f) {
+        scroll_state.scroll_offset.y = 0.0f;
+      }
+    }
+
+    // Horizontal scrolling
+    if (scroll_state.horizontal_enabled && wheel_v.x != 0.0f) {
+      scroll_state.scroll_offset.x +=
+          direction * wheel_v.x * scroll_state.scroll_speed;
+      if (scroll_state.scroll_offset.x < 0.0f) {
+        scroll_state.scroll_offset.x = 0.0f;
+      }
+    }
+  }
+};
+
 } // namespace afterhours
 
 } // namespace afterhours

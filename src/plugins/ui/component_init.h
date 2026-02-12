@@ -279,6 +279,23 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
     entity.addComponentIfMissing<HasClipChildren>();
   }
 
+  // Scroll implies clipping, so both Scroll and Hidden add HasClipChildren.
+  {
+    bool needs_clip = config.overflow_x != Overflow::Visible ||
+                      config.overflow_y != Overflow::Visible;
+    if (needs_clip) {
+      entity.addComponentIfMissing<HasClipChildren>();
+    }
+
+    bool needs_scroll = config.overflow_x == Overflow::Scroll ||
+                        config.overflow_y == Overflow::Scroll;
+    if (needs_scroll) {
+      auto &sv = entity.addComponentIfMissing<HasScrollView>();
+      sv.horizontal_enabled = (config.overflow_x == Overflow::Scroll);
+      sv.vertical_enabled = (config.overflow_y == Overflow::Scroll);
+    }
+  }
+
   if (config.font_name != UIComponent::UNSET_FONT) {
     entity.get<UIComponent>().enable_font(config.font_name, config.font_size,
                                            config.font_size_explicitly_set);

@@ -53,6 +53,10 @@ struct ComponentConfig {
   bool debug_wrap = false;
   bool clip_children = false; // Enable scissor clipping for children
 
+  // Overflow behavior per axis (Visible = default, Hidden = clip, Scroll = clip + scroll)
+  Overflow overflow_x = Overflow::Visible;
+  Overflow overflow_y = Overflow::Visible;
+
   // Background color settings
   Theme::Usage color_usage = Theme::Usage::Default;
   std::optional<Color> custom_color;
@@ -393,8 +397,26 @@ struct ComponentConfig {
     debug_wrap = enabled;
     return *this;
   }
+
+  [[deprecated("Use with_overflow(Overflow::Hidden) instead")]]
   ComponentConfig &with_clip_children(bool enabled = true) {
     clip_children = enabled;
+    return *this;
+  }
+
+  /// Set overflow behavior on a single axis (Axis::X or Axis::Y).
+  ComponentConfig &with_overflow(Overflow overflow, Axis axis) {
+    if (axis == Axis::X)
+      overflow_x = overflow;
+    else if (axis == Axis::Y)
+      overflow_y = overflow;
+    return *this;
+  }
+
+  /// Set overflow behavior on both axes at once.
+  ComponentConfig &with_overflow(Overflow overflow) {
+    overflow_x = overflow;
+    overflow_y = overflow;
     return *this;
   }
   ComponentConfig &with_font(const std::string &font_name_, Size font_size_) {

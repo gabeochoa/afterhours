@@ -232,6 +232,24 @@ struct HandleMouseUpCommand : System<PendingE2ECommand> {
   }
 };
 
+// Handle 'scroll_wheel dx dy' command - inject a synthetic mouse wheel event.
+// The wheel delta is consumed by the next call to get_mouse_wheel_move_v().
+// dx/dy are float values (positive = right/up in natural scrolling).
+struct HandleScrollWheelCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("scroll_wheel"))
+      return;
+    if (!cmd.has_args(2)) {
+      cmd.fail("scroll_wheel requires dx dy arguments");
+      return;
+    }
+    float dx = cmd.arg_as<float>(0);
+    float dy = cmd.arg_as<float>(1);
+    input_injector::set_mouse_wheel(dx, dy);
+    cmd.consume();
+  }
+};
+
 // Handle 'drag_to x1 y1 x2 y2' command - multi-frame press→move→release.
 // Spreads the operation across 3 frames so UI systems see proper state
 // transitions (just_pressed on frame 1, held+moved on frame 2, released on

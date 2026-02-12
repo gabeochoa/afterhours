@@ -28,6 +28,13 @@ struct MouseState {
 };
 inline MouseState mouse;
 
+// Synthetic scroll wheel state (consumed once per frame)
+struct WheelState {
+  float x = 0.0f;
+  float y = 0.0f;
+};
+inline WheelState wheel;
+
 struct PendingClick {
   bool pending = false;
   float x = 0, y = 0;
@@ -152,10 +159,24 @@ inline bool is_mouse_button_released() {
   return detail::mouse.active && detail::mouse.just_released;
 }
 
+/// Set scroll wheel delta (consumed on next frame)
+inline void set_mouse_wheel(float dx, float dy) {
+  detail::wheel.x = dx;
+  detail::wheel.y = dy;
+}
+
+/// Consume the synthetic wheel delta (returns and clears it)
+inline Position consume_wheel() {
+  Position v{detail::wheel.x, detail::wheel.y};
+  detail::wheel = {};
+  return v;
+}
+
 /// Reset per-frame state (call at start of frame)
 inline void reset_frame() {
   detail::mouse.just_pressed = false;
   detail::mouse.just_released = false;
+  // Note: wheel is consumed (cleared) by consume_wheel(), not here.
 }
 
 /// Clear all synthetic input state
@@ -166,6 +187,7 @@ inline void reset_all() {
   detail::mouse = {};
   detail::pending_click = {};
   detail::key_hold = {};
+  detail::wheel = {};
 }
 
 } // namespace input_injector
