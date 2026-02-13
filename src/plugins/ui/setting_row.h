@@ -292,62 +292,27 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
     break;
   }
 
-  // TODO add a component for this that we can use instead of biulding one 
+  // TODO add a component for this that we can use instead of biulding one
   case SettingRowControlType::Stepper: {
     // Expect pair<size_t*, vector<string>> value
     if constexpr (std::is_same_v<
                       ValueT, std::pair<size_t *, std::vector<std::string>>>) {
-      size_t *idx_ptr = value.first;
-      const auto &options = value.second;
-      size_t current_idx = *idx_ptr;
-
-      // Left arrow <
-      if (button(ctx, mk(entity),
-                 ComponentConfig{}
-                     .with_label("<")
-                     .with_size(
-                         ComponentSize{pixels((int)row_config.stepper_arrow_width),
-                                       pixels((int)row_h - 8)})
-                     .with_background(Theme::Usage::None)
-                     .with_custom_text_color(ctx.theme.font_muted)
-                     .with_alignment(TextAlignment::Center)
-                     .with_font(config.font_name, config.font_size)
-                     .with_debug_name("setting_row_stepper_left"))) {
-        *idx_ptr = (current_idx == 0) ? options.size() - 1 : current_idx - 1;
-        changed = true;
-      }
-
-      // Value display
-      std::string display_value =
-          options.empty() ? "---" : options[current_idx % options.size()];
-      div(ctx, mk(entity),
+      auto stepper_cfg =
           ComponentConfig{}
-              .with_label(display_value)
-              .with_size(
-                  ComponentSize{pixels((int)row_config.stepper_value_width),
-                                pixels((int)row_h - 8)})
-              .with_background(Theme::Usage::None)
-              .with_custom_text_color(ctx.theme.font)
-              .with_alignment(TextAlignment::Center)
+              .with_size(ComponentSize{
+                  pixels((int)(row_config.stepper_arrow_width * 2 +
+                               row_config.stepper_value_width)),
+                  pixels((int)row_h - 8)})
               .with_font(config.font_name, config.font_size)
-              .with_debug_name("setting_row_stepper_value"));
+              .with_debug_name("setting_row_stepper");
 
-      // Right arrow >
-      if (button(
-              ctx, mk(entity),
-              ComponentConfig{}
-                  .with_label(">")
-                  .with_size(
-                      ComponentSize{pixels((int)row_config.stepper_arrow_width),
-                                    pixels((int)row_h - 8)})
-                  .with_background(Theme::Usage::None)
-                  .with_custom_text_color(ctx.theme.font_muted)
-                  .with_alignment(TextAlignment::Center)
-                  .with_font(config.font_name, config.font_size)
-                  .with_debug_name("setting_row_stepper_right"))) {
-        *idx_ptr = (current_idx + 1) % options.size();
-        changed = true;
+      if (row_config.slot_control_config) {
+        stepper_cfg =
+            stepper_cfg.apply_overrides(*row_config.slot_control_config);
       }
+
+      if (stepper(ctx, mk(entity), value.second, *value.first, stepper_cfg))
+        changed = true;
     }
     break;
   }

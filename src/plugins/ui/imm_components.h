@@ -34,7 +34,7 @@ namespace imm {
 //
 // Composites (built from primitives):
 //   icon_row, button_group, checkbox, checkbox_group, radio_group,
-//   toggle_switch, slider, pagination, dropdown, navigation_bar,
+//   toggle_switch, slider, stepper, pagination, dropdown, navigation_bar,
 //   tab_container, progress_bar, decorative_frame
 //
 // Initialization (component_init.h):
@@ -2031,6 +2031,113 @@ ElementResult decorative_frame(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   return ElementResult{false, entity};
+}
+
+/// Stepper — cycles through string options with < and > arrow buttons.
+///
+/// Renders: [ < ] [ current value ] [ > ]
+///
+/// @param ctx The UI context
+/// @param ep_pair Entity-parent pair for hierarchy
+/// @param options The string options to cycle through
+/// @param option_index Current selection index (mutated on arrow click)
+/// @param config Optional ComponentConfig overrides
+/// @return ElementResult — true if value changed
+///
+/// Usage:
+/// ```cpp
+/// size_t idx = 0;
+/// std::vector<std::string> opts = {"Low", "Medium", "High"};
+/// if (stepper(ctx, mk(parent), opts, idx)) { /* changed */ }
+/// ```
+template <typename Container>
+ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
+                      const Container &options, size_t &option_index,
+                      ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+
+  if (options.empty())
+    return {false, entity};
+
+  option_index = option_index % options.size();
+
+  // Default size: fit children
+  if (config.size.is_default) {
+    config.with_size(ComponentSize{children(default_component_size.x),
+                                   children(default_component_size.y)});
+  }
+
+  // Row layout: [<] [value] [>]
+  config.flex_direction = FlexDirection::Row;
+  config.align_items = AlignItems::Center;
+  config.justify_content = JustifyContent::SpaceBetween;
+
+  init_component(ctx, ep_pair, config, ComponentType::Stepper, false,
+                  "stepper");
+
+  // State + keyboard + focus setup
+  HasStepperState &stepperState = init_state<HasStepperState>(
+      entity, [&](auto &) {}, option_index, options.size());
+  stepperState.index = option_index;
+  stepperState.num_options = options.size();
+  stepperState.changed_since = false;
+
+  entity.template addComponentIfMissing<FocusClusterRoot>();
+  entity.addComponentIfMissing<ui::HasLeftRightListener>(
+      [](Entity &ent, int dir) {
+        auto &state = ent.get<HasStepperState>();
+        if (dir < 0)
+          state.index =
+              detail::prev_index(state.index, state.num_options);
+        else
+          state.index =
+              detail::next_index(state.index, state.num_options);
+        state.changed_since = true;
+      });
+
+  // Shared arrow button config
+  const float arrow_w = 24.0f;
+  auto arrow_cfg =
+      ComponentConfig::inherit_from(config, "stepper_arrow")
+          .with_size(ComponentSize{pixels(arrow_w), percent(1.0f)})
+          .with_background(Theme::Usage::None)
+          .with_custom_text_color(ctx.theme.font_muted)
+          .with_alignment(TextAlignment::Center);
+
+  // Left arrow <
+  if (button(ctx, mk(entity),
+             ComponentConfig{arrow_cfg}
+                 .with_label("<")
+                 .with_debug_name("stepper_left"))) {
+    stepperState.index =
+        detail::prev_index(stepperState.index, stepperState.num_options);
+    stepperState.changed_since = true;
+  }
+
+  // Value display
+  div(ctx, mk(entity),
+      ComponentConfig::inherit_from(config, "stepper_value")
+          .with_label(options[stepperState.index % options.size()])
+          .with_size(ComponentSize{children(), percent(1.0f)})
+          .with_background(Theme::Usage::None)
+          .with_alignment(TextAlignment::Center)
+          .with_skip_tabbing(true)
+          .with_debug_name("stepper_value"));
+
+  // Right arrow >
+  if (button(ctx, mk(entity),
+             ComponentConfig{arrow_cfg}
+                 .with_label(">")
+                 .with_debug_name("stepper_right"))) {
+    stepperState.index =
+        detail::next_index(stepperState.index, stepperState.num_options);
+    stepperState.changed_since = true;
+  }
+
+  // Write state back to caller
+  option_index = stepperState.index;
+  return ElementResult{stepperState.changed_since, entity,
+                       static_cast<int>(option_index)};
 }
 
 } // namespace imm

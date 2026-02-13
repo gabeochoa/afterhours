@@ -77,6 +77,7 @@ enum struct ComponentType {
   ToggleSwitch,
   TabContainer,
   DecorativeFrame,
+  Stepper,
 };
 
 // Forward declaration - ComponentConfig is defined in component_config.h

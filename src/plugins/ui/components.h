@@ -111,6 +111,16 @@ struct HasSliderState : BaseComponent {
   HasSliderState(float val) : value(val) {}
 };
 
+// TODO: Consider unifying HasStepperState and HasDropdownState — a stepper is
+// really just a dropdown variant where only the selected element is shown.
+struct HasStepperState : BaseComponent {
+  bool changed_since = false;
+  size_t index;
+  size_t num_options;
+  HasStepperState(size_t idx, size_t count)
+      : index(idx), num_options(count) {}
+};
+
 struct HasToggleSwitchState : BaseComponent {
   bool changed_since = false;
   bool on;
