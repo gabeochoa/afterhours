@@ -1374,6 +1374,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                        dropdownState.last_option_clicked};
 }
 
+// TODO: Consider making navigation_bar a thin wrapper around stepper(num_visible=3)
 template <typename Container>
 ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
                              const Container &options, size_t &option_index,
@@ -2036,12 +2037,15 @@ ElementResult decorative_frame(HasUIContext auto &ctx, EntityParent ep_pair,
 /// Stepper — cycles through string options with < and > arrow buttons.
 ///
 /// Renders: [ < ] [ current value ] [ > ]
+/// With num_visible=3: [ < ] [ prev ] [ CURRENT ] [ next ] [ > ]
 ///
 /// @param ctx The UI context
 /// @param ep_pair Entity-parent pair for hierarchy
 /// @param options The string options to cycle through
 /// @param option_index Current selection index (mutated on arrow click)
 /// @param config Optional ComponentConfig overrides
+/// @param num_visible Number of items to show (1=current only, 3=prev/current/next, etc.)
+///        Always treated as odd; even values are clamped to the next odd number.
 /// @return ElementResult — true if value changed
 ///
 /// Usage:
@@ -2049,11 +2053,14 @@ ElementResult decorative_frame(HasUIContext auto &ctx, EntityParent ep_pair,
 /// size_t idx = 0;
 /// std::vector<std::string> opts = {"Low", "Medium", "High"};
 /// if (stepper(ctx, mk(parent), opts, idx)) { /* changed */ }
+/// // Show prev/current/next:
+/// if (stepper(ctx, mk(parent), opts, idx, {}, 3)) { /* changed */ }
 /// ```
 template <typename Container>
 ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
                       const Container &options, size_t &option_index,
-                      ComponentConfig config = ComponentConfig()) {
+                      ComponentConfig config = ComponentConfig(),
+                      size_t num_visible = 1) {
   auto [entity, parent] = deref(ep_pair);
 
   if (options.empty())
@@ -2114,15 +2121,55 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
     stepperState.changed_since = true;
   }
 
-  // Value display
-  div(ctx, mk(entity),
-      ComponentConfig::inherit_from(config, "stepper_value")
-          .with_label(options[stepperState.index % options.size()])
-          .with_size(ComponentSize{children(), percent(1.0f)})
-          .with_background(Theme::Usage::None)
-          .with_alignment(TextAlignment::Center)
-          .with_skip_tabbing(true)
-          .with_debug_name("stepper_value"));
+  // Value display — render num_visible labels centered on current selection
+  // num_visible=1: just current
+  // num_visible=3: prev, current, next
+  // num_visible=5: prev2, prev1, current, next1, next2
+  // Clamp even to next odd
+  if (num_visible % 2 == 0)
+    num_visible += 1;
+  const size_t half = num_visible / 2;
+
+  // Wrap labels in a container so the row layout stays [<] [labels] [>]
+  auto label_container =
+      div(ctx, mk(entity),
+          ComponentConfig::inherit_from(config, "stepper_labels")
+              .with_size(ComponentSize{children(), percent(1.0f)})
+              .with_background(Theme::Usage::None)
+              .with_flex_direction(FlexDirection::Row)
+              .with_justify_content(JustifyContent::SpaceAround)
+              .with_align_items(AlignItems::Center)
+              .with_skip_tabbing(true)
+              .with_debug_name("stepper_labels"));
+
+  // TODO: Make neighbor styling configurable (muted color, smaller font, opacity, etc.)
+  for (size_t i = 0; i < num_visible; ++i) {
+    // offset from center: -half .. 0 .. +half
+    int offset = static_cast<int>(i) - static_cast<int>(half);
+    size_t display_idx = stepperState.index;
+    if (offset < 0) {
+      for (int j = 0; j < -offset; ++j)
+        display_idx =
+            detail::prev_index(display_idx, stepperState.num_options);
+    } else if (offset > 0) {
+      for (int j = 0; j < offset; ++j)
+        display_idx =
+            detail::next_index(display_idx, stepperState.num_options);
+    }
+
+    bool is_center = (offset == 0);
+    div(ctx, mk(label_container.ent(), static_cast<int>(i)),
+        ComponentConfig::inherit_from(config, "stepper_value")
+            .with_label(options[display_idx % options.size()])
+            .with_size(ComponentSize{children(), percent(1.0f)})
+            .with_background(Theme::Usage::None)
+            .with_custom_text_color(is_center ? ctx.theme.font
+                                              : ctx.theme.font_muted)
+            .with_alignment(TextAlignment::Center)
+            .with_skip_tabbing(true)
+            .with_debug_name(is_center ? "stepper_value"
+                                       : "stepper_neighbor"));
+  }
 
   // Right arrow >
   if (button(ctx, mk(entity),
