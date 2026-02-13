@@ -193,7 +193,7 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
   config.justify_content = JustifyContent::SpaceBetween;
 
   // Initialize the row container
-  _init_component(ctx, ep_pair, config, ComponentType::Div, false,
+  init_component(ctx, ep_pair, config, ComponentType::Div, false,
                   "setting_row");
 
   bool changed = false;

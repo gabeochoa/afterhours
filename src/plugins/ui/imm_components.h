@@ -1,10 +1,5 @@
 #pragma once
 
-// TODO: Move internal helper functions to a detail:: namespace to clearly
-// separate public API from implementation details. Functions like prev_index,
-// next_index, and other internal utilities should not be part of the public
-// API. See e2e_testing/input_injector.h for an example of this pattern.
-
 #include <algorithm>
 #include <array>
 #include <bitset>
@@ -28,6 +23,28 @@ namespace ui {
 
 namespace imm {
 
+// ============================================================================
+// Public API — Immediate-mode UI components
+//
+// Custom component authors should compose using these primitives and utilities:
+//
+// Primitives:
+//   div, separator, button, image, sprite, image_button, checkbox_no_label,
+//   circular_progress
+//
+// Composites (built from primitives):
+//   icon_row, button_group, checkbox, checkbox_group, radio_group,
+//   toggle_switch, slider, pagination, dropdown, navigation_bar,
+//   tab_container, progress_bar, decorative_frame
+//
+// Initialization (component_init.h):
+//   init_component()  — sets up UIComponent, applies config, layout, visuals
+//   init_state()      — creates or retrieves per-entity state component
+//
+// Everything in the detail:: namespace is internal and subject to change.
+// ============================================================================
+namespace detail {
+
 inline size_t prev_index(size_t current, size_t total) {
   return (current == 0) ? total - 1 : current - 1;
 }
@@ -35,6 +52,8 @@ inline size_t prev_index(size_t current, size_t total) {
 inline size_t next_index(size_t current, size_t total) {
   return (current + 1) % total;
 }
+
+} // namespace detail
 
 ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
                   ComponentConfig config = ComponentConfig()) {
@@ -46,7 +65,7 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
     config.with_size(ComponentSize{children(default_component_size.x),
                                    children(default_component_size.y)});
 
-  _init_component(ctx, ep_pair, config, ComponentType::Div);
+  init_component(ctx, ep_pair, config, ComponentType::Div);
 
   return {true, entity};
 }
@@ -149,7 +168,7 @@ separator(HasUIContext auto &ctx, EntityParent ep_pair,
       config.with_size(ComponentSize{children(), percent(1.0f)});
     }
 
-    _init_component(ctx, ep_pair, config, ComponentType::Separator, false,
+    init_component(ctx, ep_pair, config, ComponentType::Separator, false,
                     "separator_labeled");
 
     // Create line - label - line structure
@@ -186,7 +205,7 @@ separator(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Simple separator line (no label)
   config.with_skip_tabbing(true); // Separators shouldn't be focusable
-  _init_component(ctx, ep_pair, config, ComponentType::Separator, false,
+  init_component(ctx, ep_pair, config, ComponentType::Separator, false,
                   "separator");
 
   return {false, entity};
@@ -196,7 +215,7 @@ ElementResult image(HasUIContext auto &ctx, EntityParent ep_pair,
                     ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
-  _init_component(ctx, ep_pair, config, ComponentType::Image, false, "image");
+  init_component(ctx, ep_pair, config, ComponentType::Image, false, "image");
 
   return {false, entity};
 }
@@ -216,7 +235,7 @@ ElementResult sprite(HasUIContext auto &ctx, EntityParent ep_pair,
                      ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
-  _init_component(ctx, ep_pair, config, ComponentType::Image, false, "sprite");
+  init_component(ctx, ep_pair, config, ComponentType::Image, false, "sprite");
 
   auto alignment = config.image_alignment.value_or(
       afterhours::texture_manager::HasTexture::Alignment::Center);
@@ -236,7 +255,7 @@ image_button(HasUIContext auto &ctx, EntityParent ep_pair,
              ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
-  _init_component(ctx, ep_pair, config, ComponentType::Image, true,
+  init_component(ctx, ep_pair, config, ComponentType::Image, true,
                   "image_button");
 
   auto alignment = config.image_alignment.value_or(
@@ -301,7 +320,7 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
     }
   }
 
-  _init_component(ctx, ep_pair, config, ComponentType::Button, true, "button");
+  init_component(ctx, ep_pair, config, ComponentType::Button, true, "button");
 
   // Apply flex-direction specifically for buttons so they can drive wrapping
   // TODO: this is a hack to get buttons to wrap. We should find a better way
@@ -330,7 +349,7 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
                  .with_debug_name("btn_icon"));
     };
 
-    // Label was already applied by _init_component via apply_label,
+    // Label was already applied by init_component via apply_label,
     // so child_id 0 = before label, 1 = after label.
     switch (config.icon_position) {
       case IconPosition::Left:  make_icon(0); break;
@@ -357,7 +376,7 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
     config.size.x_axis = children(max_width.value);
   }
 
-  _init_component(ctx, ep_pair, config, ComponentType::ButtonGroup, false,
+  init_component(ctx, ep_pair, config, ComponentType::ButtonGroup, false,
                   "button_group");
 
   // For Row: divide width among buttons
@@ -404,7 +423,7 @@ ElementResult checkbox_no_label(HasUIContext auto &ctx, EntityParent ep_pair,
   auto [entity, parent] = deref(ep_pair);
 
   HasCheckboxState &checkboxState =
-      _init_state<HasCheckboxState>(entity, [&](auto &) {}, value);
+      init_state<HasCheckboxState>(entity, [&](auto &) {}, value);
 
   std::string checked_indicator = config.checkbox_checked_indicator.value_or(ComponentConfig::DEFAULT_CHECKBOX_CHECKED);
   std::string unchecked_indicator = config.checkbox_unchecked_indicator.value_or(ComponentConfig::DEFAULT_CHECKBOX_UNCHECKED);
@@ -421,7 +440,7 @@ ElementResult checkbox_no_label(HasUIContext auto &ctx, EntityParent ep_pair,
     config.with_auto_text_color(true);
   }
 
-  _init_component(ctx, ep_pair, config, ComponentType::CheckboxNoLabel, true,
+  init_component(ctx, ep_pair, config, ComponentType::CheckboxNoLabel, true,
                   "checkbox");
 
   if (config.disabled) {
@@ -454,7 +473,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   config.with_flex_direction(FlexDirection::Row)
       .with_align_items(AlignItems::Center)
       .with_no_wrap();
-  _init_component(ctx, ep_pair, config, ComponentType::Div, false,
+  init_component(ctx, ep_pair, config, ComponentType::Div, false,
                   "checkbox_row");
 
   // Add FocusClusterRoot to container for consistent focus ring on entire row
@@ -481,7 +500,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   bool user_specified_corners = config.rounded_corners.has_value();
 
   if (has_label_child) {
-    config.size = config.size._scale_x(0.5f);
+    config.size = config.size.scale_x(0.5f);
 
     auto label_config =
         ComponentConfig::inherit_from(
@@ -559,7 +578,7 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
   if (config.flex_wrap == FlexWrap::Wrap) {
     config.with_no_wrap();
   }
-  _init_component(ctx, ep_pair, config, ComponentType::CheckboxGroup, false,
+  init_component(ctx, ep_pair, config, ComponentType::CheckboxGroup, false,
                   "checkbox_group");
   config.size.y_axis = max_height;
 
@@ -725,14 +744,14 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
   if (config.flex_wrap == FlexWrap::Wrap) {
     config.with_no_wrap();
   }
-  _init_component(ctx, ep_pair, config, ComponentType::ToggleSwitch, false,
+  init_component(ctx, ep_pair, config, ComponentType::ToggleSwitch, false,
                   "toggle_switch_row");
 
   // Add FocusClusterRoot to container for consistent focus ring on entire row
   entity.template addComponentIfMissing<FocusClusterRoot>();
 
   HasToggleSwitchState &state =
-      _init_state<HasToggleSwitchState>(entity, [&](auto &) {}, value);
+      init_state<HasToggleSwitchState>(entity, [&](auto &) {}, value);
 
   // Animate (smooth lerp toward target)
   float target = state.on ? 1.0f : 0.0f;
@@ -871,6 +890,8 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
   return result;
 }
 
+namespace detail {
+
 // Helper function to generate label text based on position and value
 static std::string
 generate_label_text(const std::string &original_label, float value,
@@ -923,6 +944,8 @@ static void update_main_label(Entity &slider_entity,
   }
 }
 
+} // namespace detail
+
 ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                      float &owned_value,
                      ComponentConfig config = ComponentConfig(),
@@ -940,13 +963,13 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   config.with_color_usage(Theme::Usage::None);
   // Use Row layout so label and background sit side-by-side, not stacked
   config.with_flex_direction(FlexDirection::Row);
-  _init_component(ctx, ep_pair, config, ComponentType::Slider, true, "slider");
+  init_component(ctx, ep_pair, config, ComponentType::Slider, true, "slider");
   config.color_usage = original_color_usage;
 
   // Create main label (only when label is provided)
   if (!compact) {
     std::string main_label_text =
-        generate_label_text(original_label, owned_value, handle_label_position);
+        detail::generate_label_text(original_label, owned_value, handle_label_position);
     auto label_corners = RoundedCorners(config.rounded_corners.value())
                              .sharp(TOP_RIGHT)
                              .sharp(BOTTOM_RIGHT);
@@ -960,7 +983,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                          .with_render_layer(config.render_layer + 0));
     label.ent()
         .template get<UIComponent>()
-        .set_desired_width(config.size._scale_x(0.5f).x_axis)
+        .set_desired_width(config.size.scale_x(0.5f).x_axis)
         .set_desired_height(config.size.y_axis);
     label.ent().template addComponentIfMissing<InFocusCluster>();
   }
@@ -978,7 +1001,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
     bg_size.x_axis.value = std::max(0.0f, bg_size.x_axis.value - 4.0f);
   } else if (bg_size.x_axis.dim == Dim::Percent ||
              bg_size.x_axis.dim == Dim::ScreenPercent) {
-    bg_size = bg_size._scale_x(0.95f);
+    bg_size = bg_size.scale_x(0.95f);
   }
 
   auto elem = div(ctx, mk(entity, parent.id + entity.id + 0),
@@ -1018,12 +1041,12 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
       // Update labels based on position
       if (handle_label_position == SliderHandleValueLabelPosition::OnHandle) {
-        update_handle_label(child, sliderState.value);
+        detail::update_handle_label(child, sliderState.value);
       } else if (handle_label_position ==
                      SliderHandleValueLabelPosition::WithLabel ||
                  handle_label_position ==
                      SliderHandleValueLabelPosition::WithLabelNewLine) {
-        update_main_label(target, original_label, sliderState.value,
+        detail::update_main_label(target, original_label, sliderState.value,
                           handle_label_position);
       }
     }
@@ -1153,7 +1176,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
   std::string label_str = config.label;
   config.label = "";
 
-  bool first_time = _init_component(
+  bool first_time = init_component(
       ctx, ep_pair, config, ComponentType::Pagination, false, "pagination");
 
   int child_index = 0;
@@ -1167,7 +1190,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
               .with_font(UIComponent::SYMBOL_FONT, 16.f)
               .with_no_wrap()
               .with_render_layer(config.render_layer))) {
-    on_option_click(entity, prev_index(option_index - 1, options.size()));
+    on_option_click(entity, detail::prev_index(option_index - 1, options.size()));
   }
 
   for (size_t i = 0; i < options.size(); i++) {
@@ -1194,7 +1217,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
               .with_font(UIComponent::SYMBOL_FONT, 16.f)
               .with_no_wrap()
               .with_render_layer(config.render_layer))) {
-    on_option_click(entity, next_index(option_index, options.size()));
+    on_option_click(entity, detail::next_index(option_index, options.size()));
   }
 
   if (first_time) {
@@ -1217,7 +1240,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   if (options.empty())
     return {false, entity};
 
-  HasDropdownState &dropdownState = _init_state<HasDropdownState>(
+  HasDropdownState &dropdownState = init_state<HasDropdownState>(
       entity,
       [&](auto &hdds) {
         hdds.last_option_clicked = option_index;
@@ -1246,7 +1269,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   config.label = "";
   config.flex_direction = FlexDirection::Row;
 
-  _init_component(ctx, ep_pair, config, ComponentType::Dropdown);
+  init_component(ctx, ep_pair, config, ComponentType::Dropdown);
 
   auto button_corners =
       config.rounded_corners.value_or(ctx.theme.rounded_corners);
@@ -1255,7 +1278,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
 
   bool has_label_child = !label_str.empty();
   if (has_label_child) {
-    config_size = config.size._scale_x(0.5f);
+    config_size = config.size.scale_x(0.5f);
     button_corners = RoundedCorners(button_corners).left_sharp();
 
     auto label = div(
@@ -1360,7 +1383,7 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
   if (options.empty())
     return {false, entity};
 
-  HasNavigationBarState &navState = _init_state<HasNavigationBarState>(
+  HasNavigationBarState &navState = init_state<HasNavigationBarState>(
       entity,
       [&](auto &hnbs) {
         hnbs.set_current_index(option_index);
@@ -1384,7 +1407,7 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Prevent the parent navigation bar from getting a background color
   config.with_color_usage(Theme::Usage::None);
-  _init_component(ctx, ep_pair, config, ComponentType::NavigationBar, false,
+  init_component(ctx, ep_pair, config, ComponentType::NavigationBar, false,
                   "navigation_bar");
 
   bool clicked = false;
@@ -1405,7 +1428,7 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
                  .with_rounded_corners(RoundedCorners().left_round())
                  .with_margin(Margin{}))) {
     clicked = true;
-    new_index = prev_index(navState.current_index(), options.size());
+    new_index = detail::prev_index(navState.current_index(), options.size());
   }
 
   div(ctx, mk(entity),
@@ -1425,7 +1448,7 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
                  .with_rounded_corners(RoundedCorners().right_round())
                  .with_margin(Margin{}))) {
     clicked = true;
-    new_index = next_index(navState.current_index(), options.size());
+    new_index = detail::next_index(navState.current_index(), options.size());
   }
 
   if (clicked) {
@@ -1490,7 +1513,7 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
 
   config.flex_direction = FlexDirection::Row;
   config.with_color_usage(Theme::Usage::None);
-  _init_component(ctx, ep_pair, config, ComponentType::TabContainer, false,
+  init_component(ctx, ep_pair, config, ComponentType::TabContainer, false,
                   "tab_container");
 
   bool changed = false;
@@ -1574,7 +1597,7 @@ ElementResult progress_bar(
   config.label = "";
 
   // Initialize as a non-interactive div
-  _init_component(ctx, ep_pair, config, ComponentType::Div, false,
+  init_component(ctx, ep_pair, config, ComponentType::Div, false,
                   "progress_bar");
 
   // Normalize value to 0-1 range
@@ -1688,7 +1711,7 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   // Initialize component
-  _init_component(ctx, ep_pair, config, ComponentType::CircularProgress, false,
+  init_component(ctx, ep_pair, config, ComponentType::CircularProgress, false,
                   "circular_progress");
 
   // Clamp value
@@ -1812,7 +1835,7 @@ ElementResult decorative_frame(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Initialize main container (no background - children will draw it)
   config.with_color_usage(Theme::Usage::None);
-  _init_component(ctx, ep_pair, config, ComponentType::DecorativeFrame, false,
+  init_component(ctx, ep_pair, config, ComponentType::DecorativeFrame, false,
                   "decorative_frame");
 
   // Get computed size for positioning edge elements (corners, highlights)

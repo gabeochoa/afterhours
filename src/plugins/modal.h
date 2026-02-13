@@ -311,7 +311,7 @@ struct modal : developer::Plugin {
       // function.
 
       // Create modal container
-      _init_component(
+      init_component(
           ctx, ep_pair,
           // TODO add support for configuration
           ComponentConfig{}

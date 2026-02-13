@@ -71,7 +71,9 @@ UIStylingDefaults::merge_with_defaults(ComponentType component_type,
   return defaults.value().apply_overrides(result);
 }
 
-inline ComponentConfig _overwrite_defaults(HasUIContext auto &ctx,
+namespace detail {
+
+inline ComponentConfig overwrite_defaults(HasUIContext auto &ctx,
                                            ComponentConfig config,
                                            ComponentType component_type,
                                            bool enable_color = false) {
@@ -452,7 +454,7 @@ apply_values:
   }
 }
 
-inline bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
+inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
                                     Entity &parent, ComponentConfig config,
                                     const std::string &debug_name = "") {
   (void)debug_name;
@@ -493,7 +495,7 @@ inline bool _add_missing_components(HasUIContext auto &ctx, Entity &entity,
 
 // Validate ComponentConfig for common issues.
 // Only runs when validation mode is Warn or Strict.
-inline void _validate_config(const ComponentConfig &config,
+inline void validate_config(const ComponentConfig &config,
                              const std::string &debug_name) {
   const auto &validation = UIStylingDefaults::get().get_validation_config();
   if (validation.mode == ValidationMode::Silent)
@@ -532,19 +534,21 @@ inline void _validate_config(const ComponentConfig &config,
   }
 }
 
-inline bool _init_component(HasUIContext auto &ctx, EntityParent ep_pair,
+} // namespace detail
+
+inline bool init_component(HasUIContext auto &ctx, EntityParent ep_pair,
                             ComponentConfig &config,
                             ComponentType component_type,
                             bool enable_color = false,
                             const std::string &debug_name = "") {
   auto [entity, parent] = ep_pair;
-  config = _overwrite_defaults(ctx, config, component_type, enable_color);
-  _validate_config(config, debug_name);
-  return _add_missing_components(ctx, entity, parent, config, debug_name);
+  config = detail::overwrite_defaults(ctx, config, component_type, enable_color);
+  detail::validate_config(config, debug_name);
+  return detail::add_missing_components(ctx, entity, parent, config, debug_name);
 }
 
 template <typename Component, typename... CArgs>
-Component &_init_state(Entity &entity,
+Component &init_state(Entity &entity,
                        const std::function<void(Component &)> &cb,
                        CArgs &&...args) {
   auto &cmp =

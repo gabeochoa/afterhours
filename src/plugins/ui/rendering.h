@@ -33,7 +33,9 @@ namespace ui {
 // Left-side bearing is now calculated per-string using get_first_glyph_bearing()
 // in font_helper.h. No more hardcoded offset.
 
-static inline float _compute_effective_opacity(const Entity &entity) {
+namespace detail {
+
+static inline float compute_effective_opacity(const Entity &entity) {
   float result = 1.0f;
   EntityID current_id = entity.id;
   int guard = 0;
@@ -58,7 +60,7 @@ static inline float _compute_effective_opacity(const Entity &entity) {
 
 // Find the nearest ancestor with HasScrollView or HasClipChildren
 // Returns invalid OptEntity if no clipping ancestor exists
-static inline OptEntity _find_clip_ancestor(const Entity &entity) {
+static inline OptEntity find_clip_ancestor(const Entity &entity) {
   if (!entity.has<UIComponent>())
     return {};
 
@@ -85,13 +87,13 @@ static inline OptEntity _find_clip_ancestor(const Entity &entity) {
 }
 
 // Legacy alias for backwards compatibility
-static inline OptEntity _find_scroll_view_ancestor(const Entity &entity) {
-  return _find_clip_ancestor(entity);
+static inline OptEntity find_scroll_view_ancestor(const Entity &entity) {
+  return find_clip_ancestor(entity);
 }
 
 // Get scroll offset from ancestor scroll view, returns {0,0} if none
-static inline Vector2Type _get_scroll_offset(const Entity &entity) {
-  OptEntity scroll_ancestor = _find_scroll_view_ancestor(entity);
+static inline Vector2Type get_scroll_offset(const Entity &entity) {
+  OptEntity scroll_ancestor = find_scroll_view_ancestor(entity);
   if (scroll_ancestor.valid() && scroll_ancestor->has<HasScrollView>()) {
     return scroll_ancestor->get<HasScrollView>().scroll_offset;
   }
@@ -99,8 +101,8 @@ static inline Vector2Type _get_scroll_offset(const Entity &entity) {
 }
 
 // Get the scissor rect from a scroll view ancestor (viewport bounds)
-static inline RectangleType _get_scroll_scissor_rect(const Entity &entity) {
-  OptEntity scroll_ancestor = _find_scroll_view_ancestor(entity);
+static inline RectangleType get_scroll_scissor_rect(const Entity &entity) {
+  OptEntity scroll_ancestor = find_scroll_view_ancestor(entity);
   if (scroll_ancestor.valid() && scroll_ancestor->has<UIComponent>()) {
     return scroll_ancestor->get<UIComponent>().rect();
   }
@@ -111,7 +113,7 @@ static inline RectangleType _get_scroll_scissor_rect(const Entity &entity) {
 // The layout system constrains children to parent bounds, which stacks overflow
 // items at the same position. This function fixes that by sequentially positioning
 // children based on their sizes.
-static inline void _fix_scroll_view_child_positions(Entity &entity) {
+static inline void fix_scroll_view_child_positions(Entity &entity) {
   if (!entity.has<HasScrollView>() || !entity.has<UIComponent>())
     return;
 
@@ -169,12 +171,12 @@ static inline void _fix_scroll_view_child_positions(Entity &entity) {
 // Compute content size for a scroll view from its children's sizes
 // For scroll views, we sum children's sizes instead of using screen positions
 // because the layout system constrains children to the viewport
-static inline void _update_scroll_view_content_size(Entity &entity) {
+static inline void update_scroll_view_content_size(Entity &entity) {
   if (!entity.has<HasScrollView>() || !entity.has<UIComponent>())
     return;
 
   // First fix child positions that may have been constrained by layout
-  _fix_scroll_view_child_positions(entity);
+  fix_scroll_view_child_positions(entity);
 
   HasScrollView &scroll = entity.get<HasScrollView>();
   const UIComponent &cmp = entity.get<UIComponent>();
@@ -232,6 +234,9 @@ static inline void _update_scroll_view_content_size(Entity &entity) {
   }
   scroll.clamp_scroll();
 }
+
+} // namespace detail
+
 // Minimum font size to prevent invalid rendering (font size 0)
 // This ensures text is always readable - 10px is the practical minimum
 constexpr float MIN_FONT_SIZE = 10.0f;
@@ -417,7 +422,8 @@ static inline RectangleType position_text(const ui::FontManager &fm,
 // Internal helper to draw text at a specific position (used by stroke, shadow,
 // and main text) The 'sizing' rect contains any offset (shadow/stroke) that
 // should be applied
-static inline void _draw_text_at_position(const ui::FontManager &fm,
+namespace detail {
+static inline void draw_text_at_position(const ui::FontManager &fm,
                                           const std::string &text,
                                           RectangleType rect,
                                           TextAlignment alignment,
@@ -455,6 +461,7 @@ static inline void _draw_text_at_position(const ui::FontManager &fm,
   draw_text_ex(font, text.c_str(), startPos, fontSize, spacing, color,
                rotation, centerX, centerY);
 }
+} // namespace detail
 
 static inline void
 draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
@@ -534,7 +541,7 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
     RectangleType shadow_sizing = sizing;
     shadow_sizing.x += shadow->offset_x;
     shadow_sizing.y += shadow->offset_y;
-    _draw_text_at_position(fm, text, rect, alignment, shadow_sizing,
+    detail::draw_text_at_position(fm, text, rect, alignment, shadow_sizing,
                            shadow->color, rotation, rot_center_x, rot_center_y);
   }
 
@@ -552,13 +559,13 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
       RectangleType offset_sizing = sizing;
       offset_sizing.x += ox;
       offset_sizing.y += oy;
-      _draw_text_at_position(fm, text, rect, alignment, offset_sizing,
+      detail::draw_text_at_position(fm, text, rect, alignment, offset_sizing,
                              stroke_color, rotation, rot_center_x, rot_center_y);
     }
   }
 
   // Draw main text on top
-  _draw_text_at_position(fm, text, rect, alignment, sizing, color, rotation, rot_center_x, rot_center_y);
+  detail::draw_text_at_position(fm, text, rect, alignment, sizing, color, rotation, rot_center_x, rot_center_y);
 }
 
 static inline Vector2Type
@@ -997,15 +1004,15 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     if (!entity.has<UIComponent>())
       return;
     const UIComponent &cmp = entity.get<UIComponent>();
-    const float effective_opacity = _compute_effective_opacity(entity);
+    const float effective_opacity = detail::compute_effective_opacity(entity);
     RectangleType draw_rect = cmp.rect();
 
     // (debug placeholder)
 
     // Check if this entity is inside a scroll view (but not the scroll view
     // itself)
-    OptEntity scroll_ancestor = _find_scroll_view_ancestor(entity);
-    // Note: _find_clip_ancestor returns entity with HasScrollView OR HasClipChildren
+    OptEntity scroll_ancestor = detail::find_scroll_view_ancestor(entity);
+    // Note: find_clip_ancestor returns entity with HasScrollView OR HasClipChildren
     // Only apply scroll offset if ancestor actually has HasScrollView
     bool inside_scroll_view =
         scroll_ancestor.valid() &&
@@ -1087,7 +1094,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
     if (should_draw_focus) {
       Color focus_col = context.theme.from_usage(Theme::Usage::Focus);
-      float effective_focus_opacity = _compute_effective_opacity(entity);
+      float effective_focus_opacity = detail::compute_effective_opacity(entity);
       if (effective_focus_opacity < 1.0f) {
         focus_col = colors::opacity_pct(focus_col, effective_focus_opacity);
       }
@@ -1264,7 +1271,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     }
 
     // Check if we need scissor clipping for scroll view or clip container
-    OptEntity clip_ancestor = _find_clip_ancestor(entity);
+    OptEntity clip_ancestor = detail::find_clip_ancestor(entity);
     bool is_clip_container =
         entity.has<HasScrollView>() || entity.has<HasClipChildren>();
     bool needs_scissor = clip_ancestor.valid() && !is_clip_container;
@@ -1280,7 +1287,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
     // Update scroll view content size before rendering (after layout is done)
     if (entity.has<HasScrollView>()) {
-      _update_scroll_view_content_size(entity);
+      detail::update_scroll_view_content_size(entity);
     }
 
     if (entity.has<HasColor>() || entity.has<HasLabel>() ||
@@ -1531,11 +1538,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       return;
     const UIComponent &cmp = entity.get<UIComponent>();
 
-    const float effective_opacity = _compute_effective_opacity(entity);
+    const float effective_opacity = detail::compute_effective_opacity(entity);
     RectangleType draw_rect = cmp.rect();
 
-    OptEntity scroll_ancestor = _find_scroll_view_ancestor(entity);
-    // Note: _find_clip_ancestor returns entity with HasScrollView OR HasClipChildren
+    OptEntity scroll_ancestor = detail::find_scroll_view_ancestor(entity);
+    // Note: find_clip_ancestor returns entity with HasScrollView OR HasClipChildren
     // Only apply scroll offset if ancestor actually has HasScrollView
     bool inside_scroll_view =
         scroll_ancestor.valid() &&
@@ -1610,7 +1617,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
     if (should_draw_focus) {
       Color focus_col = context.theme.from_usage(Theme::Usage::Focus);
-      float effective_focus_opacity = _compute_effective_opacity(entity);
+      float effective_focus_opacity = detail::compute_effective_opacity(entity);
       if (effective_focus_opacity < 1.0f) {
         focus_col = colors::opacity_pct(focus_col, effective_focus_opacity);
       }
@@ -1811,7 +1818,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     }
 
     // Check if we need scissor clipping for scroll view or clip container
-    OptEntity clip_ancestor = _find_clip_ancestor(entity);
+    OptEntity clip_ancestor = detail::find_clip_ancestor(entity);
     bool is_clip_container =
         entity.has<HasScrollView>() || entity.has<HasClipChildren>();
     bool needs_scissor = clip_ancestor.valid() && !is_clip_container;
@@ -1828,7 +1835,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
     // Update scroll view content size
     if (entity.has<HasScrollView>()) {
-      _update_scroll_view_content_size(entity);
+      detail::update_scroll_view_content_size(entity);
     }
 
     if (entity.has<HasColor>() || entity.has<HasLabel>() ||

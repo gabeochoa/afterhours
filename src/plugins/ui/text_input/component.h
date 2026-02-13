@@ -46,7 +46,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       typename std::remove_reference_t<decltype(ctx)>::value_type;
 
   // Initialize state
-  auto &state = _init_state<HasTextInputState>(
+  auto &state = init_state<HasTextInputState>(
       entity,
       [&](HasTextInputState &s) {
         if (s.text() != text) {
@@ -73,12 +73,12 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   config.flex_direction = FlexDirection::Row;
-  _init_component(ctx, ep_pair, config, ComponentType::TextInput, false,
+  init_component(ctx, ep_pair, config, ComponentType::TextInput, false,
                   "text_input");
 
   auto base_corners = RoundedCorners(
       config.rounded_corners.value_or(ctx.theme.rounded_corners));
-  auto field_size = has_label ? config.size._scale_x(0.5f) : config.size;
+  auto field_size = has_label ? config.size.scale_x(0.5f) : config.size;
 
   // Only add rounded corners component if any corners are actually rounded
   // This respects intentional square corner designs

@@ -214,7 +214,7 @@ struct ComponentSize {
   ComponentSize(std::pair<Size, Size> pair, bool is_default_)
       : x_axis(pair.first), y_axis(pair.second), is_default(is_default_) {}
 
-  auto _scale_x(float s) {
+  auto scale_x(float s) {
     if ((x_axis.dim == ui::Dim::Children && x_axis.value < 0) ||
         x_axis.dim == ui::Dim::Text || x_axis.dim == ui::Dim::None) {
       log_warn("Scaling component size with dim {} may be unsupported",
@@ -223,7 +223,7 @@ struct ComponentSize {
     x_axis.value *= s;
     return ComponentSize(*this);
   }
-  auto _scale_y(float s) {
+  auto scale_y(float s) {
     if ((y_axis.dim == ui::Dim::Children && y_axis.value < 0) ||
         y_axis.dim == ui::Dim::Text || y_axis.dim == ui::Dim::None) {
       log_warn("Scaling component size with dim {} may be unsupported",

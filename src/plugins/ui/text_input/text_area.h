@@ -62,7 +62,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       config.text_area_line_height.value_or(pixels(20.f)).value;
 
   // Initialize state
-  auto &state = _init_state<HasTextAreaState>(
+  auto &state = init_state<HasTextAreaState>(
       entity,
       [&](HasTextAreaState &s) {
         // Update area config from component config
@@ -86,7 +86,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   config.flex_direction = FlexDirection::Column;
-  _init_component(ctx, ep_pair, config, ComponentType::TextInput, false,
+  init_component(ctx, ep_pair, config, ComponentType::TextInput, false,
                   "text_area");
 
   auto base_corners = RoundedCorners(
