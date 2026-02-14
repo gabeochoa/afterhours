@@ -1021,7 +1021,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       EntityID child_id = cmp.children[0];
       Entity &child = UICollectionHolder::getEntityForIDEnforce(child_id);
       UIComponent &child_cmp = child.get<UIComponent>();
-      child_cmp.set_desired_padding(
+      child_cmp.set_desired_margin(
           pixels(sliderState.value * 0.75f * rect.width), Axis::left);
 
       // Update labels based on position
@@ -1078,8 +1078,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   // (e.g. with_slider_handle_height) to allow oversized knob-style handles.
   auto handle_config =
       ComponentConfig::inherit_from(config, "slider_handle")
-          .with_size(ComponentSize{handle_width_size, percent(1.f)})
-          .with_padding(Padding{.left = handle_left_size})
+          .with_size(ComponentSize{handle_width_size, bg_size.y_axis})
+          .with_absolute_position()
+          .with_margin(Margin{.left = handle_left_size})
           .with_color_usage(Theme::Usage::Primary)
           .with_rounded_corners(config.rounded_corners.value())
           .with_debug_name("slider_handle")
@@ -1088,7 +1089,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   auto handle = div(ctx, mk(slider_bg), handle_config);
   handle.cmp()
       .set_desired_width(handle_config.size.x_axis)
-      .set_desired_height(percent(1.f));
+      .set_desired_height(bg_size.y_axis);
   handle.ent().template addComponentIfMissing<InFocusCluster>();
 
   // Add handle label if needed
