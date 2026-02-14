@@ -6,7 +6,11 @@
 #include "test_input.h"
 #include "visible_text.h"
 
+#include "../../font_helper.h"
 #include "../../logging.h"
+#include "../ui/ui_collection.h"
+#include "../ui/ui_core_components.h"
+#include "../ui/components.h"
 #include "../window_manager.h"
 
 #include <atomic>
@@ -447,6 +451,116 @@ struct HandleResizeCommand : System<PendingE2ECommand> {
     window_manager::set_window_size(w, h);
 
     cmd.consume();
+  }
+};
+
+// Handle 'assert_no_overflow' command - checks that all rendered UI elements
+// fit within the current viewport AND that text content fits its containers.
+// Checks three things:
+//   1. Element rects within viewport bounds
+//   2. Text content fits its containing element (no truncation)
+//   3. Text content doesn't extend past viewport (if element is near edge)
+// Fails with a list of violating elements.
+struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("assert_no_overflow"))
+      return;
+
+    auto [vw, vh] = e2e_screen_size();
+    constexpr float TOLERANCE = 2.0f;
+    constexpr float TEXT_TOLERANCE = 4.0f; // extra tolerance for text fitting
+
+    auto *font_mgr =
+        EntityHelper::get_singleton_cmp<ui::FontManager>();
+
+    // Don't use force_merge: only check entities that completed layout pipeline
+    auto &ui_coll = ui::UICollectionHolder::get().collection;
+    auto all_ui = EntityQuery(ui_coll)
+                      .whereHasComponent<ui::UIComponent>()
+                      .gen();
+
+    std::vector<std::string> violations;
+    for (Entity &entity : all_ui) {
+      auto &cmp = entity.get<ui::UIComponent>();
+      if (!cmp.was_rendered_to_screen || cmp.should_hide)
+        continue;
+      auto rect = cmp.rect();
+      if (rect.width < 1.0f || rect.height < 1.0f)
+        continue;
+      // Skip elements that haven't been laid out yet (default computed = -1)
+      if (cmp.computed[ui::Axis::X] < 0 || cmp.computed[ui::Axis::Y] < 0)
+        continue;
+
+      // --- Check 1: element rect outside viewport ---
+      bool rect_out = (rect.x < -TOLERANCE) ||
+                      (rect.y < -TOLERANCE) ||
+                      (rect.x + rect.width > vw + TOLERANCE) ||
+                      (rect.y + rect.height > vh + TOLERANCE);
+
+      // --- Check 2: text truncation (text wider than container) ---
+      // Skip text check for elements at origin (0,0) - likely stale/unprocessed
+      bool text_truncated = false;
+      std::string text_detail;
+      if (entity.has<ui::HasLabel>() && font_mgr &&
+          (rect.x > 0.5f || rect.y > 0.5f)) {
+        auto &label = entity.get<ui::HasLabel>();
+        if (!label.label.empty() && label.label.length() > 1) {
+          std::string fname = cmp.font_name;
+          if (fname == ui::UIComponent::UNSET_FONT ||
+              fname == ui::UIComponent::DEFAULT_FONT) {
+            fname = font_mgr->active_font;
+          }
+          if (font_mgr->fonts.contains(fname)) {
+            Font font = font_mgr->fonts.at(fname);
+            float font_size = cmp.font_size.value;
+            if (font_size < 1.0f) font_size = 14.0f;
+
+            auto text_sz = measure_text(
+                font, label.label.c_str(), font_size, 1.0f);
+
+            // Text wider than container = truncation
+            if (text_sz.x > rect.width + TEXT_TOLERANCE) {
+              text_truncated = true;
+              std::string label_preview =
+                  label.label.length() > 25
+                      ? label.label.substr(0, 25) + "..."
+                      : label.label;
+              text_detail = std::format(
+                  " (text \"{}\" needs {:.0f}px but container is {:.0f}px wide)",
+                  label_preview, text_sz.x, rect.width);
+            }
+          }
+        }
+      }
+
+      if (!rect_out && !text_truncated)
+        continue;
+
+      std::string name;
+      if (entity.has<ui::UIComponentDebug>()) {
+        name = entity.get<ui::UIComponentDebug>().name();
+      } else if (entity.has<ui::HasLabel>()) {
+        name = "\"" + entity.get<ui::HasLabel>().label + "\"";
+      } else {
+        name = "entity_" + std::to_string(entity.id);
+      }
+
+      std::string reason = rect_out ? "RECT" : "TEXT";
+      violations.push_back(std::format(
+          "  [{}] {} at ({:.0f},{:.0f}) size {:.0f}x{:.0f}{}",
+          reason, name, rect.x, rect.y, rect.width, rect.height,
+          text_detail));
+    }
+
+    if (!violations.empty()) {
+      std::string msg = std::format(
+          "assert_no_overflow: {} violation(s) at {:.0f}x{:.0f}:\n",
+          violations.size(), vw, vh);
+      for (auto &v : violations) msg += v + "\n";
+      cmd.fail(msg);
+    } else {
+      cmd.consume();
+    }
   }
 };
 

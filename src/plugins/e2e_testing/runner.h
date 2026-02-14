@@ -174,6 +174,9 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
       iss >> name;
       cmd.args.push_back(name);
       cmd.wait_seconds = 1 * frame;
+    } else if (cmd.name == "assert_no_overflow") {
+      // No arguments - checks all UI elements fit within current viewport
+      cmd.wait_seconds = 2 * frame;
     } else if (cmd.name == "reset_test_state" || cmd.name == "reset") {
       cmd.name = "reset_test_state"; // Normalize alias
       cmd.wait_seconds = 2 * frame;
