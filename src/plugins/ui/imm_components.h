@@ -766,16 +766,13 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
   return {changed, parent, static_cast<int>(selected_index)};
 }
 
-enum struct ToggleSwitchStyle {
-  Pill,   // iOS-style pill with sliding knob (default)
-  Circle, // Single circle with X/checkmark inside
-};
-
-/// Toggle switch with style variants: Pill (iOS-style) or Circle (X/checkmark).
+/// iOS-style pill toggle switch with sliding knob.
+///
+/// For a simple circle toggle with check/X indicator, use checkbox()
+/// with .with_rounded_corners(RoundedCorners().all_round()).
 ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
                             bool &value,
-                            ComponentConfig config = ComponentConfig(),
-                            ToggleSwitchStyle style = ToggleSwitchStyle::Pill) {
+                            ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
   auto label = config.label;
@@ -830,101 +827,54 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
         .template addComponentIfMissing<InFocusCluster>();
   }
 
-  bool clicked = false;
+  // Pill style (iOS-like sliding knob)
+  // knob_sz = track_h - 2*pad ensures the knob circle fits perfectly
+  // inside the capsule's rounded ends (centers coincide).
 
-  if (style == ToggleSwitchStyle::Circle) {
-    // Checkbox-style circle: filled when ON, empty ring when OFF
-    constexpr float circle_sz = 28.0f;
+  // Colors — visible gray for OFF, accent for ON
+  Color track_off = colors::lerp(
+      theme.font_muted,
+      colors::lighten(theme.background, 0.3f), 0.4f);
+  Color track_on = theme.accent;
+  Color track_color = colors::lerp(track_off, track_on,
+                                   state.animation_progress);
 
-    Color circle_bg = state.on ? theme.accent : Color{0, 0, 0, 0};
-    Color circle_border = state.on ? theme.accent : theme.font_muted;
+  // Dimensions
+  constexpr float track_w = 52.0f, track_h = 28.0f;
+  constexpr float pad = 4.0f;
+  constexpr float knob_sz = track_h - pad * 2.0f;  // 20px
+  constexpr float travel = track_w - knob_sz - pad * 2.0f;  // 24px
 
-    // Circle toggle — skip_hover_override keeps correct color on hover
-    // Explicit zero padding prevents default Spacing::sm button padding
-    // which would offset the absolute-positioned indicator text.
-    auto circ = primitive::toggle_button(ctx, mk(entity),
-        ComponentConfig::inherit_from(config, "toggle_circle")
-            .with_size(ComponentSize{pixels(circle_sz), pixels(circle_sz)})
-            .with_padding(Padding{.top = pixels(0), .left = pixels(0),
-                                  .bottom = pixels(0), .right = pixels(0)})
-            .with_custom_background(circle_bg)
-            .with_border(circle_border, 2.0f)
-            .with_rounded_corners(RoundedCorners().all_round())
-            .with_roundness(1.0f)
-            .with_self_align(SelfAlign::Center),
-        state.on);
-    circ.ent().template addComponentIfMissing<InFocusCluster>();
-    circ.ent().template get<HasColor>().skip_hover_override = true;
-    clicked = circ;
+  // Track toggle — skip_hover_override keeps correct color on hover
+  // Explicit zero padding prevents default Spacing::sm button padding
+  // which would offset the absolute-positioned knob outside the capsule.
+  auto track_btn = primitive::toggle_button(ctx, mk(entity),
+      ComponentConfig::inherit_from(config, "toggle_track")
+          .with_size(ComponentSize{pixels(track_w), pixels(track_h)})
+          .with_padding(Padding{.top = pixels(0), .left = pixels(0),
+                                .bottom = pixels(0), .right = pixels(0)})
+          .with_custom_background(track_color)
+          .with_rounded_corners(RoundedCorners().all_round())
+          .with_roundness(0.5f)
+          .with_self_align(SelfAlign::Center),
+      state.on);
+  track_btn.ent().template addComponentIfMissing<InFocusCluster>();
+  track_btn.ent().template get<HasColor>().skip_hover_override = true;
+  bool clicked = track_btn;
 
-    // Check/X indicator text
-    std::string checked_indicator = config.checkbox_checked_indicator.value_or(
-        ComponentConfig::DEFAULT_CHECKBOX_CHECKED);
-    std::string unchecked_indicator = config.checkbox_unchecked_indicator.value_or(
-        ComponentConfig::DEFAULT_CHECKBOX_UNCHECKED);
-    auto check_label = state.on ? checked_indicator : unchecked_indicator;
-
-    div(ctx, mk(circ.ent()),
-        ComponentConfig{}
-            .with_debug_name("toggle_indicator")
-            .with_label(check_label)
-            .with_size(ComponentSize{pixels(circle_sz), pixels(circle_sz)})
-            .with_absolute_position()
-            .with_translate(pixels(0.0f), pixels(0.0f))
-            .with_custom_text_color(state.on ? theme.background : theme.font_muted)
-            .with_font(UIComponent::DEFAULT_FONT, pixels(16.0f))
-            .with_alignment(TextAlignment::Center)
-            .with_skip_tabbing(true));
-  } else {
-    // Pill style (iOS-like sliding knob)
-    // knob_sz = track_h - 2*pad ensures the knob circle fits perfectly
-    // inside the capsule's rounded ends (centers coincide).
-
-    // Colors — visible gray for OFF, accent for ON
-    Color track_off = colors::lerp(
-        theme.font_muted,
-        colors::lighten(theme.background, 0.3f), 0.4f);
-    Color track_on = theme.accent;
-    Color track_color = colors::lerp(track_off, track_on,
-                                     state.animation_progress);
-
-    // Dimensions
-    constexpr float track_w = 52.0f, track_h = 28.0f;
-    constexpr float pad = 4.0f;
-    constexpr float knob_sz = track_h - pad * 2.0f;  // 20px
-    constexpr float travel = track_w - knob_sz - pad * 2.0f;  // 24px
-
-    // Track toggle — skip_hover_override keeps correct color on hover
-    // Explicit zero padding prevents default Spacing::sm button padding
-    // which would offset the absolute-positioned knob outside the capsule.
-    auto track_btn = primitive::toggle_button(ctx, mk(entity),
-        ComponentConfig::inherit_from(config, "toggle_track")
-            .with_size(ComponentSize{pixels(track_w), pixels(track_h)})
-            .with_padding(Padding{.top = pixels(0), .left = pixels(0),
-                                  .bottom = pixels(0), .right = pixels(0)})
-            .with_custom_background(track_color)
-            .with_rounded_corners(RoundedCorners().all_round())
-            .with_roundness(0.5f)
-            .with_self_align(SelfAlign::Center),
-        state.on);
-    track_btn.ent().template addComponentIfMissing<InFocusCluster>();
-    track_btn.ent().template get<HasColor>().skip_hover_override = true;
-    clicked = track_btn;
-
-    // Knob — white circle with subtle dark border for visibility
-    float knob_x = pad + travel * state.animation_progress;
-    div(ctx, mk(track_btn.ent()),
-        ComponentConfig{}
-            .with_debug_name("toggle_knob")
-            .with_size(ComponentSize{pixels(knob_sz), pixels(knob_sz)})
-            .with_absolute_position()
-            .with_translate(pixels(knob_x), pixels(pad))
-            .with_custom_background(Color{255, 255, 255, 255})
-            .with_border(Color{0, 0, 0, 40}, 1.0f)
-            .with_rounded_corners(RoundedCorners().all_round())
-            .with_roundness(1.0f)
-            .with_skip_tabbing(true));
-  }
+  // Knob — white circle with subtle dark border for visibility
+  float knob_x = pad + travel * state.animation_progress;
+  div(ctx, mk(track_btn.ent()),
+      ComponentConfig{}
+          .with_debug_name("toggle_knob")
+          .with_size(ComponentSize{pixels(knob_sz), pixels(knob_sz)})
+          .with_absolute_position()
+          .with_translate(pixels(knob_x), pixels(pad))
+          .with_custom_background(Color{255, 255, 255, 255})
+          .with_border(Color{0, 0, 0, 40}, 1.0f)
+          .with_rounded_corners(RoundedCorners().all_round())
+          .with_roundness(1.0f)
+          .with_skip_tabbing(true));
 
   // Right-inset spacer: reserves the caller's original right padding as
   // empty space after the toggle, keeping it away from the row's right edge.

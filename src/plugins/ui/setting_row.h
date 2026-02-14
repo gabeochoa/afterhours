@@ -282,8 +282,7 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
       // Add right margin so the focus ring stays inside the row container.
       toggle_cfg.with_margin(Margin{.right = pixels(4)});
 
-      auto toggle_result = toggle_switch(ctx, mk(entity), *value, toggle_cfg,
-                                         ToggleSwitchStyle::Pill);
+      auto toggle_result = toggle_switch(ctx, mk(entity), *value, toggle_cfg);
 
       if (toggle_result) {
         changed = true;
