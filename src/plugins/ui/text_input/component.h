@@ -201,8 +201,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     // Cursor is a thin vertical bar
     // Note: Width must be >= 8px to survive 8pt grid snapping at high DPI
     // (grid unit scales with screen, e.g. ~11px at 1080p, so 2-4px rounds to 0)
-    auto cursor_result =
-        div(ctx, mk(field_entity, 0),
+    (void)div(ctx, mk(field_entity, 0),
             ComponentConfig()
                 .with_size(ComponentSize(pixels(8), pixels(cursor_height)))
                 .with_custom_background(ctx.theme.font) // Use theme text color

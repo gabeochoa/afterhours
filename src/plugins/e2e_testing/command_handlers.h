@@ -306,6 +306,8 @@ struct HandleDragToCommand : System<PendingE2ECommand> {
       phase = 0; // reset for next drag_to command
       cmd.consume();
       break;
+    default:
+      break;
     }
   }
 };

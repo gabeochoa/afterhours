@@ -173,7 +173,6 @@ struct PendingE2ECommand : BaseComponent {
   }
 
 private:
-  bool consumed = false;
   bool success = true;
 };
 

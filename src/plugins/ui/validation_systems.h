@@ -329,8 +329,9 @@ struct ValidateResolutionIndependence
       return field + ".right";
     case Axis::bottom:
       return field + ".bottom";
+    default:
+      return field;
     }
-    return field;
   }
 
   void validate_resolution(UIComponent &cmp, const ValidationConfig &config) {

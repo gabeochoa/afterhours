@@ -207,6 +207,7 @@ struct modal : developer::Plugin {
       case ui::Dim::None:
       case ui::Dim::Text:
       case ui::Dim::Children:
+      case ui::Dim::Expand:
       default:
         return size.value;
       }
