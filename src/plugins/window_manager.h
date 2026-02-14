@@ -12,6 +12,14 @@
 #include "../developer.h"
 #include "../logging.h"
 
+// Forward declarations for Metal/Sokol backend (defined in sokol_app.h and
+// the app's .mm translation unit respectively).
+#ifdef AFTER_HOURS_USE_METAL
+extern "C" int sapp_width(void);
+extern "C" int sapp_height(void);
+extern "C" void metal_set_window_size(int width, int height);
+#endif
+
 namespace afterhours {
 
 struct window_manager : developer::Plugin {
@@ -69,6 +77,25 @@ struct window_manager : developer::Plugin {
 
   static void set_window_size(const int width, const int height) {
     raylib::SetWindowSize(width, height);
+  }
+#elif defined(AFTER_HOURS_USE_METAL)
+  // Metal/Sokol backend — uses sapp_width()/sapp_height() for current
+  // resolution and an extern Obj-C function for resizing.
+  static Resolution fetch_current_resolution() {
+    // sapp_width()/sapp_height() return the framebuffer size (logical pixels
+    // when high_dpi is off, which is our default).
+    return Resolution{.width = ::sapp_width(), .height = ::sapp_height()};
+  }
+
+  static Resolution fetch_maximum_resolution() {
+    // Conservative fallback; a proper implementation would query
+    // NSScreen.mainScreen.frame, but this is sufficient for now.
+    return Resolution{.width = 3840, .height = 2160};
+  }
+
+  // Implemented in sokol_impl.mm via Cocoa NSWindow API.
+  static void set_window_size(const int width, const int height) {
+    ::metal_set_window_size(width, height);
   }
 #else
   static Resolution fetch_maximum_resolution() {
