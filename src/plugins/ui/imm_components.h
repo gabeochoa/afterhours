@@ -29,8 +29,8 @@ namespace imm {
 // Custom component authors should compose using these primitives and utilities:
 //
 // Primitives:
-//   div, hstack, vstack, separator, button, image, sprite, image_button,
-//   checkbox_no_label, circular_progress
+//   div, hstack, vstack, spacer, separator, button, image, sprite,
+//   image_button, circular_progress
 //
 // Composites (built from primitives):
 //   icon_row, button_group, checkbox, checkbox_group, radio_group,
@@ -184,6 +184,33 @@ ElementResult vstack(HasUIContext auto &ctx, EntityParent ep_pair,
   if (config.size.is_default) {
     config.with_size(ComponentSize{percent(1.0f), children()});
   }
+  return div(ctx, ep_pair, config);
+}
+
+/// Invisible flexible spacer — expands to fill remaining space in a flex
+/// container.  Useful for pushing siblings apart (e.g. a label on the left
+/// and a control flush-right).
+///
+/// Default size: expand() x expand() — grows along the parent's flex axis.
+/// Override with .with_size() for fixed or proportional spacers.
+///
+/// Usage:
+/// ```cpp
+/// auto row = hstack(ctx, mk(parent));
+/// button(ctx, mk(row.ent()), ComponentConfig{}.with_label("Left"));
+/// spacer(ctx, mk(row.ent()));            // pushes "Right" to the far edge
+/// button(ctx, mk(row.ent()), ComponentConfig{}.with_label("Right"));
+///
+/// // Fixed-width gap
+/// spacer(ctx, mk(row.ent()),
+///     ComponentConfig{}.with_size(ComponentSize{pixels(16), pixels(1)}));
+/// ```
+ElementResult spacer(HasUIContext auto &ctx, EntityParent ep_pair,
+                     ComponentConfig config = ComponentConfig()) {
+  if (config.size.is_default) {
+    config.with_size(ComponentSize{expand(), expand()});
+  }
+  config.with_color_usage(Theme::Usage::None).with_skip_tabbing(true);
   return div(ctx, ep_pair, config);
 }
 
@@ -532,30 +559,6 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   return {clicked, entity, value};
-}
-
-/// @deprecated Use primitive::toggle_button directly instead.
-/// Thin wrapper kept for backward compatibility — will be removed in a future
-/// release.
-ElementResult checkbox_no_label(HasUIContext auto &ctx, EntityParent ep_pair,
-                                bool &value,
-                                ComponentConfig config = ComponentConfig()) {
-  // Apply checkbox visual defaults to config, then delegate to toggle_button
-  std::string checked_indicator = config.checkbox_checked_indicator.value_or(
-      ComponentConfig::DEFAULT_CHECKBOX_CHECKED);
-  std::string unchecked_indicator = config.checkbox_unchecked_indicator.value_or(
-      ComponentConfig::DEFAULT_CHECKBOX_UNCHECKED);
-  config.label = value ? checked_indicator : unchecked_indicator;
-
-  if (!config.has_font_override()) {
-    config.font_name = UIComponent::SYMBOL_FONT;
-    config.font_size = pixels(20.f);
-  }
-  if (!config.has_text_color_override()) {
-    config.with_auto_text_color(true);
-  }
-
-  return primitive::toggle_button(ctx, ep_pair, config, value);
 }
 
 ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
