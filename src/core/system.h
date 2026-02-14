@@ -484,8 +484,6 @@ struct SystemManager {
     void render(Entities &entities, const float dt) {
         for (auto &system : render_systems_) {
             if (!system->should_run(dt)) continue;
-#ifndef AFTERHOURS_SINGLE_RENDER_PASS
-            // Call non-const first
             system->once(dt);
             system->on_iteration_begin(dt);
             for (const auto& entity : entities) {
@@ -497,8 +495,7 @@ struct SystemManager {
             }
             system->on_iteration_end(dt);
             system->after(dt);
-#endif
-            // Also call const overloads to give time for migration
+#ifndef AFTERHOURS_SINGLE_RENDER_PASS
             const SystemBase &sys = *system;
             sys.once(dt);
             sys.on_iteration_begin(dt);
@@ -512,6 +509,7 @@ struct SystemManager {
             }
             sys.on_iteration_end(dt);
             sys.after(dt);
+#endif
         }
     }
 
