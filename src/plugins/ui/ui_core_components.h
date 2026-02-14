@@ -135,9 +135,12 @@ struct UIComponent : BaseComponent {
 
   Rectangle bounds() const {
     Rectangle rect_ = rect();
+    // bounds() = the full allocation including padding (inside) and margins
+    // (outside). Padding is internal to the element so we don't subtract it
+    // from position; we only expand outward by margin.
     return Rectangle{
-        .x = rect_.x - computed_padd[Axis::left] - computed_margin[Axis::left],
-        .y = rect_.y - computed_padd[Axis::top] - computed_margin[Axis::top],
+        .x = rect_.x - computed_margin[Axis::left],
+        .y = rect_.y - computed_margin[Axis::top],
         .width =
             rect_.width + computed_padd[Axis::X] + computed_margin[Axis::X],
         .height =

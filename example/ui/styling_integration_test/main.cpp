@@ -29,7 +29,13 @@ using namespace afterhours;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
-enum struct InputAction {};
+enum struct InputAction {
+  None,
+  WidgetMod,
+  WidgetNext,
+  WidgetBack,
+  WidgetPress,
+};
 
 // Simple test to verify styling defaults integration
 struct StylingIntegrationTest : System<UIContext<InputAction>> {
@@ -92,10 +98,22 @@ int main(int, char **) {
 
     {
         auto &entity = EntityHelper::createEntity();
-        ui::add_singleton_components<InputAction>(entity);
+        entity.addComponent<UIContext<InputAction>>();
+        EntityHelper::registerSingleton<UIContext<InputAction>>(entity);
+        entity.addComponent<ui::FontManager>()
+            .load_font(UIComponent::DEFAULT_FONT, get_default_font())
+            .load_font(UIComponent::SYMBOL_FONT, get_default_font())
+            .load_font(UIComponent::UNSET_FONT, get_unset_font());
+        EntityHelper::registerSingleton<ui::FontManager>(entity);
+        entity.addComponent<window_manager::ProvidesCurrentResolution>(
+            window_manager::Resolution{1280, 720});
+        EntityHelper::registerSingleton<
+            window_manager::ProvidesCurrentResolution>(entity);
         entity.addComponent<ui::AutoLayoutRoot>();
         entity.addComponent<ui::UIComponentDebug>("styling_integration_test");
-        entity.addComponent<ui::UIComponent>(entity.id);
+        entity.addComponent<ui::UIComponent>(entity.id)
+            .set_desired_width(ui::screen_pct(1.f))
+            .set_desired_height(ui::screen_pct(1.f));
     }
 
     SystemManager systems;
@@ -103,14 +121,14 @@ int main(int, char **) {
     ui::enforce_singletons<InputAction>(systems);
 
     systems.register_update_system(
+        std::make_unique<ui::ClearUIComponentChildren>());
+    systems.register_update_system(
         std::make_unique<ui::BeginUIContextManager<InputAction>>());
     systems.register_update_system(std::make_unique<StylingIntegrationTest>());
     systems.register_update_system(
         std::make_unique<ui::EndUIContextManager<InputAction>>());
 
-    for (int i = 0; i < 2; i++) {
-        systems.run(1.f);
-    }
+    systems.run(1.f);
 
     return 0;
 }

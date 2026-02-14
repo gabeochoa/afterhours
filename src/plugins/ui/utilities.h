@@ -73,18 +73,14 @@ constexpr static InputValidationMode validation_mode =
 #define validate_enum_has_value(enum_name, name, reason)                       \
   do {                                                                         \
     if constexpr (validation_mode == InputValidationMode::None) {              \
-      log_error("validation mode none");                                       \
-      return;                                                                  \
-    }                                                                          \
-                                                                               \
-    if constexpr (!magic_enum::enum_contains<enum_name>(name)) {               \
+      /* Validation disabled - skip */                                         \
+    } else if constexpr (!magic_enum::enum_contains<enum_name>(name)) {        \
       if constexpr (validation_mode == InputValidationMode::Assert) {          \
         static_assert(false, "InputAction missing value '" name                \
                              "'. Input used to " reason);                      \
       } else if constexpr (validation_mode == InputValidationMode::LogOnly) {  \
         log_warn("InputAction missing value '" name                            \
                  "'. Input used to " reason);                                  \
-      } else {                                                                 \
       }                                                                        \
     }                                                                          \
   } while (0);

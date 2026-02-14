@@ -29,7 +29,13 @@ using namespace afterhours;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
-enum struct InputAction {};
+enum struct InputAction {
+  None,
+  WidgetMod,
+  WidgetNext,
+  WidgetBack,
+  WidgetPress,
+};
 
 struct EntityIDConflictTest : System<UIContext<InputAction>> {
     virtual void for_each_with(Entity &entity, UIContext<InputAction> &context,
@@ -87,10 +93,22 @@ int main(int, char **) {
 
     {
         auto &entity = EntityHelper::createEntity();
-        ui::add_singleton_components<InputAction>(entity);
+        entity.addComponent<UIContext<InputAction>>();
+        EntityHelper::registerSingleton<UIContext<InputAction>>(entity);
+        entity.addComponent<ui::FontManager>()
+            .load_font(UIComponent::DEFAULT_FONT, get_default_font())
+            .load_font(UIComponent::SYMBOL_FONT, get_default_font())
+            .load_font(UIComponent::UNSET_FONT, get_unset_font());
+        EntityHelper::registerSingleton<ui::FontManager>(entity);
+        entity.addComponent<window_manager::ProvidesCurrentResolution>(
+            window_manager::Resolution{1280, 720});
+        EntityHelper::registerSingleton<
+            window_manager::ProvidesCurrentResolution>(entity);
         entity.addComponent<ui::AutoLayoutRoot>();
         entity.addComponent<ui::UIComponentDebug>("singleton");
-        entity.addComponent<ui::UIComponent>(entity.id);
+        entity.addComponent<ui::UIComponent>(entity.id)
+            .set_desired_width(ui::screen_pct(1.f))
+            .set_desired_height(ui::screen_pct(1.f));
     }
 
     SystemManager systems;
@@ -98,16 +116,16 @@ int main(int, char **) {
     ui::enforce_singletons<InputAction>(systems);
 
     systems.register_update_system(
+        std::make_unique<ui::ClearUIComponentChildren>());
+    systems.register_update_system(
         std::make_unique<ui::BeginUIContextManager<InputAction>>());
     systems.register_update_system(std::make_unique<EntityIDConflictTest>());
     systems.register_update_system(
         std::make_unique<ui::EndUIContextManager<InputAction>>());
 
-    // Run multiple frames to see the issue
-    for (int i = 0; i < 3; i++) {
-        std::cout << "\n=== Frame " << i << " ===" << std::endl;
-        systems.run(1.f);
-    }
+    // Run a single frame to demonstrate the issue
+    std::cout << "\n=== Frame 0 ===" << std::endl;
+    systems.run(1.f);
 
     return 0;
 }

@@ -778,16 +778,6 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
   auto label = config.label;
   config.label = "";
 
-  // Save caller's horizontal padding. The layout engine double-counts
-  // horizontal padding (once in compute_relative_positions via container_w,
-  // and again in compute_rect_bounds via parent padding_left offset). Zeroing
-  // the row's horizontal padding avoids this. Instead we apply left padding
-  // *inside* the label div, and add a right-inset spacer div after the track.
-  Size saved_pad_left = config.padding.left;
-  Size saved_pad_right = config.padding.right;
-  config.padding.left = pixels(0);
-  config.padding.right = pixels(0);
-
   // Ensure toggle row uses Row layout to place label and toggle side-by-side
   if (config.flex_direction == FlexDirection::Column) {
     config.with_flex_direction(FlexDirection::Row);
@@ -814,15 +804,13 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
   const Theme &theme = ctx.theme;
 
   // Optional label — uses expand() to fill remaining space so the toggle
-  // control is flush-right. Left padding *inside* the label preserves the
-  // caller's intended text indentation without causing layout overflow.
+  // control is flush-right.
   if (!label.empty()) {
     div(ctx, mk(entity),
         ComponentConfig::inherit_from(config, "toggle_label")
             .with_size(ComponentSize{expand(), config.size.y_axis})
             .with_label(label)
-            .with_color_usage(Theme::Usage::None)
-            .with_padding(Padding{.left = saved_pad_left}))
+            .with_color_usage(Theme::Usage::None))
         .ent()
         .template addComponentIfMissing<InFocusCluster>();
   }
@@ -875,18 +863,6 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
           .with_rounded_corners(RoundedCorners().all_round())
           .with_roundness(1.0f)
           .with_skip_tabbing(true));
-
-  // Right-inset spacer: reserves the caller's original right padding as
-  // empty space after the toggle, keeping it away from the row's right edge.
-  // Only added when the caller actually specified horizontal padding.
-  if (saved_pad_right.dim != Dim::None && saved_pad_right.value > 0.f) {
-    div(ctx, mk(entity),
-        ComponentConfig{}
-            .with_debug_name("toggle_right_inset")
-            .with_size(ComponentSize{saved_pad_right, pixels(1)})
-            .with_color_usage(Theme::Usage::None)
-            .with_skip_tabbing(true));
-  }
 
   // toggle_button already flipped state.on if clicked
   if (clicked) {
