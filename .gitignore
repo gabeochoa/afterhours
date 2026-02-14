@@ -28,5 +28,6 @@ art_storage/*
 
 # Example outputs
 examples/graphics_example
+examples/autolayout_test
 examples/graphics_example_output.png
 examples/graphics_example_captures/
