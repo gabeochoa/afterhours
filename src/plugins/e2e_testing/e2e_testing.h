@@ -64,6 +64,7 @@ inline void register_builtin_handlers(SystemManager &sm) {
   sm.register_update_system(std::make_unique<HandleWaitFramesCommand>());
   sm.register_update_system(std::make_unique<HandleExpectTextCommand>());
   sm.register_update_system(std::make_unique<HandleExpectNoTextCommand>());
+  sm.register_update_system(std::make_unique<HandleResizeCommand>());
   // Note: screenshot and reset_test_state need callbacks, registered separately
 }
 

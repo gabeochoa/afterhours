@@ -136,6 +136,13 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
       cmd.args.push_back(y2);
       // drag_to needs extra frames for the 3-phase press→move→release cycle
       cmd.wait_seconds = (cmd.name == "drag_to") ? 10 * frame : 5 * frame;
+    } else if (cmd.name == "resize") {
+      // resize width height — physically resizes the window/viewport
+      std::string w_str, h_str;
+      iss >> w_str >> h_str;
+      cmd.args.push_back(w_str);
+      cmd.args.push_back(h_str);
+      cmd.wait_seconds = 5 * frame; // Extra frames for layout recalculation
     } else if (cmd.name == "wait") {
       // Wait in seconds (default 1 second)
       float seconds = 1.0f;

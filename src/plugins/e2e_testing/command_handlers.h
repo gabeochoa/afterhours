@@ -414,6 +414,42 @@ private:
   ResetFn on_reset_;
 };
 
+// Handle 'resize w h' command - resizes the window/viewport
+// Updates ProvidesCurrentResolution singleton and calls set_window_size().
+// Screen systems will pick up the new dimensions on the next frame.
+struct HandleResizeCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("resize"))
+      return;
+    if (!cmd.has_args(2)) {
+      cmd.fail("resize requires width height arguments");
+      return;
+    }
+
+    int w = cmd.arg_as<int>(0);
+    int h = cmd.arg_as<int>(1);
+
+    if (w <= 0 || h <= 0) {
+      cmd.fail(std::format("resize: invalid dimensions {}x{}", w, h));
+      return;
+    }
+
+    // Update the ECS resolution singleton (authoritative source for UI layout)
+    auto *pcr = EntityHelper::get_singleton_cmp<
+        window_manager::ProvidesCurrentResolution>();
+    if (pcr) {
+      pcr->current_resolution.width = w;
+      pcr->current_resolution.height = h;
+      pcr->should_refetch = false; // Prevent CollectCurrentResolution from overwriting
+    }
+
+    // Physically resize the window (no-op in headless mode)
+    window_manager::set_window_size(w, h);
+
+    cmd.consume();
+  }
+};
+
 // Fail on unhandled commands (runs after all other handlers)
 struct HandleUnknownCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
