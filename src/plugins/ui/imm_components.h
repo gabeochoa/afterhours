@@ -422,14 +422,13 @@ ElementResult icon_row(HasUIContext auto &ctx, EntityParent ep_pair,
   auto [entity, parent] = deref(ep_pair);
 
   auto row =
-      div(ctx, ep_pair,
-          ComponentConfig::inherit_from(config, "icon_row")
-              .with_size(config.size)
-              .with_margin(config.margin)
-              .with_padding(config.padding)
-              .with_flex_direction(FlexDirection::Row)
-              .with_debug_name(config.debug_name.empty() ? "icon_row"
-                                                         : config.debug_name));
+      hstack(ctx, ep_pair,
+             ComponentConfig::inherit_from(config, "icon_row")
+                 .with_size(config.size)
+                 .with_margin(config.margin)
+                 .with_padding(config.padding)
+                 .with_debug_name(config.debug_name.empty() ? "icon_row"
+                                                            : config.debug_name));
 
   size_t i = 0;
   for (const auto &frame : frames) {
@@ -1575,15 +1574,14 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
                        : afterhours::colors::darken(ctx.theme.background, 0.92f);
     Color tab_text = is_active ? ctx.theme.font : ctx.theme.font_muted;
 
-    // Wrapper div for each tab: column layout holding button + underline
+    // Wrapper for each tab: column layout holding button + underline
     auto tab_wrapper =
-        div(ctx, mk(entity, i),
-            ComponentConfig::inherit_from(config,
-                                         fmt::format("tab_wrap_{}", i))
-                .with_size(ComponentSize{percent(tab_width_percent),
-                                        config.size.y_axis})
-                .with_flex_direction(FlexDirection::Column)
-                .with_color_usage(Theme::Usage::None));
+        vstack(ctx, mk(entity, i),
+               ComponentConfig::inherit_from(config,
+                                            fmt::format("tab_wrap_{}", i))
+                   .with_size(ComponentSize{percent(tab_width_percent),
+                                           config.size.y_axis})
+                   .with_color_usage(Theme::Usage::None));
 
     auto tab_config =
         ComponentConfig::inherit_from(config, fmt::format("tab_{}", i))
@@ -2173,15 +2171,14 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Wrap labels in a container so the row layout stays [<] [labels] [>]
   auto label_container =
-      div(ctx, mk(entity),
-          ComponentConfig::inherit_from(config, "stepper_labels")
-              .with_size(ComponentSize{children(), percent(1.0f)})
-              .with_background(Theme::Usage::None)
-              .with_flex_direction(FlexDirection::Row)
-              .with_justify_content(JustifyContent::SpaceAround)
-              .with_align_items(AlignItems::Center)
-              .with_skip_tabbing(true)
-              .with_debug_name("stepper_labels"));
+      hstack(ctx, mk(entity),
+             ComponentConfig::inherit_from(config, "stepper_labels")
+                 .with_size(ComponentSize{children(), percent(1.0f)})
+                 .with_background(Theme::Usage::None)
+                 .with_justify_content(JustifyContent::SpaceAround)
+                 .with_align_items(AlignItems::Center)
+                 .with_skip_tabbing(true)
+                 .with_debug_name("stepper_labels"));
 
   // TODO: Make neighbor styling configurable (muted color, smaller font, opacity, etc.)
   for (size_t i = 0; i < num_visible; ++i) {
