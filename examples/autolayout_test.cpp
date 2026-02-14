@@ -46,6 +46,20 @@
 //   - rect() returns content-box, bounds() includes padding + margin
 //   - Nested rect bounds accumulate through hierarchy
 //
+// Absolute positioning:
+//   - Margins don't shrink absolute element size (position only)
+//   - Margins position absolute elements correctly
+//   - Large margins don't cause negative sizes on absolute elements
+//   - Flow elements with large margins clamp to zero (contrast test)
+//   - Absolute rect() vs bounds() includes margins/padding correctly
+//   - Percent sizing resolves against parent for absolute elements
+//   - Percent sizing + margins work together on absolute elements
+//   - Padding inside absolute elements reduces child content area
+//   - Absolute children excluded from parent children() sizing
+//   - Multiple absolute children have independent margin positioning
+//   - screen_pct sizing resolves against screen for absolute elements
+//   - Absolute children interleaved with flow don't affect stacking
+//
 // Real-world patterns:
 //   - Sidebar layout (fixed + expand)
 //   - Dashboard (header + sidebar|main + footer)
@@ -2192,6 +2206,337 @@ TEST(deeply_nested_mixed_directions) {
   // Row within right body
   CHECK_APPROX(t.ui(rb2).computed[Axis::X], 100.f);
   CHECK_APPROX(t.ui(rb1).computed[Axis::X], 200.f);
+}
+
+// ============================================================================
+// Absolute positioning
+// ============================================================================
+
+// ---------------------------------------------------------------------------
+// Absolute + margin: margins don't shrink the element size
+// ---------------------------------------------------------------------------
+TEST(absolute_margin_no_shrink) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(400));
+  t.ui(root).set_flex_direction(FlexDirection::Column);
+
+  auto &child = t.make_ui(pixels(200), pixels(100));
+  t.ui(child).make_absolute();
+  t.ui(child).set_desired_margin(pixels(50), Axis::X);
+  t.ui(child).set_desired_margin(pixels(30), Axis::Y);
+  t.add_child(root, child);
+  t.run(root);
+
+  // For absolute elements, rect() should NOT subtract margins from size
+  auto r = t.ui(child).rect();
+  CHECK_APPROX(r.width, 200.f);
+  CHECK_APPROX(r.height, 100.f);
+}
+
+// ---------------------------------------------------------------------------
+// Absolute + margin: margins position the element
+// ---------------------------------------------------------------------------
+TEST(absolute_margin_positions) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(400));
+  t.ui(root).set_flex_direction(FlexDirection::Column);
+
+  auto &child = t.make_ui(pixels(100), pixels(100));
+  t.ui(child).make_absolute();
+  t.ui(child).set_desired_margin(Margin{
+      .top = pixels(20),
+      .bottom = pixels(0),
+      .left = pixels(30),
+      .right = pixels(0),
+  });
+  t.add_child(root, child);
+  t.run(root);
+
+  // Margins should offset the position of the absolute element
+  auto r = t.ui(child).rect();
+  CHECK_APPROX(r.x, 30.f);
+  CHECK_APPROX(r.y, 20.f);
+  // Size should be unchanged
+  CHECK_APPROX(r.width, 100.f);
+  CHECK_APPROX(r.height, 100.f);
+}
+
+// ---------------------------------------------------------------------------
+// Absolute + large margin: even very large margins don't cause negative size
+// ---------------------------------------------------------------------------
+TEST(absolute_large_margin_no_negative) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(1280), pixels(720));
+
+  auto &child = t.make_ui(screen_pct(0.4f), screen_pct(0.6f));
+  t.ui(child).make_absolute();
+  // Margins larger than the element — would cause negative size in flow
+  t.ui(child).set_desired_margin(Margin{
+      .top = screen_pct(0.3f),
+      .bottom = screen_pct(0.3f),
+      .left = screen_pct(0.3f),
+      .right = screen_pct(0.3f),
+  });
+  t.add_child(root, child);
+  t.run(root);
+
+  auto r = t.ui(child).rect();
+  // Size should be the screen_pct value, not reduced by margins
+  // 0.4 * 1280 = 512, 0.6 * 720 = 432
+  CHECK_APPROX(r.width, 512.f);
+  CHECK_APPROX(r.height, 432.f);
+  CHECK(r.width > 0.f);
+  CHECK(r.height > 0.f);
+}
+
+// ---------------------------------------------------------------------------
+// Flow + large margin: flow element clamps to zero (contrast with absolute)
+// ---------------------------------------------------------------------------
+TEST(flow_large_margin_clamps_to_zero) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(1280), pixels(720));
+  t.ui(root).set_flex_direction(FlexDirection::Column);
+
+  auto &child = t.make_ui(screen_pct(0.4f), screen_pct(0.6f));
+  // Same margins that would cause negative size in flow
+  t.ui(child).set_desired_margin(Margin{
+      .top = screen_pct(0.3f),
+      .bottom = screen_pct(0.3f),
+      .left = screen_pct(0.3f),
+      .right = screen_pct(0.3f),
+  });
+  t.add_child(root, child);
+  t.run(root);
+
+  auto r = t.ui(child).rect();
+  // Flow layout subtracts margins: 512 - 384 - 384 < 0, clamped to 0
+  CHECK_APPROX(r.width, 0.f);
+  CHECK_APPROX(r.height, 0.f);
+}
+
+// ---------------------------------------------------------------------------
+// Absolute rect() vs bounds(): rect is content-box, bounds includes margins
+// ---------------------------------------------------------------------------
+TEST(absolute_rect_vs_bounds) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(400));
+
+  auto &child = t.make_ui(pixels(200), pixels(100));
+  t.ui(child).make_absolute();
+  t.ui(child).set_desired_margin(pixels(10), Axis::X);
+  t.ui(child).set_desired_margin(pixels(10), Axis::Y);
+  t.ui(child).set_desired_padding(pixels(5), Axis::X);
+  t.ui(child).set_desired_padding(pixels(5), Axis::Y);
+  t.add_child(root, child);
+  t.run(root);
+
+  auto r = t.ui(child).rect();
+  // Absolute: rect width = computed (no margin subtraction)
+  CHECK_APPROX(r.width, 200.f);
+  CHECK_APPROX(r.height, 100.f);
+  // Position offset by margin
+  CHECK_APPROX(r.x, 10.f);
+  CHECK_APPROX(r.y, 10.f);
+
+  auto b = t.ui(child).bounds();
+  // bounds includes padding + margin around the rect
+  CHECK_APPROX(b.x, 0.f); // rect.x - margin_left = 10 - 10 = 0
+  CHECK_APPROX(b.y, 0.f);
+  CHECK_APPROX(b.width, 200.f + 10.f + 20.f);  // rect_w + pad_x + margin_x
+  CHECK_APPROX(b.height, 100.f + 10.f + 20.f);  // rect_h + pad_y + margin_y
+}
+
+// ---------------------------------------------------------------------------
+// Absolute + percent sizing resolves against parent
+// ---------------------------------------------------------------------------
+TEST(absolute_percent_resolves_against_parent) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(300));
+
+  auto &child = t.make_ui(percent(0.5f), percent(0.5f));
+  t.ui(child).make_absolute();
+  t.add_child(root, child);
+  t.run(root);
+
+  auto r = t.ui(child).rect();
+  CHECK_APPROX(r.width, 200.f);  // 50% of 400
+  CHECK_APPROX(r.height, 150.f); // 50% of 300
+}
+
+// ---------------------------------------------------------------------------
+// Absolute + percent + margin: percent resolves correctly, margin positions
+// ---------------------------------------------------------------------------
+TEST(absolute_percent_with_margin) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(400));
+
+  auto &child = t.make_ui(percent(0.5f), percent(0.5f));
+  t.ui(child).make_absolute();
+  t.ui(child).set_desired_margin(Margin{
+      .top = pixels(20),
+      .bottom = pixels(0),
+      .left = pixels(40),
+      .right = pixels(0),
+  });
+  t.add_child(root, child);
+  t.run(root);
+
+  auto r = t.ui(child).rect();
+  // Size should be 50% of parent, not reduced by margins
+  CHECK_APPROX(r.width, 200.f);
+  CHECK_APPROX(r.height, 200.f);
+  // Position offset by margins
+  CHECK_APPROX(r.x, 40.f);
+  CHECK_APPROX(r.y, 20.f);
+}
+
+// ---------------------------------------------------------------------------
+// Absolute + padding: padding reduces content area but not element size
+// ---------------------------------------------------------------------------
+TEST(absolute_with_padding) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(400));
+
+  auto &parent = t.make_ui(pixels(200), pixels(200));
+  t.ui(parent).make_absolute();
+  t.ui(parent).set_desired_padding(pixels(20), Axis::X);
+  t.ui(parent).set_desired_padding(pixels(20), Axis::Y);
+
+  // Child should fit inside padding
+  auto &child = t.make_ui(percent(1.0f), percent(1.0f));
+  t.add_child(root, parent);
+  t.add_child(parent, child);
+  t.run(root);
+
+  // Parent rect: full 200x200 (absolute, no margin)
+  auto rp = t.ui(parent).rect();
+  CHECK_APPROX(rp.width, 200.f);
+  CHECK_APPROX(rp.height, 200.f);
+
+  // Child: 100% of parent's content area (200 - 40 padding = 160)
+  auto rc = t.ui(child).rect();
+  CHECK_APPROX(rc.width, 160.f - t.ui(child).computed_margin[Axis::X]);
+  CHECK_APPROX(rc.height, 160.f - t.ui(child).computed_margin[Axis::Y]);
+}
+
+// ---------------------------------------------------------------------------
+// Absolute child doesn't contribute to parent children() sizing
+// ---------------------------------------------------------------------------
+TEST(absolute_excluded_from_children_sizing) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(800), pixels(600));
+  t.ui(root).set_flex_direction(FlexDirection::Column);
+
+  // Parent uses children() sizing
+  auto &parent = t.make_ui(children(), children());
+  t.ui(parent).set_flex_direction(FlexDirection::Column);
+
+  // Flow child: 100x50 — this should determine parent size
+  auto &flow_child = t.make_ui(pixels(100), pixels(50));
+  t.add_child(parent, flow_child);
+
+  // Absolute child: 300x300 — should NOT inflate parent size
+  auto &abs_child = t.make_ui(pixels(300), pixels(300));
+  t.ui(abs_child).make_absolute();
+  t.add_child(parent, abs_child);
+
+  t.add_child(root, parent);
+  t.run(root);
+
+  // Parent should be sized to flow child only (100x50), not 300x300
+  CHECK_APPROX(t.ui(parent).computed[Axis::X], 100.f);
+  CHECK_APPROX(t.ui(parent).computed[Axis::Y], 50.f);
+}
+
+// ---------------------------------------------------------------------------
+// Multiple absolute children with different margins don't interfere
+// ---------------------------------------------------------------------------
+TEST(multiple_absolute_independent_margins) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(400));
+
+  auto &a = t.make_ui(pixels(80), pixels(80));
+  t.ui(a).make_absolute();
+  t.ui(a).set_desired_margin(Margin{
+      .top = pixels(10), .bottom = pixels(0),
+      .left = pixels(10), .right = pixels(0),
+  });
+
+  auto &b = t.make_ui(pixels(80), pixels(80));
+  t.ui(b).make_absolute();
+  t.ui(b).set_desired_margin(Margin{
+      .top = pixels(100), .bottom = pixels(0),
+      .left = pixels(200), .right = pixels(0),
+  });
+
+  t.add_child(root, a);
+  t.add_child(root, b);
+  t.run(root);
+
+  auto ra = t.ui(a).rect();
+  CHECK_APPROX(ra.x, 10.f);
+  CHECK_APPROX(ra.y, 10.f);
+  CHECK_APPROX(ra.width, 80.f);
+  CHECK_APPROX(ra.height, 80.f);
+
+  auto rb = t.ui(b).rect();
+  CHECK_APPROX(rb.x, 200.f);
+  CHECK_APPROX(rb.y, 100.f);
+  CHECK_APPROX(rb.width, 80.f);
+  CHECK_APPROX(rb.height, 80.f);
+}
+
+// ---------------------------------------------------------------------------
+// Absolute child with screen_pct sizing resolves against screen
+// ---------------------------------------------------------------------------
+TEST(absolute_screen_pct_sizing) {
+  TestLayout t;
+  // Screen is 1280x720 (TestLayout default)
+  auto &root = t.make_ui(pixels(400), pixels(400));
+
+  auto &child = t.make_ui(screen_pct(0.5f), screen_pct(0.25f));
+  t.ui(child).make_absolute();
+  t.add_child(root, child);
+  t.run(root);
+
+  auto r = t.ui(child).rect();
+  CHECK_APPROX(r.width, 640.f);  // 50% of 1280
+  CHECK_APPROX(r.height, 180.f); // 25% of 720
+}
+
+// ---------------------------------------------------------------------------
+// Absolute + flow siblings: absolute doesn't affect flow stacking
+// ---------------------------------------------------------------------------
+TEST(absolute_and_flow_siblings_stacking) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(400));
+  t.ui(root).set_flex_direction(FlexDirection::Column);
+
+  auto &flow1 = t.make_ui(pixels(400), pixels(60));
+  auto &abs1 = t.make_ui(pixels(100), pixels(100));
+  t.ui(abs1).make_absolute();
+  t.ui(abs1).set_desired_margin(Margin{
+      .top = pixels(50), .bottom = pixels(0),
+      .left = pixels(50), .right = pixels(0),
+  });
+  auto &flow2 = t.make_ui(pixels(400), pixels(60));
+  auto &flow3 = t.make_ui(pixels(400), pixels(60));
+
+  t.add_child(root, flow1);
+  t.add_child(root, abs1);
+  t.add_child(root, flow2);
+  t.add_child(root, flow3);
+  t.run(root);
+
+  // Flow children stack normally, ignoring the absolute child
+  CHECK_APPROX(t.ui(flow1).computed_rel[Axis::Y], 0.f);
+  CHECK_APPROX(t.ui(flow2).computed_rel[Axis::Y], 60.f);
+  CHECK_APPROX(t.ui(flow3).computed_rel[Axis::Y], 120.f);
+
+  // Absolute child is positioned by its margin
+  auto ra = t.ui(abs1).rect();
+  CHECK_APPROX(ra.x, 50.f);
+  CHECK_APPROX(ra.y, 50.f);
 }
 
 // ============================================================================
