@@ -150,6 +150,18 @@ struct ClearUIComponentChildren : System<UIComponent> {
   }
 };
 
+/// Returns the element's rect with translate offsets applied (the actual
+/// on-screen position). Use this instead of cmp.rect() when you need the
+/// final rendered position including with_translate() offsets.
+static RectangleType get_final_rect(const Entity &entity,
+                                    const UIComponent &cmp) {
+  RectangleType r = cmp.rect();
+  if (entity.has<HasUIModifiers>()) {
+    r = entity.get<HasUIModifiers>().apply_modifier(r);
+  }
+  return r;
+}
+
 static void print_debug_autolayout_tree(Entity &entity, UIComponent &cmp,
                                         size_t tab = 0) {
   for (size_t i = 0; i < tab; i++)
@@ -162,6 +174,17 @@ static void print_debug_autolayout_tree(Entity &entity, UIComponent &cmp,
 
   std::cout << "Rect(" << cmp.rect().x << "," << cmp.rect().y << " "
             << cmp.rect().width << "x" << cmp.rect().height << ") ";
+
+  // Show translate offset and final position when modifiers are present
+  if (entity.has<HasUIModifiers>()) {
+    auto &mods = entity.get<HasUIModifiers>();
+    if (mods.translate_x != 0.f || mods.translate_y != 0.f) {
+      auto final_r = get_final_rect(entity, cmp);
+      std::cout << "Translate(" << mods.translate_x << ","
+                << mods.translate_y << ") ";
+      std::cout << "FinalPos(" << final_r.x << "," << final_r.y << ") ";
+    }
+  }
 
   std::cout << "Computed(" << cmp.computed[Axis::X] << "x"
             << cmp.computed[Axis::Y] << ") ";
