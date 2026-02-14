@@ -29,8 +29,8 @@ namespace imm {
 // Custom component authors should compose using these primitives and utilities:
 //
 // Primitives:
-//   div, separator, button, image, sprite, image_button, checkbox_no_label,
-//   circular_progress
+//   div, hstack, separator, button, image, sprite, image_button,
+//   checkbox_no_label, circular_progress
 //
 // Composites (built from primitives):
 //   icon_row, button_group, checkbox, checkbox_group, radio_group,
@@ -133,6 +133,32 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
   init_component(ctx, ep_pair, config, ComponentType::Div);
 
   return {true, entity};
+}
+
+/// Horizontal stack — a div with FlexDirection::Row preset.
+///
+/// Default size: percent(1.0) x children() — fills parent width, shrinks
+/// to content height. Override with .with_size() if you need different
+/// dimensions.
+///
+/// Usage:
+/// ```cpp
+/// // Fills parent width, height wraps content
+/// auto row = hstack(ctx, mk(parent));
+/// button(ctx, mk(row.ent()), ComponentConfig{}.with_label("A"));
+/// button(ctx, mk(row.ent()), ComponentConfig{}.with_label("B"));
+///
+/// // Fixed height override
+/// auto toolbar = hstack(ctx, mk(parent),
+///     ComponentConfig{}.with_size(ComponentSize{percent(1.0f), pixels(48)}));
+/// ```
+ElementResult hstack(HasUIContext auto &ctx, EntityParent ep_pair,
+                     ComponentConfig config = ComponentConfig()) {
+  config.with_flex_direction(FlexDirection::Row);
+  if (config.size.is_default) {
+    config.with_size(ComponentSize{percent(1.0f), children()});
+  }
+  return div(ctx, ep_pair, config);
 }
 
 /// Orientation for separator widgets
