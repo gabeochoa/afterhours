@@ -839,10 +839,10 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
     Color circle_bg = state.on ? theme.accent : Color{0, 0, 0, 0};
     Color circle_border = state.on ? theme.accent : theme.font_muted;
 
-    // Circle button — skip_hover_override keeps correct color on hover
+    // Circle toggle — skip_hover_override keeps correct color on hover
     // Explicit zero padding prevents default Spacing::sm button padding
     // which would offset the absolute-positioned indicator text.
-    auto circ = button(ctx, mk(entity),
+    auto circ = primitive::toggle_button(ctx, mk(entity),
         ComponentConfig::inherit_from(config, "toggle_circle")
             .with_size(ComponentSize{pixels(circle_sz), pixels(circle_sz)})
             .with_padding(Padding{.top = pixels(0), .left = pixels(0),
@@ -851,7 +851,8 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_border(circle_border, 2.0f)
             .with_rounded_corners(RoundedCorners().all_round())
             .with_roundness(1.0f)
-            .with_self_align(SelfAlign::Center));
+            .with_self_align(SelfAlign::Center),
+        state.on);
     circ.ent().template addComponentIfMissing<InFocusCluster>();
     circ.ent().template get<HasColor>().skip_hover_override = true;
     clicked = circ;
@@ -893,10 +894,10 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
     constexpr float knob_sz = track_h - pad * 2.0f;  // 20px
     constexpr float travel = track_w - knob_sz - pad * 2.0f;  // 24px
 
-    // Track button — skip_hover_override keeps correct color on hover
+    // Track toggle — skip_hover_override keeps correct color on hover
     // Explicit zero padding prevents default Spacing::sm button padding
     // which would offset the absolute-positioned knob outside the capsule.
-    auto track_btn = button(ctx, mk(entity),
+    auto track_btn = primitive::toggle_button(ctx, mk(entity),
         ComponentConfig::inherit_from(config, "toggle_track")
             .with_size(ComponentSize{pixels(track_w), pixels(track_h)})
             .with_padding(Padding{.top = pixels(0), .left = pixels(0),
@@ -904,7 +905,8 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_custom_background(track_color)
             .with_rounded_corners(RoundedCorners().all_round())
             .with_roundness(0.5f)
-            .with_self_align(SelfAlign::Center));
+            .with_self_align(SelfAlign::Center),
+        state.on);
     track_btn.ent().template addComponentIfMissing<InFocusCluster>();
     track_btn.ent().template get<HasColor>().skip_hover_override = true;
     clicked = track_btn;
@@ -936,8 +938,8 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_skip_tabbing(true));
   }
 
+  // toggle_button already flipped state.on if clicked
   if (clicked) {
-    state.on = !state.on;
     state.changed_since = true;
   }
 
