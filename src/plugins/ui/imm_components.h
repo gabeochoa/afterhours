@@ -55,6 +55,71 @@ inline size_t next_index(size_t current, size_t total) {
 
 } // namespace detail
 
+// ============================================================================
+// imm::primitive — Stateless building blocks
+//
+// These take mutable references and flip/update them on interaction.
+// No ECS state components are created. Caller owns all state.
+// Signature convention: (ctx, ep_pair, config, &mutable_state...)
+//
+// TODO: Consider moving existing primitives (div, button, sprite, image)
+//       into this namespace (breaking change for existing users).
+// TODO: Consider whether stateful convenience wrappers should live in
+//       imm::stateful namespace long-term.
+// ============================================================================
+namespace primitive {
+
+/// A button that flips a bool on click. Stateless — caller owns the bool.
+/// Returns ElementResult where bool() == true when value changed this frame.
+///
+/// Usage:
+/// ```cpp
+/// bool my_value = false;
+/// if (primitive::toggle_button(ctx, mk(parent),
+///         ComponentConfig{}.with_label(my_value ? "ON" : "OFF"),
+///         my_value)) {
+///     // value was flipped this frame
+/// }
+/// ```
+ElementResult toggle_button(HasUIContext auto &ctx, EntityParent ep_pair,
+                            ComponentConfig config,
+                            bool &value) {
+  auto [entity, parent] = deref(ep_pair);
+
+  // Outline & Ghost: transparent bg, readable text; Outline also adds a border
+  if (config.button_variant != ButtonVariant::Filled) {
+    config.with_custom_background(colors::transparent())
+        .with_auto_text_color(false)
+        .with_custom_text_color(ctx.theme.font);
+
+    if (config.button_variant == ButtonVariant::Outline && !config.has_border()) {
+      config.with_border(config.resolve_background_color(ctx.theme),
+                         h720(2.0f));
+    }
+  }
+
+  init_component(ctx, ep_pair, config, ComponentType::Button, true,
+                  "toggle_button");
+
+  entity.get<UIComponent>().flex_direction = config.flex_direction;
+
+  if (config.disabled) {
+    entity.removeComponentIfExists<HasClickListener>();
+    return ElementResult{false, entity, value};
+  }
+
+  entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
+
+  bool clicked = entity.get<HasClickListener>().down;
+  if (clicked) {
+    value = !value;
+  }
+
+  return ElementResult{clicked, entity, value};
+}
+
+} // namespace primitive
+
 ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
                   ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
@@ -417,46 +482,28 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
   return {clicked, entity, value};
 }
 
+/// @deprecated Use primitive::toggle_button directly instead.
+/// Thin wrapper kept for backward compatibility — will be removed in a future
+/// release.
 ElementResult checkbox_no_label(HasUIContext auto &ctx, EntityParent ep_pair,
                                 bool &value,
                                 ComponentConfig config = ComponentConfig()) {
-  auto [entity, parent] = deref(ep_pair);
-
-  HasCheckboxState &checkboxState =
-      init_state<HasCheckboxState>(entity, [&](auto &) {}, value);
-
-  std::string checked_indicator = config.checkbox_checked_indicator.value_or(ComponentConfig::DEFAULT_CHECKBOX_CHECKED);
-  std::string unchecked_indicator = config.checkbox_unchecked_indicator.value_or(ComponentConfig::DEFAULT_CHECKBOX_UNCHECKED);
+  // Apply checkbox visual defaults to config, then delegate to toggle_button
+  std::string checked_indicator = config.checkbox_checked_indicator.value_or(
+      ComponentConfig::DEFAULT_CHECKBOX_CHECKED);
+  std::string unchecked_indicator = config.checkbox_unchecked_indicator.value_or(
+      ComponentConfig::DEFAULT_CHECKBOX_UNCHECKED);
   config.label = value ? checked_indicator : unchecked_indicator;
-  // Only set symbol font if no font override was specified
-  // Preserve the inherited font_size for accessibility compliance
+
   if (!config.has_font_override()) {
     config.font_name = UIComponent::SYMBOL_FONT;
-    config.font_size = pixels(20.f); // Use accessible minimum size
+    config.font_size = pixels(20.f);
   }
-  // Use auto_text_color to ensure the X indicator is visible
-  // against any background color, unless user explicitly set a text color
   if (!config.has_text_color_override()) {
     config.with_auto_text_color(true);
   }
 
-  init_component(ctx, ep_pair, config, ComponentType::CheckboxNoLabel, true,
-                  "checkbox");
-
-  if (config.disabled) {
-    entity.removeComponentIfExists<HasClickListener>();
-  } else {
-    entity.addComponentIfMissing<HasClickListener>([](Entity &ent) {
-      auto &cbs = ent.get<HasCheckboxState>();
-      cbs.on = !cbs.on;
-      cbs.changed_since = true;
-    });
-  }
-
-  value = checkboxState.on;
-  ElementResult result{checkboxState.changed_since, entity, value};
-  checkboxState.changed_since = false;
-  return result;
+  return primitive::toggle_button(ctx, ep_pair, config, value);
 }
 
 ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
@@ -464,26 +511,23 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
                        ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
+  // --- State management (convenience: caller doesn't need to track state) ---
+  HasCheckboxState &state =
+      init_state<HasCheckboxState>(entity, [&](auto &) {}, value);
+
   auto label = config.label;
   config.label = "";
 
-  // Ensure checkbox row uses Row layout to place label and checkbox
-  // side-by-side Checkboxes MUST use Row layout and NoWrap to prevent
-  // label/checkbox wrapping
+  // Row layout for label + toggle side-by-side
   config.with_flex_direction(FlexDirection::Row)
       .with_align_items(AlignItems::Center)
       .with_no_wrap();
   init_component(ctx, ep_pair, config, ComponentType::Div, false,
                   "checkbox_row");
 
-  // Add FocusClusterRoot to container for consistent focus ring on entire row
   entity.template addComponentIfMissing<FocusClusterRoot>();
 
-  // 2025-08-11: ensure checkbox row uses responsive defaults so both label
-  // and button scale with resolution. Previously, only the label used a
-  // responsive size, causing the button to remain tiny at higher
-  // DPIs/resolutions.
-  // Only apply defaults if user hasn't explicitly specified a size.
+  // Resolve responsive defaults for sizing
   if (config.size.is_default) {
     auto &styling_defaults = UIStylingDefaults::get();
     if (auto def =
@@ -495,9 +539,22 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
                                   children(default_component_size.y));
     }
   }
+
   bool has_label_child = !label.empty();
-  // Check if user provided custom corner configuration
   bool user_specified_corners = config.rounded_corners.has_value();
+
+  // Helper: resolve color_usage for child components
+  auto apply_color = [&](ComponentConfig &child_config) {
+    if (config.color_usage == Theme::Usage::Default) {
+      child_config.with_color_usage(Theme::Usage::Primary);
+    } else {
+      child_config.with_color_usage(config.color_usage);
+      if (config.color_usage == Theme::Usage::Custom &&
+          config.custom_color.has_value()) {
+        child_config.with_custom_background(config.custom_color.value());
+      }
+    }
+  };
 
   if (has_label_child) {
     config.size = config.size.scale_x(0.5f);
@@ -507,18 +564,8 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
             config, fmt::format("checkbox label {}", config.debug_name))
             .with_size(config.size)
             .with_label(label);
+    apply_color(label_config);
 
-    // Apply user's color_usage if specified, otherwise use Primary default
-    if (config.color_usage == Theme::Usage::Default) {
-      label_config.with_color_usage(Theme::Usage::Primary);
-    } else {
-      // Propagate user's custom background color
-      label_config.with_color_usage(config.color_usage);
-      if (config.color_usage == Theme::Usage::Custom && config.custom_color.has_value()) {
-        label_config.with_custom_background(config.custom_color.value());
-      }
-    }
-    // Only apply default corners if user didn't specify their own
     if (!user_specified_corners) {
       label_config.with_rounded_corners(RoundedCorners().right_sharp());
     }
@@ -528,38 +575,48 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
         .template addComponentIfMissing<InFocusCluster>();
   }
 
-  // 2025-08-11: explicitly propagate the responsive size to the clickable
-  // checkbox so it scales along with the label and row container.
-  auto checkbox_config =
+  // Build toggle button config with checkbox visual defaults
+  auto toggle_config =
       ComponentConfig::inherit_from(
           config, fmt::format("checkbox indiv from {}", config.debug_name))
           .with_size(config.size);
+  apply_color(toggle_config);
 
-  // Apply user's color_usage if specified, otherwise use Primary default
-  if (config.color_usage == Theme::Usage::Default) {
-    checkbox_config.with_color_usage(Theme::Usage::Primary);
-  } else {
-    // Propagate user's custom background color
-    checkbox_config.with_color_usage(config.color_usage);
-    if (config.color_usage == Theme::Usage::Custom && config.custom_color.has_value()) {
-      checkbox_config.with_custom_background(config.custom_color.value());
-    }
-  }
-  // Only apply default corners if user didn't specify their own
   if (!user_specified_corners) {
-    checkbox_config.with_rounded_corners(RoundedCorners().left_sharp());
+    if (has_label_child) {
+      toggle_config.with_rounded_corners(RoundedCorners().left_sharp());
+    }
+    // No-label case: keep default rounded corners from theme (no override)
   }
 
-  bool changed = false;
-  auto checkbox_ent =
-      checkbox_no_label(ctx, mk(entity), value, checkbox_config);
-  // Mark checkbox as part of focus cluster so focus ring shows on entire row
-  checkbox_ent.ent().template addComponentIfMissing<InFocusCluster>();
-  if (checkbox_ent) {
-    changed = true;
+  // Set check/X indicator label
+  std::string checked_indicator = config.checkbox_checked_indicator.value_or(
+      ComponentConfig::DEFAULT_CHECKBOX_CHECKED);
+  std::string unchecked_indicator = config.checkbox_unchecked_indicator.value_or(
+      ComponentConfig::DEFAULT_CHECKBOX_UNCHECKED);
+  toggle_config.label = state.on ? checked_indicator : unchecked_indicator;
+
+  if (!toggle_config.has_font_override()) {
+    toggle_config.font_name = UIComponent::SYMBOL_FONT;
+    toggle_config.font_size = pixels(20.f);
+  }
+  if (!toggle_config.has_text_color_override()) {
+    toggle_config.with_auto_text_color(true);
   }
 
-  return {changed, entity, value};
+  // Delegate to toggle_button primitive
+  auto toggle_result =
+      primitive::toggle_button(ctx, mk(entity), toggle_config, state.on);
+  toggle_result.ent().template addComponentIfMissing<InFocusCluster>();
+
+  if (toggle_result) {
+    state.changed_since = true;
+  }
+
+  value = state.on;
+  ElementResult result{state.changed_since, entity, value};
+  state.changed_since = false;
+  return result;
 }
 
 template <size_t Size>
