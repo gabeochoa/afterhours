@@ -29,7 +29,7 @@ namespace imm {
 // Custom component authors should compose using these primitives and utilities:
 //
 // Primitives:
-//   div, hstack, separator, button, image, sprite, image_button,
+//   div, hstack, vstack, separator, button, image, sprite, image_button,
 //   checkbox_no_label, circular_progress
 //
 // Composites (built from primitives):
@@ -155,6 +155,32 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
 ElementResult hstack(HasUIContext auto &ctx, EntityParent ep_pair,
                      ComponentConfig config = ComponentConfig()) {
   config.with_flex_direction(FlexDirection::Row);
+  if (config.size.is_default) {
+    config.with_size(ComponentSize{percent(1.0f), children()});
+  }
+  return div(ctx, ep_pair, config);
+}
+
+/// Vertical stack — a div with FlexDirection::Column preset.
+///
+/// Default size: percent(1.0) x children() — fills parent width, shrinks
+/// to content height. Override with .with_size() if you need different
+/// dimensions.
+///
+/// Usage:
+/// ```cpp
+/// // Fills parent width, height wraps content
+/// auto col = vstack(ctx, mk(parent));
+/// button(ctx, mk(col.ent()), ComponentConfig{}.with_label("Top"));
+/// button(ctx, mk(col.ent()), ComponentConfig{}.with_label("Bottom"));
+///
+/// // Fixed height override
+/// auto sidebar = vstack(ctx, mk(parent),
+///     ComponentConfig{}.with_size(ComponentSize{pixels(200), percent(1.0f)}));
+/// ```
+ElementResult vstack(HasUIContext auto &ctx, EntityParent ep_pair,
+                     ComponentConfig config = ComponentConfig()) {
+  config.with_flex_direction(FlexDirection::Column);
   if (config.size.is_default) {
     config.with_size(ComponentSize{percent(1.0f), children()});
   }
