@@ -362,10 +362,26 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
     // ui_scale in Adaptive mode (web-like zoom).
     auto scaling = entity.get<UIComponent>().resolved_scaling_mode;
     float uis = ctx.theme.ui_scale;
-    mods.translate_x = resolve_to_pixels(config.translate_x, screen_height,
+    float resolved_tx = resolve_to_pixels(config.translate_x, screen_height,
                                           scaling, uis);
-    mods.translate_y = resolve_to_pixels(config.translate_y, screen_height,
+    float resolved_ty = resolve_to_pixels(config.translate_y, screen_height,
                                           scaling, uis);
+
+    auto &uic = entity.get<UIComponent>();
+    if (uic.absolute) {
+      // For absolute elements, translate IS their position. Store it on
+      // UIComponent so the layout system can use it directly (to position
+      // children correctly). Clear translate from HasUIModifiers so it
+      // doesn't get applied again at render time.
+      uic.absolute_pos_x = resolved_tx;
+      uic.absolute_pos_y = resolved_ty;
+      mods.translate_x = 0.f;
+      mods.translate_y = 0.f;
+    } else {
+      // For flow elements, translate is a visual-only transform
+      mods.translate_x = resolved_tx;
+      mods.translate_y = resolved_ty;
+    }
   } else {
     // Reset modifiers if component exists but no modifiers needed
     if (entity.has<HasUIModifiers>()) {
@@ -374,6 +390,9 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
       mods.translate_x = 0.0f;
       mods.translate_y = 0.0f;
     }
+    // Always reset absolute position when no translate is set
+    entity.get<UIComponent>().absolute_pos_x = 0.f;
+    entity.get<UIComponent>().absolute_pos_y = 0.f;
   }
 }
 

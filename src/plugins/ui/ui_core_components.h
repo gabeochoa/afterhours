@@ -89,6 +89,12 @@ struct UIComponent : BaseComponent {
   bool was_rendered_to_screen = false;
   bool absolute = false;
 
+  // Absolute position in pixels, set from with_absolute_position(x, y)
+  // during component init. Used by autolayout to set computed_rel for
+  // absolute elements so their children are positioned correctly.
+  float absolute_pos_x = 0.f;
+  float absolute_pos_y = 0.f;
+
   // Resolved scaling mode for this component (set during creation from the
   // cascade: component override > screen context > app default).
   ScalingMode resolved_scaling_mode = ScalingMode::Proportional;

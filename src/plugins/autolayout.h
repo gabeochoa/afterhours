@@ -557,13 +557,22 @@ struct AutoLayout {
 
     float existing_desire = exp.value;
     if (widget.children.empty()) {
+      // For leaf elements with a text label (e.g. buttons using children()
+      // sizing), fall back to text measurement so the element is sized to
+      // fit its label content rather than collapsing to padding-only.
+      float text_size = 0.f;
+      const Entity &ent = to_ent(widget.id);
+      if (!ent.is_missing<HasLabel>()) {
+        text_size = get_text_size_for_axis(widget, axis);
+      }
+
       // Make sure we arent setting -1 in this case
       return std::max(0.f,
                       // if the component has no children, but the
                       // expected size was set, use that instead
                       // TODO does this need to be a setting? is this
                       // generally a decent choice
-                      std::max(no_change, existing_desire)) + pad;
+                      std::max({no_change, existing_desire, text_size})) + pad;
     }
 
     float expectation = _sum_children_axis_for_child_exp(widget, axis);
@@ -1023,6 +1032,10 @@ struct AutoLayout {
 
       // Dont worry about any children that are absolutely positioned
       if (child.absolute) {
+        // Set computed_rel from the absolute position stored on UIComponent.
+        // This is set during component init from with_absolute_position(x, y).
+        child.computed_rel[Axis::X] = child.absolute_pos_x;
+        child.computed_rel[Axis::Y] = child.absolute_pos_y;
         compute_relative_positions(child);
         continue;
       }
