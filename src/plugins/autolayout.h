@@ -19,10 +19,21 @@ struct AutoLayout {
   window_manager::Resolution resolution;
   std::map<EntityID, RefEntity> mapping;
   bool enable_grid_snapping = false;
+  float ui_scale = 1.0f;
 
   AutoLayout(window_manager::Resolution rez = {},
              const std::map<EntityID, RefEntity> &mapping_ = {})
       : resolution(rez), mapping(mapping_) {}
+
+  /// Resolve a pixel value respecting the component's scaling mode.
+  /// In Adaptive mode, pixels are multiplied by ui_scale.
+  /// In Proportional mode (default), pixels are returned as-is.
+  float resolve_pixels(float value, const UIComponent &widget) const {
+    if (widget.resolved_scaling_mode == ScalingMode::Adaptive) {
+      return value * ui_scale;
+    }
+    return value;
+  }
 
   auto &set_grid_snapping(bool enabled) {
     enable_grid_snapping = enabled;
@@ -89,7 +100,9 @@ struct AutoLayout {
     const std::string &content = ent.get<HasLabel>().label;
     // Resolve font_size to pixels using screen height
     float screen_height = fetch_screen_value_(Axis::Y);
-    float font_size = resolve_to_pixels(widget.font_size, screen_height);
+    float font_size = resolve_to_pixels(widget.font_size, screen_height,
+                                         widget.resolved_scaling_mode,
+                                         ui_scale);
     float spacing = 1.f;
 
     Vector2Type result;
@@ -123,10 +136,10 @@ struct AutoLayout {
     float no_change = widget.computed_margin[axis];
 
     float screenValue = fetch_screen_value_(axis);
-    const auto compute_ = [=](Size exp) {
+    const auto compute_ = [&](Size exp) {
       switch (exp.dim) {
       case Dim::Pixels:
-        return exp.value;
+        return resolve_pixels(exp.value, widget);
       case Dim::Text:
         log_error("Margin by dimension text not supported");
       case Dim::ScreenPercent:
@@ -186,10 +199,10 @@ struct AutoLayout {
     float no_change = widget.computed_padd[axis];
     float screenValue = fetch_screen_value_(axis);
 
-    const auto compute_ = [no_change, screenValue](const Size &exp) {
+    const auto compute_ = [&](const Size &exp) {
       switch (exp.dim) {
       case Dim::Pixels:
-        return exp.value;
+        return resolve_pixels(exp.value, widget);
       case Dim::ScreenPercent:
         return exp.value * screenValue;
         //
@@ -229,7 +242,7 @@ struct AutoLayout {
     const auto compute_ = [&](const Size &exp) {
       switch (exp.dim) {
       case Dim::Pixels:
-        return exp.value;
+        return resolve_pixels(exp.value, widget);
       case Dim::ScreenPercent:
         return exp.value * screenValue;
       case Dim::Text:
@@ -596,7 +609,7 @@ struct AutoLayout {
     case Dim::None:
       return -1.f;  // No constraint
     case Dim::Pixels:
-      return constraint.value;
+      return resolve_pixels(constraint.value, widget);
     case Dim::ScreenPercent:
       return constraint.value * (axis == Axis::X ? resolution.width : resolution.height);
     case Dim::Percent: {
@@ -1291,9 +1304,11 @@ struct AutoLayout {
   static void autolayout(UIComponent &widget,
                          const window_manager::Resolution resolution,
                          const std::map<EntityID, RefEntity> &map,
-                         bool enable_grid_snapping = false) {
+                         bool enable_grid_snapping = false,
+                         float ui_scale = 1.0f) {
     AutoLayout al(resolution, map);
     al.set_grid_snapping(enable_grid_snapping);
+    al.ui_scale = ui_scale;
 
     al.reset_computed_values(widget);
     // - (any) compute solos (doesnt rely on parent/child / other widgets)

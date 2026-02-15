@@ -88,6 +88,10 @@ struct UIComponent : BaseComponent {
   bool should_hide = false;
   bool was_rendered_to_screen = false;
   bool absolute = false;
+
+  // Resolved scaling mode for this component (set during creation from the
+  // cascade: component override > screen context > app default).
+  ScalingMode resolved_scaling_mode = ScalingMode::Proportional;
   AxisArray<float> computed;
   AxisArray<float, 6> computed_margin;
   AxisArray<float, 6> computed_padd;

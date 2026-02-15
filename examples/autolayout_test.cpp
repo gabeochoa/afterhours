@@ -182,13 +182,29 @@ struct TestLayout {
     cc.set_parent(parent.id);
   }
 
+  // UI scale for adaptive mode (passed to autolayout).
+  float ui_scale = 1.0f;
+
   // Build entity map and run layout on the root entity.
   void run(Entity &root) {
     std::map<EntityID, RefEntity> mapping;
     for (auto &e : entities) {
       mapping.emplace(e->id, std::ref(*e));
     }
-    AutoLayout::autolayout(root.get<UIComponent>(), resolution, mapping);
+    AutoLayout::autolayout(root.get<UIComponent>(), resolution, mapping,
+                           /*enable_grid_snapping=*/false, ui_scale);
+  }
+
+  // Create a UI entity with adaptive scaling mode.
+  Entity &make_ui_adaptive(Size w, Size h) {
+    Entity &e = make_ui(w, h);
+    e.get<UIComponent>().resolved_scaling_mode = ScalingMode::Adaptive;
+    return e;
+  }
+
+  // Set scaling mode on an existing entity.
+  static void set_adaptive(Entity &e) {
+    e.get<UIComponent>().resolved_scaling_mode = ScalingMode::Adaptive;
   }
 
   // Shortcut: get UIComponent from entity.
@@ -2537,6 +2553,397 @@ TEST(absolute_and_flow_siblings_stacking) {
   auto ra = t.ui(abs1).rect();
   CHECK_APPROX(ra.x, 50.f);
   CHECK_APPROX(ra.y, 50.f);
+}
+
+// ============================================================================
+// Adaptive Scaling Mode tests
+// ============================================================================
+
+// ---------------------------------------------------------------------------
+// Proportional mode (default): pixels() are not affected by ui_scale
+// ---------------------------------------------------------------------------
+TEST(proportional_mode_ignores_ui_scale) {
+  TestLayout t;
+  t.ui_scale = 2.0f;  // Double scale — should NOT affect proportional mode
+  auto &root = t.make_ui(pixels(400), pixels(300));
+  t.run(root);
+
+  CHECK_APPROX(t.ui(root).computed[Axis::X], 400.f);
+  CHECK_APPROX(t.ui(root).computed[Axis::Y], 300.f);
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive mode: pixels() are multiplied by ui_scale
+// ---------------------------------------------------------------------------
+TEST(adaptive_mode_scales_pixels) {
+  TestLayout t;
+  t.ui_scale = 2.0f;
+  auto &root = t.make_ui_adaptive(pixels(400), pixels(300));
+  t.run(root);
+
+  // 400 * 2.0 = 800, 300 * 2.0 = 600
+  CHECK_APPROX(t.ui(root).computed[Axis::X], 800.f);
+  CHECK_APPROX(t.ui(root).computed[Axis::Y], 600.f);
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive mode: ui_scale of 1.0 produces same result as proportional
+// ---------------------------------------------------------------------------
+TEST(adaptive_mode_scale_1_matches_proportional) {
+  TestLayout t;
+  t.ui_scale = 1.0f;
+  auto &root = t.make_ui_adaptive(pixels(400), pixels(300));
+  t.run(root);
+
+  CHECK_APPROX(t.ui(root).computed[Axis::X], 400.f);
+  CHECK_APPROX(t.ui(root).computed[Axis::Y], 300.f);
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive mode: screen_pct() is NOT affected by ui_scale
+// ---------------------------------------------------------------------------
+TEST(adaptive_mode_screen_pct_not_scaled) {
+  TestLayout t;
+  t.ui_scale = 2.0f;
+  t.resolution = {1280, 720};
+  auto &root = t.make_ui_adaptive(screen_pct(0.5f), screen_pct(0.5f));
+  t.run(root);
+
+  // screen_pct resolves against screen, not scaled
+  CHECK_APPROX(t.ui(root).computed[Axis::X], 640.f);
+  CHECK_APPROX(t.ui(root).computed[Axis::Y], 360.f);
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive mode: h720() (which is screen_pct) is NOT affected by ui_scale
+// ---------------------------------------------------------------------------
+TEST(adaptive_mode_h720_not_scaled) {
+  TestLayout t;
+  t.ui_scale = 1.5f;
+  t.resolution = {1280, 720};
+  // h720(100) == screen_pct(100/720). ScreenPercent resolves against screen
+  // dimension for the *same* axis. For Y: 100/720 * 720 = 100. For X:
+  // 100/720 * 1280 ≈ 177.78. Use h720 on height (Y) axis only.
+  // Use w1280 for X axis: w1280(100) = screen_pct(100/1280) => 100/1280*1280=100
+  auto &root = t.make_ui_adaptive(w1280(100.f), h720(50.f));
+  t.run(root);
+
+  // Neither should be affected by ui_scale (they're ScreenPercent, not Pixels)
+  CHECK_APPROX(t.ui(root).computed[Axis::X], 100.f);
+  CHECK_APPROX(t.ui(root).computed[Axis::Y], 50.f);
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive mode: percent() is NOT affected by ui_scale (resolves against parent)
+// ---------------------------------------------------------------------------
+TEST(adaptive_mode_percent_not_scaled) {
+  TestLayout t;
+  t.ui_scale = 2.0f;
+  auto &root = t.make_ui_adaptive(pixels(400), pixels(400));
+  auto &child = t.make_ui_adaptive(percent(0.5f), percent(0.5f));
+  t.add_child(root, child);
+  t.run(root);
+
+  // Root: 400*2 = 800. Child at 50% of 800 = 400.
+  CHECK_APPROX(t.ui(root).computed[Axis::X], 800.f);
+  CHECK_APPROX(t.ui(child).computed[Axis::X], 400.f);
+  CHECK_APPROX(t.ui(child).computed[Axis::Y], 400.f);
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive mode: padding in pixels scales with ui_scale
+// ---------------------------------------------------------------------------
+TEST(adaptive_mode_padding_scales) {
+  TestLayout t;
+  t.ui_scale = 2.0f;
+  auto &root = t.make_ui_adaptive(pixels(200), pixels(200));
+  t.ui(root).set_desired_padding(pixels(10), Axis::X);
+  t.ui(root).set_desired_padding(pixels(10), Axis::Y);
+
+  auto &child = t.make_ui_adaptive(percent(1.0f), percent(1.0f));
+  t.add_child(root, child);
+  t.run(root);
+
+  // Root at 2x: 400x400. Padding: 10*2=20 per side, so 40 total.
+  // Content area = 400-40 = 360
+  CHECK_APPROX(t.ui(root).computed[Axis::X], 400.f);
+  CHECK_APPROX(t.ui(child).computed[Axis::X], 360.f);
+  CHECK_APPROX(t.ui(child).computed[Axis::Y], 360.f);
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive mode: margin in pixels scales with ui_scale
+// ---------------------------------------------------------------------------
+TEST(adaptive_mode_margin_scales) {
+  TestLayout t;
+  t.ui_scale = 2.0f;
+  auto &root = t.make_ui_adaptive(pixels(400), pixels(400));
+  t.ui(root).set_flex_direction(FlexDirection::Column);
+
+  auto &child = t.make_ui_adaptive(pixels(100), pixels(100));
+  t.ui(child).set_desired_margin(Margin{.top = pixels(10)});
+  t.add_child(root, child);
+  t.run(root);
+
+  // margin-top = 10 * 2 = 20. Child rect should be offset.
+  auto r = t.ui(child).rect();
+  CHECK_APPROX(r.y, 20.f);
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive mode: expand() still fills remaining space correctly
+// ---------------------------------------------------------------------------
+TEST(adaptive_mode_expand_fills_remaining) {
+  TestLayout t;
+  t.ui_scale = 1.5f;
+  auto &root = t.make_ui_adaptive(pixels(400), pixels(400));
+  t.ui(root).set_flex_direction(FlexDirection::Column);
+  t.ui(root).set_flex_wrap(FlexWrap::NoWrap);
+
+  auto &header = t.make_ui_adaptive(pixels(400), pixels(50));
+  auto &body = t.make_ui_adaptive(pixels(400), expand());
+  auto &footer = t.make_ui_adaptive(pixels(400), pixels(50));
+  t.add_child(root, header);
+  t.add_child(root, body);
+  t.add_child(root, footer);
+  t.run(root);
+
+  // Root at 1.5x: 600. Header: 50*1.5=75. Footer: 50*1.5=75.
+  // Body: 600 - 75 - 75 = 450
+  CHECK_APPROX(t.ui(root).computed[Axis::Y], 600.f);
+  CHECK_APPROX(t.ui(header).computed[Axis::Y], 75.f);
+  CHECK_APPROX(t.ui(footer).computed[Axis::Y], 75.f);
+  CHECK_APPROX(t.ui(body).computed[Axis::Y], 450.f);
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive mode: fractional ui_scale (0.75x shrinks)
+// ---------------------------------------------------------------------------
+TEST(adaptive_mode_shrink_scale) {
+  TestLayout t;
+  t.ui_scale = 0.75f;
+  auto &root = t.make_ui_adaptive(pixels(400), pixels(400));
+  t.run(root);
+
+  // 400 * 0.75 = 300
+  CHECK_APPROX(t.ui(root).computed[Axis::X], 300.f);
+  CHECK_APPROX(t.ui(root).computed[Axis::Y], 300.f);
+}
+
+// ---------------------------------------------------------------------------
+// Mixed modes: proportional child inside adaptive parent
+// ---------------------------------------------------------------------------
+TEST(mixed_modes_proportional_child_in_adaptive_parent) {
+  TestLayout t;
+  t.ui_scale = 2.0f;
+
+  // Adaptive root: 400*2 = 800
+  auto &root = t.make_ui_adaptive(pixels(400), pixels(400));
+  t.ui(root).set_flex_direction(FlexDirection::Column);
+
+  // Proportional child: pixels(100) stays 100, not scaled
+  auto &child = t.make_ui(pixels(100), pixels(100));
+  t.add_child(root, child);
+  t.run(root);
+
+  CHECK_APPROX(t.ui(root).computed[Axis::X], 800.f);
+  CHECK_APPROX(t.ui(child).computed[Axis::X], 100.f);  // Not scaled
+  CHECK_APPROX(t.ui(child).computed[Axis::Y], 100.f);
+}
+
+// ---------------------------------------------------------------------------
+// Mixed modes: adaptive child inside proportional parent
+// ---------------------------------------------------------------------------
+TEST(mixed_modes_adaptive_child_in_proportional_parent) {
+  TestLayout t;
+  t.ui_scale = 2.0f;
+
+  // Proportional root: 400 stays 400
+  auto &root = t.make_ui(pixels(400), pixels(400));
+  t.ui(root).set_flex_direction(FlexDirection::Column);
+
+  // Adaptive child: pixels(100)*2 = 200
+  auto &child = t.make_ui_adaptive(pixels(100), pixels(100));
+  t.add_child(root, child);
+  t.run(root);
+
+  CHECK_APPROX(t.ui(root).computed[Axis::X], 400.f);
+  CHECK_APPROX(t.ui(child).computed[Axis::X], 200.f);  // Scaled by 2x
+  CHECK_APPROX(t.ui(child).computed[Axis::Y], 200.f);
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive mode: min/max constraints scale with ui_scale
+// ---------------------------------------------------------------------------
+TEST(adaptive_mode_constraints_scale) {
+  TestLayout t;
+  t.ui_scale = 2.0f;
+
+  auto &root = t.make_ui_adaptive(pixels(400), pixels(400));
+
+  // Child at 10% = 80px (since root is 400*2=800), min = 200*2=400
+  auto &child = t.make_ui_adaptive(percent(0.1f), pixels(100));
+  t.ui(child).set_min_width(pixels(200));
+  t.add_child(root, child);
+  t.run(root);
+
+  // 10% of 800 = 80, min(200*2)=400 -> should be 400
+  CHECK(t.ui(child).computed[Axis::X] >= 399.f);
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive mode: max constraint prevents oversizing at scale
+// ---------------------------------------------------------------------------
+TEST(adaptive_mode_max_constraint_scales) {
+  TestLayout t;
+  t.ui_scale = 2.0f;
+
+  auto &root = t.make_ui_adaptive(pixels(400), pixels(400));
+
+  // Child at 100% = 800, max = 150*2 = 300
+  auto &child = t.make_ui_adaptive(percent(1.0f), pixels(100));
+  t.ui(child).set_max_width(pixels(150));
+  t.add_child(root, child);
+  t.run(root);
+
+  CHECK(t.ui(child).computed[Axis::X] <= 301.f);
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive mode: complex layout scales uniformly
+// ---------------------------------------------------------------------------
+TEST(adaptive_mode_dashboard_layout) {
+  TestLayout t;
+  t.ui_scale = 1.5f;
+
+  auto &root = t.make_ui_adaptive(pixels(800), pixels(600));
+  t.ui(root).set_flex_direction(FlexDirection::Column);
+  t.ui(root).set_flex_wrap(FlexWrap::NoWrap);
+
+  auto &header = t.make_ui_adaptive(percent(1.0f), pixels(60));
+  auto &body = t.make_ui_adaptive(percent(1.0f), expand());
+  t.ui(body).set_flex_direction(FlexDirection::Row);
+  t.ui(body).set_flex_wrap(FlexWrap::NoWrap);
+  auto &footer = t.make_ui_adaptive(percent(1.0f), pixels(40));
+
+  t.add_child(root, header);
+  t.add_child(root, body);
+  t.add_child(root, footer);
+
+  auto &sidebar = t.make_ui_adaptive(pixels(200), percent(1.0f));
+  auto &main = t.make_ui_adaptive(expand(), percent(1.0f));
+  t.add_child(body, sidebar);
+  t.add_child(body, main);
+
+  t.run(root);
+
+  // Root: 800*1.5=1200, 600*1.5=900
+  CHECK_APPROX(t.ui(root).computed[Axis::X], 1200.f);
+  CHECK_APPROX(t.ui(root).computed[Axis::Y], 900.f);
+
+  // Header: 60*1.5=90
+  CHECK_APPROX(t.ui(header).computed[Axis::Y], 90.f);
+  // Footer: 40*1.5=60
+  CHECK_APPROX(t.ui(footer).computed[Axis::Y], 60.f);
+  // Body: 900-90-60=750
+  CHECK_APPROX(t.ui(body).computed[Axis::Y], 750.f);
+
+  // Sidebar: 200*1.5=300
+  CHECK_APPROX(t.ui(sidebar).computed[Axis::X], 300.f);
+  // Main: 1200-300=900
+  CHECK_APPROX(t.ui(main).computed[Axis::X], 900.f);
+}
+
+// ---------------------------------------------------------------------------
+// ScalingMode enum: verify default is Proportional
+// ---------------------------------------------------------------------------
+TEST(scaling_mode_default_is_proportional) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(100), pixels(100));
+  CHECK(t.ui(root).resolved_scaling_mode == ScalingMode::Proportional);
+}
+
+// ---------------------------------------------------------------------------
+// LayoutInfo: basic breakpoint calculations
+// ---------------------------------------------------------------------------
+TEST(layout_info_proportional_mode) {
+  // In proportional mode, logical dims equal screen dims
+  auto info = LayoutInfo::make(1280.f, 720.f, 2.0f, ScalingMode::Proportional);
+  CHECK_APPROX(info.logical_w, 1280.f);
+  CHECK_APPROX(info.logical_h, 720.f);
+  CHECK(info.is_wide());
+  CHECK(!info.is_narrow());
+  CHECK(!info.is_short());
+}
+
+TEST(layout_info_adaptive_mode) {
+  // In adaptive mode, logical dims = screen / ui_scale
+  auto info = LayoutInfo::make(1280.f, 720.f, 2.0f, ScalingMode::Adaptive);
+  CHECK_APPROX(info.logical_w, 640.f);  // 1280 / 2
+  CHECK_APPROX(info.logical_h, 360.f);  // 720 / 2
+  CHECK(!info.is_wide());
+  CHECK(info.is_narrow());  // 640 < 800
+  CHECK(info.is_short());   // 360 < 600
+}
+
+TEST(layout_info_adaptive_narrow_breakpoint) {
+  auto info = LayoutInfo::make(800.f, 600.f, 1.5f, ScalingMode::Adaptive);
+  // logical_w = 800 / 1.5 ≈ 533
+  CHECK(info.is_narrow());  // 533 < 800
+}
+
+TEST(layout_info_adaptive_wide_breakpoint) {
+  auto info = LayoutInfo::make(1920.f, 1080.f, 1.5f, ScalingMode::Adaptive);
+  // logical_w = 1920 / 1.5 = 1280
+  CHECK(info.is_wide());  // 1280 >= 1200
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive mode: screen_pct margin is NOT scaled by ui_scale
+// ---------------------------------------------------------------------------
+TEST(adaptive_mode_screen_pct_margin_not_scaled) {
+  TestLayout t;
+  t.ui_scale = 2.0f;
+  t.resolution = {1280, 720};
+
+  auto &root = t.make_ui_adaptive(screen_pct(1.0f), screen_pct(1.0f));
+  t.ui(root).set_flex_direction(FlexDirection::Column);
+
+  auto &child = t.make_ui_adaptive(pixels(100), pixels(100));
+  t.ui(child).set_desired_margin(Margin{.top = screen_pct(0.1f)});
+  t.add_child(root, child);
+  t.run(root);
+
+  // screen_pct(0.1) margin-top = 0.1 * 720 = 72 (not scaled by ui_scale)
+  auto r = t.ui(child).rect();
+  CHECK_APPROX(r.y, 72.f);
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive mode: asymmetric padding in pixels all scale
+// ---------------------------------------------------------------------------
+TEST(adaptive_mode_asymmetric_padding_scales) {
+  TestLayout t;
+  t.ui_scale = 2.0f;
+
+  auto &root = t.make_ui_adaptive(pixels(300), pixels(300));
+  t.ui(root).set_desired_padding(Padding{
+      .top = pixels(10),
+      .left = pixels(20),
+      .bottom = pixels(30),
+      .right = pixels(40),
+  });
+
+  auto &child = t.make_ui_adaptive(percent(1.0f), percent(1.0f));
+  t.add_child(root, child);
+  t.run(root);
+
+  // Root: 300*2 = 600
+  // Horizontal padding: (20+40)*2 = 120, content = 600-120 = 480
+  // Vertical padding: (10+30)*2 = 80, content = 600-80 = 520
+  CHECK_APPROX(t.ui(root).computed[Axis::X], 600.f);
+  CHECK_APPROX(t.ui(child).computed[Axis::X], 480.f);
+  CHECK_APPROX(t.ui(child).computed[Axis::Y], 520.f);
 }
 
 // ============================================================================

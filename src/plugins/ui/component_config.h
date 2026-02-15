@@ -54,6 +54,10 @@ struct ComponentConfig {
   bool clip_children = false;      // Enable scissor clipping for children
   bool draggable_children = false; // Enable drag-and-drop reordering of children
 
+  // Per-component scaling mode override.
+  // If set, overrides the screen/app-level scaling mode for this component.
+  std::optional<ScalingMode> scaling_mode;
+
   // Overflow behavior per axis (Visible = default, Hidden = clip, Scroll = clip + scroll)
   Overflow overflow_x = Overflow::Visible;
   Overflow overflow_y = Overflow::Visible;
@@ -425,6 +429,14 @@ struct ComponentConfig {
   /// Equivalent to what drag_group() used to do.
   ComponentConfig &with_draggable_children(bool enabled = true) {
     draggable_children = enabled;
+    return *this;
+  }
+
+  /// Override the scaling mode for this specific component.
+  /// Proportional: pixels() = fixed hardware pixels (ignores ui_scale).
+  /// Adaptive: pixels() = logical pixels * ui_scale (web-like zoom).
+  ComponentConfig &with_scaling_mode(ScalingMode mode) {
+    scaling_mode = mode;
     return *this;
   }
   ComponentConfig &with_font(const std::string &font_name_, Size font_size_) {

@@ -90,6 +90,10 @@ struct UIStylingDefaults {
   Size default_font_size = pixels(16.f);
   bool enable_grid_snapping = false;
 
+  // Scaling mode: Proportional (default) or Adaptive (web-like).
+  // See docs/30_adaptive_scaling.md for details.
+  ScalingMode scaling_mode = ScalingMode::Proportional;
+
   // Validation configuration for design rule enforcement
   ValidationConfig validation;
 
@@ -137,6 +141,11 @@ struct UIStylingDefaults {
   }
 
   // Layout configuration methods
+  UIStylingDefaults &set_scaling_mode(ScalingMode mode) {
+    scaling_mode = mode;
+    return *this;
+  }
+
   UIStylingDefaults &set_grid_snapping(bool enabled) {
     enable_grid_snapping = enabled;
     return *this;

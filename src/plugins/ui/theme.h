@@ -245,6 +245,13 @@ struct Theme {
   //     but they won't activate
   float disabled_opacity = 0.3f;
 
+  // ===== UI Scale =====
+  // Controls the size of pixel-based UI elements in Adaptive scaling mode.
+  // 1.0 = 100% (default), 1.5 = 150%, etc.
+  // In Proportional mode this is ignored. In Adaptive mode, all pixels()
+  // values are multiplied by this factor (like browser Ctrl+/- zoom).
+  float ui_scale = 1.0f;
+
   // ===== Font configuration =====
   // Per-language font configuration
   std::map<translation::Language, FontConfig> language_fonts;
@@ -476,6 +483,13 @@ public:
   // Set disabled element opacity (0.0 = invisible, 1.0 = fully opaque)
   Builder &with_disabled_opacity(float opacity) {
     theme_.disabled_opacity = std::clamp(opacity, 0.0f, 1.0f);
+    return *this;
+  }
+
+  // Set UI scale (zoom level). 1.0 = 100%, 1.5 = 150%.
+  // Only affects Adaptive scaling mode. Clamped to [0.5, 3.0].
+  Builder &with_ui_scale(float scale) {
+    theme_.ui_scale = std::clamp(scale, 0.5f, 3.0f);
     return *this;
   }
 

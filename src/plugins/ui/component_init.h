@@ -158,6 +158,21 @@ inline void apply_layout(Entity &entity, const ComponentConfig &config) {
     entity.get<UIComponent>().make_absolute();
 }
 
+// Resolve the ScalingMode cascade: component > screen > app default.
+// Called during component initialization to stamp the resolved mode onto
+// the UIComponent so the autolayout system can read it without context.
+template <typename InputAction>
+inline void resolve_scaling_mode(Entity &entity,
+                                 const UIContext<InputAction> &ctx,
+                                 const ComponentConfig &config) {
+  ScalingMode mode = imm::UIStylingDefaults::get().scaling_mode; // app default
+  if (ctx.scaling_mode.has_value())
+    mode = ctx.scaling_mode.value(); // screen override
+  if (config.scaling_mode.has_value())
+    mode = config.scaling_mode.value(); // component override
+  entity.get<UIComponent>().resolved_scaling_mode = mode;
+}
+
 inline void apply_label(HasUIContext auto &ctx, Entity &entity,
                         const ComponentConfig &config) {
   if (config.label.empty())
@@ -343,8 +358,14 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
             window_manager::ProvidesCurrentResolution>()) {
       screen_height = static_cast<float>(pcr->current_resolution.height);
     }
-    mods.translate_x = resolve_to_pixels(config.translate_x, screen_height);
-    mods.translate_y = resolve_to_pixels(config.translate_y, screen_height);
+    // Use scaling-mode-aware overload so absolute positions scale with
+    // ui_scale in Adaptive mode (web-like zoom).
+    auto scaling = entity.get<UIComponent>().resolved_scaling_mode;
+    float uis = ctx.theme.ui_scale;
+    mods.translate_x = resolve_to_pixels(config.translate_x, screen_height,
+                                          scaling, uis);
+    mods.translate_y = resolve_to_pixels(config.translate_y, screen_height,
+                                          scaling, uis);
   } else {
     // Reset modifiers if component exists but no modifiers needed
     if (entity.has<HasUIModifiers>()) {
@@ -481,6 +502,7 @@ inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
 
   apply_flags(entity, config);
   apply_layout(entity, config);
+  resolve_scaling_mode(entity, ctx, config);
   apply_visuals(ctx, entity, config);
   apply_animations(ctx, entity, config);
   apply_label(ctx, entity, config);

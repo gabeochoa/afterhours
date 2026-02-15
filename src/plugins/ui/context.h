@@ -94,6 +94,11 @@ template <typename InputAction> struct UIContext : BaseComponent {
 
   Theme theme;
 
+  // Per-screen scaling mode override. If set, overrides the app-wide default
+  // from UIStylingDefaults. Components can further override via
+  // ComponentConfig::with_scaling_mode().
+  std::optional<ScalingMode> scaling_mode;
+
   // Convenience accessor to the UIStylingDefaults singleton.
   // Defined in component_init.h (which has the full type).
   static imm::UIStylingDefaults &styling_defaults();

@@ -10,6 +10,19 @@ namespace afterhours {
 
 namespace ui {
 
+/// Controls how pixel values are resolved during layout.
+///
+/// - Proportional: pixels() = fixed hardware pixels. h720()/screen_pct() scale
+///   with resolution. Good for games rendering to a reference resolution.
+///
+/// - Adaptive: pixels() = logical pixels scaled by ui_scale. Resolution changes
+///   reflow layout without changing element sizes. Like how the web works:
+///   Ctrl+/- changes ui_scale (zoom), window resize changes available space.
+enum class ScalingMode {
+  Proportional, // Current/default. Resolution scales everything.
+  Adaptive,     // Web-like. ui_scale controls element sizes, resolution reflows.
+};
+
 enum struct Dim {
   None,
   Pixels,
@@ -156,7 +169,7 @@ inline Size h720(const float px) { return screen_pct(px / 720.f); }
 inline Size w1280(const float px) { return screen_pct(px / 1280.f); }
 
 // Resolve a Size to pixels given a screen dimension (height for h720, width
-// for w1280)
+// for w1280). Does NOT apply ui_scale — use the overload with ScalingMode for that.
 inline float resolve_to_pixels(const Size &size, float screen_dimension) {
   switch (size.dim) {
   case Dim::Pixels:
@@ -168,8 +181,31 @@ inline float resolve_to_pixels(const Size &size, float screen_dimension) {
   case Dim::Text:
   case Dim::None:
   case Dim::Expand:
-    // For these types, just return the raw value as a fallback
-    // In practice, Percent/Children/Text/Expand should only be used for layout
+    log_warn("Cannot resolve dim {} to pixels - using raw value",
+             static_cast<int>(size.dim));
+    return size.value;
+  }
+  return size.value;
+}
+
+// Resolve a Size to pixels, applying ui_scale in Adaptive mode.
+// Use this overload when resolving sizes that should respect the scaling mode
+// (e.g., translate/absolute position values, font sizes for rendering).
+inline float resolve_to_pixels(const Size &size, float screen_dimension,
+                                ScalingMode mode, float ui_scale) {
+  switch (size.dim) {
+  case Dim::Pixels:
+    if (mode == ScalingMode::Adaptive) {
+      return size.value * ui_scale;
+    }
+    return size.value;
+  case Dim::ScreenPercent:
+    return size.value * screen_dimension;
+  case Dim::Percent:
+  case Dim::Children:
+  case Dim::Text:
+  case Dim::None:
+  case Dim::Expand:
     log_warn("Cannot resolve dim {} to pixels - using raw value",
              static_cast<int>(size.dim));
     return size.value;
@@ -375,6 +411,45 @@ struct Margin {
   static Margin Bottom(Size v) { return {{}, v, {}, {}}; }
   static Margin Left(Size v) { return {{}, {}, v, {}}; }
   static Margin Right(Size v) { return {{}, {}, {}, v}; }
+};
+
+/// Breakpoint helper for responsive layout decisions.
+///
+/// In Adaptive mode, the "logical" screen size is screen_size / ui_scale,
+/// which represents how much layout space is available (like CSS viewport
+/// width when browser is zoomed). Screens can use this to switch layouts:
+///
+///   auto info = LayoutInfo::from_context(ctx);
+///   if (info.is_narrow()) { /* stack vertically */ }
+///   else { /* side by side */ }
+///
+struct LayoutInfo {
+  float logical_w = 1280.f;
+  float logical_h = 720.f;
+  float ui_scale = 1.0f;
+  ScalingMode mode = ScalingMode::Proportional;
+
+  /// Create from screen dimensions and theme settings.
+  static LayoutInfo make(float screen_w, float screen_h, float ui_scale_,
+                         ScalingMode mode_) {
+    LayoutInfo info;
+    info.ui_scale = ui_scale_;
+    info.mode = mode_;
+    if (mode_ == ScalingMode::Adaptive && ui_scale_ > 0.f) {
+      info.logical_w = screen_w / ui_scale_;
+      info.logical_h = screen_h / ui_scale_;
+    } else {
+      info.logical_w = screen_w;
+      info.logical_h = screen_h;
+    }
+    return info;
+  }
+
+  // Common breakpoints (logical pixels)
+  bool is_narrow() const { return logical_w < 800.f; }
+  bool is_medium() const { return logical_w >= 800.f && logical_w < 1200.f; }
+  bool is_wide() const { return logical_w >= 1200.f; }
+  bool is_short() const { return logical_h < 600.f; }
 };
 
 } // namespace ui

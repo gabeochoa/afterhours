@@ -1733,11 +1733,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       // to preserve the existing auto-fit-to-container behavior.
       float explicit_fs = 0.f;
       if (cmp.font_size_explicitly_set) {
-        if (cmp.font_size.dim == Dim::Pixels) {
-          explicit_fs = cmp.font_size.value;
-        } else if (cmp.font_size.dim == Dim::ScreenPercent) {
-          explicit_fs = cmp.font_size.value * context.screen_height;
-        }
+        // Use scaling-mode-aware resolution so font pixels scale with
+        // ui_scale in Adaptive mode.
+        float uis = imm::ThemeDefaults::get().theme.ui_scale;
+        explicit_fs = resolve_to_pixels(cmp.font_size, context.screen_height,
+                                         cmp.resolved_scaling_mode, uis);
       }
 
       // Position text to get font size
