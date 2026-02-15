@@ -100,7 +100,27 @@ struct input : developer::Plugin {
     return raylib::IsMouseButtonDown(button);
   }
   static bool is_mouse_button_pressed(const MouseButton button) {
-    return raylib::IsMouseButtonPressed(button);
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    return testing::test_input::is_mouse_button_pressed(
+        button, [](int b) -> bool {
+          // Manual edge detection: raylib IsMouseButtonPressed is broken on
+          // macOS because glfwSwapBuffers pumps the Cocoa event queue,
+          // setting currentButtonState before PollInputEvents copies
+          // current→previous. Use IsMouseButtonDown + edge tracking instead.
+          static bool prev[8] = {};
+          bool curr = raylib::IsMouseButtonDown(b);
+          bool pressed = curr && !prev[b];
+          prev[b] = curr;
+          return pressed;
+        });
+#else
+    // Manual edge detection (same macOS fix, no E2E layer)
+    static bool prev[8] = {};
+    bool curr = raylib::IsMouseButtonDown(button);
+    bool pressed = curr && !prev[button];
+    prev[button] = curr;
+    return pressed;
+#endif
   }
   static bool is_mouse_button_released(const MouseButton button) {
     return raylib::IsMouseButtonReleased(button);

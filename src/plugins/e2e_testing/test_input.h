@@ -82,15 +82,20 @@ inline void reset_frame() {
   detail::key_consumed = false;
   detail::char_consumed = false;
 
+  // Save press_frames before injector reset clears flags
   auto &m = input_injector::detail::mouse;
-  if (m.press_frames > 0) {
-    m.press_frames--;
-  } else {
-    m.just_pressed = false;
-  }
-  m.just_released = false;
+  int pf = m.press_frames;
 
+  // Clears just_pressed/just_released unconditionally
   input_injector::reset_frame();
+
+  // Restore just_pressed if we still have press frames remaining
+  // (simulate_mouse_press sets press_frames=1, so just_pressed survives
+  // one reset_frame call after the injection frame)
+  if (pf > 0) {
+    m.press_frames = pf - 1;
+    m.just_pressed = true;
+  }
 }
 
 // Clear all test input state
