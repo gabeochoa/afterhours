@@ -128,7 +128,7 @@ ElementResult tree_view(HasUIContext auto &ctx, EntityParent ep_pair,
   // Scrollable container
   auto scroll_config =
       ComponentConfig::inherit_from(config, "tree_scroll")
-          .with_size(ComponentSize{expand(), expand()})
+          .with_size(ComponentSize{percent(1.0f), expand()})
           .with_overflow(Overflow::Scroll, Axis::Y)
           .with_flex_direction(FlexDirection::Column)
           .with_custom_background(colors::transparent());
