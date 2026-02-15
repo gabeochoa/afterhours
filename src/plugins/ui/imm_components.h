@@ -797,6 +797,20 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
               .with_roundness(1.0f)
               .with_skip_tabbing(true)
               .with_debug_name(fmt::format("radio_dot_{}", i)));
+    } else {
+      // Subtle dash for unselected state (non-color differentiation)
+      float dash_w = visual_circle_sz * 0.4f;
+      float dash_h = 2.0f;
+      float dash_x = (visual_circle_sz - dash_w) / 2.0f;
+      float dash_y = (visual_circle_sz - dash_h) / 2.0f;
+      div(ctx, mk(ring.ent(), 0),
+          ComponentConfig{}
+              .with_size(ComponentSize{pixels(dash_w), pixels(dash_h)})
+              .with_absolute_position()
+              .with_translate(dash_x, dash_y)
+              .with_custom_background(ctx.theme.font_muted)
+              .with_skip_tabbing(true)
+              .with_debug_name(fmt::format("radio_dash_{}", i)));
     }
 
     // Label - positioned after circle
@@ -903,6 +917,33 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
   track_btn.ent().template addComponentIfMissing<InFocusCluster>();
   track_btn.ent().template get<HasColor>().skip_hover_override = true;
   bool clicked = track_btn;
+
+  // I/O indicators on the track for non-color state differentiation
+  // "|" (I) on left side visible when ON (knob moves right)
+  // "O" on right side visible when OFF (knob moves left)
+  div(ctx, mk(track_btn.ent(), 10),
+      ComponentConfig{}
+          .with_debug_name("toggle_on_indicator")
+          .with_size(ComponentSize{pixels(track_w / 2.0f - pad), pixels(track_h - pad * 2.0f)})
+          .with_absolute_position()
+          .with_translate(pixels(pad + 1.0f), pixels(pad))
+          .with_label("|")
+          .with_font_size(pixels(14.f))
+          .with_custom_text_color(Color{255, 255, 255, 200})
+          .with_alignment(TextAlignment::Center)
+          .with_skip_tabbing(true));
+
+  div(ctx, mk(track_btn.ent(), 11),
+      ComponentConfig{}
+          .with_debug_name("toggle_off_indicator")
+          .with_size(ComponentSize{pixels(track_w / 2.0f - pad), pixels(track_h - pad * 2.0f)})
+          .with_absolute_position()
+          .with_translate(pixels(track_w / 2.0f), pixels(pad))
+          .with_label("O")
+          .with_font_size(pixels(12.f))
+          .with_custom_text_color(Color{255, 255, 255, 160})
+          .with_alignment(TextAlignment::Center)
+          .with_skip_tabbing(true));
 
   // Knob — white circle with subtle dark border for visibility
   float knob_x = pad + travel * state.animation_progress;

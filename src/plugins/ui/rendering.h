@@ -1121,9 +1121,26 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
           ? entity.get<HasRoundedCorners>().segments
           : context.theme.segments;
 
-      // Draw focus ring as a rounded outline with configurable thickness
-      // Draw multiple lines for thickness effect since raylib doesn't support thick rounded lines
+      // Draw dual-color focus ring for universal contrast on any background
+      // Outer contrasting outline (1px outside the focus ring)
       float thickness = context.theme.focus_ring_thickness;
+      float lum = colors::luminance(focus_col);
+      Color outline_col = lum > 0.5f ? Color{0, 0, 0, 180} : Color{255, 255, 255, 180};
+      if (effective_focus_opacity < 1.0f) {
+        outline_col = colors::opacity_pct(outline_col, effective_focus_opacity);
+      }
+      {
+        RectangleType outlineRect = {
+          focus_rect.x - thickness,
+          focus_rect.y - thickness,
+          focus_rect.width + thickness * 2.0f,
+          focus_rect.height + thickness * 2.0f
+        };
+        draw_rectangle_rounded_lines(outlineRect, focus_roundness, focus_segments, outline_col,
+                                     focus_corner_settings);
+      }
+
+      // Draw main focus ring with configurable thickness
       for (float t = 0; t < thickness; t += 1.0f) {
         RectangleType thickRect = {
           focus_rect.x - t,
@@ -1644,8 +1661,23 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           ? entity.get<HasRoundedCorners>().segments
           : context.theme.segments;
 
-      // Draw focus ring as a rounded outline - use very high layer to ensure on top of other elements
-      // Pass thickness to the buffer for proper thick line rendering
+      // Dual-color focus ring: contrasting outline for universal visibility
+      float thickness = context.theme.focus_ring_thickness;
+      float lum = colors::luminance(focus_col);
+      Color outline_col = lum > 0.5f ? Color{0, 0, 0, 180} : Color{255, 255, 255, 180};
+      if (effective_focus_opacity < 1.0f) {
+        outline_col = colors::opacity_pct(outline_col, effective_focus_opacity);
+      }
+      RectangleType outline_rect = {
+        focus_rect.x - thickness,
+        focus_rect.y - thickness,
+        focus_rect.width + thickness * 2.0f,
+        focus_rect.height + thickness * 2.0f
+      };
+      buffer.add_rounded_rectangle_outline(outline_rect, outline_col, focus_roundness, focus_segments,
+                                           focus_corner_settings, layer + 199, entity.id);
+
+      // Main focus ring
       buffer.add_rounded_rectangle_outline(focus_rect, focus_col, focus_roundness, focus_segments,
                                            focus_corner_settings, layer + 200, entity.id,
                                            context.theme.focus_ring_thickness);

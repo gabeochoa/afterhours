@@ -125,7 +125,7 @@ struct ComponentConfig {
   std::optional<char> mask_char;
 
   // Checkbox indicator characters
-  static constexpr const char* DEFAULT_CHECKBOX_CHECKED = "X";
+  static constexpr const char* DEFAULT_CHECKBOX_CHECKED = "V";
   static constexpr const char* DEFAULT_CHECKBOX_UNCHECKED = " ";
   std::optional<std::string> checkbox_checked_indicator;
   std::optional<std::string> checkbox_unchecked_indicator;

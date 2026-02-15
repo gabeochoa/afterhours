@@ -286,7 +286,7 @@ struct Theme {
   // Default constructor - uses a dark theme with good defaults
   Theme()
       : font(colors::isabelline), darkfont(colors::oxford_blue),
-        font_muted(colors::darken(colors::isabelline, 0.3f)),
+        font_muted(colors::darken(colors::isabelline, 0.25f)),
         background(colors::oxford_blue),
         surface(colors::lighten(colors::oxford_blue, 0.1f)),
         primary(colors::pacific_blue), secondary(colors::tea_green),
@@ -435,9 +435,9 @@ public:
       }
     }
 
-    // Font muted from font at 60% opacity effect
+    // Font muted from font at 70% brightness to maintain WCAG AA 4.5:1 contrast
     if (!p.has(p.font_muted)) {
-      theme_.font_muted = colors::darken(theme_.font, 0.4f);
+      theme_.font_muted = colors::darken(theme_.font, 0.3f);
     }
 
     // Focus defaults to font color
