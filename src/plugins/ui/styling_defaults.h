@@ -22,15 +22,23 @@ static constexpr float MIN_TOUCH_TARGET = 44.0f;
 
 static Vector2Type default_component_size = {200.f, 50.f};
 
+// Mode-aware spacing: returns pixels() in Adaptive mode (scales with
+// ui_scale), h720() in Proportional mode (scales with resolution).
+// See docs/30_adaptive_scaling.md Design Decision #2.
 struct DefaultSpacing {
-  static Size tiny() { return h720(8.0f); }
-  static Size small() { return h720(16.0f); }
-  static Size medium() { return h720(24.0f); }
-  static Size large() { return h720(32.0f); }
-  static Size xlarge() { return h720(48.0f); }
-  static Size container() { return h720(64.0f); }
+  static bool is_adaptive();
+  static Size tiny() { return is_adaptive() ? pixels(8.0f) : h720(8.0f); }
+  static Size small() { return is_adaptive() ? pixels(16.0f) : h720(16.0f); }
+  static Size medium() { return is_adaptive() ? pixels(24.0f) : h720(24.0f); }
+  static Size large() { return is_adaptive() ? pixels(32.0f) : h720(32.0f); }
+  static Size xlarge() { return is_adaptive() ? pixels(48.0f) : h720(48.0f); }
+  static Size container() {
+    return is_adaptive() ? pixels(64.0f) : h720(64.0f);
+  }
 };
 
+// Mode-aware typography: returns pixels() in Adaptive mode (scales with
+// ui_scale), h720() in Proportional mode (scales with resolution).
 struct TypographyScale {
   static constexpr float BASE_SIZE_720P = 20.0f;
   static constexpr float RATIO = 1.25f;
@@ -40,11 +48,17 @@ struct TypographyScale {
 
   static Size size(int level) {
     float px_size = BASE_SIZE_720P * std::pow(RATIO, level);
-    return h720(px_size);
+    return DefaultSpacing::is_adaptive() ? pixels(px_size) : h720(px_size);
   }
 
-  static Size base() { return h720(BASE_SIZE_720P); }
-  static Size min_accessible() { return h720(MIN_ACCESSIBLE_SIZE_720P); }
+  static Size base() {
+    return DefaultSpacing::is_adaptive() ? pixels(BASE_SIZE_720P)
+                                         : h720(BASE_SIZE_720P);
+  }
+  static Size min_accessible() {
+    return DefaultSpacing::is_adaptive() ? pixels(MIN_ACCESSIBLE_SIZE_720P)
+                                         : h720(MIN_ACCESSIBLE_SIZE_720P);
+  }
 
   static float compute_line_height(float font_size_px_720p) {
     return font_size_px_720p * 1.5f;
@@ -203,6 +217,11 @@ struct UIStylingDefaults {
   ComponentConfig merge_with_defaults(ComponentType component_type,
                                       const ComponentConfig &config) const;
 };
+
+// Defined here (after UIStylingDefaults) to resolve the forward dependency.
+inline bool DefaultSpacing::is_adaptive() {
+  return UIStylingDefaults::get().scaling_mode == ScalingMode::Adaptive;
+}
 
 template <typename T>
 concept HasUIContext = requires(T a) {

@@ -473,9 +473,14 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
                   float rot_center_x = 0.0f,
                   float rot_center_y = 0.0f) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-  // Register text for E2E testing assertions (only when test mode is active)
+  // Register text for E2E testing assertions (only visible-in-viewport text)
   if (testing::test_input::detail::test_mode) {
-    testing::VisibleTextRegistry::instance().register_text(text);
+    auto *pcr = EntityHelper::get_singleton_cmp<
+        window_manager::ProvidesCurrentResolution>();
+    float vw = pcr ? static_cast<float>(pcr->width()) : 1280.f;
+    float vh = pcr ? static_cast<float>(pcr->height()) : 720.f;
+    testing::VisibleTextRegistry::instance().register_text_if_visible(
+        text, rect.x, rect.y, rect.width, rect.height, vw, vh);
   }
 #endif
 
@@ -1757,10 +1762,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                         rotation, centerX, centerY);
 
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        // Register text for E2E testing assertions (batched renderer path)
+        // Register text for E2E testing (only visible-in-viewport text)
         if (testing::test_input::detail::test_mode) {
-          testing::VisibleTextRegistry::instance().register_text(
-              hasLabel.label);
+          testing::VisibleTextRegistry::instance().register_text_if_visible(
+              hasLabel.label, draw_rect.x, draw_rect.y, draw_rect.width,
+              draw_rect.height, context.screen_width, context.screen_height);
         }
 #endif
       }
