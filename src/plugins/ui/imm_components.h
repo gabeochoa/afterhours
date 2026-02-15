@@ -1397,7 +1397,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   if (auto result = button_group(
           ctx, mk(entity), options,
           ComponentConfig::inherit_from(config, "dropdown button group")
-              .with_size(ComponentSize{config.size.x_axis,
+              .with_size(ComponentSize{percent(1.0f),
                                        children(config.size.y_axis.value)})
               .with_flex_direction(FlexDirection::Column)
               .with_no_wrap()
