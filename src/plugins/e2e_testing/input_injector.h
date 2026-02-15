@@ -25,6 +25,7 @@ struct MouseState {
   bool just_pressed = false;  // Matches UI convention
   bool just_released = false; // Matches UI convention
   int press_frames = 0;       // Frame counter for multi-frame clicks
+  bool auto_release = false;  // When true, release after press_frames expires
 };
 inline MouseState mouse;
 

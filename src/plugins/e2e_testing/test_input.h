@@ -54,12 +54,13 @@ template <HasPosition T> inline void set_mouse_position(const T &pos) {
   set_mouse_position(static_cast<float>(pos.x), static_cast<float>(pos.y));
 }
 
-// Simulate mouse press
+// Simulate mouse press (auto-releases after press_frames expires)
 inline void simulate_mouse_press() {
   auto &m = input_injector::detail::mouse;
   m.left_down = true;
   m.just_pressed = true;
   m.press_frames = 1;
+  m.auto_release = true;
   m.active = true;
 }
 
@@ -68,6 +69,7 @@ inline void simulate_mouse_release() {
   auto &m = input_injector::detail::mouse;
   m.left_down = false;
   m.just_released = true;
+  m.auto_release = false;
   m.active = true;
 }
 
@@ -95,6 +97,14 @@ inline void reset_frame() {
   if (pf > 0) {
     m.press_frames = pf - 1;
     m.just_pressed = true;
+  } else if (m.auto_release && m.left_down) {
+    // Auto-release: simulate_click/simulate_mouse_press set auto_release
+    // and press_frames=1. Once press_frames expires, release the button
+    // so subsequent clicks see a clean down-transition and produce
+    // just_pressed=true in the UI system.
+    m.left_down = false;
+    m.just_released = true;
+    m.auto_release = false;
   }
 }
 
