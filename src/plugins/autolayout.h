@@ -561,9 +561,12 @@ struct AutoLayout {
       // sizing), fall back to text measurement so the element is sized to
       // fit its label content rather than collapsing to padding-only.
       float text_size = 0.f;
-      const Entity &ent = to_ent(widget.id);
-      if (!ent.is_missing<HasLabel>()) {
-        text_size = get_text_size_for_axis(widget, axis);
+      auto it = mapping.find(widget.id);
+      if (it != mapping.end()) {
+        const Entity &ent = it->second;
+        if (!ent.is_missing<HasLabel>()) {
+          text_size = get_text_size_for_axis(widget, axis);
+        }
       }
 
       // Make sure we arent setting -1 in this case
