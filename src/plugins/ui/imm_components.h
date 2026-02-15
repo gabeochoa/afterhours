@@ -1622,7 +1622,8 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
                                             fmt::format("tab_wrap_{}", i))
                    .with_size(ComponentSize{percent(tab_width_percent),
                                            config.size.y_axis})
-                   .with_color_usage(Theme::Usage::None));
+                   .with_color_usage(Theme::Usage::None)
+                   .with_skip_tabbing(true));
 
     auto tab_config =
         ComponentConfig::inherit_from(config, fmt::format("tab_{}", i))
@@ -2169,7 +2170,6 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
   stepperState.num_options = options.size();
   stepperState.changed_since = false;
 
-  entity.template addComponentIfMissing<FocusClusterRoot>();
   entity.addComponentIfMissing<ui::HasLeftRightListener>(
       [](Entity &ent, int dir) {
         auto &state = ent.get<HasStepperState>();
