@@ -1262,8 +1262,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
             Color c = side.color;
             if (effective_opacity < 1.0f)
               c = colors::opacity_pct(c, effective_opacity);
-            DrawRectangle(static_cast<int>(sx), static_cast<int>(sy),
-                          static_cast<int>(sw), static_cast<int>(sh), c);
+            draw_rectangle(RectangleType{sx, sy, sw, sh}, c);
           };
           float tt = border.top.thickness.value;
           float bt = border.bottom.thickness.value;
