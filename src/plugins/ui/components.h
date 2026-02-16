@@ -170,6 +170,7 @@ struct HasDropdownState : ui::HasCheckboxState {
   std::function<Options(HasDropdownState &)> fetch_options = nullptr;
   std::function<void(size_t)> on_option_changed = nullptr;
   size_t last_option_clicked = 0;
+  bool was_open_last_frame = false;
 
   HasDropdownState(
       const Options &opts,

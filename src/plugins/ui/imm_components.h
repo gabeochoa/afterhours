@@ -1411,24 +1411,26 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
     label.ent().template addComponentIfMissing<InFocusCluster>();
   }
 
-  const auto toggle_visibility = [&](Entity &) {
-    dropdownState.on = !dropdownState.on;
-  };
+  // Index of the trigger button within the dropdown entity's children
+  const size_t trigger_child_index = label_str.empty() ? 0 : 1;
 
-  const auto on_option_click = [&](Entity &dd, size_t option_index) {
-    toggle_visibility(dd);
-    dropdownState.last_option_clicked = option_index;
+  const auto on_option_click = [&](Entity &, size_t opt) {
+    dropdownState.on = false;
+    dropdownState.last_option_clicked = opt;
     dropdownState.changed_since = true;
 
-    EntityID id = entity.get<UIComponent>().children[label_str.empty() ? 0 : 1];
-    Entity &first_child = UICollectionHolder::getEntityForIDEnforce(id);
-
-    first_child.get<ui::HasLabel>().label = (options[option_index]);
-    ctx.set_focus(first_child.id);
+    EntityID id =
+        entity.get<UIComponent>().children[trigger_child_index];
+    Entity &trigger = UICollectionHolder::getEntityForIDEnforce(id);
+    trigger.get<ui::HasLabel>().label =
+        fmt::format("{}{}",
+                    std::string(options[opt]),
+                    config.dropdown_closed_indicator.value_or(" v"));
+    ctx.set_focus(trigger.id);
   };
 
-  auto current_option = std::string(
-      options[dropdownState.on ? 0 : dropdownState.last_option_clicked]);
+  auto current_option =
+      std::string(options[dropdownState.last_option_clicked]);
   auto drop_closed = config.dropdown_closed_indicator.value_or(" v");
   auto drop_open = config.dropdown_open_indicator.value_or(" ^");
   auto drop_arrow_icon = dropdownState.on ? drop_open : drop_closed;
@@ -1455,12 +1457,9 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
           .with_size(config_size)
           .with_label(main_button_label)
           .with_rounded_corners(button_corners)
-          // TODO This works great but we need a way to
-          // close the dropdown when you leave without selecting anything
-          //  .with_select_on_focus(true)
-          .with_render_layer(config.render_layer + (dropdownState.on ? 0 : 0)));
+          .with_render_layer(config.render_layer));
   if (main_btn) {
-    dropdownState.on ? on_option_click(entity, 0) : toggle_visibility(entity);
+    dropdownState.on = !dropdownState.on;
   }
 
   // Mark the label + main dropdown button as a focus cluster, but do not
@@ -1469,24 +1468,62 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   // Mark the main dropdown button as part of the cluster
   main_btn.ent().template addComponentIfMissing<InFocusCluster>();
 
-  // Use absolute positioning for dropdown options to avoid layout overflow
-  // warnings - dropdown menus intentionally extend beyond their parent.
-  // NoWrap prevents grid-snap-induced wrapping of dropdown items to
-  // new columns when accumulated position rounding exceeds container size.
-  if (auto result = button_group(
-          ctx, mk(entity), options,
-          ComponentConfig::inherit_from(config, "dropdown button group")
-              .with_size(ComponentSize{percent(1.0f),
-                                       children(config.size.y_axis.value)})
-              .with_flex_direction(FlexDirection::Column)
-              .with_no_wrap()
-              .with_absolute_position()
-              .with_translate(pixels(0), config.size.y_axis)
-              .with_hidden(config.hidden || !dropdownState.on)
-              .with_render_layer(config.render_layer + 1));
-      result) {
-    on_option_click(entity, result.template as<int>());
+  // When open, show options in a tray for arrow-key navigation
+  if (dropdownState.on) {
+    auto options_tray = tray(
+        ctx, mk(entity),
+        ComponentConfig::inherit_from(config, "dropdown_options_tray")
+            .with_size(ComponentSize{percent(1.0f),
+                                     children(config.size.y_axis.value)})
+            .with_flex_direction(FlexDirection::Column)
+            .with_no_wrap()
+            .with_absolute_position()
+            .with_translate(pixels(0), config.size.y_axis)
+            .with_render_layer(config.render_layer + 1));
+
+    // Set tray selection to current option only when first opened
+    if (!dropdownState.was_open_last_frame &&
+        options_tray.ent().template has<HasTray>()) {
+      options_tray.ent().template get<HasTray>().selection_index =
+          static_cast<int>(dropdownState.last_option_clicked);
+    }
+
+    for (size_t i = 0; i < options.size(); ++i) {
+      if (button(ctx, mk(options_tray.ent(), i),
+                 ComponentConfig::inherit_from(
+                     config, fmt::format("dropdown_opt_{}", i))
+                     .with_size(
+                         ComponentSize{percent(1.0f), config.size.y_axis})
+                     .with_label(std::string(options[i])))) {
+        on_option_click(entity, i);
+      }
+    }
+
+    // Move focus to tray when first opened
+    if (!dropdownState.was_open_last_frame) {
+      ctx.set_focus(options_tray.ent().id);
+    }
+
+    // Escape closes without changing selection
+    using IA = typename std::remove_reference_t<decltype(ctx)>::value_type;
+    if (ctx.pressed(IA::MenuBack)) {
+      dropdownState.on = false;
+      EntityID trigger_id =
+          entity.get<UIComponent>().children[trigger_child_index];
+      ctx.set_focus(trigger_id);
+    }
+
+    // Close on focus loss (handles Tab-to-close and click-outside-to-close)
+    if (dropdownState.was_open_last_frame && dropdownState.on) {
+      bool focus_in_dropdown =
+          ctx.has_focus(options_tray.ent().id);
+      if (!focus_in_dropdown) {
+        dropdownState.on = false;
+      }
+    }
   }
+
+  dropdownState.was_open_last_frame = dropdownState.on;
 
   option_index = dropdownState.last_option_clicked;
   return ElementResult{dropdownState.changed_since, entity,
