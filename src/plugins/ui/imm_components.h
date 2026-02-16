@@ -1814,7 +1814,7 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   if (config.border_config.has_value()) {
-    track_color = config.border_config->color;
+    track_color = config.border_config->uniform_color();
     // Resolve Size to pixels for thickness
     float screen_height = 720.f;
     if (auto *pcr = EntityHelper::get_singleton_cmp<
@@ -1822,7 +1822,7 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
       screen_height = static_cast<float>(pcr->current_resolution.height);
     }
     thickness =
-        resolve_to_pixels(config.border_config->thickness, screen_height);
+        resolve_to_pixels(config.border_config->uniform_thickness(), screen_height);
   }
 
   // Store state on entity for rendering
@@ -1903,7 +1903,7 @@ ElementResult decorative_frame(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Get frame thickness from border config or use responsive default
   Size frame_thickness_size = config.border_config.has_value()
-                                  ? config.border_config->thickness
+                                  ? config.border_config->uniform_thickness()
                                   : h720(12.0f);
   float frame_thickness = resolve_to_pixels(frame_thickness_size, screen_height);
 
@@ -1911,7 +1911,7 @@ ElementResult decorative_frame(HasUIContext auto &ctx, EntityParent ep_pair,
   // Frame color: from border config, or derive from theme
   // Background color: from custom_color or theme
   Color frame_color = config.border_config.has_value()
-                          ? config.border_config->color
+                          ? config.border_config->uniform_color()
                           : ctx.theme.secondary;
   Color bg_color = config.custom_color.value_or(ctx.theme.surface);
 

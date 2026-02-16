@@ -63,7 +63,7 @@ inline auto with_brackets(HasUIContext auto &ctx, Color color,
     // Account for border so brackets sit outside it
     float bw = 0.0f;
     if (parent.template has<HasBorder>()) {
-      bw = parent.template get<HasBorder>().border.thickness.value;
+      bw = parent.template get<HasBorder>().border.uniform_thickness().value;
     }
 
     // Full visual box offset from content origin

@@ -300,12 +300,48 @@ struct HasShadow : BaseComponent {
   explicit HasShadow(const Shadow &s) : shadow(s) {}
 };
 
-// Border configuration for UI elements
-struct Border {
-  Color color = Color{0, 0, 0, 0}; // Transparent = no border
-  Size thickness = pixels(2.0f);
-
+// Per-side border configuration
+struct BorderSide {
+  Color color = Color{0, 0, 0, 0};
+  Size thickness = pixels(0.0f);
   bool has_border() const { return thickness.value > 0.0f && color.a > 0; }
+};
+
+// Border configuration for UI elements
+// Supports uniform or per-side borders.
+struct Border {
+  BorderSide top, right, bottom, left;
+
+  // Uniform border factory (backwards compatible)
+  static Border all(Color color, Size thickness) {
+    BorderSide s{color, thickness};
+    return {s, s, s, s};
+  }
+
+  bool has_border() const {
+    return top.has_border() || right.has_border() ||
+           bottom.has_border() || left.has_border();
+  }
+
+  bool is_uniform() const {
+    auto colors_equal = [](const Color &a, const Color &b) {
+      return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+    };
+    return colors_equal(top.color, right.color) &&
+           colors_equal(right.color, bottom.color) &&
+           colors_equal(bottom.color, left.color) &&
+           top.thickness.value == right.thickness.value &&
+           right.thickness.value == bottom.thickness.value &&
+           bottom.thickness.value == left.thickness.value;
+  }
+
+  // Convenience accessors for uniform border (returns top side values)
+  Color uniform_color() const { return top.color; }
+  Size uniform_thickness() const { return top.thickness; }
+
+  // Legacy accessors for code that assumes uniform borders
+  Color color_compat() const { return top.color; }
+  Size thickness_compat() const { return top.thickness; }
 };
 
 // Component for entities that have borders

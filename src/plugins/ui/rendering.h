@@ -1179,12 +1179,35 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     if (entity.has<HasBorder>()) {
       const Border &border = entity.template get<HasBorder>().border;
       if (border.has_border()) {
-        Color border_col = border.color;
-        if (effective_opacity < 1.0f) {
-          border_col = colors::opacity_pct(border_col, effective_opacity);
+        if (border.is_uniform()) {
+          Color border_col = border.uniform_color();
+          if (effective_opacity < 1.0f) {
+            border_col = colors::opacity_pct(border_col, effective_opacity);
+          }
+          draw_rectangle_rounded_lines(draw_rect, roundness, segments, border_col,
+                                       corner_settings);
+        } else {
+          // Per-side border rendering
+          float x = draw_rect.x, y = draw_rect.y;
+          float w = draw_rect.width, h = draw_rect.height;
+          auto draw_side = [&](const BorderSide &side, float sx, float sy,
+                               float sw, float sh) {
+            if (!side.has_border()) return;
+            Color c = side.color;
+            if (effective_opacity < 1.0f)
+              c = colors::opacity_pct(c, effective_opacity);
+            DrawRectangle(static_cast<int>(sx), static_cast<int>(sy),
+                          static_cast<int>(sw), static_cast<int>(sh), c);
+          };
+          float tt = border.top.thickness.value;
+          float bt = border.bottom.thickness.value;
+          float lt = border.left.thickness.value;
+          float rt = border.right.thickness.value;
+          draw_side(border.top, x, y, w, tt);
+          draw_side(border.bottom, x, y + h - bt, w, bt);
+          draw_side(border.left, x, y + tt, lt, h - tt - bt);
+          draw_side(border.right, x + w - rt, y + tt, rt, h - tt - bt);
         }
-        draw_rectangle_rounded_lines(draw_rect, roundness, segments, border_col,
-                                     corner_settings);
       }
     }
 
@@ -1712,12 +1735,36 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     if (entity.has<HasBorder>()) {
       const Border &border = entity.template get<HasBorder>().border;
       if (border.has_border()) {
-        Color border_col = border.color;
-        if (effective_opacity < 1.0f) {
-          border_col = colors::opacity_pct(border_col, effective_opacity);
+        if (border.is_uniform()) {
+          Color border_col = border.uniform_color();
+          if (effective_opacity < 1.0f) {
+            border_col = colors::opacity_pct(border_col, effective_opacity);
+          }
+          buffer.add_rounded_rectangle_outline(draw_rect, border_col, roundness,
+                                               segments, corner_settings, layer, entity.id);
+        } else {
+          // Per-side border rendering (as filled rectangles)
+          float x = draw_rect.x, y = draw_rect.y;
+          float w = draw_rect.width, h = draw_rect.height;
+          auto add_side = [&](const BorderSide &side, float sx, float sy,
+                              float sw, float sh) {
+            if (!side.has_border()) return;
+            Color c = side.color;
+            if (effective_opacity < 1.0f)
+              c = colors::opacity_pct(c, effective_opacity);
+            RectangleType side_rect{sx, sy, sw, sh};
+            buffer.add_rounded_rectangle(side_rect, c, 0.f, 1,
+                                         corner_settings, layer, entity.id, 0.f);
+          };
+          float tt = border.top.thickness.value;
+          float bt = border.bottom.thickness.value;
+          float lt = border.left.thickness.value;
+          float rt = border.right.thickness.value;
+          add_side(border.top, x, y, w, tt);
+          add_side(border.bottom, x, y + h - bt, w, bt);
+          add_side(border.left, x, y + tt, lt, h - tt - bt);
+          add_side(border.right, x + w - rt, y + tt, rt, h - tt - bt);
         }
-        buffer.add_rounded_rectangle_outline(draw_rect, border_col, roundness,
-                                             segments, corner_settings, layer, entity.id);
       }
     }
 

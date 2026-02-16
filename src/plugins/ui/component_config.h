@@ -191,12 +191,33 @@ struct ComponentConfig {
   }
   // Float overload for backwards compatibility
   ComponentConfig &with_border(Color color, float thickness = 2.0f) {
-    border_config = Border{color, pixels(thickness)};
+    border_config = Border::all(color, pixels(thickness));
     return *this;
   }
   // Size overload for resolution-scaled border thickness
   ComponentConfig &with_border(Color color, Size thickness) {
-    border_config = Border{color, thickness};
+    border_config = Border::all(color, thickness);
+    return *this;
+  }
+  // Per-side border methods
+  ComponentConfig &with_border_top(Color color, Size thickness = pixels(1.0f)) {
+    if (!border_config.has_value()) border_config = Border{};
+    border_config->top = BorderSide{color, thickness};
+    return *this;
+  }
+  ComponentConfig &with_border_right(Color color, Size thickness = pixels(1.0f)) {
+    if (!border_config.has_value()) border_config = Border{};
+    border_config->right = BorderSide{color, thickness};
+    return *this;
+  }
+  ComponentConfig &with_border_bottom(Color color, Size thickness = pixels(1.0f)) {
+    if (!border_config.has_value()) border_config = Border{};
+    border_config->bottom = BorderSide{color, thickness};
+    return *this;
+  }
+  ComponentConfig &with_border_left(Color color, Size thickness = pixels(1.0f)) {
+    if (!border_config.has_value()) border_config = Border{};
+    border_config->left = BorderSide{color, thickness};
     return *this;
   }
   ComponentConfig &with_bevel(const BevelBorder &bevel) {
