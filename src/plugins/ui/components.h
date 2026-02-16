@@ -135,6 +135,17 @@ struct SelectOnFocus : BaseComponent {};
 struct FocusClusterRoot : BaseComponent {};
 struct InFocusCluster : BaseComponent {};
 
+struct HasTray : BaseComponent {
+  int selection_index = 0;
+  std::vector<EntityID> navigable_children;  // rebuilt each frame
+
+  // Key repeat timing
+  float repeat_timer = 0.f;
+  float repeat_delay = 0.4f;    // seconds before repeat starts
+  float repeat_interval = 0.15f; // seconds between repeats
+  bool was_held = false;
+};
+
 struct HasChildrenComponent : BaseComponent {
   std::vector<EntityID> children;
   std::function<void(Entity &)> on_child_add;

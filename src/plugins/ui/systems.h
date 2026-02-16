@@ -335,6 +335,16 @@ template <typename InputAction> struct ComputeVisualFocusId : System<> {
     if (!focused.has_value())
       return;
     Entity &fe = focused.asE();
+    // If focused entity has HasTray, show focus on the selected child
+    if (fe.has<ui::HasTray>()) {
+      const auto &tray = fe.get<ui::HasTray>();
+      if (!tray.navigable_children.empty()) {
+        int idx = std::clamp(tray.selection_index, 0,
+                             (int)tray.navigable_children.size() - 1);
+        ctx->visual_focus_id = tray.navigable_children[idx];
+        return;
+      }
+    }
     // climb to nearest FocusClusterRoot if member of a cluster
     Entity *current = &fe;
     int guard = 0;
@@ -551,6 +561,97 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
     // Valid things to tab to...
     context->try_to_grab(entity.id);
     context->process_tabbing(entity.id);
+  }
+};
+
+template <typename InputAction>
+struct HandleTrayNavigation : SystemWithUIContext<ui::HasTray> {
+  UIContext<InputAction> *context;
+
+  virtual void once(float) override {
+    context = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+  }
+
+  virtual void for_each_with(Entity &entity, UIComponent &component,
+                             HasTray &tray, float dt) {
+    if (!component.was_rendered_to_screen) return;
+
+    // Rebuild navigable children list each frame
+    tray.navigable_children.clear();
+    for (auto child_id : component.children) {
+      auto child_opt = UICollectionHolder::getEntityForID(child_id);
+      if (!child_opt.has_value()) continue;
+      Entity &child = child_opt.asE();
+      // Mark all children as skip-tabbing
+      child.addComponentIfMissing<SkipWhenTabbing>();
+      // Only navigable if it has a click listener and is rendered
+      if (child.has<HasClickListener>() &&
+          child.has<UIComponent>() &&
+          child.get<UIComponent>().was_rendered_to_screen) {
+        tray.navigable_children.push_back(child_id);
+      }
+    }
+
+    if (tray.navigable_children.empty()) return;
+
+    // Clamp selection index
+    int count = (int)tray.navigable_children.size();
+    tray.selection_index = std::clamp(tray.selection_index, 0, count - 1);
+
+    if (!context->has_focus(entity.id)) return;
+
+    // Determine axis from flex direction
+    bool horizontal = (component.flex_direction == FlexDirection::Row);
+
+    // Arrow key navigation with key repeat
+    auto fwd = horizontal ? InputAction::WidgetRight : InputAction::WidgetDown;
+    auto bck = horizontal ? InputAction::WidgetLeft : InputAction::WidgetUp;
+
+    int dir = 0;
+    bool held = context->is_held_down(fwd) || context->is_held_down(bck);
+
+    if (context->pressed(fwd)) {
+      dir = 1;
+      tray.repeat_timer = 0.f;
+      tray.was_held = false;
+    } else if (context->pressed(bck)) {
+      dir = -1;
+      tray.repeat_timer = 0.f;
+      tray.was_held = false;
+    } else if (held) {
+      tray.repeat_timer += dt;
+      float threshold = tray.was_held ? tray.repeat_interval : tray.repeat_delay;
+      if (tray.repeat_timer >= threshold) {
+        tray.repeat_timer = 0.f;
+        tray.was_held = true;
+        // Determine direction from whichever key is held
+        dir = context->is_held_down(fwd) ? 1 : -1;
+      }
+    } else {
+      tray.repeat_timer = 0.f;
+      tray.was_held = false;
+    }
+
+    if (dir != 0) {
+      tray.selection_index = (tray.selection_index + dir + count) % count;
+    }
+
+    // WidgetPress activates selected child
+    // The tray's own HasClickListener is handled by HandleClicks (which runs
+    // before this system). If HandleClicks set the tray's .down flag, we
+    // propagate that activation to the currently selected child.
+    if (entity.has<HasClickListener>() &&
+        entity.get<HasClickListener>().down) {
+      auto sel_opt = UICollectionHolder::getEntityForID(
+          tray.navigable_children[tray.selection_index]);
+      if (sel_opt.has_value()) {
+        Entity &sel = sel_opt.asE();
+        if (sel.has<HasClickListener>()) {
+          sel.get<HasClickListener>().cb(sel);
+          sel.get<HasClickListener>().down = true;
+        }
+      }
+    }
   }
 };
 

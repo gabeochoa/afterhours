@@ -214,6 +214,32 @@ ElementResult spacer(HasUIContext auto &ctx, EntityParent ep_pair,
   return div(ctx, ep_pair, config);
 }
 
+/// A tray is a container that acts as a single tab stop.
+/// Arrow keys move a selection highlight among its focusable children;
+/// Enter/WidgetPress activates the selected child.
+///
+/// Usage:
+/// ```cpp
+/// auto t = tray(ctx, mk(parent),
+///     ComponentConfig{}.with_size(ComponentSize{percent(1.0f), children()}));
+/// button(ctx, mk(t.ent()), ComponentConfig{}.with_label("A"));
+/// button(ctx, mk(t.ent()), ComponentConfig{}.with_label("B"));
+/// button(ctx, mk(t.ent()), ComponentConfig{}.with_label("C"));
+/// ```
+ElementResult tray(HasUIContext auto &ctx, EntityParent ep_pair,
+                   ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+
+  init_component(ctx, ep_pair, config, ComponentType::Tray, false, "tray");
+
+  // Tray root is a tab stop
+  entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
+  // Add tray state
+  entity.addComponentIfMissing<HasTray>();
+
+  return ElementResult{false, entity};
+}
+
 /// Orientation for separator widgets
 enum struct SeparatorOrientation {
   Horizontal, // Thin horizontal line (default)

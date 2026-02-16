@@ -92,6 +92,7 @@ enum struct ComponentType {
   TabContainer,
   DecorativeFrame,
   Stepper,
+  Tray,
 };
 
 // Forward declaration - ComponentConfig is defined in component_config.h
