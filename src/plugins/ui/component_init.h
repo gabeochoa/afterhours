@@ -335,10 +335,9 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
       entity.addComponentIfMissing<HasColor>(colors::UI_PINK);
       entity.get<HasColor>().set(colors::UI_PINK);
     }
-  } else if (config.color_usage == Theme::Usage::Default &&
-             !config.label.empty()) {
-    // Auto-add transparent background for text-only elements so they
-    // render correctly without requiring an explicit background color.
+  } else if (config.color_usage == Theme::Usage::Default) {
+    // Auto-add transparent background for elements that don't specify
+    // a color, so child divs don't retain stale backgrounds.
     entity.addComponentIfMissing<HasColor>(colors::transparent());
     entity.get<HasColor>().set(colors::transparent());
   }
