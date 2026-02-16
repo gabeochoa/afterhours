@@ -67,23 +67,174 @@ inline void draw_rectangle_outline(const RectangleType rect, const Color color) 
     draw_rectangle_outline(rect, color, 1.0f);
 }
 
-inline void draw_rectangle_rounded(const RectangleType rect, const float, const int,
-                                   const Color color, const std::bitset<4> = std::bitset<4>().reset()) {
-    // TODO: actual rounded corners via triangle fans
-    draw_rectangle(rect, color);
+inline void draw_rectangle_rounded(const RectangleType rect, const float roundness, const int segments,
+                                   const Color color, const std::bitset<4> corners = std::bitset<4>().reset()) {
+    if (corners.none() || roundness <= 0.0f) {
+        draw_rectangle(rect, color);
+        return;
+    }
+
+    const float x = rect.x, y = rect.y, w = rect.width, h = rect.height;
+    const float shorter = (w < h) ? w : h;
+    float r = (shorter * 0.5f) * roundness;
+    if (r > w * 0.5f) r = w * 0.5f;
+    if (r > h * 0.5f) r = h * 0.5f;
+
+    const int segs = (segments > 0) ? segments : 8;
+    const float PI_HALF = 3.14159265f * 0.5f;
+
+    // Bit layout: 3=TL, 2=TR, 1=BL, 0=BR
+    float rTL = corners.test(3) ? r : 0.0f;
+    float rTR = corners.test(2) ? r : 0.0f;
+    float rBL = corners.test(1) ? r : 0.0f;
+    float rBR = corners.test(0) ? r : 0.0f;
+
+    // Center of the rectangle for triangle fan
+    float cx = x + w * 0.5f;
+    float cy = y + h * 0.5f;
+
+    metal_draw_detail::set_color(color);
+
+    // Helper: emit a corner arc as triangles from center
+    auto emit_corner_arc = [&](float cornerX, float cornerY, float radius, float startAngle) {
+        if (radius <= 0.0f) {
+            // Sharp corner: just one triangle from center to corner point
+            sgl_begin_triangles();
+            metal_draw_detail::set_color(color);
+            sgl_v2f(cx, cy);
+            sgl_v2f(cornerX, cornerY);
+            // We'll handle connectivity outside
+            sgl_end();
+            return;
+        }
+        for (int i = 0; i < segs; i++) {
+            float a0 = startAngle + PI_HALF * static_cast<float>(i) / static_cast<float>(segs);
+            float a1 = startAngle + PI_HALF * static_cast<float>(i + 1) / static_cast<float>(segs);
+            sgl_begin_triangles();
+            metal_draw_detail::set_color(color);
+            sgl_v2f(cx, cy);
+            sgl_v2f(cornerX + radius * cosf(a0), cornerY + radius * sinf(a0));
+            sgl_v2f(cornerX + radius * cosf(a1), cornerY + radius * sinf(a1));
+            sgl_end();
+        }
+    };
+
+    // Build rounded rect as triangles from center to perimeter
+    // Top-left corner arc (center at x+rTL, y+rTL), angles PI to 1.5*PI
+    emit_corner_arc(x + rTL, y + rTL, rTL, 3.14159265f);
+
+    // Top edge: TL arc end -> TR arc start
+    sgl_begin_triangles();
+    metal_draw_detail::set_color(color);
+    sgl_v2f(cx, cy);
+    sgl_v2f(x + rTL, y);
+    sgl_v2f(x + w - rTR, y);
+    sgl_end();
+
+    // Top-right corner arc (center at x+w-rTR, y+rTR), angles -PI/2 to 0
+    emit_corner_arc(x + w - rTR, y + rTR, rTR, -PI_HALF);
+
+    // Right edge: TR arc end -> BR arc start
+    sgl_begin_triangles();
+    metal_draw_detail::set_color(color);
+    sgl_v2f(cx, cy);
+    sgl_v2f(x + w, y + rTR);
+    sgl_v2f(x + w, y + h - rBR);
+    sgl_end();
+
+    // Bottom-right corner arc (center at x+w-rBR, y+h-rBR), angles 0 to PI/2
+    emit_corner_arc(x + w - rBR, y + h - rBR, rBR, 0.0f);
+
+    // Bottom edge: BR arc end -> BL arc start
+    sgl_begin_triangles();
+    metal_draw_detail::set_color(color);
+    sgl_v2f(cx, cy);
+    sgl_v2f(x + w - rBR, y + h);
+    sgl_v2f(x + rBL, y + h);
+    sgl_end();
+
+    // Bottom-left corner arc (center at x+rBL, y+h-rBL), angles PI/2 to PI
+    emit_corner_arc(x + rBL, y + h - rBL, rBL, PI_HALF);
+
+    // Left edge: BL arc end -> TL arc start
+    sgl_begin_triangles();
+    metal_draw_detail::set_color(color);
+    sgl_v2f(cx, cy);
+    sgl_v2f(x, y + h - rBL);
+    sgl_v2f(x, y + rTL);
+    sgl_end();
 }
 
 inline void draw_rectangle_rounded_rotated(const RectangleType rect, const float roundness, const int segments,
                                            const Color color, const std::bitset<4> corners, const float) {
     // TODO: rotation support
+    log_warn("draw_rectangle_rounded_rotated: rotation not implemented in sokol backend");
     draw_rectangle_rounded(rect, roundness, segments, color, corners);
 }
 
-inline void draw_rectangle_rounded_lines(const RectangleType rect, const float,
-                                         const int, const Color color,
-                                         const std::bitset<4> = std::bitset<4>().reset()) {
-    // TODO: actual rounded corners
-    draw_rectangle_outline(rect, color);
+inline void draw_rectangle_rounded_lines(const RectangleType rect, const float roundness,
+                                         const int segments, const Color color,
+                                         const std::bitset<4> corners = std::bitset<4>().reset()) {
+    if (corners.none() || roundness <= 0.0f) {
+        draw_rectangle_outline(rect, color);
+        return;
+    }
+
+    const float x = rect.x, y = rect.y, w = rect.width, h = rect.height;
+    const float shorter = (w < h) ? w : h;
+    float r = (shorter * 0.5f) * roundness;
+    if (r > w * 0.5f) r = w * 0.5f;
+    if (r > h * 0.5f) r = h * 0.5f;
+
+    const int segs = (segments > 0) ? segments : 8;
+    const float PI_HALF = 3.14159265f * 0.5f;
+
+    float rTL = corners.test(3) ? r : 0.0f;
+    float rTR = corners.test(2) ? r : 0.0f;
+    float rBL = corners.test(1) ? r : 0.0f;
+    float rBR = corners.test(0) ? r : 0.0f;
+
+    sgl_begin_line_strip();
+    metal_draw_detail::set_color(color);
+
+    // Top edge (left to right)
+    sgl_v2f(x + rTL, y);
+    sgl_v2f(x + w - rTR, y);
+
+    // Top-right arc
+    for (int i = 0; i <= segs; i++) {
+        float a = -PI_HALF + PI_HALF * static_cast<float>(i) / static_cast<float>(segs);
+        sgl_v2f(x + w - rTR + rTR * cosf(a), y + rTR + rTR * sinf(a));
+    }
+
+    // Right edge
+    sgl_v2f(x + w, y + h - rBR);
+
+    // Bottom-right arc
+    for (int i = 0; i <= segs; i++) {
+        float a = PI_HALF * static_cast<float>(i) / static_cast<float>(segs);
+        sgl_v2f(x + w - rBR + rBR * cosf(a), y + h - rBR + rBR * sinf(a));
+    }
+
+    // Bottom edge (right to left)
+    sgl_v2f(x + rBL, y + h);
+
+    // Bottom-left arc
+    for (int i = 0; i <= segs; i++) {
+        float a = PI_HALF + PI_HALF * static_cast<float>(i) / static_cast<float>(segs);
+        sgl_v2f(x + rBL + rBL * cosf(a), y + h - rBL + rBL * sinf(a));
+    }
+
+    // Left edge
+    sgl_v2f(x, y + rTL);
+
+    // Top-left arc
+    for (int i = 0; i <= segs; i++) {
+        float a = 3.14159265f + PI_HALF * static_cast<float>(i) / static_cast<float>(segs);
+        sgl_v2f(x + rTL + rTL * cosf(a), y + rTL + rTL * sinf(a));
+    }
+
+    sgl_end();
 }
 
 inline void draw_texture_npatch(const texture_manager::Texture,
@@ -135,6 +286,7 @@ inline void draw_line(int x1, int y1, int x2, int y2, Color color) {
 inline void draw_line_ex(Vector2Type start, Vector2Type end, float thickness,
                          Color color) {
     // TODO: thick lines via quads
+    log_warn("draw_line_ex: thick lines not implemented in sokol backend, ignoring thickness");
     (void)thickness;
     sgl_begin_lines();
     metal_draw_detail::set_color(color);
