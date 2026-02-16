@@ -153,6 +153,7 @@ inline void apply_layout(Entity &entity, const ComponentConfig &config) {
       .set_flex_wrap(config.flex_wrap)
       .set_debug_wrap(config.debug_wrap)
       .set_flex_direction(config.flex_direction);
+  entity.get<UIComponent>().desired_gap = config.flex_gap;
 
   if (config.is_absolute)
     entity.get<UIComponent>().make_absolute();

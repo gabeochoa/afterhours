@@ -2946,6 +2946,84 @@ TEST(adaptive_mode_asymmetric_padding_scales) {
   CHECK_APPROX(t.ui(child).computed[Axis::Y], 520.f);
 }
 
+// ===========================================================================
+// Gap: spacing between children (CSS gap equivalent)
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// Gap: basic gap between children in column
+// ---------------------------------------------------------------------------
+TEST(gap_column_basic) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(300));
+  t.ui(root).desired_gap = pixels(10.f);
+
+  auto &a = t.make_ui(pixels(400), pixels(50));
+  auto &b = t.make_ui(pixels(400), pixels(50));
+  auto &c = t.make_ui(pixels(400), pixels(50));
+  t.add_child(root, a);
+  t.add_child(root, b);
+  t.add_child(root, c);
+  t.run(root);
+
+  CHECK_APPROX(t.ui(a).computed_rel[Axis::Y], 0.f);
+  CHECK_APPROX(t.ui(b).computed_rel[Axis::Y], 60.f);   // 50 + 10 gap
+  CHECK_APPROX(t.ui(c).computed_rel[Axis::Y], 120.f);  // 50 + 10 + 50 + 10
+}
+
+// ---------------------------------------------------------------------------
+// Gap: basic gap in row
+// ---------------------------------------------------------------------------
+TEST(gap_row_basic) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(100));
+  t.ui(root).flex_direction = FlexDirection::Row;
+  t.ui(root).desired_gap = pixels(8.f);
+
+  auto &a = t.make_ui(pixels(100), pixels(100));
+  auto &b = t.make_ui(pixels(100), pixels(100));
+  t.add_child(root, a);
+  t.add_child(root, b);
+  t.run(root);
+
+  CHECK_APPROX(t.ui(a).computed_rel[Axis::X], 0.f);
+  CHECK_APPROX(t.ui(b).computed_rel[Axis::X], 108.f);  // 100 + 8
+}
+
+// ---------------------------------------------------------------------------
+// Gap: expand divides remaining space after gap
+// ---------------------------------------------------------------------------
+TEST(gap_with_expand) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(300));
+  t.ui(root).desired_gap = pixels(20.f);
+
+  auto &fixed = t.make_ui(pixels(400), pixels(50));
+  auto &exp = t.make_ui(pixels(400), expand());
+  t.add_child(root, fixed);
+  t.add_child(root, exp);
+  t.run(root);
+
+  // expand gets: 300 - 50 (fixed) - 20 (gap) = 230
+  CHECK_APPROX(t.ui(exp).computed[Axis::Y], 230.f);
+}
+
+// ---------------------------------------------------------------------------
+// Gap: single child — no gap applied
+// ---------------------------------------------------------------------------
+TEST(gap_single_child) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(300));
+  t.ui(root).desired_gap = pixels(10.f);
+
+  auto &a = t.make_ui(pixels(400), pixels(50));
+  t.add_child(root, a);
+  t.run(root);
+
+  CHECK_APPROX(t.ui(a).computed_rel[Axis::Y], 0.f);
+  CHECK_APPROX(t.ui(a).computed[Axis::Y], 50.f);
+}
+
 // ============================================================================
 // Main
 // ============================================================================

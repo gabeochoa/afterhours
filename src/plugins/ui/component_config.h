@@ -51,6 +51,7 @@ struct ComponentConfig {
   SelfAlign self_align = SelfAlign::Auto;
   FlexWrap flex_wrap = FlexWrap::Wrap;
   bool debug_wrap = false;
+  Size flex_gap = pixels(0.0f);       // Spacing between children (CSS gap)
   bool clip_children = false;      // Enable scissor clipping for children
   bool draggable_children = false; // Enable drag-and-drop reordering of children
 
@@ -425,6 +426,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_debug_wrap(bool enabled = true) {
     debug_wrap = enabled;
+    return *this;
+  }
+  ComponentConfig &with_gap(Size gap_size) {
+    flex_gap = gap_size;
     return *this;
   }
 

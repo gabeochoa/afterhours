@@ -844,14 +844,26 @@ struct AutoLayout {
       }
     };
 
+    // Resolve explicit gap for this widget
+    float resolved_gap = 0.f;
+    if (widget.desired_gap.value > 0.f) {
+      resolved_gap = resolve_pixels(widget.desired_gap.value, widget);
+      widget.gap = resolved_gap;
+    }
+
     const auto compute_error = [ACCEPTABLE_ERROR, &_total_child, &_max_child,
                                 &_solve_error_optional, &fix_violating_children,
-                                &widget](Axis axis, bool is_main_axis) -> float {
+                                &widget, num_children, resolved_gap](Axis axis, bool is_main_axis) -> float {
       // Use content area (computed minus padding) as the available space
       // for children. Padding reserves visual inset space and should not
       // be available for child layout. This matches compute_rect_bounds
       // which offsets children by padding_left/top.
       float my_size = fmaxf(0.f, widget.computed[axis] - widget.computed_padd[axis]);
+      // Subtract gap space from available area on main axis
+      if (is_main_axis && resolved_gap > 0.f && num_children > 1) {
+        my_size -= resolved_gap * static_cast<float>(num_children - 1);
+        my_size = fmaxf(0.f, my_size);
+      }
       // Main axis: children stack, so their sizes sum up.
       // Cross axis: children overlap, so only the largest matters.
       float all_children = is_main_axis ? _total_child(axis) : _max_child(axis);
@@ -978,6 +990,20 @@ struct AutoLayout {
     float start_offset = 0.f;
     float gap = 0.f;
 
+    // Resolve explicit gap from desired_gap
+    float explicit_gap = 0.f;
+    if (widget.desired_gap.value > 0.f) {
+      explicit_gap = resolve_pixels(widget.desired_gap.value, widget);
+      widget.gap = explicit_gap;
+    }
+
+    // Account for explicit gap in remaining space calculation
+    float gap_total = (num_layout_children > 1)
+                          ? explicit_gap * static_cast<float>(num_layout_children - 1)
+                          : 0.f;
+    remaining_space -= gap_total;
+    if (remaining_space < 0.f) remaining_space = 0.f;
+
     if (remaining_space > 0.f && num_layout_children > 0) {
       switch (widget.justify_content) {
       case JustifyContent::FlexStart:
@@ -999,6 +1025,9 @@ struct AutoLayout {
         break;
       }
     }
+
+    // Add explicit gap on top of justify-content gap
+    gap += explicit_gap;
 
     // Accumulated grid snap tolerance for warning checks:
     // Each child's position snap can introduce up to half a grid unit of

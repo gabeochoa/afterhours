@@ -84,6 +84,8 @@ struct UIComponent : BaseComponent {
   SelfAlign self_align = SelfAlign::Auto; // Override parent's align_items for this element
   FlexWrap flex_wrap = FlexWrap::Wrap;    // Controls wrapping behavior
   bool debug_wrap = false;                // Opt-in wrap debugging
+  float gap = 0.f;                        // Spacing between children (resolved pixels)
+  Size desired_gap = pixels(0.f);         // Spacing between children (unresolved)
 
   bool should_hide = false;
   bool was_rendered_to_screen = false;
