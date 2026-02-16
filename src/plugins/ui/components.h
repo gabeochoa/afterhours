@@ -351,6 +351,15 @@ struct HasBorder : BaseComponent {
   explicit HasBorder(const Border &b) : border(b) {}
 };
 
+// Cursor types for hover behavior
+enum struct CursorType { Default, Pointer, Text, ResizeH, ResizeV };
+
+// Component for entities that change cursor on hover
+struct HasCursor : BaseComponent {
+  CursorType cursor = CursorType::Default;
+  explicit HasCursor(CursorType c = CursorType::Default) : cursor(c) {}
+};
+
 // Bevel styles for classic raised/sunken borders
 enum class BevelStyle { None, Raised, Sunken };
 

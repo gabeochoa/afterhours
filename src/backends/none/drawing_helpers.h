@@ -53,6 +53,8 @@ inline void draw_triangle_lines(Vector2Type, Vector2Type, Vector2Type, Color) { 
 inline void draw_poly(Vector2Type, int, float, float, Color) { log_error("@notimplemented draw_poly"); }
 inline void draw_poly_lines(Vector2Type, int, float, float, Color) { log_error("@notimplemented draw_poly_lines"); }
 inline void draw_poly_lines_ex(Vector2Type, int, float, float, float, Color) { log_error("@notimplemented draw_poly_lines_ex"); }
+inline void set_mouse_cursor(int) {}
+
 inline afterhours::Font get_default_font() { return afterhours::Font(); }
 inline afterhours::Font get_unset_font() { return afterhours::Font(); }
 

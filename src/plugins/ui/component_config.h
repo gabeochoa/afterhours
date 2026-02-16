@@ -87,6 +87,7 @@ struct ComponentConfig {
   TextAlignment label_alignment = TextAlignment::None;
   TextOverflow text_overflow = TextOverflow::Clip;
   float letter_spacing = 0.f; // Additional spacing between characters (pixels)
+  std::optional<CursorType> cursor_type; // Cursor to show on hover
   bool skip_when_tabbing = false;
   bool disabled = false;
   bool hidden = false;
@@ -332,6 +333,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_letter_spacing(float spacing) {
     letter_spacing = spacing;
+    return *this;
+  }
+  ComponentConfig &with_cursor(CursorType cursor) {
+    cursor_type = cursor;
     return *this;
   }
   ComponentConfig &with_rounded_corners(const std::bitset<4> &corners) {

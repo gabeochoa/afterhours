@@ -243,6 +243,19 @@ constexpr float MIN_FONT_SIZE = 10.0f;
 // Font size threshold for debug visualization - text is likely unreadable
 constexpr float DEBUG_FONT_SIZE_THRESHOLD = 8.0f;
 
+// Convert CursorType to backend mouse cursor ID
+// Values match across raylib and sokol backends
+inline int to_cursor_id(CursorType cursor) {
+  switch (cursor) {
+  case CursorType::Default: return 0;  // MOUSE_CURSOR_DEFAULT
+  case CursorType::Pointer: return 4;  // MOUSE_CURSOR_POINTING_HAND
+  case CursorType::Text:    return 2;  // MOUSE_CURSOR_IBEAM
+  case CursorType::ResizeH: return 5;  // MOUSE_CURSOR_RESIZE_EW
+  case CursorType::ResizeV: return 6;  // MOUSE_CURSOR_RESIZE_NS
+  }
+  return 0;
+}
+
 // Enable visual debug indicators for text that can't fit in containers
 // Define AFTERHOURS_DEBUG_TEXT_OVERFLOW to show red corner indicators
 #ifdef AFTERHOURS_DEBUG_TEXT_OVERFLOW
@@ -1434,13 +1447,19 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     });
 #endif
 
+    int cursor_to_set = 0; // Default cursor
     for (auto &cmd : context.render_cmds) {
       auto id = cmd.id;
       OptEntity opt_ent = UICollectionHolder::getEntityForID(id);
       if (!opt_ent.valid())
         continue; // Skip stale entity IDs
-      render(context, font_manager, opt_ent.asE());
+      Entity &ent = opt_ent.asE();
+      render(context, font_manager, ent);
+      if (context.is_hot(ent.id) && ent.has<HasCursor>()) {
+        cursor_to_set = to_cursor_id(ent.get<HasCursor>().cursor);
+      }
     }
+    set_mouse_cursor(cursor_to_set);
     context.render_cmds.clear();
   }
 };
@@ -2065,14 +2084,20 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 #endif
 
     // Collect all commands
+    int cursor_to_set = 0; // Default cursor
     for (const auto &cmd : context.render_cmds) {
       auto id = cmd.id;
       auto layer = cmd.layer;
       OptEntity opt_ent = UICollectionHolder::getEntityForID(id);
       if (!opt_ent.valid())
         continue; // Skip stale entity IDs
-      collect(buffer, context, font_manager, opt_ent.asE(), layer);
+      Entity &ent = opt_ent.asE();
+      collect(buffer, context, font_manager, ent, layer);
+      if (context.is_hot(ent.id) && ent.has<HasCursor>()) {
+        cursor_to_set = to_cursor_id(ent.get<HasCursor>().cursor);
+      }
     }
+    set_mouse_cursor(cursor_to_set);
     context.render_cmds.clear();
 
     // Execute all commands with batching

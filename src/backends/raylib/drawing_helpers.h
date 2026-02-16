@@ -414,6 +414,10 @@ inline void draw_poly_lines_ex(Vector2Type center, int sides, float radius,
   raylib::DrawPolyLinesEx(center, sides, radius, rotation, lineThick, color);
 }
 
+inline void set_mouse_cursor(int cursor_id) {
+  raylib::SetMouseCursor(cursor_id);
+}
+
 inline raylib::Font get_default_font() { return raylib::GetFontDefault(); }
 inline raylib::Font get_unset_font() { return raylib::GetFontDefault(); }
 

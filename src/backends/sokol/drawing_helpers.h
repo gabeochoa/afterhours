@@ -226,6 +226,10 @@ inline void draw_poly_lines_ex(Vector2Type, int, float, float, float, Color) {
     log_error("@notimplemented draw_poly_lines_ex");
 }
 
+inline void set_mouse_cursor(int cursor_id) {
+  sapp_set_mouse_cursor(static_cast<sapp_mouse_cursor>(cursor_id));
+}
+
 inline afterhours::Font get_default_font() { return afterhours::Font(); }
 inline afterhours::Font get_unset_font() { return afterhours::Font(); }
 

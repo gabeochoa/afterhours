@@ -350,6 +350,10 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   }
   entity.addComponentIfMissing<HasOpacity>().value =
       std::clamp(config.opacity, 0.0f, 1.0f);
+  // Apply cursor type if specified
+  if (config.cursor_type.has_value()) {
+    entity.addComponentIfMissing<HasCursor>(config.cursor_type.value());
+  }
   // Apply UI modifiers (scale, translate) if any are non-default
   bool needs_modifiers = config.scale != 1.0f ||
                          config.translate_x.value != 0.0f ||
