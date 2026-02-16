@@ -281,7 +281,8 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
                                                   TextAlignment alignment,
                                                   Vector2Type margin_px,
                                                   float explicit_font_size = 0.f,
-                                                  float extra_spacing = 0.f) {
+                                                  float extra_spacing = 0.f,
+                                                  TextOverflow text_overflow = TextOverflow::Clip) {
   // Early return for empty text - prevents infinite loop in font size
   // calculation
   if (text.empty()) {
@@ -347,10 +348,16 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
     float high = std::min(max_text_size.y, 200.f); // Cap at reasonable max
     font_size = low;
 
+    // When text_overflow is Ellipsis, text will be truncated to fit width,
+    // so only constrain font size by height.
+    const bool width_constrained = (text_overflow != TextOverflow::Ellipsis);
+
     while (high - low > 0.5f) {
       float mid = (low + high) / 2.f;
       Vector2Type ts = measure_text(font, text.c_str(), mid, 1.f + extra_spacing);
-      if (ts.x <= max_text_size.x && ts.y <= max_text_size.y) {
+      bool fits = ts.y <= max_text_size.y &&
+                  (!width_constrained || ts.x <= max_text_size.x);
+      if (fits) {
         font_size = mid;
         low = mid;
       } else {
@@ -456,20 +463,10 @@ static inline void draw_text_at_position(const ui::FontManager &fm,
   float fontSize = sizing.height;
   float spacing = 1.0f + extra_spacing;
 
-  // Calculate offset between sizing and original rect (for shadow/stroke)
-  float offset_x = sizing.x - rect.x;
-  float offset_y = sizing.y - rect.y;
-
+  // position_text_ex already computed alignment-aware position in sizing.x/y.
+  // Shadow/stroke offsets are also pre-applied to sizing before this call.
+  // Just use the pre-calculated position directly.
   Vector2Type startPos = {sizing.x, sizing.y};
-  if (alignment == TextAlignment::Center) {
-    Vector2Type textSize =
-        measure_text_utf8(font, text.c_str(), fontSize, spacing);
-    // Apply centering within rect, THEN add the offset
-    // Clamp to prevent text from starting before container left edge
-    float centered_x = rect.x + (rect.width - textSize.x) / 2.0f + offset_x;
-    startPos.x = std::max(rect.x, centered_x);
-    startPos.y = rect.y + (rect.height - textSize.y) / 2.0f + offset_y;
-  }
 
   // Use provided rotation center (component center), or default to text rect center
   float centerX = (rot_center_x != 0.0f || rot_center_y != 0.0f)
@@ -515,7 +512,7 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
           margin_px.x = std::min(margin_px.x, rect.width * 0.4f);
           margin_px.y = std::min(margin_px.y, rect.height * 0.4f);
         }
-        return position_text_ex(fm, text, rect, alignment, margin_px, 0.f, letter_spacing);
+        return position_text_ex(fm, text, rect, alignment, margin_px, 0.f, letter_spacing, text_overflow);
       }();
 
   // Draw visual debug indicator if text doesn't fit and debug is enabled
@@ -1921,7 +1918,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       TextPositionResult result =
           position_text_ex(font_manager, hasLabel.label.c_str(), text_rect,
                           hasLabel.alignment, Vector2Type{5.f, 5.f},
-                          explicit_fs, hasLabel.letter_spacing);
+                          explicit_fs, hasLabel.letter_spacing,
+                          hasLabel.text_overflow);
 
       if (result.rect.height >= MIN_FONT_SIZE) {
         // Handle text overflow ellipsis truncation for batched path
