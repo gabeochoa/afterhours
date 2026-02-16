@@ -341,6 +341,10 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
     entity.addComponentIfMissing<HasColor>(colors::transparent());
     entity.get<HasColor>().set(colors::transparent());
   }
+  // Apply per-component hover color if specified
+  if (config.hover_color.has_value() && entity.has<HasColor>()) {
+    entity.get<HasColor>().hover_color = config.hover_color;
+  }
   entity.addComponentIfMissing<HasOpacity>().value =
       std::clamp(config.opacity, 0.0f, 1.0f);
   // Apply UI modifiers (scale, translate) if any are non-default

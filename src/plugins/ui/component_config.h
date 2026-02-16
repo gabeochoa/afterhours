@@ -65,7 +65,7 @@ struct ComponentConfig {
   // Background color settings
   Theme::Usage color_usage = Theme::Usage::Default;
   std::optional<Color> custom_color;
-
+  std::optional<Color> hover_color; // Per-component hover background override
   // Text color settings (explicit override)
   Theme::Usage text_color_usage = Theme::Usage::Default;
   std::optional<Color> custom_text_color;
@@ -240,6 +240,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_transparent_bg() {
     return with_custom_background(Color{0, 0, 0, 0});
+  }
+  ComponentConfig &with_custom_hover_bg(Color color) {
+    hover_color = color;
+    return *this;
   }
 
   // DEPRECATED: Keep for backwards compatibility

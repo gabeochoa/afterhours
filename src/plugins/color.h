@@ -509,6 +509,7 @@ public:
   bool is_dynamic = false;
   FetchFn fetch_fn = nullptr;
   bool skip_hover_override = false;
+  std::optional<Color> hover_color; // Per-component hover background override
 
   HasColor(const Color c) : color_(c) {}
   HasColor(const FetchFn &fetch)
