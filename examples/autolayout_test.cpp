@@ -3024,6 +3024,32 @@ TEST(gap_single_child) {
   CHECK_APPROX(t.ui(a).computed[Axis::Y], 50.f);
 }
 
+// ===========================================================================
+// Absolute positioning: children of absolute parent inherit position
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// Absolute parent with flow children: children inherit parent position
+// ---------------------------------------------------------------------------
+TEST(absolute_parent_children_inherit_position) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(800), pixels(600));
+
+  auto &abs_parent = t.make_ui(pixels(200), pixels(200));
+  t.ui(abs_parent).make_absolute();
+  t.ui(abs_parent).absolute_pos_x = 100.f;
+  t.ui(abs_parent).absolute_pos_y = 50.f;
+
+  auto &child = t.make_ui(pixels(80), pixels(40));
+  t.add_child(root, abs_parent);
+  t.add_child(abs_parent, child);
+  t.run(root);
+
+  // Child should be at parent's position (100, 50) + child's own offset (0, 0)
+  CHECK_APPROX(t.ui(child).computed_rel[Axis::X], 100.f);
+  CHECK_APPROX(t.ui(child).computed_rel[Axis::Y], 50.f);
+}
+
 // ============================================================================
 // Main
 // ============================================================================
