@@ -453,7 +453,9 @@ struct HasCircularProgressState : BaseComponent {
 //   Visible — children can overflow; no clipping (default).
 //   Hidden  — children are clipped to the box bounds.
 //   Scroll  — children are clipped and the user can scroll.
-enum class Overflow { Visible, Hidden, Scroll };
+//   Auto    — like Scroll, but only clips/scrolls when content exceeds viewport.
+//             When content fits, behaves like Visible (no clipping, no scroll).
+enum class Overflow { Visible, Hidden, Scroll, Auto };
 
 // Scroll view state - enables scrolling content within a clipped viewport
 struct HasScrollView : BaseComponent {
@@ -464,6 +466,7 @@ struct HasScrollView : BaseComponent {
   bool vertical_enabled = true;        // Allow vertical scrolling
   bool horizontal_enabled = false;     // Allow horizontal scrolling
   bool invert_scroll = false;          // Invert scroll direction (non-natural)
+  bool auto_overflow = false;          // Auto mode: only clip/scroll when content overflows
 
   HasScrollView() = default;
   explicit HasScrollView(float speed) : scroll_speed(speed) {}

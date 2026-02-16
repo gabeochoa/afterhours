@@ -1382,6 +1382,16 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
     // Update viewport size from computed layout
     scroll_state.viewport_size = {cmp.computed[Axis::X], cmp.computed[Axis::Y]};
 
+    // In auto mode, skip scroll input when content fits in viewport
+    if (scroll_state.auto_overflow) {
+      bool needs_v = scroll_state.vertical_enabled && scroll_state.needs_scroll_y();
+      bool needs_h = scroll_state.horizontal_enabled && scroll_state.needs_scroll_x();
+      if (!needs_v && !needs_h) {
+        scroll_state.scroll_offset = {0, 0};
+        return;
+      }
+    }
+
     // Skip input on the first frame when rect hasn't been computed yet
     RectangleType rect = cmp.rect();
     if (rect.width <= 0.0f || rect.height <= 0.0f)

@@ -175,9 +175,6 @@ static inline void update_scroll_view_content_size(Entity &entity) {
   if (!entity.has<HasScrollView>() || !entity.has<UIComponent>())
     return;
 
-  // First fix child positions that may have been constrained by layout
-  fix_scroll_view_child_positions(entity);
-
   HasScrollView &scroll = entity.get<HasScrollView>();
   const UIComponent &cmp = entity.get<UIComponent>();
 
@@ -232,6 +229,14 @@ static inline void update_scroll_view_content_size(Entity &entity) {
   } else {
     scroll.content_size = {max_width, total_height};
   }
+
+  // In auto mode, only fix child positions when content actually overflows.
+  // When content fits, the layout engine's positions are correct.
+  bool content_overflows = scroll.needs_scroll_y() || scroll.needs_scroll_x();
+  if (!scroll.auto_overflow || content_overflows) {
+    fix_scroll_view_child_positions(entity);
+  }
+
   scroll.clamp_scroll();
 }
 
@@ -1389,6 +1394,14 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         entity.has<HasScrollView>() || entity.has<HasClipChildren>();
     bool needs_scissor = clip_ancestor.valid() && !is_clip_container;
 
+    // Skip scissor for auto-overflow scroll views where content fits
+    if (needs_scissor && clip_ancestor->has<HasScrollView>()) {
+      const HasScrollView &sv = clip_ancestor->get<HasScrollView>();
+      if (sv.auto_overflow && !sv.needs_scroll_y() && !sv.needs_scroll_x()) {
+        needs_scissor = false;
+      }
+    }
+
     if (needs_scissor) {
       RectangleType scissor_rect =
           clip_ancestor->get<UIComponent>().rect();
@@ -2022,6 +2035,14 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     bool is_clip_container =
         entity.has<HasScrollView>() || entity.has<HasClipChildren>();
     bool needs_scissor = clip_ancestor.valid() && !is_clip_container;
+
+    // Skip scissor for auto-overflow scroll views where content fits
+    if (needs_scissor && clip_ancestor->has<HasScrollView>()) {
+      const HasScrollView &sv = clip_ancestor->get<HasScrollView>();
+      if (sv.auto_overflow && !sv.needs_scroll_y() && !sv.needs_scroll_x()) {
+        needs_scissor = false;
+      }
+    }
 
     if (needs_scissor) {
       RectangleType scissor_rect =

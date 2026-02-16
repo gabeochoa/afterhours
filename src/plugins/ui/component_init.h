@@ -300,19 +300,28 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   }
 
   // Scroll implies clipping, so both Scroll and Hidden add HasClipChildren.
+  // Auto does NOT add HasClipChildren — clipping is dynamic based on content size.
   {
-    bool needs_clip = config.overflow_x != Overflow::Visible ||
-                      config.overflow_y != Overflow::Visible;
+    bool needs_clip = config.overflow_x == Overflow::Hidden ||
+                      config.overflow_x == Overflow::Scroll ||
+                      config.overflow_y == Overflow::Hidden ||
+                      config.overflow_y == Overflow::Scroll;
     if (needs_clip) {
       entity.addComponentIfMissing<HasClipChildren>();
     }
 
     bool needs_scroll = config.overflow_x == Overflow::Scroll ||
-                        config.overflow_y == Overflow::Scroll;
+                        config.overflow_y == Overflow::Scroll ||
+                        config.overflow_x == Overflow::Auto ||
+                        config.overflow_y == Overflow::Auto;
     if (needs_scroll) {
       auto &sv = entity.addComponentIfMissing<HasScrollView>();
-      sv.horizontal_enabled = (config.overflow_x == Overflow::Scroll);
-      sv.vertical_enabled = (config.overflow_y == Overflow::Scroll);
+      sv.horizontal_enabled = (config.overflow_x == Overflow::Scroll ||
+                               config.overflow_x == Overflow::Auto);
+      sv.vertical_enabled = (config.overflow_y == Overflow::Scroll ||
+                             config.overflow_y == Overflow::Auto);
+      sv.auto_overflow = (config.overflow_x == Overflow::Auto ||
+                          config.overflow_y == Overflow::Auto);
     }
   }
 
