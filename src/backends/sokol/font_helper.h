@@ -58,6 +58,7 @@ inline float measure_text_internal(const char *text, const float size) {
   if (!ctx || graphics::metal_detail::g_active_font == FONS_INVALID) return 0.f;
   fonsSetFont(ctx, graphics::metal_detail::g_active_font);
   fonsSetSize(ctx, size);
+  fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   return fonsTextBounds(ctx, 0, 0, text, nullptr, nullptr);
 }
 
@@ -69,6 +70,7 @@ inline Vector2Type measure_text(const Font font, const char *text,
   if (fid == FONS_INVALID) return Vector2Type{0, 0};
   fonsSetFont(ctx, fid);
   fonsSetSize(ctx, size);
+  fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   float bounds[4] = {};
   fonsTextBounds(ctx, 0, 0, text, nullptr, bounds);
   float w = bounds[2] - bounds[0];

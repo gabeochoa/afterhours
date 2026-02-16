@@ -29,8 +29,9 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
     if (fid == FONS_INVALID) return;
     fonsSetFont(ctx, fid);
     fonsSetSize(ctx, font_size);
+    fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
     fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
-    fonsDrawText(ctx, position.x, position.y + font_size, content, nullptr);
+    fonsDrawText(ctx, position.x, position.y, content, nullptr);
 }
 
 inline void draw_text(const char *content, const float x, const float y,
@@ -39,8 +40,9 @@ inline void draw_text(const char *content, const float x, const float y,
     if (!ctx || graphics::metal_detail::g_active_font == FONS_INVALID) return;
     fonsSetFont(ctx, graphics::metal_detail::g_active_font);
     fonsSetSize(ctx, font_size);
+    fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
     fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
-    fonsDrawText(ctx, x, y + font_size, content, nullptr);
+    fonsDrawText(ctx, x, y, content, nullptr);
 }
 
 inline void draw_rectangle(const RectangleType rect, const Color color) {
