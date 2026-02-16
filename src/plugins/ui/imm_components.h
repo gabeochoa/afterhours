@@ -871,12 +871,23 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
 
   const Theme &theme = ctx.theme;
 
-  // Optional label — uses expand() to fill remaining space so the toggle
-  // control is flush-right.
+  // Dimensions — declared early so label width can reference track_w
+  constexpr float track_w = 52.0f, track_h = 28.0f;
+  constexpr float pad = 4.0f;
+  constexpr float knob_sz = track_h - pad * 2.0f;  // 20px
+  constexpr float travel = track_w - knob_sz - pad * 2.0f;  // 24px
+
+  // Optional label — when parent width is known in pixels, compute label width
+  // explicitly (parent_width - track_width) to avoid expand() resolution issues
+  // inside absolutely-positioned containers. Falls back to expand() otherwise.
   if (!label.empty()) {
+    Size label_width =
+        (config.size.x_axis.dim == Dim::Pixels)
+            ? pixels(config.size.x_axis.value - track_w)
+            : expand();
     div(ctx, mk(entity),
         ComponentConfig::inherit_from(config, "toggle_label")
-            .with_size(ComponentSize{expand(), config.size.y_axis})
+            .with_size(ComponentSize{label_width, config.size.y_axis})
             .with_label(label)
             .with_color_usage(Theme::Usage::None))
         .ent()
@@ -894,12 +905,6 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
   Color track_on = theme.accent;
   Color track_color = colors::lerp(track_off, track_on,
                                    state.animation_progress);
-
-  // Dimensions
-  constexpr float track_w = 52.0f, track_h = 28.0f;
-  constexpr float pad = 4.0f;
-  constexpr float knob_sz = track_h - pad * 2.0f;  // 20px
-  constexpr float travel = track_w - knob_sz - pad * 2.0f;  // 24px
 
   // Track toggle — skip_hover_override keeps correct color on hover
   // Explicit zero padding prevents default Spacing::sm button padding
@@ -1615,42 +1620,29 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
                        : afterhours::colors::darken(ctx.theme.background, 0.92f);
     Color tab_text = is_active ? ctx.theme.font : ctx.theme.font_muted;
 
-    // Wrapper for each tab: column layout holding button + underline
-    auto tab_wrapper =
-        vstack(ctx, mk(entity, i),
-               ComponentConfig::inherit_from(config,
-                                            fmt::format("tab_wrap_{}", i))
-                   .with_size(ComponentSize{percent(tab_width_percent),
-                                           config.size.y_axis})
-                   .with_color_usage(Theme::Usage::None)
-                   .with_skip_tabbing(true));
-
-    auto tab_config =
-        ComponentConfig::inherit_from(config, fmt::format("tab_{}", i))
-            .with_size(ComponentSize{percent(1.0f), expand(1.0f)})
-            .with_label(std::string(label))
-            .with_custom_background(tab_bg)
-            .with_custom_text_color(tab_text)
-            .with_align_items(AlignItems::Center)
-            .with_justify_content(JustifyContent::Center);
-
-    if (button(ctx, mk(tab_wrapper.ent()), tab_config)) {
-      active_tab = i;
-      changed = true;
-    }
-
     // Active tab: bold accent underline (4px)
     // Inactive tab: subtle muted line to separate from content
     Color underline_color =
         is_active ? ctx.theme.accent
                   : afterhours::colors::darken(ctx.theme.background, 0.80f);
     float underline_h = is_active ? 4.0f : 1.0f;
-    div(ctx, mk(tab_wrapper.ent(), 1),
-        ComponentConfig{}
-            .with_debug_name(fmt::format("tab_underline_{}", i))
-            .with_size(ComponentSize{percent(1.0f), pixels(underline_h)})
-            .with_custom_background(underline_color)
-            .with_skip_tabbing(true));
+
+    // Each tab is a button with border-bottom for the underline indicator
+    auto tab_config =
+        ComponentConfig::inherit_from(config, fmt::format("tab_{}", i))
+            .with_size(ComponentSize{percent(tab_width_percent),
+                                    config.size.y_axis})
+            .with_label(std::string(label))
+            .with_custom_background(tab_bg)
+            .with_custom_text_color(tab_text)
+            .with_align_items(AlignItems::Center)
+            .with_justify_content(JustifyContent::Center)
+            .with_border_bottom(underline_color, pixels(underline_h));
+
+    if (button(ctx, mk(entity, i), tab_config)) {
+      active_tab = i;
+      changed = true;
+    }
 
     ++i;
   }
