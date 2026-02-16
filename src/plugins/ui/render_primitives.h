@@ -69,6 +69,7 @@ struct RenderPrimitive {
       float shadow_offset_x;
       float shadow_offset_y;
       Color shadow_color;
+      float letter_spacing;
     } text;
 
     struct {
@@ -305,7 +306,8 @@ public:
                 const std::optional<TextShadow>& shadow = std::nullopt,
                 float rotation = 0.0f,
                 float rot_center_x = 0.0f,
-                float rot_center_y = 0.0f) {
+                float rot_center_y = 0.0f,
+                float letter_spacing = 0.0f) {
     // Copy strings to arena for stable pointers
     char* text_copy = arena_->create_array_uninitialized<char>(text.size() + 1);
     if (text_copy) {
@@ -347,6 +349,7 @@ public:
       cmd.data.text.shadow_offset_y = shadow->offset_y;
       cmd.data.text.shadow_color = shadow->color;
     }
+    cmd.data.text.letter_spacing = letter_spacing;
   }
 
   // Add image
@@ -607,7 +610,7 @@ private:
 
     Font font = fonts.get_active_font();
     float fontSize = cmd.data.text.font_size;
-    float spacing = 1.0f;
+    float spacing = 1.0f + cmd.data.text.letter_spacing;
 
     Vector2Type startPos = {cmd.data.text.rect.x, cmd.data.text.rect.y};
 

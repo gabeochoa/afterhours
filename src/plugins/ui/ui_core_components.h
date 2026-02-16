@@ -395,6 +395,7 @@ enum struct TextOverflow {
 struct HasLabel : BaseComponent {
   TextAlignment alignment = TextAlignment::None;
   TextOverflow text_overflow = TextOverflow::Clip;
+  float letter_spacing = 0.f; // Additional spacing between characters (pixels)
 
   std::string label;
   std::string font_name = UIComponent::UNSET_FONT;
@@ -428,6 +429,11 @@ struct HasLabel : BaseComponent {
 
   auto &set_text_overflow(TextOverflow overflow) {
     text_overflow = overflow;
+    return *this;
+  }
+
+  auto &set_letter_spacing(float spacing) {
+    letter_spacing = spacing;
     return *this;
   }
 

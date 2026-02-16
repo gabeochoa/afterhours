@@ -262,7 +262,8 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
                                                   RectangleType container,
                                                   TextAlignment alignment,
                                                   Vector2Type margin_px,
-                                                  float explicit_font_size = 0.f) {
+                                                  float explicit_font_size = 0.f,
+                                                  float extra_spacing = 0.f) {
   // Early return for empty text - prevents infinite loop in font size
   // calculation
   if (text.empty()) {
@@ -330,7 +331,7 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
 
     while (high - low > 0.5f) {
       float mid = (low + high) / 2.f;
-      Vector2Type ts = measure_text(font, text.c_str(), mid, 1.f);
+      Vector2Type ts = measure_text(font, text.c_str(), mid, 1.f + extra_spacing);
       if (ts.x <= max_text_size.x && ts.y <= max_text_size.y) {
         font_size = mid;
         low = mid;
@@ -360,7 +361,7 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
   }
 
   // Measure with final font size for accurate positioning
-  Vector2Type text_size = measure_text(font, text.c_str(), font_size, 1.f);
+  Vector2Type text_size = measure_text(font, text.c_str(), font_size, 1.f + extra_spacing);
 
   // Calculate the text position based on the alignment and margins
   Vector2Type position;
@@ -430,11 +431,12 @@ static inline void draw_text_at_position(const ui::FontManager &fm,
                                           RectangleType sizing, Color color,
                                           float rotation = 0.0f,
                                           float rot_center_x = 0.0f,
-                                          float rot_center_y = 0.0f) {
+                                          float rot_center_y = 0.0f,
+                                          float extra_spacing = 0.0f) {
   // Always use UTF-8 aware rendering (works for all text including CJK)
   Font font = fm.get_active_font();
   float fontSize = sizing.height;
-  float spacing = 1.0f;
+  float spacing = 1.0f + extra_spacing;
 
   // Calculate offset between sizing and original rect (for shadow/stroke)
   float offset_x = sizing.x - rect.x;
@@ -472,7 +474,8 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
                   float rotation = 0.0f,
                   float rot_center_x = 0.0f,
                   float rot_center_y = 0.0f,
-                  TextOverflow text_overflow = TextOverflow::Clip) {
+                  TextOverflow text_overflow = TextOverflow::Clip,
+                  float letter_spacing = 0.0f) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
   // Register text for E2E testing assertions (only visible-in-viewport text)
   if (testing::test_input::detail::test_mode) {
@@ -494,7 +497,7 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
           margin_px.x = std::min(margin_px.x, rect.width * 0.4f);
           margin_px.y = std::min(margin_px.y, rect.height * 0.4f);
         }
-        return position_text_ex(fm, text, rect, alignment, margin_px);
+        return position_text_ex(fm, text, rect, alignment, margin_px, 0.f, letter_spacing);
       }();
 
   // Draw visual debug indicator if text doesn't fit and debug is enabled
@@ -547,7 +550,7 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
     }
     Font font = fm.get_active_font();
     float font_size = result.rect.height;
-    float spacing = 1.f;
+    float spacing = 1.f + letter_spacing;
     float max_width = rect.width - 10.f; // Account for margins (5px each side)
     if (max_width <= 0.f) return text;
 
@@ -595,7 +598,8 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
     shadow_sizing.x += shadow->offset_x;
     shadow_sizing.y += shadow->offset_y;
     detail::draw_text_at_position(fm, render_text, rect, alignment, shadow_sizing,
-                           shadow->color, rotation, rot_center_x, rot_center_y);
+                           shadow->color, rotation, rot_center_x, rot_center_y,
+                           letter_spacing);
   }
 
   // Draw text stroke/outline if configured
@@ -613,12 +617,13 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
       offset_sizing.x += ox;
       offset_sizing.y += oy;
       detail::draw_text_at_position(fm, render_text, rect, alignment, offset_sizing,
-                             stroke_color, rotation, rot_center_x, rot_center_y);
+                             stroke_color, rotation, rot_center_x, rot_center_y,
+                             letter_spacing);
     }
   }
 
   // Draw main text on top
-  detail::draw_text_at_position(fm, render_text, rect, alignment, sizing, color, rotation, rot_center_x, rot_center_y);
+  detail::draw_text_at_position(fm, render_text, rect, alignment, sizing, color, rotation, rot_center_x, rot_center_y, letter_spacing);
 }
 
 static inline Vector2Type
@@ -1312,7 +1317,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       draw_text_in_rect(font_manager, hasLabel.label.c_str(), text_rect,
                         hasLabel.alignment, font_col, SHOW_TEXT_OVERFLOW_DEBUG,
                         stroke, shadow, rotation, centerX, centerY,
-                        hasLabel.text_overflow);
+                        hasLabel.text_overflow,
+                        hasLabel.letter_spacing);
     }
 
     if (entity.has<texture_manager::HasTexture>()) {
@@ -1879,7 +1885,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       TextPositionResult result =
           position_text_ex(font_manager, hasLabel.label.c_str(), text_rect,
                           hasLabel.alignment, Vector2Type{5.f, 5.f},
-                          explicit_fs);
+                          explicit_fs, hasLabel.letter_spacing);
 
       if (result.rect.height >= MIN_FONT_SIZE) {
         // Handle text overflow ellipsis truncation for batched path
@@ -1888,7 +1894,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
             !hasLabel.label.empty()) {
           Font font = font_manager.get_active_font();
           float font_size = result.rect.height;
-          float spacing = 1.f;
+          float spacing = 1.f + hasLabel.letter_spacing;
           float max_width = text_rect.width - 10.f;
           if (max_width > 0.f) {
             Vector2Type ts = measure_text(font, hasLabel.label.c_str(),
@@ -1928,7 +1934,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         buffer.add_text(text_rect, display_text, cmp.font_name,
                         result.rect.height, font_col, hasLabel.alignment,
                         layer, entity.id, stroke, shadow,
-                        rotation, centerX, centerY);
+                        rotation, centerX, centerY,
+                        hasLabel.letter_spacing);
 
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
         // Register text for E2E testing (only visible-in-viewport text)
