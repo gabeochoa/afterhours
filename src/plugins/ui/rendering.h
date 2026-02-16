@@ -1237,8 +1237,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         col = colors::opacity_pct(col, effective_opacity);
       }
 
-      draw_rectangle_rounded(draw_rect, roundness, segments, col,
-                             corner_settings);
+      if (col.a > 0) {
+        draw_rectangle_rounded(draw_rect, roundness, segments, col,
+                               corner_settings);
+      }
     }
 
     render_bevel(entity, draw_rect, effective_opacity);
@@ -1807,8 +1809,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         col = colors::opacity_pct(col, effective_opacity);
       }
 
-      buffer.add_rounded_rectangle(draw_rect, col, roundness, segments,
-                                   corner_settings, layer, entity.id, rotation);
+      if (col.a > 0) {
+        buffer.add_rounded_rectangle(draw_rect, col, roundness, segments,
+                                     corner_settings, layer, entity.id, rotation);
+      }
     }
 
     // Bevel border
