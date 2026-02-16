@@ -1423,7 +1423,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         entity.has<texture_manager::HasTexture>() ||
         entity.has<FocusClusterRoot>() ||
         entity.has<HasCircularProgressState>() ||
-        entity.has<HasScrollView>()) {
+        entity.has<HasScrollView>() ||
+        context.visual_focus_id == entity.id) {
       render_me(context, font_manager, entity);
     }
 
@@ -2068,7 +2069,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         entity.has<texture_manager::HasTexture>() ||
         entity.has<FocusClusterRoot>() ||
         entity.has<HasCircularProgressState>() ||
-        entity.has<HasScrollView>()) {
+        entity.has<HasScrollView>() ||
+        context.visual_focus_id == entity.id) {
       collect_me(buffer, context, font_manager, entity, layer);
     }
 

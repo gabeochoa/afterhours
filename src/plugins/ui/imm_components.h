@@ -761,9 +761,16 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
                           const std::array<std::string_view, N> &labels,
                           size_t &selected_index,
                           ComponentConfig config = ComponentConfig()) {
-  auto [entity, parent] = deref(ep_pair);
-
   bool changed = false;
+
+  // Wrap in a tray for single-tab-stop, arrow-key navigation
+  auto t = tray(ctx, ep_pair,
+                ComponentConfig{}
+                    .with_size(config.size.x_axis.value > 0
+                        ? ComponentSize{config.size.x_axis, children()}
+                        : ComponentSize{percent(1.0f), children()})
+                    .with_flex_direction(FlexDirection::Column)
+                    .with_debug_name("radio_tray"));
 
   // Circle dimensions - use MIN_TOUCH_TARGET for accessible touch area
   // The visual circle is smaller but the touch target meets accessibility requirements
@@ -781,7 +788,7 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
     if (row_size.y_axis.dim == Dim::Pixels && row_size.y_axis.value < touch_target_sz) {
       row_size.y_axis = pixels(touch_target_sz);
     }
-    auto row = button(ctx, mk(parent, 100 + i),
+    auto row = button(ctx, mk(t.ent(), 100 + i),
                       ComponentConfig{}
                           .with_size(row_size)
                           .with_label("")
@@ -857,7 +864,7 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
     }
   }
 
-  return {changed, parent, static_cast<int>(selected_index)};
+  return {changed, t.ent(), static_cast<int>(selected_index)};
 }
 
 /// iOS-style pill toggle switch with sliding knob.
