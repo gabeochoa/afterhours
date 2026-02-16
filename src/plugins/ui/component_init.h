@@ -182,7 +182,8 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
       entity.addComponentIfMissing<ui::HasLabel>(config.label, config.disabled);
   lbl.set_label(config.label)
       .set_disabled(config.disabled)
-      .set_alignment(config.label_alignment);
+      .set_alignment(config.label_alignment)
+      .set_text_overflow(config.text_overflow);
 
   // Set explicit text color if specified via with_text_color()
   if (config.text_color_usage == Theme::Usage::Custom &&

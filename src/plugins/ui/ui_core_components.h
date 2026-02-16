@@ -387,8 +387,14 @@ enum struct TextAlignment {
   None,
 };
 
+enum struct TextOverflow {
+  Clip,     // Default: text is clipped at container boundary
+  Ellipsis, // Text is truncated with "..." when it overflows
+};
+
 struct HasLabel : BaseComponent {
   TextAlignment alignment = TextAlignment::None;
+  TextOverflow text_overflow = TextOverflow::Clip;
 
   std::string label;
   std::string font_name = UIComponent::UNSET_FONT;
@@ -417,6 +423,11 @@ struct HasLabel : BaseComponent {
 
   auto &set_alignment(TextAlignment align_) {
     alignment = align_;
+    return *this;
+  }
+
+  auto &set_text_overflow(TextOverflow overflow) {
+    text_overflow = overflow;
     return *this;
   }
 

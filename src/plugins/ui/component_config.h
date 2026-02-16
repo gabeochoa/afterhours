@@ -85,6 +85,7 @@ struct ComponentConfig {
   // TODO should everything be inheritable?
   // inheritable options
   TextAlignment label_alignment = TextAlignment::None;
+  TextOverflow text_overflow = TextOverflow::Clip;
   bool skip_when_tabbing = false;
   bool disabled = false;
   bool hidden = false;
@@ -322,6 +323,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_alignment(TextAlignment align) {
     label_alignment = align;
+    return *this;
+  }
+  ComponentConfig &with_text_overflow(TextOverflow overflow) {
+    text_overflow = overflow;
     return *this;
   }
   ComponentConfig &with_rounded_corners(const std::bitset<4> &corners) {

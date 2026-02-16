@@ -471,7 +471,8 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
                   const std::optional<TextShadow> &shadow = std::nullopt,
                   float rotation = 0.0f,
                   float rot_center_x = 0.0f,
-                  float rot_center_y = 0.0f) {
+                  float rot_center_y = 0.0f,
+                  TextOverflow text_overflow = TextOverflow::Clip) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
   // Register text for E2E testing assertions (only visible-in-viewport text)
   if (testing::test_input::detail::test_mode) {
@@ -538,6 +539,53 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
     return;
   }
 
+  // Handle text overflow ellipsis truncation
+  std::string truncated_text;
+  const std::string &render_text = [&]() -> const std::string & {
+    if (text_overflow != TextOverflow::Ellipsis || text.empty()) {
+      return text;
+    }
+    Font font = fm.get_active_font();
+    float font_size = result.rect.height;
+    float spacing = 1.f;
+    float max_width = rect.width - 10.f; // Account for margins (5px each side)
+    if (max_width <= 0.f) return text;
+
+    Vector2Type text_size = measure_text(font, text.c_str(), font_size, spacing);
+    if (text_size.x <= max_width) {
+      return text;
+    }
+
+    // Text overflows — find longest prefix that fits with "..."
+    const std::string ellipsis = "...";
+    Vector2Type ellipsis_size = measure_text(font, ellipsis.c_str(), font_size, spacing);
+    float available = max_width - ellipsis_size.x;
+    if (available <= 0.f) {
+      truncated_text = ellipsis;
+      return truncated_text;
+    }
+
+    // Binary search for the longest prefix that fits
+    size_t low = 0;
+    size_t high = text.size();
+    size_t best = 0;
+    while (low <= high && high <= text.size()) {
+      size_t mid = (low + high) / 2;
+      std::string prefix = text.substr(0, mid);
+      Vector2Type ps = measure_text(font, prefix.c_str(), font_size, spacing);
+      if (ps.x <= available) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        if (mid == 0) break;
+        high = mid - 1;
+      }
+    }
+
+    truncated_text = text.substr(0, best) + ellipsis;
+    return truncated_text;
+  }();
+
   RectangleType sizing = result.rect;
 
   // Draw text shadow first (behind everything)
@@ -546,7 +594,7 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
     RectangleType shadow_sizing = sizing;
     shadow_sizing.x += shadow->offset_x;
     shadow_sizing.y += shadow->offset_y;
-    detail::draw_text_at_position(fm, text, rect, alignment, shadow_sizing,
+    detail::draw_text_at_position(fm, render_text, rect, alignment, shadow_sizing,
                            shadow->color, rotation, rot_center_x, rot_center_y);
   }
 
@@ -564,13 +612,13 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
       RectangleType offset_sizing = sizing;
       offset_sizing.x += ox;
       offset_sizing.y += oy;
-      detail::draw_text_at_position(fm, text, rect, alignment, offset_sizing,
+      detail::draw_text_at_position(fm, render_text, rect, alignment, offset_sizing,
                              stroke_color, rotation, rot_center_x, rot_center_y);
     }
   }
 
   // Draw main text on top
-  detail::draw_text_at_position(fm, text, rect, alignment, sizing, color, rotation, rot_center_x, rot_center_y);
+  detail::draw_text_at_position(fm, render_text, rect, alignment, sizing, color, rotation, rot_center_x, rot_center_y);
 }
 
 static inline Vector2Type
@@ -1263,7 +1311,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
       draw_text_in_rect(font_manager, hasLabel.label.c_str(), text_rect,
                         hasLabel.alignment, font_col, SHOW_TEXT_OVERFLOW_DEBUG,
-                        stroke, shadow, rotation, centerX, centerY);
+                        stroke, shadow, rotation, centerX, centerY,
+                        hasLabel.text_overflow);
     }
 
     if (entity.has<texture_manager::HasTexture>()) {
@@ -1833,11 +1882,50 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                           explicit_fs);
 
       if (result.rect.height >= MIN_FONT_SIZE) {
+        // Handle text overflow ellipsis truncation for batched path
+        std::string display_text = hasLabel.label;
+        if (hasLabel.text_overflow == TextOverflow::Ellipsis &&
+            !hasLabel.label.empty()) {
+          Font font = font_manager.get_active_font();
+          float font_size = result.rect.height;
+          float spacing = 1.f;
+          float max_width = text_rect.width - 10.f;
+          if (max_width > 0.f) {
+            Vector2Type ts = measure_text(font, hasLabel.label.c_str(),
+                                          font_size, spacing);
+            if (ts.x > max_width) {
+              const std::string ellipsis = "...";
+              Vector2Type es = measure_text(font, ellipsis.c_str(),
+                                            font_size, spacing);
+              float available = max_width - es.x;
+              if (available <= 0.f) {
+                display_text = ellipsis;
+              } else {
+                size_t low = 0, high = hasLabel.label.size(), best = 0;
+                while (low <= high && high <= hasLabel.label.size()) {
+                  size_t mid = (low + high) / 2;
+                  std::string prefix = hasLabel.label.substr(0, mid);
+                  Vector2Type ps = measure_text(font, prefix.c_str(),
+                                                font_size, spacing);
+                  if (ps.x <= available) {
+                    best = mid;
+                    low = mid + 1;
+                  } else {
+                    if (mid == 0) break;
+                    high = mid - 1;
+                  }
+                }
+                display_text = hasLabel.label.substr(0, best) + ellipsis;
+              }
+            }
+          }
+        }
+
         // Pass the container rect (text_rect) not the position rect (result.rect)
         // render_text will handle centering within the container
         float centerX = draw_rect.x + draw_rect.width / 2.0f;
         float centerY = draw_rect.y + draw_rect.height / 2.0f;
-        buffer.add_text(text_rect, hasLabel.label, cmp.font_name,
+        buffer.add_text(text_rect, display_text, cmp.font_name,
                         result.rect.height, font_col, hasLabel.alignment,
                         layer, entity.id, stroke, shadow,
                         rotation, centerX, centerY);
