@@ -523,10 +523,21 @@ struct ComponentConfig {
     return with_font_size(pixels(font_size_px));
   }
 
+  /// Set the font size from a FontSize tier (Small/Medium/Large/XL).
+  /// Resolves the pixel size from the theme's FontSizing at call time.
+  /// Example: .with_font_size(FontSize::Large)
+  ComponentConfig &with_font_size(FontSize tier) {
+    auto &theme = imm::ThemeDefaults::get().theme;
+    font_size = h720(theme.font_sizing.get(tier));
+    font_size_explicitly_set = true;
+    return *this;
+  }
+
   /// Set the font size from a theme FontSizing tier (Small/Medium/Large/XL).
   /// Resolves the pixel size from the theme's FontSizing at call time.
   /// The font name is left to be resolved from the default font.
   /// Example: .with_font_tier(FontSizing::Tier::Large)
+  [[deprecated("Use with_font_size(FontSize::Small) instead")]]
   ComponentConfig &with_font_tier(FontSizing::Tier tier) {
     auto &theme = imm::ThemeDefaults::get().theme;
     font_size = h720(theme.font_sizing.get(tier));
@@ -853,6 +864,7 @@ struct ComponentConfigBuilder : public ComponentConfig {
   ComponentConfig build() const { return *this; }
 };
 
+[[deprecated("Unused — will be removed in a future version")]]
 inline ComponentConfig magazine_style() {
   ComponentConfig config;
   config
@@ -868,6 +880,7 @@ inline ComponentConfig magazine_style() {
   return config;
 }
 
+[[deprecated("Unused — will be removed in a future version")]]
 inline ComponentConfig card_style() {
   ComponentConfig config;
   config
@@ -883,6 +896,7 @@ inline ComponentConfig card_style() {
   return config;
 }
 
+[[deprecated("Unused — will be removed in a future version")]]
 inline ComponentConfig form_style() {
   ComponentConfig config;
   config
@@ -898,6 +912,7 @@ inline ComponentConfig form_style() {
   return config;
 }
 
+[[deprecated("Unused — will be removed in a future version")]]
 inline ComponentConfig auto_spacing() {
   return ComponentConfig{}.apply_automatic_defaults();
 }

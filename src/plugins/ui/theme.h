@@ -139,6 +139,8 @@ struct FontSizing {
   // clang-format on
 };
 
+using FontSize = FontSizing::Tier;
+
 struct Theme {
   enum struct Usage {
     Font,
