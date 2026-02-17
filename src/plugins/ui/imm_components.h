@@ -87,13 +87,14 @@ ElementResult toggle_button(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Outline & Ghost: transparent bg, readable text; Outline also adds a border
   if (config.button_variant != ButtonVariant::Filled) {
+    Color original_bg = config.resolve_background_color(ctx.theme);
     config.with_custom_background(colors::transparent())
         .with_auto_text_color(false)
         .with_custom_text_color(ctx.theme.font);
 
     if (config.button_variant == ButtonVariant::Outline &&
         !config.has_border()) {
-      config.with_border(config.resolve_background_color(ctx.theme),
+      config.with_border(original_bg,
                          h720(2.0f));
     }
   }
@@ -479,14 +480,14 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Outline & Ghost: transparent bg, readable text; Outline also adds a border
   if (config.button_variant != ButtonVariant::Filled) {
+    Color original_bg = config.resolve_background_color(ctx.theme);
     config.with_custom_background(colors::transparent())
         .with_auto_text_color(false)
         .with_custom_text_color(ctx.theme.font);
 
     if (config.button_variant == ButtonVariant::Outline &&
         !config.has_border()) {
-      config.with_border(config.resolve_background_color(ctx.theme),
-                         h720(2.0f));
+      config.with_border(original_bg, h720(2.0f));
     }
   }
 
