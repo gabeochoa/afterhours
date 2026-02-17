@@ -1350,6 +1350,20 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                        dropdownState.last_option_clicked};
 }
 
+// Check if search_id is a descendant of root_id in the UI entity tree
+inline bool is_entity_in_ui_tree(EntityID root_id, EntityID search_id) {
+  if (root_id == search_id) return true;
+  OptEntity opt = UICollectionHolder::getEntityForID(root_id);
+  if (!opt.has_value()) return false;
+  Entity &entity = opt.asE();
+  if (!entity.has<UIComponent>()) return false;
+  const UIComponent &cmp = entity.get<UIComponent>();
+  for (EntityID child_id : cmp.children) {
+    if (is_entity_in_ui_tree(child_id, search_id)) return true;
+  }
+  return false;
+}
+
 template <typename Container>
 ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                        const Container &options, size_t &option_index,
@@ -1524,6 +1538,18 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   dropdownState.was_open_last_frame = dropdownState.on;
+
+  // Block clicks on elements behind the open dropdown
+  std::string gate_name = fmt::format("dropdown_{}", entity.id);
+  if (dropdownState.on) {
+    EntityID dropdown_id = entity.id;
+    ctx.add_input_gate(gate_name, [dropdown_id](EntityID id) {
+      if (id == static_cast<EntityID>(-1)) return true;
+      return is_entity_in_ui_tree(dropdown_id, id);
+    });
+  } else {
+    ctx.remove_input_gate(gate_name);
+  }
 
   option_index = dropdownState.last_option_clicked;
   return ElementResult{dropdownState.changed_since, entity,
