@@ -17,6 +17,7 @@
 #ifdef AFTER_HOURS_USE_METAL
 extern "C" int sapp_width(void);
 extern "C" int sapp_height(void);
+extern "C" float sapp_dpi_scale(void);
 extern "C" void metal_set_window_size(int width, int height);
 #endif
 
@@ -82,9 +83,13 @@ struct window_manager : developer::Plugin {
   // Metal/Sokol backend — uses sapp_width()/sapp_height() for current
   // resolution and an extern Obj-C function for resizing.
   static Resolution fetch_current_resolution() {
-    // sapp_width()/sapp_height() return the framebuffer size (logical pixels
-    // when high_dpi is off, which is our default).
-    return Resolution{.width = ::sapp_width(), .height = ::sapp_height()};
+    // Return logical (CSS) pixel dimensions so the UI works consistently
+    // regardless of DPI scale.
+    float dpi = ::sapp_dpi_scale();
+    return Resolution{
+        .width = static_cast<int>(static_cast<float>(::sapp_width()) / dpi),
+        .height = static_cast<int>(static_cast<float>(::sapp_height()) / dpi),
+    };
   }
 
   static Resolution fetch_maximum_resolution() {

@@ -60,9 +60,11 @@ inline float measure_text_internal(const char *text, const float size) {
   if (!ctx || graphics::metal_detail::g_active_font == FONS_INVALID)
     return 0.f;
   fonsSetFont(ctx, graphics::metal_detail::g_active_font);
-  fonsSetSize(ctx, size);
+  // Measure at DPI-scaled size (matching draw_text) and convert back to logical pixels.
+  float dpi = sapp_dpi_scale();
+  fonsSetSize(ctx, size * dpi);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
-  return fonsTextBounds(ctx, 0, 0, text, nullptr, nullptr);
+  return fonsTextBounds(ctx, 0, 0, text, nullptr, nullptr) / dpi;
 }
 
 inline Vector2Type measure_text(const Font font, const char *text,
@@ -75,14 +77,16 @@ inline Vector2Type measure_text(const Font font, const char *text,
   if (fid == FONS_INVALID)
     return Vector2Type{0, 0};
   fonsSetFont(ctx, fid);
-  fonsSetSize(ctx, size);
+  // Measure at DPI-scaled size (matching draw_text_ex) and convert back.
+  float dpi = sapp_dpi_scale();
+  fonsSetSize(ctx, size * dpi);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   float bounds[4] = {};
   fonsTextBounds(ctx, 0, 0, text, nullptr, bounds);
-  float w = bounds[2] - bounds[0];
+  float w = (bounds[2] - bounds[0]) / dpi;
   float ascender, descender, lineh;
   fonsVertMetrics(ctx, &ascender, &descender, &lineh);
-  return Vector2Type{w, lineh};
+  return Vector2Type{w, lineh / dpi};
 }
 
 inline Vector2Type measure_text_utf8(const Font font, const char *text,

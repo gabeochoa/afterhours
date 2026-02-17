@@ -131,10 +131,11 @@ inline void sokol_init_cb() {
   sgl_desc.logger.func = slog_func;
   sgl_setup(&sgl_desc);
 
-  // Initialize fontstash for text rendering
+  // Initialize fontstash for text rendering.
+  // Use a 2048x2048 atlas so high-DPI glyphs fit without overflow.
   sfons_desc_t sfons_desc{};
-  sfons_desc.width = 1024;
-  sfons_desc.height = 1024;
+  sfons_desc.width = 2048;
+  sfons_desc.height = 2048;
   g_fons_ctx = sfons_create(&sfons_desc);
 
   g_initialized = true;
@@ -275,10 +276,13 @@ struct MetalPlatformAPI {
     sg_begin_pass(&pass);
 
     // Set up sokol_gl orthographic projection for 2D drawing.
-    // With high_dpi=false the framebuffer matches the logical window size,
-    // so sapp_width()/sapp_height() give us the right dimensions directly.
-    float w = static_cast<float>(sapp_width());
-    float h = static_cast<float>(sapp_height());
+    // With high_dpi=true the framebuffer may be larger than the logical
+    // window (e.g. 2x on Retina).  We project in logical (CSS) pixels so
+    // UI code doesn't need to know about DPI; the GPU rasterises into the
+    // full-res framebuffer automatically.
+    float dpi = sapp_dpi_scale();
+    float w = static_cast<float>(sapp_width()) / dpi;
+    float h = static_cast<float>(sapp_height()) / dpi;
     sgl_defaults();
     sgl_matrix_mode_projection();
     sgl_ortho(0.0f, w, h, 0.0f, -1.0f, 1.0f);
@@ -305,8 +309,9 @@ struct MetalPlatformAPI {
     };
     // Draw a full-screen quad so the first frame isn't black
     // (pass action only takes effect on the next begin_pass)
-    float w = static_cast<float>(sapp_width());
-    float h = static_cast<float>(sapp_height());
+    float dpi_bg = sapp_dpi_scale();
+    float w = static_cast<float>(sapp_width()) / dpi_bg;
+    float h = static_cast<float>(sapp_height()) / dpi_bg;
     sgl_begin_quads();
     sgl_c4b(c.r, c.g, c.b, c.a);
     sgl_v2f(0, 0);
@@ -317,8 +322,13 @@ struct MetalPlatformAPI {
   }
 
   // ── Screen / timing ──
-  static int get_screen_width() { return sapp_width(); }
-  static int get_screen_height() { return sapp_height(); }
+  // Return logical (CSS) pixel dimensions, not framebuffer pixels.
+  static int get_screen_width() {
+    return static_cast<int>(static_cast<float>(sapp_width()) / sapp_dpi_scale());
+  }
+  static int get_screen_height() {
+    return static_cast<int>(static_cast<float>(sapp_height()) / sapp_dpi_scale());
+  }
   static float get_frame_time() {
     return static_cast<float>(sapp_frame_duration());
   }
@@ -336,8 +346,9 @@ struct MetalPlatformAPI {
     if (!ctx || metal_detail::g_active_font == FONS_INVALID)
       return 0;
     fonsSetFont(ctx, metal_detail::g_active_font);
-    fonsSetSize(ctx, static_cast<float>(font_size));
-    return static_cast<int>(fonsTextBounds(ctx, 0, 0, text, nullptr, nullptr));
+    float dpi = sapp_dpi_scale();
+    fonsSetSize(ctx, static_cast<float>(font_size) * dpi);
+    return static_cast<int>(fonsTextBounds(ctx, 0, 0, text, nullptr, nullptr) / dpi);
   }
 
   // ── Screenshots ──
@@ -435,12 +446,12 @@ struct MetalPlatformAPI {
     desc.height = cfg.height;
     desc.window_title = cfg.title;
     desc.logger.func = slog_func;
-    // Match Raylib behaviour: do NOT enable high_dpi so that a 1280×720
-    // logical window uses a 1280×720 framebuffer (upscaled by the OS on
-    // Retina).  This keeps UI element sizes consistent with the Raylib
-    // backend.  When we add an explicit HiDPI flag to RunConfig we can
-    // make this configurable.
-    desc.high_dpi = false;
+    // Enable high-DPI rendering: on Retina displays the framebuffer is at
+    // native resolution (e.g. 2x) for crisp text and UI.  All UI code
+    // works in logical (CSS) pixels; the ortho projection and input layer
+    // handle the DPI conversion transparently.
+    desc.high_dpi = true;
+    desc.sample_count = 4;  // 4× MSAA for smooth geometric edges
 
     // Map flags
     if (cfg.flags & FLAG_WINDOW_RESIZABLE) {

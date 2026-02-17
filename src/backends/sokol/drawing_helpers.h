@@ -28,10 +28,25 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
   if (fid == FONS_INVALID)
     return;
   fonsSetFont(ctx, fid);
-  fonsSetSize(ctx, font_size);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
-  fonsDrawText(ctx, position.x, position.y, content, nullptr);
+
+  // Rasterise glyphs at native DPI for crisp text on Retina displays.
+  // We scale the fontstash size up by dpi_scale and draw in a coordinate
+  // space that is 1/dpi_scale, so the resulting quads land at the correct
+  // logical pixel position.
+  float dpi = sapp_dpi_scale();
+  if (dpi > 1.01f) {
+    float inv = 1.0f / dpi;
+    fonsSetSize(ctx, font_size * dpi);
+    sgl_push_matrix();
+    sgl_scale(inv, inv, 1.0f);
+    fonsDrawText(ctx, position.x * dpi, position.y * dpi, content, nullptr);
+    sgl_pop_matrix();
+  } else {
+    fonsSetSize(ctx, font_size);
+    fonsDrawText(ctx, position.x, position.y, content, nullptr);
+  }
 }
 
 inline void draw_text(const char *content, const float x, const float y,
@@ -40,10 +55,21 @@ inline void draw_text(const char *content, const float x, const float y,
   if (!ctx || graphics::metal_detail::g_active_font == FONS_INVALID)
     return;
   fonsSetFont(ctx, graphics::metal_detail::g_active_font);
-  fonsSetSize(ctx, font_size);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
-  fonsDrawText(ctx, x, y, content, nullptr);
+
+  float dpi = sapp_dpi_scale();
+  if (dpi > 1.01f) {
+    float inv = 1.0f / dpi;
+    fonsSetSize(ctx, font_size * dpi);
+    sgl_push_matrix();
+    sgl_scale(inv, inv, 1.0f);
+    fonsDrawText(ctx, x * dpi, y * dpi, content, nullptr);
+    sgl_pop_matrix();
+  } else {
+    fonsSetSize(ctx, font_size);
+    fonsDrawText(ctx, x, y, content, nullptr);
+  }
 }
 
 inline void draw_rectangle(const RectangleType rect, const Color color) {
@@ -273,9 +299,14 @@ inline void draw_ring(float, float, float, float, int, Color) {
 }
 
 inline void begin_scissor_mode(int x, int y, int w, int h) {
-  // With high_dpi=false, framebuffer pixels == logical coords, no scaling
-  // needed
-  sgl_scissor_rect(x, y, w, h, true);
+  // Scissor operates in framebuffer pixels; scale logical coords by DPI.
+  float dpi = sapp_dpi_scale();
+  sgl_scissor_rect(
+      static_cast<int>(static_cast<float>(x) * dpi),
+      static_cast<int>(static_cast<float>(y) * dpi),
+      static_cast<int>(static_cast<float>(w) * dpi),
+      static_cast<int>(static_cast<float>(h) * dpi),
+      true);
 }
 
 inline void end_scissor_mode() {
