@@ -299,7 +299,8 @@ struct window_manager : developer::Plugin {
   }
 };
 
-// Compile-time verification that window_manager satisfies the PluginCore concept
+// Compile-time verification that window_manager satisfies the PluginCore
+// concept
 static_assert(developer::PluginCore<window_manager>,
               "window_manager must implement the core plugin interface");
 

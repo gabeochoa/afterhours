@@ -258,8 +258,7 @@ struct LayoutInspector : SystemWithUIContext<UIComponent> {
     draw_rectangle_outline(cmp.rect(), context->theme.primary, 3.f);
   }
 
-  void for_each_with(Entity &entity, UIComponent &cmp,
-                     float) override {
+  void for_each_with(Entity &entity, UIComponent &cmp, float) override {
     if (cmp.should_hide)
       return;
     if (panel_hovered)

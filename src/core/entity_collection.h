@@ -2,10 +2,10 @@
 
 #include <algorithm>
 #include <functional>
-#include <unordered_map>
-#include <unordered_set>
 #include <memory>
 #include <set>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "../debug_allocator.h"
@@ -263,7 +263,8 @@ struct EntityCollection {
     return &(ent.get<Component>());
   }
 
-  template <typename Component> const Component *get_singleton_cmp_const() const {
+  template <typename Component>
+  const Component *get_singleton_cmp_const() const {
     Entity &ent = get_singleton<Component>();
     return &(ent.get<Component>());
   }

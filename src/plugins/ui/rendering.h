@@ -15,23 +15,23 @@
 #include "../e2e_testing/test_input.h"
 #include "../e2e_testing/visible_text.h"
 #endif
+#include "../../memory/arena.h"
 #include "../input_system.h"
 #include "../texture_manager.h"
 #include "animation_keys.h"
 #include "components.h"
 #include "context.h"
 #include "fmt/format.h"
+#include "render_primitives.h"
 #include "systems.h"
 #include "theme.h"
-#include "../../memory/arena.h"
-#include "render_primitives.h"
 
 namespace afterhours {
 
 namespace ui {
 
-// Left-side bearing is now calculated per-string using get_first_glyph_bearing()
-// in font_helper.h. No more hardcoded offset.
+// Left-side bearing is now calculated per-string using
+// get_first_glyph_bearing() in font_helper.h. No more hardcoded offset.
 
 namespace detail {
 
@@ -111,8 +111,8 @@ static inline RectangleType get_scroll_scissor_rect(const Entity &entity) {
 
 // Recompute children's positions for scroll view containers
 // The layout system constrains children to parent bounds, which stacks overflow
-// items at the same position. This function fixes that by sequentially positioning
-// children based on their sizes.
+// items at the same position. This function fixes that by sequentially
+// positioning children based on their sizes.
 static inline void fix_scroll_view_child_positions(Entity &entity) {
   if (!entity.has<HasScrollView>() || !entity.has<UIComponent>())
     return;
@@ -252,11 +252,16 @@ constexpr float DEBUG_FONT_SIZE_THRESHOLD = 8.0f;
 // Values match across raylib and sokol backends
 inline int to_cursor_id(CursorType cursor) {
   switch (cursor) {
-  case CursorType::Default: return 0;  // MOUSE_CURSOR_DEFAULT
-  case CursorType::Pointer: return 4;  // MOUSE_CURSOR_POINTING_HAND
-  case CursorType::Text:    return 2;  // MOUSE_CURSOR_IBEAM
-  case CursorType::ResizeH: return 5;  // MOUSE_CURSOR_RESIZE_EW
-  case CursorType::ResizeV: return 6;  // MOUSE_CURSOR_RESIZE_NS
+  case CursorType::Default:
+    return 0; // MOUSE_CURSOR_DEFAULT
+  case CursorType::Pointer:
+    return 4; // MOUSE_CURSOR_POINTING_HAND
+  case CursorType::Text:
+    return 2; // MOUSE_CURSOR_IBEAM
+  case CursorType::ResizeH:
+    return 5; // MOUSE_CURSOR_RESIZE_EW
+  case CursorType::ResizeV:
+    return 6; // MOUSE_CURSOR_RESIZE_NS
   }
   return 0;
 }
@@ -275,14 +280,12 @@ struct TextPositionResult {
   bool text_fits; // false if font was clamped to minimum (text won't fit)
 };
 
-static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
-                                                  const std::string &text,
-                                                  RectangleType container,
-                                                  TextAlignment alignment,
-                                                  Vector2Type margin_px,
-                                                  float explicit_font_size = 0.f,
-                                                  float extra_spacing = 0.f,
-                                                  TextOverflow text_overflow = TextOverflow::Clip) {
+static inline TextPositionResult
+position_text_ex(const ui::FontManager &fm, const std::string &text,
+                 RectangleType container, TextAlignment alignment,
+                 Vector2Type margin_px, float explicit_font_size = 0.f,
+                 float extra_spacing = 0.f,
+                 TextOverflow text_overflow = TextOverflow::Clip) {
   // Early return for empty text - prevents infinite loop in font size
   // calculation
   if (text.empty()) {
@@ -354,7 +357,8 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
 
     while (high - low > 0.5f) {
       float mid = (low + high) / 2.f;
-      Vector2Type ts = measure_text(font, text.c_str(), mid, 1.f + extra_spacing);
+      Vector2Type ts =
+          measure_text(font, text.c_str(), mid, 1.f + extra_spacing);
       bool fits = ts.y <= max_text_size.y &&
                   (!width_constrained || ts.x <= max_text_size.x);
       if (fits) {
@@ -373,12 +377,11 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
       static std::unordered_set<std::string> logged_texts;
       if (logged_texts.find(text) == logged_texts.end()) {
         logged_texts.insert(text);
-        log_warn(
-            "Text '{}' cannot fit in container {}x{} with margins {}x{} - "
-            "clamping font size from {} to {}",
-            text.length() > 20 ? text.substr(0, 20) + "..." : text,
-            container.width, container.height, margin_px.x, margin_px.y,
-            font_size, MIN_FONT_SIZE);
+        log_warn("Text '{}' cannot fit in container {}x{} with margins {}x{} - "
+                 "clamping font size from {} to {}",
+                 text.length() > 20 ? text.substr(0, 20) + "..." : text,
+                 container.width, container.height, margin_px.x, margin_px.y,
+                 font_size, MIN_FONT_SIZE);
       }
 #endif
       font_size = MIN_FONT_SIZE;
@@ -386,12 +389,13 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
   }
 
   // Measure with final font size for accurate positioning
-  Vector2Type text_size = measure_text(font, text.c_str(), font_size, 1.f + extra_spacing);
+  Vector2Type text_size =
+      measure_text(font, text.c_str(), font_size, 1.f + extra_spacing);
 
   // Calculate the text position based on the alignment and margins
   Vector2Type position;
   switch (alignment) {
-  default: 
+  default:
     log_warn("Unknown alignment: {}", static_cast<int>(alignment));
     [[fallthrough]];
   case TextAlignment::None: // None defaults to Left alignment
@@ -403,8 +407,10 @@ static inline TextPositionResult position_text_ex(const ui::FontManager &fm,
     };
     break;
   case TextAlignment::Center: {
-    // Calculate centered position, but clamp to prevent starting before container left edge
-    float centered_offset = (container.width - 2 * margin_px.x - text_size.x) / 2;
+    // Calculate centered position, but clamp to prevent starting before
+    // container left edge
+    float centered_offset =
+        (container.width - 2 * margin_px.x - text_size.x) / 2;
     float text_x = container.x + margin_px.x + centered_offset;
     // Clamp so text never starts before container left edge
     text_x = std::max(container.x + margin_px.x, text_x);
@@ -449,15 +455,12 @@ static inline RectangleType position_text(const ui::FontManager &fm,
 // and main text) The 'sizing' rect contains any offset (shadow/stroke) that
 // should be applied
 namespace detail {
-static inline void draw_text_at_position(const ui::FontManager &fm,
-                                          const std::string &text,
-                                          RectangleType rect,
-                                          TextAlignment alignment,
-                                          RectangleType sizing, Color color,
-                                          float rotation = 0.0f,
-                                          float rot_center_x = 0.0f,
-                                          float rot_center_y = 0.0f,
-                                          float extra_spacing = 0.0f) {
+static inline void
+draw_text_at_position(const ui::FontManager &fm, const std::string &text,
+                      RectangleType rect, TextAlignment alignment,
+                      RectangleType sizing, Color color, float rotation = 0.0f,
+                      float rot_center_x = 0.0f, float rot_center_y = 0.0f,
+                      float extra_spacing = 0.0f) {
   // Always use UTF-8 aware rendering (works for all text including CJK)
   Font font = fm.get_active_font();
   float fontSize = sizing.height;
@@ -468,29 +471,27 @@ static inline void draw_text_at_position(const ui::FontManager &fm,
   // Just use the pre-calculated position directly.
   Vector2Type startPos = {sizing.x, sizing.y};
 
-  // Use provided rotation center (component center), or default to text rect center
+  // Use provided rotation center (component center), or default to text rect
+  // center
   float centerX = (rot_center_x != 0.0f || rot_center_y != 0.0f)
-                  ? rot_center_x
-                  : rect.x + rect.width / 2.0f;
+                      ? rot_center_x
+                      : rect.x + rect.width / 2.0f;
   float centerY = (rot_center_x != 0.0f || rot_center_y != 0.0f)
-                  ? rot_center_y
-                  : rect.y + rect.height / 2.0f;
-  draw_text_ex(font, text.c_str(), startPos, fontSize, spacing, color,
-               rotation, centerX, centerY);
+                      ? rot_center_y
+                      : rect.y + rect.height / 2.0f;
+  draw_text_ex(font, text.c_str(), startPos, fontSize, spacing, color, rotation,
+               centerX, centerY);
 }
 } // namespace detail
 
-static inline void
-draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
-                  RectangleType rect, TextAlignment alignment, Color color,
-                  bool show_debug_indicator = false,
-                  const std::optional<TextStroke> &stroke = std::nullopt,
-                  const std::optional<TextShadow> &shadow = std::nullopt,
-                  float rotation = 0.0f,
-                  float rot_center_x = 0.0f,
-                  float rot_center_y = 0.0f,
-                  TextOverflow text_overflow = TextOverflow::Clip,
-                  float letter_spacing = 0.0f) {
+static inline void draw_text_in_rect(
+    const ui::FontManager &fm, const std::string &text, RectangleType rect,
+    TextAlignment alignment, Color color, bool show_debug_indicator = false,
+    const std::optional<TextStroke> &stroke = std::nullopt,
+    const std::optional<TextShadow> &shadow = std::nullopt,
+    float rotation = 0.0f, float rot_center_x = 0.0f, float rot_center_y = 0.0f,
+    TextOverflow text_overflow = TextOverflow::Clip,
+    float letter_spacing = 0.0f) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
   // Register text for E2E testing assertions (only visible-in-viewport text)
   if (testing::test_input::detail::test_mode) {
@@ -503,17 +504,17 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
   }
 #endif
 
-  TextPositionResult result =
-      [&]() {
-        Vector2Type margin_px{5.f, 5.f};
-        if (rect.width <= 0.0f || rect.height <= 0.0f) {
-          margin_px = Vector2Type{0.0f, 0.0f};
-        } else {
-          margin_px.x = std::min(margin_px.x, rect.width * 0.4f);
-          margin_px.y = std::min(margin_px.y, rect.height * 0.4f);
-        }
-        return position_text_ex(fm, text, rect, alignment, margin_px, 0.f, letter_spacing, text_overflow);
-      }();
+  TextPositionResult result = [&]() {
+    Vector2Type margin_px{5.f, 5.f};
+    if (rect.width <= 0.0f || rect.height <= 0.0f) {
+      margin_px = Vector2Type{0.0f, 0.0f};
+    } else {
+      margin_px.x = std::min(margin_px.x, rect.width * 0.4f);
+      margin_px.y = std::min(margin_px.y, rect.height * 0.4f);
+    }
+    return position_text_ex(fm, text, rect, alignment, margin_px, 0.f,
+                            letter_spacing, text_overflow);
+  }();
 
   // Draw visual debug indicator if text doesn't fit and debug is enabled
   // Shows a semi-transparent red overlay and border around the container
@@ -567,16 +568,19 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
     float font_size = result.rect.height;
     float spacing = 1.f + letter_spacing;
     float max_width = rect.width - 10.f; // Account for margins (5px each side)
-    if (max_width <= 0.f) return text;
+    if (max_width <= 0.f)
+      return text;
 
-    Vector2Type text_size = measure_text(font, text.c_str(), font_size, spacing);
+    Vector2Type text_size =
+        measure_text(font, text.c_str(), font_size, spacing);
     if (text_size.x <= max_width) {
       return text;
     }
 
     // Text overflows — find longest prefix that fits with "..."
     const std::string ellipsis = "...";
-    Vector2Type ellipsis_size = measure_text(font, ellipsis.c_str(), font_size, spacing);
+    Vector2Type ellipsis_size =
+        measure_text(font, ellipsis.c_str(), font_size, spacing);
     float available = max_width - ellipsis_size.x;
     if (available <= 0.f) {
       truncated_text = ellipsis;
@@ -595,7 +599,8 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
         best = mid;
         low = mid + 1;
       } else {
-        if (mid == 0) break;
+        if (mid == 0)
+          break;
         high = mid - 1;
       }
     }
@@ -612,9 +617,9 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
     RectangleType shadow_sizing = sizing;
     shadow_sizing.x += shadow->offset_x;
     shadow_sizing.y += shadow->offset_y;
-    detail::draw_text_at_position(fm, render_text, rect, alignment, shadow_sizing,
-                           shadow->color, rotation, rot_center_x, rot_center_y,
-                           letter_spacing);
+    detail::draw_text_at_position(fm, render_text, rect, alignment,
+                                  shadow_sizing, shadow->color, rotation,
+                                  rot_center_x, rot_center_y, letter_spacing);
   }
 
   // Draw text stroke/outline if configured
@@ -631,14 +636,16 @@ draw_text_in_rect(const ui::FontManager &fm, const std::string &text,
       RectangleType offset_sizing = sizing;
       offset_sizing.x += ox;
       offset_sizing.y += oy;
-      detail::draw_text_at_position(fm, render_text, rect, alignment, offset_sizing,
-                             stroke_color, rotation, rot_center_x, rot_center_y,
-                             letter_spacing);
+      detail::draw_text_at_position(fm, render_text, rect, alignment,
+                                    offset_sizing, stroke_color, rotation,
+                                    rot_center_x, rot_center_y, letter_spacing);
     }
   }
 
   // Draw main text on top
-  detail::draw_text_at_position(fm, render_text, rect, alignment, sizing, color, rotation, rot_center_x, rot_center_y, letter_spacing);
+  detail::draw_text_at_position(fm, render_text, rect, alignment, sizing, color,
+                                rotation, rot_center_x, rot_center_y,
+                                letter_spacing);
 }
 
 static inline Vector2Type
@@ -1071,8 +1078,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     }
   }
 
-  void render_me(UIContext<InputAction> &context,
-                 FontManager &font_manager, Entity &entity) {
+  void render_me(UIContext<InputAction> &context, FontManager &font_manager,
+                 Entity &entity) {
     // Defensive check: entity must have UIComponent
     if (!entity.has<UIComponent>())
       return;
@@ -1085,12 +1092,12 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     // Check if this entity is inside a scroll view (but not the scroll view
     // itself)
     OptEntity scroll_ancestor = detail::find_scroll_view_ancestor(entity);
-    // Note: find_clip_ancestor returns entity with HasScrollView OR HasClipChildren
-    // Only apply scroll offset if ancestor actually has HasScrollView
-    bool inside_scroll_view =
-        scroll_ancestor.valid() &&
-        scroll_ancestor->has<HasScrollView>() &&
-        !entity.has<HasScrollView>();
+    // Note: find_clip_ancestor returns entity with HasScrollView OR
+    // HasClipChildren Only apply scroll offset if ancestor actually has
+    // HasScrollView
+    bool inside_scroll_view = scroll_ancestor.valid() &&
+                              scroll_ancestor->has<HasScrollView>() &&
+                              !entity.has<HasScrollView>();
 
     // Apply scroll offset to draw_rect if inside a scroll view
     if (inside_scroll_view) {
@@ -1104,7 +1111,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
     }
 
-    // Get rotation from modifiers (applied separately since rectangles rotate around center)
+    // Get rotation from modifiers (applied separately since rectangles rotate
+    // around center)
     float rotation = entity.has<HasUIModifiers>()
                          ? entity.get<HasUIModifiers>().rotation
                          : 0.0f;
@@ -1119,7 +1127,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                        ? entity.get<HasRoundedCorners>().segments
                        : 8;
 
-    // Push rotation transform - all subsequent drawing will be rotated around component center
+    // Push rotation transform - all subsequent drawing will be rotated around
+    // component center
     float centerX = draw_rect.x + draw_rect.width / 2.0f;
     float centerY = draw_rect.y + draw_rect.height / 2.0f;
     push_rotation(centerX, centerY, rotation);
@@ -1134,12 +1143,15 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       render_nine_slice(entity, draw_rect, effective_opacity);
     }
 
-    // Focus indicator - draw on entities with FocusClusterRoot when they contain the focused element
-    // Check both visual_focus_id match AND alternative check for FocusClusterRoot with focused children
+    // Focus indicator - draw on entities with FocusClusterRoot when they
+    // contain the focused element Check both visual_focus_id match AND
+    // alternative check for FocusClusterRoot with focused children
     bool should_draw_focus = (context.visual_focus_id == entity.id);
 
-    // Alternative check: if this entity has FocusClusterRoot and contains the current focus
-    if (!should_draw_focus && entity.has<FocusClusterRoot>() && context.focus_id != context.ROOT) {
+    // Alternative check: if this entity has FocusClusterRoot and contains the
+    // current focus
+    if (!should_draw_focus && entity.has<FocusClusterRoot>() &&
+        context.focus_id != context.ROOT) {
       // Check if focus_id is this entity or a descendant
       if (context.focus_id == entity.id) {
         should_draw_focus = true;
@@ -1153,14 +1165,16 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
           // Also check grandchildren (for components with nested children)
           OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
           if (child_opt.has_value() && child_opt.asE().has<UIComponent>()) {
-            for (EntityID grandchild_id : child_opt.asE().get<UIComponent>().children) {
+            for (EntityID grandchild_id :
+                 child_opt.asE().get<UIComponent>().children) {
               if (grandchild_id == context.focus_id) {
                 should_draw_focus = true;
                 break;
               }
             }
           }
-          if (should_draw_focus) break;
+          if (should_draw_focus)
+            break;
         }
       }
     }
@@ -1171,53 +1185,53 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       if (effective_focus_opacity < 1.0f) {
         focus_col = colors::opacity_pct(focus_col, effective_focus_opacity);
       }
-      // Use theme's focus ring offset to ensure focus ring is outside component bounds
-      RectangleType focus_rect = cmp.focus_rect(static_cast<int>(context.theme.focus_ring_offset));
+      // Use theme's focus ring offset to ensure focus ring is outside component
+      // bounds
+      RectangleType focus_rect =
+          cmp.focus_rect(static_cast<int>(context.theme.focus_ring_offset));
       if (entity.has<HasUIModifiers>()) {
         focus_rect = entity.get<HasUIModifiers>().apply_modifier(focus_rect);
       }
 
       // Respect the entity's corner settings for focus rings
       // If entity has rounded corners, use those; otherwise use theme defaults
-      auto focus_corner_settings = entity.has<HasRoundedCorners>()
-          ? entity.get<HasRoundedCorners>().rounded_corners
-          : context.theme.rounded_corners;
+      auto focus_corner_settings =
+          entity.has<HasRoundedCorners>()
+              ? entity.get<HasRoundedCorners>().rounded_corners
+              : context.theme.rounded_corners;
       float focus_roundness = entity.has<HasRoundedCorners>()
-          ? entity.get<HasRoundedCorners>().roundness
-          : context.theme.roundness;
+                                  ? entity.get<HasRoundedCorners>().roundness
+                                  : context.theme.roundness;
       int focus_segments = entity.has<HasRoundedCorners>()
-          ? entity.get<HasRoundedCorners>().segments
-          : context.theme.segments;
+                               ? entity.get<HasRoundedCorners>().segments
+                               : context.theme.segments;
 
       // Draw dual-color focus ring for universal contrast on any background
       // Outer contrasting outline (1px outside the focus ring)
       float thickness = context.theme.focus_ring_thickness;
       float lum = colors::luminance(focus_col);
-      Color outline_col = lum > 0.5f ? Color{0, 0, 0, 180} : Color{255, 255, 255, 180};
+      Color outline_col =
+          lum > 0.5f ? Color{0, 0, 0, 180} : Color{255, 255, 255, 180};
       if (effective_focus_opacity < 1.0f) {
         outline_col = colors::opacity_pct(outline_col, effective_focus_opacity);
       }
       {
-        RectangleType outlineRect = {
-          focus_rect.x - thickness,
-          focus_rect.y - thickness,
-          focus_rect.width + thickness * 2.0f,
-          focus_rect.height + thickness * 2.0f
-        };
-        draw_rectangle_rounded_lines(outlineRect, focus_roundness, focus_segments, outline_col,
+        RectangleType outlineRect = {focus_rect.x - thickness,
+                                     focus_rect.y - thickness,
+                                     focus_rect.width + thickness * 2.0f,
+                                     focus_rect.height + thickness * 2.0f};
+        draw_rectangle_rounded_lines(outlineRect, focus_roundness,
+                                     focus_segments, outline_col,
                                      focus_corner_settings);
       }
 
       // Draw main focus ring with configurable thickness
       for (float t = 0; t < thickness; t += 1.0f) {
-        RectangleType thickRect = {
-          focus_rect.x - t,
-          focus_rect.y - t,
-          focus_rect.width + t * 2.0f,
-          focus_rect.height + t * 2.0f
-        };
-        draw_rectangle_rounded_lines(thickRect, focus_roundness, focus_segments, focus_col,
-                                     focus_corner_settings);
+        RectangleType thickRect = {focus_rect.x - t, focus_rect.y - t,
+                                   focus_rect.width + t * 2.0f,
+                                   focus_rect.height + t * 2.0f};
+        draw_rectangle_rounded_lines(thickRect, focus_roundness, focus_segments,
+                                     focus_col, focus_corner_settings);
       }
     }
 
@@ -1254,15 +1268,16 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
           if (effective_opacity < 1.0f) {
             border_col = colors::opacity_pct(border_col, effective_opacity);
           }
-          draw_rectangle_rounded_lines(draw_rect, roundness, segments, border_col,
-                                       corner_settings);
+          draw_rectangle_rounded_lines(draw_rect, roundness, segments,
+                                       border_col, corner_settings);
         } else {
           // Per-side border rendering
           float x = draw_rect.x, y = draw_rect.y;
           float w = draw_rect.width, h = draw_rect.height;
           auto draw_side = [&](const BorderSide &side, float sx, float sy,
                                float sw, float sh) {
-            if (!side.has_border()) return;
+            if (!side.has_border())
+              return;
             Color c = side.color;
             if (effective_opacity < 1.0f)
               c = colors::opacity_pct(c, effective_opacity);
@@ -1333,8 +1348,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       draw_text_in_rect(font_manager, hasLabel.label.c_str(), text_rect,
                         hasLabel.alignment, font_col, SHOW_TEXT_OVERFLOW_DEBUG,
                         stroke, shadow, rotation, centerX, centerY,
-                        hasLabel.text_overflow,
-                        hasLabel.letter_spacing);
+                        hasLabel.text_overflow, hasLabel.letter_spacing);
     }
 
     if (entity.has<texture_manager::HasTexture>()) {
@@ -1374,8 +1388,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     pop_rotation();
   }
 
-  void render(UIContext<InputAction> &context,
-              FontManager &font_manager, Entity &entity) {
+  void render(UIContext<InputAction> &context, FontManager &font_manager,
+              Entity &entity) {
     // Defensive check: entity must have UIComponent
     if (!entity.has<UIComponent>())
       return;
@@ -1402,8 +1416,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     }
 
     if (needs_scissor) {
-      RectangleType scissor_rect =
-          clip_ancestor->get<UIComponent>().rect();
+      RectangleType scissor_rect = clip_ancestor->get<UIComponent>().rect();
       begin_scissor_mode(static_cast<int>(scissor_rect.x),
                          static_cast<int>(scissor_rect.y),
                          static_cast<int>(scissor_rect.width),
@@ -1419,8 +1432,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         entity.has<ui::HasImage>() ||
         entity.has<texture_manager::HasTexture>() ||
         entity.has<FocusClusterRoot>() ||
-        entity.has<HasCircularProgressState>() ||
-        entity.has<HasScrollView>() ||
+        entity.has<HasCircularProgressState>() || entity.has<HasScrollView>() ||
         context.visual_focus_id == entity.id) {
       render_me(context, font_manager, entity);
     }
@@ -1484,8 +1496,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     this->include_derived_children = true;
   }
 
-  void collect_shadow(RenderCommandBuffer& buffer,
-                      const Entity &entity, RectangleType draw_rect,
+  void collect_shadow(RenderCommandBuffer &buffer, const Entity &entity,
+                      RectangleType draw_rect,
                       const std::bitset<4> &corner_settings,
                       float effective_opacity, int layer,
                       float roundness = 0.5f, int segments = 8) {
@@ -1505,7 +1517,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                                    draw_rect.width, draw_rect.height};
       if (corner_settings.any()) {
         buffer.add_rounded_rectangle(shadow_rect, shadow_color, roundness,
-                                     segments, corner_settings, layer, entity.id);
+                                     segments, corner_settings, layer,
+                                     entity.id);
       } else {
         buffer.add_rectangle(shadow_rect, shadow_color, layer, entity.id);
       }
@@ -1531,7 +1544,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
         if (corner_settings.any()) {
           buffer.add_rounded_rectangle(shadow_rect, layer_color, roundness,
-                                       segments, corner_settings, layer, entity.id);
+                                       segments, corner_settings, layer,
+                                       entity.id);
         } else {
           buffer.add_rectangle(shadow_rect, layer_color, layer, entity.id);
         }
@@ -1539,9 +1553,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     }
   }
 
-  void collect_nine_slice(RenderCommandBuffer& buffer,
-                          const Entity &entity, RectangleType draw_rect,
-                          float effective_opacity, int layer) {
+  void collect_nine_slice(RenderCommandBuffer &buffer, const Entity &entity,
+                          RectangleType draw_rect, float effective_opacity,
+                          int layer) {
     if (!entity.has<HasNineSliceBorder>())
       return;
 
@@ -1557,7 +1571,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                           tint, layer, entity.id);
   }
 
-  void collect_circular_progress(RenderCommandBuffer& buffer,
+  void collect_circular_progress(RenderCommandBuffer &buffer,
                                  const Entity &entity, RectangleType draw_rect,
                                  float effective_opacity, int layer) {
     if (!entity.has<HasCircularProgressState>()) {
@@ -1596,9 +1610,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     }
   }
 
-  void collect_bevel(RenderCommandBuffer& buffer,
-                     const Entity &entity, RectangleType draw_rect,
-                     float effective_opacity, int layer) {
+  void collect_bevel(RenderCommandBuffer &buffer, const Entity &entity,
+                     RectangleType draw_rect, float effective_opacity,
+                     int layer) {
     if (!entity.has<HasBevelBorder>())
       return;
 
@@ -1661,10 +1675,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     }
   }
 
-  void collect_me(RenderCommandBuffer& buffer,
-                  UIContext<InputAction> &context,
-                  FontManager &font_manager, Entity &entity,
-                  int layer) {
+  void collect_me(RenderCommandBuffer &buffer, UIContext<InputAction> &context,
+                  FontManager &font_manager, Entity &entity, int layer) {
     // Defensive check: entity must have UIComponent
     if (!entity.has<UIComponent>())
       return;
@@ -1674,12 +1686,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     RectangleType draw_rect = cmp.rect();
 
     OptEntity scroll_ancestor = detail::find_scroll_view_ancestor(entity);
-    // Note: find_clip_ancestor returns entity with HasScrollView OR HasClipChildren
-    // Only apply scroll offset if ancestor actually has HasScrollView
-    bool inside_scroll_view =
-        scroll_ancestor.valid() &&
-        scroll_ancestor->has<HasScrollView>() &&
-        !entity.has<HasScrollView>();
+    // Note: find_clip_ancestor returns entity with HasScrollView OR
+    // HasClipChildren Only apply scroll offset if ancestor actually has
+    // HasScrollView
+    bool inside_scroll_view = scroll_ancestor.valid() &&
+                              scroll_ancestor->has<HasScrollView>() &&
+                              !entity.has<HasScrollView>();
 
     if (inside_scroll_view) {
       Vector2Type scroll_offset =
@@ -1692,7 +1704,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
     }
 
-    // Get rotation from modifiers (applied separately since rectangles rotate around center)
+    // Get rotation from modifiers (applied separately since rectangles rotate
+    // around center)
     float rotation = entity.has<HasUIModifiers>()
                          ? entity.get<HasUIModifiers>().rotation
                          : 0.0f;
@@ -1716,12 +1729,15 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       collect_nine_slice(buffer, entity, draw_rect, effective_opacity, layer);
     }
 
-    // Focus indicator - draw on entities with FocusClusterRoot when they contain the focused element
-    // Check both visual_focus_id match AND alternative check for FocusClusterRoot with focused children
+    // Focus indicator - draw on entities with FocusClusterRoot when they
+    // contain the focused element Check both visual_focus_id match AND
+    // alternative check for FocusClusterRoot with focused children
     bool should_draw_focus = (context.visual_focus_id == entity.id);
 
-    // Alternative check: if this entity has FocusClusterRoot and contains the current focus
-    if (!should_draw_focus && entity.has<FocusClusterRoot>() && context.focus_id != context.ROOT) {
+    // Alternative check: if this entity has FocusClusterRoot and contains the
+    // current focus
+    if (!should_draw_focus && entity.has<FocusClusterRoot>() &&
+        context.focus_id != context.ROOT) {
       // Check if focus_id is this entity or a descendant
       if (context.focus_id == entity.id) {
         should_draw_focus = true;
@@ -1735,14 +1751,16 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           // Also check grandchildren (for components with nested children)
           OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
           if (child_opt.has_value() && child_opt.asE().has<UIComponent>()) {
-            for (EntityID grandchild_id : child_opt.asE().get<UIComponent>().children) {
+            for (EntityID grandchild_id :
+                 child_opt.asE().get<UIComponent>().children) {
               if (grandchild_id == context.focus_id) {
                 should_draw_focus = true;
                 break;
               }
             }
           }
-          if (should_draw_focus) break;
+          if (should_draw_focus)
+            break;
         }
       }
     }
@@ -1753,44 +1771,48 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       if (effective_focus_opacity < 1.0f) {
         focus_col = colors::opacity_pct(focus_col, effective_focus_opacity);
       }
-      // Use theme's focus ring offset to ensure focus ring is outside component bounds
-      RectangleType focus_rect = cmp.focus_rect(static_cast<int>(context.theme.focus_ring_offset));
+      // Use theme's focus ring offset to ensure focus ring is outside component
+      // bounds
+      RectangleType focus_rect =
+          cmp.focus_rect(static_cast<int>(context.theme.focus_ring_offset));
       if (entity.has<HasUIModifiers>()) {
         focus_rect = entity.get<HasUIModifiers>().apply_modifier(focus_rect);
       }
 
       // Respect the entity's corner settings for focus rings
       // If entity has rounded corners, use those; otherwise use theme defaults
-      auto focus_corner_settings = entity.has<HasRoundedCorners>()
-          ? entity.get<HasRoundedCorners>().rounded_corners
-          : context.theme.rounded_corners;
+      auto focus_corner_settings =
+          entity.has<HasRoundedCorners>()
+              ? entity.get<HasRoundedCorners>().rounded_corners
+              : context.theme.rounded_corners;
       float focus_roundness = entity.has<HasRoundedCorners>()
-          ? entity.get<HasRoundedCorners>().roundness
-          : context.theme.roundness;
+                                  ? entity.get<HasRoundedCorners>().roundness
+                                  : context.theme.roundness;
       int focus_segments = entity.has<HasRoundedCorners>()
-          ? entity.get<HasRoundedCorners>().segments
-          : context.theme.segments;
+                               ? entity.get<HasRoundedCorners>().segments
+                               : context.theme.segments;
 
       // Dual-color focus ring: contrasting outline for universal visibility
       float thickness = context.theme.focus_ring_thickness;
       float lum = colors::luminance(focus_col);
-      Color outline_col = lum > 0.5f ? Color{0, 0, 0, 180} : Color{255, 255, 255, 180};
+      Color outline_col =
+          lum > 0.5f ? Color{0, 0, 0, 180} : Color{255, 255, 255, 180};
       if (effective_focus_opacity < 1.0f) {
         outline_col = colors::opacity_pct(outline_col, effective_focus_opacity);
       }
-      RectangleType outline_rect = {
-        focus_rect.x - thickness,
-        focus_rect.y - thickness,
-        focus_rect.width + thickness * 2.0f,
-        focus_rect.height + thickness * 2.0f
-      };
-      buffer.add_rounded_rectangle_outline(outline_rect, outline_col, focus_roundness, focus_segments,
-                                           focus_corner_settings, layer + 199, entity.id);
+      RectangleType outline_rect = {focus_rect.x - thickness,
+                                    focus_rect.y - thickness,
+                                    focus_rect.width + thickness * 2.0f,
+                                    focus_rect.height + thickness * 2.0f};
+      buffer.add_rounded_rectangle_outline(
+          outline_rect, outline_col, focus_roundness, focus_segments,
+          focus_corner_settings, layer + 199, entity.id);
 
       // Main focus ring
-      buffer.add_rounded_rectangle_outline(focus_rect, focus_col, focus_roundness, focus_segments,
-                                           focus_corner_settings, layer + 200, entity.id,
-                                           context.theme.focus_ring_thickness);
+      buffer.add_rounded_rectangle_outline(
+          focus_rect, focus_col, focus_roundness, focus_segments,
+          focus_corner_settings, layer + 200, entity.id,
+          context.theme.focus_ring_thickness);
     }
 
     // Background color
@@ -1809,7 +1831,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
       if (col.a > 0) {
         buffer.add_rounded_rectangle(draw_rect, col, roundness, segments,
-                                     corner_settings, layer, entity.id, rotation);
+                                     corner_settings, layer, entity.id,
+                                     rotation);
       }
     }
 
@@ -1817,7 +1840,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     collect_bevel(buffer, entity, draw_rect, effective_opacity, layer);
 
     // Circular progress
-    collect_circular_progress(buffer, entity, draw_rect, effective_opacity, layer);
+    collect_circular_progress(buffer, entity, draw_rect, effective_opacity,
+                              layer);
 
     // Border
     if (entity.has<HasBorder>()) {
@@ -1829,20 +1853,22 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
             border_col = colors::opacity_pct(border_col, effective_opacity);
           }
           buffer.add_rounded_rectangle_outline(draw_rect, border_col, roundness,
-                                               segments, corner_settings, layer, entity.id);
+                                               segments, corner_settings, layer,
+                                               entity.id);
         } else {
           // Per-side border rendering (as filled rectangles)
           float x = draw_rect.x, y = draw_rect.y;
           float w = draw_rect.width, h = draw_rect.height;
           auto add_side = [&](const BorderSide &side, float sx, float sy,
                               float sw, float sh) {
-            if (!side.has_border()) return;
+            if (!side.has_border())
+              return;
             Color c = side.color;
             if (effective_opacity < 1.0f)
               c = colors::opacity_pct(c, effective_opacity);
             RectangleType side_rect{sx, sy, sw, sh};
-            buffer.add_rounded_rectangle(side_rect, c, 0.f, 1,
-                                         corner_settings, layer, entity.id, 0.f);
+            buffer.add_rounded_rectangle(side_rect, c, 0.f, 1, corner_settings,
+                                         layer, entity.id, 0.f);
           };
           float tt = border.top.thickness.value;
           float bt = border.bottom.thickness.value;
@@ -1911,15 +1937,14 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         // ui_scale in Adaptive mode.
         float uis = imm::ThemeDefaults::get().theme.ui_scale;
         explicit_fs = resolve_to_pixels(cmp.font_size, context.screen_height,
-                                         cmp.resolved_scaling_mode, uis);
+                                        cmp.resolved_scaling_mode, uis);
       }
 
       // Position text to get font size
-      TextPositionResult result =
-          position_text_ex(font_manager, hasLabel.label.c_str(), text_rect,
-                          hasLabel.alignment, Vector2Type{5.f, 5.f},
-                          explicit_fs, hasLabel.letter_spacing,
-                          hasLabel.text_overflow);
+      TextPositionResult result = position_text_ex(
+          font_manager, hasLabel.label.c_str(), text_rect, hasLabel.alignment,
+          Vector2Type{5.f, 5.f}, explicit_fs, hasLabel.letter_spacing,
+          hasLabel.text_overflow);
 
       if (result.rect.height >= MIN_FONT_SIZE) {
         // Handle text overflow ellipsis truncation for batched path
@@ -1931,12 +1956,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           float spacing = 1.f + hasLabel.letter_spacing;
           float max_width = text_rect.width - 10.f;
           if (max_width > 0.f) {
-            Vector2Type ts = measure_text(font, hasLabel.label.c_str(),
-                                          font_size, spacing);
+            Vector2Type ts =
+                measure_text(font, hasLabel.label.c_str(), font_size, spacing);
             if (ts.x > max_width) {
               const std::string ellipsis = "...";
-              Vector2Type es = measure_text(font, ellipsis.c_str(),
-                                            font_size, spacing);
+              Vector2Type es =
+                  measure_text(font, ellipsis.c_str(), font_size, spacing);
               float available = max_width - es.x;
               if (available <= 0.f) {
                 display_text = ellipsis;
@@ -1945,13 +1970,14 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                 while (low <= high && high <= hasLabel.label.size()) {
                   size_t mid = (low + high) / 2;
                   std::string prefix = hasLabel.label.substr(0, mid);
-                  Vector2Type ps = measure_text(font, prefix.c_str(),
-                                                font_size, spacing);
+                  Vector2Type ps =
+                      measure_text(font, prefix.c_str(), font_size, spacing);
                   if (ps.x <= available) {
                     best = mid;
                     low = mid + 1;
                   } else {
-                    if (mid == 0) break;
+                    if (mid == 0)
+                      break;
                     high = mid - 1;
                   }
                 }
@@ -1961,14 +1987,13 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           }
         }
 
-        // Pass the container rect (text_rect) not the position rect (result.rect)
-        // render_text will handle centering within the container
+        // Pass the container rect (text_rect) not the position rect
+        // (result.rect) render_text will handle centering within the container
         float centerX = draw_rect.x + draw_rect.width / 2.0f;
         float centerY = draw_rect.y + draw_rect.height / 2.0f;
         buffer.add_text(text_rect, display_text, cmp.font_name,
-                        result.rect.height, font_col, hasLabel.alignment,
-                        layer, entity.id, stroke, shadow,
-                        rotation, centerX, centerY,
+                        result.rect.height, font_col, hasLabel.alignment, layer,
+                        entity.id, stroke, shadow, rotation, centerX, centerY,
                         hasLabel.letter_spacing);
 
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
@@ -1996,7 +2021,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       RectangleType dest = {location.x, location.y, size.x, size.y};
       RectangleType src = {0.0f, 0.0f, (float)texture.texture.width,
                            (float)texture.texture.height};
-      buffer.add_image(dest, src, texture.texture, colors::UI_WHITE, layer, entity.id);
+      buffer.add_image(dest, src, texture.texture, colors::UI_WHITE, layer,
+                       entity.id);
     } else if (entity.has<ui::HasImage>()) {
       const ui::HasImage &img = entity.get<ui::HasImage>();
       texture_manager::Rectangle src =
@@ -2018,10 +2044,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     }
   }
 
-  void collect(RenderCommandBuffer& buffer,
-               UIContext<InputAction> &context,
-               FontManager &font_manager, Entity &entity,
-               int layer) {
+  void collect(RenderCommandBuffer &buffer, UIContext<InputAction> &context,
+               FontManager &font_manager, Entity &entity, int layer) {
     // Defensive check: entity must have UIComponent to be rendered
     if (!entity.has<UIComponent>())
       return;
@@ -2048,13 +2072,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     }
 
     if (needs_scissor) {
-      RectangleType scissor_rect =
-          clip_ancestor->get<UIComponent>().rect();
-      buffer.add_scissor_start(static_cast<int>(scissor_rect.x),
-                               static_cast<int>(scissor_rect.y),
-                               static_cast<int>(scissor_rect.width),
-                               static_cast<int>(scissor_rect.height),
-                               layer, entity.id);
+      RectangleType scissor_rect = clip_ancestor->get<UIComponent>().rect();
+      buffer.add_scissor_start(
+          static_cast<int>(scissor_rect.x), static_cast<int>(scissor_rect.y),
+          static_cast<int>(scissor_rect.width),
+          static_cast<int>(scissor_rect.height), layer, entity.id);
     }
 
     // Update scroll view content size
@@ -2066,8 +2088,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         entity.has<ui::HasImage>() ||
         entity.has<texture_manager::HasTexture>() ||
         entity.has<FocusClusterRoot>() ||
-        entity.has<HasCircularProgressState>() ||
-        entity.has<HasScrollView>() ||
+        entity.has<HasCircularProgressState>() || entity.has<HasScrollView>() ||
         context.visual_focus_id == entity.id) {
       collect_me(buffer, context, font_manager, entity, layer);
     }
@@ -2077,12 +2098,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     }
   }
 
-  virtual void for_each_with_derived(Entity &,
-                                     UIContext<InputAction> &context,
+  virtual void for_each_with_derived(Entity &, UIContext<InputAction> &context,
                                      FontManager &font_manager,
                                      float) override {
     // Reset arena for new frame
-    Arena& arena = get_render_arena();
+    Arena &arena = get_render_arena();
     arena.reset();
 
     // Create command buffer

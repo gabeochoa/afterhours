@@ -501,9 +501,9 @@ struct input : developer::Plugin {
   // AnyInput = variant<KeyCode, GamepadAxisWithDir, GamepadButton>
   // doesn't have duplicate int alternatives.
   struct GamepadButton {
-      int value = 0;
-      GamepadButton() = default;
-      explicit GamepadButton(int v) : value(v) {}
+    int value = 0;
+    GamepadButton() = default;
+    explicit GamepadButton(int v) : value(v) {}
   };
 
   static MousePosition get_mouse_position() {
@@ -530,16 +530,18 @@ struct input : developer::Plugin {
   }
   static bool is_mouse_button_down(const MouseButton btn) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-    return testing::test_input::is_mouse_button_down(btn,
-      [](int b) { return graphics::MetalPlatformAPI::is_mouse_button_down(b); });
+    return testing::test_input::is_mouse_button_down(btn, [](int b) {
+      return graphics::MetalPlatformAPI::is_mouse_button_down(b);
+    });
 #else
     return graphics::MetalPlatformAPI::is_mouse_button_down(btn);
 #endif
   }
   static bool is_mouse_button_pressed(const MouseButton btn) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-    return testing::test_input::is_mouse_button_pressed(btn,
-      [](int b) { return graphics::MetalPlatformAPI::is_mouse_button_pressed(b); });
+    return testing::test_input::is_mouse_button_pressed(btn, [](int b) {
+      return graphics::MetalPlatformAPI::is_mouse_button_pressed(b);
+    });
 #else
     return graphics::MetalPlatformAPI::is_mouse_button_pressed(btn);
 #endif
@@ -549,7 +551,8 @@ struct input : developer::Plugin {
   }
   static float get_mouse_wheel_move() {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-    if (testing::test_input::detail::test_mode) return 0.0f;
+    if (testing::test_input::detail::test_mode)
+      return 0.0f;
 #endif
     return graphics::MetalPlatformAPI::get_mouse_wheel_move();
   }
@@ -560,39 +563,66 @@ struct input : developer::Plugin {
   static int get_char_pressed() {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
     return testing::test_input::get_char_pressed(
-      []() { return graphics::MetalPlatformAPI::get_char_pressed(); });
+        []() { return graphics::MetalPlatformAPI::get_char_pressed(); });
 #else
     return graphics::MetalPlatformAPI::get_char_pressed();
 #endif
   }
   static bool is_key_pressed(const KeyCode keycode) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-    return testing::test_input::is_key_pressed(keycode,
-      [](int k) { return graphics::MetalPlatformAPI::is_key_pressed(k); });
+    return testing::test_input::is_key_pressed(keycode, [](int k) {
+      return graphics::MetalPlatformAPI::is_key_pressed(k);
+    });
 #else
     return graphics::MetalPlatformAPI::is_key_pressed(keycode);
 #endif
   }
   static bool is_key_down(const KeyCode keycode) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-    return testing::test_input::is_key_down(keycode,
-      [](int k) { return graphics::MetalPlatformAPI::is_key_down(k); });
+    return testing::test_input::is_key_down(keycode, [](int k) {
+      return graphics::MetalPlatformAPI::is_key_down(k);
+    });
 #else
     return graphics::MetalPlatformAPI::is_key_down(keycode);
 #endif
   }
 
   // Gamepad not yet supported on Metal
-  static bool is_gamepad_available(const GamepadID) { log_error("@notimplemented is_gamepad_available"); return false; }
-  static float get_gamepad_axis_mvt(const GamepadID, const GamepadAxis) { log_error("@notimplemented get_gamepad_axis_mvt"); return 0.f; }
-  static bool is_gamepad_button_pressed(const GamepadID, const GamepadButton) { log_error("@notimplemented is_gamepad_button_pressed"); return false; }
-  static bool is_gamepad_button_down(const GamepadID, const GamepadButton) { log_error("@notimplemented is_gamepad_button_down"); return false; }
+  static bool is_gamepad_available(const GamepadID) {
+    log_error("@notimplemented is_gamepad_available");
+    return false;
+  }
+  static float get_gamepad_axis_mvt(const GamepadID, const GamepadAxis) {
+    log_error("@notimplemented get_gamepad_axis_mvt");
+    return 0.f;
+  }
+  static bool is_gamepad_button_pressed(const GamepadID, const GamepadButton) {
+    log_error("@notimplemented is_gamepad_button_pressed");
+    return false;
+  }
+  static bool is_gamepad_button_down(const GamepadID, const GamepadButton) {
+    log_error("@notimplemented is_gamepad_button_down");
+    return false;
+  }
 
-  static void draw_text(const std::string &, const int, const int, const int) { log_error("@notimplemented draw_text"); }
-  static void set_gamepad_mappings(const std::string &) { log_error("@notimplemented set_gamepad_mappings"); }
-  static std::string name_for_button(const GamepadButton) { log_error("@notimplemented name_for_button"); return "unknown"; }
-  static std::string icon_for_button(const GamepadButton) { log_error("@notimplemented icon_for_button"); return "unknown"; }
-  static std::string icon_for_key(const int) { log_error("@notimplemented icon_for_key"); return "unknown"; }
+  static void draw_text(const std::string &, const int, const int, const int) {
+    log_error("@notimplemented draw_text");
+  }
+  static void set_gamepad_mappings(const std::string &) {
+    log_error("@notimplemented set_gamepad_mappings");
+  }
+  static std::string name_for_button(const GamepadButton) {
+    log_error("@notimplemented name_for_button");
+    return "unknown";
+  }
+  static std::string icon_for_button(const GamepadButton) {
+    log_error("@notimplemented icon_for_button");
+    return "unknown";
+  }
+  static std::string icon_for_key(const int) {
+    log_error("@notimplemented icon_for_key");
+    return "unknown";
+  }
 
 #else
   // ── No backend — all stubs return defaults ──
@@ -605,32 +635,90 @@ struct input : developer::Plugin {
   // AnyInput = variant<KeyCode, GamepadAxisWithDir, GamepadButton>
   // doesn't have duplicate int alternatives.
   struct GamepadButton {
-      int value = 0;
-      GamepadButton() = default;
-      explicit GamepadButton(int v) : value(v) {}
+    int value = 0;
+    GamepadButton() = default;
+    explicit GamepadButton(int v) : value(v) {}
   };
 
   // TODO good luck ;)
-  static MousePosition get_mouse_position() { log_error("@notimplemented get_mouse_position"); return {0, 0}; }
-  static MousePosition get_mouse_delta() { log_error("@notimplemented get_mouse_delta"); return {0, 0}; }
-  static bool is_mouse_button_up(const MouseButton) { log_error("@notimplemented is_mouse_button_up"); return false; }
-  static bool is_mouse_button_down(const MouseButton) { log_error("@notimplemented is_mouse_button_down"); return false; }
-  static bool is_mouse_button_pressed(const MouseButton) { log_error("@notimplemented is_mouse_button_pressed"); return false; }
-  static bool is_mouse_button_released(const MouseButton) { log_error("@notimplemented is_mouse_button_released"); return false; }
-  static float get_mouse_wheel_move() { log_error("@notimplemented get_mouse_wheel_move"); return 0.f; }
-  static MousePosition get_mouse_wheel_move_v() { log_error("@notimplemented get_mouse_wheel_move_v"); return {0, 0}; }
-  static int get_char_pressed() { log_error("@notimplemented get_char_pressed"); return 0; }
-  static bool is_key_pressed(const KeyCode) { log_error("@notimplemented is_key_pressed"); return false; }
-  static bool is_key_down(const KeyCode) { log_error("@notimplemented is_key_down"); return false; }
-  static bool is_gamepad_available(const GamepadID) { log_error("@notimplemented is_gamepad_available"); return false; }
-  static float get_gamepad_axis_mvt(const GamepadID, const GamepadAxis) { log_error("@notimplemented get_gamepad_axis_mvt"); return 0.f; }
-  static bool is_gamepad_button_pressed(const GamepadID, const GamepadButton) { log_error("@notimplemented is_gamepad_button_pressed"); return false; }
-  static bool is_gamepad_button_down(const GamepadID, const GamepadButton) { log_error("@notimplemented is_gamepad_button_down"); return false; }
-  static void draw_text(const std::string &, const int, const int, const int) { log_error("@notimplemented draw_text"); }
-  static void set_gamepad_mappings(const std::string &) { log_error("@notimplemented set_gamepad_mappings"); }
-  static std::string name_for_button(const GamepadButton) { log_error("@notimplemented name_for_button"); return "unknown"; }
-  static std::string icon_for_button(const GamepadButton) { log_error("@notimplemented icon_for_button"); return "unknown"; }
-  static std::string icon_for_key(const int) { log_error("@notimplemented icon_for_key"); return "unknown"; }
+  static MousePosition get_mouse_position() {
+    log_error("@notimplemented get_mouse_position");
+    return {0, 0};
+  }
+  static MousePosition get_mouse_delta() {
+    log_error("@notimplemented get_mouse_delta");
+    return {0, 0};
+  }
+  static bool is_mouse_button_up(const MouseButton) {
+    log_error("@notimplemented is_mouse_button_up");
+    return false;
+  }
+  static bool is_mouse_button_down(const MouseButton) {
+    log_error("@notimplemented is_mouse_button_down");
+    return false;
+  }
+  static bool is_mouse_button_pressed(const MouseButton) {
+    log_error("@notimplemented is_mouse_button_pressed");
+    return false;
+  }
+  static bool is_mouse_button_released(const MouseButton) {
+    log_error("@notimplemented is_mouse_button_released");
+    return false;
+  }
+  static float get_mouse_wheel_move() {
+    log_error("@notimplemented get_mouse_wheel_move");
+    return 0.f;
+  }
+  static MousePosition get_mouse_wheel_move_v() {
+    log_error("@notimplemented get_mouse_wheel_move_v");
+    return {0, 0};
+  }
+  static int get_char_pressed() {
+    log_error("@notimplemented get_char_pressed");
+    return 0;
+  }
+  static bool is_key_pressed(const KeyCode) {
+    log_error("@notimplemented is_key_pressed");
+    return false;
+  }
+  static bool is_key_down(const KeyCode) {
+    log_error("@notimplemented is_key_down");
+    return false;
+  }
+  static bool is_gamepad_available(const GamepadID) {
+    log_error("@notimplemented is_gamepad_available");
+    return false;
+  }
+  static float get_gamepad_axis_mvt(const GamepadID, const GamepadAxis) {
+    log_error("@notimplemented get_gamepad_axis_mvt");
+    return 0.f;
+  }
+  static bool is_gamepad_button_pressed(const GamepadID, const GamepadButton) {
+    log_error("@notimplemented is_gamepad_button_pressed");
+    return false;
+  }
+  static bool is_gamepad_button_down(const GamepadID, const GamepadButton) {
+    log_error("@notimplemented is_gamepad_button_down");
+    return false;
+  }
+  static void draw_text(const std::string &, const int, const int, const int) {
+    log_error("@notimplemented draw_text");
+  }
+  static void set_gamepad_mappings(const std::string &) {
+    log_error("@notimplemented set_gamepad_mappings");
+  }
+  static std::string name_for_button(const GamepadButton) {
+    log_error("@notimplemented name_for_button");
+    return "unknown";
+  }
+  static std::string icon_for_button(const GamepadButton) {
+    log_error("@notimplemented icon_for_button");
+    return "unknown";
+  }
+  static std::string icon_for_key(const int) {
+    log_error("@notimplemented icon_for_key");
+    return "unknown";
+  }
 #endif
 
   enum struct DeviceMedium {
@@ -699,7 +787,7 @@ struct input : developer::Plugin {
 
   static std::pair<DeviceMedium, float>
   check_single_action_pressed(const GamepadID id,
-                              const ValidInputs& valid_inputs) {
+                              const ValidInputs &valid_inputs) {
     DeviceMedium medium = DeviceMedium::None;
     float value = 0.f;
     for (const auto &input : valid_inputs) {
@@ -725,7 +813,7 @@ struct input : developer::Plugin {
 
   static std::pair<DeviceMedium, float>
   check_single_action_down(const GamepadID id,
-                           const ValidInputs& valid_inputs) {
+                           const ValidInputs &valid_inputs) {
     DeviceMedium medium = DeviceMedium::None;
     float value = 0.f;
     for (const auto &input : valid_inputs) {
@@ -847,7 +935,8 @@ struct input : developer::Plugin {
         do {
           // down
           {
-            const auto [medium, amount] = input::check_single_action_down(i, vis);
+            const auto [medium, amount] =
+                input::check_single_action_down(i, vis);
             if (amount > 0.f) {
               collector.inputs.push_back(
                   ActionDone(medium, i, action, amount, dt));
@@ -855,7 +944,8 @@ struct input : developer::Plugin {
           }
           // pressed
           {
-            const auto [medium, amount] = input::check_single_action_pressed(i, vis);
+            const auto [medium, amount] =
+                input::check_single_action_pressed(i, vis);
             if (amount > 0.f) {
               collector.inputs_pressed.push_back(
                   ActionDone(medium, i, action, amount, dt));
@@ -921,9 +1011,10 @@ static_assert(developer::PluginCore<input>,
               "input must implement the core plugin interface");
 
 // Templated on project's layer enum (e.g., menu::State)
-template<typename LayerEnum>
+template <typename LayerEnum>
 struct ProvidesLayeredInputMapping : public BaseComponent {
-  using LayerMapping = std::map<int, input::ValidInputs>;  // action_id -> bindings
+  using LayerMapping =
+      std::map<int, input::ValidInputs>; // action_id -> bindings
 
   std::map<LayerEnum, LayerMapping> layers;
   LayerEnum active_layer{};
@@ -931,17 +1022,19 @@ struct ProvidesLayeredInputMapping : public BaseComponent {
   ProvidesLayeredInputMapping() = default;
 
   ProvidesLayeredInputMapping(
-      const std::map<LayerEnum, LayerMapping>& initial_layers,
+      const std::map<LayerEnum, LayerMapping> &initial_layers,
       LayerEnum starting_layer)
       : layers(initial_layers), active_layer(starting_layer) {}
 
   // Get bindings for an action in the active layer
-  const input::ValidInputs& get_bindings(int action) const {
+  const input::ValidInputs &get_bindings(int action) const {
     static const input::ValidInputs empty{};
     auto layer_it = layers.find(active_layer);
-    if (layer_it == layers.end()) return empty;
+    if (layer_it == layers.end())
+      return empty;
     auto action_it = layer_it->second.find(action);
-    if (action_it == layer_it->second.end()) return empty;
+    if (action_it == layer_it->second.end())
+      return empty;
     return action_it->second;
   }
 
@@ -949,7 +1042,8 @@ struct ProvidesLayeredInputMapping : public BaseComponent {
   LayerEnum get_active_layer() const { return active_layer; }
 
   // Modify a binding at runtime (for settings/remapping)
-  void set_binding(LayerEnum layer, int action, const input::ValidInputs& inputs) {
+  void set_binding(LayerEnum layer, int action,
+                   const input::ValidInputs &inputs) {
     layers[layer][action] = inputs;
   }
 
@@ -961,7 +1055,7 @@ struct ProvidesLayeredInputMapping : public BaseComponent {
   }
 };
 
-template<typename LayerEnum>
+template <typename LayerEnum>
 struct LayeredInputSystem
     : System<input::InputCollector, input::ProvidesMaxGamepadID,
              ProvidesLayeredInputMapping<LayerEnum>> {
@@ -977,12 +1071,10 @@ struct LayeredInputSystem
     return result;
   }
 
-  virtual void for_each_with(
-      Entity&,
-      input::InputCollector& collector,
-      input::ProvidesMaxGamepadID& maxGamepad,
-      ProvidesLayeredInputMapping<LayerEnum>& mapper,
-      float dt) override {
+  virtual void for_each_with(Entity &, input::InputCollector &collector,
+                             input::ProvidesMaxGamepadID &maxGamepad,
+                             ProvidesLayeredInputMapping<LayerEnum> &mapper,
+                             float dt) override {
 
     maxGamepad.max_gamepad_available = std::max(0, fetch_max_gamepad_id());
     collector.inputs.clear();
@@ -998,17 +1090,16 @@ struct LayeredInputSystem
       return;
     }
 
-    for (const auto& [action, valid_inputs] : layer_it->second) {
-      for (int gamepad_id = 0;
-           gamepad_id <= maxGamepad.max_gamepad_available;
+    for (const auto &[action, valid_inputs] : layer_it->second) {
+      for (int gamepad_id = 0; gamepad_id <= maxGamepad.max_gamepad_available;
            gamepad_id++) {
         // Check "down" state
         {
           const auto [down_medium, down_amount] =
               input::check_single_action_down(gamepad_id, valid_inputs);
           if (down_amount > 0.f) {
-            collector.inputs.push_back(
-                input::ActionDone(down_medium, gamepad_id, action, down_amount, dt));
+            collector.inputs.push_back(input::ActionDone(
+                down_medium, gamepad_id, action, down_amount, dt));
           }
         }
         // Check "pressed" state (just this frame)
@@ -1016,8 +1107,8 @@ struct LayeredInputSystem
           const auto [pressed_medium, pressed_amount] =
               input::check_single_action_pressed(gamepad_id, valid_inputs);
           if (pressed_amount > 0.f) {
-            collector.inputs_pressed.push_back(
-                input::ActionDone(pressed_medium, gamepad_id, action, pressed_amount, dt));
+            collector.inputs_pressed.push_back(input::ActionDone(
+                pressed_medium, gamepad_id, action, pressed_amount, dt));
           }
         }
       }
@@ -1032,43 +1123,44 @@ struct LayeredInputSystem
 };
 
 // Plugin registration helper for layered input
-template<typename LayerEnum>
-struct layered_input : developer::Plugin {
+template <typename LayerEnum> struct layered_input : developer::Plugin {
 
   static void add_singleton_components(
-      Entity& entity,
-      const std::map<LayerEnum, std::map<int, input::ValidInputs>>& mapping,
+      Entity &entity,
+      const std::map<LayerEnum, std::map<int, input::ValidInputs>> &mapping,
       LayerEnum starting_layer) {
 
     entity.addComponent<input::InputCollector>();
     entity.addComponent<input::ProvidesMaxGamepadID>();
-    entity.addComponent<ProvidesLayeredInputMapping<LayerEnum>>(
-        mapping, starting_layer);
+    entity.addComponent<ProvidesLayeredInputMapping<LayerEnum>>(mapping,
+                                                                starting_layer);
 
     EntityHelper::registerSingleton<input::InputCollector>(entity);
     EntityHelper::registerSingleton<input::ProvidesMaxGamepadID>(entity);
-    EntityHelper::registerSingleton<ProvidesLayeredInputMapping<LayerEnum>>(entity);
+    EntityHelper::registerSingleton<ProvidesLayeredInputMapping<LayerEnum>>(
+        entity);
   }
 
   // Default overload for PluginCore concept compatibility (empty mapping)
-  static void add_singleton_components(Entity& entity) {
+  static void add_singleton_components(Entity &entity) {
     add_singleton_components(
-        entity,
-        std::map<LayerEnum, std::map<int, input::ValidInputs>>{},
+        entity, std::map<LayerEnum, std::map<int, input::ValidInputs>>{},
         LayerEnum{});
   }
 
-  static void register_update_systems(SystemManager& sm) {
+  static void register_update_systems(SystemManager &sm) {
     sm.register_update_system(
         std::make_unique<LayeredInputSystem<LayerEnum>>());
   }
 
-  static void enforce_singletons(SystemManager& sm) {
+  static void enforce_singletons(SystemManager &sm) {
     sm.register_update_system(
         std::make_unique<developer::EnforceSingleton<input::InputCollector>>());
     sm.register_update_system(
-        std::make_unique<developer::EnforceSingleton<input::ProvidesMaxGamepadID>>());
-    // Note: Can't enforce ProvidesLayeredInputMapping without knowing LayerEnum at compile time
+        std::make_unique<
+            developer::EnforceSingleton<input::ProvidesMaxGamepadID>>());
+    // Note: Can't enforce ProvidesLayeredInputMapping without knowing LayerEnum
+    // at compile time
   }
 };
 

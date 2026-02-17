@@ -59,4 +59,3 @@ struct HasTextSelection : BaseComponent {
 
 } // namespace text_input
 } // namespace afterhours
-

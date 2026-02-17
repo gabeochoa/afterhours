@@ -79,9 +79,11 @@ struct LineIndex {
     }
 
     // Binary search for the line containing offset
-    auto it = std::upper_bound(line_starts_.begin(), line_starts_.end(), offset);
-    size_t row =
-        (it == line_starts_.begin()) ? 0 : std::distance(line_starts_.begin(), it) - 1;
+    auto it =
+        std::upper_bound(line_starts_.begin(), line_starts_.end(), offset);
+    size_t row = (it == line_starts_.begin())
+                     ? 0
+                     : std::distance(line_starts_.begin(), it) - 1;
     size_t column = offset - line_starts_[row];
     return {row, column};
   }
@@ -115,4 +117,3 @@ struct HasLineIndex : BaseComponent {
 
 } // namespace text_input
 } // namespace afterhours
-

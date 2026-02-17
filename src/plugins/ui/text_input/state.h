@@ -1,8 +1,8 @@
 #pragma once
 
+#include "../../../ecs.h"
 #include "concepts.h"
 #include "storage.h"
-#include "../../../ecs.h"
 #include <functional>
 #include <string>
 
@@ -49,4 +49,3 @@ struct HasTextInputListener : BaseComponent {
 
 } // namespace text_input
 } // namespace afterhours
-

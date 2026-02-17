@@ -287,10 +287,9 @@ struct ValidateMinFontSize : System<UIComponent, HasLabel> {
         label_hint = " [" + entity.get<UIComponentDebug>().name() + "]";
       }
 
-      std::string msg = "Font size " + std::to_string(font_size) +
-                        "px below minimum " +
-                        std::to_string(config.min_font_size) + "px" +
-                        label_hint;
+      std::string msg =
+          "Font size " + std::to_string(font_size) + "px below minimum " +
+          std::to_string(config.min_font_size) + "px" + label_hint;
 
       report_violation(config, "MinFontSize", msg, entity.id, 0.6f);
 
@@ -308,8 +307,7 @@ struct ValidateMinFontSize : System<UIComponent, HasLabel> {
 // h720, percent) instead of fixed pixels. Components using Dim::Pixels for
 // their size, padding, margin, or font size won't scale correctly across
 // different screen resolutions.
-struct ValidateResolutionIndependence
-    : System<AutoLayoutRoot, UIComponent> {
+struct ValidateResolutionIndependence : System<AutoLayoutRoot, UIComponent> {
 
   static bool is_pixel_dim(const Size &size, float threshold) {
     return size.dim == Dim::Pixels && size.value > threshold;
@@ -358,8 +356,7 @@ struct ValidateResolutionIndependence
       if (is_pixel_dim(cmp.desired_padding[axis], threshold)) {
         violations.push_back(
             dim_location_name("padding", axis) + "=" +
-            std::to_string(
-                static_cast<int>(cmp.desired_padding[axis].value)) +
+            std::to_string(static_cast<int>(cmp.desired_padding[axis].value)) +
             "px");
       }
     }
@@ -369,8 +366,7 @@ struct ValidateResolutionIndependence
       if (is_pixel_dim(cmp.desired_margin[axis], threshold)) {
         violations.push_back(
             dim_location_name("margin", axis) + "=" +
-            std::to_string(
-                static_cast<int>(cmp.desired_margin[axis].value)) +
+            std::to_string(static_cast<int>(cmp.desired_margin[axis].value)) +
             "px");
       }
     }
@@ -378,8 +374,8 @@ struct ValidateResolutionIndependence
     // Check font size
     if (is_pixel_dim(cmp.font_size, threshold)) {
       violations.push_back(
-          "font_size=" +
-          std::to_string(static_cast<int>(cmp.font_size.value)) + "px");
+          "font_size=" + std::to_string(static_cast<int>(cmp.font_size.value)) +
+          "px");
     }
 
     if (!violations.empty()) {
@@ -412,8 +408,7 @@ struct ValidateResolutionIndependence
         if (opt_ent.valid()) {
           Entity &ent = opt_ent.asE();
           if (!ent.has<ValidationViolation>()) {
-            ent.addComponent<ValidationViolation>(msg,
-                                                  "ResolutionIndependence",
+            ent.addComponent<ValidationViolation>(msg, "ResolutionIndependence",
                                                   0.7f);
           }
         }
@@ -467,10 +462,10 @@ struct ValidateZeroSize : System<AutoLayoutRoot, UIComponent> {
         }
       }
 
-      std::string msg =
-          "Element resolved to zero size" + name_hint + ": " + dims +
-          "Check parent has explicit size if using percent(), "
-          "or element has children if using children().";
+      std::string msg = "Element resolved to zero size" + name_hint + ": " +
+                        dims +
+                        "Check parent has explicit size if using percent(), "
+                        "or element has children if using children().";
 
       report_violation(config, "ZeroSize", msg, cmp.id, 0.8f);
 
@@ -502,8 +497,7 @@ struct ValidateZeroSize : System<AutoLayoutRoot, UIComponent> {
 struct ValidateAbsoluteMarginConflict : System<AutoLayoutRoot, UIComponent> {
 
   static bool has_nonzero_margin(const UIComponent &cmp) {
-    for (auto axis :
-         {Axis::top, Axis::left, Axis::bottom, Axis::right}) {
+    for (auto axis : {Axis::top, Axis::left, Axis::bottom, Axis::right}) {
       if (cmp.desired_margin[axis].value > 0.001f &&
           cmp.desired_margin[axis].dim != Dim::None) {
         return true;
@@ -527,19 +521,18 @@ struct ValidateAbsoluteMarginConflict : System<AutoLayoutRoot, UIComponent> {
         }
       }
 
-      std::string msg =
-          "Absolute element has margins" + name_hint +
-          ". On absolute elements, margins are position offsets "
-          "(they don't create spacing). Use with_translate() for "
-          "positioning instead.";
+      std::string msg = "Absolute element has margins" + name_hint +
+                        ". On absolute elements, margins are position offsets "
+                        "(they don't create spacing). Use with_translate() for "
+                        "positioning instead.";
 
       report_violation(config, "AbsoluteMarginConflict", msg, cmp.id, 0.6f);
 
       if (config.highlight_violations && opt_ent.valid()) {
         Entity &ent = opt_ent.asE();
         if (!ent.has<ValidationViolation>()) {
-          ent.addComponent<ValidationViolation>(
-              msg, "AbsoluteMarginConflict", 0.6f);
+          ent.addComponent<ValidationViolation>(msg, "AbsoluteMarginConflict",
+                                                0.6f);
         }
       }
     }
@@ -601,10 +594,13 @@ struct ValidateSpacingRhythm : System<AutoLayoutRoot, UIComponent> {
     for (auto axis : {Axis::top, Axis::left, Axis::bottom, Axis::right}) {
       float val = cmp.computed_margin[axis];
       if (val > 0.001f && !is_valid_spacing(val)) {
-        violations.push_back("margin." + std::string(
-            axis == Axis::top ? "top" : axis == Axis::left ? "left"
-            : axis == Axis::bottom ? "bottom" : "right") +
-            "=" + std::to_string(static_cast<int>(val)) + "px");
+        violations.push_back("margin." +
+                             std::string(axis == Axis::top      ? "top"
+                                         : axis == Axis::left   ? "left"
+                                         : axis == Axis::bottom ? "bottom"
+                                                                : "right") +
+                             "=" + std::to_string(static_cast<int>(val)) +
+                             "px");
       }
     }
 
@@ -612,10 +608,13 @@ struct ValidateSpacingRhythm : System<AutoLayoutRoot, UIComponent> {
     for (auto axis : {Axis::top, Axis::left, Axis::bottom, Axis::right}) {
       float val = cmp.computed_padd[axis];
       if (val > 0.001f && !is_valid_spacing(val)) {
-        violations.push_back("padding." + std::string(
-            axis == Axis::top ? "top" : axis == Axis::left ? "left"
-            : axis == Axis::bottom ? "bottom" : "right") +
-            "=" + std::to_string(static_cast<int>(val)) + "px");
+        violations.push_back("padding." +
+                             std::string(axis == Axis::top      ? "top"
+                                         : axis == Axis::left   ? "left"
+                                         : axis == Axis::bottom ? "bottom"
+                                                                : "right") +
+                             "=" + std::to_string(static_cast<int>(val)) +
+                             "px");
       }
     }
 
@@ -630,8 +629,7 @@ struct ValidateSpacingRhythm : System<AutoLayoutRoot, UIComponent> {
       std::string name_hint;
       OptEntity opt_ent = UICollectionHolder::getEntityForID(cmp.id);
       if (opt_ent.valid() && opt_ent.asE().has<UIComponentDebug>()) {
-        name_hint =
-            " [" + opt_ent.asE().get<UIComponentDebug>().name() + "]";
+        name_hint = " [" + opt_ent.asE().get<UIComponentDebug>().name() + "]";
       }
 
       std::string msg = "Spacing not on 4px rhythm" + name_hint + ": " +
@@ -678,13 +676,11 @@ struct ValidatePixelAlignment : System<AutoLayoutRoot, UIComponent> {
       std::string name_hint;
       OptEntity opt_ent = UICollectionHolder::getEntityForID(cmp.id);
       if (opt_ent.valid() && opt_ent.asE().has<UIComponentDebug>()) {
-        name_hint =
-            " [" + opt_ent.asE().get<UIComponentDebug>().name() + "]";
+        name_hint = " [" + opt_ent.asE().get<UIComponentDebug>().name() + "]";
       }
 
       std::string msg = "Element not pixel-aligned" + name_hint + " at (" +
-                        std::to_string(rect.x) + ", " +
-                        std::to_string(rect.y) +
+                        std::to_string(rect.x) + ", " + std::to_string(rect.y) +
                         "). Fractional positions cause blurry rendering.";
 
       report_violation(config, "PixelAlignment", msg, cmp.id, 0.3f);
@@ -807,11 +803,9 @@ static void register_update_systems(SystemManager &sm) {
   sm.register_update_system(std::make_unique<ValidateChildContainment>());
   sm.register_update_system(std::make_unique<ValidateComponentContrast>());
   sm.register_update_system(std::make_unique<ValidateMinFontSize>());
-  sm.register_update_system(
-      std::make_unique<ValidateResolutionIndependence>());
+  sm.register_update_system(std::make_unique<ValidateResolutionIndependence>());
   sm.register_update_system(std::make_unique<ValidateZeroSize>());
-  sm.register_update_system(
-      std::make_unique<ValidateAbsoluteMarginConflict>());
+  sm.register_update_system(std::make_unique<ValidateAbsoluteMarginConflict>());
   sm.register_update_system(std::make_unique<ValidateLabelHasFont>());
   sm.register_update_system(std::make_unique<ValidateSpacingRhythm>());
   sm.register_update_system(std::make_unique<ValidatePixelAlignment>());
@@ -832,11 +826,9 @@ static void register_systems(SystemManager &sm) {
   sm.register_update_system(std::make_unique<ValidateChildContainment>());
   sm.register_update_system(std::make_unique<ValidateComponentContrast>());
   sm.register_update_system(std::make_unique<ValidateMinFontSize>());
-  sm.register_update_system(
-      std::make_unique<ValidateResolutionIndependence>());
+  sm.register_update_system(std::make_unique<ValidateResolutionIndependence>());
   sm.register_update_system(std::make_unique<ValidateZeroSize>());
-  sm.register_update_system(
-      std::make_unique<ValidateAbsoluteMarginConflict>());
+  sm.register_update_system(std::make_unique<ValidateAbsoluteMarginConflict>());
   sm.register_update_system(std::make_unique<ValidateLabelHasFont>());
   sm.register_update_system(std::make_unique<ValidateSpacingRhythm>());
   sm.register_update_system(std::make_unique<ValidatePixelAlignment>());

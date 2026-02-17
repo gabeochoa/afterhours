@@ -45,9 +45,7 @@ constexpr Color black() { return {0, 0, 0, 255}; }
 constexpr Color transparent() { return {0, 0, 0, 0}; }
 
 // Grayscale
-constexpr Color gray(unsigned char value) {
-  return {value, value, value, 255};
-}
+constexpr Color gray(unsigned char value) { return {value, value, value, 255}; }
 constexpr Color gray_25() { return gray(64); }
 constexpr Color gray_50() { return gray(128); }
 constexpr Color gray_75() { return gray(192); }
@@ -176,8 +174,8 @@ static bool is_empty(const Color &c) {
   return c.r == 0 && c.g == 0 && c.b == 0 && c.a == 0;
 }
 
-// TODO we can probably just have a ifdef VECTOR_TYPE and then we can just use that vector type 
-// then we dont strictly need raylib
+// TODO we can probably just have a ifdef VECTOR_TYPE and then we can just use
+// that vector type then we dont strictly need raylib
 #ifdef AFTER_HOURS_USE_RAYLIB
 // HSL conversion functions (requires Vector3 from raylib)
 static raylib::Vector3 to_hsl(const Color color) {

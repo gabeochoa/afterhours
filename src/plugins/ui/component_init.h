@@ -74,9 +74,9 @@ UIStylingDefaults::merge_with_defaults(ComponentType component_type,
 namespace detail {
 
 inline ComponentConfig overwrite_defaults(HasUIContext auto &ctx,
-                                           ComponentConfig config,
-                                           ComponentType component_type,
-                                           bool enable_color = false) {
+                                          ComponentConfig config,
+                                          ComponentType component_type,
+                                          bool enable_color = false) {
   auto &styling_defaults = UIStylingDefaults::get();
 
   if (!config.is_internal) {
@@ -300,7 +300,8 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   }
 
   // Scroll implies clipping, so both Scroll and Hidden add HasClipChildren.
-  // Auto does NOT add HasClipChildren — clipping is dynamic based on content size.
+  // Auto does NOT add HasClipChildren — clipping is dynamic based on content
+  // size.
   {
     bool needs_clip = config.overflow_x == Overflow::Hidden ||
                       config.overflow_x == Overflow::Scroll ||
@@ -331,7 +332,7 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
 
   if (config.font_name != UIComponent::UNSET_FONT) {
     entity.get<UIComponent>().enable_font(config.font_name, config.font_size,
-                                           config.font_size_explicitly_set);
+                                          config.font_size_explicitly_set);
   }
 
   if (Theme::is_valid(config.color_usage)) {
@@ -381,10 +382,10 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
     // ui_scale in Adaptive mode (web-like zoom).
     auto scaling = entity.get<UIComponent>().resolved_scaling_mode;
     float uis = ctx.theme.ui_scale;
-    float resolved_tx = resolve_to_pixels(config.translate_x, screen_height,
-                                          scaling, uis);
-    float resolved_ty = resolve_to_pixels(config.translate_y, screen_height,
-                                          scaling, uis);
+    float resolved_tx =
+        resolve_to_pixels(config.translate_x, screen_height, scaling, uis);
+    float resolved_ty =
+        resolve_to_pixels(config.translate_y, screen_height, scaling, uis);
 
     auto &uic = entity.get<UIComponent>();
     if (uic.absolute) {
@@ -514,8 +515,8 @@ apply_values:
 }
 
 inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
-                                    Entity &parent, ComponentConfig config,
-                                    const std::string &debug_name = "") {
+                                   Entity &parent, ComponentConfig config,
+                                   const std::string &debug_name = "") {
   (void)debug_name;
   bool created = false;
 
@@ -556,16 +557,15 @@ inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
 // Validate ComponentConfig for common issues.
 // Only runs when validation mode is Warn or Strict.
 inline void validate_config(const ComponentConfig &config,
-                             const std::string &debug_name) {
+                            const std::string &debug_name) {
   const auto &validation = UIStylingDefaults::get().get_validation_config();
   if (validation.mode == ValidationMode::Silent)
     return;
 
   auto warn = [&](const std::string &msg) {
-    std::string name =
-        !config.debug_name.empty()
-            ? config.debug_name
-            : (!debug_name.empty() ? debug_name : "<unnamed>");
+    std::string name = !config.debug_name.empty()
+                           ? config.debug_name
+                           : (!debug_name.empty() ? debug_name : "<unnamed>");
     std::string full = "[UI Config] " + name + ": " + msg;
     if (validation.mode == ValidationMode::Strict) {
       log_error("{}", full);
@@ -577,7 +577,8 @@ inline void validate_config(const ComponentConfig &config,
   // Warn: fill_parent on both axes without explicit parent size hint
   // (This is the most common gotcha for new users)
   if (config.size.x_axis.dim == Dim::Percent &&
-      config.size.x_axis.value >= 1.0f && config.size.y_axis.dim == Dim::Percent &&
+      config.size.x_axis.value >= 1.0f &&
+      config.size.y_axis.dim == Dim::Percent &&
       config.size.y_axis.value >= 1.0f && config.is_absolute) {
     warn("fill_parent() with absolute positioning may not reference "
          "the expected parent. Consider using explicit pixel sizes.");
@@ -597,20 +598,22 @@ inline void validate_config(const ComponentConfig &config,
 } // namespace detail
 
 inline bool init_component(HasUIContext auto &ctx, EntityParent ep_pair,
-                            ComponentConfig &config,
-                            ComponentType component_type,
-                            bool enable_color = false,
-                            const std::string &debug_name = "") {
+                           ComponentConfig &config,
+                           ComponentType component_type,
+                           bool enable_color = false,
+                           const std::string &debug_name = "") {
   auto [entity, parent] = ep_pair;
-  config = detail::overwrite_defaults(ctx, config, component_type, enable_color);
+  config =
+      detail::overwrite_defaults(ctx, config, component_type, enable_color);
   detail::validate_config(config, debug_name);
-  return detail::add_missing_components(ctx, entity, parent, config, debug_name);
+  return detail::add_missing_components(ctx, entity, parent, config,
+                                        debug_name);
 }
 
 template <typename Component, typename... CArgs>
 Component &init_state(Entity &entity,
-                       const std::function<void(Component &)> &cb,
-                       CArgs &&...args) {
+                      const std::function<void(Component &)> &cb,
+                      CArgs &&...args) {
   auto &cmp =
       entity.addComponentIfMissing<Component>(std::forward<CArgs>(args)...);
   cb(cmp);

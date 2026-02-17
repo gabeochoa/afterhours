@@ -20,7 +20,7 @@ namespace ui {
 ///   Ctrl+/- changes ui_scale (zoom), window resize changes available space.
 enum class ScalingMode {
   Proportional, // Current/default. Resolution scales everything.
-  Adaptive,     // Web-like. ui_scale controls element sizes, resolution reflows.
+  Adaptive, // Web-like. ui_scale controls element sizes, resolution reflows.
 };
 
 enum struct Dim {
@@ -77,8 +77,7 @@ inline std::ostream &operator<<(std::ostream &os, const Size &size) {
 
 // Define formatters for Dim and Size BEFORE they are used in log statements
 namespace std {
-template <>
-struct formatter<afterhours::ui::Dim> {
+template <> struct formatter<afterhours::ui::Dim> {
   constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
 
   auto format(afterhours::ui::Dim dim, std::format_context &ctx) const {
@@ -110,8 +109,7 @@ struct formatter<afterhours::ui::Dim> {
   }
 };
 
-template <>
-struct formatter<afterhours::ui::Size> {
+template <> struct formatter<afterhours::ui::Size> {
   constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
 
   auto format(const afterhours::ui::Size &size,
@@ -152,14 +150,13 @@ inline Size children(const float value = -1) {
 }
 
 /// Expand to fill remaining space proportionally by weight.
-/// Like CSS flex-grow: elements with expand(2) get twice the space of expand(1).
-/// Weight must be positive (default 1.0).
+/// Like CSS flex-grow: elements with expand(2) get twice the space of
+/// expand(1). Weight must be positive (default 1.0).
 inline Size expand(const float weight = 1.f) {
   if (weight <= 0.f) {
     log_warn("Expand weight must be positive, got {}", weight);
   }
-  return ui::Size{
-      .dim = ui::Dim::Expand, .value = weight, .strictness = 0.f};
+  return ui::Size{.dim = ui::Dim::Expand, .value = weight, .strictness = 0.f};
 }
 
 /// Alias for expand() matching CSS flex-grow terminology.
@@ -169,7 +166,8 @@ inline Size h720(const float px) { return screen_pct(px / 720.f); }
 inline Size w1280(const float px) { return screen_pct(px / 1280.f); }
 
 // Resolve a Size to pixels given a screen dimension (height for h720, width
-// for w1280). Does NOT apply ui_scale — use the overload with ScalingMode for that.
+// for w1280). Does NOT apply ui_scale — use the overload with ScalingMode for
+// that.
 inline float resolve_to_pixels(const Size &size, float screen_dimension) {
   switch (size.dim) {
   case Dim::Pixels:
@@ -192,7 +190,7 @@ inline float resolve_to_pixels(const Size &size, float screen_dimension) {
 // Use this overload when resolving sizes that should respect the scaling mode
 // (e.g., translate/absolute position values, font sizes for rendering).
 inline float resolve_to_pixels(const Size &size, float screen_dimension,
-                                ScalingMode mode, float ui_scale) {
+                               ScalingMode mode, float ui_scale) {
   switch (size.dim) {
   case Dim::Pixels:
     if (mode == ScalingMode::Adaptive) {
@@ -341,8 +339,9 @@ enum struct SelfAlign {
   Center,    // Center on cross axis - common for centering content containers
 };
 
-/// Controls whether children wrap to new rows/columns when they exceed container size.
-/// NoWrap prevents wrapping and generates warnings when overflow would occur.
+/// Controls whether children wrap to new rows/columns when they exceed
+/// container size. NoWrap prevents wrapping and generates warnings when
+/// overflow would occur.
 enum struct FlexWrap {
   Wrap,   // Allow wrapping to new row/column (default behavior)
   NoWrap, // Never wrap - overflow/clip instead, warn if would overflow
@@ -458,8 +457,7 @@ struct LayoutInfo {
 
 // std::formatter specialization for Axis to support std::format/log_* macros
 namespace std {
-template <>
-struct formatter<afterhours::ui::Axis> {
+template <> struct formatter<afterhours::ui::Axis> {
   constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
 
   auto format(afterhours::ui::Axis axis, std::format_context &ctx) const {

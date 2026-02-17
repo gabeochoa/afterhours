@@ -71,8 +71,10 @@ struct UIComponent : BaseComponent {
   };
 
   AxisArray<Size> desired;
-  AxisArray<Size> min_size;  // Minimum size constraint (Dim::None = no constraint)
-  AxisArray<Size> max_size;  // Maximum size constraint (Dim::None = no constraint)
+  AxisArray<Size>
+      min_size; // Minimum size constraint (Dim::None = no constraint)
+  AxisArray<Size>
+      max_size; // Maximum size constraint (Dim::None = no constraint)
   AxisArray<Size, 6> desired_padding;
   AxisArray<Size, 6> desired_margin;
 
@@ -81,11 +83,12 @@ struct UIComponent : BaseComponent {
   FlexDirection flex_direction = FlexDirection::Column;
   JustifyContent justify_content = JustifyContent::FlexStart;
   AlignItems align_items = AlignItems::FlexStart;
-  SelfAlign self_align = SelfAlign::Auto; // Override parent's align_items for this element
-  FlexWrap flex_wrap = FlexWrap::Wrap;    // Controls wrapping behavior
-  bool debug_wrap = false;                // Opt-in wrap debugging
-  float gap = 0.f;                        // Spacing between children (resolved pixels)
-  Size desired_gap = pixels(0.f);         // Spacing between children (unresolved)
+  SelfAlign self_align =
+      SelfAlign::Auto; // Override parent's align_items for this element
+  FlexWrap flex_wrap = FlexWrap::Wrap; // Controls wrapping behavior
+  bool debug_wrap = false;             // Opt-in wrap debugging
+  float gap = 0.f;                // Spacing between children (resolved pixels)
+  Size desired_gap = pixels(0.f); // Spacing between children (unresolved)
 
   bool should_hide = false;
   bool was_rendered_to_screen = false;
@@ -113,7 +116,7 @@ struct UIComponent : BaseComponent {
   bool font_size_explicitly_set = false;
 
   auto &enable_font(const std::string &font_name_, Size fs,
-                     bool explicit_size = false) {
+                    bool explicit_size = false) {
     font_name = font_name_;
     font_size = fs;
     font_size_explicitly_set = explicit_size;
@@ -127,7 +130,8 @@ struct UIComponent : BaseComponent {
 
   Rectangle rect() const {
     if (absolute) {
-      // Absolute positioning: margins are position offsets only, don't shrink size
+      // Absolute positioning: margins are position offsets only, don't shrink
+      // size
       return Rectangle{
           .x = computed_rel[Axis::X] + computed_margin[Axis::left],
           .y = computed_rel[Axis::Y] + computed_margin[Axis::top],

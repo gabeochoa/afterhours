@@ -33,10 +33,10 @@ enum struct SettingRowControlType {
 /// - Slider: float*
 /// - Display: string
 using SettingRowValue =
-    std::variant<bool *,                                   // Toggle
+    std::variant<bool *,                                        // Toggle
                  std::pair<size_t *, std::vector<std::string>>, // Stepper
-                 float *,                                  // Slider
-                 std::string                               // Display
+                 float *,                                       // Slider
+                 std::string                                    // Display
                  >;
 
 /// Configuration for the setting row component
@@ -45,7 +45,7 @@ struct SettingRowConfig {
   SettingRowControlType control_type = SettingRowControlType::Display;
 
   // Optional icon configuration
-  std::optional<std::string> icon_text;     // Text/symbol to show in icon
+  std::optional<std::string> icon_text;      // Text/symbol to show in icon
   std::optional<TextureConfig> icon_texture; // Or texture for icon
   std::optional<Color> icon_bg_color;        // Icon background color
 
@@ -54,22 +54,22 @@ struct SettingRowConfig {
   float icon_size = 28.0f;
   float icon_margin = 8.0f;
   float label_gap = 12.0f;
-  float row_spacing = 6.0f;  // Vertical gap between rows
+  float row_spacing = 6.0f; // Vertical gap between rows
 
   // Toggle-specific styling
   float toggle_track_width = 44.0f;
   float toggle_track_height = 24.0f;
   float toggle_knob_size = 20.0f;
-  Color toggle_on_color{75, 195, 95, 255};   // iOS green
-  Color toggle_off_color{85, 90, 100, 255};  // Gray track
+  Color toggle_on_color{75, 195, 95, 255};  // iOS green
+  Color toggle_off_color{85, 90, 100, 255}; // Gray track
 
   // Stepper-specific styling
   float stepper_arrow_width = 24.0f;
   float stepper_value_width = 80.0f;
 
   // Slider-specific styling
-  float slider_width = 200.0f;  // Wider to make track more usable
-  float slider_height = 28.0f;  // Taller to align better with label text
+  float slider_width = 200.0f; // Wider to make track more usable
+  float slider_height = 28.0f; // Taller to align better with label text
 
   // Slot config overrides (only specify what you want to change)
   // These merge with the sensible defaults - no need to specify everything
@@ -142,7 +142,7 @@ struct SettingRowConfig {
 /// ```cpp
 /// // Toggle setting
 /// bool music_on = true;
-/// setting_row(ctx, mk(parent), 
+/// setting_row(ctx, mk(parent),
 ///             SettingRowConfig{}
 ///                 .with_label("Music")
 ///                 .with_control_type(SettingRowControlType::Toggle)
@@ -150,10 +150,10 @@ struct SettingRowConfig {
 ///                 .with_icon_bg_color(Color{85, 175, 125, 255}),
 ///             &music_on);
 ///
-/// // Stepper setting  
+/// // Stepper setting
 /// size_t quality_idx = 2;
-/// std::vector<std::string> quality_options = {"Low", "Medium", "High", "Ultra"};
-/// setting_row(ctx, mk(parent),
+/// std::vector<std::string> quality_options = {"Low", "Medium", "High",
+/// "Ultra"}; setting_row(ctx, mk(parent),
 ///             SettingRowConfig{}
 ///                 .with_label("Quality")
 ///                 .with_control_type(SettingRowControlType::Stepper),
@@ -194,13 +194,13 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Initialize the row container
   init_component(ctx, ep_pair, config, ComponentType::Div, false,
-                  "setting_row");
+                 "setting_row");
 
   bool changed = false;
 
   // ========== ICON (optional) ==========
-  bool has_icon = row_config.icon_text.has_value() ||
-                  row_config.icon_texture.has_value();
+  bool has_icon =
+      row_config.icon_text.has_value() || row_config.icon_texture.has_value();
 
   if (has_icon) {
     // Build icon with sensible defaults
@@ -208,7 +208,8 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
         ComponentConfig{}
             .with_size(ComponentSize{pixels((int)row_config.icon_size),
                                      pixels((int)row_config.icon_size)})
-            .with_margin(Margin{.left = pixels(0), .right = pixels(row_config.label_gap)})
+            .with_margin(Margin{.left = pixels(0),
+                                .right = pixels(row_config.label_gap)})
             .with_padding(Padding{}) // No padding so text fits
             .with_rounded_corners(std::bitset<4>(0b1111))
             .with_roundness(1.0f) // Circular
@@ -243,15 +244,15 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
   // Build label with sensible defaults
   // Use children() width so the label only takes as much space as its text.
   // SpaceBetween on the row pushes the label left and the control right.
-  auto label_cfg =
-      ComponentConfig{}
-          .with_size(ComponentSize{children(), pixels((int)row_h)})
-          .with_label(row_config.label)
-          .with_alignment(TextAlignment::Left)
-          .with_background(Theme::Usage::None)
-          .with_font(UIComponent::DEFAULT_FONT, config.font_size)
-          .with_custom_text_color(config.custom_text_color.value_or(ctx.theme.font))
-          .with_debug_name("setting_row_label");
+  auto label_cfg = ComponentConfig{}
+                       .with_size(ComponentSize{children(), pixels((int)row_h)})
+                       .with_label(row_config.label)
+                       .with_alignment(TextAlignment::Left)
+                       .with_background(Theme::Usage::None)
+                       .with_font(UIComponent::DEFAULT_FONT, config.font_size)
+                       .with_custom_text_color(
+                           config.custom_text_color.value_or(ctx.theme.font))
+                       .with_debug_name("setting_row_label");
 
   // Apply user override if provided
   if (row_config.slot_label_config) {
@@ -268,14 +269,14 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
       // Build toggle with sensible defaults
       // Use children() sizing to let the container fit the toggle_switch's
       // internal sizing (which uses h720() for resolution scaling)
-      auto toggle_cfg =
-          ComponentConfig{}
-              .with_size(ComponentSize{children(), children()})
-              .with_debug_name("setting_row_toggle");
+      auto toggle_cfg = ComponentConfig{}
+                            .with_size(ComponentSize{children(), children()})
+                            .with_debug_name("setting_row_toggle");
 
       // Apply user override if provided
       if (row_config.slot_control_config) {
-        toggle_cfg = toggle_cfg.apply_overrides(*row_config.slot_control_config);
+        toggle_cfg =
+            toggle_cfg.apply_overrides(*row_config.slot_control_config);
       }
 
       // Use the built-in toggle_switch component (iOS-style pill)
@@ -328,7 +329,8 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
 
       // Apply user override if provided
       if (row_config.slot_control_config) {
-        slider_cfg = slider_cfg.apply_overrides(*row_config.slot_control_config);
+        slider_cfg =
+            slider_cfg.apply_overrides(*row_config.slot_control_config);
       }
 
       float slider_value = *value;
@@ -359,7 +361,8 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
 
       // Apply user override if provided
       if (row_config.slot_control_config) {
-        display_cfg = display_cfg.apply_overrides(*row_config.slot_control_config);
+        display_cfg =
+            display_cfg.apply_overrides(*row_config.slot_control_config);
       }
 
       div(ctx, mk(entity), display_cfg);
@@ -382,10 +385,12 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
 
       // Apply user override if provided
       if (row_config.slot_control_config) {
-        dropdown_cfg = dropdown_cfg.apply_overrides(*row_config.slot_control_config);
+        dropdown_cfg =
+            dropdown_cfg.apply_overrides(*row_config.slot_control_config);
       }
 
-      if (auto result = dropdown(ctx, mk(entity), options, *idx_ptr, dropdown_cfg);
+      if (auto result =
+              dropdown(ctx, mk(entity), options, *idx_ptr, dropdown_cfg);
           result) {
         changed = true;
       }
@@ -400,15 +405,14 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
 // ========== Convenience overloads ==========
 
 /// Toggle setting row (bool value)
-inline ElementResult setting_row_toggle(HasUIContext auto &ctx,
-                                        EntityParent ep_pair,
-                                        const std::string &label, bool &value,
-                                        const std::string &icon = "",
-                                        Color icon_color = colors::soft_green,
-                                        ComponentConfig config = ComponentConfig()) {
-  auto row_config = SettingRowConfig{}
-                        .with_label(label)
-                        .with_control_type(SettingRowControlType::Toggle);
+inline ElementResult
+setting_row_toggle(HasUIContext auto &ctx, EntityParent ep_pair,
+                   const std::string &label, bool &value,
+                   const std::string &icon = "",
+                   Color icon_color = colors::soft_green,
+                   ComponentConfig config = ComponentConfig()) {
+  auto row_config = SettingRowConfig{}.with_label(label).with_control_type(
+      SettingRowControlType::Toggle);
   if (!icon.empty()) {
     row_config.with_icon(icon).with_icon_bg_color(icon_color);
   }
@@ -416,16 +420,13 @@ inline ElementResult setting_row_toggle(HasUIContext auto &ctx,
 }
 
 /// Stepper setting row (index into options)
-inline ElementResult
-setting_row_stepper(HasUIContext auto &ctx, EntityParent ep_pair,
-                    const std::string &label, size_t &option_idx,
-                    const std::vector<std::string> &options,
-                    const std::string &icon = "",
-                    Color icon_color = colors::soft_blue,
-                    ComponentConfig config = ComponentConfig()) {
-  auto row_config = SettingRowConfig{}
-                        .with_label(label)
-                        .with_control_type(SettingRowControlType::Stepper);
+inline ElementResult setting_row_stepper(
+    HasUIContext auto &ctx, EntityParent ep_pair, const std::string &label,
+    size_t &option_idx, const std::vector<std::string> &options,
+    const std::string &icon = "", Color icon_color = colors::soft_blue,
+    ComponentConfig config = ComponentConfig()) {
+  auto row_config = SettingRowConfig{}.with_label(label).with_control_type(
+      SettingRowControlType::Stepper);
   if (!icon.empty()) {
     row_config.with_icon(icon).with_icon_bg_color(icon_color);
   }
@@ -434,16 +435,13 @@ setting_row_stepper(HasUIContext auto &ctx, EntityParent ep_pair,
 }
 
 /// Dropdown setting row (select from options)
-inline ElementResult
-setting_row_dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
-                     const std::string &label, size_t &option_idx,
-                     const std::vector<std::string> &options,
-                     const std::string &icon = "",
-                     Color icon_color = colors::soft_blue,
-                     ComponentConfig config = ComponentConfig()) {
-  auto row_config = SettingRowConfig{}
-                        .with_label(label)
-                        .with_control_type(SettingRowControlType::Dropdown);
+inline ElementResult setting_row_dropdown(
+    HasUIContext auto &ctx, EntityParent ep_pair, const std::string &label,
+    size_t &option_idx, const std::vector<std::string> &options,
+    const std::string &icon = "", Color icon_color = colors::soft_blue,
+    ComponentConfig config = ComponentConfig()) {
+  auto row_config = SettingRowConfig{}.with_label(label).with_control_type(
+      SettingRowControlType::Dropdown);
   if (!icon.empty()) {
     row_config.with_icon(icon).with_icon_bg_color(icon_color);
   }
@@ -458,9 +456,8 @@ setting_row_slider(HasUIContext auto &ctx, EntityParent ep_pair,
                    const std::string &icon = "",
                    Color icon_color = colors::soft_red,
                    ComponentConfig config = ComponentConfig()) {
-  auto row_config = SettingRowConfig{}
-                        .with_label(label)
-                        .with_control_type(SettingRowControlType::Slider);
+  auto row_config = SettingRowConfig{}.with_label(label).with_control_type(
+      SettingRowControlType::Slider);
   if (!icon.empty()) {
     row_config.with_icon(icon).with_icon_bg_color(icon_color);
   }
@@ -474,9 +471,8 @@ setting_row_display(HasUIContext auto &ctx, EntityParent ep_pair,
                     const std::string &icon = "",
                     Color icon_color = colors::soft_purple,
                     ComponentConfig config = ComponentConfig()) {
-  auto row_config = SettingRowConfig{}
-                        .with_label(label)
-                        .with_control_type(SettingRowControlType::Display);
+  auto row_config = SettingRowConfig{}.with_label(label).with_control_type(
+      SettingRowControlType::Display);
   if (!icon.empty()) {
     row_config.with_icon(icon).with_icon_bg_color(icon_color);
   }
@@ -488,4 +484,3 @@ setting_row_display(HasUIContext auto &ctx, EntityParent ep_pair,
 } // namespace ui
 
 } // namespace afterhours
-

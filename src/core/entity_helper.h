@@ -146,7 +146,8 @@ struct EntityHelper {
     return get_default_collection().get_singleton_cmp<Component>();
   }
 
-  template <typename Component> static const Component *get_singleton_cmp_const() {
+  template <typename Component>
+  static const Component *get_singleton_cmp_const() {
     return get_default_collection().get_singleton_cmp_const<Component>();
   }
 

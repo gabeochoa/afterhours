@@ -101,8 +101,7 @@ struct AutoLayout {
     // Resolve font_size to pixels using screen height
     float screen_height = fetch_screen_value_(Axis::Y);
     float font_size = resolve_to_pixels(widget.font_size, screen_height,
-                                         widget.resolved_scaling_mode,
-                                         ui_scale);
+                                        widget.resolved_scaling_mode, ui_scale);
     float spacing = 1.f;
 
     Vector2Type result;
@@ -575,7 +574,8 @@ struct AutoLayout {
                       // expected size was set, use that instead
                       // TODO does this need to be a setting? is this
                       // generally a decent choice
-                      std::max({no_change, existing_desire, text_size})) + pad;
+                      std::max({no_change, existing_desire, text_size})) +
+             pad;
     }
 
     float expectation = _sum_children_axis_for_child_exp(widget, axis);
@@ -619,11 +619,12 @@ struct AutoLayout {
   float resolve_constraint(UIComponent &widget, Size constraint, Axis axis) {
     switch (constraint.dim) {
     case Dim::None:
-      return -1.f;  // No constraint
+      return -1.f; // No constraint
     case Dim::Pixels:
       return resolve_pixels(constraint.value, widget);
     case Dim::ScreenPercent:
-      return constraint.value * (axis == Axis::X ? resolution.width : resolution.height);
+      return constraint.value *
+             (axis == Axis::X ? resolution.width : resolution.height);
     case Dim::Percent: {
       // Percent of parent's content area
       if (widget.parent == -1)
@@ -764,8 +765,7 @@ struct AutoLayout {
     // incorrectly shrink all children to fit a budget N times too small.
     bool is_col =
         static_cast<bool>(widget.flex_direction & FlexDirection::Column);
-    bool is_rw =
-        static_cast<bool>(widget.flex_direction & FlexDirection::Row);
+    bool is_rw = static_cast<bool>(widget.flex_direction & FlexDirection::Row);
 
     const auto _solve_error_optional = [&layout_children](Axis axis,
                                                           float *error) {
@@ -790,59 +790,58 @@ struct AutoLayout {
       }
     };
 
-    const auto fix_violating_children = [num_children,
-                                         &layout_children](Axis axis,
-                                                           float error) {
-      VALIDATE(num_children != 0, "Should never have zero children");
+    const auto fix_violating_children =
+        [num_children, &layout_children](Axis axis, float error) {
+          VALIDATE(num_children != 0, "Should never have zero children");
 
-      size_t num_strict_children = 0;
-      for (UIComponent *child : layout_children) {
-        if (child->desired[axis].strictness == 1.f) {
-          num_strict_children++;
-        }
-      }
+          size_t num_strict_children = 0;
+          for (UIComponent *child : layout_children) {
+            if (child->desired[axis].strictness == 1.f) {
+              num_strict_children++;
+            }
+          }
 
-      // If there is any error left,
-      // we have to take away from the allowed children;
-      // Note: num_ignorable_children is 0 since layout_children already
-      // excludes absolute and should_hide
+          // If there is any error left,
+          // we have to take away from the allowed children;
+          // Note: num_ignorable_children is 0 since layout_children already
+          // excludes absolute and should_hide
 
-      size_t num_resizeable_children = num_children - num_strict_children;
+          size_t num_resizeable_children = num_children - num_strict_children;
 
-      /* support flex flags
-      // TODO we cannot enforce the assert below in the case of wrapping
-      // because the positioning happens after error correction
-      if (error > ACCEPTABLE_ERROR && num_resizeable_children == 0 &&
-          //
-          !((widget->flexflags & GrowFlags::Column) ||
-            (widget->flexflags & GrowFlags::Row))
-          //
-      ) {
-          widget->print_tree();
-          log_warn("Error was {}", error);
-          VALIDATE(
-              num_resizeable_children > 0,
-              "Cannot fit all children inside parent and unable to resize
-      any of " "the children");
-      }
-      */
+          /* support flex flags
+          // TODO we cannot enforce the assert below in the case of wrapping
+          // because the positioning happens after error correction
+          if (error > ACCEPTABLE_ERROR && num_resizeable_children == 0 &&
+              //
+              !((widget->flexflags & GrowFlags::Column) ||
+                (widget->flexflags & GrowFlags::Row))
+              //
+          ) {
+              widget->print_tree();
+              log_warn("Error was {}", error);
+              VALIDATE(
+                  num_resizeable_children > 0,
+                  "Cannot fit all children inside parent and unable to resize
+          any of " "the children");
+          }
+          */
 
-      float approx_epc =
-          error / (1.f * std::max(1, (int)num_resizeable_children));
-      for (UIComponent *child : layout_children) {
-        Size exp = child->desired[axis];
-        if (exp.strictness == 1.f) {
-          continue;
-        }
-        float portion_of_error = (1.f - exp.strictness) * approx_epc;
-        float cur_size = child->computed[axis];
-        child->computed[axis] = fmaxf(0, cur_size - portion_of_error);
-        // Reduce strictness every round
-        // so that eventually we will get there
-        exp.strictness = fmaxf(0.f, exp.strictness - 0.05f);
-        child->desired[axis] = exp;
-      }
-    };
+          float approx_epc =
+              error / (1.f * std::max(1, (int)num_resizeable_children));
+          for (UIComponent *child : layout_children) {
+            Size exp = child->desired[axis];
+            if (exp.strictness == 1.f) {
+              continue;
+            }
+            float portion_of_error = (1.f - exp.strictness) * approx_epc;
+            float cur_size = child->computed[axis];
+            child->computed[axis] = fmaxf(0, cur_size - portion_of_error);
+            // Reduce strictness every round
+            // so that eventually we will get there
+            exp.strictness = fmaxf(0.f, exp.strictness - 0.05f);
+            child->desired[axis] = exp;
+          }
+        };
 
     // Resolve explicit gap for this widget
     float resolved_gap = 0.f;
@@ -851,14 +850,16 @@ struct AutoLayout {
       widget.gap = resolved_gap;
     }
 
-    const auto compute_error = [ACCEPTABLE_ERROR, &_total_child, &_max_child,
-                                &_solve_error_optional, &fix_violating_children,
-                                &widget, num_children, resolved_gap](Axis axis, bool is_main_axis) -> float {
+    const auto compute_error =
+        [ACCEPTABLE_ERROR, &_total_child, &_max_child, &_solve_error_optional,
+         &fix_violating_children, &widget, num_children,
+         resolved_gap](Axis axis, bool is_main_axis) -> float {
       // Use content area (computed minus padding) as the available space
       // for children. Padding reserves visual inset space and should not
       // be available for child layout. This matches compute_rect_bounds
       // which offsets children by padding_left/top.
-      float my_size = fmaxf(0.f, widget.computed[axis] - widget.computed_padd[axis]);
+      float my_size =
+          fmaxf(0.f, widget.computed[axis] - widget.computed_padd[axis]);
       // Subtract gap space from available area on main axis
       if (is_main_axis && resolved_gap > 0.f && num_children > 1) {
         my_size -= resolved_gap * static_cast<float>(num_children - 1);
@@ -932,8 +933,10 @@ struct AutoLayout {
     // Children are later offset by padding_left/top in compute_rect_bounds,
     // so the layout space available to children is the content area only.
     // Clamp to 0 to handle cases where padding exceeds the widget size.
-    float container_w = fmaxf(0.f, widget.computed[Axis::X] - widget.computed_padd[Axis::X]);
-    float container_h = fmaxf(0.f, widget.computed[Axis::Y] - widget.computed_padd[Axis::Y]);
+    float container_w =
+        fmaxf(0.f, widget.computed[Axis::X] - widget.computed_padd[Axis::X]);
+    float container_h =
+        fmaxf(0.f, widget.computed[Axis::Y] - widget.computed_padd[Axis::Y]);
 
     // Wrap boundary = content area (children should wrap before exceeding it)
     float sx = container_w;
@@ -998,11 +1001,13 @@ struct AutoLayout {
     }
 
     // Account for explicit gap in remaining space calculation
-    float gap_total = (num_layout_children > 1)
-                          ? explicit_gap * static_cast<float>(num_layout_children - 1)
-                          : 0.f;
+    float gap_total =
+        (num_layout_children > 1)
+            ? explicit_gap * static_cast<float>(num_layout_children - 1)
+            : 0.f;
     remaining_space -= gap_total;
-    if (remaining_space < 0.f) remaining_space = 0.f;
+    if (remaining_space < 0.f)
+      remaining_space = 0.f;
 
     if (remaining_space > 0.f && num_layout_children > 0) {
       switch (widget.justify_content) {
@@ -1037,14 +1042,14 @@ struct AutoLayout {
     float accumulated_snap_tolerance_y = grid_snap_tolerance_y;
     if (enable_grid_snapping && num_layout_children > 2) {
       if (widget.desired[Axis::X].dim == Dim::Children) {
-        accumulated_snap_tolerance_x = std::max(
-            grid_snap_tolerance_x,
-            num_layout_children * grid_snap_tolerance_x / 2.0f);
+        accumulated_snap_tolerance_x =
+            std::max(grid_snap_tolerance_x,
+                     num_layout_children * grid_snap_tolerance_x / 2.0f);
       }
       if (widget.desired[Axis::Y].dim == Dim::Children) {
-        accumulated_snap_tolerance_y = std::max(
-            grid_snap_tolerance_y,
-            num_layout_children * grid_snap_tolerance_y / 2.0f);
+        accumulated_snap_tolerance_y =
+            std::max(grid_snap_tolerance_y,
+                     num_layout_children * grid_snap_tolerance_y / 2.0f);
       }
     }
 
@@ -1124,9 +1129,11 @@ struct AutoLayout {
       bool parent_is_scroll_view = to_ent(widget.id).has<HasScrollView>();
       constexpr float BASE_WRAP_TOLERANCE = 4.0f;
       bool should_warn_wrap_column =
-          is_column && (cy + offy > sy + accumulated_snap_tolerance_y + BASE_WRAP_TOLERANCE);
+          is_column &&
+          (cy + offy > sy + accumulated_snap_tolerance_y + BASE_WRAP_TOLERANCE);
       bool should_warn_wrap_row =
-          is_row && (cx + offx > sx + accumulated_snap_tolerance_x + BASE_WRAP_TOLERANCE);
+          is_row &&
+          (cx + offx > sx + accumulated_snap_tolerance_x + BASE_WRAP_TOLERANCE);
       if ((should_warn_wrap_column || should_warn_wrap_row) &&
           !parent_is_scroll_view) {
         bool should_warn = false;
@@ -1188,7 +1195,8 @@ struct AutoLayout {
       float cross_remaining = cross_axis_size - child_cross;
 
       if (cross_remaining > 0.f) {
-        // Use child's self_align if set, otherwise fall back to parent's align_items
+        // Use child's self_align if set, otherwise fall back to parent's
+        // align_items
         if (child.self_align != SelfAlign::Auto) {
           switch (child.self_align) {
           case SelfAlign::Auto:
@@ -1237,9 +1245,9 @@ struct AutoLayout {
       // Skip warning for scroll containers - overflow is expected behavior
       // Use accumulated tolerance to handle grid snapping rounding errors
       // Base tolerance of 2px catches floating-point rounding from
-      // screen_pct and percentage calculations while still flagging real issues.
-      // For wrapping layouts, skip the wrap-direction axis: wrapped children
-      // legitimately exceed the single-column/row content area.
+      // screen_pct and percentage calculations while still flagging real
+      // issues. For wrapping layouts, skip the wrap-direction axis: wrapped
+      // children legitimately exceed the single-column/row content area.
       constexpr float BASE_OVERFLOW_TOLERANCE = 4.0f;
       float child_end_x = child.computed_rel[Axis::X] + cx;
       float child_end_y = child.computed_rel[Axis::Y] + cy;
@@ -1248,8 +1256,12 @@ struct AutoLayout {
       // Row wraps vertically → Y overflow from wrapping is expected
       bool suppress_x = wraps && is_column;
       bool suppress_y = wraps && is_row;
-      bool overflows_x = !suppress_x && child_end_x > sx + accumulated_snap_tolerance_x + BASE_OVERFLOW_TOLERANCE;
-      bool overflows_y = !suppress_y && child_end_y > sy + accumulated_snap_tolerance_y + BASE_OVERFLOW_TOLERANCE;
+      bool overflows_x =
+          !suppress_x && child_end_x > sx + accumulated_snap_tolerance_x +
+                                           BASE_OVERFLOW_TOLERANCE;
+      bool overflows_y =
+          !suppress_y && child_end_y > sy + accumulated_snap_tolerance_y +
+                                           BASE_OVERFLOW_TOLERANCE;
       if ((overflows_x || overflows_y) && !parent_is_scroll_view) {
         log_warn("Layout overflow: '{}' extends outside parent '{}' bounds "
                  "(child_rel=[{:.1f},{:.1f}], child_size=[{:.1f},{:.1f}], "
@@ -1297,7 +1309,8 @@ struct AutoLayout {
     // update the computed size to reflect the actual wrapped dimensions.
     // After positioning, offy + col_h represents the total wrapped height,
     // and offx + col_w represents the total wrapped width.
-    // Add padding back since computed[axis] is the full box (content + padding).
+    // Add padding back since computed[axis] is the full box (content +
+    // padding).
     if (widget.desired[Axis::Y].dim == Dim::Children && is_row) {
       float wrapped_height = offy + col_h + widget.computed_padd[Axis::Y];
       if (wrapped_height > widget.computed[Axis::Y]) {

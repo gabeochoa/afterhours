@@ -59,7 +59,8 @@ struct ValidationConfig {
   // percent(1.0) when parent has no explicit size, or children() with no kids)
   bool enforce_zero_size_detection = false;
   // Flag absolute-positioned elements that also have non-zero margins
-  // (margins on absolute elements are position offsets, not spacing — often a bug)
+  // (margins on absolute elements are position offsets, not spacing — often a
+  // bug)
   bool enforce_absolute_margin_conflict = false;
   // Flag elements with a label but no font set (font_name == UNSET_FONT)
   bool enforce_label_has_font = false;

@@ -53,8 +53,8 @@ struct PendingE2ECommand : BaseComponent {
   std::vector<std::string> args;
   int line_number = 0;
   std::string error_message;
-  int frames_alive = 0;                  // How many frames this command has existed
-  static constexpr int MAX_FRAMES = 10;  // Commands timeout after 10 frames
+  int frames_alive = 0; // How many frames this command has existed
+  static constexpr int MAX_FRAMES = 10; // Commands timeout after 10 frames
   CommandState state = CommandState::Ready;
 
   // Increment frame counter, returns true if timed out

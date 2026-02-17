@@ -3,7 +3,8 @@
 // TODO: Consider using C++20 concepts for type constraints in this plugin.
 // See e2e_testing/concepts.h for examples (HasPosition, MouseStateLike, etc.)
 // Potential uses:
-// - Concept for mouse position types (instead of hard-coding input::MousePosition)
+// - Concept for mouse position types (instead of hard-coding
+// input::MousePosition)
 // - Concept for rectangle types (instead of RectangleType)
 // - Concept for input action enums (instead of template parameter)
 
@@ -23,8 +24,8 @@
 #include "../../logging.h"
 #include "../input_system.h"
 #include "components.h"
-#include "ui_collection.h"
 #include "theme.h"
+#include "ui_collection.h"
 
 namespace afterhours {
 
@@ -79,7 +80,7 @@ template <typename InputAction> struct UIContext : BaseComponent {
   EntityID visual_focus_id = ROOT; // the element the ring should be drawn on
   EntityID active_id =
       ROOT; // active means the element is being interacted with
-  EntityID prev_active_id = ROOT;  // previous frame's active_id (for animations)
+  EntityID prev_active_id = ROOT; // previous frame's active_id (for animations)
   EntityID last_processed =
       ROOT; // last element that was processed (used for reverse tabbing)
 
@@ -138,7 +139,9 @@ template <typename InputAction> struct UIContext : BaseComponent {
   // For animations: check previous frame's state (since current frame state
   // isn't set until HandleClicks runs after screen rendering)
   [[nodiscard]] bool was_hot(EntityID id) const { return prev_hot_id == id; };
-  [[nodiscard]] bool was_active(EntityID id) const { return prev_active_id == id; };
+  [[nodiscard]] bool was_active(EntityID id) const {
+    return prev_active_id == id;
+  };
   void set_hot(EntityID id) { hot_id = id; }
   void set_active(EntityID id) { active_id = id; }
 

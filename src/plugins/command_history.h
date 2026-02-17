@@ -9,8 +9,7 @@ namespace afterhours {
 
 /// Base interface for reversible commands.
 /// Template parameter State is the type being modified.
-template <typename State>
-struct Command {
+template <typename State> struct Command {
   virtual ~Command() = default;
 
   /// Apply this command to the state
@@ -33,8 +32,7 @@ struct Command {
 
 /// Generic undo/redo stack.
 /// Works with any state type - text buffers, level editors, settings, etc.
-template <typename State>
-struct CommandHistory {
+template <typename State> struct CommandHistory {
   using CommandPtr = std::unique_ptr<Command<State>>;
 
   std::vector<CommandPtr> undo_stack;
@@ -132,12 +130,10 @@ struct CommandHistory {
 ///     game_state
 ///   );
 /// @endcode
-template <typename State>
-class LambdaCommand : public Command<State> {
+template <typename State> class LambdaCommand : public Command<State> {
 public:
   LambdaCommand(std::function<void(State &)> do_fn,
-                std::function<void(State &)> undo_fn,
-                std::string desc)
+                std::function<void(State &)> undo_fn, std::string desc)
       : do_fn_(std::move(do_fn)), undo_fn_(std::move(undo_fn)),
         description_(std::move(desc)) {}
 
@@ -171,12 +167,9 @@ private:
 template <typename State>
 inline std::unique_ptr<Command<State>>
 make_command(std::function<void(State &)> do_fn,
-             std::function<void(State &)> undo_fn,
-             std::string desc) {
-  return std::make_unique<LambdaCommand<State>>(std::move(do_fn),
-                                                 std::move(undo_fn),
-                                                 std::move(desc));
+             std::function<void(State &)> undo_fn, std::string desc) {
+  return std::make_unique<LambdaCommand<State>>(
+      std::move(do_fn), std::move(undo_fn), std::move(desc));
 }
 
 } // namespace afterhours
-

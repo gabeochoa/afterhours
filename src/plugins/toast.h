@@ -141,11 +141,9 @@ struct toast : developer::Plugin {
   // Returns ElementResult where result is true when toast is visible
   // Note: Toasts are created once and managed by ToastUpdateSystem, they don't
   // follow the IMM pattern of being recreated every frame.
-  static ui::imm::ElementResult schedule(ui::imm::HasUIContext auto &ctx,
-                                         Level level = Level::Info,
-                                         float duration = 3.0f,
-                                         Color custom_color = {100, 100, 100,
-                                                               255}) {
+  static ui::imm::ElementResult
+  schedule(ui::imm::HasUIContext auto &ctx, Level level = Level::Info,
+           float duration = 3.0f, Color custom_color = {100, 100, 100, 255}) {
     using namespace ui;
 
     // Create independent entity (not through IMM mk())
@@ -244,8 +242,7 @@ struct toast : developer::Plugin {
     }
   };
 
-  template <typename InputAction>
-  struct ToastLayoutSystem : System<> {
+  template <typename InputAction> struct ToastLayoutSystem : System<> {
     void once(float) override {
       auto *res = EntityHelper::get_singleton_cmp<
           window_manager::ProvidesCurrentResolution>();

@@ -114,7 +114,7 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
       iss >> arg;
       if (cmd.name == "select_all") {
         arg = "CTRL+A";
-        cmd.name = "key";  // Normalize to key command
+        cmd.name = "key"; // Normalize to key command
       }
       cmd.args.push_back(arg);
       cmd.wait_seconds = 3 * frame;
@@ -126,7 +126,8 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
       cmd.wait_seconds = (cmd.name == "double_click") ? 4 * frame
                          : (cmd.name == "mouse_move") ? 1 * frame
                                                       : 2 * frame;
-                                                      // TODO add a way for plugins to register their own e2e testing commands using a config 
+      // TODO add a way for plugins to register their own e2e testing commands
+      // using a config
     } else if (cmd.name == "drag" || cmd.name == "drag_to") {
       std::string x1, y1, x2, y2;
       iss >> x1 >> y1 >> x2 >> y2;
@@ -401,7 +402,8 @@ private:
                  cmd.line_number, cmd.args[0], cmd.args[1], actual);
         failed_ = true;
         current_script_errors_++;
-        pending.consume();  // Mark as handled (failed validation is still "consumed")
+        pending.consume(); // Mark as handled (failed validation is still
+                           // "consumed")
       }
     }
 
@@ -417,11 +419,11 @@ private:
       if (clear_fn_)
         clear_fn_();
       test_input::reset_all();
-      key_release_detail::reset();  // Clear pending key releases
+      key_release_detail::reset(); // Clear pending key releases
       VisibleTextRegistry::instance().clear();
       current_script_idx_++;
       current_script_errors_ = 0;
-      elapsed_time_ = 0.0f;  // Reset timeout for next script
+      elapsed_time_ = 0.0f; // Reset timeout for next script
       pending.consume();
     }
   }
@@ -434,7 +436,7 @@ private:
     // Sync with command handler error count (from E2ECommandCleanupSystem)
     int command_errors = get_command_error_count();
     current_script_errors_ += command_errors;
-    reset_command_error_count();  // Reset for next script
+    reset_command_error_count(); // Reset for next script
 
     auto &result = script_results_[current_script_idx_];
     result.error_count = current_script_errors_;

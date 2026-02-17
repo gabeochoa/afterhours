@@ -7,23 +7,23 @@
 #include <string_view>
 #include <unordered_map>
 
-#include "base_component.h"
 #include "../developer.h"
+#include "base_component.h"
 
 namespace afterhours {
 
 namespace ui {
 
-using MeasureTextFn = std::function<Vector2Type(std::string_view text,
-                                                std::string_view font_name,
-                                                float font_size, float spacing)>;
+using MeasureTextFn =
+    std::function<Vector2Type(std::string_view text, std::string_view font_name,
+                              float font_size, float spacing)>;
 
 template <typename F>
-concept TextMeasureFn = requires(F fn, std::string_view text,
-                                 std::string_view font_name, float font_size,
-                                 float spacing) {
-  { fn(text, font_name, font_size, spacing) } -> std::same_as<Vector2Type>;
-};
+concept TextMeasureFn =
+    requires(F fn, std::string_view text, std::string_view font_name,
+             float font_size, float spacing) {
+      { fn(text, font_name, font_size, spacing) } -> std::same_as<Vector2Type>;
+    };
 
 class TextMeasureCache : public BaseComponent {
 public:
@@ -64,8 +64,8 @@ public:
   void set_max_entries(size_t count) { max_entries_ = count; }
 
   [[nodiscard]] Vector2Type measure(std::string_view text,
-                                    std::string_view font_name,
-                                    float font_size, float spacing = 1.0f) {
+                                    std::string_view font_name, float font_size,
+                                    float spacing = 1.0f) {
     if (!measure_fn_) {
       return {0.0f, 0.0f};
     }
@@ -97,15 +97,13 @@ public:
 
   [[nodiscard]] float measure_height(std::string_view text,
                                      std::string_view font_name,
-                                     float font_size,
-                                     float spacing = 1.0f) {
+                                     float font_size, float spacing = 1.0f) {
     return measure(text, font_name, font_size, spacing).y;
   }
 
   void end_frame() {
     current_generation_++;
-    if (prune_interval_ > 0 &&
-        current_generation_ % prune_interval_ == 0) {
+    if (prune_interval_ > 0 && current_generation_ % prune_interval_ == 0) {
       prune_stale_entries();
     }
   }
@@ -211,4 +209,3 @@ private:
 } // namespace ui
 
 } // namespace afterhours
-

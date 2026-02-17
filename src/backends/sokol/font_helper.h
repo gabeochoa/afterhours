@@ -16,7 +16,7 @@ struct Font {
 };
 
 inline Font load_font_from_file(const char *file) {
-  auto* ctx = graphics::metal_detail::g_fons_ctx;
+  auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx) {
     log_warn("fontstash context not ready yet (load_font_from_file)");
     return Font{FONS_INVALID};
@@ -26,8 +26,9 @@ inline Font load_font_from_file(const char *file) {
     log_warn("Failed to load font: {}", file);
   } else {
     // Track loaded fonts and set the first one as active default
-    auto& md = graphics::metal_detail::g_font_ids;
-    if (graphics::metal_detail::g_font_count < graphics::metal_detail::MAX_FONTS) {
+    auto &md = graphics::metal_detail::g_font_ids;
+    if (graphics::metal_detail::g_font_count <
+        graphics::metal_detail::MAX_FONTS) {
       md[graphics::metal_detail::g_font_count++] = id;
     }
     if (graphics::metal_detail::g_active_font == FONS_INVALID) {
@@ -44,18 +45,20 @@ inline Font load_font_from_file_with_codepoints(const char *file, int *, int) {
 
 inline int *remove_duplicate_codepoints(int *, int,
                                         int *codepointsResultCount) {
-  if (codepointsResultCount) *codepointsResultCount = 0;
+  if (codepointsResultCount)
+    *codepointsResultCount = 0;
   return nullptr;
 }
 
-inline Font load_font_for_string(const std::string &, const std::string &font_file,
-                                 int = 96) {
+inline Font load_font_for_string(const std::string &,
+                                 const std::string &font_file, int = 96) {
   return load_font_from_file(font_file.c_str());
 }
 
 inline float measure_text_internal(const char *text, const float size) {
-  auto* ctx = graphics::metal_detail::g_fons_ctx;
-  if (!ctx || graphics::metal_detail::g_active_font == FONS_INVALID) return 0.f;
+  auto *ctx = graphics::metal_detail::g_fons_ctx;
+  if (!ctx || graphics::metal_detail::g_active_font == FONS_INVALID)
+    return 0.f;
   fonsSetFont(ctx, graphics::metal_detail::g_active_font);
   fonsSetSize(ctx, size);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
@@ -64,10 +67,13 @@ inline float measure_text_internal(const char *text, const float size) {
 
 inline Vector2Type measure_text(const Font font, const char *text,
                                 const float size, const float /*spacing*/) {
-  auto* ctx = graphics::metal_detail::g_fons_ctx;
-  if (!ctx) return Vector2Type{0, 0};
-  int fid = (font.id != FONS_INVALID) ? font.id : graphics::metal_detail::g_active_font;
-  if (fid == FONS_INVALID) return Vector2Type{0, 0};
+  auto *ctx = graphics::metal_detail::g_fons_ctx;
+  if (!ctx)
+    return Vector2Type{0, 0};
+  int fid = (font.id != FONS_INVALID) ? font.id
+                                      : graphics::metal_detail::g_active_font;
+  if (fid == FONS_INVALID)
+    return Vector2Type{0, 0};
   fonsSetFont(ctx, fid);
   fonsSetSize(ctx, size);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
@@ -84,8 +90,6 @@ inline Vector2Type measure_text_utf8(const Font font, const char *text,
   return measure_text(font, text, size, spacing);
 }
 
-inline float get_first_glyph_bearing(const Font, const char *) {
-  return 0.0f;
-}
+inline float get_first_glyph_bearing(const Font, const char *) { return 0.0f; }
 
 } // namespace afterhours

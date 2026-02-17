@@ -19,7 +19,8 @@ inline Font load_font_from_file_with_codepoints(const char *, int *, int) {
 
 inline int *remove_duplicate_codepoints(int *, int,
                                         int *codepointsResultCount) {
-  if (codepointsResultCount) *codepointsResultCount = 0;
+  if (codepointsResultCount)
+    *codepointsResultCount = 0;
   return nullptr;
 }
 
@@ -45,8 +46,6 @@ inline Vector2Type measure_text_utf8(const Font, const char *, const float,
   return Vector2Type{0, 0};
 }
 
-inline float get_first_glyph_bearing(const Font, const char *) {
-  return 0.0f;
-}
+inline float get_first_glyph_bearing(const Font, const char *) { return 0.0f; }
 
 } // namespace afterhours

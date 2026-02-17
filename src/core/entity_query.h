@@ -34,9 +34,10 @@ struct EntityQuery {
   // deprecated. Prefer using add_filter() with a lambda or std::function
   // instead, which avoids the virtual-dispatch overhead.
   //
-  // To opt in to the optimized path now, #define SKIP_ENTITY_QUERY_MODIFICATIONS
-  // before including this header. This removes the built-in struct
-  // definitions and makes the where*() methods use direct lambdas.
+  // To opt in to the optimized path now, #define
+  // SKIP_ENTITY_QUERY_MODIFICATIONS before including this header. This removes
+  // the built-in struct definitions and makes the where*() methods use direct
+  // lambdas.
   //
   // Custom Modification subclasses registered via add_mod() continue to
   // work regardless of the define.
@@ -252,18 +253,15 @@ struct EntityQuery {
   }
 
   TReturn &whereHasAllTags(const TagBitset &mask) {
-    return add_filter(
-        [mask](const Entity &e) { return e.hasAllTags(mask); });
+    return add_filter([mask](const Entity &e) { return e.hasAllTags(mask); });
   }
 
   TReturn &whereHasAnyTag(const TagBitset &mask) {
-    return add_filter(
-        [mask](const Entity &e) { return e.hasAnyTag(mask); });
+    return add_filter([mask](const Entity &e) { return e.hasAnyTag(mask); });
   }
 
   TReturn &whereHasNoTags(const TagBitset &mask) {
-    return add_filter(
-        [mask](const Entity &e) { return e.hasNoTags(mask); });
+    return add_filter([mask](const Entity &e) { return e.hasNoTags(mask); });
   }
 
   TReturn &

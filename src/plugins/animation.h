@@ -307,7 +307,8 @@ struct animation : developer::Plugin {
     // animation::register_update_systems<YourKeyEnum>(sm);
   }
 
-  // Templated version for registering animation updates with a specific key type
+  // Templated version for registering animation updates with a specific key
+  // type
   template <typename Key>
   static inline void register_update_systems(SystemManager &sm) {
     sm.register_update_system([](float dt) { manager<Key>().update(dt); });

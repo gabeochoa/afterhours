@@ -93,8 +93,7 @@ struct LayoutDebugOverlay : SystemWithUIContext<UIComponent> {
               this->context->theme.font);
   }
 
-  void for_each_with(Entity &entity, UIComponent &cmp,
-                     float) override {
+  void for_each_with(Entity &entity, UIComponent &cmp, float) override {
     if (cmp.should_hide)
       return;
 
@@ -106,8 +105,7 @@ struct LayoutDebugOverlay : SystemWithUIContext<UIComponent> {
 
     // Determine border color based on flex direction
     Color border_color;
-    bool is_row =
-        static_cast<bool>(cmp.flex_direction & FlexDirection::Row);
+    bool is_row = static_cast<bool>(cmp.flex_direction & FlexDirection::Row);
     bool is_column =
         static_cast<bool>(cmp.flex_direction & FlexDirection::Column);
 
@@ -136,8 +134,10 @@ struct LayoutDebugOverlay : SystemWithUIContext<UIComponent> {
         continue;
 
       Rectangle child_rect = child.rect();
-      bool overflows_x = (child_rect.x + child_rect.width) > (rect.x + rect.width + 1.f);
-      bool overflows_y = (child_rect.y + child_rect.height) > (rect.y + rect.height + 1.f);
+      bool overflows_x =
+          (child_rect.x + child_rect.width) > (rect.x + rect.width + 1.f);
+      bool overflows_y =
+          (child_rect.y + child_rect.height) > (rect.y + rect.height + 1.f);
       if (overflows_x || overflows_y) {
         has_overflow = true;
         break;
@@ -174,4 +174,3 @@ struct LayoutDebugOverlay : SystemWithUIContext<UIComponent> {
 
 } // namespace ui
 } // namespace afterhours
-

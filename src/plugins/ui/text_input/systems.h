@@ -1,9 +1,9 @@
 #pragma once
 
+#include "../../../core/system.h"
 #include "line_index.h"
 #include "selection.h"
 #include "state.h"
-#include "../../../core/system.h"
 
 namespace afterhours {
 namespace text_input {
@@ -28,7 +28,7 @@ struct LineIndexUpdateSystem : System<HasLineIndex, HasTextInputState> {
   void for_each_with(Entity &, HasLineIndex &line_index,
                      HasTextInputState &state, float) override {
     std::string text = state.text();
-    
+
     size_t current_hash = 0;
     for (char c : text) {
       current_hash = current_hash * 31 + static_cast<size_t>(c);
@@ -61,8 +61,8 @@ struct TextSelectionSystem : System<HasTextSelection, HasTextInputState> {
 
 /// Clamps cursor position to valid range for multi-line text.
 struct CursorClampSystem : System<HasLineIndex, HasTextInputState> {
-  void for_each_with(Entity &, HasLineIndex &,
-                     HasTextInputState &state, float) override {
+  void for_each_with(Entity &, HasLineIndex &, HasTextInputState &state,
+                     float) override {
     if (state.cursor_position > state.text_size()) {
       state.cursor_position = state.text_size();
     }
@@ -71,4 +71,3 @@ struct CursorClampSystem : System<HasLineIndex, HasTextInputState> {
 
 } // namespace text_input
 } // namespace afterhours
-

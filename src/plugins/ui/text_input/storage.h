@@ -39,4 +39,3 @@ struct StringStorage {
 
 } // namespace text_input
 } // namespace afterhours
-

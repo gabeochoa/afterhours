@@ -157,7 +157,8 @@ concept PluginCore = requires(Entity &e, SystemManager &sm) {
 };
 
 // Plugin with render systems
-// In addition to PluginCore, also provides register_render_systems(SystemManager&)
+// In addition to PluginCore, also provides
+// register_render_systems(SystemManager&)
 template <typename T>
 concept PluginWithRender = PluginCore<T> && requires(SystemManager &sm) {
   { T::register_render_systems(sm) } -> std::same_as<void>;
@@ -168,7 +169,9 @@ concept PluginWithRender = PluginCore<T> && requires(SystemManager &sm) {
 template <typename T, typename InputAction>
 concept PluginTemplated = requires(SystemManager &sm) {
   { T::template enforce_singletons<InputAction>(sm) } -> std::same_as<void>;
-  { T::template register_update_systems<InputAction>(sm) } -> std::same_as<void>;
+  {
+    T::template register_update_systems<InputAction>(sm)
+  } -> std::same_as<void>;
 };
 
 // Helper variable template for cleaner static_assert usage

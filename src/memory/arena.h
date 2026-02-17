@@ -145,15 +145,13 @@ public:
   [[nodiscard]] size_t allocation_count() const { return allocation_count_; }
 
   [[nodiscard]] float usage_percent() const {
-    return capacity_ > 0
-               ? static_cast<float>(offset_) / capacity_ * 100.0f
-               : 0.0f;
+    return capacity_ > 0 ? static_cast<float>(offset_) / capacity_ * 100.0f
+                         : 0.0f;
   }
 
   [[nodiscard]] float peak_usage_percent() const {
-    return capacity_ > 0
-               ? static_cast<float>(peak_usage_) / capacity_ * 100.0f
-               : 0.0f;
+    return capacity_ > 0 ? static_cast<float>(peak_usage_) / capacity_ * 100.0f
+                         : 0.0f;
   }
 
   [[nodiscard]] bool is_valid() const { return memory_ != nullptr; }
@@ -324,4 +322,3 @@ private:
 };
 
 } // namespace afterhours
-

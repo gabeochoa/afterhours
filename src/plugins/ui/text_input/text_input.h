@@ -11,7 +11,8 @@
 /// - selection.h        - TextSelection for multi-line/selection support
 /// - line_index.h       - LineIndex for offset/row/column mapping
 /// - text_layout.h      - TextLayoutCache for word wrap and visual line mapping
-/// - systems.h          - ECS systems for text editing (blink, line index, selection)
+/// - systems.h          - ECS systems for text editing (blink, line index,
+/// selection)
 /// - component.h        - The text_input() immediate-mode widget
 /// - text_area_state.h  - HasTextAreaState for multiline text editing
 /// - text_area.h        - The text_area() immediate-mode widget (multiline)
@@ -40,14 +41,13 @@
 ///
 /// Or use the backward-compatible ui::imm::text_input() / ui::imm::text_area().
 
-#include "storage.h"
-#include "state.h"
-#include "utils.h"
-#include "selection.h"
-#include "line_index.h"
-#include "text_layout.h"
-#include "systems.h"
 #include "component.h"
-#include "text_area_state.h"
+#include "line_index.h"
+#include "selection.h"
+#include "state.h"
+#include "storage.h"
+#include "systems.h"
 #include "text_area.h"
-
+#include "text_area_state.h"
+#include "text_layout.h"
+#include "utils.h"

@@ -117,14 +117,13 @@ struct HasStepperState : BaseComponent {
   bool changed_since = false;
   size_t index;
   size_t num_options;
-  HasStepperState(size_t idx, size_t count)
-      : index(idx), num_options(count) {}
+  HasStepperState(size_t idx, size_t count) : index(idx), num_options(count) {}
 };
 
 struct HasToggleSwitchState : BaseComponent {
   bool changed_since = false;
   bool on;
-  float animation_progress = 0.0f;  // 0.0 = off position, 1.0 = on position
+  float animation_progress = 0.0f; // 0.0 = off position, 1.0 = on position
   HasToggleSwitchState(bool b) : on(b), animation_progress(b ? 1.0f : 0.0f) {}
 };
 
@@ -137,11 +136,11 @@ struct InFocusCluster : BaseComponent {};
 
 struct HasTray : BaseComponent {
   int selection_index = 0;
-  std::vector<EntityID> navigable_children;  // rebuilt each frame
+  std::vector<EntityID> navigable_children; // rebuilt each frame
 
   // Key repeat timing
   float repeat_timer = 0.f;
-  float repeat_delay = 0.4f;    // seconds before repeat starts
+  float repeat_delay = 0.4f;     // seconds before repeat starts
   float repeat_interval = 0.15f; // seconds between repeats
   bool was_held = false;
 };
@@ -256,7 +255,7 @@ struct HasUIModifiers : BaseComponent {
   float scale = 1.0f;
   float translate_x = 0.f;
   float translate_y = 0.f;
-  float rotation = 0.f;  // Rotation in degrees
+  float rotation = 0.f; // Rotation in degrees
 
   RectangleType apply_modifier(RectangleType rect) const {
     // Apply scale first
@@ -331,8 +330,8 @@ struct Border {
   }
 
   bool has_border() const {
-    return top.has_border() || right.has_border() ||
-           bottom.has_border() || left.has_border();
+    return top.has_border() || right.has_border() || bottom.has_border() ||
+           left.has_border();
   }
 
   bool is_uniform() const {
@@ -465,20 +464,22 @@ struct HasCircularProgressState : BaseComponent {
 //   Visible — children can overflow; no clipping (default).
 //   Hidden  — children are clipped to the box bounds.
 //   Scroll  — children are clipped and the user can scroll.
-//   Auto    — like Scroll, but only clips/scrolls when content exceeds viewport.
+//   Auto    — like Scroll, but only clips/scrolls when content exceeds
+//   viewport.
 //             When content fits, behaves like Visible (no clipping, no scroll).
 enum class Overflow { Visible, Hidden, Scroll, Auto };
 
 // Scroll view state - enables scrolling content within a clipped viewport
 struct HasScrollView : BaseComponent {
-  Vector2Type scroll_offset = {0, 0};  // Current scroll position
-  Vector2Type content_size = {0, 0};   // Total size of all children (computed)
-  Vector2Type viewport_size = {0, 0};  // Visible area size
-  float scroll_speed = 20.0f;          // Pixels per scroll wheel notch
-  bool vertical_enabled = true;        // Allow vertical scrolling
-  bool horizontal_enabled = false;     // Allow horizontal scrolling
-  bool invert_scroll = false;          // Invert scroll direction (non-natural)
-  bool auto_overflow = false;          // Auto mode: only clip/scroll when content overflows
+  Vector2Type scroll_offset = {0, 0}; // Current scroll position
+  Vector2Type content_size = {0, 0};  // Total size of all children (computed)
+  Vector2Type viewport_size = {0, 0}; // Visible area size
+  float scroll_speed = 20.0f;         // Pixels per scroll wheel notch
+  bool vertical_enabled = true;       // Allow vertical scrolling
+  bool horizontal_enabled = false;    // Allow horizontal scrolling
+  bool invert_scroll = false;         // Invert scroll direction (non-natural)
+  bool auto_overflow =
+      false; // Auto mode: only clip/scroll when content overflows
 
   HasScrollView() = default;
   explicit HasScrollView(float speed) : scroll_speed(speed) {}
@@ -505,25 +506,28 @@ struct HasClipChildren : BaseComponent {};
 
 // Tag IDs for UI overlay input exclusivity.
 enum class UITag : TagId {
-  InputExclusivity = 40, // Entity's tree receives exclusive input, blocking all
-                         // other entities. Used by overlay components (dropdowns,
-                         // popovers, etc.) that should consume clicks without
-                         // passing them through to elements behind.
+  InputExclusivity =
+      40, // Entity's tree receives exclusive input, blocking all
+          // other entities. Used by overlay components (dropdowns,
+          // popovers, etc.) that should consume clicks without
+          // passing them through to elements behind.
 };
 
 // Tag IDs for drag-and-drop entity roles.
 // These are set/cleared by the HandleDragGroups systems so that tagged
 // entities can be discovered via queries instead of storing EntityIDs.
 enum class DragTag : TagId {
-  // TODO build more confidence around how to set these number to avoid conflicts
-  // Right now since UI elements are in their own collection, its not an issue as they wont 
-  // conflict with Userspace tags, but something to keep in mind 
-  Group = 50,      // Marker tag attached by drag_group() to its div entity
-  Spacer,          // The gap-filling spacer entity
-  Overlay,         // The floating visual following the cursor
-  DraggedItem,     // The child being dragged
-  SourceGroup,     // The drag_group the item was picked from
-  HoverGroup,      // The drag_group currently under the cursor
+  // TODO build more confidence around how to set these number to avoid
+  // conflicts
+  // Right now since UI elements are in their own collection, its not an issue
+  // as they wont
+  // conflict with Userspace tags, but something to keep in mind
+  Group = 50,  // Marker tag attached by drag_group() to its div entity
+  Spacer,      // The gap-filling spacer entity
+  Overlay,     // The floating visual following the cursor
+  DraggedItem, // The child being dragged
+  SourceGroup, // The drag_group the item was picked from
+  HoverGroup,  // The drag_group currently under the cursor
 };
 
 // Singleton component tracking drag-and-drop state across drag_group instances.

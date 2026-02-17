@@ -51,15 +51,17 @@ struct ComponentConfig {
   SelfAlign self_align = SelfAlign::Auto;
   FlexWrap flex_wrap = FlexWrap::Wrap;
   bool debug_wrap = false;
-  Size flex_gap = pixels(0.0f);       // Spacing between children (CSS gap)
-  bool clip_children = false;      // Enable scissor clipping for children
-  bool draggable_children = false; // Enable drag-and-drop reordering of children
+  Size flex_gap = pixels(0.0f); // Spacing between children (CSS gap)
+  bool clip_children = false;   // Enable scissor clipping for children
+  bool draggable_children =
+      false; // Enable drag-and-drop reordering of children
 
   // Per-component scaling mode override.
   // If set, overrides the screen/app-level scaling mode for this component.
   std::optional<ScalingMode> scaling_mode;
 
-  // Overflow behavior per axis (Visible = default, Hidden = clip, Scroll = clip + scroll)
+  // Overflow behavior per axis (Visible = default, Hidden = clip, Scroll = clip
+  // + scroll)
   Overflow overflow_x = Overflow::Visible;
   Overflow overflow_y = Overflow::Visible;
 
@@ -97,7 +99,7 @@ struct ComponentConfig {
 
   // ui modifiers
   float opacity = 1.0f;
-  float scale = 1.0f;  // Visual scale applied after layout (smooth animations)
+  float scale = 1.0f; // Visual scale applied after layout (smooth animations)
   Size translate_x = pixels(0.0f);
   Size translate_y = pixels(0.0f);
 
@@ -129,8 +131,8 @@ struct ComponentConfig {
   std::optional<char> mask_char;
 
   // Checkbox indicator characters
-  static constexpr const char* DEFAULT_CHECKBOX_CHECKED = "V";
-  static constexpr const char* DEFAULT_CHECKBOX_UNCHECKED = " ";
+  static constexpr const char *DEFAULT_CHECKBOX_CHECKED = "V";
+  static constexpr const char *DEFAULT_CHECKBOX_UNCHECKED = " ";
   std::optional<std::string> checkbox_checked_indicator;
   std::optional<std::string> checkbox_unchecked_indicator;
 
@@ -139,9 +141,9 @@ struct ComponentConfig {
   std::optional<std::string> dropdown_closed_indicator;
 
   // Text area (multiline) configuration
-  std::optional<Size> text_area_line_height;  // Line height (default: 20px)
-  bool text_area_word_wrap = true;            // Enable word wrapping
-  size_t text_area_max_lines = 0;             // Max lines (0 = unlimited)
+  std::optional<Size> text_area_line_height; // Line height (default: 20px)
+  bool text_area_word_wrap = true;           // Enable word wrapping
+  size_t text_area_max_lines = 0;            // Max lines (0 = unlimited)
 
   // Button variant configuration
   ButtonVariant button_variant = ButtonVariant::Filled;
@@ -205,22 +207,29 @@ struct ComponentConfig {
   }
   // Per-side border methods
   ComponentConfig &with_border_top(Color color, Size thickness = pixels(1.0f)) {
-    if (!border_config.has_value()) border_config = Border{};
+    if (!border_config.has_value())
+      border_config = Border{};
     border_config->top = BorderSide{color, thickness};
     return *this;
   }
-  ComponentConfig &with_border_right(Color color, Size thickness = pixels(1.0f)) {
-    if (!border_config.has_value()) border_config = Border{};
+  ComponentConfig &with_border_right(Color color,
+                                     Size thickness = pixels(1.0f)) {
+    if (!border_config.has_value())
+      border_config = Border{};
     border_config->right = BorderSide{color, thickness};
     return *this;
   }
-  ComponentConfig &with_border_bottom(Color color, Size thickness = pixels(1.0f)) {
-    if (!border_config.has_value()) border_config = Border{};
+  ComponentConfig &with_border_bottom(Color color,
+                                      Size thickness = pixels(1.0f)) {
+    if (!border_config.has_value())
+      border_config = Border{};
     border_config->bottom = BorderSide{color, thickness};
     return *this;
   }
-  ComponentConfig &with_border_left(Color color, Size thickness = pixels(1.0f)) {
-    if (!border_config.has_value()) border_config = Border{};
+  ComponentConfig &with_border_left(Color color,
+                                    Size thickness = pixels(1.0f)) {
+    if (!border_config.has_value())
+      border_config = Border{};
     border_config->left = BorderSide{color, thickness};
     return *this;
   }
@@ -299,12 +308,15 @@ struct ComponentConfig {
     mask_char = c;
     return *this;
   }
-  ComponentConfig &with_checkbox_indicators(const std::string &checked, const std::string &unchecked = " ") {
+  ComponentConfig &
+  with_checkbox_indicators(const std::string &checked,
+                           const std::string &unchecked = " ") {
     checkbox_checked_indicator = checked;
     checkbox_unchecked_indicator = unchecked;
     return *this;
   }
-  ComponentConfig &with_dropdown_indicators(const std::string &closed, const std::string &open) {
+  ComponentConfig &with_dropdown_indicators(const std::string &closed,
+                                            const std::string &open) {
     dropdown_closed_indicator = closed;
     dropdown_open_indicator = open;
     return *this;
@@ -492,7 +504,8 @@ struct ComponentConfig {
   }
 
   // Float overload for backwards compatibility - converts to pixels
-  ComponentConfig &with_font(const std::string &font_name_, float font_size_px) {
+  ComponentConfig &with_font(const std::string &font_name_,
+                             float font_size_px) {
     return with_font(font_name_, pixels(font_size_px));
   }
 
@@ -677,9 +690,7 @@ struct ComponentConfig {
   bool has_font_override() const {
     return font_name != UIComponent::UNSET_FONT;
   }
-  bool has_font_size_override() const {
-    return font_size_explicitly_set;
-  }
+  bool has_font_size_override() const { return font_size_explicitly_set; }
   bool has_text_color_override() const {
     return text_color_usage != Theme::Usage::Default ||
            custom_text_color.has_value();

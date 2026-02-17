@@ -1,13 +1,13 @@
 #pragma once
 
-#include "state.h"
-#include "utils.h"
+#include "../../input_system.h"
 #include "../component_init.h"
 #include "../element_result.h"
 #include "../entity_management.h"
 #include "../rendering.h"
 #include "../rounded_corners.h"
-#include "../../input_system.h"
+#include "state.h"
+#include "utils.h"
 
 namespace afterhours {
 namespace text_input {
@@ -74,7 +74,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
 
   config.flex_direction = FlexDirection::Row;
   init_component(ctx, ep_pair, config, ComponentType::TextInput, false,
-                  "text_input");
+                 "text_input");
 
   auto base_corners = RoundedCorners(
       config.rounded_corners.value_or(ctx.theme.rounded_corners));
@@ -83,7 +83,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   // Only add rounded corners component if any corners are actually rounded
   // This respects intentional square corner designs
   if (base_corners.get().any()) {
-    auto &corners_cmp = entity.template addComponentIfMissing<HasRoundedCorners>();
+    auto &corners_cmp =
+        entity.template addComponentIfMissing<HasRoundedCorners>();
     corners_cmp.rounded_corners = base_corners.get();
     corners_cmp.roundness = config.roundness.value_or(ctx.theme.roundness);
     corners_cmp.segments = config.segments.value_or(ctx.theme.segments);
@@ -163,7 +164,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
             window_manager::ProvidesCurrentResolution>()) {
       screen_height = static_cast<float>(pcr->current_resolution.height);
     }
-    float resolved_font_size = resolve_to_pixels(config.font_size, screen_height);
+    float resolved_font_size =
+        resolve_to_pixels(config.font_size, screen_height);
     float cursor_height = std::max(resolved_font_size * 0.9f, 16.f);
     float actual_font_size = resolved_font_size;
 
@@ -201,16 +203,17 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     // Cursor is a thin vertical bar
     // Note: Width must be >= 8px to survive 8pt grid snapping at high DPI
     // (grid unit scales with screen, e.g. ~11px at 1080p, so 2-4px rounds to 0)
-    (void)div(ctx, mk(field_entity, 0),
-            ComponentConfig()
-                .with_size(ComponentSize(pixels(8), pixels(cursor_height)))
-                .with_custom_background(ctx.theme.font) // Use theme text color
-                .with_translate(cursor_x,
-                                cursor_y) // Position cursor aligned with text
-                .with_opacity(show_cursor ? 1.0f : 0.0f) // Blink
-                .with_skip_tabbing(true)
-                .with_debug_name("cursor")
-                .with_render_layer(config.render_layer + 10));
+    (void)div(
+        ctx, mk(field_entity, 0),
+        ComponentConfig()
+            .with_size(ComponentSize(pixels(8), pixels(cursor_height)))
+            .with_custom_background(ctx.theme.font) // Use theme text color
+            .with_translate(cursor_x,
+                            cursor_y) // Position cursor aligned with text
+            .with_opacity(show_cursor ? 1.0f : 0.0f) // Blink
+            .with_skip_tabbing(true)
+            .with_debug_name("cursor")
+            .with_render_layer(config.render_layer + 10));
   }
 
   // Click to focus
@@ -275,4 +278,3 @@ using afterhours::text_input::text_input;
 } // namespace ui
 
 } // namespace afterhours
-

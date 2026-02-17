@@ -70,7 +70,6 @@ inline std::string base64_encode(const std::vector<uint8_t> &data) {
   return result;
 }
 
-
 inline bool has_stdin_data() {
 #ifdef _WIN32
   HANDLE h = GetStdHandle(STD_INPUT_HANDLE);

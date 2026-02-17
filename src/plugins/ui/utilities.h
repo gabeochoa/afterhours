@@ -9,10 +9,10 @@
 #include "../../../vendor/magic_enum/magic_enum.hpp"
 #endif
 
+#include "../../core/text_cache.h"
 #include "../../developer.h"
 #include "../../ecs.h"
 #include "../../logging.h"
-#include "../../core/text_cache.h"
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
 #include "../e2e_testing/test_input.h"
 #include "../e2e_testing/visible_text.h"
@@ -89,8 +89,7 @@ constexpr static InputValidationMode validation_mode =
 // in the UI collection. Singletons are also registered in the default
 // collection so external code (toast, modal, game code) can find them.
 // Returns a reference to the root entity.
-template <typename InputAction>
-static Entity &init_ui_plugin() {
+template <typename InputAction> static Entity &init_ui_plugin() {
   auto &ui_coll = UICollectionHolder::get().collection;
   Entity &ui_root = ui_coll.createPermanentEntity();
 #ifndef AFTER_HOURS_UI_SINGLE_COLLECTION
@@ -117,18 +116,18 @@ static Entity &init_ui_plugin() {
 
   // TextMeasureCache
   auto &text_cache = ui_root.addComponent<ui::TextMeasureCache>();
-  text_cache.set_measure_function(
-      [](std::string_view text, std::string_view font_name, float font_size,
-         float spacing) {
-        auto font_manager = EntityHelper::get_singleton_cmp<ui::FontManager>();
-        if (!font_manager) {
-          return Vector2Type{0.0f, 0.0f};
-        }
-        const std::string font_name_str(font_name);
-        const std::string text_str(text);
-        Font font = font_manager->get_font(font_name_str);
-        return measure_text(font, text_str.c_str(), font_size, spacing);
-      });
+  text_cache.set_measure_function([](std::string_view text,
+                                     std::string_view font_name,
+                                     float font_size, float spacing) {
+    auto font_manager = EntityHelper::get_singleton_cmp<ui::FontManager>();
+    if (!font_manager) {
+      return Vector2Type{0.0f, 0.0f};
+    }
+    const std::string font_name_str(font_name);
+    const std::string text_str(text);
+    Font font = font_manager->get_font(font_name_str);
+    return measure_text(font, text_str.c_str(), font_size, spacing);
+  });
   ui_coll.registerSingleton<ui::TextMeasureCache>(ui_root);
 #ifndef AFTER_HOURS_UI_SINGLE_COLLECTION
   EntityHelper::registerSingleton<ui::TextMeasureCache>(ui_root);
@@ -154,8 +153,7 @@ static Entity &init_ui_plugin() {
   ui_root.addComponent<ui::UIComponent>(ui_root.id)
       .set_desired_width(ui::screen_pct(1.f))
       .set_desired_height(ui::screen_pct(1.f))
-      .enable_font(ui::UIComponent::DEFAULT_FONT,
-                   afterhours::ui::pixels(75.f));
+      .enable_font(ui::UIComponent::DEFAULT_FONT, afterhours::ui::pixels(75.f));
 
   // Validate InputAction enum
   validate_enum_has_value(InputAction, "None", "any unmapped input");
@@ -181,9 +179,9 @@ static Entity &init_ui_plugin() {
 }
 
 // Helper: run a list of systems on UI collection entities
-inline void run_systems_on_ui_entities(
-    std::vector<std::unique_ptr<SystemBase>> &systems, float dt,
-    bool is_render = false) {
+inline void
+run_systems_on_ui_entities(std::vector<std::unique_ptr<SystemBase>> &systems,
+                           float dt, bool is_render = false) {
   auto &ui_coll = UICollectionHolder::get().collection;
   ui_coll.merge_entity_arrays();
 
@@ -229,13 +227,11 @@ inline void run_systems_on_ui_entities(
 
 // Bridge system: runs ClearUIComponentChildren + BeginUIContextManager
 // on UI collection entities.
-template <typename InputAction>
-struct UIPluginPreUpdateBridge : System<> {
+template <typename InputAction> struct UIPluginPreUpdateBridge : System<> {
   std::vector<std::unique_ptr<SystemBase>> systems;
 
   UIPluginPreUpdateBridge() {
-    systems.push_back(
-        std::make_unique<ui::ClearUIComponentChildren>());
+    systems.push_back(std::make_unique<ui::ClearUIComponentChildren>());
     systems.push_back(
         std::make_unique<ui::BeginUIContextManager<InputAction>>());
   }
@@ -247,8 +243,7 @@ struct UIPluginPreUpdateBridge : System<> {
 
 // Bridge system: runs all post-user-code UI update systems on UI collection
 // entities.
-template <typename InputAction>
-struct UIPluginPostUpdateBridge : System<> {
+template <typename InputAction> struct UIPluginPostUpdateBridge : System<> {
   std::vector<std::unique_ptr<SystemBase>> systems;
 
   UIPluginPostUpdateBridge() {
@@ -264,33 +259,25 @@ struct UIPluginPostUpdateBridge : System<> {
     systems.push_back(std::make_unique<ui::RunAutoLayout>());
     systems.push_back(
         std::make_unique<ui::TrackIfComponentWillBeRendered<InputAction>>());
-    systems.push_back(
-        std::make_unique<ui::HandleTabbing<InputAction>>());
+    systems.push_back(std::make_unique<ui::HandleTabbing<InputAction>>());
     systems.push_back(
         std::make_unique<ui::InputExclusivitySystem<InputAction>>());
-    systems.push_back(
-        std::make_unique<ui::HandleClicks<InputAction>>());
+    systems.push_back(std::make_unique<ui::HandleClicks<InputAction>>());
     systems.push_back(
         std::make_unique<ui::HandleTrayNavigation<InputAction>>());
+    systems.push_back(std::make_unique<ui::HandleScrollInput<InputAction>>());
     systems.push_back(
-        std::make_unique<ui::HandleScrollInput<InputAction>>());
-    systems.push_back(
-        std::make_unique<
-            ui::CloseDropdownOnClickOutside<InputAction>>());
-    systems.push_back(
-        std::make_unique<ui::HandleDrags<InputAction>>());
+        std::make_unique<ui::CloseDropdownOnClickOutside<InputAction>>());
+    systems.push_back(std::make_unique<ui::HandleDrags<InputAction>>());
     // Post-layout drag handling: detect drag start, compute hover position,
     // create floating overlay.
     systems.push_back(
         std::make_unique<ui::HandleDragGroupsPostLayout<InputAction>>());
-    systems.push_back(
-        std::make_unique<ui::HandleLeftRight<InputAction>>());
-    systems.push_back(
-        std::make_unique<ui::HandleSelectOnFocus<InputAction>>());
+    systems.push_back(std::make_unique<ui::HandleLeftRight<InputAction>>());
+    systems.push_back(std::make_unique<ui::HandleSelectOnFocus<InputAction>>());
     systems.push_back(
         std::make_unique<ui::ComputeVisualFocusId<InputAction>>());
-    systems.push_back(
-        std::make_unique<ui::EndUIContextManager<InputAction>>());
+    systems.push_back(std::make_unique<ui::EndUIContextManager<InputAction>>());
   }
 
   virtual void once(float dt) override {
@@ -300,17 +287,14 @@ struct UIPluginPostUpdateBridge : System<> {
 };
 
 // Bridge system: runs UI render systems on UI collection entities.
-template <typename InputAction>
-struct UIPluginRenderBridge : System<> {
+template <typename InputAction> struct UIPluginRenderBridge : System<> {
   std::vector<std::unique_ptr<SystemBase>> systems;
 
   UIPluginRenderBridge(InputAction toggle_debug, bool use_batched) {
     if (use_batched) {
-      systems.push_back(
-          std::make_unique<ui::RenderBatched<InputAction>>());
+      systems.push_back(std::make_unique<ui::RenderBatched<InputAction>>());
     } else {
-      systems.push_back(
-          std::make_unique<ui::RenderImm<InputAction>>());
+      systems.push_back(std::make_unique<ui::RenderImm<InputAction>>());
     }
     systems.push_back(
         std::make_unique<ui::RenderDebugAutoLayoutRoots<InputAction>>(

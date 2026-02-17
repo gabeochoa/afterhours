@@ -171,4 +171,3 @@ struct HasTextLayoutCache : BaseComponent {
 
 } // namespace text_input
 } // namespace afterhours
-

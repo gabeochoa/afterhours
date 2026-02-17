@@ -8,9 +8,9 @@
 
 #include "../../font_helper.h"
 #include "../../logging.h"
+#include "../ui/components.h"
 #include "../ui/ui_collection.h"
 #include "../ui/ui_core_components.h"
-#include "../ui/components.h"
 #include "../window_manager.h"
 
 #include <atomic>
@@ -52,20 +52,20 @@ struct HandleTypeCommand : System<PendingE2ECommand> {
 // Handle 'key COMBO' command - presses key combo
 // Helper to track pending key releases across frames
 namespace key_release_detail {
-  inline bool pending_ctrl = false;
-  inline bool pending_shift = false;
-  inline bool pending_alt = false;
-  inline int pending_key = 0;
-  inline int release_countdown = 0;
-  
-  inline void reset() {
-    pending_ctrl = false;
-    pending_shift = false;
-    pending_alt = false;
-    pending_key = 0;
-    release_countdown = 0;
-  }
+inline bool pending_ctrl = false;
+inline bool pending_shift = false;
+inline bool pending_alt = false;
+inline int pending_key = 0;
+inline int release_countdown = 0;
+
+inline void reset() {
+  pending_ctrl = false;
+  pending_shift = false;
+  pending_alt = false;
+  pending_key = 0;
+  release_countdown = 0;
 }
+} // namespace key_release_detail
 
 // System to release keys after the app has processed them
 // This runs every frame and counts down to release
@@ -107,9 +107,9 @@ struct HandleKeyCommand : System<PendingE2ECommand> {
     }
 
     using namespace key_release_detail;
-    
+
     auto combo = parse_key_combo(cmd.args[0]);
-    
+
     // Set modifiers down for this frame
     if (combo.ctrl)
       input_injector::set_key_down(keys::LEFT_CONTROL);
@@ -117,10 +117,10 @@ struct HandleKeyCommand : System<PendingE2ECommand> {
       input_injector::set_key_down(keys::LEFT_SHIFT);
     if (combo.alt)
       input_injector::set_key_down(keys::LEFT_ALT);
-    
+
     // Push the key to queue (for polling APIs)
     test_input::push_key(combo.key);
-    
+
     // Mark key as pressed (for synthetic press detection)
     input_injector::set_key_down(combo.key);
 
@@ -411,7 +411,7 @@ struct HandleResetTestStateCommand : System<PendingE2ECommand> {
       on_reset_();
     }
     test_input::reset_all();
-    key_release_detail::reset();  
+    key_release_detail::reset();
     VisibleTextRegistry::instance().clear();
     cmd.consume();
   }
@@ -446,7 +446,8 @@ struct HandleResizeCommand : System<PendingE2ECommand> {
     if (pcr) {
       pcr->current_resolution.width = w;
       pcr->current_resolution.height = h;
-      pcr->should_refetch = false; // Prevent CollectCurrentResolution from overwriting
+      pcr->should_refetch =
+          false; // Prevent CollectCurrentResolution from overwriting
     }
 
     // Physically resize the window (no-op in headless mode)
@@ -472,14 +473,12 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
     constexpr float TOLERANCE = 2.0f;
     constexpr float TEXT_TOLERANCE = 4.0f; // extra tolerance for text fitting
 
-    auto *font_mgr =
-        EntityHelper::get_singleton_cmp<ui::FontManager>();
+    auto *font_mgr = EntityHelper::get_singleton_cmp<ui::FontManager>();
 
     // Don't use force_merge: only check entities that completed layout pipeline
     auto &ui_coll = ui::UICollectionHolder::get().collection;
-    auto all_ui = EntityQuery(ui_coll)
-                      .whereHasComponent<ui::UIComponent>()
-                      .gen();
+    auto all_ui =
+        EntityQuery(ui_coll).whereHasComponent<ui::UIComponent>().gen();
 
     std::vector<std::string> violations;
     for (Entity &entity : all_ui) {
@@ -494,8 +493,7 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
         continue;
 
       // --- Check 1: element rect outside viewport ---
-      bool rect_out = (rect.x < -TOLERANCE) ||
-                      (rect.y < -TOLERANCE) ||
+      bool rect_out = (rect.x < -TOLERANCE) || (rect.y < -TOLERANCE) ||
                       (rect.x + rect.width > vw + TOLERANCE) ||
                       (rect.y + rect.height > vh + TOLERANCE);
 
@@ -515,21 +513,21 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
           if (font_mgr->fonts.contains(fname)) {
             Font font = font_mgr->fonts.at(fname);
             float font_size = cmp.font_size.value;
-            if (font_size < 1.0f) font_size = 14.0f;
+            if (font_size < 1.0f)
+              font_size = 14.0f;
 
-            auto text_sz = measure_text(
-                font, label.label.c_str(), font_size, 1.0f);
+            auto text_sz =
+                measure_text(font, label.label.c_str(), font_size, 1.0f);
 
             // Text wider than container = truncation
             if (text_sz.x > rect.width + TEXT_TOLERANCE) {
               text_truncated = true;
               std::string label_preview =
-                  label.label.length() > 25
-                      ? label.label.substr(0, 25) + "..."
-                      : label.label;
-              text_detail = std::format(
-                  " (text \"{}\" needs {:.0f}px but container is {:.0f}px wide)",
-                  label_preview, text_sz.x, rect.width);
+                  label.label.length() > 25 ? label.label.substr(0, 25) + "..."
+                                            : label.label;
+              text_detail = std::format(" (text \"{}\" needs {:.0f}px but "
+                                        "container is {:.0f}px wide)",
+                                        label_preview, text_sz.x, rect.width);
             }
           }
         }
@@ -549,16 +547,16 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
 
       std::string reason = rect_out ? "RECT" : "TEXT";
       violations.push_back(std::format(
-          "  [{}] {} at ({:.0f},{:.0f}) size {:.0f}x{:.0f}{}",
-          reason, name, rect.x, rect.y, rect.width, rect.height,
-          text_detail));
+          "  [{}] {} at ({:.0f},{:.0f}) size {:.0f}x{:.0f}{}", reason, name,
+          rect.x, rect.y, rect.width, rect.height, text_detail));
     }
 
     if (!violations.empty()) {
-      std::string msg = std::format(
-          "assert_no_overflow: {} violation(s) at {:.0f}x{:.0f}:\n",
-          violations.size(), vw, vh);
-      for (auto &v : violations) msg += v + "\n";
+      std::string msg =
+          std::format("assert_no_overflow: {} violation(s) at {:.0f}x{:.0f}:\n",
+                      violations.size(), vw, vh);
+      for (auto &v : violations)
+        msg += v + "\n";
       cmd.fail(msg);
     } else {
       cmd.consume();

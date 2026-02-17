@@ -34,4 +34,3 @@ concept AnyTextAreaState = AnyTextInputState<T> && requires(T t, const T ct) {
 
 } // namespace text_input
 } // namespace afterhours
-

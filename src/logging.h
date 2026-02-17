@@ -38,7 +38,8 @@ inline void log_clean(std::format_string<Args...>, Args &&...) {
 }
 
 template <typename Duration, typename... Args>
-inline void log_once_per(Duration, int, std::format_string<Args...>, Args &&...) {
+inline void log_once_per(Duration, int, std::format_string<Args...>,
+                         Args &&...) {
   // For now, once per logging is disabled
 }
 

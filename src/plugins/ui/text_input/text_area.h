@@ -1,11 +1,11 @@
 #pragma once
 
+#include "../../input_system.h"
 #include "../component_init.h"
 #include "../element_result.h"
 #include "../entity_management.h"
 #include "../rendering.h"
 #include "../rounded_corners.h"
-#include "../../input_system.h"
 #include "text_area_state.h"
 #include "utils.h"
 #include <algorithm>
@@ -58,8 +58,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       typename std::remove_reference_t<decltype(ctx)>::value_type;
 
   // Get line height from config or default (extract pixel value from Size)
-  float line_height =
-      config.text_area_line_height.value_or(pixels(20.f)).value;
+  float line_height = config.text_area_line_height.value_or(pixels(20.f)).value;
 
   // Initialize state
   auto &state = init_state<HasTextAreaState>(
@@ -87,7 +86,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
 
   config.flex_direction = FlexDirection::Column;
   init_component(ctx, ep_pair, config, ComponentType::TextInput, false,
-                  "text_area");
+                 "text_area");
 
   auto base_corners = RoundedCorners(
       config.rounded_corners.value_or(ctx.theme.rounded_corners));
@@ -120,7 +119,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                              : config.size.x_axis.value;
   float pad_y = field_cmp.computed_padd[Axis::Y] > 0
                     ? field_cmp.computed_padd[Axis::Y]
-                    : 8.f;  // Fallback padding
+                    : 8.f; // Fallback padding
   float pad_x = field_cmp.computed_padd[Axis::X] > 0
                     ? field_cmp.computed_padd[Axis::X]
                     : 12.f; // Fallback padding
@@ -162,17 +161,20 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   for (size_t i = first_visible_line;
        i < lines.size() && i < first_visible_line + visible_line_count; ++i) {
     size_t line_idx = i - first_visible_line;
-    std::string line_text = lines[i].empty() ? " " : lines[i]; // Space prevents zero-height
+    std::string line_text =
+        lines[i].empty() ? " " : lines[i]; // Space prevents zero-height
 
     div(ctx, mk(field_entity, static_cast<int>(line_idx)),
         ComponentConfig{}
             .with_label(line_text)
-            .with_size(ComponentSize{pixels(viewport_width), pixels(line_height)})
+            .with_size(
+                ComponentSize{pixels(viewport_width), pixels(line_height)})
             .with_font(config.font_name == UIComponent::UNSET_FONT
                            ? UIComponent::DEFAULT_FONT
                            : config.font_name,
                        config.font_size)
-            .with_custom_text_color(config.custom_text_color.value_or(ctx.theme.font))
+            .with_custom_text_color(
+                config.custom_text_color.value_or(ctx.theme.font))
             .with_alignment(TextAlignment::Left)
             .with_skip_tabbing(true)
             .with_render_layer(config.render_layer + 2)
@@ -218,9 +220,10 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                   window_manager::ProvidesCurrentResolution>()) {
             screen_height = static_cast<float>(pcr->current_resolution.height);
           }
-          float resolved_font_size = resolve_to_pixels(config.font_size, screen_height);
-          Vector2Type text_size =
-              measure_text(font, text_before_cursor.c_str(), resolved_font_size, 1.f);
+          float resolved_font_size =
+              resolve_to_pixels(config.font_size, screen_height);
+          Vector2Type text_size = measure_text(font, text_before_cursor.c_str(),
+                                               resolved_font_size, 1.f);
           cursor_x = pad_left + text_size.x;
         }
       }
@@ -239,7 +242,8 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       div(ctx, mk(field_entity, 1000),
           ComponentConfig()
               .with_size(ComponentSize(pixels(2), pixels(cursor_height)))
-              .with_custom_background(config.custom_text_color.value_or(ctx.theme.font))
+              .with_custom_background(
+                  config.custom_text_color.value_or(ctx.theme.font))
               .with_absolute_position()
               .with_translate(cursor_x, cursor_y)
               .with_opacity(show_cursor ? 1.0f : 0.0f)
@@ -355,4 +359,3 @@ using afterhours::text_input::text_area;
 } // namespace ui
 
 } // namespace afterhours
-

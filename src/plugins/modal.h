@@ -294,15 +294,15 @@ struct modal : developer::Plugin {
       // parent). This ensures it renders before the modal and blocks input.
       // We use a div (not button) to avoid hover state color changes.
       // Visual backdrop (div) - this provides the dimmed background appearance
-      auto backdrop_visual =
-          div(ctx, backdrop_ep,
-              ComponentConfig{}
-                  .with_size(ComponentSize{pixels(static_cast<float>(screen_w)),
-                                           pixels(static_cast<float>(screen_h))})
-                  .with_absolute_position()
-                  .with_custom_background(config.backdrop_color)
-                  .with_render_layer(config.render_layer - 1)
-                  .with_debug_name("modal_backdrop"));
+      auto backdrop_visual = div(
+          ctx, backdrop_ep,
+          ComponentConfig{}
+              .with_size(ComponentSize{pixels(static_cast<float>(screen_w)),
+                                       pixels(static_cast<float>(screen_h))})
+              .with_absolute_position()
+              .with_custom_background(config.backdrop_color)
+              .with_render_layer(config.render_layer - 1)
+              .with_debug_name("modal_backdrop"));
       backdrop_visual.cmp().computed_rel[Axis::X] = 0;
       backdrop_visual.cmp().computed_rel[Axis::Y] = 0;
 
@@ -459,9 +459,8 @@ struct modal : developer::Plugin {
                        .with_label(confirm_label)
                        .with_size(ComponentSize{h720(100), h720(36)})
                        .with_background(Theme::Usage::Primary)
-                       .with_margin(
-                           Margin{.left = DefaultSpacing::small(),
-                                  .right = DefaultSpacing::small()})
+                       .with_margin(Margin{.left = DefaultSpacing::small(),
+                                           .right = DefaultSpacing::small()})
                        .with_render_layer(CONTENT_LAYER))) {
           dialog_result = DialogResult::Confirmed;
           open = false;
@@ -471,9 +470,8 @@ struct modal : developer::Plugin {
                    ComponentConfig{}
                        .with_label(cancel_label)
                        .with_size(ComponentSize{h720(100), h720(36)})
-                       .with_margin(
-                           Margin{.left = DefaultSpacing::small(),
-                                  .right = DefaultSpacing::small()})
+                       .with_margin(Margin{.left = DefaultSpacing::small(),
+                                           .right = DefaultSpacing::small()})
                        .with_render_layer(CONTENT_LAYER))) {
           dialog_result = DialogResult::Cancelled;
           open = false;
@@ -534,9 +532,8 @@ struct modal : developer::Plugin {
                        .with_label(primary_label)
                        .with_size(ComponentSize{h720(110), h720(36)})
                        .with_background(Theme::Usage::Primary)
-                       .with_margin(
-                           Margin{.left = DefaultSpacing::small(),
-                                  .right = DefaultSpacing::small()})
+                       .with_margin(Margin{.left = DefaultSpacing::small(),
+                                           .right = DefaultSpacing::small()})
                        .with_render_layer(CONTENT_LAYER))) {
           dialog_result = DialogResult::Confirmed;
           open = false;
@@ -546,9 +543,8 @@ struct modal : developer::Plugin {
                    ComponentConfig{}
                        .with_label(dismiss_label)
                        .with_size(ComponentSize{h720(100), h720(36)})
-                       .with_margin(
-                           Margin{.left = DefaultSpacing::small(),
-                                  .right = DefaultSpacing::small()})
+                       .with_margin(Margin{.left = DefaultSpacing::small(),
+                                           .right = DefaultSpacing::small()})
                        .with_render_layer(CONTENT_LAYER))) {
           dialog_result = DialogResult::Cancelled;
           open = false;
@@ -559,9 +555,8 @@ struct modal : developer::Plugin {
                      ComponentConfig{}
                          .with_label(tertiary_label)
                          .with_size(ComponentSize{h720(100), h720(36)})
-                         .with_margin(
-                             Margin{.left = DefaultSpacing::small(),
-                                    .right = DefaultSpacing::small()})
+                         .with_margin(Margin{.left = DefaultSpacing::small(),
+                                             .right = DefaultSpacing::small()})
                          .with_render_layer(CONTENT_LAYER))) {
             dialog_result = DialogResult::Custom;
             open = false;

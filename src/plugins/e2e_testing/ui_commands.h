@@ -18,7 +18,8 @@ namespace afterhours {
 namespace testing {
 namespace ui_commands {
 
-// Helper: get the screen-space rect of a UI component (applies translate modifiers)
+// Helper: get the screen-space rect of a UI component (applies translate
+// modifiers)
 inline RectangleType get_screen_rect(Entity &entity) {
   auto &cmp = entity.get<ui::UIComponent>();
   RectangleType rect = cmp.rect();
@@ -363,7 +364,8 @@ struct HandleSetSliderCommand : System<PendingE2ECommand> {
 
     for (Entity &entity : query.gen()) {
       // Click the center of the slider for now
-      // TODO: calculate pct from slider min/max when HasSliderState supports range
+      // TODO: calculate pct from slider min/max when HasSliderState supports
+      // range
       (void)value;
       auto rect = get_screen_rect(entity);
       float x = rect.x + rect.width / 2;

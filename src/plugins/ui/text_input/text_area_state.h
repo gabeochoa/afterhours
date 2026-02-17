@@ -11,26 +11,26 @@ namespace text_input {
 
 /// Configuration for text area behavior
 struct TextAreaConfig {
-  float line_height = 20.f;  // Pixels per line
-  bool word_wrap = true;     // Enable word wrapping
-  size_t max_lines = 0;      // Maximum number of lines (0 = unlimited)
+  float line_height = 20.f; // Pixels per line
+  bool word_wrap = true;    // Enable word wrapping
+  size_t max_lines = 0;     // Maximum number of lines (0 = unlimited)
 };
 
 /// State component for multiline text input (text area).
 /// Extends HasTextInputState with line navigation and layout caching.
 template <TextStorage Storage = StringStorage>
 struct HasTextAreaStateT : HasTextInputStateT<Storage> {
-  LineIndex line_index;            // Row/column mapping
-  TextLayoutCache layout_cache;    // Word wrap cache
-  TextSelection selection;         // Selection (optional, for future)
-  float scroll_offset_y = 0.f;     // Vertical scroll position
-  size_t preferred_column = 0;     // For Up/Down preserving column
+  LineIndex line_index;             // Row/column mapping
+  TextLayoutCache layout_cache;     // Word wrap cache
+  TextSelection selection;          // Selection (optional, for future)
+  float scroll_offset_y = 0.f;      // Vertical scroll position
+  size_t preferred_column = 0;      // For Up/Down preserving column
   uint64_t last_layout_version = 0; // For invalidation
-  TextAreaConfig area_config;      // Text area specific config
+  TextAreaConfig area_config;       // Text area specific config
 
   HasTextAreaStateT() = default;
   explicit HasTextAreaStateT(const std::string &initial_text,
-                             size_t max_len = 0,  // 0 = unlimited for text area
+                             size_t max_len = 0, // 0 = unlimited for text area
                              float blink_rate = 0.53f)
       : HasTextInputStateT<Storage>(initial_text, max_len, blink_rate) {
     rebuild_line_index();
@@ -79,9 +79,9 @@ struct HasTextAreaStateT : HasTextInputStateT<Storage> {
     }
 
     // Clamp scroll to valid range
-    float max_scroll = std::max(
-        0.f, static_cast<float>(line_count()) * area_config.line_height -
-                 viewport_height);
+    float max_scroll = std::max(0.f, static_cast<float>(line_count()) *
+                                             area_config.line_height -
+                                         viewport_height);
     scroll_offset_y = std::max(0.f, std::min(scroll_offset_y, max_scroll));
   }
 };
@@ -91,4 +91,3 @@ using HasTextAreaState = HasTextAreaStateT<StringStorage>;
 
 } // namespace text_input
 } // namespace afterhours
-

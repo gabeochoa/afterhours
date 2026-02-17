@@ -54,7 +54,8 @@ struct BuildUIEntityMapping : System<> {
     cache->components.clear();
     auto &ui_coll = UICollectionHolder::get().collection;
     auto ui_entities = EntityQuery(ui_coll, {.ignore_temp_warning = true})
-        .whereHasComponent<UIComponent>().gen();
+                           .whereHasComponent<UIComponent>()
+                           .gen();
     for (Entity &entity : ui_entities) {
       cache->components.emplace(entity.id, entity);
     }
@@ -125,9 +126,8 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
     {
       Entity &res_entity = EntityHelper::get_singleton<
           window_manager::ProvidesCurrentResolution>();
-      auto &res =
-          res_entity.get<window_manager::ProvidesCurrentResolution>()
-              .current_resolution;
+      auto &res = res_entity.get<window_manager::ProvidesCurrentResolution>()
+                      .current_resolution;
       context.screen_width = static_cast<float>(res.width);
       context.screen_height = static_cast<float>(res.height);
     }
@@ -181,8 +181,8 @@ static void print_debug_autolayout_tree(Entity &entity, UIComponent &cmp,
     auto &mods = entity.get<HasUIModifiers>();
     if (mods.translate_x != 0.f || mods.translate_y != 0.f) {
       auto final_r = get_final_rect(entity, cmp);
-      std::cout << "Translate(" << mods.translate_x << ","
-                << mods.translate_y << ") ";
+      std::cout << "Translate(" << mods.translate_x << "," << mods.translate_y
+                << ") ";
       std::cout << "FinalPos(" << final_r.x << "," << final_r.y << ") ";
     }
   }
@@ -509,7 +509,8 @@ struct InputExclusivitySystem
 
   virtual void once(float) override {
     context = EntityHelper::get_singleton_cmp<UIContext<InputAction>>();
-    if (!context) return;
+    if (!context)
+      return;
     // Remove all gates from last frame
     for (const auto &name : active_gates) {
       context->remove_input_gate(name);
@@ -518,11 +519,13 @@ struct InputExclusivitySystem
   }
 
   virtual void for_each_with(Entity &entity, UIComponent &, float) override {
-    if (!context) return;
+    if (!context)
+      return;
     EntityID eid = entity.id;
     std::string gate_name = fmt::format("input_exclusivity_{}", eid);
     context->add_input_gate(gate_name, [eid](EntityID id) {
-      if (id == static_cast<EntityID>(-1)) return true;
+      if (id == static_cast<EntityID>(-1))
+        return true;
       return is_entity_in_ui_tree(eid, id);
     });
     active_gates.push_back(gate_name);
@@ -542,14 +545,18 @@ struct InputExclusivitySystem
 private:
   // Check if search_id is a descendant of root_id in the UI entity tree
   static bool is_entity_in_ui_tree(EntityID root_id, EntityID search_id) {
-    if (root_id == search_id) return true;
+    if (root_id == search_id)
+      return true;
     OptEntity opt = UICollectionHolder::getEntityForID(root_id);
-    if (!opt.has_value()) return false;
+    if (!opt.has_value())
+      return false;
     Entity &entity = opt.asE();
-    if (!entity.has<UIComponent>()) return false;
+    if (!entity.has<UIComponent>())
+      return false;
     const UIComponent &cmp = entity.get<UIComponent>();
     for (EntityID child_id : cmp.children) {
-      if (is_entity_in_ui_tree(child_id, search_id)) return true;
+      if (is_entity_in_ui_tree(child_id, search_id))
+        return true;
     }
     return false;
   }
@@ -631,31 +638,34 @@ struct HandleTrayNavigation : SystemWithUIContext<ui::HasTray> {
 
   virtual void for_each_with(Entity &entity, UIComponent &component,
                              HasTray &tray, float dt) {
-    if (!component.was_rendered_to_screen) return;
+    if (!component.was_rendered_to_screen)
+      return;
 
     // Rebuild navigable children list each frame
     tray.navigable_children.clear();
     for (auto child_id : component.children) {
       auto child_opt = UICollectionHolder::getEntityForID(child_id);
-      if (!child_opt.has_value()) continue;
+      if (!child_opt.has_value())
+        continue;
       Entity &child = child_opt.asE();
       // Mark all children as skip-tabbing
       child.addComponentIfMissing<SkipWhenTabbing>();
       // Only navigable if it has a click listener and is rendered
-      if (child.has<HasClickListener>() &&
-          child.has<UIComponent>() &&
+      if (child.has<HasClickListener>() && child.has<UIComponent>() &&
           child.get<UIComponent>().was_rendered_to_screen) {
         tray.navigable_children.push_back(child_id);
       }
     }
 
-    if (tray.navigable_children.empty()) return;
+    if (tray.navigable_children.empty())
+      return;
 
     // Clamp selection index
     int count = (int)tray.navigable_children.size();
     tray.selection_index = std::clamp(tray.selection_index, 0, count - 1);
 
-    if (!context->has_focus(entity.id)) return;
+    if (!context->has_focus(entity.id))
+      return;
 
     // Determine axis from flex direction
     bool horizontal = (component.flex_direction == FlexDirection::Row);
@@ -677,7 +687,8 @@ struct HandleTrayNavigation : SystemWithUIContext<ui::HasTray> {
       tray.was_held = false;
     } else if (held) {
       tray.repeat_timer += dt;
-      float threshold = tray.was_held ? tray.repeat_interval : tray.repeat_delay;
+      float threshold =
+          tray.was_held ? tray.repeat_interval : tray.repeat_delay;
       if (tray.repeat_timer >= threshold) {
         tray.repeat_timer = 0.f;
         tray.was_held = true;
@@ -697,8 +708,7 @@ struct HandleTrayNavigation : SystemWithUIContext<ui::HasTray> {
     // The tray's own HasClickListener is handled by HandleClicks (which runs
     // before this system). If HandleClicks set the tray's .down flag, we
     // propagate that activation to the currently selected child.
-    if (entity.has<HasClickListener>() &&
-        entity.get<HasClickListener>().down) {
+    if (entity.has<HasClickListener>() && entity.get<HasClickListener>().down) {
       auto sel_opt = UICollectionHolder::getEntityForID(
           tray.navigable_children[tray.selection_index]);
       if (sel_opt.has_value()) {
@@ -1117,7 +1127,8 @@ private
       }
 
       for (size_t i = 0; i < options.size(); i++) {
-        Entity &grandchild = UICollectionHolder::get().collection.createEntity();
+        Entity &grandchild =
+            UICollectionHolder::get().collection.createEntity();
         grandchild.addComponent<UIComponentDebug>("dropdown_option");
         grandchild.addComponent<UIComponent>(grandchild.id)
             .set_desired_width(ui::Size{
@@ -1163,7 +1174,7 @@ private
 }; // namespace ui
 
 /// Query the UI collection for the first entity carrying the given DragTag.
-// TODO should we inline these? 
+// TODO should we inline these?
 inline OptEntity find_drag_tagged(DragTag tag) {
   auto &ui_coll = UICollectionHolder::get().collection;
   return EntityQuery(ui_coll, {.ignore_temp_warning = true})
@@ -1174,10 +1185,9 @@ inline OptEntity find_drag_tagged(DragTag tag) {
 /// Mark every entity carrying the given DragTag for cleanup.
 inline void cleanup_drag_tagged(DragTag tag) {
   auto &ui_coll = UICollectionHolder::get().collection;
-  for (Entity &e :
-       EntityQuery(ui_coll, {.ignore_temp_warning = true})
-           .whereHasTag(tag)
-           .gen()) {
+  for (Entity &e : EntityQuery(ui_coll, {.ignore_temp_warning = true})
+                       .whereHasTag(tag)
+                       .gen()) {
     e.cleanup = true;
   }
 }
@@ -1185,11 +1195,10 @@ inline void cleanup_drag_tagged(DragTag tag) {
 /// Clear the given DragTag from every entity that has it.
 inline void untag_all(DragTag tag) {
   auto &ui_coll = UICollectionHolder::get().collection;
-  for (Entity &e :
-       EntityQuery(ui_coll, {.ignore_temp_warning = true})
-           .whereHasTag(tag)
-           // TODO we need gen_for_each() or something
-           .gen()) {
+  for (Entity &e : EntityQuery(ui_coll, {.ignore_temp_warning = true})
+                       .whereHasTag(tag)
+                       // TODO we need gen_for_each() or something
+                       .gen()) {
     e.disableTag(tag);
   }
 }
@@ -1211,7 +1220,8 @@ inline void create_or_update_drag_overlay(DragGroupState &state, float mouse_x,
 
   // First frame of drag: create overlay from scratch.
   auto dragged_opt = find_drag_tagged(DragTag::DraggedItem);
-  if (!dragged_opt) return;
+  if (!dragged_opt)
+    return;
 
   auto &ui_coll = UICollectionHolder::get().collection;
   Entity &overlay = ui_coll.createEntity();
@@ -1253,7 +1263,8 @@ inline void create_or_update_drag_overlay(DragGroupState &state, float mouse_x,
 /// always discoverable via getEntityForID.
 inline void create_or_update_drag_spacer(DragGroupState &state) {
   auto hover_opt = find_drag_tagged(DragTag::HoverGroup);
-  if (!hover_opt || !hover_opt.asE().has<UIComponent>()) return;
+  if (!hover_opt || !hover_opt.asE().has<UIComponent>())
+    return;
 
   auto dragged_opt = find_drag_tagged(DragTag::DraggedItem);
   EntityID dragged_id = dragged_opt ? dragged_opt.asE().id : (EntityID)-1;
@@ -1290,7 +1301,8 @@ inline void create_or_update_drag_spacer(DragGroupState &state) {
       target_pos++;
       continue;
     }
-    if (visible == state.hover_index) break;
+    if (visible == state.hover_index)
+      break;
     visible++;
     target_pos++;
   }
@@ -1300,17 +1312,17 @@ inline void create_or_update_drag_spacer(DragGroupState &state) {
                             spacer_ptr->id);
 }
 
-template <typename InputAction>
-struct HandleDragGroupsPreLayout : System<> {
-/// runs BEFORE RunAutoLayout.
-/// - Hides the dragged entity (should_hide) so layout skips it.
-/// - Inserts a spacer entity at the current hover position so the layout
-///   reserves a gap.
+template <typename InputAction> struct HandleDragGroupsPreLayout : System<> {
+  /// runs BEFORE RunAutoLayout.
+  /// - Hides the dragged entity (should_hide) so layout skips it.
+  /// - Inserts a spacer entity at the current hover position so the layout
+  ///   reserves a gap.
   virtual ~HandleDragGroupsPreLayout() {}
 
   virtual void once(float) override {
     auto *state = EntityHelper::get_singleton_cmp<DragGroupState>();
-    if (!state || !state->dragging) return;
+    if (!state || !state->dragging)
+      return;
 
     // --- Hide the dragged entity ---
     auto dragged_opt = find_drag_tagged(DragTag::DraggedItem);
@@ -1332,13 +1344,12 @@ struct HandleDragGroupsPreLayout : System<> {
   }
 };
 
-template <typename InputAction>
-struct HandleDragGroupsPostLayout : System<> {
-/// runs AFTER RunAutoLayout and HandleDrags.
-/// - Detects drag start (mouse press inside a drag_group child).
-/// - While dragging: updates hover_group / hover_index, creates an overlay
-///   entity at the mouse cursor (queued to render_cmds for this frame).
-/// - On mouse release: emits a DragGroupState::Event and cleans up.
+template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
+  /// runs AFTER RunAutoLayout and HandleDrags.
+  /// - Detects drag start (mouse press inside a drag_group child).
+  /// - While dragging: updates hover_group / hover_index, creates an overlay
+  ///   entity at the mouse cursor (queued to render_cmds for this frame).
+  /// - On mouse release: emits a DragGroupState::Event and cleans up.
 
   virtual ~HandleDragGroupsPostLayout() {}
 
@@ -1354,10 +1365,12 @@ struct HandleDragGroupsPostLayout : System<> {
 
   virtual void once(float) override {
     auto *state = EntityHelper::get_singleton_cmp<DragGroupState>();
-    if (!state) return;
+    if (!state)
+      return;
 
     auto *ctx = EntityHelper::get_singleton_cmp<UIContext<InputAction>>();
-    if (!ctx) return;
+    if (!ctx)
+      return;
 
     auto &ui_coll = UICollectionHolder::get().collection;
 
@@ -1373,20 +1386,21 @@ struct HandleDragGroupsPostLayout : System<> {
 
     // ---- Not dragging: check for drag start ---------------------------------
     if (!state->dragging) {
-      if (!ctx->mouse.just_pressed) return;
+      if (!ctx->mouse.just_pressed)
+        return;
 
       for (Entity &group : groups) {
         auto &group_cmp = group.get<UIComponent>();
         for (int i = 0; i < static_cast<int>(group_cmp.children.size()); i++) {
-          auto child_opt =
-              EntityQuery(ui_coll, {.ignore_temp_warning = true})
-                  .whereID(group_cmp.children[i])
-                  .whereHasComponent<UIComponent>()
-                  .whereLambda([](const Entity &e) {
-                    return !e.get<UIComponent>().should_hide;
-                  })
-                  .gen_first();
-          if (!child_opt) continue;
+          auto child_opt = EntityQuery(ui_coll, {.ignore_temp_warning = true})
+                               .whereID(group_cmp.children[i])
+                               .whereHasComponent<UIComponent>()
+                               .whereLambda([](const Entity &e) {
+                                 return !e.get<UIComponent>().should_hide;
+                               })
+                               .gen_first();
+          if (!child_opt)
+            continue;
 
           Entity &child = child_opt.asE();
           auto &child_cmp = child.get<UIComponent>();
@@ -1408,7 +1422,8 @@ struct HandleDragGroupsPostLayout : System<> {
             break;
           }
         }
-        if (state->dragging) break;
+        if (state->dragging)
+          break;
       }
       return; // overlay will appear next frame
     }
@@ -1463,7 +1478,8 @@ struct HandleDragGroupsPostLayout : System<> {
       auto &group_cmp = group.get<UIComponent>();
       RectangleType group_rect = group_cmp.rect();
 
-      if (!is_mouse_inside(ctx->mouse.pos, group_rect)) continue;
+      if (!is_mouse_inside(ctx->mouse.pos, group_rect))
+        continue;
 
       // Move hover tag to this group
       untag_all(DragTag::HoverGroup);
@@ -1476,22 +1492,23 @@ struct HandleDragGroupsPostLayout : System<> {
       int visible_count = 0;
       for (int i = 0; i < static_cast<int>(group_cmp.children.size()); i++) {
         EntityID child_id = group_cmp.children[i];
-        if (child_id == dragged_id) continue;
+        if (child_id == dragged_id)
+          continue;
 
-        auto child_opt =
-            EntityQuery(ui_coll, {.ignore_temp_warning = true})
-                .whereID(child_id)
-                .whereHasComponent<UIComponent>()
-                .whereLambda([](const Entity &e) {
-                  return !e.hasTag(DragTag::Spacer) &&
-                         !e.get<UIComponent>().should_hide;
-                })
-                .gen_first();
-        if (!child_opt) continue;
+        auto child_opt = EntityQuery(ui_coll, {.ignore_temp_warning = true})
+                             .whereID(child_id)
+                             .whereHasComponent<UIComponent>()
+                             .whereLambda([](const Entity &e) {
+                               return !e.hasTag(DragTag::Spacer) &&
+                                      !e.get<UIComponent>().should_hide;
+                             })
+                             .gen_first();
+        if (!child_opt)
+          continue;
         auto &child_cmp = child_opt.asE().template get<UIComponent>();
         auto r = child_cmp.rect();
-        float child_mid = horizontal ? (r.x + r.width / 2.0f)
-                                     : (r.y + r.height / 2.0f);
+        float child_mid =
+            horizontal ? (r.x + r.width / 2.0f) : (r.y + r.height / 2.0f);
         float mouse_pos = horizontal ? ctx->mouse.pos.x : ctx->mouse.pos.y;
         if (mouse_pos > child_mid) {
           insert_idx = visible_count + 1;
@@ -1524,16 +1541,15 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
   virtual ~HandleScrollInput() {}
 
   virtual void once(float) override {
-    this->context =
-        EntityHelper::get_singleton_cmp<UIContext<InputAction>>();
+    this->context = EntityHelper::get_singleton_cmp<UIContext<InputAction>>();
   }
 
   virtual void for_each_with(Entity &entity, UIComponent &cmp,
                              HasScrollView &scroll_state, float) {
-    // TODO can we make this a tag? 
+    // TODO can we make this a tag?
     if (!cmp.was_rendered_to_screen)
       return;
-    // TODO can we combine these? 
+    // TODO can we combine these?
     if (cmp.should_hide || entity.has<ShouldHide>())
       return;
 
@@ -1542,8 +1558,10 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
 
     // In auto mode, skip scroll input when content fits in viewport
     if (scroll_state.auto_overflow) {
-      bool needs_v = scroll_state.vertical_enabled && scroll_state.needs_scroll_y();
-      bool needs_h = scroll_state.horizontal_enabled && scroll_state.needs_scroll_x();
+      bool needs_v =
+          scroll_state.vertical_enabled && scroll_state.needs_scroll_y();
+      bool needs_h =
+          scroll_state.horizontal_enabled && scroll_state.needs_scroll_x();
       if (!needs_v && !needs_h) {
         scroll_state.scroll_offset = {0, 0};
         return;

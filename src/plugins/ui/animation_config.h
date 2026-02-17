@@ -12,11 +12,11 @@ namespace ui {
 // Animation Trigger - what starts the animation
 // =============================================================================
 enum class AnimTrigger {
-  OnAppear,  // First render
-  OnClick,   // When clicked/pressed (active)
-  OnHover,   // Mouse enters (hot)
-  OnFocus,   // Keyboard focus
-  Loop,      // Continuous animation
+  OnAppear, // First render
+  OnClick,  // When clicked/pressed (active)
+  OnHover,  // Mouse enters (hot)
+  OnFocus,  // Keyboard focus
+  Loop,     // Continuous animation
 };
 
 // =============================================================================
@@ -288,7 +288,8 @@ inline float apply_easing(float t, AnimCurve curve) {
   case AnimCurve::EaseOut:
     return 1.0f - (1.0f - t) * (1.0f - t);
   case AnimCurve::EaseInOut:
-    return t < 0.5f ? 2.0f * t * t : 1.0f - std::pow(-2.0f * t + 2.0f, 2.0f) / 2.0f;
+    return t < 0.5f ? 2.0f * t * t
+                    : 1.0f - std::pow(-2.0f * t + 2.0f, 2.0f) / 2.0f;
   case AnimCurve::Spring:
     return t; // Spring doesn't use this
   }

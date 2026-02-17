@@ -11,7 +11,6 @@
 namespace afterhours {
 namespace text_input {
 
-
 // Get number of bytes in a UTF-8 character starting at pos
 inline size_t utf8_char_length(const std::string &str, size_t pos) {
   if (pos >= str.size())
@@ -190,7 +189,7 @@ inline size_t find_word_end(std::string_view text, size_t pos) {
 /// Select the word at position (for double-click).
 /// Returns {start, end} byte offsets.
 inline std::pair<size_t, size_t> select_word_at(std::string_view text,
-                                                 size_t pos) {
+                                                size_t pos) {
   if (text.empty())
     return {0, 0};
   pos = std::min(pos, text.size() - 1);
@@ -348,4 +347,3 @@ inline bool delete_at_cursor_multiline(AnyTextAreaState auto &s) {
 
 } // namespace text_input
 } // namespace afterhours
-

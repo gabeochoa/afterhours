@@ -43,8 +43,7 @@ namespace imm {
 ///     .decorate(with_brackets(ctx, teal, 20.0f, 2.0f));
 /// ```
 inline auto with_brackets(HasUIContext auto &ctx, Color color,
-                          float bracket_size = 15.0f,
-                          float thickness = 2.0f) {
+                          float bracket_size = 15.0f, float thickness = 2.0f) {
   return [&ctx, color, bracket_size, thickness](Entity &parent) {
     UIComponent &cmp = parent.template get<UIComponent>();
     float w = cmp.computed[Axis::X];
@@ -98,8 +97,8 @@ inline auto with_brackets(HasUIContext auto &ctx, Color color,
     // Bottom-right
     arm(6, left + outer_w - bracket_size + thickness, top + outer_h,
         bracket_size, thickness);
-    arm(7, left + outer_w, top + outer_h - bracket_size + thickness,
-        thickness, bracket_size);
+    arm(7, left + outer_w, top + outer_h - bracket_size + thickness, thickness,
+        bracket_size);
   };
 }
 
@@ -190,8 +189,7 @@ inline auto with_quote(HasUIContext auto &ctx,
     // Accent bar
     div(ctx, mk(parent, 0),
         ComponentConfig{}
-            .with_size(
-                ComponentSize{pixels(style.accent_width), percent(1.0f)})
+            .with_size(ComponentSize{pixels(style.accent_width), percent(1.0f)})
             .with_custom_background(style.accent_color)
             .with_rounded_corners(RoundedCorners().all_sharp())
             .with_skip_tabbing(true)

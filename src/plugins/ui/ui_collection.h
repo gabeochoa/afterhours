@@ -29,14 +29,16 @@ struct UICollectionHolder {
   // Look up entity by ID: searches UI collection first, then default.
   static OptEntity getEntityForID(EntityID id) {
     auto result = get().collection.getEntityForID(id);
-    if (result.valid()) return result;
+    if (result.valid())
+      return result;
     return EntityHelper::getEntityForID(id);
   }
 
   // Look up entity by ID (enforce): searches UI collection first, then default.
   static Entity &getEntityForIDEnforce(EntityID id) {
     auto result = get().collection.getEntityForID(id);
-    if (result.valid()) return result.asE();
+    if (result.valid())
+      return result.asE();
     return EntityHelper::getEntityForIDEnforce(id);
   }
 
@@ -45,8 +47,7 @@ struct UICollectionHolder {
 
 private:
 #ifdef AFTER_HOURS_UI_SINGLE_COLLECTION
-  UICollectionHolder()
-      : collection(EntityHelper::get_default_collection()) {}
+  UICollectionHolder() : collection(EntityHelper::get_default_collection()) {}
 #else
   UICollectionHolder() : collection(own_collection) {}
 #endif
