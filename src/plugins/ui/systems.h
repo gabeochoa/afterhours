@@ -11,6 +11,7 @@
 #include "../window_manager.h"
 #include "components.h"
 #include "context.h"
+#include "fmt/format.h"
 #include "theme.h"
 #include "ui_collection.h"
 #if __has_include(<magic_enum/magic_enum.hpp>)
@@ -497,6 +498,62 @@ inline bool is_point_inside_entity_tree(EntityID entity_id,
 
   return false;
 }
+
+template <typename InputAction>
+struct InputExclusivitySystem
+    : SystemWithUIContext<tags::All<UITag::InputExclusivity>> {
+  UIContext<InputAction> *context = nullptr;
+  std::vector<std::string> active_gates;
+
+  virtual ~InputExclusivitySystem() {}
+
+  virtual void once(float) override {
+    context = EntityHelper::get_singleton_cmp<UIContext<InputAction>>();
+    if (!context) return;
+    // Remove all gates from last frame
+    for (const auto &name : active_gates) {
+      context->remove_input_gate(name);
+    }
+    active_gates.clear();
+  }
+
+  virtual void for_each_with(Entity &entity, UIComponent &, float) override {
+    if (!context) return;
+    EntityID eid = entity.id;
+    std::string gate_name = fmt::format("input_exclusivity_{}", eid);
+    context->add_input_gate(gate_name, [eid](EntityID id) {
+      if (id == static_cast<EntityID>(-1)) return true;
+      return is_entity_in_ui_tree(eid, id);
+    });
+    active_gates.push_back(gate_name);
+
+    // Clear stale hot/active outside the exclusive tree
+    if (context->hot_id != context->ROOT &&
+        !is_entity_in_ui_tree(eid, context->hot_id)) {
+      context->hot_id = context->ROOT;
+    }
+    if (context->active_id != context->ROOT &&
+        context->active_id != context->FAKE &&
+        !is_entity_in_ui_tree(eid, context->active_id)) {
+      context->active_id = context->ROOT;
+    }
+  }
+
+private:
+  // Check if search_id is a descendant of root_id in the UI entity tree
+  static bool is_entity_in_ui_tree(EntityID root_id, EntityID search_id) {
+    if (root_id == search_id) return true;
+    OptEntity opt = UICollectionHolder::getEntityForID(root_id);
+    if (!opt.has_value()) return false;
+    Entity &entity = opt.asE();
+    if (!entity.has<UIComponent>()) return false;
+    const UIComponent &cmp = entity.get<UIComponent>();
+    for (EntityID child_id : cmp.children) {
+      if (is_entity_in_ui_tree(child_id, search_id)) return true;
+    }
+    return false;
+  }
+};
 
 template <typename InputAction>
 struct CloseDropdownOnClickOutside : System<HasDropdownState, UIComponent> {

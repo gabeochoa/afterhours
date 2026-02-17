@@ -82,8 +82,7 @@ namespace primitive {
 /// }
 /// ```
 ElementResult toggle_button(HasUIContext auto &ctx, EntityParent ep_pair,
-                            ComponentConfig config,
-                            bool &value) {
+                            ComponentConfig config, bool &value) {
   auto [entity, parent] = deref(ep_pair);
 
   // Outline & Ghost: transparent bg, readable text; Outline also adds a border
@@ -92,14 +91,15 @@ ElementResult toggle_button(HasUIContext auto &ctx, EntityParent ep_pair,
         .with_auto_text_color(false)
         .with_custom_text_color(ctx.theme.font);
 
-    if (config.button_variant == ButtonVariant::Outline && !config.has_border()) {
+    if (config.button_variant == ButtonVariant::Outline &&
+        !config.has_border()) {
       config.with_border(config.resolve_background_color(ctx.theme),
                          h720(2.0f));
     }
   }
 
   init_component(ctx, ep_pair, config, ComponentType::Button, true,
-                  "toggle_button");
+                 "toggle_button");
 
   entity.get<UIComponent>().flex_direction = config.flex_direction;
 
@@ -339,7 +339,7 @@ separator(HasUIContext auto &ctx, EntityParent ep_pair,
     }
 
     init_component(ctx, ep_pair, config, ComponentType::Separator, false,
-                    "separator_labeled");
+                   "separator_labeled");
 
     // Create line - label - line structure
     auto line_size = orientation == SeparatorOrientation::Horizontal
@@ -376,7 +376,7 @@ separator(HasUIContext auto &ctx, EntityParent ep_pair,
   // Simple separator line (no label)
   config.with_skip_tabbing(true); // Separators shouldn't be focusable
   init_component(ctx, ep_pair, config, ComponentType::Separator, false,
-                  "separator");
+                 "separator");
 
   return {false, entity};
 }
@@ -426,7 +426,7 @@ image_button(HasUIContext auto &ctx, EntityParent ep_pair,
   auto [entity, parent] = deref(ep_pair);
 
   init_component(ctx, ep_pair, config, ComponentType::Image, true,
-                  "image_button");
+                 "image_button");
 
   auto alignment = config.image_alignment.value_or(
       afterhours::texture_manager::HasTexture::Alignment::Center);
@@ -447,14 +447,14 @@ ElementResult icon_row(HasUIContext auto &ctx, EntityParent ep_pair,
                        ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
-  auto row =
-      hstack(ctx, ep_pair,
-             ComponentConfig::inherit_from(config, "icon_row")
-                 .with_size(config.size)
-                 .with_margin(config.margin)
-                 .with_padding(config.padding)
-                 .with_debug_name(config.debug_name.empty() ? "icon_row"
-                                                            : config.debug_name));
+  auto row = hstack(ctx, ep_pair,
+                    ComponentConfig::inherit_from(config, "icon_row")
+                        .with_size(config.size)
+                        .with_margin(config.margin)
+                        .with_padding(config.padding)
+                        .with_debug_name(config.debug_name.empty()
+                                             ? "icon_row"
+                                             : config.debug_name));
 
   size_t i = 0;
   for (const auto &frame : frames) {
@@ -483,7 +483,8 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
         .with_auto_text_color(false)
         .with_custom_text_color(ctx.theme.font);
 
-    if (config.button_variant == ButtonVariant::Outline && !config.has_border()) {
+    if (config.button_variant == ButtonVariant::Outline &&
+        !config.has_border()) {
       config.with_border(config.resolve_background_color(ctx.theme),
                          h720(2.0f));
     }
@@ -521,8 +522,12 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
     // Label was already applied by init_component via apply_label,
     // so child_id 0 = before label, 1 = after label.
     switch (config.icon_position) {
-      case IconPosition::Left:  make_icon(0); break;
-      case IconPosition::Right: make_icon(1); break;
+    case IconPosition::Left:
+      make_icon(0);
+      break;
+    case IconPosition::Right:
+      make_icon(1);
+      break;
     }
   }
 
@@ -546,7 +551,7 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   init_component(ctx, ep_pair, config, ComponentType::ButtonGroup, false,
-                  "button_group");
+                 "button_group");
 
   // For Row: divide width among buttons
   // For Column: use percent(1.0f) width to fill parent (avoids hardcoded 200px)
@@ -555,9 +560,8 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
       config.size.x_axis = pixels(max_width.value / labels.size());
     } else if (max_width.dim == Dim::Percent ||
                max_width.dim == Dim::ScreenPercent) {
-      config.size.x_axis =
-          Size{max_width.dim, max_width.value / labels.size(),
-               max_width.strictness};
+      config.size.x_axis = Size{max_width.dim, max_width.value / labels.size(),
+                                max_width.strictness};
     } else {
       config.size.x_axis = max_width;
     }
@@ -603,7 +607,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
       .with_align_items(AlignItems::Center)
       .with_no_wrap();
   init_component(ctx, ep_pair, config, ComponentType::Div, false,
-                  "checkbox_row");
+                 "checkbox_row");
 
   entity.template addComponentIfMissing<FocusClusterRoot>();
 
@@ -672,8 +676,9 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   // Set check/X indicator label
   std::string checked_indicator = config.checkbox_checked_indicator.value_or(
       ComponentConfig::DEFAULT_CHECKBOX_CHECKED);
-  std::string unchecked_indicator = config.checkbox_unchecked_indicator.value_or(
-      ComponentConfig::DEFAULT_CHECKBOX_UNCHECKED);
+  std::string unchecked_indicator =
+      config.checkbox_unchecked_indicator.value_or(
+          ComponentConfig::DEFAULT_CHECKBOX_UNCHECKED);
   toggle_config.label = state.on ? checked_indicator : unchecked_indicator;
 
   if (!toggle_config.has_font_override()) {
@@ -716,7 +721,7 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
     config.with_no_wrap();
   }
   init_component(ctx, ep_pair, config, ComponentType::CheckboxGroup, false,
-                  "checkbox_group");
+                 "checkbox_group");
   config.size.y_axis = max_height;
 
   int count = (int)values.count();
@@ -764,18 +769,20 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
   bool changed = false;
 
   // Wrap in a tray for single-tab-stop, arrow-key navigation
-  auto t = tray(ctx, ep_pair,
-                ComponentConfig{}
-                    .with_size(config.size.x_axis.value > 0
-                        ? ComponentSize{config.size.x_axis, children()}
-                        : ComponentSize{percent(1.0f), children()})
-                    .with_flex_direction(FlexDirection::Column)
-                    .with_debug_name("radio_tray"));
+  auto t =
+      tray(ctx, ep_pair,
+           ComponentConfig{}
+               .with_size(config.size.x_axis.value > 0
+                              ? ComponentSize{config.size.x_axis, children()}
+                              : ComponentSize{percent(1.0f), children()})
+               .with_flex_direction(FlexDirection::Column)
+               .with_debug_name("radio_tray"));
 
   // Circle dimensions - use MIN_TOUCH_TARGET for accessible touch area
-  // The visual circle is smaller but the touch target meets accessibility requirements
+  // The visual circle is smaller but the touch target meets accessibility
+  // requirements
   constexpr float touch_target_sz = MIN_TOUCH_TARGET;
-  constexpr float visual_circle_sz = 24.0f;  // Visual size of the radio circle
+  constexpr float visual_circle_sz = 24.0f; // Visual size of the radio circle
   constexpr float dot_sz = 14.0f;
   constexpr float border_w = 2.0f;
 
@@ -785,7 +792,8 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
     // Row button - transparent, for click handling
     // Ensure minimum touch target height
     auto row_size = config.size;
-    if (row_size.y_axis.dim == Dim::Pixels && row_size.y_axis.value < touch_target_sz) {
+    if (row_size.y_axis.dim == Dim::Pixels &&
+        row_size.y_axis.value < touch_target_sz) {
       row_size.y_axis = pixels(touch_target_sz);
     }
     auto row = button(ctx, mk(t.ent(), 100 + i),
@@ -805,17 +813,17 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Outer circle ring - visual element centered within touch target
     Color ring_color = is_selected ? ctx.theme.accent : ctx.theme.font_muted;
-    auto ring =
-        div(ctx, mk(row.ent(), 0),
-            ComponentConfig{}
-                .with_size(ComponentSize{pixels(visual_circle_sz), pixels(visual_circle_sz)})
-                .with_custom_background(ctx.theme.background)
-                .with_border(ring_color, border_w)
-                .with_rounded_corners(RoundedCorners().all_round())
-                .with_roundness(1.0f)
-                .with_margin(Margin{.right = pixels(10)})
-                .with_skip_tabbing(true)
-                .with_debug_name(fmt::format("radio_ring_{}", i)));
+    auto ring = div(ctx, mk(row.ent(), 0),
+                    ComponentConfig{}
+                        .with_size(ComponentSize{pixels(visual_circle_sz),
+                                                 pixels(visual_circle_sz)})
+                        .with_custom_background(ctx.theme.background)
+                        .with_border(ring_color, border_w)
+                        .with_rounded_corners(RoundedCorners().all_round())
+                        .with_roundness(1.0f)
+                        .with_margin(Margin{.right = pixels(10)})
+                        .with_skip_tabbing(true)
+                        .with_debug_name(fmt::format("radio_ring_{}", i)));
 
     // Inner filled dot when selected
     if (is_selected) {
@@ -890,7 +898,7 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
     config.with_no_wrap();
   }
   init_component(ctx, ep_pair, config, ComponentType::ToggleSwitch, false,
-                  "toggle_switch_row");
+                 "toggle_switch_row");
 
   // Add FocusClusterRoot to container for consistent focus ring on entire row
   entity.template addComponentIfMissing<FocusClusterRoot>();
@@ -907,17 +915,16 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
   // Dimensions — declared early so label width can reference track_w
   constexpr float track_w = 52.0f, track_h = 28.0f;
   constexpr float pad = 4.0f;
-  constexpr float knob_sz = track_h - pad * 2.0f;  // 20px
-  constexpr float travel = track_w - knob_sz - pad * 2.0f;  // 24px
+  constexpr float knob_sz = track_h - pad * 2.0f;          // 20px
+  constexpr float travel = track_w - knob_sz - pad * 2.0f; // 24px
 
   // Optional label — when parent width is known in pixels, compute label width
   // explicitly (parent_width - track_width) to avoid expand() resolution issues
   // inside absolutely-positioned containers. Falls back to expand() otherwise.
   if (!label.empty()) {
-    Size label_width =
-        (config.size.x_axis.dim == Dim::Pixels)
-            ? pixels(config.size.x_axis.value - track_w)
-            : expand();
+    Size label_width = (config.size.x_axis.dim == Dim::Pixels)
+                           ? pixels(config.size.x_axis.value - track_w)
+                           : expand();
     div(ctx, mk(entity),
         ComponentConfig::inherit_from(config, "toggle_label")
             .with_size(ComponentSize{label_width, config.size.y_axis})
@@ -932,21 +939,23 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
   // inside the capsule's rounded ends (centers coincide).
 
   // Colors — visible gray for OFF, accent for ON
-  Color track_off = colors::lerp(
-      theme.font_muted,
-      colors::lighten(theme.background, 0.3f), 0.4f);
+  Color track_off = colors::lerp(theme.font_muted,
+                                 colors::lighten(theme.background, 0.3f), 0.4f);
   Color track_on = theme.accent;
-  Color track_color = colors::lerp(track_off, track_on,
-                                   state.animation_progress);
+  Color track_color =
+      colors::lerp(track_off, track_on, state.animation_progress);
 
   // Track toggle — skip_hover_override keeps correct color on hover
   // Explicit zero padding prevents default Spacing::sm button padding
   // which would offset the absolute-positioned knob outside the capsule.
-  auto track_btn = primitive::toggle_button(ctx, mk(entity),
+  auto track_btn = primitive::toggle_button(
+      ctx, mk(entity),
       ComponentConfig::inherit_from(config, "toggle_track")
           .with_size(ComponentSize{pixels(track_w), pixels(track_h)})
-          .with_padding(Padding{.top = pixels(0), .left = pixels(0),
-                                .bottom = pixels(0), .right = pixels(0)})
+          .with_padding(Padding{.top = pixels(0),
+                                .left = pixels(0),
+                                .bottom = pixels(0),
+                                .right = pixels(0)})
           .with_custom_background(track_color)
           .with_rounded_corners(RoundedCorners().all_round())
           .with_roundness(0.5f)
@@ -962,7 +971,8 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
   div(ctx, mk(track_btn.ent(), 10),
       ComponentConfig{}
           .with_debug_name("toggle_on_indicator")
-          .with_size(ComponentSize{pixels(track_w / 2.0f - pad), pixels(track_h - pad * 2.0f)})
+          .with_size(ComponentSize{pixels(track_w / 2.0f - pad),
+                                   pixels(track_h - pad * 2.0f)})
           .with_absolute_position()
           .with_translate(pixels(pad + 1.0f), pixels(pad))
           .with_label("|")
@@ -974,7 +984,8 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
   div(ctx, mk(track_btn.ent(), 11),
       ComponentConfig{}
           .with_debug_name("toggle_off_indicator")
-          .with_size(ComponentSize{pixels(track_w / 2.0f - pad), pixels(track_h - pad * 2.0f)})
+          .with_size(ComponentSize{pixels(track_w / 2.0f - pad),
+                                   pixels(track_h - pad * 2.0f)})
           .with_absolute_position()
           .with_translate(pixels(track_w / 2.0f), pixels(pad))
           .with_label("O")
@@ -1086,8 +1097,8 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Create main label (only when label is provided)
   if (!compact) {
-    std::string main_label_text =
-        detail::generate_label_text(original_label, owned_value, handle_label_position);
+    std::string main_label_text = detail::generate_label_text(
+        original_label, owned_value, handle_label_position);
     auto label_corners = RoundedCorners(config.rounded_corners.value())
                              .sharp(TOP_RIGHT)
                              .sharp(BOTTOM_RIGHT);
@@ -1165,7 +1176,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                  handle_label_position ==
                      SliderHandleValueLabelPosition::WithLabelNewLine) {
         detail::update_main_label(target, original_label, sliderState.value,
-                          handle_label_position);
+                                  handle_label_position);
       }
     }
   };
@@ -1309,20 +1320,21 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
               .with_font(UIComponent::SYMBOL_FONT, 16.f)
               .with_no_wrap()
               .with_render_layer(config.render_layer))) {
-    on_option_click(entity, detail::prev_index(option_index - 1, options.size()));
+    on_option_click(entity,
+                    detail::prev_index(option_index - 1, options.size()));
   }
 
   for (size_t i = 0; i < options.size(); i++) {
-    if (button(
-            ctx, mk(entity, child_index + i),
-            ComponentConfig::inherit_from(config,
-                                          fmt::format("option {}", i + 1))
-                .with_size(ComponentSize{pixels(default_component_size.x * 0.75f),
-                                         config.size.y_axis})
-                .with_label(std::string(options[i]))
-                .with_no_wrap()
-                .with_padding(Spacing::md)
-                .with_render_layer(config.render_layer + 1))) {
+    if (button(ctx, mk(entity, child_index + i),
+               ComponentConfig::inherit_from(config,
+                                             fmt::format("option {}", i + 1))
+                   .with_size(
+                       ComponentSize{pixels(default_component_size.x * 0.75f),
+                                     config.size.y_axis})
+                   .with_label(std::string(options[i]))
+                   .with_no_wrap()
+                   .with_padding(Spacing::md)
+                   .with_render_layer(config.render_layer + 1))) {
       on_option_click(entity, i + 1);
     }
   }
@@ -1348,20 +1360,6 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
   option_index = dropdownState.last_option_clicked;
   return ElementResult{dropdownState.changed_since, entity,
                        dropdownState.last_option_clicked};
-}
-
-// Check if search_id is a descendant of root_id in the UI entity tree
-inline bool is_entity_in_ui_tree(EntityID root_id, EntityID search_id) {
-  if (root_id == search_id) return true;
-  OptEntity opt = UICollectionHolder::getEntityForID(root_id);
-  if (!opt.has_value()) return false;
-  Entity &entity = opt.asE();
-  if (!entity.has<UIComponent>()) return false;
-  const UIComponent &cmp = entity.get<UIComponent>();
-  for (EntityID child_id : cmp.children) {
-    if (is_entity_in_ui_tree(child_id, search_id)) return true;
-  }
-  return false;
 }
 
 template <typename Container>
@@ -1433,18 +1431,15 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
     dropdownState.last_option_clicked = opt;
     dropdownState.changed_since = true;
 
-    EntityID id =
-        entity.get<UIComponent>().children[trigger_child_index];
+    EntityID id = entity.get<UIComponent>().children[trigger_child_index];
     Entity &trigger = UICollectionHolder::getEntityForIDEnforce(id);
     trigger.get<ui::HasLabel>().label =
-        fmt::format("{}{}",
-                    std::string(options[opt]),
+        fmt::format("{}{}", std::string(options[opt]),
                     config.dropdown_closed_indicator.value_or(" v"));
     ctx.set_focus(trigger.id);
   };
 
-  auto current_option =
-      std::string(options[dropdownState.last_option_clicked]);
+  auto current_option = std::string(options[dropdownState.last_option_clicked]);
   auto drop_closed = config.dropdown_closed_indicator.value_or(" v");
   auto drop_open = config.dropdown_open_indicator.value_or(" ^");
   auto drop_arrow_icon = dropdownState.on ? drop_open : drop_closed;
@@ -1465,13 +1460,12 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   //   and passed it via with_hot_siblings({label_id}) to the main button.
   // Re-adding this would require restoring: ComponentConfig hot_siblings api,
   // ui::BringsHotSiblings component, and the rendering propagation logic.
-  auto main_btn = button(
-      ctx, mk(entity),
-      ComponentConfig::inherit_from(config, "option 1")
-          .with_size(config_size)
-          .with_label(main_button_label)
-          .with_rounded_corners(button_corners)
-          .with_render_layer(config.render_layer));
+  auto main_btn = button(ctx, mk(entity),
+                         ComponentConfig::inherit_from(config, "option 1")
+                             .with_size(config_size)
+                             .with_label(main_button_label)
+                             .with_rounded_corners(button_corners)
+                             .with_render_layer(config.render_layer));
   if (main_btn) {
     dropdownState.on = !dropdownState.on;
   }
@@ -1484,16 +1478,16 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // When open, show options in a tray for arrow-key navigation
   if (dropdownState.on) {
-    auto options_tray = tray(
-        ctx, mk(entity),
-        ComponentConfig::inherit_from(config, "dropdown_options_tray")
-            .with_size(ComponentSize{percent(1.0f),
-                                     children(config.size.y_axis.value)})
-            .with_flex_direction(FlexDirection::Column)
-            .with_no_wrap()
-            .with_absolute_position()
-            .with_translate(pixels(0), config.size.y_axis)
-            .with_render_layer(config.render_layer + 1));
+    auto options_tray =
+        tray(ctx, mk(entity),
+             ComponentConfig::inherit_from(config, "dropdown_options_tray")
+                 .with_size(ComponentSize{percent(1.0f),
+                                          children(config.size.y_axis.value)})
+                 .with_flex_direction(FlexDirection::Column)
+                 .with_no_wrap()
+                 .with_absolute_position()
+                 .with_translate(pixels(0), config.size.y_axis)
+                 .with_render_layer(config.render_layer + 1));
 
     // Set tray selection to current option only when first opened
     if (!dropdownState.was_open_last_frame &&
@@ -1503,12 +1497,12 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
     }
 
     for (size_t i = 0; i < options.size(); ++i) {
-      if (button(ctx, mk(options_tray.ent(), i),
-                 ComponentConfig::inherit_from(
-                     config, fmt::format("dropdown_opt_{}", i))
-                     .with_size(
-                         ComponentSize{percent(1.0f), config.size.y_axis})
-                     .with_label(std::string(options[i])))) {
+      if (button(
+              ctx, mk(options_tray.ent(), i),
+              ComponentConfig::inherit_from(config,
+                                            fmt::format("dropdown_opt_{}", i))
+                  .with_size(ComponentSize{percent(1.0f), config.size.y_axis})
+                  .with_label(std::string(options[i])))) {
         on_option_click(entity, i);
       }
     }
@@ -1529,8 +1523,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Close on focus loss (handles Tab-to-close and click-outside-to-close)
     if (dropdownState.was_open_last_frame && dropdownState.on) {
-      bool focus_in_dropdown =
-          ctx.has_focus(options_tray.ent().id);
+      bool focus_in_dropdown = ctx.has_focus(options_tray.ent().id);
       if (!focus_in_dropdown) {
         dropdownState.on = false;
       }
@@ -1539,16 +1532,12 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
 
   dropdownState.was_open_last_frame = dropdownState.on;
 
+  // TODO add a way to set tags directly from a bool
   // Block clicks on elements behind the open dropdown
-  std::string gate_name = fmt::format("dropdown_{}", entity.id);
   if (dropdownState.on) {
-    EntityID dropdown_id = entity.id;
-    ctx.add_input_gate(gate_name, [dropdown_id](EntityID id) {
-      if (id == static_cast<EntityID>(-1)) return true;
-      return is_entity_in_ui_tree(dropdown_id, id);
-    });
+    entity.enableTag(UITag::InputExclusivity);
   } else {
-    ctx.remove_input_gate(gate_name);
+    entity.disableTag(UITag::InputExclusivity);
   }
 
   option_index = dropdownState.last_option_clicked;
@@ -1556,7 +1545,8 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                        dropdownState.last_option_clicked};
 }
 
-// TODO: Consider making navigation_bar a thin wrapper around stepper(num_visible=3)
+// TODO: Consider making navigation_bar a thin wrapper around
+// stepper(num_visible=3)
 template <typename Container>
 ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
                              const Container &options, size_t &option_index,
@@ -1586,12 +1576,12 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
   }
   // TODO - add default
   config.flex_direction = FlexDirection::Row;
-  config.with_no_wrap();  // Prevent arrow buttons from wrapping to new line
+  config.with_no_wrap(); // Prevent arrow buttons from wrapping to new line
 
   // Prevent the parent navigation bar from getting a background color
   config.with_color_usage(Theme::Usage::None);
   init_component(ctx, ep_pair, config, ComponentType::NavigationBar, false,
-                  "navigation_bar");
+                 "navigation_bar");
 
   bool clicked = false;
   size_t new_index = navState.current_index();
@@ -1697,7 +1687,7 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
   config.flex_direction = FlexDirection::Row;
   config.with_color_usage(Theme::Usage::None);
   init_component(ctx, ep_pair, config, ComponentType::TabContainer, false,
-                  "tab_container");
+                 "tab_container");
 
   bool changed = false;
   const size_t num_tabs = tab_labels.size();
@@ -1711,9 +1701,9 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Active tab: surface color with bold text
     // Inactive tab: slightly darkened background with muted text
-    Color tab_bg = is_active
-                       ? ctx.theme.surface
-                       : afterhours::colors::darken(ctx.theme.background, 0.92f);
+    Color tab_bg =
+        is_active ? ctx.theme.surface
+                  : afterhours::colors::darken(ctx.theme.background, 0.92f);
     Color tab_text = is_active ? ctx.theme.font : ctx.theme.font_muted;
 
     // Active tab: bold accent underline (4px)
@@ -1726,8 +1716,8 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
     // Each tab is a button with border-bottom for the underline indicator
     auto tab_config =
         ComponentConfig::inherit_from(config, fmt::format("tab_{}", i))
-            .with_size(ComponentSize{percent(tab_width_percent),
-                                    config.size.y_axis})
+            .with_size(
+                ComponentSize{percent(tab_width_percent), config.size.y_axis})
             .with_label(std::string(label))
             .with_custom_background(tab_bg)
             .with_custom_text_color(tab_text)
@@ -1768,7 +1758,7 @@ ElementResult progress_bar(
 
   // Initialize as a non-interactive div
   init_component(ctx, ep_pair, config, ComponentType::Div, false,
-                  "progress_bar");
+                 "progress_bar");
 
   // Normalize value to 0-1 range
   float normalized =
@@ -1882,7 +1872,7 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Initialize component
   init_component(ctx, ep_pair, config, ComponentType::CircularProgress, false,
-                  "circular_progress");
+                 "circular_progress");
 
   // Clamp value
   float normalized = std::clamp(value, 0.0f, 1.0f);
@@ -1909,8 +1899,8 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
             window_manager::ProvidesCurrentResolution>()) {
       screen_height = static_cast<float>(pcr->current_resolution.height);
     }
-    thickness =
-        resolve_to_pixels(config.border_config->uniform_thickness(), screen_height);
+    thickness = resolve_to_pixels(config.border_config->uniform_thickness(),
+                                  screen_height);
   }
 
   // Store state on entity for rendering
@@ -1965,10 +1955,10 @@ enum struct DecorativeFrameStyle {
 ///         .with_custom_background(kraft_tan)
 ///         .with_border(frame_brown, 12.0f));
 /// ```
-ElementResult decorative_frame(HasUIContext auto &ctx, EntityParent ep_pair,
-                               ComponentConfig config = ComponentConfig(),
-                               DecorativeFrameStyle style =
-                                   DecorativeFrameStyle::KraftPaper) {
+ElementResult decorative_frame(
+    HasUIContext auto &ctx, EntityParent ep_pair,
+    ComponentConfig config = ComponentConfig(),
+    DecorativeFrameStyle style = DecorativeFrameStyle::KraftPaper) {
   auto [entity, parent] = deref(ep_pair);
 
   // Apply styling defaults if available
@@ -1993,7 +1983,8 @@ ElementResult decorative_frame(HasUIContext auto &ctx, EntityParent ep_pair,
   Size frame_thickness_size = config.border_config.has_value()
                                   ? config.border_config->uniform_thickness()
                                   : h720(12.0f);
-  float frame_thickness = resolve_to_pixels(frame_thickness_size, screen_height);
+  float frame_thickness =
+      resolve_to_pixels(frame_thickness_size, screen_height);
 
   // Determine colors
   // Frame color: from border config, or derive from theme
@@ -2006,10 +1997,11 @@ ElementResult decorative_frame(HasUIContext auto &ctx, EntityParent ep_pair,
   // Initialize main container (no background - children will draw it)
   config.with_color_usage(Theme::Usage::None);
   init_component(ctx, ep_pair, config, ComponentType::DecorativeFrame, false,
-                  "decorative_frame");
+                 "decorative_frame");
 
   // Get computed size for positioning edge elements (corners, highlights)
-  // Note: On first frame, computed values may be 0 - edge elements skip rendering
+  // Note: On first frame, computed values may be 0 - edge elements skip
+  // rendering
   UIComponent &cmp = entity.template get<UIComponent>();
   float w = cmp.computed[Axis::X];
   float h = cmp.computed[Axis::Y];
@@ -2087,7 +2079,8 @@ ElementResult decorative_frame(HasUIContext auto &ctx, EntityParent ep_pair,
           ComponentConfig{}
               .with_size(ComponentSize{corner_size, corner_size})
               .with_absolute_position()
-              .with_translate(w - corner_size_px - corner_offset_px, corner_offset_px)
+              .with_translate(w - corner_size_px - corner_offset_px,
+                              corner_offset_px)
               .with_custom_background(corner_color)
               .with_skip_tabbing(true)
               .with_debug_name("corner_tr"));
@@ -2097,7 +2090,8 @@ ElementResult decorative_frame(HasUIContext auto &ctx, EntityParent ep_pair,
           ComponentConfig{}
               .with_size(ComponentSize{corner_size, corner_size})
               .with_absolute_position()
-              .with_translate(corner_offset_px, h - corner_size_px - corner_offset_px)
+              .with_translate(corner_offset_px,
+                              h - corner_size_px - corner_offset_px)
               .with_custom_background(corner_color)
               .with_skip_tabbing(true)
               .with_debug_name("corner_bl"));
@@ -2126,7 +2120,8 @@ ElementResult decorative_frame(HasUIContext auto &ctx, EntityParent ep_pair,
 
   } else if (style == DecorativeFrameStyle::Inset) {
     // Inset style: sunken effect with shadow
-    Color shadow_color = colors::opacity_pct(colors::darken(frame_color, 0.8f), 0.6f);
+    Color shadow_color =
+        colors::opacity_pct(colors::darken(frame_color, 0.8f), 0.6f);
     Color highlight_color = colors::lighten(frame_color, 0.2f);
 
     // Outer frame
@@ -2191,10 +2186,8 @@ ElementResult decorative_frame(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_size(fill_size)
             .with_absolute_position()
             .with_translate(inset, inset)
-            .with_margin(Margin{.top = inset,
-                                .bottom = inset,
-                                .left = inset,
-                                .right = inset})
+            .with_margin(Margin{
+                .top = inset, .bottom = inset, .left = inset, .right = inset})
             .with_custom_background(bg_color)
             .with_skip_tabbing(true)
             .with_debug_name("frame_bg"));
@@ -2213,8 +2206,10 @@ ElementResult decorative_frame(HasUIContext auto &ctx, EntityParent ep_pair,
 /// @param options The string options to cycle through
 /// @param option_index Current selection index (mutated on arrow click)
 /// @param config Optional ComponentConfig overrides
-/// @param num_visible Number of items to show (1=current only, 3=prev/current/next, etc.)
-///        Always treated as odd; even values are clamped to the next odd number.
+/// @param num_visible Number of items to show (1=current only,
+/// 3=prev/current/next, etc.)
+///        Always treated as odd; even values are clamped to the next odd
+///        number.
 /// @return ElementResult — true if value changed
 ///
 /// Usage:
@@ -2249,7 +2244,7 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
   config.justify_content = JustifyContent::SpaceBetween;
 
   init_component(ctx, ep_pair, config, ComponentType::Stepper, false,
-                  "stepper");
+                 "stepper");
 
   // State + keyboard + focus setup
   HasStepperState &stepperState = init_state<HasStepperState>(
@@ -2262,28 +2257,24 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
       [](Entity &ent, int dir) {
         auto &state = ent.get<HasStepperState>();
         if (dir < 0)
-          state.index =
-              detail::prev_index(state.index, state.num_options);
+          state.index = detail::prev_index(state.index, state.num_options);
         else
-          state.index =
-              detail::next_index(state.index, state.num_options);
+          state.index = detail::next_index(state.index, state.num_options);
         state.changed_since = true;
       });
 
   // Shared arrow button config
   const float arrow_w = 24.0f;
-  auto arrow_cfg =
-      ComponentConfig::inherit_from(config, "stepper_arrow")
-          .with_size(ComponentSize{pixels(arrow_w), percent(1.0f)})
-          .with_background(Theme::Usage::None)
-          .with_custom_text_color(ctx.theme.font_muted)
-          .with_alignment(TextAlignment::Center);
+  auto arrow_cfg = ComponentConfig::inherit_from(config, "stepper_arrow")
+                       .with_size(ComponentSize{pixels(arrow_w), percent(1.0f)})
+                       .with_background(Theme::Usage::None)
+                       .with_custom_text_color(ctx.theme.font_muted)
+                       .with_alignment(TextAlignment::Center);
 
   // Left arrow <
   if (button(ctx, mk(entity),
-             ComponentConfig{arrow_cfg}
-                 .with_label("<")
-                 .with_debug_name("stepper_left"))) {
+             ComponentConfig{arrow_cfg}.with_label("<").with_debug_name(
+                 "stepper_left"))) {
     stepperState.index =
         detail::prev_index(stepperState.index, stepperState.num_options);
     stepperState.changed_since = true;
@@ -2309,19 +2300,18 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
                  .with_skip_tabbing(true)
                  .with_debug_name("stepper_labels"));
 
-  // TODO: Make neighbor styling configurable (muted color, smaller font, opacity, etc.)
+  // TODO: Make neighbor styling configurable (muted color, smaller font,
+  // opacity, etc.)
   for (size_t i = 0; i < num_visible; ++i) {
     // offset from center: -half .. 0 .. +half
     int offset = static_cast<int>(i) - static_cast<int>(half);
     size_t display_idx = stepperState.index;
     if (offset < 0) {
       for (int j = 0; j < -offset; ++j)
-        display_idx =
-            detail::prev_index(display_idx, stepperState.num_options);
+        display_idx = detail::prev_index(display_idx, stepperState.num_options);
     } else if (offset > 0) {
       for (int j = 0; j < offset; ++j)
-        display_idx =
-            detail::next_index(display_idx, stepperState.num_options);
+        display_idx = detail::next_index(display_idx, stepperState.num_options);
     }
 
     bool is_center = (offset == 0);
@@ -2334,15 +2324,13 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
                                               : ctx.theme.font_muted)
             .with_alignment(TextAlignment::Center)
             .with_skip_tabbing(true)
-            .with_debug_name(is_center ? "stepper_value"
-                                       : "stepper_neighbor"));
+            .with_debug_name(is_center ? "stepper_value" : "stepper_neighbor"));
   }
 
   // Right arrow >
   if (button(ctx, mk(entity),
-             ComponentConfig{arrow_cfg}
-                 .with_label(">")
-                 .with_debug_name("stepper_right"))) {
+             ComponentConfig{arrow_cfg}.with_label(">").with_debug_name(
+                 "stepper_right"))) {
     stepperState.index =
         detail::next_index(stepperState.index, stepperState.num_options);
     stepperState.changed_since = true;

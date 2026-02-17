@@ -503,6 +503,14 @@ struct HasScrollView : BaseComponent {
 // Unlike HasScrollView, this only clips without scroll functionality
 struct HasClipChildren : BaseComponent {};
 
+// Tag IDs for UI overlay input exclusivity.
+enum class UITag : TagId {
+  InputExclusivity = 40, // Entity's tree receives exclusive input, blocking all
+                         // other entities. Used by overlay components (dropdowns,
+                         // popovers, etc.) that should consume clicks without
+                         // passing them through to elements behind.
+};
+
 // Tag IDs for drag-and-drop entity roles.
 // These are set/cleared by the HandleDragGroups systems so that tagged
 // entities can be discovered via queries instead of storing EntityIDs.
