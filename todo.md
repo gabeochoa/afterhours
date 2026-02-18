@@ -1,192 +1,190 @@
 # TODO List
 
-> **📋 Regeneration Instructions for Cursor Agents:**
-> 
+> **Regeneration Instructions for Cursor Agents:**
+>
 > To update this file with current TODOs from the codebase, follow these steps:
-> 
+>
 > 1. **Search for TODO comments:**
 >    ```bash
->    grep -r --include="*.h" --include="*.cpp" --include="*.c" --include="*.hpp" --exclude-dir="vendor" "TODO\|FIXME\|HACK\|XXX\|NOTE" src/ example/ README.md
+>    grep -rn --include="*.h" --include="*.cpp" --include="*.c" --include="*.hpp" --exclude-dir="vendor" "TODO\|FIXME\|HACK\|XXX" vendor/afterhours/src/
 >    ```
-> 
+>
 > 2. **For each TODO found:**
->    - Read the surrounding code context (±5-10 lines) to understand the issue
+>    - Read the surrounding code context (5-10 lines) to understand the issue
 >    - Categorize as: Bug, Performance, Feature, Architecture, Documentation, etc.
->    - Assign priority: 🔴 High (bugs/safety), 🟡 Medium (performance/arch), 🟢 Low (features)
+>    - Assign priority: High (bugs/safety), Medium (performance/arch), Low (features)
 >    - Write clear explanation of what the TODO actually means and why it exists
-> 
+>
 > 3. **Organize by:**
->    - Core System (entity, query, system, logging, etc.)
->    - Plugins (input, UI, texture, autolayout, etc.)  
->    - Examples and Documentation
->    - Technical Notes
-> 
+>    - Core System (library, bitset, developer)
+>    - Plugins (input, UI subsections, E2E testing, texture, autolayout, modal)
+>    - Backend-specific (sokol, etc.)
+>
 > 4. **Include summary section with:**
->    - Priority breakdown (High/Medium/Low)
->    - Statistics (total TODOs, critical issues, etc.)
->    - Quick reference for critical bugs vs features
-> 
+>    - Priority breakdown (High/Medium/Low/Informational)
+>    - Statistics (total TODOs, by category)
+>
 > 5. **Exclude vendor directory** - contains third-party code TODOs we don't control
-> 
-> 🔄 **Last Updated:** [Update this date when regenerating]
 
 ---
 
-This document contains all TODO, FIXME, HACK, XXX, and NOTE comments found in the codebase, analyzed with context to understand the actual issues.
+This document contains all TODO comments found in `vendor/afterhours/src/`, analyzed with context to understand the actual issues.
 
 ## Core System TODOs
 
-### Entity Query System (`src/entity_query.h`)
-- **Line 39-44**: **API Design Improvement** - Want cleaner query negation syntax like `.not(whereHasComponent<Example>())` instead of current verbose approach, but template type deduction makes this challenging
-- **Line 118**: **Entity Conversion Support** - Missing functionality to convert Entities to other Entity types in the ordering system
-- **Line 219-222**: **Performance - Memory Allocation** - Query system allocates/deallocates entire entity lists on every query. Should use indexer with filtering and copying at the end instead
-- **Line 224-225**: **Entity Lifecycle Issue** - Newly created entities aren't available in queries until next system runs, which may cause timing issues (workaround: force_merge option)
-- **Line 321**: **Performance - Unnecessary Sorting** - No need to sort when only one item exists in result set
-- **Line 322**: **Performance - Partial Sort Optimization** - When using `gen_first()`, could use partial sort instead of full sort for better performance
+### Library (`src/library.h`)
+- **Line 101**: **Feature — Random Generator** — Random generator is stubbed out; always uses index 0 instead of a proper random selection from matched results
 
-### System Framework (`src/system.h`)
-- **Line 49-55**: **Template Metaprogramming Challenge** - Want to support `Not<>` queries (e.g., `System<Health, Not<Dead>>`) to filter out unwanted components, but template metaprogramming complexity is blocking implementation
-- **Line 159-161**: **Const System Registration Issue** - Systems that could be const but are registered as update systems fail because update only calls non-const `for_each_with` methods
-
-### Entity Management (`src/entity.h`)
-- **Line 235-238**: **Modern C++ Improvement** - Consider switching to functional monadic style using `optional.transform` to handle optional operations without exposing underlying value or existence checks
-
-### Entity Helper (`src/entity_helper.h`)
-- **Line 31**: **Code Quality - Typo** - Simple spelling error needs correction
-- **Line 206**: **Technical Debt - shared_ptr Conversion** - Temporary conversion utility for things that currently need shared_ptr, suggests architectural inconsistency
-
-### Base Component (`src/base_component.h`)
-- **Line 24-28**: **Broken Component Limit Check** - Component ID overflow validation is commented out because "it doesn't work for some reason" - potential memory safety issue
+### Bitset Utilities (`src/bitset_utils.h`)
+- **Line 90**: **Code Quality — Combine Functions** — Two related utility functions should be merged
 
 ### Developer Tools (`src/developer.h`)
-- **Line 58**: **Code Organization** - Developer tools should be moved to dedicated file for better organization
-
-### Logging System (`src/logging.h`)
-- **Line 4**: **Missing Implementation** - Logging functions need to be actually implemented
-- **Line 5**: **Code Organization** - Move logging to dedicated log.h file and include in other library parts
+- **Line 68**: **Architecture — Code Organization** — Developer tools should be moved to a dedicated file
 
 ## Plugin TODOs
 
+### Color (`src/plugins/color.h`)
+- **Line 177**: **Architecture — Vector Type Abstraction** — Consider using `#ifdef VECTOR_TYPE` to avoid hardcoding vector type
+
 ### Texture Manager (`src/plugins/texture_manager.h`)
-- **Line 51**: **Code Reuse Issue** - Code was "stolen from transform" component, suggesting duplication that should be refactored
-- **Line 87**: **Missing Feature - Text Alignment** - Need support for InnerLeft and InnerRight text alignment options
+- **Line 52**: **Code Quality — Duplicated Code** — Code was copied from transform component; should be refactored to share
+- **Line 88**: **Feature — Text Alignment** — Need support for `InnerLeft` and `InnerRight` alignment options
+
+### AutoLayout (`src/plugins/autolayout.h`)
+- **Line 575**: **Configuration — Fallback Behavior** — Questioning if fallback behavior should be a configurable setting
+- **Line 716**: **Layout Logic — Flex Children** — Unsure about applying sizing logic to non-1.0 flex children
+- **Line 812**: **Layout Constraint** — Cannot enforce size assertions when text wrapping is enabled
+
+### Modal (`src/plugins/modal.h`)
+- **Line 47**: **Architecture — Config Integration** — Should use `ComponentConfig` for modal configuration
+- **Line 317**: **Feature — Configuration Support** — Add support for modal configuration options
 
 ### Input System (`src/plugins/input_system.h`)
-- **Line 114**: **Cross-Platform Controller Support** - Currently only using Xbox controller button names, need PlayStation and other controller support
-- **Line 149**: **Missing Platform Support** - Need macOS-specific controller icons
-- **Line 359**: **Key Mapping Bug** - Investigating why a key maps to the same value as KEY_R (potential input conflict)
-- **Line 376**: **Complex Implementation** - Cryptic "good luck" comment suggests difficult/complex implementation ahead
-- **Line 443**: **Configuration Missing** - Gamepad deadzone (0.25) is hardcoded, should be user-configurable
-- **Line 514**: **Architecture Issue** - Need to replace with singleton query pattern
-- **Line 523**: **Namespace Organization** - Input functionality should be moved out of input namespace for better organization
+- **Line 106-109**: **Informational — macOS Workaround** — `raylib::IsMouseButtonPressed` is broken on macOS because `glfwSwapBuffers` pumps the Cocoa event queue, setting `currentButtonState` before `PollInputEvents` copies current→previous. Manual edge detection via `IsMouseButtonDown` is used instead. (Active workaround, not a TODO to fix.)
+- **Line 236**: **Feature — Controller Support** — Currently only using Xbox controller button names; need PlayStation and other controller icons
+- **Line 272**: **Feature — macOS Icon** — Need macOS-specific icon for super/command key
+- **Line 482**: **Informational (Raylib Upstream)** — `KEY_MENU` maps to the same value as `KEY_R`. Raylib 5.5 adds `KEY_MENU` for Android; potential upstream conflict.
+- **Line 643**: **Feature — Mouse Position** — `get_mouse_position()` is not implemented ("good luck")
+- **Line 772**: **Feature — Configurable Deadzone** — Gamepad deadzone (0.25) is hardcoded; should be user-configurable
+- **Line 894**: **Architecture — Singleton Query** — `get_input_collector()` should use a singleton query pattern
+- **Line 904**: **Architecture — Namespace** — Input system struct should be moved out of the `input` namespace
+
+### E2E Testing
+
+#### Input Injector (`src/plugins/e2e_testing/input_injector.h`)
+- **Line 10**: **Architecture — Input Parity** — E2E input injector should match 1-to-1 with the UI input system to share code
+
+#### Pending Command (`src/plugins/e2e_testing/pending_command.h`)
+- **Line 111**: **Design Decision — Error Handling** — Should pending command failures throw exceptions or auto-fail?
+
+#### Runner (`src/plugins/e2e_testing/runner.h`)
+- **Line 129**: **Feature — Plugin Registration** — Add a way for plugins to register their own e2e testing commands
+
+#### UI Commands (`src/plugins/e2e_testing/ui_commands.h`)
+- **Line 66**: **Feature — Conversion Helper** — Add a `gen_lambda()` helper for entity conversion
+- **Line 367**: **Feature — Slider Calculation** — Calculate percentage from slider min/max when `HasSliderState` supports it
+- **Line 410**: **Feature — Wait + Click** — Add wait and option-click logic for e2e tests
 
 ### UI System
 
+#### Context (`src/plugins/ui/context.h`)
+- **Lines 3-9**: **Architecture — C++20 Concepts** — Consider using C++20 concepts for type constraints (see `e2e_testing/concepts.h` for examples)
+- **Line 69**: **Architecture — InputBitset Coupling** — `InputBitset` definition should move to input system; currently creates a dependency on `magic_enum` in the UI layer
+
 #### Theme (`src/plugins/ui/theme.h`)
-- **Line 56**: **UI Design - Color Choice** - Current error color needs improvement, better alternative needed
+- **Line 61**: **Architecture — Font Identification** — Investigate using a `FontID` enum instead of strings for type safety
+
+#### Component Config (`src/plugins/ui/component_config.h`)
+- **Lines 29-36**: **Architecture — Config Splitting** — Consider splitting monolithic `ComponentConfig` into concept-constrained configs per component type (e.g., `TextInputConfig` only exposes text-input-relevant methods)
+- **Line 87**: **Design Decision — Inheritance** — Should all component config properties be inheritable?
+- **Line 548**: **Code Quality — Rename** — Rename method to `is_absolute()` for clarity
+
+#### Components (`src/plugins/ui/components.h`)
+- **Line 114**: **Architecture — State Unification** — Consider unifying `HasStepperState` and `HasDropdownState` since a stepper is essentially a dropdown variant
+- **Line 520**: **Code Quality — Magic Numbers** — Build more confidence around how to set numeric values to avoid issues
+- **Line 534**: **Feature — Drag Groups** — Consider adding named drag groups and accept-list filtering
+
+#### Entity Management (`src/plugins/ui/entity_management.h`)
+- **Line 60**: **Feature — Element Tracking** — Add a count of how many UI elements are created
 
 #### Rendering (`src/plugins/ui/rendering.h`)
-- **Line 36**: **Performance - Missing Caching** - Rendering system needs caching implementation for better performance
-- **Line 296**: **UI Design - Color Uncertainty** - Questioning if an additional color is needed for specific UI element
-- **Line 338**: **Code Cleanup** - Note indicates TODO might not be needed (potential cleanup item)
-- **Line 345-346**: **Filter Bug Investigation** - Adding certain components to filter causes query to return no entities (filtering logic bug)
+- **Line 337**: **Performance — Caching** — Rendering system needs caching for better performance
+- **Line 1444**: **Note** — Self-referential note indicating TODO might not be needed
 
-#### UI Context (`src/plugins/ui/context.h`)
-- **Line 34**: **Architecture - Code Organization** - UI context code should be moved to input system
-- **Line 53**: **Circular Dependency Issue** - Can't add styling defaults due to circular dependency that needs resolution
-- **Line 115**: **Incomplete Implementation** - Handling logic for certain UI use cases is incomplete
+#### Core Components (`src/plugins/ui/ui_core_components.h`)
+- **Line 263**: **Configuration — Default Values** — Uncertain about default spacing values (5,5 vs 10,10)
 
-#### UI Systems (`src/plugins/ui/systems.h`)
-- **Line 27**: **Architecture - Code Organization** - UI system code should live inside input_system
-- **Line 176**: **Template System Limitation** - Likes current approach but wishes it worked better with Tags
-- **New**: **Feature - Mobile Input Support** - Define a mobile gesture model for act-on-press that preserves scroll/drag interactions when mobile support is added
+#### Systems (`src/plugins/ui/systems.h`)
+- **Line 69-70**: **Architecture — Wrong Module** — Function should live inside `input_system` but doing so would require `magic_enum` as a dependency there
+- **Line 279**: **Architecture — System Filter** — Should move logic to a system-level filter
+- **Line 367**: **Architecture — Tag Support** — Template approach works but wishes it worked better with Tags without requiring `UIComponent` in `for_each_with`
+- **Line 771**: **Feature — Repeat Rate** — Consider using a different key repeat rate for WidgetLeft
+- **Line 811**: **Feature — Repeat Rate** — Consider using a different key repeat rate (duplicate context)
+- **Line 926**: **Architecture — Side Effects** — Figure out if current approach will actually cause trouble
+- **Line 955**: **Architecture — Pound Define** — Replace magic number validation (options > 100) with a `#define`
+- **Line 1177**: **Performance — Inlining** — Consider inlining drag-tag query helpers
+- **Line 1200**: **Feature — Gen For Each** — Need a `gen_for_each()` or equivalent for tag operations
+- **Line 1244**: **Feature — Deep Clone** — Only flat properties (HasLabel, HasColor) are copied during drag. Dragged items with children won't render correctly; consider deep-cloning subtree
+- **Line 1549**: **Architecture — Tag Conversion** — Consider converting `was_rendered_to_screen` to a tag
+- **Line 1552**: **Code Quality — Combine Checks** — Combine `should_hide` and `ShouldHide` tag checks
+- **Line 1581**: **Feature — Natural Scroll** — Add support for customizing scroll direction ("natural" scroll)
 
-#### UI Providers (`src/plugins/ui/providers.h`)
-- **Line 88**: **Documentation Reference** - References message above for context (incomplete TODO)
+#### Immediate Mode Components (`src/plugins/ui/imm_components.h`)
+- **Line 65**: **Architecture — Namespace** — Consider moving existing primitives (div, button, sprite, image) into a `primitives` namespace
+- **Line 67**: **Architecture — Namespace** — Consider whether stateful convenience wrappers should live in a separate namespace
+- **Line 497**: **Code Quality — Button Wrapping Hack** — Current approach to get buttons to wrap is a hack; needs a cleaner solution
+- **Line 1123**: **Bug — Slider Overflow** — `slider_background` can overflow by ~1-2px when parent is constrained
+- **Line 1222**: **Feature — Slider Handle Height** — Support custom handle height via a dedicated config field
+- **Line 1448**: **Architecture — Hot Sibling** — Summary of previous label-checkbox interaction behavior that changed
+- **Line 1536**: **Feature — Tag Setter** — Add a way to set tags directly from a bool
+- **Line 1549**: **Architecture — Navigation Bar** — Consider making `navigation_bar` a thin wrapper around existing components
+- **Line 1578**: **Feature — Default Values** — Add defaults for configuration
+- **Line 2304**: **Feature — Neighbor Styling** — Make neighbor styling configurable (muted color, smaller font, etc.)
 
-#### Immediate Mode Components (`src/plugins/ui/immediate/imm_components.h`)
-- **Line 128-129**: **UI Bug - Focus Ring** - Focus ring positioning incorrect because clickable area is checkbox_no_label element, not checkbox element
-- **Line 153**: **UI Feature - Corner Merging** - When user customizes corner styles, need better way to merge them with defaults
-- **Line 508-509**: **UI Feature - Dropdown Behavior** - Dropdown works well but needs way to close when user leaves without selecting
+#### Text Input (`src/plugins/ui/text_input/component.h`)
+- **Line 227**: **Feature — Horizontal Scrolling** — Implement horizontal scrolling when text exceeds field width
 
-#### Component Config (`src/plugins/ui/immediate/component_config.h`)
-- **Line 50**: **Configuration Design Question** - Questioning whether all component properties should be inheritable
+#### Setting Row (`src/plugins/ui/setting_row.h`)
+- **Line 295**: **Architecture — Reusable Component** — Add a component for this instead of building one inline
 
-### Auto Layout (`src/plugins/autolayout.h`)
-- **Line 367**: **Configuration Values** - Uncertain about default spacing values (5,5 vs 10,10)
-- **Line 996-997**: **Configuration Design** - Questioning if fallback behavior should be configurable setting
-- **Line 1075**: **Layout Logic Uncertainty** - Unsure about applying certain logic to non-1.0 flex children
-- **Line 1103**: **Missing Feature - Flexbox** - CSS-style flexbox layout support not yet implemented
-- **Line 1119**: **Layout Feature** - Need to handle absolute positioned children properly (currently ignored)
-- **Line 1182**: **Layout Constraint Issue** - Cannot enforce certain assertions when text wrapping is enabled
+#### Styling Defaults (`src/plugins/ui/styling_defaults.h`)
+- **Line 101**: **Architecture — Singleton Helper** — Needs a singleton helper pattern
 
-## Example Code TODOs
+## Backend TODOs
 
-### UI Component Example (`example/ui_component/main.cpp`)
-- **Line 33**: **Type Safety Investigation** - Need to investigate behavior when passing void type to component system
-
-### Custom Queries Example (`example/custom_queries/main.cpp`)
-- **Line 39**: **Numerical Precision Tuning** - Need to experiment with epsilon value for floating-point comparisons in custom queries
-
-### Tests Example (`example/tests/main.cpp`)
-- **Line 79**: **Incomplete Test** - Test case needs implementation
-- **Line 84**: **Incomplete Test** - Test case needs implementation
-
-### UI Layout Example (`example/ui_layout/main.cpp`)
-- **Line 168**: **Update Mechanism Missing** - Need to determine how to properly update this UI component
-- **Line 805**: **Layout Bounds Question** - Questioning whether child elements should extend beyond parent boundaries
-
-## Documentation TODOs
-
-### README.md
-- **Line 17**: **Missing Example** - `for_each_with_derived` function needs usage example in documentation
-- **Line 92**: **Incomplete Documentation** - Section needs more content/examples
-
-## Notes and Technical Comments
-
-### Performance & Implementation Notes
-
-#### Bitwise Operations (`src/bitwise.h`)
-- **Line 44**: **Implementation Choice** - Deliberately not using certain bitwise operation, using & for boolean operations instead
-
-#### UI Utilities (`src/plugins/ui/utilities.h`)
-- **Line 56**: **Compiler Limitation** - Attempted constexpr implementation failed (incomplete note)
-
-#### Input System Implementation (`src/plugins/input_system.h`)
-- **Line 438**: **Implementation Complexity** - Complex input checking logic requires validation of multiple conditions
-- **Line 441**: **Deadzone Configuration** - Documents that 0.25 is the deadzone size (links to TODO about making it configurable)
-
-#### Entity Helper Design (`src/entity_helper.h`)
-- **Line 143**: **API Design Question** - Questioning whether certain functionality should be exposed to users
-
-#### Auto Layout Implementation (`src/plugins/autolayout.h`)
-- **Line 1019**: **Implementation Logic** - Explains why early return is avoided in empty cases
+### Sokol Drawing Helpers (`src/backends/sokol/drawing_helpers.h`)
+- **Line 209**: **Feature — Rotation Support** — Drawing helpers lack rotation support
+- **Line 338**: **Feature — Thick Lines** — Implement thick lines via quads
 
 ---
 
 ## Summary by Priority
 
-### 🔴 High Priority (Bugs & Memory Safety)
-- **Component ID overflow check broken** (`src/base_component.h:24-28`)
-- **Filter bug causing empty results** (`src/plugins/ui/rendering.h:345-346`)
-- **Focus ring positioning bug** (`src/plugins/ui/immediate/imm_components.h:128-129`)
-- **Key mapping conflict** (`src/plugins/input_system.h:359`)
+### High Priority (Bugs)
+- **Slider background overflow** (`src/plugins/ui/imm_components.h:1123`) — can overflow by 1-2px when parent is constrained
 
-### 🟡 Medium Priority (Performance & Architecture)
-- **Query system memory allocation inefficiency** (`src/entity_query.h:219-222`)
-- **Missing rendering cache** (`src/plugins/ui/rendering.h:36`)
-- **Circular dependency in UI styling** (`src/plugins/ui/context.h:53`)
-- **Const system registration issue** (`src/system.h:159-161`)
+### Informational (Upstream / Active Workarounds)
+- **macOS IsMouseButtonPressed workaround** (`src/plugins/input_system.h:106-109`) — raylib bug; manual edge detection is the active fix
+- **KEY_MENU / KEY_R conflict** (`src/plugins/input_system.h:482`) — raylib upstream issue
 
-### 🟢 Low Priority (Features & Improvements)
-- **Flexbox layout support** (`src/plugins/autolayout.h:1103`)
-- **Cross-platform controller support** (`src/plugins/input_system.h:114`)
-- **Configurable gamepad deadzone** (`src/plugins/input_system.h:443`)
-- **API design improvements** (`src/entity_query.h:39-44`)
+### Medium Priority (Architecture & Performance)
+- **Random generator stubbed out** (`src/library.h:101`)
+- **Font identification uses strings** (`src/plugins/ui/theme.h:61`)
+- **Monolithic ComponentConfig** (`src/plugins/ui/component_config.h:29-36`)
+- **Function in wrong module** (`src/plugins/ui/systems.h:69-70`)
+- **C++20 concepts modernization** (`src/plugins/ui/context.h:3-9`)
+- **InputBitset dependency coupling** (`src/plugins/ui/context.h:69`)
+- **Plugin e2e command registration** (`src/plugins/e2e_testing/runner.h:129`)
+- **Various systems.h architectural items** (`src/plugins/ui/systems.h:926,955,1177,1200,1244`)
 
-**Total TODOs Found**: 46  
-**Total Notes Found**: 6  
-**Critical Issues**: 4  
-**Performance Issues**: 6  
-**Feature Requests**: 13  
-**Last Updated**: January 2026
+### Low Priority (Features & Code Quality)
+- Code quality: rename suggestions, DRY violations, namespace organization, hack cleanups
+- Features: texture alignment options, element creation tracking, stepper/dropdown unification, drag groups, horizontal text scrolling, natural scroll, slider handle customization, neighbor styling, rotation/thick-line drawing
+- Architecture: config inheritance semantics, namespace restructuring, modal config integration, singleton patterns
+
+**Total TODOs Found**: 65
+**High Priority**: 1
+**Informational**: 2
+**Medium Priority**: 8
+**Low Priority**: 54
+**Last Updated**: February 2026
