@@ -378,6 +378,28 @@ public:
     log_info("E2E finished in {:.2f} seconds", elapsed_time_);
   }
 
+  bool is_batch_mode() const { return !script_results_.empty(); }
+
+  void skip_current_script() {
+    finalize_current_script();
+    while (index_ < commands_.size()) {
+      if (commands_[index_].name == "reset_test_state") {
+        if (clear_fn_)
+          clear_fn_();
+        test_input::reset_all();
+        key_release_detail::reset();
+        VisibleTextRegistry::instance().clear();
+        current_script_idx_++;
+        current_script_errors_ = 0;
+        elapsed_time_ = 0.0f;
+        index_++;
+        return;
+      }
+      index_++;
+    }
+    finished_ = true;
+  }
+
   // Backward compatibility aliases
   bool isFinished() const { return is_finished(); }
   bool hasFailed() const { return has_failed(); }
