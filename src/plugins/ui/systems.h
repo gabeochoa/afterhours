@@ -24,6 +24,39 @@ namespace afterhours {
 
 namespace ui {
 
+namespace detail {
+// Adjust a rect for scroll offset so hit-testing matches visual position.
+// Mirrors the scroll offset subtraction in rendering.h.
+static inline RectangleType apply_scroll_offset(const Entity &entity,
+                                                 RectangleType rect) {
+  if (entity.has<HasScrollView>())
+    return rect; // scroll view itself doesn't scroll
+  if (!entity.has<UIComponent>())
+    return rect;
+  EntityID pid = entity.get<UIComponent>().parent;
+  int guard = 0;
+  while (pid >= 0 && guard < 64) {
+    OptEntity opt_parent = UICollectionHolder::getEntityForID(pid);
+    if (!opt_parent.valid())
+      break;
+    Entity &parent = opt_parent.asE();
+    if (parent.has<HasScrollView>()) {
+      Vector2Type offset = parent.get<HasScrollView>().scroll_offset;
+      rect.y -= offset.y;
+      rect.x -= offset.x;
+      return rect;
+    }
+    if (parent.has<HasClipChildren>())
+      return rect; // clip-only ancestor, no scroll
+    if (!parent.has<UIComponent>())
+      break;
+    pid = parent.get<UIComponent>().parent;
+    ++guard;
+  }
+  return rect;
+}
+} // namespace detail
+
 /// Singleton component that caches entity mappings for fast lookups during
 /// UI tree traversal. Populated once per frame by BuildUIEntityMapping system.
 struct UIEntityMappingCache : BaseComponent {
@@ -251,6 +284,88 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
   }
 };
 
+/// Fixes scroll view child positions after layout.
+/// The layout system constrains children to parent bounds, stacking overflow
+/// items at the same position. This system repositions them sequentially so
+/// that hit-testing (HandleClicks, HandleDrags) sees correct rects.
+/// Must run after RunAutoLayout and before HandleClicks.
+struct FixScrollViewPositions : System<HasScrollView, UIComponent> {
+  virtual void for_each_with(Entity &, HasScrollView &scroll,
+                             UIComponent &cmp, float) override {
+    RectangleType parent_rect = cmp.rect();
+    scroll.viewport_size = {parent_rect.width, parent_rect.height};
+
+    bool is_row_layout = scroll.horizontal_enabled && !scroll.vertical_enabled;
+
+    // Compute content size from children
+    float total_width = 0.0f;
+    float total_height = 0.0f;
+    float max_width = 0.0f;
+    float max_height = 0.0f;
+
+    for (EntityID child_id : cmp.children) {
+      OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
+      if (!child_opt.valid())
+        continue;
+      Entity &child = child_opt.asE();
+      if (!child.has<UIComponent>())
+        continue;
+      const UIComponent &child_cmp = child.get<UIComponent>();
+      float cw = child_cmp.computed[Axis::X];
+      float ch = child_cmp.computed[Axis::Y];
+      float ml = child_cmp.computed_margin[Axis::left];
+      float mr = child_cmp.computed_margin[Axis::right];
+      float mt = child_cmp.computed_margin[Axis::top];
+      float mb = child_cmp.computed_margin[Axis::bottom];
+      if (is_row_layout) {
+        total_width += cw + ml + mr;
+        max_height = std::max(max_height, ch + mt + mb);
+      } else {
+        total_height += ch + mt + mb;
+        max_width = std::max(max_width, cw + ml + mr);
+      }
+    }
+
+    scroll.content_size = is_row_layout
+                              ? Vector2Type{total_width, max_height}
+                              : Vector2Type{max_width, total_height};
+
+    bool content_overflows = scroll.needs_scroll_y() || scroll.needs_scroll_x();
+    if (!scroll.auto_overflow || content_overflows) {
+      // Reposition children sequentially (mirrors rendering.h logic)
+      float content_x = parent_rect.x + cmp.computed_padd[Axis::left];
+      float content_y = parent_rect.y + cmp.computed_padd[Axis::top];
+      float cur_x = content_x;
+      float cur_y = content_y;
+
+      for (EntityID child_id : cmp.children) {
+        OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
+        if (!child_opt.valid())
+          continue;
+        Entity &child = child_opt.asE();
+        if (!child.has<UIComponent>())
+          continue;
+        UIComponent &child_cmp = child.get<UIComponent>();
+        float mt = child_cmp.computed_margin[Axis::top];
+        float ml = child_cmp.computed_margin[Axis::left];
+        float mb = child_cmp.computed_margin[Axis::bottom];
+        float mr = child_cmp.computed_margin[Axis::right];
+        if (is_row_layout) {
+          child_cmp.computed_rel[Axis::X] = cur_x + ml;
+          child_cmp.computed_rel[Axis::Y] = content_y + mt;
+          cur_x += ml + child_cmp.computed[Axis::X] + mr;
+        } else {
+          child_cmp.computed_rel[Axis::X] = content_x + ml;
+          child_cmp.computed_rel[Axis::Y] = cur_y + mt;
+          cur_y += mt + child_cmp.computed[Axis::Y] + mb;
+        }
+      }
+    }
+
+    scroll.clamp_scroll();
+  }
+};
+
 template <typename InputAction>
 struct TrackIfComponentWillBeRendered : System<> {
   UIEntityMappingCache *cache = nullptr;
@@ -400,6 +515,7 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
     if (entity.has<HasUIModifiers>()) {
       rect = entity.get<HasUIModifiers>().apply_modifier(rect);
     }
+    rect = detail::apply_scroll_offset(entity, rect);
 
     context->active_if_mouse_inside(entity.id, rect);
 
@@ -448,7 +564,12 @@ private:
       if (child.has<HasLabel>() && child.get<HasLabel>().is_disabled)
         continue;
 
-      context->active_if_mouse_inside(child.id, child_component.rect());
+      RectangleType child_rect = child_component.rect();
+      if (child.has<HasUIModifiers>()) {
+        child_rect = child.get<HasUIModifiers>().apply_modifier(child_rect);
+      }
+      child_rect = detail::apply_scroll_offset(child, child_rect);
+      context->active_if_mouse_inside(child.id, child_rect);
 
       if (context->has_focus(child.id) &&
           context->pressed(InputAction::WidgetPress)) {
@@ -487,6 +608,7 @@ inline bool is_point_inside_entity_tree(EntityID entity_id,
   if (entity.has<HasUIModifiers>()) {
     rect = entity.get<HasUIModifiers>().apply_modifier(rect);
   }
+  rect = detail::apply_scroll_offset(entity, rect);
   if (is_mouse_inside(pos, rect))
     return true;
 
@@ -734,7 +856,12 @@ struct HandleDrags : SystemWithUIContext<ui::HasDragListener> {
 
   virtual void for_each_with(Entity &entity, UIComponent &component,
                              HasDragListener &hasDragListener, float) override {
-    context->active_if_mouse_inside(entity.id, component.rect());
+    RectangleType drag_rect = component.rect();
+    if (entity.has<HasUIModifiers>()) {
+      drag_rect = entity.get<HasUIModifiers>().apply_modifier(drag_rect);
+    }
+    drag_rect = detail::apply_scroll_offset(entity, drag_rect);
+    context->active_if_mouse_inside(entity.id, drag_rect);
 
     if (context->has_focus(entity.id) &&
         context->pressed(InputAction::WidgetPress)) {
