@@ -18,14 +18,47 @@ namespace afterhours {
 namespace testing {
 namespace ui_commands {
 
+// Adjust a rect for ancestor scroll offset so e2e click coordinates match
+// the visual (rendered) position. Mirrors detail::apply_scroll_offset in
+// systems.h.
+inline RectangleType apply_scroll_offset_for_e2e(const Entity &entity,
+                                                  RectangleType rect) {
+  if (entity.has<ui::HasScrollView>())
+    return rect;
+  if (!entity.has<ui::UIComponent>())
+    return rect;
+  EntityID pid = entity.get<ui::UIComponent>().parent;
+  int guard = 0;
+  while (pid >= 0 && guard < 64) {
+    OptEntity opt_parent = ui::UICollectionHolder::getEntityForID(pid);
+    if (!opt_parent.valid())
+      break;
+    Entity &parent = opt_parent.asE();
+    if (parent.has<ui::HasScrollView>()) {
+      Vector2Type offset = parent.get<ui::HasScrollView>().scroll_offset;
+      rect.y -= offset.y;
+      rect.x -= offset.x;
+      return rect;
+    }
+    if (parent.has<ui::HasClipChildren>())
+      return rect;
+    if (!parent.has<ui::UIComponent>())
+      break;
+    pid = parent.get<ui::UIComponent>().parent;
+    ++guard;
+  }
+  return rect;
+}
+
 // Helper: get the screen-space rect of a UI component (applies translate
-// modifiers)
+// modifiers and scroll offset)
 inline RectangleType get_screen_rect(Entity &entity) {
   auto &cmp = entity.get<ui::UIComponent>();
   RectangleType rect = cmp.rect();
   if (entity.has<ui::HasUIModifiers>()) {
     rect = entity.get<ui::HasUIModifiers>().apply_modifier(rect);
   }
+  rect = apply_scroll_offset_for_e2e(entity, rect);
   return rect;
 }
 

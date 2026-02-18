@@ -411,12 +411,16 @@ struct MetalPlatformAPI {
 
   static Vec2 get_mouse_position() {
     auto &s = metal_detail::input_state();
-    return {s.mouse_x, s.mouse_y};
+    // sokol reports mouse coords in framebuffer pixels (scaled by DPI on
+    // macOS Retina), but all UI layout/rendering uses logical pixels.
+    float dpi = sapp_dpi_scale();
+    return {s.mouse_x / dpi, s.mouse_y / dpi};
   }
 
   static Vec2 get_mouse_delta() {
     auto &s = metal_detail::input_state();
-    return {s.mouse_dx, s.mouse_dy};
+    float dpi = sapp_dpi_scale();
+    return {s.mouse_dx / dpi, s.mouse_dy / dpi};
   }
 
   static float get_mouse_wheel_move() {
