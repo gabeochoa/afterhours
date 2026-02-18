@@ -491,7 +491,8 @@ static inline void draw_text_in_rect(
     const std::optional<TextShadow> &shadow = std::nullopt,
     float rotation = 0.0f, float rot_center_x = 0.0f, float rot_center_y = 0.0f,
     TextOverflow text_overflow = TextOverflow::Clip,
-    float letter_spacing = 0.0f) {
+    float letter_spacing = 0.0f,
+    float explicit_font_size = 0.0f) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
   // Register text for E2E testing assertions (only visible-in-viewport text)
   if (testing::test_input::detail::test_mode) {
@@ -512,8 +513,8 @@ static inline void draw_text_in_rect(
       margin_px.x = std::min(margin_px.x, rect.width * 0.4f);
       margin_px.y = std::min(margin_px.y, rect.height * 0.4f);
     }
-    return position_text_ex(fm, text, rect, alignment, margin_px, 0.f,
-                            letter_spacing, text_overflow);
+    return position_text_ex(fm, text, rect, alignment, margin_px,
+                            explicit_font_size, letter_spacing, text_overflow);
   }();
 
   // Draw visual debug indicator if text doesn't fit and debug is enabled
@@ -1345,10 +1346,20 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         text_rect.height -= static_cast<float>(ns.top + ns.bottom);
       }
 
+      // TODO: unify this font-size resolution with the batched path
+      // (see position_text_ex call ~100 lines below) so they don't diverge.
+      float explicit_fs = 0.f;
+      if (cmp.font_size_explicitly_set) {
+        float uis = imm::ThemeDefaults::get().theme.ui_scale;
+        explicit_fs = resolve_to_pixels(cmp.font_size, context.screen_height,
+                                        cmp.resolved_scaling_mode, uis);
+      }
+
       draw_text_in_rect(font_manager, hasLabel.label.c_str(), text_rect,
                         hasLabel.alignment, font_col, SHOW_TEXT_OVERFLOW_DEBUG,
                         stroke, shadow, rotation, centerX, centerY,
-                        hasLabel.text_overflow, hasLabel.letter_spacing);
+                        hasLabel.text_overflow, hasLabel.letter_spacing,
+                        explicit_fs);
     }
 
     if (entity.has<texture_manager::HasTexture>()) {
