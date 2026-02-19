@@ -31,12 +31,32 @@ inline bool has_text() {
   return text != nullptr && text[0] != '\0';
 }
 
+#elif defined(AFTER_HOURS_USE_METAL)
+
+// Sokol backend — uses sapp clipboard functions.
+// Requires desc.enable_clipboard = true in sapp_desc setup.
+inline void set_text(std::string_view text) {
+  std::string str(text);
+  sapp_set_clipboard_string(str.c_str());
+}
+
+inline std::string get_text() {
+  const char *text = sapp_get_clipboard_string();
+  if (text == nullptr) {
+    return "";
+  }
+  return std::string(text);
+}
+
+inline bool has_text() {
+  const char *text = sapp_get_clipboard_string();
+  return text != nullptr && text[0] != '\0';
+}
+
 #else
 
-// Fallback implementations when raylib is not available
-inline void set_text(std::string_view) {
-  // No-op without a backend
-}
+// Fallback implementations when no backend is available
+inline void set_text(std::string_view) {}
 
 inline std::string get_text() { return ""; }
 

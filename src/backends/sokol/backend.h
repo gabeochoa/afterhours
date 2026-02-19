@@ -456,6 +456,8 @@ struct MetalPlatformAPI {
     // handle the DPI conversion transparently.
     desc.high_dpi = true;
     desc.sample_count = 4;  // 4× MSAA for smooth geometric edges
+    desc.enable_clipboard = true;
+    desc.clipboard_size = 16 * 1024;  // 16 KB clipboard buffer
 
     // Map flags
     if (cfg.flags & FLAG_WINDOW_RESIZABLE) {
