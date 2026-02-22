@@ -274,6 +274,7 @@ struct MetalPlatformAPI {
     pass.action = metal_detail::g_pass_action;
     pass.swapchain = sglue_swapchain();
     sg_begin_pass(&pass);
+    metal_detail::g_pass_active = true;
 
     // Set up sokol_gl orthographic projection for 2D drawing.
     // With high_dpi=true the framebuffer may be larger than the logical
@@ -296,6 +297,7 @@ struct MetalPlatformAPI {
     // Render all sokol_gl draw calls
     sgl_draw();
     sg_end_pass();
+    metal_detail::g_pass_active = false;
     sg_commit();
   }
 

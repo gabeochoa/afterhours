@@ -22,6 +22,9 @@ inline int g_active_font = FONS_INVALID;
 
 inline bool g_initialized = false;
 
+inline bool g_in_texture_mode = false;
+inline bool g_pass_active = false;
+
 } // namespace afterhours::graphics::metal_detail
 
 #endif // AFTER_HOURS_USE_METAL

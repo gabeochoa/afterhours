@@ -447,46 +447,140 @@ inline void set_mouse_cursor(int cursor_id) {
 inline afterhours::Font get_default_font() { return afterhours::Font(); }
 inline afterhours::Font get_unset_font() { return afterhours::Font(); }
 
-inline graphics::RenderTextureType load_render_texture(int, int) {
-  log_error("@notimplemented load_render_texture");
-  return {};
+inline graphics::RenderTextureType load_render_texture(int w, int h) {
+  graphics::RenderTextureType rt;
+  rt.width = w;
+  rt.height = h;
+
+  sg_image_desc cd{};
+  cd.render_target = true;
+  cd.width = w;
+  cd.height = h;
+  cd.pixel_format = SG_PIXELFORMAT_RGBA8;
+  cd.sample_count = 1;
+  cd.label = "rt-color";
+  sg_image color = sg_make_image(&cd);
+
+  sg_image_desc dd{};
+  dd.render_target = true;
+  dd.width = w;
+  dd.height = h;
+  dd.pixel_format = SG_PIXELFORMAT_DEPTH;
+  dd.sample_count = 1;
+  dd.label = "rt-depth";
+  sg_image depth = sg_make_image(&dd);
+
+  sg_attachments_desc ad{};
+  ad.colors[0].image = color;
+  ad.depth_stencil.image = depth;
+  ad.label = "rt-attach";
+  sg_attachments att = sg_make_attachments(&ad);
+
+  sg_sampler_desc sd{};
+  sd.min_filter = SG_FILTER_LINEAR;
+  sd.mag_filter = SG_FILTER_LINEAR;
+  sd.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
+  sd.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
+  sd.label = "rt-sampler";
+  sg_sampler smp = sg_make_sampler(&sd);
+
+  rt.color_id = color.id;
+  rt.depth_id = depth.id;
+  rt.attach_id = att.id;
+  rt.sampler_id = smp.id;
+  return rt;
 }
 
-inline void unload_render_texture(graphics::RenderTextureType &) {
-  log_error("@notimplemented unload_render_texture");
+inline void unload_render_texture(graphics::RenderTextureType &rt) {
+  if (rt.attach_id)
+    sg_destroy_attachments({rt.attach_id});
+  if (rt.depth_id)
+    sg_destroy_image({rt.depth_id});
+  if (rt.color_id)
+    sg_destroy_image({rt.color_id});
+  if (rt.sampler_id)
+    sg_destroy_sampler({rt.sampler_id});
+  rt = {};
 }
 
-inline void begin_texture_mode(graphics::RenderTextureType &) {
-  log_error("@notimplemented begin_texture_mode");
+inline void begin_texture_mode(graphics::RenderTextureType &rt) {
+  // End the current pass if one is active (swapchain or another offscreen)
+  if (graphics::metal_detail::g_pass_active) {
+    sgl_draw();
+    sg_end_pass();
+    graphics::metal_detail::g_pass_active = false;
+  }
+
+  // Begin offscreen pass targeting the render texture
+  sg_pass pass{};
+  pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+  pass.action.colors[0].clear_value = {0, 0, 0, 0};
+  pass.action.depth.load_action = SG_LOADACTION_CLEAR;
+  pass.action.depth.clear_value = 1.0f;
+  pass.attachments = {rt.attach_id};
+  sg_begin_pass(&pass);
+  graphics::metal_detail::g_pass_active = true;
+
+  // Set up orthographic projection matching the render texture dimensions
+  sgl_defaults();
+  sgl_matrix_mode_projection();
+  sgl_ortho(0.0f, static_cast<float>(rt.width),
+            static_cast<float>(rt.height), 0.0f, -1.0f, 1.0f);
+
+  graphics::metal_detail::g_in_texture_mode = true;
 }
 
 inline void end_texture_mode() {
-  log_error("@notimplemented end_texture_mode");
+  // End the offscreen pass. Does NOT restart the swapchain pass -- the caller
+  // is responsible for starting the next pass (via begin_drawing or another
+  // begin_texture_mode).
+  if (graphics::metal_detail::g_pass_active) {
+    sgl_draw();
+    sg_end_pass();
+    graphics::metal_detail::g_pass_active = false;
+  }
+
+  graphics::metal_detail::g_in_texture_mode = false;
 }
 
-inline void draw_render_texture(const graphics::RenderTextureType &, float,
-                                float, Color) {
-  log_error("@notimplemented draw_render_texture");
+inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
+                                float y, Color tint) {
+  sg_image color = {rt.color_id};
+  sg_sampler smp = {rt.sampler_id};
+  float w = static_cast<float>(rt.width);
+  float h = static_cast<float>(rt.height);
+
+  sgl_enable_texture();
+  sgl_texture(color, smp);
+  sgl_begin_quads();
+  sgl_c4b(tint.r, tint.g, tint.b, tint.a);
+  sgl_v2f_t2f(x, y, 0.0f, 0.0f);
+  sgl_v2f_t2f(x + w, y, 1.0f, 0.0f);
+  sgl_v2f_t2f(x + w, y + h, 1.0f, 1.0f);
+  sgl_v2f_t2f(x, y + h, 0.0f, 1.0f);
+  sgl_end();
+  sgl_disable_texture();
 }
 
 inline void draw_texture_rec(TextureType, RectangleType, Vector2Type, Color) {
-  log_error("@notimplemented draw_texture_rec");
+  log_warn("draw_texture_rec: not yet implemented in sokol backend");
 }
 
 inline bool capture_render_texture(const graphics::RenderTextureType &,
                                    const std::filesystem::path &) {
-  log_error("@notimplemented capture_render_texture");
+  log_warn("capture_render_texture: not yet implemented in sokol backend");
   return false;
 }
 
 inline std::vector<uint8_t>
 capture_render_texture_to_memory(const graphics::RenderTextureType &) {
-  log_error("@notimplemented capture_render_texture_to_memory");
+  log_warn("capture_render_texture_to_memory: not yet implemented in sokol "
+           "backend");
   return {};
 }
 
 inline std::vector<uint8_t> capture_screen_to_memory() {
-  log_error("@notimplemented capture_screen_to_memory");
+  log_warn("capture_screen_to_memory: not yet implemented in sokol backend");
   return {};
 }
 

@@ -36,13 +36,26 @@ namespace afterhours::graphics {
 using RenderTextureType = raylib::RenderTexture2D;
 } // namespace afterhours::graphics
 
-#else // !AFTER_HOURS_USE_RAYLIB
+#elif defined(AFTER_HOURS_USE_METAL)
+
+namespace afterhours::graphics {
+struct RenderTextureType {
+  uint32_t color_id = 0;
+  uint32_t depth_id = 0;
+  uint32_t attach_id = 0;
+  uint32_t sampler_id = 0;
+  int width = 0;
+  int height = 0;
+};
+} // namespace afterhours::graphics
+
+#else // no backend
 
 namespace afterhours::graphics {
 struct RenderTextureType {};
 } // namespace afterhours::graphics
 
-#endif // AFTER_HOURS_USE_RAYLIB
+#endif // AFTER_HOURS_USE_RAYLIB / AFTER_HOURS_USE_METAL
 
 namespace afterhours {
 
