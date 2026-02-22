@@ -15,7 +15,7 @@ struct Font {
   int id = FONS_INVALID;
 };
 
-inline Font load_font_from_file(const char *file) {
+inline Font load_font_from_file(const char *file, int = 0) {
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx) {
     log_warn("fontstash context not ready yet (load_font_from_file)");

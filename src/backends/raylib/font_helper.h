@@ -12,8 +12,10 @@ namespace afterhours {
 using Font = raylib::Font;
 using vec2 = raylib::Vector2;
 
-inline raylib::Font load_font_from_file(const char *file) {
-  raylib::Font font = raylib::LoadFont(file);
+inline raylib::Font load_font_from_file(const char *file, int size = 0) {
+  raylib::Font font = (size > 0)
+                           ? raylib::LoadFontEx(file, size, nullptr, 0)
+                           : raylib::LoadFont(file);
   raylib::SetTextureFilter(font.texture, raylib::TEXTURE_FILTER_BILINEAR);
   return font;
 }
