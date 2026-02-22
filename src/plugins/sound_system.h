@@ -11,59 +11,9 @@
 #include "../ecs.h"
 #include "../library.h"
 #include "../singleton.h"
+#include "audio_helpers.h"
 
 namespace afterhours {
-
-#ifdef AFTER_HOURS_USE_RAYLIB
-using SoundType = raylib::Sound;
-using MusicType = raylib::Music;
-
-inline void PlaySound(raylib::Sound sound) { raylib::PlaySound(sound); }
-inline bool IsSoundPlaying(raylib::Sound sound) {
-  return raylib::IsSoundPlaying(sound);
-}
-inline void SetSoundVolume(raylib::Sound sound, float volume) {
-  raylib::SetSoundVolume(sound, volume);
-}
-inline void UnloadSound(raylib::Sound sound) { raylib::UnloadSound(sound); }
-inline raylib::Sound LoadSound(const char *filename) {
-  return raylib::LoadSound(filename);
-}
-
-inline void PlayMusicStream(raylib::Music music) {
-  raylib::PlayMusicStream(music);
-}
-inline void UpdateMusicStream(raylib::Music music) {
-  raylib::UpdateMusicStream(music);
-}
-inline void SetMusicVolume(raylib::Music music, float volume) {
-  raylib::SetMusicVolume(music, volume);
-}
-inline void UnloadMusicStream(raylib::Music music) {
-  raylib::UnloadMusicStream(music);
-}
-inline raylib::Music LoadMusicStream(const char *filename) {
-  return raylib::LoadMusicStream(filename);
-}
-#else
-// Stubs for non-raylib builds
-struct SoundStub {};
-struct MusicStub {};
-using SoundType = SoundStub;
-using MusicType = MusicStub;
-
-inline void PlaySound(SoundStub) {}
-inline bool IsSoundPlaying(SoundStub) { return false; }
-inline void SetSoundVolume(SoundStub, float) {}
-inline void UnloadSound(SoundStub) {}
-inline SoundStub LoadSound(const char *) { return SoundStub{}; }
-
-inline void PlayMusicStream(MusicStub) {}
-inline void UpdateMusicStream(MusicStub) {}
-inline void SetMusicVolume(MusicStub, float) {}
-inline void UnloadMusicStream(MusicStub) {}
-inline MusicStub LoadMusicStream(const char *) { return MusicStub{}; }
-#endif
 
 struct sound_system : developer::Plugin {
   // Games should define their own SoundFile enum and provide a conversion
