@@ -91,6 +91,67 @@ static inline OptEntity find_scroll_view_ancestor(const Entity &entity) {
   return find_clip_ancestor(entity);
 }
 
+// Walk the full ancestor chain and intersect ALL clip rects
+// (HasScrollView and HasClipChildren). This handles arbitrary nesting
+// of clip containers — e.g. HasClipChildren inside a scroll view,
+// scroll view inside scroll view, etc.
+// Auto-overflow scroll views that don't need scrolling are excluded.
+// Returns {true, rect} if any clip ancestor was found, {false, {}} otherwise.
+static inline std::pair<bool, RectangleType>
+compute_intersected_clip_rect(const Entity &entity) {
+  if (!entity.has<UIComponent>())
+    return {false, {}};
+
+  EntityID pid = entity.get<UIComponent>().parent;
+  bool found = false;
+  RectangleType result = {};
+
+  int guard = 0;
+  while (pid >= 0 && guard < 64) {
+    OptEntity opt_parent = UICollectionHolder::getEntityForID(pid);
+    if (!opt_parent.valid())
+      break;
+    Entity &parent = opt_parent.asE();
+
+    if (parent.has<HasScrollView>() || parent.has<HasClipChildren>()) {
+      if (parent.has<HasScrollView>()) {
+        const HasScrollView &sv = parent.get<HasScrollView>();
+        if (sv.auto_overflow && !sv.needs_scroll_y() &&
+            !sv.needs_scroll_x()) {
+          if (!parent.has<UIComponent>())
+            break;
+          pid = parent.get<UIComponent>().parent;
+          ++guard;
+          continue;
+        }
+      }
+
+      RectangleType ancestor_rect = parent.get<UIComponent>().rect();
+      if (!found) {
+        result = ancestor_rect;
+        found = true;
+      } else {
+        float x1 = std::max(result.x, ancestor_rect.x);
+        float y1 = std::max(result.y, ancestor_rect.y);
+        float x2 = std::min(result.x + result.width,
+                            ancestor_rect.x + ancestor_rect.width);
+        float y2 = std::min(result.y + result.height,
+                            ancestor_rect.y + ancestor_rect.height);
+        result.x = x1;
+        result.y = y1;
+        result.width = std::max(0.0f, x2 - x1);
+        result.height = std::max(0.0f, y2 - y1);
+      }
+    }
+
+    if (!parent.has<UIComponent>())
+      break;
+    pid = parent.get<UIComponent>().parent;
+    ++guard;
+  }
+  return {found, result};
+}
+
 // Get scroll offset from ancestor scroll view, returns {0,0} if none
 static inline Vector2Type get_scroll_offset(const Entity &entity) {
   OptEntity scroll_ancestor = find_scroll_view_ancestor(entity);
@@ -1414,26 +1475,20 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       font_manager.set_active(cmp.font_name);
     }
 
-    // Check if we need scissor clipping for scroll view or clip container
-    OptEntity clip_ancestor = detail::find_clip_ancestor(entity);
-    bool is_clip_container =
-        entity.has<HasScrollView>() || entity.has<HasClipChildren>();
-    bool needs_scissor = clip_ancestor.valid() && !is_clip_container;
-
-    // Skip scissor for auto-overflow scroll views where content fits
-    if (needs_scissor && clip_ancestor->has<HasScrollView>()) {
-      const HasScrollView &sv = clip_ancestor->get<HasScrollView>();
-      if (sv.auto_overflow && !sv.needs_scroll_y() && !sv.needs_scroll_x()) {
-        needs_scissor = false;
+    // Scroll views define their own viewport — don't clip them by ancestors.
+    // Everything else (including HasClipChildren) gets clipped by the
+    // intersection of ALL ancestor clip rects.
+    bool needs_scissor = false;
+    if (!entity.has<HasScrollView>()) {
+      auto [has_clip, clip_rect] =
+          detail::compute_intersected_clip_rect(entity);
+      if (has_clip) {
+        begin_scissor_mode(static_cast<int>(clip_rect.x),
+                           static_cast<int>(clip_rect.y),
+                           static_cast<int>(clip_rect.width),
+                           static_cast<int>(clip_rect.height));
+        needs_scissor = true;
       }
-    }
-
-    if (needs_scissor) {
-      RectangleType scissor_rect = clip_ancestor->get<UIComponent>().rect();
-      begin_scissor_mode(static_cast<int>(scissor_rect.x),
-                         static_cast<int>(scissor_rect.y),
-                         static_cast<int>(scissor_rect.width),
-                         static_cast<int>(scissor_rect.height));
     }
 
     // Update scroll view content size before rendering (after layout is done)
@@ -2070,26 +2125,20 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       font_manager.set_active(cmp.font_name);
     }
 
-    // Check if we need scissor clipping for scroll view or clip container
-    OptEntity clip_ancestor = detail::find_clip_ancestor(entity);
-    bool is_clip_container =
-        entity.has<HasScrollView>() || entity.has<HasClipChildren>();
-    bool needs_scissor = clip_ancestor.valid() && !is_clip_container;
-
-    // Skip scissor for auto-overflow scroll views where content fits
-    if (needs_scissor && clip_ancestor->has<HasScrollView>()) {
-      const HasScrollView &sv = clip_ancestor->get<HasScrollView>();
-      if (sv.auto_overflow && !sv.needs_scroll_y() && !sv.needs_scroll_x()) {
-        needs_scissor = false;
+    // Scroll views define their own viewport — don't clip them by ancestors.
+    // Everything else (including HasClipChildren) gets clipped by the
+    // intersection of ALL ancestor clip rects.
+    bool needs_scissor = false;
+    if (!entity.has<HasScrollView>()) {
+      auto [has_clip, clip_rect] =
+          detail::compute_intersected_clip_rect(entity);
+      if (has_clip) {
+        buffer.add_scissor_start(
+            static_cast<int>(clip_rect.x), static_cast<int>(clip_rect.y),
+            static_cast<int>(clip_rect.width),
+            static_cast<int>(clip_rect.height), layer, entity.id);
+        needs_scissor = true;
       }
-    }
-
-    if (needs_scissor) {
-      RectangleType scissor_rect = clip_ancestor->get<UIComponent>().rect();
-      buffer.add_scissor_start(
-          static_cast<int>(scissor_rect.x), static_cast<int>(scissor_rect.y),
-          static_cast<int>(scissor_rect.width),
-          static_cast<int>(scissor_rect.height), layer, entity.id);
     }
 
     // Update scroll view content size
