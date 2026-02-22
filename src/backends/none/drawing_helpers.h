@@ -2,7 +2,9 @@
 #pragma once
 
 #include <bitset>
+#include <cstdint>
 #include <filesystem>
+#include <vector>
 
 #include "../../developer.h"
 #include "../../plugins/color.h"
@@ -148,6 +150,17 @@ inline bool capture_render_texture(const graphics::RenderTextureType &,
                                    const std::filesystem::path &) {
   log_error("@notimplemented capture_render_texture");
   return false;
+}
+
+inline std::vector<uint8_t>
+capture_render_texture_to_memory(const graphics::RenderTextureType &) {
+  log_error("@notimplemented capture_render_texture_to_memory");
+  return {};
+}
+
+inline std::vector<uint8_t> capture_screen_to_memory() {
+  log_error("@notimplemented capture_screen_to_memory");
+  return {};
 }
 
 } // namespace afterhours

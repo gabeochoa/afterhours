@@ -3,7 +3,9 @@
 
 #include <bitset>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
+#include <vector>
 
 #include "../../developer.h"
 #include "../../graphics.h"
@@ -448,6 +450,38 @@ inline bool capture_render_texture(const graphics::RenderTextureType &rt,
   bool ok = raylib::ExportImage(img, path.c_str());
   raylib::UnloadImage(img);
   return ok;
+}
+
+inline std::vector<uint8_t>
+capture_render_texture_to_memory(const graphics::RenderTextureType &rt) {
+  raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
+  if (img.data == nullptr)
+    return {};
+  raylib::ImageFlipVertical(&img);
+  int file_size = 0;
+  unsigned char *png_data =
+      raylib::ExportImageToMemory(img, ".png", &file_size);
+  std::vector<uint8_t> result;
+  if (png_data && file_size > 0) {
+    result.assign(png_data, png_data + file_size);
+    raylib::MemFree(png_data);
+  }
+  raylib::UnloadImage(img);
+  return result;
+}
+
+inline std::vector<uint8_t> capture_screen_to_memory() {
+  raylib::Image img = raylib::LoadImageFromScreen();
+  int file_size = 0;
+  unsigned char *png_data =
+      raylib::ExportImageToMemory(img, ".png", &file_size);
+  std::vector<uint8_t> result;
+  if (png_data && file_size > 0) {
+    result.assign(png_data, png_data + file_size);
+    raylib::MemFree(png_data);
+  }
+  raylib::UnloadImage(img);
+  return result;
 }
 
 } // namespace afterhours
