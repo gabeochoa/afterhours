@@ -23,12 +23,6 @@ namespace raylib {
 #define AFTER_HOURS_ENTITY_QUERY
 #define AFTER_HOURS_SYSTEM
 
-#define RectangleType raylib::Rectangle
-#define Vector2Type raylib::Vector2
-#define TextureType raylib::Texture2D
-#define ColorType raylib::Color
-#define FontType raylib::Font
-
 #include <afterhours/ah.h>
 #include <afterhours/src/developer.h>
 #include <afterhours/src/drawing_helpers_3d.h>

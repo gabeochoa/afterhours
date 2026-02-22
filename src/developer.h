@@ -10,6 +10,39 @@
 #include "core/system.h"
 #include "type_name.h"
 
+// When the raylib backend is selected, auto-set type macros to raylib types.
+// Consumers can still override by defining the macros before including this
+// header. Requires raylib to be included (in namespace raylib) beforehand.
+#ifdef AFTER_HOURS_USE_RAYLIB
+#if !defined(RAYLIB_H)
+#if defined(__has_include)
+#if __has_include(<raylib.h>)
+namespace raylib {
+#include <raylib.h>
+}
+#endif
+#endif
+#endif
+#ifndef Vector2Type
+#define Vector2Type raylib::Vector2
+#endif
+#ifndef Vector3Type
+#define Vector3Type raylib::Vector3
+#endif
+#ifndef RectangleType
+#define RectangleType raylib::Rectangle
+#endif
+#ifndef TextureType
+#define TextureType raylib::Texture2D
+#endif
+#ifndef ColorType
+#define ColorType raylib::Color
+#endif
+#ifndef FontType
+#define FontType raylib::Font
+#endif
+#endif // AFTER_HOURS_USE_RAYLIB
+
 #ifndef TextureType
 struct MyTexture {
   float width;
