@@ -3,6 +3,7 @@
 
 #include <bitset>
 #include <cmath>
+#include <filesystem>
 
 #include "../../developer.h"
 #include "../../graphics.h"
@@ -411,5 +412,42 @@ inline void set_mouse_cursor(int cursor_id) {
 
 inline raylib::Font get_default_font() { return raylib::GetFontDefault(); }
 inline raylib::Font get_unset_font() { return raylib::GetFontDefault(); }
+
+inline graphics::RenderTextureType load_render_texture(int w, int h) {
+  return raylib::LoadRenderTexture(w, h);
+}
+
+inline void unload_render_texture(graphics::RenderTextureType &rt) {
+  raylib::UnloadRenderTexture(rt);
+}
+
+inline void begin_texture_mode(graphics::RenderTextureType &rt) {
+  raylib::BeginTextureMode(rt);
+}
+
+inline void end_texture_mode() { raylib::EndTextureMode(); }
+
+inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
+                                float y, Color tint) {
+  raylib::DrawTextureRec(
+      rt.texture,
+      {0, 0, static_cast<float>(rt.texture.width),
+       -static_cast<float>(rt.texture.height)},
+      {x, y}, tint);
+}
+
+inline void draw_texture_rec(TextureType tex, RectangleType src,
+                             Vector2Type pos, Color tint) {
+  raylib::DrawTextureRec(tex, src, pos, tint);
+}
+
+inline bool capture_render_texture(const graphics::RenderTextureType &rt,
+                                   const std::filesystem::path &path) {
+  raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
+  raylib::ImageFlipVertical(&img);
+  bool ok = raylib::ExportImage(img, path.c_str());
+  raylib::UnloadImage(img);
+  return ok;
+}
 
 } // namespace afterhours
