@@ -31,11 +31,15 @@ endif
 # Targets
 .PHONY: all run test clean
 
-all: graphics_example autolayout_test
+all: graphics_example autolayout_test drawing_3d_example
 
 graphics_example: graphics_example.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: graphics_example"
+
+drawing_3d_example: drawing_3d_example.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
+	@echo "Built: drawing_3d_example"
 
 # Autolayout tests - pure C++, no raylib dependency
 autolayout_test: autolayout_test.cpp
@@ -45,10 +49,14 @@ autolayout_test: autolayout_test.cpp
 run: graphics_example
 	./graphics_example
 
-test: autolayout_test
+run-3d: drawing_3d_example
+	./drawing_3d_example
+
+test: autolayout_test drawing_3d_example
 	./autolayout_test
+	./drawing_3d_example
 
 clean:
-	rm -f graphics_example autolayout_test
+	rm -f graphics_example autolayout_test drawing_3d_example
 	rm -f graphics_example_output.png
 	rm -rf graphics_example_captures/
