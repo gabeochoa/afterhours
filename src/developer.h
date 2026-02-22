@@ -63,6 +63,33 @@ constexpr float distance_sq(const Vector2Type a, const Vector2Type b) {
 }
 #endif
 
+#ifndef Vector3Type
+struct MyVec3 {
+  float x;
+  float y;
+  float z;
+
+  MyVec3 operator+(const MyVec3 &other) const {
+    return MyVec3{x + other.x, y + other.y, z + other.z};
+  }
+  MyVec3 operator-(const MyVec3 &other) const {
+    return MyVec3{x - other.x, y - other.y, z - other.z};
+  }
+  MyVec3 operator*(float s) const { return MyVec3{x * s, y * s, z * s}; }
+  bool operator<(const MyVec3 &other) const {
+    if (x != other.x)
+      return x < other.x;
+    if (y != other.y)
+      return y < other.y;
+    return z < other.z;
+  }
+  bool operator==(const MyVec3 &other) const {
+    return x == other.x && y == other.y && z == other.z;
+  }
+};
+using Vector3Type = MyVec3;
+#endif
+
 namespace afterhours {
 
 // TODO move into a dedicated file?
