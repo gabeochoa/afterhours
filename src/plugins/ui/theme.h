@@ -234,7 +234,7 @@ struct Theme {
   float focus_ring_thickness =
       3.0f; // Thickness of focus ring outline (2-3px for visibility)
   float focus_ring_offset =
-      4.0f; // Gap between element and focus ring (ensures no clipping)
+      4.0f; // Inset from element edge to focus ring (keeps ring inside bounds)
 
   ClickActivationMode click_activation_mode = ClickActivationMode::Press;
 
