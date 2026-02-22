@@ -71,19 +71,15 @@ inline bool is_key_down(int key) {
   return key >= 0 && key < 512 && detail::synthetic_keys[key];
 }
 
-/// Consume a synthetic key press (returns true once per press)
+/// Check if a synthetic key press is available this frame.
+/// The press remains available for the entire frame so that multiple
+/// action mappings sharing the same key all see it.  The count is
+/// decremented once per frame in reset_frame().
 inline bool consume_press(int key) {
   if (key < 0 || key >= 512)
     return false;
-  if (detail::synthetic_press_count[key] > 0) {
-    if (detail::synthetic_press_delay[key] > 0) {
-      detail::synthetic_press_delay[key]--;
-      return false;
-    }
-    detail::synthetic_press_count[key]--;
-    return true;
-  }
-  return false;
+  return detail::synthetic_press_count[key] > 0 &&
+         detail::synthetic_press_delay[key] == 0;
 }
 
 /// Hold a key for specified duration (seconds)
@@ -177,7 +173,17 @@ inline Position consume_wheel() {
 inline void reset_frame() {
   detail::mouse.just_pressed = false;
   detail::mouse.just_released = false;
-  // Note: wheel is consumed (cleared) by consume_wheel(), not here.
+  // Tick key press delays and consume presses from the previous frame.
+  // Delays are decremented here so that all callers within a single
+  // frame see the same delay value.  Counts are decremented here so
+  // that a press is available for the entire frame it fires on.
+  for (int i = 0; i < 512; i++) {
+    if (detail::synthetic_press_delay[i] > 0) {
+      detail::synthetic_press_delay[i]--;
+    } else if (detail::synthetic_press_count[i] > 0) {
+      detail::synthetic_press_count[i]--;
+    }
+  }
 }
 
 /// Clear all synthetic input state
