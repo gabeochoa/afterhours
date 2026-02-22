@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../input_system.h"
+#include "../../../core/key_codes.h"
 #include "../component_init.h"
 #include "../element_result.h"
 #include "../entity_management.h"
@@ -233,6 +234,18 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
          key = input::get_char_pressed()) {
       if (insert_char(state, key))
         reset_blink(state);
+    }
+
+    // CTRL/Cmd+A: select all (clears text since no selection infrastructure)
+    if (ctx.pressed(InputAction::TextSelectAll) &&
+        (input::is_key_down(keys::LEFT_CONTROL) ||
+         input::is_key_down(keys::RIGHT_CONTROL) ||
+         input::is_key_down(keys::LEFT_SUPER) ||
+         input::is_key_down(keys::RIGHT_SUPER))) {
+      state.storage.clear();
+      state.cursor_position = 0;
+      state.changed_since = true;
+      reset_blink(state);
     }
 
     // Key actions

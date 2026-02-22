@@ -118,10 +118,9 @@ struct HandleKeyCommand : System<PendingE2ECommand> {
     if (combo.alt)
       input_injector::set_key_down(keys::LEFT_ALT);
 
-    // Push the key to queue (for polling APIs)
-    test_input::push_key(combo.key);
-
-    // Mark key as pressed (for synthetic press detection)
+    // Mark key as pressed via injector only. Do NOT also push_key to
+    // the queue — the injector has a 1-frame delay which causes the queue
+    // copy to fire one frame earlier, resulting in a double-press.
     input_injector::set_key_down(combo.key);
 
     // Schedule release in 2 frames (gives app time to process)

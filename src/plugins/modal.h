@@ -179,7 +179,7 @@ struct modal : developer::Plugin {
       if (root_id == search_id)
         return true;
 
-      OptEntity opt = EntityHelper::getEntityForID(root_id);
+      OptEntity opt = ui::UICollectionHolder::getEntityForID(root_id);
       if (!opt.has_value())
         return false;
 
@@ -608,7 +608,7 @@ struct modal : developer::Plugin {
   static void close(EntityID modal_id,
                     DialogResult result = DialogResult::Dismissed,
                     const std::string &return_value = "") {
-    OptEntity opt = EntityHelper::getEntityForID(modal_id);
+    OptEntity opt = ui::UICollectionHolder::getEntityForID(modal_id);
     if (!opt.has_value())
       return;
 
@@ -646,7 +646,7 @@ struct modal : developer::Plugin {
 
       // Handle escape key for topmost modal
       EntityID top_id = root.modal_stack.back();
-      OptEntity top_opt = EntityHelper::getEntityForID(top_id);
+      OptEntity top_opt = ui::UICollectionHolder::getEntityForID(top_id);
       if (!top_opt.has_value())
         return;
 
@@ -751,7 +751,7 @@ struct modal : developer::Plugin {
 
       // Draw backdrop for each modal in stack
       for (EntityID modal_id : root.modal_stack) {
-        OptEntity opt = EntityHelper::getEntityForID(modal_id);
+        OptEntity opt = ui::UICollectionHolder::getEntityForID(modal_id);
         if (!opt.has_value())
           continue;
 

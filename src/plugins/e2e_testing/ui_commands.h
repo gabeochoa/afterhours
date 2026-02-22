@@ -10,6 +10,7 @@
 #include "../autolayout.h"
 #include "../ui/components.h"
 #include "../ui/context.h"
+#include "../ui/ui_collection.h"
 
 #include <format>
 #include <magic_enum/magic_enum.hpp>
@@ -17,6 +18,11 @@
 namespace afterhours {
 namespace testing {
 namespace ui_commands {
+
+inline EntityQuery<> ui_query() {
+  return EntityQuery<>(ui::UICollectionHolder::get().collection,
+                       {.ignore_temp_warning = true});
+}
 
 // Adjust a rect for ancestor scroll offset so e2e click coordinates match
 // the visual (rendered) position. Mirrors detail::apply_scroll_offset in
@@ -65,7 +71,7 @@ inline RectangleType get_screen_rect(Entity &entity) {
 // Find a UI component by its debug name and return its center position
 template <typename InputAction>
 std::optional<Position> find_component_center(const std::string &name) {
-  auto query = EntityQuery()
+  auto query = ui_query()
                    .whereHasComponent<ui::UIComponent>()
                    .whereHasComponent<ui::UIComponentDebug>()
                    .whereLambda([&](const Entity &e) {
@@ -86,7 +92,7 @@ std::optional<Position> find_component_center(const std::string &name) {
 // Find a UI component containing specific text
 template <typename InputAction>
 std::optional<Position> find_component_with_text(const std::string &text) {
-  auto query = EntityQuery()
+  auto query = ui_query()
                    .whereHasComponent<ui::UIComponent>()
                    .whereHasComponent<ui::HasLabel>()
                    .whereLambda([&](const Entity &e) {
@@ -160,7 +166,7 @@ struct HandleFocusUICommand : System<PendingE2ECommand> {
     }
 
     const auto &name = cmd.arg(0);
-    auto query = EntityQuery()
+    auto query = ui_query()
                      .whereHasComponent<ui::UIComponent>()
                      .whereHasComponent<ui::UIComponentDebug>()
                      .whereLambda([&](const Entity &e) {
@@ -173,7 +179,16 @@ struct HandleFocusUICommand : System<PendingE2ECommand> {
       auto &cmp = entity.get<ui::UIComponent>();
       auto *ctx = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
       if (ctx) {
-        ctx->set_focus(cmp.id);
+        EntityID focus_target = cmp.id;
+        for (int child_id : cmp.children) {
+          auto child_opt =
+              ui::UICollectionHolder::getEntityForID(child_id);
+          if (child_opt.valid() &&
+              child_opt.asE().template has<ui::InFocusCluster>()) {
+            focus_target = child_id;
+          }
+        }
+        ctx->set_focus(focus_target);
         cmd.consume();
         return;
       }
@@ -275,7 +290,7 @@ struct HandleExpectFocusedCommand : System<PendingE2ECommand> {
     }
 
     const auto &name = cmd.arg(0);
-    auto query = EntityQuery()
+    auto query = ui_query()
                      .whereHasComponent<ui::UIComponent>()
                      .whereHasComponent<ui::UIComponentDebug>()
                      .whereLambda([&](const Entity &e) {
@@ -310,7 +325,7 @@ struct HandleClickButtonCommand : System<PendingE2ECommand> {
 
     const auto &text = cmd.arg(0);
     auto query =
-        EntityQuery()
+        ui_query()
             .whereHasComponent<ui::UIComponent>()
             .whereHasComponent<ui::HasLabel>()
             .whereHasComponent<ui::HasClickListener>()
@@ -345,7 +360,7 @@ struct HandleToggleCheckboxCommand : System<PendingE2ECommand> {
     }
 
     const auto &name = cmd.arg(0);
-    auto query = EntityQuery()
+    auto query = ui_query()
                      .whereHasComponent<ui::UIComponent>()
                      .whereHasComponent<ui::UIComponentDebug>()
                      .whereHasComponent<ui::HasCheckboxState>()
@@ -385,7 +400,7 @@ struct HandleSetSliderCommand : System<PendingE2ECommand> {
     }
 
     const auto &name = cmd.arg(0);
-    auto query = EntityQuery()
+    auto query = ui_query()
                      .whereHasComponent<ui::UIComponent>()
                      .whereHasComponent<ui::UIComponentDebug>()
                      .whereHasComponent<ui::HasSliderState>()
@@ -423,7 +438,7 @@ struct HandleSelectDropdownCommand : System<PendingE2ECommand> {
     }
 
     const auto &name = cmd.arg(0);
-    auto query = EntityQuery()
+    auto query = ui_query()
                      .whereHasComponent<ui::UIComponent>()
                      .whereHasComponent<ui::UIComponentDebug>()
                      .whereHasComponent<ui::HasDropdownState>()
@@ -463,7 +478,7 @@ struct HandleExpectCheckboxCommand : System<PendingE2ECommand> {
         cmd.arg(1) == "true" || cmd.arg(1) == "checked" || cmd.arg(1) == "1";
     const auto &name = cmd.arg(0);
 
-    auto query = EntityQuery()
+    auto query = ui_query()
                      .whereHasComponent<ui::UIComponent>()
                      .whereHasComponent<ui::UIComponentDebug>()
                      .whereHasComponent<ui::HasCheckboxState>()
@@ -507,7 +522,7 @@ struct HandleExpectSliderCommand : System<PendingE2ECommand> {
     float tolerance = cmd.arg_as<float>(2, 0.01f);
 
     const auto &name = cmd.arg(0);
-    auto query = EntityQuery()
+    auto query = ui_query()
                      .whereHasComponent<ui::UIComponent>()
                      .whereHasComponent<ui::UIComponentDebug>()
                      .whereHasComponent<ui::HasSliderState>()

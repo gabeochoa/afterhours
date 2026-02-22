@@ -777,7 +777,9 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
                               ? ComponentSize{config.size.x_axis, children()}
                               : ComponentSize{percent(1.0f), children()})
                .with_flex_direction(FlexDirection::Column)
-               .with_debug_name("radio_tray"));
+               .with_debug_name(config.debug_name.empty()
+                                    ? "radio_tray"
+                                    : config.debug_name));
 
   // Circle dimensions - use MIN_TOUCH_TARGET for accessible touch area
   // The visual circle is smaller but the touch target meets accessibility
