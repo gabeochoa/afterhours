@@ -124,6 +124,10 @@ void files::enforce_singletons(SystemManager &sm) {
 }
 
 files::ProvidesResourcePaths *files::get_provider() {
+  if (!EntityHelper::get_default_collection()
+           .has_singleton<ProvidesResourcePaths>()) {
+    return nullptr;
+  }
   return EntityHelper::get_singleton_cmp<ProvidesResourcePaths>();
 }
 

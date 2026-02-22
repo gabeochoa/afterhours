@@ -294,8 +294,7 @@ struct modal : developer::Plugin {
       // parent). This ensures it renders before the modal and blocks input.
       // We use a div (not button) to avoid hover state color changes.
       // Visual backdrop (div) - this provides the dimmed background appearance
-      auto backdrop_visual = div(
-          ctx, backdrop_ep,
+      div(ctx, backdrop_ep,
           ComponentConfig{}
               .with_size(ComponentSize{pixels(static_cast<float>(screen_w)),
                                        pixels(static_cast<float>(screen_h))})
@@ -303,8 +302,6 @@ struct modal : developer::Plugin {
               .with_custom_background(config.backdrop_color)
               .with_render_layer(config.render_layer - 1)
               .with_debug_name("modal_backdrop"));
-      backdrop_visual.cmp().computed_rel[Axis::X] = 0;
-      backdrop_visual.cmp().computed_rel[Axis::Y] = 0;
 
       // Note: Backdrop clicks for light dismiss are handled by
       // ModalCloseWatcherSystem which checks if clicks are outside the modal
@@ -327,10 +324,10 @@ struct modal : developer::Plugin {
               .with_debug_name("modal"),
           ComponentType::Div);
 
-      // Set absolute position manually
+      // Set absolute position so autolayout places modal at screen center
       auto &ui = entity.get<UIComponent>();
-      ui.computed_rel[Axis::X] = x_pos;
-      ui.computed_rel[Axis::Y] = y_pos;
+      ui.absolute_pos_x = x_pos;
+      ui.absolute_pos_y = y_pos;
 
       // Add title if specified
       if (!config.title.empty()) {
@@ -808,9 +805,7 @@ struct modal : developer::Plugin {
   }
 
   static void enforce_singletons(SystemManager &) {
-    // Check directly without going through get_modal_root() which throws
-    auto *existing = EntityHelper::get_singleton_cmp<ModalRoot>();
-    if (!existing) {
+    if (!EntityHelper::get_default_collection().has_singleton<ModalRoot>()) {
       Entity &singleton = EntityHelper::createEntity();
       detail::init_singleton(singleton);
     }
