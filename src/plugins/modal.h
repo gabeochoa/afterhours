@@ -319,6 +319,7 @@ struct modal : developer::Plugin {
               .with_size(ComponentSize{pixels(width_px), pixels(height_px)})
               .with_absolute_position()
               .with_flex_direction(FlexDirection::Column)
+              .with_no_wrap()
               .with_background(Theme::Usage::Surface)
               .with_roundness(0.05f)
               .with_padding(Spacing::md)

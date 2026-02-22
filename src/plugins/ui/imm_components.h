@@ -1246,7 +1246,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
     auto handle_label_config =
         ComponentConfig::inherit_from(config, "slider_handle_label")
             .with_label(handle_label_text)
-            .with_size(ComponentSize{handle_width_size, config.size.y_axis})
+            .with_size(ComponentSize{children(), children()})
             .with_color_usage(Theme::Usage::Primary)
             .with_render_layer(config.render_layer + 3)
             .with_font(config.font_name, config.font_size);

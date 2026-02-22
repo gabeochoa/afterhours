@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <unordered_set>
+#include <unordered_map>
 #include <vector>
 
 #include "../../drawing_helpers.h"
@@ -313,10 +313,12 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
   // Check for invalid container (negative or zero usable space)
   if (max_text_size.x <= 0 || max_text_size.y <= 0) {
 #ifdef AFTERHOURS_DEBUG_TEXT_OVERFLOW
-    // Only log once per unique text to avoid spamming
-    static std::unordered_set<std::string> logged_texts;
-    if (logged_texts.find(text) == logged_texts.end()) {
-      logged_texts.insert(text);
+    // Only warn when overflow persists across multiple frames. Elements with
+    // percent/absolute sizing may have zero dimensions on their first layout
+    // frame before the autolayout pass resolves them.
+    static std::unordered_map<std::string, int> overflow_frame_count;
+    overflow_frame_count[text]++;
+    if (overflow_frame_count[text] == 3) {
       log_warn("Container too small for text: container={}x{}, margins={}x{}, "
                "text='{}'",
                container.width, container.height, margin_px.x, margin_px.y,

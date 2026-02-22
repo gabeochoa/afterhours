@@ -280,7 +280,6 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
                            ui_scale);
 
     // print_debug_autolayout_tree(entity, cmp);
-    // log_error("");
   }
 };
 
