@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "../../developer.h"
+#include "../../graphics_common.h"
 #include "../../plugins/color.h"
 #include "../../plugins/texture_manager.h"
 #include "font_helper.h"

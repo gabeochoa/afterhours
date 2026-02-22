@@ -17,7 +17,7 @@
 // Run:
 //   ./graphics_example
 
-#include <afterhours/src/graphics/graphics.h>
+#include <afterhours/src/graphics.h>
 #include <iostream>
 #include <filesystem>
 
