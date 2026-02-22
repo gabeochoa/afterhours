@@ -1194,28 +1194,28 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
         apply_slider_value(draggable, v);
       });
 
-  // Create handle
-  const auto dim = config.size.x_axis.dim;
-  const float width_val = config.size.x_axis.value;
+  // Create handle - use bg_size (not original config) so handle stays within track
+  const auto dim = bg_size.x_axis.dim;
+  const float track_val = bg_size.x_axis.value;
 
   // Warn about tiny widths
   const bool tiny_width =
-      (dim == Dim::Pixels && width_val < 8.0f) ||
-      ((dim == Dim::Percent || dim == Dim::ScreenPercent) && width_val < 0.02f);
+      (dim == Dim::Pixels && track_val < 8.0f) ||
+      ((dim == Dim::Percent || dim == Dim::ScreenPercent) && track_val < 0.02f);
   if (tiny_width) {
     log_warn("slider width is very small (dim={}, value={:.4f}); slider handle "
              "may be invisible (component: {})",
-             (int)dim, width_val, config.debug_name.c_str());
+             (int)dim, track_val, config.debug_name.c_str());
   }
 
-  Size handle_width_size{dim, width_val * 0.25f, config.size.x_axis.strictness};
+  Size handle_width_size{dim, track_val * 0.25f, bg_size.x_axis.strictness};
   if (dim == Dim::Pixels)
     handle_width_size.value = std::max(2.0f, handle_width_size.value);
   else if (dim == Dim::Percent || dim == Dim::ScreenPercent)
     handle_width_size.value = std::max(0.02f, handle_width_size.value);
 
-  Size handle_left_size{dim, owned_value * 0.75f * width_val,
-                        config.size.x_axis.strictness};
+  Size handle_left_size{dim, owned_value * 0.75f * track_val,
+                        bg_size.x_axis.strictness};
   if (dim == Dim::Pixels)
     handle_left_size.value = std::max(0.0f, handle_left_size.value);
   else if (dim == Dim::Percent || dim == Dim::ScreenPercent)

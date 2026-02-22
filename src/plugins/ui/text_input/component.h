@@ -199,7 +199,11 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Center cursor vertically in field
     float field_height = field_cmp.computed[Axis::Y];
+    float field_width = field_cmp.computed[Axis::X];
     float cursor_y = (field_height - cursor_height) / 2.f;
+
+    constexpr float CURSOR_WIDTH = 8.0f;
+    cursor_x = std::min(cursor_x, field_width - CURSOR_WIDTH);
 
     // Cursor is a thin vertical bar
     // Note: Width must be >= 8px to survive 8pt grid snapping at high DPI
@@ -207,11 +211,10 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     (void)div(
         ctx, mk(field_entity, 0),
         ComponentConfig()
-            .with_size(ComponentSize(pixels(8), pixels(cursor_height)))
-            .with_custom_background(ctx.theme.font) // Use theme text color
-            .with_translate(cursor_x,
-                            cursor_y) // Position cursor aligned with text
-            .with_opacity(show_cursor ? 1.0f : 0.0f) // Blink
+            .with_size(ComponentSize(pixels(CURSOR_WIDTH), pixels(cursor_height)))
+            .with_custom_background(ctx.theme.font)
+            .with_translate(cursor_x, cursor_y)
+            .with_opacity(show_cursor ? 1.0f : 0.0f)
             .with_skip_tabbing(true)
             .with_debug_name("cursor")
             .with_render_layer(config.render_layer + 10));

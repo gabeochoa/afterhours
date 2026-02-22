@@ -235,13 +235,17 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
         static_cast<float>(cursor_rc.row - first_visible_line) * line_height +
         (line_height - cursor_height) / 2.f;
 
+    constexpr float CURSOR_WIDTH = 2.0f;
+    float field_width = field_cmp.computed[Axis::X];
+    float pad_right = field_cmp.computed_padd[Axis::right];
+    cursor_x = std::min(cursor_x, field_width - pad_right - CURSOR_WIDTH);
+
     // Only render cursor if visible in viewport
     if (cursor_rc.row >= first_visible_line &&
         cursor_rc.row < first_visible_line + visible_line_count) {
-      // Use absolute positioning to avoid flex layout interference
       div(ctx, mk(field_entity, 1000),
           ComponentConfig()
-              .with_size(ComponentSize(pixels(2), pixels(cursor_height)))
+              .with_size(ComponentSize(pixels(CURSOR_WIDTH), pixels(cursor_height)))
               .with_custom_background(
                   config.custom_text_color.value_or(ctx.theme.font))
               .with_absolute_position()

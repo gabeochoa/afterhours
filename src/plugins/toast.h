@@ -202,18 +202,6 @@ struct toast : developer::Plugin {
         return {is_visible, entity};
     }
 
-    static void add_singleton_components(Entity &singleton) {
-        detail::init_singleton(singleton);
-    }
-
-    static void enforce_singletons(SystemManager &) {
-        if (!EntityHelper::get_default_collection()
-                 .has_singleton<ToastRoot>()) {
-            Entity &singleton = EntityHelper::createEntity();
-            detail::init_singleton(singleton);
-        }
-    }
-
     static ui::imm::ElementResult send_info(ui::imm::HasUIContext auto &ctx,
                                             const std::string &msg,
                                             float duration = 3.0f) {
