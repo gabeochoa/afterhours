@@ -743,6 +743,8 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
       return;
     if (!component.was_rendered_to_screen)
       return;
+    if (!context->is_input_allowed(entity.id))
+      return;
 
     // Valid things to tab to...
     context->try_to_grab(entity.id);
