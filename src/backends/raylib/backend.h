@@ -242,15 +242,16 @@ struct RaylibPlatformAPI {
   }
 
   // ── Application control ──
-  static void request_quit() {
-    // Raylib doesn't have a direct quit request — closing the window
-    // is handled by the OS or by WindowShouldClose() returning true.
-    // For the run() loop, we can't force-quit from inside a frame.
-    // This is a no-op under the legacy poll-based API.
+  static bool &quit_flag() {
+    static bool flag = false;
+    return flag;
   }
+
+  static void request_quit() { quit_flag() = true; }
 
   // ── Unified run loop ──
   static void run(const RunConfig &cfg) {
+    quit_flag() = false;
     if (cfg.flags)
       set_config_flags(cfg.flags);
     init_window(cfg.width, cfg.height, cfg.title);
@@ -258,7 +259,7 @@ struct RaylibPlatformAPI {
       set_target_fps(cfg.target_fps);
     if (cfg.init)
       cfg.init();
-    while (!window_should_close()) {
+    while (!window_should_close() && !quit_flag()) {
       if (cfg.frame)
         cfg.frame();
     }
