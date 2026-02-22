@@ -29,6 +29,7 @@ art_storage/*
 # Example outputs
 examples/graphics_example
 examples/autolayout_test
+examples/drawing_3d_example
 examples/graphics_example_output.png
 examples/graphics_example_captures/
 internet-mode-used_DO_NOT_REMOVE_MANUALLY_SECURITY_RISK
