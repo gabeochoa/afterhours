@@ -497,10 +497,14 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
 
             // --- Check 2: text truncation (text wider than container) ---
             // Skip text check for elements at origin (0,0) - likely
-            // stale/unprocessed
+            // stale/unprocessed.
+            // Skip elements with TextOverflow::Ellipsis since they
+            // intentionally handle overflow via truncation.
             bool text_truncated = false;
             std::string text_detail;
             if (entity.has<ui::HasLabel>() && font_mgr &&
+                entity.get<ui::HasLabel>().text_overflow !=
+                    ui::TextOverflow::Ellipsis &&
                 (rect.x > 0.5f || rect.y > 0.5f)) {
                 auto &label = entity.get<ui::HasLabel>();
                 if (!label.label.empty() && label.label.length() > 1) {

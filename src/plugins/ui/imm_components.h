@@ -1726,6 +1726,7 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_custom_text_color(tab_text)
             .with_align_items(AlignItems::Center)
             .with_justify_content(JustifyContent::Center)
+            .with_text_overflow(TextOverflow::Ellipsis)
             .with_border_bottom(underline_color, pixels(underline_h));
 
     if (button(ctx, mk(entity, i), tab_config)) {
