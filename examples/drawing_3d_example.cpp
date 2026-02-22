@@ -36,8 +36,8 @@ namespace raylib {
 using Color = raylib::Color;
 using Vector3 = raylib::Vector3;
 using Vector2 = raylib::Vector2;
-constexpr int CAMERA_PERSPECTIVE = raylib::CAMERA_PERSPECTIVE;
-constexpr int CAMERA_ORTHOGRAPHIC = raylib::CAMERA_ORTHOGRAPHIC;
+constexpr int CAMERA_PERSPECTIVE = afterhours::camera::PERSPECTIVE;
+constexpr int CAMERA_ORTHOGRAPHIC = afterhours::camera::ORTHOGRAPHIC;
 
 static int tests_passed = 0;
 static int tests_run = 0;

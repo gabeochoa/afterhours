@@ -6,6 +6,11 @@
 
 namespace afterhours {
 
+namespace camera {
+constexpr int PERSPECTIVE = 0;
+constexpr int ORTHOGRAPHIC = 1;
+} // namespace camera
+
 #ifdef AFTER_HOURS_USE_RAYLIB
 using Camera3D = raylib::Camera3D;
 #else

@@ -121,6 +121,49 @@ constexpr int KP_EQUAL = 336;
 
 } // namespace keys
 
+// Mouse button codes — match raylib/GLFW values
+namespace mouse_buttons {
+constexpr int LEFT = 0;
+constexpr int RIGHT = 1;
+constexpr int MIDDLE = 2;
+constexpr int SIDE = 3;
+constexpr int EXTRA = 4;
+constexpr int FORWARD = 5;
+constexpr int BACK = 6;
+} // namespace mouse_buttons
+
+// Gamepad button codes — match raylib values
+namespace gamepad_buttons {
+constexpr int UNKNOWN = 0;
+constexpr int LEFT_FACE_UP = 1;
+constexpr int LEFT_FACE_RIGHT = 2;
+constexpr int LEFT_FACE_DOWN = 3;
+constexpr int LEFT_FACE_LEFT = 4;
+constexpr int RIGHT_FACE_UP = 5;
+constexpr int RIGHT_FACE_RIGHT = 6;
+constexpr int RIGHT_FACE_DOWN = 7;
+constexpr int RIGHT_FACE_LEFT = 8;
+constexpr int LEFT_TRIGGER_1 = 9;
+constexpr int LEFT_TRIGGER_2 = 10;
+constexpr int RIGHT_TRIGGER_1 = 11;
+constexpr int RIGHT_TRIGGER_2 = 12;
+constexpr int MIDDLE_LEFT = 13;
+constexpr int MIDDLE = 14;
+constexpr int MIDDLE_RIGHT = 15;
+constexpr int LEFT_THUMB = 16;
+constexpr int RIGHT_THUMB = 17;
+} // namespace gamepad_buttons
+
+// Gamepad axis codes — match raylib values
+namespace gamepad_axes {
+constexpr int LEFT_X = 0;
+constexpr int LEFT_Y = 1;
+constexpr int RIGHT_X = 2;
+constexpr int RIGHT_Y = 3;
+constexpr int LEFT_TRIGGER = 4;
+constexpr int RIGHT_TRIGGER = 5;
+} // namespace gamepad_axes
+
 namespace detail {
 
 inline std::string to_upper(const std::string &s) {
