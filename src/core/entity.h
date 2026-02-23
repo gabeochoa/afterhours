@@ -30,7 +30,7 @@ using ComponentArray =
     std::array<std::unique_ptr<BaseComponent>, max_num_components>;
 using EntityID = int;
 
-static std::atomic_int ENTITY_ID_GEN = 0;
+inline std::atomic_int ENTITY_ID_GEN = 0;
 
 struct Entity {
   EntityID id;

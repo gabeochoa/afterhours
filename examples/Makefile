@@ -31,7 +31,7 @@ endif
 # Targets
 .PHONY: all run test clean
 
-all: graphics_example autolayout_test drawing_3d_example
+all: graphics_example autolayout_test drawing_3d_example entity_mapping_test
 
 graphics_example: graphics_example.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
@@ -46,17 +46,23 @@ autolayout_test: autolayout_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 	@echo "Built: autolayout_test"
 
+# Entity mapping tests - multi-TU test for ENTITY_ID_GEN and UIEntityMappingCache
+entity_mapping_test: entity_mapping_test.cpp entity_mapping_test_helper.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+	@echo "Built: entity_mapping_test"
+
 run: graphics_example
 	./graphics_example
 
 run-3d: drawing_3d_example
 	./drawing_3d_example
 
-test: autolayout_test drawing_3d_example
+test: autolayout_test drawing_3d_example entity_mapping_test
 	./autolayout_test
 	./drawing_3d_example
+	./entity_mapping_test
 
 clean:
-	rm -f graphics_example autolayout_test drawing_3d_example
+	rm -f graphics_example autolayout_test drawing_3d_example entity_mapping_test
 	rm -f graphics_example_output.png
 	rm -rf graphics_example_captures/
