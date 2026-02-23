@@ -626,6 +626,9 @@ struct input : developer::Plugin {
     static void set_gamepad_mappings(const std::string &) {
         log_error("@notimplemented set_gamepad_mappings");
     }
+    static void try_load_gamepad_mappings() {
+        log_warn("try_load_gamepad_mappings: no backend configured");
+    }
     static std::string name_for_button(const GamepadButton) {
         log_error("@notimplemented name_for_button");
         return "unknown";
@@ -723,6 +726,9 @@ struct input : developer::Plugin {
     }
     static void set_gamepad_mappings(const std::string &) {
         log_error("@notimplemented set_gamepad_mappings");
+    }
+    static void try_load_gamepad_mappings() {
+        log_warn("try_load_gamepad_mappings: gamepad mappings not supported on Metal backend");
     }
     static std::string name_for_button(const GamepadButton) {
         log_error("@notimplemented name_for_button");
