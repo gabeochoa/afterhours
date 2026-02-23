@@ -170,6 +170,27 @@ static inline RectangleType get_scroll_scissor_rect(const Entity &entity) {
   return {0, 0, 0, 0};
 }
 
+// Recursively shift all descendants by a position delta.
+// Called after a scroll-view direct child is repositioned so that
+// grandchildren (and deeper) stay correct relative to their parent.
+static inline void propagate_position_delta(Entity &entity, float dx,
+                                            float dy) {
+  if (!entity.has<UIComponent>())
+    return;
+  for (EntityID child_id : entity.get<UIComponent>().children) {
+    OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
+    if (!child_opt.valid())
+      continue;
+    Entity &child = child_opt.asE();
+    if (!child.has<UIComponent>())
+      continue;
+    UIComponent &child_cmp = child.get<UIComponent>();
+    child_cmp.computed_rel[Axis::X] += dx;
+    child_cmp.computed_rel[Axis::Y] += dy;
+    propagate_position_delta(child, dx, dy);
+  }
+}
+
 // Recompute children's positions for scroll view containers
 // The layout system constrains children to parent bounds, which stacks overflow
 // items at the same position. This function fixes that by sequentially
@@ -209,6 +230,9 @@ static inline void fix_scroll_view_child_positions(Entity &entity) {
     float child_margin_bottom = child_cmp.computed_margin[Axis::bottom];
     float child_margin_right = child_cmp.computed_margin[Axis::right];
 
+    float old_x = child_cmp.computed_rel[Axis::X];
+    float old_y = child_cmp.computed_rel[Axis::Y];
+
     if (is_row_layout) {
       // Row layout: position horizontally
       child_cmp.computed_rel[Axis::X] = current_x + child_margin_left;
@@ -226,6 +250,12 @@ static inline void fix_scroll_view_child_positions(Entity &entity) {
       float child_height = child_cmp.computed[Axis::Y];
       current_y += child_margin_top + child_height + child_margin_bottom;
     }
+
+    float dx = child_cmp.computed_rel[Axis::X] - old_x;
+    float dy = child_cmp.computed_rel[Axis::Y] - old_y;
+    if (dx == 0.0f && dy == 0.0f)
+      continue;
+    propagate_position_delta(child, dx, dy);
   }
 }
 
