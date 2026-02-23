@@ -65,6 +65,14 @@ struct ValidationConfig {
   // Flag elements with a label but no font set (font_name == UNSET_FONT)
   bool enforce_label_has_font = false;
 
+  // === Accessibility: Touch/Click Targets (Design Rules Section T) ===
+  // TODO: Implement validation system for this flag. Flag interactive elements
+  // (HasClickListener, HasCheckboxState, HasToggleSwitchState, HasSliderState)
+  // whose hit rect is smaller than min_touch_target_size on either axis.
+  // See docs/a11y_checklist_validation_mapping.md for full spec.
+  bool enforce_min_touch_target = false;
+  float min_touch_target_size = 44.0f;
+
   // === Debug Helpers ===
   // Draw red borders around elements with violations
   bool highlight_violations = false;
@@ -122,7 +130,7 @@ struct ValidationConfig {
            enforce_overflow_detection || enforce_contrast_ratio ||
            enforce_min_font_size || enforce_resolution_independence ||
            enforce_zero_size_detection || enforce_absolute_margin_conflict ||
-           enforce_label_has_font;
+           enforce_label_has_font || enforce_min_touch_target;
   }
 
   // Check if mode allows logging

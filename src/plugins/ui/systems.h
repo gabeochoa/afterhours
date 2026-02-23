@@ -60,14 +60,14 @@ static inline RectangleType apply_scroll_offset(const Entity &entity,
 /// Singleton component that caches entity mappings for fast lookups during
 /// UI tree traversal. Populated once per frame by BuildUIEntityMapping system.
 struct UIEntityMappingCache : BaseComponent {
-  std::map<EntityID, RefEntity> components;
+  std::vector<Entity *> components;
 
   Entity &to_ent(EntityID id) {
-    auto it = components.find(id);
-    if (it == components.end()) {
+    if (id < 0 || static_cast<size_t>(id) >= components.size() ||
+        components[id] == nullptr) {
       log_error("UIEntityMappingCache: entity {} not in mapping", id);
     }
-    return it->second.get();
+    return *components[id];
   }
 
   UIComponent &to_cmp(EntityID id) {
@@ -81,16 +81,22 @@ struct BuildUIEntityMapping : System<> {
   virtual void once(float) override {
     auto *cache = EntityHelper::get_singleton_cmp<UIEntityMappingCache>();
     if (!cache) {
-      return; // Singleton not created yet
+      return;
     }
 
-    cache->components.clear();
     auto &ui_coll = UICollectionHolder::get().collection;
     auto ui_entities = EntityQuery(ui_coll, {.ignore_temp_warning = true})
                            .whereHasComponent<UIComponent>()
                            .gen();
+
+    EntityID max_id = 0;
     for (Entity &entity : ui_entities) {
-      cache->components.emplace(entity.id, entity);
+      max_id = std::max(max_id, entity.id);
+    }
+
+    cache->components.assign(static_cast<size_t>(max_id) + 1, nullptr);
+    for (Entity &entity : ui_entities) {
+      cache->components[entity.id] = &entity;
     }
   }
 };
@@ -639,8 +645,11 @@ struct InputExclusivitySystem
     active_gates.clear();
   }
 
-  virtual void for_each_with(Entity &entity, UIComponent &, float) override {
+  virtual void for_each_with(Entity &entity, UIComponent &component,
+                             float) override {
     if (!context)
+      return;
+    if (!component.was_rendered_to_screen)
       return;
     EntityID eid = entity.id;
     std::string gate_name = fmt::format("input_exclusivity_{}", eid);
@@ -1714,19 +1723,15 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
     if (scroll_state.vertical_enabled && wheel_v.y != 0.0f) {
       scroll_state.scroll_offset.y +=
           direction * wheel_v.y * scroll_state.scroll_speed;
-      if (scroll_state.scroll_offset.y < 0.0f) {
-        scroll_state.scroll_offset.y = 0.0f;
-      }
     }
 
     // Horizontal scrolling
     if (scroll_state.horizontal_enabled && wheel_v.x != 0.0f) {
       scroll_state.scroll_offset.x +=
           direction * wheel_v.x * scroll_state.scroll_speed;
-      if (scroll_state.scroll_offset.x < 0.0f) {
-        scroll_state.scroll_offset.x = 0.0f;
-      }
     }
+
+    scroll_state.clamp_scroll();
   }
 };
 

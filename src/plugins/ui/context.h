@@ -170,6 +170,7 @@ template <typename InputAction> struct UIContext : BaseComponent {
     active_id = ROOT;
     focused_ids.clear();
     render_cmds.clear();
+    input_gates.clear();
   }
 
   void try_to_grab(EntityID id) {

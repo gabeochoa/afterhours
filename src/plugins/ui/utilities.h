@@ -31,14 +31,19 @@ namespace ui {
 static inline void force_layout_and_print(
     Entity &root,
     window_manager::Resolution resolution = window_manager::Resolution()) {
-    std::map<EntityID, RefEntity> components;
     auto &ui_coll = UICollectionHolder::get().collection;
     ui_coll.merge_entity_arrays();
     auto comps = EntityQuery(ui_coll, {.ignore_temp_warning = true})
                      .whereHasComponent<ui::UIComponent>()
                      .gen();
+
+    EntityID max_id = 0;
     for (Entity &entity : comps) {
-        components.emplace(entity.id, entity);
+        max_id = std::max(max_id, entity.id);
+    }
+    std::vector<Entity *> components(static_cast<size_t>(max_id) + 1, nullptr);
+    for (Entity &entity : comps) {
+        components[entity.id] = &entity;
     }
 
     if (resolution.width == 0 || resolution.height == 0) {

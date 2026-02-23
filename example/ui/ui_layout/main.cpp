@@ -67,22 +67,27 @@ auto &to_cmp(Entity &entity) { return AutoLayout::to_cmp_static(entity.id); }
 auto to_rect(Entity &entity) { return to_cmp(entity).rect(); }
 auto to_bounds(Entity &entity) { return to_cmp(entity).bounds(); }
 
-void run_(Entity &root_element) {
-    std::map<EntityID, RefEntity> components;
+static std::vector<Entity *> build_flat_mapping() {
     auto comps = EntityQuery().whereHasComponent<ui::UIComponent>().gen();
+    EntityID max_id = 0;
     for (Entity &entity : comps) {
-        components.emplace(entity.id, entity);
+        max_id = std::max(max_id, entity.id);
     }
+    std::vector<Entity *> components(static_cast<size_t>(max_id) + 1, nullptr);
+    for (Entity &entity : comps) {
+        components[entity.id] = &entity;
+    }
+    return components;
+}
+
+void run_(Entity &root_element) {
+    auto components = build_flat_mapping();
     ui::AutoLayout::autolayout(root_element.get<UIComponent>(),
                                {(int) WIDTH, (int) HEIGHT}, components);
 }
 
 void print_tree(Entity &root_ent, ui::UIComponent &root) {
-    std::map<EntityID, RefEntity> components;
-    auto comps = EntityQuery().whereHasComponent<ui::UIComponent>().gen();
-    for (Entity &entity : comps) {
-        components.emplace(entity.id, entity);
-    }
+    auto components = build_flat_mapping();
     ui::AutoLayout::autolayout(root, {(int) WIDTH, (int) HEIGHT}, components);
     ui::print_debug_autolayout_tree(root_ent, root);
 }

@@ -81,10 +81,14 @@ static Entity &make_root() {
 }
 
 static void run_layout(Entity &root_element) {
-    std::map<EntityID, RefEntity> components;
     auto comps = EntityQuery().whereHasComponent<ui::UIComponent>().gen();
+    EntityID max_id = 0;
     for (Entity &entity : comps) {
-        components.emplace(entity.id, entity);
+        max_id = std::max(max_id, entity.id);
+    }
+    std::vector<Entity *> components(static_cast<size_t>(max_id) + 1, nullptr);
+    for (Entity &entity : comps) {
+        components[entity.id] = &entity;
     }
     ui::AutoLayout::autolayout(root_element.get<UIComponent>(),
                                {(int)WIDTH, (int)HEIGHT}, components);
@@ -97,6 +101,7 @@ static void cleanup_entities() {
         EntityHelper::markIDForCleanup(e.id);
     }
     EntityHelper::cleanup();
+    ENTITY_ID_GEN = 0;
 }
 
 // ============================================================================

@@ -270,6 +270,7 @@ public:
     finished_ = false;
     failed_ = false;
     timed_out_ = false;
+    draining_pending_ = false;
     current_script_idx_ = 0;
     current_script_errors_ = 0;
   }
@@ -294,33 +295,65 @@ public:
   void tick(float dt) {
     if (finished_ || commands_.empty())
       return;
-    elapsed_time_ += dt;
 
-    // Timeout check
-    if (timeout_seconds_ > 0 && elapsed_time_ > timeout_seconds_) {
-      timed_out_ = true;
-      failed_ = true;
-      finished_ = true;
-      current_script_errors_++; // Count timeout as an error
-      finalize_current_script();
-      log_warn("[TIMEOUT] after {:.2f} seconds", elapsed_time_);
-      return;
-    }
-
-    // Handle wait between commands
+    // Handle wait between commands - don't count explicit wait time
+    // against the per-script timeout so that `wait 5` doesn't eat into
+    // the timeout budget.
     if (wait_time_ > 0) {
       wait_time_ -= dt;
       return;
     }
 
-    if (index_ >= commands_.size()) {
+    elapsed_time_ += dt;
+
+    // Timeout check (only active time, not wait time)
+    if (timeout_seconds_ > 0 && elapsed_time_ > timeout_seconds_) {
+      timed_out_ = true;
+      failed_ = true;
+      current_script_errors_++;
+
+      std::string script_name = current_script_name();
+      log_warn("[TIMEOUT] {} after {:.2f}s (at command index {})",
+               script_name, elapsed_time_, index_);
+
+      // In batch mode, skip to the next script instead of aborting
+      if (is_batch_mode()) {
+        consume_all_pending_commands();
+        finalize_current_script();
+        skip_to_next_script();
+        timed_out_ = false;
+        failed_ = false;
+        return;
+      }
+
       finalize_current_script();
       finished_ = true;
       return;
     }
 
-    // Create entity with PendingE2ECommand for this command
+    // Wait for all pending commands to resolve before advancing to
+    // the next script. This prevents timeouts from one script bleeding
+    // into the next script's error count.
+    if (draining_pending_ && has_pending_commands())
+      return;
+    draining_pending_ = false;
+
+    if (index_ >= commands_.size()) {
+      if (has_pending_commands())
+        return;
+      finalize_current_script();
+      finished_ = true;
+      return;
+    }
+
+    // If the next command is reset_test_state, wait for pending commands
+    // to finish before dispatching it.
     const auto &cmd = commands_[index_];
+    if (cmd.name == "reset_test_state" && has_pending_commands()) {
+      draining_pending_ = true;
+      return;
+    }
+
     dispatch_command(cmd);
     wait_time_ = cmd.wait_seconds;
     if (slow_mode_) {
@@ -359,17 +392,29 @@ public:
       log_info("============================================");
 
       int passed = 0, failed_count = 0;
+      std::vector<const ScriptResult *> failures;
       for (const auto &sr : script_results_) {
         if (sr.passed) {
           passed++;
         } else {
           failed_count++;
+          failures.push_back(&sr);
         }
       }
 
       log_info("Scripts run:    {}", script_results_.size());
       log_info("Scripts passed: {}", passed);
       log_info("Scripts failed: {}", failed_count);
+
+      if (!failures.empty()) {
+        log_info("--------------------------------------------");
+        log_warn("Failed scripts:");
+        for (const auto *sr : failures) {
+          log_warn("  {} ({} error{})", sr->name, sr->error_count,
+                   sr->error_count == 1 ? "" : "s");
+        }
+      }
+      log_info("============================================");
       return;
     }
 
@@ -450,6 +495,55 @@ private:
     }
   }
 
+  bool has_pending_commands() const {
+    auto pending =
+        EntityQuery().whereHasComponent<PendingE2ECommand>().gen();
+    for (const Entity &e : pending) {
+      if (!e.get<PendingE2ECommand>().is_consumed())
+        return true;
+    }
+    return false;
+  }
+
+  void consume_all_pending_commands() {
+    auto pending =
+        EntityQuery().whereHasComponent<PendingE2ECommand>().gen();
+    for (Entity &e : pending) {
+      auto &cmd = e.get<PendingE2ECommand>();
+      if (!cmd.is_consumed()) {
+        cmd.fail("Cancelled due to script timeout");
+        e.cleanup = true;
+      }
+    }
+  }
+
+  std::string current_script_name() const {
+    if (!script_results_.empty() &&
+        current_script_idx_ < script_results_.size())
+      return script_results_[current_script_idx_].name;
+    return script_path_.empty() ? "(unknown)" : script_path_;
+  }
+
+  void skip_to_next_script() {
+    while (index_ < commands_.size()) {
+      if (commands_[index_].name == "reset_test_state") {
+        test_input::reset_all();
+        key_release_detail::reset();
+        VisibleTextRegistry::instance().clear();
+        if (clear_fn_)
+          clear_fn_();
+        current_script_idx_++;
+        current_script_errors_ = 0;
+        elapsed_time_ = 0.0f;
+        draining_pending_ = false;
+        index_++;
+        return;
+      }
+      index_++;
+    }
+    finished_ = true;
+  }
+
   void finalize_current_script() {
     if (script_results_.empty() ||
         current_script_idx_ >= script_results_.size())
@@ -458,7 +552,7 @@ private:
     // Sync with command handler error count (from E2ECommandCleanupSystem)
     int command_errors = get_command_error_count();
     current_script_errors_ += command_errors;
-    reset_command_error_count(); // Reset for next script
+    reset_command_error_count();
 
     auto &result = script_results_[current_script_idx_];
     result.error_count = current_script_errors_;
@@ -481,6 +575,7 @@ private:
   float timeout_seconds_ = 10.0f; // Default 10 second timeout
   bool slow_mode_ = false;        // Add delay between commands for visibility
   float slow_delay_ = 0.5f;       // Delay in seconds when slow mode is on
+  bool draining_pending_ = false; // Waiting for pending commands before next script
   bool finished_ = false;
   bool failed_ = false;
   bool timed_out_ = false;

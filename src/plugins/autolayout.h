@@ -15,14 +15,42 @@ namespace afterhours {
 
 namespace ui {
 
+template <typename T, size_t N>
+struct SmallVector {
+  std::array<T, N> stack_buf;
+  size_t len = 0;
+  std::vector<T> heap_buf;
+
+  void push_back(T val) {
+    if (len < N) {
+      stack_buf[len++] = val;
+    } else {
+      if (heap_buf.empty())
+        heap_buf.assign(stack_buf.begin(), stack_buf.begin() + len);
+      heap_buf.push_back(val);
+      len++;
+    }
+  }
+  T *data() { return len <= N ? stack_buf.data() : heap_buf.data(); }
+  const T *data() const { return len <= N ? stack_buf.data() : heap_buf.data(); }
+  size_t size() const { return len; }
+  bool empty() const { return len == 0; }
+  T &operator[](size_t i) { return data()[i]; }
+  const T &operator[](size_t i) const { return data()[i]; }
+  T *begin() { return data(); }
+  T *end() { return data() + len; }
+  const T *begin() const { return data(); }
+  const T *end() const { return data() + len; }
+};
+
 struct AutoLayout {
   window_manager::Resolution resolution;
-  std::map<EntityID, RefEntity> mapping;
+  std::vector<Entity *> mapping;
   bool enable_grid_snapping = false;
   float ui_scale = 1.0f;
 
   AutoLayout(window_manager::Resolution rez = {},
-             const std::map<EntityID, RefEntity> &mapping_ = {})
+             const std::vector<Entity *> &mapping_ = {})
       : resolution(rez), mapping(mapping_) {}
 
   /// Resolve a pixel value respecting the component's scaling mode.
@@ -41,22 +69,21 @@ struct AutoLayout {
   }
 
   Entity &to_ent(EntityID id) {
-    auto it = mapping.find(id);
-    if (it == mapping.end()) {
+    if (id < 0 || static_cast<size_t>(id) >= mapping.size() ||
+        mapping[id] == nullptr) {
       log_error("during autolayout, we looked for an entity with id {} but it "
                 "wasnt in the mapping provided",
                 id);
     }
-    return it->second;
+    return *mapping[id];
   }
 
   virtual UIComponent &to_cmp(EntityID id) {
     return to_ent(id).get<UIComponent>();
   }
 
-  std::array<float, 4>
-  for_each_spacing(UIComponent &widget,
-                   const std::function<float(UIComponent &, Axis)> &cb) {
+  template <typename Fn>
+  std::array<float, 4> for_each_spacing(UIComponent &widget, Fn &&cb) {
     std::array<float, 4> data;
     data[0] = cb(widget, Axis::top);
     data[1] = cb(widget, Axis::left);
@@ -65,9 +92,10 @@ struct AutoLayout {
     return data;
   }
 
+  template <typename Fn>
   void write_each_spacing(UIComponent &widget,
                           UIComponent::AxisArray<float, 6> &computed,
-                          const std::function<float(UIComponent &, Axis)> &cb) {
+                          Fn &&cb) {
     auto [_top, _left, _right, _bottom] = for_each_spacing(widget, cb);
     computed[Axis::top] = _top;
     computed[Axis::left] = _left;
@@ -560,9 +588,10 @@ struct AutoLayout {
       // sizing), fall back to text measurement so the element is sized to
       // fit its label content rather than collapsing to padding-only.
       float text_size = 0.f;
-      auto it = mapping.find(widget.id);
-      if (it != mapping.end()) {
-        const Entity &ent = it->second;
+      if (widget.id >= 0 &&
+          static_cast<size_t>(widget.id) < mapping.size() &&
+          mapping[widget.id] != nullptr) {
+        const Entity &ent = *mapping[widget.id];
         if (!ent.is_missing<HasLabel>()) {
           text_size = get_text_size_for_axis(widget, axis);
         }
@@ -659,9 +688,7 @@ struct AutoLayout {
   }
 
   void tax_refund(UIComponent &widget, Axis axis, float error) {
-    // Build cached list of layout children (non-absolute, non-hidden) once
-    std::vector<UIComponent *> layout_children;
-    layout_children.reserve(widget.children.size());
+    SmallVector<UIComponent *, 16> layout_children;
     for (EntityID child_id : widget.children) {
       UIComponent &child = this->to_cmp(child_id);
       // Dont worry about any children that are absolutely positioned
@@ -721,13 +748,9 @@ struct AutoLayout {
   }
 
   void solve_violations(UIComponent &widget) {
-    // we dont care if its less than a pixel
     const float ACCEPTABLE_ERROR = 1.f;
 
-    // Build cached list of layout children (non-absolute, non-hidden) once
-    // to avoid repeated to_cmp lookups and predicate checks
-    std::vector<UIComponent *> layout_children;
-    layout_children.reserve(widget.children.size());
+    SmallVector<UIComponent *, 16> layout_children;
     for (EntityID child_id : widget.children) {
       UIComponent &child_cmp = this->to_cmp(child_id);
       // Dont worry about any children that are absolutely positioned
@@ -1361,7 +1384,7 @@ struct AutoLayout {
 
   static void autolayout(UIComponent &widget,
                          const window_manager::Resolution resolution,
-                         const std::map<EntityID, RefEntity> &map,
+                         const std::vector<Entity *> &map,
                          bool enable_grid_snapping = false,
                          float ui_scale = 1.0f) {
     AutoLayout al(resolution, map);

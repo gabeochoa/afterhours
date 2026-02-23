@@ -185,11 +185,14 @@ struct TestLayout {
   // UI scale for adaptive mode (passed to autolayout).
   float ui_scale = 1.0f;
 
-  // Build entity map and run layout on the root entity.
   void run(Entity &root) {
-    std::map<EntityID, RefEntity> mapping;
+    EntityID max_id = 0;
     for (auto &e : entities) {
-      mapping.emplace(e->id, std::ref(*e));
+      max_id = std::max(max_id, e->id);
+    }
+    std::vector<Entity *> mapping(static_cast<size_t>(max_id) + 1, nullptr);
+    for (auto &e : entities) {
+      mapping[e->id] = e.get();
     }
     AutoLayout::autolayout(root.get<UIComponent>(), resolution, mapping,
                            /*enable_grid_snapping=*/false, ui_scale);
