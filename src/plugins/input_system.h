@@ -600,22 +600,17 @@ struct input : developer::Plugin {
 #endif
     }
 
-    // Gamepad not yet supported on Metal
-    static bool is_gamepad_available(const GamepadID) {
-        log_error("@notimplemented is_gamepad_available");
-        return false;
-    }
+    // Gamepad not yet supported on Metal — return safe defaults silently
+    // since the input system polls these every frame.
+    static bool is_gamepad_available(const GamepadID) { return false; }
     static float get_gamepad_axis_mvt(const GamepadID, const GamepadAxis) {
-        log_error("@notimplemented get_gamepad_axis_mvt");
         return 0.f;
     }
     static bool is_gamepad_button_pressed(const GamepadID,
                                           const GamepadButton) {
-        log_error("@notimplemented is_gamepad_button_pressed");
         return false;
     }
     static bool is_gamepad_button_down(const GamepadID, const GamepadButton) {
-        log_error("@notimplemented is_gamepad_button_down");
         return false;
     }
 
