@@ -40,10 +40,13 @@ using RenderTextureType = raylib::RenderTexture2D;
 
 namespace afterhours::graphics {
 struct RenderTextureType {
-  uint32_t color_id = 0;
-  uint32_t depth_id = 0;
-  uint32_t attach_id = 0;
+  uint32_t color_img_id = 0;
+  uint32_t depth_img_id = 0;
+  uint32_t color_view_id = 0;
+  uint32_t depth_view_id = 0;
+  uint32_t tex_view_id = 0;
   uint32_t sampler_id = 0;
+  uint32_t sgl_ctx_id = 0;
   int width = 0;
   int height = 0;
 };

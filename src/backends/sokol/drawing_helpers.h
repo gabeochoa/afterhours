@@ -452,29 +452,52 @@ inline graphics::RenderTextureType load_render_texture(int w, int h) {
   rt.width = w;
   rt.height = h;
 
+  // Query swapchain defaults so render texture formats/sample counts match.
+  const auto &env = sg_query_desc().environment.defaults;
+  sg_pixel_format color_fmt = env.color_format;
+  if (color_fmt == _SG_PIXELFORMAT_DEFAULT)
+    color_fmt = SG_PIXELFORMAT_BGRA8;
+  sg_pixel_format depth_fmt = env.depth_format;
+  if (depth_fmt == _SG_PIXELFORMAT_DEFAULT)
+    depth_fmt = SG_PIXELFORMAT_DEPTH_STENCIL;
+  int sc = env.sample_count;
+  if (sc <= 0)
+    sc = 1;
+
   sg_image_desc cd{};
-  cd.render_target = true;
+  cd.usage.color_attachment = true;
+  cd.usage.immutable = true;
   cd.width = w;
   cd.height = h;
-  cd.pixel_format = SG_PIXELFORMAT_RGBA8;
-  cd.sample_count = 1;
+  cd.pixel_format = color_fmt;
+  cd.sample_count = sc;
   cd.label = "rt-color";
   sg_image color = sg_make_image(&cd);
 
   sg_image_desc dd{};
-  dd.render_target = true;
+  dd.usage.depth_stencil_attachment = true;
+  dd.usage.immutable = true;
   dd.width = w;
   dd.height = h;
-  dd.pixel_format = SG_PIXELFORMAT_DEPTH;
-  dd.sample_count = 1;
+  dd.pixel_format = depth_fmt;
+  dd.sample_count = sc;
   dd.label = "rt-depth";
   sg_image depth = sg_make_image(&dd);
 
-  sg_attachments_desc ad{};
-  ad.colors[0].image = color;
-  ad.depth_stencil.image = depth;
-  ad.label = "rt-attach";
-  sg_attachments att = sg_make_attachments(&ad);
+  sg_view_desc cvd{};
+  cvd.color_attachment.image = color;
+  cvd.label = "rt-color-view";
+  sg_view color_view = sg_make_view(&cvd);
+
+  sg_view_desc dvd{};
+  dvd.depth_stencil_attachment.image = depth;
+  dvd.label = "rt-depth-view";
+  sg_view depth_view = sg_make_view(&dvd);
+
+  sg_view_desc tvd{};
+  tvd.texture.image = color;
+  tvd.label = "rt-tex-view";
+  sg_view tex_view = sg_make_view(&tvd);
 
   sg_sampler_desc sd{};
   sd.min_filter = SG_FILTER_LINEAR;
@@ -484,46 +507,81 @@ inline graphics::RenderTextureType load_render_texture(int w, int h) {
   sd.label = "rt-sampler";
   sg_sampler smp = sg_make_sampler(&sd);
 
-  rt.color_id = color.id;
-  rt.depth_id = depth.id;
-  rt.attach_id = att.id;
+  // Create an sgl context matching the render texture's format so that
+  // sgl_draw() uses a pipeline compatible with the offscreen pass.
+  sgl_context_desc_t ctx_desc{};
+  ctx_desc.color_format = color_fmt;
+  ctx_desc.depth_format = depth_fmt;
+  ctx_desc.sample_count = sc;
+  sgl_context sgl_ctx = sgl_make_context(&ctx_desc);
+
+  rt.color_img_id = color.id;
+  rt.depth_img_id = depth.id;
+  rt.color_view_id = color_view.id;
+  rt.depth_view_id = depth_view.id;
+  rt.tex_view_id = tex_view.id;
   rt.sampler_id = smp.id;
+  rt.sgl_ctx_id = sgl_ctx.id;
   return rt;
 }
 
 inline void unload_render_texture(graphics::RenderTextureType &rt) {
-  if (rt.attach_id)
-    sg_destroy_attachments({rt.attach_id});
-  if (rt.depth_id)
-    sg_destroy_image({rt.depth_id});
-  if (rt.color_id)
-    sg_destroy_image({rt.color_id});
+  if (rt.sgl_ctx_id)
+    sgl_destroy_context({rt.sgl_ctx_id});
+  if (rt.tex_view_id)
+    sg_destroy_view({rt.tex_view_id});
+  if (rt.depth_view_id)
+    sg_destroy_view({rt.depth_view_id});
+  if (rt.color_view_id)
+    sg_destroy_view({rt.color_view_id});
+  if (rt.depth_img_id)
+    sg_destroy_image({rt.depth_img_id});
+  if (rt.color_img_id)
+    sg_destroy_image({rt.color_img_id});
   if (rt.sampler_id)
     sg_destroy_sampler({rt.sampler_id});
   rt = {};
 }
 
 inline void begin_texture_mode(graphics::RenderTextureType &rt) {
-  // End the current pass if one is active (swapchain or another offscreen)
+  // If this render texture's pass is already active, continue drawing
+  // into the existing pass (matches Raylib's begin_texture_mode behavior).
+  if (graphics::metal_detail::g_pass_active &&
+      graphics::metal_detail::g_active_rt_color_view_id == rt.color_view_id) {
+    return;
+  }
+
+  // Flush and end the current pass (swapchain or another offscreen)
   if (graphics::metal_detail::g_pass_active) {
-    sgl_draw();
+    if (graphics::metal_detail::g_fons_ctx)
+      sfons_flush(graphics::metal_detail::g_fons_ctx);
+    sgl_context_draw(sgl_get_context());
     sg_end_pass();
     graphics::metal_detail::g_pass_active = false;
   }
 
-  // Begin offscreen pass targeting the render texture
+  // Switch to the render texture's sgl context (matching pixel format)
+  sgl_set_context({rt.sgl_ctx_id});
+
   sg_pass pass{};
-  pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
-  pass.action.colors[0].clear_value = {0, 0, 0, 0};
+  pass.action.colors[0].load_action = SG_LOADACTION_LOAD;
   pass.action.depth.load_action = SG_LOADACTION_CLEAR;
   pass.action.depth.clear_value = 1.0f;
-  pass.attachments = {rt.attach_id};
+  pass.attachments.colors[0] = {rt.color_view_id};
+  pass.attachments.depth_stencil = {rt.depth_view_id};
   sg_begin_pass(&pass);
   graphics::metal_detail::g_pass_active = true;
+  graphics::metal_detail::g_active_rt_color_view_id = rt.color_view_id;
 
-  // Set up orthographic projection matching the render texture dimensions
   sgl_defaults();
   sgl_matrix_mode_projection();
+  // Apply GL→Metal clip-space Z fixup before the ortho projection.
+  // clang-format off
+  static const float gl_to_metal[16] = {
+      1,0,0,0,  0,1,0,0,  0,0,0.5f,0,  0,0,0.5f,1
+  };
+  // clang-format on
+  sgl_load_matrix(gl_to_metal);
   sgl_ortho(0.0f, static_cast<float>(rt.width),
             static_cast<float>(rt.height), 0.0f, -1.0f, 1.0f);
 
@@ -531,27 +589,31 @@ inline void begin_texture_mode(graphics::RenderTextureType &rt) {
 }
 
 inline void end_texture_mode() {
-  // End the offscreen pass. Does NOT restart the swapchain pass -- the caller
-  // is responsible for starting the next pass (via begin_drawing or another
-  // begin_texture_mode).
   if (graphics::metal_detail::g_pass_active) {
-    sgl_draw();
+    if (graphics::metal_detail::g_fons_ctx)
+      sfons_flush(graphics::metal_detail::g_fons_ctx);
+    sgl_context_draw(sgl_get_context());
     sg_end_pass();
     graphics::metal_detail::g_pass_active = false;
+    graphics::metal_detail::g_active_rt_color_view_id = 0;
   }
 
+  // Restore the default sgl context (swapchain format).
+  // The caller is responsible for starting the next pass
+  // (via begin_drawing or another begin_texture_mode).
+  sgl_set_context(sgl_default_context());
   graphics::metal_detail::g_in_texture_mode = false;
 }
 
 inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
                                 float y, Color tint) {
-  sg_image color = {rt.color_id};
+  sg_view tv = {rt.tex_view_id};
   sg_sampler smp = {rt.sampler_id};
   float w = static_cast<float>(rt.width);
   float h = static_cast<float>(rt.height);
 
   sgl_enable_texture();
-  sgl_texture(color, smp);
+  sgl_texture(tv, smp);
   sgl_begin_quads();
   sgl_c4b(tint.r, tint.g, tint.b, tint.a);
   sgl_v2f_t2f(x, y, 0.0f, 0.0f);

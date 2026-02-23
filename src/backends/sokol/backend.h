@@ -120,6 +120,11 @@ inline void sokol_init_cb() {
   sg_desc desc{};
   desc.environment = sglue_environment();
   desc.logger.func = slog_func;
+  // TODO: Fix sgl pipeline sample_count mismatch between swapchain (4x MSAA)
+  // and offscreen render textures (1x). The mismatch is harmless on Metal
+  // but triggers validation errors. Proper fix: match sample counts or use
+  // per-pass sgl pipelines.
+  // Validation is enabled (no disable_validation).
   sg_setup(&desc);
   stm_setup();
   g_start_time = stm_now();
@@ -286,6 +291,14 @@ struct MetalPlatformAPI {
     float h = static_cast<float>(sapp_height()) / dpi;
     sgl_defaults();
     sgl_matrix_mode_projection();
+    // sokol_gl produces OpenGL clip-space Z [-1,+1]; Metal clips to [0,+1].
+    // Pre-load a fixup so ortho output lands in Metal's depth range.
+    // clang-format off
+    static const float gl_to_metal[16] = {
+        1,0,0,0,  0,1,0,0,  0,0,0.5f,0,  0,0,0.5f,1
+    };
+    // clang-format on
+    sgl_load_matrix(gl_to_metal);
     sgl_ortho(0.0f, w, h, 0.0f, -1.0f, 1.0f);
   }
 
@@ -457,7 +470,7 @@ struct MetalPlatformAPI {
     // works in logical (CSS) pixels; the ortho projection and input layer
     // handle the DPI conversion transparently.
     desc.high_dpi = true;
-    desc.sample_count = 4;  // 4× MSAA for smooth geometric edges
+    desc.sample_count = 1;
     desc.enable_clipboard = true;
     desc.clipboard_size = 16 * 1024;  // 16 KB clipboard buffer
 

@@ -43,6 +43,15 @@ namespace raylib {
 #endif
 #endif // AFTER_HOURS_USE_RAYLIB
 
+namespace afterhours {
+#ifndef DEG2RAD
+constexpr float DEG2RAD = 0.017453292519943295f; // PI / 180
+#endif
+#ifndef RAD2DEG
+constexpr float RAD2DEG = 57.29577951308232f; // 180 / PI
+#endif
+} // namespace afterhours
+
 #ifndef TextureType
 struct MyTexture {
   float width;

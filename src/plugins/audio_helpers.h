@@ -52,7 +52,9 @@ inline raylib::Music LoadMusicStream(const char *filename) {
 }
 #else
 struct SoundStub {};
-struct MusicStub {};
+struct MusicStub {
+  bool looping = false;
+};
 struct WaveStub {
   unsigned int frameCount;
   unsigned int sampleRate;

@@ -15,15 +15,9 @@ constexpr int ORTHOGRAPHIC = 1;
 using Camera3D = raylib::Camera3D;
 #else
 struct Camera3D {
-  struct {
-    float x, y, z;
-  } position;
-  struct {
-    float x, y, z;
-  } target;
-  struct {
-    float x, y, z;
-  } up;
+  Vector3Type position;
+  Vector3Type target;
+  Vector3Type up;
   float fovy;
   int projection; // 0 = perspective, 1 = orthographic
 };

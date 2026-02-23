@@ -24,6 +24,7 @@ inline bool g_initialized = false;
 
 inline bool g_in_texture_mode = false;
 inline bool g_pass_active = false;
+inline uint32_t g_active_rt_color_view_id = 0;
 
 } // namespace afterhours::graphics::metal_detail
 

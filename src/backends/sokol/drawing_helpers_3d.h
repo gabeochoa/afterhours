@@ -25,7 +25,16 @@ inline float screen_h() {
 inline void begin_3d(Camera3D &cam) {
   sgl_matrix_mode_projection();
   sgl_push_matrix();
-  sgl_load_identity();
+
+  // sokol_gl's ortho/perspective produce OpenGL clip-space Z in [-1,+1],
+  // but Metal clips to [0,+1]. Pre-load a fixup matrix so the final
+  // projection maps Z into Metal's range: z_metal = 0.5*z_gl + 0.5.
+  // clang-format off
+  static const float gl_to_metal[16] = {
+      1,0,0,0,  0,1,0,0,  0,0,0.5f,0,  0,0,0.5f,1
+  };
+  // clang-format on
+  sgl_load_matrix(gl_to_metal);
 
   float aspect = detail_3d::screen_w() / detail_3d::screen_h();
 
@@ -51,8 +60,7 @@ inline void end_3d() {
   sgl_pop_matrix();
 }
 
-template <typename V>
-inline void draw_cube(V pos, float w, float h, float d, Color c) {
+inline void draw_cube(Vector3Type pos, float w, float h, float d, Color c) {
   float x0 = pos.x - w / 2, x1 = pos.x + w / 2;
   float y0 = pos.y - h / 2, y1 = pos.y + h / 2;
   float z0 = pos.z - d / 2, z1 = pos.z + d / 2;
@@ -92,8 +100,8 @@ inline void draw_cube(V pos, float w, float h, float d, Color c) {
   sgl_end();
 }
 
-template <typename V>
-inline void draw_cube_wires(V pos, float w, float h, float d, Color c) {
+inline void draw_cube_wires(Vector3Type pos, float w, float h, float d,
+                            Color c) {
   float x0 = pos.x - w / 2, x1 = pos.x + w / 2;
   float y0 = pos.y - h / 2, y1 = pos.y + h / 2;
   float z0 = pos.z - d / 2, z1 = pos.z + d / 2;
@@ -130,8 +138,7 @@ inline void draw_cube_wires(V pos, float w, float h, float d, Color c) {
   sgl_end();
 }
 
-template <typename V3, typename V2>
-inline void draw_plane(V3 center, V2 size, Color c) {
+inline void draw_plane(Vector3Type center, Vector2Type size, Color c) {
   float hw = size.x / 2.0f;
   float hd = size.y / 2.0f;
 
@@ -144,7 +151,7 @@ inline void draw_plane(V3 center, V2 size, Color c) {
   sgl_end();
 }
 
-template <typename V> inline void draw_sphere(V pos, float radius, Color c) {
+inline void draw_sphere(Vector3Type pos, float radius, Color c) {
   constexpr int RINGS = 12;
   constexpr int SLICES = 12;
 
@@ -169,9 +176,8 @@ template <typename V> inline void draw_sphere(V pos, float radius, Color c) {
   }
 }
 
-template <typename V>
-inline void draw_sphere_wires(V pos, float radius, int rings, int slices,
-                              Color c) {
+inline void draw_sphere_wires(Vector3Type pos, float radius, int rings,
+                              int slices, Color c) {
   detail_3d::set_color(c);
 
   for (int i = 1; i < rings; i++) {
@@ -199,9 +205,8 @@ inline void draw_sphere_wires(V pos, float radius, int rings, int slices,
   }
 }
 
-template <typename V>
-inline void draw_cylinder(V pos, float rtop, float rbot, float h, int slices,
-                          Color c) {
+inline void draw_cylinder(Vector3Type pos, float rtop, float rbot, float h,
+                           int slices, Color c) {
   detail_3d::set_color(c);
   float y0 = pos.y;
   float y1 = pos.y + h;
@@ -236,9 +241,8 @@ inline void draw_cylinder(V pos, float rtop, float rbot, float h, int slices,
   }
 }
 
-template <typename V>
-inline void draw_cylinder_wires(V start, V end, float rtop, float rbot,
-                                int slices, Color c) {
+inline void draw_cylinder_wires(Vector3Type start, Vector3Type end, float rtop,
+                                float rbot, int slices, Color c) {
   detail_3d::set_color(c);
 
   sgl_begin_line_strip();
@@ -265,7 +269,7 @@ inline void draw_cylinder_wires(V start, V end, float rtop, float rbot,
   sgl_end();
 }
 
-template <typename V> inline void draw_line_3d(V a, V b, Color c) {
+inline void draw_line_3d(Vector3Type a, Vector3Type b, Color c) {
   detail_3d::set_color(c);
   sgl_begin_lines();
   sgl_v3f(a.x, a.y, a.z);
@@ -273,8 +277,7 @@ template <typename V> inline void draw_line_3d(V a, V b, Color c) {
   sgl_end();
 }
 
-template <typename V>
-inline Vector2Type get_world_to_screen(V pos, Camera3D cam) {
+inline Vector2Type get_world_to_screen(Vector3Type pos, Camera3D cam) {
   float sw = detail_3d::screen_w();
   float sh = detail_3d::screen_h();
   float aspect = sw / sh;
