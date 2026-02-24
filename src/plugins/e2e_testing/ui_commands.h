@@ -10,6 +10,7 @@
 #include "../autolayout.h"
 #include "../ui/components.h"
 #include "../ui/context.h"
+#include "../ui/text_input/state.h"
 #include "../ui/ui_collection.h"
 
 #include <format>
@@ -640,6 +641,95 @@ struct HandleReleaseActionCommand : System<PendingE2ECommand> {
   }
 };
 
+// Handle 'expect_input_text name "expected"' - asserts a text input's content
+template <typename InputAction>
+struct HandleExpectInputTextCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("expect_input_text"))
+      return;
+    if (!cmd.has_args(2)) {
+      cmd.fail("expect_input_text requires component name and expected text");
+      return;
+    }
+
+    const auto &name = cmd.arg(0);
+    const auto &expected = cmd.arg(1);
+    auto query =
+        ui_query()
+            .whereHasComponent<ui::UIComponent>()
+            .whereHasComponent<ui::UIComponentDebug>()
+            .template whereHasComponent<text_input::HasTextInputState>()
+            .whereLambda([&](const Entity &e) {
+              return e.get<ui::UIComponentDebug>().name() == name;
+            })
+            .first();
+
+    for (Entity &entity : query.gen()) {
+      auto &state =
+          entity.get<text_input::HasTextInputState>();
+      if (state.text() == expected) {
+        cmd.consume();
+        return;
+      } else {
+        cmd.fail(std::format(
+            "Input '{}' text is \"{}\", expected \"{}\"", name,
+            state.text(), expected));
+        return;
+      }
+    }
+    cmd.fail(std::format("Text input not found: {}", name));
+  }
+};
+
+// Handle 'expect_input_selection name start end' - asserts selection range
+template <typename InputAction>
+struct HandleExpectInputSelectionCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("expect_input_selection"))
+      return;
+    if (!cmd.has_args(3)) {
+      cmd.fail(
+          "expect_input_selection requires name, start, and end positions");
+      return;
+    }
+
+    const auto &name = cmd.arg(0);
+    auto expected_start = cmd.maybe_arg_as<int>(1);
+    auto expected_end = cmd.maybe_arg_as<int>(2);
+    if (!expected_start || !expected_end) {
+      cmd.fail("expect_input_selection: start and end must be integers");
+      return;
+    }
+
+    auto query =
+        ui_query()
+            .whereHasComponent<ui::UIComponent>()
+            .whereHasComponent<ui::UIComponentDebug>()
+            .template whereHasComponent<text_input::HasTextInputState>()
+            .whereLambda([&](const Entity &e) {
+              return e.get<ui::UIComponentDebug>().name() == name;
+            })
+            .first();
+
+    for (Entity &entity : query.gen()) {
+      auto &state =
+          entity.get<text_input::HasTextInputState>();
+      auto actual_start = static_cast<int>(state.selection_start());
+      auto actual_end = static_cast<int>(state.selection_end());
+      if (actual_start == *expected_start && actual_end == *expected_end) {
+        cmd.consume();
+        return;
+      } else {
+        cmd.fail(std::format(
+            "Input '{}' selection is [{}, {}), expected [{}, {})", name,
+            actual_start, actual_end, *expected_start, *expected_end));
+        return;
+      }
+    }
+    cmd.fail(std::format("Text input not found: {}", name));
+  }
+};
+
 // Register all UI command handlers
 template <typename InputAction> void register_ui_commands(SystemManager &sm) {
   // Semantic actions (preferred - works with your InputAction enum)
@@ -680,6 +770,10 @@ template <typename InputAction> void register_ui_commands(SystemManager &sm) {
       std::make_unique<HandleExpectCheckboxCommand<InputAction>>());
   sm.register_update_system(
       std::make_unique<HandleExpectSliderCommand<InputAction>>());
+  sm.register_update_system(
+      std::make_unique<HandleExpectInputTextCommand<InputAction>>());
+  sm.register_update_system(
+      std::make_unique<HandleExpectInputSelectionCommand<InputAction>>());
 }
 
 } // namespace ui_commands

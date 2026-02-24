@@ -61,6 +61,10 @@ constexpr std::array<std::string_view, 4> two_arg_commands = {
     "set_slider", "select_dropdown", "expect_slider", "expect_checkbox"
 };
 
+constexpr std::array<std::string_view, 1> three_arg_commands = {
+    "expect_input_selection"
+};
+
 constexpr std::array<std::string_view, 7> no_arg_commands = {
     "reset_test_state", "reset", "tab", "shift_tab", "enter", "escape",
     "mouse_up"
@@ -170,6 +174,12 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
     } else if (cmd.name == "expect_text") {
       cmd.args.push_back(parse_quoted());
       cmd.wait_seconds = 1 * frame;
+    } else if (cmd.name == "expect_input_text") {
+      std::string name;
+      iss >> name;
+      cmd.args.push_back(name);
+      cmd.args.push_back(parse_quoted());
+      cmd.wait_seconds = 1 * frame;
     } else if (cmd.name == "screenshot") {
       std::string name;
       iss >> name;
@@ -200,6 +210,16 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
         cmd.args.push_back(arg1);
       if (!arg2.empty())
         cmd.args.push_back(arg2);
+      cmd.wait_seconds = 2 * frame;
+    } else if (detail::contains(detail::three_arg_commands, cmd.name)) {
+      std::string arg1, arg2, arg3;
+      iss >> arg1 >> arg2 >> arg3;
+      if (!arg1.empty())
+        cmd.args.push_back(arg1);
+      if (!arg2.empty())
+        cmd.args.push_back(arg2);
+      if (!arg3.empty())
+        cmd.args.push_back(arg3);
       cmd.wait_seconds = 2 * frame;
     } else {
       // Custom/unknown command - parse all remaining as args
