@@ -361,10 +361,6 @@ public:
     }
     index_++;
 
-    if (index_ >= commands_.size()) {
-      finalize_current_script();
-      finished_ = true;
-    }
   }
 
   /// Call each frame assuming 60fps (legacy, prefer tick(dt))
