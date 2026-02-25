@@ -133,26 +133,37 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
               .with_rounded_corners(has_label ? base_corners.left_sharp()
                                               : base_corners)
               .with_alignment(TextAlignment::Left)
-              .with_padding(Padding{.top = pixels(5),
-                                    .bottom = pixels(5),
-                                    .left = pixels(10),
-                                    .right = pixels(10)})
               .with_render_layer(config.render_layer + 1));
 
   auto &field_entity = field_result.ent();
 
   // Ensure HasLabel exists and set display text
-  field_entity.template addComponentIfMissing<HasLabel>().label = display_text;
+  auto &field_label = field_entity.template addComponentIfMissing<HasLabel>();
+  field_label.label = display_text;
 
-  // Derive font size from field height so text auto-sizes to ~50% of field.
+  // Derive font size and padding from field height so everything scales
+  // proportionally. Uses previous frame's computed height (converges in 1 frame).
   {
     auto &field_cmp = field_entity.template get<UIComponent>();
     float field_h = field_cmp.computed[Axis::Y];
-    float derived_fs = field_h * 0.5f;
-    std::string fn = config.font_name != UIComponent::UNSET_FONT
-                         ? config.font_name
-                         : UIComponent::DEFAULT_FONT;
-    field_cmp.enable_font(fn, pixels(derived_fs), true);
+    if (field_h > 0.f) {
+      float derived_fs = field_h * 0.5f;
+      std::string fn = config.font_name != UIComponent::UNSET_FONT
+                           ? config.font_name
+                           : UIComponent::DEFAULT_FONT;
+      field_cmp.enable_font(fn, pixels(derived_fs), true);
+
+      float pad_h = field_h * 0.125f;
+      float pad_w = field_h * 0.35f;
+      field_cmp.set_desired_padding(Padding{.top = pixels(pad_h),
+                                            .bottom = pixels(pad_h),
+                                            .left = pixels(pad_w),
+                                            .right = pixels(pad_w)});
+
+      // draw_text_in_rect adds a 5px internal margin; subtract it so the
+      // total inset from the field edge equals pad_w.
+      field_label.text_x_offset = pad_w - 5.f;
+    }
   }
 
   // Update focus state - check if this field OR the parent container has focus
@@ -218,9 +229,10 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       cursor_height = text_pos.rect.height;
       cursor_y = text_pos.rect.y - field_rect.y - pad_top;
 
-      // X: batched render_text draws at rect.x; in content-area coords
-      // that's -pad_left. Cursor at position 0 sits at the text origin.
-      float text_start_x = -pad_left;
+      // Content area starts at rect.x + pad_left. Text rendering (via
+      // text_x_offset) also starts at rect.x + pad_left. So in content-area
+      // coords, text origin is 0.
+      float text_start_x = 0.f;
 
       if (!display_text.empty() && display_cursor_pos > 0) {
         size_t safe_pos = std::min(display_cursor_pos, display_text.size());
@@ -241,7 +253,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                                    : config.font_name;
       Font font = font_manager->get_font(font_name);
 
-      float sel_text_x = -pad_left;
+      float sel_text_x = 0.f;
 
       auto measure_x = [&](size_t byte_pos) -> float {
         if (byte_pos == 0 || display_text.empty()) return sel_text_x;

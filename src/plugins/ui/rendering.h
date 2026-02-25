@@ -1449,6 +1449,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       }
 
       RectangleType label_rect = text_rect;
+      label_rect.x += hasLabel.text_x_offset;
+      label_rect.width -= hasLabel.text_x_offset;
       label_rect.y += hasLabel.text_y_offset;
       draw_text_in_rect(font_manager, hasLabel.label.c_str(), label_rect,
                         hasLabel.alignment, font_col, SHOW_TEXT_OVERFLOW_DEBUG,
@@ -2091,6 +2093,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         // Pass the container rect (text_rect) not the position rect
         // (result.rect) render_text will handle centering within the container
         RectangleType label_rect = text_rect;
+        label_rect.x += hasLabel.text_x_offset;
+        label_rect.width -= hasLabel.text_x_offset;
         label_rect.y += hasLabel.text_y_offset;
         float centerX = draw_rect.x + draw_rect.width / 2.0f;
         float centerY = draw_rect.y + draw_rect.height / 2.0f;

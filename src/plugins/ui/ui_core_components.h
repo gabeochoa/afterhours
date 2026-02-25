@@ -423,6 +423,10 @@ struct HasLabel : BaseComponent {
   // When set, renders a shadow behind the text for depth/legibility
   std::optional<TextShadow> text_shadow;
 
+  // Horizontal offset applied to the label rect before text rendering.
+  // Positive values push text rightward (used by text_input for padding inset).
+  float text_x_offset = 0.f;
+
   // Vertical offset applied after centering to compensate for font descent.
   // Positive values push text downward (useful for visual centering when
   // measure_text includes descent in its height but visible glyphs don't
