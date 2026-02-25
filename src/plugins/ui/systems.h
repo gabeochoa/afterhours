@@ -120,7 +120,8 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
   }
 
   virtual void for_each_with(Entity &entity, UIContext<InputAction> &context,
-                             float) override {
+                             float dt) override {
+    context.dt = dt;
     // Apply theme defaults first
     auto &theme_defaults = imm::ThemeDefaults::get();
     context.theme = theme_defaults.get_theme();
@@ -157,6 +158,7 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
         context.all_actions = inputs_as_bits(inpc.inputs());
         for (auto &actions_done : inpc.inputs_pressed()) {
           context.last_action = static_cast<InputAction>(actions_done.action);
+          context.last_action_modifiers = actions_done.required_modifiers;
         }
       }
     }

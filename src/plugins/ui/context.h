@@ -86,6 +86,7 @@ template <typename InputAction> struct UIContext : BaseComponent {
 
   MousePointerState mouse;
   InputAction last_action;
+  uint8_t last_action_modifiers = 0;
   InputBitset all_actions;
 
   // Screen dimensions in pixels, set each frame by the layout system.
@@ -210,6 +211,13 @@ template <typename InputAction> struct UIContext : BaseComponent {
       last_action = InputAction::None;
     }
     return a;
+  }
+
+  [[nodiscard]] bool pressed_exact(const InputAction &name) {
+    if (last_action != name) return false;
+    if (input::get_current_modifiers() != last_action_modifiers) return false;
+    last_action = InputAction::None;
+    return true;
   }
 
   [[nodiscard]] bool is_held_down(const InputAction &name) {
