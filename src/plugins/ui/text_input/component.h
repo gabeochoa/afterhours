@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../clipboard.h"
 #include "../../input_system.h"
 #include "../../../core/key_codes.h"
 #include "../component_init.h"
@@ -143,135 +144,298 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   // Ensure HasLabel exists and set display text
   field_entity.template addComponentIfMissing<HasLabel>().label = display_text;
 
+  // Derive font size from field height so text auto-sizes to ~50% of field.
+  {
+    auto &field_cmp = field_entity.template get<UIComponent>();
+    float field_h = field_cmp.computed[Axis::Y];
+    float derived_fs = field_h * 0.5f;
+    std::string fn = config.font_name != UIComponent::UNSET_FONT
+                         ? config.font_name
+                         : UIComponent::DEFAULT_FONT;
+    field_cmp.enable_font(fn, pixels(derived_fs), true);
+  }
+
   // Update focus state - check if this field OR the parent container has focus
   field_entity.template addComponentIfMissing<InFocusCluster>();
   bool field_has_focus = ctx.has_focus(field_entity.id);
   bool parent_has_focus = ctx.has_focus(entity.id);
   state.is_focused = field_has_focus || parent_has_focus;
 
+  if (state.is_focused) {
+    auto focus_color = ctx.theme.accent;
+    field_entity.template addComponentIfMissing<HasBorder>();
+    field_entity.template get<HasBorder>().border =
+        Border::all(focus_color, pixels(2.0f));
+  }
+
   // Render cursor as overlay when focused
   if (state.is_focused) {
-    bool show_cursor = update_blink(state, 0.016f);
+    float blink_dt = ctx.dt > 0.f ? ctx.dt : (1.f / 60.f);
+    bool show_cursor = update_blink(state, blink_dt);
 
-    // Calculate cursor position using the SAME font size as text rendering
-    // Text rendering uses position_text_ex which may auto-size the font to fit
     auto &field_cmp = field_entity.template get<UIComponent>();
     auto font_manager = EntityHelper::get_singleton_cmp<FontManager>();
 
-    float cursor_x = 5.f; // Default: text margin from position_text_ex
-    // Resolve font_size to pixels using screen height
-    float screen_height = 720.f; // Default to 720p
+    float cursor_x = 0.f;
+    float screen_height = 720.f;
     if (auto *pcr = EntityHelper::get_singleton_cmp<
             window_manager::ProvidesCurrentResolution>()) {
       screen_height = static_cast<float>(pcr->current_resolution.height);
     }
-    float resolved_font_size =
-        resolve_to_pixels(config.font_size, screen_height);
-    float cursor_height = std::max(resolved_font_size * 0.9f, 16.f);
-    float actual_font_size = resolved_font_size;
+
+    float derived_fs = field_cmp.font_size.value;
+    float uis = imm::ThemeDefaults::get().theme.ui_scale;
+    float actual_font_size = resolve_to_pixels(
+        pixels(derived_fs), screen_height,
+        field_cmp.resolved_scaling_mode, uis);
+
+    float pad_left = field_cmp.computed_padd[Axis::left];
+    float pad_top = field_cmp.computed_padd[Axis::top];
+
+    float cursor_height = actual_font_size;
+    float cursor_y = 0.f;
+
+    constexpr float TEXT_MARGIN = 5.f;
 
     if (font_manager) {
-      // Get the actual rendered font size by calling position_text_ex on the
-      // full text This accounts for auto-sizing when text doesn't fit
-      constexpr Vector2Type TEXT_MARGIN{5.f, 5.f};
-      TextPositionResult full_text_result = position_text_ex(
-          *font_manager, display_text.empty() ? " " : display_text,
-          field_cmp.rect(), TextAlignment::Left, TEXT_MARGIN);
-      actual_font_size = full_text_result.rect.height;
-      cursor_height = std::max(actual_font_size * 0.9f, 16.f);
-
-      // Now measure the text BEFORE cursor using the actual rendered font size
       std::string font_name = config.font_name == UIComponent::UNSET_FONT
                                   ? UIComponent::DEFAULT_FONT
                                   : config.font_name;
       Font font = font_manager->get_font(font_name);
+      font_manager->set_active(font_name);
+
+      RectangleType field_rect = field_cmp.rect();
+      const std::string &measure_str =
+          display_text.empty() ? std::string(" ") : display_text;
+
+      // Y margin affects vertical centering bounds; X is zero because the
+      // batched renderer draws Left-aligned text at rect.x (no X margin).
+      Vector2Type margin_px{0.f, TEXT_MARGIN};
+      TextPositionResult text_pos = position_text_ex(
+          *font_manager, measure_str.c_str(), field_rect,
+          TextAlignment::Left, margin_px, actual_font_size);
+
+      cursor_height = text_pos.rect.height;
+      cursor_y = text_pos.rect.y - field_rect.y - pad_top;
+
+      // X: batched render_text draws at rect.x; in content-area coords
+      // that's -pad_left. Cursor at position 0 sits at the text origin.
+      float text_start_x = -pad_left;
 
       if (!display_text.empty() && display_cursor_pos > 0) {
         size_t safe_pos = std::min(display_cursor_pos, display_text.size());
         std::string text_before = display_text.substr(0, safe_pos);
         Vector2Type text_size =
             measure_text(font, text_before.c_str(), actual_font_size, 1.f);
-        cursor_x = TEXT_MARGIN.x + text_size.x;
+        cursor_x = text_start_x + text_size.x;
       } else {
-        cursor_x = TEXT_MARGIN.x;
+        cursor_x = text_start_x;
       }
+
     }
 
-    // Center cursor vertically in field
-    float field_height = field_cmp.computed[Axis::Y];
-    float field_width = field_cmp.computed[Axis::X];
-    float cursor_y = (field_height - cursor_height) / 2.f;
+    // Selection highlight
+    if (state.has_selection() && font_manager) {
+      std::string font_name = config.font_name == UIComponent::UNSET_FONT
+                                   ? UIComponent::DEFAULT_FONT
+                                   : config.font_name;
+      Font font = font_manager->get_font(font_name);
 
-    constexpr float CURSOR_WIDTH = 8.0f;
-    cursor_x = std::min(cursor_x, field_width - CURSOR_WIDTH);
+      float sel_text_x = -pad_left;
 
-    // Cursor is a thin vertical bar
-    // Note: Width must be >= 8px to survive 8pt grid snapping at high DPI
-    // (grid unit scales with screen, e.g. ~11px at 1080p, so 2-4px rounds to 0)
+      auto measure_x = [&](size_t byte_pos) -> float {
+        if (byte_pos == 0 || display_text.empty()) return sel_text_x;
+        size_t safe = std::min(byte_pos, display_text.size());
+        std::string sub = display_text.substr(0, safe);
+        Vector2Type sz = measure_text(font, sub.c_str(), actual_font_size, 1.f);
+        return sel_text_x + sz.x;
+      };
+
+      size_t sel_start_byte = state.selection_start();
+      size_t sel_end_byte = state.selection_end();
+      if (config.mask_char) {
+        // For masked text, convert byte positions to codepoint positions
+        size_t cp_start = 0, cp_end = 0, cp = 0;
+        for (size_t i = 0; i < state.text().size();) {
+          if (i == sel_start_byte) cp_start = cp;
+          if (i == sel_end_byte) cp_end = cp;
+          i += utf8_char_length(state.text(), i);
+          cp++;
+        }
+        if (sel_end_byte >= state.text().size()) cp_end = cp;
+        sel_start_byte = cp_start;
+        sel_end_byte = cp_end;
+      }
+
+      float sel_x1 = measure_x(sel_start_byte);
+      float sel_x2 = measure_x(sel_end_byte);
+      float sel_width = std::max(sel_x2 - sel_x1, 2.f);
+
+      auto sel_color = ctx.theme.accent;
+      sel_color.a = 100;
+      (void)div(
+          ctx, mk(field_entity, 1),
+          ComponentConfig()
+              .with_size(ComponentSize(pixels(sel_width), pixels(cursor_height)))
+              .with_custom_background(sel_color)
+              .with_absolute_position(sel_x1, cursor_y)
+              .with_skip_tabbing(true)
+              .with_skip_grid_snap()
+              .with_debug_name("selection")
+              .with_render_layer(config.render_layer + 5));
+    }
+
+    constexpr float CURSOR_WIDTH = 2.0f;
+
     (void)div(
         ctx, mk(field_entity, 0),
         ComponentConfig()
             .with_size(ComponentSize(pixels(CURSOR_WIDTH), pixels(cursor_height)))
             .with_custom_background(ctx.theme.font)
-            .with_translate(cursor_x, cursor_y)
+            .with_absolute_position(cursor_x, cursor_y)
             .with_opacity(show_cursor ? 1.0f : 0.0f)
             .with_skip_tabbing(true)
+            .with_skip_grid_snap()
             .with_debug_name("cursor")
             .with_render_layer(config.render_layer + 10));
   }
 
-  // Click to focus
+  // Click to focus and collapse selection
   field_entity.template addComponentIfMissing<HasClickListener>(
       [&ctx](Entity &ent) {
         ctx.set_focus(ent.id);
-        if (ent.has<HasTextInputState>())
-          reset_blink(ent.get<HasTextInputState>());
+        if (ent.has<HasTextInputState>()) {
+          auto &s = ent.get<HasTextInputState>();
+          s.clear_selection();
+          reset_blink(s);
+        }
       });
 
   // TODO: Implement horizontal scrolling when text exceeds field width
 
   // Handle input when focused
   if (state.is_focused) {
-    // Character input
+    // Clipboard operations (before char input so Ctrl+C/V/X don't insert)
+    if constexpr (magic_enum::enum_contains<InputAction>("TextCopy")) {
+      if (ctx.pressed(InputAction::TextCopy)) {
+        if (state.has_selection())
+          clipboard::set_text(state.selected_text());
+      }
+    }
+    if constexpr (magic_enum::enum_contains<InputAction>("TextCut")) {
+      if (ctx.pressed(InputAction::TextCut)) {
+        if (state.has_selection()) {
+          clipboard::set_text(state.selected_text());
+          delete_selection(state);
+          reset_blink(state);
+        }
+      }
+    }
+    if constexpr (magic_enum::enum_contains<InputAction>("TextPaste")) {
+      if (ctx.pressed(InputAction::TextPaste)) {
+        if (state.has_selection()) delete_selection(state);
+        std::string clip = clipboard::get_text();
+        if (!clip.empty()) {
+          for (size_t i = 0; i < clip.size();) {
+            int cp = utf8_to_codepoint(clip, i);
+            if (cp >= 32) insert_char(state, cp);
+            size_t clen = utf8_char_length(clip, i);
+            i += clen > 0 ? clen : 1;
+          }
+          state.clear_selection();
+          reset_blink(state);
+        }
+      }
+    }
+
+    // Select all
+    if (ctx.pressed(InputAction::TextSelectAll)) {
+      state.selection_anchor = 0;
+      state.cursor_position = state.text_size();
+      reset_blink(state);
+    }
+
+    // Character input (replaces selection)
     for (int key = input::get_char_pressed(); key > 0;
          key = input::get_char_pressed()) {
-      if (insert_char(state, key))
+      if (state.has_selection()) delete_selection(state);
+      if (insert_char(state, key)) {
+        state.clear_selection();
         reset_blink(state);
+      }
     }
 
-    // CTRL/Cmd+A: select all (clears text since no selection infrastructure)
-    if (ctx.pressed(InputAction::TextSelectAll) &&
-        (input::is_key_down(keys::LEFT_CONTROL) ||
-         input::is_key_down(keys::RIGHT_CONTROL) ||
-         input::is_key_down(keys::LEFT_SUPER) ||
-         input::is_key_down(keys::RIGHT_SUPER))) {
-      state.storage.clear();
-      state.cursor_position = 0;
-      state.changed_since = true;
+    // Selection movement (Shift+Arrow via chord actions)
+    if constexpr (magic_enum::enum_contains<InputAction>("TextSelectLeft")) {
+      if (ctx.pressed(InputAction::TextSelectLeft)) {
+        if (!state.selection_anchor)
+          state.selection_anchor = state.cursor_position;
+        move_cursor_left(state);
+        reset_blink(state);
+      }
+    }
+    if constexpr (magic_enum::enum_contains<InputAction>("TextSelectRight")) {
+      if (ctx.pressed(InputAction::TextSelectRight)) {
+        if (!state.selection_anchor)
+          state.selection_anchor = state.cursor_position;
+        move_cursor_right(state);
+        reset_blink(state);
+      }
+    }
+
+    // Plain movement (collapses selection).
+    // suppress_permissive_duplicates ensures bare WidgetLeft/Right are removed
+    // from inputs_pressed when a chord (e.g. Shift+Left = TextSelectLeft)
+    // claims the same key, so ctx.pressed() is safe here.
+    if (ctx.pressed(InputAction::WidgetLeft)) {
+      if (state.has_selection()) {
+        state.cursor_position = state.selection_start();
+        state.clear_selection();
+      } else {
+        move_cursor_left(state);
+      }
+      reset_blink(state);
+    }
+    if (ctx.pressed(InputAction::WidgetRight)) {
+      if (state.has_selection()) {
+        state.cursor_position = state.selection_end();
+        state.clear_selection();
+      } else {
+        move_cursor_right(state);
+      }
       reset_blink(state);
     }
 
-    // Key actions
-    if (ctx.pressed(InputAction::TextBackspace) && delete_before_cursor(state))
+    if (ctx.pressed(InputAction::TextBackspace)) {
+      if (state.has_selection()) {
+        delete_selection(state);
+      } else {
+        delete_before_cursor(state);
+      }
       reset_blink(state);
-    if (ctx.pressed(InputAction::TextDelete) && delete_at_cursor(state))
+    }
+    if (ctx.pressed(InputAction::TextDelete)) {
+      if (state.has_selection()) {
+        delete_selection(state);
+      } else {
+        delete_at_cursor(state);
+      }
       reset_blink(state);
+    }
+
+    // Home/End collapse selection
     if (ctx.pressed(InputAction::TextHome)) {
       state.cursor_position = 0;
+      state.clear_selection();
       reset_blink(state);
     }
     if (ctx.pressed(InputAction::TextEnd)) {
       state.cursor_position = state.text_size();
+      state.clear_selection();
       reset_blink(state);
     }
-    if (ctx.pressed(InputAction::WidgetLeft)) {
-      move_cursor_left(state);
-      reset_blink(state);
-    }
-    if (ctx.pressed(InputAction::WidgetRight)) {
-      move_cursor_right(state);
-      reset_blink(state);
-    }
+
+    // Enter/Submit
     if (ctx.pressed(InputAction::WidgetPress) &&
         entity.has<HasTextInputListener>())
       if (auto &listener = entity.get<HasTextInputListener>();

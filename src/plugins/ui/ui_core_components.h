@@ -93,6 +93,7 @@ struct UIComponent : BaseComponent {
   bool should_hide = false;
   bool was_rendered_to_screen = false;
   bool absolute = false;
+  bool skip_grid_snap = false;
 
   // Absolute position in pixels, set from with_absolute_position(x, y)
   // during component init. Used by autolayout to set computed_rel for
@@ -421,6 +422,12 @@ struct HasLabel : BaseComponent {
   // Text drop shadow configuration
   // When set, renders a shadow behind the text for depth/legibility
   std::optional<TextShadow> text_shadow;
+
+  // Vertical offset applied after centering to compensate for font descent.
+  // Positive values push text downward (useful for visual centering when
+  // measure_text includes descent in its height but visible glyphs don't
+  // extend below the baseline).
+  float text_y_offset = 0.f;
 
   HasLabel(const std::string &str, bool is_disabled_ = false)
       : label(str), is_disabled(is_disabled_) {}

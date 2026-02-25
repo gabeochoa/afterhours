@@ -125,6 +125,8 @@ inline ComponentConfig overwrite_defaults(HasUIContext auto &ctx,
 inline void apply_flags(Entity &entity, const ComponentConfig &config) {
   if (config.skip_when_tabbing)
     entity.addComponentIfMissing<SkipWhenTabbing>();
+  if (config.skip_grid_snap)
+    entity.get<UIComponent>().skip_grid_snap = true;
   if (config.select_on_focus)
     entity.addComponentIfMissing<SelectOnFocus>();
   if (config.has_click_activation_override()) {

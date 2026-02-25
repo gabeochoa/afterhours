@@ -945,7 +945,7 @@ struct AutoLayout {
       widget.computed_rel[Axis::Y] = 0.f;
     }
 
-    if (enable_grid_snapping) {
+    if (enable_grid_snapping && !widget.skip_grid_snap) {
       widget.computed[Axis::X] =
           snap_to_8pt_grid(widget.computed[Axis::X], Axis::X);
       widget.computed[Axis::Y] =

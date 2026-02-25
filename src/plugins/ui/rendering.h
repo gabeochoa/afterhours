@@ -1448,7 +1448,9 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                                         cmp.resolved_scaling_mode, uis);
       }
 
-      draw_text_in_rect(font_manager, hasLabel.label.c_str(), text_rect,
+      RectangleType label_rect = text_rect;
+      label_rect.y += hasLabel.text_y_offset;
+      draw_text_in_rect(font_manager, hasLabel.label.c_str(), label_rect,
                         hasLabel.alignment, font_col, SHOW_TEXT_OVERFLOW_DEBUG,
                         stroke, shadow, rotation, centerX, centerY,
                         hasLabel.text_overflow, hasLabel.letter_spacing,
@@ -1783,6 +1785,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     const float effective_opacity = detail::compute_effective_opacity(entity);
     RectangleType draw_rect = cmp.rect();
 
+
     OptEntity scroll_ancestor = detail::find_scroll_view_ancestor(entity);
     // Note: find_clip_ancestor returns entity with HasScrollView OR
     // HasClipChildren Only apply scroll offset if ancestor actually has
@@ -2087,9 +2090,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
         // Pass the container rect (text_rect) not the position rect
         // (result.rect) render_text will handle centering within the container
+        RectangleType label_rect = text_rect;
+        label_rect.y += hasLabel.text_y_offset;
         float centerX = draw_rect.x + draw_rect.width / 2.0f;
         float centerY = draw_rect.y + draw_rect.height / 2.0f;
-        buffer.add_text(text_rect, display_text, cmp.font_name,
+        buffer.add_text(label_rect, display_text, cmp.font_name,
                         result.rect.height, font_col, hasLabel.alignment, layer,
                         entity.id, stroke, shadow, rotation, centerX, centerY,
                         hasLabel.letter_spacing);

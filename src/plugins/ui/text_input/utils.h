@@ -37,6 +37,34 @@ inline size_t utf8_prev_char_start(const std::string &str, size_t pos) {
   return p;
 }
 
+// Decode a single UTF-8 character at pos into a Unicode codepoint.
+// Returns 0 on invalid/incomplete sequences.
+inline int utf8_to_codepoint(const std::string &str, size_t pos) {
+  if (pos >= str.size()) return 0;
+  size_t len = utf8_char_length(str, pos);
+  if (pos + len > str.size()) return 0;
+  auto b = [&](size_t i) -> unsigned char {
+    return static_cast<unsigned char>(str[pos + i]);
+  };
+  if (len == 1) return b(0);
+  if (len == 2) {
+    if ((b(1) & 0xC0) != 0x80) return 0;
+    return ((b(0) & 0x1F) << 6) | (b(1) & 0x3F);
+  }
+  if (len == 3) {
+    if ((b(1) & 0xC0) != 0x80 || (b(2) & 0xC0) != 0x80) return 0;
+    return ((b(0) & 0x0F) << 12) | ((b(1) & 0x3F) << 6) | (b(2) & 0x3F);
+  }
+  if (len == 4) {
+    if ((b(1) & 0xC0) != 0x80 || (b(2) & 0xC0) != 0x80 ||
+        (b(3) & 0xC0) != 0x80)
+      return 0;
+    return ((b(0) & 0x07) << 18) | ((b(1) & 0x3F) << 12) |
+           ((b(2) & 0x3F) << 6) | (b(3) & 0x3F);
+  }
+  return 0;
+}
+
 // Encode Unicode codepoint to UTF-8
 inline std::string codepoint_to_utf8(int cp) {
   std::string r;
@@ -58,6 +86,18 @@ inline std::string codepoint_to_utf8(int cp) {
     r += static_cast<char>(0x80 | (cp & 0x3F));
   }
   return r;
+}
+
+// Delete the selected range and collapse cursor to selection start.
+inline bool delete_selection(AnyTextInputState auto &s) {
+  if (!s.has_selection()) return false;
+  size_t start = s.selection_start();
+  size_t len = s.selection_end() - start;
+  s.storage.erase(start, len);
+  s.cursor_position = start;
+  s.clear_selection();
+  s.changed_since = true;
+  return true;
 }
 
 // Insert codepoint at cursor, returns true if inserted

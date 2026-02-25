@@ -627,24 +627,23 @@ private:
 
     Vector2Type startPos = {cmd.data.text.rect.x, cmd.data.text.rect.y};
 
-    // Handle alignment
-    if (cmd.data.text.alignment == TextAlignment::Center) {
+    // Vertically center text for all alignments
+    {
       Vector2Type textSize =
           measure_text_utf8(font, cmd.data.text.text, fontSize, spacing);
-      // Calculate centered position, clamping to prevent text starting before
-      // container left edge
-      float centered_x =
-          cmd.data.text.rect.x + (cmd.data.text.rect.width - textSize.x) / 2.0f;
-      startPos.x = std::max(cmd.data.text.rect.x, centered_x);
       startPos.y = cmd.data.text.rect.y +
                    (cmd.data.text.rect.height - textSize.y) / 2.0f;
-    } else if (cmd.data.text.alignment == TextAlignment::Right) {
-      Vector2Type textSize =
-          measure_text_utf8(font, cmd.data.text.text, fontSize, spacing);
-      // Clamp right-aligned text to not start before container left edge
-      float right_x =
-          cmd.data.text.rect.x + cmd.data.text.rect.width - textSize.x;
-      startPos.x = std::max(cmd.data.text.rect.x, right_x);
+
+      if (cmd.data.text.alignment == TextAlignment::Center) {
+        float centered_x =
+            cmd.data.text.rect.x +
+            (cmd.data.text.rect.width - textSize.x) / 2.0f;
+        startPos.x = std::max(cmd.data.text.rect.x, centered_x);
+      } else if (cmd.data.text.alignment == TextAlignment::Right) {
+        float right_x =
+            cmd.data.text.rect.x + cmd.data.text.rect.width - textSize.x;
+        startPos.x = std::max(cmd.data.text.rect.x, right_x);
+      }
     }
 
     // Get rotation parameters

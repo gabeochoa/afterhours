@@ -91,6 +91,7 @@ struct ComponentConfig {
   float letter_spacing = 0.f; // Additional spacing between characters (pixels)
   std::optional<CursorType> cursor_type; // Cursor to show on hover
   bool skip_when_tabbing = false;
+  bool skip_grid_snap = false;
   bool disabled = false;
   bool hidden = false;
   bool select_on_focus = false;
@@ -394,6 +395,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_skip_tabbing(bool skip) {
     skip_when_tabbing = skip;
+    return *this;
+  }
+  ComponentConfig &with_skip_grid_snap(bool skip = true) {
+    skip_grid_snap = skip;
     return *this;
   }
   ComponentConfig &with_select_on_focus(bool select) {
