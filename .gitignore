@@ -30,6 +30,9 @@ art_storage/*
 examples/graphics_example
 examples/autolayout_test
 examples/drawing_3d_example
+examples/entity_mapping_test
+examples/headless_validation
 examples/graphics_example_output.png
 examples/graphics_example_captures/
+examples/headless_validation_output/
 internet-mode-used_DO_NOT_REMOVE_MANUALLY_SECURITY_RISK
