@@ -82,6 +82,8 @@ struct Config {
   float time_scale = 1.0f;
   bool uncapped_fps = false;
   int target_fps = 60;
+  unsigned int config_flags = 0;
+  bool enable_msaa = true;
 };
 
 template <typename T>

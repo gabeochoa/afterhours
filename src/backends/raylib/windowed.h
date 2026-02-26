@@ -28,8 +28,11 @@ struct RaylibWindowed {
     }
 
     config = cfg;
-    raylib::SetConfigFlags(raylib::FLAG_WINDOW_RESIZABLE |
-                           raylib::FLAG_MSAA_4X_HINT);
+    unsigned int flags = raylib::FLAG_WINDOW_RESIZABLE | cfg.config_flags;
+    if (cfg.enable_msaa) {
+      flags |= raylib::FLAG_MSAA_4X_HINT;
+    }
+    raylib::SetConfigFlags(flags);
     raylib::InitWindow(cfg.width, cfg.height, cfg.title.c_str());
 
     // Check if window was created successfully

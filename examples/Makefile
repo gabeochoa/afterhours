@@ -31,7 +31,7 @@ endif
 # Targets
 .PHONY: all run test clean
 
-all: graphics_example autolayout_test drawing_3d_example entity_mapping_test
+all: graphics_example autolayout_test drawing_3d_example entity_mapping_test headless_validation
 
 graphics_example: graphics_example.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
@@ -45,6 +45,11 @@ drawing_3d_example: drawing_3d_example.cpp
 autolayout_test: autolayout_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 	@echo "Built: autolayout_test"
+
+# Headless validation - compares headless vs windowed rendering output
+headless_validation: headless_validation.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
+	@echo "Built: headless_validation"
 
 # Entity mapping tests - multi-TU test for ENTITY_ID_GEN and UIEntityMappingCache
 entity_mapping_test: entity_mapping_test.cpp entity_mapping_test_helper.cpp
@@ -63,6 +68,7 @@ test: autolayout_test drawing_3d_example entity_mapping_test
 	./entity_mapping_test
 
 clean:
-	rm -f graphics_example autolayout_test drawing_3d_example entity_mapping_test
+	rm -f graphics_example autolayout_test drawing_3d_example entity_mapping_test headless_validation
 	rm -f graphics_example_output.png
 	rm -rf graphics_example_captures/
+	rm -rf headless_validation_output/
