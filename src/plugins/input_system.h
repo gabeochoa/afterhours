@@ -139,6 +139,14 @@ struct input : developer::Plugin {
         return raylib::IsKeyPressed(keycode);
 #endif
     }
+    static bool is_key_pressed_repeat(const KeyCode keycode) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_key_pressed(keycode,
+                                                   raylib::IsKeyPressedRepeat);
+#else
+        return raylib::IsKeyPressedRepeat(keycode);
+#endif
+    }
     static bool is_key_down(const KeyCode keycode) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
         return testing::test_input::is_key_down(keycode, raylib::IsKeyDown);
@@ -853,8 +861,10 @@ struct input : developer::Plugin {
         bool matched_explicit = false;
     };
 
-    static ActionCheckResult check_single_action_pressed(
-        const GamepadID id, const ValidInputs &valid_inputs) {
+    template <typename KeyCheckFn, typename ButtonCheckFn>
+    static ActionCheckResult check_single_action_impl(
+        const GamepadID id, const ValidInputs &valid_inputs,
+        KeyCheckFn key_check, ButtonCheckFn button_check) {
         ActionCheckResult result;
         uint8_t current_mods = get_current_modifiers();
         for (const auto &inp : valid_inputs) {
@@ -869,7 +879,7 @@ struct input : developer::Plugin {
                 key = chord.key;
                 mods = chord.required_modifiers;
                 explicit_mods = chord.has_explicit_modifiers;
-                if (is_key_pressed(chord.key)) {
+                if (key_check(chord.key)) {
                     if (chord.has_explicit_modifiers) {
                         if ((current_mods & chord.required_modifiers) == chord.required_modifiers)
                             temp = 1.f;
@@ -882,8 +892,7 @@ struct input : developer::Plugin {
                 temp = visit_axis(id, std::get<1>(inp));
             } else if (inp.index() == 2) {
                 temp_medium = DeviceMedium::GamepadButton;
-                temp = is_gamepad_button_pressed(id, std::get<2>(inp)) ? 1.f
-                                                                       : 0.f;
+                temp = button_check(id, std::get<2>(inp));
             }
             if (temp > result.value) {
                 result.value = temp;
@@ -897,45 +906,19 @@ struct input : developer::Plugin {
     }
 
     static ActionCheckResult check_single_action_down(
-        const GamepadID id, const ValidInputs &valid_inputs) {
-        ActionCheckResult result;
-        uint8_t current_mods = get_current_modifiers();
-        for (const auto &inp : valid_inputs) {
-            DeviceMedium temp_medium = DeviceMedium::None;
-            float temp = 0.f;
-            KeyCode key = 0;
-            uint8_t mods = 0;
-            bool explicit_mods = false;
-            if (inp.index() == 0) {
-                const auto &chord = std::get<0>(inp);
-                temp_medium = DeviceMedium::Keyboard;
-                key = chord.key;
-                mods = chord.required_modifiers;
-                explicit_mods = chord.has_explicit_modifiers;
-                if (is_key_down(chord.key)) {
-                    if (chord.has_explicit_modifiers) {
-                        if ((current_mods & chord.required_modifiers) == chord.required_modifiers)
-                            temp = 1.f;
-                    } else {
-                        temp = 1.f;
-                    }
-                }
-            } else if (inp.index() == 1) {
-                temp_medium = DeviceMedium::GamepadAxis;
-                temp = visit_axis(id, std::get<1>(inp));
-            } else if (inp.index() == 2) {
-                temp_medium = DeviceMedium::GamepadButton;
-                temp = visit_button_down(id, std::get<2>(inp));
-            }
-            if (temp > result.value) {
-                result.value = temp;
-                result.medium = temp_medium;
-                result.matched_key = key;
-                result.matched_modifiers = mods;
-                result.matched_explicit = explicit_mods;
-            }
-        }
-        return result;
+        const GamepadID id, const ValidInputs &vis) {
+        return check_single_action_impl(id, vis, is_key_down,
+            [](GamepadID gid, auto btn) { return visit_button_down(gid, btn); });
+    }
+    static ActionCheckResult check_single_action_pressed(
+        const GamepadID id, const ValidInputs &vis) {
+        return check_single_action_impl(id, vis, is_key_pressed,
+            [](GamepadID gid, auto btn) { return is_gamepad_button_pressed(gid, btn) ? 1.f : 0.f; });
+    }
+    static ActionCheckResult check_single_action_pressed_repeat(
+        const GamepadID id, const ValidInputs &vis) {
+        return check_single_action_impl(id, vis, is_key_pressed_repeat,
+            [](GamepadID gid, auto btn) { return is_gamepad_button_pressed(gid, btn) ? 1.f : 0.f; });
     }
 
     // When an exclusive chord matches a key, suppress permissive (bare-key)
@@ -965,6 +948,7 @@ struct input : developer::Plugin {
     struct InputCollector : public BaseComponent {
         std::vector<input::ActionDone> inputs;
         std::vector<input::ActionDone> inputs_pressed;
+        std::vector<input::ActionDone> inputs_pressed_repeat;
         float since_last_input = 0.f;
     };
 
@@ -1010,6 +994,10 @@ struct input : developer::Plugin {
             return data.value().get().inputs_pressed;
         }
 
+        [[nodiscard]] std::vector<input::ActionDone> &inputs_pressed_repeat() {
+            return data.value().get().inputs_pressed_repeat;
+        }
+
         [[nodiscard]] float since_last_input() {
             return data.value().get().since_last_input;
         }
@@ -1052,6 +1040,17 @@ struct input : developer::Plugin {
                 std::max(0, fetch_max_gampad_id());
             collector.inputs.clear();
             collector.inputs_pressed.clear();
+            collector.inputs_pressed_repeat.clear();
+
+            auto collect = [&](auto check_fn, std::vector<ActionDone> &dest,
+                               int gid, int action, const ValidInputs &vis) {
+                const auto r = check_fn(gid, vis);
+                if (r.value > 0.f)
+                    dest.push_back(ActionDone(r.medium, gid, action, r.value,
+                                             dt, r.matched_key,
+                                             r.matched_modifiers,
+                                             r.matched_explicit));
+            };
 
             for (const auto &kv : input_mapper.mapping) {
                 const int action = kv.first;
@@ -1059,34 +1058,16 @@ struct input : developer::Plugin {
 
                 int i = 0;
                 do {
-                    // down
-                    {
-                        const auto r =
-                            input::check_single_action_down(i, vis);
-                        if (r.value > 0.f) {
-                            collector.inputs.push_back(
-                                ActionDone(r.medium, i, action, r.value, dt,
-                                           r.matched_key, r.matched_modifiers,
-                                           r.matched_explicit));
-                        }
-                    }
-                    // pressed
-                    {
-                        const auto r =
-                            input::check_single_action_pressed(i, vis);
-                        if (r.value > 0.f) {
-                            collector.inputs_pressed.push_back(
-                                ActionDone(r.medium, i, action, r.value, dt,
-                                           r.matched_key, r.matched_modifiers,
-                                           r.matched_explicit));
-                        }
-                    }
+                    collect(check_single_action_down, collector.inputs, i, action, vis);
+                    collect(check_single_action_pressed, collector.inputs_pressed, i, action, vis);
+                    collect(check_single_action_pressed_repeat, collector.inputs_pressed_repeat, i, action, vis);
                     i++;
                 } while (i <= mxGamepadID.max_gamepad_available);
             }
 
             suppress_permissive_duplicates(collector.inputs);
             suppress_permissive_duplicates(collector.inputs_pressed);
+            suppress_permissive_duplicates(collector.inputs_pressed_repeat);
 
             if (collector.inputs.empty()) {
                 collector.since_last_input += dt;
@@ -1215,6 +1196,7 @@ struct LayeredInputSystem
         maxGamepad.max_gamepad_available = std::max(0, fetch_max_gamepad_id());
         collector.inputs.clear();
         collector.inputs_pressed.clear();
+        collector.inputs_pressed_repeat.clear();
 
         // Get the active layer's mapping
         auto layer_it = mapper.layers.find(mapper.active_layer);
@@ -1226,39 +1208,28 @@ struct LayeredInputSystem
             return;
         }
 
+        auto collect = [&](auto check_fn, std::vector<input::ActionDone> &dest,
+                           int gid, int action, const input::ValidInputs &vis) {
+            const auto r = check_fn(gid, vis);
+            if (r.value > 0.f)
+                dest.push_back(input::ActionDone(r.medium, gid, action, r.value,
+                                                 dt, r.matched_key,
+                                                 r.matched_modifiers,
+                                                 r.matched_explicit));
+        };
+
         for (const auto &[action, valid_inputs] : layer_it->second) {
             for (int gamepad_id = 0;
                  gamepad_id <= maxGamepad.max_gamepad_available; gamepad_id++) {
-                // Check "down" state
-                {
-                    const auto r =
-                        input::check_single_action_down(gamepad_id,
-                                                        valid_inputs);
-                    if (r.value > 0.f) {
-                        collector.inputs.push_back(input::ActionDone(
-                            r.medium, gamepad_id, action, r.value, dt,
-                            r.matched_key, r.matched_modifiers,
-                            r.matched_explicit));
-                    }
-                }
-                // Check "pressed" state (just this frame)
-                {
-                    const auto r =
-                        input::check_single_action_pressed(gamepad_id,
-                                                           valid_inputs);
-                    if (r.value > 0.f) {
-                        collector.inputs_pressed.push_back(
-                            input::ActionDone(r.medium, gamepad_id,
-                                              action, r.value, dt,
-                                              r.matched_key, r.matched_modifiers,
-                                              r.matched_explicit));
-                    }
-                }
+                collect(input::check_single_action_down, collector.inputs, gamepad_id, action, valid_inputs);
+                collect(input::check_single_action_pressed, collector.inputs_pressed, gamepad_id, action, valid_inputs);
+                collect(input::check_single_action_pressed_repeat, collector.inputs_pressed_repeat, gamepad_id, action, valid_inputs);
             }
         }
 
         input::suppress_permissive_duplicates(collector.inputs);
         input::suppress_permissive_duplicates(collector.inputs_pressed);
+        input::suppress_permissive_duplicates(collector.inputs_pressed_repeat);
 
         if (collector.inputs.empty()) {
             collector.since_last_input += dt;

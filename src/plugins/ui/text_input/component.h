@@ -17,6 +17,27 @@ namespace text_input {
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
+// Given a local x coordinate within a text field, find the byte offset
+// in the display text that's closest to that position.
+inline size_t pixel_x_to_byte_offset(const std::string &text, float local_x,
+                                     Font font, float font_size) {
+  size_t result = 0;
+  float best_dist = std::abs(local_x);
+  for (size_t i = 0; i < text.size();) {
+    size_t clen = utf8_char_length(text, i);
+    size_t next = i + clen;
+    std::string sub = text.substr(0, next);
+    Vector2Type sz = measure_text(font, sub.c_str(), font_size, 1.f);
+    float dist = std::abs(local_x - sz.x);
+    if (dist < best_dist) {
+      best_dist = dist;
+      result = next;
+    }
+    i = next;
+  }
+  return result;
+}
+
 /// Creates a single-line text input field.
 ///
 /// @param ctx The UI context
@@ -59,6 +80,15 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
         s.changed_since = false;
       },
       text);
+
+  // Apply readonly/disabled from config each frame
+  state.readonly = config.text_readonly;
+  state.disabled = config.disabled;
+
+  // Disabled: skip focus entirely, render with reduced opacity
+  if (state.disabled) {
+    config.opacity = std::min(config.opacity, 0.5f);
+  }
 
   // Extract label before clearing config
   std::string label = config.label;
@@ -124,7 +154,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     display_cursor_pos = codepoints_before_cursor;
   }
 
-  // Create input field container
+  // Create input field container (clip overflow for horizontal scroll)
   auto field_result =
       div(ctx, mk(entity, has_label ? 1 : 0),
           ComponentConfig::inherit_from(config, "text_input_field")
@@ -133,6 +163,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
               .with_rounded_corners(has_label ? base_corners.left_sharp()
                                               : base_corners)
               .with_alignment(TextAlignment::Left)
+              .with_overflow(Overflow::Hidden)
               .with_render_layer(config.render_layer + 1));
 
   auto &field_entity = field_result.ent();
@@ -161,16 +192,19 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                                             .right = pixels(pad_w)});
 
       // draw_text_in_rect adds a 5px internal margin; subtract it so the
-      // total inset from the field edge equals pad_w.
-      field_label.text_x_offset = pad_w - 5.f;
+      // total inset from the field edge equals pad_w. Apply horizontal
+      // scroll offset to shift text left when overflowing.
+      field_label.text_x_offset = pad_w - 5.f - state.scroll_offset_x;
     }
   }
 
   // Update focus state - check if this field OR the parent container has focus
-  field_entity.template addComponentIfMissing<InFocusCluster>();
+  if (!state.disabled) {
+    field_entity.template addComponentIfMissing<InFocusCluster>();
+  }
   bool field_has_focus = ctx.has_focus(field_entity.id);
   bool parent_has_focus = ctx.has_focus(entity.id);
-  state.is_focused = field_has_focus || parent_has_focus;
+  state.is_focused = !state.disabled && (field_has_focus || parent_has_focus);
 
   if (state.is_focused) {
     auto focus_color = ctx.theme.accent;
@@ -244,6 +278,21 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
         cursor_x = text_start_x;
       }
 
+      // Horizontal scroll: keep cursor visible within the content area
+      float content_w = field_rect.width - pad_left -
+                        field_cmp.computed_padd[Axis::right];
+      if (content_w > 0.f) {
+        constexpr float SCROLL_MARGIN = 4.f;
+        if (cursor_x - state.scroll_offset_x > content_w - SCROLL_MARGIN)
+          state.scroll_offset_x = cursor_x - content_w + SCROLL_MARGIN;
+        if (cursor_x - state.scroll_offset_x < SCROLL_MARGIN)
+          state.scroll_offset_x = cursor_x - SCROLL_MARGIN;
+        if (state.scroll_offset_x < 0.f)
+          state.scroll_offset_x = 0.f;
+      }
+
+      cursor_x -= state.scroll_offset_x;
+
     }
 
     // Selection highlight
@@ -279,8 +328,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
         sel_end_byte = cp_end;
       }
 
-      float sel_x1 = measure_x(sel_start_byte);
-      float sel_x2 = measure_x(sel_end_byte);
+      float sel_x1 = measure_x(sel_start_byte) - state.scroll_offset_x;
+      float sel_x2 = measure_x(sel_end_byte) - state.scroll_offset_x;
       float sel_width = std::max(sel_x2 - sel_x1, 2.f);
 
       auto sel_color = ctx.theme.accent;
@@ -312,139 +361,297 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_render_layer(config.render_layer + 10));
   }
 
-  // Click to focus and collapse selection
+  // Click to focus, position cursor, handle multi-click and shift+click
   field_entity.template addComponentIfMissing<HasClickListener>(
       [&ctx](Entity &ent) {
+        if (!ent.has<HasTextInputState>()) return;
+        auto &s = ent.get<HasTextInputState>();
+        if (s.disabled) return;
         ctx.set_focus(ent.id);
-        if (ent.has<HasTextInputState>()) {
-          auto &s = ent.get<HasTextInputState>();
-          s.clear_selection();
-          reset_blink(s);
-        }
-      });
+        auto &cmp = ent.get<UIComponent>();
 
-  // TODO: Implement horizontal scrolling when text exceeds field width
+        bool shift = input::is_key_down(raylib::KEY_LEFT_SHIFT) ||
+                     input::is_key_down(raylib::KEY_RIGHT_SHIFT);
+
+        auto *fm = EntityHelper::get_singleton_cmp<FontManager>();
+        if (!fm) {
+          if (!shift) s.clear_selection();
+          reset_blink(s);
+          return;
+        }
+
+        std::string fn = cmp.font_name == UIComponent::UNSET_FONT
+                             ? UIComponent::DEFAULT_FONT
+                             : cmp.font_name;
+        Font font = fm->get_font(fn);
+
+        float screen_h = 720.f;
+        if (auto *pcr = EntityHelper::get_singleton_cmp<
+                window_manager::ProvidesCurrentResolution>())
+          screen_h = static_cast<float>(pcr->current_resolution.height);
+
+        float uis = imm::ThemeDefaults::get().theme.ui_scale;
+        float afs = resolve_to_pixels(cmp.font_size, screen_h,
+                                      cmp.resolved_scaling_mode, uis);
+
+        RectangleType fr = cmp.rect();
+        float local_x = ctx.mouse.pos.x - fr.x + s.scroll_offset_x;
+        std::string dt = ent.has<HasLabel>() ? ent.get<HasLabel>().label
+                                             : s.text();
+        size_t click_pos = pixel_x_to_byte_offset(dt, local_x, font, afs);
+
+        // Multi-click detection (double = word, triple = select all)
+        constexpr float MULTI_CLICK_TIME = 0.4f;
+        constexpr size_t MULTI_CLICK_DIST = 3;
+        float now = static_cast<float>(raylib::GetTime());
+        if (s.last_click_time >= 0.f &&
+            (now - s.last_click_time) < MULTI_CLICK_TIME &&
+            (click_pos > s.last_click_pos
+                 ? click_pos - s.last_click_pos
+                 : s.last_click_pos - click_pos) <= MULTI_CLICK_DIST) {
+          s.click_count++;
+        } else {
+          s.click_count = 1;
+        }
+        s.last_click_time = now;
+        s.last_click_pos = click_pos;
+
+        if (s.click_count >= 3) {
+          // Triple click: select all
+          s.selection_anchor = 0;
+          s.cursor_position = s.text_size();
+          s.click_count = 0;
+        } else if (s.click_count == 2) {
+          // Double click: select word
+          auto [ws, we] = select_word_at(s.text(), click_pos);
+          s.selection_anchor = ws;
+          s.cursor_position = we;
+        } else {
+          // Single click: position cursor
+          if (shift) {
+            if (!s.selection_anchor)
+              s.selection_anchor = s.cursor_position;
+          } else {
+            s.clear_selection();
+          }
+          s.cursor_position = click_pos;
+        }
+        reset_blink(s);
+      });
 
   // Handle input when focused
   if (state.is_focused) {
-    // Clipboard operations (before char input so Ctrl+C/V/X don't insert)
+    bool editable = !state.readonly;
+
+    // Undo/Redo (before clipboard/char input so Ctrl+Z doesn't insert)
+    if (editable) {
+      if constexpr (magic_enum::enum_contains<InputAction>("TextUndo")) {
+        if (ctx.pressed(InputAction::TextUndo)) {
+          state.undo();
+          reset_blink(state);
+        }
+      }
+      if constexpr (magic_enum::enum_contains<InputAction>("TextRedo")) {
+        if (ctx.pressed(InputAction::TextRedo)) {
+          state.redo();
+          reset_blink(state);
+        }
+      }
+    }
+
+    // Copy is always allowed (even readonly). Cut/Paste need editable.
     if constexpr (magic_enum::enum_contains<InputAction>("TextCopy")) {
       if (ctx.pressed(InputAction::TextCopy)) {
         if (state.has_selection())
           clipboard::set_text(state.selected_text());
       }
     }
-    if constexpr (magic_enum::enum_contains<InputAction>("TextCut")) {
-      if (ctx.pressed(InputAction::TextCut)) {
-        if (state.has_selection()) {
-          clipboard::set_text(state.selected_text());
-          delete_selection(state);
-          reset_blink(state);
+    if (editable) {
+      if constexpr (magic_enum::enum_contains<InputAction>("TextCut")) {
+        if (ctx.pressed(InputAction::TextCut)) {
+          if (state.has_selection()) {
+            state.push_undo_snapshot();
+            clipboard::set_text(state.selected_text());
+            delete_selection(state);
+            reset_blink(state);
+          }
         }
       }
-    }
-    if constexpr (magic_enum::enum_contains<InputAction>("TextPaste")) {
-      if (ctx.pressed(InputAction::TextPaste)) {
-        if (state.has_selection()) delete_selection(state);
-        std::string clip = clipboard::get_text();
-        if (!clip.empty()) {
-          for (size_t i = 0; i < clip.size();) {
-            int cp = utf8_to_codepoint(clip, i);
-            if (cp >= 32) insert_char(state, cp);
-            size_t clen = utf8_char_length(clip, i);
-            i += clen > 0 ? clen : 1;
+      if constexpr (magic_enum::enum_contains<InputAction>("TextPaste")) {
+        if (ctx.pressed(InputAction::TextPaste)) {
+          state.push_undo_snapshot();
+          if (state.has_selection()) delete_selection(state);
+          std::string clip = clipboard::get_text();
+          if (!clip.empty()) {
+            for (size_t i = 0; i < clip.size();) {
+              int cp = utf8_to_codepoint(clip, i);
+              if (cp >= 32) insert_char(state, cp);
+              size_t clen = utf8_char_length(clip, i);
+              i += clen > 0 ? clen : 1;
+            }
+            state.clear_selection();
+            reset_blink(state);
           }
-          state.clear_selection();
-          reset_blink(state);
         }
       }
     }
 
-    // Select all
+    // Select all (allowed in readonly)
     if (ctx.pressed(InputAction::TextSelectAll)) {
       state.selection_anchor = 0;
       state.cursor_position = state.text_size();
       reset_blink(state);
     }
 
-    // Character input (replaces selection)
-    for (int key = input::get_char_pressed(); key > 0;
-         key = input::get_char_pressed()) {
-      if (state.has_selection()) delete_selection(state);
-      if (insert_char(state, key)) {
+    // Character input (replaces selection) - only if editable
+    if (editable) {
+      for (int key = input::get_char_pressed(); key > 0;
+           key = input::get_char_pressed()) {
+        state.push_undo_snapshot();
+        if (state.has_selection()) delete_selection(state);
+        if (insert_char(state, key)) {
+          state.clear_selection();
+          reset_blink(state);
+        }
+      }
+    } else {
+      // Drain the char queue so keys don't accumulate
+      while (input::get_char_pressed() > 0) {}
+    }
+
+    // Shift-as-modifier: check raw shift state to extend/start selection
+    // during any movement. This replaces separate Select* actions.
+    bool shift_held = input::is_key_down(raylib::KEY_LEFT_SHIFT) ||
+                      input::is_key_down(raylib::KEY_RIGHT_SHIFT);
+
+    auto navigate = [&](auto move_fn) {
+      if (shift_held) {
+        if (!state.selection_anchor)
+          state.selection_anchor = state.cursor_position;
+      }
+      move_fn();
+      if (!shift_held) {
         state.clear_selection();
-        reset_blink(state);
+      }
+      reset_blink(state);
+    };
+
+    // Word-level movement (Ctrl+Arrow / Alt+Arrow)
+    if constexpr (magic_enum::enum_contains<InputAction>("TextWordLeft")) {
+      if (ctx.pressed_or_repeat(InputAction::TextWordLeft)) {
+        navigate([&] {
+          if (!shift_held && state.has_selection()) {
+            state.cursor_position = state.selection_start();
+          } else {
+            move_cursor_word_left(state);
+          }
+        });
+      }
+    }
+    if constexpr (magic_enum::enum_contains<InputAction>("TextWordRight")) {
+      if (ctx.pressed_or_repeat(InputAction::TextWordRight)) {
+        navigate([&] {
+          if (!shift_held && state.has_selection()) {
+            state.cursor_position = state.selection_end();
+          } else {
+            move_cursor_word_right(state);
+          }
+        });
       }
     }
 
-    // Selection movement (Shift+Arrow via chord actions)
+    // Character-level selection movement (Shift+Arrow via chord actions).
+    // These are kept for backward compatibility; the shift_held path in
+    // navigate() handles selection automatically.
     if constexpr (magic_enum::enum_contains<InputAction>("TextSelectLeft")) {
-      if (ctx.pressed(InputAction::TextSelectLeft)) {
-        if (!state.selection_anchor)
-          state.selection_anchor = state.cursor_position;
-        move_cursor_left(state);
-        reset_blink(state);
+      if (ctx.pressed_or_repeat(InputAction::TextSelectLeft)) {
+        navigate([&] { move_cursor_left(state); });
       }
     }
     if constexpr (magic_enum::enum_contains<InputAction>("TextSelectRight")) {
-      if (ctx.pressed(InputAction::TextSelectRight)) {
-        if (!state.selection_anchor)
-          state.selection_anchor = state.cursor_position;
-        move_cursor_right(state);
+      if (ctx.pressed_or_repeat(InputAction::TextSelectRight)) {
+        navigate([&] { move_cursor_right(state); });
+      }
+    }
+
+    // Plain left/right movement (collapses selection when shift not held).
+    if (ctx.pressed_or_repeat(InputAction::WidgetLeft)) {
+      navigate([&] {
+        if (!shift_held && state.has_selection()) {
+          state.cursor_position = state.selection_start();
+        } else {
+          move_cursor_left(state);
+        }
+      });
+    }
+    if (ctx.pressed_or_repeat(InputAction::WidgetRight)) {
+      navigate([&] {
+        if (!shift_held && state.has_selection()) {
+          state.cursor_position = state.selection_end();
+        } else {
+          move_cursor_right(state);
+        }
+      });
+    }
+
+    // Deletion (word-level and character-level) - only if editable
+    if (editable) {
+      if constexpr (magic_enum::enum_contains<InputAction>("TextDeleteWordBack")) {
+        if (ctx.pressed_or_repeat(InputAction::TextDeleteWordBack)) {
+          state.push_undo_snapshot();
+          if (state.has_selection()) {
+            delete_selection(state);
+          } else {
+            delete_word_before_cursor(state);
+          }
+          reset_blink(state);
+        }
+      }
+      if constexpr (magic_enum::enum_contains<InputAction>("TextDeleteWordForward")) {
+        if (ctx.pressed_or_repeat(InputAction::TextDeleteWordForward)) {
+          state.push_undo_snapshot();
+          if (state.has_selection()) {
+            delete_selection(state);
+          } else {
+            delete_word_after_cursor(state);
+          }
+          reset_blink(state);
+        }
+      }
+
+      if (ctx.pressed_or_repeat(InputAction::TextBackspace)) {
+        state.push_undo_snapshot();
+        if (state.has_selection()) {
+          delete_selection(state);
+        } else {
+          delete_before_cursor(state);
+        }
+        reset_blink(state);
+      }
+      if (ctx.pressed_or_repeat(InputAction::TextDelete)) {
+        state.push_undo_snapshot();
+        if (state.has_selection()) {
+          delete_selection(state);
+        } else {
+          delete_at_cursor(state);
+        }
         reset_blink(state);
       }
     }
 
-    // Plain movement (collapses selection).
-    // suppress_permissive_duplicates ensures bare WidgetLeft/Right are removed
-    // from inputs_pressed when a chord (e.g. Shift+Left = TextSelectLeft)
-    // claims the same key, so ctx.pressed() is safe here.
-    if (ctx.pressed(InputAction::WidgetLeft)) {
-      if (state.has_selection()) {
-        state.cursor_position = state.selection_start();
-        state.clear_selection();
-      } else {
-        move_cursor_left(state);
-      }
-      reset_blink(state);
+    // Home/End: Shift extends selection, plain collapses it
+    if (ctx.pressed_or_repeat(InputAction::TextHome)) {
+      navigate([&] { state.cursor_position = 0; });
     }
-    if (ctx.pressed(InputAction::WidgetRight)) {
-      if (state.has_selection()) {
-        state.cursor_position = state.selection_end();
-        state.clear_selection();
-      } else {
-        move_cursor_right(state);
-      }
-      reset_blink(state);
+    if (ctx.pressed_or_repeat(InputAction::TextEnd)) {
+      navigate([&] { state.cursor_position = state.text_size(); });
     }
 
-    if (ctx.pressed(InputAction::TextBackspace)) {
-      if (state.has_selection()) {
-        delete_selection(state);
-      } else {
-        delete_before_cursor(state);
-      }
-      reset_blink(state);
-    }
-    if (ctx.pressed(InputAction::TextDelete)) {
-      if (state.has_selection()) {
-        delete_selection(state);
-      } else {
-        delete_at_cursor(state);
-      }
-      reset_blink(state);
-    }
-
-    // Home/End collapse selection
-    if (ctx.pressed(InputAction::TextHome)) {
-      state.cursor_position = 0;
+    // Escape blurs the text field. Use FAKE instead of ROOT to prevent
+    // try_to_grab from immediately re-focusing the first tabbable widget.
+    if (ctx.pressed(InputAction::MenuBack)) {
       state.clear_selection();
-      reset_blink(state);
-    }
-    if (ctx.pressed(InputAction::TextEnd)) {
-      state.cursor_position = state.text_size();
-      state.clear_selection();
-      reset_blink(state);
+      ctx.set_focus(ctx.FAKE);
     }
 
     // Enter/Submit

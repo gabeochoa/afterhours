@@ -88,6 +88,7 @@ template <typename InputAction> struct UIContext : BaseComponent {
   InputAction last_action;
   uint8_t last_action_modifiers = 0;
   InputBitset all_actions;
+  InputBitset all_actions_repeat;
 
   // Screen dimensions in pixels, set each frame by the layout system.
   // Used by rendering to resolve ScreenPercent font sizes.
@@ -218,6 +219,14 @@ template <typename InputAction> struct UIContext : BaseComponent {
     if (input::get_current_modifiers() != last_action_modifiers) return false;
     last_action = InputAction::None;
     return true;
+  }
+
+  [[nodiscard]] bool pressed_or_repeat(const InputAction &name) {
+    if (pressed(name)) return true;
+    size_t idx = magic_enum::enum_index<InputAction>(name).value();
+    bool a = all_actions_repeat[idx];
+    if (a) all_actions_repeat[idx] = false;
+    return a;
   }
 
   [[nodiscard]] bool is_held_down(const InputAction &name) {

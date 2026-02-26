@@ -131,6 +131,9 @@ struct ComponentConfig {
   // Text input: character to display instead of actual text (for passwords)
   std::optional<char> mask_char;
 
+  // Text input: readonly mode (focusable, selectable, but not editable)
+  bool text_readonly = false;
+
   // Checkbox indicator characters
   // TODO: Replace "V" / " " with real icon glyphs (✓ ✔) once afterhours
   // ships a built-in icon font or vector glyph set. Current text fallback
@@ -312,6 +315,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_mask_char(char c) {
     mask_char = c;
+    return *this;
+  }
+  ComponentConfig &with_readonly(bool ro = true) {
+    text_readonly = ro;
     return *this;
   }
   ComponentConfig &

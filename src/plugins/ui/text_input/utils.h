@@ -251,6 +251,37 @@ inline std::pair<size_t, size_t> select_word_at(std::string_view text,
   return {start, end};
 }
 
+// Move cursor left by one word
+inline void move_cursor_word_left(AnyTextInputState auto &s) {
+  s.cursor_position = find_word_start(s.text(), s.cursor_position);
+}
+
+// Move cursor right by one word
+inline void move_cursor_word_right(AnyTextInputState auto &s) {
+  s.cursor_position = find_word_end(s.text(), s.cursor_position);
+}
+
+// Delete word before cursor (Ctrl+Backspace / Alt+Backspace)
+inline bool delete_word_before_cursor(AnyTextInputState auto &s) {
+  if (s.cursor_position == 0 || s.text_size() == 0)
+    return false;
+  size_t ws = find_word_start(s.text(), s.cursor_position);
+  s.storage.erase(ws, s.cursor_position - ws);
+  s.cursor_position = ws;
+  s.changed_since = true;
+  return true;
+}
+
+// Delete word after cursor (Ctrl+Delete / Alt+Delete)
+inline bool delete_word_after_cursor(AnyTextInputState auto &s) {
+  if (s.cursor_position >= s.text_size())
+    return false;
+  size_t we = find_word_end(s.text(), s.cursor_position);
+  s.storage.erase(s.cursor_position, we - s.cursor_position);
+  s.changed_since = true;
+  return true;
+}
+
 // ============ Multiline Text Area Utilities ============
 
 /// Insert a newline at cursor position.

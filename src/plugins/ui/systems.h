@@ -156,6 +156,7 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
       input::PossibleInputCollector inpc = input::get_input_collector();
       if (inpc.has_value()) {
         context.all_actions = inputs_as_bits(inpc.inputs());
+        context.all_actions_repeat = inputs_as_bits(inpc.inputs_pressed_repeat());
         for (auto &actions_done : inpc.inputs_pressed()) {
           context.last_action = static_cast<InputAction>(actions_done.action);
           context.last_action_modifiers = actions_done.required_modifiers;
@@ -427,7 +428,7 @@ template <typename InputAction>
 struct EndUIContextManager : System<UIContext<InputAction>> {
   virtual void for_each_with(Entity &, UIContext<InputAction> &context,
                              float) override {
-    if (context.focus_id == context.ROOT)
+    if (context.focus_id == context.ROOT || context.focus_id == context.FAKE)
       return;
 
     if (context.mouse.left_down) {
@@ -452,7 +453,7 @@ template <typename InputAction> struct ComputeVisualFocusId : System<> {
   virtual void for_each_with(Entity &, float) override {
     auto ctx = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
     ctx->visual_focus_id = ctx->ROOT;
-    if (ctx->focus_id == ctx->ROOT)
+    if (ctx->focus_id == ctx->ROOT || ctx->focus_id == ctx->FAKE)
       return;
     OptEntity focused = UICollectionHolder::getEntityForID(ctx->focus_id);
     if (!focused.has_value())
