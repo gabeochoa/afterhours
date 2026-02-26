@@ -172,6 +172,11 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   auto &field_label = field_entity.template addComponentIfMissing<HasLabel>();
   field_label.label = display_text;
 
+  // The batched text renderer draws at label_rect.x directly, without
+  // draw_text_in_rect's 5px internal margin. text_x_offset already
+  // subtracts this value, so cursor/selection must use the same origin.
+  constexpr float DRAW_TEXT_MARGIN = 5.f;
+
   // Derive font size and padding from field height so everything scales
   // proportionally. Uses previous frame's computed height (converges in 1 frame).
   {
@@ -191,10 +196,11 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                                             .left = pixels(pad_w),
                                             .right = pixels(pad_w)});
 
-      // draw_text_in_rect adds a 5px internal margin; subtract it so the
-      // total inset from the field edge equals pad_w. Apply horizontal
+      // draw_text_in_rect adds DRAW_TEXT_MARGIN internally; subtract it so
+      // the total inset from the field edge equals pad_w. Apply horizontal
       // scroll offset to shift text left when overflowing.
-      field_label.text_x_offset = pad_w - 5.f - state.scroll_offset_x;
+      field_label.text_x_offset =
+          pad_w - DRAW_TEXT_MARGIN - state.scroll_offset_x;
     }
   }
 
@@ -240,8 +246,6 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     float cursor_height = actual_font_size;
     float cursor_y = 0.f;
 
-    constexpr float TEXT_MARGIN = 5.f;
-
     if (font_manager) {
       std::string font_name = config.font_name == UIComponent::UNSET_FONT
                                   ? UIComponent::DEFAULT_FONT
@@ -253,9 +257,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       const std::string &measure_str =
           display_text.empty() ? std::string(" ") : display_text;
 
-      // Y margin affects vertical centering bounds; X is zero because the
-      // batched renderer draws Left-aligned text at rect.x (no X margin).
-      Vector2Type margin_px{0.f, TEXT_MARGIN};
+      Vector2Type margin_px{0.f, DRAW_TEXT_MARGIN};
       TextPositionResult text_pos = position_text_ex(
           *font_manager, measure_str.c_str(), field_rect,
           TextAlignment::Left, margin_px, actual_font_size);
@@ -263,10 +265,11 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       cursor_height = text_pos.rect.height;
       cursor_y = text_pos.rect.y - field_rect.y - pad_top;
 
-      // Content area starts at rect.x + pad_left. Text rendering (via
-      // text_x_offset) also starts at rect.x + pad_left. So in content-area
-      // coords, text origin is 0.
-      float text_start_x = 0.f;
+      // text_x_offset places the DrawTextEx origin at (pad_w - DRAW_TEXT_MARGIN)
+      // from rect().x. The cursor is positioned within the content area which
+      // starts at pad_w from rect().x. Shift by -DRAW_TEXT_MARGIN so cursor
+      // aligns with the DrawTextEx origin where measure_text values apply.
+      float text_start_x = -DRAW_TEXT_MARGIN;
 
       if (!display_text.empty() && display_cursor_pos > 0) {
         size_t safe_pos = std::min(display_cursor_pos, display_text.size());
@@ -302,7 +305,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                                    : config.font_name;
       Font font = font_manager->get_font(font_name);
 
-      float sel_text_x = 0.f;
+      float sel_text_x = -DRAW_TEXT_MARGIN;
 
       auto measure_x = [&](size_t byte_pos) -> float {
         if (byte_pos == 0 || display_text.empty()) return sel_text_x;
@@ -395,7 +398,9 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                                       cmp.resolved_scaling_mode, uis);
 
         RectangleType fr = cmp.rect();
-        float local_x = ctx.mouse.pos.x - fr.x + s.scroll_offset_x;
+        float pad_left = cmp.computed_padd[Axis::left];
+        float local_x = ctx.mouse.pos.x - fr.x - pad_left +
+                         DRAW_TEXT_MARGIN + s.scroll_offset_x;
         std::string dt = ent.has<HasLabel>() ? ent.get<HasLabel>().label
                                              : s.text();
         size_t click_pos = pixel_x_to_byte_offset(dt, local_x, font, afs);
