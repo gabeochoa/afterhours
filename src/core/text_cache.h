@@ -3,6 +3,7 @@
 #include <concepts>
 #include <cstdint>
 #include <functional>
+#include <list>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -32,13 +33,18 @@ public:
   static constexpr size_t DEFAULT_MAX_ENTRIES = 4096;
 
 private:
-  struct CacheEntry {
+  struct LRUEntry {
+    uint64_t key;
     Vector2Type size;
     uint32_t last_used_generation = 0;
   };
 
+  using LRUList = std::list<LRUEntry>;
+  using LRUIter = LRUList::iterator;
+
   MeasureTextFn measure_fn_;
-  std::unordered_map<uint64_t, CacheEntry> cache_;
+  LRUList lru_list_;
+  std::unordered_map<uint64_t, LRUIter> lookup_;
 
   uint32_t current_generation_ = 0;
   uint32_t prune_interval_ = DEFAULT_PRUNE_INTERVAL;
@@ -71,21 +77,23 @@ public:
     }
 
     uint64_t key = compute_hash(text, font_name, font_size, spacing);
-    auto it = cache_.find(key);
-    if (it != cache_.end()) {
-      it->second.last_used_generation = current_generation_;
+    auto it = lookup_.find(key);
+    if (it != lookup_.end()) {
+      it->second->last_used_generation = current_generation_;
+      lru_list_.splice(lru_list_.begin(), lru_list_, it->second);
       cache_hits_++;
-      return it->second.size;
+      return it->second->size;
     }
 
     cache_misses_++;
     Vector2Type size = measure_fn_(text, font_name, font_size, spacing);
 
-    if (cache_.size() >= max_entries_) {
-      prune_oldest_entries(max_entries_ / 4);
+    while (lookup_.size() >= max_entries_) {
+      evict_lru();
     }
 
-    cache_[key] = {size, current_generation_};
+    lru_list_.push_front({key, size, current_generation_});
+    lookup_[key] = lru_list_.begin();
     return size;
   }
 
@@ -111,12 +119,13 @@ public:
   void prune() { prune_stale_entries(); }
 
   void clear() {
-    cache_.clear();
+    lru_list_.clear();
+    lookup_.clear();
     cache_hits_ = 0;
     cache_misses_ = 0;
   }
 
-  [[nodiscard]] size_t size() const { return cache_.size(); }
+  [[nodiscard]] size_t size() const { return lookup_.size(); }
   [[nodiscard]] uint64_t hits() const { return cache_hits_; }
   [[nodiscard]] uint64_t misses() const { return cache_misses_; }
   [[nodiscard]] uint32_t generation() const { return current_generation_; }
@@ -166,41 +175,25 @@ public:
   }
 
 private:
+  void evict_lru() {
+    if (lru_list_.empty())
+      return;
+    auto &victim = lru_list_.back();
+    lookup_.erase(victim.key);
+    lru_list_.pop_back();
+  }
+
   void prune_stale_entries() {
     if (current_generation_ < max_age_)
       return;
 
     uint32_t threshold = current_generation_ - max_age_;
-    for (auto it = cache_.begin(); it != cache_.end();) {
-      if (it->second.last_used_generation < threshold) {
-        it = cache_.erase(it);
-      } else {
-        ++it;
-      }
-    }
-  }
-
-  void prune_oldest_entries(size_t count) {
-    if (count == 0 || cache_.empty())
-      return;
-
-    uint64_t total_age = 0;
-    for (const auto &[key, entry] : cache_) {
-      (void)key;
-      total_age += current_generation_ - entry.last_used_generation;
-    }
-
-    uint32_t avg_age = static_cast<uint32_t>(total_age / cache_.size());
-    uint32_t threshold =
-        current_generation_ > avg_age ? current_generation_ - avg_age : 0;
-
-    size_t removed = 0;
-    for (auto it = cache_.begin(); it != cache_.end() && removed < count;) {
-      if (it->second.last_used_generation < threshold) {
-        it = cache_.erase(it);
-        removed++;
-      } else {
-        ++it;
+    auto it = lru_list_.end();
+    while (it != lru_list_.begin()) {
+      --it;
+      if (it->last_used_generation < threshold) {
+        lookup_.erase(it->key);
+        it = lru_list_.erase(it);
       }
     }
   }
