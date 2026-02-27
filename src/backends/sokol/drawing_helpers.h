@@ -628,21 +628,39 @@ inline void draw_texture_rec(TextureType, RectangleType, Vector2Type, Color) {
   log_warn("draw_texture_rec: not yet implemented in sokol backend");
 }
 
-inline bool capture_render_texture(const graphics::RenderTextureType &,
-                                   const std::filesystem::path &) {
-  log_warn("capture_render_texture: not yet implemented in sokol backend");
-  return false;
+extern "C" bool metal_capture_render_texture(uint32_t color_img_id,
+                                             int width, int height,
+                                             const char *path);
+extern "C" int metal_capture_render_texture_to_memory(
+    uint32_t color_img_id, int width, int height,
+    uint8_t **out_data, int *out_size);
+
+inline bool capture_render_texture(const graphics::RenderTextureType &rt,
+                                   const std::filesystem::path &path) {
+  if (rt.color_img_id == 0)
+    return false;
+  return metal_capture_render_texture(rt.color_img_id, rt.width, rt.height,
+                                      path.c_str());
 }
 
 inline std::vector<uint8_t>
-capture_render_texture_to_memory(const graphics::RenderTextureType &) {
-  log_warn("capture_render_texture_to_memory: not yet implemented in sokol "
-           "backend");
-  return {};
+capture_render_texture_to_memory(const graphics::RenderTextureType &rt) {
+  if (rt.color_img_id == 0)
+    return {};
+  uint8_t *data = nullptr;
+  int size = 0;
+  if (!metal_capture_render_texture_to_memory(rt.color_img_id, rt.width,
+                                              rt.height, &data, &size)) {
+    return {};
+  }
+  std::vector<uint8_t> result(data, data + size);
+  free(data);
+  return result;
 }
 
 inline std::vector<uint8_t> capture_screen_to_memory() {
-  log_warn("capture_screen_to_memory: not yet implemented in sokol backend");
+  log_warn("capture_screen_to_memory: use capture_render_texture_to_memory "
+           "with an offscreen render texture instead");
   return {};
 }
 
