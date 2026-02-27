@@ -103,33 +103,45 @@ Tests whether decorations render identically:
 ./headless_validation
 
 # Run a specific scene
-./headless_validation --scene=filled_rectangles
+./headless_validation --scene=text
 
 # Custom output directory
 ./headless_validation --output-dir=/tmp/validation
+
+# Allow minor per-channel differences (e.g. anti-aliasing)
+./headless_validation --tolerance=2
+
+# Suppress raylib INFO logs
+./headless_validation -q
+
+# List available scenes
+./headless_validation --list
+
+# Verbose mode (show pixel counts)
+./headless_validation -v
 ```
 
 ---
 
 ## Output Format
 
-Success:
+Success (with -q):
 ```
-Headless Rendering Validation
-Resolution: 800x600
+=== Headless Rendering Validation ===
+Resolution:  800x600
+Tolerance:   0 (per-channel)
+Output dir:  headless_validation_output
 ==============================
-filled_rectangles ........... raylib_headless vs raylib_windowed: PASS
-rectangle_outlines .......... raylib_headless vs raylib_windowed: PASS
-...
+  PASS  filled_rects
+  PASS  text
+  ...
 ==============================
-30/30 passed, 0 failed
+30/30 passed
 ```
 
 Failure:
 ```
-alpha_blending .............. raylib_headless vs raylib_windowed: FAIL
-  First mismatch at (320, 240): #FF0000FF vs #FE0000FF
-  Diff image saved: output/alpha_blending_diff.png
+  FAIL  alpha_blending                     42 px (0.01%) differ, max=3, first=(320,240)
 ```
 
 ---
@@ -139,13 +151,27 @@ alpha_blending .............. raylib_headless vs raylib_windowed: FAIL
 For each scene, up to 3 files are saved:
 - `scene_windowed.png` -- reference capture
 - `scene_headless.png` -- headless capture
-- `scene_diff.png` -- diff image (only on failure)
+- `scene_diff.png` -- heat-map diff image (only on failure; brighter red = larger diff)
 
 ---
 
-## Risk: Backend Re-initialization
+## Implementation Notes
 
-Reinitializing the graphics backend multiple times in one process (init, shutdown, init again) needs to work cleanly. If that proves fragile, the fallback is running each pass as a separate child process, but the simple approach should be tried first.
+### Backend Re-initialization
+
+Re-initializing the graphics backend multiple times in one process caused state corruption (especially after windowed GLFW shutdown). **Solution**: render all headless scenes in one `init/shutdown` session, then all windowed scenes in another session, then compare offline.
+
+### Font Loading in Headless Mode
+
+Raylib's `LoadFontDefault()` guards texture creation behind a global `isGpuReady` flag that only `InitWindow` sets. **Solution**: the headless backend now sets `isGpuReady = true` after rlgl init and calls `LoadFontDefault()` so that `DrawText`/`GetFontDefault()` work without a window.
+
+### MSAA Parity
+
+The windowed backend hardcodes `FLAG_MSAA_4X_HINT`. Headless has no MSAA. **Solution**: added `Config::enable_msaa` flag; the validation tool disables MSAA for the windowed pass.
+
+### Static Linking
+
+On macOS, the validation tool must link against `libraylib.a` (static) rather than `libraylib.dylib` because `LoadFontDefault` is a local symbol in the dylib. The Makefile specifies the `.a` path directly plus required frameworks (Cocoa, IOKit, CoreGraphics, CoreVideo).
 
 ---
 

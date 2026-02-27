@@ -21,7 +21,7 @@ INCLUDES_RAYLIB := -I$(RAYLIB_INCLUDE) $(INCLUDES)
 # Platform-specific settings
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
-    LDFLAGS_RAYLIB := -L$(RAYLIB_LIB) -lraylib -framework OpenGL -framework CoreFoundation
+    LDFLAGS_RAYLIB := $(RAYLIB_LIB)/libraylib.a -framework OpenGL -framework CoreFoundation -framework Cocoa -framework IOKit -framework CoreGraphics -framework CoreVideo -lobjc
 else ifeq ($(UNAME_S),Linux)
     LDFLAGS_RAYLIB := -L$(RAYLIB_LIB) -lraylib -lGL -lX11 -lEGL
 endif
@@ -31,7 +31,7 @@ endif
 # Targets
 .PHONY: all run test clean
 
-all: graphics_example autolayout_test drawing_3d_example entity_mapping_test headless_validation
+all: graphics_example autolayout_test drawing_3d_example entity_mapping_test headless_validation perf_stress_test calendar_stress_test
 
 graphics_example: graphics_example.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
@@ -56,6 +56,16 @@ entity_mapping_test: entity_mapping_test.cpp entity_mapping_test_helper.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 	@echo "Built: entity_mapping_test"
 
+# Performance stress tests - no raylib dependency
+perf_stress_test: perf_stress_test.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+	@echo "Built: perf_stress_test"
+
+# Calendar layout stress test - full rendering pipeline
+calendar_stress_test: calendar_stress_test.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
+	@echo "Built: calendar_stress_test"
+
 run: graphics_example
 	./graphics_example
 
@@ -68,7 +78,7 @@ test: autolayout_test drawing_3d_example entity_mapping_test
 	./entity_mapping_test
 
 clean:
-	rm -f graphics_example autolayout_test drawing_3d_example entity_mapping_test headless_validation
+	rm -f graphics_example autolayout_test drawing_3d_example entity_mapping_test headless_validation perf_stress_test calendar_stress_test
 	rm -f graphics_example_output.png
 	rm -rf graphics_example_captures/
 	rm -rf headless_validation_output/
