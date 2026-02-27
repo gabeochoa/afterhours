@@ -194,107 +194,70 @@ static void bench_entity_queries() {
 
 // ── 3. Autolayout benchmarks ──
 
-static Entity *make_widget(EntityCollection &coll, EntityID parent_id, int idx,
-                           Size w, Size h) {
-  auto &e = coll.createEntity();
-  auto &cmp = e.addComponent<UIComponent>();
-  cmp.parent = parent_id;
-  cmp.desired[Axis::X] = w;
-  cmp.desired[Axis::Y] = h;
-  (void)idx;
-  return &e;
-}
+struct LayoutTestHarness {
+  std::vector<std::unique_ptr<Entity>> entities;
+  std::vector<Entity *> mapping;
+
+  Entity &make_entity() {
+    entities.push_back(std::make_unique<Entity>());
+    Entity &e = *entities.back();
+    while (mapping.size() <= static_cast<size_t>(e.id))
+      mapping.push_back(nullptr);
+    mapping[e.id] = &e;
+    return e;
+  }
+
+  Entity &make_ui(Size w, Size h, EntityID parent_id = -1) {
+    Entity &e = make_entity();
+    auto &ui = e.addComponent<UIComponent>(e.id);
+    ui.set_desired_width(w);
+    ui.set_desired_height(h);
+    if (parent_id >= 0) {
+      ui.set_parent(parent_id);
+      mapping[parent_id]->get<UIComponent>().add_child(e.id);
+    }
+    return e;
+  }
+
+  void layout(Entity &root) {
+    AutoLayout::autolayout(root.get<UIComponent>(), {800, 600}, mapping, false);
+  }
+};
 
 static void bench_autolayout() {
   printf("\n=== Autolayout ===\n");
 
-  // Flat list: 1 root + N children (wide tree)
-  for (int children_count : {50, 200, 500, 1000}) {
+  for (int children_count : {50, 200, 500, 1000, 2000}) {
     char name[128];
     snprintf(name, sizeof(name), "flat layout: 1 root + %d children",
              children_count);
     bench(name, 20, [children_count]() {
       ENTITY_ID_GEN.store(0);
-      EntityCollection coll;
-      EntityHelper::set_default_collection(&coll);
-
-      auto &root = coll.createEntity();
-      auto &root_cmp = root.addComponent<UIComponent>();
-      root_cmp.desired[Axis::X] = pixels(800);
-      root_cmp.desired[Axis::Y] = pixels(600);
-      root_cmp.flex_direction = FlexDirection::Column;
-
-      std::vector<Entity *> mapping;
-      auto ensure = [&](EntityID id) {
-        while (mapping.size() <= static_cast<size_t>(id))
-          mapping.push_back(nullptr);
-      };
-      ensure(root.id);
-      mapping[root.id] = &root;
-
-      for (int i = 0; i < children_count; ++i) {
-        Entity *child = make_widget(coll, root.id, i, percent(1.f), pixels(20));
-        child->get<UIComponent>().parent = root.id;
-        root_cmp.children.push_back(child->id);
-        ensure(child->id);
-        mapping[child->id] = child;
-      }
-
-      coll.merge_entity_arrays();
-
-      AutoLayout layout({800, 600}, mapping);
-      layout.calculate_standalone(root_cmp);
-      layout.calculate_those_with_parents(root_cmp);
-      layout.compute_relative_positions(root_cmp);
-
-      EntityHelper::set_default_collection(nullptr);
+      LayoutTestHarness h;
+      auto &root = h.make_ui(pixels(800), pixels(600));
+      root.get<UIComponent>().set_flex_direction(FlexDirection::Column);
+      for (int i = 0; i < children_count; ++i)
+        h.make_ui(percent(1.f), pixels(20), root.id);
+      h.layout(root);
     });
   }
 
-  // Deep tree: chain of nested widgets (depth stress)
   for (int depth : {10, 50, 100, 200}) {
     char name[128];
     snprintf(name, sizeof(name), "deep layout: depth=%d", depth);
     bench(name, 50, [depth]() {
       ENTITY_ID_GEN.store(0);
-      EntityCollection coll;
-      EntityHelper::set_default_collection(&coll);
-
-      std::vector<Entity *> mapping;
-      auto ensure = [&](EntityID id) {
-        while (mapping.size() <= static_cast<size_t>(id))
-          mapping.push_back(nullptr);
-      };
-
-      auto &root = coll.createEntity();
-      auto &root_cmp = root.addComponent<UIComponent>();
-      root_cmp.desired[Axis::X] = pixels(800);
-      root_cmp.desired[Axis::Y] = pixels(600);
-      ensure(root.id);
-      mapping[root.id] = &root;
-
+      LayoutTestHarness h;
+      auto &root = h.make_ui(pixels(800), pixels(600));
       Entity *parent = &root;
       for (int i = 0; i < depth; ++i) {
-        Entity *child = make_widget(coll, parent->id, i,
-                                    percent(0.95f), percent(0.95f));
-        parent->get<UIComponent>().children.push_back(child->id);
-        ensure(child->id);
-        mapping[child->id] = child;
-        parent = child;
+        auto &child = h.make_ui(percent(0.95f), percent(0.95f), parent->id);
+        parent = &child;
       }
-
-      coll.merge_entity_arrays();
-
-      AutoLayout layout({800, 600}, mapping);
-      layout.calculate_standalone(root_cmp);
-      layout.calculate_those_with_parents(root_cmp);
-      layout.compute_relative_positions(root_cmp);
-
-      EntityHelper::set_default_collection(nullptr);
+      h.layout(root);
     });
   }
 
-  // Realistic UI tree: root with sections, each having children
   for (int sections : {5, 20, 50}) {
     int items_per = 10;
     char name[128];
@@ -303,49 +266,35 @@ static void bench_autolayout() {
              items_per, sections * items_per + sections + 1);
     bench(name, 30, [sections, items_per]() {
       ENTITY_ID_GEN.store(0);
-      EntityCollection coll;
-      EntityHelper::set_default_collection(&coll);
-
-      std::vector<Entity *> mapping;
-      auto ensure = [&](EntityID id) {
-        while (mapping.size() <= static_cast<size_t>(id))
-          mapping.push_back(nullptr);
-      };
-
-      auto &root = coll.createEntity();
-      auto &root_cmp = root.addComponent<UIComponent>();
-      root_cmp.desired[Axis::X] = pixels(1200);
-      root_cmp.desired[Axis::Y] = pixels(800);
-      root_cmp.flex_direction = FlexDirection::Column;
-      ensure(root.id);
-      mapping[root.id] = &root;
-
+      LayoutTestHarness h;
+      auto &root = h.make_ui(pixels(800), pixels(600));
+      root.get<UIComponent>().set_flex_direction(FlexDirection::Column);
       for (int s = 0; s < sections; ++s) {
-        Entity *section = make_widget(coll, root.id, s,
-                                      percent(1.f), children());
-        section->get<UIComponent>().flex_direction = FlexDirection::Column;
-        root_cmp.children.push_back(section->id);
-        ensure(section->id);
-        mapping[section->id] = section;
-
-        for (int i = 0; i < items_per; ++i) {
-          Entity *item = make_widget(coll, section->id, i,
-                                     percent(1.f), pixels(30));
-          section->get<UIComponent>().children.push_back(item->id);
-          ensure(item->id);
-          mapping[item->id] = item;
-        }
+        auto &section = h.make_ui(percent(1.f), children(), root.id);
+        section.get<UIComponent>().set_flex_direction(FlexDirection::Column);
+        for (int i = 0; i < items_per; ++i)
+          h.make_ui(percent(1.f), pixels(30), section.id);
       }
+      h.layout(root);
+    });
+  }
 
-      coll.merge_entity_arrays();
+  // Layout-only: pre-built entities, measures only AutoLayout::autolayout
+  for (int children_count : {200, 1000, 2000}) {
+    char name[128];
+    snprintf(name, sizeof(name), "layout-only: %d children (no entity alloc)",
+             children_count);
 
-      AutoLayout layout({1200, 800}, mapping);
-      layout.calculate_standalone(root_cmp);
-      layout.calculate_those_with_parents(root_cmp);
-      layout.calculate_those_with_children(root_cmp);
-      layout.compute_relative_positions(root_cmp);
+    ENTITY_ID_GEN.store(0);
+    LayoutTestHarness h;
+    auto &root = h.make_ui(pixels(800), pixels(600));
+    root.get<UIComponent>().set_flex_direction(FlexDirection::Column);
+    for (int i = 0; i < children_count; ++i)
+      h.make_ui(percent(1.f), pixels(20), root.id);
 
-      EntityHelper::set_default_collection(nullptr);
+    bench(name, 50, [&h, &root]() {
+      AutoLayout::autolayout(root.get<UIComponent>(), {800, 600},
+                             h.mapping, false);
     });
   }
 }

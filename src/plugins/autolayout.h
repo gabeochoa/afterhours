@@ -46,6 +46,7 @@ struct SmallVector {
 struct AutoLayout {
   window_manager::Resolution resolution;
   std::vector<Entity *> mapping;
+  std::vector<UIComponent *> cmp_cache_;
   bool enable_grid_snapping = false;
   float ui_scale = 1.0f;
 
@@ -53,9 +54,19 @@ struct AutoLayout {
              const std::vector<Entity *> &mapping_ = {})
       : resolution(rez), mapping(mapping_) {}
 
-  /// Resolve a pixel value respecting the component's scaling mode.
-  /// In Adaptive mode, pixels are multiplied by ui_scale.
-  /// In Proportional mode (default), pixels are returned as-is.
+  void build_cmp_cache() {
+    cmp_cache_.resize(mapping.size(), nullptr);
+    for (size_t i = 0; i < mapping.size(); ++i) {
+      if (mapping[i] && mapping[i]->has<UIComponent>()) {
+        cmp_cache_[i] = &mapping[i]->get<UIComponent>();
+      }
+    }
+  }
+
+  UIComponent &cmp(EntityID id) const {
+    return *cmp_cache_[static_cast<size_t>(id)];
+  }
+
   float resolve_pixels(float value, const UIComponent &widget) const {
     if (widget.resolved_scaling_mode == ScalingMode::Adaptive) {
       return value * ui_scale;
@@ -79,6 +90,8 @@ struct AutoLayout {
   }
 
   virtual UIComponent &to_cmp(EntityID id) {
+    if (!cmp_cache_.empty())
+      return cmp(id);
     return to_ent(id).get<UIComponent>();
   }
 
@@ -301,7 +314,7 @@ struct AutoLayout {
         [&](UIComponent &w, Axis a) { return compute_margin_for_exp(w, a); });
 
     for (EntityID child_id : widget.children) {
-      calculate_standalone(this->to_cmp(child_id));
+      calculate_standalone(cmp(child_id));
     }
   }
 
@@ -325,7 +338,7 @@ struct AutoLayout {
       return no_change;
     }
 
-    UIComponent &parent = this->to_cmp(widget.parent);
+    UIComponent &parent = cmp(widget.parent);
     if (parent.computed[axis] == -1) {
       if (is_dimension_percent_based(widget.desired_padding, axis)) {
         log_error("Trying to compute expectation for {}, but parent {} size "
@@ -373,7 +386,7 @@ struct AutoLayout {
       return no_change;
     }
 
-    UIComponent &parent = this->to_cmp(widget.parent);
+    UIComponent &parent = cmp(widget.parent);
     if (parent.computed[axis] == -1) {
       if (is_dimension_percent_based(widget.desired_padding, axis)) {
         log_error("Trying to compute padding percent expectation for {}, but "
@@ -436,7 +449,7 @@ struct AutoLayout {
       return no_change;
     }
 
-    UIComponent &parent = this->to_cmp(widget.parent);
+    UIComponent &parent = cmp(widget.parent);
     if (parent.computed[axis] == -1) {
       if (is_dimension_percent_based(widget.desired_padding, axis)) {
         log_error("Trying to compute margin percent expectation for {}, but "
@@ -503,14 +516,14 @@ struct AutoLayout {
                        });
 
     for (EntityID child_id : widget.children) {
-      calculate_those_with_parents(this->to_cmp(child_id));
+      calculate_those_with_parents(cmp(child_id));
     }
   }
 
   float _sum_children_axis_for_child_exp(UIComponent &widget, Axis axis) {
     float total_child_size = 0.f;
     for (EntityID entityID : widget.children) {
-      const UIComponent &child = this->to_cmp(entityID);
+      const UIComponent &child = cmp(entityID);
       // Dont worry about any children that are absolutely positioned
       if (child.absolute)
         continue;
@@ -544,7 +557,7 @@ struct AutoLayout {
   float _max_child_size(UIComponent &widget, Axis axis) {
     float max_child_size = 0.f;
     for (EntityID child_id : widget.children) {
-      UIComponent &child = this->to_cmp(child_id);
+      UIComponent &child = cmp(child_id);
       // Dont worry about any children that are absolutely positioned
       if (child.absolute)
         continue;
@@ -633,7 +646,7 @@ struct AutoLayout {
     // children probably needs this)
 
     for (EntityID child : widget.children) {
-      calculate_those_with_children(this->to_cmp(child));
+      calculate_those_with_children(cmp(child));
     }
 
     auto size_x = compute_size_for_child_expectation(widget, Axis::X);
@@ -658,7 +671,7 @@ struct AutoLayout {
       // Percent of parent's content area
       if (widget.parent == -1)
         return -1.f;
-      UIComponent &parent = this->to_cmp(widget.parent);
+      UIComponent &parent = cmp(widget.parent);
       float parent_size = parent.computed[axis] - parent.computed_margin[axis] -
                           parent.computed_padd[axis];
       return constraint.value * parent_size;
@@ -690,7 +703,7 @@ struct AutoLayout {
   void tax_refund(UIComponent &widget, Axis axis, float error) {
     SmallVector<UIComponent *, 16> layout_children;
     for (EntityID child_id : widget.children) {
-      UIComponent &child = this->to_cmp(child_id);
+      UIComponent &child = cmp(child_id);
       // Dont worry about any children that are absolutely positioned
       // Ignore anything that should be hidden
       if (child.absolute || child.should_hide)
@@ -752,7 +765,7 @@ struct AutoLayout {
 
     SmallVector<UIComponent *, 16> layout_children;
     for (EntityID child_id : widget.children) {
-      UIComponent &child_cmp = this->to_cmp(child_id);
+      UIComponent &child_cmp = cmp(child_id);
       // Dont worry about any children that are absolutely positioned
       // Ignore anything that should be hidden
       if (child_cmp.absolute || child_cmp.should_hide)
@@ -876,7 +889,7 @@ struct AutoLayout {
     const auto compute_error =
         [ACCEPTABLE_ERROR, &_total_child, &_max_child, &_solve_error_optional,
          &fix_violating_children, &widget, num_children,
-         resolved_gap](Axis axis, bool is_main_axis) -> float {
+         resolved_gap, &layout_children](Axis axis, bool is_main_axis) -> float {
       // Use content area (computed minus padding) as the available space
       // for children. Padding reserves visual inset space and should not
       // be available for child layout. This matches compute_rect_bounds
@@ -900,18 +913,29 @@ struct AutoLayout {
         return error;
       }
 
-      int i_x = 0;
-      while (error > ACCEPTABLE_ERROR) {
-        _solve_error_optional(axis, &error);
-        i_x++;
-
-        fix_violating_children(axis, error);
-        all_children = _total_child(axis);
-        error = all_children - my_size;
-        if (i_x > 10) {
-          log_trace("Hit {} iteration limit trying to solve violations {}",
-                    axis, error);
+      // Check if any children can actually be resized before looping
+      bool has_resizable = false;
+      for (UIComponent *child : layout_children) {
+        if (child->desired[axis].strictness < 1.f) {
+          has_resizable = true;
           break;
+        }
+      }
+
+      if (has_resizable) {
+        int i_x = 0;
+        while (error > ACCEPTABLE_ERROR) {
+          _solve_error_optional(axis, &error);
+          i_x++;
+
+          fix_violating_children(axis, error);
+          all_children = _total_child(axis);
+          error = all_children - my_size;
+          if (i_x > 10) {
+            log_trace("Hit {} iteration limit trying to solve violations {}",
+                      axis, error);
+            break;
+          }
         }
       }
       return error;
@@ -991,7 +1015,7 @@ struct AutoLayout {
     float total_main_size = 0.f;
 
     for (EntityID child_id : widget.children) {
-      UIComponent &child = this->to_cmp(child_id);
+      UIComponent &child = cmp(child_id);
       if (child.absolute || child.should_hide)
         continue;
 
@@ -1088,7 +1112,7 @@ struct AutoLayout {
     };
 
     for (EntityID child_id : widget.children) {
-      UIComponent &child = this->to_cmp(child_id);
+      UIComponent &child = cmp(child_id);
 
       // Dont worry about any children that are absolutely positioned
       if (child.absolute) {
@@ -1353,7 +1377,7 @@ struct AutoLayout {
 
     Vector2Type offset = Vector2Type{0.f, 0.f};
     if (widget.parent != -1) {
-      UIComponent &parent = this->to_cmp(widget.parent);
+      UIComponent &parent = cmp(widget.parent);
       // Include parent's position, margin, AND padding to position child
       // within parent's content area (after padding)
       offset = Vector2Type{
@@ -1371,14 +1395,33 @@ struct AutoLayout {
     // compute their bounds.
 
     for (EntityID child : widget.children) {
-      compute_rect_bounds(this->to_cmp(child));
+      compute_rect_bounds(cmp(child));
     }
   }
 
   void reset_computed_values(UIComponent &widget) {
     widget.reset_computed_values();
     for (EntityID child : widget.children) {
-      reset_computed_values(this->to_cmp(child));
+      reset_computed_values(cmp(child));
+    }
+  }
+
+  void reset_and_calculate_standalone(UIComponent &widget) {
+    widget.reset_computed_values();
+    widget.computed[Axis::X] = compute_size_for_standalone_exp(widget, Axis::X);
+    widget.computed[Axis::Y] = compute_size_for_standalone_exp(widget, Axis::Y);
+
+    write_each_spacing(widget, widget.computed_padd,
+                       [&](UIComponent &w, Axis a) {
+                         return compute_padding_for_standalone_exp(w, a);
+                       });
+
+    write_each_spacing(
+        widget, widget.computed_margin,
+        [&](UIComponent &w, Axis a) { return compute_margin_for_exp(w, a); });
+
+    for (EntityID child_id : widget.children) {
+      reset_and_calculate_standalone(cmp(child_id));
     }
   }
 
@@ -1390,19 +1433,13 @@ struct AutoLayout {
     AutoLayout al(resolution, map);
     al.set_grid_snapping(enable_grid_snapping);
     al.ui_scale = ui_scale;
+    al.build_cmp_cache();
 
-    al.reset_computed_values(widget);
-    // - (any) compute solos (doesnt rely on parent/child / other widgets)
-    al.calculate_standalone(widget);
-    // - (pre) parent sizes
+    al.reset_and_calculate_standalone(widget);
     al.calculate_those_with_parents(widget);
-    // - (post) children
     al.calculate_those_with_children(widget);
-    // - (pre) solve violations
     al.solve_violations(widget);
-    // - (pre) compute relative positions
     al.compute_relative_positions(widget);
-    // - (pre) compute rect bounds
     al.compute_rect_bounds(widget);
   }
 
