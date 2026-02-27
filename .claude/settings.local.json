@@ -2,7 +2,21 @@
   "permissions": {
     "allow": [
       "Bash(xargs:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "WebSearch",
+      "WebFetch(domain:web-platform-tests.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:wpt.fyi)",
+      "WebFetch(domain:www.w3.org)",
+      "WebFetch(domain:drafts.csswg.org)",
+      "WebFetch(domain:webkit.org)",
+      "WebFetch(domain:www.chromium.org)",
+      "WebFetch(domain:chromium.googlesource.com)",
+      "Bash(make headless_validation:*)",
+      "Bash(make:*)",
+      "Bash(clang++:*)",
+      "Bash(ln:*)"
     ]
   }
 }

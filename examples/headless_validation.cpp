@@ -122,7 +122,6 @@ static void draw_layout_tree(TestLayout &t, Entity &e, int depth = 0) {
 struct Scene {
   const char *name;
   std::function<void()> render;
-  bool requires_font = false;
 };
 
 // -- Tier 1: Primitives ------------------------------------------------------
@@ -590,6 +589,7 @@ static void scene_scissor_clipping() {
   draw_rectangle(raylib::Rectangle{50, 50, 500, 400},
                  raylib::Color{255, 100, 100, 255});
   draw_circle(250, 200, 150.0f, raylib::Color{100, 100, 255, 255});
+  draw_text("Clipped!", 120, 180, 30, raylib::Color{255, 255, 255, 255});
   end_scissor_mode();
 
   // Unclipped reference
@@ -808,6 +808,126 @@ static void scene_mixed_primitives_and_layout() {
                raylib::Color{255, 255, 255, 80});
   draw_line_ex(raylib::Vector2{800, 0}, raylib::Vector2{0, 600}, 2.0f,
                raylib::Color{255, 255, 255, 80});
+  draw_text("Overlay", 330, 280, 24, raylib::Color{255, 255, 255, 200});
+}
+
+static void scene_bevel_borders() {
+  raylib::ClearBackground(raylib::Color{192, 192, 192, 255});
+
+  auto draw_bevel = [](float x, float y, float w, float h, int thickness,
+                       bool raised) {
+    raylib::Color light = raised ? raylib::Color{240, 240, 240, 255}
+                                 : raylib::Color{80, 80, 80, 255};
+    raylib::Color dark = raised ? raylib::Color{80, 80, 80, 255}
+                                : raylib::Color{240, 240, 240, 255};
+    raylib::Color face{192, 192, 192, 255};
+
+    draw_rectangle(raylib::Rectangle{x, y, w, h}, face);
+    for (int i = 0; i < thickness; i++) {
+      float fi = static_cast<float>(i);
+      // Top edge
+      draw_line(static_cast<int>(x + fi), static_cast<int>(y + fi),
+                static_cast<int>(x + w - fi), static_cast<int>(y + fi), light);
+      // Left edge
+      draw_line(static_cast<int>(x + fi), static_cast<int>(y + fi),
+                static_cast<int>(x + fi), static_cast<int>(y + h - fi), light);
+      // Bottom edge
+      draw_line(static_cast<int>(x + fi), static_cast<int>(y + h - fi),
+                static_cast<int>(x + w - fi), static_cast<int>(y + h - fi),
+                dark);
+      // Right edge
+      draw_line(static_cast<int>(x + w - fi), static_cast<int>(y + fi),
+                static_cast<int>(x + w - fi), static_cast<int>(y + h - fi),
+                dark);
+    }
+  };
+
+  draw_bevel(50, 50, 200, 100, 2, true);
+  draw_text("Raised", 110, 90, 20, raylib::Color{0, 0, 0, 255});
+
+  draw_bevel(300, 50, 200, 100, 2, false);
+  draw_text("Sunken", 360, 90, 20, raylib::Color{0, 0, 0, 255});
+
+  draw_bevel(50, 200, 300, 60, 3, true);
+  draw_bevel(550, 200, 200, 200, 4, false);
+
+  draw_bevel(50, 310, 450, 250, 2, true);
+  draw_bevel(65, 325, 420, 220, 2, false);
+  draw_text("Nested bevel", 180, 420, 24, raylib::Color{0, 0, 0, 255});
+}
+
+static void scene_shadows() {
+  raylib::ClearBackground(raylib::Color{245, 245, 245, 255});
+
+  auto draw_shadow_rect = [](float x, float y, float w, float h, float offset,
+                             unsigned char shadow_alpha) {
+    draw_rectangle(raylib::Rectangle{x + offset, y + offset, w, h},
+                   raylib::Color{0, 0, 0, shadow_alpha});
+    draw_rectangle(raylib::Rectangle{x, y, w, h},
+                   raylib::Color{255, 255, 255, 255});
+    draw_rectangle_outline(raylib::Rectangle{x, y, w, h},
+                           raylib::Color{200, 200, 200, 255}, 1.0f);
+  };
+
+  draw_shadow_rect(50, 50, 180, 120, 3, 40);
+  draw_text("Light", 100, 100, 20, raylib::Color{80, 80, 80, 255});
+
+  draw_shadow_rect(300, 50, 180, 120, 5, 80);
+  draw_text("Medium", 345, 100, 20, raylib::Color{80, 80, 80, 255});
+
+  draw_shadow_rect(550, 50, 180, 120, 8, 120);
+  draw_text("Heavy", 600, 100, 20, raylib::Color{80, 80, 80, 255});
+
+  draw_shadow_rect(100, 250, 250, 200, 4, 60);
+  draw_shadow_rect(500, 250, 200, 300, 6, 90);
+
+  draw_shadow_rect(120, 280, 100, 80, 2, 30);
+}
+
+static void scene_text_sizes() {
+  raylib::ClearBackground(raylib::Color{255, 255, 255, 255});
+
+  const int sizes[] = {8, 10, 12, 14, 16, 20, 24, 32, 48, 64};
+  float y = 20;
+  for (int size : sizes) {
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%dpx: The quick brown fox", size);
+    draw_text(buf, 20, static_cast<int>(y), size,
+              raylib::Color{30, 30, 30, 255});
+    y += size + 8;
+  }
+}
+
+static void scene_color_spectrum() {
+  raylib::ClearBackground(raylib::Color{0, 0, 0, 255});
+
+  for (int x = 0; x < RENDER_W; x++) {
+    for (int y = 0; y < 200; y++) {
+      unsigned char r = static_cast<unsigned char>(x * 255 / RENDER_W);
+      unsigned char g = static_cast<unsigned char>(y * 255 / 200);
+      unsigned char b = 128;
+      draw_rectangle(raylib::Rectangle{(float)x, (float)y, 1, 1},
+                     raylib::Color{r, g, b, 255});
+    }
+  }
+
+  for (int x = 0; x < RENDER_W; x++) {
+    unsigned char v = static_cast<unsigned char>(x * 255 / RENDER_W);
+    draw_rectangle(raylib::Rectangle{(float)x, 220, 1, 40},
+                   raylib::Color{v, 0, 0, 255});
+    draw_rectangle(raylib::Rectangle{(float)x, 270, 1, 40},
+                   raylib::Color{0, v, 0, 255});
+    draw_rectangle(raylib::Rectangle{(float)x, 320, 1, 40},
+                   raylib::Color{0, 0, v, 255});
+    draw_rectangle(raylib::Rectangle{(float)x, 370, 1, 40},
+                   raylib::Color{v, v, v, 255});
+  }
+
+  for (int x = 0; x < RENDER_W; x++) {
+    unsigned char a = static_cast<unsigned char>(x * 255 / RENDER_W);
+    draw_rectangle(raylib::Rectangle{(float)x, 430, 1, 40},
+                   raylib::Color{255, 100, 50, a});
+  }
 }
 
 // ============================================================================
@@ -821,7 +941,7 @@ static std::vector<Scene> build_scene_list() {
       {"outlined_rects", scene_outlined_rects},
       {"rounded_rects", scene_rounded_rects},
       {"circles_lines_triangles", scene_circles_lines_triangles},
-      {"text", scene_text, true},
+      {"text", scene_text},
       {"alpha_blending", scene_alpha_blending},
       {"polygons", scene_polygons},
       // Tier 2: Layout
@@ -838,8 +958,12 @@ static std::vector<Scene> build_scene_list() {
       {"card_grid", scene_card_grid},
       // Tier 3: Visual components
       {"borders", scene_borders},
+      {"bevel_borders", scene_bevel_borders},
+      {"shadows", scene_shadows},
       {"scissor_clipping", scene_scissor_clipping},
       {"opacity_layers", scene_opacity_layers},
+      {"text_sizes", scene_text_sizes},
+      {"color_spectrum", scene_color_spectrum},
       // Tier 4: Edge cases
       {"subpixel_positions", scene_subpixel_positions},
       {"screen_edges", scene_screen_edges},
@@ -858,12 +982,15 @@ struct CompareResult {
   int first_mismatch_x = -1;
   int first_mismatch_y = -1;
   int total_mismatches = 0;
+  int total_pixels = 0;
   int max_channel_diff = 0;
+  double mismatch_pct = 0.0;
 };
 
 static CompareResult compare_and_diff(const std::filesystem::path &path_a,
                                       const std::filesystem::path &path_b,
-                                      const std::filesystem::path &diff_path) {
+                                      const std::filesystem::path &diff_path,
+                                      int tolerance = 0) {
   raylib::Image a = raylib::LoadImage(path_a.c_str());
   raylib::Image b = raylib::LoadImage(path_b.c_str());
 
@@ -872,7 +999,7 @@ static CompareResult compare_and_diff(const std::filesystem::path &path_a,
       raylib::UnloadImage(a);
     if (b.data)
       raylib::UnloadImage(b);
-    return {false, 0, 0, -1};
+    return {false, 0, 0, -1, 0, 0, 0.0};
   }
 
   if (a.width != b.width || a.height != b.height) {
@@ -880,24 +1007,22 @@ static CompareResult compare_and_diff(const std::filesystem::path &path_a,
             a.height, b.width, b.height);
     raylib::UnloadImage(a);
     raylib::UnloadImage(b);
-    return {false, 0, 0, -1};
+    return {false, 0, 0, -1, 0, 0, 0.0};
   }
 
   int pixel_count = a.width * a.height;
   int bytes = pixel_count * 4; // RGBA
 
-  // Fast path
+  // Fast path: exact match
   if (memcmp(a.data, b.data, bytes) == 0) {
     raylib::UnloadImage(a);
     raylib::UnloadImage(b);
-    return {true, 0, 0, 0};
+    return {true, 0, 0, 0, pixel_count, 0, 0.0};
   }
 
-  // Slow path: pixel-by-pixel comparison, generate diff image
   CompareResult result;
-  result.match = false;
+  result.total_pixels = pixel_count;
 
-  // Create diff image: white where match, red where mismatch
   raylib::Image diff = raylib::GenImageColor(a.width, a.height,
                                              raylib::Color{255, 255, 255, 255});
 
@@ -911,7 +1036,8 @@ static CompareResult compare_and_diff(const std::filesystem::path &path_a,
     int db = abs((int)pa[offset + 2] - (int)pb[offset + 2]);
     int da = abs((int)pa[offset + 3] - (int)pb[offset + 3]);
     int channel_max = std::max({dr, dg, db, da});
-    if (channel_max > 0) {
+
+    if (channel_max > tolerance) {
       result.total_mismatches++;
       result.max_channel_diff = std::max(result.max_channel_diff, channel_max);
       int x = i % a.width;
@@ -920,11 +1046,21 @@ static CompareResult compare_and_diff(const std::filesystem::path &path_a,
         result.first_mismatch_x = x;
         result.first_mismatch_y = y;
       }
-      raylib::ImageDrawPixel(&diff, x, y, raylib::Color{255, 0, 0, 255});
+      unsigned char intensity = static_cast<unsigned char>(
+          std::min(255, channel_max * 255 / std::max(1, 255 - tolerance)));
+      raylib::ImageDrawPixel(&diff, x, y,
+                             raylib::Color{intensity, 0, 0, 255});
     }
   }
 
-  raylib::ExportImage(diff, diff_path.c_str());
+  result.mismatch_pct =
+      100.0 * result.total_mismatches / std::max(1, pixel_count);
+  result.match = (result.total_mismatches == 0);
+
+  if (!result.match) {
+    raylib::ExportImage(diff, diff_path.c_str());
+  }
+
   raylib::UnloadImage(diff);
   raylib::UnloadImage(a);
   raylib::UnloadImage(b);
@@ -939,6 +1075,10 @@ static CompareResult compare_and_diff(const std::filesystem::path &path_a,
 int main(int argc, char *argv[]) {
   std::string scene_filter;
   std::filesystem::path output_dir = "headless_validation_output";
+  int tolerance = 0;
+  bool verbose = false;
+  bool quiet = false;
+  bool list_scenes = false;
 
   for (int i = 1; i < argc; i++) {
     std::string arg = argv[i];
@@ -946,14 +1086,39 @@ int main(int argc, char *argv[]) {
       scene_filter = arg.substr(8);
     } else if (arg.starts_with("--output-dir=")) {
       output_dir = arg.substr(13);
+    } else if (arg.starts_with("--tolerance=")) {
+      tolerance = std::atoi(arg.substr(12).c_str());
+    } else if (arg == "--verbose" || arg == "-v") {
+      verbose = true;
+    } else if (arg == "--quiet" || arg == "-q") {
+      quiet = true;
+    } else if (arg == "--list") {
+      list_scenes = true;
     } else if (arg == "--help" || arg == "-h") {
       printf("Usage: %s [options]\n", argv[0]);
-      printf("  --scene=NAME       Run only the named scene\n");
-      printf("  --output-dir=PATH  Output directory (default: "
+      printf("  --scene=NAME        Run only the named scene\n");
+      printf("  --output-dir=PATH   Output directory (default: "
              "headless_validation_output)\n");
-      printf("  --help, -h         Show this help\n");
+      printf("  --tolerance=N       Max per-channel diff to ignore (0=exact, "
+             "default: 0)\n");
+      printf("  --verbose, -v       Show detailed per-scene info\n");
+      printf("  --quiet, -q         Suppress raylib INFO logs\n");
+      printf("  --list              List available scenes and exit\n");
+      printf("  --help, -h          Show this help\n");
       return 0;
     }
+  }
+
+  if (list_scenes) {
+    auto scenes = build_scene_list();
+    printf("Available scenes (%zu):\n", scenes.size());
+    for (const auto &s : scenes)
+      printf("  %s\n", s.name);
+    return 0;
+  }
+
+  if (quiet) {
+    raylib::SetTraceLogLevel(raylib::LOG_WARNING);
   }
 
   std::filesystem::create_directories(output_dir);
@@ -964,8 +1129,10 @@ int main(int argc, char *argv[]) {
   int skip = 0;
 
   printf("=== Headless Rendering Validation ===\n");
-  printf("Render size: %dx%d\n", RENDER_W, RENDER_H);
-  printf("Output dir:  %s\n\n", output_dir.c_str());
+  printf("Resolution:  %dx%d\n", RENDER_W, RENDER_H);
+  printf("Tolerance:   %d (per-channel)\n", tolerance);
+  printf("Output dir:  %s\n", output_dir.c_str());
+  printf("==============================\n");
 
   // Filter scenes
   std::vector<Scene *> active_scenes;
@@ -1036,30 +1203,29 @@ int main(int argc, char *argv[]) {
         output_dir / (std::string(scene->name) + "_windowed.png");
     auto diff_path = output_dir / (std::string(scene->name) + "_diff.png");
 
-    if (scene->requires_font) {
-      printf("  SKIP: %s (requires font — headless has no default font)\n",
-             scene->name);
-      skip++;
-      continue;
-    }
-
-    auto result = compare_and_diff(headless_path, windowed_path, diff_path);
+    auto result =
+        compare_and_diff(headless_path, windowed_path, diff_path, tolerance);
     if (result.match) {
-      printf("  PASS: %s\n", scene->name);
+      printf("  PASS  %-35s", scene->name);
+      if (verbose)
+        printf(" (%d pixels)", result.total_pixels);
+      printf("\n");
       pass++;
     } else {
-      printf("  FAIL: %s (%d mismatched pixels, max channel diff=%d, first at "
-             "(%d,%d))\n",
-             scene->name, result.total_mismatches, result.max_channel_diff,
-             result.first_mismatch_x, result.first_mismatch_y);
+      printf("  FAIL  %-35s %d px (%.2f%%) differ, max=%d, first=(%d,%d)\n",
+             scene->name, result.total_mismatches, result.mismatch_pct,
+             result.max_channel_diff, result.first_mismatch_x,
+             result.first_mismatch_y);
       fail++;
     }
   }
 
-  printf("\n--- Summary ---\n");
-  printf("%d passed, %d failed", pass, fail);
+  printf("==============================\n");
+  printf("%d/%d passed", pass, pass + fail);
   if (skip > 0)
     printf(", %d skipped", skip);
+  if (tolerance > 0)
+    printf(" (tolerance=%d)", tolerance);
   printf("\n");
 
   if (fail > 0) {

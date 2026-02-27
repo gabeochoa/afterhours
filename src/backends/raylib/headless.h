@@ -5,6 +5,10 @@
 #include <filesystem>
 #include <string>
 
+#if defined(__APPLE__) || defined(__linux__)
+#include <dlfcn.h>
+#endif
+
 #include "../../graphics/platform/headless_gl.h"
 #include "../../graphics_common.h"
 
@@ -42,6 +46,12 @@ struct RaylibHeadless {
     raylib::rlglInit(cfg.width, cfg.height);
     raylib::rlSetBlendMode(raylib::RL_BLEND_ALPHA);
 
+    // Try to enable font/texture loading that normally requires InitWindow.
+    // isGpuReady and LoadFontDefault are internal raylib symbols — available
+    // when statically linked but absent when dynamically linked. We use
+    // dlsym to probe at runtime so there's no hard link-time dependency.
+    try_load_default_font();
+
     // Create render texture for offscreen rendering
     render_texture = raylib::LoadRenderTexture(cfg.width, cfg.height);
 
@@ -64,6 +74,32 @@ struct RaylibHeadless {
       gl.shutdown();
       initialized = false;
     }
+  }
+
+  inline void try_load_default_font() {
+#ifdef __APPLE__
+    void *handle = dlopen(NULL, RTLD_LAZY);
+    if (!handle)
+      return;
+    auto *gpu_ready = static_cast<bool *>(dlsym(handle, "isGpuReady"));
+    auto load_font =
+        reinterpret_cast<void (*)()>(dlsym(handle, "LoadFontDefault"));
+    if (gpu_ready)
+      *gpu_ready = true;
+    if (load_font)
+      load_font();
+    dlclose(handle);
+#elif defined(__linux__)
+    // Linux: use dlsym with RTLD_DEFAULT
+    auto *gpu_ready =
+        static_cast<bool *>(dlsym(RTLD_DEFAULT, "isGpuReady"));
+    auto load_font =
+        reinterpret_cast<void (*)()>(dlsym(RTLD_DEFAULT, "LoadFontDefault"));
+    if (gpu_ready)
+      *gpu_ready = true;
+    if (load_font)
+      load_font();
+#endif
   }
 
   /// Returns true - this is a headless backend.
