@@ -19,7 +19,8 @@
 //   ./calendar_stress_test --meetings=30  # 30 meetings per day
 //   ./calendar_stress_test --hours=12     # 12 visible hours (8am-8pm)
 //   ./calendar_stress_test --frames=10    # render 10 frames then exit
-//   ./calendar_stress_test --headless     # headless mode (no window)
+//   ./calendar_stress_test --headless     # hidden window (still renders)
+//   ./calendar_stress_test --layout-only  # no window, entity+layout only
 
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
@@ -158,45 +159,47 @@ static std::vector<Meeting> generate_meetings(int count, int day_seed,
 
 static const char *DAY_NAMES[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
-static FrameTiming render_calendar_frame(int num_days, int meetings_per_day,
-                                         int visible_hours, float start_hour) {
-  FrameTiming timing;
-  double t0 = now_ms();
-
-  // ── Entity creation ──
-  double t_entity_start = now_ms();
-  ENTITY_ID_GEN.store(0);
+struct CalendarBuildResult {
   CalendarLayout cal;
+  std::vector<std::vector<Meeting>> all_meetings;
+  EntityID root_id;
+  EntityID header_id;
+  EntityID body_id;
+  EntityID gutter_id;
+};
 
-  // Root
+static CalendarBuildResult build_calendar(int num_days, int meetings_per_day,
+                                          int visible_hours, float start_hour) {
+  CalendarBuildResult result;
+  auto &cal = result.cal;
+
   auto &root = cal.make_ui(pixels(WINDOW_W), pixels(WINDOW_H));
   cal.ui(root).set_flex_direction(FlexDirection::Column);
+  result.root_id = root.id;
 
-  // ── Header bar ──
   auto &header = cal.make_ui(percent(1.0f), pixels(50));
   cal.ui(header).set_flex_direction(FlexDirection::Row);
   cal.add_child(root, header);
+  result.header_id = header.id;
 
-  // Time gutter label (top-left corner)
   auto &gutter_label = cal.make_ui(pixels(60), percent(1.0f));
   cal.add_child(header, gutter_label);
 
-  // Day headers
   for (int d = 0; d < num_days; ++d) {
     auto &day_hdr = cal.make_ui(expand(1), percent(1.0f));
     day_hdr.addComponent<HasLabel>(DAY_NAMES[d % 7]);
     cal.add_child(header, day_hdr);
   }
 
-  // ── Body (time gutter + day columns) ──
   auto &body = cal.make_ui(percent(1.0f), expand(1));
   cal.ui(body).set_flex_direction(FlexDirection::Row);
   cal.add_child(root, body);
+  result.body_id = body.id;
 
-  // Time gutter
   auto &gutter = cal.make_ui(pixels(60), percent(1.0f));
   cal.ui(gutter).set_flex_direction(FlexDirection::Column);
   cal.add_child(body, gutter);
+  result.gutter_id = gutter.id;
 
   for (int h = 0; h < visible_hours; ++h) {
     auto &hour_label = cal.make_ui(percent(1.0f), expand(1));
@@ -206,10 +209,8 @@ static FrameTiming render_calendar_frame(int num_days, int meetings_per_day,
     cal.add_child(gutter, hour_label);
   }
 
-  // Day columns with meetings
-  std::vector<std::vector<Meeting>> all_meetings;
   for (int d = 0; d < num_days; ++d) {
-    all_meetings.push_back(
+    result.all_meetings.push_back(
         generate_meetings(meetings_per_day, d, visible_hours, start_hour));
 
     auto &day_col = cal.make_ui(expand(1), percent(1.0f));
@@ -217,9 +218,8 @@ static FrameTiming render_calendar_frame(int num_days, int meetings_per_day,
     cal.ui(day_col).set_desired_padding(pixels(1), Axis::right);
     cal.add_child(body, day_col);
 
-    // Meeting blocks are absolute-positioned within the day column
     for (int m = 0; m < meetings_per_day; ++m) {
-      const Meeting &mtg = all_meetings.back()[m];
+      const Meeting &mtg = result.all_meetings.back()[m];
       float top_pct = (mtg.start_hour - start_hour) /
                       static_cast<float>(visible_hours);
       float height_pct = mtg.duration_hours / static_cast<float>(visible_hours);
@@ -233,149 +233,145 @@ static FrameTiming render_calendar_frame(int num_days, int meetings_per_day,
     }
   }
 
-  timing.entity_count = static_cast<int>(cal.entities.size());
-  timing.entity_ms = now_ms() - t_entity_start;
+  return result;
+}
 
-  // ── Layout ──
-  double t_layout_start = now_ms();
-  cal.run(root);
-  timing.layout_ms = now_ms() - t_layout_start;
+static void render_calendar(CalendarBuildResult &b, int num_days) {
+  auto &cal = b.cal;
+  auto &all_meetings = b.all_meetings;
 
-  // ── Render ──
-  double t_render_start = now_ms();
+  auto find_entity = [&](EntityID id) -> Entity & {
+    return *cal.entities[static_cast<size_t>(id)];
+  };
 
-  // Background
   raylib::ClearBackground(raylib::Color{255, 255, 255, 255});
 
-  // Header background
   {
-    auto r = cal.ui(header).rect();
+    auto r = cal.ui(find_entity(b.header_id)).rect();
     draw_rectangle(r, raylib::Color{245, 245, 245, 255});
     draw_rectangle(
         raylib::Rectangle{r.x, r.y + r.height - 1, r.width, 1},
         raylib::Color{218, 220, 224, 255});
   }
 
-  // Day header labels
-  for (EntityID child_id : cal.ui(header).children) {
-    for (auto &ep : cal.entities) {
-      if (ep->id != child_id) continue;
-      if (!ep->has<HasLabel>()) break;
-      auto rect = cal.ui(*ep).rect();
-      draw_text(ep->get<HasLabel>().label.c_str(),
-                rect.x + rect.width / 2.f - 15.f,
-                rect.y + rect.height / 2.f - 8.f, 16,
-                raylib::Color{60, 64, 67, 255});
-      // Column separator
-      draw_rectangle(
-          raylib::Rectangle{rect.x, rect.y, 1, rect.height},
-          raylib::Color{218, 220, 224, 255});
-    }
+  for (EntityID child_id : cal.ui(find_entity(b.header_id)).children) {
+    Entity &ep = find_entity(child_id);
+    if (!ep.has<HasLabel>()) continue;
+    auto rect = cal.ui(ep).rect();
+    draw_text(ep.get<HasLabel>().label.c_str(),
+              rect.x + rect.width / 2.f - 15.f,
+              rect.y + rect.height / 2.f - 8.f, 16,
+              raylib::Color{60, 64, 67, 255});
+    draw_rectangle(
+        raylib::Rectangle{rect.x, rect.y, 1, rect.height},
+        raylib::Color{218, 220, 224, 255});
   }
 
-  // Time gutter labels + hour grid lines
-  float body_x = cal.ui(body).rect().x + 60;
-  float body_w = cal.ui(body).rect().width - 60;
-  for (EntityID child_id : cal.ui(gutter).children) {
-    for (auto &ep : cal.entities) {
-      if (ep->id != child_id) continue;
-      if (!ep->has<HasLabel>()) break;
-      auto rect = cal.ui(*ep).rect();
-      draw_text(ep->get<HasLabel>().label.c_str(),
-                rect.x + 5, rect.y + 2, 11,
-                raylib::Color{112, 117, 122, 255});
-      // Grid line
-      draw_rectangle(
-          raylib::Rectangle{body_x, rect.y, body_w, 1},
-          raylib::Color{218, 220, 224, 80});
-    }
+  auto body_rect = cal.ui(find_entity(b.body_id)).rect();
+  float body_x = body_rect.x + 60;
+  float body_w = body_rect.width - 60;
+  for (EntityID child_id : cal.ui(find_entity(b.gutter_id)).children) {
+    Entity &ep = find_entity(child_id);
+    if (!ep.has<HasLabel>()) continue;
+    auto rect = cal.ui(ep).rect();
+    draw_text(ep.get<HasLabel>().label.c_str(),
+              rect.x + 5, rect.y + 2, 11,
+              raylib::Color{112, 117, 122, 255});
+    draw_rectangle(
+        raylib::Rectangle{body_x, rect.y, body_w, 1},
+        raylib::Color{218, 220, 224, 80});
   }
 
-  // Day column separators
-  for (EntityID child_id : cal.ui(body).children) {
-    for (auto &ep : cal.entities) {
-      if (ep->id != child_id) continue;
-      auto rect = cal.ui(*ep).rect();
-      draw_rectangle(
-          raylib::Rectangle{rect.x, rect.y, 1, rect.height},
-          raylib::Color{218, 220, 224, 128});
-    }
+  for (EntityID child_id : cal.ui(find_entity(b.body_id)).children) {
+    auto rect = cal.ui(find_entity(child_id)).rect();
+    draw_rectangle(
+        raylib::Rectangle{rect.x, rect.y, 1, rect.height},
+        raylib::Color{218, 220, 224, 128});
   }
 
-  // Meeting blocks
   int meeting_day = 0;
-  for (EntityID day_col_id : cal.ui(body).children) {
-    if (meeting_day == 0) { meeting_day++; continue; } // skip gutter
+  for (EntityID day_col_id : cal.ui(find_entity(b.body_id)).children) {
+    if (meeting_day == 0) { meeting_day++; continue; }
     int day_idx = meeting_day - 1;
     if (day_idx >= num_days) break;
 
-    for (auto &ep : cal.entities) {
-      if (ep->id != day_col_id) continue;
+    int mi = 0;
+    for (EntityID block_id : cal.ui(find_entity(day_col_id)).children) {
+      Entity &bp = find_entity(block_id);
+      auto rect = cal.ui(bp).rect();
+      if (rect.height < 2) { mi++; continue; }
 
-      int mi = 0;
-      for (EntityID block_id : cal.ui(*ep).children) {
-        for (auto &bp : cal.entities) {
-          if (bp->id != block_id) continue;
-          auto rect = cal.ui(*bp).rect();
-          if (rect.height < 2) break;
+      const Meeting &mtg = all_meetings[day_idx][mi];
 
-          const Meeting &mtg = all_meetings[day_idx][mi];
+      draw_rectangle_rounded(rect, 0.15f, 4, mtg.color,
+                             std::bitset<4>("1111"));
 
-          // Meeting background (rounded)
-          draw_rectangle_rounded(rect, 0.15f, 4, mtg.color,
-                                 std::bitset<4>("1111"));
+      draw_rectangle(
+          raylib::Rectangle{rect.x, rect.y + 2, 3, rect.height - 4},
+          raylib::Color{
+              static_cast<unsigned char>(std::max(0, mtg.color.r - 40)),
+              static_cast<unsigned char>(std::max(0, mtg.color.g - 40)),
+              static_cast<unsigned char>(std::max(0, mtg.color.b - 40)),
+              255});
 
-          // Left accent bar
-          draw_rectangle(
-              raylib::Rectangle{rect.x, rect.y + 2, 3, rect.height - 4},
-              raylib::Color{
-                  static_cast<unsigned char>(std::max(0, mtg.color.r - 40)),
-                  static_cast<unsigned char>(std::max(0, mtg.color.g - 40)),
-                  static_cast<unsigned char>(std::max(0, mtg.color.b - 40)),
-                  255});
-
-          // Title text
-          if (rect.height > 14) {
-            float font_size = std::min(12.f, rect.height - 4.f);
-            draw_text(mtg.title.c_str(), rect.x + 7, rect.y + 3,
-                      static_cast<int>(font_size),
-                      raylib::Color{255, 255, 255, 255});
-          }
-
-          // Time range text
-          if (rect.height > 28) {
-            int sh = static_cast<int>(mtg.start_hour);
-            int sm = static_cast<int>((mtg.start_hour - sh) * 60);
-            float end = mtg.start_hour + mtg.duration_hours;
-            int eh = static_cast<int>(end);
-            int em = static_cast<int>((end - eh) * 60);
-            auto time_str = fmt::format("{:d}:{:02d}-{:d}:{:02d}", sh, sm, eh, em);
-            draw_text(time_str.c_str(), rect.x + 7, rect.y + 17, 10,
-                      raylib::Color{255, 255, 255, 180});
-          }
-        }
-        mi++;
-        if (mi >= static_cast<int>(all_meetings[day_idx].size())) break;
+      if (rect.height > 14) {
+        float font_size = std::min(12.f, rect.height - 4.f);
+        draw_text(mtg.title.c_str(), rect.x + 7, rect.y + 3,
+                  static_cast<int>(font_size),
+                  raylib::Color{255, 255, 255, 255});
       }
+
+      if (rect.height > 28) {
+        int sh = static_cast<int>(mtg.start_hour);
+        int sm = static_cast<int>((mtg.start_hour - sh) * 60);
+        float end = mtg.start_hour + mtg.duration_hours;
+        int eh = static_cast<int>(end);
+        int em = static_cast<int>((end - eh) * 60);
+        auto time_str = fmt::format("{:d}:{:02d}-{:d}:{:02d}", sh, sm, eh, em);
+        draw_text(time_str.c_str(), rect.x + 7, rect.y + 17, 10,
+                  raylib::Color{255, 255, 255, 180});
+      }
+      mi++;
+      if (mi >= static_cast<int>(all_meetings[day_idx].size())) break;
     }
     meeting_day++;
   }
 
-  // "Now" line (red horizontal line at current simulated time)
   {
-    float now_hour = start_hour + static_cast<float>(visible_hours) * 0.4f;
-    float now_pct = (now_hour - start_hour) / static_cast<float>(visible_hours);
-    float body_top = cal.ui(body).rect().y;
-    float body_height = cal.ui(body).rect().height;
-    float y = body_top + now_pct * body_height;
+    int visible_hours = static_cast<int>(body_rect.height);
+    (void)visible_hours;
+    float now_pct = 0.4f;
+    float y = body_rect.y + now_pct * body_rect.height;
     draw_rectangle(
         raylib::Rectangle{body_x - 5, y - 1, body_w + 5, 2},
         raylib::Color{234, 67, 53, 200});
-    // Red dot
     draw_circle(body_x - 5, y, 5, raylib::Color{234, 67, 53, 255});
   }
+}
 
-  timing.render_ms = now_ms() - t_render_start;
+static FrameTiming run_frame(int num_days, int meetings_per_day,
+                             int visible_hours, float start_hour,
+                             bool layout_only) {
+  FrameTiming timing;
+  double t0 = now_ms();
+
+  double t_entity_start = now_ms();
+  ENTITY_ID_GEN.store(0);
+  auto built = build_calendar(num_days, meetings_per_day,
+                              visible_hours, start_hour);
+  timing.entity_count = static_cast<int>(built.cal.entities.size());
+  timing.entity_ms = now_ms() - t_entity_start;
+
+  double t_layout_start = now_ms();
+  built.cal.run(*built.cal.entities[static_cast<size_t>(built.root_id)]);
+  timing.layout_ms = now_ms() - t_layout_start;
+
+  if (!layout_only) {
+    double t_render_start = now_ms();
+    render_calendar(built, num_days);
+    timing.render_ms = now_ms() - t_render_start;
+  }
+
   timing.total_ms = now_ms() - t0;
   return timing;
 }
@@ -389,6 +385,7 @@ int main(int argc, char *argv[]) {
   float start_hour = 7.0f;
   int num_frames = 60;
   bool headless = false;
+  bool layout_only = false;
 
   for (int i = 1; i < argc; ++i) {
     if (strncmp(argv[i], "--days=", 7) == 0)
@@ -401,7 +398,12 @@ int main(int argc, char *argv[]) {
       num_frames = atoi(argv[i] + 9);
     else if (strcmp(argv[i], "--headless") == 0)
       headless = true;
+    else if (strcmp(argv[i], "--layout-only") == 0)
+      layout_only = true;
   }
+
+  const char *mode_str = layout_only ? "layout-only" :
+                         headless    ? "headless" : "windowed";
 
   int total_meetings = num_days * meetings_per_day;
   printf("Calendar Stress Test\n");
@@ -410,46 +412,51 @@ int main(int argc, char *argv[]) {
          num_days, meetings_per_day, total_meetings);
   printf("  Visible hours: %d (%.0f:00 - %.0f:00)\n",
          visible_hours, start_hour, start_hour + visible_hours);
-  printf("  Frames: %d, Mode: %s\n\n", num_frames,
-         headless ? "headless" : "windowed");
+  printf("  Frames: %d, Mode: %s\n\n", num_frames, mode_str);
 
-  // Init graphics -- use windowed mode with optional hidden window
-  if (headless) {
-    raylib::SetConfigFlags(raylib::FLAG_WINDOW_HIDDEN);
+  if (!layout_only) {
+    if (headless) {
+      raylib::SetConfigFlags(raylib::FLAG_WINDOW_HIDDEN);
+    }
+    raylib::SetTraceLogLevel(raylib::LOG_WARNING);
+    raylib::InitWindow(WINDOW_W, WINDOW_H, "Calendar Stress Test");
+    raylib::SetTargetFPS(0);
   }
-  raylib::SetTraceLogLevel(raylib::LOG_WARNING);
-  raylib::InitWindow(WINDOW_W, WINDOW_H, "Calendar Stress Test");
-  raylib::SetTargetFPS(0); // uncapped for benchmarking
 
-  // Collect frame timings
   std::vector<FrameTiming> timings;
   timings.reserve(num_frames);
 
   for (int frame = 0; frame < num_frames; ++frame) {
-    raylib::BeginDrawing();
+    if (!layout_only) raylib::BeginDrawing();
 
-    FrameTiming ft = render_calendar_frame(num_days, meetings_per_day,
-                                           visible_hours, start_hour);
+    FrameTiming ft = run_frame(num_days, meetings_per_day,
+                               visible_hours, start_hour, layout_only);
     timings.push_back(ft);
 
-    raylib::EndDrawing();
-
-    if (frame == 0) {
-      raylib::TakeScreenshot("calendar_stress_output.png");
+    if (!layout_only) {
+      raylib::EndDrawing();
+      if (frame == 0) {
+        raylib::TakeScreenshot("calendar_stress_output.png");
+      }
     }
   }
 
-  raylib::CloseWindow();
+  if (!layout_only) raylib::CloseWindow();
 
   // ── Report ──
-  printf("%-8s %10s %10s %10s %10s %8s\n",
-         "Frame", "Entity", "Layout", "Render", "Total", "Ents");
-  printf("--------------------------------------------------------------\n");
+  if (layout_only) {
+    printf("%-8s %10s %10s %10s %8s\n",
+           "Frame", "Entity", "Layout", "Total", "Ents");
+    printf("--------------------------------------------------\n");
+  } else {
+    printf("%-8s %10s %10s %10s %10s %8s\n",
+           "Frame", "Entity", "Layout", "Render", "Total", "Ents");
+    printf("--------------------------------------------------------------\n");
+  }
 
   double sum_entity = 0, sum_layout = 0, sum_render = 0, sum_total = 0;
   double max_entity = 0, max_layout = 0, max_render = 0, max_total = 0;
 
-  // Skip first frame (warmup)
   int start_frame = timings.size() > 1 ? 1 : 0;
 
   for (size_t i = start_frame; i < timings.size(); ++i) {
@@ -464,13 +471,17 @@ int main(int argc, char *argv[]) {
     max_total = std::max(max_total, ft.total_ms);
   }
 
-  // Print first 5 and last 5
   for (size_t i = 0; i < timings.size(); ++i) {
     if (i < 5 || i >= timings.size() - 3) {
       auto &ft = timings[i];
-      printf("%-8zu %9.2fms %9.2fms %9.2fms %9.2fms %8d\n",
-             i, ft.entity_ms, ft.layout_ms, ft.render_ms, ft.total_ms,
-             ft.entity_count);
+      if (layout_only) {
+        printf("%-8zu %9.2fms %9.2fms %9.2fms %8d\n",
+               i, ft.entity_ms, ft.layout_ms, ft.total_ms, ft.entity_count);
+      } else {
+        printf("%-8zu %9.2fms %9.2fms %9.2fms %9.2fms %8d\n",
+               i, ft.entity_ms, ft.layout_ms, ft.render_ms, ft.total_ms,
+               ft.entity_count);
+      }
     } else if (i == 5) {
       printf("  ...    (frames %zu-%zu omitted)\n", i, timings.size() - 4);
     }
@@ -479,15 +490,23 @@ int main(int argc, char *argv[]) {
   int count = static_cast<int>(timings.size()) - start_frame;
   if (count > 0) {
     printf("\n");
-    printf("%-8s %9.2fms %9.2fms %9.2fms %9.2fms\n", "AVG",
-           sum_entity / count, sum_layout / count,
-           sum_render / count, sum_total / count);
-    printf("%-8s %9.2fms %9.2fms %9.2fms %9.2fms\n", "MAX",
-           max_entity, max_layout, max_render, max_total);
+    if (layout_only) {
+      printf("%-8s %9.2fms %9.2fms %9.2fms\n", "AVG",
+             sum_entity / count, sum_layout / count, sum_total / count);
+      printf("%-8s %9.2fms %9.2fms %9.2fms\n", "MAX",
+             max_entity, max_layout, max_total);
+    } else {
+      printf("%-8s %9.2fms %9.2fms %9.2fms %9.2fms\n", "AVG",
+             sum_entity / count, sum_layout / count,
+             sum_render / count, sum_total / count);
+      printf("%-8s %9.2fms %9.2fms %9.2fms %9.2fms\n", "MAX",
+             max_entity, max_layout, max_render, max_total);
+    }
 
     double avg_total = sum_total / count;
     double fps = avg_total > 0 ? 1000.0 / avg_total : 999.0;
-    printf("\n  Estimated FPS (layout+render only): %.1f\n", fps);
+    printf("\n  Estimated FPS (%s): %.1f\n",
+           layout_only ? "entity+layout" : "entity+layout+render", fps);
     printf("  Budget @ 60fps: %.1fms available, %.1fms used (%.0f%%)\n",
            16.67, avg_total, (avg_total / 16.67) * 100.0);
 
