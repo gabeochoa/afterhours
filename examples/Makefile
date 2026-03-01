@@ -10,6 +10,10 @@ CXX := clang++
 CXXFLAGS := -std=c++20 -Wall -Wextra -g
 CXXFLAGS_RAYLIB := $(CXXFLAGS) -DAFTER_HOURS_USE_RAYLIB
 
+# Optimized flags for profiling (keeps debug symbols for sampling)
+CXXFLAGS_OPT := -std=c++20 -Wall -Wextra -O2 -g -fno-omit-frame-pointer
+CXXFLAGS_OPT_RAYLIB := $(CXXFLAGS_OPT) -DAFTER_HOURS_USE_RAYLIB
+
 # Paths - adjust these for your system
 RAYLIB_INCLUDE := /opt/homebrew/Cellar/raylib/5.5/include
 RAYLIB_LIB := /opt/homebrew/Cellar/raylib/5.5/lib
@@ -77,8 +81,39 @@ test: autolayout_test drawing_3d_example entity_mapping_test
 	./drawing_3d_example
 	./entity_mapping_test
 
+# Optimized profiling builds
+perf_stress_test_opt: perf_stress_test.cpp
+	$(CXX) $(CXXFLAGS_OPT) $(INCLUDES) $^ -o $@
+	@echo "Built: perf_stress_test_opt (O2)"
+
+calendar_stress_test_opt: calendar_stress_test.cpp
+	$(CXX) $(CXXFLAGS_OPT_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
+	@echo "Built: calendar_stress_test_opt (O2)"
+
+profile_harness: profile_harness.cpp
+	$(CXX) $(CXXFLAGS_OPT) $(INCLUDES) $^ -o $@
+	@echo "Built: profile_harness (O2)"
+
+profile-layout: perf_stress_test_opt
+	@echo "Profiling layout benchmark (10s sample)..."
+	./perf_stress_test_opt layout &  PERF_PID=$$!; \
+	sleep 0.5; \
+	sample $$PERF_PID -f profile_layout.txt 2>/dev/null || true; \
+	wait $$PERF_PID 2>/dev/null || true
+	@echo "Profile saved to profile_layout.txt"
+
+profile-calendar: calendar_stress_test_opt
+	@echo "Profiling calendar benchmark (layout-only, 500 frames)..."
+	./calendar_stress_test_opt --layout-only --frames=500 --meetings=30 &  PERF_PID=$$!; \
+	sleep 0.5; \
+	sample $$PERF_PID -f profile_calendar.txt 2>/dev/null || true; \
+	wait $$PERF_PID 2>/dev/null || true
+	@echo "Profile saved to profile_calendar.txt"
+
 clean:
 	rm -f graphics_example autolayout_test drawing_3d_example entity_mapping_test headless_validation perf_stress_test calendar_stress_test
+	rm -f perf_stress_test_opt calendar_stress_test_opt
 	rm -f graphics_example_output.png
+	rm -f profile_layout.txt profile_calendar.txt
 	rm -rf graphics_example_captures/
 	rm -rf headless_validation_output/

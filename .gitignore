@@ -33,7 +33,13 @@ examples/drawing_3d_example
 examples/entity_mapping_test
 examples/headless_validation
 examples/perf_stress_test
+examples/perf_stress_test_opt
 examples/calendar_stress_test
+examples/calendar_stress_test_opt
+examples/profile_layout.txt
+examples/profile_calendar.txt
+examples/profile_harness
+examples/profile.txt
 examples/graphics_example_output.png
 examples/calendar_stress_output.png
 examples/graphics_example_captures/
