@@ -40,6 +40,8 @@ examples/profile_layout.txt
 examples/profile_calendar.txt
 examples/profile_harness
 examples/profile.txt
+examples/profile_flat1000.txt
+examples/entity_pool_test
 examples/graphics_example_output.png
 examples/calendar_stress_output.png
 examples/graphics_example_captures/

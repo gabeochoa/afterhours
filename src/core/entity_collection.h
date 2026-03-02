@@ -50,6 +50,11 @@ struct EntityCollection {
   std::vector<EntityHandle::Slot> free_slots;
   std::vector<EntityHandle::Slot> id_to_slot;
 
+  // Entity pool: pre-allocated entities for reuse, avoiding heap churn.
+  Entities entity_pool_;
+  size_t max_pool_size_ = 0;
+  std::vector<EntityID> free_ids_;
+
   struct CreationOptions {
     bool is_permanent;
   };
@@ -63,6 +68,25 @@ struct EntityCollection {
   }
 
   void reserve_temp_space() { temp_entities.reserve(100); }
+
+  void reserve_entities(size_t count) {
+    max_pool_size_ = std::max(max_pool_size_, count * 2);
+    entity_pool_.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      entity_pool_.push_back(std::make_shared<Entity>(EntityID{-1}));
+    }
+  }
+
+  size_t pool_size() const { return entity_pool_.size(); }
+
+  EntityID alloc_entity_id() {
+    if (!free_ids_.empty()) {
+      EntityID id = free_ids_.back();
+      free_ids_.pop_back();
+      return id;
+    }
+    return ENTITY_ID_GEN++;
+  }
 
   Entities &get_temp() { return temp_entities; }
   const Entities &get_temp() const { return temp_entities; }
@@ -200,7 +224,14 @@ struct EntityCollection {
     if (temp_entities.capacity() == 0) [[unlikely]]
       reserve_temp_space();
 
-    auto e = std::make_shared<Entity>();
+    EntityType e;
+    if (!entity_pool_.empty()) {
+      e = std::move(entity_pool_.back());
+      entity_pool_.pop_back();
+      e->recycle(alloc_entity_id());
+    } else {
+      e = std::make_shared<Entity>(alloc_entity_id());
+    }
     temp_entities.push_back(e);
 
     if (options.is_permanent) {
@@ -343,10 +374,25 @@ struct EntityCollection {
       }
       // invalidate removed entity slot/id mapping
       invalidate_entity_slot_if_any(entities[i]);
+
+      EntityType removed = std::move(entities[i]);
       if (i != entities.size() - 1) {
-        std::swap(entities[i], entities.back());
+        entities[i] = std::move(entities.back());
       }
       entities.pop_back();
+
+      if (removed && entity_pool_.size() < max_pool_size_) {
+        EntityID old_id = removed->id;
+        if (old_id >= 0) {
+          free_ids_.push_back(old_id);
+        }
+        entity_pool_.push_back(std::move(removed));
+      } else if (removed) {
+        EntityID old_id = removed->id;
+        if (old_id >= 0) {
+          free_ids_.push_back(old_id);
+        }
+      }
     }
   }
 

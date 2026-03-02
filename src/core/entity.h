@@ -48,10 +48,25 @@ struct Entity {
   bool cleanup = false;
 
   Entity() : id(ENTITY_ID_GEN++) {}
+  explicit Entity(EntityID id_) : id(id_) {}
   Entity(const Entity &) = delete;
   Entity(Entity &&other) noexcept = default;
 
   virtual ~Entity() {}
+
+  void recycle(EntityID new_id) {
+    for (size_t i = 0; i < max_num_components; ++i) {
+      if (componentSet.test(i)) {
+        componentArray[i].reset();
+      }
+    }
+    componentSet.reset();
+    tags.reset();
+    cleanup = false;
+    entity_type = 0;
+    ah_slot_index = EntityHandle::INVALID_SLOT;
+    id = new_id;
+  }
 
   template <typename T> [[nodiscard]] bool has() const {
     const bool result = componentSet[components::get_type_id<T>()];
