@@ -212,6 +212,19 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   bool parent_has_focus = ctx.has_focus(entity.id);
   state.is_focused = !state.disabled && (field_has_focus || parent_has_focus);
 
+  // Select all text when gaining focus via tab (not mouse click).
+  // Mouse clicks position the cursor via the click listener instead.
+  if (state.is_focused && !state.was_focused) {
+    bool mouse_caused_focus =
+        ctx.is_mouse_press(field_entity.id) || ctx.is_mouse_press(entity.id);
+    if (!mouse_caused_focus && state.text_size() > 0) {
+      state.selection_anchor = 0;
+      state.cursor_position = state.text_size();
+      reset_blink(state);
+    }
+  }
+  state.was_focused = state.is_focused;
+
   if (state.is_focused) {
     auto focus_color = ctx.theme.accent;
     field_entity.template addComponentIfMissing<HasBorder>();

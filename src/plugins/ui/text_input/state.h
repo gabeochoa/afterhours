@@ -19,6 +19,7 @@ struct HasTextInputStateT : BaseComponent {
   size_t cursor_position = 0; // Byte position in UTF-8 string
   bool changed_since = false;
   bool is_focused = false;
+  bool was_focused = false; // Previous frame's focus state (for detecting transitions)
   bool readonly = false;  // Focus/select OK, mutations blocked
   bool disabled = false;  // Focus blocked, no interaction at all
   size_t max_length = 256; // Maximum text length in bytes (0 = unlimited)
