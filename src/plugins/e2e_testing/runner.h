@@ -180,6 +180,22 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
       cmd.args.push_back(name);
       cmd.args.push_back(parse_quoted());
       cmd.wait_seconds = 1 * frame;
+    } else if (cmd.name == "assert_ui_text") {
+      // First arg is quoted text, remaining are prop=value pairs
+      std::string text;
+      iss >> std::ws;
+      if (iss.peek() == '"') {
+        iss.get(); // consume opening quote
+        std::getline(iss, text, '"'); // read until closing quote
+      } else {
+        iss >> text; // single word, no quotes
+      }
+      cmd.args.push_back(text);
+      std::string arg;
+      while (iss >> arg) {
+        cmd.args.push_back(arg);
+      }
+      cmd.wait_seconds = 2 * frame;
     } else if (cmd.name == "screenshot") {
       std::string name;
       iss >> name;

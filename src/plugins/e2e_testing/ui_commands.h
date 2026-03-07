@@ -810,6 +810,141 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
   }
 }
 
+// Parse "w=399" into {"w", "399"}, returns false if malformed
+inline bool parse_prop_assertion(const std::string &arg, std::string &prop,
+                                  std::string &expected) {
+  auto eq = arg.find('=');
+  if (eq == std::string::npos || eq == 0) return false;
+  prop = arg.substr(0, eq);
+  expected = arg.substr(eq + 1);
+  return true;
+}
+
+// Check a single property assertion against an entity.
+// Returns empty string on match, error message on mismatch.
+inline std::string check_ui_property(Entity &entity, const std::string &prop,
+                                      const std::string &expected) {
+  auto &cmp = entity.get<ui::UIComponent>();
+  RectangleType rect = get_screen_rect(entity);
+
+  long actual_int = 0;
+  bool is_int_prop = true;
+
+  if (prop == "x") actual_int = std::lroundf(rect.x);
+  else if (prop == "y") actual_int = std::lroundf(rect.y);
+  else if (prop == "w") actual_int = std::lroundf(rect.width);
+  else if (prop == "h") actual_int = std::lroundf(rect.height);
+  else if (prop == "hidden") {
+    std::string actual_str = cmp.should_hide ? "true" : "false";
+    if (actual_str != expected)
+      return std::format("{}={} but got {}", prop, expected, actual_str);
+    return "";
+  }
+  else if (prop == "text") {
+    is_int_prop = false;
+    if (!entity.has<ui::HasLabel>())
+      return std::format("text={} but element has no label", expected);
+    auto &label = entity.get<ui::HasLabel>().label;
+    if (label != expected)
+      return std::format("text=\"{}\" but got \"{}\"", expected, label);
+    return "";
+  }
+  else {
+    return std::format("unknown property '{}'", prop);
+  }
+
+  if (is_int_prop) {
+    long expected_int = std::stol(expected);
+    if (actual_int != expected_int)
+      return std::format("{}={} but got {}", prop, expected_int, actual_int);
+  }
+  return "";
+}
+
+struct HandleAssertUICommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("assert_ui")) return;
+    if (!cmd.has_args(2)) {
+      cmd.fail("assert_ui requires: <name> <prop>=<value> [...]");
+      return;
+    }
+
+    std::string name = cmd.args[0];
+
+    // Find entity by debug name
+    auto opt = ui_query()
+        .whereHasComponent<ui::UIComponent>()
+        .whereHasComponent<ui::UIComponentDebug>()
+        .whereLambda([&](const Entity &e) {
+          return e.get<ui::UIComponentDebug>().name_value == name &&
+                 e.get<ui::UIComponent>().was_rendered_to_screen;
+        })
+        .gen_first();
+
+    if (!opt.has_value()) {
+      cmd.retry();  // Element may not be rendered yet
+      return;
+    }
+
+    Entity &entity = opt.asE();
+    // Check each prop=value assertion
+    for (size_t i = 1; i < cmd.args.size(); i++) {
+      std::string prop, expected;
+      if (!parse_prop_assertion(cmd.args[i], prop, expected)) {
+        cmd.fail(std::format("assert_ui: malformed assertion '{}'", cmd.args[i]));
+        return;
+      }
+      std::string err = check_ui_property(entity, prop, expected);
+      if (!err.empty()) {
+        cmd.fail(std::format("assert_ui '{}': {}", name, err));
+        return;
+      }
+    }
+    cmd.consume();
+  }
+};
+
+struct HandleAssertUITextCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("assert_ui_text")) return;
+    if (!cmd.has_args(2)) {
+      cmd.fail("assert_ui_text requires: \"<text>\" <prop>=<value> [...]");
+      return;
+    }
+
+    std::string text = cmd.args[0];
+
+    auto opt = ui_query()
+        .whereHasComponent<ui::UIComponent>()
+        .whereHasComponent<ui::HasLabel>()
+        .whereLambda([&](const Entity &e) {
+          return e.get<ui::HasLabel>().label == text &&
+                 e.get<ui::UIComponent>().was_rendered_to_screen;
+        })
+        .gen_first();
+
+    if (!opt.has_value()) {
+      cmd.retry();
+      return;
+    }
+
+    Entity &entity = opt.asE();
+    for (size_t i = 1; i < cmd.args.size(); i++) {
+      std::string prop, expected;
+      if (!parse_prop_assertion(cmd.args[i], prop, expected)) {
+        cmd.fail(std::format("assert_ui_text: malformed '{}'", cmd.args[i]));
+        return;
+      }
+      std::string err = check_ui_property(entity, prop, expected);
+      if (!err.empty()) {
+        cmd.fail(std::format("assert_ui_text \"{}\": {}", text, err));
+        return;
+      }
+    }
+    cmd.consume();
+  }
+};
+
 struct HandleDumpUICommand : System<PendingE2ECommand> {
   using DumpFn = std::function<void(const std::string &, const std::string &)>;
 
@@ -916,6 +1051,10 @@ template <typename InputAction> void register_ui_commands(SystemManager &sm) {
       std::make_unique<HandleExpectInputTextCommand<InputAction>>());
   sm.register_update_system(
       std::make_unique<HandleExpectInputSelectionCommand<InputAction>>());
+
+  // UI property assertions
+  sm.register_update_system(std::make_unique<HandleAssertUICommand>());
+  sm.register_update_system(std::make_unique<HandleAssertUITextCommand>());
 }
 
 } // namespace ui_commands
