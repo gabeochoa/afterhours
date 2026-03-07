@@ -13,7 +13,9 @@
 #include "../ui/text_input/state.h"
 #include "../ui/ui_collection.h"
 
+#include <cmath>
 #include <format>
+#include <functional>
 #include <magic_enum/magic_enum.hpp>
 
 namespace afterhours {
@@ -728,6 +730,133 @@ struct HandleExpectInputSelectionCommand : System<PendingE2ECommand> {
     }
     cmd.fail(std::format("Text input not found: {}", name));
   }
+};
+
+// ============================================================================
+// dump_ui command - XML tree dump of rendered UI hierarchy
+// ============================================================================
+
+inline std::string xml_escape(const std::string &s) {
+  std::string out;
+  out.reserve(s.size());
+  for (char c : s) {
+    switch (c) {
+    case '&': out += "&amp;"; break;
+    case '<': out += "&lt;"; break;
+    case '>': out += "&gt;"; break;
+    case '"': out += "&quot;"; break;
+    default: out += c; break;
+    }
+  }
+  return out;
+}
+
+inline std::string truncate_text(const std::string &s, size_t max_len = 80) {
+  if (s.size() <= max_len) return s;
+  return s.substr(0, max_len) + "...";
+}
+
+inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
+  if (depth > 64) return;
+
+  auto &cmp = entity.get<ui::UIComponent>();
+  if (!cmp.was_rendered_to_screen) return;
+
+  std::string indent(depth * 2, ' ');
+  RectangleType rect = get_screen_rect(entity);
+
+  out += indent + "<ui";
+
+  if (entity.has<ui::UIComponentDebug>()) {
+    auto &dbg = entity.get<ui::UIComponentDebug>();
+    if (dbg.type == ui::UIComponentDebug::Type::custom)
+      out += " name=\"" + xml_escape(dbg.name_value) + "\"";
+  }
+
+  out += std::format(" x=\"{}\" y=\"{}\" w=\"{}\" h=\"{}\"",
+                     std::lroundf(rect.x), std::lroundf(rect.y),
+                     std::lroundf(rect.width), std::lroundf(rect.height));
+
+  if (entity.has<ui::HasLabel>())
+    out += " text=\"" + xml_escape(truncate_text(entity.get<ui::HasLabel>().label)) + "\"";
+
+  if (entity.has<ui::HasScrollView>()) {
+    auto &sv = entity.get<ui::HasScrollView>();
+    out += std::format(" scroll_x=\"{}\" scroll_y=\"{}\"",
+                       std::lroundf(sv.scroll_offset.x),
+                       std::lroundf(sv.scroll_offset.y));
+  }
+
+  if (cmp.should_hide)
+    out += " hidden=\"true\"";
+
+  std::vector<Entity *> valid_children;
+  for (EntityID child_id : cmp.children) {
+    OptEntity opt = ui::UICollectionHolder::getEntityForID(child_id);
+    if (!opt.valid()) continue;
+    Entity &child = opt.asE();
+    if (!child.has<ui::UIComponent>()) continue;
+    if (!child.get<ui::UIComponent>().was_rendered_to_screen) continue;
+    valid_children.push_back(&child);
+  }
+
+  if (valid_children.empty()) {
+    out += "/>\n";
+  } else {
+    out += ">\n";
+    for (Entity *child : valid_children)
+      dump_ui_node(out, *child, depth + 1);
+    out += indent + "</ui>\n";
+  }
+}
+
+struct HandleDumpUICommand : System<PendingE2ECommand> {
+  using DumpFn = std::function<void(const std::string &, const std::string &)>;
+
+  explicit HandleDumpUICommand(DumpFn fn = nullptr)
+      : dump_fn_(std::move(fn)) {}
+
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("dump_ui")) return;
+    if (!cmd.has_args(1)) { cmd.fail("dump_ui requires a name argument"); return; }
+
+    std::string dump_name = cmd.args[0];
+    std::string subtree_root = cmd.has_args(2) ? cmd.args[1] : "";
+
+    std::string xml;
+    xml.reserve(8192);
+
+    if (!subtree_root.empty()) {
+      auto opt = ui_query()
+          .whereHasComponent<ui::UIComponent>()
+          .whereHasComponent<ui::UIComponentDebug>()
+          .whereLambda([&](const Entity &e) {
+            return e.get<ui::UIComponentDebug>().name_value.find(subtree_root)
+                   != std::string::npos &&
+                   e.get<ui::UIComponent>().was_rendered_to_screen;
+          })
+          .gen_first();
+      if (opt.has_value()) {
+        dump_ui_node(xml, opt.asE(), 0);
+      }
+    } else {
+      for (Entity &e : ui_query()
+          .whereHasComponent<ui::UIComponent>()
+          .whereLambda([&](const Entity &e) {
+            auto &c = e.get<ui::UIComponent>();
+            return c.parent == -1 && c.was_rendered_to_screen;
+          })
+          .gen()) {
+        dump_ui_node(xml, e, 0);
+      }
+    }
+
+    if (dump_fn_) dump_fn_(dump_name, xml);
+    cmd.consume();
+  }
+
+private:
+  DumpFn dump_fn_;
 };
 
 // Register all UI command handlers

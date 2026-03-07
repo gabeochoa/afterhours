@@ -35,7 +35,7 @@ endif
 # Targets
 .PHONY: all run test clean
 
-all: graphics_example autolayout_test drawing_3d_example entity_mapping_test entity_pool_test headless_validation perf_stress_test calendar_stress_test
+all: graphics_example autolayout_test drawing_3d_example entity_mapping_test entity_pool_test headless_validation perf_stress_test calendar_stress_test dump_ui_test
 
 graphics_example: graphics_example.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
@@ -64,6 +64,11 @@ entity_pool_test: entity_pool_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 	@echo "Built: entity_pool_test"
 
+# Dump UI XML tests - needs raylib headers for ui_commands.h includes
+dump_ui_test: dump_ui_test.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
+	@echo "Built: dump_ui_test"
+
 # Performance stress tests - no raylib dependency
 perf_stress_test: perf_stress_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
@@ -80,11 +85,12 @@ run: graphics_example
 run-3d: drawing_3d_example
 	./drawing_3d_example
 
-test: autolayout_test drawing_3d_example entity_mapping_test entity_pool_test
+test: autolayout_test drawing_3d_example entity_mapping_test entity_pool_test dump_ui_test
 	./autolayout_test
 	./drawing_3d_example
 	./entity_mapping_test
 	./entity_pool_test
+	./dump_ui_test
 
 # Optimized profiling builds
 perf_stress_test_opt: perf_stress_test.cpp
@@ -116,7 +122,7 @@ profile-calendar: calendar_stress_test_opt
 	@echo "Profile saved to profile_calendar.txt"
 
 clean:
-	rm -f graphics_example autolayout_test drawing_3d_example entity_mapping_test entity_pool_test headless_validation perf_stress_test calendar_stress_test
+	rm -f graphics_example autolayout_test drawing_3d_example entity_mapping_test entity_pool_test headless_validation perf_stress_test calendar_stress_test dump_ui_test
 	rm -f perf_stress_test_opt calendar_stress_test_opt
 	rm -f graphics_example_output.png
 	rm -f profile_layout.txt profile_calendar.txt
