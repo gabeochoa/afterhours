@@ -48,6 +48,7 @@ struct UIComponentDebug : BaseComponent {
   enum struct Type {
     unknown,
     custom,
+    auto_label, // auto-derived from label text, not explicitly set
   } type;
 
   std::string name_value;
@@ -65,8 +66,14 @@ struct UIComponentDebug : BaseComponent {
     name_value = name_;
   }
 
+  void set_from_label(const std::string &name_) {
+    type = Type::auto_label;
+    name_value = name_;
+  }
+
   std::string name() const {
-    if (type == UIComponentDebug::Type::custom) {
+    if (type == UIComponentDebug::Type::custom ||
+        type == UIComponentDebug::Type::auto_label) {
       return name_value;
     }
     return std::string(magic_enum::enum_name<UIComponentDebug::Type>(type));
