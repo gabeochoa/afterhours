@@ -843,11 +843,24 @@ struct HandleDumpUICommand : System<PendingE2ECommand> {
       for (Entity &e : ui_query()
           .whereHasComponent<ui::UIComponent>()
           .whereLambda([&](const Entity &e) {
-            auto &c = e.get<ui::UIComponent>();
-            return c.parent == -1 && c.was_rendered_to_screen;
+            return e.get<ui::UIComponent>().parent == -1;
           })
           .gen()) {
-        dump_ui_node(xml, e, 0);
+        auto &cmp = e.get<ui::UIComponent>();
+        if (cmp.was_rendered_to_screen) {
+          dump_ui_node(xml, e, 0);
+        } else {
+          // Root is a container (e.g., UIContext entity); dump its rendered
+          // children directly
+          for (EntityID child_id : cmp.children) {
+            OptEntity opt = ui::UICollectionHolder::getEntityForID(child_id);
+            if (!opt.valid()) continue;
+            Entity &child = opt.asE();
+            if (!child.has<ui::UIComponent>()) continue;
+            if (!child.get<ui::UIComponent>().was_rendered_to_screen) continue;
+            dump_ui_node(xml, child, 0);
+          }
+        }
       }
     }
 
