@@ -231,8 +231,17 @@ struct AutoLayout {
   float snap_to_8pt_grid(float value, Axis axis) {
     constexpr float GRID_UNIT_720P = 4.0f;
     float screen_value = fetch_screen_value_(axis);
-    float grid_unit = GRID_UNIT_720P * (screen_value / 720.0f);
-    return std::round(value / grid_unit) * grid_unit;
+    // Round grid unit to integer so snapped values are always integers.
+    // Without this, non-720p widths produce fractional grid units
+    // (e.g. 4.0 * 1280/720 = 7.111) and fractional snapped sizes.
+    float grid_unit =
+        fmaxf(1.f, std::round(GRID_UNIT_720P * (screen_value / 720.0f)));
+    float snapped = std::round(value / grid_unit) * grid_unit;
+    // Never snap a positive value to zero — this caused pixels(1) dividers
+    // to compute as height 0.
+    if (value > 0.f && snapped == 0.f)
+      snapped = grid_unit;
+    return snapped;
   }
 
   float compute_padding_for_standalone_exp(UIComponent &widget, Axis axis) {
