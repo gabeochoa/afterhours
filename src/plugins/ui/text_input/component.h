@@ -3,6 +3,7 @@
 #include "../../clipboard.h"
 #include "../../input_system.h"
 #include "../../../core/key_codes.h"
+#include "../../../graphics.h"
 #include "../component_init.h"
 #include "../element_result.h"
 #include "../entity_management.h"
@@ -386,8 +387,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
         ctx.set_focus(ent.id);
         auto &cmp = ent.get<UIComponent>();
 
-        bool shift = input::is_key_down(raylib::KEY_LEFT_SHIFT) ||
-                     input::is_key_down(raylib::KEY_RIGHT_SHIFT);
+        bool shift = input::is_key_down(keys::LEFT_SHIFT) ||
+                     input::is_key_down(keys::RIGHT_SHIFT);
 
         auto *fm = EntityHelper::get_singleton_cmp<FontManager>();
         if (!fm) {
@@ -421,7 +422,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
         // Multi-click detection (double = word, triple = select all)
         constexpr float MULTI_CLICK_TIME = 0.4f;
         constexpr size_t MULTI_CLICK_DIST = 3;
-        float now = static_cast<float>(raylib::GetTime());
+        float now = static_cast<float>(afterhours::graphics::get_time());
         if (s.last_click_time >= 0.f &&
             (now - s.last_click_time) < MULTI_CLICK_TIME &&
             (click_pos > s.last_click_pos
@@ -539,8 +540,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Shift-as-modifier: check raw shift state to extend/start selection
     // during any movement. This replaces separate Select* actions.
-    bool shift_held = input::is_key_down(raylib::KEY_LEFT_SHIFT) ||
-                      input::is_key_down(raylib::KEY_RIGHT_SHIFT);
+    bool shift_held = input::is_key_down(keys::LEFT_SHIFT) ||
+                      input::is_key_down(keys::RIGHT_SHIFT);
 
     auto navigate = [&](auto move_fn) {
       if (shift_held) {
