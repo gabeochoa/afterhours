@@ -598,6 +598,15 @@ struct input : developer::Plugin {
         return graphics::MetalPlatformAPI::is_key_pressed(keycode);
 #endif
     }
+    static bool is_key_pressed_repeat(const KeyCode keycode) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_key_pressed(keycode, [](int k) {
+            return graphics::MetalPlatformAPI::is_key_pressed_repeat(k);
+        });
+#else
+        return graphics::MetalPlatformAPI::is_key_pressed_repeat(keycode);
+#endif
+    }
     static bool is_key_down(const KeyCode keycode) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
         return testing::test_input::is_key_down(keycode, [](int k) {
