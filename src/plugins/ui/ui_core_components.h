@@ -140,26 +140,28 @@ struct UIComponent : BaseComponent {
           .height = fmaxf(0.f, computed[Axis::Y]),
       };
     }
-    // Flow layout: margins reduce available space (standard CSS content-box)
+    // Flow layout: margins are external spacing (handled by
+    // compute_relative_positions), not subtracted from element size.
+    // computed[axis] already represents the element's own content size
+    // (set by compute_size_for_standalone_exp / parent_expectation / etc.),
+    // so subtracting margin would incorrectly shrink the visual element.
     return Rectangle{
         .x = computed_rel[Axis::X] + computed_margin[Axis::left],
         .y = computed_rel[Axis::Y] + computed_margin[Axis::top],
-        // Clamp to 0 to prevent negative dimensions from margin overflow
-        .width = fmaxf(0.f, computed[Axis::X] - computed_margin[Axis::X]),
-        .height = fmaxf(0.f, computed[Axis::Y] - computed_margin[Axis::Y]),
+        .width = fmaxf(0.f, computed[Axis::X]),
+        .height = fmaxf(0.f, computed[Axis::Y]),
     };
   };
 
   Rectangle bounds() const {
     Rectangle rect_ = rect();
     // bounds() = the full allocation including padding (inside) and margins
-    // (outside). Padding is internal to the element so we don't subtract it
-    // from position; we only expand outward by margin.
+    // (outside). Since rect() already gives the element's content size,
+    // bounds expands by padding inward and margin outward.
     return Rectangle{
         .x = rect_.x - computed_margin[Axis::left],
         .y = rect_.y - computed_margin[Axis::top],
-        .width =
-            rect_.width + computed_padd[Axis::X] + computed_margin[Axis::X],
+        .width = rect_.width + computed_padd[Axis::X] + computed_margin[Axis::X],
         .height =
             rect_.height + computed_padd[Axis::Y] + computed_margin[Axis::Y],
     };

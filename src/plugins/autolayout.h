@@ -229,13 +229,17 @@ struct AutoLayout {
   }
 
   float snap_to_8pt_grid(float value, Axis axis) {
+    (void)axis;
     constexpr float GRID_UNIT_720P = 4.0f;
-    float screen_value = fetch_screen_value_(axis);
-    // Round grid unit to integer so snapped values are always integers.
-    // Without this, non-720p widths produce fractional grid units
-    // (e.g. 4.0 * 1280/720 = 7.111) and fractional snapped sizes.
+    // Always derive grid unit from screen HEIGHT (the 720p reference axis).
+    // Using the per-axis screen dimension caused a grid_unit of 7 for the
+    // X axis at 1280x720 (4.0 * 1280/720 = 7.111, rounded to 7). Since
+    // 1280 is not divisible by 7, screen_pct(1.0) snapped to 1281 and
+    // similar errors affected every screen_pct width. Using the height
+    // gives grid_unit=4 for both axes at 720p, and 1280 IS divisible by 4.
+    float screen_height = fetch_screen_value_(Axis::Y);
     float grid_unit =
-        fmaxf(1.f, std::round(GRID_UNIT_720P * (screen_value / 720.0f)));
+        fmaxf(1.f, std::round(GRID_UNIT_720P * (screen_height / 720.0f)));
     float snapped = std::round(value / grid_unit) * grid_unit;
     // Never snap a positive value to zero — this caused pixels(1) dividers
     // to compute as height 0.
@@ -359,10 +363,9 @@ struct AutoLayout {
     }
 
     // Content-box model: percent sizing is relative to parent's content area
-    // (after subtracting margin and padding). This matches CSS behavior where
-    // percent(1.f) fills the interior space, not the full box.
-    float parent_size = (parent.computed[axis] - parent.computed_margin[axis] -
-                         parent.computed_padd[axis]);
+    // (after subtracting padding). Margins are external spacing and are NOT
+    // included in computed[axis], so we only subtract padding here.
+    float parent_size = (parent.computed[axis] - parent.computed_padd[axis]);
 
     switch (exp.dim) {
     case Dim::Percent:
@@ -468,10 +471,11 @@ struct AutoLayout {
       return no_change;
     }
 
-    // again ignore padding on purpose
-
+    // Margin percent is relative to parent's computed size (margins are
+    // external and not included in computed, so no subtraction needed).
+    // Padding intentionally not subtracted here.
     const auto parent_size = [&parent](Axis axis_in) -> float {
-      return parent.computed[axis_in] - parent.computed_margin[axis_in];
+      return parent.computed[axis_in];
     };
 
     const auto compute_ = [no_change](const Size &exp, float parent_size) {
@@ -540,7 +544,10 @@ struct AutoLayout {
       if (child.should_hide)
         continue;
 
-      float cs = child.computed[axis];
+      // Include child margins so Dim::Children parents are sized to fit
+      // children including their external spacing.
+      float cs = child.computed[axis] + child.computed_margin[axis];
+
       if ( //
           child.desired[axis].dim == Dim::Percent &&
           widget.desired[axis].dim == Dim::Children
@@ -584,7 +591,8 @@ struct AutoLayout {
         // Instead of silently ignoring this, check the cases above
         VALIDATE(false, "expect that all children have been solved by now");
       }
-      max_child_size = fmaxf(max_child_size, cs);
+      max_child_size = fmaxf(max_child_size,
+                             cs + child.computed_margin[axis]);
     }
 
     return max_child_size;
@@ -677,12 +685,12 @@ struct AutoLayout {
       return constraint.value *
              (axis == Axis::X ? resolution.width : resolution.height);
     case Dim::Percent: {
-      // Percent of parent's content area
+      // Percent of parent's content area (computed minus padding only;
+      // margins are external spacing and not included in computed).
       if (widget.parent == -1)
         return -1.f;
       UIComponent &parent = cmp(widget.parent);
-      float parent_size = parent.computed[axis] - parent.computed_margin[axis] -
-                          parent.computed_padd[axis];
+      float parent_size = parent.computed[axis] - parent.computed_padd[axis];
       return constraint.value * parent_size;
     }
     case Dim::Children:
@@ -791,7 +799,9 @@ struct AutoLayout {
     const auto _total_child = [&layout_children](Axis axis) {
       float sum = 0.f;
       for (UIComponent *child : layout_children) {
-        sum += child->computed[axis];
+        // Include child margins: positioning uses computed + margin for
+        // layout spacing, so the solver must account for the same total.
+        sum += child->computed[axis] + child->computed_margin[axis];
       }
       return sum;
     };
@@ -799,7 +809,8 @@ struct AutoLayout {
     const auto _max_child = [&layout_children](Axis axis) {
       float max_val = 0.f;
       for (UIComponent *child : layout_children) {
-        max_val = fmaxf(max_val, child->computed[axis]);
+        max_val =
+            fmaxf(max_val, child->computed[axis] + child->computed_margin[axis]);
       }
       return max_val;
     };
@@ -979,10 +990,18 @@ struct AutoLayout {
     }
 
     if (enable_grid_snapping && !widget.skip_grid_snap) {
-      widget.computed[Axis::X] =
-          snap_to_8pt_grid(widget.computed[Axis::X], Axis::X);
-      widget.computed[Axis::Y] =
-          snap_to_8pt_grid(widget.computed[Axis::Y], Axis::Y);
+      // Skip grid snapping for pixel-exact dimensions. When a developer
+      // specifies pixels(150), they expect exactly 150px, not a
+      // grid-snapped value like 152. Only snap non-pixel sizes (percents,
+      // screen_pct, etc.) where grid alignment improves consistency.
+      if (widget.desired[Axis::X].dim != Dim::Pixels) {
+        widget.computed[Axis::X] =
+            snap_to_8pt_grid(widget.computed[Axis::X], Axis::X);
+      }
+      if (widget.desired[Axis::Y].dim != Dim::Pixels) {
+        widget.computed[Axis::Y] =
+            snap_to_8pt_grid(widget.computed[Axis::Y], Axis::Y);
+      }
     }
 
     // Content area for child layout: subtract padding from the full box.
@@ -1008,10 +1027,11 @@ struct AutoLayout {
     float grid_snap_tolerance_y = 0.f;
     if (enable_grid_snapping) {
       constexpr float GST_GRID_UNIT_720P = 4.0f;
-      grid_snap_tolerance_x =
-          GST_GRID_UNIT_720P * (fetch_screen_value_(Axis::X) / 720.0f);
-      grid_snap_tolerance_y =
+      // Use height-based grid unit for both axes (matching snap_to_8pt_grid).
+      float grid_unit =
           GST_GRID_UNIT_720P * (fetch_screen_value_(Axis::Y) / 720.0f);
+      grid_snap_tolerance_x = grid_unit;
+      grid_snap_tolerance_y = grid_unit;
     }
 
     // Determine layout direction
