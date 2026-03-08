@@ -212,14 +212,35 @@ struct HandleTabCommand : System<PendingE2ECommand> {
 };
 
 // Handle 'shift_tab' - simulates Shift+Tab for reverse tabbing
+//
+// Uses set_key_held (not set_key_down) for LEFT_SHIFT so that the modifier
+// appears as "held" in the InputCollector's down-list (all_actions) but NOT
+// as "pressed" in inputs_pressed. This prevents WidgetMod from overwriting
+// WidgetNext in UIContext::last_action, which would break process_tabbing's
+// pressed(WidgetNext) check.
 struct HandleShiftTabCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("shift_tab"))
       return;
 
-    input_injector::set_key_down(keys::LEFT_SHIFT);
+    input_injector::set_key_held(keys::LEFT_SHIFT);
     test_input::push_key(keys::TAB);
+    shift_tab_detail::release_countdown = 3;
     cmd.consume();
+  }
+};
+
+// Release shift key after shift_tab countdown expires
+struct HandleShiftTabRelease : System<> {
+  bool should_iterate() const override { return false; }
+  virtual void once(float) override {
+    using namespace shift_tab_detail;
+    if (release_countdown > 0) {
+      release_countdown--;
+      if (release_countdown == 0) {
+        input_injector::set_key_up(keys::LEFT_SHIFT);
+      }
+    }
   }
 };
 
@@ -303,13 +324,25 @@ struct HandleExpectFocusedCommand : System<PendingE2ECommand> {
 
     for (Entity &entity : query.gen()) {
       auto &cmp = entity.get<ui::UIComponent>();
+      // Check the entity itself
       if (ctx->has_focus(cmp.id)) {
         cmd.consume();
         return;
-      } else {
-        cmd.fail(std::format("Component '{}' is not focused", name));
-        return;
       }
+      // Also check InFocusCluster children (matches focus_ui behavior:
+      // focus_ui drills into children with InFocusCluster and sets focus
+      // on the child, so expect_focused must check them too)
+      for (int child_id : cmp.children) {
+        auto child_opt = ui::UICollectionHolder::getEntityForID(child_id);
+        if (child_opt.valid() &&
+            child_opt.asE().template has<ui::InFocusCluster>() &&
+            ctx->has_focus(child_id)) {
+          cmd.consume();
+          return;
+        }
+      }
+      cmd.fail(std::format("Component '{}' is not focused", name));
+      return;
     }
     cmd.fail(std::format("UI component not found: {}", cmd.arg(0)));
   }
@@ -1036,6 +1069,7 @@ template <typename InputAction> void register_ui_commands(SystemManager &sm) {
   // Raw key fallbacks (for edge cases)
   sm.register_update_system(std::make_unique<HandleTabCommand>());
   sm.register_update_system(std::make_unique<HandleShiftTabCommand>());
+  sm.register_update_system(std::make_unique<HandleShiftTabRelease>());
   sm.register_update_system(std::make_unique<HandleEnterCommand>());
   sm.register_update_system(std::make_unique<HandleEscapeCommand>());
   sm.register_update_system(std::make_unique<HandleArrowCommand>());

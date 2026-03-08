@@ -148,7 +148,20 @@ struct HandleClickCommand : System<PendingE2ECommand> {
     }
 };
 
-// Handle 'double_click x y' command
+// Handle 'double_click x y' command — two clicks with frame delay for
+// multi-click detection. Uses a phase counter so the command stays pending
+// across frames while the first click's auto-release completes.
+namespace double_click_detail {
+inline int phase = 0;
+inline float stored_x = 0, stored_y = 0;
+
+inline void reset() {
+    phase = 0;
+    stored_x = 0;
+    stored_y = 0;
+}
+} // namespace double_click_detail
+
 struct HandleDoubleClickCommand : System<PendingE2ECommand> {
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
                                float) override {
@@ -158,10 +171,28 @@ struct HandleDoubleClickCommand : System<PendingE2ECommand> {
             return;
         }
 
+        using namespace double_click_detail;
         auto [sw, sh] = e2e_screen_size();
-        test_input::simulate_click(cmd.coord_arg(0, sw), cmd.coord_arg(1, sh));
-        // Note: Full double-click needs frame delay; simplified here
-        cmd.consume();
+        float x = cmd.coord_arg(0, sw);
+        float y = cmd.coord_arg(1, sh);
+
+        if (phase == 0) {
+            // Phase 0: inject first click
+            stored_x = x;
+            stored_y = y;
+            test_input::simulate_click(x, y);
+            phase = 1;
+            cmd.retry(); // Tell runner to retry next frame
+        } else if (phase < 3) {
+            // Phases 1-2: wait for first click's auto-release to complete
+            phase++;
+            cmd.retry();
+        } else {
+            // Phase 3: inject second click, then consume
+            test_input::simulate_click(stored_x, stored_y);
+            phase = 0;
+            cmd.consume();
+        }
     }
 };
 
@@ -408,6 +439,8 @@ struct HandleResetTestStateCommand : System<PendingE2ECommand> {
         }
         test_input::reset_all();
         key_release_detail::reset();
+        double_click_detail::reset();
+        shift_tab_detail::reset();
         VisibleTextRegistry::instance().clear();
         cmd.consume();
     }

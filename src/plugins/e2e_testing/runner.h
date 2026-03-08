@@ -127,7 +127,7 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
       iss >> x_str >> y_str;
       cmd.args.push_back(x_str);
       cmd.args.push_back(y_str);
-      cmd.wait_seconds = (cmd.name == "double_click") ? 4 * frame
+      cmd.wait_seconds = (cmd.name == "double_click") ? 6 * frame
                          : (cmd.name == "mouse_move") ? 1 * frame
                                                       : 2 * frame;
       // TODO add a way for plugins to register their own e2e testing commands

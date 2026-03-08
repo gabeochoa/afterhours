@@ -59,6 +59,15 @@ inline void set_key_down(int key) {
   }
 }
 
+/// Set a key as synthetically held without generating a press event.
+/// Use for modifier keys that need to be "down" for chord matching
+/// but should NOT appear as "pressed" actions in the InputCollector.
+inline void set_key_held(int key) {
+  if (key >= 0 && key < 512) {
+    detail::synthetic_keys[key] = true;
+  }
+}
+
 /// Release a synthetically held key
 inline void set_key_up(int key) {
   if (key >= 0 && key < 512) {
@@ -198,5 +207,13 @@ inline void reset_all() {
 }
 
 } // namespace input_injector
+
+// Shared state for shift_tab command (needs to be accessible from both
+// ui_commands.h and command_handlers.h)
+namespace shift_tab_detail {
+inline int release_countdown = 0;
+inline void reset() { release_countdown = 0; }
+} // namespace shift_tab_detail
+
 } // namespace testing
 } // namespace afterhours
