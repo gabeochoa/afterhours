@@ -1761,3 +1761,40 @@ TEST_CASE("right percent margin on child") {
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
+
+TEST_CASE("row flex gap between children") {
+    auto &sophie = make_sophie();
+
+    auto &row = EntityHelper::createEntity();
+    {
+        make_component(row)
+            .set_desired_width(pixels(200.f))
+            .set_desired_height(pixels(80.f))
+            .set_flex_direction(FlexDirection::Row)
+            .set_parent(sophie);
+        row.get<ui::UIComponent>().desired_gap = pixels(12.f);
+    }
+
+    auto &a = EntityHelper::createEntity();
+    {
+        make_component(a)
+            .set_desired_width(pixels(80.f))
+            .set_desired_height(pixels(60.f))
+            .set_parent(row);
+    }
+
+    auto &b = EntityHelper::createEntity();
+    {
+        make_component(b)
+            .set_desired_width(pixels(80.f))
+            .set_desired_height(pixels(60.f))
+            .set_parent(row);
+    }
+
+    run_(sophie);
+
+    CHECK_THAT(to_rect(a),
+               RectMatcher(Rectangle{.x = 0, .y = 0, .width = 80, .height = 60}));
+    CHECK_THAT(to_rect(b),
+               RectMatcher(Rectangle{.x = 92, .y = 0, .width = 80, .height = 60}));
+}
