@@ -7,6 +7,7 @@
 
 #include "../core/base_component.h"
 #include "../core/entity_query.h"
+#include "../core/key_codes.h"
 #include "../core/system.h"
 #include "../developer.h"
 #include "window_manager.h"
@@ -709,6 +710,9 @@ struct input : developer::Plugin {
     }
     static bool is_key_pressed(const KeyCode) {
         log_error("@notimplemented is_key_pressed");
+        return false;
+    }
+    static bool is_key_pressed_repeat(const KeyCode) {
         return false;
     }
     static bool is_key_down(const KeyCode) {
