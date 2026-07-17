@@ -221,6 +221,17 @@ inline bool is_mouse_button_down(int button, BackendFn backend_fn) {
   return backend_fn(button);
 }
 
+// Check mouse button released (wraps backend call)
+template <typename BackendFn>
+inline bool is_mouse_button_released(int button, BackendFn backend_fn) {
+  if (detail::test_mode) {
+    if (button == 0)
+      return input_injector::detail::mouse.just_released;
+    return false;
+  }
+  return backend_fn(button);
+}
+
 } // namespace test_input
 } // namespace testing
 } // namespace afterhours

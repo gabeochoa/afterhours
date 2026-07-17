@@ -127,7 +127,12 @@ struct input : developer::Plugin {
 #endif
     }
     static bool is_mouse_button_released(const MouseButton button) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_mouse_button_released(
+            button, [](int b) { return raylib::IsMouseButtonReleased(b); });
+#else
         return raylib::IsMouseButtonReleased(button);
+#endif
     }
     static bool is_gamepad_available(const GamepadID id) {
         return raylib::IsGamepadAvailable(id);
@@ -570,7 +575,13 @@ struct input : developer::Plugin {
 #endif
     }
     static bool is_mouse_button_released(const MouseButton btn) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_mouse_button_released(btn, [](int b) {
+            return graphics::MetalPlatformAPI::is_mouse_button_released(b);
+        });
+#else
         return graphics::MetalPlatformAPI::is_mouse_button_released(btn);
+#endif
     }
     static float get_mouse_wheel_move() {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
