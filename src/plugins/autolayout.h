@@ -911,17 +911,17 @@ struct AutoLayout {
           float approx_epc =
               error / (1.f * std::max(1, (int)num_resizeable_children));
           for (UIComponent *child : layout_children) {
-            Size exp = child->desired[axis];
+            const Size &exp = child->desired[axis];
             if (exp.strictness == 1.f) {
               continue;
             }
             float portion_of_error = (1.f - exp.strictness) * approx_epc;
             float cur_size = child->computed[axis];
             child->computed[axis] = fmaxf(0, cur_size - portion_of_error);
-            // Reduce strictness every round
-            // so that eventually we will get there
-            exp.strictness = fmaxf(0.f, exp.strictness - 0.05f);
-            child->desired[axis] = exp;
+            // NOTE: do NOT decay child->desired strictness here. desired is
+            // persistent user intent and is not reset between passes, so
+            // writing it back corrupts strictness every frame. The loop still
+            // converges: error is recomputed each iteration.
           }
         };
 

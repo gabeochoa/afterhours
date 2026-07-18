@@ -82,7 +82,9 @@ struct EntityQuery {
     mutable int amount_taken;
     explicit Limit(const int amt) : amount(amt), amount_taken(0) {}
     bool operator()(const Entity &) const override {
-      if (amount_taken > amount)
+      // Use >= so take(n) yields exactly n entities (and first()==take(1)
+      // yields 1). With > this let through n+1 (first() returned 2).
+      if (amount_taken >= amount)
         return false;
       amount_taken++;
       return true;
@@ -215,7 +217,8 @@ struct EntityQuery {
   TReturn &take(const int amount) {
     auto taken = std::make_shared<int>(0);
     return add_filter([amount, taken](const Entity &) {
-      if (*taken > amount)
+      // Use >= so take(n) yields exactly n (first()==take(1) yields 1).
+      if (*taken >= amount)
         return false;
       (*taken)++;
       return true;

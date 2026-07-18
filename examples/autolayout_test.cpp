@@ -688,6 +688,34 @@ TEST(violation_solver_shrinks_overflow) {
 }
 
 // ---------------------------------------------------------------------------
+// Violation solver must NOT mutate the children's desired strictness. desired
+// is persistent user intent and is not reset between layout passes; if the
+// solver writes decayed strictness back into it, a child's strictness decays
+// every pass (frame) until a rigid-ish child becomes fully shrinkable.
+// ---------------------------------------------------------------------------
+TEST(violation_solver_preserves_desired_strictness) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(200), pixels(200));
+  t.ui(root).set_flex_direction(FlexDirection::Column);
+  t.ui(root).set_flex_wrap(FlexWrap::NoWrap);
+
+  // Overflowing children with a partial strictness (0.9) the solver may shrink.
+  auto &c1 = t.make_ui(pixels(200), pixels(150, 0.9f));
+  auto &c2 = t.make_ui(pixels(200), pixels(150, 0.9f));
+  t.add_child(root, c1);
+  t.add_child(root, c2);
+
+  // Run several passes, as an immediate-mode/retained loop would.
+  for (int frame = 0; frame < 5; ++frame) {
+    t.run(root);
+  }
+
+  // desired strictness must be exactly what the caller set (0.9), not decayed.
+  CHECK_APPROX(t.ui(c1).desired[Axis::Y].strictness, 0.9f);
+  CHECK_APPROX(t.ui(c2).desired[Axis::Y].strictness, 0.9f);
+}
+
+// ---------------------------------------------------------------------------
 // Children sized by children(): parent grows to fit children
 // ---------------------------------------------------------------------------
 TEST(children_sizing) {

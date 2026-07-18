@@ -1152,7 +1152,10 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
     slider_bg.addComponent<ui::HasSliderState>(owned_value);
 
   HasSliderState &sliderState = slider_bg.get<ui::HasSliderState>();
-  sliderState.changed_since = true;
+  // Reset each frame; apply_slider_value (below) sets it true only on a real
+  // value change. Previously this was unconditionally set true, so the slider's
+  // ElementResult bool was always true and `if (slider(...))` fired every frame.
+  sliderState.changed_since = false;
 
   // Create value update function
   auto apply_slider_value = [&](Entity &target, float new_value_pct) {

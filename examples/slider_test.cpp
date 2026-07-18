@@ -107,4 +107,34 @@ TEST(slider_handle_monotonic_in_value) {
   CHECK(high > low);
 }
 
+// A slider that is never interacted with reports "not changed" every frame.
+// (The bug: changed_since was set true unconditionally, so the ElementResult
+// bool was always true and `if (slider(...))` fired every frame.)
+TEST(slider_reports_unchanged_without_interaction) {
+  ImmTestHarness h;
+
+  auto row = hstack(h.context(), mk(h.root(), 0),
+                    ComponentConfig{}
+                        .with_size(ComponentSize{pixels(400), pixels(40)})
+                        .with_debug_name("row"));
+  float value = 0.5f;
+  // First frame: creation may report a change; that's fine. Re-run a second
+  // frame with no input and require it reports unchanged.
+  slider(h.context(), mk(row.ent(), 0), value,
+         ComponentConfig{}
+             .with_size(ComponentSize{percent(0.9f), pixels(36)})
+             .with_debug_name("sl"),
+         SliderHandleValueLabelPosition::None);
+  h.layout_and_render();
+
+  auto result = slider(h.context(), mk(row.ent(), 0), value,
+                       ComponentConfig{}
+                           .with_size(ComponentSize{percent(0.9f), pixels(36)})
+                           .with_debug_name("sl"),
+                       SliderHandleValueLabelPosition::None);
+  h.layout_and_render();
+
+  CHECK(!static_cast<bool>(result)); // no interaction => not changed
+}
+
 int main() { return ui_test::run_registered_tests("slider tests"); }
