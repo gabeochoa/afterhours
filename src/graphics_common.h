@@ -154,6 +154,8 @@ concept PlatformBackend = requires {
     T::get_screen_to_world_2d(std::declval<typename T::Vec2>(),
                               std::declval<typename T::Camera2D>())
   } -> std::same_as<typename T::Vec2>;
+  { T::begin_mode_2d(std::declval<typename T::Camera2D>()) } -> std::same_as<void>;
+  { T::end_mode_2d() } -> std::same_as<void>;
 
   // ── Application control ──
   { T::request_quit() } -> std::same_as<void>;

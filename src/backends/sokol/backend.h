@@ -451,6 +451,11 @@ struct MetalPlatformAPI {
 
     return {x * c - y * s + camera.target.x, x * s + y * c + camera.target.y};
   }
+  static void begin_mode_2d(const Camera2D &camera) {
+    (void)camera;
+    log_error("@notimplemented begin_mode_2d");
+  }
+  static void end_mode_2d() {}
 
   static Vec2 get_mouse_delta() {
     auto &s = metal_detail::input_state();

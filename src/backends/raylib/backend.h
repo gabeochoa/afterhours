@@ -244,6 +244,10 @@ struct RaylibPlatformAPI {
     const auto world = raylib::GetScreenToWorld2D({position.x, position.y}, camera);
     return {world.x, world.y};
   }
+  static void begin_mode_2d(const Camera2D &camera) {
+    raylib::BeginMode2D(camera);
+  }
+  static void end_mode_2d() { raylib::EndMode2D(); }
 
   // ── Application control ──
   static bool &quit_flag() {
