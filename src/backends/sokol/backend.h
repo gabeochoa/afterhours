@@ -32,6 +32,10 @@
 #include <fontstash/fontstash.h>
 #include <sokol/sokol_fontstash.h>
 #include <cmath>
+#include <cstring>
+#include <filesystem>
+#include <string>
+#include <unordered_map>
 
 // Shared state (also used by font_helper.h)
 #include "metal_state.h"
@@ -43,6 +47,13 @@ namespace metal_detail {
 // ── Rendering pass action (local to metal_backend) ──
 inline sg_pass_action g_pass_action{};
 inline int g_camera_mode_depth = 0;
+inline uint32_t g_next_shader_id = 1;
+struct ShaderRecord {
+  bool is_ps1_post = false;
+  float resolution[2] = {0.0f, 0.0f};
+};
+inline std::unordered_map<uint32_t, ShaderRecord> g_shaders;
+inline uint32_t g_active_shader_id = 0;
 
 // ── Input state ──
 // Sokol keycodes are GLFW-compatible (0-511 range covers all keys).
@@ -384,22 +395,69 @@ struct MetalPlatformAPI {
   static void take_screenshot(const char *filename);
 
   // ── Shaders ──
-  static ShaderType load_shader(const char *, const char *) {
-    log_error("@notimplemented load_shader");
-    return {};
+  static ShaderType load_shader(const char *, const char *fsFileName) {
+    ShaderType shader{};
+    if (fsFileName == nullptr) {
+      log_error("load_shader: fragment shader path is null");
+      return shader;
+    }
+    if (!std::filesystem::exists(fsFileName)) {
+      log_error("load_shader: file not found '{}'", fsFileName);
+      return shader;
+    }
+
+    const uint32_t id = metal_detail::g_next_shader_id++;
+    metal_detail::ShaderRecord rec{};
+    rec.is_ps1_post = std::string(fsFileName).find("ps1_post.fs") != std::string::npos;
+    metal_detail::g_shaders[id] = rec;
+    shader.id = id;
+    return shader;
   }
-  static void unload_shader(ShaderType &) { log_error("@notimplemented unload_shader"); }
-  static int get_shader_location(ShaderType &, const char *) {
-    log_error("@notimplemented get_shader_location");
+  static void unload_shader(ShaderType &shader) {
+    if (shader.id == 0)
+      return;
+    metal_detail::g_shaders.erase(shader.id);
+    if (metal_detail::g_active_shader_id == shader.id) {
+      metal_detail::g_active_shader_id = 0;
+      metal_detail::g_shader_runtime = {};
+    }
+    shader.id = 0;
+  }
+  static int get_shader_location(ShaderType &shader, const char *uniformName) {
+    if (shader.id == 0 || uniformName == nullptr)
+      return -1;
+    if (std::strcmp(uniformName, "resolution") == 0)
+      return 1;
     return -1;
   }
-  static void set_shader_value(ShaderType &, int, const void *, int) {
-    log_error("@notimplemented set_shader_value");
+  static void set_shader_value(ShaderType &shader, int locIndex, const void *value,
+                               int uniformType) {
+    if (shader.id == 0 || value == nullptr)
+      return;
+    auto it = metal_detail::g_shaders.find(shader.id);
+    if (it == metal_detail::g_shaders.end())
+      return;
+    if (locIndex == 1 && uniformType == SHADER_UNIFORM_VEC2) {
+      const float *vec2 = static_cast<const float *>(value);
+      it->second.resolution[0] = vec2[0];
+      it->second.resolution[1] = vec2[1];
+    }
   }
-  static void begin_shader_mode(ShaderType &) {
-    log_error("@notimplemented begin_shader_mode");
+  static void begin_shader_mode(ShaderType &shader) {
+    if (shader.id == 0)
+      return;
+    auto it = metal_detail::g_shaders.find(shader.id);
+    if (it == metal_detail::g_shaders.end())
+      return;
+    metal_detail::g_active_shader_id = shader.id;
+    metal_detail::g_shader_runtime.ps1_enabled = it->second.is_ps1_post;
+    metal_detail::g_shader_runtime.resolution[0] = it->second.resolution[0];
+    metal_detail::g_shader_runtime.resolution[1] = it->second.resolution[1];
   }
-  static void end_shader_mode() { log_error("@notimplemented end_shader_mode"); }
+  static void end_shader_mode() {
+    metal_detail::g_active_shader_id = 0;
+    metal_detail::g_shader_runtime = {};
+  }
 
   // ── Input ──
   static bool is_key_pressed_repeat(int key) {

@@ -2,6 +2,7 @@
 #pragma once
 
 #include <bitset>
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -646,6 +647,47 @@ inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
   sgl_v2f_t2f(x, y + h, 0.0f, 1.0f);
   sgl_end();
   sgl_disable_texture();
+
+  if (graphics::metal_detail::g_shader_runtime.ps1_enabled) {
+    const float scan_h = static_cast<float>(rt.height);
+    const float scan_w = static_cast<float>(rt.width);
+
+    // Approximate CRT scanlines from the ps1 post-process shader.
+    sgl_begin_lines();
+    sgl_c4b(0, 0, 0, 24);
+    for (int yy = 1; yy < rt.height; yy += 2) {
+      const float py = y + static_cast<float>(yy);
+      sgl_v2f(x, py);
+      sgl_v2f(x + scan_w, py);
+    }
+    sgl_end();
+
+    // Subtle vignette approximation: darken the edges with translucent bands.
+    const float band = std::max(8.0f, std::min(scan_w, scan_h) * 0.08f);
+    sgl_begin_quads();
+    sgl_c4b(0, 0, 0, 26);
+    // top
+    sgl_v2f(x, y);
+    sgl_v2f(x + scan_w, y);
+    sgl_v2f(x + scan_w, y + band);
+    sgl_v2f(x, y + band);
+    // bottom
+    sgl_v2f(x, y + scan_h - band);
+    sgl_v2f(x + scan_w, y + scan_h - band);
+    sgl_v2f(x + scan_w, y + scan_h);
+    sgl_v2f(x, y + scan_h);
+    // left
+    sgl_v2f(x, y + band);
+    sgl_v2f(x + band, y + band);
+    sgl_v2f(x + band, y + scan_h - band);
+    sgl_v2f(x, y + scan_h - band);
+    // right
+    sgl_v2f(x + scan_w - band, y + band);
+    sgl_v2f(x + scan_w, y + band);
+    sgl_v2f(x + scan_w, y + scan_h - band);
+    sgl_v2f(x + scan_w - band, y + scan_h - band);
+    sgl_end();
+  }
 }
 
 inline void draw_texture_rec(TextureType, RectangleType, Vector2Type, Color) {

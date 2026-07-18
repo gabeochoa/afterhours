@@ -1,6 +1,7 @@
 #pragma once
 
 #include <concepts>
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <string>
@@ -58,7 +59,9 @@ struct ShaderType {};
 
 namespace afterhours::graphics {
 struct RenderTextureType {};
-struct ShaderType {};
+struct ShaderType {
+  uint32_t id = 0;
+};
 } // namespace afterhours::graphics
 
 #endif // AFTER_HOURS_USE_RAYLIB / AFTER_HOURS_USE_METAL
