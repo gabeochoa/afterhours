@@ -277,16 +277,23 @@ struct MetalPlatformAPI {
   static bool is_window_ready() { return metal_detail::g_initialized; }
   static bool is_window_fullscreen() { return sapp_is_fullscreen(); }
   static void toggle_fullscreen() { sapp_toggle_fullscreen(); }
+  // Runtime window sizing controls are intentionally unsupported in the
+  // sokol_app layer. Sokol exposes startup size via sapp_desc, but does not
+  // provide a portable runtime API for set_window_size / set_window_min_size.
+  // Keep these loud so callers know this is a backend limitation, not a bug.
   static void minimize_window() {
     log_error("@notimplemented minimize_window");
   }
   static void set_window_size(int, int) {
-    // sokol_app currently does not provide a runtime window-size API.
+    log_error("@notimplemented set_window_size");
   }
   static void set_window_min_size(int, int) {
-    // sokol_app currently does not provide a runtime min-size API.
+    log_error("@notimplemented set_window_min_size");
   }
   static void set_window_state(unsigned int flags) {
+    // afterhours keeps raylib-style window-state flags in a backend-neutral
+    // API. Sokol has specific APIs for selected features (e.g. fullscreen),
+    // so we track requested bits here for parity and future mapping.
     metal_detail::g_window_state_flags |= flags;
   }
   static void clear_window_state(unsigned int flags) {
