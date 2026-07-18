@@ -317,13 +317,16 @@ struct modal : developer::Plugin {
             // modal and sets pending_close. We check pending_close at the start
             // of this function.
 
-            // Create modal container
+            // Create modal container. Use with_absolute_position(x, y) so the
+            // centered position is stored as absolute_pos_x/y and survives the
+            // autolayout pass — poking computed_rel directly (below) is
+            // overwritten by compute_relative_positions.
             init_component(ctx, ep_pair,
                            // TODO add support for configuration
                            ComponentConfig{}
                                .with_size(ComponentSize{pixels(width_px),
                                                         pixels(height_px)})
-                               .with_absolute_position()
+                               .with_absolute_position(x_pos, y_pos)
                                .with_flex_direction(FlexDirection::Column)
                                .with_no_wrap()
                                .with_background(Theme::Usage::Surface)
@@ -333,7 +336,8 @@ struct modal : developer::Plugin {
                                .with_debug_name("modal"),
                            ComponentType::Div);
 
-            // Set absolute position manually
+            // Also set computed_rel directly as a belt-and-suspenders fallback
+            // for the current frame before layout runs.
             auto &ui = entity.get<UIComponent>();
             ui.computed_rel[Axis::X] = x_pos;
             ui.computed_rel[Axis::Y] = y_pos;
