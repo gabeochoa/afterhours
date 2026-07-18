@@ -693,8 +693,12 @@ struct AutoLayout {
       float parent_size = parent.computed[axis] - parent.computed_padd[axis];
       return constraint.value * parent_size;
     }
-    case Dim::Children:
     case Dim::Text:
+      // Min/max by text size: resolve to the measured label extent on this
+      // axis. Enables e.g. a tab with expand() width and min_width(text()) so
+      // it fills its fair share but never shrinks below its own label.
+      return get_text_size_for_axis(widget, axis);
+    case Dim::Children:
     case Dim::Expand:
       // These don't make sense as min/max constraints
       return -1.f;

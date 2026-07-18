@@ -1701,10 +1701,6 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
                  "tab_container");
 
   bool changed = false;
-  const size_t num_tabs = tab_labels.size();
-
-  // Calculate tab width as equal portions
-  float tab_width_percent = 1.0f / static_cast<float>(num_tabs);
 
   size_t i = 0;
   for (const auto &label : tab_labels) {
@@ -1724,11 +1720,13 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
                   : afterhours::colors::darken(ctx.theme.background, 0.80f);
     float underline_h = is_active ? 4.0f : 1.0f;
 
-    // Each tab is a button with border-bottom for the underline indicator
+    // Tabs share the bar via expand() (even distribution), but each tab gets a
+    // min-width equal to its own label so long labels never ellipsize when the
+    // bar has room — short-label bars still look evenly split, long-label bars
+    // grow tabs to fit instead of truncating.
     auto tab_config =
         ComponentConfig::inherit_from(config, fmt::format("tab_{}", i))
-            .with_size(
-                ComponentSize{percent(tab_width_percent), config.size.y_axis})
+            .with_size(ComponentSize{expand(), config.size.y_axis})
             .with_label(std::string(label))
             .with_custom_background(tab_bg)
             .with_custom_text_color(tab_text)
@@ -1737,7 +1735,11 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_text_overflow(TextOverflow::Ellipsis)
             .with_border_bottom(underline_color, pixels(underline_h));
 
-    if (button(ctx, mk(entity, i), tab_config)) {
+    auto tab = button(ctx, mk(entity, i), tab_config);
+    // Content-fit floor: never shrink a tab below its label width (+ padding).
+    tab.ent().template get<UIComponent>().set_min_width(
+        Size{Dim::Text, 0.f, 1.f});
+    if (tab) {
       active_tab = i;
       changed = true;
     }
