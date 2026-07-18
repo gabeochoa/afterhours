@@ -1553,24 +1553,25 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                                      UIContext<InputAction> &context,
                                      FontManager &font_manager,
                                      float) override {
+    // Stable-sort by layer only. render_cmds are queued in document pre-order
+    // (parent before child), which is the correct paint order within a layer.
+    // Do NOT tiebreak by entity id: ids are recycled across screens and are
+    // not monotonic with document order, so an id tiebreak lets an opaque
+    // ancestor paint over its own lower-id descendants.
 #if __WIN32
-    // Note we have to do bubble sort here because mingw doesnt support
-    // std::ranges::sort
+    // Bubble sort (mingw lacks std::ranges::sort); stable because it only
+    // swaps on a strictly greater layer.
     for (size_t i = 0; i < context.render_cmds.size(); ++i) {
       for (size_t j = i + 1; j < context.render_cmds.size(); ++j) {
-        if ((context.render_cmds[i].layer > context.render_cmds[j].layer) ||
-            (context.render_cmds[i].layer == context.render_cmds[j].layer &&
-             context.render_cmds[i].id > context.render_cmds[j].id)) {
+        if (context.render_cmds[i].layer > context.render_cmds[j].layer) {
           std::swap(context.render_cmds[i], context.render_cmds[j]);
         }
       }
     }
 #else
-    std::ranges::sort(context.render_cmds, [](RenderInfo a, RenderInfo b) {
-      if (a.layer == b.layer)
-        return a.id < b.id;
-      return a.layer < b.layer;
-    });
+    std::ranges::stable_sort(
+        context.render_cmds,
+        [](RenderInfo a, RenderInfo b) { return a.layer < b.layer; });
 #endif
 
     int cursor_to_set = 0; // Default cursor
@@ -2209,23 +2210,25 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     // Create command buffer
     RenderCommandBuffer buffer(arena);
 
-    // Sort render commands by layer
+    // Stable-sort by layer only. render_cmds are queued in document pre-order
+    // (parent before child), which is the correct paint order within a layer.
+    // Do NOT tiebreak by entity id: ids are recycled across screens and are
+    // not monotonic with document order, so an id tiebreak lets an opaque
+    // ancestor paint over its own lower-id descendants.
 #if __WIN32
+    // Bubble sort (mingw lacks std::ranges::sort); stable because it only
+    // swaps on a strictly greater layer.
     for (size_t i = 0; i < context.render_cmds.size(); ++i) {
       for (size_t j = i + 1; j < context.render_cmds.size(); ++j) {
-        if ((context.render_cmds[i].layer > context.render_cmds[j].layer) ||
-            (context.render_cmds[i].layer == context.render_cmds[j].layer &&
-             context.render_cmds[i].id > context.render_cmds[j].id)) {
+        if (context.render_cmds[i].layer > context.render_cmds[j].layer) {
           std::swap(context.render_cmds[i], context.render_cmds[j]);
         }
       }
     }
 #else
-    std::ranges::sort(context.render_cmds, [](RenderInfo a, RenderInfo b) {
-      if (a.layer == b.layer)
-        return a.id < b.id;
-      return a.layer < b.layer;
-    });
+    std::ranges::stable_sort(
+        context.render_cmds,
+        [](RenderInfo a, RenderInfo b) { return a.layer < b.layer; });
 #endif
 
     // Collect all commands
