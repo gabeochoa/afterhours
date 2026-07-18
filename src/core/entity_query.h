@@ -366,6 +366,12 @@ struct EntityQuery {
     return ents;
   }
 
+  template <typename Fn> void for_each(Fn &&fn) const {
+    for (Entity &entity : gen()) {
+      std::invoke(std::forward<Fn>(fn), entity);
+    }
+  }
+
   template <typename Component>
   [[nodiscard]] std::vector<std::reference_wrapper<Component>> gen_as() const {
     const auto results = gen();
