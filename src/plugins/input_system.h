@@ -87,6 +87,13 @@ struct input : developer::Plugin {
         return {(raw.x - min_x) * scale_x, (raw.y - min_y) * scale_y};
     }
     static MousePosition get_mouse_delta() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        if (testing::test_input::detail::test_mode &&
+            testing::input_injector::detail::mouse.active) {
+            auto d = testing::input_injector::consume_mouse_delta();
+            return {d.x, d.y};
+        }
+#endif
         raylib::Vector2 v = raylib::GetMouseDelta();
         return {v.x, v.y};
     }
@@ -546,6 +553,13 @@ struct input : developer::Plugin {
 #endif
     }
     static MousePosition get_mouse_delta() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        if (testing::test_input::detail::test_mode &&
+            testing::input_injector::detail::mouse.active) {
+            auto d = testing::input_injector::consume_mouse_delta();
+            return {d.x, d.y};
+        }
+#endif
         auto d = graphics::MetalPlatformAPI::get_mouse_delta();
         return {d.x, d.y};
     }

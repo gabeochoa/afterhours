@@ -20,6 +20,7 @@ inline std::array<int, 512> synthetic_press_delay{};
 
 struct MouseState {
   Position pos{}; // Uses Position from concepts.h (satisfies HasPosition)
+  Position delta{};
   bool active = false;
   bool left_down = false;     // Matches UI convention
   bool just_pressed = false;  // Matches UI convention
@@ -110,6 +111,13 @@ inline void update_key_hold(float dt) {
 
 /// Set mouse position
 inline void set_mouse_position(float x, float y) {
+  if (detail::mouse.active) {
+    detail::mouse.delta.x = x - detail::mouse.pos.x;
+    detail::mouse.delta.y = y - detail::mouse.pos.y;
+  } else {
+    // First synthetic position has no previous point to diff against.
+    detail::mouse.delta = {};
+  }
   detail::mouse.pos.x = x;
   detail::mouse.pos.y = y;
   detail::mouse.active = true;
@@ -129,6 +137,13 @@ inline void get_mouse_position(float &x, float &y) {
 /// Get mouse position as Position
 inline Position get_mouse_position() { return detail::mouse.pos; }
 
+/// Consume synthetic mouse delta (returns and clears it)
+inline Position consume_mouse_delta() {
+  Position d = detail::mouse.delta;
+  detail::mouse.delta = {};
+  return d;
+}
+
 /// Schedule a click at center of rectangle
 inline void schedule_click_at(float x, float y, float w, float h) {
   detail::pending_click = {true, x + w / 2, y + h / 2};
@@ -137,9 +152,7 @@ inline void schedule_click_at(float x, float y, float w, float h) {
 /// Execute scheduled click
 inline void inject_scheduled_click() {
   if (detail::pending_click.pending) {
-    detail::mouse.pos.x = detail::pending_click.x;
-    detail::mouse.pos.y = detail::pending_click.y;
-    detail::mouse.active = true;
+    set_mouse_position(detail::pending_click.x, detail::pending_click.y);
     detail::mouse.left_down = true;
     detail::mouse.just_pressed = true;
   }
@@ -182,6 +195,7 @@ inline Position consume_wheel() {
 inline void reset_frame() {
   detail::mouse.just_pressed = false;
   detail::mouse.just_released = false;
+  detail::mouse.delta = {};
   // Tick key press delays and consume presses from the previous frame.
   // Delays are decremented here so that all callers within a single
   // frame see the same delay value.  Counts are decremented here so
