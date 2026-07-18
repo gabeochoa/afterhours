@@ -23,6 +23,7 @@ struct MouseState {
   Position delta{};
   bool active = false;
   bool left_down = false;     // Matches UI convention
+  bool right_down = false;    // Right button (button index 1)
   bool just_pressed = false;  // Matches UI convention
   bool just_released = false; // Matches UI convention
   int press_frames = 0;       // Frame counter for multi-frame clicks
@@ -174,6 +175,9 @@ inline bool is_mouse_button_pressed() {
 }
 inline bool is_mouse_button_down() {
   return detail::mouse.active && detail::mouse.left_down;
+}
+inline bool is_mouse_right_button_down() {
+  return detail::mouse.active && detail::mouse.right_down;
 }
 inline bool is_mouse_button_released() {
   return detail::mouse.active && detail::mouse.just_released;
