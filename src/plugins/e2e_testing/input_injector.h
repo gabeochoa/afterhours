@@ -179,7 +179,7 @@ inline bool is_mouse_button_released() {
   return detail::mouse.active && detail::mouse.just_released;
 }
 
-/// Set scroll wheel delta (consumed on next frame)
+/// Set scroll wheel delta for the current frame
 inline void set_mouse_wheel(float dx, float dy) {
   detail::wheel.x = dx;
   detail::wheel.y = dy;
@@ -187,11 +187,10 @@ inline void set_mouse_wheel(float dx, float dy) {
   detail::mouse.active = true;
 }
 
-/// Consume the synthetic wheel delta (returns and clears it)
+/// Read the synthetic wheel delta for this frame.
+/// The value is cleared by reset_frame().
 inline Position consume_wheel() {
-  Position v{detail::wheel.x, detail::wheel.y};
-  detail::wheel = {};
-  return v;
+  return Position{detail::wheel.x, detail::wheel.y};
 }
 
 /// Reset per-frame state (call at start of frame)
@@ -199,6 +198,7 @@ inline void reset_frame() {
   detail::mouse.just_pressed = false;
   detail::mouse.just_released = false;
   detail::mouse.delta = {};
+  detail::wheel = {};
   // Tick key press delays and consume presses from the previous frame.
   // Delays are decremented here so that all callers within a single
   // frame see the same delay value.  Counts are decremented here so

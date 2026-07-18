@@ -109,8 +109,13 @@ TEST(mouse_wheel_is_one_shot) {
   CHECK(w1.y == -2.0f);
 
   auto w2 = input_injector::consume_wheel();
-  CHECK(w2.x == 0.0f);
-  CHECK(w2.y == 0.0f);
+  CHECK(w2.x == 1.5f);
+  CHECK(w2.y == -2.0f);
+
+  input_injector::reset_frame();
+  auto w3 = input_injector::consume_wheel();
+  CHECK(w3.x == 0.0f);
+  CHECK(w3.y == 0.0f);
 }
 
 TEST(last_move_wins_within_frame) {
@@ -194,6 +199,16 @@ TEST(char_poll_does_not_drop_pending_key) {
   CHECK(c1 == static_cast<int>('x'));
 
   detail::test_mode = false;
+}
+
+TEST(wheel_visible_to_multiple_readers_same_frame) {
+  input_injector::reset_all();
+  input_injector::set_mouse_wheel(2.0f, -3.0f);
+
+  auto a = input_injector::consume_wheel();
+  auto b = input_injector::consume_wheel();
+  CHECK(a.x == 2.0f && a.y == -3.0f);
+  CHECK(b.x == 2.0f && b.y == -3.0f);
 }
 
 int main() {
