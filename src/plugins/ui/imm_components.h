@@ -1804,11 +1804,14 @@ ElementResult progress_bar(
     label_text = original_label + ": " + label_text;
   }
 
-  // Create background track
+  // Create background track. It fills the progress_bar entity (percent(1.0)),
+  // NOT config.size — the entity is already config.size, so re-applying it to
+  // the track compounds a percent size against the entity (e.g. percent(0.7)
+  // becomes 0.7 * 0.7 of the parent). The fill/label below then fill the track.
   auto track_corners = config.rounded_corners.value_or(RoundedCorners().get());
   auto track = div(ctx, mk(entity, 0),
                    ComponentConfig::inherit_from(config, "progress_track")
-                       .with_size(config.size)
+                       .with_size(ComponentSize{percent(1.0f), percent(1.0f)})
                        .with_color_usage(Theme::Usage::Secondary)
                        .with_rounded_corners(RoundedCorners(track_corners))
                        .with_skip_tabbing(true)

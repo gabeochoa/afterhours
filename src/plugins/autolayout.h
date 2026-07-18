@@ -568,6 +568,26 @@ struct AutoLayout {
       }
       total_child_size += cs;
     }
+
+    // Include flex_gap on the main axis so a Dim::Children parent grows to fit
+    // the inter-child gaps (otherwise the parent is too narrow and gapped
+    // children overflow/overlap it).
+    if (widget.desired_gap.value > 0.f) {
+      bool is_main_axis = (widget.flex_direction == FlexDirection::Row &&
+                           axis == Axis::X) ||
+                          (widget.flex_direction == FlexDirection::Column &&
+                           axis == Axis::Y);
+      int visible_children = 0;
+      for (EntityID cid : widget.children) {
+        const UIComponent &c = cmp(cid);
+        if (!c.absolute && !c.should_hide)
+          ++visible_children;
+      }
+      if (is_main_axis && visible_children > 1) {
+        total_child_size += resolve_pixels(widget.desired_gap.value, widget) *
+                            static_cast<float>(visible_children - 1);
+      }
+    }
     return total_child_size;
   }
   float _max_child_size(UIComponent &widget, Axis axis) {
