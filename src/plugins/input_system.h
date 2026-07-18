@@ -87,6 +87,13 @@ struct input : developer::Plugin {
         return {(raw.x - min_x) * scale_x, (raw.y - min_y) * scale_y};
     }
     static MousePosition get_mouse_delta() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        if (testing::test_input::detail::test_mode &&
+            testing::input_injector::detail::mouse.active) {
+            auto d = testing::input_injector::consume_mouse_delta();
+            return {d.x, d.y};
+        }
+#endif
         raylib::Vector2 v = raylib::GetMouseDelta();
         return {v.x, v.y};
     }
@@ -98,6 +105,10 @@ struct input : developer::Plugin {
         if (button == 0 && testing::test_input::detail::test_mode &&
             testing::input_injector::detail::mouse.active) {
             return testing::input_injector::detail::mouse.left_down;
+        }
+        if (button == 1 && testing::test_input::detail::test_mode &&
+            testing::input_injector::detail::mouse.active) {
+            return testing::input_injector::detail::mouse.right_down;
         }
 #endif
         return raylib::IsMouseButtonDown(button);
@@ -127,7 +138,12 @@ struct input : developer::Plugin {
 #endif
     }
     static bool is_mouse_button_released(const MouseButton button) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_mouse_button_released(
+            button, [](int b) { return raylib::IsMouseButtonReleased(b); });
+#else
         return raylib::IsMouseButtonReleased(button);
+#endif
     }
     static bool is_gamepad_available(const GamepadID id) {
         return raylib::IsGamepadAvailable(id);
@@ -164,8 +180,7 @@ struct input : developer::Plugin {
     }
     static float get_mouse_wheel_move() {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        if (testing::test_input::detail::test_mode &&
-            testing::input_injector::detail::mouse.active) {
+        if (testing::test_input::detail::test_mode) {
             auto w = testing::input_injector::consume_wheel();
             return w.y;
         }
@@ -174,8 +189,7 @@ struct input : developer::Plugin {
     }
     static MousePosition get_mouse_wheel_move_v() {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        if (testing::test_input::detail::test_mode &&
-            testing::input_injector::detail::mouse.active) {
+        if (testing::test_input::detail::test_mode) {
             auto w = testing::input_injector::consume_wheel();
             return {w.x, w.y};
         }
@@ -541,6 +555,13 @@ struct input : developer::Plugin {
 #endif
     }
     static MousePosition get_mouse_delta() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        if (testing::test_input::detail::test_mode &&
+            testing::input_injector::detail::mouse.active) {
+            auto d = testing::input_injector::consume_mouse_delta();
+            return {d.x, d.y};
+        }
+#endif
         auto d = graphics::MetalPlatformAPI::get_mouse_delta();
         return {d.x, d.y};
     }
@@ -570,15 +591,30 @@ struct input : developer::Plugin {
 #endif
     }
     static bool is_mouse_button_released(const MouseButton btn) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_mouse_button_released(btn, [](int b) {
+            return graphics::MetalPlatformAPI::is_mouse_button_released(b);
+        });
+#else
         return graphics::MetalPlatformAPI::is_mouse_button_released(btn);
+#endif
     }
     static float get_mouse_wheel_move() {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        if (testing::test_input::detail::test_mode) return 0.0f;
+        if (testing::test_input::detail::test_mode) {
+            auto w = testing::input_injector::consume_wheel();
+            return w.y;
+        }
 #endif
         return graphics::MetalPlatformAPI::get_mouse_wheel_move();
     }
     static MousePosition get_mouse_wheel_move_v() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        if (testing::test_input::detail::test_mode) {
+            auto w = testing::input_injector::consume_wheel();
+            return {w.x, w.y};
+        }
+#endif
         auto v = graphics::MetalPlatformAPI::get_mouse_wheel_move_v();
         return {v.x, v.y};
     }

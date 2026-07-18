@@ -69,6 +69,7 @@ inline void simulate_mouse_release() {
   auto &m = input_injector::detail::mouse;
   m.left_down = false;
   m.just_released = true;
+  m.press_frames = 0;
   m.auto_release = false;
   m.active = true;
 }
@@ -94,7 +95,7 @@ inline void reset_frame() {
   // Restore just_pressed if we still have press frames remaining
   // (simulate_mouse_press sets press_frames=1, so just_pressed survives
   // one reset_frame call after the injection frame)
-  if (pf > 0) {
+  if (pf > 0 && m.left_down) {
     m.press_frames = pf - 1;
     m.just_pressed = true;
   } else if (m.auto_release && m.left_down) {
@@ -171,9 +172,10 @@ inline bool is_key_down(int key, BackendFn backend_fn) {
 template <typename BackendFn>
 inline int get_char_pressed(BackendFn backend_fn) {
   if (detail::test_mode) {
-    // Skip non-char entries to find the next character
-    while (!detail::key_queue.empty() && !detail::key_queue.front().is_char) {
-      detail::key_queue.pop();
+    // Do not discard queued key entries when character polling occurs first.
+    // This preserves key events for subsequent is_key_pressed()/is_key_down().
+    if (!detail::key_queue.empty() && !detail::key_queue.front().is_char) {
+      return 0;
     }
     if (detail::key_queue.empty()) {
       return 0;
@@ -216,6 +218,17 @@ inline bool is_mouse_button_down(int button, BackendFn backend_fn) {
   if (detail::test_mode) {
     if (button == 0)
       return input_injector::detail::mouse.left_down;
+    return false;
+  }
+  return backend_fn(button);
+}
+
+// Check mouse button released (wraps backend call)
+template <typename BackendFn>
+inline bool is_mouse_button_released(int button, BackendFn backend_fn) {
+  if (detail::test_mode) {
+    if (button == 0)
+      return input_injector::detail::mouse.just_released;
     return false;
   }
   return backend_fn(button);

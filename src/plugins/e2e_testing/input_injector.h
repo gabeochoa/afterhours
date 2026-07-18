@@ -20,8 +20,10 @@ inline std::array<int, 512> synthetic_press_delay{};
 
 struct MouseState {
   Position pos{}; // Uses Position from concepts.h (satisfies HasPosition)
+  Position delta{};
   bool active = false;
   bool left_down = false;     // Matches UI convention
+  bool right_down = false;    // Right button (button index 1)
   bool just_pressed = false;  // Matches UI convention
   bool just_released = false; // Matches UI convention
   int press_frames = 0;       // Frame counter for multi-frame clicks
@@ -110,6 +112,13 @@ inline void update_key_hold(float dt) {
 
 /// Set mouse position
 inline void set_mouse_position(float x, float y) {
+  if (detail::mouse.active) {
+    detail::mouse.delta.x = x - detail::mouse.pos.x;
+    detail::mouse.delta.y = y - detail::mouse.pos.y;
+  } else {
+    // First synthetic position has no previous point to diff against.
+    detail::mouse.delta = {};
+  }
   detail::mouse.pos.x = x;
   detail::mouse.pos.y = y;
   detail::mouse.active = true;
@@ -129,6 +138,13 @@ inline void get_mouse_position(float &x, float &y) {
 /// Get mouse position as Position
 inline Position get_mouse_position() { return detail::mouse.pos; }
 
+/// Consume synthetic mouse delta (returns and clears it)
+inline Position consume_mouse_delta() {
+  Position d = detail::mouse.delta;
+  detail::mouse.delta = {};
+  return d;
+}
+
 /// Schedule a click at center of rectangle
 inline void schedule_click_at(float x, float y, float w, float h) {
   detail::pending_click = {true, x + w / 2, y + h / 2};
@@ -137,9 +153,7 @@ inline void schedule_click_at(float x, float y, float w, float h) {
 /// Execute scheduled click
 inline void inject_scheduled_click() {
   if (detail::pending_click.pending) {
-    detail::mouse.pos.x = detail::pending_click.x;
-    detail::mouse.pos.y = detail::pending_click.y;
-    detail::mouse.active = true;
+    set_mouse_position(detail::pending_click.x, detail::pending_click.y);
     detail::mouse.left_down = true;
     detail::mouse.just_pressed = true;
   }
@@ -149,6 +163,7 @@ inline void inject_scheduled_click() {
 inline void release_scheduled_click() {
   if (detail::pending_click.pending && detail::mouse.left_down) {
     detail::mouse.left_down = false;
+    detail::mouse.just_pressed = false;
     detail::mouse.just_released = true;
     detail::pending_click.pending = false;
   }
@@ -161,27 +176,33 @@ inline bool is_mouse_button_pressed() {
 inline bool is_mouse_button_down() {
   return detail::mouse.active && detail::mouse.left_down;
 }
+inline bool is_mouse_right_button_down() {
+  return detail::mouse.active && detail::mouse.right_down;
+}
 inline bool is_mouse_button_released() {
   return detail::mouse.active && detail::mouse.just_released;
 }
 
-/// Set scroll wheel delta (consumed on next frame)
+/// Set scroll wheel delta for the current frame
 inline void set_mouse_wheel(float dx, float dy) {
   detail::wheel.x = dx;
   detail::wheel.y = dy;
+  // Wheel injection should be observable even if no prior mouse move occurred.
+  detail::mouse.active = true;
 }
 
-/// Consume the synthetic wheel delta (returns and clears it)
+/// Read the synthetic wheel delta for this frame.
+/// The value is cleared by reset_frame().
 inline Position consume_wheel() {
-  Position v{detail::wheel.x, detail::wheel.y};
-  detail::wheel = {};
-  return v;
+  return Position{detail::wheel.x, detail::wheel.y};
 }
 
 /// Reset per-frame state (call at start of frame)
 inline void reset_frame() {
   detail::mouse.just_pressed = false;
   detail::mouse.just_released = false;
+  detail::mouse.delta = {};
+  detail::wheel = {};
   // Tick key press delays and consume presses from the previous frame.
   // Delays are decremented here so that all callers within a single
   // frame see the same delay value.  Counts are decremented here so

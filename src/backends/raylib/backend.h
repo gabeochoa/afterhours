@@ -160,9 +160,12 @@ struct RaylibPlatformAPI {
   // ── Constants ──
   static constexpr unsigned int FLAG_WINDOW_RESIZABLE =
       raylib::FLAG_WINDOW_RESIZABLE;
+  static constexpr unsigned int FLAG_VSYNC_HINT = raylib::FLAG_VSYNC_HINT;
   static constexpr int LOG_ERROR = raylib::LOG_ERROR;
   static constexpr int TEXTURE_FILTER_BILINEAR =
       raylib::TEXTURE_FILTER_BILINEAR;
+  static constexpr int TEXTURE_FILTER_POINT = raylib::TEXTURE_FILTER_POINT;
+  static constexpr int SHADER_UNIFORM_VEC2 = raylib::SHADER_UNIFORM_VEC2;
 
   // ── Window lifecycle ──
   static void init_window(int w, int h, const char *title) {
@@ -174,6 +177,16 @@ struct RaylibPlatformAPI {
   static bool is_window_fullscreen() { return raylib::IsWindowFullscreen(); }
   static void toggle_fullscreen() { raylib::ToggleFullscreen(); }
   static void minimize_window() { raylib::MinimizeWindow(); }
+  static void set_window_size(int w, int h) { raylib::SetWindowSize(w, h); }
+  static void set_window_min_size(int w, int h) {
+    raylib::SetWindowMinSize(w, h);
+  }
+  static void set_window_state(unsigned int flags) {
+    raylib::SetWindowState(flags);
+  }
+  static void clear_window_state(unsigned int flags) {
+    raylib::ClearWindowState(flags);
+  }
 
   // ── Config ──
   static void set_config_flags(unsigned int flags) {
@@ -208,6 +221,26 @@ struct RaylibPlatformAPI {
   static void take_screenshot(const char *fileName) {
     raylib::TakeScreenshot(fileName);
   }
+  static void set_render_texture_filter(RenderTextureType &rt, int filter) {
+    raylib::SetTextureFilter(rt.texture, filter);
+  }
+
+  // ── Shaders ──
+  static ShaderType load_shader(const char *vsFileName, const char *fsFileName) {
+    return raylib::LoadShader(vsFileName, fsFileName);
+  }
+  static void unload_shader(ShaderType &shader) { raylib::UnloadShader(shader); }
+  static int get_shader_location(ShaderType &shader, const char *uniformName) {
+    return raylib::GetShaderLocation(shader, uniformName);
+  }
+  static void set_shader_value(ShaderType &shader, int locIndex,
+                               const void *value, int uniformType) {
+    raylib::SetShaderValue(shader, locIndex, value, uniformType);
+  }
+  static void begin_shader_mode(ShaderType &shader) {
+    raylib::BeginShaderMode(shader);
+  }
+  static void end_shader_mode() { raylib::EndShaderMode(); }
 
   // ── Input: keyboard ──
   static bool is_key_pressed(int key) { return raylib::IsKeyPressed(key); }
@@ -233,13 +266,21 @@ struct RaylibPlatformAPI {
   }
   static float get_mouse_wheel_move() { return raylib::GetMouseWheelMove(); }
 
-  struct Vec2 {
-    float x, y;
-  };
+  using Vec2 = raylib::Vector2;
+  using Camera2D = raylib::Camera2D;
   static Vec2 get_mouse_position() {
     auto p = raylib::GetMousePosition();
     return {p.x, p.y};
   }
+  static Vec2 get_screen_to_world_2d(const Vec2 &position,
+                                     const Camera2D &camera) {
+    const auto world = raylib::GetScreenToWorld2D({position.x, position.y}, camera);
+    return {world.x, world.y};
+  }
+  static void begin_mode_2d(const Camera2D &camera) {
+    raylib::BeginMode2D(camera);
+  }
+  static void end_mode_2d() { raylib::EndMode2D(); }
 
   // ── Application control ──
   static bool &quit_flag() {

@@ -2,6 +2,7 @@
 #pragma once
 
 #include <bitset>
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -360,6 +361,30 @@ inline void draw_line_strip(Vector2Type *points, int point_count, Color color) {
   sgl_end();
 }
 
+inline bool check_collision_point_line(Vector2Type point, Vector2Type p1,
+                                       Vector2Type p2, float threshold) {
+  const float vx = p2.x - p1.x;
+  const float vy = p2.y - p1.y;
+  const float len_sq = vx * vx + vy * vy;
+  if (len_sq <= 1e-8f) {
+    const float dx = point.x - p1.x;
+    const float dy = point.y - p1.y;
+    return (dx * dx + dy * dy) <= (threshold * threshold);
+  }
+
+  float t = ((point.x - p1.x) * vx + (point.y - p1.y) * vy) / len_sq;
+  if (t < 0.0f)
+    t = 0.0f;
+  if (t > 1.0f)
+    t = 1.0f;
+
+  const float proj_x = p1.x + t * vx;
+  const float proj_y = p1.y + t * vy;
+  const float dx = point.x - proj_x;
+  const float dy = point.y - proj_y;
+  return (dx * dx + dy * dy) <= (threshold * threshold);
+}
+
 inline void draw_circle(int centerX, int centerY, float radius, Color color) {
   constexpr int SEGMENTS = 32;
   sgl_begin_triangle_strip();
@@ -544,6 +569,17 @@ inline void unload_render_texture(graphics::RenderTextureType &rt) {
 }
 
 inline void begin_texture_mode(graphics::RenderTextureType &rt) {
+  auto unwind_camera_stack = []() {
+    if (graphics::metal_detail::g_camera_mode_depth <= 0)
+      return;
+    while (graphics::metal_detail::g_camera_mode_depth > 0) {
+      sgl_matrix_mode_modelview();
+      sgl_pop_matrix();
+      --graphics::metal_detail::g_camera_mode_depth;
+    }
+    log_warn("begin_texture_mode: cleared unbalanced begin_mode_2d stack");
+  };
+
   // If this render texture's pass is already active, continue drawing
   // into the existing pass (matches Raylib's begin_texture_mode behavior).
   if (graphics::metal_detail::g_pass_active &&
@@ -553,6 +589,7 @@ inline void begin_texture_mode(graphics::RenderTextureType &rt) {
 
   // Flush and end the current pass (swapchain or another offscreen)
   if (graphics::metal_detail::g_pass_active) {
+    unwind_camera_stack();
     if (graphics::metal_detail::g_fons_ctx)
       sfons_flush(graphics::metal_detail::g_fons_ctx);
     sgl_context_draw(sgl_get_context());
@@ -589,7 +626,19 @@ inline void begin_texture_mode(graphics::RenderTextureType &rt) {
 }
 
 inline void end_texture_mode() {
+  auto unwind_camera_stack = []() {
+    if (graphics::metal_detail::g_camera_mode_depth <= 0)
+      return;
+    while (graphics::metal_detail::g_camera_mode_depth > 0) {
+      sgl_matrix_mode_modelview();
+      sgl_pop_matrix();
+      --graphics::metal_detail::g_camera_mode_depth;
+    }
+    log_warn("end_texture_mode: cleared unbalanced begin_mode_2d stack");
+  };
+
   if (graphics::metal_detail::g_pass_active) {
+    unwind_camera_stack();
     if (graphics::metal_detail::g_fons_ctx)
       sfons_flush(graphics::metal_detail::g_fons_ctx);
     sgl_context_draw(sgl_get_context());
@@ -622,10 +671,56 @@ inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
   sgl_v2f_t2f(x, y + h, 0.0f, 1.0f);
   sgl_end();
   sgl_disable_texture();
+
+  if (graphics::metal_detail::g_shader_runtime.ps1_enabled) {
+    const float scan_h = static_cast<float>(rt.height);
+    const float scan_w = static_cast<float>(rt.width);
+
+    // Approximate CRT scanlines from the ps1 post-process shader.
+    sgl_begin_lines();
+    sgl_c4b(0, 0, 0, 24);
+    for (int yy = 1; yy < rt.height; yy += 2) {
+      const float py = y + static_cast<float>(yy);
+      sgl_v2f(x, py);
+      sgl_v2f(x + scan_w, py);
+    }
+    sgl_end();
+
+    // Subtle vignette approximation: darken the edges with translucent bands.
+    const float band = std::max(8.0f, std::min(scan_w, scan_h) * 0.08f);
+    sgl_begin_quads();
+    sgl_c4b(0, 0, 0, 26);
+    // top
+    sgl_v2f(x, y);
+    sgl_v2f(x + scan_w, y);
+    sgl_v2f(x + scan_w, y + band);
+    sgl_v2f(x, y + band);
+    // bottom
+    sgl_v2f(x, y + scan_h - band);
+    sgl_v2f(x + scan_w, y + scan_h - band);
+    sgl_v2f(x + scan_w, y + scan_h);
+    sgl_v2f(x, y + scan_h);
+    // left
+    sgl_v2f(x, y + band);
+    sgl_v2f(x + band, y + band);
+    sgl_v2f(x + band, y + scan_h - band);
+    sgl_v2f(x, y + scan_h - band);
+    // right
+    sgl_v2f(x + scan_w - band, y + band);
+    sgl_v2f(x + scan_w, y + band);
+    sgl_v2f(x + scan_w, y + scan_h - band);
+    sgl_v2f(x + scan_w - band, y + scan_h - band);
+    sgl_end();
+  }
 }
 
 inline void draw_texture_rec(TextureType, RectangleType, Vector2Type, Color) {
   log_warn("draw_texture_rec: not yet implemented in sokol backend");
+}
+
+inline void draw_texture_pro(TextureType, RectangleType, RectangleType,
+                             Vector2Type, float, Color) {
+  log_error("@notimplemented draw_texture_pro");
 }
 
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id,

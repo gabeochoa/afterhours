@@ -21,9 +21,12 @@ using PlatformAPI = MetalPlatformAPI;
 
 inline constexpr unsigned int FLAG_WINDOW_RESIZABLE =
     PlatformAPI::FLAG_WINDOW_RESIZABLE;
+inline constexpr unsigned int FLAG_VSYNC_HINT = PlatformAPI::FLAG_VSYNC_HINT;
 inline constexpr int LOG_ERROR = PlatformAPI::LOG_ERROR;
 inline constexpr int TEXTURE_FILTER_BILINEAR =
     PlatformAPI::TEXTURE_FILTER_BILINEAR;
+inline constexpr int TEXTURE_FILTER_POINT = PlatformAPI::TEXTURE_FILTER_POINT;
+inline constexpr int SHADER_UNIFORM_VEC2 = PlatformAPI::SHADER_UNIFORM_VEC2;
 
 inline void init_window(int w, int h, const char *title) {
   PlatformAPI::init_window(w, h, title);
@@ -36,6 +39,16 @@ inline bool is_window_fullscreen() {
 }
 inline void toggle_fullscreen() { PlatformAPI::toggle_fullscreen(); }
 inline void minimize_window() { PlatformAPI::minimize_window(); }
+inline void set_window_size(int w, int h) { PlatformAPI::set_window_size(w, h); }
+inline void set_window_min_size(int w, int h) {
+  PlatformAPI::set_window_min_size(w, h);
+}
+inline void set_window_state(unsigned int flags) {
+  PlatformAPI::set_window_state(flags);
+}
+inline void clear_window_state(unsigned int flags) {
+  PlatformAPI::clear_window_state(flags);
+}
 
 inline void set_config_flags(unsigned int flags) {
   PlatformAPI::set_config_flags(flags);
@@ -65,6 +78,26 @@ inline int measure_text(const char *text, int fontSize) {
 inline void take_screenshot(const char *fileName) {
   PlatformAPI::take_screenshot(fileName);
 }
+inline void set_render_texture_filter(RenderTextureType &rt, int filter) {
+  PlatformAPI::set_render_texture_filter(rt, filter);
+}
+inline ShaderType load_shader(const char *vsFileName, const char *fsFileName) {
+  return PlatformAPI::load_shader(vsFileName, fsFileName);
+}
+inline void unload_shader(ShaderType &shader) {
+  PlatformAPI::unload_shader(shader);
+}
+inline int get_shader_location(ShaderType &shader, const char *uniformName) {
+  return PlatformAPI::get_shader_location(shader, uniformName);
+}
+inline void set_shader_value(ShaderType &shader, int locIndex, const void *value,
+                             int uniformType) {
+  PlatformAPI::set_shader_value(shader, locIndex, value, uniformType);
+}
+inline void begin_shader_mode(ShaderType &shader) {
+  PlatformAPI::begin_shader_mode(shader);
+}
+inline void end_shader_mode() { PlatformAPI::end_shader_mode(); }
 
 inline bool is_key_pressed(int key) { return PlatformAPI::is_key_pressed(key); }
 inline bool is_key_down(int key) { return PlatformAPI::is_key_down(key); }
@@ -92,6 +125,14 @@ inline float get_mouse_wheel_move() {
   return PlatformAPI::get_mouse_wheel_move();
 }
 inline auto get_mouse_position() { return PlatformAPI::get_mouse_position(); }
+inline auto get_screen_to_world_2d(const PlatformAPI::Vec2 &position,
+                                   const PlatformAPI::Camera2D &camera) {
+  return PlatformAPI::get_screen_to_world_2d(position, camera);
+}
+inline void begin_mode_2d(const PlatformAPI::Camera2D &camera) {
+  PlatformAPI::begin_mode_2d(camera);
+}
+inline void end_mode_2d() { PlatformAPI::end_mode_2d(); }
 
 inline void request_quit() { PlatformAPI::request_quit(); }
 

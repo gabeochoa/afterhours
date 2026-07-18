@@ -31,6 +31,11 @@
 // Font rendering (fontstash + sokol integration)
 #include <fontstash/fontstash.h>
 #include <sokol/sokol_fontstash.h>
+#include <cmath>
+#include <cstring>
+#include <filesystem>
+#include <string>
+#include <unordered_map>
 
 // Shared state (also used by font_helper.h)
 #include "metal_state.h"
@@ -41,6 +46,14 @@ namespace metal_detail {
 
 // ── Rendering pass action (local to metal_backend) ──
 inline sg_pass_action g_pass_action{};
+inline int g_camera_mode_depth = 0;
+inline uint32_t g_next_shader_id = 1;
+struct ShaderRecord {
+  bool is_ps1_post = false;
+  float resolution[2] = {0.0f, 0.0f};
+};
+inline std::unordered_map<uint32_t, ShaderRecord> g_shaders;
+inline uint32_t g_active_shader_id = 0;
 
 // ── Input state ──
 // Sokol keycodes are GLFW-compatible (0-511 range covers all keys).
@@ -242,8 +255,11 @@ struct MetalPlatformAPI {
 
   // ── Constants ──
   static constexpr unsigned int FLAG_WINDOW_RESIZABLE = 0x00000004;
+  static constexpr unsigned int FLAG_VSYNC_HINT = 0x00000040;
   static constexpr int LOG_ERROR = 5;
   static constexpr int TEXTURE_FILTER_BILINEAR = 1;
+  static constexpr int TEXTURE_FILTER_POINT = 0;
+  static constexpr int SHADER_UNIFORM_VEC2 = 1;
 
   // ── Window lifecycle (legacy API -- prefer run()) ──
   static void init_window(int, int, const char *) {
@@ -261,8 +277,27 @@ struct MetalPlatformAPI {
   static bool is_window_ready() { return metal_detail::g_initialized; }
   static bool is_window_fullscreen() { return sapp_is_fullscreen(); }
   static void toggle_fullscreen() { sapp_toggle_fullscreen(); }
+  // Runtime window sizing controls are intentionally unsupported in the
+  // sokol_app layer. Sokol exposes startup size via sapp_desc, but does not
+  // provide a portable runtime API for set_window_size / set_window_min_size.
+  // Keep these loud so callers know this is a backend limitation, not a bug.
   static void minimize_window() {
     log_error("@notimplemented minimize_window");
+  }
+  static void set_window_size(int, int) {
+    log_error("@notimplemented set_window_size");
+  }
+  static void set_window_min_size(int, int) {
+    log_error("@notimplemented set_window_min_size");
+  }
+  static void set_window_state(unsigned int flags) {
+    // afterhours keeps raylib-style window-state flags in a backend-neutral
+    // API. Sokol has specific APIs for selected features (e.g. fullscreen),
+    // so we track requested bits here for parity and future mapping.
+    metal_detail::g_window_state_flags |= flags;
+  }
+  static void clear_window_state(unsigned int flags) {
+    metal_detail::g_window_state_flags &= ~flags;
   }
 
   // ── Config (legacy API -- prefer RunConfig fields) ──
@@ -300,9 +335,19 @@ struct MetalPlatformAPI {
     // clang-format on
     sgl_load_matrix(gl_to_metal);
     sgl_ortho(0.0f, w, h, 0.0f, -1.0f, 1.0f);
+    sgl_matrix_mode_modelview();
+    sgl_load_identity();
   }
 
   static void end_drawing() {
+    if (metal_detail::g_camera_mode_depth != 0) {
+      while (metal_detail::g_camera_mode_depth > 0) {
+        sgl_matrix_mode_modelview();
+        sgl_pop_matrix();
+        --metal_detail::g_camera_mode_depth;
+      }
+      log_warn("Unbalanced begin_mode_2d/end_mode_2d; camera stack reset at frame end");
+    }
     // Flush fontstash texture updates
     if (metal_detail::g_fons_ctx) {
       sfons_flush(metal_detail::g_fons_ctx);
@@ -369,6 +414,85 @@ struct MetalPlatformAPI {
   // ── Screenshots ──
   // Implemented in sokol_impl.mm via CoreGraphics window capture
   static void take_screenshot(const char *filename);
+  static void set_render_texture_filter(RenderTextureType &rt, int filter) {
+    const bool point = (filter == TEXTURE_FILTER_POINT);
+    if (rt.sampler_id) {
+      sg_destroy_sampler({rt.sampler_id});
+      rt.sampler_id = 0;
+    }
+    sg_sampler_desc sd{};
+    sd.min_filter = point ? SG_FILTER_NEAREST : SG_FILTER_LINEAR;
+    sd.mag_filter = point ? SG_FILTER_NEAREST : SG_FILTER_LINEAR;
+    sd.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
+    sd.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
+    sd.label = point ? "rt-sampler-point" : "rt-sampler-linear";
+    rt.sampler_id = sg_make_sampler(&sd).id;
+  }
+
+  // ── Shaders ──
+  static ShaderType load_shader(const char *, const char *fsFileName) {
+    ShaderType shader{};
+    if (fsFileName == nullptr) {
+      log_error("load_shader: fragment shader path is null");
+      return shader;
+    }
+    if (!std::filesystem::exists(fsFileName)) {
+      log_error("load_shader: file not found '{}'", fsFileName);
+      return shader;
+    }
+
+    const uint32_t id = metal_detail::g_next_shader_id++;
+    metal_detail::ShaderRecord rec{};
+    rec.is_ps1_post = std::string(fsFileName).find("ps1_post.fs") != std::string::npos;
+    metal_detail::g_shaders[id] = rec;
+    shader.id = id;
+    return shader;
+  }
+  static void unload_shader(ShaderType &shader) {
+    if (shader.id == 0)
+      return;
+    metal_detail::g_shaders.erase(shader.id);
+    if (metal_detail::g_active_shader_id == shader.id) {
+      metal_detail::g_active_shader_id = 0;
+      metal_detail::g_shader_runtime = {};
+    }
+    shader.id = 0;
+  }
+  static int get_shader_location(ShaderType &shader, const char *uniformName) {
+    if (shader.id == 0 || uniformName == nullptr)
+      return -1;
+    if (std::strcmp(uniformName, "resolution") == 0)
+      return 1;
+    return -1;
+  }
+  static void set_shader_value(ShaderType &shader, int locIndex, const void *value,
+                               int uniformType) {
+    if (shader.id == 0 || value == nullptr)
+      return;
+    auto it = metal_detail::g_shaders.find(shader.id);
+    if (it == metal_detail::g_shaders.end())
+      return;
+    if (locIndex == 1 && uniformType == SHADER_UNIFORM_VEC2) {
+      const float *vec2 = static_cast<const float *>(value);
+      it->second.resolution[0] = vec2[0];
+      it->second.resolution[1] = vec2[1];
+    }
+  }
+  static void begin_shader_mode(ShaderType &shader) {
+    if (shader.id == 0)
+      return;
+    auto it = metal_detail::g_shaders.find(shader.id);
+    if (it == metal_detail::g_shaders.end())
+      return;
+    metal_detail::g_active_shader_id = shader.id;
+    metal_detail::g_shader_runtime.ps1_enabled = it->second.is_ps1_post;
+    metal_detail::g_shader_runtime.resolution[0] = it->second.resolution[0];
+    metal_detail::g_shader_runtime.resolution[1] = it->second.resolution[1];
+  }
+  static void end_shader_mode() {
+    metal_detail::g_active_shader_id = 0;
+    metal_detail::g_shader_runtime = {};
+  }
 
   // ── Input ──
   static bool is_key_pressed_repeat(int key) {
@@ -423,6 +547,12 @@ struct MetalPlatformAPI {
   struct Vec2 {
     float x, y;
   };
+  struct Camera2D {
+    Vec2 offset;
+    Vec2 target;
+    float rotation;
+    float zoom;
+  };
 
   static Vec2 get_mouse_position() {
     auto &s = metal_detail::input_state();
@@ -430,6 +560,44 @@ struct MetalPlatformAPI {
     // macOS Retina), but all UI layout/rendering uses logical pixels.
     float dpi = sapp_dpi_scale();
     return {s.mouse_x / dpi, s.mouse_y / dpi};
+  }
+  static Vec2 get_screen_to_world_2d(const Vec2 &position,
+                                     const Camera2D &camera) {
+    constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
+    const float zoom = (camera.zoom == 0.0f) ? 1.0f : camera.zoom;
+    const float x = (position.x - camera.offset.x) / zoom;
+    const float y = (position.y - camera.offset.y) / zoom;
+
+    const float rot = -camera.rotation * kDegToRad;
+    const float c = std::cos(rot);
+    const float s = std::sin(rot);
+
+    return {x * c - y * s + camera.target.x, x * s + y * c + camera.target.y};
+  }
+  static void begin_mode_2d(const Camera2D &camera) {
+    if (!metal_detail::g_pass_active) {
+      log_warn("begin_mode_2d called outside active drawing pass");
+      return;
+    }
+    sgl_matrix_mode_modelview();
+    sgl_push_matrix();
+    ++metal_detail::g_camera_mode_depth;
+
+    // Match raylib Camera2D transform:
+    // screen = T(offset) * R(rotation) * S(zoom) * T(-target) * world
+    sgl_translate(camera.offset.x, camera.offset.y, 0.0f);
+    sgl_rotate(sgl_rad(camera.rotation), 0.0f, 0.0f, 1.0f);
+    sgl_scale(camera.zoom, camera.zoom, 1.0f);
+    sgl_translate(-camera.target.x, -camera.target.y, 0.0f);
+  }
+  static void end_mode_2d() {
+    if (metal_detail::g_camera_mode_depth <= 0) {
+      log_warn("end_mode_2d called without matching begin_mode_2d");
+      return;
+    }
+    sgl_matrix_mode_modelview();
+    sgl_pop_matrix();
+    --metal_detail::g_camera_mode_depth;
   }
 
   static Vec2 get_mouse_delta() {
@@ -486,6 +654,63 @@ struct MetalPlatformAPI {
 
 static_assert(PlatformBackend<MetalPlatformAPI>,
               "MetalPlatformAPI must satisfy PlatformBackend concept");
+
+namespace metal_backend {
+
+inline bool metal_init(const Config &cfg) {
+  if (cfg.display == DisplayMode::Headless) {
+    log_error("@notimplemented metal headless mode");
+    return false;
+  }
+  // Sokol owns the app lifecycle via sapp_run() in MetalPlatformAPI::run().
+  // Keep graphics::init() explicitly unsupported, but ensure the backend is
+  // registered so failures are deterministic.
+  log_error("@notimplemented graphics::init on metal backend; use graphics::run");
+  return false;
+}
+
+inline void metal_shutdown() {}
+
+inline void metal_begin_frame() { MetalPlatformAPI::begin_drawing(); }
+
+inline void metal_end_frame() { MetalPlatformAPI::end_drawing(); }
+
+inline bool metal_capture_frame(const std::filesystem::path &) { return false; }
+
+inline float metal_get_delta_time() { return MetalPlatformAPI::get_frame_time(); }
+
+inline bool metal_is_headless() { return false; }
+
+inline RenderTextureType &metal_get_render_texture() {
+  static RenderTextureType dummy{};
+  return dummy;
+}
+
+inline void ensure_registered() {
+  static bool registered = false;
+  if (!registered) {
+    BackendInterface iface{};
+    iface.init = metal_init;
+    iface.shutdown = metal_shutdown;
+    iface.begin_frame = metal_begin_frame;
+    iface.end_frame = metal_end_frame;
+    iface.capture_frame = metal_capture_frame;
+    iface.get_delta_time = metal_get_delta_time;
+    iface.is_headless = metal_is_headless;
+    iface.get_render_texture = metal_get_render_texture;
+    register_backend(iface);
+    registered = true;
+  }
+}
+
+namespace detail {
+struct AutoRegister {
+  AutoRegister() { ensure_registered(); }
+};
+inline AutoRegister auto_register{};
+} // namespace detail
+
+} // namespace metal_backend
 
 } // namespace afterhours::graphics
 

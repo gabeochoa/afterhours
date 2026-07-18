@@ -342,6 +342,11 @@ inline void draw_line_strip(Vector2Type *points, int point_count, Color color) {
   raylib::DrawLineStrip(points, point_count, color);
 }
 
+inline bool check_collision_point_line(Vector2Type point, Vector2Type p1,
+                                       Vector2Type p2, float threshold) {
+  return raylib::CheckCollisionPointLine(point, p1, p2, threshold);
+}
+
 // Circle drawing primitives
 inline void draw_circle(int centerX, int centerY, float radius, Color color) {
   raylib::DrawCircle(centerX, centerY, radius, color);
@@ -441,6 +446,11 @@ inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
 inline void draw_texture_rec(TextureType tex, RectangleType src,
                              Vector2Type pos, Color tint) {
   raylib::DrawTextureRec(tex, src, pos, tint);
+}
+
+inline void draw_texture_pro(TextureType tex, RectangleType src, RectangleType dest,
+                             Vector2Type origin, float rotation, Color tint) {
+  raylib::DrawTexturePro(tex, src, dest, origin, rotation, tint);
 }
 
 inline bool capture_render_texture(const graphics::RenderTextureType &rt,

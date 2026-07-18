@@ -79,6 +79,11 @@ inline void draw_line_ex(Vector2Type, Vector2Type, float, Color) {
 inline void draw_line_strip(Vector2Type *, int, Color) {
   log_error("@notimplemented draw_line_strip");
 }
+inline bool check_collision_point_line(Vector2Type, Vector2Type, Vector2Type,
+                                       float) {
+  log_error("@notimplemented check_collision_point_line");
+  return false;
+}
 inline void draw_circle(int, int, float, Color) {
   log_error("@notimplemented draw_circle");
 }
@@ -145,6 +150,10 @@ inline void draw_render_texture(const graphics::RenderTextureType &, float,
 
 inline void draw_texture_rec(TextureType, RectangleType, Vector2Type, Color) {
   log_error("@notimplemented draw_texture_rec");
+}
+inline void draw_texture_pro(TextureType, RectangleType, RectangleType,
+                             Vector2Type, float, Color) {
+  log_error("@notimplemented draw_texture_pro");
 }
 
 inline bool capture_render_texture(const graphics::RenderTextureType &,

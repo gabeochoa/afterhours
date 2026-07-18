@@ -1,6 +1,7 @@
 #pragma once
 
 #include <concepts>
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <string>
@@ -34,6 +35,7 @@ namespace raylib {
 
 namespace afterhours::graphics {
 using RenderTextureType = raylib::RenderTexture2D;
+using ShaderType = raylib::Shader;
 } // namespace afterhours::graphics
 
 #elif defined(AFTER_HOURS_USE_METAL)
@@ -50,12 +52,18 @@ struct RenderTextureType {
   int width = 0;
   int height = 0;
 };
+struct ShaderType {
+  uint32_t id = 0;
+};
 } // namespace afterhours::graphics
 
 #else // no backend
 
 namespace afterhours::graphics {
 struct RenderTextureType {};
+struct ShaderType {
+  uint32_t id = 0;
+};
 } // namespace afterhours::graphics
 
 #endif // AFTER_HOURS_USE_RAYLIB / AFTER_HOURS_USE_METAL
@@ -109,6 +117,10 @@ concept PlatformBackend = requires {
   { T::is_window_fullscreen() } -> std::same_as<bool>;
   { T::toggle_fullscreen() } -> std::same_as<void>;
   { T::minimize_window() } -> std::same_as<void>;
+  { T::set_window_size(int{}, int{}) } -> std::same_as<void>;
+  { T::set_window_min_size(int{}, int{}) } -> std::same_as<void>;
+  { T::set_window_state(unsigned{}) } -> std::same_as<void>;
+  { T::clear_window_state(unsigned{}) } -> std::same_as<void>;
 
   // ── Config ──
   { T::set_config_flags(unsigned{}) } -> std::same_as<void>;
@@ -136,6 +148,18 @@ concept PlatformBackend = requires {
 
   // ── Screenshots ──
   { T::take_screenshot((const char *){}) } -> std::same_as<void>;
+  { T::set_render_texture_filter(std::declval<RenderTextureType &>(), int{}) } -> std::same_as<void>;
+
+  // ── Shaders ──
+  { T::load_shader((const char *){}, (const char *){}) } -> std::same_as<ShaderType>;
+  { T::unload_shader(std::declval<ShaderType &>()) } -> std::same_as<void>;
+  { T::get_shader_location(std::declval<ShaderType &>(), (const char *){}) } -> std::same_as<int>;
+  {
+    T::set_shader_value(std::declval<ShaderType &>(), int{},
+                        (const void *){}, int{})
+  } -> std::same_as<void>;
+  { T::begin_shader_mode(std::declval<ShaderType &>()) } -> std::same_as<void>;
+  { T::end_shader_mode() } -> std::same_as<void>;
 
   // ── Input: keyboard ──
   { T::is_key_pressed(int{}) } -> std::same_as<bool>;
@@ -150,6 +174,12 @@ concept PlatformBackend = requires {
   { T::is_mouse_button_released(int{}) } -> std::same_as<bool>;
   { T::is_mouse_button_up(int{}) } -> std::same_as<bool>;
   { T::get_mouse_wheel_move() } -> std::same_as<float>;
+  {
+    T::get_screen_to_world_2d(std::declval<typename T::Vec2>(),
+                              std::declval<typename T::Camera2D>())
+  } -> std::same_as<typename T::Vec2>;
+  { T::begin_mode_2d(std::declval<typename T::Camera2D>()) } -> std::same_as<void>;
+  { T::end_mode_2d() } -> std::same_as<void>;
 
   // ── Application control ──
   { T::request_quit() } -> std::same_as<void>;
