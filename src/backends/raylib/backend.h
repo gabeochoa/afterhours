@@ -160,9 +160,11 @@ struct RaylibPlatformAPI {
   // ── Constants ──
   static constexpr unsigned int FLAG_WINDOW_RESIZABLE =
       raylib::FLAG_WINDOW_RESIZABLE;
+  static constexpr unsigned int FLAG_VSYNC_HINT = raylib::FLAG_VSYNC_HINT;
   static constexpr int LOG_ERROR = raylib::LOG_ERROR;
   static constexpr int TEXTURE_FILTER_BILINEAR =
       raylib::TEXTURE_FILTER_BILINEAR;
+  static constexpr int TEXTURE_FILTER_POINT = raylib::TEXTURE_FILTER_POINT;
   static constexpr int SHADER_UNIFORM_VEC2 = raylib::SHADER_UNIFORM_VEC2;
 
   // ── Window lifecycle ──
@@ -175,6 +177,16 @@ struct RaylibPlatformAPI {
   static bool is_window_fullscreen() { return raylib::IsWindowFullscreen(); }
   static void toggle_fullscreen() { raylib::ToggleFullscreen(); }
   static void minimize_window() { raylib::MinimizeWindow(); }
+  static void set_window_size(int w, int h) { raylib::SetWindowSize(w, h); }
+  static void set_window_min_size(int w, int h) {
+    raylib::SetWindowMinSize(w, h);
+  }
+  static void set_window_state(unsigned int flags) {
+    raylib::SetWindowState(flags);
+  }
+  static void clear_window_state(unsigned int flags) {
+    raylib::ClearWindowState(flags);
+  }
 
   // ── Config ──
   static void set_config_flags(unsigned int flags) {
@@ -208,6 +220,9 @@ struct RaylibPlatformAPI {
   // ── Screenshots ──
   static void take_screenshot(const char *fileName) {
     raylib::TakeScreenshot(fileName);
+  }
+  static void set_render_texture_filter(RenderTextureType &rt, int filter) {
+    raylib::SetTextureFilter(rt.texture, filter);
   }
 
   // ── Shaders ──

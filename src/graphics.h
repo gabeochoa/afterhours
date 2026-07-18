@@ -21,9 +21,11 @@ using PlatformAPI = MetalPlatformAPI;
 
 inline constexpr unsigned int FLAG_WINDOW_RESIZABLE =
     PlatformAPI::FLAG_WINDOW_RESIZABLE;
+inline constexpr unsigned int FLAG_VSYNC_HINT = PlatformAPI::FLAG_VSYNC_HINT;
 inline constexpr int LOG_ERROR = PlatformAPI::LOG_ERROR;
 inline constexpr int TEXTURE_FILTER_BILINEAR =
     PlatformAPI::TEXTURE_FILTER_BILINEAR;
+inline constexpr int TEXTURE_FILTER_POINT = PlatformAPI::TEXTURE_FILTER_POINT;
 inline constexpr int SHADER_UNIFORM_VEC2 = PlatformAPI::SHADER_UNIFORM_VEC2;
 
 inline void init_window(int w, int h, const char *title) {
@@ -37,6 +39,16 @@ inline bool is_window_fullscreen() {
 }
 inline void toggle_fullscreen() { PlatformAPI::toggle_fullscreen(); }
 inline void minimize_window() { PlatformAPI::minimize_window(); }
+inline void set_window_size(int w, int h) { PlatformAPI::set_window_size(w, h); }
+inline void set_window_min_size(int w, int h) {
+  PlatformAPI::set_window_min_size(w, h);
+}
+inline void set_window_state(unsigned int flags) {
+  PlatformAPI::set_window_state(flags);
+}
+inline void clear_window_state(unsigned int flags) {
+  PlatformAPI::clear_window_state(flags);
+}
 
 inline void set_config_flags(unsigned int flags) {
   PlatformAPI::set_config_flags(flags);
@@ -65,6 +77,9 @@ inline int measure_text(const char *text, int fontSize) {
 
 inline void take_screenshot(const char *fileName) {
   PlatformAPI::take_screenshot(fileName);
+}
+inline void set_render_texture_filter(RenderTextureType &rt, int filter) {
+  PlatformAPI::set_render_texture_filter(rt, filter);
 }
 inline ShaderType load_shader(const char *vsFileName, const char *fsFileName) {
   return PlatformAPI::load_shader(vsFileName, fsFileName);

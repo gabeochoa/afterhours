@@ -115,6 +115,10 @@ concept PlatformBackend = requires {
   { T::is_window_fullscreen() } -> std::same_as<bool>;
   { T::toggle_fullscreen() } -> std::same_as<void>;
   { T::minimize_window() } -> std::same_as<void>;
+  { T::set_window_size(int{}, int{}) } -> std::same_as<void>;
+  { T::set_window_min_size(int{}, int{}) } -> std::same_as<void>;
+  { T::set_window_state(unsigned{}) } -> std::same_as<void>;
+  { T::clear_window_state(unsigned{}) } -> std::same_as<void>;
 
   // ── Config ──
   { T::set_config_flags(unsigned{}) } -> std::same_as<void>;
@@ -142,6 +146,7 @@ concept PlatformBackend = requires {
 
   // ── Screenshots ──
   { T::take_screenshot((const char *){}) } -> std::same_as<void>;
+  { T::set_render_texture_filter(std::declval<RenderTextureType &>(), int{}) } -> std::same_as<void>;
 
   // ── Shaders ──
   { T::load_shader((const char *){}, (const char *){}) } -> std::same_as<ShaderType>;

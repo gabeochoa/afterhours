@@ -255,8 +255,10 @@ struct MetalPlatformAPI {
 
   // ── Constants ──
   static constexpr unsigned int FLAG_WINDOW_RESIZABLE = 0x00000004;
+  static constexpr unsigned int FLAG_VSYNC_HINT = 0x00000040;
   static constexpr int LOG_ERROR = 5;
   static constexpr int TEXTURE_FILTER_BILINEAR = 1;
+  static constexpr int TEXTURE_FILTER_POINT = 0;
   static constexpr int SHADER_UNIFORM_VEC2 = 1;
 
   // ── Window lifecycle (legacy API -- prefer run()) ──
@@ -277,6 +279,18 @@ struct MetalPlatformAPI {
   static void toggle_fullscreen() { sapp_toggle_fullscreen(); }
   static void minimize_window() {
     log_error("@notimplemented minimize_window");
+  }
+  static void set_window_size(int, int) {
+    log_error("@notimplemented set_window_size");
+  }
+  static void set_window_min_size(int, int) {
+    log_error("@notimplemented set_window_min_size");
+  }
+  static void set_window_state(unsigned int) {
+    log_error("@notimplemented set_window_state");
+  }
+  static void clear_window_state(unsigned int) {
+    log_error("@notimplemented clear_window_state");
   }
 
   // ── Config (legacy API -- prefer RunConfig fields) ──
@@ -393,6 +407,10 @@ struct MetalPlatformAPI {
   // ── Screenshots ──
   // Implemented in sokol_impl.mm via CoreGraphics window capture
   static void take_screenshot(const char *filename);
+  static void set_render_texture_filter(RenderTextureType &, int) {
+    // Render-texture sampling in the sokol path is configured when the sampler
+    // is created in drawing_helpers.
+  }
 
   // ── Shaders ──
   static ShaderType load_shader(const char *, const char *fsFileName) {
