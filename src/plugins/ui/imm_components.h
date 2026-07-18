@@ -1813,8 +1813,13 @@ ElementResult progress_bar(
                        .with_render_layer(config.render_layer));
 
   // Create fill bar (width based on normalized value)
-  const auto x_axis = config.size.x_axis;
-  Size fill_width{x_axis.dim, x_axis.value * normalized, x_axis.strictness};
+  // The fill is a child of the track, so its size must be relative to the
+  // track: width = percent(normalized), height = percent(1.0). Re-applying
+  // config.size here would resolve against the track and compound the fraction
+  // (e.g. a percent height of 0.7 * 0.7), leaving the fill shorter/narrower
+  // than the track and offset from it. Pixel-sized tracks still work because
+  // percent-of-track resolves to the right pixels.
+  Size fill_width = percent(normalized);
 
   // Only render fill if there's something to show
   if (normalized > 0.001f) {
@@ -1826,7 +1831,7 @@ ElementResult progress_bar(
 
     div(ctx, mk(track.ent(), 0),
         ComponentConfig::inherit_from(config, "progress_fill")
-            .with_size(ComponentSize{fill_width, config.size.y_axis})
+            .with_size(ComponentSize{fill_width, percent(1.0f)})
             .with_absolute_position()
             .with_color_usage(Theme::Usage::Primary)
             .with_rounded_corners(fill_corners)
@@ -1838,7 +1843,7 @@ ElementResult progress_bar(
   if (!label_text.empty()) {
     div(ctx, mk(track.ent(), 1),
         ComponentConfig::inherit_from(config, "progress_label")
-            .with_size(config.size)
+            .with_size(ComponentSize{percent(1.0f), percent(1.0f)})
             .with_label(label_text)
             .with_absolute_position()
             .with_color_usage(Theme::Usage::None)
