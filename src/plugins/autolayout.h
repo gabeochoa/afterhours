@@ -166,7 +166,8 @@ struct AutoLayout {
     case Axis::top:
     case Axis::right:
     case Axis::bottom:
-      log_error("Text size not supported for axis {}", axis);
+      log_error("Text size not supported for axis {}",
+                static_cast<int>(axis));
       break;
     }
     return 0.f;
@@ -508,7 +509,8 @@ struct AutoLayout {
     case Axis::bottom:
       return compute_(margin[axis], parent_size(Axis::Y));
     }
-    log_error("computing margin for parent exp but got invalid axis {}", axis);
+    log_error("computing margin for parent exp but got invalid axis {}",
+              static_cast<int>(axis));
     return no_change;
   }
 
@@ -556,7 +558,7 @@ struct AutoLayout {
         log_error("Parents sized with mode 'children' cannot have "
                   "children sized with mode 'percent'. Failed when checking "
                   "children for {} axis {}",
-                  widget.id, axis);
+                  widget.id, static_cast<int>(axis));
       }
 
       //  no computed value yet
@@ -925,7 +927,7 @@ struct AutoLayout {
       // Cross axis: children overlap, so only the largest matters.
       float all_children = is_main_axis ? _total_child(axis) : _max_child(axis);
       float error = all_children - my_size;
-      log_trace("starting error {} {}", axis, error);
+      log_trace("starting error {} {}", static_cast<int>(axis), error);
 
       // Only run error correction on the main axis. Cross-axis children
       // overlap so shrinking them to fit a "sum" budget is incorrect.
@@ -953,7 +955,7 @@ struct AutoLayout {
           error = all_children - my_size;
           if (i_x > 10) {
             log_trace("Hit {} iteration limit trying to solve violations {}",
-                      axis, error);
+                      static_cast<int>(axis), error);
             break;
           }
         }

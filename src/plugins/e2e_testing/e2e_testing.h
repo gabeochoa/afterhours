@@ -25,6 +25,11 @@
 // Custom commands: Create systems that handle PendingE2ECommand
 // Semantic actions: Use 'action WidgetLeft' instead of 'key LEFT' (via
 // ui_commands.h)
+//
+// Optional perf commands are provided in perf_commands.h and are NOT
+// auto-registered. Projects must explicitly:
+//   1) configure perf_commands::set_provider(...)
+//   2) call perf_commands::register_perf_commands(sm)
 #pragma once
 
 #include "../../core/key_codes.h"
