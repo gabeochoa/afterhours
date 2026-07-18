@@ -42,6 +42,7 @@ namespace metal_detail {
 
 // ── Rendering pass action (local to metal_backend) ──
 inline sg_pass_action g_pass_action{};
+inline int g_camera_mode_depth = 0;
 
 // ── Input state ──
 // Sokol keycodes are GLFW-compatible (0-511 range covers all keys).
@@ -302,9 +303,19 @@ struct MetalPlatformAPI {
     // clang-format on
     sgl_load_matrix(gl_to_metal);
     sgl_ortho(0.0f, w, h, 0.0f, -1.0f, 1.0f);
+    sgl_matrix_mode_modelview();
+    sgl_load_identity();
   }
 
   static void end_drawing() {
+    if (metal_detail::g_camera_mode_depth != 0) {
+      while (metal_detail::g_camera_mode_depth > 0) {
+        sgl_matrix_mode_modelview();
+        sgl_pop_matrix();
+        --metal_detail::g_camera_mode_depth;
+      }
+      log_warn("Unbalanced begin_mode_2d/end_mode_2d; camera stack reset at frame end");
+    }
     // Flush fontstash texture updates
     if (metal_detail::g_fons_ctx) {
       sfons_flush(metal_detail::g_fons_ctx);
@@ -471,10 +482,30 @@ struct MetalPlatformAPI {
     return {x * c - y * s + camera.target.x, x * s + y * c + camera.target.y};
   }
   static void begin_mode_2d(const Camera2D &camera) {
-    (void)camera;
-    log_error("@notimplemented begin_mode_2d");
+    if (!metal_detail::g_pass_active) {
+      log_warn("begin_mode_2d called outside active drawing pass");
+      return;
+    }
+    sgl_matrix_mode_modelview();
+    sgl_push_matrix();
+    ++metal_detail::g_camera_mode_depth;
+
+    // Match raylib Camera2D transform:
+    // screen = T(offset) * R(rotation) * S(zoom) * T(-target) * world
+    sgl_translate(camera.offset.x, camera.offset.y, 0.0f);
+    sgl_rotate(sgl_rad(camera.rotation), 0.0f, 0.0f, 1.0f);
+    sgl_scale(camera.zoom, camera.zoom, 1.0f);
+    sgl_translate(-camera.target.x, -camera.target.y, 0.0f);
   }
-  static void end_mode_2d() {}
+  static void end_mode_2d() {
+    if (metal_detail::g_camera_mode_depth <= 0) {
+      log_warn("end_mode_2d called without matching begin_mode_2d");
+      return;
+    }
+    sgl_matrix_mode_modelview();
+    sgl_pop_matrix();
+    --metal_detail::g_camera_mode_depth;
+  }
 
   static Vec2 get_mouse_delta() {
     auto &s = metal_detail::input_state();
