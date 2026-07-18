@@ -151,6 +151,10 @@ inline void draw_render_texture(const graphics::RenderTextureType &, float,
 inline void draw_texture_rec(TextureType, RectangleType, Vector2Type, Color) {
   log_error("@notimplemented draw_texture_rec");
 }
+inline void draw_texture_pro(TextureType, RectangleType, RectangleType,
+                             Vector2Type, float, Color) {
+  log_error("@notimplemented draw_texture_pro");
+}
 
 inline bool capture_render_texture(const graphics::RenderTextureType &,
                                    const std::filesystem::path &) {

@@ -694,6 +694,11 @@ inline void draw_texture_rec(TextureType, RectangleType, Vector2Type, Color) {
   log_warn("draw_texture_rec: not yet implemented in sokol backend");
 }
 
+inline void draw_texture_pro(TextureType, RectangleType, RectangleType,
+                             Vector2Type, float, Color) {
+  log_error("@notimplemented draw_texture_pro");
+}
+
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id,
                                              int width, int height,
                                              const char *path);

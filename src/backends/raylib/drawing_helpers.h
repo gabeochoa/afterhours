@@ -448,6 +448,11 @@ inline void draw_texture_rec(TextureType tex, RectangleType src,
   raylib::DrawTextureRec(tex, src, pos, tint);
 }
 
+inline void draw_texture_pro(TextureType tex, RectangleType src, RectangleType dest,
+                             Vector2Type origin, float rotation, Color tint) {
+  raylib::DrawTexturePro(tex, src, dest, origin, rotation, tint);
+}
+
 inline bool capture_render_texture(const graphics::RenderTextureType &rt,
                                    const std::filesystem::path &path) {
   raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
