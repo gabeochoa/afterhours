@@ -2294,13 +2294,18 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
   const size_t half = num_visible / 2;
 
   // Wrap labels in a container so the row layout stays [<] [labels] [>]
+  // When more than one label is visible (prev/current/next), add a gap so the
+  // labels don't run together — the container sizes to children(), so
+  // SpaceAround has no free space to distribute on its own.
   auto label_container =
       hstack(ctx, mk(entity),
              ComponentConfig::inherit_from(config, "stepper_labels")
                  .with_size(ComponentSize{children(), percent(1.0f)})
-                 .with_background(Theme::Usage::None)
                  .with_justify_content(JustifyContent::SpaceAround)
                  .with_align_items(AlignItems::Center)
+                 .with_gap(pixels(num_visible > 1 ? 12.0f : 0.0f))
+                 .with_no_wrap()
+                 .with_background(Theme::Usage::None)
                  .with_skip_tabbing(true)
                  .with_debug_name("stepper_labels"));
 
