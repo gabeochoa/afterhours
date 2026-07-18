@@ -1214,7 +1214,15 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   else if (dim == Dim::Percent || dim == Dim::ScreenPercent)
     handle_width_size.value = std::max(0.02f, handle_width_size.value);
 
-  Size handle_left_size{dim, owned_value * 0.75f * track_val,
+  // Handle left offset positions the knob along the track. The handle is a
+  // child of the track, so a Percent/ScreenPercent margin already resolves
+  // against the track width — it must NOT be multiplied by track_val again
+  // (that double-application pinned the knob near the start). Pixels dims do
+  // need the track width to convert the fraction to pixels.
+  float handle_left_frac = owned_value * 0.75f;
+  Size handle_left_size{dim,
+                        (dim == Dim::Pixels) ? handle_left_frac * track_val
+                                             : handle_left_frac,
                         bg_size.x_axis.strictness};
   if (dim == Dim::Pixels)
     handle_left_size.value = std::max(0.0f, handle_left_size.value);
