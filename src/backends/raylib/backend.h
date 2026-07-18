@@ -233,12 +233,16 @@ struct RaylibPlatformAPI {
   }
   static float get_mouse_wheel_move() { return raylib::GetMouseWheelMove(); }
 
-  struct Vec2 {
-    float x, y;
-  };
+  using Vec2 = raylib::Vector2;
+  using Camera2D = raylib::Camera2D;
   static Vec2 get_mouse_position() {
     auto p = raylib::GetMousePosition();
     return {p.x, p.y};
+  }
+  static Vec2 get_screen_to_world_2d(const Vec2 &position,
+                                     const Camera2D &camera) {
+    const auto world = raylib::GetScreenToWorld2D({position.x, position.y}, camera);
+    return {world.x, world.y};
   }
 
   // ── Application control ──

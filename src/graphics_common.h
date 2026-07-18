@@ -150,6 +150,10 @@ concept PlatformBackend = requires {
   { T::is_mouse_button_released(int{}) } -> std::same_as<bool>;
   { T::is_mouse_button_up(int{}) } -> std::same_as<bool>;
   { T::get_mouse_wheel_move() } -> std::same_as<float>;
+  {
+    T::get_screen_to_world_2d(std::declval<typename T::Vec2>(),
+                              std::declval<typename T::Camera2D>())
+  } -> std::same_as<typename T::Vec2>;
 
   // ── Application control ──
   { T::request_quit() } -> std::same_as<void>;

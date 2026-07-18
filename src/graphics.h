@@ -92,6 +92,10 @@ inline float get_mouse_wheel_move() {
   return PlatformAPI::get_mouse_wheel_move();
 }
 inline auto get_mouse_position() { return PlatformAPI::get_mouse_position(); }
+inline auto get_screen_to_world_2d(const PlatformAPI::Vec2 &position,
+                                   const PlatformAPI::Camera2D &camera) {
+  return PlatformAPI::get_screen_to_world_2d(position, camera);
+}
 
 inline void request_quit() { PlatformAPI::request_quit(); }
 

@@ -31,6 +31,7 @@
 // Font rendering (fontstash + sokol integration)
 #include <fontstash/fontstash.h>
 #include <sokol/sokol_fontstash.h>
+#include <cmath>
 
 // Shared state (also used by font_helper.h)
 #include "metal_state.h"
@@ -423,6 +424,12 @@ struct MetalPlatformAPI {
   struct Vec2 {
     float x, y;
   };
+  struct Camera2D {
+    Vec2 offset;
+    Vec2 target;
+    float rotation;
+    float zoom;
+  };
 
   static Vec2 get_mouse_position() {
     auto &s = metal_detail::input_state();
@@ -430,6 +437,19 @@ struct MetalPlatformAPI {
     // macOS Retina), but all UI layout/rendering uses logical pixels.
     float dpi = sapp_dpi_scale();
     return {s.mouse_x / dpi, s.mouse_y / dpi};
+  }
+  static Vec2 get_screen_to_world_2d(const Vec2 &position,
+                                     const Camera2D &camera) {
+    constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
+    const float zoom = (camera.zoom == 0.0f) ? 1.0f : camera.zoom;
+    const float x = (position.x - camera.offset.x) / zoom;
+    const float y = (position.y - camera.offset.y) / zoom;
+
+    const float rot = -camera.rotation * kDegToRad;
+    const float c = std::cos(rot);
+    const float s = std::sin(rot);
+
+    return {x * c - y * s + camera.target.x, x * s + y * c + camera.target.y};
   }
 
   static Vec2 get_mouse_delta() {
