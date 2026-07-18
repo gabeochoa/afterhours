@@ -3027,6 +3027,50 @@ TEST(gap_single_child) {
   CHECK_APPROX(t.ui(a).computed[Axis::Y], 50.f);
 }
 
+// ---------------------------------------------------------------------------
+// Gap: children()-sized parent grows to include the inter-child gaps
+// (otherwise a gapped children() container is too small and its children
+// overflow/overlap it).
+// ---------------------------------------------------------------------------
+TEST(gap_children_sizing_includes_gap_row) {
+  TestLayout t;
+  // Row parent sized to its children, with a gap between them.
+  auto &root = t.make_ui(children(), pixels(100));
+  t.ui(root).flex_direction = FlexDirection::Row;
+  t.ui(root).desired_gap = pixels(12.f);
+
+  auto &a = t.make_ui(pixels(60), pixels(40));
+  auto &b = t.make_ui(pixels(60), pixels(40));
+  auto &c = t.make_ui(pixels(60), pixels(40));
+  t.add_child(root, a);
+  t.add_child(root, b);
+  t.add_child(root, c);
+  t.run(root);
+
+  // 3 * 60 + 2 * 12 gap = 204 (not 180).
+  CHECK_APPROX(t.ui(root).computed[Axis::X], 204.f);
+  // Children are positioned with the gap and stay within the parent.
+  CHECK_APPROX(t.ui(a).computed_rel[Axis::X], 0.f);
+  CHECK_APPROX(t.ui(b).computed_rel[Axis::X], 72.f);  // 60 + 12
+  CHECK_APPROX(t.ui(c).computed_rel[Axis::X], 144.f); // 120 + 24
+}
+
+// Column variant: children() height includes the gaps.
+TEST(gap_children_sizing_includes_gap_column) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(100), children());
+  t.ui(root).desired_gap = pixels(10.f);
+
+  auto &a = t.make_ui(pixels(80), pixels(30));
+  auto &b = t.make_ui(pixels(80), pixels(30));
+  t.add_child(root, a);
+  t.add_child(root, b);
+  t.run(root);
+
+  // 2 * 30 + 1 * 10 gap = 70 (not 60).
+  CHECK_APPROX(t.ui(root).computed[Axis::Y], 70.f);
+}
+
 // ===========================================================================
 // Absolute positioning: children of absolute parent inherit position
 // ===========================================================================

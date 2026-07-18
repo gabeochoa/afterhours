@@ -1214,7 +1214,15 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   else if (dim == Dim::Percent || dim == Dim::ScreenPercent)
     handle_width_size.value = std::max(0.02f, handle_width_size.value);
 
-  Size handle_left_size{dim, owned_value * 0.75f * track_val,
+  // Handle left offset positions the knob along the track. The handle is a
+  // child of the track, so a Percent/ScreenPercent margin already resolves
+  // against the track width — it must NOT be multiplied by track_val again
+  // (that double-application pinned the knob near the start). Pixels dims do
+  // need the track width to convert the fraction to pixels.
+  float handle_left_frac = owned_value * 0.75f;
+  Size handle_left_size{dim,
+                        (dim == Dim::Pixels) ? handle_left_frac * track_val
+                                             : handle_left_frac,
                         bg_size.x_axis.strictness};
   if (dim == Dim::Pixels)
     handle_left_size.value = std::max(0.0f, handle_left_size.value);
@@ -1693,10 +1701,6 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
                  "tab_container");
 
   bool changed = false;
-  const size_t num_tabs = tab_labels.size();
-
-  // Calculate tab width as equal portions
-  float tab_width_percent = 1.0f / static_cast<float>(num_tabs);
 
   size_t i = 0;
   for (const auto &label : tab_labels) {
@@ -1716,11 +1720,13 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
                   : afterhours::colors::darken(ctx.theme.background, 0.80f);
     float underline_h = is_active ? 4.0f : 1.0f;
 
-    // Each tab is a button with border-bottom for the underline indicator
+    // Tabs share the bar via expand() (even distribution), but each tab gets a
+    // min-width equal to its own label so long labels never ellipsize when the
+    // bar has room — short-label bars still look evenly split, long-label bars
+    // grow tabs to fit instead of truncating.
     auto tab_config =
         ComponentConfig::inherit_from(config, fmt::format("tab_{}", i))
-            .with_size(
-                ComponentSize{percent(tab_width_percent), config.size.y_axis})
+            .with_size(ComponentSize{expand(), config.size.y_axis})
             .with_label(std::string(label))
             .with_custom_background(tab_bg)
             .with_custom_text_color(tab_text)
@@ -1729,7 +1735,11 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_text_overflow(TextOverflow::Ellipsis)
             .with_border_bottom(underline_color, pixels(underline_h));
 
-    if (button(ctx, mk(entity, i), tab_config)) {
+    auto tab = button(ctx, mk(entity, i), tab_config);
+    // Content-fit floor: never shrink a tab below its label width (+ padding).
+    tab.ent().template get<UIComponent>().set_min_width(
+        Size{Dim::Text, 0.f, 1.f});
+    if (tab) {
       active_tab = i;
       changed = true;
     }
@@ -1794,19 +1804,27 @@ ElementResult progress_bar(
     label_text = original_label + ": " + label_text;
   }
 
-  // Create background track
+  // Create background track. It fills the progress_bar entity (percent(1.0)),
+  // NOT config.size — the entity is already config.size, so re-applying it to
+  // the track compounds a percent size against the entity (e.g. percent(0.7)
+  // becomes 0.7 * 0.7 of the parent). The fill/label below then fill the track.
   auto track_corners = config.rounded_corners.value_or(RoundedCorners().get());
   auto track = div(ctx, mk(entity, 0),
                    ComponentConfig::inherit_from(config, "progress_track")
-                       .with_size(config.size)
+                       .with_size(ComponentSize{percent(1.0f), percent(1.0f)})
                        .with_color_usage(Theme::Usage::Secondary)
                        .with_rounded_corners(RoundedCorners(track_corners))
                        .with_skip_tabbing(true)
                        .with_render_layer(config.render_layer));
 
   // Create fill bar (width based on normalized value)
-  const auto x_axis = config.size.x_axis;
-  Size fill_width{x_axis.dim, x_axis.value * normalized, x_axis.strictness};
+  // The fill is a child of the track, so its size must be relative to the
+  // track: width = percent(normalized), height = percent(1.0). Re-applying
+  // config.size here would resolve against the track and compound the fraction
+  // (e.g. a percent height of 0.7 * 0.7), leaving the fill shorter/narrower
+  // than the track and offset from it. Pixel-sized tracks still work because
+  // percent-of-track resolves to the right pixels.
+  Size fill_width = percent(normalized);
 
   // Only render fill if there's something to show
   if (normalized > 0.001f) {
@@ -1818,7 +1836,7 @@ ElementResult progress_bar(
 
     div(ctx, mk(track.ent(), 0),
         ComponentConfig::inherit_from(config, "progress_fill")
-            .with_size(ComponentSize{fill_width, config.size.y_axis})
+            .with_size(ComponentSize{fill_width, percent(1.0f)})
             .with_absolute_position()
             .with_color_usage(Theme::Usage::Primary)
             .with_rounded_corners(fill_corners)
@@ -1830,7 +1848,7 @@ ElementResult progress_bar(
   if (!label_text.empty()) {
     div(ctx, mk(track.ent(), 1),
         ComponentConfig::inherit_from(config, "progress_label")
-            .with_size(config.size)
+            .with_size(ComponentSize{percent(1.0f), percent(1.0f)})
             .with_label(label_text)
             .with_absolute_position()
             .with_color_usage(Theme::Usage::None)
@@ -2294,13 +2312,18 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
   const size_t half = num_visible / 2;
 
   // Wrap labels in a container so the row layout stays [<] [labels] [>]
+  // When more than one label is visible (prev/current/next), add a gap so the
+  // labels don't run together — the container sizes to children(), so
+  // SpaceAround has no free space to distribute on its own.
   auto label_container =
       hstack(ctx, mk(entity),
              ComponentConfig::inherit_from(config, "stepper_labels")
                  .with_size(ComponentSize{children(), percent(1.0f)})
-                 .with_background(Theme::Usage::None)
                  .with_justify_content(JustifyContent::SpaceAround)
                  .with_align_items(AlignItems::Center)
+                 .with_gap(pixels(num_visible > 1 ? 12.0f : 0.0f))
+                 .with_no_wrap()
+                 .with_background(Theme::Usage::None)
                  .with_skip_tabbing(true)
                  .with_debug_name("stepper_labels"));
 

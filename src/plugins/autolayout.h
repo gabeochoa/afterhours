@@ -570,6 +570,26 @@ struct AutoLayout {
       }
       total_child_size += cs;
     }
+
+    // Include flex_gap on the main axis so a Dim::Children parent grows to fit
+    // the inter-child gaps (otherwise the parent is too narrow and gapped
+    // children overflow/overlap it).
+    if (widget.desired_gap.value > 0.f) {
+      bool is_main_axis = (widget.flex_direction == FlexDirection::Row &&
+                           axis == Axis::X) ||
+                          (widget.flex_direction == FlexDirection::Column &&
+                           axis == Axis::Y);
+      int visible_children = 0;
+      for (EntityID cid : widget.children) {
+        const UIComponent &c = cmp(cid);
+        if (!c.absolute && !c.should_hide)
+          ++visible_children;
+      }
+      if (is_main_axis && visible_children > 1) {
+        total_child_size += resolve_pixels(widget.desired_gap.value, widget) *
+                            static_cast<float>(visible_children - 1);
+      }
+    }
     return total_child_size;
   }
   float _max_child_size(UIComponent &widget, Axis axis) {
@@ -695,8 +715,12 @@ struct AutoLayout {
       float parent_size = parent.computed[axis] - parent.computed_padd[axis];
       return constraint.value * parent_size;
     }
-    case Dim::Children:
     case Dim::Text:
+      // Min/max by text size: resolve to the measured label extent on this
+      // axis. Enables e.g. a tab with expand() width and min_width(text()) so
+      // it fills its fair share but never shrinks below its own label.
+      return get_text_size_for_axis(widget, axis);
+    case Dim::Children:
     case Dim::Expand:
       // These don't make sense as min/max constraints
       return -1.f;
