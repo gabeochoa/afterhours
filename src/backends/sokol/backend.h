@@ -655,6 +655,63 @@ struct MetalPlatformAPI {
 static_assert(PlatformBackend<MetalPlatformAPI>,
               "MetalPlatformAPI must satisfy PlatformBackend concept");
 
+namespace metal_backend {
+
+inline bool metal_init(const Config &cfg) {
+  if (cfg.display == DisplayMode::Headless) {
+    log_error("@notimplemented metal headless mode");
+    return false;
+  }
+  // Sokol owns the app lifecycle via sapp_run() in MetalPlatformAPI::run().
+  // Keep graphics::init() explicitly unsupported, but ensure the backend is
+  // registered so failures are deterministic.
+  log_error("@notimplemented graphics::init on metal backend; use graphics::run");
+  return false;
+}
+
+inline void metal_shutdown() {}
+
+inline void metal_begin_frame() { MetalPlatformAPI::begin_drawing(); }
+
+inline void metal_end_frame() { MetalPlatformAPI::end_drawing(); }
+
+inline bool metal_capture_frame(const std::filesystem::path &) { return false; }
+
+inline float metal_get_delta_time() { return MetalPlatformAPI::get_frame_time(); }
+
+inline bool metal_is_headless() { return false; }
+
+inline RenderTextureType &metal_get_render_texture() {
+  static RenderTextureType dummy{};
+  return dummy;
+}
+
+inline void ensure_registered() {
+  static bool registered = false;
+  if (!registered) {
+    BackendInterface iface{};
+    iface.init = metal_init;
+    iface.shutdown = metal_shutdown;
+    iface.begin_frame = metal_begin_frame;
+    iface.end_frame = metal_end_frame;
+    iface.capture_frame = metal_capture_frame;
+    iface.get_delta_time = metal_get_delta_time;
+    iface.is_headless = metal_is_headless;
+    iface.get_render_texture = metal_get_render_texture;
+    register_backend(iface);
+    registered = true;
+  }
+}
+
+namespace detail {
+struct AutoRegister {
+  AutoRegister() { ensure_registered(); }
+};
+inline AutoRegister auto_register{};
+} // namespace detail
+
+} // namespace metal_backend
+
 } // namespace afterhours::graphics
 
 extern "C" void metal_take_screenshot(const char *);

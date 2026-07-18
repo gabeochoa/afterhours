@@ -569,6 +569,17 @@ inline void unload_render_texture(graphics::RenderTextureType &rt) {
 }
 
 inline void begin_texture_mode(graphics::RenderTextureType &rt) {
+  auto unwind_camera_stack = []() {
+    if (graphics::metal_detail::g_camera_mode_depth <= 0)
+      return;
+    while (graphics::metal_detail::g_camera_mode_depth > 0) {
+      sgl_matrix_mode_modelview();
+      sgl_pop_matrix();
+      --graphics::metal_detail::g_camera_mode_depth;
+    }
+    log_warn("begin_texture_mode: cleared unbalanced begin_mode_2d stack");
+  };
+
   // If this render texture's pass is already active, continue drawing
   // into the existing pass (matches Raylib's begin_texture_mode behavior).
   if (graphics::metal_detail::g_pass_active &&
@@ -578,6 +589,7 @@ inline void begin_texture_mode(graphics::RenderTextureType &rt) {
 
   // Flush and end the current pass (swapchain or another offscreen)
   if (graphics::metal_detail::g_pass_active) {
+    unwind_camera_stack();
     if (graphics::metal_detail::g_fons_ctx)
       sfons_flush(graphics::metal_detail::g_fons_ctx);
     sgl_context_draw(sgl_get_context());
@@ -614,7 +626,19 @@ inline void begin_texture_mode(graphics::RenderTextureType &rt) {
 }
 
 inline void end_texture_mode() {
+  auto unwind_camera_stack = []() {
+    if (graphics::metal_detail::g_camera_mode_depth <= 0)
+      return;
+    while (graphics::metal_detail::g_camera_mode_depth > 0) {
+      sgl_matrix_mode_modelview();
+      sgl_pop_matrix();
+      --graphics::metal_detail::g_camera_mode_depth;
+    }
+    log_warn("end_texture_mode: cleared unbalanced begin_mode_2d stack");
+  };
+
   if (graphics::metal_detail::g_pass_active) {
+    unwind_camera_stack();
     if (graphics::metal_detail::g_fons_ctx)
       sfons_flush(graphics::metal_detail::g_fons_ctx);
     sgl_context_draw(sgl_get_context());

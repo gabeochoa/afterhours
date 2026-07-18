@@ -171,9 +171,10 @@ inline bool is_key_down(int key, BackendFn backend_fn) {
 template <typename BackendFn>
 inline int get_char_pressed(BackendFn backend_fn) {
   if (detail::test_mode) {
-    // Skip non-char entries to find the next character
-    while (!detail::key_queue.empty() && !detail::key_queue.front().is_char) {
-      detail::key_queue.pop();
+    // Do not discard queued key entries when character polling occurs first.
+    // This preserves key events for subsequent is_key_pressed()/is_key_down().
+    if (!detail::key_queue.empty() && !detail::key_queue.front().is_char) {
+      return 0;
     }
     if (detail::key_queue.empty()) {
       return 0;

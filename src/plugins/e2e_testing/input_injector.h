@@ -162,6 +162,7 @@ inline void inject_scheduled_click() {
 inline void release_scheduled_click() {
   if (detail::pending_click.pending && detail::mouse.left_down) {
     detail::mouse.left_down = false;
+    detail::mouse.just_pressed = false;
     detail::mouse.just_released = true;
     detail::pending_click.pending = false;
   }
@@ -182,6 +183,8 @@ inline bool is_mouse_button_released() {
 inline void set_mouse_wheel(float dx, float dy) {
   detail::wheel.x = dx;
   detail::wheel.y = dy;
+  // Wheel injection should be observable even if no prior mouse move occurred.
+  detail::mouse.active = true;
 }
 
 /// Consume the synthetic wheel delta (returns and clears it)

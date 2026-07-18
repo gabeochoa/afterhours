@@ -176,8 +176,7 @@ struct input : developer::Plugin {
     }
     static float get_mouse_wheel_move() {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        if (testing::test_input::detail::test_mode &&
-            testing::input_injector::detail::mouse.active) {
+        if (testing::test_input::detail::test_mode) {
             auto w = testing::input_injector::consume_wheel();
             return w.y;
         }
@@ -186,8 +185,7 @@ struct input : developer::Plugin {
     }
     static MousePosition get_mouse_wheel_move_v() {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        if (testing::test_input::detail::test_mode &&
-            testing::input_injector::detail::mouse.active) {
+        if (testing::test_input::detail::test_mode) {
             auto w = testing::input_injector::consume_wheel();
             return {w.x, w.y};
         }
@@ -599,11 +597,20 @@ struct input : developer::Plugin {
     }
     static float get_mouse_wheel_move() {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        if (testing::test_input::detail::test_mode) return 0.0f;
+        if (testing::test_input::detail::test_mode) {
+            auto w = testing::input_injector::consume_wheel();
+            return w.y;
+        }
 #endif
         return graphics::MetalPlatformAPI::get_mouse_wheel_move();
     }
     static MousePosition get_mouse_wheel_move_v() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        if (testing::test_input::detail::test_mode) {
+            auto w = testing::input_injector::consume_wheel();
+            return {w.x, w.y};
+        }
+#endif
         auto v = graphics::MetalPlatformAPI::get_mouse_wheel_move_v();
         return {v.x, v.y};
     }
