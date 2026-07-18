@@ -169,6 +169,27 @@ TEST(simulate_click_multi_frame_lifecycle) {
   detail::test_mode = false;
 }
 
+TEST(manual_release_before_reset_does_not_reassert_pressed) {
+  using namespace afterhours::testing::test_input;
+  detail::test_mode = true;
+  reset_all();
+
+  simulate_mouse_press();
+  CHECK(input_injector::detail::mouse.left_down);
+  CHECK(input_injector::detail::mouse.just_pressed);
+
+  // Manual release in the same frame should win.
+  simulate_mouse_release();
+  CHECK(!input_injector::detail::mouse.left_down);
+  CHECK(input_injector::detail::mouse.just_released);
+
+  reset_frame();
+  CHECK(!input_injector::detail::mouse.left_down);
+  CHECK(!input_injector::detail::mouse.just_pressed);
+
+  detail::test_mode = false;
+}
+
 TEST(key_press_is_deferred_until_next_frame) {
   input_injector::reset_all();
   constexpr int k = 65; // 'A'

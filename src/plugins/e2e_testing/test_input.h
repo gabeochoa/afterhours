@@ -94,7 +94,7 @@ inline void reset_frame() {
   // Restore just_pressed if we still have press frames remaining
   // (simulate_mouse_press sets press_frames=1, so just_pressed survives
   // one reset_frame call after the injection frame)
-  if (pf > 0) {
+  if (pf > 0 && m.left_down) {
     m.press_frames = pf - 1;
     m.just_pressed = true;
   } else if (m.auto_release && m.left_down) {
