@@ -397,6 +397,7 @@ enum struct TextAlignment {
 enum struct TextOverflow {
   Clip,     // Default: text is clipped at container boundary
   Ellipsis, // Text is truncated with "..." when it overflows
+  Wrap,     // Text wraps to multiple lines to fit the container width
 };
 
 struct HasLabel : BaseComponent {

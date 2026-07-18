@@ -548,6 +548,44 @@ static inline RectangleType position_text(const ui::FontManager &fm,
 // and main text) The 'sizing' rect contains any offset (shadow/stroke) that
 // should be applied
 namespace detail {
+
+// Greedy word-wrap: split `text` into lines each no wider than `max_width`,
+// using `measure` to size candidate lines. Words wider than max_width are
+// placed on their own line (not character-split). Returns at least one line
+// for non-empty input. `measure` returns the pixel width of a string.
+template <typename MeasureFn>
+static inline std::vector<std::string>
+wrap_text_to_width(const std::string &text, float max_width,
+                   MeasureFn &&measure) {
+  std::vector<std::string> lines;
+  if (text.empty() || max_width <= 0.f) {
+    lines.push_back(text);
+    return lines;
+  }
+  std::string current;
+  size_t start = 0;
+  while (start <= text.size()) {
+    size_t sp = text.find(' ', start);
+    std::string word = text.substr(
+        start, sp == std::string::npos ? std::string::npos : sp - start);
+    std::string candidate = current.empty() ? word : current + " " + word;
+    if (current.empty() || measure(candidate) <= max_width) {
+      current = candidate;
+    } else {
+      lines.push_back(current);
+      current = word;
+    }
+    if (sp == std::string::npos)
+      break;
+    start = sp + 1;
+  }
+  if (!current.empty())
+    lines.push_back(current);
+  if (lines.empty())
+    lines.push_back(text);
+  return lines;
+}
+
 static inline void
 draw_text_at_position(const ui::FontManager &fm, const std::string &text,
                       RectangleType rect, TextAlignment alignment,
@@ -597,6 +635,45 @@ static inline void draw_text_in_rect(
         text, rect.x, rect.y, rect.width, rect.height, vw, vh);
   }
 #endif
+
+  // Word-wrap: split the text into lines that fit the rect width and draw each
+  // stacked vertically. Requires an explicit font size (wrapping is only
+  // well-defined at a known size; without one we fall through to the normal
+  // auto-fitting single-line path). Each line is drawn with Clip to avoid
+  // re-entering this branch.
+  if (text_overflow == TextOverflow::Wrap && !text.empty() &&
+      rect.width > 0.f && explicit_font_size > 0.f) {
+    Font font = fm.get_active_font();
+    float font_size = explicit_font_size;
+    float spacing = 1.f + letter_spacing;
+    float max_width = rect.width - 10.f; // 5px margin each side
+
+    auto line_width = [&](const std::string &s) {
+      return measure_text(font, s.c_str(), font_size, spacing).x;
+    };
+
+    // Greedy word wrap. Words wider than max_width are placed on their own
+    // line (not character-split) — callers that need hard breaks can size up.
+    std::vector<std::string> lines =
+        detail::wrap_text_to_width(text, max_width, line_width);
+
+    if (lines.size() > 1) {
+      float line_h = measure_text(font, "Ag", font_size, spacing).y;
+      float total_h = line_h * static_cast<float>(lines.size());
+      // Vertically center the block within the rect.
+      float y = rect.y + std::max(0.f, (rect.height - total_h) * 0.5f);
+      for (const auto &ln : lines) {
+        RectangleType line_rect{rect.x, y, rect.width, line_h};
+        draw_text_in_rect(fm, ln, line_rect, alignment, color,
+                          show_debug_indicator, stroke, shadow, rotation,
+                          rot_center_x, rot_center_y, TextOverflow::Clip,
+                          letter_spacing, explicit_font_size);
+        y += line_h;
+      }
+      return;
+    }
+    // Single line that fits: fall through to normal single-line rendering.
+  }
 
   TextPositionResult result = [&]() {
     Vector2Type margin_px{5.f, 5.f};
@@ -2099,10 +2176,49 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         label_rect.y += hasLabel.text_y_offset;
         float centerX = draw_rect.x + draw_rect.width / 2.0f;
         float centerY = draw_rect.y + draw_rect.height / 2.0f;
-        buffer.add_text(label_rect, display_text, cmp.font_name,
-                        result.rect.height, font_col, hasLabel.alignment, layer,
-                        entity.id, stroke, shadow, rotation, centerX, centerY,
-                        hasLabel.letter_spacing);
+
+        // Word-wrap: emit one text command per line that fits label_rect's
+        // width. Requires an explicit font size (see draw_text_in_rect). Falls
+        // through to the single-line command otherwise.
+        bool wrapped = false;
+        if (hasLabel.text_overflow == TextOverflow::Wrap &&
+            !display_text.empty() && explicit_fs > 0.f &&
+            label_rect.width > 0.f) {
+          Font font = font_manager.get_active_font();
+          float font_size = explicit_fs;
+          float spacing = 1.f + hasLabel.letter_spacing;
+          float max_width = label_rect.width - 10.f;
+          auto line_width = [&](const std::string &s) {
+            return measure_text(font, s.c_str(), font_size, spacing).x;
+          };
+          if (max_width > 0.f && line_width(display_text) > max_width) {
+            std::vector<std::string> lines =
+                detail::wrap_text_to_width(display_text, max_width, line_width);
+            if (lines.size() > 1) {
+              float line_h =
+                  measure_text(font, "Ag", font_size, spacing).y;
+              float total_h = line_h * static_cast<float>(lines.size());
+              float y = label_rect.y +
+                        std::max(0.f, (label_rect.height - total_h) * 0.5f);
+              for (const auto &ln : lines) {
+                RectangleType lr{label_rect.x, y, label_rect.width, line_h};
+                buffer.add_text(lr, ln, cmp.font_name, font_size, font_col,
+                                hasLabel.alignment, layer, entity.id, stroke,
+                                shadow, rotation, centerX, centerY,
+                                hasLabel.letter_spacing);
+                y += line_h;
+              }
+              wrapped = true;
+            }
+          }
+        }
+
+        if (!wrapped) {
+          buffer.add_text(label_rect, display_text, cmp.font_name,
+                          result.rect.height, font_col, hasLabel.alignment,
+                          layer, entity.id, stroke, shadow, rotation, centerX,
+                          centerY, hasLabel.letter_spacing);
+        }
 
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
         // Register text for E2E testing (only visible-in-viewport text)
