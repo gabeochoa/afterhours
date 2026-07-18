@@ -62,6 +62,9 @@ afterhours::testing::perf_commands::register_perf_commands(sm);
 This keeps behavior fully explicit: projects opt in where they register E2E
 commands, and can choose partial support while they wire richer metrics.
 
+For a template-ready copy/paste block, see
+`docs/profiling_template_snippet.md`.
+
 ## Why provider callbacks?
 
 Different projects store profiling data differently. The callback provider keeps
