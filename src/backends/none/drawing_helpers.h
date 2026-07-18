@@ -79,6 +79,11 @@ inline void draw_line_ex(Vector2Type, Vector2Type, float, Color) {
 inline void draw_line_strip(Vector2Type *, int, Color) {
   log_error("@notimplemented draw_line_strip");
 }
+inline bool check_collision_point_line(Vector2Type, Vector2Type, Vector2Type,
+                                       float) {
+  log_error("@notimplemented check_collision_point_line");
+  return false;
+}
 inline void draw_circle(int, int, float, Color) {
   log_error("@notimplemented draw_circle");
 }

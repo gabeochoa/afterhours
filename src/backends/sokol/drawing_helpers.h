@@ -360,6 +360,30 @@ inline void draw_line_strip(Vector2Type *points, int point_count, Color color) {
   sgl_end();
 }
 
+inline bool check_collision_point_line(Vector2Type point, Vector2Type p1,
+                                       Vector2Type p2, float threshold) {
+  const float vx = p2.x - p1.x;
+  const float vy = p2.y - p1.y;
+  const float len_sq = vx * vx + vy * vy;
+  if (len_sq <= 1e-8f) {
+    const float dx = point.x - p1.x;
+    const float dy = point.y - p1.y;
+    return (dx * dx + dy * dy) <= (threshold * threshold);
+  }
+
+  float t = ((point.x - p1.x) * vx + (point.y - p1.y) * vy) / len_sq;
+  if (t < 0.0f)
+    t = 0.0f;
+  if (t > 1.0f)
+    t = 1.0f;
+
+  const float proj_x = p1.x + t * vx;
+  const float proj_y = p1.y + t * vy;
+  const float dx = point.x - proj_x;
+  const float dy = point.y - proj_y;
+  return (dx * dx + dy * dy) <= (threshold * threshold);
+}
+
 inline void draw_circle(int centerX, int centerY, float radius, Color color) {
   constexpr int SEGMENTS = 32;
   sgl_begin_triangle_strip();
