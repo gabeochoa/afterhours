@@ -163,6 +163,7 @@ struct RaylibPlatformAPI {
   static constexpr int LOG_ERROR = raylib::LOG_ERROR;
   static constexpr int TEXTURE_FILTER_BILINEAR =
       raylib::TEXTURE_FILTER_BILINEAR;
+  static constexpr int SHADER_UNIFORM_VEC2 = raylib::SHADER_UNIFORM_VEC2;
 
   // ── Window lifecycle ──
   static void init_window(int w, int h, const char *title) {
@@ -208,6 +209,23 @@ struct RaylibPlatformAPI {
   static void take_screenshot(const char *fileName) {
     raylib::TakeScreenshot(fileName);
   }
+
+  // ── Shaders ──
+  static ShaderType load_shader(const char *vsFileName, const char *fsFileName) {
+    return raylib::LoadShader(vsFileName, fsFileName);
+  }
+  static void unload_shader(ShaderType &shader) { raylib::UnloadShader(shader); }
+  static int get_shader_location(ShaderType &shader, const char *uniformName) {
+    return raylib::GetShaderLocation(shader, uniformName);
+  }
+  static void set_shader_value(ShaderType &shader, int locIndex,
+                               const void *value, int uniformType) {
+    raylib::SetShaderValue(shader, locIndex, value, uniformType);
+  }
+  static void begin_shader_mode(ShaderType &shader) {
+    raylib::BeginShaderMode(shader);
+  }
+  static void end_shader_mode() { raylib::EndShaderMode(); }
 
   // ── Input: keyboard ──
   static bool is_key_pressed(int key) { return raylib::IsKeyPressed(key); }

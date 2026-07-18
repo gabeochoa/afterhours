@@ -245,6 +245,7 @@ struct MetalPlatformAPI {
   static constexpr unsigned int FLAG_WINDOW_RESIZABLE = 0x00000004;
   static constexpr int LOG_ERROR = 5;
   static constexpr int TEXTURE_FILTER_BILINEAR = 1;
+  static constexpr int SHADER_UNIFORM_VEC2 = 1;
 
   // ── Window lifecycle (legacy API -- prefer run()) ──
   static void init_window(int, int, const char *) {
@@ -370,6 +371,24 @@ struct MetalPlatformAPI {
   // ── Screenshots ──
   // Implemented in sokol_impl.mm via CoreGraphics window capture
   static void take_screenshot(const char *filename);
+
+  // ── Shaders ──
+  static ShaderType load_shader(const char *, const char *) {
+    log_error("@notimplemented load_shader");
+    return {};
+  }
+  static void unload_shader(ShaderType &) { log_error("@notimplemented unload_shader"); }
+  static int get_shader_location(ShaderType &, const char *) {
+    log_error("@notimplemented get_shader_location");
+    return -1;
+  }
+  static void set_shader_value(ShaderType &, int, const void *, int) {
+    log_error("@notimplemented set_shader_value");
+  }
+  static void begin_shader_mode(ShaderType &) {
+    log_error("@notimplemented begin_shader_mode");
+  }
+  static void end_shader_mode() { log_error("@notimplemented end_shader_mode"); }
 
   // ── Input ──
   static bool is_key_pressed_repeat(int key) {

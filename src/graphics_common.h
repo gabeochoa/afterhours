@@ -34,6 +34,7 @@ namespace raylib {
 
 namespace afterhours::graphics {
 using RenderTextureType = raylib::RenderTexture2D;
+using ShaderType = raylib::Shader;
 } // namespace afterhours::graphics
 
 #elif defined(AFTER_HOURS_USE_METAL)
@@ -50,12 +51,14 @@ struct RenderTextureType {
   int width = 0;
   int height = 0;
 };
+struct ShaderType {};
 } // namespace afterhours::graphics
 
 #else // no backend
 
 namespace afterhours::graphics {
 struct RenderTextureType {};
+struct ShaderType {};
 } // namespace afterhours::graphics
 
 #endif // AFTER_HOURS_USE_RAYLIB / AFTER_HOURS_USE_METAL
@@ -136,6 +139,17 @@ concept PlatformBackend = requires {
 
   // ── Screenshots ──
   { T::take_screenshot((const char *){}) } -> std::same_as<void>;
+
+  // ── Shaders ──
+  { T::load_shader((const char *){}, (const char *){}) } -> std::same_as<ShaderType>;
+  { T::unload_shader(std::declval<ShaderType &>()) } -> std::same_as<void>;
+  { T::get_shader_location(std::declval<ShaderType &>(), (const char *){}) } -> std::same_as<int>;
+  {
+    T::set_shader_value(std::declval<ShaderType &>(), int{},
+                        (const void *){}, int{})
+  } -> std::same_as<void>;
+  { T::begin_shader_mode(std::declval<ShaderType &>()) } -> std::same_as<void>;
+  { T::end_shader_mode() } -> std::same_as<void>;
 
   // ── Input: keyboard ──
   { T::is_key_pressed(int{}) } -> std::same_as<bool>;

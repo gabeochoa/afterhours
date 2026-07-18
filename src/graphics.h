@@ -24,6 +24,7 @@ inline constexpr unsigned int FLAG_WINDOW_RESIZABLE =
 inline constexpr int LOG_ERROR = PlatformAPI::LOG_ERROR;
 inline constexpr int TEXTURE_FILTER_BILINEAR =
     PlatformAPI::TEXTURE_FILTER_BILINEAR;
+inline constexpr int SHADER_UNIFORM_VEC2 = PlatformAPI::SHADER_UNIFORM_VEC2;
 
 inline void init_window(int w, int h, const char *title) {
   PlatformAPI::init_window(w, h, title);
@@ -65,6 +66,23 @@ inline int measure_text(const char *text, int fontSize) {
 inline void take_screenshot(const char *fileName) {
   PlatformAPI::take_screenshot(fileName);
 }
+inline ShaderType load_shader(const char *vsFileName, const char *fsFileName) {
+  return PlatformAPI::load_shader(vsFileName, fsFileName);
+}
+inline void unload_shader(ShaderType &shader) {
+  PlatformAPI::unload_shader(shader);
+}
+inline int get_shader_location(ShaderType &shader, const char *uniformName) {
+  return PlatformAPI::get_shader_location(shader, uniformName);
+}
+inline void set_shader_value(ShaderType &shader, int locIndex, const void *value,
+                             int uniformType) {
+  PlatformAPI::set_shader_value(shader, locIndex, value, uniformType);
+}
+inline void begin_shader_mode(ShaderType &shader) {
+  PlatformAPI::begin_shader_mode(shader);
+}
+inline void end_shader_mode() { PlatformAPI::end_shader_mode(); }
 
 inline bool is_key_pressed(int key) { return PlatformAPI::is_key_pressed(key); }
 inline bool is_key_down(int key) { return PlatformAPI::is_key_down(key); }
