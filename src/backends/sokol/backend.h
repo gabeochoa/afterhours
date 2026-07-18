@@ -281,16 +281,16 @@ struct MetalPlatformAPI {
     log_error("@notimplemented minimize_window");
   }
   static void set_window_size(int, int) {
-    log_error("@notimplemented set_window_size");
+    // sokol_app currently does not provide a runtime window-size API.
   }
   static void set_window_min_size(int, int) {
-    log_error("@notimplemented set_window_min_size");
+    // sokol_app currently does not provide a runtime min-size API.
   }
-  static void set_window_state(unsigned int) {
-    log_error("@notimplemented set_window_state");
+  static void set_window_state(unsigned int flags) {
+    metal_detail::g_window_state_flags |= flags;
   }
-  static void clear_window_state(unsigned int) {
-    log_error("@notimplemented clear_window_state");
+  static void clear_window_state(unsigned int flags) {
+    metal_detail::g_window_state_flags &= ~flags;
   }
 
   // ── Config (legacy API -- prefer RunConfig fields) ──
@@ -407,9 +407,19 @@ struct MetalPlatformAPI {
   // ── Screenshots ──
   // Implemented in sokol_impl.mm via CoreGraphics window capture
   static void take_screenshot(const char *filename);
-  static void set_render_texture_filter(RenderTextureType &, int) {
-    // Render-texture sampling in the sokol path is configured when the sampler
-    // is created in drawing_helpers.
+  static void set_render_texture_filter(RenderTextureType &rt, int filter) {
+    const bool point = (filter == TEXTURE_FILTER_POINT);
+    if (rt.sampler_id) {
+      sg_destroy_sampler({rt.sampler_id});
+      rt.sampler_id = 0;
+    }
+    sg_sampler_desc sd{};
+    sd.min_filter = point ? SG_FILTER_NEAREST : SG_FILTER_LINEAR;
+    sd.mag_filter = point ? SG_FILTER_NEAREST : SG_FILTER_LINEAR;
+    sd.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
+    sd.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
+    sd.label = point ? "rt-sampler-point" : "rt-sampler-linear";
+    rt.sampler_id = sg_make_sampler(&sd).id;
   }
 
   // ── Shaders ──

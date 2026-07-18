@@ -52,7 +52,9 @@ struct RenderTextureType {
   int width = 0;
   int height = 0;
 };
-struct ShaderType {};
+struct ShaderType {
+  uint32_t id = 0;
+};
 } // namespace afterhours::graphics
 
 #else // no backend
