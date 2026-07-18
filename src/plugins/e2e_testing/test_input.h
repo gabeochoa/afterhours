@@ -69,6 +69,7 @@ inline void simulate_mouse_release() {
   auto &m = input_injector::detail::mouse;
   m.left_down = false;
   m.just_released = true;
+  m.press_frames = 0;
   m.auto_release = false;
   m.active = true;
 }
