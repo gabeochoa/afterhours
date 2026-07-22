@@ -339,14 +339,44 @@ inline void draw_line(int x1, int y1, int x2, int y2, Color color) {
 
 inline void draw_line_ex(Vector2Type start, Vector2Type end, float thickness,
                          Color color) {
-  // TODO: thick lines via quads
-  log_warn("draw_line_ex: thick lines not implemented in sokol backend, "
-           "ignoring thickness");
-  (void)thickness;
-  sgl_begin_lines();
+  const float dx = end.x - start.x;
+  const float dy = end.y - start.y;
+  const float len = std::sqrt(dx * dx + dy * dy);
+  if (len <= 0.0001f) {
+    draw_circle_v(start, std::max(0.5f, thickness * 0.5f), color);
+    return;
+  }
+
+  if (thickness <= 1.0f) {
+    sgl_begin_lines();
+    metal_draw_detail::set_color(color);
+    sgl_v2f(start.x, start.y);
+    sgl_v2f(end.x, end.y);
+    sgl_end();
+    return;
+  }
+
+  const float half = thickness * 0.5f;
+  const float nx = -dy / len;
+  const float ny = dx / len;
+  const float ox = nx * half;
+  const float oy = ny * half;
+
+  const float ax = start.x + ox;
+  const float ay = start.y + oy;
+  const float bx = end.x + ox;
+  const float by = end.y + oy;
+  const float cx = end.x - ox;
+  const float cy = end.y - oy;
+  const float dx2 = start.x - ox;
+  const float dy2 = start.y - oy;
+
+  sgl_begin_quads();
   metal_draw_detail::set_color(color);
-  sgl_v2f(start.x, start.y);
-  sgl_v2f(end.x, end.y);
+  sgl_v2f(ax, ay);
+  sgl_v2f(bx, by);
+  sgl_v2f(cx, cy);
+  sgl_v2f(dx2, dy2);
   sgl_end();
 }
 
