@@ -289,12 +289,10 @@ struct ComponentConfig {
     return *this;
   }
 
-  // DEPRECATED: Keep for backwards compatibility
-  [[deprecated("Use with_background() instead")]]
+  // Backwards-compatible aliases kept intentionally while call sites migrate.
   ComponentConfig &with_color_usage(Theme::Usage usage) {
     return with_background(usage);
   }
-  [[deprecated("Use with_custom_background() instead")]]
   ComponentConfig &with_custom_color(Color color) {
     return with_custom_background(color);
   }
