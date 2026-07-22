@@ -1122,18 +1122,21 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Create slider background
   // In compact mode, use full rounded corners; otherwise sharp on left
-  // TODO: slider_background can overflow by ~1-2px when parent is constrained
-  // by layout. Percent sizing doesn't work because it resolves against
-  // configured size, not laid-out size. Need layout system fix or tolerance.
+  // Guard against occasional 1-2px overflow when parent layout constrains this
+  // row tighter than configured widths.
+  constexpr float layout_overflow_tolerance_px = 2.0f;
   auto elem_corners =
       compact ? RoundedCorners(config.rounded_corners.value())
               : RoundedCorners(config.rounded_corners.value()).left_sharp();
   ComponentSize bg_size = config.size;
   if (bg_size.x_axis.dim == Dim::Pixels) {
-    bg_size.x_axis.value = std::max(0.0f, bg_size.x_axis.value - 4.0f);
+    bg_size.x_axis.value = std::max(
+        0.0f, bg_size.x_axis.value - 4.0f - layout_overflow_tolerance_px);
   } else if (bg_size.x_axis.dim == Dim::Percent ||
              bg_size.x_axis.dim == Dim::ScreenPercent) {
     bg_size = bg_size.scale_x(0.95f);
+    bg_size.x_axis.value = std::max(
+        0.0f, bg_size.x_axis.value - (layout_overflow_tolerance_px / 100.f));
   }
 
   auto elem = div(ctx, mk(entity, parent.id + entity.id + 0),
