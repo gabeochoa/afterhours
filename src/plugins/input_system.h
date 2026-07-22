@@ -26,6 +26,10 @@ struct input : developer::Plugin {
     static constexpr float DEADZONE = 0.25f;
     static constexpr int MAX_GAMEPAD_ID = 8;
 
+    struct ProvidesInputConfig : BaseComponent {
+        float gamepad_deadzone = DEADZONE;
+    };
+
     using MouseButton = int;
 #ifdef AFTER_HOURS_USE_RAYLIB
     using MousePosition = raylib::Vector2;
@@ -885,9 +889,10 @@ struct input : developer::Plugin {
         // Note: this one is a bit more complex because we have to check if you
         // are pushing in the right direction while also checking the magnitude
         const float mvt = get_gamepad_axis_mvt(id, axis_with_dir.axis);
-        // Note: The 0.25 is how big the deadzone is
-        // TODO consider making the deadzone configurable?
-        if (util::sgn(mvt) == axis_with_dir.dir && abs(mvt) > DEADZONE) {
+        float deadzone = DEADZONE;
+        if (const auto *cfg = EntityHelper::get_singleton_cmp<ProvidesInputConfig>())
+            deadzone = cfg->gamepad_deadzone;
+        if (util::sgn(mvt) == axis_with_dir.dir && abs(mvt) > deadzone) {
             return abs(mvt);
         }
         return 0.f;
@@ -1132,10 +1137,12 @@ struct input : developer::Plugin {
         entity.addComponent<InputCollector>();
         entity.addComponent<input::ProvidesMaxGamepadID>();
         entity.addComponent<input::ProvidesInputMapping>(inital_mapping);
+        entity.addComponent<input::ProvidesInputConfig>();
 
         EntityHelper::registerSingleton<InputCollector>(entity);
         EntityHelper::registerSingleton<input::ProvidesMaxGamepadID>(entity);
         EntityHelper::registerSingleton<input::ProvidesInputMapping>(entity);
+        EntityHelper::registerSingleton<input::ProvidesInputConfig>(entity);
 
         input::try_load_gamepad_mappings();
     }
@@ -1149,6 +1156,9 @@ struct input : developer::Plugin {
         sm.register_update_system(
             std::make_unique<
                 developer::EnforceSingleton<ProvidesInputMapping>>());
+        sm.register_update_system(
+            std::make_unique<
+                developer::EnforceSingleton<ProvidesInputConfig>>());
     }
 
     // Default overload for PluginCore concept compatibility
