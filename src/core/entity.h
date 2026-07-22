@@ -233,6 +233,15 @@ struct Entity {
 #endif
   }
 
+  template <typename T, typename Value>
+  [[nodiscard]] Value get_or_default(Value T::*member,
+                                     const Value &fallback) const {
+    if (!has<T>()) {
+      return fallback;
+    }
+    return get<T>().*member;
+  }
+
   void enableTag(const TagId tag_id) {
     if (tag_id >= AFTER_HOURS_MAX_ENTITY_TAGS)
       return;
