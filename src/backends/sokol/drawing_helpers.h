@@ -209,10 +209,19 @@ inline void draw_rectangle_rounded(
 inline void
 draw_rectangle_rounded_rotated(const RectangleType rect, const float roundness,
                                const int segments, const Color color,
-                               const std::bitset<4> corners, const float) {
-  // TODO: rotation support
-  log_warn("draw_rectangle_rounded_rotated: rotation not implemented in sokol "
-           "backend");
+                               const std::bitset<4> corners,
+                               const float rotation) {
+  if (std::abs(rotation) >= 0.001f) {
+    const float centerX = rect.x + rect.width * 0.5f;
+    const float centerY = rect.y + rect.height * 0.5f;
+    sgl_push_matrix();
+    sgl_translate(centerX, centerY, 0.0f);
+    sgl_rotate(sgl_rad(rotation), 0.0f, 0.0f, 1.0f);
+    sgl_translate(-centerX, -centerY, 0.0f);
+    draw_rectangle_rounded(rect, roundness, segments, color, corners);
+    sgl_pop_matrix();
+    return;
+  }
   draw_rectangle_rounded(rect, roundness, segments, color, corners);
 }
 
