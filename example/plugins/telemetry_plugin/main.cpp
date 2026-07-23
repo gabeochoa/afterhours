@@ -47,24 +47,26 @@ int main(int, char **) {
     SystemManager systems;
 
     const bool use_localhost = std::getenv("AH_TELEMETRY_USE_LOCALHOST") != nullptr;
+    const char *endpoint_env = std::getenv("AH_TELEMETRY_ENDPOINT");
+    const bool use_http_provider = use_localhost || endpoint_env != nullptr;
 
     // Minimal plugin configuration shared on every event request.
     telemetry::Config cfg;
     cfg.enabled = true;
-    cfg.endpoint = "http://localhost:8787/v1/ingest";
+    cfg.endpoint = endpoint_env ? endpoint_env : "http://localhost:8787/v1/ingest";
     cfg.game_version = "example-1.0.0";
     std::unique_ptr<TelemetryProvider> provider;
-    if (use_localhost) {
+    if (use_http_provider) {
         // Uses cpp-httplib when httplib.h is available on the include path.
         // Without it, provider logs a warning and retries.
         provider = std::make_unique<HttpGetTelemetryProvider>();
-        std::cout << "Localhost validation mode enabled (HttpGet provider)."
-                  << std::endl;
+        std::cout << "HTTP validation mode enabled (HttpGet provider). endpoint="
+                  << cfg.endpoint << std::endl;
     } else {
         // Default mode stays offline and deterministic.
         provider = std::make_unique<NoopTelemetryProvider>();
         std::cout << "Offline mode (Noop provider). Set AH_TELEMETRY_USE_LOCALHOST=1 "
-                     "to send real GETs."
+                     "or AH_TELEMETRY_ENDPOINT to send real GETs."
                   << std::endl;
     }
     telemetry::init(cfg, std::move(provider));

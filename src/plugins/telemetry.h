@@ -246,7 +246,10 @@ struct HttpGetTelemetryProvider : TelemetryProvider {
                parsed.host, parsed.port, parsed.path);
       return false;
     }
-    if (res->status >= 200 && res->status < 300) return true;
+    if (res->status >= 200 && res->status < 300) {
+      log_trace("telemetry(HttpGet): status={} path={}", res->status, parsed.path);
+      return true;
+    }
     log_warn("telemetry(HttpGet): response status={} endpoint={}", res->status,
              endpoint);
     return false;

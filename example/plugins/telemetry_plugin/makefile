@@ -19,3 +19,7 @@ validate-localhost:
 	cat $(LOG); \
 	echo "\nTelemetry ingest lines (without /health):"; \
 	grep "/v1/ingest" $(LOG) || echo "(none: add httplib.h to include path to enable real GET transport)"
+
+validate-httpbin:
+	clang++ $(FLAGS) $(INCLUDES) main.cpp -o $(EXE)
+	AH_TELEMETRY_ENDPOINT=http://httpbin.org/anything ./$(EXE)
