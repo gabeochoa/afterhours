@@ -51,7 +51,7 @@ if (lastID >= max_num_components) {
 
 How to run:
 ```bash
-cd example/arena_usage && make
+cd examples/catalog/memory/arena_usage && make
 ```
 
 ### 0.1 `text_cache_usage/` - Text Measurement Cache Smoke Test
@@ -64,7 +64,7 @@ cd example/arena_usage && make
 
 How to run:
 ```bash
-cd example/text_cache_usage && make
+cd examples/catalog/utility/text_cache_usage && make
 ```
 
 ### 1. `logging_test/` - Logging System Verification
@@ -124,13 +124,13 @@ make all
 ### Run Specific Test Categories
 ```bash
 # Test logging system only
-cd example/logging_test && make
+cd examples/catalog/utility/logging_test && make
 
 # Test component overflow protection only
-cd example/component_overflow_test && make
+cd examples/catalog/safety/component_overflow_test && make
 
 # Run just the forced overflow test (most comprehensive)
-cd example/component_overflow_test && make force_test
+cd examples/catalog/safety/component_overflow_test && make force_test
 ```
 
 ---
@@ -186,5 +186,5 @@ Demonstrates how to use `afterhours::tags::All`, `Any`, and `None` inside `Syste
 
 How to run:
 ```bash
-cd example/tag_filters && make
+cd examples/catalog/core/tag_filters && make
 ```

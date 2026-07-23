@@ -20,7 +20,7 @@ This implies:
 - Entities live as `std::shared_ptr<Entity>` in a dense list plus a temp list that is merged later.
 - `EntityHelper::getEntityForID` is currently a linear scan (O(N)).
 
-### Existing usage patterns (from `example/`)
+### Existing usage patterns (from `examples/catalog/`)
 
 The UI stack already follows the “good” pattern:
 
@@ -95,7 +95,7 @@ Separate “identity” from “memory address”:
 **Goal**: establish a clean baseline and add “tripwire” tests that catch accidental behavior changes during the refactor.
 
 - **Fix currently failing test(s)**:
-  - `example/ui_layout` currently has a couple failing assertions due to rounding (`87.5` vs expected `88`).
+  - `examples/catalog/ui/ui_layout` currently has a couple failing assertions due to rounding (`87.5` vs expected `88`).
   - Make these tests tolerant to the intended behavior (either adjust expectations or use an epsilon-based matcher).
 - **Add new regression tests (before refactor)**
   - Focus on behaviors likely to be accidentally changed by handle/SoA refactors:
@@ -201,17 +201,17 @@ Options:
 
 ## Validation: example-driven tests per phase
 
-Below are concrete test ideas (2–3 per phase) that fit the existing `example/tests` Catch2 setup and the usage patterns in `example/`.
+Below are concrete test ideas (2–3 per phase) that fit the existing `examples/catalog/safety/tests` Catch2 setup and the usage patterns in `examples/catalog/`.
 
 ### Phase 0 — Baseline + regression tripwires
 
 - **UI layout rounding regression**
-  - Update the couple failing assertions in `example/ui_layout` so the suite is green.
+  - Update the couple failing assertions in `examples/catalog/ui/ui_layout` so the suite is green.
   - Add at least one explicit test that covers the specific rounding case (so we don’t “fix” it later by accident).
 - **Temp entity visibility is stable**
   - Create an entity without merging.
   - Assert query misses it by default and sees it with `{.force_merge=true}`.
-  - This is already exercised informally in `example/custom_queries`; turn it into a Catch test in `example/tests`.
+  - This is already exercised informally in `examples/catalog/core/custom_queries`; turn it into a Catch test in `examples/catalog/safety/tests`.
 - **Cleanup removes entities**
   - Create/merge entities, mark one for cleanup, call `EntityHelper::cleanup()`.
   - Assert it is not returned by `EntityQuery().whereID(id)` and `getEntityForID(id)` returns empty.
@@ -292,16 +292,16 @@ Below are concrete test ideas (2–3 per phase) that fit the existing `example/t
 
 Recommended non-raylib targets to run after each phase:
 
-- `make -C example/tests`
-- `make -C example/tag_filters`
-- `make -C example/basic_usage`
-- `make -C example/custom_queries`
-- `make -C example/simple_system`
-- `make -C example/functional_usage`
-- `make -C example/not_system`
+- `make -C examples/catalog/safety/tests`
+- `make -C examples/catalog/core/tag_filters`
+- `make -C examples/catalog/core/basic_usage`
+- `make -C examples/catalog/core/custom_queries`
+- `make -C examples/catalog/core/simple_system`
+- `make -C examples/catalog/core/functional_usage`
+- `make -C examples/catalog/core/not_system`
 
-Notes from reviewing/running `example/` in this environment:
+Notes from reviewing/running `examples/catalog/` in this environment:
 
-- `example/tests` currently passes.
-- `example/ui_layout` is useful non-raylib coverage but currently had 2 failing assertions due to float rounding (`87.5` vs expected `88`). Phase 0 is to make this suite green so it can act as a guardrail.
+- `examples/catalog/safety/tests` currently passes.
+- `examples/catalog/ui/ui_layout` is useful non-raylib coverage but currently had 2 failing assertions due to float rounding (`87.5` vs expected `88`). Phase 0 is to make this suite green so it can act as a guardrail.
 

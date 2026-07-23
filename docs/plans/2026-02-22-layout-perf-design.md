@@ -47,7 +47,7 @@ Internal-only changes. No layout behavior modifications.
 - `AutoLayout` constructor and `autolayout()` static method in `autolayout.h`
 - `force_layout_and_print()` in `utilities.h`
 - `autolayout_test.cpp` test harness
-- `example/ui/ui_layout/main.cpp` and `example/ui/layout_performance/main.cpp`
+- `examples/catalog/ui/ui_layout/main.cpp` and `examples/catalog/ui/layout_performance/main.cpp`
 
 **Before:**
 ```cpp

@@ -2,7 +2,7 @@
 #!/bin/bash
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 echo "=== Afterhours Examples Test Runner ==="
 echo "Running all example directories..."
@@ -75,9 +75,9 @@ if [ -d "$EXAMPLES_DIR" ] && [ -f "$EXAMPLES_DIR/Makefile" ]; then
     done
 fi
 
-# ── Part 2: example/ directory (unit tests & plugin examples) ──
+# ── Part 2: examples/catalog/ directory (unit tests & plugin examples) ──
 
-echo "--- example/ (unit tests & plugin examples) ---"
+echo "--- examples/catalog/ (unit tests & plugin examples) ---"
 echo
 
 cd "$SCRIPT_DIR"
@@ -101,7 +101,7 @@ done | sort -u)
 if [ -n "$all_dirs" ]; then
     for dir in $all_dirs; do
         example_name=$(echo "$dir" | sed 's|^\./||')
-        run_example "$dir" "example/$example_name"
+        run_example "$dir" "examples/catalog/$example_name"
     done
 fi
 

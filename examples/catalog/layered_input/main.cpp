@@ -1,4 +1,4 @@
-// example/layered_input/main.cpp
+// examples/catalog/layered_input/main.cpp
 //
 // Demonstrates the layered input plugin which allows different
 // key bindings per game state (e.g., menu vs gameplay).

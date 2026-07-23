@@ -26,7 +26,7 @@ struct EntityQuery {
   //
   // This is the original virtual-dispatch filter system. It is kept for
   // backward compatibility so that custom EntityQuery subclasses (e.g.
-  // example/core/custom_queries) can still define their own Modification
+  // examples/catalog/core/custom_queries) can still define their own Modification
   // subclasses and register them via add_mod().
   //
   // >>> MIGRATION NOTICE <<<
