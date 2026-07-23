@@ -786,8 +786,23 @@ inline void draw_poly(Vector2Type center, int sides, float radius,
   }
   sgl_end();
 }
-inline void draw_poly_lines(Vector2Type, int, float, float, Color) {
-  log_error("@notimplemented draw_poly_lines");
+// Draw the outline of a regular polygon as a closed line loop.
+inline void draw_poly_lines(Vector2Type center, int sides, float radius,
+                            float rotation, Color color) {
+  if (sides < 3)
+    sides = 3;
+
+  const float centralAngleStep = 360.0f / static_cast<float>(sides);
+  float centralAngle = rotation;
+
+  metal_draw_detail::set_color(color);
+  sgl_begin_line_strip();
+  for (int i = 0; i <= sides; i++) {
+    const float a = DEG2RAD * centralAngle;
+    sgl_v2f(center.x + cosf(a) * radius, center.y + sinf(a) * radius);
+    centralAngle += centralAngleStep;
+  }
+  sgl_end();
 }
 inline void draw_poly_lines_ex(Vector2Type, int, float, float, float, Color) {
   log_error("@notimplemented draw_poly_lines_ex");
