@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SMOKE="$ROOT/examples/input_system_mouse_delta_backend_smoke.cpp"
-INJECTOR_TEST="$ROOT/examples/input_injector_mouse_delta_test.cpp"
+SMOKE="$ROOT/tests/input_system_mouse_delta_backend_smoke.cpp"
+INJECTOR_TEST="$ROOT/tests/input_injector_mouse_delta_test.cpp"
 OUT_DIR="$ROOT/output/mouse_delta_checks"
 mkdir -p "$OUT_DIR"
 

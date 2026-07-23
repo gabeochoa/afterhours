@@ -28,9 +28,7 @@ art_storage/*
 
 # Example outputs
 examples/graphics_example
-examples/autolayout_test
 examples/drawing_3d_example
-examples/entity_mapping_test
 examples/headless_validation
 examples/perf_stress_test
 examples/perf_stress_test_opt
@@ -41,9 +39,22 @@ examples/profile_calendar.txt
 examples/profile_harness
 examples/profile.txt
 examples/profile_flat1000.txt
-examples/entity_pool_test
 examples/graphics_example_output.png
 examples/calendar_stress_output.png
 examples/graphics_example_captures/
 examples/headless_validation_output/
+
+# Test outputs
+tests/autolayout_test
+tests/dump_ui_test
+tests/entity_mapping_test
+tests/entity_pool_test
+tests/entity_query_test
+tests/input_injector_mouse_delta_test
+tests/progress_bar_test
+tests/render_order_test
+tests/slider_test
+tests/stepper_test
+tests/tab_container_test
+tests/text_wrap_test
 internet-mode-used_DO_NOT_REMOVE_MANUALLY_SECURITY_RISK

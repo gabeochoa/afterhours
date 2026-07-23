@@ -1,9 +1,9 @@
-# Makefile for afterhours examples and tests
+# Makefile for afterhours examples/benchmarks
 #
 # Usage:
-#   make              - Build all examples and tests
+#   make              - Build all examples and benchmarks
 #   make run          - Build and run graphics example
-#   make test         - Build and run autolayout tests
+#   make test         - Build and run tests from ../tests
 #   make clean        - Remove build artifacts
 
 CXX := clang++
@@ -35,7 +35,7 @@ endif
 # Targets
 .PHONY: all run test clean
 
-all: graphics_example autolayout_test drawing_3d_example entity_mapping_test entity_pool_test headless_validation perf_stress_test calendar_stress_test dump_ui_test
+all: graphics_example drawing_3d_example headless_validation perf_stress_test calendar_stress_test profile_harness
 
 graphics_example: graphics_example.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
@@ -45,29 +45,10 @@ drawing_3d_example: drawing_3d_example.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: drawing_3d_example"
 
-# Autolayout tests - pure C++, no raylib dependency
-autolayout_test: autolayout_test.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
-	@echo "Built: autolayout_test"
-
 # Headless validation - compares headless vs windowed rendering output
 headless_validation: headless_validation.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: headless_validation"
-
-# Entity mapping tests - multi-TU test for ENTITY_ID_GEN and UIEntityMappingCache
-entity_mapping_test: entity_mapping_test.cpp entity_mapping_test_helper.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
-	@echo "Built: entity_mapping_test"
-
-entity_pool_test: entity_pool_test.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
-	@echo "Built: entity_pool_test"
-
-# Dump UI XML tests - needs raylib headers for ui_commands.h includes
-dump_ui_test: dump_ui_test.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
-	@echo "Built: dump_ui_test"
 
 # Performance stress tests - no raylib dependency
 perf_stress_test: perf_stress_test.cpp
@@ -85,12 +66,8 @@ run: graphics_example
 run-3d: drawing_3d_example
 	./drawing_3d_example
 
-test: autolayout_test drawing_3d_example entity_mapping_test entity_pool_test dump_ui_test
-	./autolayout_test
-	./drawing_3d_example
-	./entity_mapping_test
-	./entity_pool_test
-	./dump_ui_test
+test:
+	$(MAKE) -C ../tests test
 
 # Optimized profiling builds
 perf_stress_test_opt: perf_stress_test.cpp
@@ -122,7 +99,7 @@ profile-calendar: calendar_stress_test_opt
 	@echo "Profile saved to profile_calendar.txt"
 
 clean:
-	rm -f graphics_example autolayout_test drawing_3d_example entity_mapping_test entity_pool_test headless_validation perf_stress_test calendar_stress_test dump_ui_test
+	rm -f graphics_example drawing_3d_example headless_validation perf_stress_test calendar_stress_test profile_harness
 	rm -f perf_stress_test_opt calendar_stress_test_opt
 	rm -f graphics_example_output.png
 	rm -f profile_layout.txt profile_calendar.txt

@@ -47,20 +47,20 @@ run_example() {
     echo
 }
 
-# ── Part 1: examples/ directory (autolayout_test, drawing_3d_example, graphics_example) ──
+# ── Part 1: examples/ directory (graphics demos + rendering tools) ──
 
 EXAMPLES_DIR="$REPO_ROOT/examples"
 if [ -d "$EXAMPLES_DIR" ] && [ -f "$EXAMPLES_DIR/Makefile" ]; then
     echo "--- examples/ (raylib & autolayout tests) ---"
     echo
 
-    # Build all three
-    run_example "$EXAMPLES_DIR" "examples/build_autolayout_test" "autolayout_test"
+    # Build key demos/tools
     run_example "$EXAMPLES_DIR" "examples/build_drawing_3d_example" "drawing_3d_example"
     run_example "$EXAMPLES_DIR" "examples/build_graphics_example" "graphics_example"
+    run_example "$EXAMPLES_DIR" "examples/build_headless_validation" "headless_validation"
 
-    # Run all three
-    for bin in autolayout_test drawing_3d_example graphics_example; do
+    # Run demos/tools
+    for bin in drawing_3d_example graphics_example; do
         ((total_examples++))
         echo "=== Running examples/$bin ==="
         if "$EXAMPLES_DIR/$bin" 2>&1; then
@@ -75,7 +75,16 @@ if [ -d "$EXAMPLES_DIR" ] && [ -f "$EXAMPLES_DIR/Makefile" ]; then
     done
 fi
 
-# ── Part 2: examples/catalog/ directory (unit tests & plugin examples) ──
+# ── Part 2: tests/ directory (automated regression tests) ──
+
+TESTS_DIR="$REPO_ROOT/tests"
+if [ -d "$TESTS_DIR" ] && [ -f "$TESTS_DIR/Makefile" ]; then
+    echo "--- tests/ (automated regressions) ---"
+    echo
+    run_example "$TESTS_DIR" "tests/test" "test"
+fi
+
+# ── Part 3: examples/catalog/ directory (legacy categorized examples) ──
 
 echo "--- examples/catalog/ (unit tests & plugin examples) ---"
 echo
