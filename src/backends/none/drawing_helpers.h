@@ -193,4 +193,24 @@ inline std::vector<uint8_t> capture_screen_to_memory() {
   return {};
 }
 
+inline constexpr int TEXTURE_FILTER_BILINEAR = 1;
+inline constexpr int TEXTURE_FILTER_TRILINEAR = 2;
+
+inline TextureType load_texture(const char *) {
+  log_error("@notimplemented load_texture");
+  return TextureType{};
+}
+
+inline void unload_texture(TextureType &) {
+  log_error("@notimplemented unload_texture");
+}
+
+inline void gen_texture_mipmaps(TextureType &) {
+  log_error("@notimplemented gen_texture_mipmaps");
+}
+
+inline void set_texture_filter(TextureType &, int) {
+  log_error("@notimplemented set_texture_filter");
+}
+
 } // namespace afterhours

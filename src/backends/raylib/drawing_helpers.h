@@ -530,4 +530,31 @@ inline std::vector<uint8_t> capture_screen_to_memory() {
   return result;
 }
 
+inline constexpr int TEXTURE_FILTER_BILINEAR = raylib::TEXTURE_FILTER_BILINEAR;
+inline constexpr int TEXTURE_FILTER_TRILINEAR =
+    raylib::TEXTURE_FILTER_TRILINEAR;
+
+inline TextureType load_texture(const char *path) {
+  return raylib::LoadTexture(path);
+}
+
+inline void unload_texture(TextureType &texture) {
+  if (texture.id != 0) {
+    raylib::UnloadTexture(texture);
+    texture = TextureType{};
+  }
+}
+
+inline void gen_texture_mipmaps(TextureType &texture) {
+  if (texture.id != 0) {
+    raylib::GenTextureMipmaps(&texture);
+  }
+}
+
+inline void set_texture_filter(TextureType &texture, int filter) {
+  if (texture.id != 0) {
+    raylib::SetTextureFilter(texture, filter);
+  }
+}
+
 } // namespace afterhours
