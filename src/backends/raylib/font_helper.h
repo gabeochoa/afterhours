@@ -21,9 +21,9 @@ inline raylib::Font load_font_from_file(const char *file, int size = 0) {
 }
 
 // Add codepoint-based font loading for CJK support
-inline raylib::Font load_font_from_file_with_codepoints(const char *file,
-                                                        int *codepoints,
-                                                        int codepoint_count) {
+inline raylib::Font
+load_font_from_file_with_codepoints(const char *file, int *codepoints,
+                                    int codepoint_count, int size = 32) {
   if (!file || !codepoints || codepoint_count <= 0) {
     log_error("Invalid parameters for font loading: file={}, codepoints={}, "
               "count={}",
@@ -31,7 +31,7 @@ inline raylib::Font load_font_from_file_with_codepoints(const char *file,
               codepoint_count);
     return raylib::GetFontDefault();
   }
-  raylib::Font font = raylib::LoadFontEx(file, 32, codepoints, codepoint_count);
+  raylib::Font font = raylib::LoadFontEx(file, size, codepoints, codepoint_count);
   raylib::SetTextureFilter(font.texture, raylib::TEXTURE_FILTER_BILINEAR);
   return font;
 }
@@ -154,6 +154,10 @@ inline float get_first_glyph_bearing(const raylib::Font font,
   if (glyphIndex < 0 || glyphIndex >= font.glyphCount)
     return 0.0f;
   return static_cast<float>(font.glyphs[glyphIndex].offsetX);
+}
+
+inline bool is_font_loaded(const raylib::Font &font) {
+  return font.texture.id != 0 && font.glyphCount > 0;
 }
 
 } // namespace afterhours

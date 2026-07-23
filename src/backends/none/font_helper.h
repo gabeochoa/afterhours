@@ -47,5 +47,6 @@ inline Vector2Type measure_text_utf8(const Font, const char *, const float,
 }
 
 inline float get_first_glyph_bearing(const Font, const char *) { return 0.0f; }
+inline bool is_font_loaded(const Font &) { return false; }
 
 } // namespace afterhours

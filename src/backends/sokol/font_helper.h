@@ -96,4 +96,6 @@ inline Vector2Type measure_text_utf8(const Font font, const char *text,
 
 inline float get_first_glyph_bearing(const Font, const char *) { return 0.0f; }
 
+inline bool is_font_loaded(const Font &font) { return font.id != FONS_INVALID; }
+
 } // namespace afterhours
