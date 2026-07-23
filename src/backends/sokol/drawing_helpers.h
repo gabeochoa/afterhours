@@ -727,8 +727,20 @@ inline void draw_ellipse(int centerX, int centerY, float radiusH,
   }
   sgl_end();
 }
-inline void draw_ellipse_lines(int, int, float, float, Color) {
-  log_error("@notimplemented draw_ellipse_lines");
+// Draw the outline of an ellipse as a closed line loop.
+inline void draw_ellipse_lines(int centerX, int centerY, float radiusH,
+                               float radiusV, Color color) {
+  constexpr int SEGMENTS = 36;
+  const float cx = static_cast<float>(centerX);
+  const float cy = static_cast<float>(centerY);
+  metal_draw_detail::set_color(color);
+  sgl_begin_line_strip();
+  for (int i = 0; i <= SEGMENTS; i++) {
+    const float a = static_cast<float>(i) * 2.0f * 3.14159265f /
+                    static_cast<float>(SEGMENTS);
+    sgl_v2f(cx + cosf(a) * radiusH, cy + sinf(a) * radiusV);
+  }
+  sgl_end();
 }
 
 inline void draw_triangle(Vector2Type v1, Vector2Type v2, Vector2Type v3,
