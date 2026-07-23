@@ -900,4 +900,10 @@ inline void set_texture_filter(TextureType &, int) {
   log_error("@notimplemented set_texture_filter");
 }
 
+inline TextureType load_texture_with_color_key(const char *, const Color,
+                                               const Color, int) {
+  log_error("@notimplemented load_texture_with_color_key");
+  return TextureType{};
+}
+
 } // namespace afterhours

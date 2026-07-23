@@ -557,4 +557,21 @@ inline void set_texture_filter(TextureType &texture, int filter) {
   }
 }
 
+inline TextureType
+load_texture_with_color_key(const char *path, const Color key,
+                            const Color replacement,
+                            int filter = TEXTURE_FILTER_BILINEAR) {
+  raylib::Image img = raylib::LoadImage(path);
+  if (img.data == nullptr) {
+    return TextureType{};
+  }
+  raylib::ImageColorReplace(&img, key, replacement);
+  TextureType texture = raylib::LoadTextureFromImage(img);
+  raylib::UnloadImage(img);
+  if (texture.id != 0) {
+    raylib::SetTextureFilter(texture, filter);
+  }
+  return texture;
+}
+
 } // namespace afterhours
