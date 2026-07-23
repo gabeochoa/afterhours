@@ -764,8 +764,27 @@ inline void draw_triangle_lines(Vector2Type v1, Vector2Type v2, Vector2Type v3,
   sgl_end();
 }
 
-inline void draw_poly(Vector2Type, int, float, float, Color) {
-  log_error("@notimplemented draw_poly");
+// Draw a filled regular polygon (triangle fan from center). rotation in
+// degrees. Matches raylib's DrawPoly.
+inline void draw_poly(Vector2Type center, int sides, float radius,
+                      float rotation, Color color) {
+  if (sides < 3)
+    sides = 3;
+
+  const float centralAngleStep = 360.0f / static_cast<float>(sides);
+  float centralAngle = rotation;
+
+  metal_draw_detail::set_color(color);
+  sgl_begin_triangles();
+  for (int i = 0; i < sides; i++) {
+    const float a0 = DEG2RAD * centralAngle;
+    const float a1 = DEG2RAD * (centralAngle + centralAngleStep);
+    sgl_v2f(center.x, center.y);
+    sgl_v2f(center.x + cosf(a1) * radius, center.y + sinf(a1) * radius);
+    sgl_v2f(center.x + cosf(a0) * radius, center.y + sinf(a0) * radius);
+    centralAngle += centralAngleStep;
+  }
+  sgl_end();
 }
 inline void draw_poly_lines(Vector2Type, int, float, float, Color) {
   log_error("@notimplemented draw_poly_lines");
