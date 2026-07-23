@@ -665,9 +665,48 @@ inline void draw_circle_sector(Vector2Type center, float radius,
   }
   sgl_end();
 }
-inline void draw_circle_sector_lines(Vector2Type, float, float, float, int,
-                                     Color) {
-  log_error("@notimplemented draw_circle_sector_lines");
+// Draw the outline of a circle sector: the two radii plus the arc.
+inline void draw_circle_sector_lines(Vector2Type center, float radius,
+                                     float startAngle, float endAngle,
+                                     int segments, Color color) {
+  if (radius <= 0.0f)
+    radius = 0.1f;
+
+  if (endAngle < startAngle) {
+    float tmp = startAngle;
+    startAngle = endAngle;
+    endAngle = tmp;
+  }
+
+  const int minSegments =
+      static_cast<int>(ceilf((endAngle - startAngle) / 90.0f));
+  if (segments < minSegments) {
+    float th = acosf(2.0f * powf(1.0f - 0.5f / radius, 2.0f) - 1.0f);
+    segments =
+        static_cast<int>((endAngle - startAngle) / (th * RAD2DEG) / 2.0f);
+    if (segments <= 0)
+      segments = minSegments;
+  }
+
+  // Draw the cap lines to the center only when the sector is not a full
+  // circle (matches raylib's showCapLines behaviour).
+  const bool showCapLines = (endAngle - startAngle) < 360.0f;
+  const float stepLength =
+      (endAngle - startAngle) / static_cast<float>(segments);
+  float angle = startAngle;
+
+  metal_draw_detail::set_color(color);
+  sgl_begin_line_strip();
+  if (showCapLines)
+    sgl_v2f(center.x, center.y);
+  for (int i = 0; i <= segments; i++) {
+    const float a = DEG2RAD * angle;
+    sgl_v2f(center.x + cosf(a) * radius, center.y + sinf(a) * radius);
+    angle += stepLength;
+  }
+  if (showCapLines)
+    sgl_v2f(center.x, center.y);
+  sgl_end();
 }
 inline void draw_ellipse(int, int, float, float, Color) {
   log_error("@notimplemented draw_ellipse");
