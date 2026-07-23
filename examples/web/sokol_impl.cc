@@ -23,3 +23,8 @@
 #define FONTSTASH_IMPLEMENTATION
 #include <fontstash/fontstash.h>
 #include <sokol/sokol_fontstash.h>
+
+// Image decoding for texture loading: the single STB_IMAGE_IMPLEMENTATION for
+// this project lives here alongside the other _IMPL defines.
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>

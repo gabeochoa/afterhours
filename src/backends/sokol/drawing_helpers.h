@@ -13,6 +13,7 @@
 #include "../../plugins/color.h"
 #include "../../plugins/texture_manager.h"
 #include "font_helper.h"
+#include "image_decode.h"
 
 namespace afterhours {
 
