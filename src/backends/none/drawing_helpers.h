@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <bitset>
 #include <cstdint>
 #include <filesystem>
@@ -103,6 +104,19 @@ inline bool check_collision_point_line(Vector2Type, Vector2Type, Vector2Type,
                                        float) {
   log_error("@notimplemented check_collision_point_line");
   return false;
+}
+inline bool check_collision_recs(RectangleType a, RectangleType b) {
+  return (a.x < b.x + b.width) && (a.x + a.width > b.x) &&
+         (a.y < b.y + b.height) && (a.y + a.height > b.y);
+}
+inline RectangleType get_collision_rec(RectangleType a, RectangleType b) {
+  if (!check_collision_recs(a, b))
+    return RectangleType{0, 0, 0, 0};
+  const float x1 = std::max(a.x, b.x);
+  const float y1 = std::max(a.y, b.y);
+  const float x2 = std::min(a.x + a.width, b.x + b.width);
+  const float y2 = std::min(a.y + a.height, b.y + b.height);
+  return RectangleType{x1, y1, x2 - x1, y2 - y1};
 }
 inline void draw_circle(int, int, float, Color) {
   log_error("@notimplemented draw_circle");

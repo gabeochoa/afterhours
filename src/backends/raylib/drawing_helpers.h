@@ -383,6 +383,14 @@ inline bool check_collision_point_line(Vector2Type point, Vector2Type p1,
   return raylib::CheckCollisionPointLine(point, p1, p2, threshold);
 }
 
+inline bool check_collision_recs(RectangleType a, RectangleType b) {
+  return raylib::CheckCollisionRecs(a, b);
+}
+
+inline RectangleType get_collision_rec(RectangleType a, RectangleType b) {
+  return raylib::GetCollisionRec(a, b);
+}
+
 // Circle drawing primitives
 inline void draw_circle(int centerX, int centerY, float radius, Color color) {
   raylib::DrawCircle(centerX, centerY, radius, color);
