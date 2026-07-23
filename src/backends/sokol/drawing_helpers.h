@@ -804,8 +804,47 @@ inline void draw_poly_lines(Vector2Type center, int sides, float radius,
   }
   sgl_end();
 }
-inline void draw_poly_lines_ex(Vector2Type, int, float, float, float, Color) {
-  log_error("@notimplemented draw_poly_lines_ex");
+// Draw a regular polygon outline with a given thickness, built from a quad
+// per edge (inner/outer offset). Matches raylib's DrawPolyLinesEx.
+inline void draw_poly_lines_ex(Vector2Type center, int sides, float radius,
+                               float rotation, float lineThick, Color color) {
+  if (sides < 3)
+    sides = 3;
+
+  const float centralAngleStep = 360.0f / static_cast<float>(sides);
+  const float exteriorAngle = 360.0f / static_cast<float>(sides) * DEG2RAD;
+  const float innerRadius =
+      radius - lineThick * cosf(exteriorAngle / 2.0f);
+  float centralAngle = rotation;
+
+  metal_draw_detail::set_color(color);
+  sgl_begin_triangles();
+  for (int i = 0; i < sides; i++) {
+    const float a0 = DEG2RAD * centralAngle;
+    const float a1 = DEG2RAD * (centralAngle + centralAngleStep);
+
+    const float outerX0 = center.x + cosf(a0) * radius;
+    const float outerY0 = center.y + sinf(a0) * radius;
+    const float outerX1 = center.x + cosf(a1) * radius;
+    const float outerY1 = center.y + sinf(a1) * radius;
+    const float innerX0 = center.x + cosf(a0) * innerRadius;
+    const float innerY0 = center.y + sinf(a0) * innerRadius;
+    const float innerX1 = center.x + cosf(a1) * innerRadius;
+    const float innerY1 = center.y + sinf(a1) * innerRadius;
+
+    // Two triangles form the thick edge quad between this vertex and the
+    // next (winding matches raylib's DrawPolyLinesEx).
+    sgl_v2f(outerX0, outerY0);
+    sgl_v2f(innerX1, innerY1);
+    sgl_v2f(innerX0, innerY0);
+
+    sgl_v2f(outerX0, outerY0);
+    sgl_v2f(outerX1, outerY1);
+    sgl_v2f(innerX1, innerY1);
+
+    centralAngle += centralAngleStep;
+  }
+  sgl_end();
 }
 
 inline void set_mouse_cursor(int cursor_id) {
