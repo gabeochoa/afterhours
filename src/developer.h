@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <concepts>
+#include <cstdint>
 #include <iostream>
 
 #include "core/base_component.h"
@@ -54,8 +55,14 @@ constexpr float RAD2DEG = 57.29577951308232f; // 180 / PI
 
 #ifndef TextureType
 struct MyTexture {
-  float width;
-  float height;
+  float width = 0;
+  float height = 0;
+  // GPU handles for the sokol/Metal backend (sg_image / sg_view / sg_sampler
+  // ids). Zero on the "none" backend, which only reads width/height. Mirrors
+  // graphics::RenderTextureType's handle layout.
+  uint32_t img_id = 0;
+  uint32_t view_id = 0;
+  uint32_t sampler_id = 0;
 };
 using TextureType = MyTexture;
 #endif
