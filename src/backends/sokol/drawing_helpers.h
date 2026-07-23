@@ -384,9 +384,74 @@ inline void draw_texture_npatch(const texture_manager::Texture,
   log_error("@notimplemented draw_texture_npatch");
 }
 
-inline void draw_ring_segment(float, float, float, float, float, float, int,
-                              Color) {
-  log_error("@notimplemented draw_ring_segment");
+// Draw a ring segment (annular sector) between innerRadius and outerRadius,
+// sweeping from startAngle to endAngle (degrees). Matches raylib's DrawRing:
+// filled with a quad strip between the two radii.
+inline void draw_ring_segment(float centerX, float centerY, float innerRadius,
+                              float outerRadius, float startAngle,
+                              float endAngle, int segments, Color color) {
+  if (startAngle == endAngle)
+    return;
+
+  // Ensure outer >= inner (raylib swaps if reversed).
+  if (outerRadius < innerRadius) {
+    float tmp = outerRadius;
+    outerRadius = innerRadius;
+    innerRadius = tmp;
+  }
+  if (outerRadius <= 0.0f)
+    outerRadius = 0.1f;
+
+  // Normalise so we always sweep from the smaller to the larger angle.
+  if (endAngle < startAngle) {
+    float tmp = startAngle;
+    startAngle = endAngle;
+    endAngle = tmp;
+  }
+
+  if (segments < 4) {
+    // Estimate segments from a smooth-error heuristic (matches raylib).
+    float th =
+        acosf(2.0f * powf(1.0f - 0.5f / outerRadius, 2.0f) - 1.0f);
+    segments =
+        static_cast<int>((endAngle - startAngle) / (th * RAD2DEG) / 2.0f);
+    if (segments <= 0)
+      segments = 4;
+  }
+
+  // Special case: a degenerate inner radius makes this a circle sector.
+  const float stepLength =
+      (endAngle - startAngle) / static_cast<float>(segments);
+  float angle = startAngle;
+
+  metal_draw_detail::set_color(color);
+  sgl_begin_triangles();
+  for (int i = 0; i < segments; i++) {
+    const float a0 = DEG2RAD * angle;
+    const float a1 = DEG2RAD * (angle + stepLength);
+
+    const float outerX0 = centerX + cosf(a0) * outerRadius;
+    const float outerY0 = centerY + sinf(a0) * outerRadius;
+    const float outerX1 = centerX + cosf(a1) * outerRadius;
+    const float outerY1 = centerY + sinf(a1) * outerRadius;
+    const float innerX0 = centerX + cosf(a0) * innerRadius;
+    const float innerY0 = centerY + sinf(a0) * innerRadius;
+    const float innerX1 = centerX + cosf(a1) * innerRadius;
+    const float innerY1 = centerY + sinf(a1) * innerRadius;
+
+    // Two triangles form the quad between the inner and outer arc for this
+    // segment (winding matches raylib's DrawRing).
+    sgl_v2f(outerX0, outerY0);
+    sgl_v2f(innerX0, innerY0);
+    sgl_v2f(innerX1, innerY1);
+
+    sgl_v2f(outerX0, outerY0);
+    sgl_v2f(innerX1, innerY1);
+    sgl_v2f(outerX1, outerY1);
+
+    angle += stepLength;
+  }
+  sgl_end();
 }
 
 inline void draw_ring(float, float, float, float, int, Color) {
