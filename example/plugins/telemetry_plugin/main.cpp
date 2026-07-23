@@ -55,11 +55,10 @@ int main(int, char **) {
     cfg.game_version = "example-1.0.0";
     std::unique_ptr<TelemetryProvider> provider;
     if (use_localhost) {
-        // Use afterhours' current HTTP provider hook. Today this is a placeholder
-        // until shared transport lands, so localhost validation may show no
-        // ingest events yet.
+        // Uses cpp-httplib when httplib.h is available on the include path.
+        // Without it, provider logs a warning and retries.
         provider = std::make_unique<HttpGetTelemetryProvider>();
-        std::cout << "Localhost validation mode enabled (placeholder provider)."
+        std::cout << "Localhost validation mode enabled (HttpGet provider)."
                   << std::endl;
     } else {
         // Default mode stays offline and deterministic.

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <chrono>
+#include <cctype>
 #include <cstdint>
 #include <deque>
 #include <memory>
@@ -8,7 +10,11 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
-#include <chrono>
+
+#if __has_include("httplib.h")
+#include "httplib.h"
+#define AFTERHOURS_HAS_CPP_HTTPLIB 1
+#endif
 
 #include "../core/base_component.h"
 #include "../core/entity_helper.h"
@@ -86,24 +92,81 @@ struct NoopTelemetryProvider : TelemetryProvider {
   }
 };
 
-// Placeholder provider adapter for HTTP GET transport. This intentionally keeps
-// network I/O out of core plugin design; host games can swap in their own
-// provider implementation until afterhours lands a shared HTTP primitive.
-struct HttpGetTelemetryProvider : TelemetryProvider {
-  bool send_get(const std::string &endpoint,
-                const TelemetryFields &query) override {
-    (void)query;
-    // TODO: wire to shared HTTP transport once afterhours has one.
-    log_trace("telemetry(HttpGet): endpoint={} (transport TODO)", endpoint);
-    return true;
-  }
-};
-
 // Compile-time verification that telemetry satisfies PluginCore concept.
 static_assert(developer::PluginCore<telemetry>,
               "telemetry must implement the core plugin interface");
 
 namespace telemetry_detail {
+inline std::string url_encode(std::string_view input) {
+  static constexpr char hex[] = "0123456789ABCDEF";
+  std::string out;
+  out.reserve(input.size() * 3);
+  for (unsigned char c : input) {
+    if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+      out.push_back(static_cast<char>(c));
+      continue;
+    }
+    out.push_back('%');
+    out.push_back(hex[c >> 4]);
+    out.push_back(hex[c & 0x0F]);
+  }
+  return out;
+}
+
+inline std::string build_query_string(const TelemetryFields &query) {
+  std::string out;
+  bool first = true;
+  for (const auto &[k, v] : query) {
+    if (!first) out += "&";
+    first = false;
+    out += url_encode(k);
+    out += "=";
+    out += url_encode(v);
+  }
+  return out;
+}
+
+struct EndpointParts {
+  std::string host;
+  std::string path;
+  int port = 80;
+};
+
+inline bool parse_http_endpoint(const std::string &endpoint, EndpointParts &out) {
+  static constexpr std::string_view kHttpPrefix = "http://";
+  if (!endpoint.starts_with(kHttpPrefix)) return false;
+
+  const std::string_view rest =
+      std::string_view(endpoint).substr(kHttpPrefix.size());
+  const size_t slash = rest.find('/');
+  const std::string_view host_port =
+      (slash == std::string_view::npos) ? rest : rest.substr(0, slash);
+  if (host_port.empty()) return false;
+
+  out.path =
+      (slash == std::string_view::npos) ? "/" : std::string(rest.substr(slash));
+  out.host.clear();
+  out.port = 80;
+
+  const size_t colon = host_port.find(':');
+  if (colon == std::string_view::npos) {
+    out.host = std::string(host_port);
+    return true;
+  }
+
+  out.host = std::string(host_port.substr(0, colon));
+  if (out.host.empty()) return false;
+  const std::string port_text = std::string(host_port.substr(colon + 1));
+  if (port_text.empty()) return false;
+
+  try {
+    out.port = std::stoi(port_text);
+  } catch (...) {
+    return false;
+  }
+  return out.port > 0;
+}
+
 struct QueuedEvent {
   std::string name;
   TelemetryFields fields;
@@ -158,6 +221,45 @@ inline TelemetryFields build_query(const telemetry::ProvidesTelemetry &state,
   return q;
 }
 
+}  // namespace telemetry_detail
+
+struct HttpGetTelemetryProvider : TelemetryProvider {
+  bool send_get(const std::string &endpoint,
+                const TelemetryFields &query) override {
+    telemetry_detail::EndpointParts parsed;
+    if (!telemetry_detail::parse_http_endpoint(endpoint, parsed)) {
+      log_warn("telemetry(HttpGet): unsupported endpoint {}", endpoint);
+      return false;
+    }
+
+    const std::string request_path =
+        parsed.path + "?" + telemetry_detail::build_query_string(query);
+
+#if defined(AFTERHOURS_HAS_CPP_HTTPLIB)
+    httplib::Client client(parsed.host, parsed.port);
+    client.set_connection_timeout(1, 0);
+    client.set_read_timeout(1, 0);
+    client.set_write_timeout(1, 0);
+    auto res = client.Get(request_path);
+    if (!res) {
+      log_warn("telemetry(HttpGet): request failed host={} port={} path={}",
+               parsed.host, parsed.port, parsed.path);
+      return false;
+    }
+    if (res->status >= 200 && res->status < 300) return true;
+    log_warn("telemetry(HttpGet): response status={} endpoint={}", res->status,
+             endpoint);
+    return false;
+#else
+    log_warn(
+        "telemetry(HttpGet): cpp-httplib unavailable; add httplib.h to include path");
+    (void)request_path;
+    return false;
+#endif
+  }
+};
+
+namespace telemetry_detail {
 struct TelemetryFlushSystem : System<telemetry::ProvidesTelemetry> {
   void for_each_with(Entity &, telemetry::ProvidesTelemetry &state,
                      const float) override {

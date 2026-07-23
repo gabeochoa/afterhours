@@ -18,4 +18,4 @@ validate-localhost:
 	echo "\nCaptured telemetry requests:"; \
 	cat $(LOG); \
 	echo "\nTelemetry ingest lines (without /health):"; \
-	grep "/v1/ingest" $(LOG) || echo "(none yet: expected until HttpGet transport is implemented)"
+	grep "/v1/ingest" $(LOG) || echo "(none: add httplib.h to include path to enable real GET transport)"
