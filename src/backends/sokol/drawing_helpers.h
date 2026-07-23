@@ -384,10 +384,65 @@ inline void draw_circle_gradient(int centerX, int centerY, float radius,
   sgl_end();
 }
 
-inline void draw_texture_npatch(const texture_manager::Texture,
-                                const RectangleType, int, int, int, int,
-                                const Color) {
-  log_error("@notimplemented draw_texture_npatch");
+// Draw a 9-slice (NPatch) texture stretched to fill dest. The corners (left,
+// top, right, bottom pixel insets) stay fixed-size; the edges stretch along one
+// axis and the center stretches both ways -> 9 textured quads. Matches raylib's
+// DrawTextureNPatch with NPATCH_NINE_PATCH (source = full texture).
+inline void draw_texture_npatch(const texture_manager::Texture tex,
+                                const RectangleType dest, int left, int top,
+                                int right, int bottom, const Color tint) {
+  if (tex.view_id == 0 || tex.width <= 0.0f || tex.height <= 0.0f)
+    return;
+
+  const float tw = tex.width;
+  const float th = tex.height;
+
+  // Destination X seams: [x0 | x1 .. x2 | x3]; center = dest minus corners.
+  const float dx0 = dest.x;
+  const float dx1 = dest.x + static_cast<float>(left);
+  const float dx2 = dest.x + dest.width - static_cast<float>(right);
+  const float dx3 = dest.x + dest.width;
+  const float dy0 = dest.y;
+  const float dy1 = dest.y + static_cast<float>(top);
+  const float dy2 = dest.y + dest.height - static_cast<float>(bottom);
+  const float dy3 = dest.y + dest.height;
+
+  // Source seams in UV space (full texture split by the same pixel insets).
+  const float ux0 = 0.0f;
+  const float ux1 = static_cast<float>(left) / tw;
+  const float ux2 = (tw - static_cast<float>(right)) / tw;
+  const float ux3 = 1.0f;
+  const float uy0 = 0.0f;
+  const float uy1 = static_cast<float>(top) / th;
+  const float uy2 = (th - static_cast<float>(bottom)) / th;
+  const float uy3 = 1.0f;
+
+  const float dxs[4] = {dx0, dx1, dx2, dx3};
+  const float dys[4] = {dy0, dy1, dy2, dy3};
+  const float uxs[4] = {ux0, ux1, ux2, ux3};
+  const float uys[4] = {uy0, uy1, uy2, uy3};
+
+  sg_view tv = {tex.view_id};
+  sg_sampler smp = {tex.sampler_id};
+
+  sgl_enable_texture();
+  sgl_texture(tv, smp);
+  sgl_begin_quads();
+  sgl_c4b(tint.r, tint.g, tint.b, tint.a);
+  for (int row = 0; row < 3; ++row) {
+    for (int col = 0; col < 3; ++col) {
+      const float x0 = dxs[col], x1 = dxs[col + 1];
+      const float y0 = dys[row], y1 = dys[row + 1];
+      const float u0 = uxs[col], u1 = uxs[col + 1];
+      const float v0 = uys[row], v1 = uys[row + 1];
+      sgl_v2f_t2f(x0, y0, u0, v0);
+      sgl_v2f_t2f(x1, y0, u1, v0);
+      sgl_v2f_t2f(x1, y1, u1, v1);
+      sgl_v2f_t2f(x0, y1, u0, v1);
+    }
+  }
+  sgl_end();
+  sgl_disable_texture();
 }
 
 // Draw a ring segment (annular sector) between innerRadius and outerRadius,
@@ -1102,13 +1157,50 @@ inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
   }
 }
 
-inline void draw_texture_rec(TextureType, RectangleType, Vector2Type, Color) {
-  log_warn("draw_texture_rec: not yet implemented in sokol backend");
+inline void draw_texture_pro(TextureType tex, RectangleType src,
+                             RectangleType dest, Vector2Type origin,
+                             float rotation, Color tint) {
+  if (tex.view_id == 0 || tex.width <= 0.0f || tex.height <= 0.0f)
+    return;
+
+  // Source rect -> UV coordinates. Negative src.width/height flip the sampled
+  // region, matching raylib's DrawTexturePro.
+  const float u0 = src.x / tex.width;
+  const float v0 = src.y / tex.height;
+  const float u1 = (src.x + src.width) / tex.width;
+  const float v1 = (src.y + src.height) / tex.height;
+
+  // Rotate about the destination anchor (dest.x, dest.y); the quad is offset by
+  // -origin so that `origin` names the pivot point within the destination rect
+  // (matches raylib: it rotates around dest.{x,y} and subtracts origin).
+  const float x = dest.x - origin.x;
+  const float y = dest.y - origin.y;
+  const float w = dest.width;
+  const float h = dest.height;
+
+  sg_view tv = {tex.view_id};
+  sg_sampler smp = {tex.sampler_id};
+
+  push_rotation(dest.x, dest.y, rotation);
+  sgl_enable_texture();
+  sgl_texture(tv, smp);
+  sgl_begin_quads();
+  sgl_c4b(tint.r, tint.g, tint.b, tint.a);
+  sgl_v2f_t2f(x, y, u0, v0);
+  sgl_v2f_t2f(x + w, y, u1, v0);
+  sgl_v2f_t2f(x + w, y + h, u1, v1);
+  sgl_v2f_t2f(x, y + h, u0, v1);
+  sgl_end();
+  sgl_disable_texture();
+  pop_rotation();
 }
 
-inline void draw_texture_pro(TextureType, RectangleType, RectangleType,
-                             Vector2Type, float, Color) {
-  log_error("@notimplemented draw_texture_pro");
+inline void draw_texture_rec(TextureType tex, RectangleType src,
+                             Vector2Type pos, Color tint) {
+  // raylib's DrawTextureRec == DrawTexturePro with dest at pos, dest size =
+  // |src| dimensions, no origin offset, no rotation.
+  RectangleType dest{pos.x, pos.y, std::abs(src.width), std::abs(src.height)};
+  draw_texture_pro(tex, src, dest, Vector2Type{0.0f, 0.0f}, 0.0f, tint);
 }
 
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id,
