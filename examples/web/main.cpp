@@ -20,9 +20,11 @@
 #include <afterhours/ah.h>
 #include <afterhours/src/drawing_helpers.h>
 #include <afterhours/src/graphics.h>
+#include <afterhours/src/plugins/texture_manager.h>
 
 using namespace afterhours;
 namespace g = afterhours::graphics;
+namespace tex = afterhours::texture_manager;
 
 constexpr int WIDTH = 800;
 constexpr int HEIGHT = 600;
@@ -134,6 +136,58 @@ struct PrimitiveShowcaseSystem : System<> {
 
 static SystemManager systems;
 
+// ---- Texture showcase (sokol texture path) ---------------------------------
+// Build a procedural RGBA checker texture (no file IO, AMFI-safe) and draw it
+// three ways to exercise the sokol texture backend:
+//   - draw_texture_rec   (axis-aligned blit of a sub-rect)
+//   - draw_texture_pro   (rotated, scaled blit about an origin)
+//   - a sprite via texture_manager (RenderSprites -> draw_texture_pro route)
+static TextureType g_checker{};
+constexpr int CHECKER_DIM = 64; // 8x8 cells of 8px
+
+static TextureType make_checker_texture() {
+  std::vector<unsigned char> px(CHECKER_DIM * CHECKER_DIM * 4);
+  for (int y = 0; y < CHECKER_DIM; ++y) {
+    for (int x = 0; x < CHECKER_DIM; ++x) {
+      const bool on = ((x / 8) + (y / 8)) % 2 == 0;
+      unsigned char *p = px.data() + (y * CHECKER_DIM + x) * 4;
+      if (on) {
+        p[0] = 240; p[1] = 200; p[2] = 60; p[3] = 255; // amber
+      } else {
+        p[0] = 40; p[1] = 60; p[2] = 120; p[3] = 255;  // slate blue
+      }
+    }
+  }
+  return metal_texture_detail::load_texture_from_pixels(px.data(), CHECKER_DIM,
+                                                        CHECKER_DIM,
+                                                        TEXTURE_FILTER_BILINEAR);
+}
+
+// Static reference scene: draws the checker texture via rec + rotated pro.
+struct TextureShowcaseSystem : System<> {
+  float t = 0.f;
+  void once(float dt) override {
+    if (g_checker.view_id == 0)
+      return;
+    t += dt;
+    const Color white{255, 255, 255, 255};
+
+    const float tw = g_checker.width;
+    const float th = g_checker.height;
+    const RectangleType full{0, 0, tw, th};
+
+    // 1) draw_texture_rec: 1:1 blit, top-right corner.
+    draw_texture_rec(g_checker, full, Vector2Type{560, 200}, white);
+
+    // 2) draw_texture_pro: scaled 2x and spinning about its center.
+    const float scale = 2.0f;
+    const RectangleType dest{700, 300, tw * scale, th * scale};
+    const Vector2Type origin{tw * scale / 2.f, th * scale / 2.f};
+    const float rotation = std::fmod(t * 45.f, 360.f); // deg/sec
+    draw_texture_pro(g_checker, full, dest, origin, rotation, white);
+  }
+};
+
 // ---- Setup ------------------------------------------------------------------
 static float frand(float lo, float hi) {
   return lo + (hi - lo) * (static_cast<float>(std::rand()) /
@@ -166,6 +220,25 @@ static void spawn_boxes() {
     e.addComponent<Tint>().hue = frand(0, 360);
   }
   EntityHelper::merge_entity_arrays();
+
+  // Texture path: build the procedural checker (GPU resources need a live
+  // sokol context, which exists by the time cfg.init runs), register it as the
+  // sprite-sheet singleton, and spawn one sprite entity so RenderSprites (which
+  // routes through the sokol draw_texture_pro) has something to draw.
+  g_checker = make_checker_texture();
+  {
+    auto &sheet = EntityHelper::createEntity();
+    sheet.addComponent<tex::HasSpritesheet>(g_checker);
+
+    auto &sprite = EntityHelper::createEntity();
+    // Sample the full texture as one "frame"; draw it near bottom-right.
+    const tex::Rectangle frame{0, 0, g_checker.width, g_checker.height};
+    sprite.addComponent<tex::HasSprite>(
+        /*pos*/ Vector2Type{620, 440}, /*size*/ Vector2Type{96, 96},
+        /*angle*/ 20.f, frame, /*scale*/ 1.5f,
+        tex::Color{255, 255, 255, 255});
+    EntityHelper::merge_entity_arrays();
+  }
 }
 
 // Called once per frame by the sokol backend: update + render systems run
@@ -186,6 +259,10 @@ int main() {
   systems.register_render_system(std::make_unique<RenderSystem>());
   // Static reference scene exercising every sokol geometry primitive.
   systems.register_render_system(std::make_unique<PrimitiveShowcaseSystem>());
+  // Texture path: direct rec + rotated pro blits.
+  systems.register_render_system(std::make_unique<TextureShowcaseSystem>());
+  // Sprite path: routes through texture_manager -> sokol draw_texture_pro.
+  systems.register_render_system(std::make_unique<tex::RenderSprites>());
 
   g::RunConfig cfg;
   cfg.width = WIDTH;
