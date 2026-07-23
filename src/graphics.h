@@ -129,6 +129,10 @@ inline auto get_screen_to_world_2d(const PlatformAPI::Vec2 &position,
                                    const PlatformAPI::Camera2D &camera) {
   return PlatformAPI::get_screen_to_world_2d(position, camera);
 }
+inline auto get_world_to_screen_2d(const PlatformAPI::Vec2 &position,
+                                   const PlatformAPI::Camera2D &camera) {
+  return PlatformAPI::get_world_to_screen_2d(position, camera);
+}
 inline void begin_mode_2d(const PlatformAPI::Camera2D &camera) {
   PlatformAPI::begin_mode_2d(camera);
 }

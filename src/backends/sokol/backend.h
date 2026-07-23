@@ -574,6 +574,20 @@ struct MetalPlatformAPI {
 
     return {x * c - y * s + camera.target.x, x * s + y * c + camera.target.y};
   }
+  static Vec2 get_world_to_screen_2d(const Vec2 &position,
+                                     const Camera2D &camera) {
+    constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
+    const float zoom = (camera.zoom == 0.0f) ? 1.0f : camera.zoom;
+    const float x = position.x - camera.target.x;
+    const float y = position.y - camera.target.y;
+
+    const float rot = camera.rotation * kDegToRad;
+    const float c = std::cos(rot);
+    const float s = std::sin(rot);
+
+    return {camera.offset.x + (x * c - y * s) * zoom,
+            camera.offset.y + (x * s + y * c) * zoom};
+  }
   static void begin_mode_2d(const Camera2D &camera) {
     if (!metal_detail::g_pass_active) {
       log_warn("begin_mode_2d called outside active drawing pass");
