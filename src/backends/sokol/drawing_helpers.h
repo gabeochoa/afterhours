@@ -296,6 +296,88 @@ inline void draw_rectangle_rounded_lines(
   sgl_end();
 }
 
+inline void draw_rectangle_rounded_lines_ex(const RectangleType rect,
+                                            const float roundness,
+                                            const int segments,
+                                            const float thickness,
+                                            const Color color) {
+  if (thickness <= 1.0f) {
+    draw_rectangle_rounded_lines(rect, roundness, segments, color,
+                                 std::bitset<4>().set());
+    return;
+  }
+  const int layers = std::max(1, static_cast<int>(std::round(thickness)));
+  for (int i = 0; i < layers; ++i) {
+    const float inset = static_cast<float>(i);
+    const RectangleType r{rect.x + inset, rect.y + inset,
+                          std::max(0.0f, rect.width - 2.0f * inset),
+                          std::max(0.0f, rect.height - 2.0f * inset)};
+    if (r.width <= 0.0f || r.height <= 0.0f)
+      break;
+    draw_rectangle_rounded_lines(r, roundness, segments, color,
+                                 std::bitset<4>().set());
+  }
+}
+
+inline void draw_rectangle_gradient_v(const RectangleType rect, const Color top,
+                                      const Color bottom) {
+  sgl_begin_quads();
+  sgl_c4b(top.r, top.g, top.b, top.a);
+  sgl_v2f(rect.x, rect.y);
+  sgl_v2f(rect.x + rect.width, rect.y);
+  sgl_c4b(bottom.r, bottom.g, bottom.b, bottom.a);
+  sgl_v2f(rect.x + rect.width, rect.y + rect.height);
+  sgl_v2f(rect.x, rect.y + rect.height);
+  sgl_end();
+}
+
+inline void draw_rectangle_gradient_h(const RectangleType rect,
+                                      const Color left, const Color right) {
+  sgl_begin_quads();
+  sgl_c4b(left.r, left.g, left.b, left.a);
+  sgl_v2f(rect.x, rect.y);
+  sgl_v2f(rect.x, rect.y + rect.height);
+  sgl_c4b(right.r, right.g, right.b, right.a);
+  sgl_v2f(rect.x + rect.width, rect.y + rect.height);
+  sgl_v2f(rect.x + rect.width, rect.y);
+  sgl_end();
+}
+
+inline void draw_rectangle_gradient_ex(const RectangleType rect, const Color tl,
+                                       const Color bl, const Color tr,
+                                       const Color br) {
+  sgl_begin_quads();
+  sgl_c4b(tl.r, tl.g, tl.b, tl.a);
+  sgl_v2f(rect.x, rect.y);
+  sgl_c4b(bl.r, bl.g, bl.b, bl.a);
+  sgl_v2f(rect.x, rect.y + rect.height);
+  sgl_c4b(br.r, br.g, br.b, br.a);
+  sgl_v2f(rect.x + rect.width, rect.y + rect.height);
+  sgl_c4b(tr.r, tr.g, tr.b, tr.a);
+  sgl_v2f(rect.x + rect.width, rect.y);
+  sgl_end();
+}
+
+inline void draw_circle_gradient(int centerX, int centerY, float radius,
+                                 Color inner, Color outer) {
+  constexpr int SEGMENTS = 40;
+  const float cx = static_cast<float>(centerX);
+  const float cy = static_cast<float>(centerY);
+  sgl_begin_triangles();
+  for (int i = 0; i < SEGMENTS; ++i) {
+    const float a0 =
+        static_cast<float>(i) * 2.0f * 3.14159265f / static_cast<float>(SEGMENTS);
+    const float a1 = static_cast<float>(i + 1) * 2.0f * 3.14159265f /
+                     static_cast<float>(SEGMENTS);
+    sgl_c4b(inner.r, inner.g, inner.b, inner.a);
+    sgl_v2f(cx, cy);
+    sgl_c4b(outer.r, outer.g, outer.b, outer.a);
+    sgl_v2f(cx + radius * std::cos(a0), cy + radius * std::sin(a0));
+    sgl_v2f(cx + radius * std::cos(a1), cy + radius * std::sin(a1));
+  }
+  sgl_end();
+}
+
 inline void draw_texture_npatch(const texture_manager::Texture,
                                 const RectangleType, int, int, int, int,
                                 const Color) {

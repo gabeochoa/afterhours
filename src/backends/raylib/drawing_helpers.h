@@ -244,6 +244,42 @@ inline void draw_rectangle_rounded_lines(
   raylib::DrawRectangleRoundedLines(rect, roundness, segments, color);
 }
 
+inline void draw_rectangle_rounded_lines_ex(const RectangleType rect,
+                                            const float roundness,
+                                            const int segments,
+                                            const float thickness,
+                                            const Color color) {
+  raylib::DrawRectangleRoundedLinesEx(rect, roundness, segments, thickness,
+                                      color);
+}
+
+inline void draw_rectangle_gradient_v(const RectangleType rect, const Color top,
+                                      const Color bottom) {
+  raylib::DrawRectangleGradientV(static_cast<int>(rect.x),
+                                 static_cast<int>(rect.y),
+                                 static_cast<int>(rect.width),
+                                 static_cast<int>(rect.height), top, bottom);
+}
+
+inline void draw_rectangle_gradient_h(const RectangleType rect,
+                                      const Color left, const Color right) {
+  raylib::DrawRectangleGradientH(static_cast<int>(rect.x),
+                                 static_cast<int>(rect.y),
+                                 static_cast<int>(rect.width),
+                                 static_cast<int>(rect.height), left, right);
+}
+
+inline void draw_rectangle_gradient_ex(const RectangleType rect, const Color tl,
+                                       const Color bl, const Color tr,
+                                       const Color br) {
+  raylib::DrawRectangleGradientEx(rect, tl, bl, tr, br);
+}
+
+inline void draw_circle_gradient(int centerX, int centerY, float radius,
+                                 Color inner, Color outer) {
+  raylib::DrawCircleGradient(centerX, centerY, radius, inner, outer);
+}
+
 // Draw a rotated rounded rectangle
 // rotation: angle in degrees (clockwise)
 // The rectangle rotates around its center

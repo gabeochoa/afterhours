@@ -48,6 +48,26 @@ inline void draw_rectangle_rounded_lines(const RectangleType, const float,
                                          const std::bitset<4>) {
   log_error("@notimplemented draw_rectangle_rounded_lines");
 }
+inline void draw_rectangle_rounded_lines_ex(const RectangleType, const float,
+                                            const int, const float,
+                                            const Color) {
+  log_error("@notimplemented draw_rectangle_rounded_lines_ex");
+}
+inline void draw_rectangle_gradient_v(const RectangleType, const Color,
+                                      const Color) {
+  log_error("@notimplemented draw_rectangle_gradient_v");
+}
+inline void draw_rectangle_gradient_h(const RectangleType, const Color,
+                                      const Color) {
+  log_error("@notimplemented draw_rectangle_gradient_h");
+}
+inline void draw_rectangle_gradient_ex(const RectangleType, const Color,
+                                       const Color, const Color, const Color) {
+  log_error("@notimplemented draw_rectangle_gradient_ex");
+}
+inline void draw_circle_gradient(int, int, float, Color, Color) {
+  log_error("@notimplemented draw_circle_gradient");
+}
 inline void draw_texture_npatch(const texture_manager::Texture,
                                 const RectangleType, int, int, int, int,
                                 const Color) {
