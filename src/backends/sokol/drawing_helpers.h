@@ -1345,10 +1345,33 @@ inline void set_texture_filter(TextureType &texture, int filter) {
   texture.sampler_id = smp.id;
 }
 
-inline TextureType load_texture_with_color_key(const char *, const Color,
-                                               const Color, int) {
-  log_error("@notimplemented load_texture_with_color_key");
-  return TextureType{};
+inline TextureType
+load_texture_with_color_key(const char *path, const Color key,
+                           const Color replacement,
+                           int filter = TEXTURE_FILTER_BILINEAR) {
+  int w = 0, h = 0, comp = 0;
+  unsigned char *pixels = stbi_load(path, &w, &h, &comp, 4);
+  if (pixels == nullptr) {
+    log_error("load_texture_with_color_key: failed to load '{}': {}", path,
+              stbi_failure_reason());
+    return TextureType{};
+  }
+  // Exact-match replace of `key` with `replacement` across the RGBA buffer,
+  // matching raylib's ImageColorReplace behavior.
+  const size_t count = static_cast<size_t>(w) * static_cast<size_t>(h);
+  for (size_t i = 0; i < count; ++i) {
+    unsigned char *px = pixels + i * 4;
+    if (px[0] == key.r && px[1] == key.g && px[2] == key.b && px[3] == key.a) {
+      px[0] = replacement.r;
+      px[1] = replacement.g;
+      px[2] = replacement.b;
+      px[3] = replacement.a;
+    }
+  }
+  TextureType tex =
+      metal_texture_detail::load_texture_from_pixels(pixels, w, h, filter);
+  stbi_image_free(pixels);
+  return tex;
 }
 
 } // namespace afterhours
