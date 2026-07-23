@@ -708,8 +708,24 @@ inline void draw_circle_sector_lines(Vector2Type center, float radius,
     sgl_v2f(center.x, center.y);
   sgl_end();
 }
-inline void draw_ellipse(int, int, float, float, Color) {
-  log_error("@notimplemented draw_ellipse");
+// Draw a filled ellipse as a triangle fan (a circle scaled per-axis).
+inline void draw_ellipse(int centerX, int centerY, float radiusH,
+                         float radiusV, Color color) {
+  constexpr int SEGMENTS = 36;
+  const float cx = static_cast<float>(centerX);
+  const float cy = static_cast<float>(centerY);
+  metal_draw_detail::set_color(color);
+  sgl_begin_triangles();
+  for (int i = 0; i < SEGMENTS; i++) {
+    const float a0 = static_cast<float>(i) * 2.0f * 3.14159265f /
+                     static_cast<float>(SEGMENTS);
+    const float a1 = static_cast<float>(i + 1) * 2.0f * 3.14159265f /
+                     static_cast<float>(SEGMENTS);
+    sgl_v2f(cx, cy);
+    sgl_v2f(cx + cosf(a1) * radiusH, cy + sinf(a1) * radiusV);
+    sgl_v2f(cx + cosf(a0) * radiusH, cy + sinf(a0) * radiusV);
+  }
+  sgl_end();
 }
 inline void draw_ellipse_lines(int, int, float, float, Color) {
   log_error("@notimplemented draw_ellipse_lines");
