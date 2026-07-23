@@ -24,7 +24,8 @@
 #include <fontstash/fontstash.h>
 #include <sokol/sokol_fontstash.h>
 
-// Image decoding for texture loading: the single STB_IMAGE_IMPLEMENTATION for
-// this project lives here alongside the other _IMPL defines.
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb/stb_image.h>
+// Image decoding for texture loading: the sokol backend's image_decode.h
+// automatically defines STB_IMAGE_IMPLEMENTATION when SOKOL_IMPL is defined
+// (see src/backends/sokol/image_decode.h), so stb rides along with this TU --
+// no manual STB define and no extra .cc file for the consumer to manage.
+#include <afterhours/src/backends/sokol/image_decode.h>
