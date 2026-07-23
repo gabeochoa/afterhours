@@ -1231,12 +1231,26 @@ inline void unload_texture(TextureType &texture) {
   texture = TextureType{};
 }
 
-inline void gen_texture_mipmaps(TextureType &) {
-  log_error("@notimplemented gen_texture_mipmaps");
+inline void gen_texture_mipmaps(TextureType &texture) {
+  // Sokol fixes an image's mip count at creation time (sg_image_desc.num_mipmaps
+  // + the mip_levels[] data supplied to sg_make_image); there is no runtime
+  // "generate mipmaps for an existing immutable image" call as in raylib's
+  // GenTextureMipmaps. Our load_texture uploads a single mip level, so there is
+  // nothing to regenerate. Documented no-op — sampling still works via
+  // set_texture_filter. (To get true mipmaps here we would upload pre-built mip
+  // levels at load time; out of scope for matching the current raylib API.)
+  (void)texture;
 }
 
-inline void set_texture_filter(TextureType &, int) {
-  log_error("@notimplemented set_texture_filter");
+inline void set_texture_filter(TextureType &texture, int filter) {
+  if (texture.img_id == 0)
+    return;
+  // Recreate the sampler with the requested filter. The old sampler is
+  // destroyed to avoid leaking a GPU sampler object.
+  if (texture.sampler_id)
+    sg_destroy_sampler({texture.sampler_id});
+  sg_sampler smp = metal_texture_detail::make_sampler_for_filter(filter);
+  texture.sampler_id = smp.id;
 }
 
 inline TextureType load_texture_with_color_key(const char *, const Color,
