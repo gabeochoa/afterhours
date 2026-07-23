@@ -624,8 +624,46 @@ inline void draw_circle_lines(int centerX, int centerY, float radius,
   sgl_end();
 }
 
-inline void draw_circle_sector(Vector2Type, float, float, float, int, Color) {
-  log_error("@notimplemented draw_circle_sector");
+// Draw a filled circle sector (pie slice) from startAngle to endAngle
+// (degrees), as a triangle fan from the center. Matches raylib.
+inline void draw_circle_sector(Vector2Type center, float radius,
+                               float startAngle, float endAngle, int segments,
+                               Color color) {
+  if (radius <= 0.0f)
+    radius = 0.1f;
+
+  // Sweep from smaller to larger angle.
+  if (endAngle < startAngle) {
+    float tmp = startAngle;
+    startAngle = endAngle;
+    endAngle = tmp;
+  }
+
+  const int minSegments =
+      static_cast<int>(ceilf((endAngle - startAngle) / 90.0f));
+  if (segments < minSegments) {
+    float th = acosf(2.0f * powf(1.0f - 0.5f / radius, 2.0f) - 1.0f);
+    segments =
+        static_cast<int>((endAngle - startAngle) / (th * RAD2DEG) / 2.0f);
+    if (segments <= 0)
+      segments = minSegments;
+  }
+
+  const float stepLength =
+      (endAngle - startAngle) / static_cast<float>(segments);
+  float angle = startAngle;
+
+  metal_draw_detail::set_color(color);
+  sgl_begin_triangles();
+  for (int i = 0; i < segments; i++) {
+    const float a0 = DEG2RAD * angle;
+    const float a1 = DEG2RAD * (angle + stepLength);
+    sgl_v2f(center.x, center.y);
+    sgl_v2f(center.x + cosf(a1) * radius, center.y + sinf(a1) * radius);
+    sgl_v2f(center.x + cosf(a0) * radius, center.y + sinf(a0) * radius);
+    angle += stepLength;
+  }
+  sgl_end();
 }
 inline void draw_circle_sector_lines(Vector2Type, float, float, float, int,
                                      Color) {
