@@ -1150,13 +1150,85 @@ inline std::vector<uint8_t> capture_screen_to_memory() {
 inline constexpr int TEXTURE_FILTER_BILINEAR = 1;
 inline constexpr int TEXTURE_FILTER_TRILINEAR = 2;
 
-inline TextureType load_texture(const char *) {
-  log_error("@notimplemented load_texture");
-  return TextureType{};
+namespace metal_texture_detail {
+
+// Map the afterhours filter constant to a sokol sampler filter. Both BILINEAR
+// and TRILINEAR use linear min/mag; TRILINEAR additionally uses a linear mipmap
+// filter (only meaningful when the image has mip levels).
+inline sg_sampler make_sampler_for_filter(int filter) {
+  sg_sampler_desc sd{};
+  sd.min_filter = SG_FILTER_LINEAR;
+  sd.mag_filter = SG_FILTER_LINEAR;
+  sd.mipmap_filter =
+      (filter == TEXTURE_FILTER_TRILINEAR) ? SG_FILTER_LINEAR : SG_FILTER_NEAREST;
+  sd.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
+  sd.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
+  sd.label = "tex-sampler";
+  return sg_make_sampler(&sd);
 }
 
-inline void unload_texture(TextureType &) {
-  log_error("@notimplemented unload_texture");
+// Upload a tightly-packed RGBA8 pixel buffer to a new immutable GPU image and
+// build the matching view + sampler. Shared by load_texture and
+// load_texture_with_color_key. Returns an empty TextureType on failure.
+inline TextureType load_texture_from_pixels(const unsigned char *rgba, int w,
+                                            int h,
+                                            int filter = TEXTURE_FILTER_BILINEAR) {
+  if (rgba == nullptr || w <= 0 || h <= 0) {
+    log_error("load_texture_from_pixels: invalid pixel data ({}x{})", w, h);
+    return TextureType{};
+  }
+
+  sg_image_desc id{};
+  id.usage.immutable = true;
+  id.width = w;
+  id.height = h;
+  id.pixel_format = SG_PIXELFORMAT_RGBA8;
+  id.data.mip_levels[0].ptr = rgba;
+  id.data.mip_levels[0].size =
+      static_cast<size_t>(w) * static_cast<size_t>(h) * 4u;
+  id.label = "tex-image";
+  sg_image img = sg_make_image(&id);
+
+  sg_view_desc vd{};
+  vd.texture.image = img;
+  vd.label = "tex-view";
+  sg_view view = sg_make_view(&vd);
+
+  sg_sampler smp = make_sampler_for_filter(filter);
+
+  TextureType tex{};
+  tex.width = static_cast<float>(w);
+  tex.height = static_cast<float>(h);
+  tex.img_id = img.id;
+  tex.view_id = view.id;
+  tex.sampler_id = smp.id;
+  return tex;
+}
+
+} // namespace metal_texture_detail
+
+inline TextureType load_texture(const char *path) {
+  int w = 0, h = 0, comp = 0;
+  // Force 4 channels (RGBA8) to match the fixed pixel format below.
+  unsigned char *pixels = stbi_load(path, &w, &h, &comp, 4);
+  if (pixels == nullptr) {
+    log_error("load_texture: failed to load '{}': {}", path,
+              stbi_failure_reason());
+    return TextureType{};
+  }
+  TextureType tex = metal_texture_detail::load_texture_from_pixels(pixels, w, h);
+  stbi_image_free(pixels);
+  return tex;
+}
+
+inline void unload_texture(TextureType &texture) {
+  if (texture.view_id)
+    sg_destroy_view({texture.view_id});
+  if (texture.sampler_id)
+    sg_destroy_sampler({texture.sampler_id});
+  if (texture.img_id)
+    sg_destroy_image({texture.img_id});
+  texture = TextureType{};
 }
 
 inline void gen_texture_mipmaps(TextureType &) {
