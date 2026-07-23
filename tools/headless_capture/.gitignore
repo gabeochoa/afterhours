@@ -1,0 +1,4 @@
+# Build artifacts for the headless capture harness.
+headless_capture
+*.o
+out.png
