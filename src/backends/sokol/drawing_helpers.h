@@ -1324,14 +1324,16 @@ inline void unload_texture(TextureType &texture) {
 }
 
 inline void gen_texture_mipmaps(TextureType &texture) {
-  // Sokol fixes an image's mip count at creation time (sg_image_desc.num_mipmaps
-  // + the mip_levels[] data supplied to sg_make_image); there is no runtime
-  // "generate mipmaps for an existing immutable image" call as in raylib's
-  // GenTextureMipmaps. Our load_texture uploads a single mip level, so there is
-  // nothing to regenerate. Documented no-op — sampling still works via
-  // set_texture_filter. (To get true mipmaps here we would upload pre-built mip
-  // levels at load time; out of scope for matching the current raylib API.)
+  // Not implemented in the sokol backend. Sokol fixes an image's mip count at
+  // creation time (sg_image_desc.num_mipmaps + the mip_levels[] data supplied to
+  // sg_make_image); there is no runtime "generate mipmaps for an existing
+  // immutable image" call as in raylib's GenTextureMipmaps, and load_texture
+  // uploads a single mip level. To get true mipmaps here we would upload
+  // pre-built mip levels at load time. Sampling still works via
+  // set_texture_filter. Kept loud so callers know it is a backend limitation,
+  // not a silent success.
   (void)texture;
+  log_error("@notimplemented gen_texture_mipmaps");
 }
 
 inline void set_texture_filter(TextureType &texture, int filter) {
