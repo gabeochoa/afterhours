@@ -96,6 +96,42 @@ struct RenderSystem : System<Transform, Tint> {
   }
 };
 
+// ---- Primitive showcase (sokol geometry primitives) ------------------------
+// A static reference scene that exercises every geometry primitive implemented
+// in the sokol backend (draw_circle_sector / _lines, draw_ellipse / _lines,
+// draw_poly / _lines / _lines_ex, draw_ring / draw_ring_segment). Handy for
+// eyeballing the sokol backend against the raylib reference. Registered as a
+// render system so its sgl calls land inside the frame's draw pass.
+struct PrimitiveShowcaseSystem : System<> {
+  void once(float) override {
+    const Color white{255, 255, 255, 255};
+    const Color red{230, 60, 60, 255};
+    const Color green{60, 200, 90, 255};
+    const Color blue{70, 130, 240, 255};
+    const Color yellow{240, 210, 60, 255};
+    const Color purple{180, 90, 220, 255};
+    const Color orange{240, 150, 50, 255};
+    const Color cyan{60, 210, 220, 255};
+
+    // Row 1
+    draw_circle_sector(Vector2Type{120, 120}, 60, 0, 120, 0, red);
+    draw_circle_sector_lines(Vector2Type{280, 120}, 60, 200, 320, 0, green);
+    draw_ellipse(460, 120, 70, 40, blue);
+    draw_ellipse_lines(640, 120, 35, 65, yellow);
+
+    // Row 2
+    draw_poly(Vector2Type{120, 340}, 6, 60, 0, purple);
+    draw_poly_lines(Vector2Type{300, 340}, 5, 60, -90, orange);
+    draw_poly_lines_ex(Vector2Type{480, 340}, 3, 60, -90, 10, cyan);
+
+    // Row 3
+    draw_ring(140, 540, 30, 65, 36, white);
+    draw_ring_segment(340, 540, 30, 65, 45, 300, 32, red);
+    draw_circle(560, 540, 40, green);
+    draw_circle_lines(700, 540, 40, blue);
+  }
+};
+
 static SystemManager systems;
 
 // ---- Setup ------------------------------------------------------------------
@@ -148,6 +184,8 @@ int main() {
   systems.register_update_system(std::make_unique<PulseSystem>());
   systems.register_update_system(std::make_unique<ColorCycleSystem>());
   systems.register_render_system(std::make_unique<RenderSystem>());
+  // Static reference scene exercising every sokol geometry primitive.
+  systems.register_render_system(std::make_unique<PrimitiveShowcaseSystem>());
 
   g::RunConfig cfg;
   cfg.width = WIDTH;
