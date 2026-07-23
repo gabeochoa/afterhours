@@ -20,6 +20,11 @@ namespace metal_draw_detail {
 inline void set_color(const Color c) { sgl_c4b(c.r, c.g, c.b, c.a); }
 } // namespace metal_draw_detail
 
+// Forward declaration: draw_line_ex (below) calls draw_circle_v for round
+// end-caps, but draw_circle_v is defined further down. Declare it here so the
+// call site compiles regardless of definition order.
+inline void draw_circle_v(Vector2Type center, float radius, Color color);
+
 inline void draw_text_ex(const afterhours::Font font, const char *content,
                          const Vector2Type position, const float font_size,
                          const float, const Color color, const float = 0.0f,
