@@ -454,8 +454,11 @@ inline void draw_ring_segment(float centerX, float centerY, float innerRadius,
   sgl_end();
 }
 
-inline void draw_ring(float, float, float, float, int, Color) {
-  log_error("@notimplemented draw_ring");
+// Draw a full ring (circle with a hole) — a ring segment sweeping 0..360.
+inline void draw_ring(float centerX, float centerY, float innerRadius,
+                      float outerRadius, int segments, Color color) {
+  draw_ring_segment(centerX, centerY, innerRadius, outerRadius, 0.0f, 360.0f,
+                    segments, color);
 }
 
 inline void begin_scissor_mode(int x, int y, int w, int h) {
