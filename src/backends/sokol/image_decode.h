@@ -53,4 +53,20 @@ AFTERHOURS_MISSING_sokol_impl_TU__add_one_objcpp_file_that_defines_SOKOL_IMPL_an
   return 0;
 }
 #endif
+
+// Platform-neutral twin of the sentinel above. The "objcpp file" wording is
+// only literally correct on macOS/Metal (where the impl TU must be compiled as
+// Objective-C++); on Linux (SOKOL_GLCORE), Windows (SOKOL_D3D11), and web
+// (SOKOL_GLES3) the impl TU is a plain C++ translation unit. This twin uses
+// OS-agnostic wording so the link error reads correctly everywhere. Both are
+// referenced by graphics::run(); the impl TU defines both.
+// clang-format off
+int AFTERHOURS_MISSING_sokol_impl_TU__add_one_TU_that_defines_SOKOL_IMPL_and_includes_afterhours_src_backends_sokol_image_decode_h();
+// clang-format on
+#if defined(SOKOL_IMPL) || defined(AFTERHOURS_SOKOL_IMPL_SENTINEL)
+int
+AFTERHOURS_MISSING_sokol_impl_TU__add_one_TU_that_defines_SOKOL_IMPL_and_includes_afterhours_src_backends_sokol_image_decode_h() {
+  return 0;
+}
+#endif
 } // namespace afterhours::graphics
