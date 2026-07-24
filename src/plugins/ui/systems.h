@@ -310,6 +310,7 @@ struct FixScrollViewPositions : System<HasScrollView, UIComponent> {
     float total_height = 0.0f;
     float max_width = 0.0f;
     float max_height = 0.0f;
+    int laid_out = 0;
 
     for (EntityID child_id : cmp.children) {
       OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
@@ -332,11 +333,16 @@ struct FixScrollViewPositions : System<HasScrollView, UIComponent> {
         total_height += ch + mt + mb;
         max_width = std::max(max_width, cw + ml + mr);
       }
+      laid_out++;
     }
 
+    // The flex gap sits between children but isn't part of any child's box, so
+    // fold it into the content size along the layout axis — otherwise a gapped
+    // list reports content ~= viewport and never registers as overflowing.
+    const float gaps = cmp.gap * (float)std::max(0, laid_out - 1);
     scroll.content_size = is_row_layout
-                              ? Vector2Type{total_width, max_height}
-                              : Vector2Type{max_width, total_height};
+                              ? Vector2Type{total_width + gaps, max_height}
+                              : Vector2Type{max_width, total_height + gaps};
 
     bool content_overflows = scroll.needs_scroll_y() || scroll.needs_scroll_x();
     if (!scroll.auto_overflow || content_overflows) {
@@ -361,11 +367,11 @@ struct FixScrollViewPositions : System<HasScrollView, UIComponent> {
         if (is_row_layout) {
           child_cmp.computed_rel[Axis::X] = cur_x + ml;
           child_cmp.computed_rel[Axis::Y] = content_y + mt;
-          cur_x += ml + child_cmp.computed[Axis::X] + mr;
+          cur_x += ml + child_cmp.computed[Axis::X] + mr + cmp.gap;
         } else {
           child_cmp.computed_rel[Axis::X] = content_x + ml;
           child_cmp.computed_rel[Axis::Y] = cur_y + mt;
-          cur_y += mt + child_cmp.computed[Axis::Y] + mb;
+          cur_y += mt + child_cmp.computed[Axis::Y] + mb + cmp.gap;
         }
       }
     }
