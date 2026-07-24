@@ -2,7 +2,7 @@
 
 #include <functional>
 #include <limits>
-#include <set>
+#include <unordered_set>
 
 #include "../core/base_component.h"
 #include "../core/system.h"
@@ -33,7 +33,15 @@ struct collision : developer::Plugin {
   struct UpdateCollidingEntities : System<TransformType> {
     using Transform = TransformType;
 
-    std::set<int> ids;
+    std::unordered_set<int> ids;
+
+    // cache the query ents instead of just the ids
+    RefEntities collidables;
+
+    virtual void once(float) override {
+      ids.clear();
+      collidables = EntityQuery().whereHasComponent<Transform>().gen();
+    }
 
     struct Config {
       std::function<float()> get_collision_scalar;
@@ -51,8 +59,6 @@ struct collision : developer::Plugin {
       std::function<float(const Transform &)> get_speed;
       std::function<bool(const Transform &, const Transform &)> check_overlap;
     } callbacks;
-
-    virtual void once(float) override { ids.clear(); }
 
     void positional_correction(Transform &a, Transform &b,
                                const vec2 &collisionNormal,
@@ -215,12 +221,10 @@ struct collision : developer::Plugin {
         return;
       }
 
-      auto can_collide = EntityQuery()
-                             .whereHasComponent<Transform>()
-                             .whereNotID(entity.id)
-                             .gen();
-
-      for (Entity &other : can_collide) {
+      for (Entity &other : collidables) {
+        if (other.id == entity.id) {
+          continue;
+        }
         if (callbacks.is_floor_overlay && callbacks.is_floor_overlay(other)) {
           continue;
         }
