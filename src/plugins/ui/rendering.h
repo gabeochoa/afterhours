@@ -1434,7 +1434,28 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     if (entity.has<HasBorder>()) {
       const Border &border = entity.template get<HasBorder>().border;
       if (border.has_border()) {
-        if (border.is_uniform()) {
+        // Draw a dashed run of small rects along a side rect. Orientation is
+        // inferred from aspect: wider-than-tall = horizontal, else vertical.
+        // ponytail: dotted ignores rounded corners (four straight dashed
+        // sides).
+        auto draw_dashed = [&](float sx, float sy, float sw, float sh,
+                               float thickness, Color c) {
+          float dash = std::max(1.0f, thickness * 2.0f);
+          float gap_len = std::max(1.0f, thickness * 2.0f);
+          float step = dash + gap_len;
+          bool horizontal = sw >= sh;
+          float len = horizontal ? sw : sh;
+          for (float pos = 0.0f; pos < len; pos += step) {
+            float seg = std::min(dash, len - pos);
+            if (horizontal)
+              draw_rectangle(RectangleType{sx + pos, sy, seg, sh}, c);
+            else
+              draw_rectangle(RectangleType{sx, sy + pos, sw, seg}, c);
+          }
+        };
+        bool uniform_dotted =
+            border.is_uniform() && border.top.style == BorderStyle::Dotted;
+        if (border.is_uniform() && !uniform_dotted) {
           Color border_col = border.uniform_color();
           if (effective_opacity < 1.0f) {
             border_col = colors::opacity_pct(border_col, effective_opacity);
@@ -1442,7 +1463,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
           draw_rectangle_rounded_lines(draw_rect, roundness, segments,
                                        border_col, corner_settings);
         } else {
-          // Per-side border rendering
+          // Per-side (and uniform-dotted) border rendering
           float x = draw_rect.x, y = draw_rect.y;
           float w = draw_rect.width, h = draw_rect.height;
           auto draw_side = [&](const BorderSide &side, float sx, float sy,
@@ -1452,7 +1473,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
             Color c = side.color;
             if (effective_opacity < 1.0f)
               c = colors::opacity_pct(c, effective_opacity);
-            draw_rectangle(RectangleType{sx, sy, sw, sh}, c);
+            if (side.style == BorderStyle::Dotted)
+              draw_dashed(sx, sy, sw, sh, side.thickness.value, c);
+            else
+              draw_rectangle(RectangleType{sx, sy, sw, sh}, c);
           };
           float tt = border.top.thickness.value;
           float bt = border.bottom.thickness.value;
@@ -2028,7 +2052,28 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     if (entity.has<HasBorder>()) {
       const Border &border = entity.template get<HasBorder>().border;
       if (border.has_border()) {
-        if (border.is_uniform()) {
+        // Add a dashed run of small rects along a side rect. Orientation is
+        // inferred from aspect: wider-than-tall = horizontal, else vertical.
+        // ponytail: dotted ignores rounded corners (four straight dashed
+        // sides).
+        auto add_dashed = [&](float sx, float sy, float sw, float sh,
+                              float thickness, Color c) {
+          float dash = std::max(1.0f, thickness * 2.0f);
+          float gap_len = std::max(1.0f, thickness * 2.0f);
+          float step = dash + gap_len;
+          bool horizontal = sw >= sh;
+          float len = horizontal ? sw : sh;
+          for (float pos = 0.0f; pos < len; pos += step) {
+            float seg = std::min(dash, len - pos);
+            RectangleType r = horizontal ? RectangleType{sx + pos, sy, seg, sh}
+                                         : RectangleType{sx, sy + pos, sw, seg};
+            buffer.add_rounded_rectangle(r, c, 0.f, 1, corner_settings, layer,
+                                         entity.id, 0.f);
+          }
+        };
+        bool uniform_dotted =
+            border.is_uniform() && border.top.style == BorderStyle::Dotted;
+        if (border.is_uniform() && !uniform_dotted) {
           Color border_col = border.uniform_color();
           if (effective_opacity < 1.0f) {
             border_col = colors::opacity_pct(border_col, effective_opacity);
@@ -2037,7 +2082,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                                                segments, corner_settings, layer,
                                                entity.id);
         } else {
-          // Per-side border rendering (as filled rectangles)
+          // Per-side (and uniform-dotted) border rendering (filled rectangles)
           float x = draw_rect.x, y = draw_rect.y;
           float w = draw_rect.width, h = draw_rect.height;
           auto add_side = [&](const BorderSide &side, float sx, float sy,
@@ -2047,6 +2092,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
             Color c = side.color;
             if (effective_opacity < 1.0f)
               c = colors::opacity_pct(c, effective_opacity);
+            if (side.style == BorderStyle::Dotted) {
+              add_dashed(sx, sy, sw, sh, side.thickness.value, c);
+              return;
+            }
             RectangleType side_rect{sx, sy, sw, sh};
             buffer.add_rounded_rectangle(side_rect, c, 0.f, 1, corner_settings,
                                          layer, entity.id, 0.f);

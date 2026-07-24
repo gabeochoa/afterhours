@@ -318,10 +318,14 @@ struct HasShadow : BaseComponent {
   explicit HasShadow(const Shadow &s) : shadow(s) {}
 };
 
+// Border line style
+enum struct BorderStyle { Solid, Dotted };
+
 // Per-side border configuration
 struct BorderSide {
   Color color = Color{0, 0, 0, 0};
   Size thickness = pixels(0.0f);
+  BorderStyle style = BorderStyle::Solid;
   bool has_border() const { return thickness.value > 0.0f && color.a > 0; }
 };
 
@@ -331,8 +335,9 @@ struct Border {
   BorderSide top, right, bottom, left;
 
   // Uniform border factory (backwards compatible)
-  static Border all(Color color, Size thickness) {
-    BorderSide s{color, thickness};
+  static Border all(Color color, Size thickness,
+                    BorderStyle style = BorderStyle::Solid) {
+    BorderSide s{color, thickness, style};
     return {s, s, s, s};
   }
 
