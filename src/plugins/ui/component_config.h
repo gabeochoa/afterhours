@@ -205,41 +205,45 @@ struct ComponentConfig {
     return *this;
   }
   // Float overload for backwards compatibility
-  ComponentConfig &with_border(Color color, float thickness = 2.0f) {
-    border_config = Border::all(color, pixels(thickness));
+  ComponentConfig &with_border(Color color, float thickness = 2.0f,
+                               BorderStyle style = BorderStyle::Solid) {
+    border_config = Border::all(color, pixels(thickness), style);
     return *this;
   }
   // Size overload for resolution-scaled border thickness
-  ComponentConfig &with_border(Color color, Size thickness) {
-    border_config = Border::all(color, thickness);
+  ComponentConfig &with_border(Color color, Size thickness,
+                               BorderStyle style = BorderStyle::Solid) {
+    border_config = Border::all(color, thickness, style);
     return *this;
   }
   // Per-side border methods
-  ComponentConfig &with_border_top(Color color, Size thickness = pixels(1.0f)) {
+  ComponentConfig &with_border_top(Color color, Size thickness = pixels(1.0f),
+                                   BorderStyle style = BorderStyle::Solid) {
     if (!border_config.has_value())
       border_config = Border{};
-    border_config->top = BorderSide{color, thickness};
+    border_config->top = BorderSide{color, thickness, style};
     return *this;
   }
-  ComponentConfig &with_border_right(Color color,
-                                     Size thickness = pixels(1.0f)) {
+  ComponentConfig &with_border_right(Color color, Size thickness = pixels(1.0f),
+                                     BorderStyle style = BorderStyle::Solid) {
     if (!border_config.has_value())
       border_config = Border{};
-    border_config->right = BorderSide{color, thickness};
+    border_config->right = BorderSide{color, thickness, style};
     return *this;
   }
   ComponentConfig &with_border_bottom(Color color,
-                                      Size thickness = pixels(1.0f)) {
+                                      Size thickness = pixels(1.0f),
+                                      BorderStyle style = BorderStyle::Solid) {
     if (!border_config.has_value())
       border_config = Border{};
-    border_config->bottom = BorderSide{color, thickness};
+    border_config->bottom = BorderSide{color, thickness, style};
     return *this;
   }
-  ComponentConfig &with_border_left(Color color,
-                                    Size thickness = pixels(1.0f)) {
+  ComponentConfig &with_border_left(Color color, Size thickness = pixels(1.0f),
+                                    BorderStyle style = BorderStyle::Solid) {
     if (!border_config.has_value())
       border_config = Border{};
-    border_config->left = BorderSide{color, thickness};
+    border_config->left = BorderSide{color, thickness, style};
     return *this;
   }
   ComponentConfig &with_bevel(const BevelBorder &bevel) {
