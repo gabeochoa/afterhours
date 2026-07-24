@@ -44,6 +44,12 @@ enum class ClosedBy {
 // Forward declaration
 struct modal;
 
+// Where the modal is anchored on screen. The main axis is pinned to the
+// chosen edge; the cross axis is centered. Size the modal to fill the cross
+// axis for edge-anchored patterns (e.g. Right + full-height = side drawer,
+// Bottom + full-width = bottom sheet / banner).
+enum struct ModalAnchor { Center, Top, Bottom, Left, Right };
+
 // TODO eventually it would be nice to use ComponentConfig
 // Modal configuration
 struct ModalConfig {
@@ -51,6 +57,7 @@ struct ModalConfig {
     ui::Size height = ui::h720(200);
     std::string title;
     bool center_on_screen = true;
+    ModalAnchor anchor = ModalAnchor::Center;
     ClosedBy closed_by = ClosedBy::CloseRequest;
     bool show_close_button = true;
     Color backdrop_color = {0, 0, 0, 128};
@@ -84,6 +91,12 @@ struct ModalConfig {
 
     ModalConfig &with_render_layer(int layer) {
         render_layer = layer;
+        return *this;
+    }
+
+    ModalConfig &with_anchor(ModalAnchor a) {
+        anchor = a;
+        center_on_screen = (a == ModalAnchor::Center);
         return *this;
     }
 };
@@ -310,8 +323,21 @@ struct modal : developer::Plugin {
             float width_px = resolve_size(config.width, screen_w, screen_h);
             float height_px = resolve_size(config.height, screen_w, screen_h);
 
-            float x_pos = (static_cast<float>(screen_w) - width_px) / 2.0f;
-            float y_pos = (static_cast<float>(screen_h) - height_px) / 2.0f;
+            // Anchor the modal: pin the main axis to the chosen edge, center
+            // the cross axis. Sizing to the full cross axis yields drawers
+            // (Left/Right) and bottom/top sheets & banners.
+            float sw = static_cast<float>(screen_w);
+            float sh = static_cast<float>(screen_h);
+            float cx = (sw - width_px) / 2.0f;
+            float cy = (sh - height_px) / 2.0f;
+            float x_pos = cx, y_pos = cy;
+            switch (config.anchor) {
+            case ModalAnchor::Center: break;
+            case ModalAnchor::Top: y_pos = 0.f; break;
+            case ModalAnchor::Bottom: y_pos = sh - height_px; break;
+            case ModalAnchor::Left: x_pos = 0.f; break;
+            case ModalAnchor::Right: x_pos = sw - width_px; break;
+            }
 
             // Create full-screen backdrop overlay as a SIBLING of the modal
             // (child of parent). This ensures it renders before the modal and
