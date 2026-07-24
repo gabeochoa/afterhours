@@ -250,8 +250,17 @@ template <typename InputAction> struct UIContext : BaseComponent {
 
   void process_tabbing(EntityID id) {
     if (has_focus(id)) {
+      // Arrow Up/Down move focus just like Tab / Shift+Tab, EXCEPT when the
+      // focused element consumes vertical input for value adjustment (e.g. a
+      // spinbox marked AcceptsValueInput) — then Up/Down belong to it.
+      const bool arrows_navigate = !focused_accepts_value_input();
       if constexpr (magic_enum::enum_contains<InputAction>("WidgetNext")) {
-        if (pressed(InputAction::WidgetNext)) {
+        bool forward = pressed(InputAction::WidgetNext);
+        if constexpr (magic_enum::enum_contains<InputAction>("WidgetDown")) {
+          if (arrows_navigate && pressed(InputAction::WidgetDown))
+            forward = true;
+        }
+        if (forward) {
           set_focus(ROOT);
           if constexpr (magic_enum::enum_contains<InputAction>("WidgetMod")) {
             if (is_held_down(InputAction::WidgetMod)) {
@@ -261,7 +270,12 @@ template <typename InputAction> struct UIContext : BaseComponent {
         }
       }
       if constexpr (magic_enum::enum_contains<InputAction>("WidgetBack")) {
-        if (pressed(InputAction::WidgetBack)) {
+        bool backward = pressed(InputAction::WidgetBack);
+        if constexpr (magic_enum::enum_contains<InputAction>("WidgetUp")) {
+          if (arrows_navigate && pressed(InputAction::WidgetUp))
+            backward = true;
+        }
+        if (backward) {
           set_focus(last_processed);
         }
       }
