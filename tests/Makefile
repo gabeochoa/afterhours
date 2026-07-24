@@ -9,11 +9,24 @@ CXX := clang++
 CXXFLAGS := -std=c++20 -Wall -Wextra -g
 CXXFLAGS_RAYLIB := $(CXXFLAGS) -DAFTER_HOURS_USE_RAYLIB
 
-RAYLIB_INCLUDE := /opt/homebrew/Cellar/raylib/5.5/include
-RAYLIB_LIB := /opt/homebrew/Cellar/raylib/5.5/lib
+# Homebrew prefix differs per machine (/opt/homebrew on Apple-Silicon default,
+# ~/homebrew for a per-user install). Auto-detect via `brew --prefix raylib`
+# and fall back to the classic Cellar path. Override on the CLI if needed:
+#   make RAYLIB_PREFIX=/path/to/raylib
+RAYLIB_PREFIX := $(shell brew --prefix raylib 2>/dev/null)
+ifeq ($(RAYLIB_PREFIX),)
+    RAYLIB_PREFIX := /opt/homebrew/Cellar/raylib/5.5
+endif
+RAYLIB_INCLUDE := $(RAYLIB_PREFIX)/include
+RAYLIB_LIB := $(RAYLIB_PREFIX)/lib
+# fmt is header-only here; its headers live under the Homebrew include dir.
+BREW_PREFIX := $(shell brew --prefix 2>/dev/null)
+ifeq ($(BREW_PREFIX),)
+    BREW_PREFIX := /opt/homebrew
+endif
 AFTERHOURS_ROOT := ..
 
-INCLUDES := -isystem $(AFTERHOURS_ROOT)/..
+INCLUDES := -isystem $(AFTERHOURS_ROOT)/.. -isystem $(BREW_PREFIX)/include
 INCLUDES_RAYLIB := -I$(RAYLIB_INCLUDE) $(INCLUDES)
 
 UNAME_S := $(shell uname -s)
