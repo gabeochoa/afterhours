@@ -37,7 +37,8 @@ ALL_TESTS := \
 	slider_test \
 	stepper_test \
 	tab_container_test \
-	text_wrap_test
+	text_wrap_test \
+	timer_test
 
 RAYLIB_TESTS := \
 	dump_ui_test \
@@ -85,6 +86,9 @@ tab_container_test: tab_container_test.cpp
 
 text_wrap_test: text_wrap_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
+
+timer_test: timer_test.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 
 test: all
 	@for t in $(ALL_TESTS); do \
