@@ -24,3 +24,33 @@
 #endif
 
 #include <stb/stb_image.h>
+
+// ── Impl-TU sentinel ─────────────────────────────────────────────────────────
+// The sokol/Metal backend requires exactly ONE Objective-C++ translation unit
+// that defines SOKOL_IMPL and includes this header (see backend.h). If a project
+// forgets that TU, the raw failure is a wall of cryptic "Undefined symbols:
+// _sg_setup, _stbi_load, _sfons_create ..." link errors.
+//
+// To make that failure self-explanatory, the impl TU DEFINES the sentinel below
+// (compiled only when SOKOL_IMPL is set), and graphics::run() REFERENCES it. If
+// the impl TU is missing, the linker fails on this one symbol whose name spells
+// out the fix, e.g.:
+//
+//   Undefined symbols for architecture arm64:
+//     "afterhours::graphics::
+//        AFTERHOURS_MISSING_sokol_impl_TU__add_one_objcpp_file_that_defines_SOKOL_IMPL_and_includes_afterhours_src_backends_sokol_image_decode_h()"
+//
+// See examples/web/sokol_impl.cc for the ~10-line file to add.
+namespace afterhours::graphics {
+// clang-format off
+int AFTERHOURS_MISSING_sokol_impl_TU__add_one_objcpp_file_that_defines_SOKOL_IMPL_and_includes_afterhours_src_backends_sokol_image_decode_h();
+// clang-format on
+#if defined(SOKOL_IMPL) || defined(AFTERHOURS_SOKOL_IMPL_SENTINEL)
+// Real (non-inline) definition emitted ONLY by the impl TU, so exactly one
+// definition exists across the program. Referenced by graphics::run() below.
+int
+AFTERHOURS_MISSING_sokol_impl_TU__add_one_objcpp_file_that_defines_SOKOL_IMPL_and_includes_afterhours_src_backends_sokol_image_decode_h() {
+  return 0;
+}
+#endif
+} // namespace afterhours::graphics
