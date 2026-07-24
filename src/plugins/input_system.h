@@ -1058,7 +1058,6 @@ struct input : developer::Plugin {
     };
 
     static auto get_input_collector() -> PossibleInputCollector {
-        // InputCollector is a singleton; guard returns empty when absent.
         if (!EntityHelper::has_singleton<InputCollector>()) return {};
         InputCollector *ic = EntityHelper::get_singleton_cmp<InputCollector>();
         if (ic == nullptr) return {};
