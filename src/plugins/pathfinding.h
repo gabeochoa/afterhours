@@ -5,10 +5,11 @@
 #include <deque>
 #include <functional>
 #include <limits>
-#include <map>
 #include <mutex>
-#include <set>
+#include <queue>
 #include <thread>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "../core/base_component.h"
@@ -18,6 +19,16 @@
 #include "../logging.h"
 
 // Vector2Type is defined in developer.h
+
+// Hash for grid coords. Safe as an unordered key because A*/BFS never iterate
+// these tables in sorted order.
+template <> struct std::hash<Vector2Type> {
+  size_t operator()(const Vector2Type &v) const noexcept {
+    size_t hx = std::hash<float>{}(v.x);
+    size_t hy = std::hash<float>{}(v.y);
+    return hx ^ (hy + 0x9e3779b97f4a7c15ULL + (hx << 6) + (hx >> 2));
+  }
+};
 
 namespace afterhours {
 
@@ -124,6 +135,7 @@ struct pathfinding : developer::Plugin {
       // Default neighbor function (8-directional)
       get_neighbors_fn = [](Vec2 pos) {
         std::vector<Vec2> neighbors;
+        neighbors.reserve(8);
         static constexpr int neigh_x[8] = {-1, -1, -1, 0, 0, 1, 1, 1};
         static constexpr int neigh_y[8] = {-1, 0, 1, -1, 1, -1, 0, 1};
         for (int i = 0; i < 8; i++) {
@@ -147,8 +159,9 @@ struct pathfinding : developer::Plugin {
       Node *parent = nullptr;
     };
 
-    std::set<Vec2> visited;
-    std::deque<Node *> all_nodes;
+    std::unordered_set<Vec2> visited;
+    // deque never relocates elements, so &arena.back() stays valid as a parent.
+    std::deque<Node> arena;
     std::deque<Node *> queue;
 
     auto reconstruct_path = [](Node *n) {
@@ -162,8 +175,8 @@ struct pathfinding : developer::Plugin {
     };
 
     visited.insert(start);
-    all_nodes.push_back(new Node{.pos = start, .parent = nullptr});
-    queue.push_back(all_nodes.back());
+    arena.push_back(Node{.pos = start, .parent = nullptr});
+    queue.push_back(&arena.back());
 
     while (!queue.empty()) {
       Node *n = queue.front();
@@ -171,12 +184,7 @@ struct pathfinding : developer::Plugin {
 
       float dist_sq = distance(n->pos, end);
       if (dist_sq < 4.0f) {
-        auto path = reconstruct_path(n);
-        // Cleanup
-        for (auto *node : all_nodes) {
-          delete node;
-        }
-        return path;
+        return reconstruct_path(n);
       }
 
       if (dist_sq > (max_path_length * max_path_length)) {
@@ -192,15 +200,11 @@ struct pathfinding : developer::Plugin {
           continue;
         }
         visited.insert(neighbor);
-        all_nodes.push_back(new Node{.pos = neighbor, .parent = n});
-        queue.push_back(all_nodes.back());
+        arena.push_back(Node{.pos = neighbor, .parent = n});
+        queue.push_back(&arena.back());
       }
     }
 
-    // Cleanup
-    for (auto *node : all_nodes) {
-      delete node;
-    }
     return {};
   }
 
@@ -221,31 +225,30 @@ struct pathfinding : developer::Plugin {
       return {};
     }
 
-    std::set<Vec2> open_set;
-    open_set.insert(start);
+    struct OpenEntry {
+      float f;
+      Vec2 pos;
+    };
+    struct OpenCmp {
+      bool operator()(const OpenEntry &a, const OpenEntry &b) const {
+        // Min-heap by f, breaking f-ties toward the smallest Vec2.
+        if (a.f != b.f)
+          return a.f > b.f;
+        return b.pos < a.pos;
+      }
+    };
+    std::priority_queue<OpenEntry, std::vector<OpenEntry>, OpenCmp> open_set;
+    open_set.push(OpenEntry{static_cast<float>(distance(start, end)), start});
 
-    std::map<Vec2, Vec2> parent_map;
-    std::map<Vec2, ScoreValue> g_score;
-    std::map<Vec2, ScoreValue> f_score;
+    std::unordered_map<Vec2, Vec2> parent_map;
+    std::unordered_map<Vec2, ScoreValue> g_score;
+    std::unordered_map<Vec2, ScoreValue> f_score;
 
     g_score[start] = ScoreValue(0.0f);
     f_score[start] = ScoreValue(distance(start, end));
 
-    auto get_lowest_f = [](const std::set<Vec2> &set,
-                           std::map<Vec2, ScoreValue> &fscore) {
-      float best_score = std::numeric_limits<float>::max();
-      Vec2 loc = *(set.begin());
-      for (const Vec2 &location : set) {
-        float score = static_cast<float>(fscore[location]);
-        if (score < best_score) {
-          best_score = score;
-          loc = location;
-        }
-      }
-      return loc;
-    };
-
-    auto reconstruct_path = [](std::map<Vec2, Vec2> &parent_map, Vec2 current) {
+    auto reconstruct_path = [](std::unordered_map<Vec2, Vec2> &parent_map,
+                               Vec2 current) {
       std::deque<Vec2> path;
       while (parent_map.contains(current)) {
         path.push_front(current);
@@ -258,14 +261,22 @@ struct pathfinding : developer::Plugin {
     constexpr int MAX_ITERATIONS = 10000;
 
     while (!open_set.empty()) {
+      OpenEntry top = open_set.top();
+      open_set.pop();
+
+      // Lazy deletion: a node can have several queued entries; skip any whose f
+      // no longer matches its current f_score.
+      if (top.f != static_cast<float>(f_score[top.pos])) {
+        continue;
+      }
+
       iterations++;
       if (iterations > MAX_ITERATIONS) {
         log_warn("A* pathfinding hit iteration limit");
         break;
       }
 
-      Vec2 current = get_lowest_f(open_set, f_score);
-      open_set.erase(current);
+      Vec2 current = top.pos;
 
       float current_dist = distance(current, end);
       if (current_dist < 0.5f) {
@@ -283,10 +294,9 @@ struct pathfinding : developer::Plugin {
         if (tentative_g < neighbor_g) {
           parent_map[neighbor] = current;
           g_score[neighbor] = ScoreValue(tentative_g);
-          f_score[neighbor] = ScoreValue(tentative_g + distance(neighbor, end));
-          if (!open_set.contains(neighbor)) {
-            open_set.insert(neighbor);
-          }
+          float nf = tentative_g + distance(neighbor, end);
+          f_score[neighbor] = ScoreValue(nf);
+          open_set.push(OpenEntry{nf, neighbor});
         }
       }
     }
