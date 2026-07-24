@@ -4,7 +4,7 @@
 #include <cassert>
 #include <concepts>
 #include <cstdint>
-#include <iostream>
+#include <cstdio>
 
 #include "core/base_component.h"
 #include "core/entity_query.h"
@@ -173,8 +173,9 @@ template <typename Component> struct EnforceSingleton : System<Component> {
 
   virtual void for_each_with(Entity &, Component &, const float) override {
     if (saw_one) {
-      std::cerr << "Enforcing only one entity with " << type_name<Component>()
-                << std::endl;
+      const auto n = type_name<Component>();
+      std::fprintf(stderr, "Enforcing only one entity with %.*s\n",
+                   static_cast<int>(n.size()), n.data());
       assert(false);
     }
     saw_one = true;
