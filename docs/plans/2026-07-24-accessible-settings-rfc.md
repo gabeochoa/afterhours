@@ -378,6 +378,103 @@ Validation additions:
 This keeps "mouse-only" as a supported comfort mode while ensuring the game is
 not "mouse-required."
 
+### 12) Localization-first settings UI contract
+
+Settings screens are the highest-risk UI for localization regressions because
+they are dense, label-heavy, and commonly built with fixed-width controls.
+afterhours should treat localization constraints as core layout requirements.
+
+Layout and string model requirements:
+
+- plan for at least +30% text expansion beyond English for all settings labels
+  and action text
+- primary setting labels must never be ellipsized; they must wrap or expand
+- avoid fixed-width label boxes for setting names; allow content-driven width or
+  multi-line rows
+- do not compose runtime sentences via string concatenation
+  (`"Set " + setting + " to " + value"`); use localized templates with named
+  placeholders
+- pluralization must use locale-aware message formatting (ICU-style rules or
+  equivalent engine support)
+
+RTL requirements (engineering, not just content):
+
+- support full layout mirroring for RTL locales (Arabic/Hebrew)
+- mirror directional iconography and navigation affordances (back arrows, row
+  flow, panel docking)
+- mirror value direction where semantically appropriate (for example slider fill
+  direction and increment/decrement affordances)
+
+Font and glyph coverage policy:
+
+- define locale/script fallback chains (Latin, Cyrillic, CJK, Arabic, etc.)
+- automatically load script-appropriate fallback fonts when selected locale
+  lacks glyphs in the primary face
+- expose locale-tunable typography metrics (line height, baseline offsets,
+  minimum readable sizes) because CJK and Arabic often need different defaults
+- disallow shipping locale bundles with missing glyph coverage in CI validation
+
+String externalization and assets:
+
+- all user-facing strings must be externalized (no hardcoded UI copy in C++)
+- avoid text baked into textures/images for core menu affordances
+- where image text is unavoidable, require per-locale variants and fallback
+  logic
+
+Locale formatting:
+
+- all numeric display (decimals, grouping), units, and time/date formatting must
+  be locale-aware
+- setting value renderers (`sensitivity`, timers, percentages, resolution
+  labels) should pass through a locale formatting layer, not raw `std::to_string`
+
+Pseudolocalization workflow:
+
+- ship a built-in pseudolocale mode for development and CI
+- pseudolocale should:
+  - inject accented/extended glyphs
+  - expand strings (padding/stretch) to simulate translation growth
+  - optionally force RTL simulation mode
+- add a screenshot/layout validation pass for key settings screens under
+  pseudolocale
+
+Language picker fail-safe:
+
+- language selection must be reachable before reading complex menu text
+- language options should render self-identifying endonyms (for example
+  `Español`, `Deutsch`, `日本語`) rather than only English exonyms
+- keep language selection reachable from first-launch setup and settings quick
+  access
+
+Suggested engine surface:
+
+```cpp
+namespace afterhours::i18n {
+
+struct LocaleLayoutPolicy {
+  bool is_rtl = false;
+  float text_expansion_budget = 1.3f;
+  bool mirror_directional_ui = true;
+};
+
+void set_locale(std::string locale_id);
+const LocaleLayoutPolicy& layout_policy();
+std::string tr(std::string key);                 // localized lookup
+std::string trf(std::string key, NamedArgs args); // templated format
+std::string format_number(double value);
+std::string format_percent(double value);
+std::string format_unit(std::string unit_key, double value);
+
+}
+```
+
+Validation additions:
+
+- warn/fail if primary settings labels ellipsize in any enabled locale
+- warn/fail for untranslated keys in settings categories
+- warn/fail when locale glyph coverage is incomplete for active fonts
+- warn/fail when RTL locale uses non-mirrored settings scaffold layout
+
 ---
 
 ## "If you use IMM, it is automatically accessible"
