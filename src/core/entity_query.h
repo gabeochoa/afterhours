@@ -375,6 +375,31 @@ struct EntityQuery {
     }
   }
 
+  // Like for_each() but visits entities without materializing a RefEntities
+  // vector. An orderby needs the full set, so delegate to gen() in that case.
+  template <typename Fn> void for_each_stream(Fn &&fn) const {
+    if (orderby) {
+      for (Entity &entity : gen()) {
+        std::invoke(std::forward<Fn>(fn), entity);
+      }
+      return;
+    }
+    for (const auto &e_ptr : entities) {
+      if (!e_ptr)
+        continue;
+      Entity &e = *e_ptr;
+      bool ok = true;
+      for (const auto &mod : mods) {
+        if (!mod(e)) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok)
+        std::invoke(fn, e);
+    }
+  }
+
   template <typename Component>
   [[nodiscard]] std::vector<std::reference_wrapper<Component>> gen_as() const {
     const auto results = gen();
