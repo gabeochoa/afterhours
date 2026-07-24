@@ -539,6 +539,27 @@ struct EntityCollection {
     auto opt_ent = getEntityForID(id);
     return opt_ent.asE();
   }
+
+  // Fast path is the O(1) id_to_slot lookup; the scan is a fallback for
+  // entities whose slot mapping is stale or absent (e.g. not yet merged).
+  std::shared_ptr<Entity> getEntityAsSharedPtr(const Entity &entity) const {
+    const EntityID id = entity.id;
+    if (id >= 0) {
+      const std::size_t idx = static_cast<std::size_t>(id);
+      if (idx < id_to_slot.size()) {
+        const EntityHandle::Slot slot = id_to_slot[idx];
+        if (slot != EntityHandle::INVALID_SLOT && slot < slots.size()) {
+          if (const auto &sp = slots[slot].ent; sp && sp->id == id)
+            return sp;
+        }
+      }
+    }
+    for (const std::shared_ptr<Entity> &current_entity : get_entities()) {
+      if (entity.id == current_entity->id)
+        return current_entity;
+    }
+    return {};
+  }
 };
 
 } // namespace afterhours

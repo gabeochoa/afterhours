@@ -109,7 +109,9 @@ struct EntityHelper {
 
   static RefEntities get_ref_entities() {
     RefEntities matching;
-    for (const auto &e : get_entities()) {
+    const auto &ents = get_entities();
+    matching.reserve(ents.size());
+    for (const auto &e : ents) {
       if (!e)
         continue;
       matching.push_back(*e);
@@ -186,11 +188,7 @@ struct EntityHelper {
   }
 
   static std::shared_ptr<Entity> getEntityAsSharedPtr(const Entity &entity) {
-    for (const std::shared_ptr<Entity> &current_entity : get_entities()) {
-      if (entity.id == current_entity->id)
-        return current_entity;
-    }
-    return {};
+    return get_default_collection().getEntityAsSharedPtr(entity);
   }
 
   static std::shared_ptr<Entity> getEntityAsSharedPtr(const OptEntity entity) {
