@@ -743,16 +743,11 @@ struct AutoLayout {
     }
   }
 
-  void tax_refund(UIComponent &widget, Axis axis, float error) {
-    SmallVector<UIComponent *, 16> layout_children;
-    for (EntityID child_id : widget.children) {
-      UIComponent &child = cmp(child_id);
-      // Dont worry about any children that are absolutely positioned
-      // Ignore anything that should be hidden
-      if (child.absolute || child.should_hide)
-        continue;
-      layout_children.push_back(&child);
-    }
+  // `layout_children` is the caller's already-filtered child list, reused here
+  // so we don't re-walk and re-filter widget.children on each axis.
+  void tax_refund(UIComponent &widget, Axis axis, float error,
+                  const SmallVector<UIComponent *, 16> &layout_children) {
+    (void)widget;
 
     // First, check for Expand children and distribute to them
     float total_expand_weight = 0.f;
@@ -801,6 +796,19 @@ struct AutoLayout {
       // continue;
       // }
     }
+  }
+
+  void tax_refund(UIComponent &widget, Axis axis, float error) {
+    SmallVector<UIComponent *, 16> layout_children;
+    for (EntityID child_id : widget.children) {
+      UIComponent &child = cmp(child_id);
+      // Dont worry about any children that are absolutely positioned
+      // Ignore anything that should be hidden
+      if (child.absolute || child.should_hide)
+        continue;
+      layout_children.push_back(&child);
+    }
+    tax_refund(widget, axis, error, layout_children);
   }
 
   void solve_violations(UIComponent &widget) {
@@ -990,12 +998,12 @@ struct AutoLayout {
     // Main axis: Row→X, Column→Y. Cross axis uses max (overlap).
     float error_x = compute_error(Axis::X, is_rw);
     if (error_x < 0) {
-      tax_refund(widget, Axis::X, error_x);
+      tax_refund(widget, Axis::X, error_x, layout_children);
     }
 
     float error_y = compute_error(Axis::Y, is_col);
     if (error_y < 0) {
-      tax_refund(widget, Axis::Y, error_y);
+      tax_refund(widget, Axis::Y, error_y, layout_children);
     }
 
     // Apply min/max constraints after size computation and error distribution
@@ -1374,18 +1382,10 @@ struct AutoLayout {
                  cy, child_end_x, child_end_y, sx, sy, gap, start_offset);
       }
 
-      constexpr float GRID_UNIT_720P = 4.0f;
-      float grid_unit_y =
-          GRID_UNIT_720P * (fetch_screen_value_(Axis::Y) / 720.0f);
-      float grid_unit_x =
-          GRID_UNIT_720P * (fetch_screen_value_(Axis::X) / 720.0f);
-
       // Setup for next child placement (include gap for justify)
       if (is_column) {
         float next_y = offy + cy + gap;
-        // Note: We no longer add grid_unit_y here - it was causing
-        // accumulated offset that breaks justify calculations.
-        // Grid snapping now only affects final position, not child spacing.
+        // Snap only the final position, not the inter-child spacing accumulator.
         if (enable_grid_snapping) {
           next_y = snap_to_8pt_grid(next_y, Axis::Y);
         }
@@ -1393,9 +1393,7 @@ struct AutoLayout {
       }
       if (is_row) {
         float next_x = offx + cx + gap;
-        // Note: We no longer add grid_unit_x here - it was causing
-        // accumulated offset that breaks justify calculations.
-        // Grid snapping now only affects final position, not child spacing.
+        // Snap only the final position, not the inter-child spacing accumulator.
         if (enable_grid_snapping) {
           next_x = snap_to_8pt_grid(next_x, Axis::X);
         }
