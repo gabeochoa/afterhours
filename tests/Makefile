@@ -26,6 +26,7 @@ endif
 .PHONY: all test clean
 
 ALL_TESTS := \
+	animation_test \
 	autolayout_test \
 	dump_ui_test \
 	entity_mapping_test \
@@ -52,6 +53,11 @@ all: $(ALL_TESTS)
 
 autolayout_test: autolayout_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+
+# Behavior lock for src/plugins/animation.h. Self-contained: animation.h only
+# pulls relative core headers, so no extra include roots are needed.
+animation_test: animation_test.cpp
+	$(CXX) $(CXXFLAGS) $^ -o $@
 
 entity_mapping_test: entity_mapping_test.cpp ../examples/entity_mapping_test_helper.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
