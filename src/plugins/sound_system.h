@@ -173,8 +173,11 @@ struct sound_system : developer::Plugin {
 
     struct SoundEmitter : BaseComponent {
         int default_alias_copies = 4;
-        std::map<std::string, std::vector<std::string>> alias_names_by_base;
-        std::map<std::string, size_t> next_alias_index_by_base;
+        struct AliasState {
+            std::vector<std::string> names;
+            size_t next_index = 0;
+        };
+        std::map<std::string, AliasState> alias_state_by_base;
     };
 
     struct PlaySoundRequest : BaseComponent {
@@ -224,14 +227,14 @@ struct sound_system : developer::Plugin {
         static void ensure_alias_names(SoundEmitter *emitter,
                                        const std::string &base, int copies) {
             if (!emitter) return;
-            if (emitter->alias_names_by_base.contains(base)) return;
-            std::vector<std::string> names;
-            names.reserve(static_cast<size_t>(copies));
+            if (emitter->alias_state_by_base.contains(base)) return;
+            SoundEmitter::AliasState state;
+            state.names.reserve(static_cast<size_t>(copies));
             for (int i = 0; i < copies; ++i) {
-                names.push_back(base + std::string("_a") + std::to_string(i));
+                state.names.push_back(base + std::string("_a") +
+                                      std::to_string(i));
             }
-            emitter->alias_names_by_base[base] = std::move(names);
-            emitter->next_alias_index_by_base[base] = 0;
+            emitter->alias_state_by_base[base] = std::move(state);
         }
 
         static bool library_contains(const std::string &name) {
@@ -241,19 +244,22 @@ struct sound_system : developer::Plugin {
         static void play_with_alias_or_name(SoundEmitter *emitter,
                                             const char *name,
                                             bool prefer_alias) {
+            SoundLibrary &lib = SoundLibrary::get();
             const std::string base{name};
 
             if (prefer_alias && emitter) {
                 ensure_alias_names(emitter, base,
                                    emitter->default_alias_copies);
-                auto &names = emitter->alias_names_by_base[base];
-                auto &idx = emitter->next_alias_index_by_base[base];
+                SoundEmitter::AliasState &state =
+                    emitter->alias_state_by_base[base];
+                auto &names = state.names;
+                auto &idx = state.next_index;
 
                 for (size_t i = 0; i < names.size(); ++i) {
                     size_t try_index = (idx + i) % names.size();
                     const std::string &alias_name = names[try_index];
-                    if (library_contains(alias_name)) {
-                        auto &s = SoundLibrary::get().get(alias_name);
+                    if (lib.contains(alias_name)) {
+                        auto &s = lib.get(alias_name);
                         if (!::afterhours::IsSoundPlaying(s)) {
                             ::afterhours::PlaySound(s);
                             idx = (try_index + 1) % names.size();
@@ -261,21 +267,20 @@ struct sound_system : developer::Plugin {
                         }
                     }
                 }
-                try {
-                    auto &s = SoundLibrary::get().get(base);
-                    ::afterhours::PlaySound(s);
-                } catch (...) {
-                    SoundLibrary::get().play(name);
+                // play(name) still throws on a missing base, matching get().
+                if (lib.contains(base)) {
+                    ::afterhours::PlaySound(lib.get(base));
+                } else {
+                    lib.play(name);
                 }
                 idx = (idx + 1) % names.size();
                 return;
             }
 
-            try {
-                auto &s = SoundLibrary::get().get(base);
-                ::afterhours::PlaySound(s);
-            } catch (...) {
-                SoundLibrary::get().play(name);
+            if (lib.contains(base)) {
+                ::afterhours::PlaySound(lib.get(base));
+            } else {
+                lib.play(name);
             }
         }
     };
