@@ -54,16 +54,25 @@ constexpr float RAD2DEG = 57.29577951308232f; // 180 / PI
 } // namespace afterhours
 
 #ifndef TextureType
+#ifdef AFTER_HOURS_USE_METAL
+// sokol/Metal backend: the texture carries GPU handles (sg_image / sg_view /
+// sg_sampler ids) so load_texture / draw_texture_* can bind it. Mirrors
+// graphics::RenderTextureType's handle layout. Scoped to the Metal backend so
+// other backends (e.g. "none") don't pay for fields they never use.
 struct MyTexture {
   float width = 0;
   float height = 0;
-  // GPU handles for the sokol/Metal backend (sg_image / sg_view / sg_sampler
-  // ids). Zero on the "none" backend, which only reads width/height. Mirrors
-  // graphics::RenderTextureType's handle layout.
   uint32_t img_id = 0;
   uint32_t view_id = 0;
   uint32_t sampler_id = 0;
 };
+#else
+// Fallback / "none" backend: no GPU, so a texture is just its dimensions.
+struct MyTexture {
+  float width = 0;
+  float height = 0;
+};
+#endif
 using TextureType = MyTexture;
 #endif
 
