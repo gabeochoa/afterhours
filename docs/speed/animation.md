@@ -1,5 +1,9 @@
 # Animation Plugin
 
+> Source: `src/plugins/animation.h` (`AnimationManager`, `AnimTrack`, `AnimSegment`).
+> Note: `src/plugins/ui/animation_config.h` is a separate fluent config builder and is
+> **not** the optimization surface for the items below.
+
 1. **HIGH — Use a contiguous array of active tracks instead of iterating all tracks in the hash map.**
    `AnimationManager::update()` iterates every track, including inactive ones. Maintain a separate list of active track keys for O(active) instead of O(total).
 
