@@ -173,7 +173,6 @@ struct sound_system : developer::Plugin {
 
     struct SoundEmitter : BaseComponent {
         int default_alias_copies = 4;
-        // Alias names + cursor in one map so a play does a single lookup.
         struct AliasState {
             std::vector<std::string> names;
             size_t next_index = 0;
