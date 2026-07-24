@@ -31,6 +31,9 @@
 // Font rendering (fontstash + sokol integration)
 #include <fontstash/fontstash.h>
 #include <sokol/sokol_fontstash.h>
+// Image decoding + the impl-TU sentinel (referenced from run() below so a
+// missing SOKOL_IMPL translation unit produces a self-describing link error).
+#include "image_decode.h"
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -634,6 +637,16 @@ struct MetalPlatformAPI {
 
   // ── Unified run loop ──
   static void run(const RunConfig &cfg) {
+    // Force a link-time reference to the impl-TU sentinel. If the project
+    // forgot to add the one SOKOL_IMPL Objective-C++ TU, the linker fails here
+    // on a symbol whose name spells out the fix (see image_decode.h). Two twins
+    // are referenced: the macOS-worded one and a platform-neutral one, so the
+    // error reads correctly on Metal, GL (Linux), D3D11 (Windows), and web.
+    volatile int _ah_sokol_impl_present =
+        AFTERHOURS_MISSING_sokol_impl_TU__add_one_objcpp_file_that_defines_SOKOL_IMPL_and_includes_afterhours_src_backends_sokol_image_decode_h() +
+        AFTERHOURS_MISSING_sokol_impl_TU__add_one_TU_that_defines_SOKOL_IMPL_and_includes_afterhours_src_backends_sokol_image_decode_h();
+    (void)_ah_sokol_impl_present;
+
     metal_detail::g_init_fn = cfg.init;
     metal_detail::g_frame_fn = cfg.frame;
     metal_detail::g_cleanup_fn = cfg.cleanup;

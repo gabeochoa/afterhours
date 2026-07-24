@@ -20,8 +20,27 @@ using Rectangle = RectangleType;
 using Texture = TextureType;
 using Color = ColorType;
 
+#if defined(AFTER_HOURS_USE_METAL)
+// Forward declaration of the sokol/Metal backend draw_texture_pro (defined in
+// backends/sokol/drawing_helpers.h, included after this header). Routing the
+// wrapper here lets sprite/animation rendering (RenderSprites / RenderAnimation
+// below) light up on the sokol backend. The call resolves at the sprite
+// systems' use sites, by which point the definition is visible.
+} // namespace texture_manager
+void draw_texture_pro(TextureType tex, RectangleType src, RectangleType dest,
+                      Vector2Type origin, float rotation, ColorType tint);
+namespace texture_manager {
+
+inline void draw_texture_pro(const Texture sheet, const Rectangle frame,
+                             const Rectangle location, const Vector2Type size,
+                             const float angle, const Color tint) {
+  ::afterhours::draw_texture_pro(sheet, frame, location, size, angle, tint);
+}
+#else
+// No graphics backend selected: sprites are a no-op.
 inline void draw_texture_pro(const Texture, const Rectangle, const Rectangle,
                              const Vector2Type, const float, const Color) {}
+#endif
 #endif
 
 #ifndef AFTERHOURS_SPRITE_SIZE_PX

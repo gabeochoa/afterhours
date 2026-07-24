@@ -13,6 +13,7 @@
 #include "../../plugins/color.h"
 #include "../../plugins/texture_manager.h"
 #include "font_helper.h"
+#include "image_decode.h"
 
 namespace afterhours {
 
@@ -383,10 +384,65 @@ inline void draw_circle_gradient(int centerX, int centerY, float radius,
   sgl_end();
 }
 
-inline void draw_texture_npatch(const texture_manager::Texture,
-                                const RectangleType, int, int, int, int,
-                                const Color) {
-  log_error("@notimplemented draw_texture_npatch");
+// Draw a 9-slice (NPatch) texture stretched to fill dest. The corners (left,
+// top, right, bottom pixel insets) stay fixed-size; the edges stretch along one
+// axis and the center stretches both ways -> 9 textured quads. Matches raylib's
+// DrawTextureNPatch with NPATCH_NINE_PATCH (source = full texture).
+inline void draw_texture_npatch(const texture_manager::Texture tex,
+                                const RectangleType dest, int left, int top,
+                                int right, int bottom, const Color tint) {
+  if (tex.view_id == 0 || tex.width <= 0.0f || tex.height <= 0.0f)
+    return;
+
+  const float tw = tex.width;
+  const float th = tex.height;
+
+  // Destination X seams: [x0 | x1 .. x2 | x3]; center = dest minus corners.
+  const float dx0 = dest.x;
+  const float dx1 = dest.x + static_cast<float>(left);
+  const float dx2 = dest.x + dest.width - static_cast<float>(right);
+  const float dx3 = dest.x + dest.width;
+  const float dy0 = dest.y;
+  const float dy1 = dest.y + static_cast<float>(top);
+  const float dy2 = dest.y + dest.height - static_cast<float>(bottom);
+  const float dy3 = dest.y + dest.height;
+
+  // Source seams in UV space (full texture split by the same pixel insets).
+  const float ux0 = 0.0f;
+  const float ux1 = static_cast<float>(left) / tw;
+  const float ux2 = (tw - static_cast<float>(right)) / tw;
+  const float ux3 = 1.0f;
+  const float uy0 = 0.0f;
+  const float uy1 = static_cast<float>(top) / th;
+  const float uy2 = (th - static_cast<float>(bottom)) / th;
+  const float uy3 = 1.0f;
+
+  const float dxs[4] = {dx0, dx1, dx2, dx3};
+  const float dys[4] = {dy0, dy1, dy2, dy3};
+  const float uxs[4] = {ux0, ux1, ux2, ux3};
+  const float uys[4] = {uy0, uy1, uy2, uy3};
+
+  sg_view tv = {tex.view_id};
+  sg_sampler smp = {tex.sampler_id};
+
+  sgl_enable_texture();
+  sgl_texture(tv, smp);
+  sgl_begin_quads();
+  sgl_c4b(tint.r, tint.g, tint.b, tint.a);
+  for (int row = 0; row < 3; ++row) {
+    for (int col = 0; col < 3; ++col) {
+      const float x0 = dxs[col], x1 = dxs[col + 1];
+      const float y0 = dys[row], y1 = dys[row + 1];
+      const float u0 = uxs[col], u1 = uxs[col + 1];
+      const float v0 = uys[row], v1 = uys[row + 1];
+      sgl_v2f_t2f(x0, y0, u0, v0);
+      sgl_v2f_t2f(x1, y0, u1, v0);
+      sgl_v2f_t2f(x1, y1, u1, v1);
+      sgl_v2f_t2f(x0, y1, u0, v1);
+    }
+  }
+  sgl_end();
+  sgl_disable_texture();
 }
 
 // Draw a ring segment (annular sector) between innerRadius and outerRadius,
@@ -1101,13 +1157,50 @@ inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
   }
 }
 
-inline void draw_texture_rec(TextureType, RectangleType, Vector2Type, Color) {
-  log_warn("draw_texture_rec: not yet implemented in sokol backend");
+inline void draw_texture_pro(TextureType tex, RectangleType src,
+                             RectangleType dest, Vector2Type origin,
+                             float rotation, Color tint) {
+  if (tex.view_id == 0 || tex.width <= 0.0f || tex.height <= 0.0f)
+    return;
+
+  // Source rect -> UV coordinates. Negative src.width/height flip the sampled
+  // region, matching raylib's DrawTexturePro.
+  const float u0 = src.x / tex.width;
+  const float v0 = src.y / tex.height;
+  const float u1 = (src.x + src.width) / tex.width;
+  const float v1 = (src.y + src.height) / tex.height;
+
+  // Rotate about the destination anchor (dest.x, dest.y); the quad is offset by
+  // -origin so that `origin` names the pivot point within the destination rect
+  // (matches raylib: it rotates around dest.{x,y} and subtracts origin).
+  const float x = dest.x - origin.x;
+  const float y = dest.y - origin.y;
+  const float w = dest.width;
+  const float h = dest.height;
+
+  sg_view tv = {tex.view_id};
+  sg_sampler smp = {tex.sampler_id};
+
+  push_rotation(dest.x, dest.y, rotation);
+  sgl_enable_texture();
+  sgl_texture(tv, smp);
+  sgl_begin_quads();
+  sgl_c4b(tint.r, tint.g, tint.b, tint.a);
+  sgl_v2f_t2f(x, y, u0, v0);
+  sgl_v2f_t2f(x + w, y, u1, v0);
+  sgl_v2f_t2f(x + w, y + h, u1, v1);
+  sgl_v2f_t2f(x, y + h, u0, v1);
+  sgl_end();
+  sgl_disable_texture();
+  pop_rotation();
 }
 
-inline void draw_texture_pro(TextureType, RectangleType, RectangleType,
-                             Vector2Type, float, Color) {
-  log_error("@notimplemented draw_texture_pro");
+inline void draw_texture_rec(TextureType tex, RectangleType src,
+                             Vector2Type pos, Color tint) {
+  // raylib's DrawTextureRec == DrawTexturePro with dest at pos, dest size =
+  // |src| dimensions, no origin offset, no rotation.
+  RectangleType dest{pos.x, pos.y, std::abs(src.width), std::abs(src.height)};
+  draw_texture_pro(tex, src, dest, Vector2Type{0.0f, 0.0f}, 0.0f, tint);
 }
 
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id,
@@ -1149,27 +1242,138 @@ inline std::vector<uint8_t> capture_screen_to_memory() {
 inline constexpr int TEXTURE_FILTER_BILINEAR = 1;
 inline constexpr int TEXTURE_FILTER_TRILINEAR = 2;
 
-inline TextureType load_texture(const char *) {
-  log_error("@notimplemented load_texture");
-  return TextureType{};
+namespace metal_texture_detail {
+
+// Map the afterhours filter constant to a sokol sampler filter. Both BILINEAR
+// and TRILINEAR use linear min/mag; TRILINEAR additionally uses a linear mipmap
+// filter (only meaningful when the image has mip levels).
+inline sg_sampler make_sampler_for_filter(int filter) {
+  sg_sampler_desc sd{};
+  sd.min_filter = SG_FILTER_LINEAR;
+  sd.mag_filter = SG_FILTER_LINEAR;
+  sd.mipmap_filter =
+      (filter == TEXTURE_FILTER_TRILINEAR) ? SG_FILTER_LINEAR : SG_FILTER_NEAREST;
+  sd.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
+  sd.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
+  sd.label = "tex-sampler";
+  return sg_make_sampler(&sd);
 }
 
-inline void unload_texture(TextureType &) {
-  log_error("@notimplemented unload_texture");
+// Upload a tightly-packed RGBA8 pixel buffer to a new immutable GPU image and
+// build the matching view + sampler. Shared by load_texture and
+// load_texture_with_color_key. Returns an empty TextureType on failure.
+inline TextureType load_texture_from_pixels(const unsigned char *rgba, int w,
+                                            int h,
+                                            int filter = TEXTURE_FILTER_BILINEAR) {
+  if (rgba == nullptr || w <= 0 || h <= 0) {
+    log_error("load_texture_from_pixels: invalid pixel data ({}x{})", w, h);
+    return TextureType{};
+  }
+
+  sg_image_desc id{};
+  id.usage.immutable = true;
+  id.width = w;
+  id.height = h;
+  id.pixel_format = SG_PIXELFORMAT_RGBA8;
+  id.data.mip_levels[0].ptr = rgba;
+  id.data.mip_levels[0].size =
+      static_cast<size_t>(w) * static_cast<size_t>(h) * 4u;
+  id.label = "tex-image";
+  sg_image img = sg_make_image(&id);
+
+  sg_view_desc vd{};
+  vd.texture.image = img;
+  vd.label = "tex-view";
+  sg_view view = sg_make_view(&vd);
+
+  sg_sampler smp = make_sampler_for_filter(filter);
+
+  TextureType tex{};
+  tex.width = static_cast<float>(w);
+  tex.height = static_cast<float>(h);
+  tex.img_id = img.id;
+  tex.view_id = view.id;
+  tex.sampler_id = smp.id;
+  return tex;
 }
 
-inline void gen_texture_mipmaps(TextureType &) {
+} // namespace metal_texture_detail
+
+inline TextureType load_texture(const char *path) {
+  int w = 0, h = 0, comp = 0;
+  // Force 4 channels (RGBA8) to match the fixed pixel format below.
+  unsigned char *pixels = stbi_load(path, &w, &h, &comp, 4);
+  if (pixels == nullptr) {
+    log_error("load_texture: failed to load '{}': {}", path,
+              stbi_failure_reason());
+    return TextureType{};
+  }
+  TextureType tex = metal_texture_detail::load_texture_from_pixels(pixels, w, h);
+  stbi_image_free(pixels);
+  return tex;
+}
+
+inline void unload_texture(TextureType &texture) {
+  if (texture.view_id)
+    sg_destroy_view({texture.view_id});
+  if (texture.sampler_id)
+    sg_destroy_sampler({texture.sampler_id});
+  if (texture.img_id)
+    sg_destroy_image({texture.img_id});
+  texture = TextureType{};
+}
+
+inline void gen_texture_mipmaps(TextureType &texture) {
+  // Not implemented in the sokol backend. Sokol fixes an image's mip count at
+  // creation time (sg_image_desc.num_mipmaps + the mip_levels[] data supplied to
+  // sg_make_image); there is no runtime "generate mipmaps for an existing
+  // immutable image" call as in raylib's GenTextureMipmaps, and load_texture
+  // uploads a single mip level. To get true mipmaps here we would upload
+  // pre-built mip levels at load time. Sampling still works via
+  // set_texture_filter. Kept loud so callers know it is a backend limitation,
+  // not a silent success.
+  (void)texture;
   log_error("@notimplemented gen_texture_mipmaps");
 }
 
-inline void set_texture_filter(TextureType &, int) {
-  log_error("@notimplemented set_texture_filter");
+inline void set_texture_filter(TextureType &texture, int filter) {
+  if (texture.img_id == 0)
+    return;
+  // Recreate the sampler with the requested filter. The old sampler is
+  // destroyed to avoid leaking a GPU sampler object.
+  if (texture.sampler_id)
+    sg_destroy_sampler({texture.sampler_id});
+  sg_sampler smp = metal_texture_detail::make_sampler_for_filter(filter);
+  texture.sampler_id = smp.id;
 }
 
-inline TextureType load_texture_with_color_key(const char *, const Color,
-                                               const Color, int) {
-  log_error("@notimplemented load_texture_with_color_key");
-  return TextureType{};
+inline TextureType
+load_texture_with_color_key(const char *path, const Color key,
+                           const Color replacement,
+                           int filter = TEXTURE_FILTER_BILINEAR) {
+  int w = 0, h = 0, comp = 0;
+  unsigned char *pixels = stbi_load(path, &w, &h, &comp, 4);
+  if (pixels == nullptr) {
+    log_error("load_texture_with_color_key: failed to load '{}': {}", path,
+              stbi_failure_reason());
+    return TextureType{};
+  }
+  // Exact-match replace of `key` with `replacement` across the RGBA buffer,
+  // matching raylib's ImageColorReplace behavior.
+  const size_t count = static_cast<size_t>(w) * static_cast<size_t>(h);
+  for (size_t i = 0; i < count; ++i) {
+    unsigned char *px = pixels + i * 4;
+    if (px[0] == key.r && px[1] == key.g && px[2] == key.b && px[3] == key.a) {
+      px[0] = replacement.r;
+      px[1] = replacement.g;
+      px[2] = replacement.b;
+      px[3] = replacement.a;
+    }
+  }
+  TextureType tex =
+      metal_texture_detail::load_texture_from_pixels(pixels, w, h, filter);
+  stbi_image_free(pixels);
+  return tex;
 }
 
 } // namespace afterhours
