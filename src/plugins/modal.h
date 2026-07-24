@@ -50,18 +50,30 @@ struct modal;
 // Bottom + full-width = bottom sheet / banner).
 enum struct ModalAnchor { Center, Top, Bottom, Left, Right };
 
+// Render layers. Modals sit well above base UI. Header/content are children
+// of the modal, so they render above the panel at the same layer via document
+// pre-order (no per-child offset needed).
+enum struct RenderLayer : int {
+    Base = 0,
+    Modal = 1000,
+};
+
+// Layers between stacked modals: each nested modal is bumped by this so it
+// (and its backdrop, one layer below) clears the modal beneath it. It is a
+// spacing value, not a layer of its own.
+constexpr int MODAL_LAYER_STRIDE = 10;
+
 // TODO eventually it would be nice to use ComponentConfig
 // Modal configuration
 struct ModalConfig {
     ui::Size width = ui::h720(400);
     ui::Size height = ui::h720(200);
     std::string title;
-    bool center_on_screen = true;
     ModalAnchor anchor = ModalAnchor::Center;
     ClosedBy closed_by = ClosedBy::CloseRequest;
     bool show_close_button = true;
     Color backdrop_color = {0, 0, 0, 128};
-    int render_layer = 1000;
+    int render_layer = static_cast<int>(RenderLayer::Modal);
 
     ModalConfig &with_size(ui::Size w, ui::Size h) {
         width = w;
@@ -96,7 +108,6 @@ struct ModalConfig {
 
     ModalConfig &with_anchor(ModalAnchor a) {
         anchor = a;
-        center_on_screen = (a == ModalAnchor::Center);
         return *this;
     }
 };
@@ -118,7 +129,7 @@ struct modal : developer::Plugin {
         bool show_close_button = true;
         size_t open_order = 0;
         EntityID previously_focused_element = -1;
-        int render_layer = 1000;
+        int render_layer = static_cast<int>(RenderLayer::Modal);
         std::string title;
 
         // Flag set by systems to signal the modal should close
@@ -229,6 +240,19 @@ struct modal : developer::Plugin {
             }
         }
 
+        // Render layer for a modal at its current depth in the stack: deeper
+        // modals render above shallower ones (and their backdrops/content).
+        static int render_layer_for_depth(EntityID id, int base_layer) {
+            auto &root = get_modal_root();
+            auto it = std::find(root.modal_stack.begin(),
+                                root.modal_stack.end(), id);
+            int depth = (it == root.modal_stack.end())
+                            ? 0
+                            : static_cast<int>(
+                                  std::distance(root.modal_stack.begin(), it));
+            return base_layer + depth * MODAL_LAYER_STRIDE;
+        }
+
         // Internal implementation for creating a modal
         static ui::imm::ElementResult modal_impl(
             ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent ep_pair,
@@ -299,19 +323,10 @@ struct modal : developer::Plugin {
             // their backdrops) render above the modal beneath them instead of
             // colliding at the same layer. Children inherit max(child, parent)
             // layer, so bumping the modal/backdrop lifts their content too.
-            // Content helpers read m.render_layer (set below) for the exact
+            // Content helpers read m.render_layer (set here) for the exact
             // layer to sit just above this modal's panel.
-            constexpr int LAYER_STRIDE = 10;
-            int stack_depth = 0;
-            {
-                auto &root = get_modal_root();
-                auto it = std::find(root.modal_stack.begin(),
-                                    root.modal_stack.end(), entity.id);
-                if (it != root.modal_stack.end())
-                    stack_depth = static_cast<int>(
-                        std::distance(root.modal_stack.begin(), it));
-            }
-            config.render_layer += stack_depth * LAYER_STRIDE;
+            config.render_layer =
+                render_layer_for_depth(entity.id, config.render_layer);
             m.render_layer = config.render_layer;
 
             // Get screen dimensions for centering
@@ -391,7 +406,7 @@ struct modal : developer::Plugin {
                         .with_justify_content(JustifyContent::SpaceBetween)
                         .with_align_items(AlignItems::Center)
                         .with_margin(Margin{.bottom = DefaultSpacing::small()})
-                        .with_render_layer(config.render_layer + 1)
+                        .with_render_layer(config.render_layer)
                         .with_debug_name("modal_header"));
 
                 div(ctx, mk(header.ent(), 0),
@@ -400,7 +415,7 @@ struct modal : developer::Plugin {
                         .with_size(ComponentSize{children(), percent(1.0f)})
                         .with_font(UIComponent::DEFAULT_FONT, 18.0f)
                         .with_auto_text_color(true)
-                        .with_render_layer(config.render_layer + 1)
+                        .with_render_layer(config.render_layer)
                         .with_debug_name("modal_title"));
 
                 if (config.show_close_button) {
@@ -408,7 +423,7 @@ struct modal : developer::Plugin {
                                ComponentConfig{}
                                    .with_label("X")
                                    .with_size(ComponentSize{h720(28), h720(28)})
-                                   .with_render_layer(config.render_layer + 1)
+                                   .with_render_layer(config.render_layer)
                                    .with_debug_name("modal_close"))) {
                         m.result = DialogResult::Dismissed;
                         open = false;
@@ -416,8 +431,11 @@ struct modal : developer::Plugin {
                 }
             }
 
-            // Queue for render at high layer
-            ctx.queue_render(RenderInfo{entity.id, config.render_layer});
+            // Note: the modal is already queued for render by init_component
+            // (via apply_render_layer) in correct document order — before its
+            // children — so header/content at the same layer render above the
+            // panel. No explicit re-queue (which would draw the panel over its
+            // own children) and no per-child layer offset are needed.
 
             return {true, entity};
         }
@@ -430,7 +448,7 @@ struct modal : developer::Plugin {
             using namespace ui;
             using namespace ui::imm;
 
-            int CONTENT_LAYER = 1001;
+            int content_layer = static_cast<int>(RenderLayer::Modal);
 
             auto result = modal_impl(ctx, ep_pair, open,
                                      ModalConfig{}
@@ -441,14 +459,14 @@ struct modal : developer::Plugin {
             if (result) {
                 // Content sits just above this modal's (depth-adjusted) panel.
                 if (result.ent().template has<Modal>())
-                    CONTENT_LAYER =
-                        result.ent().template get<Modal>().render_layer + 1;
+                    content_layer =
+                        result.ent().template get<Modal>().render_layer;
                 div(ctx, mk(result.ent(), 0),
                     ComponentConfig{}
                         .with_label(message)
                         .with_size(ComponentSize{percent(1.0f), expand()})
                         .with_padding(Spacing::md)
-                        .with_render_layer(CONTENT_LAYER));
+                        .with_render_layer(content_layer));
 
                 auto button_row =
                     div(ctx, mk(result.ent(), 1),
@@ -458,13 +476,13 @@ struct modal : developer::Plugin {
                             .with_justify_content(JustifyContent::Center)
                             .with_align_items(AlignItems::Center)
                             .with_flex_wrap(FlexWrap::NoWrap)
-                            .with_render_layer(CONTENT_LAYER));
+                            .with_render_layer(content_layer));
 
                 if (button(ctx, mk(button_row.ent(), 0),
                            ComponentConfig{}
                                .with_label(button_label)
                                .with_size(ComponentSize{h720(100), h720(36)})
-                               .with_render_layer(CONTENT_LAYER))) {
+                               .with_render_layer(content_layer))) {
                     open = false;
                 }
             }
@@ -480,7 +498,7 @@ struct modal : developer::Plugin {
             using namespace ui;
             using namespace ui::imm;
 
-            int CONTENT_LAYER = 1001;
+            int content_layer = static_cast<int>(RenderLayer::Modal);
             DialogResult dialog_result = DialogResult::Pending;
 
             auto result = modal_impl(ctx, ep_pair, open,
@@ -492,14 +510,14 @@ struct modal : developer::Plugin {
             if (result) {
                 // Content sits just above this modal's (depth-adjusted) panel.
                 if (result.ent().template has<Modal>())
-                    CONTENT_LAYER =
-                        result.ent().template get<Modal>().render_layer + 1;
+                    content_layer =
+                        result.ent().template get<Modal>().render_layer;
                 div(ctx, mk(result.ent(), 0),
                     ComponentConfig{}
                         .with_label(message)
                         .with_size(ComponentSize{percent(1.0f), expand()})
                         .with_padding(Spacing::md)
-                        .with_render_layer(CONTENT_LAYER));
+                        .with_render_layer(content_layer));
 
                 auto button_row =
                     div(ctx, mk(result.ent(), 1),
@@ -509,7 +527,7 @@ struct modal : developer::Plugin {
                             .with_justify_content(JustifyContent::Center)
                             .with_align_items(AlignItems::Center)
                             .with_flex_wrap(FlexWrap::NoWrap)
-                            .with_render_layer(CONTENT_LAYER));
+                            .with_render_layer(content_layer));
 
                 if (button(ctx, mk(button_row.ent(), 0),
                            ComponentConfig{}
@@ -519,7 +537,7 @@ struct modal : developer::Plugin {
                                .with_margin(
                                    Margin{.left = DefaultSpacing::small(),
                                           .right = DefaultSpacing::small()})
-                               .with_render_layer(CONTENT_LAYER))) {
+                               .with_render_layer(content_layer))) {
                     dialog_result = DialogResult::Confirmed;
                     open = false;
                 }
@@ -531,7 +549,7 @@ struct modal : developer::Plugin {
                                .with_margin(
                                    Margin{.left = DefaultSpacing::small(),
                                           .right = DefaultSpacing::small()})
-                               .with_render_layer(CONTENT_LAYER))) {
+                               .with_render_layer(content_layer))) {
                     dialog_result = DialogResult::Cancelled;
                     open = false;
                 }
@@ -557,7 +575,7 @@ struct modal : developer::Plugin {
             using namespace ui;
             using namespace ui::imm;
 
-            int CONTENT_LAYER = 1001;
+            int content_layer = static_cast<int>(RenderLayer::Modal);
             DialogResult dialog_result = DialogResult::Pending;
 
             auto result = modal_impl(ctx, ep_pair, open,
@@ -569,14 +587,14 @@ struct modal : developer::Plugin {
             if (result) {
                 // Content sits just above this modal's (depth-adjusted) panel.
                 if (result.ent().template has<Modal>())
-                    CONTENT_LAYER =
-                        result.ent().template get<Modal>().render_layer + 1;
+                    content_layer =
+                        result.ent().template get<Modal>().render_layer;
                 div(ctx, mk(result.ent(), 0),
                     ComponentConfig{}
                         .with_label(message)
                         .with_size(ComponentSize{percent(1.0f), expand()})
                         .with_padding(Spacing::md)
-                        .with_render_layer(CONTENT_LAYER));
+                        .with_render_layer(content_layer));
 
                 auto button_row =
                     div(ctx, mk(result.ent(), 1),
@@ -586,7 +604,7 @@ struct modal : developer::Plugin {
                             .with_justify_content(JustifyContent::Center)
                             .with_align_items(AlignItems::Center)
                             .with_flex_wrap(FlexWrap::NoWrap)
-                            .with_render_layer(CONTENT_LAYER));
+                            .with_render_layer(content_layer));
 
                 if (button(ctx, mk(button_row.ent(), 0),
                            ComponentConfig{}
@@ -596,7 +614,7 @@ struct modal : developer::Plugin {
                                .with_margin(
                                    Margin{.left = DefaultSpacing::small(),
                                           .right = DefaultSpacing::small()})
-                               .with_render_layer(CONTENT_LAYER))) {
+                               .with_render_layer(content_layer))) {
                     dialog_result = DialogResult::Confirmed;
                     open = false;
                 }
@@ -608,7 +626,7 @@ struct modal : developer::Plugin {
                                .with_margin(
                                    Margin{.left = DefaultSpacing::small(),
                                           .right = DefaultSpacing::small()})
-                               .with_render_layer(CONTENT_LAYER))) {
+                               .with_render_layer(content_layer))) {
                     dialog_result = DialogResult::Cancelled;
                     open = false;
                 }
@@ -622,7 +640,7 @@ struct modal : developer::Plugin {
                                 .with_margin(
                                     Margin{.left = DefaultSpacing::small(),
                                            .right = DefaultSpacing::small()})
-                                .with_render_layer(CONTENT_LAYER))) {
+                                .with_render_layer(content_layer))) {
                         dialog_result = DialogResult::Custom;
                         open = false;
                     }
