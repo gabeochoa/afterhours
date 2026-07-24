@@ -1058,14 +1058,11 @@ struct input : developer::Plugin {
     };
 
     static auto get_input_collector() -> PossibleInputCollector {
-        // TODO replace with a singletone query
-        OptEntity opt_collector =
-            EntityQuery({.ignore_temp_warning = true})
-                .template whereHasComponent<InputCollector>()
-                .gen_first();
-        if (!opt_collector.valid()) return {};
-        Entity &collector = opt_collector.asE();
-        return collector.get<InputCollector>();
+        // InputCollector is a singleton; guard returns empty when absent.
+        if (!EntityHelper::has_singleton<InputCollector>()) return {};
+        InputCollector *ic = EntityHelper::get_singleton_cmp<InputCollector>();
+        if (ic == nullptr) return {};
+        return *ic;
     }
 
     // TODO i would like to move this out of input namespace
@@ -1108,7 +1105,7 @@ struct input : developer::Plugin {
 
             for (const auto &kv : input_mapper.mapping) {
                 const int action = kv.first;
-                const ValidInputs vis = kv.second;
+                const ValidInputs &vis = kv.second;
 
                 int i = 0;
                 do {
