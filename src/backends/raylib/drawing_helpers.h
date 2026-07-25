@@ -343,9 +343,11 @@ inline void draw_ring(float centerX, float centerY, float innerRadius,
                    0.0f, 360.0f, segments, color);
 }
 
-// Begin scissor mode (clipping rectangle)
+// Begin scissor mode (clipping rectangle). Scissor is device-pixel, so scale
+// logical coords by the supersample factor to match the render texture.
 inline void begin_scissor_mode(int x, int y, int width, int height) {
-  raylib::BeginScissorMode(x, y, width, height);
+  const int s = graphics::render_scale();
+  raylib::BeginScissorMode(x * s, y * s, width * s, height * s);
 }
 
 // End scissor mode (stop clipping)

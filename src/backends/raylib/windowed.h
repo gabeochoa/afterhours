@@ -15,6 +15,10 @@ struct RaylibWindowed {
   RenderTextureType render_texture{};
   Config config{};
   bool initialized = false;
+  // Logical (design) draw size + supersample factor (render tex = logical*scale).
+  int logical_w_ = 0;
+  int logical_h_ = 0;
+  int render_scale_ = 1;
 
   /// Initialize the windowed backend with the given configuration.
   /// Creates a resizable window with MSAA and sets up a render texture for
@@ -28,9 +32,14 @@ struct RaylibWindowed {
     }
 
     config = cfg;
+    logical_w_ = cfg.width;
+    logical_h_ = cfg.height;
     unsigned int flags = raylib::FLAG_WINDOW_RESIZABLE | cfg.config_flags;
     if (cfg.enable_msaa) {
       flags |= raylib::FLAG_MSAA_4X_HINT;
+    }
+    if (cfg.hidpi) {
+      flags |= raylib::FLAG_WINDOW_HIGHDPI;
     }
     raylib::SetConfigFlags(flags);
     raylib::InitWindow(cfg.width, cfg.height, cfg.title.c_str());
@@ -41,7 +50,18 @@ struct RaylibWindowed {
     }
 
     raylib::SetTargetFPS(cfg.target_fps);
-    render_texture = raylib::LoadRenderTexture(cfg.width, cfg.height);
+
+    // Scale 1 (no hidpi / 1x display) == the old behavior exactly.
+    render_scale_ = 1;
+    if (cfg.hidpi) {
+      const float dpi = raylib::GetWindowScaleDPI().x;
+      render_scale_ = dpi > 1.0f ? static_cast<int>(dpi + 0.5f) : 1;
+      if (render_scale_ < 1)
+        render_scale_ = 1;
+    }
+    graphics::render_scale() = render_scale_;
+    render_texture = raylib::LoadRenderTexture(logical_w_ * render_scale_,
+                                               logical_h_ * render_scale_);
 
     // Check if render texture was created successfully
     if (render_texture.id == 0) {
@@ -68,8 +88,19 @@ struct RaylibWindowed {
   /// Returns the frame time from raylib for delta time calculations.
   float get_delta_time() const { return raylib::GetFrameTime(); }
 
-  /// Begin rendering to the render texture.
-  void begin_frame() { raylib::BeginTextureMode(render_texture); }
+  // Supersample: keep draws in logical coords via a projection override (not the
+  // modelview, so it survives BeginMode2D) rasterizing into the denser texture.
+  void begin_frame() {
+    raylib::BeginTextureMode(render_texture);
+    if (render_scale_ != 1) {
+      raylib::rlDrawRenderBatchActive();
+      raylib::rlMatrixMode(RL_PROJECTION);
+      raylib::rlLoadIdentity();
+      raylib::rlOrtho(0, logical_w_, logical_h_, 0, 0.0, 1.0);
+      raylib::rlMatrixMode(RL_MODELVIEW);
+      raylib::rlLoadIdentity();
+    }
+  }
 
   /// End rendering to the render texture.
   void end_frame() { raylib::EndTextureMode(); }

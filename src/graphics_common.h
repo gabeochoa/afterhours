@@ -36,6 +36,12 @@ namespace raylib {
 namespace afterhours::graphics {
 using RenderTextureType = raylib::RenderTexture2D;
 using ShaderType = raylib::Shader;
+// Device-pixel scale for scissor rects when the render texture is supersampled
+// (Config.hidpi). 1 = no scaling. Set by the active backend at init.
+inline int &render_scale() {
+  static int s = 1;
+  return s;
+}
 } // namespace afterhours::graphics
 
 #elif defined(AFTER_HOURS_USE_METAL)
@@ -92,6 +98,9 @@ struct Config {
   int target_fps = 60;
   unsigned int config_flags = 0;
   bool enable_msaa = true;
+  // Supersample the render texture at design*dpi (crisp on Retina); game keeps
+  // logical coords. Windowed/raylib only. See RaylibWindowed.
+  bool hidpi = false;
 };
 
 template <typename T>
