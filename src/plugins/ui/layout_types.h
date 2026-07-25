@@ -1,10 +1,15 @@
 #pragma once
 
-#include <format>
-#include <iostream>
+#include <ostream>
 #include <string_view>
 
-#include "../../logging.h"
+#include "../../logging.h" // defines AFTER_HOURS_HAS_FORMAT
+
+// std::formatter specializations below need <format>; on toolchains without it
+// (gcc 11/12 etc.) logging is no-op anyway, so skip them. See logging.h.
+#if AFTER_HOURS_HAS_FORMAT
+#include <format>
+#endif
 
 namespace afterhours {
 
@@ -76,6 +81,7 @@ inline std::ostream &operator<<(std::ostream &os, const Size &size) {
 } // namespace afterhours
 
 // Define formatters for Dim and Size BEFORE they are used in log statements
+#if AFTER_HOURS_HAS_FORMAT
 namespace std {
 template <> struct formatter<afterhours::ui::Dim> {
   constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
@@ -119,6 +125,7 @@ template <> struct formatter<afterhours::ui::Size> {
   }
 };
 } // namespace std
+#endif // AFTER_HOURS_HAS_FORMAT
 
 // Reopen namespace to continue with functions that use logging
 namespace afterhours {
@@ -456,6 +463,7 @@ struct LayoutInfo {
 } // namespace afterhours
 
 // std::formatter specialization for Axis to support std::format/log_* macros
+#if AFTER_HOURS_HAS_FORMAT
 namespace std {
 template <> struct formatter<afterhours::ui::Axis> {
   constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
@@ -486,3 +494,4 @@ template <> struct formatter<afterhours::ui::Axis> {
   }
 };
 } // namespace std
+#endif // AFTER_HOURS_HAS_FORMAT
