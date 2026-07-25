@@ -2,8 +2,8 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <functional>
-#include <sstream>
 #include <string>
 
 #include "../core/base_component.h"
@@ -133,10 +133,9 @@ struct settings : developer::Plugin {
                  settings_path.string().c_str());
         return false;
       }
-      std::stringstream buffer;
-      buffer << ifs.rdbuf();
+      std::string buf_str((std::istreambuf_iterator<char>(ifs)),
+                          std::istreambuf_iterator<char>());
       ifs.close();
-      auto buf_str = buffer.str();
       bitsery::quickDeserialization<BitsInputAdapter>(
           {buf_str.begin(), buf_str.size()}, provider->data);
       log_info("Settings loaded from bitsery: %s",
@@ -160,10 +159,9 @@ struct settings : developer::Plugin {
                  settings_path.string().c_str());
         return false;
       }
-      std::stringstream buffer;
-      buffer << ifs.rdbuf();
+      std::string content((std::istreambuf_iterator<char>(ifs)),
+                          std::istreambuf_iterator<char>());
       ifs.close();
-      std::string content = buffer.str();
       provider->data = SettingsData::from_string(content);
       log_info("Settings loaded from raw string: %s",
                settings_path.string().c_str());
