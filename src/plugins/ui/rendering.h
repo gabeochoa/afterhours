@@ -1409,7 +1409,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     if (entity.has<HasColor>()) {
       Color col = entity.template get<HasColor>().color();
 
-      if (context.is_hot(entity.id) &&
+      // In FollowsMostRecentInput the ring is the only highlight, so skip the
+      // hover fill entirely (mouse and keyboard render identically).
+      if (context.theme.highlight_mode == HighlightMode::Split &&
+          context.is_hot(entity.id) &&
           !entity.template get<HasColor>().skip_hover_override) {
         col = entity.template get<HasColor>().hover_color.value_or(
             context.theme.from_usage(Theme::Usage::Background));
@@ -2024,7 +2027,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     if (entity.has<HasColor>()) {
       Color col = entity.template get<HasColor>().color();
 
-      if (context.is_hot(entity.id) &&
+      // In FollowsMostRecentInput the ring is the only highlight, so skip the
+      // hover fill entirely (mouse and keyboard render identically).
+      if (context.theme.highlight_mode == HighlightMode::Split &&
+          context.is_hot(entity.id) &&
           !entity.template get<HasColor>().skip_hover_override) {
         col = entity.template get<HasColor>().hover_color.value_or(
             context.theme.from_usage(Theme::Usage::Background));

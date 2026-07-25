@@ -55,6 +55,7 @@ struct MousePointerState {
   bool just_released = false;
   input::MousePosition press_pos{};
   bool press_moved = false;
+  bool moved_this_frame = false; // pos changed since last frame (any button)
   static constexpr float press_drag_threshold_px = 6.0f;
 };
 

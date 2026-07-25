@@ -19,6 +19,18 @@ enum class ClickActivationMode {
   Release,
 };
 
+// How mouse hover and keyboard focus are highlighted.
+//   Split: mouse hover paints a fill (hot_id), keyboard focus draws the ring
+//     (visual_focus_id) - two independent indicators (the default/legacy look).
+//   FollowsMostRecentInput: one highlight (the focus ring). Moving the mouse
+//     drives the ring to the hovered widget; keyboard nav keeps it until the
+//     mouse moves again; the separate hover fill is suppressed so both inputs
+//     render identically.
+enum class HighlightMode {
+  Split,
+  FollowsMostRecentInput,
+};
+
 // Text stroke/outline configuration for labels
 // Renders text with an outline effect by drawing the text at offsets
 struct TextStroke {
@@ -237,6 +249,8 @@ struct Theme {
       4.0f; // Inset from element edge to focus ring (keeps ring inside bounds)
 
   ClickActivationMode click_activation_mode = ClickActivationMode::Press;
+
+  HighlightMode highlight_mode = HighlightMode::Split;
 
   // Disabled element styling.
   // When with_disabled(true) is set on a ComponentConfig:
@@ -536,6 +550,11 @@ struct ThemeDefaults {
 
   ThemeDefaults &set_click_activation_mode(ClickActivationMode mode) {
     theme.click_activation_mode = mode;
+    return *this;
+  }
+
+  ThemeDefaults &set_highlight_mode(HighlightMode mode) {
+    theme.highlight_mode = mode;
     return *this;
   }
 

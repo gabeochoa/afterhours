@@ -128,7 +128,10 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
 
     // Mouse input handling
     {
+      const auto prev_pos = context.mouse.pos;
       context.mouse.pos = input::get_mouse_position();
+      context.mouse.moved_this_frame = (context.mouse.pos.x != prev_pos.x ||
+                                        context.mouse.pos.y != prev_pos.y);
       const bool prev_mouse_down = context.mouse.left_down;
       context.mouse.left_down = input::is_mouse_button_down(0);
       context.mouse.just_pressed = !prev_mouse_down && context.mouse.left_down;
@@ -458,6 +461,17 @@ struct EndUIContextManager : System<UIContext<InputAction>> {
 template <typename InputAction> struct ComputeVisualFocusId : System<> {
   virtual void for_each_with(Entity &, float) override {
     auto ctx = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    // FollowsMostRecentInput: when the mouse moved this frame, take focus (and
+    // thus the ring, derived below) to the hovered widget. A parked mouse leaves
+    // keyboard focus alone; empty space (hot_id==ROOT) leaves the ring put. Runs
+    // here because hot_id is final and focused_ids is populated (HandleTabbing),
+    // so EndUIContextManager won't drop the newly-set focus.
+    if (ctx->theme.highlight_mode == HighlightMode::FollowsMostRecentInput &&
+        ctx->mouse.moved_this_frame && ctx->hot_id != ctx->ROOT) {
+      const OptEntity hot = UICollectionHolder::getEntityForID(ctx->hot_id);
+      if (hot.has_value() && can_be_focused(*ctx, hot.asE()))
+        ctx->set_focus(ctx->hot_id);
+    }
     ctx->visual_focus_id = ctx->ROOT;
     if (ctx->focus_id == ctx->ROOT || ctx->focus_id == ctx->FAKE)
       return;
@@ -739,6 +753,27 @@ struct CloseDropdownOnClickOutside : System<HasDropdownState, UIComponent> {
   }
 };
 
+// Single source of truth for "can this widget take focus?" - shared by
+// HandleTabbing and the FollowsMostRecentInput hover arbitration so the two can
+// never drift. Focusable <=> has a click or drag listener, not SkipWhenTabbing,
+// not ShouldHide, was rendered this frame, and input is allowed.
+template <typename InputAction>
+bool can_be_focused(UIContext<InputAction> &ctx, const Entity &e) {
+  if (e.template is_missing<HasClickListener>() &&
+      e.template is_missing<HasDragListener>())
+    return false;
+  if (e.template has<SkipWhenTabbing>())
+    return false;
+  if (e.template has<ShouldHide>())
+    return false;
+  if (e.template is_missing<UIComponent>() ||
+      !e.template get<UIComponent>().was_rendered_to_screen)
+    return false;
+  if (!ctx.is_input_allowed(e.id))
+    return false;
+  return true;
+}
+
 template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
   UIContext<InputAction> *context;
 
@@ -749,18 +784,9 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
 
   virtual ~HandleTabbing() {}
 
-  virtual void for_each_with(Entity &entity, UIComponent &component,
+  virtual void for_each_with(Entity &entity, UIComponent &,
                              float) override {
-    if (entity.is_missing<HasClickListener>() &&
-        entity.is_missing<HasDragListener>())
-      return;
-    if (entity.has<SkipWhenTabbing>())
-      return;
-    if (entity.has<ShouldHide>())
-      return;
-    if (!component.was_rendered_to_screen)
-      return;
-    if (!context->is_input_allowed(entity.id))
+    if (!can_be_focused(*context, entity))
       return;
 
     // Valid things to tab to...
