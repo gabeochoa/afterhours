@@ -76,7 +76,7 @@ autolayout_test: autolayout_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 
 entity_mapping_test: entity_mapping_test.cpp ../examples/entity_mapping_test_helper.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -I../examples $^ -o $@
 
 entity_pool_test: entity_pool_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
