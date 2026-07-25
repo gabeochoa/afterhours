@@ -1,5 +1,6 @@
 
 #pragma once
+#include "../config.h"
 #include "../developer.h"
 
 namespace afterhours {
@@ -41,14 +42,6 @@ inline void draw_texture_pro(const Texture sheet, const Rectangle frame,
 inline void draw_texture_pro(const Texture, const Rectangle, const Rectangle,
                              const Vector2Type, const float, const Color) {}
 #endif
-#endif
-
-#ifndef AFTERHOURS_SPRITE_SIZE_PX
-#define AFTERHOURS_SPRITE_SIZE_PX 32
-#endif
-
-#ifndef AFTERHOURS_SPRITE_SHEET_NUM_SPRITES_WIDE
-#define AFTERHOURS_SPRITE_SHEET_NUM_SPRITES_WIDE 32
 #endif
 
 constexpr static Rectangle idx_to_sprite_frame(const int i, const int j) {

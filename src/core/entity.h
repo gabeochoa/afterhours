@@ -9,16 +9,13 @@
 #include <type_traits>
 
 #include "../logging.h"
+#include "../config.h"
 #include "../type_name.h"
 #include "base_component.h"
 #include "entity_handle.h"
 #include "pointer_policy.h"
 
 namespace afterhours {
-#ifndef AFTER_HOURS_MAX_ENTITY_TAGS
-#define AFTER_HOURS_MAX_ENTITY_TAGS 64
-#endif
-
 using TagId = std::uint8_t;
 using TagBitset = std::bitset<AFTER_HOURS_MAX_ENTITY_TAGS>;
 template <typename Base, typename Derived> bool child_of(Derived *derived) {

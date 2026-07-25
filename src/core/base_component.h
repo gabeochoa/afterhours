@@ -5,15 +5,12 @@
 #include <vector>
 
 #include "../logging.h"
+#include "../config.h"
 #include "../type_name.h"
 
 namespace afterhours {
 
 struct BaseComponent;
-
-#if !defined(AFTER_HOURS_MAX_COMPONENTS)
-#define AFTER_HOURS_MAX_COMPONENTS 128
-#endif
 
 constexpr size_t max_num_components = AFTER_HOURS_MAX_COMPONENTS;
 
