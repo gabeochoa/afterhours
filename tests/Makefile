@@ -49,6 +49,7 @@ ALL_TESTS := \
 	render_order_test \
 	slider_test \
 	stepper_test \
+	system_tags_test \
 	tab_container_test \
 	text_wrap_test
 
@@ -73,6 +74,9 @@ entity_pool_test: entity_pool_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 
 entity_query_test: entity_query_test.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+
+system_tags_test: system_tags_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 
 input_injector_mouse_delta_test: input_injector_mouse_delta_test.cpp
