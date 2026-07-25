@@ -1,0 +1,67 @@
+name: build-and-test
+
+# Minimal CI: build the test suite + examples on Linux and RUN the backend-neutral
+# (non-raylib) tests, which carry real assertions — including the regression
+# guards for tag filtering and the seedable RandomEngine. The raylib/UI tests are
+# compile-only here (they need a GL context); their runtime behavior is exercised
+# by the examples locally. Runs on Linux specifically because that's where the
+# portability bugs bite (gcc's <format> availability, the tag-filter #if __APPLE__
+# guard) that a macOS-only check would miss.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  linux-build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain + deps
+        run: |
+          sudo apt-get update
+          # clang (C++20), header-only fmt, and raylib for the UI/raylib tests.
+          sudo apt-get install -y clang libfmt-dev libraylib-dev
+
+      - name: Build + run backend-neutral tests
+        working-directory: tests
+        run: |
+          # These tests are pure ECS/logic — no GL context needed, so CI runs
+          # them. BREW_PREFIX/RAYLIB_PREFIX point at /usr for the apt packages
+          # (the Makefile's `brew --prefix` autodetect yields empty on Linux).
+          for t in autolayout_test entity_mapping_test entity_pool_test \
+                   entity_query_test input_injector_mouse_delta_test \
+                   system_tags_test random_engine_test; do
+            if grep -q "^$t:" Makefile; then
+              echo "== build $t =="
+              make BREW_PREFIX=/usr RAYLIB_PREFIX=/usr "$t"
+              echo "== run $t =="
+              "./$t"
+            fi
+          done
+
+      - name: Compile-check raylib/UI tests (headless CI, link needs a GL context)
+        working-directory: tests
+        run: |
+          # Build via the Makefile's own rules so includes/flags stay in one
+          # place. Linking needs GL/display which CI lacks, so a link failure
+          # here is expected — we only assert the tests COMPILE. (`make -k`
+          # keeps going; we grep the log for real compile errors.)
+          set +e
+          make BREW_PREFIX=/usr RAYLIB_PREFIX=/usr -k \
+            slider_test progress_bar_test render_order_test stepper_test \
+            tab_container_test text_wrap_test dump_ui_test > build.log 2>&1
+          set -e
+          if grep -E "error:" build.log; then
+            echo "Real compile error in a raylib test"; exit 1
+          fi
+          echo "raylib/UI tests compiled (link skipped: no GL context on CI)"
+
+      - name: Build examples (compile-check)
+        working-directory: examples
+        run: |
+          # Non-raylib benchmarks fully build; raylib examples compile-check.
+          make BREW_PREFIX=/usr RAYLIB_PREFIX=/usr perf_stress_test profile_harness
