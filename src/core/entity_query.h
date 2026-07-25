@@ -8,9 +8,18 @@
 #include <type_traits>
 #include <vector>
 
+#include "../config.h"
 #include "../logging.h"
 #include "entity.h"
 #include "entity_helper.h"
+
+// Opt-in via config.h (AFTER_HOURS_ENABLE_RANDOM): seedable, unbiased
+// gen_random(). Off => plain rand().
+#if AFTER_HOURS_RANDOM_ENABLED
+#include "../random_engine.h"
+#else
+#include <cstdlib>
+#endif
 namespace afterhours {
 
 template <typename Derived = void> //
@@ -489,7 +498,13 @@ struct EntityQuery {
     if (results.empty()) {
       return {};
     }
+#if AFTER_HOURS_RANDOM_ENABLED
+    // Seedable + unbiased via RandomEngine (empty handled above).
+    size_t random_index =
+        static_cast<size_t>(RandomEngine::get().get_index(results));
+#else
     size_t random_index = rand() % results.size();
+#endif
     return results[random_index];
   }
 

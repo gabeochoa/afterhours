@@ -1,5 +1,7 @@
 #pragma once
 
+#include "config.h"
+
 #if __has_include(<expected>)
 #include <expected>
 #if defined(__cpp_lib_expected)
@@ -18,6 +20,12 @@ namespace ah_std = tl; // fallback to tl::expected/unexpected
 
 #include "logging.h"
 #include "type_name.h"
+
+// Opt-in via config.h (AFTER_HOURS_ENABLE_RANDOM): make get_random_match
+// actually random (and seedable). Off => no <random>/RandomEngine cost.
+#if AFTER_HOURS_RANDOM_ENABLED
+#include "random_engine.h"
+#endif
 
 template <typename T> struct Library {
   enum struct Error {
@@ -98,10 +106,13 @@ template <typename T> struct Library {
       return ah_std::unexpected(Error::NO_MATCH);
     }
 
-    // TODO add random generator
-    // int idx = RandomEngine::get().get_int(0,
-    // static_cast<int>(num_matches) - 1);
-    int idx = 0;
+    size_t idx = 0;
+#if AFTER_HOURS_RANDOM_ENABLED
+    if (num_matches > 1) {
+      idx = static_cast<size_t>(afterhours::RandomEngine::get().get_int(
+          0, static_cast<int>(num_matches) - 1));
+    }
+#endif
     const_iterator start(matches.first);
     std::advance(start, idx);
     return start->second;
