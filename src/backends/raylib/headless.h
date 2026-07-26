@@ -141,6 +141,8 @@ struct RaylibHeadless {
 
     // Get image from texture
     raylib::Image img = raylib::LoadImageFromTexture(render_texture.texture);
+    if (img.data == nullptr) // readback failed (invalid/unloaded texture)
+      return false;
     raylib::ImageFlipVertical(&img);
 
     // Export using raylib (uses stb_image_write internally)

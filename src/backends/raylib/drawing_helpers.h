@@ -502,6 +502,8 @@ inline void draw_texture_pro(TextureType tex, RectangleType src, RectangleType d
 inline bool capture_render_texture(const graphics::RenderTextureType &rt,
                                    const std::filesystem::path &path) {
   raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
+  if (img.data == nullptr) // readback failed (invalid/unloaded texture)
+    return false;
   raylib::ImageFlipVertical(&img);
   bool ok = raylib::ExportImage(img, path.c_str());
   raylib::UnloadImage(img);

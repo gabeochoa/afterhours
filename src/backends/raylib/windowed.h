@@ -113,6 +113,8 @@ struct RaylibWindowed {
   /// @return true if the export succeeded, false otherwise.
   bool capture_frame(const std::filesystem::path &path) {
     raylib::Image img = raylib::LoadImageFromTexture(render_texture.texture);
+    if (img.data == nullptr) // readback failed (invalid/unloaded texture)
+      return false;
     raylib::ImageFlipVertical(&img);
     bool success = raylib::ExportImage(img, path.c_str());
     raylib::UnloadImage(img);
