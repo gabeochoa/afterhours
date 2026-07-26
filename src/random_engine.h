@@ -26,11 +26,18 @@ struct RandomEngine {
   }
   [[nodiscard]] std::uint32_t get_seed() const { return seed; }
 
-  // Inclusive range [a, b].
+  // Inclusive range [a, b]. std::uniform_int_distribution requires a <= b
+  // (a > b is undefined behavior — can hang or return garbage), so a degenerate
+  // or inverted range returns the lower bound deterministically instead.
   [[nodiscard]] int get_int(int a, int b) {
+    if (a >= b)
+      return a;
     return std::uniform_int_distribution<int>(a, b)(rng);
   }
+  // Range [a, b). a >= b returns a (empty/inverted range -> lower bound).
   [[nodiscard]] float get_float(float a, float b) {
+    if (a >= b)
+      return a;
     return std::uniform_real_distribution<float>(a, b)(rng);
   }
   [[nodiscard]] bool get_bool() { return get_int(0, 1) == 1; }
