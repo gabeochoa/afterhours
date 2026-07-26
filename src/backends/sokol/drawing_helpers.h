@@ -1280,11 +1280,25 @@ inline TextureType load_texture_from_pixels(const unsigned char *rgba, int w,
       static_cast<size_t>(w) * static_cast<size_t>(h) * 4u;
   id.label = "tex-image";
   sg_image img = sg_make_image(&id);
+  if (sg_query_image_state(img) != SG_RESOURCESTATE_VALID) {
+    // Image creation failed (e.g. GPU OOM or sokol image pool exhausted).
+    // Bail before making the view/sampler — otherwise those GPU objects leak
+    // (the caller gets an empty TextureType and won't unload_texture it).
+    log_error("load_texture_from_pixels: sg_make_image failed ({}x{})", w, h);
+    sg_destroy_image(img); // safe on a failed image; frees the pool slot
+    return TextureType{};
+  }
 
   sg_view_desc vd{};
   vd.texture.image = img;
   vd.label = "tex-view";
   sg_view view = sg_make_view(&vd);
+  if (sg_query_view_state(view) != SG_RESOURCESTATE_VALID) {
+    log_error("load_texture_from_pixels: sg_make_view failed ({}x{})", w, h);
+    sg_destroy_view(view);
+    sg_destroy_image(img);
+    return TextureType{};
+  }
 
   sg_sampler smp = make_sampler_for_filter(filter);
 
