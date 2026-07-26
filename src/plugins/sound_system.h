@@ -41,11 +41,22 @@ struct sound_system : developer::Plugin {
         }
 
         void play(const char *const name) {
+            if (!contains(name)) {
+                log_warn("SoundLibrary::play: no sound loaded named '{}'", name);
+                return;
+            }
             ::afterhours::PlaySound(get(name));
         }
 
         void play_random_match(const std::string &prefix) {
-            impl.get_random_match(prefix).transform(::afterhours::PlaySound);
+            // Explicit has_value/value instead of .transform(): the latter is a
+            // C++23 monadic op that std::expected has but the tl::expected
+            // fallback (used when <expected> is unavailable, e.g. gcc 11) does
+            // not, so .transform() fails to compile there.
+            auto match = impl.get_random_match(prefix);
+            if (match.has_value()) {
+                ::afterhours::PlaySound(match.value());
+            }
         }
 
         void play_if_none_playing(const std::string &prefix) {
@@ -129,6 +140,11 @@ struct sound_system : developer::Plugin {
         }
 
         void play(const std::string &name) {
+            if (!contains(name)) {
+                log_warn("MusicLibrary::play: no music loaded named '{}'",
+                         name.c_str());
+                return;
+            }
             auto &music = get(name);
             ::afterhours::PlayMusicStream(music);
         }
@@ -267,7 +283,8 @@ struct sound_system : developer::Plugin {
                         }
                     }
                 }
-                // play(name) still throws on a missing base, matching get().
+                // On a missing base, play(name) logs and no-ops (it
+                // contains-guards); no exception.
                 if (lib.contains(base)) {
                     ::afterhours::PlaySound(lib.get(base));
                 } else {
