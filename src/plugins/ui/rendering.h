@@ -859,7 +859,8 @@ position_texture(texture_manager::Texture, Vector2Type size,
 
 static inline void
 draw_texture_in_rect(texture_manager::Texture texture, RectangleType rect,
-                     texture_manager::HasTexture::Alignment alignment) {
+                     texture_manager::HasTexture::Alignment alignment,
+                     texture_manager::Color tint = colors::UI_WHITE) {
   float scale = (float)texture.height / rect.height;
   Vector2Type size = {
       (float)texture.width / scale,
@@ -881,7 +882,7 @@ draw_texture_in_rect(texture_manager::Texture texture, RectangleType rect,
                                         .width = size.x,
                                         .height = size.y,
                                     },
-                                    size, 0.f, colors::UI_WHITE);
+                                    size, 0.f, tint);
 }
 
 template <typename InputAction>
@@ -1566,11 +1567,12 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     if (entity.has<texture_manager::HasTexture>()) {
       const texture_manager::HasTexture &texture =
           entity.get<texture_manager::HasTexture>();
-      // draw textured rect with opacity via color tint
-      // NOTE: draw_texture_in_rect path lacks tint, so opacity will apply
-      // to images below reuse existing helper (no tint support), so
-      // fallback to image path below
-      draw_texture_in_rect(texture.texture, draw_rect, texture.alignment);
+      Color tex_col = colors::UI_WHITE;
+      if (effective_opacity < 1.0f) {
+        tex_col = colors::opacity_pct(tex_col, effective_opacity);
+      }
+      draw_texture_in_rect(texture.texture, draw_rect, texture.alignment,
+                           tex_col);
     } else if (entity.has<ui::HasImage>()) {
       const ui::HasImage &img = entity.get<ui::HasImage>();
       texture_manager::Rectangle src =
