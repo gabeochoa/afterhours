@@ -62,6 +62,14 @@ static inline RectangleType apply_scroll_offset(const Entity &entity,
 struct UIEntityMappingCache : BaseComponent {
   std::vector<Entity *> components;
 
+  // Whether `id` maps to a live entity in this frame's mapping. A stale child
+  // id (e.g. a child cleaned up while its parent still lists it) is NOT
+  // contained, so callers can skip it instead of dereferencing null in to_ent.
+  [[nodiscard]] bool contains(EntityID id) const {
+    return id >= 0 && static_cast<size_t>(id) < components.size() &&
+           components[id] != nullptr;
+  }
+
   Entity &to_ent(EntityID id) {
     if (id < 0 || static_cast<size_t>(id) >= components.size() ||
         components[id] == nullptr) {
@@ -398,6 +406,10 @@ struct TrackIfComponentWillBeRendered : System<> {
 
     // Process children first (bottom-up approach for better early exits)
     for (EntityID child : cmp.children) {
+      // Skip stale child ids (child cleaned up while still listed in the
+      // parent) — otherwise to_cmp->to_ent dereferences a null mapping slot.
+      if (!cache->contains(child))
+        continue;
       set_visibility(cache->to_cmp(child));
     }
 
