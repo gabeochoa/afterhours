@@ -50,6 +50,11 @@ headless_validation: headless_validation.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: headless_validation"
 
+# imm visual regression - renders imm UI to a hidden window, captures a PNG
+imm_visual_check: imm_visual_check.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
+	@echo "Built: imm_visual_check"
+
 # Performance stress tests - no raylib dependency
 perf_stress_test: perf_stress_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
@@ -101,6 +106,7 @@ profile-calendar: calendar_stress_test_opt
 clean:
 	rm -f graphics_example drawing_3d_example headless_validation perf_stress_test calendar_stress_test profile_harness
 	rm -f perf_stress_test_opt calendar_stress_test_opt
+	rm -f imm_visual_check imm_visual_check.png
 	rm -f graphics_example_output.png
 	rm -f profile_layout.txt profile_calendar.txt
 	rm -rf graphics_example_captures/

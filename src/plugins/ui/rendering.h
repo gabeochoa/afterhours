@@ -1415,8 +1415,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       if (context.theme.highlight_mode == HighlightMode::Split &&
           context.is_hot(entity.id) &&
           !entity.template get<HasColor>().skip_hover_override) {
-        col = entity.template get<HasColor>().hover_color.value_or(
-            context.theme.from_usage(Theme::Usage::Background));
+        col = entity.template get<HasColor>().hover_bg();
       }
 
       if (effective_opacity < 1.0f) {
@@ -2034,8 +2033,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       if (context.theme.highlight_mode == HighlightMode::Split &&
           context.is_hot(entity.id) &&
           !entity.template get<HasColor>().skip_hover_override) {
-        col = entity.template get<HasColor>().hover_color.value_or(
-            context.theme.from_usage(Theme::Usage::Background));
+        col = entity.template get<HasColor>().hover_bg();
       }
 
       if (effective_opacity < 1.0f) {

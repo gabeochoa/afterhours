@@ -519,6 +519,17 @@ public:
     }
     return color_;
   }
+
+  // Hover background: explicit override if set, else a luminance-derived tint
+  // of the widget's own color (dark -> lighter, light -> darker). Avoids the
+  // old default of flashing to the theme Background on hover.
+  Color hover_bg() const {
+    if (hover_color.has_value())
+      return hover_color.value();
+    const Color base = color();
+    return colors::is_dark(base) ? colors::lighten(base, 0.15f)
+                                 : colors::darken(base, 0.85f);
+  }
   auto &set(const Color col) {
     color_ = col;
     return *this;
