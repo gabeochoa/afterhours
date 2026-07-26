@@ -941,6 +941,11 @@ inline graphics::RenderTextureType load_render_texture(int w, int h) {
   cd.sample_count = sc;
   cd.label = "rt-color";
   sg_image color = sg_make_image(&cd);
+  if (sg_query_image_state(color) != SG_RESOURCESTATE_VALID) {
+    log_error("load_render_texture: color image creation failed ({}x{})", w, h);
+    sg_destroy_image(color);
+    return rt; // empty (only width/height set) — caller sees invalid ids
+  }
 
   sg_image_desc dd{};
   dd.usage.depth_stencil_attachment = true;
@@ -951,21 +956,51 @@ inline graphics::RenderTextureType load_render_texture(int w, int h) {
   dd.sample_count = sc;
   dd.label = "rt-depth";
   sg_image depth = sg_make_image(&dd);
+  if (sg_query_image_state(depth) != SG_RESOURCESTATE_VALID) {
+    log_error("load_render_texture: depth image creation failed ({}x{})", w, h);
+    sg_destroy_image(depth);
+    sg_destroy_image(color);
+    return rt;
+  }
 
   sg_view_desc cvd{};
   cvd.color_attachment.image = color;
   cvd.label = "rt-color-view";
   sg_view color_view = sg_make_view(&cvd);
+  if (sg_query_view_state(color_view) != SG_RESOURCESTATE_VALID) {
+    log_error("load_render_texture: color view creation failed");
+    sg_destroy_view(color_view);
+    sg_destroy_image(depth);
+    sg_destroy_image(color);
+    return rt;
+  }
 
   sg_view_desc dvd{};
   dvd.depth_stencil_attachment.image = depth;
   dvd.label = "rt-depth-view";
   sg_view depth_view = sg_make_view(&dvd);
+  if (sg_query_view_state(depth_view) != SG_RESOURCESTATE_VALID) {
+    log_error("load_render_texture: depth view creation failed");
+    sg_destroy_view(depth_view);
+    sg_destroy_view(color_view);
+    sg_destroy_image(depth);
+    sg_destroy_image(color);
+    return rt;
+  }
 
   sg_view_desc tvd{};
   tvd.texture.image = color;
   tvd.label = "rt-tex-view";
   sg_view tex_view = sg_make_view(&tvd);
+  if (sg_query_view_state(tex_view) != SG_RESOURCESTATE_VALID) {
+    log_error("load_render_texture: texture view creation failed");
+    sg_destroy_view(tex_view);
+    sg_destroy_view(depth_view);
+    sg_destroy_view(color_view);
+    sg_destroy_image(depth);
+    sg_destroy_image(color);
+    return rt;
+  }
 
   sg_sampler_desc sd{};
   sd.min_filter = SG_FILTER_LINEAR;
@@ -974,6 +1009,16 @@ inline graphics::RenderTextureType load_render_texture(int w, int h) {
   sd.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
   sd.label = "rt-sampler";
   sg_sampler smp = sg_make_sampler(&sd);
+  if (sg_query_sampler_state(smp) != SG_RESOURCESTATE_VALID) {
+    log_error("load_render_texture: sampler creation failed");
+    sg_destroy_sampler(smp);
+    sg_destroy_view(tex_view);
+    sg_destroy_view(depth_view);
+    sg_destroy_view(color_view);
+    sg_destroy_image(depth);
+    sg_destroy_image(color);
+    return rt;
+  }
 
   // Create an sgl context matching the render texture's format so that
   // sgl_draw() uses a pipeline compatible with the offscreen pass.
@@ -982,6 +1027,16 @@ inline graphics::RenderTextureType load_render_texture(int w, int h) {
   ctx_desc.depth_format = depth_fmt;
   ctx_desc.sample_count = sc;
   sgl_context sgl_ctx = sgl_make_context(&ctx_desc);
+  if (sgl_ctx.id == SG_INVALID_ID) {
+    log_error("load_render_texture: sgl context creation failed");
+    sg_destroy_sampler(smp);
+    sg_destroy_view(tex_view);
+    sg_destroy_view(depth_view);
+    sg_destroy_view(color_view);
+    sg_destroy_image(depth);
+    sg_destroy_image(color);
+    return rt;
+  }
 
   rt.color_img_id = color.id;
   rt.depth_img_id = depth.id;
