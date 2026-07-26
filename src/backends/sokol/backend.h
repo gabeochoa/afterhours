@@ -158,6 +158,12 @@ inline void sokol_init_cb() {
   sfons_desc.width = 2048;
   sfons_desc.height = 2048;
   g_fons_ctx = sfons_create(&sfons_desc);
+  if (g_fons_ctx == nullptr) {
+    // Atlas allocation failed (e.g. GPU OOM at startup). All text calls guard
+    // on !g_fons_ctx and become no-ops, so this manifests as silently missing
+    // text app-wide — log it loudly so it's diagnosable rather than baffling.
+    log_error("sfons_create failed (2048x2048 atlas); text rendering disabled");
+  }
 
   g_initialized = true;
 
