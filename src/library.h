@@ -60,21 +60,31 @@ template <typename T> struct Library {
   }
 
   [[nodiscard]] T &get(const std::string &name) {
-    if (!this->contains(name)) {
+    auto it = storage.find(name);
+    if (it == storage.end()) {
       log_warn("asking for item: {} but nothing has been loaded with that "
                "name yet {}",
                name.c_str(), type_name<T>());
+      // Degrade gracefully to a default-constructed fallback instead of
+      // storage.at() throwing std::out_of_range (a hard abort under
+      // -fno-exceptions). Static so we can return a reference.
+      static T missing{};
+      missing = T{}; // reset each miss so callers can't corrupt the fallback
+      return missing;
     }
-    return storage.at(name);
+    return it->second;
   }
 
   [[nodiscard]] const T &get(const std::string &name) const {
-    if (!this->contains(name)) {
+    auto it = storage.find(name);
+    if (it == storage.end()) {
       log_warn("asking for item: {} but nothing has been loaded with that "
                "name yet for {}",
                name.c_str(), type_name<T>());
+      static const T missing{};
+      return missing;
     }
-    return storage.at(name);
+    return it->second;
   }
 
   [[nodiscard]] bool contains(const std::string &name) const {
