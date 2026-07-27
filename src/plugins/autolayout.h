@@ -340,6 +340,14 @@ struct AutoLayout {
       VALIDATE(false, "Absolute widgets should not use Percent");
     }
 
+    // Expand is resolved later in distribute_expand_space (tax_refund); in this
+    // pass its size is always 0, independent of the parent. Handle it before the
+    // parent-size guards below: when the parent is children()-sized it isn't
+    // computed yet here, so falling through would leave the expand child stuck
+    // at the -1 reset sentinel, which then poisons the parent's children-sum.
+    if (exp.dim == Dim::Expand)
+      return 0.f;
+
     float no_change = widget.computed[axis];
     if (widget.parent == -1) {
       if (exp.dim == Dim::Percent) {

@@ -3125,6 +3125,34 @@ TEST(absolute_parent_children_inherit_position) {
   CHECK_APPROX(t.ui(child).computed_rel[Axis::Y], 50.f);
 }
 
+// ---------------------------------------------------------------------------
+// Regression: a children()-sized parent with an expand() child on the SAME axis
+// is contradictory (parent fits child; child fills parent). It must resolve to
+// 0/0 and must NEVER leak the -1 uncomputed sentinel. Previously the expand
+// child kept -1 (the parent-expectation pass skipped it because the
+// children()-sized parent wasn't computed yet), which poisoned the parent's
+// children-sum (parent -> -1) and made tax_refund hand the child abs(-1)=1.
+// ---------------------------------------------------------------------------
+TEST(expand_in_children_parent_same_axis_no_sentinel) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(1000), pixels(200));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_flex_wrap(FlexWrap::NoWrap);
+  auto &panel = t.make_ui(children(), pixels(200));
+  t.ui(panel).set_flex_direction(FlexDirection::Row);
+  auto &inner = t.make_ui(expand(), pixels(100));
+  t.add_child(root, panel);
+  t.add_child(panel, inner);
+  t.run(root);
+
+  // No sentinel / negative leak on either widget.
+  CHECK(t.ui(panel).computed[Axis::X] >= 0.f);
+  CHECK(t.ui(inner).computed[Axis::X] >= 0.f);
+  // No free space in a content-sized parent, so both collapse to content (0).
+  CHECK_APPROX(t.ui(panel).computed[Axis::X], 0.f);
+  CHECK_APPROX(t.ui(inner).computed[Axis::X], 0.f);
+}
+
 // ============================================================================
 // Main
 // ============================================================================
