@@ -2,6 +2,7 @@
 
 #include <bitset>
 #include <cstring>
+#include <functional>
 #include <optional>
 
 #include "../../memory/arena.h"
@@ -21,11 +22,18 @@ enum class RenderPrimitiveType {
   ScissorEnd,
   Ring,
   RingSegment,
-  NineSlice
+  NineSlice,
+  Custom
 };
 
 // Render primitive struct with union for different primitive data
 struct RenderPrimitive {
+  // A per-widget custom-draw callback. Receives the widget's final on-screen
+  // rect and draws with the raw afterhours::draw_* primitives. Owned by the
+  // widget's HasOnDraw component (below); a Custom command holds a pointer to
+  // it so RenderPrimitive stays trivially destructible for the arena.
+  using CustomDrawFn = std::function<void(RectangleType)>;
+
   RenderPrimitiveType type;
   int layer = 0;
   EntityID entity_id = -1; // For debugging
@@ -112,6 +120,13 @@ struct RenderPrimitive {
       int left, top, right, bottom;
       Color tint;
     } nine_slice;
+
+    struct {
+      RectangleType rect;
+      // Stored as a pointer so RenderPrimitive stays
+      // trivially destructible for the arena 
+      const CustomDrawFn *fn;
+    } custom;
 
     // Default constructor for union
     PrimitiveData() { std::memset(this, 0, sizeof(PrimitiveData)); }
@@ -257,12 +272,31 @@ public:
     cmd.data.nine_slice.tint = tint;
     return cmd;
   }
+
+  static RenderPrimitive custom(const RectangleType &rect,
+                                const CustomDrawFn *fn, int layer,
+                                EntityID entity_id = -1) {
+    RenderPrimitive cmd(RenderPrimitiveType::Custom, layer, entity_id);
+    cmd.data.custom.rect = rect;
+    cmd.data.custom.fn = fn;
+    return cmd;
+  }
 };
 
 // Static assertion to ensure RenderPrimitive is trivially destructible for
 // ArenaVector
 static_assert(std::is_trivially_destructible_v<RenderPrimitive>,
               "RenderPrimitive must be trivially destructible for ArenaVector");
+
+// Per-widget custom-draw callbacks, invoked during the render pass with the
+// widget's final on-screen rect. `bg` draws behind the widget's own fill; `fg`
+// on top of all its primitives. Lets callers draw visuals imm can't express
+// (gradients, feeds, brackets) inline, without a debug-name rect lookup or
+// separate BG/FG render systems. Set via ComponentConfig::with_on_draw_bg/fg.
+struct HasOnDraw : BaseComponent {
+  RenderPrimitive::CustomDrawFn bg;
+  RenderPrimitive::CustomDrawFn fg;
+};
 
 // Render command buffer using arena allocation for zero-allocation rendering
 class RenderCommandBuffer {
@@ -367,6 +401,14 @@ public:
                  Color tint, int layer, EntityID entity_id = -1) {
     commands_.push_back(RenderPrimitive::image(dest_rect, source_rect, texture,
                                                tint, layer, entity_id));
+  }
+
+  // Add a custom draw callback. `fn` must outlive the render pass (it lives on
+  // the widget's HasOnDraw component). Executed in z-order at flush time.
+  void add_custom(const RectangleType &rect,
+                  const RenderPrimitive::CustomDrawFn *fn, int layer,
+                  EntityID entity_id = -1) {
+    commands_.push_back(RenderPrimitive::custom(rect, fn, layer, entity_id));
   }
 
   // Add scissor start
@@ -524,6 +566,12 @@ public:
 
       case RenderPrimitiveType::NineSlice:
         render_nine_slice(cmd);
+        i++;
+        break;
+
+      case RenderPrimitiveType::Custom:
+        if (cmd.data.custom.fn && *cmd.data.custom.fn)
+          (*cmd.data.custom.fn)(cmd.data.custom.rect);
         i++;
         break;
 

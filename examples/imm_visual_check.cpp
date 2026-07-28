@@ -15,6 +15,7 @@
 #include <cassert>
 #include <cstdio>
 #include <filesystem>
+#include <string>
 
 #include <afterhours/ah.h>
 #include <afterhours/src/drawing_helpers.h>
@@ -57,12 +58,16 @@ enum struct InputAction {
 };
 
 static constexpr int RENDER_W = 640;
-static constexpr int RENDER_H = 360;
+static constexpr int RENDER_H = 480;
 
 // Populated during the build pass so main() can force the hover state and the
 // texture is available when the config is assembled.
 static texture_manager::Texture g_tex{};
 static EntityID g_hover_button_id = -1;
+
+// with_on_draw invocation counters (fix: custom-draw callbacks).
+static int g_bg_calls = 0;
+static int g_fg_calls = 0;
 
 struct BuildScene : System<UIContext<InputAction>> {
   virtual void for_each_with(Entity &entity, UIContext<InputAction> &context,
@@ -110,6 +115,38 @@ struct BuildScene : System<UIContext<InputAction>> {
                                .with_custom_background(teal)
                                .with_label("hovered"));
     g_hover_button_id = hot.id();
+
+    // Row 3: with_on_draw. White widget; bg draws a red rect expanded 20px
+    // (peeks out behind the white fill -> proves "behind"); fg draws green
+    // corner brackets (visible on top of white -> proves "on top").
+    auto od_row = imm::div(context, mk(col.ent()),
+                           ComponentConfig{}
+                               .with_size({percent(1.f), pixels(140.f)})
+                               .with_flex_direction(FlexDirection::Row));
+    imm::div(context, mk(od_row.ent()),
+             ComponentConfig{}
+                 .with_size({pixels(200.f), pixels(100.f)})
+                 .with_margin(Spacing::md)
+                 .with_custom_background(Color{240, 240, 240, 255})
+                 .with_on_draw_bg([](RectangleType r) {
+                   g_bg_calls++;
+                   draw_rectangle(RectangleType{r.x - 20, r.y - 20,
+                                                r.width + 40, r.height + 40},
+                                  Color{220, 60, 60, 255});
+                 })
+                 .with_on_draw_fg([](RectangleType r) {
+                   g_fg_calls++;
+                   const float s = 26.f, t = 6.f;
+                   const Color g{60, 200, 90, 255};
+                   draw_rectangle(RectangleType{r.x, r.y, s, t}, g);
+                   draw_rectangle(RectangleType{r.x, r.y, t, s}, g);
+                   draw_rectangle(
+                       RectangleType{r.x + r.width - s, r.y + r.height - t, s, t},
+                       g);
+                   draw_rectangle(
+                       RectangleType{r.x + r.width - t, r.y + r.height - s, t, s},
+                       g);
+                 }));
   }
 };
 
@@ -140,8 +177,15 @@ static void assert_hover_bg() {
   printf("hover_bg assertions: PASS\n");
 }
 
-int main(int, char **) {
+int main(int argc, char **argv) {
   assert_hover_bg();
+
+  // Render path: default is the immediate RenderImm; pass "batched" for the
+  // RenderBatched path (the one the game actually uses). Both must honor
+  // with_on_draw / opacity / hover_bg.
+  bool batched = argc > 1 && std::string(argv[1]) == "batched";
+  const char *out_name =
+      batched ? "imm_visual_check_batched.png" : "imm_visual_check.png";
 
   graphics::Config cfg{};
   cfg.display = graphics::DisplayMode::Windowed;
@@ -190,16 +234,26 @@ int main(int, char **) {
   systems.register_update_system(std::make_unique<BuildScene>());
   ui::register_after_ui_updates<InputAction>(systems);
   systems.register_update_system(std::make_unique<ForceHover>());
-  ui::register_render_systems<InputAction>(systems);
+  if (batched)
+    ui::register_batched_render_systems<InputAction>(systems);
+  else
+    ui::register_render_systems<InputAction>(systems);
 
   graphics::begin_frame();
   raylib::ClearBackground(raylib::Color{20, 20, 28, 255});
   systems.run(1.f / 60.f);
   graphics::end_frame();
 
-  std::filesystem::path out = "imm_visual_check.png";
+  std::filesystem::path out = out_name;
   bool ok = graphics::capture_frame(out);
-  printf("screenshot: %s -> %s\n", ok ? "OK" : "FAILED", out.c_str());
+  printf("[%s] screenshot: %s -> %s\n", batched ? "batched" : "immediate",
+         ok ? "OK" : "FAILED", out.c_str());
+
+  // with_on_draw callbacks must have fired (also guards the render-eligibility
+  // check for on_draw-only widgets).
+  printf("on_draw calls: bg=%d fg=%d\n", g_bg_calls, g_fg_calls);
+  assert(g_bg_calls > 0 && "with_on_draw_bg must fire");
+  assert(g_fg_calls > 0 && "with_on_draw_fg must fire");
 
   raylib::UnloadTexture(g_tex);
   graphics::shutdown();

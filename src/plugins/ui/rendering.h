@@ -1407,6 +1407,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       }
     }
 
+    // Custom draw (behind): drawn before the widget's own fill.
+    if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().bg)
+      entity.get<HasOnDraw>().bg(draw_rect);
+
     if (entity.has<HasColor>()) {
       Color col = entity.template get<HasColor>().color();
 
@@ -1598,6 +1602,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                                         size, 0.f, img_col);
     }
 
+    // Custom draw (on top): drawn after all of the widget's own primitives.
+    if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().fg)
+      entity.get<HasOnDraw>().fg(draw_rect);
+
     pop_rotation();
   }
 
@@ -1638,7 +1646,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     if (entity.has<HasColor>() || entity.has<HasLabel>() ||
         entity.has<ui::HasImage>() ||
         entity.has<texture_manager::HasTexture>() ||
-        entity.has<FocusClusterRoot>() ||
+        entity.has<FocusClusterRoot>() || entity.has<HasOnDraw>() ||
         entity.has<HasCircularProgressState>() || entity.has<HasScrollView>() ||
         context.visual_focus_id == entity.id) {
       render_me(context, font_manager, entity);
@@ -2024,6 +2032,13 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           context.theme.focus_ring_thickness);
     }
 
+    // Custom draw (behind): enqueued before the fill so it renders under the
+    // widget; the fn pointer is stable on the HasOnDraw component for the frame.
+    if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().bg) {
+      buffer.add_custom(draw_rect, &entity.get<HasOnDraw>().bg, layer,
+                        entity.id);
+    }
+
     // Background color
     if (entity.has<HasColor>()) {
       Color col = entity.template get<HasColor>().color();
@@ -2321,6 +2336,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       RectangleType dest = {location.x, location.y, size.x, size.y};
       buffer.add_image(dest, src, img.texture, img_col, layer, entity.id);
     }
+
+    // Custom draw (on top): enqueued after all of the widget's own primitives.
+    if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().fg) {
+      buffer.add_custom(draw_rect, &entity.get<HasOnDraw>().fg, layer,
+                        entity.id);
+    }
   }
 
   void collect(RenderCommandBuffer &buffer, UIContext<InputAction> &context,
@@ -2360,7 +2381,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     if (entity.has<HasColor>() || entity.has<HasLabel>() ||
         entity.has<ui::HasImage>() ||
         entity.has<texture_manager::HasTexture>() ||
-        entity.has<FocusClusterRoot>() ||
+        entity.has<FocusClusterRoot>() || entity.has<HasOnDraw>() ||
         entity.has<HasCircularProgressState>() || entity.has<HasScrollView>() ||
         context.visual_focus_id == entity.id) {
       collect_me(buffer, context, font_manager, entity, layer);

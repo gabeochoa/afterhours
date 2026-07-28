@@ -106,7 +106,7 @@ profile-calendar: calendar_stress_test_opt
 clean:
 	rm -f graphics_example drawing_3d_example headless_validation perf_stress_test calendar_stress_test profile_harness
 	rm -f perf_stress_test_opt calendar_stress_test_opt
-	rm -f imm_visual_check imm_visual_check.png
+	rm -f imm_visual_check imm_visual_check.png imm_visual_check_batched.png
 	rm -f graphics_example_output.png
 	rm -f profile_layout.txt profile_calendar.txt
 	rm -rf graphics_example_captures/

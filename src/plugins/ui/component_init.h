@@ -268,6 +268,16 @@ inline void apply_bevel(Entity &entity, const ComponentConfig &config) {
   entity.addComponentIfMissing<HasBevelBorder>(bevel);
 }
 
+inline void apply_on_draw(Entity &entity, const ComponentConfig &config) {
+  if (!config.on_draw_bg && !config.on_draw_fg) {
+    entity.removeComponentIfExists<HasOnDraw>();
+    return;
+  }
+  auto &hod = entity.addComponentIfMissing<HasOnDraw>();
+  hod.bg = config.on_draw_bg;
+  hod.fg = config.on_draw_fg;
+}
+
 inline void apply_render_layer(HasUIContext auto &ctx, Entity &entity,
                                Entity &parent, ComponentConfig &config) {
   // Inherit render layer from parent (child is at least on parent's layer)
@@ -552,6 +562,7 @@ inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
   apply_border(entity, config);
   apply_bevel(entity, config);
   apply_nine_slice(entity, config);
+  apply_on_draw(entity, config);
   apply_render_layer(ctx, entity, parent, config);
   return created;
 }
