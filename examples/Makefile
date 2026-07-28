@@ -55,6 +55,11 @@ imm_visual_check: imm_visual_check.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: imm_visual_check"
 
+# on_draw example - pedagogical demo of with_on_draw_bg / with_on_draw_fg
+on_draw_example: on_draw_example.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
+	@echo "Built: on_draw_example"
+
 # Performance stress tests - no raylib dependency
 perf_stress_test: perf_stress_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
@@ -107,6 +112,7 @@ clean:
 	rm -f graphics_example drawing_3d_example headless_validation perf_stress_test calendar_stress_test profile_harness
 	rm -f perf_stress_test_opt calendar_stress_test_opt
 	rm -f imm_visual_check imm_visual_check.png imm_visual_check_batched.png
+	rm -f on_draw_example on_draw_example.png
 	rm -f graphics_example_output.png
 	rm -f profile_layout.txt profile_calendar.txt
 	rm -rf graphics_example_captures/

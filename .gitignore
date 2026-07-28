@@ -40,6 +40,8 @@ examples/profile_harness
 examples/imm_visual_check
 examples/imm_visual_check.png
 examples/imm_visual_check_batched.png
+examples/on_draw_example
+examples/on_draw_example.png
 examples/profile.txt
 examples/profile_flat1000.txt
 examples/graphics_example_output.png
