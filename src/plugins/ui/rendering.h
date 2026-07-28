@@ -126,7 +126,14 @@ compute_intersected_clip_rect(const Entity &entity) {
         }
       }
 
+      // A clip container nested inside a scroll view moves with the content, so
+      // offset its clip rect by the scroll above it (else content scrolls out of
+      // its own scissor and vanishes). The scroll view's own viewport has no
+      // scroll above it, so it stays put.
       RectangleType ancestor_rect = parent.get<UIComponent>().rect();
+      Vector2Type aoff = accumulated_scroll_offset(parent);
+      ancestor_rect.x -= aoff.x;
+      ancestor_rect.y -= aoff.y;
       if (!found) {
         result = ancestor_rect;
         found = true;
