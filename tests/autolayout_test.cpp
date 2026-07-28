@@ -1598,10 +1598,12 @@ TEST(rect_is_content_box) {
   t.run(root);
 
   auto r = t.ui(child).rect();
-  // rect width = computed - margin_x = 200 - 20 = 180
-  // rect height = computed - margin_y = 100 - 20 = 80
-  CHECK_APPROX(r.width, 180.f);
-  CHECK_APPROX(r.height, 80.f);
+  // rect() reports the element's own content size (== computed). Margins are
+  // external spacing and are NOT subtracted from the size (see d41e1d8:
+  // "rect() no longer subtracts margins from computed size"); they only offset
+  // the position. So width/height stay at the computed 200x100.
+  CHECK_APPROX(r.width, 200.f);
+  CHECK_APPROX(r.height, 100.f);
   // rect position is offset by margin
   CHECK_APPROX(r.x, 10.f);
   CHECK_APPROX(r.y, 10.f);
@@ -1623,10 +1625,11 @@ TEST(bounds_includes_padding_and_margin) {
   t.run(root);
 
   auto b = t.ui(child).bounds();
-  // bounds width = rect_width + padding_x + margin_x = 180 + 10 + 20 = 210
-  // bounds height = rect_height + padding_y + margin_y = 80 + 10 + 20 = 110
-  CHECK_APPROX(b.width, 210.f);
-  CHECK_APPROX(b.height, 110.f);
+  // bounds() = rect (content size, == computed 200x100) + padding + margin.
+  // width  = 200 + padd_x(10) + margin_x(20) = 230
+  // height = 100 + padd_y(10) + margin_y(20) = 130
+  CHECK_APPROX(b.width, 230.f);
+  CHECK_APPROX(b.height, 130.f);
   // bounds position is at element's origin (before margin)
   CHECK_APPROX(b.x, 0.f);
   CHECK_APPROX(b.y, 0.f);
