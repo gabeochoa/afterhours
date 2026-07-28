@@ -161,6 +161,9 @@ static inline Vector2Type get_scroll_offset(const Entity &entity) {
   return {0.0f, 0.0f};
 }
 
+// accumulated_scroll_offset lives in systems.h (included above) — one helper
+// shared by render (here) and hit-test so they stay aligned.
+
 // Get the scissor rect from a scroll view ancestor (viewport bounds)
 static inline RectangleType get_scroll_scissor_rect(const Entity &entity) {
   OptEntity scroll_ancestor = find_scroll_view_ancestor(entity);
@@ -1259,25 +1262,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     const float effective_opacity = detail::compute_effective_opacity(entity);
     RectangleType draw_rect = cmp.rect();
 
-    // (debug placeholder)
-
-    // Check if this entity is inside a scroll view (but not the scroll view
-    // itself)
-    OptEntity scroll_ancestor = detail::find_scroll_view_ancestor(entity);
-    // Note: find_clip_ancestor returns entity with HasScrollView OR
-    // HasClipChildren Only apply scroll offset if ancestor actually has
-    // HasScrollView
-    bool inside_scroll_view = scroll_ancestor.valid() &&
-                              scroll_ancestor->has<HasScrollView>() &&
-                              !entity.has<HasScrollView>();
-
-    // Apply scroll offset to draw_rect if inside a scroll view
-    if (inside_scroll_view) {
-      Vector2Type scroll_offset =
-          scroll_ancestor->get<HasScrollView>().scroll_offset;
-      draw_rect.y -= scroll_offset.y;
-      draw_rect.x -= scroll_offset.x;
-    }
+    // Scroll of all scroll-view ancestors; reused for focus_rect below.
+    const Vector2Type scroll_offset = detail::accumulated_scroll_offset(entity);
+    draw_rect.y -= scroll_offset.y;
+    draw_rect.x -= scroll_offset.x;
 
     if (entity.has<HasUIModifiers>()) {
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
@@ -1361,6 +1349,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       // bounds
       RectangleType focus_rect =
           cmp.focus_rect(static_cast<int>(context.theme.focus_ring_offset));
+      focus_rect.x -= scroll_offset.x;  // ride the scroll like draw_rect
+      focus_rect.y -= scroll_offset.y;
       if (entity.has<HasUIModifiers>()) {
         focus_rect = entity.get<HasUIModifiers>().apply_modifier(focus_rect);
       }
@@ -1901,21 +1891,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     const float effective_opacity = detail::compute_effective_opacity(entity);
     RectangleType draw_rect = cmp.rect();
 
-
-    OptEntity scroll_ancestor = detail::find_scroll_view_ancestor(entity);
-    // Note: find_clip_ancestor returns entity with HasScrollView OR
-    // HasClipChildren Only apply scroll offset if ancestor actually has
-    // HasScrollView
-    bool inside_scroll_view = scroll_ancestor.valid() &&
-                              scroll_ancestor->has<HasScrollView>() &&
-                              !entity.has<HasScrollView>();
-
-    if (inside_scroll_view) {
-      Vector2Type scroll_offset =
-          scroll_ancestor->get<HasScrollView>().scroll_offset;
-      draw_rect.y -= scroll_offset.y;
-      draw_rect.x -= scroll_offset.x;
-    }
+    // See render_me. Reused for focus_rect below.
+    const Vector2Type scroll_offset = detail::accumulated_scroll_offset(entity);
+    draw_rect.y -= scroll_offset.y;
+    draw_rect.x -= scroll_offset.x;
 
     if (entity.has<HasUIModifiers>()) {
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
@@ -1992,6 +1971,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       // bounds
       RectangleType focus_rect =
           cmp.focus_rect(static_cast<int>(context.theme.focus_ring_offset));
+      focus_rect.x -= scroll_offset.x;  // ride the scroll like draw_rect
+      focus_rect.y -= scroll_offset.y;
       if (entity.has<HasUIModifiers>()) {
         focus_rect = entity.get<HasUIModifiers>().apply_modifier(focus_rect);
       }
