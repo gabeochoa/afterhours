@@ -187,7 +187,8 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
       .set_disabled(config.disabled)
       .set_alignment(config.label_alignment)
       .set_text_overflow(config.text_overflow)
-      .set_letter_spacing(config.letter_spacing);
+      .set_letter_spacing(config.letter_spacing)
+      .set_spans(config.styled_label);
 
   // Set explicit text color if specified via with_text_color()
   if (config.text_color_usage == Theme::Usage::Custom &&

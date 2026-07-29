@@ -435,12 +435,22 @@ enum struct TextOverflow {
   Wrap,     // Text wraps to multiple lines to fit the container width
 };
 
+// One colored run of text within a styled (multi-color) label.
+struct TextSpan {
+  std::string text;
+  Color color;
+};
+
 struct HasLabel : BaseComponent {
   TextAlignment alignment = TextAlignment::None;
   TextOverflow text_overflow = TextOverflow::Clip;
   float letter_spacing = 0.f; // Additional spacing between characters (pixels)
 
   std::string label;
+  // When non-empty, the label is drawn as a sequence of colored runs (each with
+  // its own color) instead of the single `label` string. `label` still holds the
+  // concatenated text so layout/measurement/overflow work unchanged.
+  std::vector<TextSpan> spans;
   std::string font_name = UIComponent::UNSET_FONT;
   bool is_disabled = false;
 
@@ -492,6 +502,11 @@ struct HasLabel : BaseComponent {
 
   auto &set_label(const std::string &str) {
     label = str;
+    return *this;
+  }
+
+  auto &set_spans(const std::vector<TextSpan> &s) {
+    spans = s;
     return *this;
   }
 

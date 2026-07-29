@@ -116,6 +116,7 @@ struct ComponentConfig {
 
   std::string font_name = UIComponent::UNSET_FONT;
   colors::FontWeight font_weight = colors::FontWeight::Regular;
+  std::vector<TextSpan> styled_label; // multi-color runs (see with_styled_label)
   Size font_size = pixels(50.f);
   bool font_size_explicitly_set = false;
   bool is_internal = false;
@@ -549,6 +550,17 @@ struct ComponentConfig {
   // "<font>@<weight>" font at render, falling back to the base font).
   ComponentConfig &with_font_weight(colors::FontWeight weight) {
     font_weight = weight;
+    return *this;
+  }
+
+  // Render the label as a sequence of colored runs on one line (e.g. a green
+  // "+4" then a red "-2"). Sets `label` to the concatenated text so layout,
+  // measurement, and overflow behave exactly like a normal label.
+  ComponentConfig &with_styled_label(std::vector<TextSpan> spans) {
+    styled_label = std::move(spans);
+    label.clear();
+    for (const auto &s : styled_label)
+      label += s.text;
     return *this;
   }
 

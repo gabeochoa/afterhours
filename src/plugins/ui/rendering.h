@@ -2274,6 +2274,33 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           }
         }
 
+        // Styled (multi-color) label: draw each run in sequence with its own
+        // color, positioned by the label's alignment.
+        if (!wrapped && !hasLabel.spans.empty()) {
+          Font font = font_manager.get_active_font();
+          const std::string resolved =
+              font_manager.resolve_weighted(cmp.font_name, cmp.font_weight);
+          float font_size = result.rect.height;
+          float spacing = 1.f + hasLabel.letter_spacing;
+          float total = 0.f;
+          for (const auto &sp : hasLabel.spans)
+            total += measure_text(font, sp.text.c_str(), font_size, spacing).x;
+          float x = label_rect.x;
+          if (hasLabel.alignment == TextAlignment::Center)
+            x += std::max(0.f, (label_rect.width - total) / 2.0f);
+          else if (hasLabel.alignment == TextAlignment::Right)
+            x += std::max(0.f, label_rect.width - total);
+          for (const auto &sp : hasLabel.spans) {
+            float w = measure_text(font, sp.text.c_str(), font_size, spacing).x;
+            RectangleType sr{x, label_rect.y, w, label_rect.height};
+            buffer.add_text(sr, sp.text, resolved, font_size, sp.color,
+                            TextAlignment::Left, layer, entity.id, stroke, shadow,
+                            rotation, centerX, centerY, hasLabel.letter_spacing);
+            x += w;
+          }
+          wrapped = true;
+        }
+
         if (!wrapped) {
           buffer.add_text(
               label_rect, display_text,
