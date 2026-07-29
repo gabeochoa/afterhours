@@ -82,7 +82,12 @@ jobs:
             slider_test progress_bar_test render_order_test stepper_test \
             tab_container_test text_wrap_test dump_ui_test > build.log 2>&1
           set -e
-          if grep -E "error:" build.log; then
+          # Match only real COMPILER diagnostics (`file:line:col: error:`), not
+          # the linker-driver banner. Linking is expected to fail here (no GL
+          # context), and that emits `clang++: error: linker command failed`,
+          # whose `error:` must NOT trip the guard — only an actual compile
+          # error (which has a file:line:col: prefix) should.
+          if grep -E "^[^ ]+:[0-9]+:[0-9]+: error:" build.log; then
             echo "Real compile error in a raylib test"; exit 1
           fi
           echo "raylib/UI tests compiled (link skipped: no GL context on CI)"
