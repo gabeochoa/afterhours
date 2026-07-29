@@ -5,9 +5,14 @@
 #include <cmath>
 #include <map>
 #include <string>
+#if __has_include(<magic_enum/magic_enum.hpp>)
+#include <magic_enum/magic_enum.hpp>
+#else
+#include "../../../vendor/magic_enum/magic_enum.hpp"
+#endif
 
 #include "../color.h"
-#include "../translation.h"
+#include "../language.h" // only needs translation::Language, not translation.h's fmt-heavy machinery
 
 namespace afterhours {
 
