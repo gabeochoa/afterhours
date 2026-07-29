@@ -6,6 +6,7 @@
 #include <string>
 
 #include "../../graphics_common.h"
+#include "../../logging.h"
 
 namespace afterhours::graphics {
 
@@ -113,8 +114,11 @@ struct RaylibWindowed {
   /// @return true if the export succeeded, false otherwise.
   bool capture_frame(const std::filesystem::path &path) {
     raylib::Image img = raylib::LoadImageFromTexture(render_texture.texture);
-    if (img.data == nullptr) // readback failed (invalid/unloaded texture)
+    if (img.data == nullptr) { // readback failed (invalid/unloaded texture)
+      log_error("capture_frame: texture readback returned a null image "
+                "(invalid/unloaded render texture)");
       return false;
+    }
     raylib::ImageFlipVertical(&img);
     bool success = raylib::ExportImage(img, path.c_str());
     raylib::UnloadImage(img);
