@@ -14,12 +14,35 @@ CXXFLAGS_RAYLIB := $(CXXFLAGS) -DAFTER_HOURS_USE_RAYLIB
 CXXFLAGS_OPT := -std=c++20 -Wall -Wextra -O2 -g -fno-omit-frame-pointer
 CXXFLAGS_OPT_RAYLIB := $(CXXFLAGS_OPT) -DAFTER_HOURS_USE_RAYLIB
 
-# Paths - adjust these for your system
-RAYLIB_INCLUDE := /opt/homebrew/Cellar/raylib/5.5/include
-RAYLIB_LIB := /opt/homebrew/Cellar/raylib/5.5/lib
-AFTERHOURS_ROOT := ..
+# Paths
+# Homebrew prefix differs per machine (/opt/homebrew on Apple-Silicon default,
+# ~/homebrew for a per-user install). Auto-detect via `brew --prefix raylib`
+# and fall back to the classic Cellar path. Override on the CLI if needed:
+#   make RAYLIB_PREFIX=/path/to/raylib
+RAYLIB_PREFIX := $(shell brew --prefix raylib 2>/dev/null)
+ifeq ($(RAYLIB_PREFIX),)
+    RAYLIB_PREFIX := /opt/homebrew/Cellar/raylib/5.5
+endif
+RAYLIB_INCLUDE := $(RAYLIB_PREFIX)/include
+RAYLIB_LIB := $(RAYLIB_PREFIX)/lib
+# fmt is header-only here; its headers live under the Homebrew include dir.
+BREW_PREFIX := $(shell brew --prefix 2>/dev/null)
+ifeq ($(BREW_PREFIX),)
+    BREW_PREFIX := /opt/homebrew
+endif
 
-INCLUDES := -isystem $(AFTERHOURS_ROOT)/..
+# Pin <afterhours/...> to THIS checkout regardless of the directory's name.
+# A bare `-isystem ../..` resolves <afterhours/...> to the *parent* of the
+# checkout dir, which only works when the checkout is literally named
+# `afterhours`. In a git worktree (or any differently-named clone) that silently
+# picks up a *sibling* `afterhours` checkout. Generate a private include dir
+# containing a symlink named exactly `afterhours` -> this checkout root, and use
+# it as the sole afterhours root.
+AFTERHOURS_ROOT := $(realpath ..)
+INCLUDE_ROOT := $(CURDIR)/.afh-include
+$(shell mkdir -p $(INCLUDE_ROOT) && ln -sfn $(AFTERHOURS_ROOT) $(INCLUDE_ROOT)/afterhours)
+
+INCLUDES := -isystem $(INCLUDE_ROOT) -isystem $(AFTERHOURS_ROOT)/vendor -isystem $(BREW_PREFIX)/include
 INCLUDES_RAYLIB := -I$(RAYLIB_INCLUDE) $(INCLUDES)
 
 # Platform-specific settings
@@ -117,3 +140,4 @@ clean:
 	rm -f profile_layout.txt profile_calendar.txt
 	rm -rf graphics_example_captures/
 	rm -rf headless_validation_output/
+	rm -rf $(INCLUDE_ROOT)
