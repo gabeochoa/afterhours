@@ -5,6 +5,7 @@
 #include <random>
 #include <string>
 
+#include "logging.h"
 #include "singleton.h"
 
 namespace afterhours {
@@ -27,17 +28,23 @@ struct RandomEngine {
   [[nodiscard]] std::uint32_t get_seed() const { return seed; }
 
   // Inclusive range [a, b]. std::uniform_int_distribution requires a <= b
-  // (a > b is undefined behavior — can hang or return garbage), so a degenerate
-  // or inverted range returns the lower bound deterministically instead.
+  // (a > b is UB — can hang or return garbage). An inverted range is a caller
+  // bug, so fail loud: log_error aborts in projects that wire it to assert,
+  // surfacing the bad value immediately instead of papering over it. a == b is
+  // a valid single-value range.
   [[nodiscard]] int get_int(int a, int b) {
-    if (a >= b)
-      return a;
+    if (a > b)
+      log_error("RandomEngine::get_int: inverted range [{}, {}] (a must be <= b)",
+                a, b);
     return std::uniform_int_distribution<int>(a, b)(rng);
   }
-  // Range [a, b). a >= b returns a (empty/inverted range -> lower bound).
+  // Range [a, b). a > b is a caller bug (UB) -> fail loud; a == b is a valid
+  // empty range that yields a.
   [[nodiscard]] float get_float(float a, float b) {
-    if (a >= b)
-      return a;
+    if (a > b)
+      log_error(
+          "RandomEngine::get_float: inverted range [{}, {}) (a must be <= b)", a,
+          b);
     return std::uniform_real_distribution<float>(a, b)(rng);
   }
   [[nodiscard]] bool get_bool() { return get_int(0, 1) == 1; }
