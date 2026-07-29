@@ -149,9 +149,11 @@ struct ComponentConfig {
   std::optional<std::string> checkbox_checked_indicator;
   std::optional<std::string> checkbox_unchecked_indicator;
 
-  // Dropdown indicator characters (default: "v" for closed, "^" for open)
-  // TODO: Replace "v" / "^" with real chevron glyphs (▾ ▴ or ▼ ▲) once
+  // Dropdown indicator characters (default: " v" for closed, " ^" for open)
+  // TODO: Replace " v" / " ^" with real chevron glyphs (▾ ▴ or ▼ ▲) once
   // afterhours ships a built-in icon font or vector glyph set.
+  static constexpr const char *DEFAULT_DROPDOWN_CLOSED = " v";
+  static constexpr const char *DEFAULT_DROPDOWN_OPEN = " ^";
   std::optional<std::string> dropdown_open_indicator;
   std::optional<std::string> dropdown_closed_indicator;
 
