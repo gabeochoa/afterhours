@@ -598,9 +598,11 @@ TEST(screen_pct_half) {
 }
 
 // ---------------------------------------------------------------------------
-// Margin does not overflow parent: child with margins fits within parent
+// percent(1.0) child + margin overflows the parent on the cross axis by
+// design (content-box model: percent fills 100% of content area, margin then
+// offsets position). See d41e1d8.
 // ---------------------------------------------------------------------------
-TEST(margin_fits_within_parent) {
+TEST(margin_offsets_percent_child_into_overflow) {
   TestLayout t;
   auto &root = t.make_ui(pixels(300), pixels(300));
   t.ui(root).set_flex_direction(FlexDirection::Column);
@@ -611,11 +613,19 @@ TEST(margin_fits_within_parent) {
   t.add_child(root, child);
   t.run(root);
 
-  // Child rect should be within parent bounds (margin is inside the box)
+  // Post-d41e1d8 content-box model: percent(1.0f) resolves to 100% of the
+  // parent's content area (300) WITHOUT subtracting margin, and margin then
+  // offsets the position. So a full-width child + margin overflows the parent
+  // by design on the cross axis — the child's own size is the content box, not
+  // a margin-inset box. (Cross axis in a Column gets no error correction.)
   auto r = t.ui(child).rect();
   CHECK(r.x >= 0.f);
   CHECK(r.y >= 0.f);
-  CHECK(r.x + r.width <= 300.f + 1.f);
+  // cross axis (X): full content-box width, offset by margin -> right edge 310
+  CHECK_APPROX(r.x, 10.f);
+  CHECK_APPROX(r.width, 300.f);
+  CHECK_APPROX(r.x + r.width, 310.f);
+  // main axis (Y): pixels(100) child + 10 margin offset fits within the 300 parent
   CHECK(r.y + r.height <= 300.f + 1.f);
 }
 
