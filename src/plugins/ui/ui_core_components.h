@@ -24,9 +24,14 @@ namespace ui {
 struct AutoLayoutRoot : BaseComponent {};
 
 struct UIComponent : BaseComponent {
-  static constexpr std::string UNSET_FONT = "__unset";
-  static constexpr std::string DEFAULT_FONT = "__default";
-  static constexpr std::string SYMBOL_FONT = "__symbol";
+  // Sentinel font names. Kept as `const char*` (not `constexpr std::string`,
+  // which needs libstdc++-13 / libc++-15) so the UI plugin builds on older but
+  // C++20-capable toolchains (e.g. gcc 11/12). They're only used as opaque
+  // sentinels — compared against std::string and passed to load_font/enable_font
+  // (which take const std::string&, so const char* converts implicitly).
+  static constexpr const char *UNSET_FONT = "__unset";
+  static constexpr const char *DEFAULT_FONT = "__default";
+  static constexpr const char *SYMBOL_FONT = "__symbol";
 
   EntityID id;
   UIComponent() { init_values(); }
