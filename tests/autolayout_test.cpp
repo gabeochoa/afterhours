@@ -1598,10 +1598,12 @@ TEST(rect_is_content_box) {
   t.run(root);
 
   auto r = t.ui(child).rect();
-  // rect width = computed - margin_x = 200 - 20 = 180
-  // rect height = computed - margin_y = 100 - 20 = 80
-  CHECK_APPROX(r.width, 180.f);
-  CHECK_APPROX(r.height, 80.f);
+  // rect() reports the element's own content size (== computed). Margins are
+  // external spacing and are NOT subtracted from the size (see d41e1d8:
+  // "rect() no longer subtracts margins from computed size"); they only offset
+  // the position. So width/height stay at the computed 200x100.
+  CHECK_APPROX(r.width, 200.f);
+  CHECK_APPROX(r.height, 100.f);
   // rect position is offset by margin
   CHECK_APPROX(r.x, 10.f);
   CHECK_APPROX(r.y, 10.f);
@@ -1623,10 +1625,11 @@ TEST(bounds_includes_padding_and_margin) {
   t.run(root);
 
   auto b = t.ui(child).bounds();
-  // bounds width = rect_width + padding_x + margin_x = 180 + 10 + 20 = 210
-  // bounds height = rect_height + padding_y + margin_y = 80 + 10 + 20 = 110
-  CHECK_APPROX(b.width, 210.f);
-  CHECK_APPROX(b.height, 110.f);
+  // bounds() = rect (content size, == computed 200x100) + padding + margin.
+  // width  = 200 + padd_x(10) + margin_x(20) = 230
+  // height = 100 + padd_y(10) + margin_y(20) = 130
+  CHECK_APPROX(b.width, 230.f);
+  CHECK_APPROX(b.height, 130.f);
   // bounds position is at element's origin (before margin)
   CHECK_APPROX(b.x, 0.f);
   CHECK_APPROX(b.y, 0.f);
@@ -3123,6 +3126,34 @@ TEST(absolute_parent_children_inherit_position) {
   // Child should be at parent's position (100, 50) + child's own offset (0, 0)
   CHECK_APPROX(t.ui(child).computed_rel[Axis::X], 100.f);
   CHECK_APPROX(t.ui(child).computed_rel[Axis::Y], 50.f);
+}
+
+// ---------------------------------------------------------------------------
+// Regression: a children()-sized parent with an expand() child on the SAME axis
+// is contradictory (parent fits child; child fills parent). It must resolve to
+// 0/0 and must NEVER leak the -1 uncomputed sentinel. Previously the expand
+// child kept -1 (the parent-expectation pass skipped it because the
+// children()-sized parent wasn't computed yet), which poisoned the parent's
+// children-sum (parent -> -1) and made tax_refund hand the child abs(-1)=1.
+// ---------------------------------------------------------------------------
+TEST(expand_in_children_parent_same_axis_no_sentinel) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(1000), pixels(200));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_flex_wrap(FlexWrap::NoWrap);
+  auto &panel = t.make_ui(children(), pixels(200));
+  t.ui(panel).set_flex_direction(FlexDirection::Row);
+  auto &inner = t.make_ui(expand(), pixels(100));
+  t.add_child(root, panel);
+  t.add_child(panel, inner);
+  t.run(root);
+
+  // No sentinel / negative leak on either widget.
+  CHECK(t.ui(panel).computed[Axis::X] >= 0.f);
+  CHECK(t.ui(inner).computed[Axis::X] >= 0.f);
+  // No free space in a content-sized parent, so both collapse to content (0).
+  CHECK_APPROX(t.ui(panel).computed[Axis::X], 0.f);
+  CHECK_APPROX(t.ui(inner).computed[Axis::X], 0.f);
 }
 
 // ============================================================================

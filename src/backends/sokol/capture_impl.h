@@ -68,6 +68,15 @@ static id<MTLTexture> metal_resolve_msaa(id<MTLTexture> src) {
 // Returns nullptr on failure. Handles both MSAA and non-MSAA textures.
 static uint8_t *metal_read_image_pixels(sg_image img_id, int width,
                                         int height) {
+  // Guard invalid dimensions: width/height <= 0 would malloc(0) + read a
+  // zero/negative MTLRegion, and a huge width*height*4 can overflow size_t and
+  // under-allocate, so getBytes then writes past the buffer (heap corruption).
+  if (width <= 0 || height <= 0)
+    return nullptr;
+  const size_t px = static_cast<size_t>(width) * static_cast<size_t>(height);
+  if (px > SIZE_MAX / 4u) // width*height*4 (RGBA8) would overflow
+    return nullptr;
+
   sg_mtl_image_info info = sg_mtl_query_image_info(img_id);
   id<MTLTexture> tex =
       (__bridge id<MTLTexture>)info.tex[info.active_slot];

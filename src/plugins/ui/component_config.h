@@ -10,6 +10,7 @@
 #include "../texture_manager.h"
 #include "animation_config.h"
 #include "components.h"
+#include "render_primitives.h"
 #include "rounded_corners.h"
 #include "styling_defaults.h"
 #include "theme.h"
@@ -108,6 +109,11 @@ struct ComponentConfig {
   std::string debug_name = "";
   int render_layer = 0;
 
+  // Custom-draw callbacks (see HasOnDraw): bg draws behind the widget's fill,
+  // fg on top of all its primitives, both receiving the widget's final rect.
+  RenderPrimitive::CustomDrawFn on_draw_bg;
+  RenderPrimitive::CustomDrawFn on_draw_fg;
+
   std::string font_name = UIComponent::UNSET_FONT;
   Size font_size = pixels(50.f);
   bool font_size_explicitly_set = false;
@@ -143,9 +149,11 @@ struct ComponentConfig {
   std::optional<std::string> checkbox_checked_indicator;
   std::optional<std::string> checkbox_unchecked_indicator;
 
-  // Dropdown indicator characters (default: "v" for closed, "^" for open)
-  // TODO: Replace "v" / "^" with real chevron glyphs (▾ ▴ or ▼ ▲) once
+  // Dropdown indicator characters (default: " v" for closed, " ^" for open)
+  // TODO: Replace " v" / " ^" with real chevron glyphs (▾ ▴ or ▼ ▲) once
   // afterhours ships a built-in icon font or vector glyph set.
+  static constexpr const char *DEFAULT_DROPDOWN_CLOSED = " v";
+  static constexpr const char *DEFAULT_DROPDOWN_OPEN = " ^";
   std::optional<std::string> dropdown_open_indicator;
   std::optional<std::string> dropdown_closed_indicator;
 
@@ -392,6 +400,14 @@ struct ComponentConfig {
   }
   ComponentConfig &with_render_layer(int layer) {
     render_layer = layer;
+    return *this;
+  }
+  ComponentConfig &with_on_draw_bg(RenderPrimitive::CustomDrawFn fn) {
+    on_draw_bg = std::move(fn);
+    return *this;
+  }
+  ComponentConfig &with_on_draw_fg(RenderPrimitive::CustomDrawFn fn) {
+    on_draw_fg = std::move(fn);
     return *this;
   }
   ComponentConfig &with_disabled(bool dis) {

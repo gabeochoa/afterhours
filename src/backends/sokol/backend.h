@@ -136,11 +136,12 @@ inline void sokol_init_cb() {
   sg_desc desc{};
   desc.environment = sglue_environment();
   desc.logger.func = slog_func;
-  // TODO: Fix sgl pipeline sample_count mismatch between swapchain (4x MSAA)
-  // and offscreen render textures (1x). The mismatch is harmless on Metal
-  // but triggers validation errors. Proper fix: match sample counts or use
-  // per-pass sgl pipelines.
-  // Validation is enabled (no disable_validation).
+  // sgl sample_count: the default sgl context here matches the swapchain (4x
+  // MSAA); offscreen render textures are drawn through their own per-texture
+  // sgl_context created with the render texture's sample_count (see
+  // load_render_texture + begin_texture_mode in drawing_helpers.h), so each
+  // pass draws with a pipeline whose sample_count matches its target. Validation
+  // is enabled (no disable_validation).
   sg_setup(&desc);
   stm_setup();
   g_start_time = stm_now();
@@ -158,6 +159,12 @@ inline void sokol_init_cb() {
   sfons_desc.width = 2048;
   sfons_desc.height = 2048;
   g_fons_ctx = sfons_create(&sfons_desc);
+  if (g_fons_ctx == nullptr) {
+    // Atlas allocation failed (e.g. GPU OOM at startup). All text calls guard
+    // on !g_fons_ctx and become no-ops, so this manifests as silently missing
+    // text app-wide — log it loudly so it's diagnosable rather than baffling.
+    log_error("sfons_create failed (2048x2048 atlas); text rendering disabled");
+  }
 
   g_initialized = true;
 

@@ -349,8 +349,9 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       float sel_x2 = measure_x(sel_end_byte) - state.scroll_offset_x;
       float sel_width = std::max(sel_x2 - sel_x1, 2.f);
 
-      auto sel_color = ctx.theme.accent;
-      sel_color.a = 100;
+      // Distinct translucent tint, NOT theme.accent (which can equal the text
+      // color, e.g. amber-on-amber, making selected text unreadable).
+      Color sel_color{70, 130, 220, 110};
       (void)div(
           ctx, mk(field_entity, 1),
           ComponentConfig()

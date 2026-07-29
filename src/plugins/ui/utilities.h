@@ -1,7 +1,5 @@
 #pragma once
 
-#include <format>
-#include <iostream>
 #include <string>
 #if __has_include(<magic_enum/magic_enum.hpp>)
 #include <magic_enum/magic_enum.hpp>

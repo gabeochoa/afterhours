@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <map>
 #include <set>
 #include <vector>
@@ -27,12 +28,13 @@ namespace ui {
 namespace detail {
 // Adjust a rect for scroll offset so hit-testing matches visual position.
 // Mirrors the scroll offset subtraction in rendering.h.
-static inline RectangleType apply_scroll_offset(const Entity &entity,
-                                                 RectangleType rect) {
-  if (entity.has<HasScrollView>())
-    return rect; // scroll view itself doesn't scroll
+// Sum scroll of ALL HasScrollView ancestors, walking past HasClipChildren.
+// The one source of truth used by both render (rendering.h) and hit-test below,
+// so clicks land where things render — including content clipped inside a view.
+static inline Vector2Type accumulated_scroll_offset(const Entity &entity) {
+  Vector2Type total = {0.0f, 0.0f};
   if (!entity.has<UIComponent>())
-    return rect;
+    return total;
   EntityID pid = entity.get<UIComponent>().parent;
   int guard = 0;
   while (pid >= 0 && guard < 64) {
@@ -41,18 +43,25 @@ static inline RectangleType apply_scroll_offset(const Entity &entity,
       break;
     Entity &parent = opt_parent.asE();
     if (parent.has<HasScrollView>()) {
-      Vector2Type offset = parent.get<HasScrollView>().scroll_offset;
-      rect.y -= offset.y;
-      rect.x -= offset.x;
-      return rect;
+      const HasScrollView &sv = parent.get<HasScrollView>();
+      if (!(sv.auto_overflow && !sv.needs_scroll_y() && !sv.needs_scroll_x())) {
+        total.x += sv.scroll_offset.x;
+        total.y += sv.scroll_offset.y;
+      }
     }
-    if (parent.has<HasClipChildren>())
-      return rect; // clip-only ancestor, no scroll
     if (!parent.has<UIComponent>())
       break;
     pid = parent.get<UIComponent>().parent;
     ++guard;
   }
+  return total;
+}
+
+static inline RectangleType apply_scroll_offset(const Entity &entity,
+                                                 RectangleType rect) {
+  Vector2Type off = accumulated_scroll_offset(entity);
+  rect.x -= off.x;
+  rect.y -= off.y;
   return rect;
 }
 } // namespace detail
@@ -61,6 +70,14 @@ static inline RectangleType apply_scroll_offset(const Entity &entity,
 /// UI tree traversal. Populated once per frame by BuildUIEntityMapping system.
 struct UIEntityMappingCache : BaseComponent {
   std::vector<Entity *> components;
+
+  // Whether `id` maps to a live entity in this frame's mapping. A stale child
+  // id (e.g. a child cleaned up while its parent still lists it) is NOT
+  // contained, so callers can skip it instead of dereferencing null in to_ent.
+  [[nodiscard]] bool contains(EntityID id) const {
+    return id >= 0 && static_cast<size_t>(id) < components.size() &&
+           components[id] != nullptr;
+  }
 
   Entity &to_ent(EntityID id) {
     if (id < 0 || static_cast<size_t>(id) >= components.size() ||
@@ -398,6 +415,10 @@ struct TrackIfComponentWillBeRendered : System<> {
 
     // Process children first (bottom-up approach for better early exits)
     for (EntityID child : cmp.children) {
+      // Skip stale child ids (child cleaned up while still listed in the
+      // parent) — otherwise to_cmp->to_ent dereferences a null mapping slot.
+      if (!cache->contains(child))
+        continue;
       set_visibility(cache->to_cmp(child));
     }
 
@@ -1094,27 +1115,11 @@ struct UpdateDropdownOptions
   }
 
   UpdateDropdownOptions()
-      : SystemWithUIContext<HasDropdownState, HasChildrenComponent>() {
-// TODO figure out if this actually will cause trouble
-// Remove include_derived_children since we want to process entities with direct
-// components
-#if __WIN32
-// this->include_derived_children = true;
-#else
-// this->include_derived_children = true;
-#endif
-  }
+      : SystemWithUIContext<HasDropdownState, HasChildrenComponent>() {}
 
-#if __WIN32
-  virtual void for_each_with(Entity &entity, UIComponent &component,
-                             HasDropdownState &hasDropdownState,
-                             HasChildrenComponent &hasChildren, float){
-
-#else
   virtual void for_each_with(Entity &entity, UIComponent &component,
                              HasDropdownState &hasDropdownState,
                              HasChildrenComponent &hasChildren, float) {
-#endif
       // The system should automatically filter entities to only those with
       // required components No need to manually check since
       // SystemWithUIContext<HasDropdownState, HasChildrenComponent> handles

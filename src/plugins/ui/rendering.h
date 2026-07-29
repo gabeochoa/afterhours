@@ -126,7 +126,14 @@ compute_intersected_clip_rect(const Entity &entity) {
         }
       }
 
+      // A clip container nested inside a scroll view moves with the content, so
+      // offset its clip rect by the scroll above it (else content scrolls out of
+      // its own scissor and vanishes). The scroll view's own viewport has no
+      // scroll above it, so it stays put.
       RectangleType ancestor_rect = parent.get<UIComponent>().rect();
+      Vector2Type aoff = accumulated_scroll_offset(parent);
+      ancestor_rect.x -= aoff.x;
+      ancestor_rect.y -= aoff.y;
       if (!found) {
         result = ancestor_rect;
         found = true;
@@ -160,6 +167,9 @@ static inline Vector2Type get_scroll_offset(const Entity &entity) {
   }
   return {0.0f, 0.0f};
 }
+
+// accumulated_scroll_offset lives in systems.h (included above) — one helper
+// shared by render (here) and hit-test so they stay aligned.
 
 // Get the scissor rect from a scroll view ancestor (viewport bounds)
 static inline RectangleType get_scroll_scissor_rect(const Entity &entity) {
@@ -859,7 +869,8 @@ position_texture(texture_manager::Texture, Vector2Type size,
 
 static inline void
 draw_texture_in_rect(texture_manager::Texture texture, RectangleType rect,
-                     texture_manager::HasTexture::Alignment alignment) {
+                     texture_manager::HasTexture::Alignment alignment,
+                     texture_manager::Color tint = colors::UI_WHITE) {
   float scale = (float)texture.height / rect.height;
   Vector2Type size = {
       (float)texture.width / scale,
@@ -881,7 +892,7 @@ draw_texture_in_rect(texture_manager::Texture texture, RectangleType rect,
                                         .width = size.x,
                                         .height = size.y,
                                     },
-                                    size, 0.f, colors::UI_WHITE);
+                                    size, 0.f, tint);
 }
 
 template <typename InputAction>
@@ -1258,25 +1269,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     const float effective_opacity = detail::compute_effective_opacity(entity);
     RectangleType draw_rect = cmp.rect();
 
-    // (debug placeholder)
-
-    // Check if this entity is inside a scroll view (but not the scroll view
-    // itself)
-    OptEntity scroll_ancestor = detail::find_scroll_view_ancestor(entity);
-    // Note: find_clip_ancestor returns entity with HasScrollView OR
-    // HasClipChildren Only apply scroll offset if ancestor actually has
-    // HasScrollView
-    bool inside_scroll_view = scroll_ancestor.valid() &&
-                              scroll_ancestor->has<HasScrollView>() &&
-                              !entity.has<HasScrollView>();
-
-    // Apply scroll offset to draw_rect if inside a scroll view
-    if (inside_scroll_view) {
-      Vector2Type scroll_offset =
-          scroll_ancestor->get<HasScrollView>().scroll_offset;
-      draw_rect.y -= scroll_offset.y;
-      draw_rect.x -= scroll_offset.x;
-    }
+    // Scroll of all scroll-view ancestors; reused for focus_rect below.
+    const Vector2Type scroll_offset = detail::accumulated_scroll_offset(entity);
+    draw_rect.y -= scroll_offset.y;
+    draw_rect.x -= scroll_offset.x;
 
     if (entity.has<HasUIModifiers>()) {
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
@@ -1360,6 +1356,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       // bounds
       RectangleType focus_rect =
           cmp.focus_rect(static_cast<int>(context.theme.focus_ring_offset));
+      focus_rect.x -= scroll_offset.x;  // ride the scroll like draw_rect
+      focus_rect.y -= scroll_offset.y;
       if (entity.has<HasUIModifiers>()) {
         focus_rect = entity.get<HasUIModifiers>().apply_modifier(focus_rect);
       }
@@ -1406,6 +1404,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       }
     }
 
+    // Custom draw (behind): drawn before the widget's own fill.
+    if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().bg)
+      entity.get<HasOnDraw>().bg(draw_rect);
+
     if (entity.has<HasColor>()) {
       Color col = entity.template get<HasColor>().color();
 
@@ -1414,8 +1416,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       if (context.theme.highlight_mode == HighlightMode::Split &&
           context.is_hot(entity.id) &&
           !entity.template get<HasColor>().skip_hover_override) {
-        col = entity.template get<HasColor>().hover_color.value_or(
-            context.theme.from_usage(Theme::Usage::Background));
+        col = entity.template get<HasColor>().hover_bg();
       }
 
       if (effective_opacity < 1.0f) {
@@ -1566,11 +1567,12 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     if (entity.has<texture_manager::HasTexture>()) {
       const texture_manager::HasTexture &texture =
           entity.get<texture_manager::HasTexture>();
-      // draw textured rect with opacity via color tint
-      // NOTE: draw_texture_in_rect path lacks tint, so opacity will apply
-      // to images below reuse existing helper (no tint support), so
-      // fallback to image path below
-      draw_texture_in_rect(texture.texture, draw_rect, texture.alignment);
+      Color tex_col = colors::UI_WHITE;
+      if (effective_opacity < 1.0f) {
+        tex_col = colors::opacity_pct(tex_col, effective_opacity);
+      }
+      draw_texture_in_rect(texture.texture, draw_rect, texture.alignment,
+                           tex_col);
     } else if (entity.has<ui::HasImage>()) {
       const ui::HasImage &img = entity.get<ui::HasImage>();
       texture_manager::Rectangle src =
@@ -1596,6 +1598,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                                         },
                                         size, 0.f, img_col);
     }
+
+    // Custom draw (on top): drawn after all of the widget's own primitives.
+    if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().fg)
+      entity.get<HasOnDraw>().fg(draw_rect);
 
     pop_rotation();
   }
@@ -1637,7 +1643,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     if (entity.has<HasColor>() || entity.has<HasLabel>() ||
         entity.has<ui::HasImage>() ||
         entity.has<texture_manager::HasTexture>() ||
-        entity.has<FocusClusterRoot>() ||
+        entity.has<FocusClusterRoot>() || entity.has<HasOnDraw>() ||
         entity.has<HasCircularProgressState>() || entity.has<HasScrollView>() ||
         context.visual_focus_id == entity.id) {
       render_me(context, font_manager, entity);
@@ -1892,21 +1898,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     const float effective_opacity = detail::compute_effective_opacity(entity);
     RectangleType draw_rect = cmp.rect();
 
-
-    OptEntity scroll_ancestor = detail::find_scroll_view_ancestor(entity);
-    // Note: find_clip_ancestor returns entity with HasScrollView OR
-    // HasClipChildren Only apply scroll offset if ancestor actually has
-    // HasScrollView
-    bool inside_scroll_view = scroll_ancestor.valid() &&
-                              scroll_ancestor->has<HasScrollView>() &&
-                              !entity.has<HasScrollView>();
-
-    if (inside_scroll_view) {
-      Vector2Type scroll_offset =
-          scroll_ancestor->get<HasScrollView>().scroll_offset;
-      draw_rect.y -= scroll_offset.y;
-      draw_rect.x -= scroll_offset.x;
-    }
+    // See render_me. Reused for focus_rect below.
+    const Vector2Type scroll_offset = detail::accumulated_scroll_offset(entity);
+    draw_rect.y -= scroll_offset.y;
+    draw_rect.x -= scroll_offset.x;
 
     if (entity.has<HasUIModifiers>()) {
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
@@ -1983,6 +1978,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       // bounds
       RectangleType focus_rect =
           cmp.focus_rect(static_cast<int>(context.theme.focus_ring_offset));
+      focus_rect.x -= scroll_offset.x;  // ride the scroll like draw_rect
+      focus_rect.y -= scroll_offset.y;
       if (entity.has<HasUIModifiers>()) {
         focus_rect = entity.get<HasUIModifiers>().apply_modifier(focus_rect);
       }
@@ -2023,6 +2020,13 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           context.theme.focus_ring_thickness);
     }
 
+    // Custom draw (behind): enqueued before the fill so it renders under the
+    // widget; the fn pointer is stable on the HasOnDraw component for the frame.
+    if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().bg) {
+      buffer.add_custom(draw_rect, &entity.get<HasOnDraw>().bg, layer,
+                        entity.id);
+    }
+
     // Background color
     if (entity.has<HasColor>()) {
       Color col = entity.template get<HasColor>().color();
@@ -2032,8 +2036,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       if (context.theme.highlight_mode == HighlightMode::Split &&
           context.is_hot(entity.id) &&
           !entity.template get<HasColor>().skip_hover_override) {
-        col = entity.template get<HasColor>().hover_color.value_or(
-            context.theme.from_usage(Theme::Usage::Background));
+        col = entity.template get<HasColor>().hover_bg();
       }
 
       if (effective_opacity < 1.0f) {
@@ -2321,6 +2324,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       RectangleType dest = {location.x, location.y, size.x, size.y};
       buffer.add_image(dest, src, img.texture, img_col, layer, entity.id);
     }
+
+    // Custom draw (on top): enqueued after all of the widget's own primitives.
+    if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().fg) {
+      buffer.add_custom(draw_rect, &entity.get<HasOnDraw>().fg, layer,
+                        entity.id);
+    }
   }
 
   void collect(RenderCommandBuffer &buffer, UIContext<InputAction> &context,
@@ -2360,7 +2369,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     if (entity.has<HasColor>() || entity.has<HasLabel>() ||
         entity.has<ui::HasImage>() ||
         entity.has<texture_manager::HasTexture>() ||
-        entity.has<FocusClusterRoot>() ||
+        entity.has<FocusClusterRoot>() || entity.has<HasOnDraw>() ||
         entity.has<HasCircularProgressState>() || entity.has<HasScrollView>() ||
         context.visual_focus_id == entity.id) {
       collect_me(buffer, context, font_manager, entity, layer);

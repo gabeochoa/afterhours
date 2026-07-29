@@ -15,12 +15,14 @@
 #include "../core/entity_helper.h"
 #include "../core/entity_query.h"
 #include "../developer.h"
+#include "language.h" // translation::Language (kept here so existing users are unaffected)
 #include "../logging.h"
 
 namespace afterhours {
 namespace translation {
 
-enum struct Language { English, Korean, Japanese };
+// Language enum lives in language.h so enum-only consumers (ui/theme.h) avoid
+// this file's fmt dependency.
 
 template <typename ParamEnum> class TranslatableString {
 public:

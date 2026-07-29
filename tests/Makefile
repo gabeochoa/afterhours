@@ -24,9 +24,18 @@ BREW_PREFIX := $(shell brew --prefix 2>/dev/null)
 ifeq ($(BREW_PREFIX),)
     BREW_PREFIX := /opt/homebrew
 endif
-AFTERHOURS_ROOT := ..
+# Pin <afterhours/...> to THIS checkout regardless of the directory's name.
+# A bare `-isystem ../..` resolves <afterhours/...> to the *parent* of the
+# checkout dir, which only works when the checkout is literally named
+# `afterhours`. In a git worktree (or any differently-named clone) that silently
+# picks up a *sibling* `afterhours` checkout, so tests compile against the wrong
+# source. Generate a private include dir containing a symlink named exactly
+# `afterhours` -> this checkout root, and use it as the sole afterhours root.
+AFTERHOURS_ROOT := $(realpath ..)
+INCLUDE_ROOT := $(CURDIR)/.afh-include
+$(shell mkdir -p $(INCLUDE_ROOT) && ln -sfn $(AFTERHOURS_ROOT) $(INCLUDE_ROOT)/afterhours)
 
-INCLUDES := -isystem $(AFTERHOURS_ROOT)/.. -isystem $(BREW_PREFIX)/include
+INCLUDES := -isystem $(INCLUDE_ROOT) -isystem $(AFTERHOURS_ROOT)/vendor -isystem $(BREW_PREFIX)/include
 INCLUDES_RAYLIB := -I$(RAYLIB_INCLUDE) $(INCLUDES)
 
 UNAME_S := $(shell uname -s)
@@ -46,6 +55,7 @@ ALL_TESTS := \
 	entity_query_test \
 	input_injector_mouse_delta_test \
 	progress_bar_test \
+	random_engine_test \
 	render_order_test \
 	slider_test \
 	stepper_test \
@@ -68,7 +78,7 @@ autolayout_test: autolayout_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 
 entity_mapping_test: entity_mapping_test.cpp ../examples/entity_mapping_test_helper.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -I../examples $^ -o $@
 
 entity_pool_test: entity_pool_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
@@ -78,6 +88,9 @@ entity_query_test: entity_query_test.cpp
 
 system_tags_test: system_tags_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+
+random_engine_test: random_engine_test.cpp
+	$(CXX) $(CXXFLAGS) -DAFTER_HOURS_ENABLE_RANDOM $(INCLUDES) $^ -o $@
 
 input_injector_mouse_delta_test: input_injector_mouse_delta_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
@@ -111,3 +124,4 @@ test: all
 
 clean:
 	rm -f $(ALL_TESTS) input_system_mouse_delta_backend_smoke.o smoke_raylib.o smoke_sokol.o
+	rm -rf $(INCLUDE_ROOT)
