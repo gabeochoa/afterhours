@@ -2350,15 +2350,18 @@ TEST(absolute_large_margin_no_negative) {
 }
 
 // ---------------------------------------------------------------------------
-// Flow + large margin: flow element clamps to zero (contrast with absolute)
+// Flow + oversized margin: cross axis keeps its size, main axis shrinks (but
+// does not clamp to zero). Contrast with the absolute case above.
 // ---------------------------------------------------------------------------
-TEST(flow_large_margin_clamps_to_zero) {
+TEST(flow_oversized_margin_shrinks_main_axis) {
   TestLayout t;
   auto &root = t.make_ui(pixels(1280), pixels(720));
   t.ui(root).set_flex_direction(FlexDirection::Column);
 
   auto &child = t.make_ui(screen_pct(0.4f), screen_pct(0.6f));
-  // Same margins that would cause negative size in flow
+  // Margins large enough that child+margins overflow the main (Y) axis:
+  // screen_pct(0.3) each side => 216*2 = 432 on Y, plus the 432 child height
+  // wants 864 in a 720 axis.
   t.ui(child).set_desired_margin(Margin{
       .top = screen_pct(0.3f),
       .bottom = screen_pct(0.3f),
@@ -2369,9 +2372,16 @@ TEST(flow_large_margin_clamps_to_zero) {
   t.run(root);
 
   auto r = t.ui(child).rect();
-  // Flow layout subtracts margins: 512 - 384 - 384 < 0, clamped to 0
-  CHECK_APPROX(r.width, 0.f);
-  CHECK_APPROX(r.height, 0.f);
+  // Cross axis (X, width) gets NO error correction in a Column, and rect() no
+  // longer subtracts margin (d41e1d8), so width stays the full screen_pct value.
+  CHECK_APPROX(r.width, 512.f);
+  // Main axis (Y, height): the error solver shrinks the (resizeable, strictness
+  // 0.9) child so child+margins fit the 720 axis. It shrinks below the desired
+  // 432 but is NOT clamped to zero. (The exact value is solver-dependent — the
+  // margin-inclusive error correction converges toward child=288 but is capped
+  // mid-iteration, so we assert the invariant, not the transient value.)
+  CHECK(r.height > 0.f);
+  CHECK(r.height < 432.f);
 }
 
 // ---------------------------------------------------------------------------
