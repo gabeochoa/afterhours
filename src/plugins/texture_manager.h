@@ -202,6 +202,11 @@ struct AnimationUpdateCurrentFrame : System<HasAnimation> {
         return;
       }
       hasAnimation.params.cur_frame = 0;
+      // Also rewind the sprite-sheet position, not just the frame counter.
+      // Otherwise a looping animation keeps advancing cur_frame_position each
+      // loop (row j grows unbounded), so after the first loop it samples the
+      // wrong — eventually out-of-sheet — cells.
+      hasAnimation.cur_frame_position = hasAnimation.start_position();
     }
 
     const auto [i, j] =
