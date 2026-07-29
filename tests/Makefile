@@ -49,6 +49,7 @@ endif
 
 ALL_TESTS := \
 	autolayout_test \
+	dialog_test \
 	dump_ui_test \
 	entity_mapping_test \
 	entity_pool_test \
@@ -64,6 +65,7 @@ ALL_TESTS := \
 	text_wrap_test
 
 RAYLIB_TESTS := \
+	dialog_test \
 	dump_ui_test \
 	progress_bar_test \
 	render_order_test \
@@ -94,6 +96,9 @@ random_engine_test: random_engine_test.cpp
 
 input_injector_mouse_delta_test: input_injector_mouse_delta_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+
+dialog_test: dialog_test.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 
 dump_ui_test: dump_ui_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@

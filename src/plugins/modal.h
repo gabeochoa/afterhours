@@ -15,6 +15,7 @@
 #include "ui/element_result.h"
 #include "ui/imm_components.h"
 #include "ui/rendering.h"
+#include "ui/text_input/text_input.h"
 #include "ui/systems.h"
 #include "ui/theme.h"
 #include "window_manager.h"
@@ -440,6 +441,87 @@ struct modal : developer::Plugin {
             return {true, entity};
         }
 
+        // ---- Shared dialog content helpers (consistent look across presets) --
+        // Button emphasis for dialog action buttons.
+        enum class DialogButton { Neutral, Primary, Danger };
+
+        // Wrapping, comfortably-padded message body. Uses a fixed height (not
+        // expand()) so it never eats the button row's space (expand is greedy
+        // and would overlap a fixed-height sibling). Explicit font size is
+        // required for wrapping.
+        static void dialog_message(ui::imm::HasUIContext auto &ctx,
+                                   ui::imm::EntityParent ep_pair,
+                                   const std::string &message,
+                                   int content_layer) {
+            using namespace ui;
+            using namespace ui::imm;
+            div(ctx, ep_pair,
+                ComponentConfig{}
+                    .with_label(message)
+                    .with_size(ComponentSize{percent(1.0f), h720(96)})
+                    .with_padding(Spacing::md)
+                    .with_font(UIComponent::DEFAULT_FONT, pixels(18.0f))
+                    .with_text_overflow(TextOverflow::Wrap)
+                    .with_render_layer(content_layer)
+                    .with_debug_name("dialog_message"));
+        }
+
+        // Right-aligned action row (STYLE_GUIDE §3: actions trail, right-aligned).
+        static ui::imm::ElementResult dialog_button_row(
+            ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent ep_pair,
+            int content_layer) {
+            using namespace ui;
+            using namespace ui::imm;
+            return div(ctx, ep_pair,
+                       ComponentConfig{}
+                           .with_size(ComponentSize{percent(1.0f), h720(56)})
+                           .with_flex_direction(FlexDirection::Row)
+                           .with_justify_content(JustifyContent::FlexEnd)
+                           .with_align_items(AlignItems::Center)
+                           .with_flex_wrap(FlexWrap::NoWrap)
+                           .with_padding(Padding{.right = DefaultSpacing::medium()})
+                           .with_render_layer(content_layer)
+                           .with_debug_name("dialog_buttons"));
+        }
+
+        // One dialog action button: fixed width (children()+padding renders
+        // wider than its allocated box and escapes the row), 44px tall hit
+        // target, centered label, leading gap so buttons never touch, colored by
+        // emphasis. Returns true on click.
+        static bool dialog_button(ui::imm::HasUIContext auto &ctx,
+                                  ui::imm::EntityParent ep_pair,
+                                  const std::string &label, DialogButton kind,
+                                  int content_layer) {
+            using namespace ui;
+            using namespace ui::imm;
+            auto cfg =
+                ComponentConfig{}
+                    .with_label(label)
+                    .with_size(ComponentSize{w1280(130), h720(44)})
+                    .with_font(UIComponent::DEFAULT_FONT, pixels(16.0f))
+                    .with_alignment(TextAlignment::Center)
+                    .with_margin(Margin{.left = DefaultSpacing::medium()})
+                    .with_render_layer(content_layer);
+            if (kind == DialogButton::Primary)
+                cfg.with_background(Theme::Usage::Primary);
+            else if (kind == DialogButton::Danger)
+                cfg.with_background(Theme::Usage::Error);
+            else
+                // Neutral: a lighter shade of the Surface panel so the button is
+                // visible (plain Surface blends into the panel it sits on).
+                cfg.with_custom_background(colors::lighten(
+                    ctx.theme.from_usage(Theme::Usage::Surface), 0.18f));
+            return button(ctx, ep_pair, cfg);
+        }
+
+        // Content-layer readback: children must draw above the (depth-adjusted)
+        // modal panel or they render behind it.
+        static int content_layer_of(ui::imm::ElementResult &result) {
+            if (result.ent().template has<Modal>())
+                return result.ent().template get<Modal>().render_layer;
+            return static_cast<int>(RenderLayer::Modal);
+        }
+
         // Helper to create info dialog content
         static ui::imm::ElementResult create_info_content(
             ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent ep_pair,
@@ -448,41 +530,19 @@ struct modal : developer::Plugin {
             using namespace ui;
             using namespace ui::imm;
 
-            int content_layer = static_cast<int>(RenderLayer::Modal);
-
             auto result = modal_impl(ctx, ep_pair, open,
                                      ModalConfig{}
-                                         .with_size(h720(350), h720(150))
+                                         .with_size(h720(420), h720(230))
                                          .with_title(title)
                                          .with_show_close_button(false));
 
             if (result) {
-                // Content sits just above this modal's (depth-adjusted) panel.
-                if (result.ent().template has<Modal>())
-                    content_layer =
-                        result.ent().template get<Modal>().render_layer;
-                div(ctx, mk(result.ent(), 0),
-                    ComponentConfig{}
-                        .with_label(message)
-                        .with_size(ComponentSize{percent(1.0f), expand()})
-                        .with_padding(Spacing::md)
-                        .with_render_layer(content_layer));
-
+                int content_layer = content_layer_of(result);
+                dialog_message(ctx, mk(result.ent(), 0), message, content_layer);
                 auto button_row =
-                    div(ctx, mk(result.ent(), 1),
-                        ComponentConfig{}
-                            .with_size(ComponentSize{percent(1.0f), h720(44)})
-                            .with_flex_direction(FlexDirection::Row)
-                            .with_justify_content(JustifyContent::Center)
-                            .with_align_items(AlignItems::Center)
-                            .with_flex_wrap(FlexWrap::NoWrap)
-                            .with_render_layer(content_layer));
-
-                if (button(ctx, mk(button_row.ent(), 0),
-                           ComponentConfig{}
-                               .with_label(button_label)
-                               .with_size(ComponentSize{h720(100), h720(36)})
-                               .with_render_layer(content_layer))) {
+                    dialog_button_row(ctx, mk(result.ent(), 1), content_layer);
+                if (dialog_button(ctx, mk(button_row.ent(), 0), button_label,
+                                  DialogButton::Primary, content_layer)) {
                     open = false;
                 }
             }
@@ -490,67 +550,43 @@ struct modal : developer::Plugin {
             return result;
         }
 
-        // Helper to create confirm dialog content
+        // Helper to create confirm dialog content.
+        // danger=true styles the confirm action as destructive (Error color);
+        // the safe action (Cancel) sits leftmost so it's the calm default.
         static ModalResult create_confirm_content(
             ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent ep_pair,
             bool &open, const std::string &title, const std::string &message,
-            const std::string &confirm_label, const std::string &cancel_label) {
+            const std::string &confirm_label, const std::string &cancel_label,
+            bool danger = false) {
             using namespace ui;
             using namespace ui::imm;
 
-            int content_layer = static_cast<int>(RenderLayer::Modal);
             DialogResult dialog_result = DialogResult::Pending;
 
             auto result = modal_impl(ctx, ep_pair, open,
                                      ModalConfig{}
-                                         .with_size(h720(540), h720(180))
+                                         .with_size(h720(540), h720(230))
                                          .with_title(title)
                                          .with_show_close_button(false));
 
             if (result) {
-                // Content sits just above this modal's (depth-adjusted) panel.
-                if (result.ent().template has<Modal>())
-                    content_layer =
-                        result.ent().template get<Modal>().render_layer;
-                div(ctx, mk(result.ent(), 0),
-                    ComponentConfig{}
-                        .with_label(message)
-                        .with_size(ComponentSize{percent(1.0f), expand()})
-                        .with_padding(Spacing::md)
-                        .with_render_layer(content_layer));
+                int content_layer = content_layer_of(result);
+                dialog_message(ctx, mk(result.ent(), 0), message, content_layer);
+                auto row =
+                    dialog_button_row(ctx, mk(result.ent(), 1), content_layer);
 
-                auto button_row =
-                    div(ctx, mk(result.ent(), 1),
-                        ComponentConfig{}
-                            .with_size(ComponentSize{percent(1.0f), h720(44)})
-                            .with_flex_direction(FlexDirection::Row)
-                            .with_justify_content(JustifyContent::Center)
-                            .with_align_items(AlignItems::Center)
-                            .with_flex_wrap(FlexWrap::NoWrap)
-                            .with_render_layer(content_layer));
-
-                if (button(ctx, mk(button_row.ent(), 0),
-                           ComponentConfig{}
-                               .with_label(confirm_label)
-                               .with_size(ComponentSize{h720(100), h720(36)})
-                               .with_background(Theme::Usage::Primary)
-                               .with_margin(
-                                   Margin{.left = DefaultSpacing::small(),
-                                          .right = DefaultSpacing::small()})
-                               .with_render_layer(content_layer))) {
-                    dialog_result = DialogResult::Confirmed;
+                // Cancel first (leftmost of the right-aligned cluster) = calm
+                // default; confirm/destructive action trails on the right.
+                if (dialog_button(ctx, mk(row.ent(), 0), cancel_label,
+                                  DialogButton::Neutral, content_layer)) {
+                    dialog_result = DialogResult::Cancelled;
                     open = false;
                 }
-
-                if (button(ctx, mk(button_row.ent(), 1),
-                           ComponentConfig{}
-                               .with_label(cancel_label)
-                               .with_size(ComponentSize{h720(100), h720(36)})
-                               .with_margin(
-                                   Margin{.left = DefaultSpacing::small(),
-                                          .right = DefaultSpacing::small()})
-                               .with_render_layer(content_layer))) {
-                    dialog_result = DialogResult::Cancelled;
+                if (dialog_button(ctx, mk(row.ent(), 1), confirm_label,
+                                  danger ? DialogButton::Danger
+                                         : DialogButton::Primary,
+                                  content_layer)) {
+                    dialog_result = DialogResult::Confirmed;
                     open = false;
                 }
             }
@@ -575,79 +611,109 @@ struct modal : developer::Plugin {
             using namespace ui;
             using namespace ui::imm;
 
-            int content_layer = static_cast<int>(RenderLayer::Modal);
             DialogResult dialog_result = DialogResult::Pending;
 
             auto result = modal_impl(ctx, ep_pair, open,
                                      ModalConfig{}
-                                         .with_size(h720(540), h720(200))
+                                         .with_size(h720(640), h720(230))
                                          .with_title(title)
                                          .with_show_close_button(false));
 
             if (result) {
-                // Content sits just above this modal's (depth-adjusted) panel.
-                if (result.ent().template has<Modal>())
-                    content_layer =
-                        result.ent().template get<Modal>().render_layer;
-                div(ctx, mk(result.ent(), 0),
-                    ComponentConfig{}
-                        .with_label(message)
-                        .with_size(ComponentSize{percent(1.0f), expand()})
-                        .with_padding(Spacing::md)
-                        .with_render_layer(content_layer));
+                int content_layer = content_layer_of(result);
+                dialog_message(ctx, mk(result.ent(), 0), message, content_layer);
+                auto row =
+                    dialog_button_row(ctx, mk(result.ent(), 1), content_layer);
 
-                auto button_row =
-                    div(ctx, mk(result.ent(), 1),
-                        ComponentConfig{}
-                            .with_size(ComponentSize{percent(1.0f), h720(44)})
-                            .with_flex_direction(FlexDirection::Row)
-                            .with_justify_content(JustifyContent::Center)
-                            .with_align_items(AlignItems::Center)
-                            .with_flex_wrap(FlexWrap::NoWrap)
-                            .with_render_layer(content_layer));
-
-                if (button(ctx, mk(button_row.ent(), 0),
-                           ComponentConfig{}
-                               .with_label(primary_label)
-                               .with_size(ComponentSize{h720(110), h720(36)})
-                               .with_background(Theme::Usage::Primary)
-                               .with_margin(
-                                   Margin{.left = DefaultSpacing::small(),
-                                          .right = DefaultSpacing::small()})
-                               .with_render_layer(content_layer))) {
-                    dialog_result = DialogResult::Confirmed;
-                    open = false;
-                }
-
-                if (button(ctx, mk(button_row.ent(), 1),
-                           ComponentConfig{}
-                               .with_label(dismiss_label)
-                               .with_size(ComponentSize{h720(100), h720(36)})
-                               .with_margin(
-                                   Margin{.left = DefaultSpacing::small(),
-                                          .right = DefaultSpacing::small()})
-                               .with_render_layer(content_layer))) {
-                    dialog_result = DialogResult::Cancelled;
-                    open = false;
-                }
-
+                // Left-to-right: tertiary (if any), dismiss, primary (emphasis,
+                // rightmost).
                 if (!tertiary_label.empty()) {
-                    if (button(
-                            ctx, mk(button_row.ent(), 2),
-                            ComponentConfig{}
-                                .with_label(tertiary_label)
-                                .with_size(ComponentSize{h720(100), h720(36)})
-                                .with_margin(
-                                    Margin{.left = DefaultSpacing::small(),
-                                           .right = DefaultSpacing::small()})
-                                .with_render_layer(content_layer))) {
+                    if (dialog_button(ctx, mk(row.ent(), 0), tertiary_label,
+                                      DialogButton::Neutral, content_layer)) {
                         dialog_result = DialogResult::Custom;
                         open = false;
                     }
                 }
+                if (dialog_button(ctx, mk(row.ent(), 1), dismiss_label,
+                                  DialogButton::Neutral, content_layer)) {
+                    dialog_result = DialogResult::Cancelled;
+                    open = false;
+                }
+                if (dialog_button(ctx, mk(row.ent(), 2), primary_label,
+                                  DialogButton::Primary, content_layer)) {
+                    dialog_result = DialogResult::Confirmed;
+                    open = false;
+                }
             }
 
             // Check if modal was closed by escape/backdrop
+            if (!open && result.ent().template has<Modal>()) {
+                Modal &m = result.ent().template get<Modal>();
+                if (m.result != DialogResult::Pending) {
+                    dialog_result = m.result;
+                }
+            }
+
+            return {result, dialog_result};
+        }
+
+        // Helper to create prompt (text input) dialog content.
+        // On OK, `value` holds the entered text and result is Confirmed.
+        static ModalResult create_prompt_content(
+            ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent ep_pair,
+            bool &open, std::string &value, const std::string &title,
+            const std::string &message, const std::string &ok_label,
+            const std::string &cancel_label) {
+            using namespace ui;
+            using namespace ui::imm;
+
+            DialogResult dialog_result = DialogResult::Pending;
+
+            auto result = modal_impl(ctx, ep_pair, open,
+                                     ModalConfig{}
+                                         .with_size(h720(540), h720(250))
+                                         .with_title(title)
+                                         .with_show_close_button(false));
+
+            if (result) {
+                int content_layer = content_layer_of(result);
+
+                // Prompt message: fixed height so the field + buttons fit.
+                div(ctx, mk(result.ent(), 0),
+                    ComponentConfig{}
+                        .with_label(message)
+                        .with_size(ComponentSize{percent(1.0f), h720(56)})
+                        .with_padding(Spacing::md)
+                        .with_font(UIComponent::DEFAULT_FONT, pixels(18.0f))
+                        .with_text_overflow(TextOverflow::Wrap)
+                        .with_render_layer(content_layer));
+
+                imm::text_input(
+                    ctx, mk(result.ent(), 1), value,
+                    ComponentConfig{}
+                        .with_size(ComponentSize{percent(1.0f), h720(40)})
+                        .with_margin(
+                            Margin{.left = DefaultSpacing::medium(),
+                                   .right = DefaultSpacing::medium()})
+                        .with_background(Theme::Usage::Background)
+                        .with_rounded_corners(RoundedCorners().all_round())
+                        .with_roundness(0.1f)
+                        .with_render_layer(content_layer));
+
+                auto row =
+                    dialog_button_row(ctx, mk(result.ent(), 2), content_layer);
+                if (dialog_button(ctx, mk(row.ent(), 0), cancel_label,
+                                  DialogButton::Neutral, content_layer)) {
+                    dialog_result = DialogResult::Cancelled;
+                    open = false;
+                }
+                if (dialog_button(ctx, mk(row.ent(), 1), ok_label,
+                                  DialogButton::Primary, content_layer)) {
+                    dialog_result = DialogResult::Confirmed;
+                    open = false;
+                }
+            }
+
             if (!open && result.ent().template has<Modal>()) {
                 Modal &m = result.ent().template get<Modal>();
                 if (m.result != DialogResult::Pending) {
@@ -937,6 +1003,31 @@ struct modal : developer::Plugin {
                                const std::string &cancel_label = "Cancel") {
         return detail::create_confirm_content(
             ctx, ep_pair, open, title, message, confirm_label, cancel_label);
+    }
+
+    // modal::confirm_danger - Two button confirm for destructive actions.
+    // The confirm button is styled with the Error color; Cancel is the calm
+    // default (leftmost). Returns Confirmed/Cancelled/Dismissed.
+    static ModalResult confirm_danger(
+        ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent ep_pair,
+        bool &open, const std::string &title, const std::string &message,
+        const std::string &confirm_label = "Delete",
+        const std::string &cancel_label = "Cancel") {
+        return detail::create_confirm_content(ctx, ep_pair, open, title, message,
+                                              confirm_label, cancel_label,
+                                              /*danger=*/true);
+    }
+
+    // modal::prompt - Text input dialog. On OK, `value` holds the entered text
+    // and the result is Confirmed.
+    static ModalResult prompt(ui::imm::HasUIContext auto &ctx,
+                              ui::imm::EntityParent ep_pair, bool &open,
+                              std::string &value, const std::string &title,
+                              const std::string &message,
+                              const std::string &ok_label = "OK",
+                              const std::string &cancel_label = "Cancel") {
+        return detail::create_prompt_content(ctx, ep_pair, open, value, title,
+                                             message, ok_label, cancel_label);
     }
 
     // modal::fyi - Three button with tertiary option
