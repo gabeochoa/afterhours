@@ -5,6 +5,7 @@
 #include "../color.h"
 #include "../input.h"
 #include "components.h"
+#include "fmt/format.h"
 #include "systems.h"
 #include "ui_core_components.h"
 #include <magic_enum/magic_enum.hpp>

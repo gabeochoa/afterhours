@@ -9,6 +9,7 @@
 #include "../bitwise.h"
 #include "../core/text_cache.h"
 #include "../developer.h"
+#include "fmt/format.h"
 #include "window_manager.h"
 
 namespace afterhours {

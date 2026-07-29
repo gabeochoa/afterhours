@@ -10,6 +10,7 @@
 #include "components.h"
 #include "context.h"
 #include "entity_management.h"
+#include "fmt/format.h"
 
 namespace afterhours {
 
