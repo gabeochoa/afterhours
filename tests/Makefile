@@ -46,6 +46,7 @@ ALL_TESTS := \
 	entity_query_test \
 	input_injector_mouse_delta_test \
 	progress_bar_test \
+	random_engine_test \
 	render_order_test \
 	slider_test \
 	stepper_test \
@@ -74,6 +75,9 @@ entity_pool_test: entity_pool_test.cpp
 
 entity_query_test: entity_query_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+
+random_engine_test: random_engine_test.cpp
+	$(CXX) $(CXXFLAGS) -DAFTER_HOURS_ENABLE_RANDOM $(INCLUDES) $^ -o $@
 
 input_injector_mouse_delta_test: input_injector_mouse_delta_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
