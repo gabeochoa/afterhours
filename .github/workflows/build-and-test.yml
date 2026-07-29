@@ -39,14 +39,17 @@ jobs:
         working-directory: tests
         run: |
           # These tests are pure ECS/logic — no GL context needed, so CI runs
-          # them. BREW_PREFIX/RAYLIB_PREFIX point at /usr for the apt packages
-          # (the Makefile's `brew --prefix` autodetect yields empty on Linux).
+          # them. Only RAYLIB_PREFIX is overridden (-> /opt/raylib, the fetched
+          # release); we deliberately do NOT pass BREW_PREFIX=/usr — that would
+          # add `-isystem /usr/include`, which reorders clang's system header
+          # search and breaks `#include_next <math.h>` from <cmath>. fmt from
+          # libfmt-dev already lives on clang's default /usr/include path.
           for t in entity_mapping_test entity_pool_test \
                    entity_query_test input_injector_mouse_delta_test \
                    system_tags_test random_engine_test; do
             if grep -q "^$t:" Makefile; then
               echo "== build $t =="
-              make BREW_PREFIX=/usr RAYLIB_PREFIX=/opt/raylib "$t"
+              make RAYLIB_PREFIX=/opt/raylib "$t"
               echo "== run $t =="
               "./$t"
             fi
@@ -62,7 +65,7 @@ jobs:
           # open questions. Flip this back into the run-loop above once #68's
           # remaining assertions are resolved.
           if grep -q "^autolayout_test:" Makefile; then
-            make BREW_PREFIX=/usr RAYLIB_PREFIX=/opt/raylib autolayout_test
+            make RAYLIB_PREFIX=/opt/raylib autolayout_test
           fi
 
       - name: Compile-check raylib/UI tests (headless CI, link needs a GL context)
@@ -73,7 +76,7 @@ jobs:
           # here is expected — we only assert the tests COMPILE. (`make -k`
           # keeps going; we grep the log for real compile errors.)
           set +e
-          make BREW_PREFIX=/usr RAYLIB_PREFIX=/opt/raylib -k \
+          make RAYLIB_PREFIX=/opt/raylib -k \
             slider_test progress_bar_test render_order_test stepper_test \
             tab_container_test text_wrap_test dump_ui_test > build.log 2>&1
           set -e
@@ -86,4 +89,4 @@ jobs:
         working-directory: examples
         run: |
           # Non-raylib benchmarks fully build; raylib examples compile-check.
-          make BREW_PREFIX=/usr RAYLIB_PREFIX=/opt/raylib perf_stress_test profile_harness
+          make RAYLIB_PREFIX=/opt/raylib perf_stress_test profile_harness
