@@ -136,6 +136,87 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
   return {true, entity};
 }
 
+/// Windowed (virtualized) list — a scroll container that only builds the rows
+/// currently visible in the viewport (plus a small overscan), with top/bottom
+/// spacers reserving the full scroll extent so the scrollbar behaves normally.
+/// Keeps huge diffs / long commit logs snappy (O(visible) entities per frame
+/// instead of O(count)).
+///
+/// `render_row(index, row_parent)` builds one row's contents; every row is
+/// exactly `row_height` px tall. Row entities use the item index as their id so
+/// per-row state persists across frames and scrolling.
+///
+/// Usage:
+/// ```cpp
+/// virtual_list(ctx, mk(parent), items.size(), 26.f,
+///   [&](size_t i, Entity &row) {
+///     div(ctx, mk(row, 0), ComponentConfig{}.with_label(items[i]));
+///   });
+/// ```
+template <typename RenderRow>
+ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
+                           size_t count, float row_height, RenderRow &&render_row,
+                           ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+  if (config.size.is_default)
+    config.with_size(ComponentSize{percent(1.0f), percent(1.0f)});
+  config.with_overflow(Overflow::Scroll, Axis::Y)
+      .with_flex_direction(FlexDirection::Column);
+  init_component(ctx, ep_pair, config, ComponentType::Div);
+
+  if (row_height <= 0.f)
+    row_height = 1.f;
+  if (count == 0)
+    return {true, entity};
+
+  // Window from last frame's scroll state (persisted on the container entity).
+  float offset = 0.f, viewport = 0.f;
+  if (entity.template has<HasScrollView>()) {
+    const auto &sv = entity.template get<HasScrollView>();
+    offset = sv.scroll_offset.y;
+    viewport = sv.viewport_size.y;
+  }
+  constexpr long OVERSCAN = 4;
+  const long n = static_cast<long>(count);
+  size_t first = 0, last = static_cast<size_t>(n - 1);
+  if (viewport > 0.f) {
+    long f = static_cast<long>(offset / row_height) - OVERSCAN;
+    long l = static_cast<long>((offset + viewport) / row_height) + OVERSCAN;
+    first = static_cast<size_t>(std::clamp<long>(f, 0, n - 1));
+    last = static_cast<size_t>(std::clamp<long>(l, 0, n - 1));
+  } else {
+    // First frame (viewport not measured yet): render an initial window.
+    last = static_cast<size_t>(std::min<long>(n - 1, 60));
+  }
+
+  if (first > 0) {
+    div(ctx, mk(entity, 0),
+        ComponentConfig{}
+            .with_size(ComponentSize{percent(1.0f),
+                                     pixels(static_cast<float>(first) * row_height)})
+            .with_transparent_bg()
+            .with_debug_name("vlist_top_spacer"));
+  }
+  for (size_t i = first; i <= last && i < count; ++i) {
+    auto row = div(ctx, mk(entity, static_cast<int>(i) + 1),
+                   ComponentConfig{}
+                       .with_size(ComponentSize{percent(1.0f), pixels(row_height)})
+                       .with_transparent_bg()
+                       .with_debug_name("vlist_row"));
+    render_row(i, row.ent());
+  }
+  size_t below = (last + 1 < count) ? (count - 1 - last) : 0;
+  if (below > 0) {
+    div(ctx, mk(entity, n + 2),
+        ComponentConfig{}
+            .with_size(ComponentSize{percent(1.0f),
+                                     pixels(static_cast<float>(below) * row_height)})
+            .with_transparent_bg()
+            .with_debug_name("vlist_bottom_spacer"));
+  }
+  return {true, entity};
+}
+
 /// Horizontal stack — a div with FlexDirection::Row preset.
 ///
 /// Default size: percent(1.0) x children() — fills parent width, shrinks
