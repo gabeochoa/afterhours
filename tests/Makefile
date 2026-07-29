@@ -45,6 +45,7 @@ ALL_TESTS := \
 	entity_pool_test \
 	entity_query_test \
 	input_injector_mouse_delta_test \
+	library_get_test \
 	progress_bar_test \
 	render_order_test \
 	slider_test \
@@ -70,6 +71,9 @@ entity_mapping_test: entity_mapping_test.cpp ../examples/entity_mapping_test_hel
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 
 entity_pool_test: entity_pool_test.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+
+library_get_test: library_get_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 
 entity_query_test: entity_query_test.cpp
