@@ -690,6 +690,9 @@ inline void draw_circle_lines(int centerX, int centerY, float radius,
 inline void draw_circle_sector(Vector2Type center, float radius,
                                float startAngle, float endAngle, int segments,
                                Color color) {
+  if (startAngle == endAngle)
+    return; // zero sweep: nothing to draw (matches draw_ring_segment; also
+            // avoids a 0/0 = NaN stepLength when segments is 0)
   if (radius <= 0.0f)
     radius = 0.1f;
 
@@ -730,6 +733,9 @@ inline void draw_circle_sector(Vector2Type center, float radius,
 inline void draw_circle_sector_lines(Vector2Type center, float radius,
                                      float startAngle, float endAngle,
                                      int segments, Color color) {
+  if (startAngle == endAngle)
+    return; // zero sweep: nothing to draw (matches draw_ring_segment; also
+            // avoids a 0/0 = NaN stepLength when segments is 0)
   if (radius <= 0.0f)
     radius = 0.1f;
 
