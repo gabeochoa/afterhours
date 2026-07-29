@@ -136,11 +136,12 @@ inline void sokol_init_cb() {
   sg_desc desc{};
   desc.environment = sglue_environment();
   desc.logger.func = slog_func;
-  // TODO: Fix sgl pipeline sample_count mismatch between swapchain (4x MSAA)
-  // and offscreen render textures (1x). The mismatch is harmless on Metal
-  // but triggers validation errors. Proper fix: match sample counts or use
-  // per-pass sgl pipelines.
-  // Validation is enabled (no disable_validation).
+  // sgl sample_count: the default sgl context here matches the swapchain (4x
+  // MSAA); offscreen render textures are drawn through their own per-texture
+  // sgl_context created with the render texture's sample_count (see
+  // load_render_texture + begin_texture_mode in drawing_helpers.h), so each
+  // pass draws with a pipeline whose sample_count matches its target. Validation
+  // is enabled (no disable_validation).
   sg_setup(&desc);
   stm_setup();
   g_start_time = stm_now();
