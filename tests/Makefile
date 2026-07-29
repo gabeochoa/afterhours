@@ -218,6 +218,7 @@ ALL_TESTS := \
 	menu_test \
 	color_swatch_test \
 	overlay_placement_test \
+	library_get_test \
 	progress_bar_test \
 	pagination_test \
 	random_engine_test \
@@ -367,6 +368,11 @@ $(ALL_TESTS): %: $(OUT)/%
 # One rule for every test. The raylib split rides on target-specific variables
 # rather than a second copy of the recipe.
 RAYLIB_BINS := $(addprefix $(OUT)/,$(RAYLIB_TESTS))
+library_get_test: library_get_test.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+
+entity_query_test: entity_query_test.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 
 CXXFLAGS_T = $(CXXFLAGS)
 INCLUDES_T = $(INCLUDES)
