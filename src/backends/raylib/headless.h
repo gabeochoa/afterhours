@@ -11,6 +11,7 @@
 
 #include "../../graphics/platform/headless_gl.h"
 #include "../../graphics_common.h"
+#include "../../logging.h"
 
 namespace afterhours::graphics {
 
@@ -141,6 +142,11 @@ struct RaylibHeadless {
 
     // Get image from texture
     raylib::Image img = raylib::LoadImageFromTexture(render_texture.texture);
+    if (img.data == nullptr) { // readback failed (invalid/unloaded texture)
+      log_error("capture_frame: texture readback returned a null image "
+                "(invalid/unloaded render texture)");
+      return false;
+    }
     raylib::ImageFlipVertical(&img);
 
     // Export using raylib (uses stb_image_write internally)
