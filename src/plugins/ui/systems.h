@@ -1102,27 +1102,11 @@ struct UpdateDropdownOptions
   }
 
   UpdateDropdownOptions()
-      : SystemWithUIContext<HasDropdownState, HasChildrenComponent>() {
-// TODO figure out if this actually will cause trouble
-// Remove include_derived_children since we want to process entities with direct
-// components
-#if __WIN32
-// this->include_derived_children = true;
-#else
-// this->include_derived_children = true;
-#endif
-  }
+      : SystemWithUIContext<HasDropdownState, HasChildrenComponent>() {}
 
-#if __WIN32
-  virtual void for_each_with(Entity &entity, UIComponent &component,
-                             HasDropdownState &hasDropdownState,
-                             HasChildrenComponent &hasChildren, float){
-
-#else
   virtual void for_each_with(Entity &entity, UIComponent &component,
                              HasDropdownState &hasDropdownState,
                              HasChildrenComponent &hasChildren, float) {
-#endif
       // The system should automatically filter entities to only those with
       // required components No need to manually check since
       // SystemWithUIContext<HasDropdownState, HasChildrenComponent> handles
