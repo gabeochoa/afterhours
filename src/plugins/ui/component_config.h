@@ -115,6 +115,7 @@ struct ComponentConfig {
   RenderPrimitive::CustomDrawFn on_draw_fg;
 
   std::string font_name = UIComponent::UNSET_FONT;
+  colors::FontWeight font_weight = colors::FontWeight::Regular;
   Size font_size = pixels(50.f);
   bool font_size_explicitly_set = false;
   bool is_internal = false;
@@ -544,6 +545,13 @@ struct ComponentConfig {
     return with_font(font_name_, pixels(font_size_px));
   }
 
+  // Select a weight variant of the current font (resolved to a registered
+  // "<font>@<weight>" font at render, falling back to the base font).
+  ComponentConfig &with_font_weight(colors::FontWeight weight) {
+    font_weight = weight;
+    return *this;
+  }
+
   /// Set only the font size, leaving the font name to be resolved from
   /// the default font. Use this when you want a custom size but the
   /// theme/default font name.
@@ -830,6 +838,9 @@ struct ComponentConfig {
     if (overrides.has_font_override()) {
       merged.font_name = overrides.font_name;
     }
+    if (overrides.font_weight != colors::FontWeight::Regular) {
+      merged.font_weight = overrides.font_weight;
+    }
     if (overrides.has_font_override() || overrides.has_font_size_override()) {
       merged.font_size = overrides.font_size;
       merged.font_size_explicitly_set = overrides.font_size_explicitly_set;
@@ -881,6 +892,7 @@ struct ComponentConfig {
     select_on_focus = parent.select_on_focus;
     click_activation = parent.click_activation;
     font_name = parent.font_name;
+    font_weight = parent.font_weight;
     font_size = parent.font_size;
     font_size_explicitly_set = parent.font_size_explicitly_set;
     is_internal = parent.is_internal;

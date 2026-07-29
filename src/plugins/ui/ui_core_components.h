@@ -120,12 +120,15 @@ struct UIComponent : BaseComponent {
   std::string font_name = UNSET_FONT;
   Size font_size = pixels(50.f);
   bool font_size_explicitly_set = false;
+  colors::FontWeight font_weight = colors::FontWeight::Regular;
 
   auto &enable_font(const std::string &font_name_, Size fs,
-                    bool explicit_size = false) {
+                    bool explicit_size = false,
+                    colors::FontWeight fw = colors::FontWeight::Regular) {
     font_name = font_name_;
     font_size = fs;
     font_size_explicitly_set = explicit_size;
+    font_weight = fw;
     return *this;
   }
 
@@ -390,6 +393,33 @@ struct FontManager : BaseComponent {
     return fonts.at(active_font);
   }
   Font get_font(const std::string &name) const { return fonts.at(name); }
+
+  static std::string weight_suffix(colors::FontWeight w) {
+    switch (w) {
+    case colors::FontWeight::Light:
+      return "@light";
+    case colors::FontWeight::Medium:
+      return "@medium";
+    case colors::FontWeight::SemiBold:
+      return "@semibold";
+    case colors::FontWeight::Bold:
+      return "@bold";
+    default:
+      return "";
+    }
+  }
+
+  // Resolve a (base font name, weight) to a registered weight-variant font name
+  // (convention: "<base>@<weight>"), falling back to the base if no variant is
+  // loaded. Lets callers use with_font_weight() without every font having a
+  // variant registered.
+  std::string resolve_weighted(const std::string &base,
+                               colors::FontWeight w) const {
+    if (w == colors::FontWeight::Regular)
+      return base;
+    std::string key = base + weight_suffix(w);
+    return fonts.contains(key) ? key : base;
+  }
 };
 
 enum struct TextAlignment {

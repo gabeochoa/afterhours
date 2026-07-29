@@ -345,7 +345,8 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
 
   if (config.font_name != UIComponent::UNSET_FONT) {
     entity.get<UIComponent>().enable_font(config.font_name, config.font_size,
-                                          config.font_size_explicitly_set);
+                                          config.font_size_explicitly_set,
+                                          config.font_weight);
   }
 
   if (Theme::is_valid(config.color_usage)) {

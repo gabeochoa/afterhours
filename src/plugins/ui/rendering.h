@@ -1616,7 +1616,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       return;
 
     if (cmp.font_name != UIComponent::UNSET_FONT) {
-      font_manager.set_active(cmp.font_name);
+      font_manager.set_active(
+          font_manager.resolve_weighted(cmp.font_name, cmp.font_weight));
     }
 
     // Scroll views define their own viewport — don't clip them by ancestors.
@@ -2260,10 +2261,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                         std::max(0.f, (label_rect.height - total_h) * 0.5f);
               for (const auto &ln : lines) {
                 RectangleType lr{label_rect.x, y, label_rect.width, line_h};
-                buffer.add_text(lr, ln, cmp.font_name, font_size, font_col,
-                                hasLabel.alignment, layer, entity.id, stroke,
-                                shadow, rotation, centerX, centerY,
-                                hasLabel.letter_spacing);
+                buffer.add_text(
+                    lr, ln,
+                    font_manager.resolve_weighted(cmp.font_name, cmp.font_weight),
+                    font_size, font_col, hasLabel.alignment, layer, entity.id,
+                    stroke, shadow, rotation, centerX, centerY,
+                    hasLabel.letter_spacing);
                 y += line_h;
               }
               wrapped = true;
@@ -2272,10 +2275,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         }
 
         if (!wrapped) {
-          buffer.add_text(label_rect, display_text, cmp.font_name,
-                          result.rect.height, font_col, hasLabel.alignment,
-                          layer, entity.id, stroke, shadow, rotation, centerX,
-                          centerY, hasLabel.letter_spacing);
+          buffer.add_text(
+              label_rect, display_text,
+              font_manager.resolve_weighted(cmp.font_name, cmp.font_weight),
+              result.rect.height, font_col, hasLabel.alignment, layer, entity.id,
+              stroke, shadow, rotation, centerX, centerY,
+              hasLabel.letter_spacing);
         }
 
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
@@ -2342,7 +2347,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       return;
 
     if (cmp.font_name != UIComponent::UNSET_FONT) {
-      font_manager.set_active(cmp.font_name);
+      font_manager.set_active(
+          font_manager.resolve_weighted(cmp.font_name, cmp.font_weight));
     }
 
     // Scroll views define their own viewport — don't clip them by ancestors.
