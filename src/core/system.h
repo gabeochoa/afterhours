@@ -353,7 +353,6 @@ struct System
     static constexpr bool has_tag_requirements =
         (is_tag_type<Components>::value || ...);
 
-#if __APPLE__
     static TagBitset required_all_mask() {
         static TagBitset m = (TagBitset{} | ... | AllMask<Components>::value());
         return m;
@@ -384,10 +383,6 @@ struct System
             return true;
         }
     }
-
-#else
-    static bool tags_ok(const Entity &) { return true; }
-#endif
 
     void for_each(Entity &entity, const float dt) {
         if (!tags_ok(entity)) return;
