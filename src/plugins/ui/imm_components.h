@@ -1452,13 +1452,16 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
     Entity &trigger = UICollectionHolder::getEntityForIDEnforce(id);
     trigger.get<ui::HasLabel>().label =
         fmt::format("{}{}", std::string(options[opt]),
-                    config.dropdown_closed_indicator.value_or(" v"));
+                    config.dropdown_closed_indicator.value_or(
+                        ComponentConfig::DEFAULT_DROPDOWN_CLOSED));
     ctx.set_focus(trigger.id);
   };
 
   auto current_option = std::string(options[dropdownState.last_option_clicked]);
-  auto drop_closed = config.dropdown_closed_indicator.value_or(" v");
-  auto drop_open = config.dropdown_open_indicator.value_or(" ^");
+  auto drop_closed = config.dropdown_closed_indicator.value_or(
+      ComponentConfig::DEFAULT_DROPDOWN_CLOSED);
+  auto drop_open = config.dropdown_open_indicator.value_or(
+      ComponentConfig::DEFAULT_DROPDOWN_OPEN);
   auto drop_arrow_icon = dropdownState.on ? drop_open : drop_closed;
   auto main_button_label = fmt::format("{}{}", current_option, drop_arrow_icon);
   // TODO hot sibling summary: previously, when a label was present to the
