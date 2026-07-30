@@ -61,7 +61,7 @@ inline float measure_text_internal(const char *text, const float size) {
     return 0.f;
   fonsSetFont(ctx, graphics::metal_detail::g_active_font);
   // Measure at DPI-scaled size (matching draw_text) and convert back to logical pixels.
-  float dpi = sapp_dpi_scale();
+  float dpi = graphics::metal_detail::dpi_scale();
   fonsSetSize(ctx, size * dpi);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   return fonsTextBounds(ctx, 0, 0, text, nullptr, nullptr) / dpi;
@@ -78,7 +78,7 @@ inline Vector2Type measure_text(const Font font, const char *text,
     return Vector2Type{0, 0};
   fonsSetFont(ctx, fid);
   // Measure at DPI-scaled size (matching draw_text_ex) and convert back.
-  float dpi = sapp_dpi_scale();
+  float dpi = graphics::metal_detail::dpi_scale();
   fonsSetSize(ctx, size * dpi);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   float bounds[4] = {};

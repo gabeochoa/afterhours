@@ -45,7 +45,7 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
   // We scale the fontstash size up by dpi_scale and draw in a coordinate
   // space that is 1/dpi_scale, so the resulting quads land at the correct
   // logical pixel position.
-  float dpi = sapp_dpi_scale();
+  float dpi = graphics::metal_detail::dpi_scale();
   if (dpi > 1.01f) {
     float inv = 1.0f / dpi;
     fonsSetSize(ctx, font_size * dpi);
@@ -68,7 +68,7 @@ inline void draw_text(const char *content, const float x, const float y,
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
 
-  float dpi = sapp_dpi_scale();
+  float dpi = graphics::metal_detail::dpi_scale();
   if (dpi > 1.01f) {
     float inv = 1.0f / dpi;
     fonsSetSize(ctx, font_size * dpi);
@@ -524,7 +524,7 @@ inline void draw_ring(float centerX, float centerY, float innerRadius,
 
 inline void begin_scissor_mode(int x, int y, int w, int h) {
   // Scissor operates in framebuffer pixels; scale logical coords by DPI.
-  float dpi = sapp_dpi_scale();
+  float dpi = graphics::metal_detail::dpi_scale();
   sgl_scissor_rect(
       static_cast<int>(static_cast<float>(x) * dpi),
       static_cast<int>(static_cast<float>(y) * dpi),
@@ -535,7 +535,8 @@ inline void begin_scissor_mode(int x, int y, int w, int h) {
 
 inline void end_scissor_mode() {
   // Reset scissor to full viewport (framebuffer pixels)
-  sgl_scissor_rect(0, 0, sapp_width(), sapp_height(), true);
+  sgl_scissor_rect(0, 0, graphics::metal_detail::screen_w(),
+                   graphics::metal_detail::screen_h(), true);
 }
 
 inline void push_rotation(float centerX, float centerY, float rotation) {

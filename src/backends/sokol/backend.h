@@ -43,6 +43,23 @@
 // Shared state (also used by font_helper.h)
 #include "metal_state.h"
 
+// Offscreen render-texture helpers are defined later in
+// backends/sokol/drawing_helpers.h — but that header pulls in graphics.h (hence
+// this file) *before* it defines them, so forward-declare the few the headless
+// frame path needs here. Any TU that odr-uses the headless branches also
+// includes drawing_helpers.h (it renders UI), so the definitions are present.
+namespace afterhours {
+graphics::RenderTextureType load_render_texture(int w, int h);
+void unload_render_texture(graphics::RenderTextureType &rt);
+void begin_texture_mode(graphics::RenderTextureType &rt);
+void end_texture_mode();
+} // namespace afterhours
+
+// Implemented in capture_impl.h (the SOKOL_IMPL Objective-C++ TU).
+extern "C" const void *metal_create_system_device(void);
+extern "C" bool metal_capture_render_texture(uint32_t color_img_id, int width,
+                                             int height, const char *path);
+
 namespace afterhours::graphics {
 
 namespace metal_detail {
@@ -57,6 +74,27 @@ struct ShaderRecord {
 };
 inline std::unordered_map<uint32_t, ShaderRecord> g_shaders;
 inline uint32_t g_active_shader_id = 0;
+
+// Offscreen render target for headless (windowless) mode, created in metal_init.
+inline RenderTextureType g_headless_rt{};
+
+// sokol_gl + fontstash setup shared by the windowed (sokol_init_cb) and headless
+// (metal_init) bootstraps. Assumes sg_setup() has already run.
+inline void setup_sokol_gl_and_fonts() {
+  sgl_desc_t sgl_desc{};
+  sgl_desc.max_vertices = 1 << 18; // 262144 vertices
+  sgl_desc.max_commands = 1 << 16; // 65536 commands
+  sgl_desc.logger.func = slog_func;
+  sgl_setup(&sgl_desc);
+
+  sfons_desc_t sfons_desc{};
+  sfons_desc.width = 2048;
+  sfons_desc.height = 2048;
+  g_fons_ctx = sfons_create(&sfons_desc);
+  if (g_fons_ctx == nullptr) {
+    log_error("sfons_create failed (2048x2048 atlas); text rendering disabled");
+  }
+}
 
 // ── Input state ──
 // Sokol keycodes are GLFW-compatible (0-511 range covers all keys).
@@ -146,25 +184,8 @@ inline void sokol_init_cb() {
   stm_setup();
   g_start_time = stm_now();
 
-  // Initialize sokol_gl for 2D drawing (generous buffer for complex UIs)
-  sgl_desc_t sgl_desc{};
-  sgl_desc.max_vertices = 1 << 18; // 262144 vertices
-  sgl_desc.max_commands = 1 << 16; // 65536 commands
-  sgl_desc.logger.func = slog_func;
-  sgl_setup(&sgl_desc);
-
-  // Initialize fontstash for text rendering.
-  // Use a 2048x2048 atlas so high-DPI glyphs fit without overflow.
-  sfons_desc_t sfons_desc{};
-  sfons_desc.width = 2048;
-  sfons_desc.height = 2048;
-  g_fons_ctx = sfons_create(&sfons_desc);
-  if (g_fons_ctx == nullptr) {
-    // Atlas allocation failed (e.g. GPU OOM at startup). All text calls guard
-    // on !g_fons_ctx and become no-ops, so this manifests as silently missing
-    // text app-wide — log it loudly so it's diagnosable rather than baffling.
-    log_error("sfons_create failed (2048x2048 atlas); text rendering disabled");
-  }
+  // Initialize sokol_gl (2D drawing) + fontstash (text). Shared with headless.
+  setup_sokol_gl_and_fonts();
 
   g_initialized = true;
 
@@ -320,6 +341,13 @@ struct MetalPlatformAPI {
 
   // ── Frame ──
   static void begin_drawing() {
+    // Headless: no swapchain — render into the offscreen texture instead. This
+    // sets up the ortho projection + GL→Metal fixup internally, so we return.
+    if (metal_detail::g_headless) {
+      ::afterhours::begin_texture_mode(metal_detail::g_headless_rt);
+      return;
+    }
+
     sg_pass pass{};
     pass.action = metal_detail::g_pass_action;
     pass.swapchain = sglue_swapchain();
@@ -350,6 +378,14 @@ struct MetalPlatformAPI {
   }
 
   static void end_drawing() {
+    // Headless: close the offscreen pass (flushes fontstash + sokol_gl draws)
+    // and submit the GPU work so the render texture is ready for readback.
+    if (metal_detail::g_headless) {
+      ::afterhours::end_texture_mode();
+      sg_commit();
+      return;
+    }
+
     if (metal_detail::g_camera_mode_depth != 0) {
       while (metal_detail::g_camera_mode_depth > 0) {
         sgl_matrix_mode_modelview();
@@ -378,10 +414,11 @@ struct MetalPlatformAPI {
         static_cast<float>(c.a) / 255.0f,
     };
     // Draw a full-screen quad so the first frame isn't black
-    // (pass action only takes effect on the next begin_pass)
-    float dpi_bg = sapp_dpi_scale();
-    float w = static_cast<float>(sapp_width()) / dpi_bg;
-    float h = static_cast<float>(sapp_height()) / dpi_bg;
+    // (pass action only takes effect on the next begin_pass). Headless has no
+    // swapchain, so size the quad from the render texture via the shim.
+    float dpi_bg = metal_detail::dpi_scale();
+    float w = static_cast<float>(metal_detail::screen_w()) / dpi_bg;
+    float h = static_cast<float>(metal_detail::screen_h()) / dpi_bg;
     sgl_begin_quads();
     sgl_c4b(c.r, c.g, c.b, c.a);
     sgl_v2f(0, 0);
@@ -394,12 +431,18 @@ struct MetalPlatformAPI {
   // ── Screen / timing ──
   // Return logical (CSS) pixel dimensions, not framebuffer pixels.
   static int get_screen_width() {
-    return static_cast<int>(static_cast<float>(sapp_width()) / sapp_dpi_scale());
+    return static_cast<int>(static_cast<float>(metal_detail::screen_w()) /
+                            metal_detail::dpi_scale());
   }
   static int get_screen_height() {
-    return static_cast<int>(static_cast<float>(sapp_height()) / sapp_dpi_scale());
+    return static_cast<int>(static_cast<float>(metal_detail::screen_h()) /
+                            metal_detail::dpi_scale());
   }
   static float get_frame_time() {
+    // No sokol_app in headless: sapp_frame_duration() is invalid. Advance the
+    // sim at a fixed step so frame-driven logic still progresses.
+    if (metal_detail::g_headless)
+      return 1.0f / 60.0f;
     return static_cast<float>(sapp_frame_duration());
   }
   static float get_fps() {
@@ -416,7 +459,7 @@ struct MetalPlatformAPI {
     if (!ctx || metal_detail::g_active_font == FONS_INVALID)
       return 0;
     fonsSetFont(ctx, metal_detail::g_active_font);
-    float dpi = sapp_dpi_scale();
+    float dpi = metal_detail::dpi_scale();
     fonsSetSize(ctx, static_cast<float>(font_size) * dpi);
     return static_cast<int>(fonsTextBounds(ctx, 0, 0, text, nullptr, nullptr) / dpi);
   }
@@ -693,31 +736,93 @@ namespace metal_backend {
 
 inline bool metal_init(const Config &cfg) {
   if (cfg.display == DisplayMode::Headless) {
-    log_error("@notimplemented metal headless mode");
-    return false;
+    // Windowless offscreen rendering: create our own Metal device (no
+    // sokol_app / WindowServer), set up sokol_gfx against it with no swapchain,
+    // and render into an offscreen texture we can read back to PNG.
+    metal_detail::g_headless = true;
+    metal_detail::g_headless_w = cfg.width;
+    metal_detail::g_headless_h = cfg.height;
+
+    const void *device = metal_create_system_device();
+    if (!device) {
+      log_error("metal headless: MTLCreateSystemDefaultDevice failed (no GPU?)");
+      metal_detail::g_headless = false;
+      return false;
+    }
+
+    sg_desc desc{};
+    desc.environment.metal.device = device;
+    // No swapchain to query, so give load_render_texture sane defaults.
+    desc.environment.defaults.color_format = SG_PIXELFORMAT_BGRA8;
+    desc.environment.defaults.depth_format = SG_PIXELFORMAT_DEPTH_STENCIL;
+    desc.environment.defaults.sample_count = 1;
+    desc.logger.func = slog_func;
+    sg_setup(&desc);
+    if (!sg_isvalid()) {
+      log_error("metal headless: sg_setup failed");
+      metal_detail::g_headless = false;
+      return false;
+    }
+    stm_setup();
+    metal_detail::g_start_time = stm_now();
+    metal_detail::setup_sokol_gl_and_fonts();
+    metal_detail::g_initialized = true;
+
+    metal_detail::g_headless_rt = load_render_texture(cfg.width, cfg.height);
+    if (metal_detail::g_headless_rt.color_img_id == 0) {
+      log_error("metal headless: offscreen render texture creation failed "
+                "({}x{})",
+                cfg.width, cfg.height);
+      return false;
+    }
+    return true;
   }
   // Sokol owns the app lifecycle via sapp_run() in MetalPlatformAPI::run().
-  // Keep graphics::init() explicitly unsupported, but ensure the backend is
-  // registered so failures are deterministic.
+  // Keep the windowed graphics::init() path unsupported (use graphics::run).
   log_error("@notimplemented graphics::init on metal backend; use graphics::run");
   return false;
 }
 
-inline void metal_shutdown() {}
+inline void metal_shutdown() {
+  if (!metal_detail::g_headless)
+    return;
+  unload_render_texture(metal_detail::g_headless_rt);
+  if (metal_detail::g_fons_ctx) {
+    sfons_destroy(metal_detail::g_fons_ctx);
+    metal_detail::g_fons_ctx = nullptr;
+  }
+  sgl_shutdown();
+  sg_shutdown();
+  metal_detail::g_initialized = false;
+  metal_detail::g_headless = false;
+}
 
 inline void metal_begin_frame() { MetalPlatformAPI::begin_drawing(); }
 
 inline void metal_end_frame() { MetalPlatformAPI::end_drawing(); }
 
-inline bool metal_capture_frame(const std::filesystem::path &) { return false; }
+inline bool metal_capture_frame(const std::filesystem::path &path) {
+  if (!metal_detail::g_headless)
+    return false;
+  auto &rt = metal_detail::g_headless_rt;
+  if (rt.color_img_id == 0)
+    return false;
+  return metal_capture_render_texture(rt.color_img_id, rt.width, rt.height,
+                                      path.string().c_str());
+}
 
-inline float metal_get_delta_time() { return MetalPlatformAPI::get_frame_time(); }
+inline float metal_get_delta_time() {
+  // No sokol_app in headless: sapp_frame_duration() is invalid, so advance the
+  // sim at a fixed step.
+  if (metal_detail::g_headless)
+    return 1.0f / 60.0f;
+  return MetalPlatformAPI::get_frame_time();
+}
 
-inline bool metal_is_headless() { return false; }
+inline bool metal_is_headless() { return metal_detail::g_headless; }
 
 inline RenderTextureType &metal_get_render_texture() {
-  static RenderTextureType dummy{};
-  return dummy;
+  return metal_detail::g_headless_rt;
 }
 
 inline void ensure_registered() {

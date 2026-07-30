@@ -5,8 +5,27 @@
 #include <cstdint>
 #include <fontstash/fontstash.h>
 #include <functional>
+// For sapp_dpi_scale/sapp_width/sapp_height used by the shim accessors below.
+// Declarations only (no SOKOL_IMPL); include-guard makes this safe to repeat.
+#include <sokol/sokol_app.h>
 
 namespace afterhours::graphics::metal_detail {
+
+// ── Headless (windowless) rendering state ──
+// When true, there is no sokol_app: no window, no swapchain, no WindowServer.
+// The backend renders into an offscreen render texture instead (see backend.h /
+// metal_init). The accessors below feed logical-pixel size/scale to the text
+// and drawing code that would otherwise ask sokol_app.
+inline bool g_headless = false;
+inline int g_headless_w = 0;
+inline int g_headless_h = 0;
+
+// Device-pixel scale. Headless renders 1:1 (logical == device pixels).
+inline float dpi_scale() { return g_headless ? 1.0f : sapp_dpi_scale(); }
+// Framebuffer size in device pixels. Headless has no swapchain, so use the
+// configured render-texture size (which we render at dpi=1).
+inline int screen_w() { return g_headless ? g_headless_w : sapp_width(); }
+inline int screen_h() { return g_headless ? g_headless_h : sapp_height(); }
 
 inline std::function<void()> g_init_fn;
 inline std::function<void()> g_frame_fn;
