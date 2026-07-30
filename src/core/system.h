@@ -467,7 +467,11 @@ struct SystemManager {
             system->once(dt);
             if (system->should_iterate()) {
                 system->on_iteration_begin(dt);
-                for (const auto &entity : entities) {
+                // Index-based so a push_back to entities (e.g. a for_each that
+                // triggers a merge) doesn't invalidate our iterator.
+                const std::size_t entity_count = entities.size();
+                for (std::size_t idx = 0; idx < entity_count; ++idx) {
+                    const auto &entity = entities[idx];
                     if (!entity) continue;
                     if (system->include_derived_children)
                         system->for_each_derived(*entity, dt);
@@ -487,7 +491,11 @@ struct SystemManager {
             system->once(dt);
             if (system->should_iterate()) {
                 system->on_iteration_begin(dt);
-                for (const auto &entity : entities) {
+                // Index-based so a push_back to entities (e.g. a for_each that
+                // triggers a merge) doesn't invalidate our iterator.
+                const std::size_t entity_count = entities.size();
+                for (std::size_t idx = 0; idx < entity_count; ++idx) {
+                    const auto &entity = entities[idx];
                     if (!entity) continue;
                     if (system->include_derived_children)
                         system->for_each_derived(*entity, dt);
@@ -506,7 +514,11 @@ struct SystemManager {
             system->once(dt);
             if (system->should_iterate()) {
                 system->on_iteration_begin(dt);
-                for (const auto &entity : entities) {
+                // Index-based so a push_back to entities (e.g. a for_each that
+                // triggers a merge) doesn't invalidate our iterator.
+                const std::size_t entity_count = entities.size();
+                for (std::size_t idx = 0; idx < entity_count; ++idx) {
+                    const auto &entity = entities[idx];
                     if (!entity) continue;
                     if (system->include_derived_children)
                         system->for_each_derived(*entity, dt);
@@ -521,7 +533,11 @@ struct SystemManager {
             sys.once(dt);
             if (sys.should_iterate()) {
                 sys.on_iteration_begin(dt);
-                for (const auto &entity : entities) {
+                // Index-based so a push_back to entities doesn't invalidate our
+                // iterator (see note in tick).
+                const std::size_t entity_count = entities.size();
+                for (std::size_t idx = 0; idx < entity_count; ++idx) {
+                    const auto &entity = entities[idx];
                     if (!entity) continue;
                     const Entity &e = *entity;
                     if (sys.include_derived_children)
