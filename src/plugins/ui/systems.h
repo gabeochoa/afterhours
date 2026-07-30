@@ -64,6 +64,84 @@ static inline RectangleType apply_scroll_offset(const Entity &entity,
   rect.y -= off.y;
   return rect;
 }
+
+static inline RectangleType intersect_rects(const RectangleType &a,
+                                            const RectangleType &b) {
+  float x1 = std::max(a.x, b.x);
+  float y1 = std::max(a.y, b.y);
+  float x2 = std::min(a.x + a.width, b.x + b.width);
+  float y2 = std::min(a.y + a.height, b.y + b.height);
+  RectangleType r;
+  r.x = x1;
+  r.y = y1;
+  r.width = std::max(0.0f, x2 - x1);
+  r.height = std::max(0.0f, y2 - y1);
+  return r;
+}
+
+// Walk the full ancestor chain and intersect ALL clip rects (HasScrollView and
+// HasClipChildren). This handles arbitrary nesting of clip containers. The one
+// source of truth used by both render (rendering.h scissor) and hit-testing
+// (HandleClicks below), so a row scissored out of a scroll viewport is also not
+// clickable. Auto-overflow scroll views that don't need scrolling are excluded.
+// Returns {true, rect} if any clip ancestor was found, {false, {}} otherwise.
+static inline std::pair<bool, RectangleType>
+compute_intersected_clip_rect(const Entity &entity) {
+  if (!entity.has<UIComponent>())
+    return {false, {}};
+
+  EntityID pid = entity.get<UIComponent>().parent;
+  bool found = false;
+  RectangleType result = {};
+
+  int guard = 0;
+  while (pid >= 0 && guard < 64) {
+    OptEntity opt_parent = UICollectionHolder::getEntityForID(pid);
+    if (!opt_parent.valid())
+      break;
+    Entity &parent = opt_parent.asE();
+
+    if (parent.has<HasScrollView>() || parent.has<HasClipChildren>()) {
+      if (parent.has<HasScrollView>()) {
+        const HasScrollView &sv = parent.get<HasScrollView>();
+        if (sv.auto_overflow && !sv.needs_scroll_y() &&
+            !sv.needs_scroll_x()) {
+          if (!parent.has<UIComponent>())
+            break;
+          pid = parent.get<UIComponent>().parent;
+          ++guard;
+          continue;
+        }
+      }
+
+      RectangleType ancestor_rect = parent.get<UIComponent>().rect();
+      Vector2Type aoff = accumulated_scroll_offset(parent);
+      ancestor_rect.x -= aoff.x;
+      ancestor_rect.y -= aoff.y;
+      if (!found) {
+        result = ancestor_rect;
+        found = true;
+      } else {
+        result = intersect_rects(result, ancestor_rect);
+      }
+    }
+
+    if (!parent.has<UIComponent>())
+      break;
+    pid = parent.get<UIComponent>().parent;
+    ++guard;
+  }
+  return {found, result};
+}
+
+// Clip a hit-test rect to the entity's effective clip viewport, so a widget
+// scissored out of a scroll view is not clickable outside it. No-op when the
+// entity has no clip ancestor.
+static inline RectangleType clip_hit_rect(const Entity &entity,
+                                          RectangleType rect) {
+  auto [has_clip, clip] = compute_intersected_clip_rect(entity);
+  return has_clip ? intersect_rects(rect, clip) : rect;
+}
 } // namespace detail
 
 /// Singleton component that caches entity mappings for fast lookups during
@@ -565,6 +643,9 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
       rect = entity.get<HasUIModifiers>().apply_modifier(rect);
     }
     rect = detail::apply_scroll_offset(entity, rect);
+    // Clip to the scroll viewport so a row scissored out of view (rendering.h)
+    // is not clickable outside it — mirrors the render cull.
+    rect = detail::clip_hit_rect(entity, rect);
 
     context->active_if_mouse_inside(entity.id, rect);
 
@@ -618,6 +699,7 @@ private:
         child_rect = child.get<HasUIModifiers>().apply_modifier(child_rect);
       }
       child_rect = detail::apply_scroll_offset(child, child_rect);
+      child_rect = detail::clip_hit_rect(child, child_rect);
       context->active_if_mouse_inside(child.id, child_rect);
 
       if (context->has_focus(child.id) &&
@@ -658,6 +740,7 @@ inline bool is_point_inside_entity_tree(EntityID entity_id,
     rect = entity.get<HasUIModifiers>().apply_modifier(rect);
   }
   rect = detail::apply_scroll_offset(entity, rect);
+  rect = detail::clip_hit_rect(entity, rect);
   if (is_mouse_inside(pos, rect))
     return true;
 
