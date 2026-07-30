@@ -63,6 +63,45 @@ static id<MTLTexture> metal_resolve_msaa(id<MTLTexture> src) {
   return resolved;
 }
 
+// Blit-copy a non-MSAA texture into a fresh MTLStorageModeShared texture so the
+// CPU can read it with getBytes. Render targets are MTLStorageModePrivate on
+// macOS; getBytes on a Private texture returns garbage/zeros. The command buffer
+// runs after sokol's already-committed offscreen pass (same queue = ordered),
+// and waitUntilCompleted gives us the GPU->done sync point before readback.
+// Returns nil on failure.
+static id<MTLTexture> metal_copy_to_shared(id<MTLTexture> src) {
+  MTLTextureDescriptor *desc = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:[src pixelFormat]
+                                   width:[src width]
+                                  height:[src height]
+                               mipmapped:NO];
+  desc.usage = MTLTextureUsageShaderRead;
+  desc.storageMode = MTLStorageModeShared;
+
+  id<MTLDevice> device = (__bridge id<MTLDevice>)sg_mtl_device();
+  id<MTLTexture> shared = [device newTextureWithDescriptor:desc];
+  if (!shared)
+    return nil;
+
+  id<MTLCommandQueue> queue =
+      (__bridge id<MTLCommandQueue>)sg_mtl_command_queue();
+  id<MTLCommandBuffer> cmd = [queue commandBuffer];
+  id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
+  [blit copyFromTexture:src
+            sourceSlice:0
+            sourceLevel:0
+           sourceOrigin:MTLOriginMake(0, 0, 0)
+             sourceSize:MTLSizeMake([src width], [src height], 1)
+              toTexture:shared
+       destinationSlice:0
+       destinationLevel:0
+      destinationOrigin:MTLOriginMake(0, 0, 0)];
+  [blit endEncoding];
+  [cmd commit];
+  [cmd waitUntilCompleted];
+  return shared;
+}
+
 // Read pixels from a sokol sg_image (color attachment / render texture).
 // Returns an RGBA8 pixel buffer. Caller must free() the returned pointer.
 // Returns nullptr on failure. Handles both MSAA and non-MSAA textures.
@@ -83,9 +122,25 @@ static uint8_t *metal_read_image_pixels(sg_image img_id, int width,
   if (!tex)
     return nullptr;
 
-  // If MSAA, resolve to a single-sample texture first.
-  id<MTLTexture> resolved = metal_resolve_msaa(tex);
-  id<MTLTexture> read_tex = resolved ? resolved : tex;
+  // Get a host-readable, single-sample texture:
+  //  - MSAA: resolve to a Shared single-sample texture.
+  //  - non-MSAA already Shared (e.g. resolved earlier): read directly.
+  //  - non-MSAA Private (the offscreen render-target case): blit-copy to Shared.
+  // Both resolve/copy paths waitUntilCompleted, which also acts as the GPU sync
+  // point after sokol's committed offscreen pass.
+  id<MTLTexture> staged = nil;
+  id<MTLTexture> read_tex;
+  if ([tex sampleCount] > 1) {
+    staged = metal_resolve_msaa(tex);
+    read_tex = staged;
+  } else if ([tex storageMode] == MTLStorageModeShared) {
+    read_tex = tex;
+  } else {
+    staged = metal_copy_to_shared(tex);
+    read_tex = staged;
+  }
+  if (!read_tex)
+    return nullptr;
 
   size_t bpp = 4;
   size_t row_bytes = static_cast<size_t>(width) * bpp;
@@ -177,6 +232,18 @@ extern "C" int metal_capture_render_texture_to_memory(
   *out_data = rgba;
   *out_size = static_cast<int>(data_size);
   return 1;
+}
+
+// Create the system default Metal device for headless (windowless) rendering,
+// where there is no sokol_app to hand us one. Returned as a retained void* fed
+// to sg_setup via sg_desc.environment.metal.device. Never released: the device
+// lives for the whole (short-lived) headless process. Returns nullptr if Metal
+// is unavailable (no GPU).
+extern "C" const void *metal_create_system_device(void) {
+  id<MTLDevice> dev = MTLCreateSystemDefaultDevice();
+  if (!dev)
+    return nullptr;
+  return (__bridge_retained const void *)dev;
 }
 
 #endif // AFTER_HOURS_USE_METAL
