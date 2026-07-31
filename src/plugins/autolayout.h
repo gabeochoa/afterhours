@@ -1034,6 +1034,34 @@ struct AutoLayout {
       tax_refund(widget, Axis::Y, error_y, layout_children);
     }
 
+    // Diagnostic: an Expand child collapses to 0 when this parent has no
+    // definite size to distribute (Children/None) — a common "forgot to size
+    // the container" mistake that was previously silent. Warn once per widget.
+    for (UIComponent *child : layout_children) {
+      for (Axis axis : {Axis::X, Axis::Y}) {
+        if (child->desired[axis].dim != Dim::Expand)
+          continue;
+        if (child->computed[axis] > 1.f)
+          continue;
+        const Dim pdim = widget.desired[axis].dim;
+        if (pdim != Dim::Children && pdim != Dim::None)
+          continue;
+        if (child->warned_expand_collapse)
+          continue;
+        child->warned_expand_collapse = true;
+        auto dbg = [this](EntityID id) -> std::string {
+          Entity &e = this->to_ent(id);
+          return e.has<UIComponentDebug>() ? e.get<UIComponentDebug>().name()
+                                           : fmt::format("entity_{}", id);
+        };
+        log_warn("Expand child '{}' collapsed to 0: parent '{}' is {}-sized so "
+                 "there is no free space to fill. Give the parent a definite "
+                 "size (pixels/percent/expand) on that axis.",
+                 dbg(child->id), dbg(widget.id),
+                 pdim == Dim::Children ? "content" : "unset");
+      }
+    }
+
     // Apply min/max constraints after size computation and error distribution
     apply_size_constraints(widget);
 

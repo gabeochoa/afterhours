@@ -99,6 +99,7 @@ struct UIComponent : BaseComponent {
   bool was_rendered_to_screen = false;
   bool absolute = false;
   bool skip_grid_snap = false;
+  bool warned_expand_collapse = false; // one-shot layout diagnostic guard
 
   // Absolute position in pixels, set from with_absolute_position(x, y)
   // during component init. Used by autolayout to set computed_rel for
