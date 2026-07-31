@@ -271,9 +271,14 @@ struct EntityCollection {
   template <typename Component> RefEntity get_singleton() const {
     const ComponentID id = components::get_type_id<Component>();
     if (!singletonMap.contains(id)) {
-      log_warn("Singleton map is missing value for component {} ({}). Did you "
-               "register this component previously?",
-               id, type_name<Component>());
+      // Warn once per component id, not every frame — a missing singleton is
+      // queried per-frame and would otherwise flood the log.
+      static std::unordered_set<ComponentID> warned;
+      if (warned.insert(id).second) {
+        log_warn("Singleton map is missing value for component {} ({}). Did "
+                 "you register this component previously?",
+                 id, type_name<Component>());
+      }
       // Return a reference to a static dummy entity to avoid crash
       // This should never happen in proper usage, but prevents segfault
       static Entity dummy_entity;
