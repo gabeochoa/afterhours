@@ -366,50 +366,30 @@ static Entity &setup_with_resolution(SystemManager &sm,
                                      UserSystems &&...user_systems) {
     Entity &ui_root = init_ui_plugin<InputAction>();
 
-    // RunAutoLayout reads the resolution from this singleton but
-    // init_ui_plugin does not create it, so every app had to remember it
-    // separately. Defer to an existing registration if the app owns one.
+    // RunAutoLayout needs this; init_ui_plugin does not create it. Skip if the
+    // app already owns one.
     if (!EntityHelper::has_singleton<
             window_manager::ProvidesCurrentResolution>()) {
         window_manager::add_singleton_components(ui_root, rez, 60);
     }
 
     register_before_ui_updates<InputAction>(sm);
+    // Fold: one register_update_system() call per system, in argument order.
     (sm.register_update_system(std::forward<UserSystems>(user_systems)), ...);
     register_after_ui_updates<InputAction>(sm);
     return ui_root;
 }
 
-/// One-call UI bring-up: creates the plugin root and registers the update
-/// systems in the only order that works, with the caller's systems sandwiched
-/// in between.
+/// Creates the UI root and registers the update systems in the only order that
+/// works, with the caller's systems in between. Misordering these by hand
+/// fails silently: the UI runs and never lays out.
 ///
-/// Replaces this, where getting the order wrong fails silently:
+///     ui::setup<>(systems, std::make_unique<MySystem>());
 ///
-/// ```cpp
-/// ui::init_ui_plugin<InputAction>();
-/// // ...remember ProvidesCurrentResolution, which RunAutoLayout needs...
-/// ui::register_before_ui_updates<InputAction>(systems);
-/// systems.register_update_system(std::make_unique<MySystem>());
-/// ui::register_after_ui_updates<InputAction>(systems);
-/// ```
-///
-/// with:
-///
-/// ```cpp
-/// ui::setup<>(systems, std::make_unique<MySystem>());
-/// ```
-///
-/// InputAction defaults to ui::DefaultAction, so an app that does not need its
-/// own bindings never declares an enum. The resolution singleton is only added
-/// when nothing else has registered one, so apps driving a real window can call
-/// window_manager::add_singleton_components() first and this will defer to it.
-///
-/// Returns the UI root entity for apps that need to attach more to it. For
-/// finer control over ordering, the pieces this composes are still public.
+/// Defaults InputAction to DefaultAction. Returns the UI root. The pieces this
+/// composes stay public for custom ordering.
 template<typename InputAction = DefaultAction, typename... UserSystems>
-static Entity &setup(SystemManager &sm,
-                     UserSystems &&...user_systems) {
+static Entity &setup(SystemManager &sm, UserSystems &&...user_systems) {
     return setup_with_resolution<InputAction>(
         sm, window_manager::Resolution{1280, 720},
         std::forward<UserSystems>(user_systems)...);

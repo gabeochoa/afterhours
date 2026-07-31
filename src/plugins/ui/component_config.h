@@ -44,9 +44,8 @@ struct ComponentConfig {
   ComponentSize size = ComponentSize(pixels(default_component_size.x),
                                      pixels(default_component_size.y), true);
 
-  // Clamps applied to the computed size after layout. Dim::None (the default)
-  // means "no constraint". Supported dims: Pixels, Percent, ScreenPercent,
-  // Text. Children/Expand are meaningless as clamps and are ignored.
+  // Clamps on the computed size. Dim::None (default) = no constraint.
+  // Pixels/Percent/ScreenPercent/Text only; Children/Expand are ignored.
   Size min_width;
   Size max_width;
   Size min_height;
@@ -190,10 +189,9 @@ struct ComponentConfig {
 
   ComponentConfig() = default;
 
-  // Implicit on purpose: lets callers write button(ctx, mk(e), "Click Me")
-  // instead of ComponentConfig{}.with_label("Click Me"). Both overloads are
+  // Implicit on purpose: button(ctx, mk(e), "Click Me"). Both overloads are
   // needed — const char* -> string_view -> ComponentConfig would be two
-  // user-defined conversions, which the language won't do implicitly.
+  // user-defined conversions, which is not implicit.
   // NOLINTNEXTLINE(google-explicit-constructor)
   ComponentConfig(const char *lbl) : label(lbl) {}
   // NOLINTNEXTLINE(google-explicit-constructor)
@@ -207,9 +205,8 @@ struct ComponentConfig {
     size = sz;
     return *this;
   }
-  // Min/max clamps. Per-axis on purpose: constraining one axis ("sidebar at
-  // most 300px wide") is the common case, and with_max_width(pixels(300))
-  // reads better than a pair with a placeholder in the other slot.
+  // Per-axis on purpose: you rarely clamp both, and a pair would need a
+  // placeholder in the unused slot.
   ComponentConfig &with_min_width(Size s) {
     min_width = s;
     return *this;
