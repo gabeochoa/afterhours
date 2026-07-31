@@ -297,7 +297,7 @@ shrink-wrap on the stacking axis — a split divides a region it has been given.
 Covered by `tests/split_test.cpp` (tiling, expand weights, nesting, deduction)
 and demoed headless by `examples/catalog/ui/split_layout/`.
 
-### 4. `ui::setup<InputAction>()` — one-call initialization
+### 4. `ui::setup<InputAction>()` — one-call initialization — **DONE**
 
 Ratatui's `run()` handles setup, teardown, and panic hooks so the app author
 writes none of it.
@@ -314,7 +314,13 @@ ui::setup<InputAction>(systems, std::make_unique<MyUISystem>());
 
 collapsing init + before + user + after into one call, and folding in
 `ProvidesCurrentResolution`, which `RunAutoLayout` requires but
-`init_ui_plugin` does not create — every app has to remember it separately.
+`init_ui_plugin` does not create — every app had to remember it separately.
+
+Landed as `ui::setup()` plus `ui::setup_with_resolution()`, both variadic over
+the caller's systems. The resolution singleton is only added when nothing else
+registered one, so apps driving a real window can call
+`window_manager::add_singleton_components()` first and setup defers. The
+underlying pieces stay public for apps that need custom ordering.
 
 Note the catalog examples do **not** use this path; several still hand-roll the
 old `ClearUIComponentChildren` → `BeginUIContextManager` → `EndUIContextManager`
@@ -335,7 +341,7 @@ its own verification pass over all 49. Note that `make` in these directories
 the source, so make considered the target up to date and did nothing. Pointing
 the output at `output/` is what exposed it.
 
-### 5. `ui::DefaultAction` — stop forcing an enum declaration
+### 5. `ui::DefaultAction` — stop forcing an enum declaration — **DONE**
 
 Ratatui aliases `DefaultTerminal` specifically "so you rarely spell out backend
 generics." We thread `InputAction` through every UI type.
@@ -346,8 +352,16 @@ Confirmed while writing `examples/catalog/ui/split_layout`: a 5-value enum is
 enough for the old hand-rolled wiring, but the moment you use the real
 `register_after_ui_updates` bridge the compiler demands `WidgetLeft`,
 `WidgetRight`, `WidgetUp`, `WidgetDown`, `MenuBack` and the whole `Text*` set.
-That example now carries the same 26-value block, which is the single largest
+That example carried the same 26-value block, which was the single largest
 thing standing between it and a short hello world.
+
+Landed as `ui::DefaultAction` in `context.h` with exactly the 26 values the
+library references, plus `using DefaultUIContext = UIContext<DefaultAction>`.
+`tests/setup_test.cpp` pins the list — the failure mode without it is an app
+that suddenly stops compiling with no hint that the default set regressed.
+
+Skipped the default keymap: binding actions to keys is the app's job and every
+backend spells key codes differently. Add one if a real app wants it.
 
 Ship that vocabulary as `ui::DefaultAction` plus
 `using DefaultUIContext = UIContext<DefaultAction>`, with a default keymap.

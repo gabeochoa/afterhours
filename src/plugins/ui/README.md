@@ -6,19 +6,41 @@ Immediate-mode UI toolkit built on the Afterhours ECS framework. All widgets are
 
 ```cpp
 #include <afterhours/src/plugins/ui.h>
-#include <afterhours/src/plugins/ui/text_input/text_input.h>
 
+using namespace afterhours;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
-// In your render system:
-void for_each_with(Entity &entity, UIContext<InputAction> &ctx, float) override {
-  if (button(ctx, mk(entity, 0),
-      ComponentConfig{}.with_label("Click Me").with_size({pixels(200), pixels(50)}))) {
-    // clicked
+struct MyUI : System<DefaultUIContext> {
+  void for_each_with(Entity &entity, DefaultUIContext &ctx, float) override {
+    if (button(ctx, mk(entity, 0), "Click Me")) {
+      // clicked
+    }
   }
+};
+
+int main() {
+  SystemManager systems;
+  ui::setup<>(systems, std::make_unique<MyUI>());
+  systems.run(1.f);
 }
 ```
+
+`ui::setup()` creates the UI root and every singleton, then registers the
+update systems in the only order that works with your systems in between. It
+defaults `InputAction` to `ui::DefaultAction`, so nothing above declares an
+enum. Use `setup_with_resolution()` to pass a starting resolution; if your app
+already registered `ProvidesCurrentResolution`, setup defers to it.
+
+For finer control the pieces are still public — `init_ui_plugin()`,
+`register_before_ui_updates()`, `register_after_ui_updates()`.
+
+### Input actions
+
+Every widget system is templated on an `InputAction` enum and looks its actions
+up by name, so a custom enum must define all 26 values the plugin references
+before it will compile. `ui::DefaultAction` ships that vocabulary; supply your
+own only when you want UI actions fused with your game bindings.
 
 ## Widgets
 

@@ -15,8 +15,11 @@
 //   | status bar                       (24px)           |
 //   +--------------------------------------------------+
 //
-// Runs headless for one frame and prints the resolved rects, so the layout is
-// verifiable without a window. Build: make (from this directory).
+// Doubles as the "how short can setup get" showcase: no InputAction enum, no
+// singleton wiring, no system-ordering ritual. Runs headless for one frame and
+// prints the resolved rects, so the layout is verifiable without a window.
+//
+// Build: make (from this directory).
 
 #include <cstdio>
 
@@ -30,39 +33,6 @@ using namespace afterhours;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
-// Boilerplate, not content: the nav/text/debug systems in the post-update
-// bridge reference every one of these by name, so the enum has to spell them
-// all out before anything compiles. See todo.md item 5 ("ui::DefaultAction") —
-// shipping this vocabulary with the library deletes this whole block.
-enum struct InputAction {
-  None,
-  WidgetMod,
-  WidgetNext,
-  WidgetBack,
-  WidgetPress,
-  WidgetLeft,
-  WidgetRight,
-  WidgetUp,
-  WidgetDown,
-  MenuBack,
-  TextBackspace,
-  TextCopy,
-  TextCut,
-  TextDelete,
-  TextDeleteWordBack,
-  TextDeleteWordForward,
-  TextEnd,
-  TextHome,
-  TextPaste,
-  TextRedo,
-  TextSelectAll,
-  TextSelectLeft,
-  TextSelectRight,
-  TextUndo,
-  TextWordLeft,
-  TextWordRight,
-};
-
 constexpr int SCREEN_W = 1280;
 constexpr int SCREEN_H = 720;
 
@@ -72,8 +42,10 @@ struct {
   EntityID title = -1, nav = -1, content = -1, status = -1;
 } g_regions;
 
-struct BuildShell : System<UIContext<InputAction>> {
-  virtual void for_each_with(Entity &entity, UIContext<InputAction> &ctx,
+// DefaultUIContext is UIContext<DefaultAction> — the library ships the input
+// vocabulary its widget systems need, so this app declares no enum at all.
+struct BuildShell : System<DefaultUIContext> {
+  virtual void for_each_with(Entity &entity, DefaultUIContext &ctx,
                              float) override {
     // Three horizontal bands. expand(1) soaks up whatever the fixed bands
     // leave behind, so the body always fills the gap.
@@ -97,7 +69,8 @@ struct BuildShell : System<UIContext<InputAction>> {
   }
 };
 
-// Runs after the post-update bridge, which is where RunAutoLayout lives.
+// Registered after setup(), so it runs after the post-update bridge, which is
+// where RunAutoLayout lives.
 struct PrintRects : System<> {
   bool should_iterate() const override { return false; }
 
@@ -134,22 +107,14 @@ struct PrintRects : System<> {
 };
 
 int main(int, char **) {
-  // Creates the UI root plus every singleton the plugin needs (UIContext,
-  // FontManager, TextMeasureCache, UIEntityMappingCache, AutoLayoutRoot, ...).
-  Entity &ui_root = ui::init_ui_plugin<InputAction>();
-
-  // RunAutoLayout reads the resolution from this singleton; the app owns it.
-  ui_root.addComponent<window_manager::ProvidesCurrentResolution>(
-      window_manager::Resolution{SCREEN_W, SCREEN_H});
-  EntityHelper::registerSingleton<window_manager::ProvidesCurrentResolution>(
-      ui_root);
-
   SystemManager systems;
-  ui::register_before_ui_updates<InputAction>(systems);
-  systems.register_update_system(std::make_unique<BuildShell>());
-  ui::register_after_ui_updates<InputAction>(systems); // RunAutoLayout is here
-  systems.register_update_system(std::make_unique<PrintRects>());
 
+  // Creates the UI root and every singleton, then registers the pre-bridge,
+  // BuildShell, and the post-bridge in the only order that works.
+  ui::setup_with_resolution<>(systems, {SCREEN_W, SCREEN_H},
+                              std::make_unique<BuildShell>());
+
+  systems.register_update_system(std::make_unique<PrintRects>());
   systems.run(1.f);
   return 0;
 }

@@ -31,6 +31,50 @@ namespace afterhours {
 
 namespace ui {
 
+/// The complete input vocabulary the UI plugin references by name.
+///
+/// Every widget system is templated on an InputAction enum and looks its
+/// actions up by name, so an app that supplies its own enum has to spell out
+/// all of these before the plugin will compile — 26 values before you can put
+/// a button on screen. Use this instead unless you need the actions fused with
+/// your own game bindings:
+///
+/// ```cpp
+/// ui::setup<>(systems, std::make_unique<MySystem>()); // defaults to this
+/// ```
+///
+/// Keep in sync with the validate_enum_has_value() calls in utilities.h.
+enum struct DefaultAction {
+  None,
+  // Focus movement and activation.
+  WidgetMod,
+  WidgetNext,
+  WidgetBack,
+  WidgetPress,
+  WidgetLeft,
+  WidgetRight,
+  WidgetUp,
+  WidgetDown,
+  MenuBack,
+  // Text editing — referenced by the text_input/text_area systems.
+  TextBackspace,
+  TextCopy,
+  TextCut,
+  TextDelete,
+  TextDeleteWordBack,
+  TextDeleteWordForward,
+  TextEnd,
+  TextHome,
+  TextPaste,
+  TextRedo,
+  TextSelectAll,
+  TextSelectLeft,
+  TextSelectRight,
+  TextUndo,
+  TextWordLeft,
+  TextWordRight,
+};
+
 static inline bool is_mouse_inside(const input::MousePosition &mouse_pos,
                                    const RectangleType &rect) {
   return mouse_pos.x >= rect.x && mouse_pos.x <= rect.x + rect.width &&
@@ -289,6 +333,9 @@ template <typename InputAction> struct UIContext : BaseComponent {
 
   void queue_render(RenderInfo &&info) { render_cmds.emplace_back(info); }
 };
+
+/// Spares apps that use DefaultAction from spelling out the generic.
+using DefaultUIContext = UIContext<DefaultAction>;
 
 } // namespace ui
 
