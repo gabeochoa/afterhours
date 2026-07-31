@@ -10,7 +10,12 @@
 #include "../core/entity_query.h"
 #include "../core/system.h"
 #include "../developer.h"
-#include "../graphics.h"  // graphics::is_headless / set_window_size / metal_detail
+// Only the backend branches below use graphics:: (metal_detail / is_headless /
+// set_window_size). graphics.h #errors without a backend, so guard the include
+// to keep backend-agnostic consumers (e.g. the layout tests) building.
+#if defined(AFTER_HOURS_USE_RAYLIB) || defined(AFTER_HOURS_USE_METAL)
+#include "../graphics.h"
+#endif
 #include "../logging.h"
 
 // Forward declarations for Metal/Sokol backend (defined in sokol_app.h and
