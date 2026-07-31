@@ -10,6 +10,7 @@
 #include "../core/entity_query.h"
 #include "../core/system.h"
 #include "../developer.h"
+#include "../graphics.h"  // graphics::is_headless / set_window_size / metal_detail
 #include "../logging.h"
 
 // Forward declarations for Metal/Sokol backend (defined in sokol_app.h and
@@ -84,11 +85,12 @@ struct window_manager : developer::Plugin {
   // resolution and an extern Obj-C function for resizing.
   static Resolution fetch_current_resolution() {
     // Return logical (CSS) pixel dimensions so the UI works consistently
-    // regardless of DPI scale.
-    float dpi = ::sapp_dpi_scale();
+    // regardless of DPI scale. The metal_detail accessors return the headless
+    // offscreen size (dpi=1) when there is no window.
+    float dpi = graphics::metal_detail::dpi_scale();
     return Resolution{
-        .width = static_cast<int>(static_cast<float>(::sapp_width()) / dpi),
-        .height = static_cast<int>(static_cast<float>(::sapp_height()) / dpi),
+        .width = static_cast<int>(static_cast<float>(graphics::metal_detail::screen_w()) / dpi),
+        .height = static_cast<int>(static_cast<float>(graphics::metal_detail::screen_h()) / dpi),
     };
   }
 
@@ -98,8 +100,13 @@ struct window_manager : developer::Plugin {
     return Resolution{.width = 3840, .height = 2160};
   }
 
-  // Implemented in sokol_impl.mm via Cocoa NSWindow API.
+  // Windowed: Cocoa NSWindow resize (sokol_impl.mm). Headless: no window, so
+  // resize the offscreen render target instead (MetalPlatformAPI::set_window_size).
   static void set_window_size(const int width, const int height) {
+    if (graphics::is_headless()) {
+      graphics::set_window_size(width, height);
+      return;
+    }
     ::metal_set_window_size(width, height);
   }
 #else

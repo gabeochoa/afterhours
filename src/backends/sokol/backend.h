@@ -315,7 +315,22 @@ struct MetalPlatformAPI {
   static void minimize_window() {
     log_error("@notimplemented minimize_window");
   }
-  static void set_window_size(int, int) {
+  static void set_window_size(int w, int h) {
+    // Headless: there is no window, but we can honor a resize by re-sizing the
+    // offscreen render target + reported screen dims, so layout/e2e that depend
+    // on a specific viewport size work windowlessly. Called on resize events
+    // only (not per-frame), so recreating the render texture here is fine.
+    if (metal_detail::g_headless) {
+      if (w <= 0 || h <= 0)
+        return;
+      if (w == metal_detail::g_headless_w && h == metal_detail::g_headless_h)
+        return;
+      metal_detail::g_headless_w = w;
+      metal_detail::g_headless_h = h;
+      ::afterhours::unload_render_texture(metal_detail::g_headless_rt);
+      metal_detail::g_headless_rt = ::afterhours::load_render_texture(w, h);
+      return;
+    }
     log_error("@notimplemented set_window_size");
   }
   static void set_window_min_size(int, int) {
