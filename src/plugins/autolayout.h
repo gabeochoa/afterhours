@@ -837,6 +837,25 @@ struct AutoLayout {
     if (num_children == 0)
       return;
 
+    // Re-resolve Percent children against our now-final size. Percent is first
+    // computed in the parent-expectation pass, but a parent sized by Expand
+    // isn't final until here, so its percent children were left at 0.
+    // solve_violations is top-down (parent solved before child), so
+    // widget.computed is final now. Skip Children-sized axes: a percent child
+    // of a shrink-to-fit parent is contradictory and stays 0.
+    for (UIComponent *child : layout_children) {
+      for (Axis axis : {Axis::X, Axis::Y}) {
+        if (child->desired[axis].dim != Dim::Percent)
+          continue;
+        if (widget.desired[axis].dim == Dim::Children)
+          continue;
+        const float avail = widget.computed[axis] - widget.computed_padd[axis];
+        if (avail <= 0.f)
+          continue;
+        child->computed[axis] = child->desired[axis].value * avail;
+      }
+    }
+
     // me -> left -> right
 
     const auto _total_child = [&layout_children](Axis axis) {

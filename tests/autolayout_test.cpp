@@ -3166,6 +3166,62 @@ TEST(expand_in_children_parent_same_axis_no_sentinel) {
   CHECK_APPROX(t.ui(inner).computed[Axis::X], 0.f);
 }
 
+// ---------------------------------------------------------------------------
+// Regression: a Percent child of an Expand-sized parent must fill the parent.
+// Percent is first resolved in the parent-expectation pass, but an Expand
+// parent isn't sized until the violation-solver pass, so the percent child was
+// previously left at 0. solve_violations now re-resolves percent top-down.
+// ---------------------------------------------------------------------------
+TEST(percent_child_of_expand_parent) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(1000), pixels(200));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_flex_wrap(FlexWrap::NoWrap);
+  auto &side = t.make_ui(pixels(200), pixels(200));
+  auto &panel = t.make_ui(expand(), pixels(200)); // fills 1000 - 200 = 800
+  t.ui(panel).set_flex_direction(FlexDirection::Row);
+  t.ui(panel).set_flex_wrap(FlexWrap::NoWrap);
+  auto &pct = t.make_ui(percent(1.0f), pixels(200)); // 100% of panel = 800
+  t.add_child(root, side);
+  t.add_child(root, panel);
+  t.add_child(panel, pct);
+  t.run(root);
+
+  CHECK_APPROX(t.ui(panel).computed[Axis::X], 800.f);
+  CHECK_APPROX(t.ui(pct).computed[Axis::X], 800.f);
+}
+
+// ---------------------------------------------------------------------------
+// Regression: Expand -> Percent -> Expand chain. The inner percent resolves
+// against the now-sized expand parent, then its own expand child fills what's
+// left. Before the fix the percent link was 0 and the whole chain collapsed.
+// ---------------------------------------------------------------------------
+TEST(expand_percent_expand_chain) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(1000), pixels(200));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_flex_wrap(FlexWrap::NoWrap);
+  auto &side = t.make_ui(pixels(200), pixels(200));
+  auto &mid = t.make_ui(expand(), pixels(200)); // 800
+  t.ui(mid).set_flex_direction(FlexDirection::Row);
+  t.ui(mid).set_flex_wrap(FlexWrap::NoWrap);
+  auto &inner = t.make_ui(percent(1.0f), pixels(200)); // 100% of 800
+  t.ui(inner).set_flex_direction(FlexDirection::Row);
+  t.ui(inner).set_flex_wrap(FlexWrap::NoWrap);
+  auto &lbl = t.make_ui(pixels(100), pixels(200));
+  auto &leaf = t.make_ui(expand(), pixels(200)); // 800 - 100 = 700
+  t.add_child(root, side);
+  t.add_child(root, mid);
+  t.add_child(mid, inner);
+  t.add_child(inner, lbl);
+  t.add_child(inner, leaf);
+  t.run(root);
+
+  CHECK_APPROX(t.ui(mid).computed[Axis::X], 800.f);
+  CHECK_APPROX(t.ui(inner).computed[Axis::X], 800.f);
+  CHECK_APPROX(t.ui(leaf).computed[Axis::X], 700.f);
+}
+
 // ============================================================================
 // Main
 // ============================================================================
