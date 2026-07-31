@@ -2285,8 +2285,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       RectangleType dest = {location.x, location.y, size.x, size.y};
       RectangleType src = {0.0f, 0.0f, (float)texture.texture.width,
                            (float)texture.texture.height};
-      buffer.add_image(dest, src, texture.texture, colors::UI_WHITE, layer,
-                       entity.id);
+      // Honor with_opacity like the HasImage branch below (and the direct
+      // render path); previously HasTexture ignored it in the buffered pass.
+      Color tex_col = colors::UI_WHITE;
+      if (effective_opacity < 1.0f)
+        tex_col = colors::opacity_pct(tex_col, effective_opacity);
+      buffer.add_image(dest, src, texture.texture, tex_col, layer, entity.id);
     } else if (entity.has<ui::HasImage>()) {
       const ui::HasImage &img = entity.get<ui::HasImage>();
       texture_manager::Rectangle src =
