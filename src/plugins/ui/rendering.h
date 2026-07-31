@@ -378,11 +378,26 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
   bool text_fits;
 
   if (explicit_font_size > 0.f) {
-    // When an explicit font size is provided, use it directly instead of
-    // auto-sizing. Text may overflow the container horizontally; the caller
-    // is responsible for ensuring the size is appropriate.
+    // Exact-size mode: use the requested size directly (never downscale to fit).
+    // Text may overflow; report that accurately via text_fits so the overflow
+    // debug indicator + warning cover explicitly-sized text too (previously
+    // hardcoded true, so an oversized explicit font silently clipped).
     font_size = std::max(explicit_font_size, MIN_FONT_SIZE);
-    text_fits = true;
+    Vector2Type ts =
+        measure_text(font, text.c_str(), font_size, 1.f + extra_spacing);
+    text_fits = ts.y <= max_text_size.y && ts.x <= max_text_size.x;
+#ifdef AFTERHOURS_DEBUG_TEXT_OVERFLOW
+    if (!text_fits) {
+      static std::unordered_set<std::string> logged_explicit;
+      if (logged_explicit.insert(text).second) {
+        log_warn("Text '{}' at explicit font {} overflows container {}x{} "
+                 "(margins {}x{}) - it will be clipped, not downscaled",
+                 text.length() > 20 ? text.substr(0, 20) + "..." : text,
+                 font_size, container.width, container.height, margin_px.x,
+                 margin_px.y);
+      }
+    }
+#endif
   } else {
     // Use binary search to find largest font size that fits
     float low = MIN_FONT_SIZE;
