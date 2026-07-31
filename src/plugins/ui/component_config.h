@@ -4,6 +4,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "../autolayout.h"
 #include "../color.h"
@@ -42,6 +43,15 @@ enum struct IconPosition { Left, Right };
 struct ComponentConfig {
   ComponentSize size = ComponentSize(pixels(default_component_size.x),
                                      pixels(default_component_size.y), true);
+
+  // Clamps applied to the computed size after layout. Dim::None (the default)
+  // means "no constraint". Supported dims: Pixels, Percent, ScreenPercent,
+  // Text. Children/Expand are meaningless as clamps and are ignored.
+  Size min_width;
+  Size max_width;
+  Size min_height;
+  Size max_height;
+
   Padding padding;
   Margin margin;
   std::string label;
@@ -178,12 +188,42 @@ struct ComponentConfig {
   // Animation configurations
   std::vector<AnimationDef> animations;
 
+  ComponentConfig() = default;
+
+  // Implicit on purpose: lets callers write button(ctx, mk(e), "Click Me")
+  // instead of ComponentConfig{}.with_label("Click Me"). Both overloads are
+  // needed — const char* -> string_view -> ComponentConfig would be two
+  // user-defined conversions, which the language won't do implicitly.
+  // NOLINTNEXTLINE(google-explicit-constructor)
+  ComponentConfig(const char *lbl) : label(lbl) {}
+  // NOLINTNEXTLINE(google-explicit-constructor)
+  ComponentConfig(std::string_view lbl) : label(lbl) {}
+
   ComponentConfig &with_label(const std::string &lbl) {
     label = lbl;
     return *this;
   }
   ComponentConfig &with_size(const ComponentSize &sz) {
     size = sz;
+    return *this;
+  }
+  // Min/max clamps. Per-axis on purpose: constraining one axis ("sidebar at
+  // most 300px wide") is the common case, and with_max_width(pixels(300))
+  // reads better than a pair with a placeholder in the other slot.
+  ComponentConfig &with_min_width(Size s) {
+    min_width = s;
+    return *this;
+  }
+  ComponentConfig &with_max_width(Size s) {
+    max_width = s;
+    return *this;
+  }
+  ComponentConfig &with_min_height(Size s) {
+    min_height = s;
+    return *this;
+  }
+  ComponentConfig &with_max_height(Size s) {
+    max_height = s;
     return *this;
   }
   // Size in 720p reference coordinates (w1280 for width, h720 for height)

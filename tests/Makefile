@@ -58,6 +58,7 @@ ALL_TESTS := \
 	progress_bar_test \
 	random_engine_test \
 	render_order_test \
+	size_constraints_test \
 	slider_test \
 	stepper_test \
 	system_tags_test \
@@ -69,6 +70,7 @@ RAYLIB_TESTS := \
 	dump_ui_test \
 	progress_bar_test \
 	render_order_test \
+	size_constraints_test \
 	slider_test \
 	stepper_test \
 	tab_container_test \
@@ -107,6 +109,9 @@ progress_bar_test: progress_bar_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 
 render_order_test: render_order_test.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
+
+size_constraints_test: size_constraints_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 
 slider_test: slider_test.cpp

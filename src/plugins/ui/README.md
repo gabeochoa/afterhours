@@ -90,6 +90,14 @@ These are top-level plugins (not in `ui/`) that provide overlay UI systems:
 
 All widgets accept a `ComponentConfig` with a chainable builder API. Below is every available method.
 
+A bare string converts implicitly to a label-only config, so the common case
+needs no builder at all:
+
+```cpp
+if (button(ctx, mk(entity, 0), "Click Me")) { /* clicked */ }
+div(ctx, mk(entity, 1), "Hello");
+```
+
 ### Content & Identity
 
 ```cpp
@@ -107,6 +115,13 @@ All widgets accept a `ComponentConfig` with a chainable builder API. Below is ev
 .with_size({screen_pct(0.3f), h720(40)})  // Relative to screen
 .with_size({children(), children()})       // Shrink to fit content
 .with_size({expand(1.0f), pixels(50)})     // Fill remaining space (flex-grow)
+```
+
+```cpp
+.with_min_width(pixels(120))    // Clamp computed size after layout.
+.with_max_width(pixels(300))    // Dim::None (default) = no constraint.
+.with_min_height(text())        // Supported dims: pixels, percent,
+.with_max_height(percent(0.5f)) // screen_pct, text. children()/expand() ignored.
 ```
 
 **Size functions:**

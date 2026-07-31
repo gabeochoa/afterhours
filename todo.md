@@ -188,3 +188,164 @@ This document contains all TODO comments found in `vendor/afterhours/src/`, anal
 **Medium Priority**: 8
 **Low Priority**: 54
 **Last Updated**: February 2026
+
+---
+
+# Ergonomics: "Shortest Hello World" Showcase
+
+> **NOT derived from source TODO comments — do not delete during regeneration.**
+> Hand-written from a review of [ratatui](https://docs.rs/ratatui/latest/ratatui/)'s API.
+
+## Goal
+
+Build `examples/hello/main.cpp` — a showcase that is as short as ratatui's hello
+world while keeping the full customization surface available. Ratatui's is 10
+lines:
+
+```rust
+fn main() -> std::io::Result<()> {
+    ratatui::run(|mut terminal| {
+        loop {
+            terminal.draw(|frame| frame.render_widget("Hello World!", frame.area()))?;
+            if event::read()?.is_key_press() { break Ok(()); }
+        }
+    })
+}
+```
+
+Ours today (`examples/catalog/ui/ui_component/main.cpp`) is ~60 lines: a 5-value
+`InputAction` enum, 18 lines of singleton wiring, `enforce_singletons`, and four
+systems that must be registered in an exact order. The items below are what
+closes that gap. Each is additive — no existing call site changes.
+
+The showcase is the acceptance test: if hello world isn't short, the item isn't
+done. Each item lands with its own line in `examples/hello/main.cpp`.
+
+## Items (ordered by diff size, smallest first)
+
+### 1. `ComponentConfig` implicit from string — **DONE**
+
+Ratatui renders a bare `&str` as a widget. Ours needs
+`ComponentConfig{}.with_label("Hello")`.
+
+`ComponentConfig` is currently an aggregate with no constructors. All 135
+existing uses are `ComponentConfig{}` or copy-init from another config
+(`imm_components.h:2388,2449`), so adding constructors breaks nothing:
+
+```cpp
+ComponentConfig() = default;
+ComponentConfig(std::string_view l) : label(l) {}  // implicit on purpose
+```
+
+Unlocks `button(ctx, mk(e), "Click Me")` and `div(ctx, mk(e), "Hello")`.
+
+Landed with a `const char*` overload alongside the `string_view` one — without
+it, `const char*` → `string_view` → `ComponentConfig` is two user-defined
+conversions and the language won't do it implicitly.
+
+### 2. Expose `min_size` / `max_size` on `ComponentConfig` — **DONE**
+
+Ratatui makes `Min` and `Max` first-class constraints resolved *above*
+`Length`/`Percentage`/`Fill` — it's how you express "sidebar at most 300px" or
+"content at least 100px".
+
+`UIComponent` already has `min_size`/`max_size` with setters
+(`ui_core_components.h:80-82`, `:231-246`) but `ComponentConfig` never exposes
+them, so no imm caller can reach it. This is finishing an existing feature, not
+adding one: `AutoLayout::apply_size_constraints` (`autolayout.h:741`) already
+does the work.
+
+Landed as four per-axis methods — `with_min_width` / `with_max_width` /
+`with_min_height` / `with_max_height` — rather than `ComponentSize` pairs.
+Constraining one axis is the common case, and `with_max_width(pixels(300))`
+beats a pair with a placeholder in the other slot. Add pair versions if a real
+call site wants them.
+
+Covered by `tests/size_constraints_test.cpp`. The check that matters is
+`unset_constraints_do_not_clamp`: `apply_layout` calls the setters
+unconditionally, so a default `Dim::None` must pass through instead of clamping
+everything to zero.
+
+### 3. `vsplit<N>` / `hsplit<N>` — destructured layout split
+
+Ratatui's best ergonomic:
+
+```rust
+let [title, main, status] = Layout::vertical([Length(1), Min(0), Length(1)]).areas(frame.area());
+```
+
+Ours needs three `div`s, three `mk()`s, three configs, and manual `.ent()`
+threading. All the machinery already exists (`expand()`, `pixels()`, `vstack`,
+`mk(parent, index)`); what's missing is the function returning
+`std::array<ElementResult, N>`:
+
+```cpp
+auto [title, main, status] = imm::vsplit<3>(ctx, mk(entity),
+                                            {pixels(30), expand(1), pixels(30)});
+```
+
+Implementation is `vstack` + a loop of
+`div(ctx, mk(parent, i), cfg.with_size({percent(1), sizes[i]}))`. Structured
+bindings do the rest. Depends on #2 for `Min(0)`-style constraints to be
+expressible.
+
+### 4. `ui::setup<InputAction>()` — one-call initialization
+
+Ratatui's `run()` handles setup, teardown, and panic hooks so the app author
+writes none of it. Ours requires, in order: create singleton entity, add
+`UIContext`, register it, add + load `FontManager` (3 fonts), add
+`ProvidesCurrentResolution`, add `AutoLayoutRoot`, add `UIComponentDebug`, add
+root `UIComponent` sized to screen, call `enforce_singletons`, then register
+`ClearUIComponentChildren` → `BeginUIContextManager` → user systems →
+`EndUIContextManager`. Wrong order is a silent bug.
+
+All mechanical:
+
+```cpp
+ui::setup<InputAction>(systems, std::make_unique<MyUISystem>());
+```
+
+Keep the current path working for anyone who needs to customize the wiring —
+`setup()` is the default, not the only way.
+
+### 5. `ui::DefaultAction` — stop forcing an enum declaration
+
+Ratatui aliases `DefaultTerminal` specifically "so you rarely spell out backend
+generics." We thread `InputAction` through every UI type.
+`examples/imm_visual_check.cpp` declares **26 enum values verbatim** — the full
+vocabulary the nav/text/debug systems reference — just to compile.
+
+Ship that vocabulary as `ui::DefaultAction` plus
+`using DefaultUIContext = UIContext<DefaultAction>`, with a default keymap.
+Hello world then declares no enum at all; games still supply their own.
+
+### 6. Serializable `Theme` (stretch)
+
+Ratatui gates a `serde` feature on its style types explicitly for theme files.
+Our `Theme` is hardcoded C++, so every color tweak is a recompile. Not strictly
+an ergonomics item, but it's the iteration-speed one — and a hot-reloading theme
+is the most compelling thing a showcase can demo.
+
+## Explicitly not doing
+
+- **Layout-solve caching / draw diffing.** Ratatui caches the constraint solve
+  (`layout-cache`) and diffs terminal cells because writing to a terminal is
+  brutally expensive. On a GPU that inverts: our draw is cheap and the layout
+  solve is the cost. Immediate mode rebuilds the tree every frame, so cache hit
+  rate is the entire question. **Profile before writing any of it.**
+- **Renaming the `with_` prefix off `ComponentConfig` methods.** Ratatui's
+  `Stylize` shorthand (`.red().on_white().bold()`) is nice, but ~60 renames of
+  churn across every call site for saved keystrokes is a bad trade.
+- **A `Widget` trait.** Ratatui needs `impl Widget for Foo`; our free functions
+  returning `ElementResult` already compose identically with less ceremony.
+- **A `prelude` namespace.** `ui.h` plus the three `using namespace` lines
+  already covers it.
+
+## Already at parity or ahead
+
+- `JustifyContent` covers ratatui's `Flex::{Start,Center,SpaceBetween,SpaceAround}`.
+- `ElementResult::decorate()` has no ratatui equivalent and is nicer than their
+  `Block::bordered()` wrapping.
+- `mk()`'s source-location hashing gives stable widget identity for free;
+  ratatui pushes state management entirely onto the caller
+  (`render_stateful_widget`).
