@@ -148,6 +148,45 @@ struct MyVec3 {
 using Vector3Type = MyVec3;
 #endif
 
+// The raylib backend defines the type names as macros (RectangleType ->
+// raylib::Rectangle, ...), so `afterhours::RectangleType` would wrongly expand
+// to `afterhours::raylib::Rectangle` and fail to compile. Capture the macro
+// targets under temp names, drop the macros, then re-expose them as REAL type
+// aliases inside namespace afterhours (with a global re-export so existing
+// unqualified `RectangleType` usage keeps working). Placed after the fallback
+// block above so the #undef can't re-trigger it. (Non-raylib backends already
+// use real `using` aliases.)
+#ifdef AFTER_HOURS_USE_RAYLIB
+namespace afterhours::detail_rl_types {
+using v2 = Vector2Type;
+using v3 = Vector3Type;
+using rect = RectangleType;
+using tex = TextureType;
+using col = ColorType;
+using font = FontType;
+} // namespace afterhours::detail_rl_types
+#undef Vector2Type
+#undef Vector3Type
+#undef RectangleType
+#undef TextureType
+#undef ColorType
+#undef FontType
+namespace afterhours {
+using Vector2Type = detail_rl_types::v2;
+using Vector3Type = detail_rl_types::v3;
+using RectangleType = detail_rl_types::rect;
+using TextureType = detail_rl_types::tex;
+using ColorType = detail_rl_types::col;
+using FontType = detail_rl_types::font;
+} // namespace afterhours
+using afterhours::ColorType;
+using afterhours::FontType;
+using afterhours::RectangleType;
+using afterhours::TextureType;
+using afterhours::Vector2Type;
+using afterhours::Vector3Type;
+#endif // AFTER_HOURS_USE_RAYLIB
+
 namespace afterhours {
 
 // TODO move into a dedicated file?
