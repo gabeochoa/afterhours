@@ -298,10 +298,13 @@ struct input : developer::Plugin {
     }
 
     static std::string icon_for_key(const int keycode) {
+        // Direct cast, NOT magic_enum::enum_cast: magic_enum only scans the
+        // [-128, 127] value range by default, so every raylib key above it
+        // (ESCAPE=256, ENTER=257, arrows=262..265, F1=290, ...) failed the cast
+        // and fell through to "". The switch below already enumerates the valid
+        // values; an unknown keycode simply falls through to the "" at the end.
         const raylib::KeyboardKey key =
-            magic_enum::enum_cast<raylib::KeyboardKey>(
-                static_cast<unsigned int>(keycode))
-                .value_or(raylib::KeyboardKey::KEY_NULL);
+            static_cast<raylib::KeyboardKey>(keycode);
         switch (key) {
             case raylib::KEY_TAB:
                 return "keyboard_tab";
