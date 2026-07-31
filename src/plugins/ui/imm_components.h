@@ -6,6 +6,7 @@
 #include <chrono>
 #include <fstream>
 #include <string>
+#include <utility>
 
 #include "../../ecs.h"
 #include "../input_system.h"
@@ -267,6 +268,75 @@ ElementResult vstack(HasUIContext auto &ctx, EntityParent ep_pair,
     config.with_size(ComponentSize{percent(1.0f), children()});
   }
   return div(ctx, ep_pair, config);
+}
+
+namespace detail {
+/// Shared body for vsplit/hsplit. `axis` picks which of the two child
+/// dimensions the caller's sizes drive; the other is percent(1) so each region
+/// spans the container's cross axis.
+template <size_t N>
+std::array<ElementResult, N>
+split_impl(HasUIContext auto &ctx, EntityParent ep_pair, FlexDirection dir,
+           const Size (&sizes)[N], ComponentConfig config) {
+  config.with_flex_direction(dir);
+  // A split divides a known region, so it fills its parent by default. This is
+  // deliberately unlike vstack/hstack, which shrink-wrap on the stacking axis.
+  if (config.size.is_default)
+    config.with_size(ComponentSize{percent(1.f), percent(1.f)});
+  auto container = div(ctx, ep_pair, config);
+
+  // Children must be constructed in place: ElementResult holds a reference, so
+  // it is neither default-constructible nor assignable. Pack expansion inside
+  // a braced-init-list is guaranteed left-to-right, which keeps the returned
+  // regions in the caller's declared order.
+  return [&]<size_t... I>(std::index_sequence<I...>) {
+    return std::array<ElementResult, N>{
+        div(ctx, mk(container.ent(), I),
+            ComponentConfig{}.with_size(
+                dir == FlexDirection::Column
+                    ? ComponentSize{percent(1.f), sizes[I]}
+                    : ComponentSize{sizes[I], percent(1.f)}))...};
+  }(std::make_index_sequence<N>{});
+}
+} // namespace detail
+
+/// Divide the parent into N stacked regions and hand them all back at once,
+/// so a whole screen skeleton is one statement instead of N nested divs.
+///
+/// N is deduced from the size list — there is no count to keep in sync.
+///
+/// Usage:
+/// ```cpp
+/// auto [title, main, status] = vsplit(ctx, mk(entity),
+///                                     {pixels(30), expand(1), pixels(30)});
+/// button(ctx, mk(title.ent()), "File");
+/// ```
+///
+/// Each region spans the container's width; the sizes drive height. Any Size
+/// works — pixels(), percent(), children(), and expand() to soak up the
+/// remainder. Pass a config to size or pad the container itself.
+template <size_t N>
+std::array<ElementResult, N>
+vsplit(HasUIContext auto &ctx, EntityParent ep_pair, const Size (&sizes)[N],
+       ComponentConfig config = ComponentConfig()) {
+  return detail::split_impl(ctx, ep_pair, FlexDirection::Column, sizes,
+                            std::move(config));
+}
+
+/// Divide the parent into N side-by-side regions. The row-major counterpart to
+/// vsplit — regions span the container's height and the sizes drive width.
+///
+/// Usage:
+/// ```cpp
+/// auto [sidebar, content] = hsplit(ctx, mk(entity),
+///                                  {pixels(200), expand(1)});
+/// ```
+template <size_t N>
+std::array<ElementResult, N>
+hsplit(HasUIContext auto &ctx, EntityParent ep_pair, const Size (&sizes)[N],
+       ComponentConfig config = ComponentConfig()) {
+  return detail::split_impl(ctx, ep_pair, FlexDirection::Row, sizes,
+                            std::move(config));
 }
 
 /// Invisible flexible spacer — expands to fill remaining space in a flex

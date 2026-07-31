@@ -266,7 +266,7 @@ Covered by `tests/size_constraints_test.cpp`. The check that matters is
 unconditionally, so a default `Dim::None` must pass through instead of clamping
 everything to zero.
 
-### 3. `vsplit<N>` / `hsplit<N>` — destructured layout split
+### 3. `vsplit` / `hsplit` — destructured layout split — **DONE**
 
 Ratatui's best ergonomic:
 
@@ -284,29 +284,42 @@ auto [title, main, status] = imm::vsplit<3>(ctx, mk(entity),
                                             {pixels(30), expand(1), pixels(30)});
 ```
 
-Implementation is `vstack` + a loop of
-`div(ctx, mk(parent, i), cfg.with_size({percent(1), sizes[i]}))`. Structured
-bindings do the rest. Depends on #2 for `Min(0)`-style constraints to be
-expressible.
+Landed taking `const Size (&)[N]` rather than `std::array<Size, N>`, so N is
+deduced from the braced list and there is no `<3>` to drift out of sync with a
+three-element list. Regions are built inside a pack expansion because
+`ElementResult` holds a reference and so is neither default-constructible nor
+assignable; braced-init-list expansion is guaranteed left-to-right, which is
+what keeps the returned regions in declared order.
+
+Splits fill their parent by default, unlike `vstack`/`hstack`, which
+shrink-wrap on the stacking axis — a split divides a region it has been given.
+
+Covered by `tests/split_test.cpp` (tiling, expand weights, nesting, deduction)
+and demoed headless by `examples/catalog/ui/split_layout/`.
 
 ### 4. `ui::setup<InputAction>()` — one-call initialization
 
 Ratatui's `run()` handles setup, teardown, and panic hooks so the app author
-writes none of it. Ours requires, in order: create singleton entity, add
-`UIContext`, register it, add + load `FontManager` (3 fonts), add
-`ProvidesCurrentResolution`, add `AutoLayoutRoot`, add `UIComponentDebug`, add
-root `UIComponent` sized to screen, call `enforce_singletons`, then register
-`ClearUIComponentChildren` → `BeginUIContextManager` → user systems →
-`EndUIContextManager`. Wrong order is a silent bug.
+writes none of it.
 
-All mechanical:
+**Correction from building item 3:** most of this already exists and the gap is
+smaller than first written. `ui::init_ui_plugin<InputAction>()`
+(`utilities.h:97`) already creates the root and every singleton, and
+`register_before_ui_updates` / `register_after_ui_updates` already wrap the
+system ordering in bridges. What is left is genuinely small:
 
 ```cpp
 ui::setup<InputAction>(systems, std::make_unique<MyUISystem>());
 ```
 
-Keep the current path working for anyone who needs to customize the wiring —
-`setup()` is the default, not the only way.
+collapsing init + before + user + after into one call, and folding in
+`ProvidesCurrentResolution`, which `RunAutoLayout` requires but
+`init_ui_plugin` does not create — every app has to remember it separately.
+
+Note the catalog examples do **not** use this path; several still hand-roll the
+old `ClearUIComponentChildren` → `BeginUIContextManager` → `EndUIContextManager`
+wiring and never run layout at all. `examples/catalog/ui/ui_component` does not
+even compile (its includes assume a shallower directory). Worth a sweep.
 
 ### 5. `ui::DefaultAction` — stop forcing an enum declaration
 
@@ -314,6 +327,13 @@ Ratatui aliases `DefaultTerminal` specifically "so you rarely spell out backend
 generics." We thread `InputAction` through every UI type.
 `examples/imm_visual_check.cpp` declares **26 enum values verbatim** — the full
 vocabulary the nav/text/debug systems reference — just to compile.
+
+Confirmed while writing `examples/catalog/ui/split_layout`: a 5-value enum is
+enough for the old hand-rolled wiring, but the moment you use the real
+`register_after_ui_updates` bridge the compiler demands `WidgetLeft`,
+`WidgetRight`, `WidgetUp`, `WidgetDown`, `MenuBack` and the whole `Text*` set.
+That example now carries the same 26-value block, which is the single largest
+thing standing between it and a short hello world.
 
 Ship that vocabulary as `ui::DefaultAction` plus
 `using DefaultUIContext = UIContext<DefaultAction>`, with a default keymap.

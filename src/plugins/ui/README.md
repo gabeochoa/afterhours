@@ -27,9 +27,29 @@ void for_each_with(Entity &entity, UIContext<InputAction> &ctx, float) override 
 | Widget | Header | Description |
 |--------|--------|-------------|
 | `div` | `imm_components.h` | Container / text label. Defaults to `children()` sizing. |
+| `vsplit` / `hsplit` | `imm_components.h` | Divide a region into N parts and return all N at once. N is deduced from the size list. |
 | `separator` | `imm_components.h` | Horizontal or vertical line. Optional center label (`"--- OR ---"` style). |
 | `div` + `with_overflow` | `imm_components.h` | Scrollable/clipped container via `config.with_overflow(Overflow::Scroll, Axis::Y)`. |
 | `decorative_frame` | `imm_components.h` | Decorative border. Styles: `KraftPaper`, `Simple`, `Inset`. |
+
+**Splitting a region.** `vsplit`/`hsplit` divide a container and hand back
+every region at once, so a screen skeleton is one statement per axis instead of
+N nested divs. The region count is deduced from the size list — there is no
+`<N>` to keep in sync:
+
+```cpp
+auto [title, body, status] = vsplit(ctx, mk(entity),
+                                    {pixels(30), expand(1.f), pixels(24)});
+auto [nav, content] = hsplit(ctx, mk(body.ent()), {pixels(200), expand(1.f)});
+
+button(ctx, mk(nav.ent(), 0), "Open");
+```
+
+Sizes drive the split axis; the cross axis spans the container. Any `Size`
+works, and `expand()` soaks up whatever the fixed regions leave. Pass a
+`ComponentConfig` to size or pad the container itself — unlike `vstack`/
+`hstack`, a split fills its parent by default. See
+`examples/catalog/ui/split_layout/`.
 
 ### Buttons & Selection
 
