@@ -1,4 +1,4 @@
-
+include ../../common.mk
 # Layout Performance Benchmarks Makefile
 #
 # Uses -O3 optimization for meaningful benchmark results
@@ -10,28 +10,28 @@ FLAGS = -std=c++23 -O3 -DNDEBUG -Wall -Wextra -Wpedantic -Wuninitialized -Wshado
 all: build run
 
 build:
-	clang++ $(FLAGS) main.cpp -o layout_performance.exe
+	clang++ $(FLAGS) main.cpp -o $(OUT)/layout_performance.exe
 
 run:
-	./layout_performance.exe
+	$(OUT)/layout_performance.exe
 
 # Run with verbose output showing individual samples
 verbose:
-	./layout_performance.exe -d yes
+	$(OUT)/layout_performance.exe -d yes
 
 # Run only supported benchmarks (skip stubbed ones)
 supported:
-	./layout_performance.exe [supported]
+	$(OUT)/layout_performance.exe [supported]
 
 # Run layout verification tests (dump computed layouts for validation)
 verify:
-	./layout_performance.exe [verify] -s
+	$(OUT)/layout_performance.exe [verify] -s
 
 # List available benchmarks
 list:
-	./layout_performance.exe --list-tests
+	$(OUT)/layout_performance.exe --list-tests
 
 clean:
-	rm -f layout_performance.exe
+	rm -f $(OUT)/layout_performance.exe
 
 .PHONY: all build run verbose supported list clean

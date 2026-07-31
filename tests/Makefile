@@ -45,7 +45,10 @@ else ifeq ($(UNAME_S),Linux)
     LDFLAGS_RAYLIB := -L$(RAYLIB_LIB) -lraylib -lGL -lX11 -lEGL
 endif
 
-.PHONY: all test clean
+# All build products land in the repo-wide output/ dir (see
+# examples/catalog/common.mk) instead of littering the source tree.
+OUT := $(realpath ..)/output
+$(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
 	autolayout_test \
@@ -78,65 +81,73 @@ RAYLIB_TESTS := \
 	tab_container_test \
 	text_wrap_test
 
-all: $(ALL_TESTS)
+TEST_BINS := $(addprefix $(OUT)/,$(ALL_TESTS))
 
-autolayout_test: autolayout_test.cpp
+# Declared after ALL_TESTS so the bare-name aliases are actually included.
+.PHONY: all test clean $(ALL_TESTS)
+
+all: $(TEST_BINS)
+
+# Bare names stay usable: `make split_test` builds $(OUT)/split_test.
+$(ALL_TESTS): %: $(OUT)/%
+
+$(OUT)/autolayout_test: autolayout_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 
-entity_mapping_test: entity_mapping_test.cpp ../examples/entity_mapping_test_helper.cpp
+$(OUT)/entity_mapping_test: entity_mapping_test.cpp ../examples/entity_mapping_test_helper.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -I../examples $^ -o $@
 
-entity_pool_test: entity_pool_test.cpp
+$(OUT)/entity_pool_test: entity_pool_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 
-entity_query_test: entity_query_test.cpp
+$(OUT)/entity_query_test: entity_query_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 
-system_tags_test: system_tags_test.cpp
+$(OUT)/system_tags_test: system_tags_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 
-random_engine_test: random_engine_test.cpp
+$(OUT)/random_engine_test: random_engine_test.cpp
 	$(CXX) $(CXXFLAGS) -DAFTER_HOURS_ENABLE_RANDOM $(INCLUDES) $^ -o $@
 
-input_injector_mouse_delta_test: input_injector_mouse_delta_test.cpp
+$(OUT)/input_injector_mouse_delta_test: input_injector_mouse_delta_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 
-dialog_test: dialog_test.cpp
+$(OUT)/dialog_test: dialog_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 
-dump_ui_test: dump_ui_test.cpp
+$(OUT)/dump_ui_test: dump_ui_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 
-progress_bar_test: progress_bar_test.cpp
+$(OUT)/progress_bar_test: progress_bar_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 
-render_order_test: render_order_test.cpp
+$(OUT)/render_order_test: render_order_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 
-size_constraints_test: size_constraints_test.cpp
+$(OUT)/size_constraints_test: size_constraints_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 
-slider_test: slider_test.cpp
+$(OUT)/slider_test: slider_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 
-split_test: split_test.cpp
+$(OUT)/split_test: split_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 
-stepper_test: stepper_test.cpp
+$(OUT)/stepper_test: stepper_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 
-tab_container_test: tab_container_test.cpp
+$(OUT)/tab_container_test: tab_container_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 
-text_wrap_test: text_wrap_test.cpp
+$(OUT)/text_wrap_test: text_wrap_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 
 test: all
 	@for t in $(ALL_TESTS); do \
 		echo "Running $$t"; \
-		./$$t; \
+		$(OUT)/$$t; \
 	done
 
 clean:
-	rm -f $(ALL_TESTS) input_system_mouse_delta_backend_smoke.o smoke_raylib.o smoke_sokol.o
+	rm -f $(TEST_BINS) input_system_mouse_delta_backend_smoke.o smoke_raylib.o smoke_sokol.o
 	rm -rf $(INCLUDE_ROOT)

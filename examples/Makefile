@@ -55,69 +55,79 @@ endif
 
 # Header-only library - no additional source files needed
 
+# All build products land in the repo-wide output/ dir (see
+# examples/catalog/common.mk) instead of littering the source tree.
+OUT := $(AFTERHOURS_ROOT)/output
+$(shell mkdir -p $(OUT))
+
+EXAMPLE_BINS := graphics_example drawing_3d_example headless_validation imm_visual_check on_draw_example perf_stress_test calendar_stress_test perf_stress_test_opt calendar_stress_test_opt profile_harness
+
 # Targets
-.PHONY: all run test clean
+.PHONY: all run run-3d test clean graphics_example drawing_3d_example headless_validation imm_visual_check on_draw_example perf_stress_test calendar_stress_test perf_stress_test_opt calendar_stress_test_opt profile_harness
 
-all: graphics_example drawing_3d_example headless_validation perf_stress_test calendar_stress_test profile_harness
+# Bare names stay usable: `make graphics_example` builds $(OUT)/graphics_example.
+$(EXAMPLE_BINS): %: $(OUT)/%
 
-graphics_example: graphics_example.cpp
+all: $(addprefix $(OUT)/,graphics_example drawing_3d_example headless_validation perf_stress_test calendar_stress_test profile_harness)
+
+$(OUT)/graphics_example: graphics_example.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: graphics_example"
 
-drawing_3d_example: drawing_3d_example.cpp
+$(OUT)/drawing_3d_example: drawing_3d_example.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: drawing_3d_example"
 
 # Headless validation - compares headless vs windowed rendering output
-headless_validation: headless_validation.cpp
+$(OUT)/headless_validation: headless_validation.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: headless_validation"
 
 # imm visual regression - renders imm UI to a hidden window, captures a PNG
-imm_visual_check: imm_visual_check.cpp
+$(OUT)/imm_visual_check: imm_visual_check.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: imm_visual_check"
 
 # on_draw example - pedagogical demo of with_on_draw_bg / with_on_draw_fg
-on_draw_example: on_draw_example.cpp
+$(OUT)/on_draw_example: on_draw_example.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: on_draw_example"
 
 # Performance stress tests - no raylib dependency
-perf_stress_test: perf_stress_test.cpp
+$(OUT)/perf_stress_test: perf_stress_test.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 	@echo "Built: perf_stress_test"
 
 # Calendar layout stress test - full rendering pipeline
-calendar_stress_test: calendar_stress_test.cpp
+$(OUT)/calendar_stress_test: calendar_stress_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: calendar_stress_test"
 
 run: graphics_example
-	./graphics_example
+	$(OUT)/graphics_example
 
 run-3d: drawing_3d_example
-	./drawing_3d_example
+	$(OUT)/drawing_3d_example
 
 test:
 	$(MAKE) -C ../tests test
 
 # Optimized profiling builds
-perf_stress_test_opt: perf_stress_test.cpp
+$(OUT)/perf_stress_test_opt: perf_stress_test.cpp
 	$(CXX) $(CXXFLAGS_OPT) $(INCLUDES) $^ -o $@
 	@echo "Built: perf_stress_test_opt (O2)"
 
-calendar_stress_test_opt: calendar_stress_test.cpp
+$(OUT)/calendar_stress_test_opt: calendar_stress_test.cpp
 	$(CXX) $(CXXFLAGS_OPT_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: calendar_stress_test_opt (O2)"
 
-profile_harness: profile_harness.cpp
+$(OUT)/profile_harness: profile_harness.cpp
 	$(CXX) $(CXXFLAGS_OPT) $(INCLUDES) $^ -o $@
 	@echo "Built: profile_harness (O2)"
 
 profile-layout: perf_stress_test_opt
 	@echo "Profiling layout benchmark (10s sample)..."
-	./perf_stress_test_opt layout &  PERF_PID=$$!; \
+	$(OUT)/perf_stress_test_opt layout &  PERF_PID=$$!; \
 	sleep 0.5; \
 	sample $$PERF_PID -f profile_layout.txt 2>/dev/null || true; \
 	wait $$PERF_PID 2>/dev/null || true
@@ -125,17 +135,17 @@ profile-layout: perf_stress_test_opt
 
 profile-calendar: calendar_stress_test_opt
 	@echo "Profiling calendar benchmark (layout-only, 500 frames)..."
-	./calendar_stress_test_opt --layout-only --frames=500 --meetings=30 &  PERF_PID=$$!; \
+	$(OUT)/calendar_stress_test_opt --layout-only --frames=500 --meetings=30 &  PERF_PID=$$!; \
 	sleep 0.5; \
 	sample $$PERF_PID -f profile_calendar.txt 2>/dev/null || true; \
 	wait $$PERF_PID 2>/dev/null || true
 	@echo "Profile saved to profile_calendar.txt"
 
 clean:
-	rm -f graphics_example drawing_3d_example headless_validation perf_stress_test calendar_stress_test profile_harness
-	rm -f perf_stress_test_opt calendar_stress_test_opt
-	rm -f imm_visual_check imm_visual_check.png imm_visual_check_batched.png
-	rm -f on_draw_example on_draw_example.png
+	rm -f $(addprefix $(OUT)/,graphics_example drawing_3d_example headless_validation perf_stress_test calendar_stress_test profile_harness)
+	rm -f $(addprefix $(OUT)/,perf_stress_test_opt calendar_stress_test_opt)
+	rm -f $(OUT)/imm_visual_check imm_visual_check.png imm_visual_check_batched.png
+	rm -f $(OUT)/on_draw_example on_draw_example.png
 	rm -f graphics_example_output.png
 	rm -f profile_layout.txt profile_calendar.txt
 	rm -rf graphics_example_captures/

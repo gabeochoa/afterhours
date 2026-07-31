@@ -1,4 +1,4 @@
-
+include ../../common.mk
 # ECS Performance Benchmarks Makefile
 #
 # Uses -O3 optimization for meaningful benchmark results
@@ -9,20 +9,20 @@ FLAGS = -std=c++23 -O3 -DNDEBUG -Wall -Wextra -Wpedantic -Wuninitialized -Wshado
 all: build run
 
 build:
-	clang++ $(FLAGS) main.cpp -o ecs_benchmarks.exe
+	clang++ $(FLAGS) main.cpp -o $(OUT)/ecs_benchmarks.exe
 
 run:
-	./ecs_benchmarks.exe
+	$(OUT)/ecs_benchmarks.exe
 
 # Run with verbose output showing individual samples
 verbose:
-	./ecs_benchmarks.exe -d yes
+	$(OUT)/ecs_benchmarks.exe -d yes
 
 # List available benchmarks
 list:
-	./ecs_benchmarks.exe --list-tests
+	$(OUT)/ecs_benchmarks.exe --list-tests
 
 clean:
-	rm -f ecs_benchmarks.exe
+	rm -f $(OUT)/ecs_benchmarks.exe
 
 .PHONY: all build run verbose list clean

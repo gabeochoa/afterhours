@@ -318,8 +318,22 @@ collapsing init + before + user + after into one call, and folding in
 
 Note the catalog examples do **not** use this path; several still hand-roll the
 old `ClearUIComponentChildren` → `BeginUIContextManager` → `EndUIContextManager`
-wiring and never run layout at all. `examples/catalog/ui/ui_component` does not
-even compile (its includes assume a shallower directory). Worth a sweep.
+wiring and never run layout at all.
+
+### 4b. The example catalog is bit-rotted — 44 of 49 do not compile
+
+Found while moving build output to `output/`. Every catalog example lives at
+`examples/catalog/<category>/<name>/`, but their includes still say
+`../../../src/...`, which resolves to `examples/src` — one level short. The
+category directories were added and the includes never followed. Confirmed the
+fix is uniform: rewriting `"../../../src/` to `"../../../../src/` makes
+`core/basic_usage` compile clean.
+
+Not swept yet — it is a separate concern from the output-dir change and wants
+its own verification pass over all 49. Note that `make` in these directories
+*looked* like it passed because most of them had a stale binary sitting next to
+the source, so make considered the target up to date and did nothing. Pointing
+the output at `output/` is what exposed it.
 
 ### 5. `ui::DefaultAction` — stop forcing an enum declaration
 

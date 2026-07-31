@@ -1,4 +1,5 @@
+include ../../common.mk
 FLAGS = -std=c++23 -Wall -Wextra -Wpedantic -g
 
 all:
-	clang++ $(FLAGS) main.cpp -o modal.exe && ./modal.exe
+	clang++ $(FLAGS) main.cpp -o $(OUT)/modal.exe && $(OUT)/modal.exe

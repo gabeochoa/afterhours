@@ -1,6 +1,7 @@
+include ../../common.mk
 CXX = g++
 CXXFLAGS = -std=c++23 -Wall -Wextra -O2
-TARGET = bitset_utils_example
+TARGET = $(OUT)/bitset_utils_example.exe
 SOURCE = main.cpp
 
 $(TARGET): $(SOURCE)
@@ -10,6 +11,6 @@ clean:
 	rm -f $(TARGET)
 
 run: $(TARGET)
-	./$(TARGET)
+	$(TARGET)
 
 .PHONY: clean run

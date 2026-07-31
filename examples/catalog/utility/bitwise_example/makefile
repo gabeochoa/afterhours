@@ -1,4 +1,5 @@
+include ../../common.mk
 FLAGS = -std=c++23 -Wall -Wextra -Wpedantic -g
 
 all:
-	clang++ $(FLAGS) main.cpp -o bitwise_example.exe && ./bitwise_example.exe
+	clang++ $(FLAGS) main.cpp -o $(OUT)/bitwise_example.exe && $(OUT)/bitwise_example.exe

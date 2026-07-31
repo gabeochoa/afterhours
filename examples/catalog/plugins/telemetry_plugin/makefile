@@ -1,10 +1,11 @@
+include ../../common.mk
 FLAGS = -std=c++23 -Wall -Wextra -Wpedantic -g
 INCLUDES = -I../../.. -I../../../vendor -I../../../../../vendor
-EXE = telemetry_plugin.exe
+EXE = $(OUT)/telemetry_plugin.exe
 LOG = telemetry_requests.log
 
 all:
-	clang++ $(FLAGS) $(INCLUDES) main.cpp -o $(EXE) && ./$(EXE)
+	clang++ $(FLAGS) $(INCLUDES) main.cpp -o $(EXE) && $(EXE)
 
 validate-localhost:
 	clang++ $(FLAGS) $(INCLUDES) main.cpp -o $(EXE)
@@ -13,7 +14,7 @@ validate-localhost:
 	python3 ingest_server.py $(LOG) 8787 >/dev/null 2>&1 & \
 	SERVER_PID=$$!; \
 	until curl -fsS --max-time 1 http://127.0.0.1:8787/health >/dev/null 2>&1; do sleep 0.05; done; \
-	AH_TELEMETRY_USE_LOCALHOST=1 ./$(EXE); \
+	AH_TELEMETRY_USE_LOCALHOST=1 $(EXE); \
 	sleep 0.3; \
 	echo "\nCaptured telemetry requests:"; \
 	cat $(LOG); \
@@ -22,4 +23,4 @@ validate-localhost:
 
 validate-httpbin:
 	clang++ $(FLAGS) $(INCLUDES) main.cpp -o $(EXE)
-	AH_TELEMETRY_ENDPOINT=http://httpbin.org/anything ./$(EXE)
+	AH_TELEMETRY_ENDPOINT=http://httpbin.org/anything $(EXE)
