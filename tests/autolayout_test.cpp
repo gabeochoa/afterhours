@@ -241,13 +241,22 @@ struct TestLayout {
   // UI scale for adaptive mode (passed to autolayout).
   float ui_scale = 1.0f;
 
-  void run(Entity &root) {
+  void run(Entity &root) { run_without(root, -1); }
+
+  // Same as run(), but leaves `omit` as a null hole in the mapping while its
+  // parent still lists it as a child. This is the stale-child case that
+  // UIEntityMappingCache documents (systems.h): the mapping is rebuilt each
+  // frame from live UI entities, so an entity cleaned up while its parent
+  // still references it leaves exactly this hole.
+  void run_without(Entity &root, EntityID omit) {
     EntityID max_id = 0;
     for (auto &e : entities) {
       max_id = std::max(max_id, e->id);
     }
     std::vector<Entity *> mapping(static_cast<size_t>(max_id) + 1, nullptr);
     for (auto &e : entities) {
+      if (e->id == omit)
+        continue;
       mapping[e->id] = e.get();
     }
     AutoLayout::autolayout(root.get<UIComponent>(), resolution, mapping,
@@ -3308,6 +3317,99 @@ TEST(expand_percent_expand_chain) {
   CHECK_APPROX(t.ui(mid).computed[Axis::X], 800.f);
   CHECK_APPROX(t.ui(inner).computed[Axis::X], 800.f);
   CHECK_APPROX(t.ui(leaf).computed[Axis::X], 700.f);
+}
+
+// ============================================================================
+// Stale child ids must not crash the layout pass
+//
+// UIEntityMappingCache rebuilds its id->Entity* vector every frame from the
+// live UI entities, so any id in [0, max_id] that is not a live UI entity is a
+// null hole. A parent that still lists a cleaned-up child therefore hands
+// autolayout an id it cannot resolve. AutoLayout::to_ent logs that and then
+// dereferences the null slot anyway, so the log line is immediately followed
+// by the segfault it just described.
+//
+// Reported against floatinghotel as a startup crash. The call site it named
+// (the children() text-measurement fallback) is guarded now, but the traversal
+// sites are not, so the crash is still reachable.
+// ============================================================================
+
+// The minimal shape: a leaf that went away while its parent still lists it.
+// Pre-fix this segfaulted in reset_and_calculate_standalone, the very first
+// traversal, before any sizing ran.
+TEST(stale_child_id_is_dropped) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(300));
+  auto &live = t.make_ui(pixels(100), pixels(50));
+  auto &gone = t.make_ui(pixels(100), pixels(50));
+  t.add_child(root, live);
+  t.add_child(root, gone);
+
+  t.run_without(root, gone.id);
+
+  // The dead id is dropped rather than skipped, so the parent's own view of
+  // its children matches what actually got laid out.
+  check(TestLayout::ui(root).children.size() == 1, "stale child dropped",
+        __FILE__, __LINE__);
+  CHECK_APPROX(t.ui(live).computed[Axis::X], 100.f);
+}
+
+// A whole subtree hanging off a dead parent. Nothing under it can be reached,
+// so it must be dropped wholesale without touching the live sibling.
+TEST(stale_subtree_is_dropped_whole) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(300));
+  auto &live = t.make_ui(pixels(400), pixels(100));
+  auto &shelf = t.make_ui(pixels(400), pixels(100));
+  auto &item = t.make_ui(pixels(100), pixels(100));
+  t.add_child(root, live);
+  t.add_child(root, shelf);
+  t.add_child(shelf, item);
+
+  t.run_without(root, shelf.id);
+
+  check(TestLayout::ui(root).children.size() == 1, "stale subtree dropped",
+        __FILE__, __LINE__);
+  CHECK_APPROX(t.ui(live).computed[Axis::Y], 100.f);
+}
+
+// Sizing modes that resolve through the entity (Text reaches
+// get_text_size_for_axis -> to_ent) must not be reachable with a dead id
+// either. Pruning happens before any sizing runs, so they never are.
+TEST(stale_child_with_text_sizing_is_dropped) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(300));
+  auto &live = t.make_ui(pixels(120), pixels(40));
+  auto &label = t.make_ui(Size{.dim = Dim::Text, .value = 0.f}, pixels(40));
+  t.add_child(root, live);
+  t.add_child(root, label);
+
+  t.run_without(root, label.id);
+
+  check(TestLayout::ui(root).children.size() == 1, "stale text child dropped",
+        __FILE__, __LINE__);
+  CHECK_APPROX(t.ui(live).computed[Axis::X], 120.f);
+}
+
+// Pruning must not disturb the normal case: a fully-mapped tree keeps every
+// child. Guards against a bad has_cmp() bounds check quietly eating live ids.
+TEST(prune_keeps_every_live_child) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(300));
+  auto &a = t.make_ui(pixels(100), pixels(50));
+  auto &b = t.make_ui(pixels(100), pixels(50));
+  auto &c = t.make_ui(pixels(100), pixels(50));
+  t.add_child(root, a);
+  t.add_child(root, b);
+  t.add_child(b, c);
+
+  t.run(root);
+
+  check(TestLayout::ui(root).children.size() == 2, "live children kept",
+        __FILE__, __LINE__);
+  check(TestLayout::ui(b).children.size() == 1, "nested live child kept",
+        __FILE__, __LINE__);
+  CHECK_APPROX(t.ui(c).computed[Axis::X], 100.f);
 }
 
 // ============================================================================

@@ -68,6 +68,31 @@ struct AutoLayout {
     return *cmp_cache_[static_cast<size_t>(id)];
   }
 
+  // Whether `id` resolves to a live component this pass. cmp() is an unchecked
+  // deref on the hot path, so anything walking ids has to ask first.
+  [[nodiscard]] bool has_cmp(EntityID id) const {
+    return id >= 0 && static_cast<size_t>(id) < cmp_cache_.size() &&
+           cmp_cache_[static_cast<size_t>(id)] != nullptr;
+  }
+
+  // A parent can outlive its children. The mapping is rebuilt every frame from
+  // the live UI entities (see UIEntityMappingCache), so a child cleaned up
+  // while its parent still lists it leaves a null hole that cmp() would
+  // happily dereference. Drop those ids once, here, instead of guarding the
+  // ten-odd `for (EntityID child : widget.children)` loops below -- every one
+  // of them assumes children resolve, and the next one written would too.
+  //
+  // Dropping is the right answer rather than merely skipping: the id names an
+  // entity that no longer exists, and in immediate mode the child list is
+  // rebuilt from scratch next frame anyway.
+  void prune_stale_children(UIComponent &widget) {
+    std::erase_if(widget.children,
+                  [this](EntityID id) { return !has_cmp(id); });
+    for (EntityID child : widget.children) {
+      prune_stale_children(cmp(child));
+    }
+  }
+
   float resolve_pixels(float value, const UIComponent &widget) const {
     if (widget.resolved_scaling_mode == ScalingMode::Adaptive) {
       return value * ui_scale;
@@ -1555,6 +1580,7 @@ struct AutoLayout {
     al.set_grid_snapping(enable_grid_snapping);
     al.ui_scale = ui_scale;
     al.build_cmp_cache();
+    al.prune_stale_children(widget);
 
     al.reset_and_calculate_standalone(widget);
     al.calculate_those_with_parents(widget);
