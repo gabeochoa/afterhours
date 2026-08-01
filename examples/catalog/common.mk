@@ -28,11 +28,16 @@ SRCS ?= main.cpp
 # $(ROOT)/vendor is magic_enum/fmt; $(ROOT)/.. is the directory holding this
 # checkout, so <afterhours/...> resolves (what the old -I../../../../../vendor
 # was doing in about half the leaves).
+EXE := $(OUT)/$(NAME).exe
+
+# -MF is not optional here. Left to itself, -MD names the dep file after the
+# output with its extension replaced, so `-o foo.exe` writes foo.d -- not
+# foo.exe.d, which is what the -include below looks for. The result compiles
+# and looks healthy while tracking nothing: editing a header rebuilds nothing
+# and you test a stale binary.
 FLAGS = -std=c++23 -Wall -Wextra -Wpedantic -Wuninitialized -Wshadow \
         -Wconversion -g -isystem $(ROOT)/vendor -isystem $(ROOT)/.. \
-        -DFMT_HEADER_ONLY -MD -MP $(EXTRA_FLAGS)
-
-EXE := $(OUT)/$(NAME).exe
+        -DFMT_HEADER_ONLY -MD -MP -MF $(EXE).d $(EXTRA_FLAGS)
 
 .PHONY: all build run clean
 

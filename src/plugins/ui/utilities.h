@@ -511,6 +511,25 @@ static int run(const graphics::Config &cfg, UserSystems &&...user_systems) {
         graphics::clear_background(imm::ThemeDefaults::get().theme.background);
         systems.run(graphics::get_frame_time());
         graphics::end_frame();
+
+        // begin_frame/end_frame only bind and unbind an offscreen render
+        // texture -- nothing reaches the window without this. Skipping it does
+        // not just leave the window blank: raylib ticks its frame timer and
+        // polls input inside end_drawing, so GetFrameTime stays 0, the fps cap
+        // never applies, and no input arrives.
+        graphics::begin_drawing();
+        auto &render_texture = graphics::get_render_texture();
+        // Negative source height flips it: render textures are bottom-up.
+        draw_texture_pro(
+            render_texture.texture,
+            RectangleType{0, 0,
+                          static_cast<float>(render_texture.texture.width),
+                          -static_cast<float>(render_texture.texture.height)},
+            RectangleType{0, 0,
+                          static_cast<float>(graphics::get_screen_width()),
+                          static_cast<float>(graphics::get_screen_height())},
+            Vector2Type{0, 0}, 0.f, colors::UI_WHITE);
+        graphics::end_drawing();
     }
 
     graphics::shutdown();
