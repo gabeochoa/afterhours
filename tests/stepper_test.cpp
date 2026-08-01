@@ -28,6 +28,10 @@ TEST(stepper_multi_visible_labels_separated) {
   stepper(h.context(), mk(h.root(), 0), opts, idx,
           ComponentConfig{}
               .with_size(ComponentSize{pixels(400), pixels(56)})
+              // ComponentConfig defaults to a 50px font; three labels at that
+              // size do not fit in 400px and the stepper legitimately reports
+              // an overflow. Pick a size a real caller would use.
+              .with_font(UIComponent::DEFAULT_FONT, pixels(18))
               .with_debug_name("st"),
           /*num_visible=*/3);
   h.layout_and_render();

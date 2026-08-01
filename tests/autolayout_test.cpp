@@ -83,6 +83,46 @@
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 
+// Capture layout warnings instead of printing them.
+//
+// A few tests below deliberately overflow their parent (NoWrap with children
+// that do not fit, a min_height that beats the space expand leaves). The
+// warning is the behaviour under test, not noise, so those tests assert it via
+// EXPECT_WARN. Every other test must produce no warnings at all -- the runner
+// fails any test that warns without declaring it, which is what stops a real
+// regression from hiding in the log.
+#define AFTER_HOURS_REPLACE_LOGGING
+#include <cstdio>
+#include <format>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+inline std::vector<std::string> &captured_warnings() {
+  static std::vector<std::string> v;
+  return v;
+}
+
+template <typename... Args>
+inline void log_warn(std::format_string<Args...> fmt, Args &&...args) {
+  captured_warnings().push_back(std::format(fmt, std::forward<Args>(args)...));
+}
+template <typename... Args>
+inline void log_error(std::format_string<Args...> fmt, Args &&...args) {
+  std::fprintf(stderr, "[ERROR] %s\n",
+               std::format(fmt, std::forward<Args>(args)...).c_str());
+}
+template <typename... Args>
+inline void log_trace(std::format_string<Args...>, Args &&...) {}
+template <typename... Args>
+inline void log_info(std::format_string<Args...>, Args &&...) {}
+template <typename... Args>
+inline void log_clean(std::format_string<Args...>, Args &&...) {}
+template <typename Duration, typename... Args>
+inline void log_once_per(Duration, int, std::format_string<Args...>,
+                         Args &&...) {}
+
 #include <afterhours/ah.h>
 #include <afterhours/src/plugins/autolayout.h>
 
@@ -135,6 +175,22 @@ static void check(bool cond, const char *expr, const char *file, int line) {
 }
 
 #define CHECK(expr) check((expr), #expr, __FILE__, __LINE__)
+
+// Declare that this test is expected to emit a warning containing `needle`.
+// Consumes the matching warnings so the runner does not flag them as
+// unexpected, and fails if the warning never arrived.
+static bool expect_warn(std::string_view needle, const char *file, int line) {
+  auto &w = captured_warnings();
+  size_t before = w.size();
+  std::erase_if(w, [&](const std::string &m) {
+    return m.find(needle) != std::string::npos;
+  });
+  bool found = w.size() < before;
+  check(found, "expected a layout warning", file, line);
+  return found;
+}
+
+#define EXPECT_WARN(needle) expect_warn((needle), __FILE__, __LINE__)
 
 static bool approx(float a, float b, float eps = 0.5f) {
   return std::fabs(a - b) < eps;
@@ -496,6 +552,10 @@ TEST(nowrap_column_no_wrapping) {
   CHECK(t.ui(c2).computed_rel[Axis::Y] > 0.f);
   // c3 follows c2
   CHECK(t.ui(c3).computed_rel[Axis::Y] > t.ui(c2).computed_rel[Axis::Y]);
+
+  // Third child does not fit; both warnings are the point of this test.
+  EXPECT_WARN("NoWrap set but would overflow");
+  EXPECT_WARN("Layout overflow");
 }
 
 // ---------------------------------------------------------------------------
@@ -1337,6 +1397,11 @@ TEST(min_height_with_expand) {
 
   // Body expand = 100 - 80 = 20, but min = 50
   CHECK(t.ui(body).computed[Axis::Y] >= 49.f);
+
+  // min_height beats the 20px expand leaves, so 80 + 50 overflows the 100px
+  // parent. Inherent to what this test checks.
+  EXPECT_WARN("NoWrap set but would overflow");
+  EXPECT_WARN("Layout overflow");
 }
 
 // ---------------------------------------------------------------------------
@@ -2176,6 +2241,10 @@ TEST(nowrap_overflow_maintains_order) {
   // X positions should be in order
   CHECK(t.ui(c1).computed_rel[Axis::X] < t.ui(c2).computed_rel[Axis::X]);
   CHECK(t.ui(c2).computed_rel[Axis::X] < t.ui(c3).computed_rel[Axis::X]);
+
+  // Three 150px children in a 300px row: the overflow is deliberate.
+  EXPECT_WARN("NoWrap set but would overflow");
+  EXPECT_WARN("Layout overflow");
 }
 
 // ---------------------------------------------------------------------------
@@ -3179,6 +3248,10 @@ TEST(expand_in_children_parent_same_axis_no_sentinel) {
   // No free space in a content-sized parent, so both collapse to content (0).
   CHECK_APPROX(t.ui(panel).computed[Axis::X], 0.f);
   CHECK_APPROX(t.ui(inner).computed[Axis::X], 0.f);
+
+  // A content-sized parent has no free space, so expand collapsing and warning
+  // is the documented behaviour.
+  EXPECT_WARN("collapsed to 0");
 }
 
 // ---------------------------------------------------------------------------
@@ -3244,12 +3317,24 @@ TEST(expand_percent_expand_chain) {
 int main() {
   printf("=== Autolayout Engine Tests ===\n\n");
 
+  int unexpected = 0;
   for (auto &[name, fn] : test_registry()) {
     printf("  Running: %s\n", name);
+    captured_warnings().clear();
     fn();
+    // Anything left over was not declared with EXPECT_WARN.
+    for (const std::string &w : captured_warnings()) {
+      fprintf(stderr, "  UNEXPECTED WARNING in %s: %s\n", name, w.c_str());
+      unexpected++;
+    }
   }
 
   printf("\n%d/%d tests passed\n", tests_passed, tests_run);
+
+  if (unexpected > 0) {
+    printf("UNDECLARED WARNINGS: %d\n", unexpected);
+    return 1;
+  }
 
   if (tests_passed != tests_run) {
     printf("FAILURES: %d\n", tests_run - tests_passed);
