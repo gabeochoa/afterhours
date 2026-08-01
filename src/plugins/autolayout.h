@@ -944,14 +944,26 @@ struct AutoLayout {
           }
           */
 
-          float approx_epc =
-              error / (1.f * std::max(1, (int)num_resizeable_children));
+          // Distribute the whole error in one pass, weighted by each child's
+          // shrink capacity (1 - strictness), instead of taking only a
+          // (1 - strictness) fraction of an even split. The old form
+          // under-corrected geometrically: with one child at strictness 0.9 it
+          // removed 10% of the remaining error per pass, so the 10-iteration
+          // cap left 0.9^11 of it behind (432 -> 333.19 instead of 288).
+          float total_shrink_weight = 0.f;
+          for (UIComponent *child : layout_children) {
+            total_shrink_weight += 1.f - child->desired[axis].strictness;
+          }
+          if (total_shrink_weight <= 0.f) {
+            return;
+          }
           for (UIComponent *child : layout_children) {
             const Size &exp = child->desired[axis];
             if (exp.strictness == 1.f) {
               continue;
             }
-            float portion_of_error = (1.f - exp.strictness) * approx_epc;
+            float portion_of_error =
+                error * ((1.f - exp.strictness) / total_shrink_weight);
             float cur_size = child->computed[axis];
             child->computed[axis] = fmaxf(0, cur_size - portion_of_error);
             // NOTE: do NOT decay child->desired strictness here. desired is

@@ -2350,15 +2350,17 @@ TEST(absolute_large_margin_no_negative) {
 }
 
 // ---------------------------------------------------------------------------
-// Flow + large margin: flow element clamps to zero (contrast with absolute)
+// Flow + oversized margin: the main axis shrinks to fit, the cross axis does
+// not. Contrast with the absolute case above, which ignores margins entirely.
 // ---------------------------------------------------------------------------
-TEST(flow_large_margin_clamps_to_zero) {
+TEST(flow_oversized_margin_shrinks_main_axis) {
   TestLayout t;
   auto &root = t.make_ui(pixels(1280), pixels(720));
   t.ui(root).set_flex_direction(FlexDirection::Column);
 
   auto &child = t.make_ui(screen_pct(0.4f), screen_pct(0.6f));
-  // Same margins that would cause negative size in flow
+  // Child wants 512x432. Margins are 384 per side on X, 216 per side on Y, so
+  // the child plus its margins wants 1280 across and 864 down.
   t.ui(child).set_desired_margin(Margin{
       .top = screen_pct(0.3f),
       .bottom = screen_pct(0.3f),
@@ -2369,9 +2371,22 @@ TEST(flow_large_margin_clamps_to_zero) {
   t.run(root);
 
   auto r = t.ui(child).rect();
-  // Flow layout subtracts margins: 512 - 384 - 384 < 0, clamped to 0
-  CHECK_APPROX(r.width, 0.f);
-  CHECK_APPROX(r.height, 0.f);
+
+  // X is the cross axis in a Column, where children overlap rather than stack,
+  // so there is no error to correct: 512 + 768 == the 1280 available. The
+  // child keeps its full width. It does not clamp to zero.
+  CHECK_APPROX(r.width, 512.f);
+
+  // Y is the main axis and overflows by 144, so the child shrinks to exactly
+  // fill what the margins leave: 720 - 216 - 216 = 288.
+  //
+  // This used to land on 333.19. fix_violating_children shrank each child by
+  // (1 - strictness) of an even split of the error, which for one child at
+  // screen_pct's default strictness 0.9 removed only 10% of the remaining
+  // error per pass. The 10-iteration cap then left 144 * 0.9^11 = 45.19 of
+  // overflow behind. The solver now distributes the whole error in one pass,
+  // weighted by shrink capacity.
+  CHECK_APPROX(r.height, 288.f);
 }
 
 // ---------------------------------------------------------------------------
