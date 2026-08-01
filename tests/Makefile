@@ -66,6 +66,7 @@ ALL_TESTS := \
 	slider_test \
 	split_test \
 	stepper_test \
+	styling_test \
 	system_tags_test \
 	tab_container_test \
 	text_wrap_test
@@ -80,6 +81,7 @@ RAYLIB_TESTS := \
 	slider_test \
 	split_test \
 	stepper_test \
+	styling_test \
 	tab_container_test \
 	text_wrap_test
 
@@ -139,6 +141,9 @@ $(OUT)/split_test: split_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 
 $(OUT)/stepper_test: stepper_test.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
+
+$(OUT)/styling_test: styling_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
 
 $(OUT)/tab_container_test: tab_container_test.cpp

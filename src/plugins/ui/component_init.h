@@ -303,8 +303,13 @@ inline void apply_nine_slice(Entity &entity, const ComponentConfig &config) {
   hn.nine_slice = nine_slice;
 }
 
+// Most of this already behaves as an overlay: every field guards on has_value()
+// or a sentinel, so an unset one is skipped. Three branches instead force a
+// reset, which is what stops a reused entity keeping last frame's state. Pass
+// overlay=true to skip those three and apply only what the config explicitly
+// set — see apply_restyle().
 inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
-                          const ComponentConfig &config) {
+                          const ComponentConfig &config, bool overlay = false) {
   if (config.rounded_corners.has_value() &&
       config.rounded_corners.value().any()) {
     entity.addComponentIfMissing<HasRoundedCorners>()
@@ -367,7 +372,7 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
       entity.addComponentIfMissing<HasColor>(colors::UI_PINK);
       entity.get<HasColor>().set(colors::UI_PINK);
     }
-  } else if (config.color_usage == Theme::Usage::Default) {
+  } else if (!overlay && config.color_usage == Theme::Usage::Default) {
     // Auto-add transparent background for elements that don't specify
     // a color, so child divs don't retain stale backgrounds.
     entity.addComponentIfMissing<HasColor>(colors::transparent());
@@ -377,8 +382,12 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   if (config.hover_color.has_value() && entity.has<HasColor>()) {
     entity.get<HasColor>().hover_color = config.hover_color;
   }
-  entity.addComponentIfMissing<HasOpacity>().value =
-      std::clamp(config.opacity, 0.0f, 1.0f);
+  // opacity has no "unset" value, so in overlay mode a default 1.0 is treated
+  // as "not mentioned" rather than "make it opaque".
+  if (!overlay || config.opacity != 1.0f) {
+    entity.addComponentIfMissing<HasOpacity>().value =
+        std::clamp(config.opacity, 0.0f, 1.0f);
+  }
   // Apply cursor type if specified
   if (config.cursor_type.has_value()) {
     entity.addComponentIfMissing<HasCursor>(config.cursor_type.value());
@@ -421,7 +430,7 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
       mods.translate_x = resolved_tx;
       mods.translate_y = resolved_ty;
     }
-  } else {
+  } else if (!overlay) {
     // Reset modifiers if component exists but no modifiers needed
     if (entity.has<HasUIModifiers>()) {
       auto &mods = entity.get<HasUIModifiers>();
@@ -432,6 +441,29 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
     // Always reset absolute position when no translate is set
     entity.get<UIComponent>().absolute_pos_x = 0.f;
     entity.get<UIComponent>().absolute_pos_y = 0.f;
+  }
+}
+
+// Overlay a config onto an element that already exists: applies every field
+// apply_visuals can detect as explicitly set, leaves the rest alone. Layout
+// enums and plain bools have no "unset" value, so they are not restylable.
+//
+// Call this from the build pass. It relies on the element's own config having
+// re-applied (and reset) first this frame, which is what makes a conditional
+// restyle revert on its own when the condition goes false.
+inline void apply_restyle(HasUIContext auto &ctx, Entity &entity,
+                          const ComponentConfig &config) {
+  const bool sets_background = Theme::is_valid(config.color_usage) ||
+                               config.color_usage == Theme::Usage::Custom;
+
+  apply_visuals(ctx, entity, config, /*overlay=*/true);
+
+  // apply_label seeds HasLabel::background_hint from the config background and
+  // auto-contrast text reads it. A live hint means auto-contrast is on, so a
+  // new background has to refresh it or light text stays on a light fill.
+  if (sets_background && entity.has<HasLabel>() && entity.has<HasColor>() &&
+      entity.get<HasLabel>().background_hint.has_value()) {
+    entity.get<HasLabel>().set_background_hint(entity.get<HasColor>().color());
   }
 }
 

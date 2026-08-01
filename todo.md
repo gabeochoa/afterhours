@@ -374,6 +374,31 @@ Our `Theme` is hardcoded C++, so every color tweak is a recompile. Not strictly
 an ergonomics item, but it's the iteration-speed one — and a hot-reloading theme
 is the most compelling thing a showcase can demo.
 
+### 6b. Split region configs — deferred
+
+`vsplit`/`hsplit` could take `{size, config}` pairs so regions are styled where
+they are declared:
+
+```cpp
+auto [title, body] = vsplit(ctx, mk(e), {
+  {pixels(36),  ComponentConfig{}.with_custom_background(navy)},
+  {expand(1.f), ComponentConfig{}.with_custom_background(dark)},
+});
+```
+
+`Region` would be implicitly constructible from `Size`, so the terse form keeps
+working and N stays deduced.
+
+Not done because `restyle()` already covers it, and the two differ only in
+where the config sits — locality vs one uniform mechanism. Worth revisiting if
+splits start carrying a lot of per-region styling and the `restyle()` calls
+drift far from the `vsplit()` they belong to.
+
+Note for whoever picks this up: **dynamic styling was never the reason** for
+either feature. Configs are values, so `with_custom_background(x ? a : b)`
+already covers that. The actual gap was reaching elements the caller did not
+create — split regions, `progress_bar`'s track/fill, `dropdown`'s options.
+
 ## Explicitly not doing
 
 - **Layout-solve caching / draw diffing.** Ratatui caches the constraint solve

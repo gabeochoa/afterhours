@@ -73,6 +73,35 @@ works, and `expand()` soaks up whatever the fixed regions leave. Pass a
 `hstack`, a split fills its parent by default. See
 `examples/catalog/ui/split_layout/`.
 
+**Styling regions.** The split creates the region containers, so you have no
+config for them. `restyle()` overlays one onto an element that already exists:
+
+```cpp
+auto [title, body] = vsplit(ctx, mk(entity), {pixels(36), expand(1.f)});
+title.restyle(ctx, ComponentConfig{}.with_custom_background(navy));
+```
+
+It applies only what the config explicitly set and leaves everything else
+alone. Layout enums (`flex_direction`, `justify_content`, `align_items`,
+overflow) and plain bools (`hidden`, `disabled`, `clip_children`) are **not**
+restylable — they have no "unset" value, so there is no way to tell "make it
+false" from "not mentioned".
+
+Call it from the build pass, never from state cached across frames. It works
+because the element's own config re-applies (and resets) first each frame, so
+`if (x) title.restyle(...)` reverts on its own when `x` goes false.
+
+Also works on any widget, not just split regions — `progress_bar`'s track,
+`tab_container`'s tabs, or anything else you get a handle to.
+
+For dynamic styling of elements you *do* create, you do not need `restyle()` —
+configs are values, so just branch when you build one:
+
+```cpp
+button(ctx, mk(e), ComponentConfig{"Save"}
+    .with_custom_background(is_dirty ? accent : base));
+```
+
 ### Buttons & Selection
 
 | Widget | Header | Description |

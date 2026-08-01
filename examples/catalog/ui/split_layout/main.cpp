@@ -55,10 +55,15 @@ struct BuildShell : System<DefaultUIContext> {
     auto [nav, content] =
         hsplit(ctx, mk(body.ent()), {pixels(200), expand(1.f)});
 
-    title.ent().get<HasColor>().set(Color{38, 42, 58, 255});
-    nav.ent().get<HasColor>().set(Color{28, 31, 44, 255});
-    content.ent().get<HasColor>().set(Color{22, 24, 34, 255});
-    status.ent().get<HasColor>().set(Color{38, 42, 58, 255});
+    // restyle() overlays visual config onto elements you did not create --
+    // here the region containers vsplit/hsplit built.
+    const auto fill = [](Color c) {
+      return ComponentConfig{}.with_custom_background(c);
+    };
+    title.restyle(ctx, fill(Color{38, 42, 58, 255}));
+    nav.restyle(ctx, fill(Color{28, 31, 44, 255}));
+    content.restyle(ctx, fill(Color{22, 24, 34, 255}));
+    status.restyle(ctx, fill(Color{38, 42, 58, 255}));
 
     // Regions are ordinary containers; a bare string is a label-only config.
     const auto label = [](const char *text, float size) {

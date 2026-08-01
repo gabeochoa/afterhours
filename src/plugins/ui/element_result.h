@@ -4,6 +4,7 @@
 #include <variant>
 
 #include "../../ecs.h"
+#include "component_init.h"
 #include "components.h"
 #include "context.h"
 
@@ -54,6 +55,23 @@ struct ElementResult {
   /// ```
   template <typename Fn> ElementResult &decorate(Fn &&fn) {
     std::forward<Fn>(fn)(element);
+    return *this;
+  }
+
+  /// Overlay visual config onto this element. Applies only what the config
+  /// explicitly set; layout enums and plain bools are not restylable because
+  /// they have no "unset" value. Mainly for elements you did not create, like
+  /// the regions vsplit/hsplit build for you:
+  ///
+  /// ```cpp
+  /// auto [title, body] = vsplit(ctx, mk(e), {pixels(36), expand(1.f)});
+  /// title.restyle(ctx, ComponentConfig{}.with_custom_background(navy));
+  /// ```
+  ///
+  /// Call from the build pass only — never from state cached across frames.
+  ElementResult &restyle(HasUIContext auto &ctx,
+                         const ComponentConfig &config) {
+    detail::apply_restyle(ctx, element, config);
     return *this;
   }
 
