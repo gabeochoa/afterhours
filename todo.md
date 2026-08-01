@@ -412,32 +412,31 @@ either feature. Configs are values, so `with_custom_background(x ? a : b)`
 already covers that. The actual gap was reaching elements the caller did not
 create — split regions, `progress_bar`'s track/fill, `dropdown`'s options.
 
-### 7. modal::confirm overflows below 720p
+### 7. modal dialog sizing — **DONE**
 
-Found while chasing layout warnings. `create_confirm_content` hardcodes
-`ModalConfig{}.with_size(h720(540), h720(230))` (`modal.h:568`) and `confirm()`
-exposes no size override, so callers cannot work around it.
+Every dialog variant declared a height shorter than its own content. At 720p
+the content is header 52 + message 96 + buttons 56 + padding 57.6 = 261.6, but
+`create_*_content` asked for `h720(230)`. Since every piece scales linearly
+(h720, and `Spacing::md` is `screen_pct(0.04)`), the shortfall was the same
+~14% at every resolution — not a small-screen-only problem as first suspected.
 
-`h720` scales the modal box with resolution but the message text does not
-scale with it, so below 720p the box shrinks while its content does not and
-the button row spills out of the dialog:
+It stayed hidden because `ImmTestHarness` registered no
+`ProvidesCurrentResolution`, so `modal_impl` sized the box against a 1280x720
+fallback while autolayout sized the children against the harness's real
+800x600. The box came out too big relative to its content, which masked the
+shortfall exactly.
 
-```
-Layout overflow: 'dialog_buttons' extends outside parent 'modal' bounds
-  (child_size=[386.0,46.7], child_end=[386.0,170.0], parent_size=[386.0,143.7])
-```
+Fixed: heights 230 -> 280 (and the taller variant 250 -> 300), and the harness
+now registers the resolution it actually lays out at.
 
-Reproduce by registering a `ProvidesCurrentResolution` of 800x600 in
-`ImmTestHarness` and running `dialog_test`. The harness does not register one
-today, so the modal's `resolve_size` falls back to a 1280x720 baseline, the box
-comes out full size, and the overflow is hidden. That fallback is itself worth
-fixing — the harness reports 800x600 through `UIContext` and lays out at
-800x600, so the resolution lookup disagreeing with both is a test-fidelity gap.
-Fixing it needs this modal issue solved first, otherwise `dialog_test` just
-goes noisy.
+`check_dialog_layout` in dialog_test only checked the panel's *right* edge, so
+nothing caught a row hanging out of the bottom. It now checks the bottom too,
+and that check fails if the height is put back.
 
-Likely fix: size the dialog to its content (`children()` height, or a min
-height) instead of a fixed `h720`, and/or let `confirm()` take a `ModalConfig`.
+Also made the dialog fonts `h720` to match every box in the file. Mixing an
+h720 box with a fixed-pixel font means text keeps its size while its box
+shrinks. That was not what caused this overflow and no test covers it — it is a
+consistency fix for the same class of bug.
 
 ## Explicitly not doing
 

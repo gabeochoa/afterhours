@@ -414,7 +414,7 @@ struct modal : developer::Plugin {
                     ComponentConfig{}
                         .with_label(config.title)
                         .with_size(ComponentSize{children(), percent(1.0f)})
-                        .with_font(UIComponent::DEFAULT_FONT, 18.0f)
+                        .with_font(UIComponent::DEFAULT_FONT, h720(18.0f))
                         .with_auto_text_color(true)
                         .with_render_layer(config.render_layer)
                         .with_debug_name("modal_title"));
@@ -449,6 +449,10 @@ struct modal : developer::Plugin {
         // expand()) so it never eats the button row's space (expand is greedy
         // and would overlap a fixed-height sibling). Explicit font size is
         // required for wrapping.
+        //
+        // Font uses h720 like every box in this file. Mixing an h720 box with a
+        // fixed-pixel font means the box shrinks below 720p while the text does
+        // not, and the content overflows the dialog.
         static void dialog_message(ui::imm::HasUIContext auto &ctx,
                                    ui::imm::EntityParent ep_pair,
                                    const std::string &message,
@@ -460,7 +464,7 @@ struct modal : developer::Plugin {
                     .with_label(message)
                     .with_size(ComponentSize{percent(1.0f), h720(96)})
                     .with_padding(Spacing::md)
-                    .with_font(UIComponent::DEFAULT_FONT, pixels(18.0f))
+                    .with_font(UIComponent::DEFAULT_FONT, h720(18.0f))
                     .with_text_overflow(TextOverflow::Wrap)
                     .with_render_layer(content_layer)
                     .with_debug_name("dialog_message"));
@@ -498,7 +502,7 @@ struct modal : developer::Plugin {
                 ComponentConfig{}
                     .with_label(label)
                     .with_size(ComponentSize{w1280(130), h720(44)})
-                    .with_font(UIComponent::DEFAULT_FONT, pixels(16.0f))
+                    .with_font(UIComponent::DEFAULT_FONT, h720(16.0f))
                     .with_alignment(TextAlignment::Center)
                     .with_margin(Margin{.left = DefaultSpacing::medium()})
                     .with_render_layer(content_layer);
@@ -532,7 +536,7 @@ struct modal : developer::Plugin {
 
             auto result = modal_impl(ctx, ep_pair, open,
                                      ModalConfig{}
-                                         .with_size(h720(420), h720(230))
+                                         .with_size(h720(420), h720(280))
                                          .with_title(title)
                                          .with_show_close_button(false));
 
@@ -565,7 +569,7 @@ struct modal : developer::Plugin {
 
             auto result = modal_impl(ctx, ep_pair, open,
                                      ModalConfig{}
-                                         .with_size(h720(540), h720(230))
+                                         .with_size(h720(540), h720(280))
                                          .with_title(title)
                                          .with_show_close_button(false));
 
@@ -615,7 +619,7 @@ struct modal : developer::Plugin {
 
             auto result = modal_impl(ctx, ep_pair, open,
                                      ModalConfig{}
-                                         .with_size(h720(640), h720(230))
+                                         .with_size(h720(640), h720(280))
                                          .with_title(title)
                                          .with_show_close_button(false));
 
@@ -671,7 +675,7 @@ struct modal : developer::Plugin {
 
             auto result = modal_impl(ctx, ep_pair, open,
                                      ModalConfig{}
-                                         .with_size(h720(540), h720(250))
+                                         .with_size(h720(540), h720(300))
                                          .with_title(title)
                                          .with_show_close_button(false));
 
@@ -684,7 +688,7 @@ struct modal : developer::Plugin {
                         .with_label(message)
                         .with_size(ComponentSize{percent(1.0f), h720(56)})
                         .with_padding(Spacing::md)
-                        .with_font(UIComponent::DEFAULT_FONT, pixels(18.0f))
+                        .with_font(UIComponent::DEFAULT_FONT, h720(18.0f))
                         .with_text_overflow(TextOverflow::Wrap)
                         .with_render_layer(content_layer));
 

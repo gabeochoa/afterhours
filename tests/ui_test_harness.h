@@ -124,6 +124,19 @@ struct ImmTestHarness {
       EntityHelper::registerSingleton<TextMeasureCache>(tm);
     }
 
+    // Register the resolution the harness actually lays out at. Without it,
+    // code that resolves h720/screen_pct against this singleton silently falls
+    // back to a 1280x720 baseline while the context and autolayout both say
+    // 800x600, so tests exercise a size combination no real app would see.
+    if (!EntityHelper::has_singleton<
+            window_manager::ProvidesCurrentResolution>()) {
+      Entity &res = EntityHelper::createPermanentEntity();
+      res.addComponent<window_manager::ProvidesCurrentResolution>(
+          window_manager::Resolution{800, 600});
+      EntityHelper::registerSingleton<
+          window_manager::ProvidesCurrentResolution>(res);
+    }
+
     ctx_entity = &coll.createEntity();
     ctx = &ctx_entity->addComponent<UIContext<TestInputAction>>();
     ctx->screen_width = 800;

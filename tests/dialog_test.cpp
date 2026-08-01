@@ -48,6 +48,12 @@ static void check_dialog_layout(ImmTestHarness &h, size_t expected_buttons) {
     UIComponent &b = AutoLayout::to_cmp_static(cid);
     CHECK(b.rect().x + b.rect().width <= panel_right + 2.f);
   }
+
+  // 3. The button row fits vertically too. Only the horizontal edge was
+  // checked before, so a dialog declared shorter than its own content -- which
+  // every variant was -- passed while the row hung out of the bottom.
+  float panel_bottom = panel->rect().y + panel->rect().height;
+  CHECK(row->rect().y + row->rect().height <= panel_bottom + 2.f);
 }
 
 TEST(confirm_dialog_message_above_buttons) {
