@@ -2,7 +2,7 @@
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_ENTITY_QUERY
 #define AFTER_HOURS_SYSTEM
-#include "../../../ah.h"
+#include "../../../../ah.h"
 using namespace afterhours;
 struct Pos : BaseComponent { float x,y; };
 int main() {

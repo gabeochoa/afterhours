@@ -2,7 +2,7 @@
 #include <iostream>
 
 #define AFTER_HOURS_ENTITY_HELPER
-#include "../../../ah.h"
+#include "../../../../ah.h"
 
 using namespace afterhours;
 

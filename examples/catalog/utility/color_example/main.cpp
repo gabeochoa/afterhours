@@ -2,7 +2,7 @@
 #include <cmath>
 #include <iostream>
 
-#include "../../../src/plugins/color.h"
+#include "../../../../src/plugins/color.h"
 
 using namespace afterhours;
 using namespace afterhours::colors;

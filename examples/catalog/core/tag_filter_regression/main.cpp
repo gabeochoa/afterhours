@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "../../../src/ecs.h"
+#include "../../../../src/ecs.h"
 #include "demo_tags.h"
 
 using namespace afterhours;

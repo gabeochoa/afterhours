@@ -14,8 +14,8 @@
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_ENTITY_QUERY
 #define AFTER_HOURS_SYSTEM
-#include "../../../ah.h"
-#include "../../../src/core/opt_entity_handle.h"
+#include "../../../../ah.h"
+#include "../../../../src/core/opt_entity_handle.h"
 
 #include "../../core/tag_filter_regression/demo_tags.h"
 

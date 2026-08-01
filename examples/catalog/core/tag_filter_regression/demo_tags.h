@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-#include "../../../src/core/base_component.h"
+#include "../../../../src/core/base_component.h"
 
 namespace afterhours {
 

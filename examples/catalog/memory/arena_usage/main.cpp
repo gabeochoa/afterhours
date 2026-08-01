@@ -1,7 +1,7 @@
 #include <cassert>
 #include <cstdio>
 
-#include "../../../src/memory/arena.h"
+#include "../../../../src/memory/arena.h"
 
 int main(int, char **) {
   using namespace afterhours;

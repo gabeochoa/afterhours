@@ -2,7 +2,7 @@
 #include <iostream>
 #include <random>
 
-#include "../../../src/bitset_utils.h"
+#include "../../../../src/bitset_utils.h"
 
 int main() {
     std::cout << "=== Bitset Utilities Example ===\n\n";

@@ -3,12 +3,12 @@
 #include <variant>
 
 // Include developer.h directly to get fallback types
-#include "../../../src/developer.h"
+#include "../../../../src/developer.h"
 
 // Now include the rest of afterhours
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_SYSTEM
-#include "../../../ah.h"
+#include "../../../../ah.h"
 
 using namespace afterhours;
 

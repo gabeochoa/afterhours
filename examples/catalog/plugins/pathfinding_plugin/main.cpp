@@ -3,8 +3,8 @@
 
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_SYSTEM
-#include "../../../ah.h"
-#include "../../../src/plugins/pathfinding.h"
+#include "../../../../ah.h"
+#include "../../../../src/plugins/pathfinding.h"
 #include "../../shared/vector.h"
 
 using namespace afterhours;

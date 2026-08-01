@@ -1,7 +1,7 @@
 #include <cassert>
 #include <iostream>
 
-#include "../../../src/plugins/command_history.h"
+#include "../../../../src/plugins/command_history.h"
 
 using namespace afterhours;
 

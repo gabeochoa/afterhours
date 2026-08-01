@@ -3,7 +3,7 @@
 #include <string>
 #include <string_view>
 
-#include "../../../src/type_name.h"
+#include "../../../../src/type_name.h"
 
 struct PlayerData {
   std::string name;

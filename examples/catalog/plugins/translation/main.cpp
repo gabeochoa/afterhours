@@ -3,8 +3,8 @@
 
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_SYSTEM
-#include "../../../ah.h"
-#include "../../../src/plugins/translation.h"
+#include "../../../../ah.h"
+#include "../../../../src/plugins/translation.h"
 
 using namespace afterhours;
 using namespace afterhours::translation;

@@ -2,8 +2,8 @@
 #include <iostream>
 
 #define AFTER_HOURS_ENTITY_HELPER
-#include "../../../ah.h"
-#include "../../../src/core/opt_entity_handle.h"
+#include "../../../../ah.h"
+#include "../../../../src/core/opt_entity_handle.h"
 
 using namespace afterhours;
 

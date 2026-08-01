@@ -29,13 +29,13 @@
 #define AFTER_HOURS_SYSTEM
 // Use the optimized direct-lambda query path (no virtual Modification structs).
 #define SKIP_ENTITY_QUERY_MODIFICATIONS
-#include "../../../ah.h"
-#include "../../../src/core/opt_entity_handle.h"
-#include "../../../src/core/snapshot.h"
+#include "../../../../ah.h"
+#include "../../../../src/core/opt_entity_handle.h"
+#include "../../../../src/core/snapshot.h"
 
 #define CATCH_CONFIG_ENABLE_BENCHMARKING
 #define CATCH_CONFIG_MAIN
-#include "../../../vendor/catch2/catch.hpp"
+#include "../../../../vendor/catch2/catch.hpp"
 
 #include "../../core/tag_filter_regression/demo_tags.h"
 

@@ -4,7 +4,7 @@
 
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_ENTITY_QUERY
-#include "../../../ah.h"
+#include "../../../../ah.h"
 #include "../../shared/vector.h"
 
 namespace afterhours {

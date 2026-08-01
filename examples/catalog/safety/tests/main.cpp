@@ -1,17 +1,17 @@
 
 
 #define CATCH_CONFIG_MAIN
-#include "../../../vendor/catch2/catch.hpp"
-#include "../../../vendor/trompeloeil/trompeloeil.hpp"
+#include "../../../../vendor/catch2/catch.hpp"
+#include "../../../../vendor/trompeloeil/trompeloeil.hpp"
 //
 #include <algorithm>
 #include <memory>
 
-#include "../../../src/core/opt_entity_handle.h"
-#include "../../../src/core/pointer_policy.h"
-#include "../../../src/core/snapshot.h"
-#include "../../../src/ecs.h"
-#include "../../../src/plugins/autolayout.h"
+#include "../../../../src/core/opt_entity_handle.h"
+#include "../../../../src/core/pointer_policy.h"
+#include "../../../../src/core/snapshot.h"
+#include "../../../../src/ecs.h"
+#include "../../../../src/plugins/autolayout.h"
 #include "../../core/tag_filter_regression/demo_tags.h"
 
 namespace afterhours {

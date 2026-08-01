@@ -1,4 +1,4 @@
-EXTRA_FLAGS = -I../../..
+EXTRA_FLAGS = -I../../../..
 LOG         = telemetry_requests.log
 
 include ../../common.mk

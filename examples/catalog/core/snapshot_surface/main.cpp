@@ -1,8 +1,8 @@
 #include <cassert>
 #include <iostream>
 
-#include "../../../src/core/snapshot.h"
-#include "../../../src/ecs.h"
+#include "../../../../src/core/snapshot.h"
+#include "../../../../src/ecs.h"
 
 using namespace afterhours;
 

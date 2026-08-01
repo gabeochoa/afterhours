@@ -1,10 +1,10 @@
 #include <iostream>
 #include <vector>
 
-#include "../../../ah.h"
-#include "../../../src/plugins/autolayout.h"
+#include "../../../../ah.h"
+#include "../../../../src/plugins/autolayout.h"
 #define AFTER_HOURS_IMM_UI
-#include "../../../src/plugins/ui.h"
+#include "../../../../src/plugins/ui.h"
 
 namespace afterhours {
 

@@ -34,9 +34,12 @@ FLAGS = -std=c++23 -Wall -Wextra -Wpedantic -Wuninitialized -Wshadow \
 
 EXE := $(OUT)/$(NAME).exe
 
-.PHONY: all run clean
+.PHONY: all build run clean
 
 all: run
+
+# Compile without running, for CI and for sweeping the catalog.
+build: $(EXE)
 
 run: $(EXE)
 	@$(EXE)

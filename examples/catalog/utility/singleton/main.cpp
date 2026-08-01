@@ -2,7 +2,7 @@
 #include <iostream>
 #include <string>
 
-#include "../../../src/singleton.h"
+#include "../../../../src/singleton.h"
 
 // Example 1: Basic singleton using SINGLETON macro
 SINGLETON_FWD(GameConfig)

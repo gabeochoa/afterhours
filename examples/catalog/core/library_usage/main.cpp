@@ -2,8 +2,8 @@
 #include <memory>
 #include <string>
 
-#include "../../../src/library.h"
-#include "../../../src/type_name.h"
+#include "../../../../src/library.h"
+#include "../../../../src/type_name.h"
 
 // Example resource types
 struct Texture {

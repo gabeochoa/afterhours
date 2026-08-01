@@ -3,9 +3,9 @@
 
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_SYSTEM
-#include "../../../ah.h"
-#include "../../../src/plugins/files.h"
-#include "../../../src/plugins/settings.h"
+#include "../../../../ah.h"
+#include "../../../../src/plugins/files.h"
+#include "../../../../src/plugins/settings.h"
 
 using namespace afterhours;
 

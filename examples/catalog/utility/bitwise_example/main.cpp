@@ -1,7 +1,7 @@
 #include <cassert>
 #include <iostream>
 
-#include "../../../src/bitwise.h"
+#include "../../../../src/bitwise.h"
 
 // Define a flags enum for testing
 enum struct Flags : int {

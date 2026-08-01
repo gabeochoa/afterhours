@@ -2,8 +2,8 @@
 
 #include <iostream>
 
-#include "../../../src/core/entity.h"
-#include "../../../src/core/entity_helper.h"
+#include "../../../../src/core/entity.h"
+#include "../../../../src/core/entity_helper.h"
 #include "../../shared/vector.h"
 
 namespace afterhours {

@@ -2,7 +2,7 @@
 #include <cstdio>
 #include <string_view>
 
-#include "../../../src/core/text_cache.h"
+#include "../../../../src/core/text_cache.h"
 
 int main(int, char **) {
   using namespace afterhours;

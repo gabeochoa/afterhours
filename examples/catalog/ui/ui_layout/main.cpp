@@ -35,13 +35,13 @@
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_ENTITY_QUERY
 #define AFTER_HOURS_SYSTEM
-#include "../../../ah.h"
-#include "../../../src/plugins/autolayout.h"
-#include "../../../src/plugins/ui.h"
+#include "../../../../ah.h"
+#include "../../../../src/plugins/autolayout.h"
+#include "../../../../src/plugins/ui.h"
 
 #define CATCH_CONFIG_MAIN
-#include "../../../vendor/catch2/catch.hpp"
-#include "../../../vendor/trompeloeil/trompeloeil.hpp"
+#include "../../../../vendor/catch2/catch.hpp"
+#include "../../../../vendor/trompeloeil/trompeloeil.hpp"
 
 using namespace afterhours;
 using namespace afterhours::ui;

@@ -4,8 +4,8 @@
 
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_SYSTEM
-#include "../../../ah.h"
-#include "../../../src/plugins/collision.h"
+#include "../../../../ah.h"
+#include "../../../../src/plugins/collision.h"
 
 using namespace afterhours;
 

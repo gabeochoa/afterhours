@@ -4,12 +4,10 @@ EXTRA_FLAGS = -O3 -DNDEBUG -Wmost
 
 include ../../common.mk
 
-build: $(EXE)
-
 verbose: $(EXE)
 	@$(EXE) -d yes
 
 list: $(EXE)
 	@$(EXE) --list-tests
 
-.PHONY: build verbose list
+.PHONY: verbose list

@@ -3,7 +3,7 @@
 #include <iostream>
 
 // Include the memory arena directly for standalone usage
-#include "../../../src/memory/arena.h"
+#include "../../../../src/memory/arena.h"
 
 // For this standalone example, we define the necessary types
 // that would normally come from raylib/developer.h

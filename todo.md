@@ -326,20 +326,29 @@ Note the catalog examples do **not** use this path; several still hand-roll the
 old `ClearUIComponentChildren` → `BeginUIContextManager` → `EndUIContextManager`
 wiring and never run layout at all.
 
-### 4b. The example catalog is bit-rotted — 44 of 49 do not compile
+### 4b. Example catalog build rot — **DONE**
 
-Found while moving build output to `output/`. Every catalog example lives at
-`examples/catalog/<category>/<name>/`, but their includes still say
-`../../../src/...`, which resolves to `examples/src` — one level short. The
-category directories were added and the includes never followed. Confirmed the
-fix is uniform: rewriting `"../../../src/` to `"../../../../src/` makes
-`core/basic_usage` compile clean.
+All 49 catalog examples compile again (was 4). Their includes said
+`../../../src/...`, one level short of where they live since the category
+directories were added; re-rooted to `../../../../`. Two makefiles needed the
+same one-level fix in `SRCS`/`-I`.
 
-Not swept yet — it is a separate concern from the output-dir change and wants
-its own verification pass over all 49. Note that `make` in these directories
-*looked* like it passed because most of them had a stale binary sitting next to
-the source, so make considered the target up to date and did nothing. Pointing
-the output at `output/` is what exposed it.
+`common.mk` gained a `build` target so the catalog can be compiled without
+running each example — needed because sweeping with `all` hangs on the
+long-running ones.
+
+Fixing the build surfaced failures that had been dark the whole time the
+examples did not compile:
+
+- `core/entity_query` — asserted `take(2) == 3`, documenting the off-by-one
+  that commit a3e16a2 fixed. Stale expectation, corrected.
+- **`ui/ui_layout` — 30 of 56 catch2 cases fail, 108 assertions.** Not
+  investigated. This is a whole layout suite that has been silently dark;
+  it needs its own pass and may be real bugs rather than stale expectations.
+  Highest-value remaining item.
+
+`safety/benchmarks` and `ui/layout_performance` exceed a 15s timeout, which is
+expected for those two — not failures.
 
 ### 5. `ui::DefaultAction` — stop forcing an enum declaration — **DONE**
 

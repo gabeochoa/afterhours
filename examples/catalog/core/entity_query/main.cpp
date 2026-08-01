@@ -4,7 +4,7 @@
 
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_ENTITY_QUERY
-#include "../../../ah.h"
+#include "../../../../ah.h"
 
 using namespace afterhours;
 
@@ -152,22 +152,19 @@ int main() {
     assert(low_health.size() == 2);  // enemy1 (25) and enemy3 (15)
 
     // Test 7: take() to limit results
-    // Note: take(n) returns n+1 entities due to the > check in Limit
-    std::cout << "\n7. Query first 3 entities with Position (using take(2))..." << std::endl;
+    std::cout << "\n7. Query first 2 entities with Position (using take(2))..." << std::endl;
     auto first_few = EntityQuery<>()
                          .whereHasComponent<Position>()
                          .take(2)
                          .gen();
     std::cout << "  Got " << first_few.size() << " entities" << std::endl;
-    assert(first_few.size() == 3);  // take(n) gives n+1
+    assert(first_few.size() == 2);
 
     // Test 8: first() to get single result
-    // Note: first() calls take(1) which returns 2 entities due to off-by-one
     std::cout << "\n8. Query first entity with Player tag (using first)..." << std::endl;
     auto player_query = EntityQuery<>().whereHasTag(GameTag::Player).first().gen();
     std::cout << "  Got " << player_query.size() << " entity(ies)" << std::endl;
-    // first() may return more than 1 due to take(1) off-by-one
-    assert(player_query.size() >= 1);
+    assert(player_query.size() == 1);
     assert(player_query[0].get().hasTag(static_cast<TagId>(GameTag::Player)));
 
     // Test 9: gen_first() for optional single result
