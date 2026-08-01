@@ -35,6 +35,15 @@ AFTERHOURS_ROOT := $(realpath ..)
 INCLUDE_ROOT := $(CURDIR)/.afh-include
 $(shell mkdir -p $(INCLUDE_ROOT) && ln -sfn $(AFTERHOURS_ROOT) $(INCLUDE_ROOT)/afterhours)
 
+# Emits a .d beside each binary listing the headers it pulled in. Without this,
+# editing a header rebuilds nothing and you test a stale binary.
+#
+# -MD, not -MMD: the afterhours headers arrive via -isystem (see INCLUDE_ROOT
+# below), which makes them system headers, and -MMD omits those by definition.
+# With -MMD the dep files come out not mentioning a single afterhours header —
+# tracking that silently does nothing. The cost is SDK headers in the .d too.
+DEPFLAGS := -MD -MP
+
 INCLUDES := -isystem $(INCLUDE_ROOT) -isystem $(AFTERHOURS_ROOT)/vendor -isystem $(BREW_PREFIX)/include
 INCLUDES_RAYLIB := -I$(RAYLIB_INCLUDE) $(INCLUDES)
 
@@ -95,69 +104,41 @@ all: $(TEST_BINS)
 # Bare names stay usable: `make split_test` builds $(OUT)/split_test.
 $(ALL_TESTS): %: $(OUT)/%
 
-$(OUT)/autolayout_test: autolayout_test.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+# One rule for every test. The raylib split rides on target-specific variables
+# rather than a second copy of the recipe.
+RAYLIB_BINS := $(addprefix $(OUT)/,$(RAYLIB_TESTS))
 
-$(OUT)/entity_mapping_test: entity_mapping_test.cpp ../examples/entity_mapping_test_helper.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -I../examples $^ -o $@
+CXXFLAGS_T = $(CXXFLAGS)
+INCLUDES_T = $(INCLUDES)
+LDFLAGS_T  =
 
-$(OUT)/entity_pool_test: entity_pool_test.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+$(RAYLIB_BINS): CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
+$(RAYLIB_BINS): INCLUDES_T = $(INCLUDES_RAYLIB)
+$(RAYLIB_BINS): LDFLAGS_T  = $(LDFLAGS_RAYLIB)
 
-$(OUT)/entity_query_test: entity_query_test.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+# $(filter %.cpp,$^) rather than $^: the generated .d files add every header as
+# a prerequisite, and a bare $^ would hand all of them to clang as input files.
+$(OUT)/%: %.cpp
+	$(CXX) $(CXXFLAGS_T) $(DEPFLAGS) $(INCLUDES_T) $(filter %.cpp,$^) $(LDFLAGS_T) -o $@
 
-$(OUT)/system_tags_test: system_tags_test.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+# Exceptions. A rule with prerequisites and no recipe adds to the pattern rule
+# above instead of replacing it.
+$(OUT)/entity_mapping_test: ../examples/entity_mapping_test_helper.cpp
+$(OUT)/entity_mapping_test: INCLUDES_T += -I../examples
+$(OUT)/random_engine_test:  CXXFLAGS_T += -DAFTER_HOURS_ENABLE_RANDOM
 
-$(OUT)/random_engine_test: random_engine_test.cpp
-	$(CXX) $(CXXFLAGS) -DAFTER_HOURS_ENABLE_RANDOM $(INCLUDES) $^ -o $@
-
-$(OUT)/input_injector_mouse_delta_test: input_injector_mouse_delta_test.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
-
-$(OUT)/dialog_test: dialog_test.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
-
-$(OUT)/dump_ui_test: dump_ui_test.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
-
-$(OUT)/progress_bar_test: progress_bar_test.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
-
-$(OUT)/render_order_test: render_order_test.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
-
-$(OUT)/setup_test: setup_test.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
-
-$(OUT)/size_constraints_test: size_constraints_test.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
-
-$(OUT)/slider_test: slider_test.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
-
-$(OUT)/split_test: split_test.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
-
-$(OUT)/stepper_test: stepper_test.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
-
-$(OUT)/styling_test: styling_test.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
-
-$(OUT)/tab_container_test: tab_container_test.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
-
-$(OUT)/text_wrap_test: text_wrap_test.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
-
+# Runs every test even when one fails, then reports. The old loop dropped each
+# exit code, so only the last test's status escaped and a red suite read green.
 test: all
-	@for t in $(ALL_TESTS); do \
+	@fail=0; for t in $(ALL_TESTS); do \
 		echo "Running $$t"; \
-		$(OUT)/$$t; \
-	done
+		$(OUT)/$$t || fail=1; \
+	done; \
+	if [ $$fail -ne 0 ]; then echo "SOME TESTS FAILED"; exit 1; fi
 
 clean:
-	rm -f $(TEST_BINS) input_system_mouse_delta_backend_smoke.o smoke_raylib.o smoke_sokol.o
+	rm -rf $(TEST_BINS) $(addsuffix .d,$(TEST_BINS)) $(addsuffix .dSYM,$(TEST_BINS))
+	rm -f input_system_mouse_delta_backend_smoke.o smoke_raylib.o smoke_sokol.o
 	rm -rf $(INCLUDE_ROOT)
+
+-include $(wildcard $(OUT)/*.d)

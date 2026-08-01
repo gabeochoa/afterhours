@@ -42,6 +42,10 @@ AFTERHOURS_ROOT := $(realpath ..)
 INCLUDE_ROOT := $(CURDIR)/.afh-include
 $(shell mkdir -p $(INCLUDE_ROOT) && ln -sfn $(AFTERHOURS_ROOT) $(INCLUDE_ROOT)/afterhours)
 
+# -MD, not -MMD: afterhours headers arrive via -isystem, and -MMD omits system
+# headers by definition, which would leave them untracked. See tests/Makefile.
+DEPFLAGS := -MD -MP
+
 INCLUDES := -isystem $(INCLUDE_ROOT) -isystem $(AFTERHOURS_ROOT)/vendor -isystem $(BREW_PREFIX)/include
 INCLUDES_RAYLIB := -I$(RAYLIB_INCLUDE) $(INCLUDES)
 
@@ -60,6 +64,7 @@ endif
 OUT := $(AFTERHOURS_ROOT)/output
 $(shell mkdir -p $(OUT))
 
+EXAMPLE_BINS_PATHS := $(addprefix $(OUT)/,graphics_example drawing_3d_example headless_validation imm_visual_check on_draw_example perf_stress_test calendar_stress_test perf_stress_test_opt calendar_stress_test_opt profile_harness)
 EXAMPLE_BINS := graphics_example drawing_3d_example headless_validation imm_visual_check on_draw_example perf_stress_test calendar_stress_test perf_stress_test_opt calendar_stress_test_opt profile_harness
 
 # Targets
@@ -71,36 +76,36 @@ $(EXAMPLE_BINS): %: $(OUT)/%
 all: $(addprefix $(OUT)/,graphics_example drawing_3d_example headless_validation perf_stress_test calendar_stress_test profile_harness)
 
 $(OUT)/graphics_example: graphics_example.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
+	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $(filter %.cpp,$^) $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: graphics_example"
 
 $(OUT)/drawing_3d_example: drawing_3d_example.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
+	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $(filter %.cpp,$^) $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: drawing_3d_example"
 
 # Headless validation - compares headless vs windowed rendering output
 $(OUT)/headless_validation: headless_validation.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
+	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $(filter %.cpp,$^) $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: headless_validation"
 
 # imm visual regression - renders imm UI to a hidden window, captures a PNG
 $(OUT)/imm_visual_check: imm_visual_check.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
+	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $(filter %.cpp,$^) $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: imm_visual_check"
 
 # on_draw example - pedagogical demo of with_on_draw_bg / with_on_draw_fg
 $(OUT)/on_draw_example: on_draw_example.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
+	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $(filter %.cpp,$^) $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: on_draw_example"
 
 # Performance stress tests - no raylib dependency
 $(OUT)/perf_stress_test: perf_stress_test.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) $(filter %.cpp,$^) -o $@
 	@echo "Built: perf_stress_test"
 
 # Calendar layout stress test - full rendering pipeline
 $(OUT)/calendar_stress_test: calendar_stress_test.cpp
-	$(CXX) $(CXXFLAGS_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
+	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $(filter %.cpp,$^) $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: calendar_stress_test"
 
 run: graphics_example
@@ -114,15 +119,15 @@ test:
 
 # Optimized profiling builds
 $(OUT)/perf_stress_test_opt: perf_stress_test.cpp
-	$(CXX) $(CXXFLAGS_OPT) $(INCLUDES) $^ -o $@
+	$(CXX) $(CXXFLAGS_OPT) $(DEPFLAGS) $(INCLUDES) $(filter %.cpp,$^) -o $@
 	@echo "Built: perf_stress_test_opt (O2)"
 
 $(OUT)/calendar_stress_test_opt: calendar_stress_test.cpp
-	$(CXX) $(CXXFLAGS_OPT_RAYLIB) $(INCLUDES_RAYLIB) $^ $(LDFLAGS_RAYLIB) -o $@
+	$(CXX) $(CXXFLAGS_OPT_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $(filter %.cpp,$^) $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: calendar_stress_test_opt (O2)"
 
 $(OUT)/profile_harness: profile_harness.cpp
-	$(CXX) $(CXXFLAGS_OPT) $(INCLUDES) $^ -o $@
+	$(CXX) $(CXXFLAGS_OPT) $(DEPFLAGS) $(INCLUDES) $(filter %.cpp,$^) -o $@
 	@echo "Built: profile_harness (O2)"
 
 profile-layout: perf_stress_test_opt
@@ -151,3 +156,7 @@ clean:
 	rm -rf graphics_example_captures/
 	rm -rf headless_validation_output/
 	rm -rf $(INCLUDE_ROOT)
+	rm -f $(addsuffix .d,$(EXAMPLE_BINS_PATHS))
+	rm -rf $(addsuffix .dSYM,$(EXAMPLE_BINS_PATHS))
+
+-include $(wildcard $(OUT)/*.d)

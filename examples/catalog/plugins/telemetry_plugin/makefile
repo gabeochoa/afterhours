@@ -1,14 +1,9 @@
+EXTRA_FLAGS = -I../../..
+LOG         = telemetry_requests.log
+
 include ../../common.mk
-FLAGS = -std=c++23 -Wall -Wextra -Wpedantic -g
-INCLUDES = -I../../.. -I../../../vendor -I../../../../../vendor
-EXE = $(OUT)/telemetry_plugin.exe
-LOG = telemetry_requests.log
 
-all:
-	clang++ $(FLAGS) $(INCLUDES) main.cpp -o $(EXE) && $(EXE)
-
-validate-localhost:
-	clang++ $(FLAGS) $(INCLUDES) main.cpp -o $(EXE)
+validate-localhost: $(EXE)
 	rm -f $(LOG)
 	@trap 'kill $$SERVER_PID 2>/dev/null || true' EXIT; \
 	python3 ingest_server.py $(LOG) 8787 >/dev/null 2>&1 & \
@@ -21,6 +16,7 @@ validate-localhost:
 	echo "\nTelemetry ingest lines (without /health):"; \
 	grep "/v1/ingest" $(LOG) || echo "(none: add httplib.h to include path to enable real GET transport)"
 
-validate-httpbin:
-	clang++ $(FLAGS) $(INCLUDES) main.cpp -o $(EXE)
+validate-httpbin: $(EXE)
 	AH_TELEMETRY_ENDPOINT=http://httpbin.org/anything $(EXE)
+
+.PHONY: validate-localhost validate-httpbin
