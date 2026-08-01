@@ -342,10 +342,14 @@ examples did not compile:
 
 - `core/entity_query` — asserted `take(2) == 3`, documenting the off-by-one
   that commit a3e16a2 fixed. Stale expectation, corrected.
-- **`ui/ui_layout` — 30 of 56 catch2 cases fail, 108 assertions.** Not
-  investigated. This is a whole layout suite that has been silently dark;
-  it needs its own pass and may be real bugs rather than stale expectations.
-  Highest-value remaining item.
+- `ui/ui_layout` — 30 of 56 cases, 108 assertions. **Fixed; all 289 now
+  pass.** Every one was the same stale expectation: commit d41e1d8 fixed
+  margins wrongly shrinking elements ("pixels(70) with 24px margin rendered
+  as 46px"), moving to the CSS model where margin is external. This suite
+  encoded the pre-fix behaviour and went dark before it could notice.
+  Verified as a pure semantics shift before touching anything — positions
+  unchanged, and the margin total implied by old and new expectations agreed
+  on every one of the 30 cases. **Zero real layout bugs.**
 
 `safety/benchmarks` and `ui/layout_performance` exceed a 15s timeout, which is
 expected for those two — not failures.
