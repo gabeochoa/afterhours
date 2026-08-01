@@ -587,3 +587,411 @@ Two things found while verifying, neither a regression:
 - `mk()`'s source-location hashing gives stable widget identity for free;
   ratatui pushes state management entirely onto the caller
   (`render_stateful_widget`).
+
+# Downstream app feedback
+
+> **NOT derived from source TODO comments — do not delete during regeneration.**
+
+Collected 2026-08-01 from the three apps that consume this library:
+
+| App | Backend | Source docs |
+|---|---|---|
+| hanabi | sokol/Metal | `~/p/hanabi/afterhours_gaps.md` (#1-#18) |
+| floatinghotel | sokol/Metal | `~/p/floatinghotel/docs/afterhours-gaps.md`, `afterhours-ui-footguns.md` (F1-F16), `afterhours_issues.md` |
+| wm_afterhours | raylib | no gap doc; it is the reference consumer |
+
+Both gap-doc apps are on the **sokol** backend, so their reports skew there;
+wm_afterhours exercises raylib. Neither app has ever patched vendor — every
+item below has a shipped app-side workaround, which is why none of it has
+surfaced as a bug report.
+
+**wm_afterhours regression check (2026-08-01):** submodule fast-forwarded
+`f06268e` → `5fe2e95` (26 commits, all of the ratatui-parity work). `make all`
+builds clean and `make run-all-tests` is 7/7, exit 0. The one warning is a
+pre-existing `-Wshadow` in its own `src/systems/screens/FighterMenu.h:270`.
+Nothing broke.
+
+## Already shipped — the docs are stale, tell the apps
+
+Verified present in `src/`; the app docs predate them. No work here beyond
+closing the loop so they can delete their workarounds.
+
+- **`flex_grow(weight)`** — `layout_types.h:170`, an alias for `expand(weight)`.
+  hanabi #18 asks for exactly this by name. See D2 for the caveat.
+- **`FontWeight` / `with_font_weight`** — `component_config.h`, `color.h`,
+  wired through `rendering.h`. Closes floatinghotel "No Font Weight Support".
+- **`with_styled_label`** — `component_config.h`. Closes floatinghotel "No Rich
+  Text / Multi-Color Text", which asked for this API almost verbatim.
+- **`tree_view()` / `TreeNode<T>`** — `ui/tree_view.h`. Closes floatinghotel
+  missing-primitive #3.
+- **text_input clipboard** — `text_input/component.h:483-504` handles
+  TextCopy/Cut/Paste/Undo/Redo. Closes floatinghotel "Clipboard shortcuts not
+  wired".
+- **text_input InputAction bootstrapping** — `default_keymap<InputAction>()`
+  (todo item 8) binds every Text* action by name, so an app no longer has to
+  hand-roll the enum values and mappings. Closes floatinghotel "text_input()
+  requires InputAction enum values".
+- **e2e `simulate_click` auto-release** — `auto_release` exists in both
+  `e2e_testing/input_injector.h` and `test_input.h`. Closes the
+  `afterhours_issues.md` "High" item.
+- **ECS iterator UAF on `force_merge` during tick** — landed in `74afaf0`.
+  Closes footgun F8.
+- **Sokol headless rendering** — landed in `74afaf0` / `f06268e`. Closes
+  footgun F9 (the *virtual resize* half too).
+- **`disabled_opacity`** — in `theme.h`. floatinghotel's own doc already notes
+  this; see D14 for the part that is genuinely still open.
+
+## Open — ranked
+
+Convergent items first: two independent apps hitting the same wall is the
+strongest signal available, and both of the top two cost their app real
+workaround code.
+
+### D1. Sokol backend has alpha blending disabled — 3 symptoms, 1 fix
+**hanabi #13 + #15, floatinghotel "Div backgrounds render opaque".** Root
+cause is one line: `begin_drawing` calls `sgl_defaults()` every frame, which
+loads the sokol_gl default pipeline, and sokol_gfx defaults blending to *off*.
+Everything downstream inherits it:
+- `draw_texture_pro` blits a transparent PNG's `a=0` texels as **opaque black**
+  (hanabi #13) — so an icon atlas is unusable as authored.
+- `with_custom_background(Color{r,g,b,31})` fills a **fully saturated opaque**
+  quad; the alpha byte reaches `sgl_c4b` and is discarded (hanabi #15).
+  Pixel-sampled: token said `a=31`, screen showed `a=255`.
+- `with_opacity(0.32f)` on an overlay div likewise renders opaque
+  (floatinghotel), so a translucent selection wash is impossible.
+
+Workarounds shipped: hanabi builds its own blend-enabled `sgl_pipeline` and
+push/pops it around every blit; hanabi *also* added `theme::over(fg, bg)` to
+pre-composite tints against a **known** backdrop colour — brittle the moment
+surfaces stack. floatinghotel draws an opaque selection box then re-draws the
+selected substring on top of it.
+
+Fix: enable src-over blending on the sokol_gl pipeline used for 2D UI. Raylib
+backend is unaffected, so this needs a sokol-side test. Translucent tint
+surfaces (chips, hover overlays, selection washes, badges) are a core idiom —
+this is the single highest-value item in the list.
+
+### D2. Row-flex `expand()` — get a repro or close it
+**hanabi #18, floatinghotel "Row Flex Layout Broken with expand() Children" +
+footgun F5.** These two reports do not agree, and the evidence points at
+discoverability rather than a layout bug:
+- `flex_grow(w)` / `expand(w)` exists (`layout_types.h:170`).
+- `autolayout_test` is **332/332 green** today, including
+  `expand_fills_remaining_row`, `multiple_expand_share_space`, and
+  `expand_with_padding`. (Note: the 2 failures recorded in the older makefile
+  plan are gone.)
+- hanabi #18 only ever describes trying `percent(1.0f)` and a fixed
+  `percent(0.72f)`, then asks for "`with_flex_grow(int)`" — i.e. it never found
+  the function that already does this.
+- floatinghotel F5 cites "a known Row-flex expand() bug (referenced in the
+  repo's own docs/afterhours-gaps.md)" — which is its own doc. Circular.
+
+But floatinghotel's gaps doc makes a *specific* claim the passing tests do not
+cover: a Row-flex **`button`/`div` with children**, where an `expand()` child
+takes 100% and the fixed sibling wraps below. Both apps paid for this: hanabi
+hand-computes `labelW = rowContentW − leadSlot − countColW` across three
+different row types; floatinghotel bakes whole rows into one label string.
+
+Action: build the `[icon(18px)] [label expand()] [count(24px)]` row as a test.
+If it passes, this is a docs problem — say so in the README's sizing table and
+tell both apps. If it fails, it is a real bug in the *nested-children* path
+that the current flat tests miss.
+
+### D3. No hit-test priority or click consumption for overlapping widgets
+**hanabi #3, floatinghotel F13b.** Two shapes of the same gap:
+- Absolutely-positioned siblings that overlap (a tab body and its close ×)
+  return ambiguous `ElementResult`s (hanabi).
+- A `button()` nested inside a row that has its own `HasClickListener` **never**
+  fires — the row's listener always wins, and there is no `stopPropagation`
+  (floatinghotel). Render order and child-ness do not change priority.
+
+Both apps fell back to manual `is_mouse_inside(ctx.mouse.pos, rect)` +
+consuming `ctx.mouse.just_pressed`. floatinghotel's positional fallback *also*
+failed, on D10's coordinate-space mismatch — so it shipped the bug (a Refs
+checkout click with no row to land on). "A control inside a clickable row" is
+not achievable today.
+
+Ask: topmost-wins hit priority by render layer / child depth, plus a way for a
+handler to consume a click.
+
+### D4. `FlexWrap` defaults to `Wrap`
+**floatinghotel F4b, called "the single nastiest default we hit".** Confirmed
+still `FlexWrap::Wrap` at `component_config.h:62` and
+`ui_core_components.h:93`. Any Column taller than its viewport silently wraps
+its children into a **second column off-screen** instead of scrolling — you see
+stray text fragments hugging the right edge. Every scroll container and every
+stacking Column needs an explicit `.with_no_wrap()`.
+
+Ask: default `NoWrap`, or at minimum default it for `Overflow::Scroll/Auto`
+containers, and document that the current default wraps. A breaking change, so
+it wants a deprecation cycle — but four apps each rediscovering this is worse.
+
+### D5. Unmapped child ids segfault the layout pass — **DONE**
+**floatinghotel `afterhours_issues.md`, "Critical".** Fixed; repro'd first.
+
+The report blamed `to_ent` (`autolayout.h:83-91`), which bounds-checks,
+`log_error`s, then returns `*mapping[id]` anyway — the log line is immediately
+followed by the segfault it just described. That is real, but it was **not**
+the reachable crash. Two corrections from building the repro:
+
+- The call site floatinghotel named — the `children()` text-measurement
+  fallback from `c10c0aa` — has since been guarded (`autolayout.h:652-659`).
+  Their doc predates the guard.
+- The live crash was one level lower and much broader. `cmp(id)`
+  (`autolayout.h:67`) is an *unchecked* `*cmp_cache_[id]` with no bounds test at
+  all, and it is what every tree walk uses. ASan put the fault in
+  `reset_and_calculate_standalone` (`autolayout.h:1544-1545`) — the very first
+  traversal, before any sizing runs. So the crash needs no text sizing, no
+  labels, and no `children()`: any stale child id is enough.
+
+Trigger is exactly what `UIEntityMappingCache` already documents at
+`systems.h:152-154` — the mapping is rebuilt each frame from live UI entities,
+so a child cleaned up while its parent still lists it leaves a null hole.
+
+**Fix:** `prune_stale_children()` walks the tree once after `build_cmp_cache()`
+and drops unreachable child ids, so `cmp()` stays an unchecked deref on the hot
+path and every present *and future* traversal is safe by construction. Guarding
+the ten-odd `for (EntityID child : widget.children)` loops individually would
+have been a bigger diff that the next such loop would silently opt out of.
+
+**Tests** (`autolayout_test.cpp`, 4 added, 341/341 green): `stale_child_id_is_dropped`
+(exits 139 without the fix), `stale_subtree_is_dropped_whole`,
+`stale_child_with_text_sizing_is_dropped`, and `prune_keeps_every_live_child` —
+the last one guards against a bad `has_cmp()` bounds check quietly eating live
+ids, which is the way this fix would fail.
+
+**Still open:** `to_ent` and `UIEntityMappingCache::to_ent` (`systems.h:160-166`)
+both still deref after logging. Pruning makes them unreachable from the layout
+walk, but they remain traps for any new caller. Worth converting to a
+pointer/optional return separately — it is a mechanical change across ~6 call
+sites, each of which has an obvious unmapped fallback (a debug name, `false`
+for `has<HasScrollView>()`, `0` for a text size).
+
+### D6. `with_text_overflow(Ellipsis)` hangs with `expand()` / `children()` sizing
+**floatinghotel gaps doc.** Infinite hang **on launch**, not a wrong pixel. The
+renderer's binary search for the longest fitting prefix runs against a 0-width
+container before layout resolves and never terminates. Only safe on fixed-pixel
+widths today. Also crash class; pairs naturally with D5.
+
+### D7. Nested scroll containers stop rendering children
+**floatinghotel F7b + F13.** A `ScrollPanel` nested inside another scroll
+container silently stops rendering its rows once the UI has been exercised —
+hit twice (sidebar file list, Refs branch list), and the branch case **shipped
+as a bug**. Suspected same root as F13: `HasScrollView` only enables scroll
+when `content_size.y > viewport_size.y`, and `content_size` is summed in
+`FixScrollViewPositions` from resolved child heights — if heights don't resolve
+on a frame, scroll silently disables and the panel reports empty.
+
+Workaround both times: render rows into the *outer* panel. Ask: make nesting
+work, or at minimum warn when a container resolves to zero content while it has
+children. Related trap from F4b: a nested container sized `children()` inside a
+fixed-height scroll parent gets clamped to the remaining viewport, so siblings
+below it overlap.
+
+### D8. Labels don't word-wrap
+**floatinghotel F1.** `with_word_wrap(true)` sets `text_area_word_wrap`
+(`component_config.h:392`) which only the multiline *text-area* widget reads. A
+long single-line label — a commit-message body — just overflows off-screen.
+There is no wrapping mode for plain `div`/label text bounded by its
+`percent()`/`pixels()` width.
+
+### D9. Font atlas is ASCII-only (Basic Latin)
+**floatinghotel F2.** Every non-ASCII glyph renders **blank**: `←`, `▾`, `✓`,
+box-drawing, icon glyphs. floatinghotel fell back to `<- Back` and "More"
+instead of "More ▾", and text buttons instead of icon buttons — an icon-heavy
+mock cannot be matched without shipping an icon font. Ask: document the atlas
+coverage prominently, and support supplemental glyph ranges or an icon font.
+
+### D10. One coordinate space, please
+**floatinghotel F4b(a) + F13b.** Three spaces disagree today:
+- `measure_text` returns **physical** px on a HiDPI/headless framebuffer while
+  layout rects are logical — so a `measure_text`-driven wrap wraps at half
+  width.
+- e2e `click x y` injection space and `get_mouse_position()` return space don't
+  agree, which is what defeated floatinghotel's positional workaround for D3.
+
+Ask: one consistent space across `get_mouse_position()`, e2e click injection,
+layout rects, and `measure_text` — or at least a documented conversion.
+
+### D11. text_input ignores `with_font_size` and `with_custom_background`
+**hanabi #17.** The widget *derives* its font size from computed field height
+(`text_input/component.h:187`, `derived_fs = field_h * 0.5f`) and forces the
+inner field fill to `Theme::Usage::Secondary` (`:163`). Both config calls are
+silently ignored: a 72px field rendered hanabi's draft at ~36px and overflowed,
+and the field stayed dark even in the app's Light theme. Workaround: pin the
+field to ~34px so the derived font lands readable, and accept the wrong colour.
+
+Ask: honour an explicit `with_font_size` when set, falling back to the derived
+size only when unset; let `with_custom_background` override the forced fill.
+
+### D12. text_input has no `with_placeholder`
+**hanabi #17 follow-on (2026-08-01).** Grep-confirmed absent. An empty field is
+a bare box — hanabi's sidebar search read as an unlabelled box + magnifier and
+was written up as a hostile-review defect. Compounded by D11: because the field
+force-fills opaque `Secondary`, a placeholder painted *behind* the input is
+covered by the field's own fill, so the obvious workaround doesn't work either.
+hanabi ships an absolutely-positioned overlay child at a higher render layer,
+with its origin hand-derived from panel geometry (panel xy → header height →
+search-wrap/field paddings + magnifier slot). Fix D11's forced fill and this
+becomes a ~10-line addition.
+
+### D13. Missing container/menu primitives
+**floatinghotel missing-primitives #1, #2, #4, #5, #6.** Each is built app-local
+in `src/ui/`, all five marked BLOCKER or HIGH:
+
+| Want | floatinghotel's local build | Status here |
+|---|---|---|
+| `draggable_divider()` | `split_panel.h` via `div()` + `HasDragListener` | missing |
+| `split_pane()` | `split_panel.h` | **`vsplit`/`hsplit` (todo item 6) covers the static case**; the draggable divider is what's left |
+| `dropdown_menu()` | `menu_setup.h`, absolute positioning + hover-to-switch + click-outside | missing |
+| `context_menu()` | `context_menu.h`, cursor-positioned, window-edge flipping | missing |
+| `popover()` | reuses the dropdown approach with manual anchor maths | missing |
+
+The last three share one engine: an anchored, auto-flipping, click-outside-to-
+close overlay with a common item format (label, shortcut, separator, disabled,
+callback). Build that once and all three fall out. Note D3 blocks nothing here
+but will bite any of them that nest a control inside a clickable row.
+
+### D14. Custom colours bypass disabled dimming
+**floatinghotel.** `resolve_background_color()` returns custom colours as-is
+when `disabled=true`; the dimming only applies to `Theme::Usage`-based colours.
+Since apps overwhelmingly use `with_custom_background(Color)`,
+`with_disabled(true)` blocks interaction but leaves the widget looking enabled.
+`disabled_opacity` in `theme.h` is the mechanism but is not applied on the
+custom-colour path.
+
+### D15. Roundness is a fraction, not pixels
+**floatinghotel F7.** `with_roundness(f)` is a fraction of half the min
+dimension, so "an 8px radius card" has to be back-solved per element size, and
+the same fraction looks wrong on a tall card vs a short button. Ask: a
+pixel-radius option alongside the fraction.
+
+### D16. `percent()` doesn't resolve reliably in nested containers
+**floatinghotel F6.** The sidebar threads an explicit `pixels(sidebarPixelWidth_)`
+down to every child section because `percent()` resolves wrong inside nested
+divs. Note `c10c0aa` fixed the *absolute-positioned-parent* case specifically;
+this is the plain-nesting case and may be the same bug or a different one — no
+repro captured. Wants one before it can be actioned.
+
+### D17. No measured-text size unit
+**floatinghotel F3.** Menu-header widths come from a hardcoded `charW ≈ 10px`
+estimate that had to be re-tuned by hand whenever font tiers changed.
+`measure_text` exists but isn't reachable from layout sizing. Ask: a `Size`
+mode that resolves to measured text width — see D10, it must resolve in
+*logical* px.
+
+### D18. Mouse-wheel injection is consume-once and order-sensitive
+**floatinghotel F12.** e2e `scroll_wheel` sets a wheel value that
+`get_mouse_wheel_move_v()` *consumes* on first read, cleared per frame — so
+whichever system reads first wins and targeting a specific scroll view
+headlessly is unreliable. The real app reads a live, re-readable wheel, so
+**headless behaviour diverges from real**, which is the part that matters for a
+test harness. Ask: non-consuming reads in test mode, or per-target routing.
+
+### D19. Metal headless capture can't supersample
+**hanabi #6.** The windowed Metal path sets `desc.high_dpi = true`, so the live
+app is crisp. The *headless* path (`DisplayMode::Headless` → `metal_init`)
+creates a fixed `cfg.width × cfg.height` offscreen texture at 1x.
+`graphics::Config.hidpi` is read **only** by the raylib backend
+(`backends/raylib/windowed.h`); sokol/Metal ignores it and never sets
+`graphics::render_scale()`. Rendering into a 2x texture is *not* a workaround —
+adaptive UI just lays out at the larger logical size. Consequence: hanabi's
+`--screenshot` PNGs, used for docs and pixel-perfect phase validation, are soft
+and under-represent the real window. Ask: honour `Config.hidpi` in the Metal
+headless path — allocate at `width*scale × height*scale`, set
+`render_scale(scale)`, keep the ortho projection in logical px (the same
+contract windowed high_dpi already uses).
+
+### D20. `load_texture` generates no mipmaps
+**hanabi #14.** Sokol backend creates its image with
+`mipmap_filter = SG_FILTER_NEAREST` and a single mip level. A texture drawn
+much smaller than source minifies off the full-res level with no pyramid, so
+thin high-contrast features (line-icon strokes) alias and shimmer. No app-side
+way to request mipmaps, trilinear, or anisotropy. hanabi's workaround is to
+author the atlas near the real draw size (regenerated at 32px cells, was 64px)
+to keep minification under ~2x where plain bilinear is clean. Ask: generate a
+mip chain in `load_texture` with `mipmap_filter = LINEAR`, or a variant that
+opts in.
+
+### D21. No OS appearance (light/dark) query
+**hanabi #1 and #16 — filed twice, so it kept mattering.** Nothing exposes the
+host appearance (macOS `AppleInterfaceStyle` / `NSApp.effectiveAppearance`) or
+an appearance-changed hook. hanabi's settings panel offers Light / Dark /
+System; Light and Dark work, **System cannot be honoured** and silently renders
+Dark with a footnote apologising for it. "Match system" is table stakes for a
+native desktop app. Ask: `graphics::os_appearance() -> {Light,Dark,Unknown}`
+plus a changed callback. hanabi notes an app-side ObjC++ shim is viable, so
+this is a convenience — but every app will otherwise write the same probe.
+
+### D22. Animation gaps (post-MVP)
+**hanabi #8-#12.** The `Anim` builder (`ui/animation_config.h`) plus the
+key-based manager (`plugins/animation.h`) already cover hover, press-spring,
+appear fade, loop pulse, idle float, and count tick. Residual, all non-blocking:
+- **#9 OnExit / leaving lifecycle** — hanabi calls this "the single biggest
+  structural gap". Triggers are `OnAppear/OnClick/OnHover/OnFocus/Loop`
+  (`animation_config.h:14-20`); in immediate mode a departing widget simply
+  isn't emitted next frame, so nothing can animate out. Wants a "keep alive M
+  ms after last emit and run its exit anim" hook. Genuinely hard in pure
+  immediate mode — the interesting design problem in this list.
+- **#8 stagger/delay** — `AnimationDef` (`animation_config.h:47-60`) has no
+  `delay`/`stagger_index`, so a list fades in all at once with no cascade.
+  Smallest of the five: one field applied before the track goes active.
+- **#10 OnValueChanged** — no "underlying value changed" trigger for a one-shot
+  flash when a row's status flips.
+- **#11 shimmer sweep** — needs a linear-gradient fill/mask primitive; a pulsing
+  skeleton is already trivial via `loop().opacity(...)`.
+- **#12 drag gesture + spring-to-slot** — no pointer-delta model, so spring-based
+  tab reorder isn't expressible. Note this compounds D3.
+
+### D23. Smaller ergonomics
+- **Tween/AnimatedValue helper** (hanabi #2) — every animated property is
+  hand-rolled `animT += dt/dur` + `smoothstep`. hanabi calls this "arguably not
+  a real gap, just boilerplate". Low priority.
+- **Synchronized scroll views** (floatinghotel) — side-by-side diff; today you
+  mirror the offset manually each frame.
+- **Virtualized list** (floatinghotel) — 10k+ commit logs; today you hand-roll
+  windowed rendering inside `scroll_view()`.
+- **`with_font_tier()` only supports `h720()` scaling** (floatinghotel) —
+  adopting tiers forces proportional font scaling; no tier + fixed `pixels()`
+  path.
+- **No card preset** (F15) — `with_border`/`with_border_bottom` are good, but
+  every card re-specifies bg + border + radius + padding.
+- **Absolute children need manual `with_render_layer`** (F16) to stack
+  correctly (graph dots over lines); easy to forget.
+- **Raw font sizes drift** (F14) — call sites bypass the `FontSize` tier enum
+  with raw `h720(px)`/`pixels(px)` and nothing discourages it. A lint or a
+  "no raw font sizes" mode would hold the scale.
+- **`TextOverflow` under-documented** (F4) — default is `Clip` and the
+  interaction with `NoWrap`/flex is easy to get wrong.
+- **`window_manager` forward-declares `sapp_*`** (F11) to stay decoupled, so the
+  headless resize path couldn't reach `graphics::` without adding the include.
+  Minor; the decoupling fought them.
+- **Offscreen readback needs manual GPU sync** (F10) — non-MSAA Private Metal
+  render targets return garbage from `getBytes`; you must blit to Shared +
+  `waitUntilCompleted`. Not a code gap, a documentation one.
+
+### D24. Known-broken widgets floatinghotel routes around
+- **`tab_container()` renders at screen-absolute position**, ignoring parent
+  bounds — unusable for multi-repo tabs; they build manual tab buttons in a row.
+- **`toggle_switch()` creates sibling entities that consume layout space**, so
+  adjacent elements misalign; workaround is `with_no_wrap()` on the parent plus
+  a taller container.
+
+Both are straightforward bugs rather than missing features, and both have a
+concrete repro in a real app.
+
+## Out of scope for this library
+
+Recorded so they aren't re-litigated:
+
+- **macOS menu-bar extra / NSStatusItem** (hanabi #5). afterhours only creates a
+  normal window; hanabi will do NSStatusItem + NSMenu in its own `.mm`. The only
+  plausible upstream ask is a hook to run app code without owning the main
+  window. Deferred by hanabi to its Phase 4.
+- **GPU memory knobs** (hanabi #7). Placeholder against a <250MB RSS target;
+  baseline is ~70MB windowed, so nothing is measured yet. If it ever bites, the
+  ask would be configurable font-atlas dimensions (fixed 2048x2048 today) and a
+  texture-cache eviction hook.
+- **Status-glyph shapes** (hanabi #4) — logged then self-resolved. `draw_triangle`,
+  `draw_poly`, `draw_circle_v` plus `with_on_draw_fg` already do it. Kept only as
+  evidence that `with_on_draw_fg` is under-advertised.
