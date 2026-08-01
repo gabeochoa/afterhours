@@ -36,6 +36,8 @@ examples/imm_visual_check.png
 examples/imm_visual_check_batched.png
 examples/on_draw_example.png
 examples/catalog/ui/split_layout/split_layout.png
+# Seeded on first run by HotReloadTheme, then hand-edited.
+examples/catalog/ui/hello/hello.theme
 examples/graphics_example_output.png
 examples/calendar_stress_output.png
 examples/graphics_example_captures/

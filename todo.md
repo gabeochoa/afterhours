@@ -377,12 +377,72 @@ Originally skipped the default keymap on the grounds that "every backend spells
 key codes differently." **That was wrong** — `afterhours::keys` is already a
 backend-neutral set of GLFW/raylib codes. Shipped in item 8 below.
 
-### 6. Serializable `Theme` (stretch)
+### 6. Serializable `Theme` — **DONE**
 
 Ratatui gates a `serde` feature on its style types explicitly for theme files.
-Our `Theme` is hardcoded C++, so every color tweak is a recompile. Not strictly
-an ergonomics item, but it's the iteration-speed one — and a hot-reloading theme
-is the most compelling thing a showcase can demo.
+Ours was hardcoded C++, so every color tweak was a recompile.
+
+Landed as `src/plugins/ui/theme_io.h`. Format is flat `key = value` with `#`
+comments — no dependency. nlohmann/json is only reachable through the settings
+plugin's opt-in macros and is not vendored, so JSON would have meant requiring
+a dependency to change a color.
+
+The field list is written once and drives both directions:
+
+- **Colors** iterate `Theme::Usage` and go through `color_ref`, so a usage
+  added to the enum is serialized without touching `theme_io`.
+- **Scalars** use a member-pointer table (`float_fields`), so save and load
+  cannot drift apart.
+
+`HotReloadTheme` is a plain `System<>` the app registers, rather than something
+baked into `run()`:
+
+```cpp
+ui::run<>({.title = "hello"},
+          std::make_unique<theme_io::HotReloadTheme>("hello.theme"),
+          std::make_unique<Hello>());
+```
+
+It polls mtime, writes ThemeDefaults (which `BeginUIContextManager` copies into
+every context each frame, so a reload lands next frame), and seeds the file
+from the live theme on first run so there is something to edit.
+
+Two deliberate asymmetries: `load()` treats a file as a *partial override* of a
+base theme, while hot reload reads onto a default `Theme` so the file is
+authoritative and deleting a line restores that property's default. And a
+malformed line costs one property, logged with its line number, rather than
+failing the file — a typo must not silently swap in a whole default theme.
+
+`tests/theme_io_test.cpp`, 62 checks. It caught a real bug while being written:
+`primary = #112233  # note` kept the trailing comment, because the first `#` on
+the line is the color. Comment stripping now runs per-side of the `=`.
+
+Not covered: `language_fonts` and `font_sizing`. Fonts are asset wiring, and
+`FontSizing` overloads its sign to mean "user-set vs interpolated", which does
+not survive a naive round trip.
+
+### 8b. Two defects found while verifying item 6
+
+Both were caught only because hot reload gave a *behavioural* signal — the
+theme visibly failing to change — that no compile or test would have produced.
+
+**`ui::run()` never presented to the window.** `begin_frame`/`end_frame` in the
+raylib windowed backend only bind and unbind an offscreen render texture;
+blitting it to the window is the app's job (`begin_drawing` → draw the texture
+→ `end_drawing`), as `puzzle`'s `present_render_texture` does. Without it the
+window stays blank, and — because raylib ticks its frame timer and polls input
+inside `end_drawing` — `GetFrameTime()` returns 0, the fps cap never applies
+(measured ~640fps), and no input arrives. `run()` now presents. This shipped in
+the item 8 commit; the frame captures that "verified" it read the offscreen
+texture directly and so looked correct.
+
+**Catalog dependency tracking was dead.** `-MD` names the dep file after the
+output with its extension replaced, so `-o hello.exe` writes `hello.d`, while
+`common.mk` included `hello.exe.d`. Every one of the 50 examples has been
+compiling against stale binaries since `common.mk` was written — the same
+class of silent-no-op as the earlier `-MMD` bug, and it is what made the
+`run()` defect survive two rebuild-and-retest cycles. Fixed with an explicit
+`-MF $(EXE).d`; verified by touching a header and confirming a recompile.
 
 ### 6b. Split region configs — deferred
 

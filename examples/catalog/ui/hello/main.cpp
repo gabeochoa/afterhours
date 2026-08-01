@@ -1,7 +1,7 @@
 // hello — the shortest complete afterhours app.
 //
-// A real window, a real event loop, a clickable button, keyboard navigation.
-// Everything below main() is the app; everything inside it is one call.
+// A real window, a real event loop, a clickable button, and a theme file that
+// reloads on save. Everything below main() is the app; main() is one call.
 
 #include <cstdio>
 
@@ -22,5 +22,8 @@ struct Hello : System<DefaultUIContext> {
 };
 
 int main(int, char **) {
-  return ui::run<>({.title = "hello"}, std::make_unique<Hello>());
+  // Writes hello.theme on first run; edit any color and save to see it apply.
+  return ui::run<>({.title = "hello"},
+                   std::make_unique<theme_io::HotReloadTheme>("hello.theme"),
+                   std::make_unique<Hello>());
 }

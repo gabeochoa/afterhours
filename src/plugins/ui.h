@@ -7,4 +7,5 @@
 #include "ui/rendering.h"
 #include "ui/systems.h"
 #include "ui/theme.h"
+#include "ui/theme_io.h"
 #include "ui/utilities.h"
