@@ -22,9 +22,9 @@ struct toast : developer::Plugin {
     enum class Level { Info, Success, Warning, Error, Custom };
 
     // Resolution-scaled sizes (designed for 720p, scales proportionally)
-    static inline ui::Size WIDTH = ui::h720(380.0f);
-    static inline ui::Size HEIGHT = ui::h720(50.0f);
-    static inline ui::Size PADDING = ui::h720(16.0f);
+    static inline ui::Size WIDTH = ui::h720(340.0f);
+    static inline ui::Size HEIGHT = ui::h720(32.0f);
+    static inline ui::Size PADDING = ui::h720(14.0f);
     static inline ui::Size TOAST_GAP = ui::h720(8.0f);
 
     // Helper to resolve a Size to actual pixels given screen dimensions
@@ -82,19 +82,18 @@ struct toast : developer::Plugin {
             return t >= 1.0f ? 1.0f : 1.0f - std::pow(2.0f, -10.0f * t);
         }
 
+        // Only warnings/errors get a text prefix; info/success stay clean.
         [[nodiscard]] static std::string icon_for_level(Level level) {
             switch (level) {
-                case Level::Success:
-                    return "[OK]";
                 case Level::Warning:
                     return "[!]";
                 case Level::Error:
                     return "[X]";
+                case Level::Success:
                 case Level::Custom:
-                    return "[*]";
                 case Level::Info:
                 default:
-                    return "[i]";
+                    return "";
             }
         }
 
@@ -115,9 +114,10 @@ struct toast : developer::Plugin {
             ui::imm::ElementResult result =
                 schedule(ctx, level, duration, custom_color);
 
-            // Set the label with icon and message
+            // Set the label with icon and message (no prefix for info/success).
             std::string icon = icon_for_level(level);
-            result.ent().get<ui::HasLabel>().label = icon + " " + msg;
+            result.ent().get<ui::HasLabel>().label =
+                icon.empty() ? msg : icon + " " + msg;
 
             return result;
         }
@@ -281,12 +281,12 @@ struct toast : developer::Plugin {
                     static_cast<float>(index) * (toast_height + gap_px);
                 float y_pos = static_cast<float>(screen_h) - padding_px -
                               toast_height - y_offset;
-                float x_pos =
-                    static_cast<float>(screen_w) - width_px - padding_px;
+                // Bottom-center, stacking upward; slide up on entry.
+                float x_pos = (static_cast<float>(screen_w) - width_px) / 2.0f;
 
                 float alpha_ease = detail::ease_out_expo(t.progress());
-                float slide_offset = (1.0f - alpha_ease) * 50.0f;
-                x_pos += slide_offset;
+                float slide_offset = (1.0f - alpha_ease) * 24.0f;
+                y_pos += slide_offset;
 
                 ui.computed_rel[ui::Axis::X] = x_pos;
                 ui.computed_rel[ui::Axis::Y] = y_pos;
