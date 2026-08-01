@@ -196,11 +196,11 @@ This document contains all TODO comments found in `vendor/afterhours/src/`, anal
 > **NOT derived from source TODO comments — do not delete during regeneration.**
 > Hand-written from a review of [ratatui](https://docs.rs/ratatui/latest/ratatui/)'s API.
 
-## Goal
+## Goal — **DONE** (see item 8)
 
-Build `examples/hello/main.cpp` — a showcase that is as short as ratatui's hello
-world while keeping the full customization surface available. Ratatui's is 10
-lines:
+Build a showcase that is as short as ratatui's hello world while keeping the
+full customization surface available. Landed as
+`examples/catalog/ui/hello/main.cpp` at 17 lines. Ratatui's is 10:
 
 ```rust
 fn main() -> std::io::Result<()> {
@@ -219,7 +219,7 @@ systems that must be registered in an exact order. The items below are what
 closes that gap. Each is additive — no existing call site changes.
 
 The showcase is the acceptance test: if hello world isn't short, the item isn't
-done. Each item lands with its own line in `examples/hello/main.cpp`.
+done.
 
 ## Items (ordered by diff size, smallest first)
 
@@ -373,12 +373,9 @@ library references, plus `using DefaultUIContext = UIContext<DefaultAction>`.
 `tests/setup_test.cpp` pins the list — the failure mode without it is an app
 that suddenly stops compiling with no hint that the default set regressed.
 
-Skipped the default keymap: binding actions to keys is the app's job and every
-backend spells key codes differently. Add one if a real app wants it.
-
-Ship that vocabulary as `ui::DefaultAction` plus
-`using DefaultUIContext = UIContext<DefaultAction>`, with a default keymap.
-Hello world then declares no enum at all; games still supply their own.
+Originally skipped the default keymap on the grounds that "every backend spells
+key codes differently." **That was wrong** — `afterhours::keys` is already a
+backend-neutral set of GLFW/raylib codes. Shipped in item 8 below.
 
 ### 6. Serializable `Theme` (stretch)
 
@@ -437,6 +434,75 @@ Also made the dialog fonts `h720` to match every box in the file. Mixing an
 h720 box with a fixed-pixel font means text keeps its size while its box
 shrinks. That was not what caused this overflow and no test covers it — it is a
 consistency fix for the same class of bug.
+
+### 8. `ui::run()` + `ui::default_keymap()` — the showcase itself — **DONE**
+
+Items 1-5 shortened the *app*; what was left was the *harness*. Writing the
+hello world made the remaining gap obvious — window init, input singletons,
+system order, the frame loop, and shutdown came to ~15 lines of ceremony
+around a 5-line app, and none of it varies between apps.
+
+Two additions, both in `utilities.h`:
+
+- **`ui::default_keymap<InputAction>()`** — conventional bindings for the UI's
+  own actions. Entries match the caller's enum **by name** (via `magic_enum`),
+  so an app with its own larger enum gets the widget/text bindings for free and
+  keeps everything else; names the enum lacks are skipped. Reuses the existing
+  `ProvidesInputMapping::GameMapping`, no new type.
+
+- **`ui::run<InputAction>(graphics::Config, systems...)`** — opens the window,
+  wires input + UI, runs the loop until close, shuts down, returns an exit
+  code. Reuses `graphics::Config` (which already has title/width/height/fps)
+  rather than inventing a config struct. Gated on a backend being defined, the
+  same guard `window_manager.h` uses. Every piece it composes stays public.
+
+The showcase, `examples/catalog/ui/hello/` — **17 lines**, 7 of them includes
+and `using`s, against ratatui's 10:
+
+```cpp
+struct Hello : System<DefaultUIContext> {
+  void for_each_with(Entity &entity, DefaultUIContext &ctx, float) override {
+    if (button(ctx, mk(entity), "Hello World!"))
+      printf("clicked\n");
+  }
+};
+
+int main(int, char **) {
+  return ui::run<>({.title = "hello"}, std::make_unique<Hello>());
+}
+```
+
+That is a real window with a real event loop and a themed button. No
+`InputAction` enum, no keymap, no singleton wiring, no system ordering, no loop.
+
+**Verification limit:** the window, loop, theming and render are confirmed
+visually (captured frame), and the keymap contents are unit-tested. What is
+*not* verified end to end is that a keypress or click actually reaches the
+widget through `run()` — that needs synthetic input against a live window,
+which nothing here can do yet. The e2e `input_injector` is the obvious tool;
+wiring it to a `run()`-driven window would close this.
+
+It lives in the catalog rather than at `examples/hello/` as first written, so
+it reuses `common.mk` and gets swept by the catalog build like everything else.
+
+`tests/keymap_test.cpp` covers the keymap. The check that matters is
+`every_default_action_is_bound`: an action with no binding is *silently* dead —
+the widget systems query it every frame and it never fires, with nothing in the
+build or at runtime to say so. That exact bug shipped in the consuming app,
+where a menu input layer defined `WidgetNext` but not `WidgetMod`, so Shift+Tab
+could not move focus backward. Mutation-tested by dropping the `WidgetMod`
+binding: 4 failures, including the name printed as unbound.
+
+Two things found while verifying, neither a regression:
+
+- `run()` clears with `ThemeDefaults`, not `ctx.theme`.
+  `BeginUIContextManager` (`systems.h:222`) overwrites the context's theme from
+  `ThemeDefaults` every frame, so `ctx.theme` is a per-frame copy — clearing
+  from it lags a frame behind any app that sets it.
+- `Theme`'s default constructor (`theme.h:308`) fully overrides the member
+  initializers at `theme.h:202-212`, so the documented defaults there
+  (`background{45,45,55}` etc.) are dead code; the real default background is
+  `oxford_blue`. Left alone, but the comments at those lines are misleading.
 
 ## Explicitly not doing
 

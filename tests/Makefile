@@ -67,6 +67,7 @@ ALL_TESTS := \
 	entity_pool_test \
 	entity_query_test \
 	input_injector_mouse_delta_test \
+	keymap_test \
 	progress_bar_test \
 	random_engine_test \
 	render_order_test \

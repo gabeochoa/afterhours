@@ -411,6 +411,113 @@ static void register_batched_render_systems(
             toggle_debug, /*use_batched=*/true));
 }
 
+/// Conventional key bindings for the UI's own actions.
+///
+/// Entries are matched to the caller's enum *by name*, so an app with extra
+/// actions of its own gets the widget/text bindings for free and keeps the
+/// rest; names the enum does not have are skipped. `afterhours::keys` values
+/// are GLFW/raylib codes, so this is backend-independent.
+///
+///     auto m = ui::default_keymap<MyAction>();
+///     m[(int)MyAction::Jump] = {keys::SPACE};   // add your own on top
+template<typename InputAction>
+static input::ProvidesInputMapping::GameMapping default_keymap() {
+    using KeyChord = input::KeyChord;
+    input::ProvidesInputMapping::GameMapping mapping;
+
+    auto bind = [&mapping](std::string_view name, input::ValidInputs inputs) {
+        if (auto value = magic_enum::enum_cast<InputAction>(name))
+            mapping[static_cast<int>(*value)] = std::move(inputs);
+    };
+
+    // Focus movement. WidgetMod is held, not tapped: holding it turns
+    // WidgetNext into WidgetBack, which is how Shift+Tab reverses.
+    bind("WidgetMod", {keys::LEFT_SHIFT, keys::RIGHT_SHIFT});
+    bind("WidgetNext", {keys::TAB});
+    bind("WidgetBack", {keys::BACKSPACE});
+    bind("WidgetPress", {keys::ENTER, keys::SPACE});
+    bind("WidgetUp", {keys::UP});
+    bind("WidgetDown", {keys::DOWN});
+    bind("WidgetLeft", {keys::LEFT});
+    bind("WidgetRight", {keys::RIGHT});
+    bind("MenuBack", {keys::ESCAPE});
+
+    // Text editing. BACKSPACE is deliberately double-bound with WidgetBack
+    // above: the text systems only consume it while a field has focus.
+    constexpr uint8_t CMD = KeyChord::MOD_SUPER;
+    constexpr uint8_t CTRL = KeyChord::MOD_CTRL;
+    constexpr uint8_t SHIFT = KeyChord::MOD_SHIFT;
+    // Every editing chord is bound for both macOS (cmd) and elsewhere (ctrl).
+    auto bind_chord = [&bind](std::string_view name, int key) {
+        bind(name, {KeyChord{key, CMD}, KeyChord{key, CTRL}});
+    };
+    bind("TextBackspace", {keys::BACKSPACE});
+    bind("TextDelete", {keys::DELETE_KEY});
+    bind("TextHome", {keys::HOME});
+    bind("TextEnd", {keys::END});
+    bind_chord("TextCopy", keys::C);
+    bind_chord("TextCut", keys::X);
+    bind_chord("TextPaste", keys::V);
+    bind_chord("TextUndo", keys::Z);
+    bind_chord("TextSelectAll", keys::A);
+    bind_chord("TextDeleteWordBack", keys::BACKSPACE);
+    bind_chord("TextDeleteWordForward", keys::DELETE_KEY);
+    bind_chord("TextWordLeft", keys::LEFT);
+    bind_chord("TextWordRight", keys::RIGHT);
+    bind("TextRedo", {KeyChord{keys::Z, static_cast<uint8_t>(CMD | SHIFT)},
+                      KeyChord{keys::Z, static_cast<uint8_t>(CTRL | SHIFT)}});
+    bind("TextSelectLeft", {KeyChord{keys::LEFT, SHIFT}});
+    bind("TextSelectRight", {KeyChord{keys::RIGHT, SHIFT}});
+
+    return mapping;
+}
+
+#if defined(AFTER_HOURS_USE_RAYLIB) || defined(AFTER_HOURS_USE_METAL)
+/// Opens a window, wires input + UI, and runs the frame loop until the window
+/// closes. Returns a main()-style exit code.
+///
+///     int main() { return ui::run<>({.title = "hello"},
+///                                   std::make_unique<MySystem>()); }
+///
+/// This is the whole-app convenience path. Anything it decides for you --
+/// keymap, resolution singleton, clear color, system order -- is reachable
+/// piecemeal via graphics::init + default_keymap + setup + the loop below.
+template<typename InputAction = DefaultAction, typename... UserSystems>
+static int run(const graphics::Config &cfg, UserSystems &&...user_systems) {
+    if (!graphics::init(cfg)) {
+        log_error("graphics::init failed; cannot run");
+        return 1;
+    }
+
+    // Skipped if the app already made one, same as the resolution singleton in
+    // setup_with_resolution.
+    if (!EntityHelper::has_singleton<input::InputCollector>()) {
+        input::add_singleton_components(EntityHelper::createEntity(),
+                                        default_keymap<InputAction>());
+    }
+
+    SystemManager systems;
+    // Input must tick before the UI reads the collector this frame.
+    input::register_update_systems(systems);
+    setup_with_resolution<InputAction>(
+        systems, window_manager::Resolution{cfg.width, cfg.height},
+        std::forward<UserSystems>(user_systems)...);
+    register_render_systems<InputAction>(systems);
+
+    while (!graphics::window_should_close()) {
+        graphics::begin_frame();
+        // ThemeDefaults, not ctx.theme: BeginUIContextManager overwrites the
+        // context's copy from it every frame, so this is the durable one.
+        graphics::clear_background(imm::ThemeDefaults::get().theme.background);
+        systems.run(graphics::get_frame_time());
+        graphics::end_frame();
+    }
+
+    graphics::shutdown();
+    return 0;
+}
+#endif
+
 }  // namespace ui
 
 }  // namespace afterhours
