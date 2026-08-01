@@ -3413,6 +3413,59 @@ TEST(prune_keeps_every_live_child) {
 }
 
 // ============================================================================
+// D2: expand() in a Row, as real app code writes it
+//
+// hanabi and floatinghotel both report that expand() in a Row takes the full
+// parent width instead of the remaining width, and both pay for it: hanabi
+// hand-computes `labelW = rowContentW - leadSlot - countColW` across three row
+// types, floatinghotel bakes whole rows into one label string.
+//
+// expand_fills_remaining_row already covers this and passes -- but it calls
+// set_flex_wrap(NoWrap) first. App code does not; FlexWrap defaults to Wrap
+// (component_config.h:62). These pin the default-wrap case.
+// ============================================================================
+
+// The reported row, verbatim: [icon 18px] [label expand()] [count 24px], with
+// the wrap default left alone.
+TEST(expand_in_row_with_default_wrap) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(300), pixels(40));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+
+  auto &icon = t.make_ui(pixels(18), pixels(40));
+  auto &label = t.make_ui(expand(), pixels(40));
+  auto &count = t.make_ui(pixels(24), pixels(40));
+  t.add_child(root, icon);
+  t.add_child(root, label);
+  t.add_child(root, count);
+  t.run(root);
+
+  // 300 - 18 - 24 = 258, and the count sits flush against the right edge.
+  CHECK_APPROX(t.ui(label).computed[Axis::X], 258.f);
+  CHECK_APPROX(t.ui(count).computed_rel[Axis::X], 276.f);
+}
+
+// Same row, but the parent is percent-sized rather than a fixed pixel width --
+// hanabi's actual case, where the usable width varies with sidebar state.
+TEST(expand_in_row_under_percent_parent) {
+  TestLayout t;
+  auto &screen = t.make_ui(pixels(400), pixels(200));
+  auto &root = t.make_ui(percent(1.0f), pixels(40));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.add_child(screen, root);
+
+  auto &icon = t.make_ui(pixels(18), pixels(40));
+  auto &label = t.make_ui(expand(), pixels(40));
+  auto &count = t.make_ui(pixels(24), pixels(40));
+  t.add_child(root, icon);
+  t.add_child(root, label);
+  t.add_child(root, count);
+  t.run(screen);
+
+  CHECK_APPROX(t.ui(label).computed[Axis::X], 358.f);
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 

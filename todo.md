@@ -692,10 +692,31 @@ takes 100% and the fixed sibling wraps below. Both apps paid for this: hanabi
 hand-computes `labelW = rowContentW − leadSlot − countColW` across three
 different row types; floatinghotel bakes whole rows into one label string.
 
-Action: build the `[icon(18px)] [label expand()] [count(24px)]` row as a test.
-If it passes, this is a docs problem — say so in the README's sizing table and
-tell both apps. If it fails, it is a real bug in the *nested-children* path
-that the current flat tests miss.
+**Resolved: not a bug.** Built the repro seven ways and every one passes.
+
+Engine level (`autolayout_test`, 344/344): the reported row with the `NoWrap`
+the old test set, *and* with the `FlexWrap::Wrap` default that app code
+actually gets, under both a fixed-pixel and a `percent(1.0f)` parent.
+
+imm level (`downstream_gaps_test`, the layer the apps call): `div()` rows,
+a `percent`-sized row, `button()` with children, and the assertion hanabi
+actually wanted — two rows of *different* leading-slot width landing their
+trailing counts on one shared right edge, which is the ~17px gap it could not
+close.
+
+Two things worth passing back:
+- hanabi asked for "`with_flex_grow(int)`". That is `expand(weight)`, aliased
+  as `flex_grow(weight)` since `layout_types.h:170`. It never found the
+  function, and `percent(1.0f)` — the thing it did try — correctly means "all
+  of the parent", not "the remainder". Pure discoverability.
+- The `button()` case is the trap worth documenting. Unlike `div()`, `button()`
+  carries default padding, so a row of width 300 with a 16px sibling gives the
+  expanding child **252**, not 284. That reads exactly like "expand is wrong"
+  if you measure against the outer rect instead of the content box. Betting
+  this is what floatinghotel actually saw.
+
+Follow-up: say so in the README sizing table (`expand` vs `percent`, and that
+`button()` pads), and tell both apps they can delete the pixel bookkeeping.
 
 ### D3. No hit-test priority or click consumption for overlapping widgets
 **hanabi #3, floatinghotel F13b.** Two shapes of the same gap:
@@ -772,6 +793,45 @@ for `has<HasScrollView>()`, `0` for a text size).
 renderer's binary search for the longest fitting prefix runs against a 0-width
 container before layout resolves and never terminates. Only safe on fixed-pixel
 widths today. Also crash class; pairs naturally with D5.
+
+**Partly cleared, and blocked on D6b for the rest.**
+
+The *layout* half does not hang. `d24_tab_container_respects_parent_origin` and
+friends exercise exactly the suspect combination — `tab_container` sets
+`TextOverflow::Ellipsis`, sizes tabs with `expand()`, and pins
+`set_min_width(Size{Dim::Text, ...})` (`imm_components.h:1874-1886`) — and they
+complete.
+
+The *render* half reads as sound too. The binary search
+(`rendering.h:722-737`) terminates: `low` only rises, `high` only falls,
+`mid == 0` breaks before the `high = mid - 1` underflow, and a zero-width rect
+returns early at `:702` (`max_width = rect.width - 10.f` goes negative, so the
+0-width-container theory in the report cannot reach the loop). The guards look
+like someone already fixed this.
+
+Cannot fully close it, because the render path is untestable here — see D6b.
+If floatinghotel still hangs on current afterhours, ask for a stack sample; a
+hang is one of the easiest things to get a definitive answer on.
+
+### D6b. The imm test harness never renders — `rendering.h` has zero coverage
+Not an app report; found while trying to test D6. `ImmTestHarness::layout_and_render()`
+(`tests/ui_test_harness.h:164-181`) runs `AutoLayout::autolayout()` and then
+sets `was_rendered_to_screen = true` on every component. It never calls the
+renderer. The name says otherwise, and I wrote a green D6 test against it
+before noticing — a test that never executed the code it was testing, which is
+worse than no test.
+
+Consequence: everything in `rendering.h` is untested — ellipsis truncation,
+colour resolution, opacity, per-side borders, `on_draw_fg`. That is also where
+several open items live (D1 blending, D6 truncation, D14 disabled dimming), so
+it blocks more than it looks.
+
+Two jobs, in order:
+1. Rename to `layout_only()` so it stops implying coverage it does not provide.
+2. Add a real render harness. The text path needs only a `measure_text` seam
+   (the harness already stubs one for layout) plus a recording draw sink —
+   assert on the *draw calls* rather than pixels, and no GPU is needed. That
+   unlocks D6 and D14 without touching a backend.
 
 ### D7. Nested scroll containers stop rendering children
 **floatinghotel F7b + F13.** A `ScrollPanel` nested inside another scroll
@@ -970,15 +1030,37 @@ appear fade, loop pulse, idle float, and count tick. Residual, all non-blocking:
   render targets return garbage from `getBytes`; you must blit to Shared +
   `waitUntilCompleted`. Not a code gap, a documentation one.
 
-### D24. Known-broken widgets floatinghotel routes around
+### D24. Known-broken widgets floatinghotel routes around — **NOT REPRODUCIBLE**
 - **`tab_container()` renders at screen-absolute position**, ignoring parent
   bounds — unusable for multi-repo tabs; they build manual tab buttons in a row.
 - **`toggle_switch()` creates sibling entities that consume layout space**, so
   adjacent elements misalign; workaround is `with_no_wrap()` on the parent plus
   a taller container.
 
-Both are straightforward bugs rather than missing features, and both have a
-concrete repro in a real app.
+Neither reproduces. Both now have coverage in `downstream_gaps_test`, which
+they did not before — the two pre-existing `tab_container` tests are about
+label widths, and `toggle_switch` had no tests at all, which is presumably how
+these shipped broken in the first place if they ever were.
+
+Four tests, covering the stated conditions *and* the likeliest underlying
+cause:
+- `d24_tab_container_respects_parent_origin` — bar nested in an offset panel
+  lands at the panel's origin, not the screen's.
+- `d24_tab_container_under_absolute_parent` — the same bar under an
+  absolutely-positioned ancestor. This is almost certainly the original bug:
+  `c10c0aa` fixed "percent(1.0f) resolved to screen width inside
+  absolute-positioned parents", and a tab bar defaults to `percent(1.0f)`
+  width, so the report is that bug wearing a `tab_container` costume.
+- `d24_toggle_switch_stays_within_its_row` — the row below is not pushed down.
+- `d24_toggle_switch_in_narrow_parent_does_not_wrap` — parent squeezed below
+  label + 52px track, the condition their `with_no_wrap()`-plus-taller-container
+  workaround implies.
+
+Caveat: not-reproducible is weaker than fixed. These cover the conditions the
+reports describe, not necessarily the app state that produced them. If either
+app still sees it on current afterhours, the next thing to ask for is the
+containing hierarchy, since both suspicions point at the ancestor chain rather
+than the widget.
 
 ## Out of scope for this library
 
