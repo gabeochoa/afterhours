@@ -153,7 +153,7 @@ struct ImmTestHarness {
   Entity &root() { return *root_entity; }
 
   // Run autolayout and mark everything as rendered
-  void layout_and_render() {
+  void layout_only() {
     coll.merge_entity_arrays();
 
     // Build entity mapping
@@ -235,7 +235,7 @@ TEST(truncate_text_custom_limit) {
 
 TEST(dump_depth_guard) {
   ImmTestHarness h;
-  h.layout_and_render();
+  h.layout_only();
   std::string xml;
   // Depth 65 should produce nothing
   dump_ui_node(xml, h.root(), 65);
@@ -244,7 +244,7 @@ TEST(dump_depth_guard) {
 
 TEST(dump_unrendered_root) {
   ImmTestHarness h;
-  h.layout_and_render();
+  h.layout_only();
   h.root().get<UIComponent>().was_rendered_to_screen = false;
 
   std::string xml;
@@ -266,7 +266,7 @@ TEST(imm_single_div_with_label) {
                .with_size(ComponentSize{pixels(200), pixels(40)})
                .with_debug_name("greeting"));
 
-  h.layout_and_render();
+  h.layout_only();
   std::string xml = h.dump();
 
   // Root should contain the child div
@@ -297,7 +297,7 @@ TEST(imm_vstack_with_children) {
                .with_size(ComponentSize{pixels(300), pixels(40)})
                .with_debug_name("item2"));
 
-  h.layout_and_render();
+  h.layout_only();
   std::string xml = h.dump();
 
   CHECK(xml.find("name=\"column\"") != std::string::npos);
@@ -333,7 +333,7 @@ TEST(imm_hstack_buttons) {
                   .with_size(ComponentSize{pixels(100), pixels(40)})
                   .with_debug_name("btn_cancel"));
 
-  h.layout_and_render();
+  h.layout_only();
   std::string xml = h.dump();
 
   CHECK(xml.find("name=\"toolbar\"") != std::string::npos);
@@ -389,7 +389,7 @@ TEST(imm_nested_card_layout) {
                .with_size(ComponentSize{percent(1.0f), pixels(30)})
                .with_debug_name("opt_b"));
 
-  h.layout_and_render();
+  h.layout_only();
   std::string xml = h.dump();
 
   // Verify the full hierarchy exists
@@ -427,7 +427,7 @@ TEST(imm_hidden_div) {
                .with_size(ComponentSize{pixels(100), pixels(40)})
                .with_debug_name("hidden_div"));
 
-  h.layout_and_render();
+  h.layout_only();
 
   // Manually hide the div after layout
   auto &entities = h.coll.get_entities();
@@ -451,7 +451,7 @@ TEST(imm_scroll_view) {
                .with_size(ComponentSize{pixels(200), pixels(100)})
                .with_debug_name("scrollable"));
 
-  h.layout_and_render();
+  h.layout_only();
 
   // Add scroll state after layout
   auto &entities = h.coll.get_entities();
@@ -477,7 +477,7 @@ TEST(imm_integer_coords) {
                .with_size(ComponentSize{pixels(123), pixels(45)})
                .with_debug_name("precise"));
 
-  h.layout_and_render();
+  h.layout_only();
   std::string xml = h.dump();
 
   // Coordinates should be integer-formatted (no decimal points in the values)
@@ -496,7 +496,7 @@ TEST(imm_leaf_self_closing) {
                .with_size(ComponentSize{pixels(100), pixels(50)})
                .with_debug_name("leaf"));
 
-  h.layout_and_render();
+  h.layout_only();
 
   // Find the leaf node and dump just it
   auto &entities = h.coll.get_entities();

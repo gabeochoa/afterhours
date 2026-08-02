@@ -37,7 +37,7 @@ TEST(unstyled_element_is_transparent) {
   ImmTestHarness h;
   auto d = div(h.context(), mk(h.root(), 0),
                ComponentConfig{}.with_debug_name("plain"));
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK(d.ent().has<HasColor>());
   if (d.ent().has<HasColor>())
@@ -50,7 +50,7 @@ TEST(unstyled_element_is_transparent) {
 TEST(opacity_component_always_present) {
   ImmTestHarness h;
   auto d = div(h.context(), mk(h.root(), 0), ComponentConfig{});
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK(d.ent().has<HasOpacity>());
   if (d.ent().has<HasOpacity>())
@@ -64,7 +64,7 @@ TEST(opacity_component_always_present) {
 TEST(modifiers_reset_when_unset) {
   ImmTestHarness h;
   auto d = div(h.context(), mk(h.root(), 0), ComponentConfig{});
-  h.layout_and_render();
+  h.layout_only();
 
   if (d.ent().has<HasUIModifiers>()) {
     auto &m = d.ent().get<HasUIModifiers>();
@@ -81,7 +81,7 @@ TEST(modifiers_applied_when_set) {
   ImmTestHarness h;
   auto d = div(h.context(), mk(h.root(), 0),
                ComponentConfig{}.with_scale(1.5f).with_translate(10.f, 20.f));
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK(d.ent().has<HasUIModifiers>());
   if (d.ent().has<HasUIModifiers>()) {
@@ -101,7 +101,7 @@ TEST(custom_background_applies) {
   const Color teal{60, 150, 150, 255};
   auto d = div(h.context(), mk(h.root(), 0),
                ComponentConfig{}.with_custom_background(teal));
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK(d.ent().has<HasColor>());
   if (d.ent().has<HasColor>())
@@ -112,7 +112,7 @@ TEST(theme_usage_background_applies) {
   ImmTestHarness h;
   auto d = div(h.context(), mk(h.root(), 0),
                ComponentConfig{}.with_background(Theme::Usage::Primary));
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK(d.ent().has<HasColor>());
   if (d.ent().has<HasColor>())
@@ -128,7 +128,7 @@ TEST(hover_color_applies) {
   auto d = div(h.context(), mk(h.root(), 0),
                ComponentConfig{}.with_custom_background(base).with_custom_hover_bg(
                    hov));
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK(d.ent().has<HasColor>());
   if (d.ent().has<HasColor>()) {
@@ -143,7 +143,7 @@ TEST(opacity_applies_when_set) {
   ImmTestHarness h;
   auto d = div(h.context(), mk(h.root(), 0),
                ComponentConfig{}.with_opacity(0.35f));
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK(d.ent().has<HasOpacity>());
   if (d.ent().has<HasOpacity>())
@@ -156,7 +156,7 @@ TEST(rounded_corners_apply) {
                ComponentConfig{}
                    .with_rounded_corners(std::bitset<4>(0b1111))
                    .with_roundness(0.25f));
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK(d.ent().has<HasRoundedCorners>());
 }
@@ -165,7 +165,7 @@ TEST(cursor_applies_when_set) {
   ImmTestHarness h;
   auto d = div(h.context(), mk(h.root(), 0),
                ComponentConfig{}.with_cursor(CursorType::Pointer));
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK(d.ent().has<HasCursor>());
   if (d.ent().has<HasCursor>())
@@ -187,7 +187,7 @@ TEST(restyle_empty_config_changes_nothing) {
                    .with_opacity(0.4f)
                    .with_scale(1.5f));
   d.restyle(h.context(), ComponentConfig{});
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK(same_color(d.ent().get<HasColor>().color(), teal));
   CHECK_APPROX(d.ent().get<HasOpacity>().value, 0.4f);
@@ -214,11 +214,11 @@ TEST(restyle_does_not_leak_across_frames) {
   };
 
   auto a = build_frame(true);
-  h.layout_and_render();
+  h.layout_only();
   CHECK(same_color(a.ent().get<HasColor>().color(), red));
 
   auto b = build_frame(false);
-  h.layout_and_render();
+  h.layout_only();
   CHECK(b.id() == a.id()); // element really was reused
   CHECK(same_color(b.ent().get<HasColor>().color(), base));
 }
@@ -230,7 +230,7 @@ TEST(restyle_partial_leaves_other_fields) {
   auto d = div(h.context(), mk(h.root(), 0),
                ComponentConfig{}.with_custom_background(teal));
   d.restyle(h.context(), ComponentConfig{}.with_opacity(0.25f));
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK_APPROX(d.ent().get<HasOpacity>().value, 0.25f);
   CHECK(same_color(d.ent().get<HasColor>().color(), teal)); // untouched
@@ -248,7 +248,7 @@ TEST(restyle_refreshes_auto_contrast_hint) {
                    .with_custom_background(dark)
                    .with_auto_text_color(true));
   d.restyle(h.context(), ComponentConfig{}.with_custom_background(light));
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK(d.ent().has<HasLabel>());
   if (d.ent().has<HasLabel>()) {
@@ -271,7 +271,7 @@ TEST(restyle_background_custom_and_theme) {
   auto b = div(h.context(), mk(h.root(), 1), ComponentConfig{});
   b.restyle(h.context(),
             ComponentConfig{}.with_background(Theme::Usage::Primary));
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK(same_color(a.ent().get<HasColor>().color(), navy));
   CHECK(same_color(b.ent().get<HasColor>().color(),

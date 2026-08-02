@@ -72,7 +72,7 @@ TEST(d2_expand_row_pins_trailing_element) {
   auto count = div(h.context(), mk(row.ent(), 2),
                    ComponentConfig{}.with_size(
                        ComponentSize{pixels(24), pixels(40)}));
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK_APPROX(rect_of(icon).width, 18.f);
   // 300 - 18 - 24. The whole complaint is that this comes back as 300.
@@ -105,7 +105,7 @@ TEST(d2_expand_row_under_percent_parent) {
   auto count = div(h.context(), mk(row.ent(), 2),
                    ComponentConfig{}.with_size(
                        ComponentSize{pixels(24), pixels(40)}));
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK_APPROX(rect_of(label).width, 358.f); // 400 - 18 - 24
 
@@ -140,7 +140,7 @@ TEST(d2_expand_rows_share_one_right_edge) {
   // Different leading slots: one row has an icon, the other a wider chevron.
   auto count_a = make_row(0, pixels(18));
   auto count_b = make_row(1, pixels(40));
-  h.layout_and_render();
+  h.layout_only();
 
   Rectangle a = rect_of(count_a), b = rect_of(count_b);
   CHECK_APPROX(a.x + a.width, b.x + b.width);
@@ -162,7 +162,7 @@ TEST(d2_expand_row_inside_button_with_children) {
   auto filename = div(h.context(), mk(row.ent(), 1),
                       ComponentConfig{}.with_size(
                           ComponentSize{expand(), pixels(30)}));
-  h.layout_and_render();
+  h.layout_only();
 
   // Written against the button's CONTENT box, not its outer rect: unlike div(),
   // button() carries default padding, so hardcoding 300 - 16 here fails at 252
@@ -215,7 +215,7 @@ TEST(d24_tab_container_respects_parent_origin) {
   auto bar = tab_container(h.context(), mk(panel.ent(), 0), labels, active,
                            ComponentConfig{}.with_size(
                                ComponentSize{percent(1.0f), pixels(48)}));
-  h.layout_and_render();
+  h.layout_only();
 
   Rectangle p = rect_of(panel), b = rect_of(bar);
   CHECK_APPROX(b.y, p.y); // 120 if parented, 0 if screen-absolute
@@ -250,7 +250,7 @@ TEST(d24_toggle_switch_stays_within_its_row) {
   auto below = div(h.context(), mk(column.ent(), 2),
                    ComponentConfig{}.with_size(
                        ComponentSize{pixels(300), pixels(40)}));
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK_APPROX(rect_of(toggle).height, 40.f);
   // The row below must not be pushed down by the toggle's internals.
@@ -274,7 +274,7 @@ TEST(d24_tab_container_under_absolute_parent) {
   auto bar = tab_container(h.context(), mk(panel.ent(), 0), labels, active,
                            ComponentConfig{}.with_size(
                                ComponentSize{percent(1.0f), pixels(48)}));
-  h.layout_and_render();
+  h.layout_only();
 
   Rectangle p = rect_of(panel), b = rect_of(bar);
   CHECK_APPROX(b.x, p.x); // 150, not 0
@@ -305,10 +305,95 @@ TEST(d24_toggle_switch_in_narrow_parent_does_not_wrap) {
   auto below = div(h.context(), mk(column.ent(), 2),
                    ComponentConfig{}.with_size(
                        ComponentSize{pixels(120), pixels(30)}));
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK_APPROX(rect_of(toggle).height, 30.f);
   CHECK_APPROX(rect_of(below).y, rect_of(above).y + 60.f);
+}
+
+// ===========================================================================
+// D6b -- the render path, now that there is a harness for it
+//
+// ImmTestHarness::layout_only() runs autolayout and stops, so every test in
+// this repo that said "and render" rendered nothing. h.render() drives
+// RenderImm for real against the `none` backend, which records draw calls
+// instead of touching a GPU.
+//
+// This file is deliberately NOT in RAYLIB_TESTS: with a real backend the draws
+// go to raylib and nothing is recorded.
+// ===========================================================================
+
+// Smoke test for the harness itself. If this ever goes quiet, every render
+// assertion below is silently vacuous -- which is exactly the trap that made
+// the first D6 test worthless.
+TEST(d6b_render_harness_actually_draws) {
+  ImmTestHarness h;
+  div(h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(200), pixels(40)})
+          .with_label("hello")
+          .with_custom_background(Color{10, 20, 30, 255}));
+  h.render();
+
+  ui_test::check(!h.drawn("rectangle").empty() ||
+                     !h.drawn("rectangle_rounded").empty(),
+                 "a background rect was drawn", __FILE__, __LINE__);
+
+  auto texts = h.drawn("text");
+  ui_test::check(!texts.empty(), "label text was drawn", __FILE__, __LINE__);
+  if (!texts.empty())
+    ui_test::check(texts[0].text == "hello", "drawn text is the label",
+                   __FILE__, __LINE__);
+}
+
+// D6: the reported infinite hang. The layout half is already covered by the
+// d24 tab tests; this is the render half, which nothing could reach before.
+// A label far too wide for its box, with Ellipsis, on an expand()-sized
+// element -- the exact combination the report named.
+TEST(d6_ellipsis_with_expand_terminates_and_truncates) {
+  ImmTestHarness h;
+  auto row = div(h.context(), mk(h.root(), 0),
+                 ComponentConfig{}
+                     .with_size(ComponentSize{pixels(120), pixels(20)})
+                     .with_flex_direction(FlexDirection::Row));
+  const std::string long_label =
+      "a really quite long label that cannot possibly fit in 120 pixels";
+  div(h.context(), mk(row.ent(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{expand(), pixels(20)})
+          .with_label(long_label)
+          .with_text_overflow(TextOverflow::Ellipsis));
+  h.render();
+
+  // Reaching here at all is the headline: the report says this never returns.
+  auto texts = h.drawn("text");
+  ui_test::check(!texts.empty(), "truncated label was drawn", __FILE__,
+                 __LINE__);
+  if (!texts.empty()) {
+    const std::string &drawn = texts[0].text;
+    ui_test::check(drawn.size() < long_label.size(), "label was shortened",
+                   __FILE__, __LINE__);
+    ui_test::check(drawn.size() >= 3 &&
+                       drawn.compare(drawn.size() - 3, 3, "...") == 0,
+                   "shortened label ends in an ellipsis", __FILE__, __LINE__);
+  }
+}
+
+// Same, with children() sizing -- the report names both.
+TEST(d6_ellipsis_with_children_sizing_terminates) {
+  ImmTestHarness h;
+  auto box = div(h.context(), mk(h.root(), 0),
+                 ComponentConfig{}.with_size(
+                     ComponentSize{children(), pixels(20)}));
+  div(h.context(), mk(box.ent(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{children(), pixels(20)})
+          .with_label("another label that is much too long to fit")
+          .with_text_overflow(TextOverflow::Ellipsis));
+  h.render();
+
+  ui_test::check(!h.drawn("text").empty(), "children()+ellipsis rendered",
+                 __FILE__, __LINE__);
 }
 
 int main() { return ui_test::run_registered_tests("Downstream Gaps"); }

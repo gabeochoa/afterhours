@@ -794,7 +794,26 @@ renderer's binary search for the longest fitting prefix runs against a 0-width
 container before layout resolves and never terminates. Only safe on fixed-pixel
 widths today. Also crash class; pairs naturally with D5.
 
-**Partly cleared, and blocked on D6b for the rest.**
+**Resolved: no hang, and truncation works.** Now covered end to end by
+`d6_ellipsis_with_expand_terminates_and_truncates` and
+`d6_ellipsis_with_children_sizing_terminates`, which run the real renderer via
+the D6b harness: the long label comes back shortened and ending in `...`, from
+an `expand()`-sized element, in finite time.
+
+Getting there took two passes, both worth remembering. The first version was
+vacuous because the harness never rendered (D6b). The second still was, more
+subtly: the `none` backend's `measure_text` returned `{0,0}`, so
+`text_size.x <= max_width` was trivially true and the truncation code returned
+early at `rendering.h:707` without ever reaching the binary search. Both
+versions were green. Only installing a real measure function made the two
+truncation assertions fail-then-pass, which is the only evidence that they
+test anything.
+
+Original analysis holds: the search at `rendering.h:722-737` terminates, and
+the zero-width theory in the report cannot reach the loop because `max_width`
+goes negative and returns at `:702`.
+
+**Kept below for context.**
 
 The *layout* half does not hang. `d24_tab_container_respects_parent_origin` and
 friends exercise exactly the suspect combination — `tab_container` sets
@@ -826,12 +845,39 @@ colour resolution, opacity, per-side borders, `on_draw_fg`. That is also where
 several open items live (D1 blending, D6 truncation, D14 disabled dimming), so
 it blocks more than it looks.
 
-Two jobs, in order:
-1. Rename to `layout_only()` so it stops implying coverage it does not provide.
-2. Add a real render harness. The text path needs only a `measure_text` seam
-   (the harness already stubs one for layout) plus a recording draw sink —
-   assert on the *draw calls* rather than pixels, and no GPU is needed. That
-   unlocks D6 and D14 without touching a backend.
+**DONE.** Three parts:
+
+1. Renamed to `layout_only()` across all 66 call sites, so it stops implying
+   coverage it does not provide.
+2. The `none` backend now **records** draw calls instead of `log_error`-ing
+   them (`backends/none/drawing_helpers.h`). It exists so the library builds
+   with no GPU; logging made it useless for testing. Recording costs nothing
+   and needs no new abstraction — the backend switch in `drawing_helpers.h`
+   was already the seam. Only the ops the UI render path emits are recorded;
+   the rest still log, because an unimplemented call reached by accident
+   should stay loud.
+3. `ImmTestHarness::render()` drives `RenderImm` for real and returns the
+   recorded calls; `drawn(op)` filters them.
+
+`AFTER_HOURS_BACKEND_NONE` is defined by `drawing_helpers.h` when it falls
+back, so `render()` is *compiled out* under a real backend rather than offered
+and silently recording nothing. Render-asserting suites must stay out of
+`RAYLIB_TESTS`; `downstream_gaps_test` was moved out.
+
+**The bit that mattered most:** `none`'s `measure_text` returned `{0,0}` while
+its own warning told callers to "provide your own through
+`set_measure_text_fn()`" — a setter that did not exist for this backend.
+`AutoLayout` has such a hook, but the renderer calls the free function
+directly. So every measured-width branch in `rendering.h` took the it-fits
+path, and a truncation test passed while testing nothing. Added the seam to
+`backends/none/font_helper.h` and installed the harness's existing layout stub
+through it, so layout and render finally agree on text width.
+
+Verified: 232 tests across 18 suites green, catalog 50/50.
+
+Now unblocked: D14 (disabled dimming) is directly testable. D1 is not — it is a
+pipeline-state bug, invisible at the draw-call level, and still needs a real
+sokol target.
 
 ### D7. Nested scroll containers stop rendering children
 **floatinghotel F7b + F13.** A `ScrollPanel` nested inside another scroll

@@ -5,6 +5,7 @@
 #include <bitset>
 #include <cstdint>
 #include <filesystem>
+#include <string>
 #include <vector>
 
 #include "../../developer.h"
@@ -15,29 +16,64 @@
 
 namespace afterhours {
 
-inline void draw_text_ex(const afterhours::Font, const char *,
-                         const Vector2Type, const float, const float,
-                         const Color, const float = 0.0f, const float = 0.0f,
-                         const float = 0.0f) {
-  log_error("@notimplemented draw_text_ex");
+// ---------------------------------------------------------------------------
+// Draw recording
+//
+// This backend exists so the library builds and runs with no GPU. Logging an
+// error per draw call made it useless for testing the render path, which is a
+// large part of why rendering.h had no coverage at all -- the imm test harness
+// only ever ran autolayout.
+//
+// Recording instead costs nothing and lets a test assert on what was drawn
+// (which text, which colour, which rect) with no window, no font, no GPU. Only
+// the ops the UI render path actually emits are recorded; the rest still log,
+// because an unimplemented call reached by accident should still be loud.
+//
+// Tests are responsible for clearing between frames -- see clear_draw_calls().
+// ---------------------------------------------------------------------------
+struct DrawCall {
+  std::string op;
+  RectangleType rect{};
+  Color color{};
+  std::string text;
+};
+
+inline std::vector<DrawCall> &draw_calls() {
+  static std::vector<DrawCall> calls;
+  return calls;
 }
-inline void draw_text(const char *, const float, const float, const float,
-                      const Color) {
-  log_error("@notimplemented draw_text");
+
+inline void clear_draw_calls() { draw_calls().clear(); }
+
+inline void draw_text_ex(const afterhours::Font, const char *text,
+                         const Vector2Type position, const float,
+                         const float, const Color color, const float = 0.0f,
+                         const float = 0.0f, const float = 0.0f) {
+  draw_calls().push_back({"text",
+                          RectangleType{position.x, position.y, 0.f, 0.f},
+                          color,
+                          text ? text : ""});
 }
-inline void draw_rectangle(const RectangleType, const Color) {
-  log_error("@notimplemented draw_rectangle");
+inline void draw_text(const char *text, const float x, const float y,
+                      const float, const Color color) {
+  draw_calls().push_back(
+      {"text", RectangleType{x, y, 0.f, 0.f}, color, text ? text : ""});
 }
-inline void draw_rectangle_outline(const RectangleType, const Color) {
-  log_error("@notimplemented draw_rectangle_outline");
+inline void draw_rectangle(const RectangleType rect, const Color color) {
+  draw_calls().push_back({"rectangle", rect, color, ""});
 }
-inline void draw_rectangle_outline(const RectangleType, const Color,
+inline void draw_rectangle_outline(const RectangleType rect,
+                                   const Color color) {
+  draw_calls().push_back({"rectangle_outline", rect, color, ""});
+}
+inline void draw_rectangle_outline(const RectangleType rect, const Color color,
                                    const float) {
-  log_error("@notimplemented draw_rectangle_outline");
+  draw_calls().push_back({"rectangle_outline", rect, color, ""});
 }
-inline void draw_rectangle_rounded(const RectangleType, const float, const int,
-                                   const Color, const std::bitset<4>) {
-  log_error("@notimplemented draw_rectangle_rounded");
+inline void draw_rectangle_rounded(const RectangleType rect, const float,
+                                   const int, const Color color,
+                                   const std::bitset<4>) {
+  draw_calls().push_back({"rectangle_rounded", rect, color, ""});
 }
 inline void draw_rectangle_rounded_rotated(const RectangleType, const float,
                                            const int, const Color,

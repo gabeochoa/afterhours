@@ -31,7 +31,7 @@ TEST(slider_percent_track_handle_high_value) {
              .with_size(ComponentSize{percent(0.9f), pixels(36)})
              .with_debug_name("sl"),
          SliderHandleValueLabelPosition::None);
-  h.layout_and_render();
+  h.layout_only();
 
   UIComponent *track = h.find("slider_background");
   UIComponent *handle = h.find("slider_handle");
@@ -64,7 +64,7 @@ TEST(slider_percent_track_handle_low_value) {
              .with_size(ComponentSize{percent(0.9f), pixels(36)})
              .with_debug_name("sl"),
          SliderHandleValueLabelPosition::None);
-  h.layout_and_render();
+  h.layout_only();
 
   UIComponent *track = h.find("slider_background");
   UIComponent *handle = h.find("slider_handle");
@@ -92,7 +92,7 @@ TEST(slider_handle_monotonic_in_value) {
                .with_size(ComponentSize{percent(0.9f), pixels(36)})
                .with_debug_name("sl"),
            SliderHandleValueLabelPosition::None);
-    h.layout_and_render();
+    h.layout_only();
     UIComponent *handle = h.find("slider_handle");
     if (!handle)
       return -1.f;
@@ -125,14 +125,14 @@ TEST(slider_reports_unchanged_without_interaction) {
              .with_size(ComponentSize{percent(0.9f), pixels(36)})
              .with_debug_name("sl"),
          SliderHandleValueLabelPosition::None);
-  h.layout_and_render();
+  h.layout_only();
 
   auto result = slider(h.context(), mk(row.ent(), 0), value,
                        ComponentConfig{}
                            .with_size(ComponentSize{percent(0.9f), pixels(36)})
                            .with_debug_name("sl"),
                        SliderHandleValueLabelPosition::None);
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK(!static_cast<bool>(result)); // no interaction => not changed
 }

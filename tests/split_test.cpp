@@ -30,7 +30,7 @@ TEST(vsplit_fixed_expand_fixed) {
   auto [title, main, status] =
       vsplit(h.context(), mk(h.root(), 0),
              {pixels(30), expand(1.f), pixels(50)});
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK_APPROX(rect_of(title).height, 30.f);
   CHECK_APPROX(rect_of(main).height, 520.f); // 600 - 30 - 50
@@ -48,7 +48,7 @@ TEST(vsplit_regions_tile_in_declared_order) {
   ImmTestHarness h;
   auto [a, b, c] = vsplit(h.context(), mk(h.root(), 0),
                           {pixels(100), pixels(200), expand(1.f)});
-  h.layout_and_render();
+  h.layout_only();
 
   Rectangle ra = rect_of(a), rb = rect_of(b), rc = rect_of(c);
   CHECK_APPROX(ra.y, 0.f);
@@ -62,7 +62,7 @@ TEST(vsplit_expand_weights_share_remainder) {
   ImmTestHarness h;
   auto [head, small, big] = vsplit(h.context(), mk(h.root(), 0),
                                    {pixels(100), expand(1.f), expand(3.f)});
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK_APPROX(rect_of(head).height, 100.f);
   CHECK_APPROX(rect_of(small).height, 125.f); // (600-100) * 1/4
@@ -74,7 +74,7 @@ TEST(hsplit_sidebar_and_content) {
   ImmTestHarness h;
   auto [sidebar, content] =
       hsplit(h.context(), mk(h.root(), 0), {pixels(200), expand(1.f)});
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK_APPROX(rect_of(sidebar).width, 200.f);
   CHECK_APPROX(rect_of(content).width, 600.f);
@@ -88,7 +88,7 @@ TEST(hsplit_percent_sizes) {
   ImmTestHarness h;
   auto [left, right] = hsplit(h.context(), mk(h.root(), 0),
                               {percent(0.25f), percent(0.75f)});
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK_APPROX(rect_of(left).width, 200.f);
   CHECK_APPROX(rect_of(right).width, 600.f);
@@ -100,7 +100,7 @@ TEST(split_respects_container_config) {
   auto [top, bottom] = vsplit(
       h.context(), mk(h.root(), 0), {expand(1.f), expand(1.f)},
       ComponentConfig{}.with_size(ComponentSize{pixels(400), pixels(200)}));
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK_APPROX(rect_of(top).width, 400.f);
   CHECK_APPROX(rect_of(top).height, 100.f);
@@ -114,7 +114,7 @@ TEST(splits_nest) {
       vsplit(h.context(), mk(h.root(), 0), {pixels(100), expand(1.f)});
   auto [nav, content] =
       hsplit(h.context(), mk(body.ent(), 0), {pixels(150), expand(1.f)});
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK_APPROX(rect_of(header).height, 100.f);
   CHECK_APPROX(rect_of(nav).width, 150.f);
@@ -130,7 +130,7 @@ TEST(split_regions_accept_children) {
       hsplit(h.context(), mk(h.root(), 0), {expand(1.f), expand(1.f)});
   auto b = button(h.context(), mk(left.ent(), 0), "Click Me");
   div(h.context(), mk(right.ent(), 0), "Label");
-  h.layout_and_render();
+  h.layout_only();
 
   // The button landed inside the left region, not at the root.
   CHECK(b.cmp().parent == left.ent().id);
@@ -146,7 +146,7 @@ TEST(split_count_is_deduced) {
                       expand(1.f)},
                      ComponentConfig{}.with_size(
                          ComponentSize{pixels(500), pixels(100)}));
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK(two.size() == 2);
   CHECK(five.size() == 5);

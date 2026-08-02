@@ -64,7 +64,7 @@ TEST(confirm_dialog_message_above_buttons) {
                  "This is a reasonably long confirmation message that should "
                  "wrap across several lines inside the dialog panel.",
                  "Apply", "Cancel");
-  h.layout_and_render();
+  h.layout_only();
   check_dialog_layout(h, /*expected_buttons=*/2);
 }
 
@@ -75,7 +75,7 @@ TEST(confirm_danger_lays_out_two_buttons) {
   modal::confirm_danger(h.context(), mk(h.root(), 0), open, "Delete save?",
                         "This permanently deletes the file and cannot be undone.",
                         "Delete", "Cancel");
-  h.layout_and_render();
+  h.layout_only();
   check_dialog_layout(h, /*expected_buttons=*/2);
 }
 

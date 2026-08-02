@@ -34,7 +34,7 @@ TEST(progress_bar_percent_sizing_fills_track) {
                    .with_size(ComponentSize{percent(0.5f), percent(0.7f)})
                    .with_debug_name("pb"),
                ProgressBarLabelStyle::Percentage);
-  h.layout_and_render();
+  h.layout_only();
 
   UIComponent *track = h.find("progress_track");
   UIComponent *fill = h.find("progress_fill");
@@ -63,7 +63,7 @@ TEST(progress_bar_pixel_sizing_fills_track) {
                    .with_size(ComponentSize{pixels(300), pixels(28)})
                    .with_debug_name("pb"),
                ProgressBarLabelStyle::Percentage);
-  h.layout_and_render();
+  h.layout_only();
 
   UIComponent *track = h.find("progress_track");
   UIComponent *fill = h.find("progress_fill");
@@ -91,7 +91,7 @@ TEST(progress_bar_full_value_fills_width) {
                    .with_size(ComponentSize{percent(1.0f), pixels(28)})
                    .with_debug_name("pb"),
                ProgressBarLabelStyle::Percentage);
-  h.layout_and_render();
+  h.layout_only();
 
   UIComponent *track = h.find("progress_track");
   UIComponent *fill = h.find("progress_fill");

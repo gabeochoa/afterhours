@@ -21,6 +21,7 @@
 #include <afterhours/src/plugins/e2e_testing/ui_commands.h>
 #include <afterhours/src/plugins/ui/component_init.h>
 #include <afterhours/src/plugins/ui/imm_components.h>
+#include <afterhours/src/plugins/ui/rendering.h>
 
 #include <algorithm>
 #include <cmath>
@@ -106,6 +107,7 @@ struct ImmTestHarness {
   Entity *ctx_entity = nullptr;
   UIContext<TestInputAction> *ctx = nullptr;
   Entity *root_entity = nullptr;
+  Entity *font_entity = nullptr;
 
   ImmTestHarness() : coll(UICollectionHolder::get().collection) {
     imm::clear_existing_ui_elements();
@@ -137,6 +139,20 @@ struct ImmTestHarness {
           window_manager::ProvidesCurrentResolution>(res);
     }
 
+#ifdef AFTER_HOURS_BACKEND_NONE
+    // The renderer calls the backend's free measure_text rather than going
+    // through TextMeasureCache, so it needs the SAME stub installed separately
+    // or the two disagree. Without this the `none` backend returns {0,0} and
+    // every "does the text fit" branch takes the it-fits path, which makes any
+    // render assertion about truncation quietly vacuous.
+    set_measure_text_fn([](const char *text, float font_size, float) {
+      return Vector2Type{
+          static_cast<float>(std::string_view(text ? text : "").size()) *
+              font_size * 0.5f,
+          font_size};
+    });
+#endif
+
     ctx_entity = &coll.createEntity();
     ctx = &ctx_entity->addComponent<UIContext<TestInputAction>>();
     ctx->screen_width = 800;
@@ -161,7 +177,7 @@ struct ImmTestHarness {
   UIContext<TestInputAction> &context() { return *ctx; }
   Entity &root() { return *root_entity; }
 
-  void layout_and_render() {
+  void layout_only() {
     coll.merge_entity_arrays();
     auto &entities = coll.get_entities();
     EntityID max_id = 0;
@@ -179,6 +195,45 @@ struct ImmTestHarness {
       if (e && e->has<UIComponent>())
         e->get<UIComponent>().was_rendered_to_screen = true;
   }
+
+  // Lay out, then actually run the renderer and return what it drew.
+  //
+  // layout_only() deliberately stops before rendering, which left everything
+  // in rendering.h -- ellipsis truncation, colour resolution, opacity, borders
+  // -- with no coverage at all. This drives RenderImm for real against the
+  // `none` backend, which records draw calls instead of touching a GPU, so a
+  // test can assert on what was drawn.
+  //
+  // Only available in a TU built WITHOUT a real backend macro: with
+  // AFTER_HOURS_USE_RAYLIB the draws go to raylib and nothing is recorded, so
+  // this is compiled out rather than offered and quietly returning nothing.
+  // Keep render-asserting suites out of RAYLIB_TESTS in tests/Makefile.
+#ifdef AFTER_HOURS_BACKEND_NONE
+  const std::vector<DrawCall> &render() {
+    layout_only();
+
+    if (!font_entity) {
+      font_entity = &coll.createEntity();
+      auto &fm = font_entity->addComponent<FontManager>();
+      fm.load_font(UIComponent::DEFAULT_FONT, get_default_font());
+    }
+
+    clear_draw_calls();
+    RenderImm<TestInputAction> renderer;
+    renderer.for_each_with_derived(*root_entity, *ctx,
+                                   font_entity->get<FontManager>(), 0.f);
+    return draw_calls();
+  }
+
+  // Every recorded draw of a given op, in paint order.
+  std::vector<DrawCall> drawn(const std::string &op) {
+    std::vector<DrawCall> out;
+    for (const auto &c : draw_calls())
+      if (c.op == op)
+        out.push_back(c);
+    return out;
+  }
+#endif // AFTER_HOURS_BACKEND_NONE
 
   // First UIComponent whose debug name == `name` (nullptr if none).
   UIComponent *find(const std::string &name) {

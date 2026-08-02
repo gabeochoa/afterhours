@@ -34,7 +34,7 @@ TEST(stepper_multi_visible_labels_separated) {
               .with_font(UIComponent::DEFAULT_FONT, pixels(18))
               .with_debug_name("st"),
           /*num_visible=*/3);
-  h.layout_and_render();
+  h.layout_only();
 
   UIComponent *labels = h.find("stepper_labels");
   CHECK(labels != nullptr);
@@ -61,7 +61,7 @@ TEST(stepper_single_visible_no_gap) {
           ComponentConfig{}
               .with_size(ComponentSize{pixels(300), pixels(48)})
               .with_debug_name("st"));
-  h.layout_and_render();
+  h.layout_only();
 
   UIComponent *labels = h.find("stepper_labels");
   CHECK(labels != nullptr);

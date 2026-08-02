@@ -92,7 +92,6 @@ RAYLIB_TESTS := \
 	size_constraints_test \
 	slider_test \
 	split_test \
-	downstream_gaps_test \
 	stepper_test \
 	styling_test \
 	tab_container_test \

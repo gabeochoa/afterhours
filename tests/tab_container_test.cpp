@@ -26,7 +26,7 @@ TEST(tab_container_long_label_not_truncated) {
                 ComponentConfig{}
                     .with_size(ComponentSize{pixels(800), pixels(44)})
                     .with_debug_name("tabs"));
-  h.layout_and_render();
+  h.layout_only();
 
   UIComponent *long_tab = h.find("tab_2"); // the "LongCategoryName" tab
   CHECK(long_tab != nullptr);
@@ -47,7 +47,7 @@ TEST(tab_container_equal_labels_even_split) {
                 ComponentConfig{}
                     .with_size(ComponentSize{pixels(600), pixels(44)})
                     .with_debug_name("tabs"));
-  h.layout_and_render();
+  h.layout_only();
 
   UIComponent *t0 = h.find("tab_0");
   UIComponent *t1 = h.find("tab_1");

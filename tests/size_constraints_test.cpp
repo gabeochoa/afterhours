@@ -41,7 +41,7 @@ TEST(unset_constraints_do_not_clamp) {
       ComponentConfig{}
           .with_size(ComponentSize{percent(1.f), percent(1.f)})
           .with_debug_name("child"));
-  h.layout_and_render();
+  h.layout_only();
 
   UIComponent *child = h.find("child");
   CHECK(child != nullptr);
@@ -60,7 +60,7 @@ TEST(max_width_caps_percent_child) {
           .with_size(ComponentSize{percent(1.f), pixels(40)})
           .with_max_width(pixels(150))
           .with_debug_name("child"));
-  h.layout_and_render();
+  h.layout_only();
 
   UIComponent *child = h.find("child");
   CHECK(child != nullptr);
@@ -79,7 +79,7 @@ TEST(min_width_raises_small_child) {
           .with_size(ComponentSize{pixels(50), pixels(40)})
           .with_min_width(pixels(120))
           .with_debug_name("child"));
-  h.layout_and_render();
+  h.layout_only();
 
   UIComponent *child = h.find("child");
   CHECK(child != nullptr);
@@ -97,7 +97,7 @@ TEST(non_binding_constraint_is_noop) {
           .with_min_width(pixels(100))
           .with_max_width(pixels(300))
           .with_debug_name("child"));
-  h.layout_and_render();
+  h.layout_only();
 
   UIComponent *child = h.find("child");
   CHECK(child != nullptr);
@@ -114,7 +114,7 @@ TEST(max_height_caps_percent_child) {
           .with_size(ComponentSize{pixels(80), percent(1.f)})
           .with_max_height(pixels(25))
           .with_debug_name("child"));
-  h.layout_and_render();
+  h.layout_only();
 
   UIComponent *child = h.find("child");
   CHECK(child != nullptr);
@@ -134,7 +134,7 @@ TEST(percent_constraint_resolves_against_parent) {
           .with_size(ComponentSize{percent(1.f), pixels(40)})
           .with_max_width(percent(0.25f))
           .with_debug_name("child"));
-  h.layout_and_render();
+  h.layout_only();
 
   UIComponent *child = h.find("child");
   CHECK(child != nullptr);
@@ -159,7 +159,7 @@ TEST(widgets_accept_bare_string_config) {
   auto row = make_row(h);
   auto b = button(h.context(), mk(row.ent(), 0), "Click Me");
   auto d = div(h.context(), mk(row.ent(), 1), "Hello");
-  h.layout_and_render();
+  h.layout_only();
 
   CHECK(b.ent().has<HasLabel>());
   if (b.ent().has<HasLabel>())
