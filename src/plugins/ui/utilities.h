@@ -472,7 +472,10 @@ static input::ProvidesInputMapping::GameMapping default_keymap() {
     return mapping;
 }
 
-#if defined(AFTER_HOURS_USE_RAYLIB) || defined(AFTER_HOURS_USE_METAL)
+// NOTE: raylib-only. The body uses raylib's render-texture API
+// (render_texture.texture / draw_texture_pro); the Metal/sokol backend drives
+// its own frame loop (see floatinghotel main.cpp), so run() is not built there.
+#if defined(AFTER_HOURS_USE_RAYLIB)
 /// Opens a window, wires input + UI, and runs the frame loop until the window
 /// closes. Returns a main()-style exit code.
 ///
