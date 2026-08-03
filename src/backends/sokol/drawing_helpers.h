@@ -1121,8 +1121,11 @@ inline void begin_texture_mode(graphics::RenderTextureType &rt) {
   };
   // clang-format on
   sgl_load_matrix(gl_to_metal);
-  sgl_ortho(0.0f, static_cast<float>(rt.width),
-            static_cast<float>(rt.height), 0.0f, -1.0f, 1.0f);
+  // Logical, not physical: a supersampled target rasterises the same drawing
+  // into more pixels rather than shrinking it into a corner.
+  const int s = rt.scale > 0 ? rt.scale : 1;
+  sgl_ortho(0.0f, static_cast<float>(rt.width / s),
+            static_cast<float>(rt.height / s), 0.0f, -1.0f, 1.0f);
 
   graphics::metal_detail::g_in_texture_mode = true;
 }
@@ -1310,12 +1313,55 @@ inline sg_sampler make_sampler_for_filter(int filter) {
   sg_sampler_desc sd{};
   sd.min_filter = SG_FILTER_LINEAR;
   sd.mag_filter = SG_FILTER_LINEAR;
+  // Textures now ship a mip chain, so NEAREST picks the closest level and
+  // TRILINEAR blends between two.
   sd.mipmap_filter =
       (filter == TEXTURE_FILTER_TRILINEAR) ? SG_FILTER_LINEAR : SG_FILTER_NEAREST;
   sd.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
   sd.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
   sd.label = "tex-sampler";
   return sg_make_sampler(&sd);
+}
+
+// Box-filter mip chain for a tightly-packed RGBA8 buffer, smallest level last.
+// sokol has no runtime mipmap generation -- levels have to be supplied at image
+// creation -- so without this a minified texture samples the full-res level and
+// thin high-contrast detail aliases.
+inline std::vector<std::vector<unsigned char>>
+build_mip_chain(const unsigned char *rgba, int w, int h) {
+  std::vector<std::vector<unsigned char>> levels;
+  int pw = w, ph = h;
+  const unsigned char *prev = rgba;
+  std::vector<unsigned char> prev_owned;
+  while (pw > 1 || ph > 1) {
+    const int nw = pw > 1 ? pw / 2 : 1;
+    const int nh = ph > 1 ? ph / 2 : 1;
+    std::vector<unsigned char> next(static_cast<size_t>(nw) * nh * 4);
+    for (int y = 0; y < nh; y++) {
+      for (int x = 0; x < nw; x++) {
+        // Source 2x2, clamped so odd dimensions reuse the last row/column.
+        const int x0 = std::min(x * 2, pw - 1);
+        const int x1 = std::min(x * 2 + 1, pw - 1);
+        const int y0 = std::min(y * 2, ph - 1);
+        const int y1 = std::min(y * 2 + 1, ph - 1);
+        for (int c = 0; c < 4; c++) {
+          const int sum =
+              prev[(static_cast<size_t>(y0) * pw + x0) * 4 + c] +
+              prev[(static_cast<size_t>(y0) * pw + x1) * 4 + c] +
+              prev[(static_cast<size_t>(y1) * pw + x0) * 4 + c] +
+              prev[(static_cast<size_t>(y1) * pw + x1) * 4 + c];
+          next[(static_cast<size_t>(y) * nw + x) * 4 + c] =
+              static_cast<unsigned char>((sum + 2) / 4);
+        }
+      }
+    }
+    prev_owned = std::move(next);
+    prev = prev_owned.data();
+    pw = nw;
+    ph = nh;
+    levels.push_back(prev_owned);
+  }
+  return levels;
 }
 
 // Upload a tightly-packed RGBA8 pixel buffer to a new immutable GPU image and
@@ -1337,6 +1383,12 @@ inline TextureType load_texture_from_pixels(const unsigned char *rgba, int w,
   id.data.mip_levels[0].ptr = rgba;
   id.data.mip_levels[0].size =
       static_cast<size_t>(w) * static_cast<size_t>(h) * 4u;
+  const auto mips = build_mip_chain(rgba, w, h);
+  id.num_mipmaps = 1 + static_cast<int>(mips.size());
+  for (size_t i = 0; i < mips.size(); i++) {
+    id.data.mip_levels[i + 1].ptr = mips[i].data();
+    id.data.mip_levels[i + 1].size = mips[i].size();
+  }
   id.label = "tex-image";
   sg_image img = sg_make_image(&id);
   if (sg_query_image_state(img) != SG_RESOURCESTATE_VALID) {
@@ -1396,17 +1448,9 @@ inline void unload_texture(TextureType &texture) {
   texture = TextureType{};
 }
 
-inline void gen_texture_mipmaps(TextureType &texture) {
-  // Not implemented in the sokol backend. Sokol fixes an image's mip count at
-  // creation time (sg_image_desc.num_mipmaps + the mip_levels[] data supplied to
-  // sg_make_image); there is no runtime "generate mipmaps for an existing
-  // immutable image" call as in raylib's GenTextureMipmaps, and load_texture
-  // uploads a single mip level. To get true mipmaps here we would upload
-  // pre-built mip levels at load time. Sampling still works via
-  // set_texture_filter. Kept loud so callers know it is a backend limitation,
-  // not a silent success.
-  (void)texture;
-  log_error("@notimplemented gen_texture_mipmaps");
+inline void gen_texture_mipmaps(TextureType &) {
+  // No-op: load_texture already builds and uploads the full chain, and sokol
+  // images are immutable so there is nothing to regenerate.
 }
 
 inline void set_texture_filter(TextureType &texture, int filter) {

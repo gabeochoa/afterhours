@@ -36,12 +36,6 @@ namespace raylib {
 namespace afterhours::graphics {
 using RenderTextureType = raylib::RenderTexture2D;
 using ShaderType = raylib::Shader;
-// Device-pixel scale for scissor rects when the render texture is supersampled
-// (Config.hidpi). 1 = no scaling. Set by the active backend at init.
-inline int &render_scale() {
-  static int s = 1;
-  return s;
-}
 } // namespace afterhours::graphics
 
 #elif defined(AFTER_HOURS_USE_METAL)
@@ -55,8 +49,12 @@ struct RenderTextureType {
   uint32_t tex_view_id = 0;
   uint32_t sampler_id = 0;
   uint32_t sgl_ctx_id = 0;
-  int width = 0;
+  int width = 0;   // physical, i.e. logical * scale
   int height = 0;
+  // Supersample factor. Drawing stays in logical coords (width / scale) and
+  // rasterises into the denser texture. Uniform on both axes, matching
+  // render_scale() and what the backends report for display DPI.
+  int scale = 1;
 };
 struct ShaderType {
   uint32_t id = 0;
@@ -73,6 +71,15 @@ struct ShaderType {
 } // namespace afterhours::graphics
 
 #endif // AFTER_HOURS_USE_RAYLIB / AFTER_HOURS_USE_METAL
+
+namespace afterhours::graphics {
+// Device-pixel scale when the render texture is supersampled (Config.hidpi).
+// 1 = no scaling. Set by the active backend at init.
+inline int &render_scale() {
+  static int s = 1;
+  return s;
+}
+} // namespace afterhours::graphics
 
 namespace afterhours {
 
@@ -99,8 +106,11 @@ struct Config {
   unsigned int config_flags = 0;
   bool enable_msaa = true;
   // Supersample the render texture at design*dpi (crisp on Retina); game keeps
-  // logical coords. Windowed/raylib only. See RaylibWindowed.
+  // logical coords. Honoured by raylib windowed and sokol headless capture.
   bool hidpi = false;
+  // Supersample factor used when hidpi is set and there is no display to query
+  // (headless capture). 2 matches a typical Retina window.
+  int hidpi_scale = 2;
 };
 
 template <typename T>

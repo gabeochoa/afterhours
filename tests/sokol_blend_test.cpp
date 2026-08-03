@@ -200,6 +200,95 @@ int main() {
 
   g::shutdown();
 
+  // D19: headless capture ignored Config.hidpi, so screenshots came out 1x and
+  // soft. With hidpi the target is denser while drawing stays in logical
+  // coords, giving a true supersample rather than a bigger canvas.
+  {
+    g::Config hi;
+    hi.display = g::DisplayMode::Headless;
+    hi.width = W;
+    hi.height = H;
+    hi.hidpi = true;
+    hi.title = "hidpi test";
+    if (g::init(hi)) {
+      const int scale = g::render_scale();
+      check(scale == 2, "hidpi headless sets a 2x render scale");
+
+      auto &rt = g::metal_detail::g_headless_rt;
+      check(rt.width == W * 2 && rt.height == H * 2,
+            "the offscreen target is allocated at 2x");
+      check(rt.scale == 2 && rt.width / rt.scale == W &&
+                rt.height / rt.scale == H,
+            "the target reports its scale, so logical size is derivable");
+
+      // Fill the LEFT HALF in logical coords. If the projection were physical,
+      // it would only cover a quarter of the image.
+      g::begin_drawing();
+      afterhours::draw_rectangle(RectangleType{0, 0, W, H}, opaque_blue);
+      afterhours::draw_rectangle(RectangleType{0, 0, W / 2, H}, opaque_green);
+      g::end_drawing();
+
+      std::vector<uint8_t> px =
+          afterhours::capture_render_texture_to_memory(rt);
+      check(px.size() == static_cast<size_t>(W * 2) * (H * 2) * 4,
+            "capture returns the full 2x pixel buffer");
+      if (px.size() == static_cast<size_t>(W * 2) * (H * 2) * 4) {
+        const int pw = W * 2;
+        auto at = [&](int x, int y) {
+          const size_t i = (static_cast<size_t>(y) * pw + x) * 4;
+          return Px{px[i], px[i + 1], px[i + 2], px[i + 3]};
+        };
+        const Px left = at(pw / 4, H);   // inside the logical left half
+        const Px right = at(pw * 3 / 4, H); // inside the logical right half
+        check(near(left.g, 255) && near(left.r, 0),
+              "logical left half is green across the 2x image");
+        check(near(right.b, 255) && near(right.g, 0),
+              "logical right half is blue across the 2x image");
+      }
+      g::shutdown();
+    } else {
+      printf("SKIP: hidpi headless init failed\n");
+    }
+  }
+
+  // D20: load_texture built no mip chain, so a texture drawn much smaller than
+  // its source sampled the full-res level and thin detail aliased. sokol has no
+  // runtime mipmap generation, so the chain is built on the CPU at load.
+  {
+    // 4x4 -> 2x2 -> 1x1
+    std::vector<unsigned char> solid(4 * 4 * 4, 0);
+    for (int i = 0; i < 4 * 4; i++) {
+      solid[i * 4 + 0] = 10;
+      solid[i * 4 + 1] = 20;
+      solid[i * 4 + 2] = 30;
+      solid[i * 4 + 3] = 255;
+    }
+    const auto mips = afterhours::metal_texture_detail::build_mip_chain(solid.data(), 4, 4);
+    check(mips.size() == 2, "4x4 produces two smaller levels");
+    if (mips.size() == 2) {
+      check(mips[0].size() == 2u * 2 * 4, "first level is 2x2");
+      check(mips[1].size() == 4u, "last level is 1x1");
+      check(mips[1][0] == 10 && mips[1][1] == 20 && mips[1][2] == 30,
+            "a solid image stays the same colour all the way down");
+    }
+
+    // A 2x2 half-black half-white averages to mid grey, which is the whole
+    // point: the small level is the average, not one of the source texels.
+    std::vector<unsigned char> checker = {
+        0,   0,   0,   255, 255, 255, 255, 255,
+        255, 255, 255, 255, 0,   0,   0,   255};
+    const auto cm = afterhours::metal_texture_detail::build_mip_chain(checker.data(), 2, 2);
+    check(cm.size() == 1 && cm[0].size() == 4u, "2x2 produces one 1x1 level");
+    if (cm.size() == 1)
+      check(cm[0][0] == 128, "1x1 level is the average of the 2x2 block");
+
+    // Non-square and odd sizes must terminate rather than loop or divide to 0.
+    const std::vector<unsigned char> odd(5 * 3 * 4, 200);
+    const auto om = afterhours::metal_texture_detail::build_mip_chain(odd.data(), 5, 3);
+    check(!om.empty() && om.back().size() == 4u,
+          "an odd non-square image still reduces to 1x1");
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);

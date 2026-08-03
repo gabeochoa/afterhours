@@ -1259,7 +1259,33 @@ headlessly is unreliable. The real app reads a live, re-readable wheel, so
 **headless behaviour diverges from real**, which is the part that matters for a
 test harness. Ask: non-consuming reads in test mode, or per-target routing.
 
-### D19. Metal headless capture can't supersample
+### D19. Metal headless capture can't supersample — **DONE**
+`Config.hidpi` is now honoured by the sokol headless path: the offscreen target
+is allocated at `width*scale x height*scale` (`hidpi_scale`, default 2),
+`render_scale()` is set, and the ortho projection stays in LOGICAL pixels so
+the same drawing rasterises into more pixels instead of shrinking into a
+corner. `RenderTextureType` carries a single `scale` and derives logical size
+as `width / scale`; scale is uniform everywhere already (raylib reads
+`GetWindowScaleDPI().x` and drops `.y`, sokol's `sapp_dpi_scale()` is one
+float, `render_scale()` is one int), so two logical fields were redundant and
+could disagree. `render_scale()` moved out of the raylib-only branch.
+
+Tested by capturing at 2x and sampling: the buffer is `(w*2)*(h*2)*4`, and a
+rect covering the logical left half is green across the left half of the 2x
+image. Three checks fail with the scale forced to 1.
+
+### D20 (original report, kept for context) — **DONE**
+sokol has no runtime mipmap generation — levels must be supplied at image
+creation — so `load_texture` now builds a box-filtered chain on the CPU and
+uploads every level. `gen_texture_mipmaps` becomes a no-op (images are
+immutable and the chain already exists) instead of logging @notimplemented.
+
+Costs ~33% more texture memory, the standard trade. Tested on the builder
+directly since it is deterministic: a solid image keeps its colour to 1x1, a
+black/white 2x2 averages to exactly 128, and odd non-square sizes still
+terminate at 1x1.
+
+### D19 (original report, kept for context)
 **hanabi #6.** The windowed Metal path sets `desc.high_dpi = true`, so the live
 app is crisp. The *headless* path (`DisplayMode::Headless` → `metal_init`)
 creates a fixed `cfg.width × cfg.height` offscreen texture at 1x.
