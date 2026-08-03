@@ -696,8 +696,8 @@ TEST(margin_offsets_percent_child_into_overflow) {
   CHECK_APPROX(r.x + r.width, 310.f);
   // main axis (Y): pixels(100) child + 10 margin offset fits within the 300 parent
   CHECK(r.y + r.height <= 300.f + 1.f);
-  // The cross-axis overflow above is intentional, so the layout warns about it.
-  EXPECT_WARN("extends outside parent");
+  // No overflow warning: the child sticks out by exactly its margin, which the
+  // content-box model guarantees, so flagging it would be unactionable noise.
 }
 
 // ---------------------------------------------------------------------------
@@ -3465,6 +3465,32 @@ TEST(expand_in_row_under_percent_parent) {
   t.run(screen);
 
   CHECK_APPROX(t.ui(label).computed[Axis::X], 358.f);
+}
+
+// Overflow warnings must stay actionable. A child that sticks out only by its
+// own margin is the content-box model working as documented, and a caller
+// cannot do anything about it; genuine overflow still has to be reported.
+TEST(overflow_warning_ignores_margin_but_catches_real_overflow) {
+  {
+    TestLayout t;
+    auto &root = t.make_ui(pixels(300), pixels(300));
+    TestLayout::ui(root).set_flex_direction(FlexDirection::Column);
+    auto &child = t.make_ui(percent(1.0f), pixels(50));
+    child.get<UIComponent>().set_desired_margin(pixels(10), Axis::X);
+    t.add_child(root, child);
+    t.run(root);
+    // No EXPECT_WARN: the runner fails the test if an undeclared warning fires.
+  }
+  {
+    TestLayout t;
+    auto &root = t.make_ui(pixels(300), pixels(300));
+    TestLayout::ui(root).set_flex_direction(FlexDirection::Column);
+    // 200px past the parent, far beyond any margin.
+    auto &child = t.make_ui(pixels(500), pixels(50));
+    t.add_child(root, child);
+    t.run(root);
+    EXPECT_WARN("extends outside parent");
+  }
 }
 
 // ============================================================================

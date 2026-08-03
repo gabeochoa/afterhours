@@ -1450,11 +1450,19 @@ struct AutoLayout {
       // Row wraps vertically → Y overflow from wrapping is expected
       bool suppress_x = wraps && is_column;
       bool suppress_y = wraps && is_row;
+      // A percent(1.0f) child plus margin overflows by exactly its margin under
+      // the content-box model, so flagging that reports a documented idiom the
+      // caller cannot act on. Trade-off: real overflow smaller than the child's
+      // margin is missed, same spirit as BASE_OVERFLOW_TOLERANCE.
+      float margin_x = child.computed_margin[Axis::X];
+      float margin_y = child.computed_margin[Axis::Y];
       bool overflows_x =
-          !suppress_x && child_end_x > sx + accumulated_snap_tolerance_x +
+          !suppress_x && child_end_x > sx + margin_x +
+                                           accumulated_snap_tolerance_x +
                                            BASE_OVERFLOW_TOLERANCE;
       bool overflows_y =
-          !suppress_y && child_end_y > sy + accumulated_snap_tolerance_y +
+          !suppress_y && child_end_y > sy + margin_y +
+                                           accumulated_snap_tolerance_y +
                                            BASE_OVERFLOW_TOLERANCE;
       if ((overflows_x || overflows_y) && !parent_is_scroll_view) {
         log_warn("Layout overflow: '{}' extends outside parent '{}' bounds "

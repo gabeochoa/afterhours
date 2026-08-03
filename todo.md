@@ -784,10 +784,32 @@ was suppressed when the parent wrapped (`autolayout.h:1452`), so a
 is accurate, and the test that documents the overflow as intentional declares
 it.
 
-**Safety, measured rather than argued.** wm_afterhours renders 80 screens: with
-and without the change it produces the *same* 8 screenshot diffs at identical
-percentages, and the *same* warning volume (24 wrap, 28 overflow). So the flip
-changed nothing visually in a real app and added no noise.
+**Correction to an earlier claim in this file.** I first recorded that the flip
+changed nothing in wm_afterhours. That measurement was invalid: `rsync -a`
+preserves source mtimes, they landed in the same second as the existing object
+files, and make skipped the rebuild — the numbers came from a stale binary.
+Always confirm the binary is newer than the sources before trusting a result
+here; this repo has produced sub-second mtime races three times.
+
+**What clean builds actually show** (same commit, D4 reverted vs not):
+
+| | overflow warns | wrap warns | flex_alignment |
+|---|---|---|---|
+| without D4 | 28 | 24 | 1.3079% |
+| with D4 | 128 | 34 | 1.7796% |
+| with D4 + margin fix | 54 | 34 | 1.7796% |
+
+The 128 was a bad diagnostic, not bad app code: 98% of those overflowed by
+≤32px, spread across ~50 distinct widgets — one idiom, `percent(1.0f)` plus a
+margin, which the content-box model *guarantees* will overflow. Warning on it
+told developers to stop doing something the library documents (there is a test
+enshrining it as "by design"). The overflow check now allows overflow within
+the child's own margin.
+
+The residual ~36 are all on one screen and are **genuine**: three fixed 26px
+boxes ending at x=78 inside a 49.8px-wide container. They used to wrap out of
+sight. That is exactly what D4 is for, and it is why that screenshot moved —
+the app can add `.with_wrap()` if wrapping was the intent.
 
 ### D4 (original report, kept for context)
 **floatinghotel F4b, called "the single nastiest default we hit".** Confirmed
