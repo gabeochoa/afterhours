@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cmath>
+
 #include "../texture_manager.h"
 #if __has_include(<magic_enum/magic_enum.hpp>)
 #include <magic_enum/magic_enum.hpp>
@@ -483,10 +485,19 @@ enum class Overflow { Visible, Hidden, Scroll, Auto };
 
 // Scroll view state - enables scrolling content within a clipped viewport
 struct HasScrollView : BaseComponent {
-  Vector2Type scroll_offset = {0, 0}; // Current scroll position
+  Vector2Type scroll_offset = {0, 0}; // Current (rendered) scroll position
+  Vector2Type scroll_target = {0, 0}; // Desired scroll position (wheel writes
+                                      // here; scroll_offset eases toward it for
+                                      // smooth, momentum-like scrolling)
   Vector2Type content_size = {0, 0};  // Total size of all children (computed)
   Vector2Type viewport_size = {0, 0}; // Visible area size
   float scroll_speed = 20.0f;         // Pixels per scroll wheel notch
+  // Fraction of the remaining distance covered per 60fps frame. 1.0 (default)
+  // snaps, matching the behaviour before smoothing existed; ~0.25 glides.
+  float scroll_smoothing = 1.0f;
+  // What ease_scroll last wrote, so a caller assigning scroll_offset directly
+  // can be told apart from the easing's own output.
+  Vector2Type last_eased_offset = {0, 0};
   bool vertical_enabled = true;       // Allow vertical scrolling
   bool horizontal_enabled = false;    // Allow horizontal scrolling
   bool invert_scroll = false;         // Invert scroll direction (non-natural)
@@ -498,13 +509,47 @@ struct HasScrollView : BaseComponent {
   HasScrollView(bool vert, bool horiz)
       : vertical_enabled(vert), horizontal_enabled(horiz) {}
 
-  // Clamp scroll offset to valid bounds (0 to max scrollable distance)
+  // Clamp scroll offset AND target to valid bounds (0 to max scrollable).
   void clamp_scroll() {
     float max_scroll_y = std::max(0.0f, content_size.y - viewport_size.y);
     scroll_offset.y = std::clamp(scroll_offset.y, 0.0f, max_scroll_y);
+    scroll_target.y = std::clamp(scroll_target.y, 0.0f, max_scroll_y);
     // Horizontal scrolling (not enabled in MVP but structure is here)
     float max_scroll_x = std::max(0.0f, content_size.x - viewport_size.x);
     scroll_offset.x = std::clamp(scroll_offset.x, 0.0f, max_scroll_x);
+    scroll_target.x = std::clamp(scroll_target.x, 0.0f, max_scroll_x);
+    // Clamping is our own edit, not a caller's, so do not let the next ease
+    // mistake it for one and drag the target back out of bounds.
+    last_eased_offset = scroll_offset;
+  }
+
+  // Ease the rendered offset toward the target, once per frame.
+  void ease_scroll(float dt) {
+    // A caller that assigns scroll_offset directly (scroll-to-top, scrollbar
+    // drag) is authoritative: bring the target along instead of reverting it.
+    if (scroll_offset.x != last_eased_offset.x ||
+        scroll_offset.y != last_eased_offset.y)
+      scroll_target = scroll_offset;
+
+    if (scroll_smoothing >= 1.0f || scroll_smoothing <= 0.0f) {
+      scroll_offset = scroll_target;
+      last_eased_offset = scroll_offset;
+      return;
+    }
+
+    // Convert the per-60fps-frame fraction to elapsed time, so the glide takes
+    // the same wall-clock time on a 120Hz display as on a 60Hz one.
+    const float alpha =
+        1.0f - std::pow(1.0f - scroll_smoothing, std::max(dt, 0.0f) * 60.0f);
+    auto step = [alpha](float cur, float tgt) {
+      const float d = tgt - cur;
+      if (d > -0.5f && d < 0.5f)
+        return tgt; // settle exactly, no perpetual sub-pixel redraw
+      return cur + d * alpha;
+    };
+    scroll_offset.y = step(scroll_offset.y, scroll_target.y);
+    scroll_offset.x = step(scroll_offset.x, scroll_target.x);
+    last_eased_offset = scroll_offset;
   }
 
   // Check if content exceeds viewport (scrolling needed)

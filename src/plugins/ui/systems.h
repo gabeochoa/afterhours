@@ -1805,7 +1805,7 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
   }
 
   virtual void for_each_with(Entity &entity, UIComponent &cmp,
-                             HasScrollView &scroll_state, float) {
+                             HasScrollView &scroll_state, float dt) {
     // TODO can we make this a tag?
     if (!cmp.was_rendered_to_screen)
       return;
@@ -1816,6 +1816,11 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
     // Update viewport size from computed layout
     scroll_state.viewport_size = {cmp.computed[Axis::X], cmp.computed[Axis::Y]};
 
+    // Ease the rendered offset toward the target EVERY frame (before any early
+    // return), so an in-progress smooth-scroll glide keeps animating even when
+    // the cursor leaves the view. No-op (snaps) when scroll_smoothing >= 1.
+    scroll_state.ease_scroll(dt);
+
     // In auto mode, skip scroll input when content fits in viewport
     if (scroll_state.auto_overflow) {
       bool needs_v =
@@ -1824,6 +1829,7 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
           scroll_state.horizontal_enabled && scroll_state.needs_scroll_x();
       if (!needs_v && !needs_h) {
         scroll_state.scroll_offset = {0, 0};
+        scroll_state.scroll_target = {0, 0};
         return;
       }
     }
@@ -1842,15 +1848,16 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
     // Direction multiplier: natural scrolling (default) vs inverted
     float direction = scroll_state.invert_scroll ? 1.0f : -1.0f;
 
+    // Wheel writes to scroll_target; scroll_offset eases toward it (above).
     // Vertical scrolling
     if (scroll_state.vertical_enabled && wheel_v.y != 0.0f) {
-      scroll_state.scroll_offset.y +=
+      scroll_state.scroll_target.y +=
           direction * wheel_v.y * scroll_state.scroll_speed;
     }
 
     // Horizontal scrolling
     if (scroll_state.horizontal_enabled && wheel_v.x != 0.0f) {
-      scroll_state.scroll_offset.x +=
+      scroll_state.scroll_target.x +=
           direction * wheel_v.x * scroll_state.scroll_speed;
     }
 

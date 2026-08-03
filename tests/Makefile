@@ -73,6 +73,7 @@ ALL_TESTS := \
 	progress_bar_test \
 	random_engine_test \
 	render_order_test \
+	scroll_smoothing_test \
 	setup_test \
 	size_constraints_test \
 	slider_test \
