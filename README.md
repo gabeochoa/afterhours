@@ -3,7 +3,38 @@
 
 an ecs framework based on the one used in https://github.com/gabeochoa/pharmasea
 
-check the examples folder for how to use it :) 
+check the examples folder for how to use it :)
+
+## quick start
+
+A window, an event loop, a clickable button and a hot-reloading theme file:
+
+```cpp
+#include "ah.h"
+#include "src/graphics.h"
+#define AFTER_HOURS_IMM_UI
+#include "src/plugins/ui.h"
+
+using namespace afterhours;
+using namespace afterhours::ui;
+
+struct Hello : System<DefaultUIContext> {
+  void for_each_with(Entity &entity, DefaultUIContext &ctx, float) override {
+    if (imm::button(ctx, imm::mk(entity), "Hello World!"))
+      printf("clicked\n");
+  }
+};
+
+int main() {
+  return ui::run<>({.title = "hello"},
+                   std::make_unique<theme_io::HotReloadTheme>("hello.theme"),
+                   std::make_unique<Hello>());
+}
+```
+
+`ui::run()` owns window setup, the default keymap, system registration, the
+frame loop and teardown. See `examples/catalog/ui/hello`; the catalog has ~50
+runnable examples.
 
 
 ## compiler options: 
@@ -13,6 +44,16 @@ AFTER_HOURS_MAX_COMPONENTS
 
 AFTER_HOURS_USE_RAYLIB
 - some of the plugins use raylib functions (like raylib::SetWindowSize or raylib::IsKeyPressed). Not used for main library 
+
+AFTER_HOURS_USE_METAL
+- selects the sokol/Metal backend instead of raylib. Needs one Objective-C++
+  translation unit defining SOKOL_IMPL plus capture_impl.h; see
+  examples/web/sokol_impl.cc for the canonical one. Supports windowed and
+  headless (offscreen) rendering; headless honours Config.hidpi to supersample
+  captures.
+
+AFTER_HOURS_IMM_UI
+- enables the immediate-mode UI helpers (div/button/slider/...)
 
 AFTER_HOURS_INCLUDE_DERIVED_CHILDREN
 - Allows access to for_each_with_derived which will return all entities which match a component or a components children (TODO add an example) 
@@ -73,6 +114,18 @@ This pairs with the files plugin: a `.app` puts the binary in
 
 Linux `.desktop` and Windows packaging are not implemented; `--platform` errors
 for them rather than producing something untested.
+
+## behaviour changes worth knowing
+
+- **`FlexWrap` now defaults to `NoWrap`.** It used to be `Wrap`, which meant a
+  Column taller than its viewport silently wrapped its children into a second
+  column off-screen instead of overflowing. Ask for the old behaviour with
+  `with_wrap()`.
+- **The sokol backend now alpha-blends.** `sgl_defaults()` loads a pipeline with
+  blending off, so low-alpha colours used to fill fully opaque and transparent
+  texture texels blitted as black. Opaque drawing is unchanged.
+- **`with_font_size()` works on its own.** It used to be ignored unless you also
+  named a font, which quietly disabled text wrapping.
 
 ## Plugins
 
@@ -161,12 +214,38 @@ Render Systems:
 - register_render_systems() => does both UI and debug rendering
 
 UI Elements:
-- div
-- button
-- slider
-- dropdown 
-- checkbox
-- // TODO add more 
+- div, button, slider, dropdown, checkbox, radio group, stepper, toggle switch
+- text_input (`with_placeholder`, masking, selection, clipboard, undo/redo)
+- tab_container, tree_view, scroll_view, modal, toast
+- vsplit / hsplit: divide a region into N parts in one statement
+  `auto [title, body, status] = vsplit(ctx, mk(e), {pixels(30), expand(), pixels(50)});`
+
+Styling:
+- `ComponentConfig` is the one config struct; `restyle()` applies a partial
+  update to an existing element
+- `with_styled_label({{"M ", red}, {"file.h", white}})` for multi-colour runs;
+  these word-wrap with `TextOverflow::Wrap`
+- `theme_io`: read/write a `Theme` as a flat `key = value` text file, plus
+  `HotReloadTheme` to re-apply it on save. No JSON dependency.
+
+Scrolling:
+- `HasScrollView::scroll_smoothing` — 1.0 (default) snaps, ~0.25 glides. The
+  wheel drives `scroll_target` and the rendered offset eases toward it,
+  frame-rate independent.
+
+### files
+per-app paths and crash-safe persistence.
+
+- `files::init(app_name)`, then `get_config_path()` / `get_save_path()` /
+  `get_resource_path(group, name)`. Resource lookup resolves from the
+  executable's own location (so a bundled `.app` finds `Contents/Resources`),
+  falling back to the working directory for dev builds.
+- `files::write_string_atomic(path, content)` writes a sibling temp and renames
+  over the target, so a crash mid-write cannot truncate the file the way a
+  plain `ofstream` does. `read_string(path)` returns `nullopt` when missing.
+  Crash-safe, not power-loss-safe.
+- Requires compiling `src/plugins/files.cpp`; the two helpers above are
+  header-only and do not.
 
 ### texture manager (desires raylib)
 sprite rendering
