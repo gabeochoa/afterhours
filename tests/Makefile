@@ -70,6 +70,7 @@ ALL_TESTS := \
 	entity_query_test \
 	input_injector_mouse_delta_test \
 	keymap_test \
+	menu_test \
 	overlay_placement_test \
 	progress_bar_test \
 	random_engine_test \
