@@ -1059,221 +1059,40 @@ becomes a ~10-line addition.
 three widgets need and all three hand-rolled downstream. Pure geometry, 16
 checks, no entities.
 
-**Blocked on an unexplained layout result.** Wiring it into `dropdown` so the
-tray flips near the bottom edge did not work: `overlay::place` computed the
-right screen position (`abs_y=440` for a trigger at 560, tray 120 tall), and
-`absolute_pos_y` held 440, but the laid-out `rect().y` came back 1560 —
-440 + 2*560.
+**Blocked on D13b below.** Wiring it into `dropdown` fails because an absolute
+overlay cannot be positioned reliably yet.
 
-An "absolute child double-counts its parent's offset" theory does NOT hold: a
-minimal absolute-in-absolute repro gives 700 for 300+400, which is the sensible
-parent-relative answer. So the dropdown case differs in some other way (the tray
-is `percent(1.0f)` wide with a `children()` height, created via `tray()`, inside
-a dropdown that is itself absolutely positioned) and the cause is still unknown.
+### D13b. Absolute children accumulate their position across frames
+Found while wiring `overlay::place()` into `dropdown`. Reproduced minimally:
+an absolute div at y=560 containing an absolute div at y=440, re-emitted each
+frame like real immediate-mode code.
 
-The dropdown change is reverted; only the engine is committed. Next step is to
-find what the tray does differently before building `dropdown_menu`,
-`context_menu` and `popover` on top — every one of them needs to position an
-overlay in screen space, so this has to be understood first.
-**floatinghotel missing-primitives #1, #2, #4, #5, #6.** Each is built app-local
-in `src/ui/`, all five marked BLOCKER or HIGH:
+| frame | parent rect.y | child rect.y | child computed_rel | child absolute_pos_y |
+|---|---|---|---|---|
+| 1 | 560 | 1000 | 1000 | 440 |
+| 2 | 560 | 2680 | 2680 | 440 |
+| 3 | 560 | 5480 | 5480 | 440 |
+| 4 | 560 | 9400 | 9400 | 440 |
 
-| Want | floatinghotel's local build | Status here |
-|---|---|---|
-| `draggable_divider()` | `split_panel.h` via `div()` + `HasDragListener` | missing |
-| `split_pane()` | `split_panel.h` | **`vsplit`/`hsplit` (todo item 6) covers the static case**; the draggable divider is what's left |
-| `dropdown_menu()` | `menu_setup.h`, absolute positioning + hover-to-switch + click-outside | missing |
-| `context_menu()` | `context_menu.h`, cursor-positioned, window-edge flipping | missing |
-| `popover()` | reuses the dropdown approach with manual anchor maths | missing |
+The parent is stable and `absolute_pos_y` is stable; `computed_rel` is what
+grows, quadratically (second difference 1120 = 2*560).
 
-The last three share one engine: an anchored, auto-flipping, click-outside-to-
-close overlay with a common item format (label, shortcut, separator, disabled,
-callback). Build that once and all three fall out. Note D3 blocks nothing here
-but will bite any of them that nest a control inside a clickable row.
+Suspect: `compute_relative_positions` (`autolayout.h:1534`) does
+`widget.computed_rel += offset` where `offset` includes the parent's own
+`computed_rel`. That is only correct if `computed_rel` holds the widget's LOCAL
+position at that point. `:1277` assigns `computed_rel = absolute_pos` for
+absolute children, which should make it local — so the next thing to check is
+whether that assignment is being reached for this child on every frame, or
+whether the child is visited twice (once through the parent's child loop, once
+through the recursion) so the `+=` lands more than once.
 
-### D14. Custom colours bypass disabled dimming — **DONE**
-**floatinghotel.** `with_disabled(true)` blocked interaction but left the
-widget looking enabled. An accessibility bug, not a cosmetic one: a control
-that looks enabled invites clicks that silently do nothing. Their workaround
-was hand-picking colours in every preset factory.
+Not a theory to trust yet: an earlier "parent offset applied twice" explanation
+looked right and was disproven by measurement. Start from the table above.
 
-**The report named the wrong function** — same shape as D5. It points at
-`ComponentConfig::resolve_background_color()` (`component_config.h:818`), which
-does have the bug but is only reached from `imm_components.h:91`/`:619`, for
-non-Filled button variants. The live path for every widget is
-`component_init.h:362-374`, which never calls it and re-implements the same
-branch with the same mistake. Fixing only the named function would have left
-the bug in place.
-
-**Fix:** extracted the dim transform out of `Theme::from_usage` into
-`Theme::disabled_variant(Color)` (`theme.h`) — mix toward background, scale
-alpha by `disabled_opacity`, desaturate 50% — and called it from *both*
-custom-colour paths. `from_usage` now delegates to it, so the pre-existing
-theme path is unchanged by construction.
-
-Free consequence: `component_init.h:464-466` sets `HasLabel::background_hint`
-from `HasColor` *after* the colour is assigned, so auto-contrast text
-re-derives against the dimmed background with no extra work.
-
-**Tests** (`downstream_gaps_test`): `d14_disabled_custom_background_is_dimmed`
-is the regression guard and fails before the fix;
-`d14_enabled_custom_background_is_untouched` is the control that catches
-dimming everything; `d14_disabled_theme_background_still_dims` pins the path
-the refactor touched.
-
-**Also de-duplicated** the disabled-text logic. `RenderImm` and `RenderBatched`
-carried identical copies, so the darken-when-disabled line existed four times.
-Now one `detail::resolve_label_color()`.
-
-### D15x. hanabi's two vendor patches — **DONE**, one taken, one rewritten
-hanabi ships `vendor_patches/`: fixes prototyped in their app and captured
-"ready for the maintainer". Reviewed both rather than applying blind.
-
-**#25 (sokol rounded corners) — taken as-is.** `emit_corner_arc`'s sharp branch
-called `sgl_begin_triangles()` and emitted *two* vertices: a degenerate
-primitive that rendered as a diagonal slice on any mixed round/sharp config.
-Verified the claim by tracing `rTL == 0`: the top edge starts at `(x+rTL, y)`
-and the left edge ends at `(x, y+rTL)`, both `(x, y)`, both fanning from the
-centre — the square corner is fully tiled without the arc. Raylib handles mixed
-corners via its own path, so this was sokol-only. No test: no sokol target
-exists here (D1), and saying so beats implying coverage.
-
-**#22 (styled spans word-wrap) — intent accepted, implementation rewritten.**
-The need is general: `with_styled_label`/`TextSpan` already shipped, and
-floatinghotel asked for the same API by name. So this finishes a half-built API
-rather than adding one. But the patch had three problems:
-- It only touched `RenderBatched`. Spans were handled at exactly one site, so
-  `with_styled_label` was a **silent no-op** under `RenderImm` — selectable at
-  runtime via `use_batched` with nothing in app code mentioning it.
-- Its wrap math summed per-word widths while the real wrapper measures the
-  whole candidate line. `measure_text` applies spacing *between characters*, so
-  the sum drops two gaps per word boundary and drifts — breaking the very
-  height-model guarantee the patch claimed to provide.
-- It inherited #24.
-
-Instead: `detail::wrap_runs_to_width` is now the single wrapping primitive, and
-`wrap_text_to_width` is one colourless run through it. Plain and styled break
-identically **by construction**. Both renderers use it (`draw_runs_in_rect` for
-`RenderImm`), and `d22_both_renderers_agree_on_styled_output` pins that.
-
-Also found: a wrapping styled label did not render styled-but-unwrapped — the
-wrap branch set `wrapped` first, making the span branch unreachable, so it
-rendered as **plain text with colours discarded**.
-
-**#24 (`\n` ignored in wrapping) — DONE**, folded in since it is the same
-function. `\n` is a hard break; `\n\n` yields a blank line so paragraph spacing
-survives.
-
-### D22b. `with_font_size()` alone was silently ignored — **DONE**
-Not from any app report. Found because a plain-text wrap baseline that should
-obviously have passed did not.
-
-`component_init.h` gated `enable_font()` — the only thing that copies
-`font_size` and `font_size_explicitly_set` onto the `UIComponent` — on
-`config.font_name != UNSET_FONT`. Set a size without also naming a font and
-`explicit_fs` resolved to 0, switching off every path that needs a known size.
-Wrapping was the visible casualty. Confirmed both ways: same widget, no font
-name → one 752px line in a 230px box; add `with_font(...)` → wraps to four
-lines.
-
-Strong candidate for floatinghotel footgun F1 ("labels don't word-wrap"): set a
-size, ask for wrapping, get one clipped line and no diagnostic. Worth telling
-them.
-
-### D32. Resource paths resolved against CWD, so bundled apps found nothing — **DONE**
-`files.cpp:54` set `resource_folder_path = current_path() / root_folder`. A
-launched macOS `.app` has CWD `/`, so a shipped bundle could never find its own
-resources — the API failed in exactly the case it exists for, and worked only
-when run from a build directory.
-
-Now resolved from the executable's own location, CWD last:
-1. `<exe_dir>/<root>` — binary next to a resources dir
-2. `<exe_dir>/../Resources/<root>` and then `<exe_dir>/../Resources`
-3. `current_path()/<root>` — unchanged fallback, so dev builds keep working
-
-The bundle probes only fire when the binary really is in `Contents/MacOS`. The
-first cut keyed off "a sibling `Resources` dir exists", which the tests caught:
-an unrelated `Resources` got returned even without the requested root in it.
-
-`files_resource_path_test` covers all three, and the bundle case is a real one
-— it builds a `.app`, copies the test binary into `Contents/MacOS`, and re-execs
-it there, because that layout is now what the resolver keys on. Two checks fail
-without the fix.
-
-### D31. `.app` bundling — **DONE** (macOS), as opt-in build tooling
-I first declined this alongside #33/#34. That was wrong, and the distinction is
-worth keeping: those are *runtime* OS integration we would own on three
-platforms, while bundling is a **build step** — a directory layout plus a plist
-the OS reads before the process starts. It cannot be a C++ plugin at all (it
-does not fit `PluginCore`), so it ships as `tools/mk_bundle.sh` next to the
-existing `tools/` scripts. Nothing in the library calls it.
-
-Two failure modes it exists to prevent, both silent: `CFBundleExecutable` not
-matching the copied binary's filename (bundle refuses to launch, no diagnostic)
-and a missing `NSHighResolutionCapable` (window upscaled from 1x, just looks
-soft). The executable name is derived rather than passed, and the plist is
-`plutil -lint`ed before exit.
-
-`--plist-extra FILE` is the escape hatch: model the common keys, let anything
-else through as raw XML instead of growing a flag per plist key.
-
-Pairs with D32 — a `.app` puts the binary in `Contents/MacOS`, which is exactly
-what the new resource resolver keys on, so a bundled app can finally find its
-own resources. `bundle_test`'s last case launches the bundled binary and checks
-that, proving the two work together rather than each in isolation.
-
-Verified beyond the unit test: bundled `examples/web/demo` (the real Metal
-target) and launched it with `open(1)`, so LaunchServices actually parsed the
-plist. A bundle that lints but will not launch is the failure worth catching by
-hand once.
-
-**TODO — Linux `.desktop` and Windows.** `--platform` dispatches to
-`bundle_linux` / `bundle_windows`, which currently error. Adding them is
-additive rather than a restructure. Not written now because nothing here can
-build or run either, and shipping two unverified code paths is the pattern that
-has bitten repeatedly.
-
-### Still declined: runtime OS integration (#33, #34)
-NSStatusItem/notifications/global hotkeys, and *handling* an opened URL. Already
-implemented app-side in the reporter's own `.mm`; owning them means three
-platforms of OS integration for one consumer. Note the split: mk_bundle.sh
-generates the `CFBundleURLTypes` **declaration**, which is packaging — reacting
-to the Apple event stays app-side.
-
-`#35` (enumerate system fonts) is borderline — real per-OS code for one feature.
-`#36` (a `get_cache_path()` sibling to the existing `get_config_path()`) is
-small and fits, if it ever comes up.
-
-### D1b. There is now a working native sokol/Metal target — **DONE**
-D1, D19 and D20 were all blocked on "nothing here builds sokol". That was
-nearly untrue: `examples/web` already had a native macOS/Metal recipe
-(`make demo`) alongside its emscripten one. It just did not work.
-
-Two blockers, both fixed:
-- **Link failure.** `sokol_impl.cc` never included `capture_impl.h`, so
-  `metal_create_system_device` and `metal_capture_render_texture` were
-  undefined. It also has to `#define AFTER_HOURS_USE_METAL` — `main.cpp`
-  defines that for itself, and `capture_impl.h` is guarded on it, so including
-  it alone would still have compiled to nothing. Guarded on `SOKOL_METAL` so
-  the WebGL2 build is unaffected.
-- **Segfault on startup**, hit the moment it linked. `RenderSprites::once`
-  (`texture_manager.h:225`) did
-  `get_singleton_cmp<HasSpritesheet>()->texture` with no null check, so any app
-  registering that system without a spritesheet crashed;
-  `RenderAnimation::once` was identical. Both now resolve the sheet in
-  `should_run` and skip when absent. Same class as D5.
-
-`make demo` builds, links and runs. **Not yet a test target** — it is windowed
-with no headless mode, so it proves the backend works but cannot make
-assertions. A headless sokol test (offscreen render + `capture_render_texture_to_memory`,
-which already exists) is the remaining step before D1/#25 can be verified
-automatically rather than by eye.
-
-### Porting wm_afterhours to sokol — **not recommended**
-It is raylib-only: no metal/sokol in its makefile, no sokol impl TU, and
-**445 direct `raylib::` calls across 32 files**. That is a port, not a
-configuration change, and `examples/web` already gives a sokol target for a
-fraction of the cost.
+Real-world impact is wider than dropdowns: any absolutely-positioned child of an
+absolutely-positioned parent drifts off screen the longer it stays alive, which
+likely underlies floatinghotel's tab_container-in-absolute-parent report and
+possibly D16.
 
 ### D14b. Disabled text and disabled backgrounds use different transforms
 Surfaced by the de-duplication above, not by an app. Disabled **text** darkens
