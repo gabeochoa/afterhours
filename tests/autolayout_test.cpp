@@ -3415,8 +3415,8 @@ TEST(prune_keeps_every_live_child) {
 // ============================================================================
 // D2: expand() in a Row, as real app code writes it
 //
-// hanabi and floatinghotel both report that expand() in a Row takes the full
-// parent width instead of the remaining width, and both pay for it: hanabi
+// Two downstream apps both report that expand() in a Row takes the full
+// parent width instead of the remaining width, and both pay for it: one
 // hand-computes `labelW = rowContentW - leadSlot - countColW` across three row
 // types, floatinghotel bakes whole rows into one label string.
 //
@@ -3446,7 +3446,7 @@ TEST(expand_in_row_with_default_wrap) {
 }
 
 // Same row, but the parent is percent-sized rather than a fixed pixel width --
-// hanabi's actual case, where the usable width varies with sidebar state.
+// the reporting app's actual case, where usable width varies with sidebar state.
 TEST(expand_in_row_under_percent_parent) {
   TestLayout t;
   auto &screen = t.make_ui(pixels(400), pixels(200));

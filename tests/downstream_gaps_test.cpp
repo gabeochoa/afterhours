@@ -1,5 +1,5 @@
 // downstream_gaps_test.cpp
-// Executable repros for the gaps hanabi and floatinghotel reported against
+// Executable repros for gaps that downstream apps reported against
 // this library (see the "Downstream app feedback" section of todo.md).
 //
 // Why these live together rather than in the per-widget suites: each one
@@ -22,6 +22,8 @@
 
 #include "ui_test_harness.h"
 
+#include <optional>
+
 using namespace afterhours;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
@@ -37,16 +39,16 @@ Rectangle rect_of(const ElementResult &e) {
 // D2 -- expand() in a Row, at the imm layer
 //
 // Reported by BOTH apps, which is why it is first.
-//   hanabi #18:        "no flex-grow: can't pin a trailing element to the
+//   app A #18:         "no flex-grow: can't pin a trailing element to the
 //                       right edge"
-//   floatinghotel:     "Row Flex Layout Broken with expand() Children" --
+//   app B:             "Row Flex Layout Broken with expand() Children" --
 //                       "any child sized with expand() consumes the full
 //                       parent width instead of the remaining width after
 //                       fixed-size siblings"
 //
-// Both paid real cost: hanabi hand-computes
+// Both paid real cost: one hand-computes
 // `labelW = rowContentW - leadSlot - countColW` across three row types;
-// floatinghotel bakes whole rows into a single label string and gives up on
+// the other bakes whole rows into a single label string and gives up on
 // coloured status letters.
 //
 // autolayout_test already covers this at the engine level and passes, both
@@ -84,7 +86,7 @@ TEST(d2_expand_row_pins_trailing_element) {
   CHECK_APPROX(c.x + c.width, r.x + r.width);
 }
 
-// hanabi's actual case rather than the reduced one: the row is percent-sized
+// The reporting app's actual case rather than the reduced one: the row is percent-sized
 // because the usable width moves with sidebar and scrollbar state, which is
 // exactly why it could not just hardcode percent(0.72f) for the label.
 TEST(d2_expand_row_under_percent_parent) {
@@ -114,7 +116,7 @@ TEST(d2_expand_row_under_percent_parent) {
 }
 
 // Two rows of different composition must land their trailing counts on the
-// SAME right edge. This is the assertion hanabi could not make: its smart-view
+// SAME right edge. This is the assertion the reporter could not make: its smart-view
 // counts and folder counts sat ~17px apart, each internally consistent but not
 // sharing an edge.
 TEST(d2_expand_rows_share_one_right_edge) {
@@ -394,6 +396,457 @@ TEST(d6_ellipsis_with_children_sizing_terminates) {
 
   ui_test::check(!h.drawn("text").empty(), "children()+ellipsis rendered",
                  __FILE__, __LINE__);
+}
+
+// ===========================================================================
+// D14 -- with_disabled(true) must look disabled, not just act disabled
+//
+// floatinghotel: "Since real apps overwhelmingly use
+// with_custom_background(Color), with_disabled(true) blocks interactions but
+// does NOT change the visual appearance." Their workaround is to hand-pick
+// different colours in every preset factory.
+//
+// An accessibility bug rather than a cosmetic one: a control that looks
+// enabled invites clicks that silently do nothing.
+// ===========================================================================
+
+namespace {
+bool same_color(const Color &a, const Color &b) {
+  return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+}
+
+// The widest recorded background rect -- the widget's own fill, as opposed to
+// the thin per-side border rects drawn over it.
+std::optional<Color> widest_fill(ImmTestHarness &h) {
+  std::optional<Color> best;
+  float best_w = -1.f;
+  for (const char *op : {"rectangle", "rectangle_rounded"}) {
+    for (const auto &c : h.drawn(op)) {
+      if (c.rect.width > best_w) {
+        best_w = c.rect.width;
+        best = c.color;
+      }
+    }
+  }
+  return best;
+}
+} // namespace
+
+// The regression test. Fails before the fix: the drawn colour comes back as
+// the raw custom colour, undimmed.
+TEST(d14_disabled_custom_background_is_dimmed) {
+  ImmTestHarness h;
+  const Color custom{200, 60, 60, 255};
+  div(h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(200), pixels(40)})
+          .with_custom_background(custom)
+          .with_disabled(true));
+  h.render();
+
+  auto fill = widest_fill(h);
+  ui_test::check(fill.has_value(), "a background was drawn", __FILE__,
+                 __LINE__);
+  if (fill) {
+    ui_test::check(!same_color(*fill, custom),
+                   "disabled custom background is not the raw colour",
+                   __FILE__, __LINE__);
+    ui_test::check(same_color(*fill, h.context().theme.disabled_variant(custom)),
+                   "disabled custom background matches disabled_variant",
+                   __FILE__, __LINE__);
+  }
+}
+
+// The control. Without with_disabled the colour must be untouched -- guards
+// against the fix dimming everything.
+TEST(d14_enabled_custom_background_is_untouched) {
+  ImmTestHarness h;
+  const Color custom{200, 60, 60, 255};
+  div(h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(200), pixels(40)})
+          .with_custom_background(custom));
+  h.render();
+
+  auto fill = widest_fill(h);
+  ui_test::check(fill.has_value(), "a background was drawn", __FILE__,
+                 __LINE__);
+  if (fill)
+    ui_test::check(same_color(*fill, custom),
+                   "enabled custom background is exactly as given", __FILE__,
+                   __LINE__);
+}
+
+// The theme-usage path already dimmed correctly; this pins it so extracting
+// disabled_variant out of from_usage cannot quietly change it.
+TEST(d14_disabled_theme_background_still_dims) {
+  ImmTestHarness h;
+  div(h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(200), pixels(40)})
+          .with_color_usage(Theme::Usage::Primary)
+          .with_disabled(true));
+  h.render();
+
+  auto fill = widest_fill(h);
+  ui_test::check(fill.has_value(), "a background was drawn", __FILE__,
+                 __LINE__);
+  if (fill) {
+    const Theme &theme = h.context().theme;
+    ui_test::check(
+        same_color(*fill, theme.from_usage(Theme::Usage::Primary, true)),
+        "disabled theme background still dims", __FILE__, __LINE__);
+    ui_test::check(
+        !same_color(*fill, theme.from_usage(Theme::Usage::Primary, false)),
+        "disabled theme background differs from enabled", __FILE__, __LINE__);
+  }
+}
+
+// Disabled TEXT uses colors::darken(col, 0.5f) -- a different transform from
+// the background's mix+alpha+desaturate. That inconsistency is deliberate for
+// now (unifying it would change how every existing app's disabled text looks),
+// so pin today's behaviour: the four duplicated copies of this logic get
+// collapsed into one helper, and this proves that was behaviour-preserving.
+TEST(d14_disabled_text_keeps_its_own_darken_transform) {
+  ImmTestHarness h;
+  const Color text_color{240, 240, 240, 255};
+  div(h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(200), pixels(40)})
+          .with_label("disabled")
+          .with_custom_text_color(text_color)
+          .with_disabled(true));
+  h.render();
+
+  auto texts = h.drawn("text");
+  ui_test::check(!texts.empty(), "disabled label was drawn", __FILE__,
+                 __LINE__);
+  if (!texts.empty())
+    ui_test::check(same_color(texts[0].color, colors::darken(text_color, 0.5f)),
+                   "disabled text is darkened by 0.5", __FILE__, __LINE__);
+}
+
+// ===========================================================================
+// #22 / #24 -- styled spans and hard line breaks
+//
+// Written BEFORE the fix, so each one is proven to fail against today's code.
+// A test that is green both before and after proves nothing; that has already
+// bitten twice in this file's history (a harness that never rendered, then a
+// measure_text stub that returned {0,0}).
+//
+// #22: with_styled_label spans draw on ONE line, so styled runs
+//      cannot be used inside a wrapping paragraph. Also -- not in the
+//      original report -- spans are handled at exactly one site in rendering.h, inside
+//      RenderBatched, so with_styled_label is a silent no-op under RenderImm.
+//      Both renderers are runtime-selectable (utilities.h, `use_batched`).
+//
+// #24: detail::wrap_text_to_width splits on ' ' only, so '\n' is an
+//      ordinary word character. Multi-line bodies collapse into one run-on
+//      paragraph and the caller's height model (sized for N logical lines) is
+//      wrong, leaving a large empty gap.
+// ===========================================================================
+
+namespace {
+// Recorded text draws grouped into visual lines: same y == same line, runs on
+// a line concatenated in paint order, lines ordered top to bottom. Works for
+// both the plain wrapper (one draw per line) and spans (one draw per run).
+std::vector<std::string> drawn_lines(ImmTestHarness &h) {
+  std::vector<std::pair<float, std::string>> acc;
+  for (const auto &c : h.drawn("text")) {
+    bool merged = false;
+    for (auto &p : acc) {
+      if (std::fabs(p.first - c.rect.y) < 0.5f) {
+        p.second += c.text;
+        merged = true;
+        break;
+      }
+    }
+    if (!merged)
+      acc.push_back({c.rect.y, c.text});
+  }
+  std::sort(acc.begin(), acc.end(),
+            [](const auto &a, const auto &b) { return a.first < b.first; });
+  std::vector<std::string> out;
+  for (auto &p : acc)
+    out.push_back(p.second);
+  return out;
+}
+
+const char *kParagraph =
+    "the quick brown fox jumps over the lazy dog and keeps on running "
+    "well past the edge of the box";
+} // namespace
+
+// #22: a styled label long enough to need wrapping must wrap AND stay styled.
+//
+// The colour assertion is the load-bearing half. Today the wrap branch
+// (rendering.h:2173) runs first and sets `wrapped`, which makes the span
+// branch at :2209 unreachable -- so a wrapping styled label silently renders
+// as PLAIN text. Checking only the line count would pass on that fallback and
+// prove nothing.
+TEST(d22_styled_spans_wrap_and_stay_styled) {
+  const Color teal{0, 190, 190, 255};
+  ImmTestHarness h;
+  div(h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(240), pixels(120)})
+          .with_font(UIComponent::DEFAULT_FONT, 16.f)
+          .with_text_overflow(TextOverflow::Wrap)
+          .with_styled_label({TextSpan{kParagraph, teal}}));
+  h.render_batched();
+
+  auto lines = drawn_lines(h);
+  ui_test::check(lines.size() > 1, "styled label wrapped onto >1 line",
+                 __FILE__, __LINE__);
+
+  bool all_teal = !h.drawn("text").empty();
+  for (const auto &c : h.drawn("text"))
+    if (!same_color(c.color, teal))
+      all_teal = false;
+  ui_test::check(all_teal, "wrapped styled label kept its span colour",
+                 __FILE__, __LINE__);
+}
+
+// #22: the invariant that makes styled labels usable -- a caller sizes a box
+// from the plain wrapper's line count, so styled must wrap on exactly the same
+// boundaries. letter_spacing is set because that is where a per-word-width
+// implementation drifts from measuring the whole candidate line.
+//
+// This one PASSES today, for the wrong reason: a wrapping styled label falls
+// back to drawing the plain concatenated label, so the two are trivially
+// identical. It earns its keep AFTER the fix, as the guard against the
+// per-word-width drift that made the proposed patch unsafe to take as-is.
+TEST(d22_styled_wraps_on_same_boundaries_as_plain) {
+  std::vector<std::string> plain_lines;
+  {
+    ImmTestHarness h;
+    div(h.context(), mk(h.root(), 0),
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(240), pixels(120)})
+            .with_font(UIComponent::DEFAULT_FONT, 16.f)
+            .with_letter_spacing(2.f)
+            .with_text_overflow(TextOverflow::Wrap)
+            .with_label(kParagraph));
+    h.render_batched();
+    plain_lines = drawn_lines(h);
+  }
+
+  std::vector<std::string> span_lines;
+  {
+    ImmTestHarness h;
+    div(h.context(), mk(h.root(), 0),
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(240), pixels(120)})
+            .with_font(UIComponent::DEFAULT_FONT, 16.f)
+            .with_letter_spacing(2.f)
+            .with_text_overflow(TextOverflow::Wrap)
+            .with_styled_label(
+                {TextSpan{kParagraph, Color{255, 255, 255, 255}}}));
+    h.render_batched();
+    span_lines = drawn_lines(h);
+  }
+
+  ui_test::check(plain_lines.size() > 1, "plain paragraph wrapped", __FILE__,
+                 __LINE__);
+  ui_test::check(span_lines == plain_lines,
+                 "styled wraps on the same boundaries as plain", __FILE__,
+                 __LINE__);
+}
+
+// #22: each run keeps its own colour after wrapping.
+TEST(d22_wrapped_spans_keep_their_colors) {
+  const Color red{220, 60, 60, 255};
+  const Color blue{60, 120, 220, 255};
+  ImmTestHarness h;
+  div(h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(240), pixels(120)})
+          .with_font(UIComponent::DEFAULT_FONT, 16.f)
+          .with_text_overflow(TextOverflow::Wrap)
+          .with_styled_label({
+              TextSpan{"the quick brown fox jumps over ", red},
+              TextSpan{"the lazy dog and keeps on running far", blue},
+          }));
+  h.render_batched();
+
+  bool saw_red = false, saw_blue = false;
+  for (const auto &c : h.drawn("text")) {
+    if (same_color(c.color, red))
+      saw_red = true;
+    if (same_color(c.color, blue))
+      saw_blue = true;
+  }
+  ui_test::check(saw_red && saw_blue, "both span colours survive wrapping",
+                 __FILE__, __LINE__);
+  ui_test::check(drawn_lines(h).size() > 1, "multi-span label wrapped",
+                 __FILE__, __LINE__);
+}
+
+// #22: spans are only implemented in RenderBatched, so with_styled_label draws
+// nothing coloured under RenderImm -- the same UI renders differently
+// depending on a runtime flag no app-level code mentions.
+TEST(d22_styled_spans_render_under_render_imm_too) {
+  const Color red{220, 60, 60, 255};
+  ImmTestHarness h;
+  div(h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(240), pixels(60)})
+          .with_font(UIComponent::DEFAULT_FONT, 16.f)
+          .with_styled_label({TextSpan{"hello", red}}));
+  h.render();
+
+  bool saw_red = false;
+  for (const auto &c : h.drawn("text"))
+    if (same_color(c.color, red))
+      saw_red = true;
+  ui_test::check(saw_red, "RenderImm honours span colours", __FILE__, __LINE__);
+}
+
+// #24: '\n' is a hard break. Today it is an ordinary word character, so this
+// draws one run-on line instead of two.
+TEST(d24_newline_forces_a_line_break) {
+  ImmTestHarness h;
+  div(h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(400), pixels(120)})
+          .with_font(UIComponent::DEFAULT_FONT, 16.f)
+          .with_text_overflow(TextOverflow::Wrap)
+          .with_label("first line\nsecond line"));
+  h.render_batched();
+
+  auto lines = drawn_lines(h);
+  ui_test::check(lines.size() == 2, "newline split the label into two lines",
+                 __FILE__, __LINE__);
+  if (lines.size() == 2) {
+    ui_test::check(lines[0] == "first line", "first line is intact", __FILE__,
+                   __LINE__);
+    ui_test::check(lines[1] == "second line", "second line is intact",
+                   __FILE__, __LINE__);
+  }
+}
+
+// #24: a blank line between paragraphs must survive, otherwise prose that
+// relies on '\n\n' for spacing renders as one block.
+TEST(d24_blank_line_between_paragraphs_is_preserved) {
+  ImmTestHarness h;
+  div(h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(400), pixels(200)})
+          .with_font(UIComponent::DEFAULT_FONT, 16.f)
+          .with_text_overflow(TextOverflow::Wrap)
+          .with_label("para one\n\npara two"));
+  h.render_batched();
+
+  auto lines = drawn_lines(h);
+  // Two drawn lines with a full line-height gap between them: the empty middle
+  // line advances the pen without emitting text.
+  ui_test::check(lines.size() == 2, "two paragraphs drawn", __FILE__,
+                 __LINE__);
+  auto texts = h.drawn("text");
+  if (texts.size() >= 2) {
+    float gap = texts.back().rect.y - texts.front().rect.y;
+    ui_test::check(gap > 16.f * 1.5f,
+                   "blank line leaves a full line of vertical space", __FILE__,
+                   __LINE__);
+  }
+}
+
+// ===========================================================================
+// #22b -- with_font_size() alone is silently ignored
+//
+// Not from any app report; found while writing the #22/#24 tests, when a
+// plain-text WRAP baseline that should obviously have passed did not.
+//
+// component_init.h:356 gates enable_font() -- the ONLY thing that copies
+// font_size and font_size_explicitly_set onto the UIComponent -- on
+// `config.font_name != UNSET_FONT`. So calling with_font_size() without also
+// naming a font leaves cmp.font_size_explicitly_set false, explicit_fs
+// resolves to 0, and every code path that requires a known font size quietly
+// switches off. Wrapping is the visible casualty: rendering.h:2174 requires
+// explicit_fs > 0.
+//
+// Strong candidate for floatinghotel footgun F1 ("labels don't word-wrap") --
+// set a size, ask for wrapping, get one long clipped line and no diagnostic.
+// ===========================================================================
+TEST(d22b_with_font_size_alone_enables_wrapping) {
+  ImmTestHarness h;
+  div(h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(240), pixels(120)})
+          .with_font_size(16.f) // deliberately NO with_font()
+          .with_text_overflow(TextOverflow::Wrap)
+          .with_label(kParagraph));
+  h.render_batched();
+
+  ui_test::check(drawn_lines(h).size() > 1,
+                 "with_font_size alone is enough to wrap", __FILE__, __LINE__);
+}
+
+// The same widget WITH a font name wraps, proving the size was never the
+// problem -- it is the name gate. Passes today; guards the fix's blast radius.
+TEST(d22b_with_font_name_and_size_wraps_today) {
+  ImmTestHarness h;
+  div(h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(240), pixels(120)})
+          .with_font(UIComponent::DEFAULT_FONT, 16.f)
+          .with_text_overflow(TextOverflow::Wrap)
+          .with_label(kParagraph));
+  h.render_batched();
+
+  ui_test::check(drawn_lines(h).size() > 1, "named font + size wraps",
+                 __FILE__, __LINE__);
+}
+
+// #22: the two renderers must agree. `use_batched` is a runtime flag that no
+// app-level UI code mentions, so a styled label that renders differently
+// across it is a trap. Also the real check on RenderImm's per-run inset
+// compensation: draw_text_in_rect insets by 5px, so a tight run rect would
+// shift every run right relative to the batched path.
+TEST(d22_both_renderers_agree_on_styled_output) {
+  const Color red{220, 60, 60, 255};
+  const Color blue{60, 120, 220, 255};
+  const auto build = [&](ImmTestHarness &h) {
+    div(h.context(), mk(h.root(), 0),
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(240), pixels(120)})
+            .with_font(UIComponent::DEFAULT_FONT, 16.f)
+            .with_text_overflow(TextOverflow::Wrap)
+            .with_styled_label({
+                TextSpan{"the quick brown fox jumps over ", red},
+                TextSpan{"the lazy dog and keeps on running far", blue},
+            }));
+  };
+
+  std::vector<DrawCall> imm_texts, batched_texts;
+  {
+    ImmTestHarness h;
+    build(h);
+    h.render();
+    imm_texts = h.drawn("text");
+  }
+  {
+    ImmTestHarness h;
+    build(h);
+    h.render_batched();
+    batched_texts = h.drawn("text");
+  }
+
+  ui_test::check(!imm_texts.empty(), "RenderImm drew the styled label",
+                 __FILE__, __LINE__);
+  ui_test::check(imm_texts.size() == batched_texts.size(),
+                 "both renderers emit the same number of runs", __FILE__,
+                 __LINE__);
+  if (imm_texts.size() == batched_texts.size()) {
+    bool same = true;
+    for (size_t i = 0; i < imm_texts.size(); i++) {
+      if (imm_texts[i].text != batched_texts[i].text ||
+          !same_color(imm_texts[i].color, batched_texts[i].color))
+        same = false;
+    }
+    ui_test::check(same, "both renderers emit the same run text and colours",
+                   __FILE__, __LINE__);
+  }
 }
 
 int main() { return ui_test::run_registered_tests("Downstream Gaps"); }

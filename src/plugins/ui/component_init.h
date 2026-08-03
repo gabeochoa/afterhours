@@ -353,7 +353,11 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
     entity.enableTag(DragTag::Group);
   }
 
-  if (config.font_name != UIComponent::UNSET_FONT) {
+  // An explicit size counts even with no font name: enable_font is the only
+  // thing that copies font_size across, so gating on the name silently
+  // dropped with_font_size() and switched off wrapping.
+  if (config.font_name != UIComponent::UNSET_FONT ||
+      config.font_size_explicitly_set) {
     entity.get<UIComponent>().enable_font(config.font_name, config.font_size,
                                           config.font_size_explicitly_set,
                                           config.font_weight);
@@ -366,8 +370,12 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
         ctx.theme.from_usage(config.color_usage, config.disabled));
   } else if (config.color_usage == Theme::Usage::Custom) {
     if (config.custom_color.has_value()) {
-      entity.addComponentIfMissing<HasColor>(config.custom_color.value());
-      entity.get<HasColor>().set(config.custom_color.value());
+      // Dim like the theme branch above; without it disabled looked enabled.
+      const Color custom =
+          config.disabled ? ctx.theme.disabled_variant(config.custom_color.value())
+                          : config.custom_color.value();
+      entity.addComponentIfMissing<HasColor>(custom);
+      entity.get<HasColor>().set(custom);
     } else {
       entity.addComponentIfMissing<HasColor>(colors::UI_PINK);
       entity.get<HasColor>().set(colors::UI_PINK);

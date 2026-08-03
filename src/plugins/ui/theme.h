@@ -321,19 +321,19 @@ struct Theme {
                magic_enum::enum_name(cu));
     }
     Color color = color_ref(cu);
-    if (disabled) {
-      // Blend toward background and reduce alpha for a clear "disabled" look.
-      Color muted = colors::mix(color, background, 1.0f - disabled_opacity);
-      muted.a = static_cast<unsigned char>(color.a * disabled_opacity);
-      // Desaturate: shift RGB toward grayscale (50% desaturation) so disabled
-      // elements look clearly "grayed out" rather than just slightly faded.
-      float lum = 0.299f * muted.r + 0.587f * muted.g + 0.114f * muted.b;
-      muted.r = static_cast<unsigned char>(muted.r * 0.5f + lum * 0.5f);
-      muted.g = static_cast<unsigned char>(muted.g * 0.5f + lum * 0.5f);
-      muted.b = static_cast<unsigned char>(muted.b * 0.5f + lum * 0.5f);
-      return muted;
-    }
-    return color;
+    return disabled ? disabled_variant(color) : color;
+  }
+
+  // The disabled look, shared by the theme and custom-colour paths.
+  Color disabled_variant(Color color) const {
+    Color muted = colors::mix(color, background, 1.0f - disabled_opacity);
+    muted.a = static_cast<unsigned char>(color.a * disabled_opacity);
+    // Desaturate 50% toward luminance so it reads grayed out, not just faded.
+    float lum = 0.299f * muted.r + 0.587f * muted.g + 0.114f * muted.b;
+    muted.r = static_cast<unsigned char>(muted.r * 0.5f + lum * 0.5f);
+    muted.g = static_cast<unsigned char>(muted.g * 0.5f + lum * 0.5f);
+    muted.b = static_cast<unsigned char>(muted.b * 0.5f + lum * 0.5f);
+    return muted;
   }
 
   // Automatically pick the best font color for a given background usage

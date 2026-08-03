@@ -817,7 +817,9 @@ struct ComponentConfig {
   // Falls back to Primary if no usage is set.
   Color resolve_background_color(const Theme &theme) const {
     if (color_usage == Theme::Usage::Custom && custom_color.has_value()) {
-      return custom_color.value();
+      // Matches the live path in component_init.h; this one only feeds variants.
+      return disabled ? theme.disabled_variant(custom_color.value())
+                      : custom_color.value();
     }
     Theme::Usage usage =
         Theme::is_valid(color_usage) ? color_usage : Theme::Usage::Primary;

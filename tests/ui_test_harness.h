@@ -209,17 +209,33 @@ struct ImmTestHarness {
   // this is compiled out rather than offered and quietly returning nothing.
   // Keep render-asserting suites out of RAYLIB_TESTS in tests/Makefile.
 #ifdef AFTER_HOURS_BACKEND_NONE
+  // Both renderers are selectable at runtime by real apps (utilities.h,
+  // `use_batched`), so both need to be testable. Call ONE per harness: the
+  // renderer consumes context.render_cmds, so a second call sees an empty
+  // list and draws nothing.
   const std::vector<DrawCall> &render() {
+    return render_with<RenderImm<TestInputAction>>();
+  }
+  const std::vector<DrawCall> &render_batched() {
+    return render_with<RenderBatched<TestInputAction>>();
+  }
+
+  template <typename Renderer> const std::vector<DrawCall> &render_with() {
     layout_only();
 
     if (!font_entity) {
       font_entity = &coll.createEntity();
       auto &fm = font_entity->addComponent<FontManager>();
+      // Both names are needed: RenderImm draws via get_active_font()
+      // (DEFAULT_FONT), while RenderBatched resolves the component's font_name
+      // -- which is UNSET_FONT unless the caller set one -- and looks it up
+      // with .at(), throwing if it is absent.
       fm.load_font(UIComponent::DEFAULT_FONT, get_default_font());
+      fm.load_font(UIComponent::UNSET_FONT, get_default_font());
     }
 
     clear_draw_calls();
-    RenderImm<TestInputAction> renderer;
+    Renderer renderer;
     renderer.for_each_with_derived(*root_entity, *ctx,
                                    font_entity->get<FontManager>(), 0.f);
     return draw_calls();

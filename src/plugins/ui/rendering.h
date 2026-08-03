@@ -509,6 +509,85 @@ static inline RectangleType position_text(const ui::FontManager &fm,
 // should be applied
 namespace detail {
 
+// One visual line, as coloured runs.
+using TextRunLine = std::vector<TextSpan>;
+
+// Greedy word-wrap over coloured runs. Over-wide words get their own line;
+// '\n' is a hard break, so '\n\n' leaves a blank line.
+//
+// `measure` sizes the whole joined candidate line, not a sum of per-word
+// widths -- measure_text spaces BETWEEN characters, so a per-word sum drifts
+// further off with every word.
+//
+// The single wrapping primitive: wrap_text_to_width is one colourless run
+// through here, so plain and styled break identically by construction.
+template <typename MeasureFn>
+static inline std::vector<TextRunLine>
+wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
+                   MeasureFn &&measure) {
+  std::vector<TextRunLine> lines;
+  TextRunLine current;
+  std::string current_text; // joined text of `current`, for measuring
+
+  const auto same_color = [](const Color &a, const Color &b) {
+    return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+  };
+
+  const auto flush = [&]() {
+    lines.push_back(current);
+    current.clear();
+    current_text.clear();
+  };
+
+  const auto append_word = [&](std::string word, const Color &color) {
+    if (word.empty())
+      return;
+    if (current_text.empty()) {
+      current_text = word;
+      current.push_back(TextSpan{std::move(word), color});
+      return;
+    }
+    const std::string candidate = current_text + " " + word;
+    if (measure(candidate) > max_width) {
+      flush();
+      current_text = word;
+      current.push_back(TextSpan{std::move(word), color});
+      return;
+    }
+    current_text = candidate;
+    // Space goes with the following word; merge same-coloured runs so a
+    // single-colour line stays one run.
+    if (!current.empty() && same_color(current.back().color, color)) {
+      current.back().text += " " + word;
+    } else {
+      current.push_back(TextSpan{" " + word, color});
+    }
+  };
+
+  for (const auto &run : runs) {
+    size_t i = 0;
+    while (true) {
+      const size_t nl = run.text.find('\n', i);
+      const size_t end = (nl == std::string::npos) ? run.text.size() : nl;
+      size_t w = i;
+      while (w < end) {
+        size_t sp = run.text.find(' ', w);
+        if (sp == std::string::npos || sp > end)
+          sp = end;
+        append_word(run.text.substr(w, sp - w), run.color);
+        w = sp + 1;
+      }
+      if (nl == std::string::npos)
+        break;
+      flush(); // hard break
+      i = nl + 1;
+    }
+  }
+  if (!current.empty() || lines.empty())
+    flush();
+  return lines;
+}
+
 // Greedy word-wrap: split `text` into lines each no wider than `max_width`,
 // using `measure` to size candidate lines. Words wider than max_width are
 // placed on their own line (not character-split). Returns at least one line
@@ -517,30 +596,16 @@ template <typename MeasureFn>
 static inline std::vector<std::string>
 wrap_text_to_width(const std::string &text, float max_width,
                    MeasureFn &&measure) {
+  if (text.empty() || max_width <= 0.f)
+    return {text};
   std::vector<std::string> lines;
-  if (text.empty() || max_width <= 0.f) {
-    lines.push_back(text);
-    return lines;
+  for (const auto &line : wrap_runs_to_width({TextSpan{text, Color{}}},
+                                             max_width, measure)) {
+    std::string joined;
+    for (const auto &run : line)
+      joined += run.text;
+    lines.push_back(std::move(joined));
   }
-  std::string current;
-  size_t start = 0;
-  while (start <= text.size()) {
-    size_t sp = text.find(' ', start);
-    std::string word = text.substr(
-        start, sp == std::string::npos ? std::string::npos : sp - start);
-    std::string candidate = current.empty() ? word : current + " " + word;
-    if (current.empty() || measure(candidate) <= max_width) {
-      current = candidate;
-    } else {
-      lines.push_back(current);
-      current = word;
-    }
-    if (sp == std::string::npos)
-      break;
-    start = sp + 1;
-  }
-  if (!current.empty())
-    lines.push_back(current);
   if (lines.empty())
     lines.push_back(text);
   return lines;
@@ -572,6 +637,23 @@ draw_text_at_position(const ui::FontManager &fm, const std::string &text,
                       : rect.y + rect.height / 2.0f;
   draw_text_ex(font, text.c_str(), startPos, fontSize, spacing, color, rotation,
                centerX, centerY);
+}
+
+// Explicit override, else auto-contrast, else theme font; disabled in each.
+// Shared by RenderImm and RenderBatched, which had identical copies.
+// Disabled text darkens by 0.5 while disabled backgrounds use
+// Theme::disabled_variant -- kept as-is, see todo.md D14b.
+inline Color resolve_label_color(const HasLabel &hasLabel, const Theme &theme) {
+  if (hasLabel.explicit_text_color.has_value()) {
+    const Color c = hasLabel.explicit_text_color.value();
+    return hasLabel.is_disabled ? colors::darken(c, 0.5f) : c;
+  }
+  if (hasLabel.background_hint.has_value()) {
+    const Color c = colors::auto_text_color(hasLabel.background_hint.value(),
+                                            theme.font, theme.darkfont);
+    return hasLabel.is_disabled ? colors::darken(c, 0.5f) : c;
+  }
+  return theme.from_usage(Theme::Usage::Font, hasLabel.is_disabled);
 }
 } // namespace detail
 
@@ -777,6 +859,78 @@ static inline void draw_text_in_rect(
   detail::draw_text_at_position(fm, render_text, rect, alignment, sizing, color,
                                 rotation, rot_center_x, rot_center_y,
                                 letter_spacing);
+}
+
+// Draw coloured runs through the same wrap primitive as the plain path.
+// `joined` is the concatenated text, only used to derive a font size when none
+// was set explicitly.
+static inline void draw_runs_in_rect(
+    const ui::FontManager &fm, const std::vector<TextSpan> &runs,
+    RectangleType rect, TextAlignment alignment,
+    bool show_debug_indicator = false,
+    const std::optional<TextStroke> &stroke = std::nullopt,
+    const std::optional<TextShadow> &shadow = std::nullopt,
+    float rotation = 0.0f, float rot_center_x = 0.0f, float rot_center_y = 0.0f,
+    TextOverflow text_overflow = TextOverflow::Clip, float letter_spacing = 0.0f,
+    float explicit_font_size = 0.0f, const std::string &joined = "") {
+  if (runs.empty() || rect.width <= 0.f)
+    return;
+
+  Font font = fm.get_active_font();
+  float font_size = explicit_font_size;
+  if (font_size <= 0.f) {
+    font_size = position_text_ex(fm, joined, rect, alignment,
+                                 Vector2Type{5.f, 5.f}, explicit_font_size,
+                                 letter_spacing, text_overflow)
+                    .rect.height;
+  }
+  const float spacing = 1.f + letter_spacing;
+  const auto line_width = [&](const std::string &s) {
+    return measure_text(font, s.c_str(), font_size, spacing).x;
+  };
+
+  // Only wrap when asked and a size is known, matching draw_text_in_rect.
+  const bool wants_wrap =
+      text_overflow == TextOverflow::Wrap && explicit_font_size > 0.f;
+  const float wrap_width = wants_wrap ? (rect.width - 10.f) : 1e9f;
+  if (wrap_width <= 0.f)
+    return;
+
+  const auto lines = detail::wrap_runs_to_width(runs, wrap_width, line_width);
+  const float line_h = measure_text(font, "Ag", font_size, spacing).y;
+  const float total_h = line_h * static_cast<float>(lines.size());
+  float y = rect.y + std::max(0.f, (rect.height - total_h) * 0.5f);
+
+  // draw_text_in_rect insets by min(5, width*0.4); pad each side so the
+  // inset stays 5 and the glyphs land on `x`.
+  constexpr float kInset = 5.f;
+
+  for (const auto &line : lines) {
+    if (line.empty()) {
+      y += line_h; // blank line from a "\n\n"
+      continue;
+    }
+    std::string line_text;
+    for (const auto &run : line)
+      line_text += run.text;
+
+    float x = rect.x;
+    if (alignment == TextAlignment::Center)
+      x += std::max(0.f, (rect.width - line_width(line_text)) / 2.f);
+    else if (alignment == TextAlignment::Right)
+      x += std::max(0.f, rect.width - line_width(line_text));
+
+    for (const auto &run : line) {
+      const float w = line_width(run.text);
+      RectangleType run_rect{x - kInset, y, w + kInset * 2.f, line_h};
+      draw_text_in_rect(fm, run.text, run_rect, TextAlignment::Left, run.color,
+                        show_debug_indicator, stroke, shadow, rotation,
+                        rot_center_x, rot_center_y, TextOverflow::Clip,
+                        letter_spacing, font_size);
+      x += w;
+    }
+    y += line_h;
+  }
 }
 
 static inline Vector2Type
@@ -1446,27 +1600,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
     if (entity.has<HasLabel>()) {
       const HasLabel &hasLabel = entity.get<HasLabel>();
-      Color font_col;
-
-      if (hasLabel.explicit_text_color.has_value()) {
-        // Explicit text color set via with_text_color()
-        font_col = hasLabel.explicit_text_color.value();
-        if (hasLabel.is_disabled) {
-          font_col = colors::darken(font_col, 0.5f);
-        }
-      } else if (hasLabel.background_hint.has_value()) {
-        // Garnish auto-contrast: pick best text color for readability
-        font_col =
-            colors::auto_text_color(hasLabel.background_hint.value(),
-                                    context.theme.font, context.theme.darkfont);
-        if (hasLabel.is_disabled) {
-          font_col = colors::darken(font_col, 0.5f);
-        }
-      } else {
-        // Default: use theme font color (unchanged behavior)
-        font_col =
-            context.theme.from_usage(Theme::Usage::Font, hasLabel.is_disabled);
-      }
+      Color font_col = detail::resolve_label_color(hasLabel, context.theme);
 
       if (effective_opacity < 1.0f) {
         font_col = colors::opacity_pct(font_col, effective_opacity);
@@ -1507,11 +1641,21 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       label_rect.x += hasLabel.text_x_offset;
       label_rect.width -= hasLabel.text_x_offset;
       label_rect.y += hasLabel.text_y_offset;
-      draw_text_in_rect(font_manager, hasLabel.label.c_str(), label_rect,
-                        hasLabel.alignment, font_col, SHOW_TEXT_OVERFLOW_DEBUG,
-                        stroke, shadow, rotation, centerX, centerY,
-                        hasLabel.text_overflow, hasLabel.letter_spacing,
-                        explicit_fs);
+      // Without this branch with_styled_label is a no-op here, so the same
+      // UI renders differently depending on `use_batched`.
+      if (!hasLabel.spans.empty()) {
+        draw_runs_in_rect(font_manager, hasLabel.spans, label_rect,
+                          hasLabel.alignment, SHOW_TEXT_OVERFLOW_DEBUG, stroke,
+                          shadow, rotation, centerX, centerY,
+                          hasLabel.text_overflow, hasLabel.letter_spacing,
+                          explicit_fs, hasLabel.label);
+      } else {
+        draw_text_in_rect(font_manager, hasLabel.label.c_str(), label_rect,
+                          hasLabel.alignment, font_col,
+                          SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation,
+                          centerX, centerY, hasLabel.text_overflow,
+                          hasLabel.letter_spacing, explicit_fs);
+      }
     }
 
     if (entity.has<texture_manager::HasTexture>()) {
@@ -2075,24 +2219,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     // Label/text
     if (entity.has<HasLabel>()) {
       const HasLabel &hasLabel = entity.get<HasLabel>();
-      Color font_col;
-
-      if (hasLabel.explicit_text_color.has_value()) {
-        font_col = hasLabel.explicit_text_color.value();
-        if (hasLabel.is_disabled) {
-          font_col = colors::darken(font_col, 0.5f);
-        }
-      } else if (hasLabel.background_hint.has_value()) {
-        font_col =
-            colors::auto_text_color(hasLabel.background_hint.value(),
-                                    context.theme.font, context.theme.darkfont);
-        if (hasLabel.is_disabled) {
-          font_col = colors::darken(font_col, 0.5f);
-        }
-      } else {
-        font_col =
-            context.theme.from_usage(Theme::Usage::Font, hasLabel.is_disabled);
-      }
+      Color font_col = detail::resolve_label_color(hasLabel, context.theme);
 
       if (effective_opacity < 1.0f) {
         font_col = colors::opacity_pct(font_col, effective_opacity);
@@ -2186,69 +2313,80 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         float centerX = draw_rect.x + draw_rect.width / 2.0f;
         float centerY = draw_rect.y + draw_rect.height / 2.0f;
 
-        // Word-wrap: emit one text command per line that fits label_rect's
-        // width. Requires an explicit font size (see draw_text_in_rect). Falls
-        // through to the single-line command otherwise.
+        // Wrap into lines of coloured runs, one command per run. Plain text is
+        // the single-run case. Wrapping needs an explicit font size (see
+        // draw_text_in_rect); styled runs lay out either way.
         bool wrapped = false;
-        if (hasLabel.text_overflow == TextOverflow::Wrap &&
-            !display_text.empty() && explicit_fs > 0.f &&
+        const bool has_spans = !hasLabel.spans.empty();
+        const bool wants_wrap =
+            hasLabel.text_overflow == TextOverflow::Wrap && explicit_fs > 0.f;
+        if ((wants_wrap || has_spans) && !display_text.empty() &&
             label_rect.width > 0.f) {
           Font font = font_manager.get_active_font();
-          float font_size = explicit_fs;
-          float spacing = 1.f + hasLabel.letter_spacing;
-          float max_width = label_rect.width - 10.f;
+          const std::string resolved =
+              font_manager.resolve_weighted(cmp.font_name, cmp.font_weight);
+          const float font_size = wants_wrap ? explicit_fs : result.rect.height;
+          const float spacing = 1.f + hasLabel.letter_spacing;
           auto line_width = [&](const std::string &s) {
             return measure_text(font, s.c_str(), font_size, spacing).x;
           };
-          if (max_width > 0.f && line_width(display_text) > max_width) {
-            std::vector<std::string> lines =
-                detail::wrap_text_to_width(display_text, max_width, line_width);
-            if (lines.size() > 1) {
-              float line_h =
+          // Unwrapped styled text uses the same loop, unbounded width.
+          const float wrap_width =
+              wants_wrap ? (label_rect.width - 10.f) : 1e9f;
+
+          if (wrap_width > 0.f) {
+            const std::vector<TextSpan> runs =
+                has_spans ? hasLabel.spans
+                          : std::vector<TextSpan>{
+                                TextSpan{display_text, font_col}};
+            const auto lines =
+                detail::wrap_runs_to_width(runs, wrap_width, line_width);
+
+            // A single colourless line is what the path below already draws.
+            if (lines.size() > 1 || has_spans) {
+              const float line_h =
                   measure_text(font, "Ag", font_size, spacing).y;
-              float total_h = line_h * static_cast<float>(lines.size());
+              const float total_h = line_h * static_cast<float>(lines.size());
               float y = label_rect.y +
                         std::max(0.f, (label_rect.height - total_h) * 0.5f);
-              for (const auto &ln : lines) {
-                RectangleType lr{label_rect.x, y, label_rect.width, line_h};
-                buffer.add_text(
-                    lr, ln,
-                    font_manager.resolve_weighted(cmp.font_name, cmp.font_weight),
-                    font_size, font_col, hasLabel.alignment, layer, entity.id,
-                    stroke, shadow, rotation, centerX, centerY,
-                    hasLabel.letter_spacing);
+              for (const auto &line : lines) {
+                if (line.empty()) {
+                  y += line_h; // blank line from a "\n\n"
+                  continue;
+                }
+                if (line.size() == 1) {
+                  // Same call shape as before, so plain wrapped text does
+                  // not shift.
+                  RectangleType lr{label_rect.x, y, label_rect.width, line_h};
+                  buffer.add_text(lr, line[0].text, resolved, font_size,
+                                  line[0].color, hasLabel.alignment, layer,
+                                  entity.id, stroke, shadow, rotation, centerX,
+                                  centerY, hasLabel.letter_spacing);
+                } else {
+                  std::string joined;
+                  for (const auto &run : line)
+                    joined += run.text;
+                  float x = label_rect.x;
+                  if (hasLabel.alignment == TextAlignment::Center)
+                    x += std::max(0.f,
+                                  (label_rect.width - line_width(joined)) / 2.f);
+                  else if (hasLabel.alignment == TextAlignment::Right)
+                    x += std::max(0.f, label_rect.width - line_width(joined));
+                  for (const auto &run : line) {
+                    const float w = line_width(run.text);
+                    RectangleType sr{x, y, w, line_h};
+                    buffer.add_text(sr, run.text, resolved, font_size,
+                                    run.color, TextAlignment::Left, layer,
+                                    entity.id, stroke, shadow, rotation,
+                                    centerX, centerY, hasLabel.letter_spacing);
+                    x += w;
+                  }
+                }
                 y += line_h;
               }
               wrapped = true;
             }
           }
-        }
-
-        // Styled (multi-color) label: draw each run in sequence with its own
-        // color, positioned by the label's alignment.
-        if (!wrapped && !hasLabel.spans.empty()) {
-          Font font = font_manager.get_active_font();
-          const std::string resolved =
-              font_manager.resolve_weighted(cmp.font_name, cmp.font_weight);
-          float font_size = result.rect.height;
-          float spacing = 1.f + hasLabel.letter_spacing;
-          float total = 0.f;
-          for (const auto &sp : hasLabel.spans)
-            total += measure_text(font, sp.text.c_str(), font_size, spacing).x;
-          float x = label_rect.x;
-          if (hasLabel.alignment == TextAlignment::Center)
-            x += std::max(0.f, (label_rect.width - total) / 2.0f);
-          else if (hasLabel.alignment == TextAlignment::Right)
-            x += std::max(0.f, label_rect.width - total);
-          for (const auto &sp : hasLabel.spans) {
-            float w = measure_text(font, sp.text.c_str(), font_size, spacing).x;
-            RectangleType sr{x, label_rect.y, w, label_rect.height};
-            buffer.add_text(sr, sp.text, resolved, font_size, sp.color,
-                            TextAlignment::Left, layer, entity.id, stroke, shadow,
-                            rotation, centerX, centerY, hasLabel.letter_spacing);
-            x += w;
-          }
-          wrapped = true;
         }
 
         if (!wrapped) {
