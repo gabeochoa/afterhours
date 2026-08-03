@@ -28,6 +28,7 @@
 #include <utility>
 
 #include "../../core/system.h"
+#include "../files.h"
 #include "theme.h"
 
 namespace afterhours {
@@ -306,13 +307,11 @@ inline std::string to_string(const Theme &theme) {
 // ---------------------------------------------------------------------------
 
 inline bool save(const Theme &theme, const std::filesystem::path &path) {
-  std::ofstream file(path);
-  if (!file) {
-    log_error("could not open theme file for writing: {}", path.string());
+  if (!files::write_string_atomic(path, to_string(theme))) {
+    log_error("could not write theme file: {}", path.string());
     return false;
   }
-  file << to_string(theme);
-  return file.good();
+  return true;
 }
 
 /// Starts from `base` (a default Theme unless given), so a file listing only
@@ -321,14 +320,12 @@ inline bool save(const Theme &theme, const std::filesystem::path &path) {
 /// since dropping every good line over one typo is worse than a warning.
 inline std::optional<Theme> load(const std::filesystem::path &path,
                                  Theme base = Theme{}) {
-  std::ifstream file(path);
-  if (!file) {
+  const auto text = files::read_string(path);
+  if (!text) {
     log_warn("could not open theme file: {}", path.string());
     return std::nullopt;
   }
-  std::ostringstream buffer;
-  buffer << file.rdbuf();
-  read_into(buffer.str(), base);
+  read_into(*text, base);
   return base;
 }
 
@@ -387,14 +384,12 @@ struct HotReloadTheme : System<> {
       return;
     stamp = modified;
 
-    std::ifstream file(path);
-    if (!file)
+    const auto text = files::read_string(path);
+    if (!text)
       return;
-    std::ostringstream buffer;
-    buffer << file.rdbuf();
 
     Theme fresh;
-    const ApplyResult result = read_into(buffer.str(), fresh);
+    const ApplyResult result = read_into(*text, fresh);
     // ponytail: catches the common case of reading while an editor is
     // mid-write (file momentarily empty). A partially-flushed file that still
     // has some valid lines will apply and then correct itself on the next

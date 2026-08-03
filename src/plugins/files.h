@@ -1,8 +1,11 @@
 #pragma once
 
+#include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 
@@ -110,21 +113,90 @@ struct files : developer::Plugin {
   // caller's own .tmp file.
   static constexpr const char *TEMP_SUFFIX = ".afh-tmp";
 
+  // Defined here rather than in files.cpp: these are plain std::filesystem
+  // helpers with no singleton or platform_folders dependency, and theme_io
+  // (pulled in by ui.h) needs them without forcing every UI consumer to link
+  // files.cpp.
+
   // Write to a sibling temp then rename, so a crash mid-write cannot truncate
   // the target.
   // TODO: crash-safe but not power-loss-safe. Durability across power loss
   // needs open/write/fsync/close on a raw fd plus an fsync of the directory,
   // which is platform-specific. Fits behind this signature when needed.
   static bool write_string_atomic(const fs::path &path,
-                                  std::string_view content);
+                                  std::string_view content) {
+    std::error_code ec;
+    if (!path.parent_path().empty())
+      fs::create_directories(path.parent_path(), ec);
+
+    // Sibling temp: rename is only atomic within one filesystem. The suffix is
+    // distinctive so sweep_temp_files can tell ours from a caller's .tmp.
+    fs::path tmp = path;
+    tmp += TEMP_SUFFIX;
+
+    {
+      std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+      if (!out) {
+        log_warn("write_string_atomic: cannot open {}", tmp.string());
+        return false;
+      }
+      out.write(content.data(), static_cast<std::streamsize>(content.size()));
+      out.flush();
+      if (!out) {
+        out.close();
+        fs::remove(tmp, ec);
+        log_warn("write_string_atomic: write failed for {}", tmp.string());
+        return false;
+      }
+    }
+
+    fs::rename(tmp, path, ec);
+    if (ec) {
+      fs::remove(tmp, ec);
+      log_warn("write_string_atomic: rename to {} failed", path.string());
+      return false;
+    }
+    return true;
+  }
 
   // Whole file, or nullopt if missing/unreadable.
-  static std::optional<std::string> read_string(const fs::path &path);
+  static std::optional<std::string> read_string(const fs::path &path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in)
+      return std::nullopt;
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    if (in.bad())
+      return std::nullopt;
+    return ss.str();
+  }
 
-  // Delete leftover temps under `dir`. Called by init() for the config and
-  // save dirs. Never recovers data from them: a half-written and a complete
-  // temp are indistinguishable, so promoting one could overwrite good data.
-  static int sweep_temp_files(const fs::path &dir);
+  // Delete leftover temps under `dir`. init() runs it over the config and save
+  // dirs. Never recovers data from them: a half-written and a complete temp are
+  // indistinguishable, so promoting one could overwrite good data.
+  static int sweep_temp_files(const fs::path &dir) {
+    std::error_code ec;
+    if (!fs::is_directory(dir, ec))
+      return 0;
+    int removed = 0;
+    for (fs::recursive_directory_iterator it(dir, ec), end; !ec && it != end;
+         it.increment(ec)) {
+      if (!it->is_regular_file(ec))
+        continue;
+      const std::string name = it->path().filename().string();
+      if (name.size() <= strlen(TEMP_SUFFIX))
+        continue;
+      if (name.compare(name.size() - strlen(TEMP_SUFFIX),
+                       strlen(TEMP_SUFFIX), TEMP_SUFFIX) != 0)
+        continue;
+      std::error_code rm;
+      if (fs::remove(it->path(), rm))
+        removed++;
+    }
+    if (removed > 0)
+      log_info("swept {} leftover temp file(s) from {}", removed, dir.string());
+    return removed;
+  }
 };
 
 // Compile-time verification that files satisfies the PluginCore concept
