@@ -45,6 +45,25 @@ enum struct TestInputAction {
   WidgetDown,
   WidgetLeft,
   WidgetRight,
+  // text_input references these directly rather than behind if constexpr, so
+  // any InputAction used with it has to declare them.
+  TextBackspace,
+  TextDelete,
+  TextHome,
+  TextEnd,
+  TextSelectAll,
+  TextCopy,
+  TextCut,
+  TextPaste,
+  TextUndo,
+  TextRedo,
+  TextSelectLeft,
+  TextSelectRight,
+  TextWordLeft,
+  TextWordRight,
+  TextDeleteWordBack,
+  TextDeleteWordForward,
+  MenuBack,
 };
 
 // ---------------------------------------------------------------------------

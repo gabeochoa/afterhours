@@ -995,7 +995,28 @@ coverage prominently, and support supplemental glyph ranges or an icon font.
 Ask: one consistent space across `get_mouse_position()`, e2e click injection,
 layout rects, and `measure_text` — or at least a documented conversion.
 
-### D11. text_input ignores `with_font_size` and `with_custom_background`
+### D11. text_input ignores `with_font_size`/`with_custom_background` — **DONE**
+The field derived its font size from its computed height and forced its fill to
+`Theme::Usage::Secondary`, dropping both config calls. The height-derived size
+is now a *fallback* used only when `font_size_explicitly_set` is false, and the
+theme fill is only imposed when the caller did not set a custom background.
+
+Two things the tests surfaced:
+- `text_input` sizes from the PREVIOUS frame's height, so a single emit+layout
+  never reaches that code at all. The tests run two frames like a real app;
+  without that the control case reads the ComponentConfig default (50) instead
+  of the derived 40 and proves nothing.
+- They cannot live in `downstream_gaps_test`: `text_input` pulls in
+  `graphics.h`, which requires a real backend macro. So `text_input_test` is a
+  raylib suite asserting on component state after layout.
+
+Also found: `text_input` references `TextSelectAll`, `TextBackspace`,
+`TextDelete` and `MenuBack` on the InputAction enum *without* the `if constexpr`
+guard the clipboard actions use, so the harness enum had to grow them. That is
+floatinghotel's "text_input requires InputAction enum values" only half-fixed;
+guarding the rest would let the widget degrade instead of failing to compile.
+
+### D11 (original report, kept for context)
 **hanabi #17.** The widget *derives* its font size from computed field height
 (`text_input/component.h:187`, `derived_fs = field_h * 0.5f`) and forces the
 inner field fill to `Theme::Usage::Secondary` (`:163`). Both config calls are

@@ -83,6 +83,7 @@ ALL_TESTS := \
 	styling_test \
 	system_tags_test \
 	tab_container_test \
+	text_input_test \
 	text_wrap_test \
 	theme_io_test
 
@@ -105,6 +106,7 @@ RAYLIB_TESTS := \
 	stepper_test \
 	styling_test \
 	tab_container_test \
+	text_input_test \
 	text_wrap_test \
 	theme_io_test
 

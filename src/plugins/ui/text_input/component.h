@@ -156,16 +156,25 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   // Create input field container (clip overflow for horizontal scroll)
-  auto field_result =
-      div(ctx, mk(entity, has_label ? 1 : 0),
-          ComponentConfig::inherit_from(config, "text_input_field")
-              .with_size(field_size)
-              .with_background(Theme::Usage::Secondary)
-              .with_rounded_corners(has_label ? base_corners.left_sharp()
-                                              : base_corners)
-              .with_alignment(TextAlignment::Left)
-              .with_overflow(Overflow::Hidden)
-              .with_render_layer(config.render_layer + 1));
+  auto field_config =
+      ComponentConfig::inherit_from(config, "text_input_field")
+          .with_size(field_size)
+          .with_rounded_corners(has_label ? base_corners.left_sharp()
+                                          : base_corners)
+          .with_alignment(TextAlignment::Left)
+          .with_overflow(Overflow::Hidden)
+          .with_render_layer(config.render_layer + 1);
+  // Only impose the theme fill when the caller did not pick one, or an app
+  // with its own tokens cannot theme the field.
+  const bool caller_set_background =
+      config.color_usage == Theme::Usage::Custom &&
+      config.custom_color.has_value();
+  if (caller_set_background)
+    field_config.with_custom_background(config.custom_color.value());
+  else
+    field_config.with_background(Theme::Usage::Secondary);
+
+  auto field_result = div(ctx, mk(entity, has_label ? 1 : 0), field_config);
 
   auto &field_entity = field_result.ent();
 
@@ -184,11 +193,15 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     auto &field_cmp = field_entity.template get<UIComponent>();
     float field_h = field_cmp.computed[Axis::Y];
     if (field_h > 0.f) {
-      float derived_fs = field_h * 0.5f;
       std::string fn = config.font_name != UIComponent::UNSET_FONT
                            ? config.font_name
                            : UIComponent::DEFAULT_FONT;
-      field_cmp.enable_font(fn, pixels(derived_fs), true);
+      // Height-derived only as a fallback: an explicit size otherwise gets
+      // silently replaced, and a tall field renders text that overflows it.
+      const Size fs = config.font_size_explicitly_set
+                          ? config.font_size
+                          : pixels(field_h * 0.5f);
+      field_cmp.enable_font(fn, fs, true);
 
       float pad_h = field_h * 0.125f;
       float pad_w = field_h * 0.35f;
