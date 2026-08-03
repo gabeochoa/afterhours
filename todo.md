@@ -1055,44 +1055,36 @@ search-wrap/field paddings + magnifier slot). Fix D11's forced fill and this
 becomes a ~10-line addition.
 
 ### D13. Missing container/menu primitives — **IN PROGRESS** (branch `d13-anchored-overlays`)
-`overlay::place()` landed: anchored placement with edge flipping, the piece all
-three widgets need and all three hand-rolled downstream. Pure geometry, 16
-checks, no entities.
+`overlay::place()`: anchored placement with edge flipping, the piece all three
+widgets need and all three hand-rolled downstream. Pure geometry, 16 checks.
 
-**Blocked on D13b below.** Wiring it into `dropdown` fails because an absolute
-overlay cannot be positioned reliably yet.
+Wired into `dropdown`: an open tray near the bottom now flips above the trigger
+instead of running off screen. Two tests cover both directions.
 
-### D13b. Absolute children accumulate their position across frames
-Found while wiring `overlay::place()` into `dropdown`. Reproduced minimally:
-an absolute div at y=560 containing an absolute div at y=440, re-emitted each
-frame like real immediate-mode code.
+Still to build: the shared item format (label, shortcut, separator, disabled,
+callback), click-outside (generalise `ModalCloseWatcherSystem` rather than
+rewrite it), then `dropdown_menu` / `context_menu` / `popover` on top.
 
-| frame | parent rect.y | child rect.y | child computed_rel | child absolute_pos_y |
-|---|---|---|---|---|
-| 1 | 560 | 1000 | 1000 | 440 |
-| 2 | 560 | 2680 | 2680 | 440 |
-| 3 | 560 | 5480 | 5480 | 440 |
-| 4 | 560 | 9400 | 9400 | 440 |
+### D13b. NOT a library bug — the harness was missing the per-frame reset
+Kept because two wrong theories got written down before the measurement was
+right, and the sequence is the useful part.
 
-The parent is stable and `absolute_pos_y` is stable; `computed_rel` is what
-grows, quadratically (second difference 1120 = 2*560).
+Wiring `overlay::place()` into `dropdown` produced absurd positions. First
+theory: an absolute child double-counts its parent's offset — disproven by a
+minimal repro returning the sensible parent-relative answer. Second theory:
+absolute positions accumulate across frames — they did, `computed_rel` grew
+1000 → 2680 → 5480 → 9400, but that was a symptom.
 
-Suspect: `compute_relative_positions` (`autolayout.h:1534`) does
-`widget.computed_rel += offset` where `offset` includes the parent's own
-`computed_rel`. That is only correct if `computed_rel` holds the widget's LOCAL
-position at that point. `:1277` assigns `computed_rel = absolute_pos` for
-absolute children, which should make it local — so the next thing to check is
-whether that assignment is being reached for this child on every frame, or
-whether the child is visited twice (once through the parent's child loop, once
-through the recursion) so the `+=` lands more than once.
+Actual cause: `ImmTestHarness` never ran the equivalent of
+`ClearUIComponentChildren` (`systems.h:288`), which real apps run before
+emitting each frame. Without it a reused imm entity is appended to its parent
+again every frame, so `compute_rect_bounds` adds the parent offset once per
+duplicate. The library was correct throughout; the harness was lying.
 
-Not a theory to trust yet: an earlier "parent offset applied twice" explanation
-looked right and was disproven by measurement. Start from the table above.
-
-Real-world impact is wider than dropdowns: any absolutely-positioned child of an
-absolutely-positioned parent drifts off screen the longer it stays alive, which
-likely underlies floatinghotel's tab_container-in-absolute-parent report and
-possibly D16.
+`ImmTestHarness::begin_frame()` now clears the tree and multi-frame tests call
+it. Any new multi-frame test must too. A single emit+layout hides this
+entirely, which is why it went unnoticed — every earlier test happened to be
+single-frame.
 
 ### D14b. Disabled text and disabled backgrounds use different transforms
 Surfaced by the de-duplication above, not by an app. Disabled **text** darkens

@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "../../ecs.h"
+#include "overlay.h"
 #include "../input_system.h"
 #include "component_init.h"
 #include "components.h"
@@ -1621,6 +1622,15 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // When open, show options in a tray for arrow-key navigation
   if (dropdownState.on) {
+    // Flip above the trigger when the tray would run off the bottom. Options
+    // are uniform, so the height is known before layout.
+    const RectangleType anchor = entity.template get<UIComponent>().rect();
+    const float tray_h =
+        static_cast<float>(options.size()) * config.size.y_axis.value;
+    const auto placed = overlay::place(
+        anchor, anchor.width, tray_h, ctx.screen_width, ctx.screen_height,
+        overlay::Placement::Below);
+
     auto options_tray =
         tray(ctx, mk(entity),
              ComponentConfig::inherit_from(config, "dropdown_options_tray")
@@ -1629,7 +1639,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                  .with_flex_direction(FlexDirection::Column)
                  .with_no_wrap()
                  .with_absolute_position()
-                 .with_translate(pixels(0), config.size.y_axis)
+                 .with_translate(pixels(0), pixels(placed.y - anchor.y))
                  .with_render_layer(config.render_layer + 1));
 
     // Set tray selection to current option only when first opened

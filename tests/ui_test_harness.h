@@ -196,6 +196,18 @@ struct ImmTestHarness {
   UIContext<TestInputAction> &context() { return *ctx; }
   Entity &root() { return *root_entity; }
 
+  // Real apps run ClearUIComponentChildren before emitting each frame. Without
+  // it a reused imm entity is appended to its parent again every frame, the
+  // tree fills with duplicates, and compute_rect_bounds adds the parent offset
+  // once per duplicate -- positions then grow every frame. Call this at the top
+  // of each frame in any multi-frame test.
+  void begin_frame() {
+    coll.merge_entity_arrays();
+    for (const auto &e : coll.get_entities())
+      if (e && e->has<UIComponent>())
+        e->get<UIComponent>().children.clear();
+  }
+
   void layout_only() {
     coll.merge_entity_arrays();
     auto &entities = coll.get_entities();

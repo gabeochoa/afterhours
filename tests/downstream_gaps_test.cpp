@@ -924,4 +924,53 @@ TEST(d4_wrap_override_survives_apply_overrides) {
                  "an explicit wrap override is applied", __FILE__, __LINE__);
 }
 
+// D13: an open dropdown always opened downward, so one near the bottom edge
+// ran off screen. The tray now goes through overlay::place().
+namespace {
+UIComponent *open_dropdown_tray(ImmTestHarness &h, float y) {
+  std::vector<std::string> opts = {"One", "Two", "Three", "Four"};
+  size_t idx = 0;
+  auto emit = [&] {
+    dropdown(h.context(), mk(h.root(), 0), opts, idx,
+             ComponentConfig{}
+                 .with_size(ComponentSize{pixels(160), pixels(30)})
+                 .with_absolute_position(40.f, y));
+  };
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  for (const auto &e : UICollectionHolder::get().collection.get_entities())
+    if (e && e->has<HasDropdownState>())
+      e->get<HasDropdownState>().on = true;
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  return h.find("dropdown_options_tray");
+}
+} // namespace
+
+TEST(d13_dropdown_opens_downward_with_room) {
+  ImmTestHarness h;
+  UIComponent *t = open_dropdown_tray(h, 50.f);
+  ui_test::check(t != nullptr, "tray exists", __FILE__, __LINE__);
+  if (t)
+    ui_test::check(t->rect().y > 50.f, "tray sits below the trigger",
+                   __FILE__, __LINE__);
+}
+
+TEST(d13_dropdown_flips_up_near_the_bottom) {
+  ImmTestHarness h;
+  UIComponent *t = open_dropdown_tray(h, 560.f);
+  ui_test::check(t != nullptr, "tray exists", __FILE__, __LINE__);
+  if (t) {
+    const float y = t->rect().y;
+    ui_test::check(y < 560.f, "tray flips above the trigger", __FILE__,
+                   __LINE__);
+    ui_test::check(y >= 0.f && y + t->rect().height <= 601.f,
+                   "tray stays on screen", __FILE__, __LINE__);
+    if (y >= 560.f)
+      fprintf(stderr, "        tray y=%.1f h=%.1f\n", y, t->rect().height);
+  }
+}
+
 int main() { return ui_test::run_registered_tests("Downstream Gaps"); }
