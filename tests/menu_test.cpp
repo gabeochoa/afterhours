@@ -345,4 +345,72 @@ TEST(menu_parts_have_no_rounded_corners) {
   }
 }
 
+// Click-outside dismissal. detail::menu_lost_focus was written for this and
+// then never called, so an open menu stayed open forever -- opening all four
+// menus in the wm showcase left all four on screen at once.
+//
+// Same mechanism dropdown already uses: focus moves to the list when it opens,
+// and anything that takes focus away closes it. was_open_last_frame is what
+// stops the opening click from counting as an outside click, since on that
+// first frame focus has not reached the list yet.
+TEST(menu_stays_open_while_it_holds_focus) {
+  ImmTestHarness h;
+  bool open = true;
+  auto emit = [&] {
+    context_menu(h.context(), mk(h.root(), 0), sample(), Vector2Type{100, 100},
+                 open, ComponentConfig{}.with_size(
+                           ComponentSize{pixels(180), pixels(28)}));
+  };
+  h.begin_frame(); emit(); h.layout_only();
+  ui_test::check(open, "still open on the frame it opened", __FILE__, __LINE__);
+
+  h.begin_frame(); emit(); h.layout_only();
+  ui_test::check(open, "still open while it holds focus", __FILE__, __LINE__);
+}
+
+TEST(menu_closes_when_focus_moves_away) {
+  ImmTestHarness h;
+  bool open = true;
+  auto emit = [&] {
+    context_menu(h.context(), mk(h.root(), 0), sample(), Vector2Type{100, 100},
+                 open, ComponentConfig{}.with_size(
+                           ComponentSize{pixels(180), pixels(28)}));
+  };
+  h.begin_frame(); emit(); h.layout_only();
+  h.begin_frame(); emit(); h.layout_only();
+  ui_test::check(open, "open before the outside click", __FILE__, __LINE__);
+
+  // What a click on something else does: focus lands on that other thing.
+  h.context().set_focus(h.root().id);
+  h.begin_frame(); emit(); h.layout_only();
+  ui_test::check(!open, "an outside click closes it", __FILE__, __LINE__);
+}
+
+// Consequence of focus-based dismissal worth stating outright: only one menu
+// can hold focus, so opening a second closes the first. That is what a menu
+// bar should do, but it also means "several menus open at once" is not a
+// reachable state -- a screenshot that shows one is capturing a frame that
+// never survives.
+TEST(opening_a_second_menu_closes_the_first) {
+  ImmTestHarness h;
+  bool first = true, second = true;
+  auto emit = [&] {
+    context_menu(h.context(), mk(h.root(), 0), sample(), Vector2Type{50, 50},
+                 first, ComponentConfig{}.with_size(
+                            ComponentSize{pixels(180), pixels(28)}));
+    context_menu(h.context(), mk(h.root(), 1), sample(), Vector2Type{300, 50},
+                 second, ComponentConfig{}.with_size(
+                             ComponentSize{pixels(180), pixels(28)}));
+  };
+  h.begin_frame(); emit(); h.layout_only();
+  ui_test::check(first && second, "both open on the first frame", __FILE__,
+                 __LINE__);
+
+  h.begin_frame(); emit(); h.layout_only();
+  ui_test::check(!first, "the first menu gave up focus and closed", __FILE__,
+                 __LINE__);
+  ui_test::check(second, "the menu holding focus stays open", __FILE__,
+                 __LINE__);
+}
+
 int main() { return ui_test::run_registered_tests("menu"); }

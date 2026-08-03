@@ -33,6 +33,12 @@ struct MenuItem {
 // Result of a menu: index of the item chosen this frame, or -1.
 inline constexpr int kNoMenuSelection = -1;
 
+// Per-menu state. Only the open/closed edge, which is what tells a genuine
+// outside click apart from the click that opened the menu in the first place.
+struct HasMenuState : BaseComponent {
+  bool was_open_last_frame = false;
+};
+
 namespace detail {
 // Menus close when focus leaves them, which is also how a click outside is
 // noticed -- the same rule dropdown already relies on.
@@ -50,8 +56,11 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
               overlay::Placement preferred = overlay::Placement::Below,
               ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
-  if (!open || items.empty())
+  auto &state = entity.template addComponentIfMissing<HasMenuState>();
+  if (!open || items.empty()) {
+    state.was_open_last_frame = false;
     return kNoMenuSelection;
+  }
 
   // The menu's own entity is a zero-size holder: the list hangs off it and is
   // absolutely positioned, but it still needs a UIComponent to be a parent.
@@ -165,6 +174,18 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
 
   if (chosen != kNoMenuSelection)
     open = false;
+
+  // Dismissal, the same rule dropdown uses: the list takes focus when it
+  // opens, and losing it closes the menu. That covers a click outside and a
+  // tab away with one check. Gated on was_open_last_frame because focus does
+  // not reach the list until the frame after it is built, so without the gate
+  // a menu would close on the very frame it opened.
+  if (!state.was_open_last_frame) {
+    ctx.set_focus(list.ent().id);
+  } else if (detail::menu_lost_focus(ctx, list.ent().id, open)) {
+    open = false;
+  }
+  state.was_open_last_frame = open;
 
   return chosen;
 }
