@@ -2,7 +2,9 @@
 
 #include <filesystem>
 #include <functional>
+#include <optional>
 #include <string>
+#include <string_view>
 
 #include "../core/base_component.h"
 #include "../core/entity_helper.h"
@@ -103,6 +105,26 @@ struct files : developer::Plugin {
       const std::function<void(std::string, std::string)> &cb);
 
   static bool ensure_directory_exists(const fs::path &path);
+
+  // Suffix for in-progress writes. Distinctive so the sweep never deletes a
+  // caller's own .tmp file.
+  static constexpr const char *TEMP_SUFFIX = ".afh-tmp";
+
+  // Write to a sibling temp then rename, so a crash mid-write cannot truncate
+  // the target.
+  // TODO: crash-safe but not power-loss-safe. Durability across power loss
+  // needs open/write/fsync/close on a raw fd plus an fsync of the directory,
+  // which is platform-specific. Fits behind this signature when needed.
+  static bool write_string_atomic(const fs::path &path,
+                                  std::string_view content);
+
+  // Whole file, or nullopt if missing/unreadable.
+  static std::optional<std::string> read_string(const fs::path &path);
+
+  // Delete leftover temps under `dir`. Called by init() for the config and
+  // save dirs. Never recovers data from them: a half-written and a complete
+  // temp are indistinguishable, so promoting one could overwrite good data.
+  static int sweep_temp_files(const fs::path &dir);
 };
 
 // Compile-time verification that files satisfies the PluginCore concept

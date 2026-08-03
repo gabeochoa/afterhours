@@ -26,6 +26,10 @@
 
 #endif // !__EMSCRIPTEN__
 
+#include <cstring>
+#include <fstream>
+#include <sstream>
+
 #ifndef __EMSCRIPTEN__
 #include <cstdint>
 #if defined(__APPLE__)
@@ -212,6 +216,12 @@ void files::init(const std::string &game_name, const std::string &root_folder) {
   Entity &entity = EntityHelper::createPermanentEntity();
   add_singleton_components(entity, game_name, root_folder);
   EntityHelper::merge_entity_arrays();
+
+  // A crash leaves a temp behind, and a write-once path never rewrites it, so
+  // nothing else would reclaim it. Deleting is safe: the target is intact
+  // whether the temp was complete or half-written.
+  sweep_temp_files(get_config_path());
+  sweep_temp_files(get_save_path());
 }
 
 fs::path files::get_resource_path(const std::string &group,
@@ -271,6 +281,77 @@ bool files::ensure_directory_exists(const fs::path &path) {
     return false;
   }
   return provider->ensure_directory_exists(path);
+}
+
+bool files::write_string_atomic(const fs::path &path,
+                                std::string_view content) {
+  std::error_code ec;
+  if (!path.parent_path().empty())
+    fs::create_directories(path.parent_path(), ec);
+
+  // Sibling temp: rename is only atomic within one filesystem. The suffix is
+  // distinctive so sweep_temp_files can tell ours from a caller's .tmp.
+  fs::path tmp = path;
+  tmp += files::TEMP_SUFFIX;
+
+  {
+    std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+    if (!out) {
+      log_warn("write_string_atomic: cannot open {}", tmp.string());
+      return false;
+    }
+    out.write(content.data(), static_cast<std::streamsize>(content.size()));
+    out.flush();
+    if (!out) {
+      out.close();
+      fs::remove(tmp, ec);
+      log_warn("write_string_atomic: write failed for {}", tmp.string());
+      return false;
+    }
+  }
+
+  fs::rename(tmp, path, ec);
+  if (ec) {
+    fs::remove(tmp, ec);
+    log_warn("write_string_atomic: rename to {} failed", path.string());
+    return false;
+  }
+  return true;
+}
+
+std::optional<std::string> files::read_string(const fs::path &path) {
+  std::ifstream in(path, std::ios::binary);
+  if (!in)
+    return std::nullopt;
+  std::ostringstream ss;
+  ss << in.rdbuf();
+  if (in.bad())
+    return std::nullopt;
+  return ss.str();
+}
+
+int files::sweep_temp_files(const fs::path &dir) {
+  std::error_code ec;
+  if (!fs::is_directory(dir, ec))
+    return 0;
+  int removed = 0;
+  for (fs::recursive_directory_iterator it(dir, ec), end; !ec && it != end;
+       it.increment(ec)) {
+    if (!it->is_regular_file(ec))
+      continue;
+    const std::string name = it->path().filename().string();
+    if (name.size() <= strlen(files::TEMP_SUFFIX))
+      continue;
+    if (name.compare(name.size() - strlen(files::TEMP_SUFFIX),
+                     strlen(files::TEMP_SUFFIX), files::TEMP_SUFFIX) != 0)
+      continue;
+    std::error_code rm;
+    if (fs::remove(it->path(), rm))
+      removed++;
+  }
+  if (removed > 0)
+    log_info("swept {} leftover temp file(s) from {}", removed, dir.string());
+  return removed;
 }
 
 // Provide the symbol that the header checks for
