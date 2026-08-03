@@ -5,6 +5,8 @@
 // content. All share MenuItem and overlay::place, so flipping and dismissal
 // behave the same everywhere.
 
+#include <algorithm>
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -67,22 +69,43 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
       config.size.x_axis.value > 0.f ? config.size.x_axis.value : anchor.width;
 
   float total_h = 0.f;
-  for (const auto &it : items)
+  size_t longest_shortcut = 0;
+  for (const auto &it : items) {
     total_h += it.separator ? item_h * 0.25f : item_h;
+    longest_shortcut = std::max(longest_shortcut, it.shortcut.size());
+  }
+
+  // Gutter for the shortcuts. No font is reachable here, so a glyph is
+  // approximated at half the row height -- over-wide is harmless since the
+  // shortcut is right-aligned inside it. Half the menu is the ceiling: past
+  // that the label has nowhere to go and truncating the shortcut is better.
+  const float gutter =
+      longest_shortcut == 0
+          ? 0.f
+          : std::min(width * 0.5f, static_cast<float>(longest_shortcut) *
+                                           item_h * 0.3f +
+                                       item_h * 0.25f);
 
   const auto placed =
       overlay::place(anchor, width, total_h, ctx.screen_width,
                      ctx.screen_height, preferred);
 
-  // with_absolute_position is PARENT-relative, and `anchor` is in screen
-  // space, so convert. Passing screen coords straight through adds the
-  // parent's own offset a second time.
-  const RectangleType parent_rect = parent.template get<UIComponent>().rect();
-  const float local_x = placed.x - parent_rect.x;
-  const float local_y = placed.y - parent_rect.y;
+  // with_absolute_position is relative to the IMMEDIATE parent, which for the
+  // list is menu_root -- not menu_root's parent. Subtracting the latter leaves
+  // menu_root's own offset in, and inside a dropdown holder that offset is the
+  // trigger's height, so every menu lands one trigger too far along.
+  const RectangleType root_rect = entity.template get<UIComponent>().rect();
+  const float local_x = placed.x - root_rect.x;
+  const float local_y = placed.y - root_rect.y;
 
+  // The list is the panel: it owns the background, so rows sit flush and a
+  // separator reads as a band on a continuous surface. Square, like everything
+  // else in the menu -- a rounded panel shows through the last row whenever
+  // that row is disabled, since disabled backgrounds are translucent.
   auto list = tray(ctx, mk(entity),
                    ComponentConfig::inherit_from(config, "menu_list")
+                       .with_background(Theme::Usage::Surface)
+                       .disable_rounded_corners()
                        .with_size(ComponentSize{pixels(width), children(item_h)})
                        .with_flex_direction(FlexDirection::Column)
                        .with_no_wrap()
@@ -94,20 +117,31 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
   float row_y = 0.f; // running offset of the current row inside the list
   for (const auto &item : items) {
     if (item.separator) {
+      // Transparent band: the list's surface shows through it, which is the
+      // divider. A drawn rule would need to fit a band this thin, and the
+      // theme's separator thickness is sized for full rows.
       div(ctx, mk(list.ent(), index),
           ComponentConfig::inherit_from(config, "menu_separator")
               .with_size(ComponentSize{percent(1.0f), pixels(item_h * 0.25f)})
+              .disable_rounded_corners()
+              .with_transparent_bg()
               .with_skip_tabbing(true));
       row_y += item_h * 0.25f;
       index++;
       continue;
     }
 
+    // Square rows: rounding each one carves notches out of the edge it shares
+    // with its neighbour, which reads as a gap between them.
     auto row = ComponentConfig::inherit_from(
                    config, fmt::format("menu_item_{}", index))
                    .with_size(ComponentSize{percent(1.0f), pixels(item_h)})
+                   .disable_rounded_corners()
                    .with_label(item.label)
                    .with_disabled(item.disabled);
+    // Labels default to centred, which walks straight into the gutter.
+    if (gutter > 0.f)
+      row.with_alignment(TextAlignment::Left);
     auto item_el = button(ctx, mk(list.ent(), index), row);
     if (item_el && !item.disabled)
       chosen = index;
@@ -115,11 +149,10 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
     // Positioned against the LIST, not the item: inside the item it lands in
     // the item's content box (after padding) and spills past the menu edge.
     if (!item.shortcut.empty()) {
-      const float sc_w = width * 0.42f;
       div(ctx, mk(list.ent(), 10000 + index),
           ComponentConfig::inherit_from(config, "menu_shortcut")
-              .with_size(ComponentSize{pixels(sc_w), pixels(item_h)})
-              .with_absolute_position(width - sc_w, row_y)
+              .with_size(ComponentSize{pixels(gutter), pixels(item_h)})
+              .with_absolute_position(width - gutter, row_y)
               .with_label(item.shortcut)
               .with_alignment(TextAlignment::Right)
               .with_disabled(true)
@@ -151,9 +184,12 @@ int dropdown_menu(HasUIContext auto &ctx, EntityParent ep_pair,
   init_component(ctx, ep_pair, holder, ComponentType::Div, false,
                  "dropdown_menu");
 
+  // Square too: an open menu butts straight up against the trigger, and a
+  // rounded trigger notches that seam.
   if (button(ctx, mk(entity, 0),
              ComponentConfig::inherit_from(config, "dropdown_menu_trigger")
                  .with_size(ComponentSize{percent(1.0f), config.size.y_axis})
+                 .disable_rounded_corners()
                  .with_label(label)))
     open = !open;
 
