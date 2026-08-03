@@ -180,7 +180,19 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Ensure HasLabel exists and set display text
   auto &field_label = field_entity.template addComponentIfMissing<HasLabel>();
-  field_label.label = display_text;
+  // display_text stays the real (masked) text: the cursor and scroll maths read
+  // it, so routing the hint through it would park the caret after the hint.
+  const bool show_placeholder =
+      display_text.empty() && !config.placeholder.empty();
+  field_label.label = show_placeholder ? config.placeholder : display_text;
+  // Entities persist across frames, so the muted colour has to be cleared
+  // again rather than only set.
+  if (show_placeholder)
+    field_label.explicit_text_color = ctx.theme.font_muted;
+  else if (config.custom_text_color.has_value())
+    field_label.explicit_text_color = config.custom_text_color;
+  else
+    field_label.explicit_text_color.reset();
 
   // The batched text renderer draws at label_rect.x directly, without
   // draw_text_in_rect's 5px internal margin. text_x_offset already

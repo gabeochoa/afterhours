@@ -114,4 +114,106 @@ TEST(d11_text_input_honours_custom_background) {
                    __LINE__);
 }
 
+// D12: no placeholder. An empty field renders as a bare box, so hanabi's
+// sidebar search read as an unlabelled rectangle. Painting hint text BEHIND the
+// field did not work either -- D11's forced fill covered it -- which is why the
+// app resorted to an absolutely-positioned overlay with hand-derived geometry.
+
+TEST(d12_placeholder_shows_when_empty) {
+  ImmTestHarness h;
+  std::string text;
+  two_frames(h, [&] {
+    imm::text_input(h.context(), mk(h.root(), 0), text,
+                    ComponentConfig{}
+                        .with_size(ComponentSize{pixels(220), pixels(40)})
+                        .with_placeholder("Search conversations"));
+  });
+
+  Entity *field = find_field_entity();
+  ui_test::check(field != nullptr && field->has<HasLabel>(), "field exists",
+                 __FILE__, __LINE__);
+  if (field && field->has<HasLabel>())
+    ui_test::check(field->get<HasLabel>().label == "Search conversations",
+                   "an empty field shows the placeholder", __FILE__, __LINE__);
+}
+
+TEST(d12_placeholder_hidden_once_there_is_text) {
+  ImmTestHarness h;
+  std::string text = "hello";
+  two_frames(h, [&] {
+    imm::text_input(h.context(), mk(h.root(), 0), text,
+                    ComponentConfig{}
+                        .with_size(ComponentSize{pixels(220), pixels(40)})
+                        .with_placeholder("Search conversations"));
+  });
+
+  Entity *field = find_field_entity();
+  if (field && field->has<HasLabel>())
+    ui_test::check(field->get<HasLabel>().label == "hello",
+                   "typed text replaces the placeholder", __FILE__, __LINE__);
+}
+
+TEST(d12_placeholder_is_muted_and_real_text_is_not) {
+  {
+    ImmTestHarness h;
+    std::string text;
+    two_frames(h, [&] {
+      imm::text_input(h.context(), mk(h.root(), 0), text,
+                      ComponentConfig{}
+                          .with_size(ComponentSize{pixels(220), pixels(40)})
+                          .with_placeholder("hint"));
+    });
+    Entity *field = find_field_entity();
+    if (field && field->has<HasLabel>())
+      ui_test::check(field->get<HasLabel>().explicit_text_color.has_value() &&
+                         same_color(*field->get<HasLabel>().explicit_text_color,
+                                    h.context().theme.font_muted),
+                     "the placeholder draws muted", __FILE__, __LINE__);
+  }
+  {
+    ImmTestHarness h;
+    std::string text = "typed";
+    two_frames(h, [&] {
+      imm::text_input(h.context(), mk(h.root(), 0), text,
+                      ComponentConfig{}
+                          .with_size(ComponentSize{pixels(220), pixels(40)})
+                          .with_placeholder("hint"));
+    });
+    Entity *field = find_field_entity();
+    if (field && field->has<HasLabel>())
+      ui_test::check(!field->get<HasLabel>().explicit_text_color.has_value(),
+                     "real text is not left muted", __FILE__, __LINE__);
+  }
+}
+
+// The placeholder must not feed the cursor maths, or the caret would sit after
+// the hint instead of where typing starts.
+TEST(d12_placeholder_does_not_move_the_cursor) {
+  auto cursor_x_for = [](bool with_placeholder) {
+    ImmTestHarness h;
+    std::string text;
+    auto emit = [&] {
+      auto cfg = ComponentConfig{}
+                     .with_size(ComponentSize{pixels(220), pixels(40)});
+      if (with_placeholder)
+        cfg.with_placeholder("a very long placeholder string");
+      imm::text_input(h.context(), mk(h.root(), 0), text, cfg);
+    };
+    // The caret only exists while focused, so focus the field between frames.
+    emit();
+    h.layout_only();
+    if (Entity *field = find_field_entity())
+      h.context().focus_id = field->id;
+    emit();
+    h.layout_only();
+    UIComponent *c = h.find("cursor");
+    return c ? c->rect().x : -1.f;
+  };
+  const float without = cursor_x_for(false);
+  const float with = cursor_x_for(true);
+  ui_test::check(without >= 0.f && with >= 0.f, "found the cursor", __FILE__,
+                 __LINE__);
+  CHECK_APPROX(with, without);
+}
+
 int main() { return ui_test::run_registered_tests("text_input"); }

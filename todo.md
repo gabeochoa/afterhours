@@ -1027,7 +1027,23 @@ field to ~34px so the derived font lands readable, and accept the wrong colour.
 Ask: honour an explicit `with_font_size` when set, falling back to the derived
 size only when unset; let `with_custom_background` override the forced fill.
 
-### D12. text_input has no `with_placeholder`
+### D12. text_input has no `with_placeholder` — **DONE**
+`ComponentConfig::with_placeholder(std::string)`. The hint shows while the
+bound string is empty and draws in `theme.font_muted`; it survives focus and
+clears on the first character, matching the platform convention.
+
+It routes into the field's `HasLabel` only, never into `display_text`, because
+the cursor and horizontal-scroll maths read that — sending the hint through it
+would park the caret after the hint instead of where typing starts. A test
+focuses the field and compares the caret x with and without a long placeholder.
+
+The muted colour is cleared explicitly on non-placeholder frames: imm entities
+persist, so setting a colour without unsetting it leaves real text muted once
+the field has been empty.
+
+Unblocked by D11 — the forced `Secondary` fill was what made hint text painted
+*behind* the field invisible, which is why the reporting app used an
+absolutely-positioned overlay with hand-derived geometry instead.
 **hanabi #17 follow-on (2026-08-01).** Grep-confirmed absent. An empty field is
 a bare box — hanabi's sidebar search read as an unlabelled box + magnifier and
 was written up as a hostile-review defect. Compounded by D11: because the field

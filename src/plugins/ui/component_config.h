@@ -151,6 +151,9 @@ struct ComponentConfig {
   // Text input: readonly mode (focusable, selectable, but not editable)
   bool text_readonly = false;
 
+  // Text input: hint shown while the bound string is empty.
+  std::string placeholder;
+
   // Checkbox indicator characters
   // TODO: Replace "V" / " " with real icon glyphs (✓ ✔) once afterhours
   // ships a built-in icon font or vector glyph set. Current text fallback
@@ -519,6 +522,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_no_wrap() {
     flex_wrap = FlexWrap::NoWrap;
+    return *this;
+  }
+  ComponentConfig &with_placeholder(std::string hint) {
+    placeholder = std::move(hint);
     return *this;
   }
   ComponentConfig &with_wrap() {
