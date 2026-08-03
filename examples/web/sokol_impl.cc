@@ -29,3 +29,16 @@
 // (see src/backends/sokol/image_decode.h), so stb rides along with this TU --
 // no manual STB define and no extra .cc file for the consumer to manage.
 #include <afterhours/src/backends/sokol/image_decode.h>
+
+// Metal device creation + texture readback. These are extern "C" and called
+// from the header-only backend, so they need an Objective-C++ TU to live in;
+// this is it. Without them the native build compiles and fails at link on
+// metal_create_system_device / metal_capture_render_texture.
+//
+// capture_impl.h is guarded on AFTER_HOURS_USE_METAL, which main.cpp defines
+// for itself -- this TU has to say so too. Only on the native Metal build:
+// the emscripten/WebGL2 build has no Metal.
+#if defined(SOKOL_METAL)
+#define AFTER_HOURS_USE_METAL
+#include <afterhours/src/backends/sokol/capture_impl.h>
+#endif

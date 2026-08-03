@@ -221,8 +221,13 @@ struct AnimationUpdateCurrentFrame : System<HasAnimation> {
 struct RenderSprites : System<HasSprite> {
   Texture sheet;
 
-  virtual void once(const float) override {
-    sheet = EntityHelper::get_singleton_cmp<HasSpritesheet>()->texture;
+  // Registering this system without a spritesheet used to segfault here.
+  bool should_run(float) override {
+    auto *sheets = EntityHelper::get_singleton_cmp<HasSpritesheet>();
+    if (!sheets)
+      return false;
+    sheet = sheets->texture;
+    return true;
   }
 
   virtual void for_each_with(Entity &, HasSprite &hasSprite,
@@ -237,8 +242,13 @@ struct RenderSprites : System<HasSprite> {
 struct RenderAnimation : System<HasAnimation> {
   Texture sheet;
 
-  virtual void once(const float) override {
-    sheet = EntityHelper::get_singleton_cmp<HasSpritesheet>()->texture;
+  // Same unchecked deref as RenderSprites had.
+  bool should_run(float) override {
+    auto *sheets = EntityHelper::get_singleton_cmp<HasSpritesheet>();
+    if (!sheets)
+      return false;
+    sheet = sheets->texture;
+    return true;
   }
 
   virtual void for_each_with(Entity &, HasAnimation &hasAnimation,
