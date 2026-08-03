@@ -611,6 +611,38 @@ wrap_text_to_width(const std::string &text, float max_width,
   return lines;
 }
 
+// Wrap-aware text measurement: the pixel width/height and line count of `text`
+// laid out within `max_width` (wrap_text_to_width already honors hard newlines).
+// The reusable answer to "how tall is this wrapped paragraph?" so apps stop
+// hand-rolling height estimates. `measure2d(str)` returns the {w,h} of a line.
+struct WrappedTextMetrics {
+  float width = 0.f;  // widest resulting line
+  float height = 0.f; // line_count * single-line height
+  int line_count = 0;
+};
+template <typename Measure2DFn>
+static inline WrappedTextMetrics
+measure_wrapped(const std::string &text, float max_width,
+                Measure2DFn &&measure2d) {
+  std::vector<std::string> lines = wrap_text_to_width(
+      text, max_width, [&](const std::string &s) { return measure2d(s).x; });
+  WrappedTextMetrics m;
+  m.line_count = static_cast<int>(lines.size());
+  // Line height from a representative non-empty line (blank lines still occupy
+  // one line of height); fall back to the whole-text measure.
+  float line_h = 0.f;
+  for (const auto &l : lines) {
+    Vector2Type ls = measure2d(l);
+    m.width = std::max(m.width, ls.x);
+    if (!l.empty())
+      line_h = std::max(line_h, ls.y);
+  }
+  if (line_h <= 0.f)
+    line_h = measure2d(text).y;
+  m.height = line_h * static_cast<float>(m.line_count);
+  return m;
+}
+
 static inline void
 draw_text_at_position(const ui::FontManager &fm, const std::string &text,
                       RectangleType rect, TextAlignment alignment,
@@ -656,6 +688,21 @@ inline Color resolve_label_color(const HasLabel &hasLabel, const Theme &theme) {
   return theme.from_usage(Theme::Usage::Font, hasLabel.is_disabled);
 }
 } // namespace detail
+
+// Public wrap-aware text measurement. Returns the {width, height, line_count}
+// of `text` laid out within `max_width` (honoring hard newlines), using the
+// shared TextMeasureCache for per-line sizing. Lets apps size a container to a
+// wrapping paragraph instead of hand-rolling a height estimate.
+using WrappedTextMetrics = detail::WrappedTextMetrics;
+[[nodiscard]] inline WrappedTextMetrics
+measure_text_wrapped(TextMeasureCache &cache, std::string_view text,
+                     std::string_view font_name, float font_size,
+                     float max_width, float spacing = 1.0f) {
+  return detail::measure_wrapped(
+      std::string(text), max_width, [&](const std::string &s) {
+        return cache.measure(s, font_name, font_size, spacing);
+      });
+}
 
 static inline void draw_text_in_rect(
     const ui::FontManager &fm, const std::string &text, RectangleType rect,
