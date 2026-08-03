@@ -91,12 +91,14 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
 
   int chosen = kNoMenuSelection;
   int index = 0;
+  float row_y = 0.f; // running offset of the current row inside the list
   for (const auto &item : items) {
     if (item.separator) {
       div(ctx, mk(list.ent(), index),
           ComponentConfig::inherit_from(config, "menu_separator")
               .with_size(ComponentSize{percent(1.0f), pixels(item_h * 0.25f)})
               .with_skip_tabbing(true));
+      row_y += item_h * 0.25f;
       index++;
       continue;
     }
@@ -110,20 +112,21 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
     if (item_el && !item.disabled)
       chosen = index;
 
-    // Pinned inside the item rather than given its own row, or it lays out as
-    // a sibling and lands under the menu.
+    // Positioned against the LIST, not the item: inside the item it lands in
+    // the item's content box (after padding) and spills past the menu edge.
     if (!item.shortcut.empty()) {
-      const float sc_w = width * 0.45f;
-      div(ctx, mk(item_el.ent(), 0),
+      const float sc_w = width * 0.42f;
+      div(ctx, mk(list.ent(), 10000 + index),
           ComponentConfig::inherit_from(config, "menu_shortcut")
               .with_size(ComponentSize{pixels(sc_w), pixels(item_h)})
-              .with_absolute_position(width - sc_w - item_h * 0.3f, 0.f)
+              .with_absolute_position(width - sc_w, row_y)
               .with_label(item.shortcut)
               .with_alignment(TextAlignment::Right)
               .with_disabled(true)
               .with_skip_tabbing(true)
               .with_render_layer(config.render_layer + 2));
     }
+    row_y += item_h;
     index++;
   }
 
