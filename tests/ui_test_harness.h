@@ -195,6 +195,9 @@ struct ImmTestHarness {
 
   UIContext<TestInputAction> &context() { return *ctx; }
   Entity &root() { return *root_entity; }
+  // The entity holding the context, for tests that must register it as the
+  // singleton a real system looks it up through.
+  Entity &context_entity() { return *ctx_entity; }
 
   // Real apps run ClearUIComponentChildren before emitting each frame. Without
   // it a reused imm entity is appended to its parent again every frame, the
