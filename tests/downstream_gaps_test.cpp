@@ -849,4 +849,79 @@ TEST(d22_both_renderers_agree_on_styled_output) {
   }
 }
 
+// ===========================================================================
+// D4 -- FlexWrap defaults to Wrap
+//
+// Reported as "the single nastiest default we hit": a Column taller than its
+// viewport silently wraps its children into a SECOND column off to the right
+// instead of overflowing, so you get stray content hugging the right edge and
+// no diagnostic. Every scroll container and every stacking Column needs an
+// explicit .with_no_wrap() today.
+//
+// Flipping the default has two traps worth pinning:
+//   - there is no with_wrap(), only with_no_wrap(), so wrapping would become
+//     unreachable from ComponentConfig
+//   - apply_overrides uses FlexWrap::Wrap as its "caller did not set this"
+//     sentinel, which inverts when the default moves
+// ===========================================================================
+
+// A column whose children overflow it must stay a single column.
+TEST(d4_tall_column_does_not_wrap_into_a_second_column) {
+  ImmTestHarness h;
+  auto col = div(h.context(), mk(h.root(), 0),
+                 ComponentConfig{}
+                     .with_size(ComponentSize{pixels(100), pixels(100)})
+                     .with_flex_direction(FlexDirection::Column));
+  std::vector<ElementResult> kids;
+  for (int i = 0; i < 4; i++)
+    kids.push_back(div(h.context(), mk(col.ent(), i),
+                       ComponentConfig{}.with_size(
+                           ComponentSize{pixels(100), pixels(50)})));
+  h.layout_only();
+
+  const float left = rect_of(col).x;
+  bool all_in_one_column = true;
+  for (const auto &k : kids)
+    if (!ui_test::approx(rect_of(k).x, left))
+      all_in_one_column = false;
+  ui_test::check(all_in_one_column,
+                 "overflowing column children stay in one column", __FILE__,
+                 __LINE__);
+}
+
+// Wrapping must stay reachable, and actually wrap, when asked for explicitly.
+TEST(d4_explicit_wrap_still_wraps) {
+  ImmTestHarness h;
+  auto row = div(h.context(), mk(h.root(), 0),
+                 ComponentConfig{}
+                     .with_size(ComponentSize{pixels(100), pixels(100)})
+                     .with_flex_direction(FlexDirection::Row)
+                     .with_wrap());
+  std::vector<ElementResult> kids;
+  for (int i = 0; i < 4; i++)
+    kids.push_back(div(h.context(), mk(row.ent(), i),
+                       ComponentConfig{}.with_size(
+                           ComponentSize{pixels(50), pixels(25)})));
+  h.layout_only();
+
+  bool saw_second_row = false;
+  const float top = rect_of(kids[0]).y;
+  for (const auto &k : kids)
+    if (rect_of(k).y > top + 1.f)
+      saw_second_row = true;
+  ui_test::check(saw_second_row, "with_wrap() still wraps onto a second line",
+                 __FILE__, __LINE__);
+}
+
+// The override sentinel: asking for the non-default value in a restyle has to
+// survive the merge.
+TEST(d4_wrap_override_survives_apply_overrides) {
+  ComponentConfig base;
+  ComponentConfig overrides;
+  overrides.with_wrap();
+  const ComponentConfig merged = base.apply_overrides(overrides);
+  ui_test::check(merged.flex_wrap == FlexWrap::Wrap,
+                 "an explicit wrap override is applied", __FILE__, __LINE__);
+}
+
 int main() { return ui_test::run_registered_tests("Downstream Gaps"); }

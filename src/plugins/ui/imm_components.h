@@ -852,11 +852,6 @@ checkbox_group(HasUIContext auto &ctx, EntityParent ep_pair,
 
   auto max_height = config.size.y_axis;
   config.size.y_axis = children();
-  // Only prevent wrapping if caller hasn't explicitly configured wrap behavior
-  // Default behavior prevents unexpected horizontal wrapping in Column layouts
-  if (config.flex_wrap == FlexWrap::Wrap) {
-    config.with_no_wrap();
-  }
   init_component(ctx, ep_pair, config, ComponentType::CheckboxGroup, false,
                  "checkbox_group");
   config.size.y_axis = max_height;
@@ -1032,10 +1027,6 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
   }
   config.with_align_items(AlignItems::Center);
   config.with_justify_content(JustifyContent::FlexStart);
-  // Only prevent wrapping if caller hasn't explicitly configured wrap behavior
-  if (config.flex_wrap == FlexWrap::Wrap) {
-    config.with_no_wrap();
-  }
   init_component(ctx, ep_pair, config, ComponentType::ToggleSwitch, false,
                  "toggle_switch_row");
 
@@ -1451,10 +1442,6 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Use styling defaults for size if none provided
   config.flex_direction = FlexDirection::Row;
-  // Only prevent wrapping if caller hasn't explicitly configured wrap behavior
-  if (config.flex_wrap == FlexWrap::Wrap) {
-    config.with_no_wrap();
-  }
 
   std::string label_str = config.label;
   config.label = "";

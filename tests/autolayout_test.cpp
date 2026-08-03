@@ -696,6 +696,8 @@ TEST(margin_offsets_percent_child_into_overflow) {
   CHECK_APPROX(r.x + r.width, 310.f);
   // main axis (Y): pixels(100) child + 10 margin offset fits within the 300 parent
   CHECK(r.y + r.height <= 300.f + 1.f);
+  // The cross-axis overflow above is intentional, so the layout warns about it.
+  EXPECT_WARN("extends outside parent");
 }
 
 // ---------------------------------------------------------------------------

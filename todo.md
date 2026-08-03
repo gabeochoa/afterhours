@@ -759,7 +759,37 @@ not achievable today.
 Ask: topmost-wins hit priority by render layer / child depth, plus a way for a
 handler to consume a click.
 
-### D4. `FlexWrap` defaults to `Wrap`
+### D4. `FlexWrap` defaults to `Wrap` — **DONE**, now `NoWrap`
+Flipped in both `component_config.h` and `ui_core_components.h`. Three things
+had to move with it, none of them obvious from the report:
+
+- **There was no `with_wrap()`**, only `with_no_wrap()`. Flipping without adding
+  it would have made wrapping unreachable from `ComponentConfig`.
+- **`apply_overrides` used `FlexWrap::Wrap` as its "caller did not set this"
+  sentinel**, so it inverts when the default moves. (Every field in that
+  function has the same default-as-sentinel property: you can never override
+  *back to* the default. Pre-existing, just relocated.)
+- **Three imm widgets did `if (flex_wrap == Wrap) with_no_wrap()`** to mean
+  "caller did not choose". After the flip `Wrap` only appears when the caller
+  asked for it, so those would have overridden an explicit request. Removed.
+
+Also removed a wrap-warning condition that keyed off `child.flex_wrap`. It read
+the wrong field — the *parent's* flex_wrap decides whether a child wraps — and
+once `NoWrap` was the default it fired on every child of a deliberately
+wrapping parent. Condition 1 (parent NoWrap + overflow) covers the real case.
+
+One warning became newly visible rather than newly wrong: cross-axis overflow
+was suppressed when the parent wrapped (`autolayout.h:1452`), so a
+`percent(1.0f)` child plus margin now warns under the content-box model. That
+is accurate, and the test that documents the overflow as intentional declares
+it.
+
+**Safety, measured rather than argued.** wm_afterhours renders 80 screens: with
+and without the change it produces the *same* 8 screenshot diffs at identical
+percentages, and the *same* warning volume (24 wrap, 28 overflow). So the flip
+changed nothing visually in a real app and added no noise.
+
+### D4 (original report, kept for context)
 **floatinghotel F4b, called "the single nastiest default we hit".** Confirmed
 still `FlexWrap::Wrap` at `component_config.h:62` and
 `ui_core_components.h:93`. Any Column taller than its viewport silently wraps

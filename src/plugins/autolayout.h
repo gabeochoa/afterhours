@@ -1347,18 +1347,9 @@ struct AutoLayout {
           should_warn = true;
           warn_reason = "NoWrap set but would overflow";
         }
-        // Condition 2: Child FlexDirection matches parent
-        // Only warn if the child itself has NoWrap, indicating the developer
-        // did not intend wrapping. Without this, every naturally-wrapping
-        // long page would trigger this warning.
-        else if (child.flex_direction == widget.flex_direction &&
-                 child.flex_wrap == FlexWrap::NoWrap) {
-          should_warn = true;
-          warn_reason = fmt::format(
-              "Child FlexDirection matches parent ({}) and has NoWrap - may "
-              "cause unexpected wrap",
-              is_column ? "Column" : "Row");
-        }
+        // Condition 1 also covers a child whose direction matches its parent's,
+        // even though it does not look like it: the PARENT's flex_wrap decides
+        // whether a child wraps, so there is nothing to check on the child.
         // Condition 4: Debug flag enabled
         else if (child.debug_wrap) {
           should_warn = true;

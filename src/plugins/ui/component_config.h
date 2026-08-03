@@ -59,7 +59,7 @@ struct ComponentConfig {
   JustifyContent justify_content = JustifyContent::FlexStart;
   AlignItems align_items = AlignItems::FlexStart;
   SelfAlign self_align = SelfAlign::Auto;
-  FlexWrap flex_wrap = FlexWrap::Wrap;
+  FlexWrap flex_wrap = FlexWrap::NoWrap;
   bool debug_wrap = false;
   Size flex_gap = pixels(0.0f); // Spacing between children (CSS gap)
   bool clip_children = false;   // Enable scissor clipping for children
@@ -521,6 +521,10 @@ struct ComponentConfig {
     flex_wrap = FlexWrap::NoWrap;
     return *this;
   }
+  ComponentConfig &with_wrap() {
+    flex_wrap = FlexWrap::Wrap;
+    return *this;
+  }
   ComponentConfig &with_flex_wrap(FlexWrap fw) {
     flex_wrap = fw;
     return *this;
@@ -918,7 +922,7 @@ struct ComponentConfig {
       merged.align_items = overrides.align_items;
     if (overrides.self_align != SelfAlign::Auto)
       merged.self_align = overrides.self_align;
-    if (overrides.flex_wrap != FlexWrap::Wrap)
+    if (overrides.flex_wrap != FlexWrap::NoWrap)
       merged.flex_wrap = overrides.flex_wrap;
     if (overrides.debug_wrap)
       merged.debug_wrap = overrides.debug_wrap;
