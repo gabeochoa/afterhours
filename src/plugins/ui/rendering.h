@@ -1722,6 +1722,25 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       auto [has_clip, clip_rect] =
           detail::compute_intersected_clip_rect(entity);
       if (has_clip) {
+        // Off-screen cull: if this entity is entirely outside its clip
+        // viewport, skip drawing it. Scrolled-away rows (e.g. the thousands of
+        // diff lines in a long diff) no longer pay text-shaping + draw cost
+        // every frame — only the visible slice does. Children carry their own
+        // render_cmds and are culled the same way, so returning here is safe.
+        // Use the same scroll-adjusted rect render_me draws with, so the
+        // intersection is against where the row actually paints on screen.
+        // Skip the cull for modifier-transformed elements — their painted rect
+        // is offset by apply_modifier() (translate/rotate) which we don't model
+        // here, so culling on the untransformed rect could wrongly drop them.
+        if (!entity.has<HasUIModifiers>()) {
+          RectangleType er = cmp.rect();
+          const Vector2Type so = detail::accumulated_scroll_offset(entity);
+          er.x -= so.x;
+          er.y -= so.y;
+          RectangleType vis = detail::intersect_rects(er, clip_rect);
+          if (vis.width <= 0.0f || vis.height <= 0.0f)
+            return;
+        }
         begin_scissor_mode(static_cast<int>(clip_rect.x),
                            static_cast<int>(clip_rect.y),
                            static_cast<int>(clip_rect.width),
