@@ -74,12 +74,19 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
       overlay::place(anchor, width, total_h, ctx.screen_width,
                      ctx.screen_height, preferred);
 
+  // with_absolute_position is PARENT-relative, and `anchor` is in screen
+  // space, so convert. Passing screen coords straight through adds the
+  // parent's own offset a second time.
+  const RectangleType parent_rect = parent.template get<UIComponent>().rect();
+  const float local_x = placed.x - parent_rect.x;
+  const float local_y = placed.y - parent_rect.y;
+
   auto list = tray(ctx, mk(entity),
                    ComponentConfig::inherit_from(config, "menu_list")
                        .with_size(ComponentSize{pixels(width), children(item_h)})
                        .with_flex_direction(FlexDirection::Column)
                        .with_no_wrap()
-                       .with_absolute_position(placed.x, placed.y)
+                       .with_absolute_position(local_x, local_y)
                        .with_render_layer(config.render_layer + 1));
 
   int chosen = kNoMenuSelection;
@@ -99,25 +106,23 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
                    .with_size(ComponentSize{percent(1.0f), pixels(item_h)})
                    .with_label(item.label)
                    .with_disabled(item.disabled);
-    if (button(ctx, mk(list.ent(), index), row) && !item.disabled)
+    auto item_el = button(ctx, mk(list.ent(), index), row);
+    if (item_el && !item.disabled)
       chosen = index;
 
-    // A shortcut rides on the same row, pushed right by an expanding spacer.
+    // Pinned inside the item rather than given its own row, or it lays out as
+    // a sibling and lands under the menu.
     if (!item.shortcut.empty()) {
-      auto shortcut_row =
-          div(ctx, mk(list.ent(), 10000 + index),
-              ComponentConfig::inherit_from(config, "menu_shortcut_row")
-                  .with_size(ComponentSize{percent(1.0f), pixels(0.f)})
-                  .with_flex_direction(FlexDirection::Row)
-                  .with_skip_tabbing(true));
-      div(ctx, mk(shortcut_row.ent(), 0),
-          ComponentConfig{}.with_size(ComponentSize{expand(), pixels(0.f)}));
-      div(ctx, mk(shortcut_row.ent(), 1),
+      const float sc_w = width * 0.45f;
+      div(ctx, mk(item_el.ent(), 0),
           ComponentConfig::inherit_from(config, "menu_shortcut")
-              .with_size(ComponentSize{pixels(width * 0.4f), pixels(item_h)})
+              .with_size(ComponentSize{pixels(sc_w), pixels(item_h)})
+              .with_absolute_position(width - sc_w - item_h * 0.3f, 0.f)
               .with_label(item.shortcut)
+              .with_alignment(TextAlignment::Right)
               .with_disabled(true)
-              .with_skip_tabbing(true));
+              .with_skip_tabbing(true)
+              .with_render_layer(config.render_layer + 2));
     }
     index++;
   }

@@ -122,4 +122,30 @@ TEST(dropdown_menu_anchors_under_its_trigger) {
                    __LINE__);
 }
 
+// The wm showcase case: a menu-bar trigger near the bottom edge. Only the
+// downward case was covered before, which is why this went unnoticed.
+TEST(dropdown_menu_flips_near_the_bottom) {
+  ImmTestHarness h;
+  bool open = true;
+  auto emit = [&] {
+    dropdown_menu(h.context(), mk(h.root(), 0), "Bottom", sample(), open,
+                  ComponentConfig{}
+                      .with_size(ComponentSize{pixels(150), pixels(32)})
+                      .with_absolute_position(24.f, 540.f));
+  };
+  h.begin_frame(); emit(); h.layout_only();
+  h.begin_frame(); emit(); h.layout_only();
+
+  UIComponent *list = h.find("menu_list");
+  ui_test::check(list != nullptr, "the list exists", __FILE__, __LINE__);
+  if (list) {
+    const float y = list->rect().y;
+    ui_test::check(y < 540.f, "flips above the trigger", __FILE__, __LINE__);
+    ui_test::check(y >= 0.f && y + list->rect().height <= 601.f,
+                   "stays on screen", __FILE__, __LINE__);
+    if (y >= 540.f)
+      fprintf(stderr, "        list y=%.1f h=%.1f\n", y, list->rect().height);
+  }
+}
+
 int main() { return ui_test::run_registered_tests("menu"); }
