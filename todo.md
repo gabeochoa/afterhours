@@ -1054,7 +1054,27 @@ with its origin hand-derived from panel geometry (panel xy → header height →
 search-wrap/field paddings + magnifier slot). Fix D11's forced fill and this
 becomes a ~10-line addition.
 
-### D13. Missing container/menu primitives
+### D13. Missing container/menu primitives — **IN PROGRESS** (branch `d13-anchored-overlays`)
+`overlay::place()` landed: anchored placement with edge flipping, the piece all
+three widgets need and all three hand-rolled downstream. Pure geometry, 16
+checks, no entities.
+
+**Blocked on an unexplained layout result.** Wiring it into `dropdown` so the
+tray flips near the bottom edge did not work: `overlay::place` computed the
+right screen position (`abs_y=440` for a trigger at 560, tray 120 tall), and
+`absolute_pos_y` held 440, but the laid-out `rect().y` came back 1560 —
+440 + 2*560.
+
+An "absolute child double-counts its parent's offset" theory does NOT hold: a
+minimal absolute-in-absolute repro gives 700 for 300+400, which is the sensible
+parent-relative answer. So the dropdown case differs in some other way (the tray
+is `percent(1.0f)` wide with a `children()` height, created via `tray()`, inside
+a dropdown that is itself absolutely positioned) and the cause is still unknown.
+
+The dropdown change is reverted; only the engine is committed. Next step is to
+find what the tray does differently before building `dropdown_menu`,
+`context_menu` and `popover` on top — every one of them needs to position an
+overlay in screen space, so this has to be understood first.
 **floatinghotel missing-primitives #1, #2, #4, #5, #6.** Each is built app-local
 in `src/ui/`, all five marked BLOCKER or HIGH:
 
