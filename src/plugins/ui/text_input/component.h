@@ -279,11 +279,14 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       cursor_height = text_pos.rect.height;
       cursor_y = text_pos.rect.y - field_rect.y - pad_top;
 
-      // text_x_offset places the DrawTextEx origin at (pad_w - DRAW_TEXT_MARGIN)
-      // from rect().x. The cursor is positioned within the content area which
-      // starts at pad_w from rect().x. Shift by -DRAW_TEXT_MARGIN so cursor
-      // aligns with the DrawTextEx origin where measure_text values apply.
-      float text_start_x = -DRAW_TEXT_MARGIN;
+      // The text renders starting at field.x + pad_left: draw_text_in_rect adds
+      // its own DRAW_TEXT_MARGIN internally on top of text_x_offset (= pad_w -
+      // DRAW_TEXT_MARGIN), so the net text origin is pad_w == pad_left. The
+      // cursor div is absolutely positioned relative to the field WITHOUT that
+      // internal margin, so its origin must be pad_left directly — using
+      // -DRAW_TEXT_MARGIN put it pad_left+MARGIN too far LEFT, drawing INSIDE the
+      // typed text (hanabi gap #32: "caret inside the last letter").
+      float text_start_x = pad_left;
 
       if (!display_text.empty() && display_cursor_pos > 0) {
         size_t safe_pos = std::min(display_cursor_pos, display_text.size());
@@ -319,7 +322,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                                    : config.font_name;
       Font font = font_manager->get_font(font_name);
 
-      float sel_text_x = -DRAW_TEXT_MARGIN;
+      float sel_text_x = pad_left;  // match the text origin (gap #32); was -DRAW_TEXT_MARGIN
 
       auto measure_x = [&](size_t byte_pos) -> float {
         if (byte_pos == 0 || display_text.empty()) return sel_text_x;
