@@ -286,7 +286,13 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       // internal margin, so its origin must be pad_left directly — using
       // -DRAW_TEXT_MARGIN put it pad_left+MARGIN too far LEFT, drawing INSIDE the
       // typed text (hanabi gap #32: "caret inside the last letter").
-      float text_start_x = pad_left;
+      // The caret div is an ABSOLUTE child of the field; autolayout resolves an
+      // absolute child's position as parent_origin + parent_PADDING + abs_pos.
+      // So the caret already gets +pad_left for free — its abs x needs to be
+      // just the measured text width (0 + width) to sit in the gap right after
+      // the last glyph. -DRAW_TEXT_MARGIN put it inside the glyph (gap #32);
+      // pad_left double-counted the padding (caret too far right). 0 is correct.
+      float text_start_x = 0.f;
 
       if (!display_text.empty() && display_cursor_pos > 0) {
         size_t safe_pos = std::min(display_cursor_pos, display_text.size());
@@ -322,7 +328,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                                    : config.font_name;
       Font font = font_manager->get_font(font_name);
 
-      float sel_text_x = pad_left;  // match the text origin (gap #32); was -DRAW_TEXT_MARGIN
+      float sel_text_x = 0.f;  // absolute child of the field: pad_left added by autolayout (gap #32)
 
       auto measure_x = [&](size_t byte_pos) -> float {
         if (byte_pos == 0 || display_text.empty()) return sel_text_x;
