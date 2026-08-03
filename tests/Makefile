@@ -84,6 +84,11 @@ ALL_TESTS := \
 	text_wrap_test \
 	theme_io_test
 
+# .app packaging is macOS-only, and the test shells out to plutil.
+ifeq ($(UNAME_S),Darwin)
+ALL_TESTS += bundle_test
+endif
+
 RAYLIB_TESTS := \
 	dialog_test \
 	dump_ui_test \
@@ -132,6 +137,7 @@ $(OUT)/entity_mapping_test: ../examples/entity_mapping_test_helper.cpp
 $(OUT)/entity_mapping_test: INCLUDES_T += -I../examples
 $(OUT)/random_engine_test:  CXXFLAGS_T += -DAFTER_HOURS_ENABLE_RANDOM
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
+$(OUT)/bundle_test: ../src/plugins/files.cpp
 
 # Runs every test even when one fails, then reports. The old loop dropped each
 # exit code, so only the last test's status escaped and a red suite read green.

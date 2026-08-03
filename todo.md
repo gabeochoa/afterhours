@@ -1067,10 +1067,45 @@ an unrelated `Resources` got returned even without the requested root in it.
 it there, because that layout is now what the resolver keys on. Two checks fail
 without the fix.
 
-### Declined for now: desktop/OS integration (#31, #33, #34)
-`.app` bundling, NSStatusItem/notifications/hotkeys, URL-scheme handling — all
-app-side today. Bundling is the one worth revisiting: it is a build step rather
-than runtime OS integration, so it is far cheaper to own.
+### D31. `.app` bundling — **DONE** (macOS), as opt-in build tooling
+I first declined this alongside #33/#34. That was wrong, and the distinction is
+worth keeping: those are *runtime* OS integration we would own on three
+platforms, while bundling is a **build step** — a directory layout plus a plist
+the OS reads before the process starts. It cannot be a C++ plugin at all (it
+does not fit `PluginCore`), so it ships as `tools/mk_bundle.sh` next to the
+existing `tools/` scripts. Nothing in the library calls it.
+
+Two failure modes it exists to prevent, both silent: `CFBundleExecutable` not
+matching the copied binary's filename (bundle refuses to launch, no diagnostic)
+and a missing `NSHighResolutionCapable` (window upscaled from 1x, just looks
+soft). The executable name is derived rather than passed, and the plist is
+`plutil -lint`ed before exit.
+
+`--plist-extra FILE` is the escape hatch: model the common keys, let anything
+else through as raw XML instead of growing a flag per plist key.
+
+Pairs with D32 — a `.app` puts the binary in `Contents/MacOS`, which is exactly
+what the new resource resolver keys on, so a bundled app can finally find its
+own resources. `bundle_test`'s last case launches the bundled binary and checks
+that, proving the two work together rather than each in isolation.
+
+Verified beyond the unit test: bundled `examples/web/demo` (the real Metal
+target) and launched it with `open(1)`, so LaunchServices actually parsed the
+plist. A bundle that lints but will not launch is the failure worth catching by
+hand once.
+
+**TODO — Linux `.desktop` and Windows.** `--platform` dispatches to
+`bundle_linux` / `bundle_windows`, which currently error. Adding them is
+additive rather than a restructure. Not written now because nothing here can
+build or run either, and shipping two unverified code paths is the pattern that
+has bitten repeatedly.
+
+### Still declined: runtime OS integration (#33, #34)
+NSStatusItem/notifications/global hotkeys, and *handling* an opened URL. Already
+implemented app-side in the reporter's own `.mm`; owning them means three
+platforms of OS integration for one consumer. Note the split: mk_bundle.sh
+generates the `CFBundleURLTypes` **declaration**, which is packaging — reacting
+to the Apple event stays app-side.
 
 `#35` (enumerate system fonts) is borderline — real per-OS code for one feature.
 `#36` (a `get_cache_path()` sibling to the existing `get_config_path()`) is

@@ -45,6 +45,35 @@ AFTERHOURS_ENFORCE_MIN_FONT_SIZE
 - automatically clamps font sizes to the minimum to ensure accessibility
 
 
+## Packaging a desktop app (macOS)
+
+`tools/mk_bundle.sh` packages a built executable as a `.app`. Nothing in the
+library calls it, so it costs you nothing unless you do. Two lines of make:
+
+```make
+bundle: $(EXE)
+	@vendor/afterhours/tools/mk_bundle.sh --exe $(EXE) \
+	    --name MyApp --id com.example.myapp --resources output/resources
+```
+
+`--help` lists everything. The common flags are `--version`, `--icon`,
+`--category`, `--url-scheme` (repeatable), and `--sign -` for ad-hoc signing.
+Anything not modelled goes in verbatim with `--plist-extra FILE`, so the script
+does not need a flag per plist key.
+
+Two details it handles that are easy to get wrong by hand: `CFBundleExecutable`
+is derived from the copied binary's filename (a mismatch produces a bundle that
+silently refuses to launch), and `NSHighResolutionCapable` is always set
+(without it the window is upscaled from 1x and looks soft on Retina). The
+generated plist is checked with `plutil -lint` before the script exits.
+
+This pairs with the files plugin: a `.app` puts the binary in
+`Contents/MacOS`, which is what `files::get_resource_path` keys on to find
+`Contents/Resources`. Pass `--resources` and a bundled app finds its own files.
+
+Linux `.desktop` and Windows packaging are not implemented; `--platform` errors
+for them rather than producing something untested.
+
 ## Plugins
 
 Plugins are basically just helpful things I added to the library so i can help them in all my projects. They arent needed at all and dont provide examples (yet). All plugins (and any you make i hope) should implement the functions mentioned in developer.h 
