@@ -12,11 +12,17 @@
 
 #include <afterhours/src/plugins/ui/rendering.h>
 
+using afterhours::ui::detail::measure_wrapped;
 using afterhours::ui::detail::wrap_text_to_width;
 
 // Fixed-width measure: every character is 10px wide.
 static auto measure10 = [](const std::string &s) {
   return static_cast<float>(s.size()) * 10.f;
+};
+
+// 2D variant: width = chars * 10, height = 20 per line.
+static auto measure10x20 = [](const std::string &s) {
+  return Vector2Type{static_cast<float>(s.size()) * 10.f, 20.f};
 };
 
 // Text that fits stays on one line.
@@ -77,6 +83,49 @@ TEST(wrap_sentence_multiple_lines) {
   // No line exceeds the width.
   for (const auto &ln : lines)
     CHECK(measure10(ln) <= 250.f);
+}
+
+// Hard newlines always break a line, even when the text would otherwise fit.
+TEST(wrap_hard_newline_breaks) {
+  auto lines = wrap_text_to_width("alpha\nbeta", 1000.f, measure10);
+  CHECK(lines.size() == 2);
+  CHECK(lines[0] == "alpha");
+  CHECK(lines[1] == "beta");
+}
+
+// A blank line between two hard newlines is preserved.
+TEST(wrap_blank_line_preserved) {
+  auto lines = wrap_text_to_width("a\n\nb", 1000.f, measure10);
+  CHECK(lines.size() == 3);
+  CHECK(lines[0] == "a");
+  CHECK(lines[1].empty());
+  CHECK(lines[2] == "b");
+}
+
+// Hard newlines and greedy word-wrap combine: each segment wraps independently.
+TEST(wrap_newline_plus_wordwrap) {
+  // "aaa bbb ccc" wraps to 2 lines at width 70; the "\nddd" forces a 3rd.
+  auto lines = wrap_text_to_width("aaa bbb ccc\nddd", 70.f, measure10);
+  CHECK(lines.size() == 3);
+  CHECK(lines[0] == "aaa bbb");
+  CHECK(lines[1] == "ccc");
+  CHECK(lines[2] == "ddd");
+}
+
+// measure_wrapped reports width (widest line), height (lines * line height),
+// and line count.
+TEST(measure_wrapped_metrics) {
+  auto m = measure_wrapped("one two three", 50.f, measure10x20);
+  CHECK(m.line_count == 3);       // one / two / three
+  CHECK(m.height == 60.f);        // 3 lines * 20px
+  CHECK(m.width == 50.f);         // "three" = 5 chars * 10
+}
+
+// measure_wrapped counts blank lines from hard newlines in the height.
+TEST(measure_wrapped_counts_blank_lines) {
+  auto m = measure_wrapped("a\n\nb", 1000.f, measure10x20);
+  CHECK(m.line_count == 3);
+  CHECK(m.height == 60.f);        // blank middle line still occupies height
 }
 
 int main() { return ui_test::run_registered_tests("text wrap tests"); }
