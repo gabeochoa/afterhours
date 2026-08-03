@@ -27,10 +27,11 @@ bool same_color(const Color &a, const Color &b) {
 // text_input sizes its font from the PREVIOUS frame's height, so a single
 // emit+layout never exercises that path. Run two frames like a real app does.
 void two_frames(ImmTestHarness &h, const std::function<void()> &emit) {
-  emit();
-  h.layout_only();
-  emit();
-  h.layout_only();
+  for (int i = 0; i < 2; i++) {
+    h.begin_frame();
+    emit();
+    h.layout_only();
+  }
 }
 
 Entity *find_field_entity() {
@@ -200,10 +201,12 @@ TEST(d12_placeholder_does_not_move_the_cursor) {
       imm::text_input(h.context(), mk(h.root(), 0), text, cfg);
     };
     // The caret only exists while focused, so focus the field between frames.
+    h.begin_frame();
     emit();
     h.layout_only();
     if (Entity *field = find_field_entity())
       h.context().focus_id = field->id;
+    h.begin_frame();
     emit();
     h.layout_only();
     UIComponent *c = h.find("cursor");

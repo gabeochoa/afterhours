@@ -1,6 +1,8 @@
 #pragma once
 
 #include <functional>
+#include <string>
+#include <unordered_set>
 
 #include "../../ecs.h"
 #include "../color.h"
@@ -622,16 +624,25 @@ inline void validate_config(const ComponentConfig &config,
   if (validation.mode == ValidationMode::Silent)
     return;
 
-  auto warn = [&](const std::string &msg) {
-    std::string name = !config.debug_name.empty()
-                           ? config.debug_name
-                           : (!debug_name.empty() ? debug_name : "<unnamed>");
-    std::string full = "[UI Config] " + name + ": " + msg;
+  // This runs for every element every frame, so an un-deduped warn buries the
+  // log in thousands of identical lines. Once per distinct message is enough:
+  // these are static config mistakes, not events.
+  static std::unordered_set<std::string> warned;
+  auto emit = [&](const std::string &full) {
+    if (!warned.insert(full).second)
+      return;
     if (validation.mode == ValidationMode::Strict) {
       log_error("{}", full);
     } else {
       log_warn("{}", full);
     }
+  };
+
+  auto warn = [&](const std::string &msg) {
+    std::string name = !config.debug_name.empty()
+                           ? config.debug_name
+                           : (!debug_name.empty() ? debug_name : "<unnamed>");
+    emit("[UI Config] " + name + ": " + msg);
   };
 
   // Warn: fill_parent on both axes without explicit parent size hint
@@ -644,13 +655,16 @@ inline void validate_config(const ComponentConfig &config,
          "the expected parent. Consider using explicit pixel sizes.");
   }
 
-  // Warn: text without any font specified and no global default
+  // Warn: text without any font specified and no global default.
+  // Deliberately not named after the element that tripped it -- the condition
+  // is global, so every text element reports it and the fix is the same one
+  // call. Naming them would print the same advice once per widget.
   if (!config.label.empty() && !config.has_font_override()) {
     auto &defaults = UIStylingDefaults::get();
     if (defaults.default_font_name == UIComponent::UNSET_FONT) {
-      warn("Text element has no font and no global default font is set. "
-           "Call UIStylingDefaults::get().set_default_font() or use "
-           ".with_font().");
+      emit("[UI Config] No global default font is set, so text elements have "
+           "no font. Call UIStylingDefaults::get().set_default_font(), or "
+           ".with_font() per element.");
     }
   }
 }
