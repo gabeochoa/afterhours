@@ -1054,16 +1054,32 @@ with its origin hand-derived from panel geometry (panel xy → header height →
 search-wrap/field paddings + magnifier slot). Fix D11's forced fill and this
 becomes a ~10-line addition.
 
-### D13. Missing container/menu primitives — **IN PROGRESS** (branch `d13-anchored-overlays`)
+### D13. Missing container/menu primitives — **DONE** (branch `d13-anchored-overlays`)
 `overlay::place()`: anchored placement with edge flipping, the piece all three
 widgets need and all three hand-rolled downstream. Pure geometry, 16 checks.
 
 Wired into `dropdown`: an open tray near the bottom now flips above the trigger
 instead of running off screen. Two tests cover both directions.
 
-Still to build: the shared item format (label, shortcut, separator, disabled,
-callback), click-outside (generalise `ModalCloseWatcherSystem` rather than
-rewrite it), then `dropdown_menu` / `context_menu` / `popover` on top.
+Built on top: `MenuItem` (label, shortcut, separator, disabled), `menu_list`,
+`dropdown_menu`, `context_menu`, `popover`. 53 checks in `menu_test`, plus the
+`menu_showcase` screen and screenshot baseline in wm_afterhours.
+
+Dismissal is focus-based rather than a generalised `ModalCloseWatcherSystem`.
+`dropdown` already closes on focus loss (`imm_components.h:1677`) and that one
+check covers click-outside and tab-away without any hit testing, so the menus
+reuse it instead of growing a second mechanism. Consequence: only one menu can
+hold focus, so opening a second closes the first.
+
+`popover` needs `detail::focus_within` rather than exact-id focus — a menu
+closing when an item takes focus is correct, a popover doing it when you click
+its own text input is not. It walks UP the parent chain, because the tree is
+cleared each frame and a popover runs its check before the caller re-adds
+content; walking down always sees an empty subtree.
+
+Not done: Escape-to-close. `dropdown` does it via an unguarded `IA::MenuBack`,
+which fails to compile for apps whose `InputAction` lacks that value — the same
+portability problem as D23's `text_input` note. Wants a `magic_enum` guard.
 
 ### D13b. NOT a library bug — the harness was missing the per-frame reset
 Kept because two wrong theories got written down before the measurement was

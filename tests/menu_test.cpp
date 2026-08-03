@@ -413,4 +413,126 @@ TEST(opening_a_second_menu_closes_the_first) {
                  __LINE__);
 }
 
+// popover: the third D13 widget. Same anchoring and dismissal as a menu, but
+// the caller draws the contents, so it needs one thing a menu does not --
+// clicking a control INSIDE it must not dismiss it. A menu closes when an item
+// takes focus because choosing an item is the point; a popover holding a text
+// input or a slider would be unusable under that rule.
+TEST(popover_closed_builds_nothing) {
+  ImmTestHarness h;
+  bool open = false;
+  h.begin_frame();
+  auto pop = popover(h.context(), mk(h.root(), 0),
+                     RectangleType{100, 100, 120, 30}, open,
+                     overlay::Placement::Below,
+                     ComponentConfig{}.with_size(
+                         ComponentSize{pixels(200), pixels(120)}));
+  h.layout_only();
+  ui_test::check(!pop, "a closed popover is falsy", __FILE__, __LINE__);
+  ui_test::check(h.find("popover_panel") == nullptr, "and builds no panel",
+                 __FILE__, __LINE__);
+}
+
+TEST(popover_anchors_and_flips_like_a_menu) {
+  ImmTestHarness h;
+  bool open = true;
+  auto emit = [&](float anchor_y) {
+    return popover(h.context(), mk(h.root(), 0),
+                   RectangleType{100, anchor_y, 120, 30}, open,
+                   overlay::Placement::Below,
+                   ComponentConfig{}.with_size(
+                       ComponentSize{pixels(200), pixels(120)}));
+  };
+  h.begin_frame(); emit(100.f); h.layout_only();
+  UIComponent *panel = h.find("popover_panel");
+  ui_test::check(panel != nullptr, "the panel exists", __FILE__, __LINE__);
+  if (panel) {
+    CHECK_APPROX(panel->rect().x, 100.f);
+    CHECK_APPROX(panel->rect().y, 130.f);
+  }
+
+  // Near the bottom it flips above, same overlay::place as the menus.
+  ImmTestHarness h2;
+  bool open2 = true;
+  h2.begin_frame();
+  popover(h2.context(), mk(h2.root(), 0), RectangleType{100, 550, 120, 30},
+          open2, overlay::Placement::Below,
+          ComponentConfig{}.with_size(ComponentSize{pixels(200), pixels(120)}));
+  h2.layout_only();
+  UIComponent *flipped = h2.find("popover_panel");
+  ui_test::check(flipped != nullptr, "the flipped panel exists", __FILE__,
+                 __LINE__);
+  if (flipped)
+    ui_test::check(flipped->rect().y + 120.f <= 550.f + 0.5f,
+                   "flips above the anchor", __FILE__, __LINE__);
+}
+
+TEST(popover_hosts_caller_drawn_content) {
+  ImmTestHarness h;
+  bool open = true;
+  h.begin_frame();
+  auto pop = popover(h.context(), mk(h.root(), 0),
+                     RectangleType{100, 100, 120, 30}, open,
+                     overlay::Placement::Below,
+                     ComponentConfig{}.with_size(
+                         ComponentSize{pixels(200), pixels(120)}));
+  ui_test::check(!!pop, "an open popover is truthy", __FILE__, __LINE__);
+  if (pop)
+    button(h.context(), mk(pop.ent(), 0),
+           ComponentConfig{}
+               .with_size(ComponentSize{pixels(80), pixels(24)})
+               .with_label("Apply")
+               .with_debug_name("popover_button"));
+  h.layout_only();
+
+  UIComponent *panel = h.find("popover_panel");
+  UIComponent *btn = h.find("popover_button");
+  ui_test::check(panel != nullptr && btn != nullptr, "both exist", __FILE__,
+                 __LINE__);
+  if (panel && btn) {
+    // The child is laid out inside the panel, which is what makes the panel
+    // usable as a container rather than just a positioned rectangle.
+    ui_test::check(btn->rect().x >= panel->rect().x &&
+                       btn->rect().y >= panel->rect().y,
+                   "content is laid out inside the panel", __FILE__, __LINE__);
+  }
+}
+
+// The behaviour that separates popover from menu_list.
+TEST(popover_survives_focus_on_its_own_content) {
+  ImmTestHarness h;
+  bool open = true;
+  EntityID child_id = -1;
+  auto emit = [&] {
+    auto pop = popover(h.context(), mk(h.root(), 0),
+                       RectangleType{100, 100, 120, 30}, open,
+                       overlay::Placement::Below,
+                       ComponentConfig{}.with_size(
+                           ComponentSize{pixels(200), pixels(120)}));
+    if (pop) {
+      auto b = button(h.context(), mk(pop.ent(), 0),
+                      ComponentConfig{}
+                          .with_size(ComponentSize{pixels(80), pixels(24)})
+                          .with_label("Apply")
+                          .with_debug_name("popover_button"));
+      child_id = b.ent().id;
+    }
+  };
+  h.begin_frame(); emit(); h.layout_only();
+  h.begin_frame(); emit(); h.layout_only();
+  ui_test::check(open, "open while it holds focus", __FILE__, __LINE__);
+
+  // Clicking a control inside the popover puts focus on that control. A menu
+  // would close here; a popover must not.
+  h.context().set_focus(child_id);
+  h.begin_frame(); emit(); h.layout_only();
+  ui_test::check(open, "focus on its own content does not dismiss it", __FILE__,
+                 __LINE__);
+
+  // Focus genuinely elsewhere still dismisses.
+  h.context().set_focus(h.root().id);
+  h.begin_frame(); emit(); h.layout_only();
+  ui_test::check(!open, "focus outside dismisses it", __FILE__, __LINE__);
+}
+
 int main() { return ui_test::run_registered_tests("menu"); }

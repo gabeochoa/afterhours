@@ -46,6 +46,29 @@ template <typename Ctx>
 bool menu_lost_focus(Ctx &ctx, EntityID list_id, bool was_open) {
   return was_open && !ctx.has_focus(list_id);
 }
+
+// Focus anywhere in a subtree. A menu can use exact-id focus because focusing
+// an item means choosing it, but a popover holds arbitrary controls and must
+// survive focus landing on one of them.
+//
+// Walks UP from the focused element, not down from `id`. The tree is cleared
+// and rebuilt every frame and a popover runs this check before its caller has
+// re-added any content, so walking down would always see an empty subtree.
+// ClearUIComponentChildren empties `children` but leaves `parent` intact.
+template <typename Ctx> bool focus_within(Ctx &ctx, EntityID id) {
+  EntityID cur = ctx.focus_id;
+  // Bounded rather than while(true): a malformed parent chain would otherwise
+  // hang the frame, and no real UI nests this deep.
+  for (int depth = 0; depth < 64 && cur != -1; depth++) {
+    if (cur == id)
+      return true;
+    OptEntity opt = UICollectionHolder::getEntityForID(cur);
+    if (!opt.has_value() || !opt.asE().template has<UIComponent>())
+      return false;
+    cur = opt.asE().template get<UIComponent>().parent;
+  }
+  return false;
+}
 } // namespace detail
 
 // The shared list. `anchor` is what it opens against, in screen space.
@@ -227,6 +250,68 @@ int context_menu(HasUIContext auto &ctx, EntityParent ep_pair,
   const RectangleType anchor{at.x, at.y, 0.f, 0.f};
   return menu_list(ctx, ep_pair, items, anchor, open,
                    overlay::Placement::Below, config);
+}
+
+// An anchored panel whose contents the caller draws. Same placement and
+// dismissal as a menu; the difference is what closes it -- see focus_within.
+//
+//   auto pop = popover(ctx, mk(entity), anchor, open, Placement::Below,
+//                      ComponentConfig{}.with_size({pixels(220),
+//                                                   pixels(140)}));
+//   if (pop)
+//     button(ctx, mk(pop.ent(), 0), ComponentConfig{}.with_label("Apply"));
+//
+// Returns the panel, falsy when closed, so the body only runs when open.
+inline ElementResult
+popover(HasUIContext auto &ctx, EntityParent ep_pair,
+        const RectangleType &anchor, bool &open,
+        overlay::Placement preferred = overlay::Placement::Below,
+        ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+  auto &state = entity.template addComponentIfMissing<HasMenuState>();
+  if (!open) {
+    state.was_open_last_frame = false;
+    return ElementResult{false, entity};
+  }
+
+  ComponentConfig root_config =
+      ComponentConfig::inherit_from(config, "popover_root")
+          .with_size(ComponentSize{pixels(0.f), pixels(0.f)})
+          .with_skip_tabbing(true);
+  init_component(ctx, ep_pair, root_config, ComponentType::Div, false,
+                 "popover_root");
+
+  const float width =
+      config.size.x_axis.value > 0.f ? config.size.x_axis.value : anchor.width;
+  const float height = config.size.y_axis.value > 0.f
+                           ? config.size.y_axis.value
+                           : default_component_size.y;
+
+  const auto placed = overlay::place(anchor, width, height, ctx.screen_width,
+                                     ctx.screen_height, preferred);
+
+  // Parent-relative, against popover_root itself -- see the same conversion in
+  // menu_list for why its parent is the wrong thing to subtract.
+  const RectangleType root_rect = entity.template get<UIComponent>().rect();
+
+  auto panel =
+      tray(ctx, mk(entity),
+           ComponentConfig::inherit_from(config, "popover_panel")
+               .with_background(Theme::Usage::Surface)
+               .with_size(ComponentSize{pixels(width), pixels(height)})
+               .with_flex_direction(FlexDirection::Column)
+               .with_absolute_position(placed.x - root_rect.x,
+                                       placed.y - root_rect.y)
+               .with_render_layer(config.render_layer + 1));
+
+  if (!state.was_open_last_frame) {
+    ctx.set_focus(panel.ent().id);
+  } else if (!detail::focus_within(ctx, panel.ent().id)) {
+    open = false;
+  }
+  state.was_open_last_frame = open;
+
+  return ElementResult{true, panel.ent()};
 }
 
 } // namespace imm
