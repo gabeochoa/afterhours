@@ -1047,6 +1047,35 @@ Strong candidate for floatinghotel footgun F1 ("labels don't word-wrap"): set a
 size, ask for wrapping, get one clipped line and no diagnostic. Worth telling
 them.
 
+### D32. Resource paths resolved against CWD, so bundled apps found nothing — **DONE**
+`files.cpp:54` set `resource_folder_path = current_path() / root_folder`. A
+launched macOS `.app` has CWD `/`, so a shipped bundle could never find its own
+resources — the API failed in exactly the case it exists for, and worked only
+when run from a build directory.
+
+Now resolved from the executable's own location, CWD last:
+1. `<exe_dir>/<root>` — binary next to a resources dir
+2. `<exe_dir>/../Resources/<root>` and then `<exe_dir>/../Resources`
+3. `current_path()/<root>` — unchanged fallback, so dev builds keep working
+
+The bundle probes only fire when the binary really is in `Contents/MacOS`. The
+first cut keyed off "a sibling `Resources` dir exists", which the tests caught:
+an unrelated `Resources` got returned even without the requested root in it.
+
+`files_resource_path_test` covers all three, and the bundle case is a real one
+— it builds a `.app`, copies the test binary into `Contents/MacOS`, and re-execs
+it there, because that layout is now what the resolver keys on. Two checks fail
+without the fix.
+
+### Declined for now: desktop/OS integration (#31, #33, #34)
+`.app` bundling, NSStatusItem/notifications/hotkeys, URL-scheme handling — all
+app-side today. Bundling is the one worth revisiting: it is a build step rather
+than runtime OS integration, so it is far cheaper to own.
+
+`#35` (enumerate system fonts) is borderline — real per-OS code for one feature.
+`#36` (a `get_cache_path()` sibling to the existing `get_config_path()`) is
+small and fits, if it ever comes up.
+
 ### D1b. There is now a working native sokol/Metal target — **DONE**
 D1, D19 and D20 were all blocked on "nothing here builds sokol". That was
 nearly untrue: `examples/web` already had a native macOS/Metal recipe

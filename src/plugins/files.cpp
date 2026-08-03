@@ -26,7 +26,76 @@
 
 #endif // !__EMSCRIPTEN__
 
+#ifndef __EMSCRIPTEN__
+#include <cstdint>
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#elif defined(_WIN32)
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+#endif
+
 namespace afterhours {
+
+#ifndef __EMSCRIPTEN__
+namespace {
+// Directory holding the running executable, or empty if it cannot be found.
+std::filesystem::path executable_dir() {
+  std::error_code ec;
+#if defined(__APPLE__)
+  uint32_t size = 0;
+  _NSGetExecutablePath(nullptr, &size);
+  std::string buf(size, '\0');
+  if (_NSGetExecutablePath(buf.data(), &size) != 0)
+    return {};
+  auto exe = std::filesystem::canonical(buf.c_str(), ec);
+#elif defined(_WIN32)
+  char buf[MAX_PATH];
+  DWORD n = GetModuleFileNameA(nullptr, buf, MAX_PATH);
+  if (n == 0 || n == MAX_PATH)
+    return {};
+  auto exe = std::filesystem::canonical(std::string(buf, n), ec);
+#else
+  auto exe = std::filesystem::canonical("/proc/self/exe", ec);
+#endif
+  if (ec)
+    return {};
+  return exe.parent_path();
+}
+
+// Resource root, preferring the executable's own location.
+//
+// This used to be current_path()/root_folder. A launched macOS .app has CWD
+// "/", so a bundled app could never find its own resources -- the API failed
+// in exactly the case it exists for. CWD stays as the last resort so running
+// from a build tree keeps working.
+std::filesystem::path resolve_resource_root(const std::string &root_folder) {
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  const fs::path exe = executable_dir();
+  if (!exe.empty()) {
+    if (fs::is_directory(exe / root_folder, ec)) // binary next to resources/
+      return fs::weakly_canonical(exe / root_folder, ec);
+
+    // .app only, recognised by the Contents/MacOS layout rather than by the
+    // mere existence of a sibling Resources dir -- otherwise an unrelated
+    // Resources would be returned even when it lacks the requested root.
+    const bool in_app_bundle = exe.filename() == "MacOS" &&
+                               exe.parent_path().filename() == "Contents";
+    if (in_app_bundle) {
+      const fs::path resources = exe.parent_path() / "Resources";
+      if (fs::is_directory(resources / root_folder, ec))
+        return fs::weakly_canonical(resources / root_folder, ec);
+      if (fs::is_directory(resources, ec))
+        return fs::weakly_canonical(resources, ec);
+    }
+  }
+  return fs::current_path() / fs::path(root_folder);
+}
+} // namespace
+#endif // !__EMSCRIPTEN__
 
 // Implementation of ProvidesResourcePaths constructor that uses
 // platform_folders on native, and Emscripten virtual filesystem paths on web.
@@ -51,7 +120,7 @@ files::ProvidesResourcePaths::ProvidesResourcePaths(
   const fs::path master_folder(sago::getSaveGamesFolder1());
   save_folder_path = master_folder / fs::path(game_name);
   config_folder_path = sago::getConfigHome() / fs::path(game_name);
-  resource_folder_path = fs::current_path() / fs::path(root_folder);
+  resource_folder_path = resolve_resource_root(root_folder);
 
   if (!fs::exists(save_folder_path)) {
     bool was_created = fs::create_directories(save_folder_path);

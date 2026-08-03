@@ -64,6 +64,7 @@ ALL_TESTS := \
 	dialog_test \
 	dump_ui_test \
 	entity_mapping_test \
+	files_resource_path_test \
 	entity_pool_test \
 	entity_query_test \
 	input_injector_mouse_delta_test \
@@ -130,6 +131,7 @@ $(OUT)/%: %.cpp
 $(OUT)/entity_mapping_test: ../examples/entity_mapping_test_helper.cpp
 $(OUT)/entity_mapping_test: INCLUDES_T += -I../examples
 $(OUT)/random_engine_test:  CXXFLAGS_T += -DAFTER_HOURS_ENABLE_RANDOM
+$(OUT)/files_resource_path_test: ../src/plugins/files.cpp
 
 # Runs every test even when one fails, then reports. The old loop dropped each
 # exit code, so only the last test's status escaped and a red suite read green.
