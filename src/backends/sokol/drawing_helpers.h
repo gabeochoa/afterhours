@@ -143,13 +143,9 @@ inline void draw_rectangle_rounded(
   auto emit_corner_arc = [&](float cornerX, float cornerY, float radius,
                              float startAngle) {
     if (radius <= 0.0f) {
-      // Sharp corner: just one triangle from center to corner point
-      sgl_begin_triangles();
-      metal_draw_detail::set_color(color);
-      sgl_v2f(cx, cy);
-      sgl_v2f(cornerX, cornerY);
-      // We'll handle connectivity outside
-      sgl_end();
+      // Emit nothing: the edge triangles already reach the corner point, so
+      // the centre fan tiles it. A 2-vertex triangle here drew a diagonal
+      // slice on any mixed round/sharp config.
       return;
     }
     for (int i = 0; i < segs; i++) {
