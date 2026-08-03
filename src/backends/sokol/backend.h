@@ -78,6 +78,10 @@ inline uint32_t g_active_shader_id = 0;
 // Offscreen render target for headless (windowless) mode, created in metal_init.
 inline RenderTextureType g_headless_rt{};
 
+// src-over for 2D drawing; sgl_defaults() loads a pipeline with blending off,
+// which discarded every alpha byte. Opaque draws are unchanged (a=255).
+inline sgl_pipeline g_blend_pip{};
+
 // sokol_gl + fontstash setup shared by the windowed (sokol_init_cb) and headless
 // (metal_init) bootstraps. Assumes sg_setup() has already run.
 inline void setup_sokol_gl_and_fonts() {
@@ -86,6 +90,16 @@ inline void setup_sokol_gl_and_fonts() {
   sgl_desc.max_commands = 1 << 16; // 65536 commands
   sgl_desc.logger.func = slog_func;
   sgl_setup(&sgl_desc);
+
+  sg_pipeline_desc blend_desc{};
+  blend_desc.colors[0].blend.enabled = true;
+  blend_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
+  blend_desc.colors[0].blend.dst_factor_rgb =
+      SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+  blend_desc.colors[0].blend.src_factor_alpha = SG_BLENDFACTOR_ONE;
+  blend_desc.colors[0].blend.dst_factor_alpha =
+      SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+  g_blend_pip = sgl_make_pipeline(&blend_desc);
 
   sfons_desc_t sfons_desc{};
   sfons_desc.width = 2048;
@@ -378,6 +392,7 @@ struct MetalPlatformAPI {
     float w = static_cast<float>(sapp_width()) / dpi;
     float h = static_cast<float>(sapp_height()) / dpi;
     sgl_defaults();
+    sgl_load_pipeline(metal_detail::g_blend_pip);
     sgl_matrix_mode_projection();
     // sokol_gl produces OpenGL clip-space Z [-1,+1]; Metal clips to [0,+1].
     // Pre-load a fixup so ortho output lands in Metal's depth range.

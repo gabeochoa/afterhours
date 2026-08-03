@@ -647,7 +647,31 @@ Convergent items first: two independent apps hitting the same wall is the
 strongest signal available, and both of the top two cost their app real
 workaround code.
 
-### D1. Sokol backend has alpha blending disabled — 3 symptoms, 1 fix
+### D1. Sokol alpha blending — **DONE**, and now pixel-tested
+Fixed: `metal_detail::g_blend_pip`, a src-over pipeline created once in
+`setup_sokol_gl_and_fonts()` and loaded after both `sgl_defaults()` calls
+(`backend.h:400` windowed, `drawing_helpers.h:1114` texture/headless).
+
+Safe as a global default rather than opt-in: with straight alpha and `a == 255`
+src-over is `src*1 + dst*0`, so opaque drawing is bit-identical. That is not
+just an argument — the opaque case passes both with and without the fix.
+
+**Proven, not asserted.** `sokol_blend_test` renders headless into an offscreen
+texture and reads the pixels back, so it checks what the GPU produced rather
+than which calls were issued. Without the fix, half-alpha red over blue comes
+back `rgba(255, 0, 0, 255)` — and so does a fully *transparent* draw. That is
+the reported symptom exactly: the alpha byte reaches `sgl_c4b` and is discarded.
+
+**Text was never at risk**, which was the one thing worth checking before
+changing a global pipeline. `sokol_fontstash.h:2401-2408` wraps its draw in
+`sgl_push_pipeline()`/`sgl_pop_pipeline()` around its own alpha-blended
+pipeline, so text has always blended and is fully isolated from the sgl default.
+Shapes never blended; text always did.
+
+This also closes the first sokol test target. D19 (Metal headless hi-DPI) and
+D20 (`load_texture` mipmaps) are now testable the same way.
+
+### D1 (original report, kept for context)
 **hanabi #13 + #15, floatinghotel "Div backgrounds render opaque".** Root
 cause is one line: `begin_drawing` calls `sgl_defaults()` every frame, which
 loads the sokol_gl default pipeline, and sokol_gfx defaults blending to *off*.

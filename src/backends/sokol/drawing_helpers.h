@@ -1112,6 +1112,7 @@ inline void begin_texture_mode(graphics::RenderTextureType &rt) {
   graphics::metal_detail::g_active_rt_color_view_id = rt.color_view_id;
 
   sgl_defaults();
+  sgl_load_pipeline(graphics::metal_detail::g_blend_pip);
   sgl_matrix_mode_projection();
   // Apply GL→Metal clip-space Z fixup before the ortho projection.
   // clang-format off

@@ -87,6 +87,8 @@ ALL_TESTS := \
 # .app packaging is macOS-only, and the test shells out to plutil.
 ifeq ($(UNAME_S),Darwin)
 ALL_TESTS += bundle_test
+# Sokol is Metal here, so macOS-only; renders headless, no window.
+ALL_TESTS += sokol_blend_test
 endif
 
 RAYLIB_TESTS := \
@@ -126,10 +128,10 @@ $(RAYLIB_BINS): CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(RAYLIB_BINS): INCLUDES_T = $(INCLUDES_RAYLIB)
 $(RAYLIB_BINS): LDFLAGS_T  = $(LDFLAGS_RAYLIB)
 
-# $(filter %.cpp,$^) rather than $^: the generated .d files add every header as
-# a prerequisite, and a bare $^ would hand all of them to clang as input files.
+# Filter to sources: the .d files list every header as a prerequisite, and a
+# bare $^ would hand them all to clang. .cc is the sokol implementation TU.
 $(OUT)/%: %.cpp
-	$(CXX) $(CXXFLAGS_T) $(DEPFLAGS) $(INCLUDES_T) $(filter %.cpp,$^) $(LDFLAGS_T) -o $@
+	$(CXX) $(CXXFLAGS_T) $(DEPFLAGS) $(INCLUDES_T) $(filter %.cpp %.cc,$^) $(LDFLAGS_T) -o $@
 
 # Exceptions. A rule with prerequisites and no recipe adds to the pattern rule
 # above instead of replacing it.
@@ -138,6 +140,14 @@ $(OUT)/entity_mapping_test: INCLUDES_T += -I../examples
 $(OUT)/random_engine_test:  CXXFLAGS_T += -DAFTER_HOURS_ENABLE_RANDOM
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
 $(OUT)/bundle_test: ../src/plugins/files.cpp
+
+# Sokol's implementation TU must be Objective-C++ for Metal; reuse the web
+# example's rather than keeping a second copy.
+SOKOL_FRAMEWORKS := -framework Metal -framework MetalKit -framework Cocoa \
+                    -framework QuartzCore -framework AudioToolbox -framework Foundation
+$(OUT)/sokol_blend_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_blend_test: CXXFLAGS_T += -DSOKOL_METAL -x objective-c++
+$(OUT)/sokol_blend_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 
 # Runs every test even when one fails, then reports. The old loop dropped each
 # exit code, so only the last test's status escaped and a red suite read green.
