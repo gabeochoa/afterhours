@@ -261,4 +261,60 @@ TEST(styled_label_keeps_run_colours_across_lines) {
   CHECK(calls[1].color.r == 0 && calls[1].color.g == 255);
 }
 
+// ---------------------------------------------------------------------------
+// "Does it fit" has to be asked of the wrapped layout
+// ---------------------------------------------------------------------------
+
+// position_text_ex drives both the overflow warning and the debug overlay. It
+// used to measure the whole label as one line, so a paragraph that wraps
+// perfectly well inside its box still reported as overflowing -- every frame,
+// for every wrapping label.
+TEST(a_wrapping_label_that_fits_does_not_report_overflow) {
+  ImmTestHarness h;
+  const std::string text = "the quick brown fox jumps over the lazy dog";
+  // 43 chars = 430px on one line, well past 300. Wrapped at 290 it needs three
+  // lines = 60px, inside a 300x100 box.
+  auto res = position_text_ex(
+      *h.render_font(), text, RectangleType{0.f, 0.f, 300.f, 100.f},
+      TextAlignment::Left, Vector2Type{5.f, 5.f}, FS, 0.f, TextOverflow::Wrap);
+  CHECK(res.text_fits);
+}
+
+// The same text in a box too short for the lines it wraps to still overflows.
+// The fix must not silence real overflow.
+TEST(a_wrapping_label_too_short_still_reports_overflow) {
+  ImmTestHarness h;
+  const std::string text = "the quick brown fox jumps over the lazy dog";
+  // Wraps to three 20px lines; a 30px box cannot hold them.
+  auto res = position_text_ex(
+      *h.render_font(), text, RectangleType{0.f, 0.f, 300.f, 30.f},
+      TextAlignment::Left, Vector2Type{5.f, 5.f}, FS, 0.f, TextOverflow::Wrap);
+  CHECK(!res.text_fits);
+}
+
+// A single unbreakable word wider than the box is genuine width overflow --
+// wrapping cannot help it.
+TEST(an_unbreakable_word_still_reports_overflow) {
+  ImmTestHarness h;
+  auto res = position_text_ex(
+      *h.render_font(), "supercalifragilisticexpialidocious",
+      RectangleType{0.f, 0.f, 100.f, 100.f}, TextAlignment::Left,
+      Vector2Type{5.f, 5.f}, FS, 0.f, TextOverflow::Wrap);
+  CHECK(!res.text_fits);
+}
+
+// Hard breaks get the same treatment without asking for Wrap. The joined
+// string here is 32 chars (320px) and would not fit 190px, but the widest
+// LINE is 10 chars (100px) and does -- so measuring the block rather than the
+// joined string is what decides it.
+TEST(a_hard_broken_label_that_fits_does_not_report_overflow) {
+  ImmTestHarness h;
+  auto res = position_text_ex(*h.render_font(),
+                              "aaaaaaaaaa\nbbbbbbbbbb\ncccccccccc",
+                              RectangleType{0.f, 0.f, 200.f, 100.f},
+                              TextAlignment::Left, Vector2Type{5.f, 5.f}, FS,
+                              0.f, TextOverflow::Clip);
+  CHECK(res.text_fits);
+}
+
 int main() { return ui_test::run_registered_tests("multiline text"); }

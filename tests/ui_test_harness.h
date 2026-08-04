@@ -254,9 +254,9 @@ struct ImmTestHarness {
     return render_with<RenderBatched<TestInputAction>>();
   }
 
-  template <typename Renderer> const std::vector<DrawCall> &render_with() {
-    layout_only();
-
+  // The FontManager the renderer uses, for tests that call a measuring or
+  // positioning helper directly instead of going through render().
+  FontManager *render_font() {
     if (!font_entity) {
       font_entity = &coll.createEntity();
       auto &fm = font_entity->addComponent<FontManager>();
@@ -267,6 +267,12 @@ struct ImmTestHarness {
       fm.load_font(UIComponent::DEFAULT_FONT, get_default_font());
       fm.load_font(UIComponent::UNSET_FONT, get_default_font());
     }
+    return &font_entity->get<FontManager>();
+  }
+
+  template <typename Renderer> const std::vector<DrawCall> &render_with() {
+    layout_only();
+    render_font();
 
     clear_draw_calls();
     Renderer renderer;

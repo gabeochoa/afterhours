@@ -383,30 +383,63 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
   float font_size;
   bool text_fits;
 
+  // "Does it fit" has to be asked of the layout the text will actually be
+  // drawn as. A wrapping or hard-broken label measured as one long line is
+  // always wider than its box, so every one of them reported as overflowing --
+  // which is both wrong and loud, since the warning fires per frame per size
+  // and a dragged box is a new size every frame.
+  const bool measures_as_block = text_overflow == TextOverflow::Wrap ||
+                                 text.find('\n') != std::string::npos;
+  const auto measure_laid_out = [&](float size) {
+    if (!measures_as_block)
+      return measure_text(font, text.c_str(), size, 1.f + extra_spacing);
+    const auto m = detail::measure_wrapped(
+        text, max_text_size.x, [&](const std::string &s) {
+          return measure_text(font, s.c_str(), size, 1.f + extra_spacing);
+        });
+    return Vector2Type{m.width, m.height};
+  };
+
   if (explicit_font_size > 0.f) {
     // Exact-size mode: use the requested size directly (never downscale to fit).
     // Text may overflow; report that accurately via text_fits so the overflow
     // debug indicator + warning cover explicitly-sized text too (previously
     // hardcoded true, so an oversized explicit font silently clipped).
     font_size = std::max(explicit_font_size, MIN_FONT_SIZE);
-    Vector2Type ts =
-        measure_text(font, text.c_str(), font_size, 1.f + extra_spacing);
-    text_fits = ts.y <= max_text_size.y && ts.x <= max_text_size.x;
+    Vector2Type ts = measure_laid_out(font_size);
+    // A block is centred in the FULL rect with no vertical margin (see the
+    // multi-line branch of draw_text_in_rect), so charging it the y-margin
+    // would report a box sized to exactly its own text -- a Dim::Text box --
+    // as overflowing by precisely the margin, always.
+    const float usable_y = measures_as_block ? container.height : max_text_size.y;
+    text_fits = ts.y <= usable_y && ts.x <= max_text_size.x;
 #ifdef AFTERHOURS_DEBUG_TEXT_OVERFLOW
     if (!text_fits && report_overflow) {
       // Keyed on the LAYOUT, not the string. Keying on text meant an editable
       // field logged a fresh line on every keystroke -- and grew this set
       // without bound for the life of the process. The container and font are
       // the actionable part anyway; the string is only there to locate it.
+      //
+      // Quantised, because a container being *dragged* is a new exact size
+      // every frame, which brings back both the per-frame spam and the
+      // unbounded set. A resize crosses a 25px bucket rarely enough to stay
+      // readable while still reporting each distinct size it settles at. The
+      // cap is the backstop for anything that defeats the bucketing.
+      constexpr int kBucket = 25;
+      constexpr size_t kMaxLogged = 64;
       static std::unordered_set<std::string> logged_explicit;
       const std::string key =
-          fmt::format("{}x{}@{}", container.width, container.height, font_size);
-      if (logged_explicit.insert(key).second) {
+          fmt::format("{}x{}@{}", (int)container.width / kBucket,
+                      (int)container.height / kBucket, (int)font_size);
+      if (logged_explicit.size() < kMaxLogged &&
+          logged_explicit.insert(key).second) {
         log_warn("Text '{}' at explicit font {} overflows container {}x{} "
                  "(margins {}x{}) - it will be clipped, not downscaled",
                  text.length() > 20 ? text.substr(0, 20) + "..." : text,
                  font_size, container.width, container.height, margin_px.x,
                  margin_px.y);
+        if (logged_explicit.size() == kMaxLogged)
+          log_warn("... further text-overflow warnings suppressed");
       }
     }
 #endif
@@ -422,8 +455,7 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
 
     while (high - low > 0.5f) {
       float mid = (low + high) / 2.f;
-      Vector2Type ts =
-          measure_text(font, text.c_str(), mid, 1.f + extra_spacing);
+      Vector2Type ts = measure_laid_out(mid);
       bool fits = ts.y <= max_text_size.y &&
                   (!width_constrained || ts.x <= max_text_size.x);
       if (fits) {
@@ -594,7 +626,12 @@ static inline void draw_text_in_rect(
     float rotation = 0.0f, float rot_center_x = 0.0f, float rot_center_y = 0.0f,
     TextOverflow text_overflow = TextOverflow::Clip,
     float letter_spacing = 0.0f,
-    float explicit_font_size = 0.0f) {
+    float explicit_font_size = 0.0f,
+    // False for the per-line calls this makes on itself. Each of those gets a
+    // rect exactly one line tall, which can never contain that line once the
+    // 5px margins come off -- so they would all report overflow. Whether the
+    // block fits is the parent call's question, and it has already answered it.
+    bool report_overflow = true) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
   // Register text for E2E testing assertions (only visible-in-viewport text)
   if (testing::test_input::detail::test_mode) {
@@ -658,7 +695,7 @@ static inline void draw_text_in_rect(
         draw_text_in_rect(fm, ln, line_rect, alignment, color,
                           show_debug_indicator, stroke, shadow, rotation,
                           rot_center_x, rot_center_y, TextOverflow::Clip,
-                          letter_spacing, font_size);
+                          letter_spacing, font_size, /*report_overflow=*/false);
         y += line_h;
       }
       return;
@@ -881,10 +918,12 @@ static inline void draw_runs_in_rect(
     for (const auto &run : line) {
       const float w = line_width(run.text);
       RectangleType run_rect{x - kInset, y, w + kInset * 2.f, line_h};
+      // Same as the per-line calls above: a run's rect is sized to that run,
+      // so charging it margins would report overflow for every one of them.
       draw_text_in_rect(fm, run.text, run_rect, TextAlignment::Left, run.color,
                         show_debug_indicator, stroke, shadow, rotation,
                         rot_center_x, rot_center_y, TextOverflow::Clip,
-                        letter_spacing, font_size);
+                        letter_spacing, font_size, /*report_overflow=*/false);
       x += w;
     }
     y += line_h;
