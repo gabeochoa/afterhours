@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../text_selection.h"
 #include "concepts.h"
 #include "line_index.h"
 #include "state.h"
@@ -11,22 +12,12 @@
 namespace afterhours {
 namespace text_input {
 
-// Get number of bytes in a UTF-8 character starting at pos
-inline size_t utf8_char_length(const std::string &str, size_t pos) {
-  if (pos >= str.size())
-    return 0;
-  unsigned char c = static_cast<unsigned char>(str[pos]);
-  if ((c & 0x80) == 0)
-    return 1; // ASCII
-  if ((c & 0xE0) == 0xC0)
-    return 2; // 2-byte
-  if ((c & 0xF0) == 0xE0)
-    return 3; // 3-byte (CJK)
-  if ((c & 0xF8) == 0xF0)
-    return 4; // 4-byte (emoji)
-  return 1;
-}
+// Canonical definition lives in ui/text_selection.h; selection geometry needs
+// it and must not depend on the editing module.
+using afterhours::ui::utf8_char_length;
 
+
+// Get number of bytes in a UTF-8 character starting at pos
 // Find start of previous UTF-8 character
 inline size_t utf8_prev_char_start(const std::string &str, size_t pos) {
   if (pos == 0 || str.empty())

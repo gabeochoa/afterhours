@@ -11,6 +11,7 @@
 #include "../../font_helper.h"
 #include "../../logging.h"
 #include "../animation.h"
+#include "text_selection.h"
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
 #include "../e2e_testing/test_input.h"
 #include "../e2e_testing/visible_text.h"
@@ -520,84 +521,8 @@ static inline RectangleType position_text(const ui::FontManager &fm,
 // should be applied
 namespace detail {
 
-// One visual line, as coloured runs.
-using TextRunLine = std::vector<TextSpan>;
-
-// Greedy word-wrap over coloured runs. Over-wide words get their own line;
-// '\n' is a hard break, so '\n\n' leaves a blank line.
-//
-// `measure` sizes the whole joined candidate line, not a sum of per-word
-// widths -- measure_text spaces BETWEEN characters, so a per-word sum drifts
-// further off with every word.
-//
-// The single wrapping primitive: wrap_text_to_width is one colourless run
-// through here, so plain and styled break identically by construction.
-template <typename MeasureFn>
-static inline std::vector<TextRunLine>
-wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
-                   MeasureFn &&measure) {
-  std::vector<TextRunLine> lines;
-  TextRunLine current;
-  std::string current_text; // joined text of `current`, for measuring
-
-  const auto same_color = [](const Color &a, const Color &b) {
-    return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
-  };
-
-  const auto flush = [&]() {
-    lines.push_back(current);
-    current.clear();
-    current_text.clear();
-  };
-
-  const auto append_word = [&](std::string word, const Color &color) {
-    if (word.empty())
-      return;
-    if (current_text.empty()) {
-      current_text = word;
-      current.push_back(TextSpan{std::move(word), color});
-      return;
-    }
-    const std::string candidate = current_text + " " + word;
-    if (measure(candidate) > max_width) {
-      flush();
-      current_text = word;
-      current.push_back(TextSpan{std::move(word), color});
-      return;
-    }
-    current_text = candidate;
-    // Space goes with the following word; merge same-coloured runs so a
-    // single-colour line stays one run.
-    if (!current.empty() && same_color(current.back().color, color)) {
-      current.back().text += " " + word;
-    } else {
-      current.push_back(TextSpan{" " + word, color});
-    }
-  };
-
-  for (const auto &run : runs) {
-    size_t i = 0;
-    while (true) {
-      const size_t nl = run.text.find('\n', i);
-      const size_t end = (nl == std::string::npos) ? run.text.size() : nl;
-      size_t w = i;
-      while (w < end) {
-        size_t sp = run.text.find(' ', w);
-        if (sp == std::string::npos || sp > end)
-          sp = end;
-        append_word(run.text.substr(w, sp - w), run.color);
-        w = sp + 1;
-      }
-      if (nl == std::string::npos)
-        break;
-      flush(); // hard break
-      i = nl + 1;
-    }
-  }
-  if (!current.empty() || lines.empty())
-    flush();
-  return lines;
-}
+// TextRunLine and wrap_runs_to_width now live in text_selection.h, so the
+// selection geometry can share them without pulling in a graphics backend.
 
 // Greedy word-wrap: split `text` into lines each no wider than `max_width`,
 // using `measure` to size candidate lines. Words wider than max_width are

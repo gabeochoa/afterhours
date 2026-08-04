@@ -71,6 +71,7 @@ ALL_TESTS := \
 	input_injector_mouse_delta_test \
 	keymap_test \
 	hit_priority_test \
+	text_selection_test \
 	menu_test \
 	overlay_placement_test \
 	progress_bar_test \
