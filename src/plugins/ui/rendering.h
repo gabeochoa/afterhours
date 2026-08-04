@@ -11,6 +11,7 @@
 #include "../../font_helper.h"
 #include "../../logging.h"
 #include "../animation.h"
+#include "text_selection.h"
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
 #include "../e2e_testing/test_input.h"
 #include "../e2e_testing/visible_text.h"
@@ -321,7 +322,12 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
                  RectangleType container, TextAlignment alignment,
                  Vector2Type margin_px, float explicit_font_size = 0.f,
                  float extra_spacing = 0.f,
-                 TextOverflow text_overflow = TextOverflow::Clip) {
+                 TextOverflow text_overflow = TextOverflow::Clip,
+                 // False for callers that clip on purpose (a text field) or
+                 // that are only measuring. The overflow warning means "your
+                 // text is being cut off and you may not have noticed"; for
+                 // those callers it is neither news nor actionable.
+                 bool report_overflow = true) {
   // Early return for empty text - prevents infinite loop in font size
   // calculation
   if (text.empty()) {
@@ -377,24 +383,63 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
   float font_size;
   bool text_fits;
 
+  // "Does it fit" has to be asked of the layout the text will actually be
+  // drawn as. A wrapping or hard-broken label measured as one long line is
+  // always wider than its box, so every one of them reported as overflowing --
+  // which is both wrong and loud, since the warning fires per frame per size
+  // and a dragged box is a new size every frame.
+  const bool measures_as_block = text_overflow == TextOverflow::Wrap ||
+                                 text.find('\n') != std::string::npos;
+  const auto measure_laid_out = [&](float size) {
+    if (!measures_as_block)
+      return measure_text(font, text.c_str(), size, 1.f + extra_spacing);
+    const auto m = detail::measure_wrapped(
+        text, max_text_size.x, [&](const std::string &s) {
+          return measure_text(font, s.c_str(), size, 1.f + extra_spacing);
+        });
+    return Vector2Type{m.width, m.height};
+  };
+
   if (explicit_font_size > 0.f) {
     // Exact-size mode: use the requested size directly (never downscale to fit).
     // Text may overflow; report that accurately via text_fits so the overflow
     // debug indicator + warning cover explicitly-sized text too (previously
     // hardcoded true, so an oversized explicit font silently clipped).
     font_size = std::max(explicit_font_size, MIN_FONT_SIZE);
-    Vector2Type ts =
-        measure_text(font, text.c_str(), font_size, 1.f + extra_spacing);
-    text_fits = ts.y <= max_text_size.y && ts.x <= max_text_size.x;
+    Vector2Type ts = measure_laid_out(font_size);
+    // A block is centred in the FULL rect with no vertical margin (see the
+    // multi-line branch of draw_text_in_rect), so charging it the y-margin
+    // would report a box sized to exactly its own text -- a Dim::Text box --
+    // as overflowing by precisely the margin, always.
+    const float usable_y = measures_as_block ? container.height : max_text_size.y;
+    text_fits = ts.y <= usable_y && ts.x <= max_text_size.x;
 #ifdef AFTERHOURS_DEBUG_TEXT_OVERFLOW
-    if (!text_fits) {
+    if (!text_fits && report_overflow) {
+      // Keyed on the LAYOUT, not the string. Keying on text meant an editable
+      // field logged a fresh line on every keystroke -- and grew this set
+      // without bound for the life of the process. The container and font are
+      // the actionable part anyway; the string is only there to locate it.
+      //
+      // Quantised, because a container being *dragged* is a new exact size
+      // every frame, which brings back both the per-frame spam and the
+      // unbounded set. A resize crosses a 25px bucket rarely enough to stay
+      // readable while still reporting each distinct size it settles at. The
+      // cap is the backstop for anything that defeats the bucketing.
+      constexpr int kBucket = 25;
+      constexpr size_t kMaxLogged = 64;
       static std::unordered_set<std::string> logged_explicit;
-      if (logged_explicit.insert(text).second) {
+      const std::string key =
+          fmt::format("{}x{}@{}", (int)container.width / kBucket,
+                      (int)container.height / kBucket, (int)font_size);
+      if (logged_explicit.size() < kMaxLogged &&
+          logged_explicit.insert(key).second) {
         log_warn("Text '{}' at explicit font {} overflows container {}x{} "
                  "(margins {}x{}) - it will be clipped, not downscaled",
                  text.length() > 20 ? text.substr(0, 20) + "..." : text,
                  font_size, container.width, container.height, margin_px.x,
                  margin_px.y);
+        if (logged_explicit.size() == kMaxLogged)
+          log_warn("... further text-overflow warnings suppressed");
       }
     }
 #endif
@@ -410,8 +455,7 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
 
     while (high - low > 0.5f) {
       float mid = (low + high) / 2.f;
-      Vector2Type ts =
-          measure_text(font, text.c_str(), mid, 1.f + extra_spacing);
+      Vector2Type ts = measure_laid_out(mid);
       bool fits = ts.y <= max_text_size.y &&
                   (!width_constrained || ts.x <= max_text_size.x);
       if (fits) {
@@ -509,139 +553,9 @@ static inline RectangleType position_text(const ui::FontManager &fm,
 // should be applied
 namespace detail {
 
-// One visual line, as coloured runs.
-using TextRunLine = std::vector<TextSpan>;
-
-// Greedy word-wrap over coloured runs. Over-wide words get their own line;
-// '\n' is a hard break, so '\n\n' leaves a blank line.
-//
-// `measure` sizes the whole joined candidate line, not a sum of per-word
-// widths -- measure_text spaces BETWEEN characters, so a per-word sum drifts
-// further off with every word.
-//
-// The single wrapping primitive: wrap_text_to_width is one colourless run
-// through here, so plain and styled break identically by construction.
-template <typename MeasureFn>
-static inline std::vector<TextRunLine>
-wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
-                   MeasureFn &&measure) {
-  std::vector<TextRunLine> lines;
-  TextRunLine current;
-  std::string current_text; // joined text of `current`, for measuring
-
-  const auto same_color = [](const Color &a, const Color &b) {
-    return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
-  };
-
-  const auto flush = [&]() {
-    lines.push_back(current);
-    current.clear();
-    current_text.clear();
-  };
-
-  const auto append_word = [&](std::string word, const Color &color) {
-    if (word.empty())
-      return;
-    if (current_text.empty()) {
-      current_text = word;
-      current.push_back(TextSpan{std::move(word), color});
-      return;
-    }
-    const std::string candidate = current_text + " " + word;
-    if (measure(candidate) > max_width) {
-      flush();
-      current_text = word;
-      current.push_back(TextSpan{std::move(word), color});
-      return;
-    }
-    current_text = candidate;
-    // Space goes with the following word; merge same-coloured runs so a
-    // single-colour line stays one run.
-    if (!current.empty() && same_color(current.back().color, color)) {
-      current.back().text += " " + word;
-    } else {
-      current.push_back(TextSpan{" " + word, color});
-    }
-  };
-
-  for (const auto &run : runs) {
-    size_t i = 0;
-    while (true) {
-      const size_t nl = run.text.find('\n', i);
-      const size_t end = (nl == std::string::npos) ? run.text.size() : nl;
-      size_t w = i;
-      while (w < end) {
-        size_t sp = run.text.find(' ', w);
-        if (sp == std::string::npos || sp > end)
-          sp = end;
-        append_word(run.text.substr(w, sp - w), run.color);
-        w = sp + 1;
-      }
-      if (nl == std::string::npos)
-        break;
-      flush(); // hard break
-      i = nl + 1;
-    }
-  }
-  if (!current.empty() || lines.empty())
-    flush();
-  return lines;
-}
-
-// Greedy word-wrap: split `text` into lines each no wider than `max_width`,
-// using `measure` to size candidate lines. Words wider than max_width are
-// placed on their own line (not character-split). Returns at least one line
-// for non-empty input. `measure` returns the pixel width of a string.
-template <typename MeasureFn>
-static inline std::vector<std::string>
-wrap_text_to_width(const std::string &text, float max_width,
-                   MeasureFn &&measure) {
-  if (text.empty() || max_width <= 0.f)
-    return {text};
-  std::vector<std::string> lines;
-  for (const auto &line : wrap_runs_to_width({TextSpan{text, Color{}}},
-                                             max_width, measure)) {
-    std::string joined;
-    for (const auto &run : line)
-      joined += run.text;
-    lines.push_back(std::move(joined));
-  }
-  if (lines.empty())
-    lines.push_back(text);
-  return lines;
-}
-
-// Wrap-aware text measurement: the pixel width/height and line count of `text`
-// laid out within `max_width` (wrap_text_to_width already honors hard newlines).
-// The reusable answer to "how tall is this wrapped paragraph?" so apps stop
-// hand-rolling height estimates. `measure2d(str)` returns the {w,h} of a line.
-struct WrappedTextMetrics {
-  float width = 0.f;  // widest resulting line
-  float height = 0.f; // line_count * single-line height
-  int line_count = 0;
-};
-template <typename Measure2DFn>
-static inline WrappedTextMetrics
-measure_wrapped(const std::string &text, float max_width,
-                Measure2DFn &&measure2d) {
-  std::vector<std::string> lines = wrap_text_to_width(
-      text, max_width, [&](const std::string &s) { return measure2d(s).x; });
-  WrappedTextMetrics m;
-  m.line_count = static_cast<int>(lines.size());
-  // Line height from a representative non-empty line (blank lines still occupy
-  // one line of height); fall back to the whole-text measure.
-  float line_h = 0.f;
-  for (const auto &l : lines) {
-    Vector2Type ls = measure2d(l);
-    m.width = std::max(m.width, ls.x);
-    if (!l.empty())
-      line_h = std::max(line_h, ls.y);
-  }
-  if (line_h <= 0.f)
-    line_h = measure2d(text).y;
-  m.height = line_h * static_cast<float>(m.line_count);
-  return m;
-}
+// TextRunLine, wrap_runs_to_width, wrap_text_to_width and measure_wrapped now
+// live in text_selection.h, so selection geometry and autolayout can share
+// them without pulling in a graphics backend.
 
 static inline void
 draw_text_at_position(const ui::FontManager &fm, const std::string &text,
@@ -712,7 +626,12 @@ static inline void draw_text_in_rect(
     float rotation = 0.0f, float rot_center_x = 0.0f, float rot_center_y = 0.0f,
     TextOverflow text_overflow = TextOverflow::Clip,
     float letter_spacing = 0.0f,
-    float explicit_font_size = 0.0f) {
+    float explicit_font_size = 0.0f,
+    // False for the per-line calls this makes on itself. Each of those gets a
+    // rect exactly one line tall, which can never contain that line once the
+    // 5px margins come off -- so they would all report overflow. Whether the
+    // block fits is the parent call's question, and it has already answered it.
+    bool report_overflow = true) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
   // Register text for E2E testing assertions (only visible-in-viewport text)
   if (testing::test_input::detail::test_mode) {
@@ -725,17 +644,30 @@ static inline void draw_text_in_rect(
   }
 #endif
 
-  // Word-wrap: split the text into lines that fit the rect width and draw each
-  // stacked vertically. Requires an explicit font size (wrapping is only
-  // well-defined at a known size; without one we fall through to the normal
-  // auto-fitting single-line path). Each line is drawn with Clip to avoid
-  // re-entering this branch.
-  if (text_overflow == TextOverflow::Wrap && !text.empty() &&
-      rect.width > 0.f && explicit_font_size > 0.f) {
+  // Multi-line: split into lines and draw each stacked vertically. Two ways in
+  // -- a hard '\n', which always breaks, or TextOverflow::Wrap with an explicit
+  // font size (soft wrapping is only well-defined at a known size). Each line
+  // is drawn with Clip and contains no '\n', so this never re-enters.
+  //
+  // Hard breaks are handled here rather than left to the backend: raylib's
+  // DrawTextEx honours '\n' but sokol and the recording backend do not, so
+  // without this the same label renders differently per backend.
+  const bool has_hard_break = text.find('\n') != std::string::npos;
+  const bool soft_wraps =
+      text_overflow == TextOverflow::Wrap && explicit_font_size > 0.f;
+  if ((has_hard_break || soft_wraps) && !text.empty() && rect.width > 0.f) {
     Font font = fm.get_active_font();
-    float font_size = explicit_font_size;
     float spacing = 1.f + letter_spacing;
-    float max_width = rect.width - 10.f; // 5px margin each side
+    // No pinned size: auto-fit as the single-line path would, then shrink so
+    // every line fits rather than just the first.
+    float font_size = explicit_font_size;
+    if (font_size <= 0.f)
+      font_size = position_text_ex(fm, text, rect, alignment,
+                                   Vector2Type{5.f, 5.f}, explicit_font_size,
+                                   letter_spacing, text_overflow)
+                      .rect.height;
+    // Only soft-wrap when asked; otherwise break on '\n' alone.
+    float max_width = soft_wraps ? rect.width - 10.f : 1e9f;
 
     auto line_width = [&](const std::string &s) {
       return measure_text(font, s.c_str(), font_size, spacing).x;
@@ -748,6 +680,13 @@ static inline void draw_text_in_rect(
 
     if (lines.size() > 1) {
       float line_h = measure_text(font, "Ag", font_size, spacing).y;
+      if (explicit_font_size <= 0.f && rect.height > 0.f) {
+        const float want = line_h * static_cast<float>(lines.size());
+        if (want > rect.height) {
+          font_size *= rect.height / want;
+          line_h = measure_text(font, "Ag", font_size, spacing).y;
+        }
+      }
       float total_h = line_h * static_cast<float>(lines.size());
       // Vertically center the block within the rect.
       float y = rect.y + std::max(0.f, (rect.height - total_h) * 0.5f);
@@ -756,7 +695,7 @@ static inline void draw_text_in_rect(
         draw_text_in_rect(fm, ln, line_rect, alignment, color,
                           show_debug_indicator, stroke, shadow, rotation,
                           rot_center_x, rot_center_y, TextOverflow::Clip,
-                          letter_spacing, explicit_font_size);
+                          letter_spacing, font_size, /*report_overflow=*/false);
         y += line_h;
       }
       return;
@@ -944,7 +883,16 @@ static inline void draw_runs_in_rect(
     return;
 
   const auto lines = detail::wrap_runs_to_width(runs, wrap_width, line_width);
-  const float line_h = measure_text(font, "Ag", font_size, spacing).y;
+  float line_h = measure_text(font, "Ag", font_size, spacing).y;
+  // Auto-fit above sized the font against the joined text, i.e. for a single
+  // line. Hard breaks still split it, so shrink to fit every line.
+  if (explicit_font_size <= 0.f && lines.size() > 1 && rect.height > 0.f) {
+    const float want = line_h * static_cast<float>(lines.size());
+    if (want > rect.height) {
+      font_size *= rect.height / want;
+      line_h = measure_text(font, "Ag", font_size, spacing).y;
+    }
+  }
   const float total_h = line_h * static_cast<float>(lines.size());
   float y = rect.y + std::max(0.f, (rect.height - total_h) * 0.5f);
 
@@ -970,10 +918,12 @@ static inline void draw_runs_in_rect(
     for (const auto &run : line) {
       const float w = line_width(run.text);
       RectangleType run_rect{x - kInset, y, w + kInset * 2.f, line_h};
+      // Same as the per-line calls above: a run's rect is sized to that run,
+      // so charging it margins would report overflow for every one of them.
       draw_text_in_rect(fm, run.text, run_rect, TextAlignment::Left, run.color,
                         show_debug_indicator, stroke, shadow, rotation,
                         rot_center_x, rot_center_y, TextOverflow::Clip,
-                        letter_spacing, font_size);
+                        letter_spacing, font_size, /*report_overflow=*/false);
       x += w;
     }
     y += line_h;
@@ -2327,7 +2277,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       TextPositionResult result = position_text_ex(
           font_manager, hasLabel.label.c_str(), text_rect, hasLabel.alignment,
           Vector2Type{5.f, 5.f}, explicit_fs, hasLabel.letter_spacing,
-          hasLabel.text_overflow);
+          hasLabel.text_overflow,
+          // An element that clips on purpose has already answered the question
+          // the overflow warning asks.
+          !entity.template has<HasClipChildren>());
 
       if (result.rect.height >= MIN_FONT_SIZE) {
         // Handle text overflow ellipsis truncation for batched path

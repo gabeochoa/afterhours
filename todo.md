@@ -759,6 +759,33 @@ not achievable today.
 Ask: topmost-wins hit priority by render layer / child depth, plus a way for a
 handler to consume a click.
 
+**DONE** — topmost-wins, no bubbling. `ResolveHitTarget` picks one winner per
+frame (highest `render_layer`, ties to later in paint order) and points *both*
+`hot` and `active` at it; `HandleClicks`/`HandleDrags` stopped resolving inline.
+Nothing else was needed: `is_mouse_press` already requires `is_hot && is_active`,
+so once they name one element only that element activates. Same rule ImGui uses
+— `ActiveId` is only granted to an item already hovered.
+
+Root cause was not precedence. The two fields disagreed: `set_hot` is
+last-writer-wins, `set_active` is first-writer-wins, and a press needs both. A
+nested child ended up hot but never active, so it fired nothing while its
+parent, visited first, fired. Making `set_active` last-wins does not fix it —
+the parent has already decided mid-iteration and both would fire.
+
+Also deleted `HandleClicks::process_derived_children`: the system already
+visits every entity with the component, so it processed children twice.
+
+Not done: bubbling / `stopPropagation` (needs an event object in every
+callback, nothing needs it yet) and an input-passthrough flag (an overlay with
+no click listener is already not a candidate).
+
+Worth knowing: the failure is **iteration-order dependent**, so it does not bite
+everywhere. wm's menus worked before the fix by ordering luck — verified by
+reverting and re-running. hanabi's tab bar is on the unlucky side: tab
+`mk(uiRoot, 910+i)` at `render_layer(baseLayer)` and its close × at
+`mk(uiRoot, 950+i)`, `baseLayer + 1`, overlapping siblings where the lower id
+wins. That is the shape `hit_priority_test` covers.
+
 ### D4. `FlexWrap` defaults to `Wrap` — **DONE**, now `NoWrap`
 Flipped in both `component_config.h` and `ui_core_components.h`. Three things
 had to move with it, none of them obvious from the report:
@@ -995,7 +1022,28 @@ coverage prominently, and support supplemental glyph ranges or an icon font.
 Ask: one consistent space across `get_mouse_position()`, e2e click injection,
 layout rects, and `measure_text` — or at least a documented conversion.
 
-### D11. text_input ignores `with_font_size` and `with_custom_background`
+### D11. text_input ignores `with_font_size`/`with_custom_background` — **DONE**
+The field derived its font size from its computed height and forced its fill to
+`Theme::Usage::Secondary`, dropping both config calls. The height-derived size
+is now a *fallback* used only when `font_size_explicitly_set` is false, and the
+theme fill is only imposed when the caller did not set a custom background.
+
+Two things the tests surfaced:
+- `text_input` sizes from the PREVIOUS frame's height, so a single emit+layout
+  never reaches that code at all. The tests run two frames like a real app;
+  without that the control case reads the ComponentConfig default (50) instead
+  of the derived 40 and proves nothing.
+- They cannot live in `downstream_gaps_test`: `text_input` pulls in
+  `graphics.h`, which requires a real backend macro. So `text_input_test` is a
+  raylib suite asserting on component state after layout.
+
+Also found: `text_input` references `TextSelectAll`, `TextBackspace`,
+`TextDelete` and `MenuBack` on the InputAction enum *without* the `if constexpr`
+guard the clipboard actions use, so the harness enum had to grow them. That is
+floatinghotel's "text_input requires InputAction enum values" only half-fixed;
+guarding the rest would let the widget degrade instead of failing to compile.
+
+### D11 (original report, kept for context)
 **hanabi #17.** The widget *derives* its font size from computed field height
 (`text_input/component.h:187`, `derived_fs = field_h * 0.5f`) and forces the
 inner field fill to `Theme::Usage::Secondary` (`:163`). Both config calls are
@@ -1006,7 +1054,23 @@ field to ~34px so the derived font lands readable, and accept the wrong colour.
 Ask: honour an explicit `with_font_size` when set, falling back to the derived
 size only when unset; let `with_custom_background` override the forced fill.
 
-### D12. text_input has no `with_placeholder`
+### D12. text_input has no `with_placeholder` — **DONE**
+`ComponentConfig::with_placeholder(std::string)`. The hint shows while the
+bound string is empty and draws in `theme.font_muted`; it survives focus and
+clears on the first character, matching the platform convention.
+
+It routes into the field's `HasLabel` only, never into `display_text`, because
+the cursor and horizontal-scroll maths read that — sending the hint through it
+would park the caret after the hint instead of where typing starts. A test
+focuses the field and compares the caret x with and without a long placeholder.
+
+The muted colour is cleared explicitly on non-placeholder frames: imm entities
+persist, so setting a colour without unsetting it leaves real text muted once
+the field has been empty.
+
+Unblocked by D11 — the forced `Secondary` fill was what made hint text painted
+*behind* the field invisible, which is why the reporting app used an
+absolutely-positioned overlay with hand-derived geometry instead.
 **hanabi #17 follow-on (2026-08-01).** Grep-confirmed absent. An empty field is
 a bare box — hanabi's sidebar search read as an unlabelled box + magnifier and
 was written up as a hostile-review defect. Compounded by D11: because the field
@@ -1017,206 +1081,53 @@ with its origin hand-derived from panel geometry (panel xy → header height →
 search-wrap/field paddings + magnifier slot). Fix D11's forced fill and this
 becomes a ~10-line addition.
 
-### D13. Missing container/menu primitives
-**floatinghotel missing-primitives #1, #2, #4, #5, #6.** Each is built app-local
-in `src/ui/`, all five marked BLOCKER or HIGH:
+### D13. Missing container/menu primitives — **DONE** (branch `d13-anchored-overlays`)
+`overlay::place()`: anchored placement with edge flipping, the piece all three
+widgets need and all three hand-rolled downstream. Pure geometry, 16 checks.
 
-| Want | floatinghotel's local build | Status here |
-|---|---|---|
-| `draggable_divider()` | `split_panel.h` via `div()` + `HasDragListener` | missing |
-| `split_pane()` | `split_panel.h` | **`vsplit`/`hsplit` (todo item 6) covers the static case**; the draggable divider is what's left |
-| `dropdown_menu()` | `menu_setup.h`, absolute positioning + hover-to-switch + click-outside | missing |
-| `context_menu()` | `context_menu.h`, cursor-positioned, window-edge flipping | missing |
-| `popover()` | reuses the dropdown approach with manual anchor maths | missing |
+Wired into `dropdown`: an open tray near the bottom now flips above the trigger
+instead of running off screen. Two tests cover both directions.
 
-The last three share one engine: an anchored, auto-flipping, click-outside-to-
-close overlay with a common item format (label, shortcut, separator, disabled,
-callback). Build that once and all three fall out. Note D3 blocks nothing here
-but will bite any of them that nest a control inside a clickable row.
+Built on top: `MenuItem` (label, shortcut, separator, disabled), `menu_list`,
+`dropdown_menu`, `context_menu`, `popover`. 53 checks in `menu_test`, plus the
+`menu_showcase` screen and screenshot baseline in wm_afterhours.
 
-### D14. Custom colours bypass disabled dimming — **DONE**
-**floatinghotel.** `with_disabled(true)` blocked interaction but left the
-widget looking enabled. An accessibility bug, not a cosmetic one: a control
-that looks enabled invites clicks that silently do nothing. Their workaround
-was hand-picking colours in every preset factory.
+Dismissal is focus-based rather than a generalised `ModalCloseWatcherSystem`.
+`dropdown` already closes on focus loss (`imm_components.h:1677`) and that one
+check covers click-outside and tab-away without any hit testing, so the menus
+reuse it instead of growing a second mechanism. Consequence: only one menu can
+hold focus, so opening a second closes the first.
 
-**The report named the wrong function** — same shape as D5. It points at
-`ComponentConfig::resolve_background_color()` (`component_config.h:818`), which
-does have the bug but is only reached from `imm_components.h:91`/`:619`, for
-non-Filled button variants. The live path for every widget is
-`component_init.h:362-374`, which never calls it and re-implements the same
-branch with the same mistake. Fixing only the named function would have left
-the bug in place.
+`popover` needs `detail::focus_within` rather than exact-id focus — a menu
+closing when an item takes focus is correct, a popover doing it when you click
+its own text input is not. It walks UP the parent chain, because the tree is
+cleared each frame and a popover runs its check before the caller re-adds
+content; walking down always sees an empty subtree.
 
-**Fix:** extracted the dim transform out of `Theme::from_usage` into
-`Theme::disabled_variant(Color)` (`theme.h`) — mix toward background, scale
-alpha by `disabled_opacity`, desaturate 50% — and called it from *both*
-custom-colour paths. `from_usage` now delegates to it, so the pre-existing
-theme path is unchanged by construction.
+Not done: Escape-to-close. `dropdown` does it via an unguarded `IA::MenuBack`,
+which fails to compile for apps whose `InputAction` lacks that value — the same
+portability problem as D23's `text_input` note. Wants a `magic_enum` guard.
 
-Free consequence: `component_init.h:464-466` sets `HasLabel::background_hint`
-from `HasColor` *after* the colour is assigned, so auto-contrast text
-re-derives against the dimmed background with no extra work.
+### D13b. NOT a library bug — the harness was missing the per-frame reset
+Kept because two wrong theories got written down before the measurement was
+right, and the sequence is the useful part.
 
-**Tests** (`downstream_gaps_test`): `d14_disabled_custom_background_is_dimmed`
-is the regression guard and fails before the fix;
-`d14_enabled_custom_background_is_untouched` is the control that catches
-dimming everything; `d14_disabled_theme_background_still_dims` pins the path
-the refactor touched.
+Wiring `overlay::place()` into `dropdown` produced absurd positions. First
+theory: an absolute child double-counts its parent's offset — disproven by a
+minimal repro returning the sensible parent-relative answer. Second theory:
+absolute positions accumulate across frames — they did, `computed_rel` grew
+1000 → 2680 → 5480 → 9400, but that was a symptom.
 
-**Also de-duplicated** the disabled-text logic. `RenderImm` and `RenderBatched`
-carried identical copies, so the darken-when-disabled line existed four times.
-Now one `detail::resolve_label_color()`.
+Actual cause: `ImmTestHarness` never ran the equivalent of
+`ClearUIComponentChildren` (`systems.h:288`), which real apps run before
+emitting each frame. Without it a reused imm entity is appended to its parent
+again every frame, so `compute_rect_bounds` adds the parent offset once per
+duplicate. The library was correct throughout; the harness was lying.
 
-### D15x. hanabi's two vendor patches — **DONE**, one taken, one rewritten
-hanabi ships `vendor_patches/`: fixes prototyped in their app and captured
-"ready for the maintainer". Reviewed both rather than applying blind.
-
-**#25 (sokol rounded corners) — taken as-is.** `emit_corner_arc`'s sharp branch
-called `sgl_begin_triangles()` and emitted *two* vertices: a degenerate
-primitive that rendered as a diagonal slice on any mixed round/sharp config.
-Verified the claim by tracing `rTL == 0`: the top edge starts at `(x+rTL, y)`
-and the left edge ends at `(x, y+rTL)`, both `(x, y)`, both fanning from the
-centre — the square corner is fully tiled without the arc. Raylib handles mixed
-corners via its own path, so this was sokol-only. No test: no sokol target
-exists here (D1), and saying so beats implying coverage.
-
-**#22 (styled spans word-wrap) — intent accepted, implementation rewritten.**
-The need is general: `with_styled_label`/`TextSpan` already shipped, and
-floatinghotel asked for the same API by name. So this finishes a half-built API
-rather than adding one. But the patch had three problems:
-- It only touched `RenderBatched`. Spans were handled at exactly one site, so
-  `with_styled_label` was a **silent no-op** under `RenderImm` — selectable at
-  runtime via `use_batched` with nothing in app code mentioning it.
-- Its wrap math summed per-word widths while the real wrapper measures the
-  whole candidate line. `measure_text` applies spacing *between characters*, so
-  the sum drops two gaps per word boundary and drifts — breaking the very
-  height-model guarantee the patch claimed to provide.
-- It inherited #24.
-
-Instead: `detail::wrap_runs_to_width` is now the single wrapping primitive, and
-`wrap_text_to_width` is one colourless run through it. Plain and styled break
-identically **by construction**. Both renderers use it (`draw_runs_in_rect` for
-`RenderImm`), and `d22_both_renderers_agree_on_styled_output` pins that.
-
-Also found: a wrapping styled label did not render styled-but-unwrapped — the
-wrap branch set `wrapped` first, making the span branch unreachable, so it
-rendered as **plain text with colours discarded**.
-
-**#24 (`\n` ignored in wrapping) — DONE**, folded in since it is the same
-function. `\n` is a hard break; `\n\n` yields a blank line so paragraph spacing
-survives.
-
-### D22b. `with_font_size()` alone was silently ignored — **DONE**
-Not from any app report. Found because a plain-text wrap baseline that should
-obviously have passed did not.
-
-`component_init.h` gated `enable_font()` — the only thing that copies
-`font_size` and `font_size_explicitly_set` onto the `UIComponent` — on
-`config.font_name != UNSET_FONT`. Set a size without also naming a font and
-`explicit_fs` resolved to 0, switching off every path that needs a known size.
-Wrapping was the visible casualty. Confirmed both ways: same widget, no font
-name → one 752px line in a 230px box; add `with_font(...)` → wraps to four
-lines.
-
-Strong candidate for floatinghotel footgun F1 ("labels don't word-wrap"): set a
-size, ask for wrapping, get one clipped line and no diagnostic. Worth telling
-them.
-
-### D32. Resource paths resolved against CWD, so bundled apps found nothing — **DONE**
-`files.cpp:54` set `resource_folder_path = current_path() / root_folder`. A
-launched macOS `.app` has CWD `/`, so a shipped bundle could never find its own
-resources — the API failed in exactly the case it exists for, and worked only
-when run from a build directory.
-
-Now resolved from the executable's own location, CWD last:
-1. `<exe_dir>/<root>` — binary next to a resources dir
-2. `<exe_dir>/../Resources/<root>` and then `<exe_dir>/../Resources`
-3. `current_path()/<root>` — unchanged fallback, so dev builds keep working
-
-The bundle probes only fire when the binary really is in `Contents/MacOS`. The
-first cut keyed off "a sibling `Resources` dir exists", which the tests caught:
-an unrelated `Resources` got returned even without the requested root in it.
-
-`files_resource_path_test` covers all three, and the bundle case is a real one
-— it builds a `.app`, copies the test binary into `Contents/MacOS`, and re-execs
-it there, because that layout is now what the resolver keys on. Two checks fail
-without the fix.
-
-### D31. `.app` bundling — **DONE** (macOS), as opt-in build tooling
-I first declined this alongside #33/#34. That was wrong, and the distinction is
-worth keeping: those are *runtime* OS integration we would own on three
-platforms, while bundling is a **build step** — a directory layout plus a plist
-the OS reads before the process starts. It cannot be a C++ plugin at all (it
-does not fit `PluginCore`), so it ships as `tools/mk_bundle.sh` next to the
-existing `tools/` scripts. Nothing in the library calls it.
-
-Two failure modes it exists to prevent, both silent: `CFBundleExecutable` not
-matching the copied binary's filename (bundle refuses to launch, no diagnostic)
-and a missing `NSHighResolutionCapable` (window upscaled from 1x, just looks
-soft). The executable name is derived rather than passed, and the plist is
-`plutil -lint`ed before exit.
-
-`--plist-extra FILE` is the escape hatch: model the common keys, let anything
-else through as raw XML instead of growing a flag per plist key.
-
-Pairs with D32 — a `.app` puts the binary in `Contents/MacOS`, which is exactly
-what the new resource resolver keys on, so a bundled app can finally find its
-own resources. `bundle_test`'s last case launches the bundled binary and checks
-that, proving the two work together rather than each in isolation.
-
-Verified beyond the unit test: bundled `examples/web/demo` (the real Metal
-target) and launched it with `open(1)`, so LaunchServices actually parsed the
-plist. A bundle that lints but will not launch is the failure worth catching by
-hand once.
-
-**TODO — Linux `.desktop` and Windows.** `--platform` dispatches to
-`bundle_linux` / `bundle_windows`, which currently error. Adding them is
-additive rather than a restructure. Not written now because nothing here can
-build or run either, and shipping two unverified code paths is the pattern that
-has bitten repeatedly.
-
-### Still declined: runtime OS integration (#33, #34)
-NSStatusItem/notifications/global hotkeys, and *handling* an opened URL. Already
-implemented app-side in the reporter's own `.mm`; owning them means three
-platforms of OS integration for one consumer. Note the split: mk_bundle.sh
-generates the `CFBundleURLTypes` **declaration**, which is packaging — reacting
-to the Apple event stays app-side.
-
-`#35` (enumerate system fonts) is borderline — real per-OS code for one feature.
-`#36` (a `get_cache_path()` sibling to the existing `get_config_path()`) is
-small and fits, if it ever comes up.
-
-### D1b. There is now a working native sokol/Metal target — **DONE**
-D1, D19 and D20 were all blocked on "nothing here builds sokol". That was
-nearly untrue: `examples/web` already had a native macOS/Metal recipe
-(`make demo`) alongside its emscripten one. It just did not work.
-
-Two blockers, both fixed:
-- **Link failure.** `sokol_impl.cc` never included `capture_impl.h`, so
-  `metal_create_system_device` and `metal_capture_render_texture` were
-  undefined. It also has to `#define AFTER_HOURS_USE_METAL` — `main.cpp`
-  defines that for itself, and `capture_impl.h` is guarded on it, so including
-  it alone would still have compiled to nothing. Guarded on `SOKOL_METAL` so
-  the WebGL2 build is unaffected.
-- **Segfault on startup**, hit the moment it linked. `RenderSprites::once`
-  (`texture_manager.h:225`) did
-  `get_singleton_cmp<HasSpritesheet>()->texture` with no null check, so any app
-  registering that system without a spritesheet crashed;
-  `RenderAnimation::once` was identical. Both now resolve the sheet in
-  `should_run` and skip when absent. Same class as D5.
-
-`make demo` builds, links and runs. **Not yet a test target** — it is windowed
-with no headless mode, so it proves the backend works but cannot make
-assertions. A headless sokol test (offscreen render + `capture_render_texture_to_memory`,
-which already exists) is the remaining step before D1/#25 can be verified
-automatically rather than by eye.
-
-### Porting wm_afterhours to sokol — **not recommended**
-It is raylib-only: no metal/sokol in its makefile, no sokol impl TU, and
-**445 direct `raylib::` calls across 32 files**. That is a port, not a
-configuration change, and `examples/web` already gives a sokol target for a
-fraction of the cost.
+`ImmTestHarness::begin_frame()` now clears the tree and multi-frame tests call
+it. Any new multi-frame test must too. A single emit+layout hides this
+entirely, which is why it went unnoticed — every earlier test happened to be
+single-frame.
 
 ### D14b. Disabled text and disabled backgrounds use different transforms
 Surfaced by the de-duplication above, not by an app. Disabled **text** darkens
@@ -1259,7 +1170,33 @@ headlessly is unreliable. The real app reads a live, re-readable wheel, so
 **headless behaviour diverges from real**, which is the part that matters for a
 test harness. Ask: non-consuming reads in test mode, or per-target routing.
 
-### D19. Metal headless capture can't supersample
+### D19. Metal headless capture can't supersample — **DONE**
+`Config.hidpi` is now honoured by the sokol headless path: the offscreen target
+is allocated at `width*scale x height*scale` (`hidpi_scale`, default 2),
+`render_scale()` is set, and the ortho projection stays in LOGICAL pixels so
+the same drawing rasterises into more pixels instead of shrinking into a
+corner. `RenderTextureType` carries a single `scale` and derives logical size
+as `width / scale`; scale is uniform everywhere already (raylib reads
+`GetWindowScaleDPI().x` and drops `.y`, sokol's `sapp_dpi_scale()` is one
+float, `render_scale()` is one int), so two logical fields were redundant and
+could disagree. `render_scale()` moved out of the raylib-only branch.
+
+Tested by capturing at 2x and sampling: the buffer is `(w*2)*(h*2)*4`, and a
+rect covering the logical left half is green across the left half of the 2x
+image. Three checks fail with the scale forced to 1.
+
+### D20 (original report, kept for context) — **DONE**
+sokol has no runtime mipmap generation — levels must be supplied at image
+creation — so `load_texture` now builds a box-filtered chain on the CPU and
+uploads every level. `gen_texture_mipmaps` becomes a no-op (images are
+immutable and the chain already exists) instead of logging @notimplemented.
+
+Costs ~33% more texture memory, the standard trade. Tested on the builder
+directly since it is deterministic: a solid image keeps its colour to 1x1, a
+black/white 2x2 averages to exactly 128, and odd non-square sizes still
+terminate at 1x1.
+
+### D19 (original report, kept for context)
 **hanabi #6.** The windowed Metal path sets `desc.high_dpi = true`, so the live
 app is crisp. The *headless* path (`DisplayMode::Headless` → `metal_init`)
 creates a fixed `cfg.width × cfg.height` offscreen texture at 1x.
@@ -1388,3 +1325,92 @@ Recorded so they aren't re-litigated:
 - **Status-glyph shapes** (hanabi #4) — logged then self-resolved. `draw_triangle`,
   `draw_poly`, `draw_circle_v` plus `with_on_draw_fg` already do it. Kept only as
   evidence that `with_on_draw_fg` is under-advertised.
+
+---
+
+# Gap sweep 2026-08-03 (post-D3)
+
+Re-read the four app gap docs. hanabi's was updated **the same day** (a full
+text-input requirements spec); floatinghotel's and wm's were 3 and 6 days old.
+
+**Closed by today's work, no action needed:**
+floatinghotel's "Missing Primitives" 4/5/6 — `dropdown_menu`, `context_menu`,
+`popover` — are D13, shipped. Its 1/2/3 stay open and are the only gaps in any
+doc still labelled **BLOCKER**.
+
+### D25. No subtree-hover query, and no hit-test-ignore flag
+**hanabi #29.** One global `hot_id`, so a hoverable child steals its parent
+row's hover fill: hanabi's sidebar thread row FLICKERS its whole-row wash as the
+pointer crosses onto the trailing star toggle. Two things are missing — a cheap
+"is the mouse anywhere in this subtree?" query (the tree hit-test helper is
+internal and scroll-offset-aware), and any hit-test-exclusion flag
+(`with_skip_tabbing` is focus/tab only, it does not affect hot).
+
+The workaround is expensive: the row bakes the hover wash into its base
+`HasColor`, caches the star's entity id per session in a **static map** (it needs
+the child id before the child is emitted), and ORs `is_hot(star)||was_hot(star)`
+into the row signal.
+
+**Why this is now cheap.** Both halves land in code written today. D13's
+`detail::focus_within` already walks UP the parent chain from `focus_id` — the
+identical shape over `hot_id` gives `mouse_in_subtree(id)`. And D3's
+`ResolveHitTarget::is_candidate` is the single place a hit candidate is decided,
+so a `HasInputPassthrough` marker is one condition there. This was listed as
+"not doing" in the D3 plan on the grounds nothing needed it; hanabi does.
+
+**Recommended next.** Smallest diff of anything below, reuses two things just
+built, and deletes a documented pile of app code.
+
+### D26. text_input is not a real text field — **hanabi's active pain**
+hanabi wrote a full requirements spec (10 sections) and a priority order for its
+chat composer. D11/D12 (font size, custom bg, placeholder) are done; the rest:
+
+1. **Control-char filter** (#31) — the sokol macOS backend pushes backspace
+   (U+007F) into the CHAR queue, so "backspace adds a space". Fixed app-side;
+   belongs in the backend.
+2. **Scissor-clip single-line** (#34a) — long text overflows OUTSIDE the field.
+3. **Multiline wrap + Shift+Enter** (#33/#34b) — "the big one".
+4. Caret origin (#32) — **already fixed** on `hanabi/text-input-fixes`; needs
+   pulling upstream.
+5. macOS Cmd bindings — word/line nav, select-all, clipboard, undo.
+6. Double/triple-click and drag selection.
+
+### D27. Scroll: anchoring, virtualization, scrollbars
+- **#30 scroll anchor / preserve-position-on-prepend.** Content inserted above
+  the viewport yanks the view to the top. hanabi holds position by measuring the
+  prepended items and bumping `scroll_offset.y` once.
+- **#23 no off-screen culling / list virtualization.**
+- **#31 virtualization must be built from a STALE scroll offset** — no
+  next-offset or velocity hint.
+- **#26 `HasScrollView` renders no scrollbar or scroll indicator.**
+
+### D28. Retained layout / dirty-skip
+**hanabi #27.** The imm tree is cleared and rebuilt every frame with no
+retained-layout or dirty-skip primitive; this is hanabi's idle-frame cost floor.
+Big, architectural, and worth its own investigation before any code.
+
+### D29. OS integration: window focus and global hotkeys
+**hanabi #28.** No frontmost-app / window-focus query, so no focus-gated global
+hotkey. Sits with D21 (OS appearance) as the "platform shim" ask.
+
+### D30. Container widgets floatinghotel still hand-rolls — **BLOCKER**
+The only gaps in any doc still marked blocking.
+- **Draggable divider** (P0) — app-local in `src/ui/split_panel.h` via
+  `div()` + `HasDragListener`.
+- **Split pane** (P0, depends on the divider) — same file.
+- **Tree node** (P1) — `src/ui/tree_view.h`, `div()` + `button()` with indent
+  levels and expand state in a static map.
+
+Note these are drag-driven, so D3's `HandleDrags` change is worth re-checking
+against them when they land.
+
+### D31. Styled text: no wrap, no weight
+**hanabi #22 + follow-up.** `with_styled_label` renders on ONE line and does not
+word-wrap, and spans are **colour-only** — bold renders as a colour change, not
+a weight. floatinghotel files the same two as "No Font Weight Support" and "No
+Rich Text". Blocks real markdown. Related: D8, D9.
+
+### D32. wm's remaining open items (all low priority)
+Slider knob 0.75 compression (cosmetic); crowded tab bars still need a smaller
+font at the call site; word-wrap has no hard character break, so a single word
+wider than its box is not split.

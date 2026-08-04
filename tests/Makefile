@@ -70,6 +70,11 @@ ALL_TESTS := \
 	entity_query_test \
 	input_injector_mouse_delta_test \
 	keymap_test \
+	hit_priority_test \
+	text_selection_test \
+	multiline_text_test \
+	menu_test \
+	overlay_placement_test \
 	progress_bar_test \
 	random_engine_test \
 	render_order_test \
@@ -83,6 +88,7 @@ ALL_TESTS := \
 	styling_test \
 	system_tags_test \
 	tab_container_test \
+	text_input_test \
 	text_wrap_test \
 	theme_io_test
 
@@ -105,6 +111,7 @@ RAYLIB_TESTS := \
 	stepper_test \
 	styling_test \
 	tab_container_test \
+	text_input_test \
 	text_wrap_test \
 	theme_io_test
 

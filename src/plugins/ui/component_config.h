@@ -151,6 +151,9 @@ struct ComponentConfig {
   // Text input: readonly mode (focusable, selectable, but not editable)
   bool text_readonly = false;
 
+  // Text input: hint shown while the bound string is empty.
+  std::string placeholder;
+
   // Checkbox indicator characters
   // TODO: Replace "V" / " " with real icon glyphs (✓ ✔) once afterhours
   // ships a built-in icon font or vector glyph set. Current text fallback
@@ -401,6 +404,9 @@ struct ComponentConfig {
     label_alignment = align;
     return *this;
   }
+  /// TextOverflow::Wrap additionally needs with_font_size(): soft wrapping is
+  /// only defined at a known size, and without one the text is auto-fit onto a
+  /// single line instead. A hard '\n' breaks either way.
   ComponentConfig &with_text_overflow(TextOverflow overflow) {
     text_overflow = overflow;
     return *this;
@@ -519,6 +525,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_no_wrap() {
     flex_wrap = FlexWrap::NoWrap;
+    return *this;
+  }
+  ComponentConfig &with_placeholder(std::string hint) {
+    placeholder = std::move(hint);
     return *this;
   }
   ComponentConfig &with_wrap() {

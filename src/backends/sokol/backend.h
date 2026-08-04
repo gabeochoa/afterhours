@@ -798,7 +798,12 @@ inline bool metal_init(const Config &cfg) {
     metal_detail::setup_sokol_gl_and_fonts();
     metal_detail::g_initialized = true;
 
-    metal_detail::g_headless_rt = load_render_texture(cfg.width, cfg.height);
+    const int scale =
+        cfg.hidpi ? (cfg.hidpi_scale > 1 ? cfg.hidpi_scale : 2) : 1;
+    graphics::render_scale() = scale;
+    metal_detail::g_headless_rt =
+        load_render_texture(cfg.width * scale, cfg.height * scale);
+    metal_detail::g_headless_rt.scale = scale;
     if (metal_detail::g_headless_rt.color_img_id == 0) {
       log_error("metal headless: offscreen render texture creation failed "
                 "({}x{})",

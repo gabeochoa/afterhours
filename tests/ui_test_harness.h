@@ -45,6 +45,25 @@ enum struct TestInputAction {
   WidgetDown,
   WidgetLeft,
   WidgetRight,
+  // text_input references these directly rather than behind if constexpr, so
+  // any InputAction used with it has to declare them.
+  TextBackspace,
+  TextDelete,
+  TextHome,
+  TextEnd,
+  TextSelectAll,
+  TextCopy,
+  TextCut,
+  TextPaste,
+  TextUndo,
+  TextRedo,
+  TextSelectLeft,
+  TextSelectRight,
+  TextWordLeft,
+  TextWordRight,
+  TextDeleteWordBack,
+  TextDeleteWordForward,
+  MenuBack,
 };
 
 // ---------------------------------------------------------------------------
@@ -176,6 +195,21 @@ struct ImmTestHarness {
 
   UIContext<TestInputAction> &context() { return *ctx; }
   Entity &root() { return *root_entity; }
+  // The entity holding the context, for tests that must register it as the
+  // singleton a real system looks it up through.
+  Entity &context_entity() { return *ctx_entity; }
+
+  // Real apps run ClearUIComponentChildren before emitting each frame. Without
+  // it a reused imm entity is appended to its parent again every frame, the
+  // tree fills with duplicates, and compute_rect_bounds adds the parent offset
+  // once per duplicate -- positions then grow every frame. Call this at the top
+  // of each frame in any multi-frame test.
+  void begin_frame() {
+    coll.merge_entity_arrays();
+    for (const auto &e : coll.get_entities())
+      if (e && e->has<UIComponent>())
+        e->get<UIComponent>().children.clear();
+  }
 
   void layout_only() {
     coll.merge_entity_arrays();
@@ -220,9 +254,9 @@ struct ImmTestHarness {
     return render_with<RenderBatched<TestInputAction>>();
   }
 
-  template <typename Renderer> const std::vector<DrawCall> &render_with() {
-    layout_only();
-
+  // The FontManager the renderer uses, for tests that call a measuring or
+  // positioning helper directly instead of going through render().
+  FontManager *render_font() {
     if (!font_entity) {
       font_entity = &coll.createEntity();
       auto &fm = font_entity->addComponent<FontManager>();
@@ -233,6 +267,12 @@ struct ImmTestHarness {
       fm.load_font(UIComponent::DEFAULT_FONT, get_default_font());
       fm.load_font(UIComponent::UNSET_FONT, get_default_font());
     }
+    return &font_entity->get<FontManager>();
+  }
+
+  template <typename Renderer> const std::vector<DrawCall> &render_with() {
+    layout_only();
+    render_font();
 
     clear_draw_calls();
     Renderer renderer;

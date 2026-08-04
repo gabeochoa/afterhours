@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <limits>
 #include <map>
 #include <set>
 #include <vector>
@@ -94,6 +95,19 @@ compute_intersected_clip_rect(const Entity &entity) {
   bool found = false;
   RectangleType result = {};
 
+  // An element that declares Overflow::Hidden clips its own drawing too, not
+  // just its children's. Its label is drawn as part of the element rather than
+  // as a child, so without this a text_input's value paints straight out past
+  // the end of the field. Scroll views are excluded: their rect IS the
+  // viewport, and the renderer already treats them as defining their own.
+  if (entity.has<HasClipChildren>() && !entity.has<HasScrollView>()) {
+    result = entity.get<UIComponent>().rect();
+    Vector2Type own_off = accumulated_scroll_offset(entity);
+    result.x -= own_off.x;
+    result.y -= own_off.y;
+    found = true;
+  }
+
   int guard = 0;
   while (pid >= 0 && guard < 64) {
     OptEntity opt_parent = UICollectionHolder::getEntityForID(pid);
@@ -141,6 +155,18 @@ static inline RectangleType clip_hit_rect(const Entity &entity,
                                           RectangleType rect) {
   auto [has_clip, clip] = compute_intersected_clip_rect(entity);
   return has_clip ? intersect_rects(rect, clip) : rect;
+}
+
+// The rect a hit test must use: translation, then scroll, then the scroll
+// viewport clip. One helper so that whoever decides which element was hit and
+// whoever fires its callback can never disagree about where it is.
+static inline RectangleType hit_rect(const Entity &entity,
+                                     const UIComponent &component) {
+  RectangleType rect = component.rect();
+  if (entity.has<HasUIModifiers>())
+    rect = entity.get<HasUIModifiers>().apply_modifier(rect);
+  rect = apply_scroll_offset(entity, rect);
+  return clip_hit_rect(entity, rect);
 }
 } // namespace detail
 
@@ -611,6 +637,93 @@ template <typename InputAction> struct ComputeVisualFocusId : System<> {
 template <typename... Components>
 struct SystemWithUIContext : System<UIComponent, Components...> {};
 
+// Decides which single element the mouse is over, before any widget acts on
+// it. Runs ahead of HandleClicks and HandleDrags, which used to resolve this
+// inline per entity in iteration order -- so whoever happened to be visited
+// first won, and a control nested inside a clickable row could never fire.
+//
+// Sets both hot and active, which is what makes the rest work: is_mouse_press
+// requires is_hot AND is_active, so once they name the same element, only that
+// element can activate. Same rule Dear ImGui uses -- ActiveId is only ever
+// granted to an item that is already hovered, never claimed independently.
+template <typename InputAction>
+struct ResolveHitTarget : SystemWithUIContext<> {
+  UIContext<InputAction> *context = nullptr;
+
+  virtual void once(float) override {
+    context = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    resolve();
+  }
+
+  // Separate from once() so it can be driven with a context assigned directly,
+  // without a registered singleton -- which is how the tests reach it.
+  void resolve() {
+    if (!context)
+      return;
+
+    EntityID winner = context->ROOT;
+    int best_layer = std::numeric_limits<int>::min();
+
+    // Pre-order is paint order, so a later visit is drawn on top. Walked over
+    // the tree rather than the entity array because array order is creation
+    // order, which drifts from tree order as imm entities are reused.
+    for (const auto &e : UICollectionHolder::get().collection.get_entities()) {
+      if (!e || !e->has<UIComponent>())
+        continue;
+      if (e->get<UIComponent>().parent != -1)
+        continue;
+      visit(*e, winner, best_layer);
+    }
+
+    context->set_hot(winner);
+    // The condition active_if_mouse_inside used: claim on press only, and
+    // never steal from a press already in flight. active deliberately persists
+    // across frames (BeginUIContextManager resets hot_id but not active_id),
+    // which is what keeps press-and-hold and drags alive once the cursor
+    // leaves the element.
+    if (winner != context->ROOT && context->mouse.left_down &&
+        context->is_active(context->ROOT))
+      context->set_active(winner);
+  }
+
+  virtual void for_each_with(Entity &, UIComponent &, float) override {
+    // All the work happens in once(); this needs the whole tree at once.
+  }
+
+private:
+  // Every guard HandleClicks applies before it would fire, so resolution and
+  // firing agree on who is eligible.
+  bool is_candidate(const Entity &e, const UIComponent &cmp) const {
+    if (e.is_missing<HasClickListener>() && e.is_missing<HasDragListener>())
+      return false;
+    if (!cmp.was_rendered_to_screen)
+      return false;
+    if (cmp.should_hide || e.has<ShouldHide>())
+      return false;
+    if (e.has<HasLabel>() && e.get<HasLabel>().is_disabled)
+      return false;
+    return context->is_input_allowed(e.id);
+  }
+
+  void visit(Entity &entity, EntityID &winner, int &best_layer) {
+    UIComponent &cmp = entity.get<UIComponent>();
+
+    if (is_candidate(entity, cmp) &&
+        is_mouse_inside(context->mouse.pos, detail::hit_rect(entity, cmp)) &&
+        // >= rather than >: on a tie the later visit is painted on top.
+        cmp.render_layer >= best_layer) {
+      best_layer = cmp.render_layer;
+      winner = entity.id;
+    }
+
+    for (EntityID child_id : cmp.children) {
+      OptEntity child = UICollectionHolder::getEntityForID(child_id);
+      if (child.has_value() && child.asE().has<UIComponent>())
+        visit(child.asE(), winner, best_layer);
+    }
+  }
+};
+
 template <typename InputAction>
 struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
   UIContext<InputAction> *context;
@@ -636,18 +749,9 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
     if (entity.has<HasLabel>() && entity.get<HasLabel>().is_disabled)
       return;
 
-    // Apply translation if present (with_translate applies via
-    // HasUIModifiers)
-    RectangleType rect = component.rect();
-    if (entity.has<HasUIModifiers>()) {
-      rect = entity.get<HasUIModifiers>().apply_modifier(rect);
-    }
-    rect = detail::apply_scroll_offset(entity, rect);
-    // Clip to the scroll viewport so a row scissored out of view (rendering.h)
-    // is not clickable outside it — mirrors the render cull.
-    rect = detail::clip_hit_rect(entity, rect);
-
-    context->active_if_mouse_inside(entity.id, rect);
+    // No hit test here: ResolveHitTarget has already picked the single
+    // topmost element and pointed both hot and active at it, so
+    // mouse_activates below is true for that element and nothing else.
 
     if (context->has_focus(entity.id) &&
         context->pressed(InputAction::WidgetPress)) {
@@ -662,61 +766,9 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
       hasClickListener.down = true;
     }
 
-    process_derived_children(entity, component);
-  }
-
-private:
-  void process_derived_children(Entity &parent, UIComponent &parent_component) {
-    if (!parent.has<UIComponent>()) {
-      return;
-    }
-
-    auto &ui_component = parent.get<UIComponent>();
-    for (auto child_id : ui_component.children) {
-      auto child_entity = UICollectionHolder::getEntityForID(child_id);
-      if (!child_entity.has_value()) {
-        continue;
-      }
-
-      Entity &child = child_entity.asE();
-      if (!child.has<UIComponent>() || !child.has<ui::HasClickListener>()) {
-        continue;
-      }
-
-      auto &child_component = child.get<UIComponent>();
-      auto &child_hasClickListener = child.get<ui::HasClickListener>();
-
-      child_hasClickListener.down = false;
-
-      if (!child_component.was_rendered_to_screen)
-        continue;
-
-      if (child.has<HasLabel>() && child.get<HasLabel>().is_disabled)
-        continue;
-
-      RectangleType child_rect = child_component.rect();
-      if (child.has<HasUIModifiers>()) {
-        child_rect = child.get<HasUIModifiers>().apply_modifier(child_rect);
-      }
-      child_rect = detail::apply_scroll_offset(child, child_rect);
-      child_rect = detail::clip_hit_rect(child, child_rect);
-      context->active_if_mouse_inside(child.id, child_rect);
-
-      if (context->has_focus(child.id) &&
-          context->pressed(InputAction::WidgetPress)) {
-        context->set_focus(child.id);
-        child_hasClickListener.cb(child);
-        child_hasClickListener.down = true;
-      }
-
-      if (context->mouse_activates(child.id)) {
-        context->set_focus(child.id);
-        child_hasClickListener.cb(child);
-        child_hasClickListener.down = true;
-      }
-
-      process_derived_children(child, child_component);
-    }
+    // No recursion into children: run_systems_on_ui_entities visits every
+    // entity carrying HasClickListener, so a child is already reached on its
+    // own. The recursion this replaces processed each one a second time.
   }
 };
 
@@ -1003,14 +1055,11 @@ struct HandleDrags : SystemWithUIContext<ui::HasDragListener> {
   }
   virtual ~HandleDrags() {}
 
-  virtual void for_each_with(Entity &entity, UIComponent &component,
+  virtual void for_each_with(Entity &entity, UIComponent &,
                              HasDragListener &hasDragListener, float) override {
-    RectangleType drag_rect = component.rect();
-    if (entity.has<HasUIModifiers>()) {
-      drag_rect = entity.get<HasUIModifiers>().apply_modifier(drag_rect);
-    }
-    drag_rect = detail::apply_scroll_offset(entity, drag_rect);
-    context->active_if_mouse_inside(entity.id, drag_rect);
+    // ResolveHitTarget grants active on the press. Deliberately not gated on
+    // the hit target below: a drag has to keep firing once the cursor leaves
+    // the handle, which is exactly what active persisting across frames buys.
 
     if (context->has_focus(entity.id) &&
         context->pressed(InputAction::WidgetPress)) {

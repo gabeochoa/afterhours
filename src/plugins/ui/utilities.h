@@ -270,6 +270,10 @@ struct UIPluginPostUpdateBridge : System<> {
         systems.push_back(std::make_unique<ui::HandleTabbing<InputAction>>());
         systems.push_back(
             std::make_unique<ui::InputExclusivitySystem<InputAction>>());
+        // After InputExclusivitySystem so the input gates it installs are in
+        // place, and before every consumer of hot/active.
+        systems.push_back(
+            std::make_unique<ui::ResolveHitTarget<InputAction>>());
         systems.push_back(std::make_unique<ui::HandleClicks<InputAction>>());
         systems.push_back(
             std::make_unique<ui::HandleTrayNavigation<InputAction>>());

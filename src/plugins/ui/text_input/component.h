@@ -156,22 +156,43 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   // Create input field container (clip overflow for horizontal scroll)
-  auto field_result =
-      div(ctx, mk(entity, has_label ? 1 : 0),
-          ComponentConfig::inherit_from(config, "text_input_field")
-              .with_size(field_size)
-              .with_background(Theme::Usage::Secondary)
-              .with_rounded_corners(has_label ? base_corners.left_sharp()
-                                              : base_corners)
-              .with_alignment(TextAlignment::Left)
-              .with_overflow(Overflow::Hidden)
-              .with_render_layer(config.render_layer + 1));
+  auto field_config =
+      ComponentConfig::inherit_from(config, "text_input_field")
+          .with_size(field_size)
+          .with_rounded_corners(has_label ? base_corners.left_sharp()
+                                          : base_corners)
+          .with_alignment(TextAlignment::Left)
+          .with_overflow(Overflow::Hidden)
+          .with_render_layer(config.render_layer + 1);
+  // Only impose the theme fill when the caller did not pick one, or an app
+  // with its own tokens cannot theme the field.
+  const bool caller_set_background =
+      config.color_usage == Theme::Usage::Custom &&
+      config.custom_color.has_value();
+  if (caller_set_background)
+    field_config.with_custom_background(config.custom_color.value());
+  else
+    field_config.with_background(Theme::Usage::Secondary);
+
+  auto field_result = div(ctx, mk(entity, has_label ? 1 : 0), field_config);
 
   auto &field_entity = field_result.ent();
 
   // Ensure HasLabel exists and set display text
   auto &field_label = field_entity.template addComponentIfMissing<HasLabel>();
-  field_label.label = display_text;
+  // display_text stays the real (masked) text: the cursor and scroll maths read
+  // it, so routing the hint through it would park the caret after the hint.
+  const bool show_placeholder =
+      display_text.empty() && !config.placeholder.empty();
+  field_label.label = show_placeholder ? config.placeholder : display_text;
+  // Entities persist across frames, so the muted colour has to be cleared
+  // again rather than only set.
+  if (show_placeholder)
+    field_label.explicit_text_color = ctx.theme.font_muted;
+  else if (config.custom_text_color.has_value())
+    field_label.explicit_text_color = config.custom_text_color;
+  else
+    field_label.explicit_text_color.reset();
 
   // The batched text renderer draws at label_rect.x directly, without
   // draw_text_in_rect's 5px internal margin. text_x_offset already
@@ -184,11 +205,15 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     auto &field_cmp = field_entity.template get<UIComponent>();
     float field_h = field_cmp.computed[Axis::Y];
     if (field_h > 0.f) {
-      float derived_fs = field_h * 0.5f;
       std::string fn = config.font_name != UIComponent::UNSET_FONT
                            ? config.font_name
                            : UIComponent::DEFAULT_FONT;
-      field_cmp.enable_font(fn, pixels(derived_fs), true);
+      // Height-derived only as a fallback: an explicit size otherwise gets
+      // silently replaced, and a tall field renders text that overflows it.
+      const Size fs = config.font_size_explicitly_set
+                          ? config.font_size
+                          : pixels(field_h * 0.5f);
+      field_cmp.enable_font(fn, fs, true);
 
       float pad_h = field_h * 0.125f;
       float pad_w = field_h * 0.35f;
@@ -272,9 +297,13 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
           display_text.empty() ? std::string(" ") : display_text;
 
       Vector2Type margin_px{0.f, DRAW_TEXT_MARGIN};
+      // Measuring to place the caret, not drawing -- and a field that has
+      // scrolled its content is meant to overflow, so no overflow report.
       TextPositionResult text_pos = position_text_ex(
           *font_manager, measure_str.c_str(), field_rect,
-          TextAlignment::Left, margin_px, actual_font_size);
+          TextAlignment::Left, margin_px, actual_font_size,
+          /*extra_spacing=*/0.f, TextOverflow::Clip,
+          /*report_overflow=*/false);
 
       cursor_height = text_pos.rect.height;
       cursor_y = text_pos.rect.y - field_rect.y - pad_top;
