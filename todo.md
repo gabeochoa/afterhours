@@ -1325,3 +1325,92 @@ Recorded so they aren't re-litigated:
 - **Status-glyph shapes** (hanabi #4) — logged then self-resolved. `draw_triangle`,
   `draw_poly`, `draw_circle_v` plus `with_on_draw_fg` already do it. Kept only as
   evidence that `with_on_draw_fg` is under-advertised.
+
+---
+
+# Gap sweep 2026-08-03 (post-D3)
+
+Re-read the four app gap docs. hanabi's was updated **the same day** (a full
+text-input requirements spec); floatinghotel's and wm's were 3 and 6 days old.
+
+**Closed by today's work, no action needed:**
+floatinghotel's "Missing Primitives" 4/5/6 — `dropdown_menu`, `context_menu`,
+`popover` — are D13, shipped. Its 1/2/3 stay open and are the only gaps in any
+doc still labelled **BLOCKER**.
+
+### D25. No subtree-hover query, and no hit-test-ignore flag
+**hanabi #29.** One global `hot_id`, so a hoverable child steals its parent
+row's hover fill: hanabi's sidebar thread row FLICKERS its whole-row wash as the
+pointer crosses onto the trailing star toggle. Two things are missing — a cheap
+"is the mouse anywhere in this subtree?" query (the tree hit-test helper is
+internal and scroll-offset-aware), and any hit-test-exclusion flag
+(`with_skip_tabbing` is focus/tab only, it does not affect hot).
+
+The workaround is expensive: the row bakes the hover wash into its base
+`HasColor`, caches the star's entity id per session in a **static map** (it needs
+the child id before the child is emitted), and ORs `is_hot(star)||was_hot(star)`
+into the row signal.
+
+**Why this is now cheap.** Both halves land in code written today. D13's
+`detail::focus_within` already walks UP the parent chain from `focus_id` — the
+identical shape over `hot_id` gives `mouse_in_subtree(id)`. And D3's
+`ResolveHitTarget::is_candidate` is the single place a hit candidate is decided,
+so a `HasInputPassthrough` marker is one condition there. This was listed as
+"not doing" in the D3 plan on the grounds nothing needed it; hanabi does.
+
+**Recommended next.** Smallest diff of anything below, reuses two things just
+built, and deletes a documented pile of app code.
+
+### D26. text_input is not a real text field — **hanabi's active pain**
+hanabi wrote a full requirements spec (10 sections) and a priority order for its
+chat composer. D11/D12 (font size, custom bg, placeholder) are done; the rest:
+
+1. **Control-char filter** (#31) — the sokol macOS backend pushes backspace
+   (U+007F) into the CHAR queue, so "backspace adds a space". Fixed app-side;
+   belongs in the backend.
+2. **Scissor-clip single-line** (#34a) — long text overflows OUTSIDE the field.
+3. **Multiline wrap + Shift+Enter** (#33/#34b) — "the big one".
+4. Caret origin (#32) — **already fixed** on `hanabi/text-input-fixes`; needs
+   pulling upstream.
+5. macOS Cmd bindings — word/line nav, select-all, clipboard, undo.
+6. Double/triple-click and drag selection.
+
+### D27. Scroll: anchoring, virtualization, scrollbars
+- **#30 scroll anchor / preserve-position-on-prepend.** Content inserted above
+  the viewport yanks the view to the top. hanabi holds position by measuring the
+  prepended items and bumping `scroll_offset.y` once.
+- **#23 no off-screen culling / list virtualization.**
+- **#31 virtualization must be built from a STALE scroll offset** — no
+  next-offset or velocity hint.
+- **#26 `HasScrollView` renders no scrollbar or scroll indicator.**
+
+### D28. Retained layout / dirty-skip
+**hanabi #27.** The imm tree is cleared and rebuilt every frame with no
+retained-layout or dirty-skip primitive; this is hanabi's idle-frame cost floor.
+Big, architectural, and worth its own investigation before any code.
+
+### D29. OS integration: window focus and global hotkeys
+**hanabi #28.** No frontmost-app / window-focus query, so no focus-gated global
+hotkey. Sits with D21 (OS appearance) as the "platform shim" ask.
+
+### D30. Container widgets floatinghotel still hand-rolls — **BLOCKER**
+The only gaps in any doc still marked blocking.
+- **Draggable divider** (P0) — app-local in `src/ui/split_panel.h` via
+  `div()` + `HasDragListener`.
+- **Split pane** (P0, depends on the divider) — same file.
+- **Tree node** (P1) — `src/ui/tree_view.h`, `div()` + `button()` with indent
+  levels and expand state in a static map.
+
+Note these are drag-driven, so D3's `HandleDrags` change is worth re-checking
+against them when they land.
+
+### D31. Styled text: no wrap, no weight
+**hanabi #22 + follow-up.** `with_styled_label` renders on ONE line and does not
+word-wrap, and spans are **colour-only** — bold renders as a colour change, not
+a weight. floatinghotel files the same two as "No Font Weight Support" and "No
+Rich Text". Blocks real markdown. Related: D8, D9.
+
+### D32. wm's remaining open items (all low priority)
+Slider knob 0.75 compression (cosmetic); crowded tab bars still need a smaller
+font at the call site; word-wrap has no hard character break, so a single word
+wider than its box is not split.
