@@ -95,6 +95,19 @@ compute_intersected_clip_rect(const Entity &entity) {
   bool found = false;
   RectangleType result = {};
 
+  // An element that declares Overflow::Hidden clips its own drawing too, not
+  // just its children's. Its label is drawn as part of the element rather than
+  // as a child, so without this a text_input's value paints straight out past
+  // the end of the field. Scroll views are excluded: their rect IS the
+  // viewport, and the renderer already treats them as defining their own.
+  if (entity.has<HasClipChildren>() && !entity.has<HasScrollView>()) {
+    result = entity.get<UIComponent>().rect();
+    Vector2Type own_off = accumulated_scroll_offset(entity);
+    result.x -= own_off.x;
+    result.y -= own_off.y;
+    found = true;
+  }
+
   int guard = 0;
   while (pid >= 0 && guard < 64) {
     OptEntity opt_parent = UICollectionHolder::getEntityForID(pid);

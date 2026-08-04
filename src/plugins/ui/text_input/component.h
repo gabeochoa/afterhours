@@ -297,9 +297,13 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
           display_text.empty() ? std::string(" ") : display_text;
 
       Vector2Type margin_px{0.f, DRAW_TEXT_MARGIN};
+      // Measuring to place the caret, not drawing -- and a field that has
+      // scrolled its content is meant to overflow, so no overflow report.
       TextPositionResult text_pos = position_text_ex(
           *font_manager, measure_str.c_str(), field_rect,
-          TextAlignment::Left, margin_px, actual_font_size);
+          TextAlignment::Left, margin_px, actual_font_size,
+          /*extra_spacing=*/0.f, TextOverflow::Clip,
+          /*report_overflow=*/false);
 
       cursor_height = text_pos.rect.height;
       cursor_y = text_pos.rect.y - field_rect.y - pad_top;

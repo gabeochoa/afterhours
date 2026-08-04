@@ -321,7 +321,12 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
                  RectangleType container, TextAlignment alignment,
                  Vector2Type margin_px, float explicit_font_size = 0.f,
                  float extra_spacing = 0.f,
-                 TextOverflow text_overflow = TextOverflow::Clip) {
+                 TextOverflow text_overflow = TextOverflow::Clip,
+                 // False for callers that clip on purpose (a text field) or
+                 // that are only measuring. The overflow warning means "your
+                 // text is being cut off and you may not have noticed"; for
+                 // those callers it is neither news nor actionable.
+                 bool report_overflow = true) {
   // Early return for empty text - prevents infinite loop in font size
   // calculation
   if (text.empty()) {
@@ -387,9 +392,15 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
         measure_text(font, text.c_str(), font_size, 1.f + extra_spacing);
     text_fits = ts.y <= max_text_size.y && ts.x <= max_text_size.x;
 #ifdef AFTERHOURS_DEBUG_TEXT_OVERFLOW
-    if (!text_fits) {
+    if (!text_fits && report_overflow) {
+      // Keyed on the LAYOUT, not the string. Keying on text meant an editable
+      // field logged a fresh line on every keystroke -- and grew this set
+      // without bound for the life of the process. The container and font are
+      // the actionable part anyway; the string is only there to locate it.
       static std::unordered_set<std::string> logged_explicit;
-      if (logged_explicit.insert(text).second) {
+      const std::string key =
+          fmt::format("{}x{}@{}", container.width, container.height, font_size);
+      if (logged_explicit.insert(key).second) {
         log_warn("Text '{}' at explicit font {} overflows container {}x{} "
                  "(margins {}x{}) - it will be clipped, not downscaled",
                  text.length() > 20 ? text.substr(0, 20) + "..." : text,
@@ -2327,7 +2338,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       TextPositionResult result = position_text_ex(
           font_manager, hasLabel.label.c_str(), text_rect, hasLabel.alignment,
           Vector2Type{5.f, 5.f}, explicit_fs, hasLabel.letter_spacing,
-          hasLabel.text_overflow);
+          hasLabel.text_overflow,
+          // An element that clips on purpose has already answered the question
+          // the overflow warning asks.
+          !entity.template has<HasClipChildren>());
 
       if (result.rect.height >= MIN_FONT_SIZE) {
         // Handle text overflow ellipsis truncation for batched path
