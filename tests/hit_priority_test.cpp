@@ -49,11 +49,18 @@ void press_at(UIContext<ui_test::TestInputAction> &ctx, float x, float y) {
   ctx.set_active(ctx.ROOT);
 }
 
+// The two systems in the order the real app runs them: resolve which element
+// is on top, then let the widgets act on that.
+//
+// Contexts are assigned rather than resolved via once(): once() looks the
+// context up as a singleton, and one cannot be registered per harness -- the
+// registry refuses to overwrite, so the second test would read a freed entity.
 void run_clicks(ImmTestHarness &h) {
+  ResolveHitTarget<ui_test::TestInputAction> resolver;
+  resolver.context = &h.context();
+  resolver.resolve();
+
   HandleClicks<ui_test::TestInputAction> sys;
-  // Assigned rather than resolved via once(): that looks the context up as a
-  // singleton, and registering one per harness is not possible -- the registry
-  // refuses to overwrite, so the second test would read a freed entity.
   sys.context = &h.context();
   for (const auto &e : UICollectionHolder::get().collection.get_entities()) {
     if (!e || !e->has<UIComponent>() || !e->has<HasClickListener>())
@@ -66,10 +73,16 @@ void run_clicks(ImmTestHarness &h) {
 } // namespace
 
 // Shape 1 (floatinghotel F13b): a control inside a clickable row.
+//
+// The button's fired-ness is read off HasClickListener::down, which
+// HandleClicks sets on whichever listener it invokes. An earlier version of
+// this test tracked a `button_fired` bool that nothing ever assigned -- since
+// button() installs its own listener -- so "the row did not fire" was
+// satisfied by NOTHING firing and the positive half asserted nothing at all.
 TEST(button_inside_a_clickable_row_receives_the_click) {
   ImmTestHarness h;
 
-  bool row_fired = false, button_fired = false;
+  bool row_fired = false;
 
   h.begin_frame();
   auto row = div(h.context(), mk(h.root(), 0),
@@ -79,11 +92,12 @@ TEST(button_inside_a_clickable_row_receives_the_click) {
                      .with_debug_name("row"));
   row.ent().addComponentIfMissing<HasClickListener>(
       [&](Entity &) { row_fired = true; });
-  button(h.context(), mk(row.ent(), 0),
-         ComponentConfig{}
-             .with_size(ComponentSize{pixels(80), pixels(24)})
-             .with_label("X")
-             .with_debug_name("inner_button"));
+  auto btn_el = button(h.context(), mk(row.ent(), 0),
+                       ComponentConfig{}
+                           .with_size(ComponentSize{pixels(80), pixels(24)})
+                           .with_label("X")
+                           .with_debug_name("inner_button"));
+  Entity &btn_ent = btn_el.ent();
   h.layout_only();
   mark_rendered();
 
@@ -97,9 +111,10 @@ TEST(button_inside_a_clickable_row_receives_the_click) {
            btn->rect().y + btn->rect().height * 0.5f);
   run_clicks(h);
 
-  ui_test::check(button_fired || !row_fired,
-                 "the row does not swallow a click aimed at its child",
-                 __FILE__, __LINE__);
+  const bool button_fired = btn_ent.has<HasClickListener>() &&
+                            btn_ent.get<HasClickListener>().down;
+  ui_test::check(button_fired, "the button receives the click", __FILE__,
+                 __LINE__);
   ui_test::check(!row_fired, "the row's listener does not fire", __FILE__,
                  __LINE__);
   fprintf(stderr, "        row_fired=%d button_fired=%d\n", (int)row_fired,
@@ -152,6 +167,7 @@ TEST(a_single_press_fires_exactly_one_listener) {
   ImmTestHarness h;
 
   int fire_count = 0;
+  bool inner_fired = false;
 
   h.begin_frame();
   auto outer = div(h.context(), mk(h.root(), 0),
@@ -165,8 +181,10 @@ TEST(a_single_press_fires_exactly_one_listener) {
                    ComponentConfig{}
                        .with_size(ComponentSize{pixels(60), pixels(30)})
                        .with_debug_name("inner"));
-  inner.ent().addComponentIfMissing<HasClickListener>(
-      [&](Entity &) { fire_count++; });
+  inner.ent().addComponentIfMissing<HasClickListener>([&](Entity &) {
+    fire_count++;
+    inner_fired = true;
+  });
   h.layout_only();
   mark_rendered();
 
@@ -178,7 +196,61 @@ TEST(a_single_press_fires_exactly_one_listener) {
 
   ui_test::check(fire_count == 1, "exactly one listener fires per press",
                  __FILE__, __LINE__);
-  fprintf(stderr, "        fire_count=%d\n", fire_count);
+  // Which one matters as much as how many: a count of 1 is also what a
+  // swallowed click looks like.
+  ui_test::check(inner_fired, "and it is the inner one", __FILE__, __LINE__);
+  fprintf(stderr, "        fire_count=%d inner_fired=%d\n", fire_count,
+          (int)inner_fired);
+}
+
+// active is claimed on press and then deliberately persists across frames --
+// BeginUIContextManager resets hot_id but not active_id. That is what keeps a
+// press-and-hold (and any drag) alive after the cursor leaves the element, so
+// the resolution pass must not hand active to whatever is under the cursor
+// later in the gesture. Without the is_active(ROOT) guard, dragging across a
+// UI would light up every control it passed over.
+TEST(a_held_press_does_not_transfer_to_what_it_moves_over) {
+  ImmTestHarness h;
+
+  bool a_fired = false, b_fired = false;
+
+  auto emit = [&] {
+    auto a = div(h.context(), mk(h.root(), 0),
+                 ComponentConfig{}
+                     .with_size(ComponentSize{pixels(80), pixels(40)})
+                     .with_absolute_position(0.f, 0.f)
+                     .with_debug_name("a"));
+    a.ent().addComponentIfMissing<HasClickListener>(
+        [&](Entity &) { a_fired = true; });
+    auto b = div(h.context(), mk(h.root(), 1),
+                 ComponentConfig{}
+                     .with_size(ComponentSize{pixels(80), pixels(40)})
+                     .with_absolute_position(200.f, 0.f)
+                     .with_debug_name("b"));
+    b.ent().addComponentIfMissing<HasClickListener>(
+        [&](Entity &) { b_fired = true; });
+  };
+
+  h.begin_frame(); emit(); h.layout_only(); mark_rendered();
+  press_at(h.context(), 40.f, 20.f); // inside A
+  run_clicks(h);
+  ui_test::check(a_fired, "A fires on the press", __FILE__, __LINE__);
+
+  // Still held, cursor now over B. press_at is not reused: it would reset
+  // active to ROOT, which is exactly the state this test is about.
+  a_fired = b_fired = false;
+  h.begin_frame(); emit(); h.layout_only(); mark_rendered();
+  h.context().mouse.pos = input::MousePosition{240.f, 20.f};
+  h.context().mouse.just_pressed = false; // held, not a new press
+  h.context().mouse.left_down = true;
+  run_clicks(h);
+
+  ui_test::check(!b_fired, "B does not fire under a press it never received",
+                 __FILE__, __LINE__);
+  ui_test::check(h.context().is_active(h.context().ROOT) == false,
+                 "the gesture still owns active", __FILE__, __LINE__);
+  fprintf(stderr, "        a_fired=%d b_fired=%d active=%d\n", (int)a_fired,
+          (int)b_fired, (int)h.context().active_id);
 }
 
 int main() { return ui_test::run_registered_tests("hit priority"); }

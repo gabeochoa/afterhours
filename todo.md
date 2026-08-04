@@ -759,6 +759,33 @@ not achievable today.
 Ask: topmost-wins hit priority by render layer / child depth, plus a way for a
 handler to consume a click.
 
+**DONE** — topmost-wins, no bubbling. `ResolveHitTarget` picks one winner per
+frame (highest `render_layer`, ties to later in paint order) and points *both*
+`hot` and `active` at it; `HandleClicks`/`HandleDrags` stopped resolving inline.
+Nothing else was needed: `is_mouse_press` already requires `is_hot && is_active`,
+so once they name one element only that element activates. Same rule ImGui uses
+— `ActiveId` is only granted to an item already hovered.
+
+Root cause was not precedence. The two fields disagreed: `set_hot` is
+last-writer-wins, `set_active` is first-writer-wins, and a press needs both. A
+nested child ended up hot but never active, so it fired nothing while its
+parent, visited first, fired. Making `set_active` last-wins does not fix it —
+the parent has already decided mid-iteration and both would fire.
+
+Also deleted `HandleClicks::process_derived_children`: the system already
+visits every entity with the component, so it processed children twice.
+
+Not done: bubbling / `stopPropagation` (needs an event object in every
+callback, nothing needs it yet) and an input-passthrough flag (an overlay with
+no click listener is already not a candidate).
+
+Worth knowing: the failure is **iteration-order dependent**, so it does not bite
+everywhere. wm's menus worked before the fix by ordering luck — verified by
+reverting and re-running. hanabi's tab bar is on the unlucky side: tab
+`mk(uiRoot, 910+i)` at `render_layer(baseLayer)` and its close × at
+`mk(uiRoot, 950+i)`, `baseLayer + 1`, overlapping siblings where the lower id
+wins. That is the shape `hit_priority_test` covers.
+
 ### D4. `FlexWrap` defaults to `Wrap` — **DONE**, now `NoWrap`
 Flipped in both `component_config.h` and `ui_core_components.h`. Three things
 had to move with it, none of them obvious from the report:
