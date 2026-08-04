@@ -3,6 +3,7 @@
 // Re-export layout types and core components for backwards compatibility
 #include "ui/components.h"
 #include "ui/layout_types.h"
+#include "ui/text_selection.h"
 #include "ui/ui_collection.h"
 #include "ui/ui_core_components.h"
 
@@ -164,23 +165,40 @@ struct AutoLayout {
                "any text attached (add HasLabel)");
       return 0;
     }
-    const std::string &content = ent.get<HasLabel>().label;
+    const HasLabel &label = ent.get<HasLabel>();
+    const std::string &content = label.label;
     // Resolve font_size to pixels using screen height
     float screen_height = fetch_screen_value_(Axis::Y);
     float font_size = resolve_to_pixels(widget.font_size, screen_height,
                                         widget.resolved_scaling_mode, ui_scale);
     float spacing = 1.f;
 
-    Vector2Type result;
-    if (external_measure_text) {
-      result = external_measure_text(font_name, content, font_size, spacing);
-    } else if (auto *text_cache =
-                   EntityHelper::get_singleton_cmp<ui::TextMeasureCache>()) {
-      result = text_cache->measure(content, font_name, font_size, spacing);
-    } else {
+    const auto measure_one = [&](const std::string &s) -> Vector2Type {
+      if (external_measure_text)
+        return external_measure_text(font_name, s, font_size, spacing);
+      if (auto *text_cache =
+              EntityHelper::get_singleton_cmp<ui::TextMeasureCache>())
+        return text_cache->measure(s, font_name, font_size, spacing);
       auto font_manager = EntityHelper::get_singleton_cmp<FontManager>();
       auto font = font_manager->get_font(font_name);
-      result = measure_text(font, content.c_str(), font_size, spacing);
+      return measure_text(font, s.c_str(), font_size, spacing);
+    };
+
+    // A multi-line label is not the size of its joined string: it is as wide
+    // as its widest line and as tall as all of them. Wrapping is only measured
+    // when the renderer would also wrap -- it needs a pinned font size and a
+    // width to wrap against -- so the two never disagree about line count.
+    // The -10 matches the margin draw_text_in_rect reserves.
+    const bool wraps = label.text_overflow == TextOverflow::Wrap &&
+                       widget.font_size_explicitly_set &&
+                       widget.computed[Axis::X] > 10.f;
+    Vector2Type result;
+    if (wraps || content.find('\n') != std::string::npos) {
+      const float max_w = wraps ? widget.computed[Axis::X] - 10.f : 1e9f;
+      const auto m = ui::detail::measure_wrapped(content, max_w, measure_one);
+      result = Vector2Type{m.width, m.height};
+    } else {
+      result = measure_one(content);
     }
 
     switch (axis) {

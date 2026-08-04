@@ -61,63 +61,33 @@ template <typename MeasureFn>
 static inline std::vector<TextRunLine>
 wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
                    MeasureFn &&measure) {
-  // A word is a run of non-space characters, which may cross colour
-  // boundaries: {"foo", red}, {"(bar)", blue} is ONE word in two colours, not
-  // two words. Tokenising per-run instead used to insert a space at every
-  // colour change, so syntax-highlighted "foo(bar)" rendered as "foo (bar)".
-  struct Word {
+  // Hard breaks are split off first so soft wrapping only ever sees one source
+  // line, and whitespace decisions stay local to it.
+  std::vector<TextRunLine> source_lines{TextRunLine{}};
+  for (const auto &run : runs) {
+    size_t start = 0;
+    while (true) {
+      const size_t nl = run.text.find('\n', start);
+      const size_t end = nl == std::string::npos ? run.text.size() : nl;
+      if (end > start)
+        source_lines.back().push_back(
+            TextSpan{run.text.substr(start, end - start), run.color});
+      if (nl == std::string::npos)
+        break;
+      source_lines.push_back(TextRunLine{});
+      start = nl + 1;
+    }
+  }
+
+  // A chunk is a maximal run of either spaces or non-spaces, and may cross
+  // colour boundaries: {"foo", red}, {"(bar)", blue} is ONE word in two
+  // colours. Tokenising per-run instead inserted a space at every colour
+  // change, so syntax-highlighted "foo(bar)" rendered as "foo (bar)".
+  struct Chunk {
     TextRunLine parts;
     std::string text;
-    bool empty() const { return text.empty(); }
+    bool is_space = false;
   };
-
-  std::vector<Word> words;   // one entry per word; a null word marks a break
-  std::vector<bool> breaks;  // hard break AFTER words[i]
-  Word pending;
-
-  const auto end_word = [&]() {
-    words.push_back(pending);
-    breaks.push_back(false);
-    pending = Word{};
-  };
-  const auto hard_break = [&]() {
-    if (!pending.empty())
-      end_word();
-    else {
-      words.push_back(Word{});
-      breaks.push_back(false);
-    }
-    breaks.back() = true;
-  };
-
-  for (const auto &run : runs) {
-    size_t i = 0;
-    while (i < run.text.size()) {
-      const char c = run.text[i];
-      if (c == '\n') {
-        hard_break();
-        i++;
-        continue;
-      }
-      if (c == ' ') {
-        if (!pending.empty())
-          end_word();
-        i++;
-        continue;
-      }
-      size_t j = i;
-      while (j < run.text.size() && run.text[j] != ' ' && run.text[j] != '\n')
-        j++;
-      const std::string frag = run.text.substr(i, j - i);
-      pending.parts.push_back(TextSpan{frag, run.color});
-      pending.text += frag;
-      i = j;
-    }
-    // Run ended without a separator: the next run continues the SAME word, so
-    // `pending` is intentionally left open across the boundary.
-  }
-  if (!pending.empty())
-    end_word();
 
   const auto same_color = [](const Color &a, const Color &b) {
     return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
@@ -127,48 +97,132 @@ wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
   TextRunLine current;
   std::string current_text;
 
-  const auto flush = [&]() {
-    lines.push_back(current);
-    current.clear();
-    current_text.clear();
-  };
-  const auto push_parts = [&](const TextRunLine &parts, bool with_space) {
-    bool first = true;
+  const auto push_parts = [&](const TextRunLine &parts) {
     for (const auto &part : parts) {
-      const std::string text =
-          (first && with_space) ? " " + part.text : part.text;
       if (!current.empty() && same_color(current.back().color, part.color))
-        current.back().text += text;
+        current.back().text += part.text;
       else
-        current.push_back(TextSpan{text, part.color});
-      first = false;
+        current.push_back(part);
     }
   };
 
-  for (size_t w = 0; w < words.size(); w++) {
-    const Word &word = words[w];
-    if (!word.empty()) {
-      if (current_text.empty()) {
-        current_text = word.text;
-        push_parts(word.parts, false);
-      } else {
-        const std::string candidate = current_text + " " + word.text;
-        if (measure(candidate) > max_width) {
-          flush();
-          current_text = word.text;
-          push_parts(word.parts, false);
+  for (const auto &src : source_lines) {
+    std::vector<Chunk> chunks;
+    for (const auto &part : src) {
+      size_t i = 0;
+      while (i < part.text.size()) {
+        const bool sp = part.text[i] == ' ';
+        size_t j = i;
+        while (j < part.text.size() && (part.text[j] == ' ') == sp)
+          j++;
+        const std::string frag = part.text.substr(i, j - i);
+        if (!chunks.empty() && chunks.back().is_space == sp) {
+          chunks.back().parts.push_back(TextSpan{frag, part.color});
+          chunks.back().text += frag;
         } else {
-          current_text = candidate;
-          push_parts(word.parts, true);
+          chunks.push_back(
+              Chunk{TextRunLine{TextSpan{frag, part.color}}, frag, sp});
         }
+        i = j;
       }
     }
-    if (breaks[w])
-      flush();
+
+    current.clear();
+    current_text.clear();
+    // Whitespace is held until we know whether the next word fits: if it does
+    // the spacing is kept verbatim (so indentation and column alignment
+    // survive), and if it does not the break consumes it.
+    Chunk pending_ws;
+
+    for (const auto &chunk : chunks) {
+      if (chunk.is_space) {
+        pending_ws.parts.insert(pending_ws.parts.end(), chunk.parts.begin(),
+                                chunk.parts.end());
+        pending_ws.text += chunk.text;
+        continue;
+      }
+      const std::string candidate =
+          current_text + pending_ws.text + chunk.text;
+      if (!current_text.empty() && measure(candidate) > max_width) {
+        lines.push_back(current);
+        current.clear();
+        push_parts(chunk.parts);
+        current_text = chunk.text;
+      } else {
+        // An empty line here means the start of the source line, not a wrap,
+        // so its leading whitespace is indentation and is kept.
+        push_parts(pending_ws.parts);
+        push_parts(chunk.parts);
+        current_text = candidate;
+      }
+      pending_ws = Chunk{};
+    }
+    // Trailing spaces are kept too, so hard-broken text round-trips byte for
+    // byte through joined_text().
+    if (!pending_ws.text.empty()) {
+      push_parts(pending_ws.parts);
+      current_text += pending_ws.text;
+    }
+    lines.push_back(current);
   }
-  if (!current.empty() || lines.empty())
-    flush();
+
+  current.clear();
   return lines;
+}
+
+// Greedy word-wrap: split `text` into lines each no wider than `max_width`,
+// using `measure` to size candidate lines. Words wider than max_width are
+// placed on their own line (not character-split). Returns at least one line
+// for non-empty input. `measure` returns the pixel width of a string.
+template <typename MeasureFn>
+static inline std::vector<std::string>
+wrap_text_to_width(const std::string &text, float max_width,
+                   MeasureFn &&measure) {
+  if (text.empty() || max_width <= 0.f)
+    return {text};
+  std::vector<std::string> lines;
+  for (const auto &line :
+       wrap_runs_to_width({TextSpan{text, Color{}}}, max_width, measure)) {
+    std::string joined;
+    for (const auto &run : line)
+      joined += run.text;
+    lines.push_back(std::move(joined));
+  }
+  if (lines.empty())
+    lines.push_back(text);
+  return lines;
+}
+
+// Wrap-aware text measurement: the pixel width/height and line count of `text`
+// laid out within `max_width` (wrap_text_to_width already honors hard newlines).
+// The reusable answer to "how tall is this wrapped paragraph?" so apps stop
+// hand-rolling height estimates. `measure2d(str)` returns the {w,h} of a line.
+struct WrappedTextMetrics {
+  float width = 0.f;  // widest resulting line
+  float height = 0.f; // line_count * single-line height
+  int line_count = 0;
+};
+template <typename Measure2DFn>
+static inline WrappedTextMetrics
+measure_wrapped(const std::string &text, float max_width,
+                Measure2DFn &&measure2d) {
+  std::vector<std::string> lines = wrap_text_to_width(
+      text, max_width, [&](const std::string &s) { return measure2d(s).x; });
+  WrappedTextMetrics m;
+  m.line_count = static_cast<int>(lines.size());
+  // Line height from a representative non-empty line (blank lines still occupy
+  // one line of height); fall back to the whole-text measure.
+  float line_h = 0.f;
+  for (const auto &l : lines) {
+    Vector2Type ls = measure2d(l);
+    m.width = std::max(m.width, ls.x);
+    if (!l.empty())
+      line_h = std::max(line_h, ls.y);
+  }
+  if (line_h <= 0.f)
+    line_h = measure2d(text).y;
+  m.height = line_h * static_cast<float>(m.line_count);
+  return m;
 }
 
 } // namespace detail

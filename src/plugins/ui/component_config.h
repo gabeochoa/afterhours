@@ -404,6 +404,9 @@ struct ComponentConfig {
     label_alignment = align;
     return *this;
   }
+  /// TextOverflow::Wrap additionally needs with_font_size(): soft wrapping is
+  /// only defined at a known size, and without one the text is auto-fit onto a
+  /// single line instead. A hard '\n' breaks either way.
   ComponentConfig &with_text_overflow(TextOverflow overflow) {
     text_overflow = overflow;
     return *this;

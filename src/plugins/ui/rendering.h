@@ -521,63 +521,9 @@ static inline RectangleType position_text(const ui::FontManager &fm,
 // should be applied
 namespace detail {
 
-// TextRunLine and wrap_runs_to_width now live in text_selection.h, so the
-// selection geometry can share them without pulling in a graphics backend.
-
-// Greedy word-wrap: split `text` into lines each no wider than `max_width`,
-// using `measure` to size candidate lines. Words wider than max_width are
-// placed on their own line (not character-split). Returns at least one line
-// for non-empty input. `measure` returns the pixel width of a string.
-template <typename MeasureFn>
-static inline std::vector<std::string>
-wrap_text_to_width(const std::string &text, float max_width,
-                   MeasureFn &&measure) {
-  if (text.empty() || max_width <= 0.f)
-    return {text};
-  std::vector<std::string> lines;
-  for (const auto &line : wrap_runs_to_width({TextSpan{text, Color{}}},
-                                             max_width, measure)) {
-    std::string joined;
-    for (const auto &run : line)
-      joined += run.text;
-    lines.push_back(std::move(joined));
-  }
-  if (lines.empty())
-    lines.push_back(text);
-  return lines;
-}
-
-// Wrap-aware text measurement: the pixel width/height and line count of `text`
-// laid out within `max_width` (wrap_text_to_width already honors hard newlines).
-// The reusable answer to "how tall is this wrapped paragraph?" so apps stop
-// hand-rolling height estimates. `measure2d(str)` returns the {w,h} of a line.
-struct WrappedTextMetrics {
-  float width = 0.f;  // widest resulting line
-  float height = 0.f; // line_count * single-line height
-  int line_count = 0;
-};
-template <typename Measure2DFn>
-static inline WrappedTextMetrics
-measure_wrapped(const std::string &text, float max_width,
-                Measure2DFn &&measure2d) {
-  std::vector<std::string> lines = wrap_text_to_width(
-      text, max_width, [&](const std::string &s) { return measure2d(s).x; });
-  WrappedTextMetrics m;
-  m.line_count = static_cast<int>(lines.size());
-  // Line height from a representative non-empty line (blank lines still occupy
-  // one line of height); fall back to the whole-text measure.
-  float line_h = 0.f;
-  for (const auto &l : lines) {
-    Vector2Type ls = measure2d(l);
-    m.width = std::max(m.width, ls.x);
-    if (!l.empty())
-      line_h = std::max(line_h, ls.y);
-  }
-  if (line_h <= 0.f)
-    line_h = measure2d(text).y;
-  m.height = line_h * static_cast<float>(m.line_count);
-  return m;
-}
+// TextRunLine, wrap_runs_to_width, wrap_text_to_width and measure_wrapped now
+// live in text_selection.h, so selection geometry and autolayout can share
+// them without pulling in a graphics backend.
 
 static inline void
 draw_text_at_position(const ui::FontManager &fm, const std::string &text,
@@ -661,17 +607,30 @@ static inline void draw_text_in_rect(
   }
 #endif
 
-  // Word-wrap: split the text into lines that fit the rect width and draw each
-  // stacked vertically. Requires an explicit font size (wrapping is only
-  // well-defined at a known size; without one we fall through to the normal
-  // auto-fitting single-line path). Each line is drawn with Clip to avoid
-  // re-entering this branch.
-  if (text_overflow == TextOverflow::Wrap && !text.empty() &&
-      rect.width > 0.f && explicit_font_size > 0.f) {
+  // Multi-line: split into lines and draw each stacked vertically. Two ways in
+  // -- a hard '\n', which always breaks, or TextOverflow::Wrap with an explicit
+  // font size (soft wrapping is only well-defined at a known size). Each line
+  // is drawn with Clip and contains no '\n', so this never re-enters.
+  //
+  // Hard breaks are handled here rather than left to the backend: raylib's
+  // DrawTextEx honours '\n' but sokol and the recording backend do not, so
+  // without this the same label renders differently per backend.
+  const bool has_hard_break = text.find('\n') != std::string::npos;
+  const bool soft_wraps =
+      text_overflow == TextOverflow::Wrap && explicit_font_size > 0.f;
+  if ((has_hard_break || soft_wraps) && !text.empty() && rect.width > 0.f) {
     Font font = fm.get_active_font();
-    float font_size = explicit_font_size;
     float spacing = 1.f + letter_spacing;
-    float max_width = rect.width - 10.f; // 5px margin each side
+    // No pinned size: auto-fit as the single-line path would, then shrink so
+    // every line fits rather than just the first.
+    float font_size = explicit_font_size;
+    if (font_size <= 0.f)
+      font_size = position_text_ex(fm, text, rect, alignment,
+                                   Vector2Type{5.f, 5.f}, explicit_font_size,
+                                   letter_spacing, text_overflow)
+                      .rect.height;
+    // Only soft-wrap when asked; otherwise break on '\n' alone.
+    float max_width = soft_wraps ? rect.width - 10.f : 1e9f;
 
     auto line_width = [&](const std::string &s) {
       return measure_text(font, s.c_str(), font_size, spacing).x;
@@ -684,6 +643,13 @@ static inline void draw_text_in_rect(
 
     if (lines.size() > 1) {
       float line_h = measure_text(font, "Ag", font_size, spacing).y;
+      if (explicit_font_size <= 0.f && rect.height > 0.f) {
+        const float want = line_h * static_cast<float>(lines.size());
+        if (want > rect.height) {
+          font_size *= rect.height / want;
+          line_h = measure_text(font, "Ag", font_size, spacing).y;
+        }
+      }
       float total_h = line_h * static_cast<float>(lines.size());
       // Vertically center the block within the rect.
       float y = rect.y + std::max(0.f, (rect.height - total_h) * 0.5f);
@@ -692,7 +658,7 @@ static inline void draw_text_in_rect(
         draw_text_in_rect(fm, ln, line_rect, alignment, color,
                           show_debug_indicator, stroke, shadow, rotation,
                           rot_center_x, rot_center_y, TextOverflow::Clip,
-                          letter_spacing, explicit_font_size);
+                          letter_spacing, font_size);
         y += line_h;
       }
       return;
@@ -880,7 +846,16 @@ static inline void draw_runs_in_rect(
     return;
 
   const auto lines = detail::wrap_runs_to_width(runs, wrap_width, line_width);
-  const float line_h = measure_text(font, "Ag", font_size, spacing).y;
+  float line_h = measure_text(font, "Ag", font_size, spacing).y;
+  // Auto-fit above sized the font against the joined text, i.e. for a single
+  // line. Hard breaks still split it, so shrink to fit every line.
+  if (explicit_font_size <= 0.f && lines.size() > 1 && rect.height > 0.f) {
+    const float want = line_h * static_cast<float>(lines.size());
+    if (want > rect.height) {
+      font_size *= rect.height / want;
+      line_h = measure_text(font, "Ag", font_size, spacing).y;
+    }
+  }
   const float total_h = line_h * static_cast<float>(lines.size());
   float y = rect.y + std::max(0.f, (rect.height - total_h) * 0.5f);
 

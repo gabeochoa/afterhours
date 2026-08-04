@@ -112,6 +112,52 @@ TEST(wrap_newline_plus_wordwrap) {
   CHECK(lines[2] == "ddd");
 }
 
+// Leading whitespace is indentation, not padding to be tidied away. Code and
+// diff views put text through here, and collapsing runs of spaces silently
+// reindents them.
+TEST(wrap_preserves_leading_indentation) {
+  auto lines = wrap_text_to_width("    indented", 1000.f, measure10);
+  CHECK(lines.size() == 1);
+  CHECK(lines[0] == "    indented");
+}
+
+// Runs of spaces inside a line are kept verbatim, so column alignment holds.
+TEST(wrap_preserves_runs_of_spaces) {
+  auto lines = wrap_text_to_width("a    b", 1000.f, measure10);
+  CHECK(lines.size() == 1);
+  CHECK(lines[0] == "a    b");
+}
+
+// Indentation after a hard break survives too -- every line of a code block
+// past the first depends on this.
+TEST(wrap_preserves_indentation_after_a_hard_break) {
+  auto lines = wrap_text_to_width("fn main() {\n    body();\n}", 1000.f,
+                                  measure10);
+  CHECK(lines.size() == 3);
+  if (lines.size() != 3)
+    return;
+  CHECK(lines[1] == "    body();");
+}
+
+// Trailing spaces are kept, so hard-broken text round-trips byte for byte
+// (text_selection's offsets index into exactly this text).
+TEST(wrap_preserves_trailing_spaces) {
+  auto lines = wrap_text_to_width("trailing   ", 1000.f, measure10);
+  CHECK(lines.size() == 1);
+  CHECK(lines[0] == "trailing   ");
+}
+
+// The space a soft wrap breaks at IS consumed -- a wrapped line must not start
+// with the separator it broke on.
+TEST(wrap_consumes_whitespace_at_the_break) {
+  // "aaa bbb ccc" at width 70 breaks before "ccc".
+  auto lines = wrap_text_to_width("aaa bbb ccc", 70.f, measure10);
+  CHECK(lines.size() == 2);
+  if (lines.size() != 2)
+    return;
+  CHECK(lines[1] == "ccc"); // not " ccc"
+}
+
 // measure_wrapped reports width (widest line), height (lines * line height),
 // and line count.
 TEST(measure_wrapped_metrics) {

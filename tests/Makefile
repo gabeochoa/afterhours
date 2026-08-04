@@ -72,6 +72,7 @@ ALL_TESTS := \
 	keymap_test \
 	hit_priority_test \
 	text_selection_test \
+	multiline_text_test \
 	menu_test \
 	overlay_placement_test \
 	progress_bar_test \
