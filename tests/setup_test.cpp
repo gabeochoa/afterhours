@@ -13,10 +13,14 @@
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 
-#include <afterhours/ah.h>
-#include <afterhours/src/plugins/autolayout.h>
+// ui.h FIRST, deliberately: it is what apps include, and a header beneath it
+// that forgets an include only fails when nothing else pulled that include in
+// first. Ordering autolayout.h ahead of it hid exactly that bug once.
 #define AFTER_HOURS_IMM_UI
 #include <afterhours/src/plugins/ui.h>
+
+#include <afterhours/ah.h>
+#include <afterhours/src/plugins/autolayout.h>
 
 #include <cstdio>
 #include <cmath>

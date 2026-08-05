@@ -26,6 +26,9 @@
 #include "components.h"
 #include "theme.h"
 #include "ui_collection.h"
+// UIComponent, for the parent-chain walk in contains_in_subtree. Not pulled in
+// transitively: a TU including ui.h directly reaches context.h first.
+#include "ui_core_components.h"
 
 namespace afterhours {
 
