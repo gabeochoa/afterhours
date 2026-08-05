@@ -20,9 +20,11 @@ struct TextAreaConfig {
 /// Extends HasTextInputState with line navigation and layout caching.
 template <TextStorage Storage = StringStorage>
 struct HasTextAreaStateT : HasTextInputStateT<Storage> {
-  LineIndex line_index;             // Row/column mapping
-  TextLayoutCache layout_cache;     // Word wrap cache
-  TextSelection selection;          // Selection (optional, for future)
+  LineIndex line_index;         // Row/column mapping
+  TextLayoutCache layout_cache; // Word wrap cache
+  // Selection lives on HasTextInputStateT as selection_anchor + cursor, which
+  // is what both widgets drive. A TextSelection member sat here unused as a
+  // third model of the same thing; removed rather than left to be picked up.
   float scroll_offset_y = 0.f;      // Vertical scroll position
   size_t preferred_column = 0;      // For Up/Down preserving column
   uint64_t last_layout_version = 0; // For invalidation

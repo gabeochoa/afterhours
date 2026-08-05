@@ -34,12 +34,12 @@ inline constexpr float kVerticalPadding = 8.f;
 /// - Alt/Ctrl+Left/Right move by word; Alt/Ctrl+Backspace/Delete erase a word
 /// - Home/End go to the ends of the visual row, not the source line
 /// - Mouse wheel scrolls when the content overflows
+/// - Click positions the caret; drag, double-click (word) and triple-click
+///   (visual row) select; Shift+click and Shift+any movement extend
+/// - Cut/copy/paste, select-all and undo/redo
 /// - Visual cursor that blinks when focused
 /// - Word wrapping (optional)
 /// - Full UTF-8/CJK support
-///
-/// Not supported yet: selection, clipboard, undo, and click-to-position.
-/// Clicking focuses the field but does not move the caret.
 ///
 /// Configuration:
 /// - with_line_height(Size) - Line height, e.g. pixels(18) (default: 20px)
@@ -247,6 +247,39 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   bool parent_has_focus = ctx.has_focus(entity.id);
   state.is_focused = field_has_focus || parent_has_focus;
 
+  // Selection highlight: one band per visual row the range touches, so a
+  // selection across a wrapped paragraph reads as a block rather than a
+  // single rect spanning rows it does not cover.
+  if (state.is_focused && state.has_selection()) {
+    const float pad_l = field_cmp.computed_padd[Axis::left];
+    const float pad_t = field_cmp.computed_padd[Axis::top];
+    // Distinct translucent tint rather than theme.accent, which can equal the
+    // text colour and make the selected text unreadable.
+    const Color sel_color{70, 130, 220, 110};
+    int sel_key = 2000;
+    for (const RectangleType &r : selection_rects(
+             state.layout_cache, display_text, state.selection_start(),
+             state.selection_end(),
+             Vector2Type{pad_l, pad_t - state.scroll_offset_y}, line_height,
+             line_width)) {
+      // Rows scrolled out of the viewport are skipped rather than clamped, so
+      // a partially-scrolled selection does not smear along the top edge.
+      if (r.y + r.height <= pad_t || r.y >= pad_t + viewport_height)
+        continue;
+      div(ctx, mk(field_entity, sel_key++),
+          ComponentConfig()
+              .with_size(ComponentSize(pixels(std::max(r.width, 2.f)),
+                                       pixels(r.height)))
+              .with_custom_background(sel_color)
+              .with_absolute_position()
+              .with_translate(r.x, r.y)
+              .with_skip_tabbing(true)
+              .with_skip_grid_snap()
+              .with_debug_name("text_area_selection")
+              .with_render_layer(config.render_layer + 5));
+    }
+  }
+
   // Render cursor when focused
   if (state.is_focused) {
     bool show_cursor = update_blink(state, 0.016f);
@@ -295,12 +328,90 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     }
   }
 
-  // Click to focus
+  // Click to focus AND position the caret. Clicking used to only focus, so
+  // there was no way to put the cursor anywhere but where typing left it.
   field_entity.template addComponentIfMissing<HasClickListener>(
-      [&ctx](Entity &ent) {
+      [&ctx, line_height, line_width](Entity &ent) {
         ctx.set_focus(ent.id);
-        if (ent.has<HasTextAreaState>())
-          reset_blink(ent.get<HasTextAreaState>());
+        if (!ent.has<HasTextAreaState>())
+          return;
+        auto &s = ent.get<HasTextAreaState>();
+        if (s.disabled)
+          return;
+        auto &cmp = ent.get<UIComponent>();
+        const RectangleType fr = cmp.rect();
+        const Vector2Type local{
+            ctx.mouse.pos.x - fr.x - cmp.computed_padd[Axis::left],
+            ctx.mouse.pos.y - fr.y - cmp.computed_padd[Axis::top] +
+                s.scroll_offset_y};
+        const std::string txt = s.text();
+        const size_t at = offset_at_point(s.layout_cache, txt, local,
+                                          line_height, line_width);
+
+        const bool shift = input::is_key_down(keys::LEFT_SHIFT) ||
+                           input::is_key_down(keys::RIGHT_SHIFT);
+
+        // Double click selects the word, triple selects the visual row.
+        constexpr float MULTI_CLICK_TIME = 0.4f;
+        constexpr size_t MULTI_CLICK_DIST = 3;
+        const float now = static_cast<float>(graphics::get_time());
+        const size_t moved = at > s.last_click_pos ? at - s.last_click_pos
+                                                   : s.last_click_pos - at;
+        if (s.last_click_time >= 0.f &&
+            (now - s.last_click_time) < MULTI_CLICK_TIME &&
+            moved <= MULTI_CLICK_DIST)
+          s.click_count++;
+        else
+          s.click_count = 1;
+        s.last_click_time = now;
+        s.last_click_pos = at;
+
+        if (s.click_count >= 3) {
+          const auto &l =
+              s.layout_cache.line(s.layout_cache.line_at_offset(at));
+          s.selection_anchor = l.source_offset;
+          s.cursor_position = std::min(l.end_offset(), s.text_size());
+          s.click_count = 0;
+        } else if (s.click_count == 2) {
+          auto [ws, we] = select_word_at(txt, at);
+          s.selection_anchor = ws;
+          s.cursor_position = we;
+        } else {
+          if (shift) {
+            if (!s.selection_anchor)
+              s.selection_anchor = s.cursor_position;
+          } else {
+            s.clear_selection();
+          }
+          s.cursor_position = at;
+        }
+        reset_preferred_column(s);
+        reset_blink(s);
+      });
+
+  // Drag to extend the selection. The anchor is set on the press above; this
+  // only moves the cursor end, and only while the button is actually held --
+  // HasDragListener keeps firing after the pointer leaves the field, which is
+  // what lets a drag run off the bottom and keep selecting.
+  field_entity.template addComponentIfMissing<HasDragListener>(
+      [&ctx, line_height, line_width](Entity &ent) {
+        if (!ent.has<HasTextAreaState>())
+          return;
+        auto &s = ent.get<HasTextAreaState>();
+        if (s.disabled || !ctx.mouse.left_down)
+          return;
+        auto &cmp = ent.get<UIComponent>();
+        const RectangleType fr = cmp.rect();
+        const Vector2Type local{
+            ctx.mouse.pos.x - fr.x - cmp.computed_padd[Axis::left],
+            ctx.mouse.pos.y - fr.y - cmp.computed_padd[Axis::top] +
+                s.scroll_offset_y};
+        const size_t at = offset_at_point(s.layout_cache, s.text(), local,
+                                          line_height, line_width);
+        if (!s.selection_anchor)
+          s.selection_anchor = s.cursor_position;
+        s.cursor_position = at;
+        reset_blink(s);
       });
 
   // Wheel scrolling. Works on hover rather than focus, which is what a wheel
@@ -328,17 +439,46 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   // Handle input when focused
   if (state.is_focused) {
     bool text_changed = false;
+    const bool editable = !state.readonly;
 
-    // Character input
+    // Clipboard, undo/redo and select-all are identical to text_input's, so
+    // they run through the shared helper rather than a second copy.
+    if (handle_clipboard_and_undo(ctx, state, editable))
+      text_changed = true;
+
+    // Shift held during any movement extends the selection; without it,
+    // moving collapses. Wraps every navigation below.
+    const bool shift_held = input::is_key_down(keys::LEFT_SHIFT) ||
+                            input::is_key_down(keys::RIGHT_SHIFT);
+    const auto navigate = [&](auto move_fn) {
+      if (shift_held && !state.selection_anchor)
+        state.selection_anchor = state.cursor_position;
+      move_fn();
+      if (!shift_held)
+        state.clear_selection();
+      reset_blink(state);
+    };
+
+    // Character input replaces the selection, which is what makes typing over
+    // a selection work at all.
     for (int key = input::get_char_pressed(); key > 0;
          key = input::get_char_pressed()) {
+      if (!editable)
+        continue;
+      state.push_undo_snapshot();
+      if (state.has_selection())
+        delete_selection(state);
       if (insert_char(state, key)) {
+        state.clear_selection();
         reset_blink(state);
         reset_preferred_column(state);
         state.rebuild_line_index();
         text_changed = true;
       }
     }
+    if (!editable)
+      while (input::get_char_pressed() > 0) {
+      }
 
     // Enter. A chat composer wants Enter to send and Shift+Enter to break the
     // line; a plain text area wants Enter to break. Off by default, so the
@@ -386,18 +526,27 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       }
     }
 
-    // Backspace
+    // Backspace and Delete take the selection when there is one, rather than
+    // one character next to the caret.
     if (ctx.pressed_or_repeat(InputAction::TextBackspace)) {
-      if (delete_before_cursor_multiline(state)) {
+      state.push_undo_snapshot();
+      const bool did = state.has_selection()
+                           ? delete_selection(state)
+                           : delete_before_cursor_multiline(state);
+      if (did) {
+        state.rebuild_line_index();
         reset_preferred_column(state);
         reset_blink(state);
         text_changed = true;
       }
     }
-
-    // Delete
     if (ctx.pressed_or_repeat(InputAction::TextDelete)) {
-      if (delete_at_cursor_multiline(state)) {
+      state.push_undo_snapshot();
+      const bool did = state.has_selection()
+                           ? delete_selection(state)
+                           : delete_at_cursor_multiline(state);
+      if (did) {
+        state.rebuild_line_index();
         reset_preferred_column(state);
         reset_blink(state);
         text_changed = true;
@@ -407,55 +556,52 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     // Home/End act on the VISUAL row, not the source line: on a wrapped
     // paragraph the source version jumps to the far end of the paragraph
     // rather than the end of the row you can see.
-    if (ctx.pressed_or_repeat(InputAction::TextHome)) {
-      move_to_visual_line_start(state);
-      reset_blink(state);
-    }
-    if (ctx.pressed_or_repeat(InputAction::TextEnd)) {
-      move_to_visual_line_end(state);
-      reset_blink(state);
-    }
+    if (ctx.pressed_or_repeat(InputAction::TextHome))
+      navigate([&] { move_to_visual_line_start(state); });
+    if (ctx.pressed_or_repeat(InputAction::TextEnd))
+      navigate([&] { move_to_visual_line_end(state); });
 
     // Word-level movement (Alt/Ctrl+Arrow).
     if constexpr (magic_enum::enum_contains<InputAction>("TextWordLeft")) {
-      if (ctx.pressed_or_repeat(InputAction::TextWordLeft)) {
-        move_cursor_word_left(state);
-        reset_preferred_column(state);
-        reset_blink(state);
-      }
+      if (ctx.pressed_or_repeat(InputAction::TextWordLeft))
+        navigate([&] {
+          move_cursor_word_left(state);
+          reset_preferred_column(state);
+        });
     }
     if constexpr (magic_enum::enum_contains<InputAction>("TextWordRight")) {
-      if (ctx.pressed_or_repeat(InputAction::TextWordRight)) {
-        move_cursor_word_right(state);
+      if (ctx.pressed_or_repeat(InputAction::TextWordRight))
+        navigate([&] {
+          move_cursor_word_right(state);
+          reset_preferred_column(state);
+        });
+    }
+
+    // Left/Right. Unshifted with a selection, they collapse to its near edge
+    // rather than stepping one character from the caret.
+    if (ctx.pressed_or_repeat(InputAction::WidgetLeft))
+      navigate([&] {
+        if (!shift_held && state.has_selection())
+          state.cursor_position = state.selection_start();
+        else
+          move_cursor_left(state);
         reset_preferred_column(state);
-        reset_blink(state);
-      }
-    }
-
-    // Left arrow
-    if (ctx.pressed_or_repeat(InputAction::WidgetLeft)) {
-      move_cursor_left(state);
-      reset_preferred_column(state);
-      reset_blink(state);
-    }
-
-    // Right arrow
-    if (ctx.pressed_or_repeat(InputAction::WidgetRight)) {
-      move_cursor_right(state);
-      reset_preferred_column(state);
-      reset_blink(state);
-    }
+      });
+    if (ctx.pressed_or_repeat(InputAction::WidgetRight))
+      navigate([&] {
+        if (!shift_held && state.has_selection())
+          state.cursor_position = state.selection_end();
+        else
+          move_cursor_right(state);
+        reset_preferred_column(state);
+      });
 
     // Up/Down move by VISUAL line: on a wrapped paragraph, moving by source
     // line would jump the whole paragraph at once.
-    if (ctx.pressed_or_repeat(InputAction::WidgetUp)) {
-      move_cursor_visual_row(state, -1, line_width);
-      reset_blink(state);
-    }
-    if (ctx.pressed_or_repeat(InputAction::WidgetDown)) {
-      move_cursor_visual_row(state, +1, line_width);
-      reset_blink(state);
-    }
+    if (ctx.pressed_or_repeat(InputAction::WidgetUp))
+      navigate([&] { move_cursor_visual_row(state, -1, line_width); });
+    if (ctx.pressed_or_repeat(InputAction::WidgetDown))
+      navigate([&] { move_cursor_visual_row(state, +1, line_width); });
 
     // Ensure cursor stays visible after any input
     if (text_changed) {

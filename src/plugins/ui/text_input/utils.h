@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../clipboard.h"
 #include "../text_selection.h"
 #include "concepts.h"
 #include "line_index.h"
@@ -478,6 +479,97 @@ inline bool delete_at_cursor_multiline(AnyTextAreaState auto &s) {
   s.preferred_column = 0;
   return true;
 }
+
+/// A pasted newline breaks the line in a multiline field. In a single-line one
+/// there is nowhere to put it, so it is dropped rather than inserted as a
+/// control byte.
+template <typename State> inline void insert_newline_if_multiline(State &s) {
+  if constexpr (AnyTextAreaState<State>)
+    insert_newline(s);
+}
+
+/// Undo/redo, clipboard and select-all -- the part of editing that is the same
+/// whether the field is one line or many. Returns true if the text changed.
+///
+/// Copy and select-all are allowed while readonly; cut, paste, undo and redo
+/// are not. Each action is guarded on existing in the app's enum, so a smaller
+/// InputAction still compiles.
+///
+/// text_input still carries its own copy of this. Converging it is a separate
+/// change against working editing code that has no clipboard coverage.
+template <typename Ctx, typename State>
+inline bool handle_clipboard_and_undo(Ctx &ctx, State &s, bool editable) {
+  using InputAction = typename std::remove_reference_t<Ctx>::value_type;
+  bool changed = false;
+
+  if (editable) {
+    if constexpr (magic_enum::enum_contains<InputAction>("TextUndo")) {
+      if (ctx.pressed(InputAction::TextUndo)) {
+        s.undo();
+        reset_blink(s);
+        changed = true;
+      }
+    }
+    if constexpr (magic_enum::enum_contains<InputAction>("TextRedo")) {
+      if (ctx.pressed(InputAction::TextRedo)) {
+        s.redo();
+        reset_blink(s);
+        changed = true;
+      }
+    }
+  }
+
+  if constexpr (magic_enum::enum_contains<InputAction>("TextCopy")) {
+    if (ctx.pressed(InputAction::TextCopy) && s.has_selection())
+      clipboard::set_text(s.selected_text());
+  }
+
+  if (editable) {
+    if constexpr (magic_enum::enum_contains<InputAction>("TextCut")) {
+      if (ctx.pressed(InputAction::TextCut) && s.has_selection()) {
+        s.push_undo_snapshot();
+        clipboard::set_text(s.selected_text());
+        delete_selection(s);
+        reset_blink(s);
+        changed = true;
+      }
+    }
+    if constexpr (magic_enum::enum_contains<InputAction>("TextPaste")) {
+      if (ctx.pressed(InputAction::TextPaste)) {
+        const std::string clip = clipboard::get_text();
+        if (!clip.empty()) {
+          s.push_undo_snapshot();
+          if (s.has_selection())
+            delete_selection(s);
+          // Newlines survive a paste into a multiline field and are dropped by
+          // insert_char in a single-line one, which is the right split.
+          for (size_t i = 0; i < clip.size();) {
+            const int cp = utf8_to_codepoint(clip, i);
+            if (cp == '\n')
+              insert_newline_if_multiline(s);
+            else
+              insert_char(s, cp);
+            const size_t len = utf8_char_length(clip, i);
+            i += len > 0 ? len : 1;
+          }
+          s.clear_selection();
+          reset_blink(s);
+          changed = true;
+        }
+      }
+    }
+  }
+
+  if constexpr (magic_enum::enum_contains<InputAction>("TextSelectAll")) {
+    if (ctx.pressed(InputAction::TextSelectAll)) {
+      s.selection_anchor = 0;
+      s.cursor_position = s.text_size();
+      reset_blink(s);
+    }
+  }
+  return changed;
+}
+
 
 } // namespace text_input
 } // namespace afterhours

@@ -615,4 +615,215 @@ TEST(a_field_that_fits_its_content_leaves_the_wheel_alone) {
   CHECK_APPROX(none, 0.f);
 }
 
+// ---------------------------------------------------------------------------
+// Selection geometry
+//
+// These work in SOURCE offsets, not joined_text offsets. A soft break consumes
+// the space it broke at, so the two spaces disagree by one byte per wrapped
+// row -- which is exactly the drift that would put a highlight a character off
+// on every line after the first.
+// ---------------------------------------------------------------------------
+
+TEST(a_range_inside_one_row_is_one_rect) {
+  const std::string src = "hello world again";
+  auto c = layout(src, 11.f); // "hello world" | "again"
+  auto rects = ti::selection_rects(c, src, 0, 5, Vector2Type{0.f, 0.f}, LINE_H,
+                                   measure);
+  CHECK(rects.size() == 1);
+  if (rects.size() == 1) {
+    CHECK_APPROX(rects[0].x, 0.f);
+    CHECK_APPROX(rects[0].width, 5.f * CHAR_W);
+    CHECK_APPROX(rects[0].height, LINE_H);
+  }
+}
+
+// A range spanning rows yields one rect per row, first and last partial.
+TEST(a_range_across_rows_is_one_rect_per_row) {
+  const std::string src = "hello world again";
+  auto c = layout(src, 11.f);
+  auto rects = ti::selection_rects(c, src, 6, 14, Vector2Type{0.f, 0.f},
+                                   LINE_H, measure);
+  CHECK(rects.size() == 2);
+  if (rects.size() == 2) {
+    // Row 0: "world" -- from byte 6 to the end of the row.
+    CHECK_APPROX(rects[0].x, 6.f * CHAR_W);
+    CHECK_APPROX(rects[0].width, 5.f * CHAR_W);
+    CHECK_APPROX(rects[0].y, 0.f);
+    // Row 1: "ag" -- source offset 12, so the range covers its first 2 bytes.
+    CHECK_APPROX(rects[1].x, 0.f);
+    CHECK_APPROX(rects[1].width, 2.f * CHAR_W);
+    CHECK_APPROX(rects[1].y, LINE_H);
+  }
+}
+
+TEST(an_empty_range_yields_no_rects) {
+  const std::string src = "hello world";
+  auto c = layout(src, 20.f);
+  CHECK(ti::selection_rects(c, src, 4, 4, Vector2Type{0.f, 0.f}, LINE_H,
+                            measure)
+            .empty());
+}
+
+// The break between rows is not drawn, so selecting only across it paints
+// nothing rather than a stray sliver.
+TEST(a_range_covering_only_a_break_paints_nothing) {
+  const std::string src = "ab\ncd";
+  auto c = layout(src, 40.f);
+  auto rects = ti::selection_rects(c, src, 2, 3, Vector2Type{0.f, 0.f},
+                                   LINE_H, measure);
+  CHECK(rects.empty());
+}
+
+TEST(origin_offsets_every_rect) {
+  const std::string src = "abcd";
+  auto c = layout(src, 40.f);
+  auto rects = ti::selection_rects(c, src, 0, 2, Vector2Type{7.f, 3.f},
+                                   LINE_H, measure);
+  CHECK(rects.size() == 1);
+  if (rects.size() == 1) {
+    CHECK_APPROX(rects[0].x, 7.f);
+    CHECK_APPROX(rects[0].y, 3.f);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// point -> offset
+// ---------------------------------------------------------------------------
+
+TEST(offset_at_point_finds_the_byte_under_the_cursor) {
+  const std::string src = "hello world again";
+  auto c = layout(src, 11.f);
+  // Row 0, three characters in.
+  CHECK(ti::offset_at_point(c, src, Vector2Type{3.f * CHAR_W, 5.f}, LINE_H,
+                            measure) == 3);
+  // Row 1, two characters in -- source offset 12 + 2, NOT 11 + 2. This is the
+  // consumed-space byte that a joined_text mapping would lose.
+  CHECK(ti::offset_at_point(c, src, Vector2Type{2.f * CHAR_W, LINE_H + 5.f},
+                            LINE_H, measure) == 14);
+}
+
+TEST(offset_at_point_clamps_off_the_ends) {
+  const std::string src = "ab\ncd";
+  auto c = layout(src, 40.f);
+  // Above the first row, and left of it.
+  CHECK(ti::offset_at_point(c, src, Vector2Type{-99.f, -99.f}, LINE_H,
+                            measure) == 0);
+  // Below the last row and off its right edge clamps to the end of the text.
+  CHECK(ti::offset_at_point(c, src, Vector2Type{999.f, 999.f}, LINE_H,
+                            measure) == 5);
+}
+
+// ---------------------------------------------------------------------------
+// Selection through the widget
+// ---------------------------------------------------------------------------
+
+TEST(select_all_selects_the_whole_text) {
+  ImmTestHarness h;
+  std::string text = "alpha beta";
+  auto *s = press(h, text, ui_test::TestInputAction::TextSelectAll, 0);
+  ui_test::check(s != nullptr, "state exists", __FILE__, __LINE__);
+  if (s) {
+    CHECK(s->has_selection());
+    CHECK(s->selection_start() == 0);
+    CHECK(s->selection_end() == text.size());
+    CHECK(s->selected_text() == "alpha beta");
+  }
+}
+
+// Typing over a selection replaces it -- without this, select-all then type
+// appends instead of overwriting.
+TEST(typing_replaces_the_selection) {
+  ImmTestHarness h;
+  std::string text = "alpha beta";
+  Entity *area = nullptr;
+  auto emit = [&] {
+    auto r = text_area(h.context(), mk(h.root(), 0), text,
+                       area_config(200.f, 200.f));
+    area = &r.ent();
+  };
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  if (UIComponent *f = h.find("text_area_field"))
+    h.context().focus_id = f->id;
+  if (area && area->has<ti::HasTextAreaState>()) {
+    auto &s = area->get<ti::HasTextAreaState>();
+    s.selection_anchor = 0;
+    s.cursor_position = 5; // "alpha" selected
+  }
+  testing::test_input::detail::test_mode = true;
+  testing::input_injector::reset_all();
+  testing::test_input::push_char('X');
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  testing::input_injector::reset_all();
+  testing::test_input::detail::test_mode = false;
+  CHECK(text == "X beta");
+}
+
+// Backspace with a selection deletes the selection, not one character behind
+// the cursor.
+TEST(backspace_deletes_the_selection) {
+  ImmTestHarness h;
+  std::string text = "alpha beta";
+  Entity *area = nullptr;
+  auto emit = [&] {
+    auto r = text_area(h.context(), mk(h.root(), 0), text,
+                       area_config(200.f, 200.f));
+    area = &r.ent();
+  };
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  if (UIComponent *f = h.find("text_area_field"))
+    h.context().focus_id = f->id;
+  if (area && area->has<ti::HasTextAreaState>()) {
+    auto &s = area->get<ti::HasTextAreaState>();
+    s.selection_anchor = 0;
+    s.cursor_position = 6;
+  }
+  h.context().last_action = ui_test::TestInputAction::TextBackspace;
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  CHECK(text == "beta");
+}
+
+// Shift+Left extends rather than collapsing, which is what makes keyboard
+// selection possible at all.
+TEST(shift_arrow_extends_the_selection) {
+  ImmTestHarness h;
+  std::string text = "alpha beta";
+  Entity *area = nullptr;
+  auto emit = [&] {
+    auto r = text_area(h.context(), mk(h.root(), 0), text,
+                       area_config(200.f, 200.f));
+    area = &r.ent();
+  };
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  if (UIComponent *f = h.find("text_area_field"))
+    h.context().focus_id = f->id;
+  if (area && area->has<ti::HasTextAreaState>())
+    area->get<ti::HasTextAreaState>().cursor_position = 10;
+
+  testing::test_input::detail::test_mode = true;
+  testing::input_injector::reset_all();
+  testing::input_injector::set_key_held(keys::LEFT_SHIFT);
+  h.context().last_action = ui_test::TestInputAction::WidgetLeft;
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  testing::input_injector::reset_all();
+  testing::test_input::detail::test_mode = false;
+
+  if (area && area->has<ti::HasTextAreaState>()) {
+    auto &s = area->get<ti::HasTextAreaState>();
+    CHECK(s.has_selection());
+    CHECK(s.selected_text() == "a");
+  }
+}
+
 int main() { return ui_test::run_registered_tests("text_area"); }

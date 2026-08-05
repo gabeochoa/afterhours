@@ -137,6 +137,64 @@ struct TextLayoutCache {
   }
 };
 
+// Selection geometry over a wrapped block, in SOURCE byte offsets.
+//
+// ui::text_selection has equivalents, but they index into joined_text(), where
+// a soft break becomes a '\n' the source never had -- fine for a read-only
+// block, wrong for an editor whose cursor is a source offset. These take the
+// same offsets the caret and the storage use.
+
+/// Byte offset nearest a point local to the text block's top left.
+template <typename MeasureFn>
+inline size_t offset_at_point(const TextLayoutCache &cache,
+                              std::string_view source, Vector2Type local,
+                              float line_height, MeasureFn &&measure) {
+  if (cache.line_count() == 0)
+    return 0;
+  const size_t row = cache.line_at_y(local.y, line_height);
+  const std::string text = cache.line_text(source, row);
+  // Walks UTF-8 characters, so a multi-byte glyph is never split.
+  const size_t within = ui::text_selection::detail_sel::offset_nearest_x(
+      text, local.x, std::forward<MeasureFn>(measure));
+  return cache.line(row).source_offset + within;
+}
+
+/// One rect per visual row the range covers: a range inside one row yields one
+/// rect, a range spanning three yields three with the first and last partial.
+/// `origin` is the block's top left.
+template <typename MeasureFn>
+inline std::vector<RectangleType>
+selection_rects(const TextLayoutCache &cache, std::string_view source,
+                size_t start, size_t end, Vector2Type origin,
+                float line_height, MeasureFn &&measure) {
+  std::vector<RectangleType> rects;
+  if (start >= end)
+    return rects;
+
+  for (size_t row = 0; row < cache.line_count(); row++) {
+    const VisualLine &l = cache.line(row);
+    // The break between rows is not drawn, so a range covering only it
+    // contributes nothing on its own.
+    if (l.end_offset() <= start || l.source_offset >= end)
+      continue;
+
+    const std::string text = cache.line_text(source, row);
+    const size_t from = start > l.source_offset ? start - l.source_offset : 0;
+    const size_t to =
+        end < l.end_offset() ? end - l.source_offset : text.size();
+    if (to <= from || from > text.size())
+      continue;
+
+    const float x0 = measure(std::string_view(text).substr(0, from));
+    const float x1 = measure(std::string_view(text).substr(0, to));
+    rects.push_back(RectangleType{origin.x + x0,
+                                  origin.y + line_height *
+                                                 static_cast<float>(row),
+                                  x1 - x0, line_height});
+  }
+  return rects;
+}
+
 /// ECS component wrapper for TextLayoutCache
 struct HasTextLayoutCache : BaseComponent {
   TextLayoutCache cache;
