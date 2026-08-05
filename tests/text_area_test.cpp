@@ -480,6 +480,52 @@ TEST(alt_delete_deletes_the_word_ahead) {
   CHECK(text == " beta gamma");
 }
 
+// Trailing whitespace goes with the word attached to it, in one press --
+// deleting only the run of spaces and leaving the word behind is the wrong
+// half. Same rule forwards, over leading whitespace.
+TEST(alt_backspace_takes_trailing_spaces_and_the_word_together) {
+  {
+    ImmTestHarness h;
+    std::string text = "alpha beta   ";
+    press(h, text, ui_test::TestInputAction::TextDeleteWordBack, 13);
+    CHECK(text == "alpha ");
+  }
+  {
+    // A single trailing space is the same case, not a special one.
+    ImmTestHarness h;
+    std::string text = "alpha beta ";
+    press(h, text, ui_test::TestInputAction::TextDeleteWordBack, 11);
+    CHECK(text == "alpha ");
+  }
+  {
+    ImmTestHarness h;
+    std::string text = "   alpha beta";
+    press(h, text, ui_test::TestInputAction::TextDeleteWordForward, 0);
+    CHECK(text == " beta");
+  }
+}
+
+// The cursor lands where the deletion started, not adrift in what is left.
+TEST(alt_backspace_leaves_the_cursor_at_the_join) {
+  ImmTestHarness h;
+  std::string text = "alpha beta   ";
+  auto *s = press(h, text, ui_test::TestInputAction::TextDeleteWordBack, 13);
+  ui_test::check(s != nullptr, "state exists", __FILE__, __LINE__);
+  if (s)
+    CHECK(s->cursor_position == 6);
+}
+
+// Word motion skips the same span it would delete, so Alt+Left then
+// Alt+Backspace do not disagree about where the word begins.
+TEST(alt_left_skips_trailing_spaces_to_the_word_start) {
+  ImmTestHarness h;
+  std::string text = "alpha beta   ";
+  auto *s = press(h, text, ui_test::TestInputAction::TextWordLeft, 13);
+  ui_test::check(s != nullptr, "state exists", __FILE__, __LINE__);
+  if (s)
+    CHECK(s->cursor_position == 6);
+}
+
 // Home/End go to the ends of the VISUAL row. With wrapping on, the source-line
 // versions would jump to the far end of the whole paragraph instead.
 TEST(home_goes_to_the_start_of_the_wrapped_row) {
