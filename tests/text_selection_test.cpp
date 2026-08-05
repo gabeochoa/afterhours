@@ -31,13 +31,19 @@ float measure(const std::string &s) {
   return static_cast<float>(s.size()) * CHAR_W;
 }
 
+// wrap_runs_to_width measures per weight. These cases are all regular, so the
+// weight is ignored and the width matches `measure` above.
+float measure_w(const std::string &s, afterhours::colors::FontWeight) {
+  return measure(s);
+}
+
 const Color kWhite{255, 255, 255, 255};
 const Color kRed{255, 0, 0, 255};
 
 // Hard breaks only -- a huge max_width means nothing soft-wraps, so the joined
 // text is byte-identical to the source. This is the diff-viewer shape.
 std::vector<uid::TextRunLine> hard_lines(const std::string &text) {
-  return uid::wrap_runs_to_width({TextSpan{text, kWhite}}, 1e9f, measure);
+  return uid::wrap_runs_to_width({TextSpan{text, kWhite}}, 1e9f, measure_w);
 }
 } // namespace
 
@@ -196,7 +202,7 @@ TEST(selection_tracks_drag_direction) {
 TEST(runs_of_different_colours_are_one_continuous_line) {
   const std::vector<TextSpan> runs{TextSpan{"red", kRed},
                                    TextSpan{"white", kWhite}};
-  const auto lines = uid::wrap_runs_to_width(runs, 1e9f, measure);
+  const auto lines = uid::wrap_runs_to_width(runs, 1e9f, measure_w);
   ui_test::check(lines.size() == 1, "one visual line", __FILE__, __LINE__);
   fprintf(stderr, "        joined = '%s'\n", ts::joined_text(lines).c_str());
   ui_test::check(ts::joined_text(lines) == "redwhite",

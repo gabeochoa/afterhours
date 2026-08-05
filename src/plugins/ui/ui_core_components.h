@@ -436,11 +436,23 @@ enum struct TextOverflow {
   Wrap,     // Text wraps to multiple lines to fit the container width
 };
 
-// One colored run of text within a styled (multi-color) label.
+// One styled run of text within a styled label.
+//
+// `weight` resolves against the FontManager as base + "@bold" etc., falling
+// back to the base face when that variant was never loaded -- so a run asking
+// for Bold in an app that registered no bold font renders regular rather than
+// failing. Registering the variant is what turns it on.
 struct TextSpan {
   std::string text;
   Color color;
+  colors::FontWeight weight = colors::FontWeight::Regular;
 };
+
+inline bool operator==(const TextSpan &a, const TextSpan &b) {
+  return a.text == b.text && a.color.r == b.color.r &&
+         a.color.g == b.color.g && a.color.b == b.color.b &&
+         a.color.a == b.color.a && a.weight == b.weight;
+}
 
 struct HasLabel : BaseComponent {
   TextAlignment alignment = TextAlignment::None;

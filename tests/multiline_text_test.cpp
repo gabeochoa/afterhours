@@ -317,4 +317,224 @@ TEST(a_hard_broken_label_that_fits_does_not_report_overflow) {
   CHECK(res.text_fits);
 }
 
+// ---------------------------------------------------------------------------
+// Per-span font weight
+// ---------------------------------------------------------------------------
+//
+// These drive the wrap primitive directly with a measure that is WIDER for
+// bold, which is the whole reason weight has to reach the wrapper: measuring a
+// bold run with the regular face under-measures it and the line overflows.
+
+namespace {
+namespace uid = afterhours::ui::detail;
+using afterhours::colors::FontWeight;
+
+const Color kW{255, 255, 255, 255};
+
+// Regular is 10px a character, bold 20px. Exaggerated so a mistake cannot hide
+// inside a rounding tolerance.
+int g_measure_calls = 0;
+float measure_by_weight(const std::string &s, FontWeight w) {
+  g_measure_calls++;
+  const float per = (w == FontWeight::Bold) ? 20.f : 10.f;
+  return static_cast<float>(s.size()) * per;
+}
+} // namespace
+
+// Runs sharing a colour but differing in weight must stay separate, or the
+// bold half gets coalesced into the regular run and silently renders regular.
+TEST(a_bold_run_is_not_merged_into_a_regular_run_of_the_same_colour) {
+  const std::vector<TextSpan> runs{
+      TextSpan{"plain", kW, FontWeight::Regular},
+      TextSpan{"bold", kW, FontWeight::Bold},
+  };
+  const auto lines = uid::wrap_runs_to_width(runs, 1e9f, measure_by_weight);
+  CHECK(lines.size() == 1);
+  if (lines.size() != 1)
+    return;
+  CHECK(lines[0].size() == 2);
+  if (lines[0].size() != 2)
+    return;
+  CHECK(lines[0][0].text == "plain");
+  CHECK(lines[0][0].weight == FontWeight::Regular);
+  CHECK(lines[0][1].text == "bold");
+  CHECK(lines[0][1].weight == FontWeight::Bold);
+}
+
+// Adjacent runs that match in BOTH colour and weight still coalesce.
+TEST(runs_matching_in_colour_and_weight_still_merge) {
+  const std::vector<TextSpan> runs{TextSpan{"foo", kW, FontWeight::Bold},
+                                   TextSpan{"bar", kW, FontWeight::Bold}};
+  const auto lines = uid::wrap_runs_to_width(runs, 1e9f, measure_by_weight);
+  CHECK(lines.size() == 1);
+  if (lines.size() != 1)
+    return;
+  CHECK(lines[0].size() == 1);
+  if (lines[0].size() == 1)
+    CHECK(lines[0][0].text == "foobar");
+}
+
+// The point of threading weight into the wrapper. "aaa" regular is 30px and
+// "bbb" bold is 60px; at width 80 they cannot share a line, though a
+// regular-only measure would call it 60 and keep them together.
+TEST(wrap_breaks_earlier_because_a_bold_run_is_wider) {
+  const std::vector<TextSpan> runs{TextSpan{"aaa ", kW, FontWeight::Regular},
+                                   TextSpan{"bbb", kW, FontWeight::Bold}};
+  const auto bold_lines = uid::wrap_runs_to_width(runs, 80.f,
+                                                  measure_by_weight);
+  CHECK(bold_lines.size() == 2);
+
+  // Same text all regular is 3 + 1 + 3 = 70px and does fit in 80.
+  const std::vector<TextSpan> plain{TextSpan{"aaa ", kW, FontWeight::Regular},
+                                    TextSpan{"bbb", kW, FontWeight::Regular}};
+  const auto plain_lines = uid::wrap_runs_to_width(plain, 80.f,
+                                                   measure_by_weight);
+  CHECK(plain_lines.size() == 1);
+  fprintf(stderr, "        bold=%zu plain=%zu\n", bold_lines.size(),
+          plain_lines.size());
+}
+
+// A line of uniform weight must still be measured in ONE call. measure_text
+// spaces between characters, so summing pieces loses a spacing per join --
+// the reason the wrapper measures whole candidates rather than per word.
+TEST(a_uniform_line_costs_one_measure_call_per_candidate) {
+  const std::vector<TextSpan> runs{TextSpan{"aaa bbb ccc", kW,
+                                            FontWeight::Regular}};
+  g_measure_calls = 0;
+  uid::wrap_runs_to_width(runs, 1e9f, measure_by_weight);
+  const int uniform = g_measure_calls;
+
+  // Two words, two weights -> the candidate splits at the boundary only.
+  const std::vector<TextSpan> mixed{TextSpan{"aaa ", kW, FontWeight::Regular},
+                                    TextSpan{"bbb", kW, FontWeight::Bold}};
+  g_measure_calls = 0;
+  uid::wrap_runs_to_width(mixed, 1e9f, measure_by_weight);
+  const int split = g_measure_calls;
+
+  fprintf(stderr, "        uniform=%d mixed=%d calls\n", uniform, split);
+  // "aaa bbb ccc" has two wrap candidates, each one call: never per word.
+  CHECK(uniform <= 2);
+  CHECK(split >= uniform);
+}
+
+// Weight survives a hard break, which is where the '\n' split rebuilds spans.
+TEST(weight_survives_a_hard_break) {
+  const std::vector<TextSpan> runs{
+      TextSpan{"first\nsecond", kW, FontWeight::Bold}};
+  const auto lines = uid::wrap_runs_to_width(runs, 1e9f, measure_by_weight);
+  CHECK(lines.size() == 2);
+  if (lines.size() != 2)
+    return;
+  CHECK(lines[0][0].weight == FontWeight::Bold);
+  CHECK(lines[1][0].weight == FontWeight::Bold);
+}
+
+// An app that never loaded a bold face gets the base font, not a throw from
+// get_font. This is what makes the feature safe to adopt incrementally.
+TEST(an_unloaded_weight_falls_back_to_the_base_face) {
+  ImmTestHarness h;
+  auto *fm = h.render_font();
+  CHECK(fm->resolve_weighted(UIComponent::DEFAULT_FONT, FontWeight::Bold) ==
+        UIComponent::DEFAULT_FONT);
+  // And a loaded one is picked up.
+  fm->load_font(std::string(UIComponent::DEFAULT_FONT) + "@bold",
+                get_default_font());
+  CHECK(fm->resolve_weighted(UIComponent::DEFAULT_FONT, FontWeight::Bold) ==
+        std::string(UIComponent::DEFAULT_FONT) + "@bold");
+}
+
+// Switching a label from plain to styled must not move the text. The two go
+// through different draw paths, and only one of them applied the 5px inset --
+// so the same string in the same box landed 5px further left once it gained a
+// colour.
+TEST(a_styled_label_starts_where_a_plain_one_does) {
+  float plain_x = 0.f;
+  {
+    ImmTestHarness h;
+    div(h.context(), mk(h.root(), 0),
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(300), pixels(40)})
+            .with_absolute_position(0.f, 0.f)
+            .with_label("hello")
+            .with_alignment(TextAlignment::Left)
+            .with_font_size(FS));
+    h.render();
+    const auto calls = h.drawn("text");
+    CHECK(!calls.empty());
+    if (calls.empty())
+      return;
+    plain_x = calls[0].rect.x;
+  }
+
+  float styled_x = 0.f;
+  {
+    ImmTestHarness h;
+    div(h.context(), mk(h.root(), 0),
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(300), pixels(40)})
+            .with_absolute_position(0.f, 0.f)
+            .with_styled_label({TextSpan{"hello", Color{255, 255, 255, 255}}})
+            .with_alignment(TextAlignment::Left)
+            .with_font_size(FS));
+    h.render();
+    const auto calls = h.drawn("text");
+    CHECK(!calls.empty());
+    if (calls.empty())
+      return;
+    styled_x = calls[0].rect.x;
+  }
+
+  fprintf(stderr, "        plain x=%.1f styled x=%.1f\n", plain_x, styled_x);
+  CHECK_APPROX(styled_x, plain_x);
+}
+
+// The same check against the BATCHED renderer, which is what wm and the other
+// apps actually run. The two renderers are selectable at runtime, so a fix to
+// one of them is half a fix -- and this pair of paths has diverged before.
+TEST(batched_styled_label_starts_where_a_plain_one_does) {
+  float plain_x = 0.f;
+  {
+    ImmTestHarness h;
+    div(h.context(), mk(h.root(), 0),
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(300), pixels(40)})
+            .with_absolute_position(0.f, 0.f)
+            .with_label("hello")
+            .with_alignment(TextAlignment::Left)
+            .with_font_size(FS));
+    h.render_batched();
+    const auto calls = h.drawn("text");
+    CHECK(!calls.empty());
+    if (calls.empty())
+      return;
+    plain_x = calls[0].rect.x;
+  }
+
+  float styled_x = 0.f;
+  {
+    ImmTestHarness h;
+    div(h.context(), mk(h.root(), 0),
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(300), pixels(40)})
+            .with_absolute_position(0.f, 0.f)
+            // TWO spans on purpose: a single-run line takes the whole-rect
+            // branch and records label_rect, which would pass no matter what
+            // the per-run alignment maths did.
+            .with_styled_label({TextSpan{"hel", Color{255, 255, 255, 255}},
+                                TextSpan{"lo", Color{255, 200, 0, 255}}})
+            .with_alignment(TextAlignment::Left)
+            .with_font_size(FS));
+    h.render_batched();
+    const auto calls = h.drawn("text");
+    CHECK(!calls.empty());
+    if (calls.empty())
+      return;
+    styled_x = calls[0].rect.x;
+  }
+
+  fprintf(stderr, "        batched plain x=%.1f styled x=%.1f\n", plain_x,
+          styled_x);
+  CHECK_APPROX(styled_x, plain_x);
+}
+
 int main() { return ui_test::run_registered_tests("multiline text"); }

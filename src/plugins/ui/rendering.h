@@ -850,8 +850,11 @@ static inline void draw_text_in_rect(
 // Draw coloured runs through the same wrap primitive as the plain path.
 // `joined` is the concatenated text, only used to derive a font size when none
 // was set explicitly.
+// Non-const fm: per-run weights are drawn by swapping the active font around
+// each run, since draw_text_in_rect resolves the face itself. The active font
+// is restored before returning.
 static inline void draw_runs_in_rect(
-    const ui::FontManager &fm, const std::vector<TextSpan> &runs,
+    ui::FontManager &fm, const std::vector<TextSpan> &runs,
     RectangleType rect, TextAlignment alignment,
     bool show_debug_indicator = false,
     const std::optional<TextStroke> &stroke = std::nullopt,
@@ -871,6 +874,17 @@ static inline void draw_runs_in_rect(
                     .rect.height;
   }
   const float spacing = 1.f + letter_spacing;
+
+  // Per-run weight resolves against the ACTIVE font's family. resolve_weighted
+  // returns the base name when that variant was never loaded, so an app with
+  // no bold face renders regular rather than throwing in get_font.
+  const std::string base_font = fm.active_font;
+  const auto font_for = [&](colors::FontWeight w) {
+    return fm.get_font(fm.resolve_weighted(base_font, w));
+  };
+  const auto weighted_width = [&](const std::string &s, colors::FontWeight w) {
+    return measure_text(font_for(w), s.c_str(), font_size, spacing).x;
+  };
   const auto line_width = [&](const std::string &s) {
     return measure_text(font, s.c_str(), font_size, spacing).x;
   };
@@ -882,7 +896,8 @@ static inline void draw_runs_in_rect(
   if (wrap_width <= 0.f)
     return;
 
-  const auto lines = detail::wrap_runs_to_width(runs, wrap_width, line_width);
+  const auto lines =
+      detail::wrap_runs_to_width(runs, wrap_width, weighted_width);
   float line_h = measure_text(font, "Ag", font_size, spacing).y;
   // Auto-fit above sized the font against the joined text, i.e. for a single
   // line. Hard breaks still split it, so shrink to fit every line.
@@ -905,25 +920,41 @@ static inline void draw_runs_in_rect(
       y += line_h; // blank line from a "\n\n"
       continue;
     }
-    std::string line_text;
+    // Line width sums the runs at their own weights; a bold run is wider than
+    // the same characters in regular, so centring on a single-font measure
+    // would drift the whole line left.
+    float line_w = 0.f;
     for (const auto &run : line)
-      line_text += run.text;
+      line_w += weighted_width(run.text, run.weight);
 
-    float x = rect.x;
+    // Mirror position_text_ex's alignment maths so a label lands in the same
+    // place whether it is drawn as plain text or as styled runs. Left used to
+    // start flush at rect.x here while the plain path insets by the margin, so
+    // giving a label a colour shifted it kInset to the left.
+    float x = rect.x + kInset;
     if (alignment == TextAlignment::Center)
-      x += std::max(0.f, (rect.width - line_width(line_text)) / 2.f);
+      x = std::max(rect.x + kInset,
+                   rect.x + kInset + (rect.width - 2.f * kInset - line_w) / 2.f);
     else if (alignment == TextAlignment::Right)
-      x += std::max(0.f, rect.width - line_width(line_text));
+      x = rect.x + rect.width - kInset - line_w;
 
     for (const auto &run : line) {
-      const float w = line_width(run.text);
+      const float w = weighted_width(run.text, run.weight);
       RectangleType run_rect{x - kInset, y, w + kInset * 2.f, line_h};
+      // draw_text_in_rect draws with the ACTIVE font, so the weight has to be
+      // swapped in around the call and put back afterwards.
+      const std::string want = fm.resolve_weighted(base_font, run.weight);
+      const bool swap = want != fm.active_font;
+      if (swap)
+        fm.set_active(want);
       // Same as the per-line calls above: a run's rect is sized to that run,
       // so charging it margins would report overflow for every one of them.
       draw_text_in_rect(fm, run.text, run_rect, TextAlignment::Left, run.color,
                         show_debug_indicator, stroke, shadow, rotation,
                         rot_center_x, rot_center_y, TextOverflow::Clip,
                         letter_spacing, font_size, /*report_overflow=*/false);
+      if (swap)
+        fm.set_active(base_font);
       x += w;
     }
     y += line_h;
@@ -2346,6 +2377,20 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
               font_manager.resolve_weighted(cmp.font_name, cmp.font_weight);
           const float font_size = wants_wrap ? explicit_fs : result.rect.height;
           const float spacing = 1.f + hasLabel.letter_spacing;
+          // A span's weight wins when it asks for one; otherwise the run
+          // inherits the component's. So a styled label with no per-span
+          // weights resolves exactly as it did before spans had weights.
+          const auto name_for = [&](colors::FontWeight sw) {
+            return font_manager.resolve_weighted(
+                cmp.font_name,
+                sw == colors::FontWeight::Regular ? cmp.font_weight : sw);
+          };
+          const auto weighted_width = [&](const std::string &s,
+                                          colors::FontWeight sw) {
+            return measure_text(font_manager.get_font(name_for(sw)), s.c_str(),
+                                font_size, spacing)
+                .x;
+          };
           auto line_width = [&](const std::string &s) {
             return measure_text(font, s.c_str(), font_size, spacing).x;
           };
@@ -2359,7 +2404,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                           : std::vector<TextSpan>{
                                 TextSpan{display_text, font_col}};
             const auto lines =
-                detail::wrap_runs_to_width(runs, wrap_width, line_width);
+                detail::wrap_runs_to_width(runs, wrap_width, weighted_width);
 
             // A single colourless line is what the path below already draws.
             if (lines.size() > 1 || has_spans) {
@@ -2377,26 +2422,28 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                   // Same call shape as before, so plain wrapped text does
                   // not shift.
                   RectangleType lr{label_rect.x, y, label_rect.width, line_h};
-                  buffer.add_text(lr, line[0].text, resolved, font_size,
-                                  line[0].color, hasLabel.alignment, layer,
-                                  entity.id, stroke, shadow, rotation, centerX,
-                                  centerY, hasLabel.letter_spacing);
+                  buffer.add_text(lr, line[0].text, name_for(line[0].weight),
+                                  font_size, line[0].color, hasLabel.alignment,
+                                  layer, entity.id, stroke, shadow, rotation,
+                                  centerX, centerY, hasLabel.letter_spacing);
                 } else {
-                  std::string joined;
+                  // Sum the runs at their own weights: a bold run is wider
+                  // than the same characters regular, so measuring the joined
+                  // line with one face would drift the alignment.
+                  float line_w = 0.f;
                   for (const auto &run : line)
-                    joined += run.text;
+                    line_w += weighted_width(run.text, run.weight);
                   float x = label_rect.x;
                   if (hasLabel.alignment == TextAlignment::Center)
-                    x += std::max(0.f,
-                                  (label_rect.width - line_width(joined)) / 2.f);
+                    x += std::max(0.f, (label_rect.width - line_w) / 2.f);
                   else if (hasLabel.alignment == TextAlignment::Right)
-                    x += std::max(0.f, label_rect.width - line_width(joined));
+                    x += std::max(0.f, label_rect.width - line_w);
                   for (const auto &run : line) {
-                    const float w = line_width(run.text);
+                    const float w = weighted_width(run.text, run.weight);
                     RectangleType sr{x, y, w, line_h};
-                    buffer.add_text(sr, run.text, resolved, font_size,
-                                    run.color, TextAlignment::Left, layer,
-                                    entity.id, stroke, shadow, rotation,
+                    buffer.add_text(sr, run.text, name_for(run.weight),
+                                    font_size, run.color, TextAlignment::Left,
+                                    layer, entity.id, stroke, shadow, rotation,
                                     centerX, centerY, hasLabel.letter_spacing);
                     x += w;
                   }
