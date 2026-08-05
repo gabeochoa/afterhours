@@ -303,4 +303,52 @@ TEST(d26_a_plain_div_is_not_clipped) {
   CHECK(!clipped);
 }
 
+// ---------------------------------------------------------------------------
+// D26: clicking positions the caret
+// ---------------------------------------------------------------------------
+
+// The state lives on the widget's OUTER entity while the click listener hangs
+// off the inner field, its child. The listener asked its own entity for the
+// state, found none, and returned -- so clicking a text field had never once
+// moved the caret, in any app, on any build.
+TEST(d26_clicking_the_field_reaches_the_widget_state) {
+  ImmTestHarness h;
+  std::string text = "hello world";
+  two_frames(h, [&] {
+    imm::text_input(h.context(), mk(h.root(), 0), text,
+                    ComponentConfig{}.with_size(
+                        ComponentSize{pixels(300), pixels(40)}));
+  });
+
+  Entity *field = find_field_entity();
+  ui_test::check(field != nullptr && field->has<HasClickListener>(),
+                 "the field has a click listener", __FILE__, __LINE__);
+  if (!field || !field->has<HasClickListener>())
+    return;
+
+  // The field itself must NOT hold the state -- that is the whole trap.
+  CHECK(!field->has<text_input::HasTextInputState>());
+  CHECK(text_input::state_for_field<text_input::HasTextInputState>(*field) !=
+        nullptr);
+
+  // Clicking has to reach the state and act on it. Without a FontManager the
+  // callback stops before the caret maths -- no font, no measurement -- but it
+  // still clears the selection and resets the blink on its way out, and those
+  // are past the lookup that used to fail.
+  auto *s = text_input::state_for_field<text_input::HasTextInputState>(*field);
+  ui_test::check(s != nullptr, "state reachable", __FILE__, __LINE__);
+  if (!s)
+    return;
+  s->selection_anchor = 3;
+  s->cursor_blink_timer = 0.4f;
+
+  const RectangleType fr = field->get<UIComponent>().rect();
+  h.context().mouse.pos = Vector2Type{fr.x + fr.width * 0.5f,
+                                      fr.y + fr.height * 0.5f};
+  field->get<HasClickListener>().cb(*field);
+
+  CHECK(!s->selection_anchor.has_value());
+  CHECK_APPROX(s->cursor_blink_timer, 0.f);
+}
+
 int main() { return ui_test::run_registered_tests("text_input"); }

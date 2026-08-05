@@ -826,4 +826,83 @@ TEST(shift_arrow_extends_the_selection) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Click-to-position, across frames
+//
+// The listener is installed with addComponentIfMissing, so the lambda stored
+// on the FIRST frame is the one that runs for the life of the widget. Anything
+// it closed over from that frame's stack is long gone by the time a real click
+// arrives. These run several frames before clicking, which is the only way to
+// catch that -- a same-frame click would read the stack while it is still warm
+// and pass.
+// ---------------------------------------------------------------------------
+
+namespace {
+// Build the field over several frames, then click at `local_x` within it.
+size_t cursor_after_click_at(const std::string &content, float local_x,
+                             int frames_before_click) {
+  ImmTestHarness h;
+  std::string text = content;
+  Entity *area = nullptr;
+  auto emit = [&] {
+    auto r = text_area(h.context(), mk(h.root(), 0), text,
+                       area_config(400.f, 200.f));
+    area = &r.ent();
+  };
+  for (int i = 0; i < frames_before_click; i++) {
+    h.begin_frame();
+    emit();
+    h.layout_only();
+  }
+  UIComponent *f = h.find("text_area_field");
+  if (!f || !area || !area->has<ti::HasTextAreaState>())
+    return static_cast<size_t>(-1);
+  h.context().focus_id = f->id;
+
+  const RectangleType fr = f->rect();
+  h.context().mouse.pos =
+      Vector2Type{fr.x + f->computed_padd[Axis::left] + local_x,
+                  fr.y + f->computed_padd[Axis::top] + 5.f};
+
+  // Fire the stored listener, exactly as HandleClicks would.
+  Entity *field_ent = nullptr;
+  for (const auto &e : UICollectionHolder::get().collection.get_entities()) {
+    if (e && e->has<UIComponentDebug>() &&
+        e->get<UIComponentDebug>().name() == "text_area_field")
+      field_ent = e.get();
+  }
+  if (!field_ent || !field_ent->has<HasClickListener>())
+    return static_cast<size_t>(-1);
+  field_ent->get<HasClickListener>().cb(*field_ent);
+
+  return area->get<ti::HasTextAreaState>().cursor_position;
+}
+} // namespace
+
+// Clicking five characters in must put the caret at byte 5, not at 0 and not
+// at the end.
+TEST(clicking_in_the_middle_positions_the_caret) {
+  const size_t at = cursor_after_click_at("hello world", 5.f * CHAR_W, 1);
+  CHECK(at == 5);
+}
+
+// The same click, several frames later. This is the one that fails if the
+// listener closed over the frame that installed it.
+TEST(clicking_still_positions_the_caret_many_frames_later) {
+  const size_t at = cursor_after_click_at("hello world", 5.f * CHAR_W, 5);
+  CHECK(at == 5);
+}
+
+// Clicking at the left edge is byte 0 -- pins that the test above is measuring
+// position and not just "something non-zero happened".
+TEST(clicking_at_the_start_gives_offset_zero) {
+  const size_t at = cursor_after_click_at("hello world", 0.f, 5);
+  CHECK(at == 0);
+}
+
+TEST(clicking_past_the_end_of_a_row_clamps_to_its_end) {
+  const size_t at = cursor_after_click_at("hello", 999.f, 5);
+  CHECK(at == 5);
+}
+
 int main() { return ui_test::run_registered_tests("text_area"); }

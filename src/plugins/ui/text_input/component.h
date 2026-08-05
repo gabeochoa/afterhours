@@ -411,8 +411,10 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   // Click to focus, position cursor, handle multi-click and shift+click
   field_entity.template addComponentIfMissing<HasClickListener>(
       [&ctx](Entity &ent) {
-        if (!ent.has<HasTextInputState>()) return;
-        auto &s = ent.get<HasTextInputState>();
+        // The state is on the widget's outer entity, not on this field.
+        HasTextInputState *sp = state_for_field<HasTextInputState>(ent);
+        if (!sp) return;
+        auto &s = *sp;
         if (s.disabled) return;
         ctx.set_focus(ent.id);
         auto &cmp = ent.get<UIComponent>();

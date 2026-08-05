@@ -20,6 +20,33 @@ using namespace afterhours::ui::imm;
 // the last line sits under the bottom edge.
 inline constexpr float kVerticalPadding = 8.f;
 
+// Width of `str` in the font the field last rendered with.
+//
+// Reads the state rather than closing over the frame's locals. The click and
+// drag listeners are installed with addComponentIfMissing, so the lambda from
+// the FIRST frame is the one that runs for the life of the widget -- anything
+// it captured by reference from that frame's stack is dangling by the time a
+// real click arrives.
+inline float measure_in_field(const HasTextAreaState &s,
+                              std::string_view str) {
+  auto *fm = EntityHelper::get_singleton_cmp<FontManager>();
+  if (!fm || s.render_font_size <= 0.f)
+    return static_cast<float>(str.size()) * s.render_font_size * 0.5f;
+  return measure_text(fm->get_font(s.render_font_name), std::string(str).c_str(),
+                      s.render_font_size, 1.f)
+      .x;
+}
+
+// The point a pointer event lands on, in the text block's own space.
+inline Vector2Type field_local_point(const UIComponent &cmp,
+                                     const HasTextAreaState &s,
+                                     Vector2Type mouse) {
+  const RectangleType fr = cmp.rect();
+  return Vector2Type{mouse.x - fr.x - cmp.computed_padd[Axis::left],
+                     mouse.y - fr.y - cmp.computed_padd[Axis::top] +
+                         s.scroll_offset_y};
+}
+
 /// Creates a multiline text input field (text area).
 ///
 /// @param ctx The UI context
@@ -179,6 +206,10 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     screen_height = static_cast<float>(pcr->current_resolution.height);
   const float resolved_font_size =
       resolve_to_pixels(config.font_size, screen_height);
+  // Published for the listeners, which cannot see any of this by the time they
+  // run. area_config.line_height is already refreshed in init_state above.
+  state.render_font_name = font_name;
+  state.render_font_size = resolved_font_size;
 
   // Wrap through the same primitive both renderers use, so an edited line
   // breaks exactly where a drawn one does. Without a font manager (headless)
@@ -331,22 +362,23 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   // Click to focus AND position the caret. Clicking used to only focus, so
   // there was no way to put the cursor anywhere but where typing left it.
   field_entity.template addComponentIfMissing<HasClickListener>(
-      [&ctx, line_height, line_width](Entity &ent) {
+      [&ctx](Entity &ent) {
         ctx.set_focus(ent.id);
-        if (!ent.has<HasTextAreaState>())
+        HasTextAreaState *sp = state_for_field<HasTextAreaState>(ent);
+        if (!sp)
           return;
-        auto &s = ent.get<HasTextAreaState>();
+        auto &s = *sp;
         if (s.disabled)
           return;
         auto &cmp = ent.get<UIComponent>();
-        const RectangleType fr = cmp.rect();
-        const Vector2Type local{
-            ctx.mouse.pos.x - fr.x - cmp.computed_padd[Axis::left],
-            ctx.mouse.pos.y - fr.y - cmp.computed_padd[Axis::top] +
-                s.scroll_offset_y};
+        const auto measure = [&s](std::string_view t) {
+          return measure_in_field(s, t);
+        };
+        const Vector2Type local = field_local_point(cmp, s, ctx.mouse.pos);
         const std::string txt = s.text();
-        const size_t at = offset_at_point(s.layout_cache, txt, local,
-                                          line_height, line_width);
+        const size_t at =
+            offset_at_point(s.layout_cache, txt, local,
+                            s.area_config.line_height, measure);
 
         const bool shift = input::is_key_down(keys::LEFT_SHIFT) ||
                            input::is_key_down(keys::RIGHT_SHIFT);
@@ -394,20 +426,21 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   // HasDragListener keeps firing after the pointer leaves the field, which is
   // what lets a drag run off the bottom and keep selecting.
   field_entity.template addComponentIfMissing<HasDragListener>(
-      [&ctx, line_height, line_width](Entity &ent) {
-        if (!ent.has<HasTextAreaState>())
+      [&ctx](Entity &ent) {
+        HasTextAreaState *sp = state_for_field<HasTextAreaState>(ent);
+        if (!sp)
           return;
-        auto &s = ent.get<HasTextAreaState>();
+        auto &s = *sp;
         if (s.disabled || !ctx.mouse.left_down)
           return;
         auto &cmp = ent.get<UIComponent>();
-        const RectangleType fr = cmp.rect();
-        const Vector2Type local{
-            ctx.mouse.pos.x - fr.x - cmp.computed_padd[Axis::left],
-            ctx.mouse.pos.y - fr.y - cmp.computed_padd[Axis::top] +
-                s.scroll_offset_y};
-        const size_t at = offset_at_point(s.layout_cache, s.text(), local,
-                                          line_height, line_width);
+        const auto measure = [&s](std::string_view t) {
+          return measure_in_field(s, t);
+        };
+        const Vector2Type local = field_local_point(cmp, s, ctx.mouse.pos);
+        const size_t at =
+            offset_at_point(s.layout_cache, s.text(), local,
+                            s.area_config.line_height, measure);
         if (!s.selection_anchor)
           s.selection_anchor = s.cursor_position;
         s.cursor_position = at;

@@ -2,6 +2,7 @@
 
 #include "../../clipboard.h"
 #include "../text_selection.h"
+#include "../ui_collection.h"
 #include "concepts.h"
 #include "line_index.h"
 #include "state.h"
@@ -478,6 +479,23 @@ inline bool delete_at_cursor_multiline(AnyTextAreaState auto &s) {
 
   s.preferred_column = 0;
   return true;
+}
+
+/// Both widgets keep their state on the OUTER entity and hang their pointer
+/// listeners off the inner field, which is its child. A listener that asks its
+/// own entity for the state therefore finds nothing and returns without doing
+/// anything -- which is why click-to-position silently did nothing in either
+/// widget. Walk up one level rather than keeping a second copy on the field.
+template <typename StateT> inline StateT *state_for_field(Entity &field) {
+  if (field.has<StateT>())
+    return &field.get<StateT>();
+  if (!field.has<ui::UIComponent>())
+    return nullptr;
+  OptEntity parent =
+      ui::UICollectionHolder::getEntityForID(field.get<ui::UIComponent>().parent);
+  if (parent.has_value() && parent.asE().template has<StateT>())
+    return &parent.asE().template get<StateT>();
+  return nullptr;
 }
 
 /// A pasted newline breaks the line in a multiline field. In a single-line one

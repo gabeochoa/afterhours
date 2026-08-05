@@ -30,6 +30,12 @@ struct HasTextAreaStateT : HasTextInputStateT<Storage> {
   uint64_t last_layout_version = 0; // For invalidation
   TextAreaConfig area_config;       // Text area specific config
 
+  // The font the field last rendered with. Listeners have to measure text to
+  // turn a click into an offset, and they run long after the frame that
+  // installed them -- so the measurement inputs live here, not in a capture.
+  std::string render_font_name;
+  float render_font_size = 0.f;
+
   HasTextAreaStateT() = default;
   explicit HasTextAreaStateT(const std::string &initial_text,
                              size_t max_len = 0, // 0 = unlimited for text area
