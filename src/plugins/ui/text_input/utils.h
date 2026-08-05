@@ -404,6 +404,27 @@ inline void move_to_line_end(AnyTextAreaState auto &s) {
   s.preferred_column = s.line_index.line_length(pos.row);
 }
 
+/// Home/End on the VISUAL line, which is where the eye expects them: on a
+/// wrapped paragraph the source-line versions above jump to the far end of the
+/// whole paragraph instead of the end of the row you are looking at.
+inline void move_to_visual_line_start(AnyTextAreaState auto &s) {
+  const auto &cache = s.layout_cache;
+  if (cache.line_count() == 0)
+    return move_to_line_start(s);
+  s.cursor_position = cache.line(cache.line_at_offset(s.cursor_position))
+                          .source_offset;
+  s.preferred_column = 0;
+}
+
+inline void move_to_visual_line_end(AnyTextAreaState auto &s) {
+  const auto &cache = s.layout_cache;
+  if (cache.line_count() == 0)
+    return move_to_line_end(s);
+  const auto &l = cache.line(cache.line_at_offset(s.cursor_position));
+  s.cursor_position = std::min(l.end_offset(), s.text_size());
+  s.preferred_column = l.length;
+}
+
 /// Reset preferred column when moving left/right.
 /// Call this after move_cursor_left/right to reset up/down behavior.
 inline void reset_preferred_column(AnyTextAreaState auto &s) {

@@ -29,14 +29,17 @@ inline constexpr float kVerticalPadding = 8.f;
 ///
 /// Features:
 /// - Click to focus, keyboard input when focused
-/// - Enter to insert newline
-/// - Up/Down arrows to navigate lines
-/// - Left/Right arrows to move cursor
-/// - Home/End to go to line start/end
+/// - Enter to insert newline (or submit, see with_submit_on_enter)
+/// - Up/Down arrows move by VISUAL row, Left/Right by character
+/// - Alt/Ctrl+Left/Right move by word; Alt/Ctrl+Backspace/Delete erase a word
+/// - Home/End go to the ends of the visual row, not the source line
+/// - Mouse wheel scrolls when the content overflows
 /// - Visual cursor that blinks when focused
 /// - Word wrapping (optional)
-/// - Vertical scrolling when content exceeds viewport
 /// - Full UTF-8/CJK support
+///
+/// Not supported yet: selection, clipboard, undo, and click-to-position.
+/// Clicking focuses the field but does not move the caret.
 ///
 /// Configuration:
 /// - with_line_height(Size) - Line height, e.g. pixels(18) (default: 20px)
@@ -300,6 +303,28 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
           reset_blink(ent.get<HasTextAreaState>());
       });
 
+  // Wheel scrolling. Works on hover rather than focus, which is what a wheel
+  // over a box is expected to do, and is deliberately NOT consumed when the
+  // content already fits: the wheel is consume-once, so a field that cannot
+  // scroll must leave it for whatever scroll view encloses it.
+  {
+    const float max_scroll =
+        std::max(0.f, static_cast<float>(vlines.size()) * line_height -
+                          viewport_height);
+    const RectangleType fr = field_cmp.rect();
+    const bool hovered = ctx.mouse.pos.x >= fr.x &&
+                         ctx.mouse.pos.x <= fr.x + fr.width &&
+                         ctx.mouse.pos.y >= fr.y &&
+                         ctx.mouse.pos.y <= fr.y + fr.height;
+    if (max_scroll > 0.f && hovered) {
+      const float wheel = input::get_mouse_wheel_move_v().y;
+      if (wheel != 0.f) {
+        state.scroll_offset_y = std::clamp(
+            state.scroll_offset_y - wheel * line_height, 0.f, max_scroll);
+      }
+    }
+  }
+
   // Handle input when focused
   if (state.is_focused) {
     bool text_changed = false;
@@ -335,43 +360,87 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       }
     }
 
+    // Word-level delete (Alt/Ctrl+Backspace, Alt/Ctrl+Delete). Guarded on the
+    // action existing so an app with a smaller enum still compiles, the same
+    // way text_input does it.
+    if constexpr (magic_enum::enum_contains<InputAction>(
+                      "TextDeleteWordBack")) {
+      if (ctx.pressed_or_repeat(InputAction::TextDeleteWordBack)) {
+        if (delete_word_before_cursor(state)) {
+          state.rebuild_line_index();
+          reset_preferred_column(state);
+          reset_blink(state);
+          text_changed = true;
+        }
+      }
+    }
+    if constexpr (magic_enum::enum_contains<InputAction>(
+                      "TextDeleteWordForward")) {
+      if (ctx.pressed_or_repeat(InputAction::TextDeleteWordForward)) {
+        if (delete_word_after_cursor(state)) {
+          state.rebuild_line_index();
+          reset_preferred_column(state);
+          reset_blink(state);
+          text_changed = true;
+        }
+      }
+    }
+
     // Backspace
-    if (ctx.pressed(InputAction::TextBackspace)) {
+    if (ctx.pressed_or_repeat(InputAction::TextBackspace)) {
       if (delete_before_cursor_multiline(state)) {
+        reset_preferred_column(state);
         reset_blink(state);
         text_changed = true;
       }
     }
 
     // Delete
-    if (ctx.pressed(InputAction::TextDelete)) {
+    if (ctx.pressed_or_repeat(InputAction::TextDelete)) {
       if (delete_at_cursor_multiline(state)) {
+        reset_preferred_column(state);
         reset_blink(state);
         text_changed = true;
       }
     }
 
-    // Home - go to line start
-    if (ctx.pressed(InputAction::TextHome)) {
-      move_to_line_start(state);
+    // Home/End act on the VISUAL row, not the source line: on a wrapped
+    // paragraph the source version jumps to the far end of the paragraph
+    // rather than the end of the row you can see.
+    if (ctx.pressed_or_repeat(InputAction::TextHome)) {
+      move_to_visual_line_start(state);
+      reset_blink(state);
+    }
+    if (ctx.pressed_or_repeat(InputAction::TextEnd)) {
+      move_to_visual_line_end(state);
       reset_blink(state);
     }
 
-    // End - go to line end
-    if (ctx.pressed(InputAction::TextEnd)) {
-      move_to_line_end(state);
-      reset_blink(state);
+    // Word-level movement (Alt/Ctrl+Arrow).
+    if constexpr (magic_enum::enum_contains<InputAction>("TextWordLeft")) {
+      if (ctx.pressed_or_repeat(InputAction::TextWordLeft)) {
+        move_cursor_word_left(state);
+        reset_preferred_column(state);
+        reset_blink(state);
+      }
+    }
+    if constexpr (magic_enum::enum_contains<InputAction>("TextWordRight")) {
+      if (ctx.pressed_or_repeat(InputAction::TextWordRight)) {
+        move_cursor_word_right(state);
+        reset_preferred_column(state);
+        reset_blink(state);
+      }
     }
 
     // Left arrow
-    if (ctx.pressed(InputAction::WidgetLeft)) {
+    if (ctx.pressed_or_repeat(InputAction::WidgetLeft)) {
       move_cursor_left(state);
       reset_preferred_column(state);
       reset_blink(state);
     }
 
     // Right arrow
-    if (ctx.pressed(InputAction::WidgetRight)) {
+    if (ctx.pressed_or_repeat(InputAction::WidgetRight)) {
       move_cursor_right(state);
       reset_preferred_column(state);
       reset_blink(state);
@@ -379,11 +448,11 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Up/Down move by VISUAL line: on a wrapped paragraph, moving by source
     // line would jump the whole paragraph at once.
-    if (ctx.pressed(InputAction::WidgetUp)) {
+    if (ctx.pressed_or_repeat(InputAction::WidgetUp)) {
       move_cursor_visual_row(state, -1, line_width);
       reset_blink(state);
     }
-    if (ctx.pressed(InputAction::WidgetDown)) {
+    if (ctx.pressed_or_repeat(InputAction::WidgetDown)) {
       move_cursor_visual_row(state, +1, line_width);
       reset_blink(state);
     }

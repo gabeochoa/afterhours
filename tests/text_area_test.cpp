@@ -410,4 +410,163 @@ TEST(the_field_clips_its_rows) {
     CHECK(field->has<HasClipChildren>());
 }
 
+// ---------------------------------------------------------------------------
+// Keyboard controls
+//
+// Driven through the widget, not the helpers, because the wiring is the part
+// that was missing -- move_cursor_word_left and friends already existed and
+// text_area simply never called any of them.
+// ---------------------------------------------------------------------------
+
+namespace {
+// Focus a text_area holding `start`, fire `action`, return the resulting state.
+// Two emits: the widget needs a laid-out frame before its wrap is real.
+ti::HasTextAreaState *press(ImmTestHarness &h, std::string &text,
+                            ui_test::TestInputAction action,
+                            size_t cursor_at, bool wrap = true) {
+  Entity *area = nullptr;
+  auto emit = [&] {
+    auto r = text_area(h.context(), mk(h.root(), 0), text,
+                       area_config(200.f, 200.f).with_word_wrap(wrap));
+    area = &r.ent();
+  };
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  if (UIComponent *f = h.find("text_area_field"))
+    h.context().focus_id = f->id;
+  if (area && area->has<ti::HasTextAreaState>())
+    area->get<ti::HasTextAreaState>().cursor_position = cursor_at;
+
+  h.context().last_action = action;
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  return area && area->has<ti::HasTextAreaState>()
+             ? &area->get<ti::HasTextAreaState>()
+             : nullptr;
+}
+} // namespace
+
+TEST(alt_left_moves_a_word_back) {
+  ImmTestHarness h;
+  std::string text = "alpha beta gamma";
+  auto *s = press(h, text, ui_test::TestInputAction::TextWordLeft, 16);
+  ui_test::check(s != nullptr, "state exists", __FILE__, __LINE__);
+  if (s)
+    CHECK(s->cursor_position == 11); // start of "gamma"
+}
+
+TEST(alt_right_moves_a_word_forward) {
+  ImmTestHarness h;
+  std::string text = "alpha beta gamma";
+  auto *s = press(h, text, ui_test::TestInputAction::TextWordRight, 0);
+  ui_test::check(s != nullptr, "state exists", __FILE__, __LINE__);
+  if (s)
+    CHECK(s->cursor_position == 5); // end of "alpha"
+}
+
+TEST(alt_backspace_deletes_the_word_behind) {
+  ImmTestHarness h;
+  std::string text = "alpha beta gamma";
+  press(h, text, ui_test::TestInputAction::TextDeleteWordBack, 16);
+  CHECK(text == "alpha beta ");
+}
+
+TEST(alt_delete_deletes_the_word_ahead) {
+  ImmTestHarness h;
+  std::string text = "alpha beta gamma";
+  press(h, text, ui_test::TestInputAction::TextDeleteWordForward, 0);
+  CHECK(text == " beta gamma");
+}
+
+// Home/End go to the ends of the VISUAL row. With wrapping on, the source-line
+// versions would jump to the far end of the whole paragraph instead.
+TEST(home_goes_to_the_start_of_the_wrapped_row) {
+  ImmTestHarness h;
+  // 200px wide at 10px/char, minus padding -> wraps well before the end.
+  std::string text = "aaa bbb ccc ddd eee fff ggg hhh iii jjj kkk lll";
+  auto *s = press(h, text, ui_test::TestInputAction::TextHome, 40);
+  ui_test::check(s != nullptr, "state exists", __FILE__, __LINE__);
+  if (s) {
+    const size_t row = s->layout_cache.line_at_offset(40);
+    ui_test::check(row > 0, "offset 40 is on a wrapped row, not the first",
+                   __FILE__, __LINE__);
+    CHECK(s->cursor_position == s->layout_cache.line(row).source_offset);
+    CHECK(s->cursor_position != 0); // NOT the start of the paragraph
+  }
+}
+
+TEST(end_goes_to_the_end_of_the_wrapped_row) {
+  ImmTestHarness h;
+  std::string text = "aaa bbb ccc ddd eee fff ggg hhh iii jjj kkk lll";
+  auto *s = press(h, text, ui_test::TestInputAction::TextEnd, 4);
+  ui_test::check(s != nullptr, "state exists", __FILE__, __LINE__);
+  if (s) {
+    CHECK(s->cursor_position == s->layout_cache.line(0).end_offset());
+    CHECK(s->cursor_position != text.size()); // NOT the end of the paragraph
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Wheel scrolling
+// ---------------------------------------------------------------------------
+
+namespace {
+// Put the mouse over the field, turn the wheel, and report the scroll offset.
+float scroll_after_wheel(const std::string &content, float box_h, float wheel) {
+  ImmTestHarness h;
+  std::string text = content;
+  Entity *area = nullptr;
+  auto emit = [&] {
+    auto r = text_area(h.context(), mk(h.root(), 0), text,
+                       area_config(200.f, box_h));
+    area = &r.ent();
+  };
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  // Park the cursor at the top so ensure_cursor_visible is not what moves it.
+  if (area && area->has<ti::HasTextAreaState>())
+    area->get<ti::HasTextAreaState>().cursor_position = 0;
+
+  if (UIComponent *f = h.find("text_area_field")) {
+    const RectangleType r = f->rect();
+    h.context().mouse.pos =
+        Vector2Type{r.x + r.width * 0.5f, r.y + r.height * 0.5f};
+  }
+  // get_mouse_wheel_move_v only reads the injector in test mode.
+  testing::test_input::detail::test_mode = true;
+  testing::input_injector::reset_all();
+  testing::input_injector::set_mouse_wheel(0.f, wheel);
+
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  testing::input_injector::reset_all();
+  testing::test_input::detail::test_mode = false;
+  return area && area->has<ti::HasTextAreaState>()
+             ? area->get<ti::HasTextAreaState>().scroll_offset_y
+             : -1.f;
+}
+} // namespace
+
+TEST(the_wheel_scrolls_a_field_whose_content_overflows) {
+  // Eight rows in a three-row box.
+  const float down = scroll_after_wheel("a\nb\nc\nd\ne\nf\ng\nh", 70.f, -1.f);
+  CHECK_APPROX(down, LINE_H);
+}
+
+TEST(the_wheel_does_not_scroll_past_the_top) {
+  const float up = scroll_after_wheel("a\nb\nc\nd\ne\nf\ng\nh", 70.f, 1.f);
+  CHECK_APPROX(up, 0.f);
+}
+
+// The wheel is consume-once, so a field that cannot scroll must leave it for
+// whatever scroll view encloses it rather than swallowing it.
+TEST(a_field_that_fits_its_content_leaves_the_wheel_alone) {
+  const float none = scroll_after_wheel("a\nb", 200.f, -1.f);
+  CHECK_APPROX(none, 0.f);
+}
+
 int main() { return ui_test::run_registered_tests("text_area"); }
