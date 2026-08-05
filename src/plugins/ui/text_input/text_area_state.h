@@ -62,6 +62,25 @@ struct HasTextAreaStateT : HasTextInputStateT<Storage> {
     return static_cast<size_t>(viewport_height / area_config.line_height);
   }
 
+  /// Ensure cursor is visible by adjusting scroll offset.
+  /// `row` is a VISUAL row and `total_rows` the wrapped line count: with
+  /// wrapping on, one source line can be several rows and scrolling by source
+  /// rows leaves the caret off-screen.
+  void ensure_cursor_visible_at_row(size_t row, float viewport_height,
+                                    size_t total_rows) {
+    const float lh = area_config.line_height;
+    float cursor_y = static_cast<float>(row) * lh;
+
+    if (cursor_y < scroll_offset_y)
+      scroll_offset_y = cursor_y;
+    if (cursor_y + lh > scroll_offset_y + viewport_height)
+      scroll_offset_y = cursor_y + lh - viewport_height;
+
+    const float max_scroll =
+        std::max(0.f, static_cast<float>(total_rows) * lh - viewport_height);
+    scroll_offset_y = std::max(0.f, std::min(scroll_offset_y, max_scroll));
+  }
+
   /// Ensure cursor is visible by adjusting scroll offset
   void ensure_cursor_visible(float viewport_height) {
     auto pos = cursor_position_rc();

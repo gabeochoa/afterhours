@@ -164,6 +164,12 @@ inline void input_begin_frame() {
   s.scroll_y = 0.f;
 }
 
+// C0, DEL, and C1 -- control codes, not text. Kept here rather than shared with
+// text_input so the backend does not depend on a UI plugin.
+inline bool is_control_char_code(uint32_t c) {
+  return (c < 32 && c != '\t') || c == 0x7F || (c >= 0x80 && c <= 0x9F);
+}
+
 inline void push_char(uint32_t c) {
   auto &s = input_state();
   int next = (s.char_queue_tail + 1) % InputState::CHAR_QUEUE_SIZE;
@@ -252,7 +258,9 @@ inline void sokol_event_cb(const sapp_event *ev) {
     }
     break;
   case SAPP_EVENTTYPE_CHAR:
-    if (ev->char_code > 0) {
+    // macOS sends DEL (0x7F) for Backspace as a CHAR event; queueing it makes
+    // backspace type a blank. Only real text belongs in the char queue.
+    if (ev->char_code > 0 && !is_control_char_code(ev->char_code)) {
       push_char(ev->char_code);
     }
     break;

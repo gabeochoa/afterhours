@@ -1381,19 +1381,76 @@ OR — replaced by one `mouse_was_in_subtree(row_id)` call. That deletion has
 not been attempted yet, and per the D3 lesson it is the only real proof the
 gap is closed.
 
-### D26. text_input is not a real text field — **hanabi's active pain**
+### D26. text_input is not a real text field — hanabi's top three are **DONE**
 hanabi wrote a full requirements spec (10 sections) and a priority order for its
-chat composer. D11/D12 (font size, custom bg, placeholder) are done; the rest:
+chat composer. D11/D12 (font size, custom bg, placeholder) were already done.
+Their "land these three first" list is now closed:
 
-1. **Control-char filter** (#31) — the sokol macOS backend pushes backspace
-   (U+007F) into the CHAR queue, so "backspace adds a space". Fixed app-side;
-   belongs in the backend.
-2. **Scissor-clip single-line** (#34a) — long text overflows OUTSIDE the field.
-3. **Multiline wrap + Shift+Enter** (#33/#34b) — "the big one".
-4. Caret origin (#32) — **already fixed** on `hanabi/text-input-fixes`; needs
-   pulling upstream.
-5. macOS Cmd bindings — word/line nav, select-all, clipboard, undo.
-6. Double/triple-click and drag selection.
+1. **Control-char filter** (#31) — **DONE, at the root.** macOS sends Backspace
+   as a CHAR event carrying DEL (0x7F); the sokol backend queued any
+   `char_code > 0` and `insert_char` only rejected `< 32`, so backspace typed a
+   blank. Fixed in both places: the backend no longer queues control codes, and
+   `is_control_codepoint` (C0 + DEL + C1) is the shared guard every caller
+   routes through — the char queue *and* paste, which had its own weaker
+   `cp >= 32` check.
+   **Proved by deletion:** hanabi's `ComposerCharFilterSystem` (a whole ECS
+   system that drained and re-pushed the char queue every frame) and
+   `api/textinput_filter.h` are gone, its test now drives `insert_char`
+   unfiltered, and 11/11 still pass. Reverting the upstream guard fails that
+   test — checked with a forced rebuild, since the first attempt passed only
+   because the binary was stale.
+2. **Scissor-clip single-line** (#34a) — **was already done**, via
+   `Overflow::Hidden` on the field plus the self-clip in
+   `compute_intersected_clip_rect`. Nothing tested clipping *anywhere* in the
+   suite, so it is now pinned at that function — the one definition both the
+   render scissor and hit-testing read.
+3. **Multiline wrap + Shift+Enter** (#33/#34b) — **DONE.** See below.
+4. Caret origin (#32) — **closed, not taken.** ours tested better on all four
+   scenarios; hanabi's branch changes were dropped.
+5. macOS Cmd bindings — word/line nav, select-all, clipboard, undo. Present on
+   `text_input`, **absent on `text_area`**: the multiline widget still has no
+   selection, clipboard or undo at all.
+6. Double/triple-click and drag selection. Same split — `text_input` has
+   double/triple-click; `text_area` has neither, nor drag.
+
+#### D26.3 — what multiline actually needed
+`text_area` never wrapped. It hand-split on `'\n'` and **never read
+`word_wrap`** at all, so `with_word_wrap(true)` was dead config — the same
+complaint as D8, one widget over.
+
+`text_layout.h` already held a `TextLayoutCache` doing visual-line wrapping,
+already sat on `HasTextAreaState`, and **nothing had ever called it**. It was a
+second, rival wrap implementation: it broke at different positions than the
+renderer (it kept the trailing space in a line), and its `line_at_offset` used
+a half-open containment test, so an offset sitting exactly at a line end
+matched no line and fell through to the *last* one — which is where the caret
+sits every time you press End or type to the wrap point. Rebuilt on
+`wrap_text_to_width`, the same primitive both renderers use, so an edited line
+now breaks exactly where a drawn one does. The old engine fails 9 of the new
+checks.
+
+What the cache adds over the renderer's wrap is the mapping the renderer never
+needs: **which source byte each visual line starts at**. A soft break consumes
+the space it broke at, so line k does not begin at a position arithmetic can
+predict; it is recovered by finding each line's next verbatim occurrence, which
+is exact given that the tokenizer preserves everything except break whitespace.
+Everything downstream — caret, Up/Down, scrolling — is in *visual* rows now,
+because with wrapping on, moving by source line jumps a whole paragraph.
+
+Also added: `with_auto_grow()` (height follows content, capped by
+`with_max_lines`) and `with_submit_on_enter()` (Enter sends, Shift+Enter
+breaks). Submit-on-enter is **off by default** so a text area keeps Enter
+meaning newline.
+
+Found by screenshot, not by test: a grown field was *also* scrolled, showing
+only its last row. Auto-grow sets the height for the current frame but the
+viewport was still read from the previous frame's computed height, leaving it a
+row behind and scrolling to reach a caret that was already on screen. Now
+covered.
+
+See wm's `composer_lab` screen. **Still missing on `text_area`:** selection,
+clipboard, undo, and click-to-position — it has no click hit-test into the text
+at all, only click-to-focus.
 
 ### D27. Scroll: anchoring, virtualization, scrollbars
 - **#30 scroll anchor / preserve-position-on-prepend.** Content inserted above
@@ -1414,12 +1471,23 @@ Big, architectural, and worth its own investigation before any code.
 hotkey. Sits with D21 (OS appearance) as the "platform shim" ask.
 
 ### D30. Container widgets floatinghotel still hand-rolls — **BLOCKER**
-The only gaps in any doc still marked blocking.
-- **Draggable divider** (P0) — app-local in `src/ui/split_panel.h` via
-  `div()` + `HasDragListener`.
-- **Split pane** (P0, depends on the divider) — same file.
-- **Tree node** (P1) — `src/ui/tree_view.h`, `div()` + `button()` with indent
-  levels and expand state in a static map.
+The only gaps in any doc still marked blocking. **Re-surveyed 2026-08-05: the
+file paths below were stale.** `src/ui/split_panel.h` and `src/ui/tree_view.h`
+no longer exist in floatinghotel.
+- **Draggable divider** (P0) — now inline, in two places:
+  `src/ecs/main_content_system.h:675` (sidebar) and
+  `src/ecs/sidebar_system.h:296`. Both `div()` + `HasDragListener`.
+- **Split pane** (P0, depends on the divider).
+- ~~Tree node (P1)~~ — **afterhours already ships `ui/tree_view.h`**, with
+  `TreeNode<T>` and `HasTreeViewState`. floatinghotel has no tree view at all
+  any more. Not a gap; an adoption question at most.
+
+The real defect the divider exposes is not the missing widget, it is that
+`HasDragListener` fires a bare callback with **no delta and no coordinate
+space**, so every caller reaches for `graphics::get_mouse_position()` and
+converts by hand — floatinghotel does `mouseX * 1280.0f / sw` in both copies.
+That is D10 leaking through the drag API, and wm's resize box is a third copy.
+A divider widget should hand back a delta in layout space.
 
 Note these are drag-driven, so D3's `HandleDrags` change is worth re-checking
 against them when they land.

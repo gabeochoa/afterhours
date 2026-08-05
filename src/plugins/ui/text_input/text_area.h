@@ -16,6 +16,10 @@ namespace text_input {
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
+// The field's own top+bottom padding, below. Auto-grow has to add it back or
+// the last line sits under the bottom edge.
+inline constexpr float kVerticalPadding = 8.f;
+
 /// Creates a multiline text input field (text area).
 ///
 /// @param ctx The UI context
@@ -38,6 +42,8 @@ using namespace afterhours::ui::imm;
 /// - with_line_height(Size) - Line height, e.g. pixels(18) (default: 20px)
 /// - with_word_wrap(bool) - Enable word wrapping (default: true)
 /// - with_max_lines(size_t) - Maximum lines, 0 = unlimited (default: 0)
+/// - with_auto_grow(bool) - Height follows content, capped by max_lines
+/// - with_submit_on_enter(bool) - Enter submits, Shift+Enter breaks the line
 ///
 /// Usage:
 /// ```cpp
@@ -49,6 +55,16 @@ using namespace afterhours::ui::imm;
 ///                   .with_max_lines(5))) {
 ///   // Text was changed
 /// }
+/// ```
+///
+/// A chat composer that grows to five lines and sends on Enter:
+/// ```cpp
+/// text_area(ctx, mk(parent), draft,
+///           ComponentConfig{}
+///               .with_size(ComponentSize{percent(1.f), pixels(36)})
+///               .with_auto_grow()
+///               .with_max_lines(5)
+///               .with_submit_on_enter());
 /// ```
 ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                         std::string &text,
@@ -84,6 +100,18 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     config.size = ComponentSize(pixels(200), pixels(100));
   }
 
+  // Auto-grow uses the PREVIOUS frame's wrap, which is the only one that
+  // exists while the tree is being built. It converges in a frame, the same
+  // deal text_input's height-derived font size makes.
+  if (config.text_area_auto_grow) {
+    const size_t rows = std::max<size_t>(1, state.layout_cache.line_count());
+    const size_t capped = config.text_area_max_lines > 0
+                              ? std::min(rows, config.text_area_max_lines)
+                              : rows;
+    config.size.y_axis =
+        pixels(static_cast<float>(capped) * line_height + kVerticalPadding);
+  }
+
   config.flex_direction = FlexDirection::Column;
   init_component(ctx, ep_pair, config, ComponentType::TextInput, false,
                  "text_area");
@@ -103,6 +131,9 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                                     .bottom = h720(4),
                                     .left = w1280(6),
                                     .right = w1280(6)})
+              // Lines past the bottom of a fixed-height field must not paint
+              // over whatever sits below it.
+              .with_overflow(Overflow::Hidden)
               .with_render_layer(config.render_layer + 1));
 
   auto &field_entity = field_result.ent();
@@ -111,7 +142,12 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   // Calculate viewport dimensions
   // Use computed (resolved) values, with fallback to config size on first frame
   // Default padding estimate: ~8px vertical, ~12px horizontal at 720p baseline
-  float computed_height = field_cmp.computed[Axis::Y] > 0
+  // Auto-grow already fixed the height for THIS frame, so use it rather than
+  // last frame's computed value: that one is a row behind, and a viewport a
+  // row too short scrolls a field that fits its content perfectly.
+  float computed_height = config.text_area_auto_grow
+                              ? config.size.y_axis.value
+                          : field_cmp.computed[Axis::Y] > 0
                               ? field_cmp.computed[Axis::Y]
                               : config.size.y_axis.value;
   float computed_width = field_cmp.computed[Axis::X] > 0
@@ -126,29 +162,49 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   float viewport_height = std::max(computed_height - pad_y, line_height);
   float viewport_width = std::max(computed_width - pad_x, 50.f);
 
-  // Build the lines to display
   std::string display_text = state.text();
-  std::vector<std::string> lines;
 
-  // Split text into lines
-  size_t pos = 0;
-  while (pos <= display_text.size()) {
-    size_t end = display_text.find('\n', pos);
-    if (end == std::string::npos)
-      end = display_text.size();
-    lines.push_back(display_text.substr(pos, end - pos));
-    if (end >= display_text.size())
-      break;
-    pos = end + 1;
-  }
-  if (lines.empty())
-    lines.push_back("");
+  // Resolve the font up front: the wrap has to measure with the same face and
+  // size the lines are drawn at, or text breaks somewhere other than where it
+  // is painted.
+  const std::string font_name = config.font_name == UIComponent::UNSET_FONT
+                                    ? UIComponent::DEFAULT_FONT
+                                    : config.font_name;
+  float screen_height = 720.f;
+  if (auto *pcr = EntityHelper::get_singleton_cmp<
+          window_manager::ProvidesCurrentResolution>())
+    screen_height = static_cast<float>(pcr->current_resolution.height);
+  const float resolved_font_size =
+      resolve_to_pixels(config.font_size, screen_height);
 
-  // Get current cursor row/column
-  auto cursor_rc = state.cursor_position_rc();
+  // Wrap through the same primitive both renderers use, so an edited line
+  // breaks exactly where a drawn one does. Without a font manager (headless)
+  // fall back to the harness's approximation rather than laying out nothing.
+  auto *font_manager = EntityHelper::get_singleton_cmp<FontManager>();
+  auto line_width = [&](std::string_view s) -> float {
+    if (!font_manager)
+      return static_cast<float>(s.size()) * resolved_font_size * 0.5f;
+    return measure_text(font_manager->get_font(font_name),
+                        std::string(s).c_str(), resolved_font_size, 1.f)
+        .x;
+  };
+  // The 6px horizontal padding each side is already out of viewport_width.
+  const float wrap_width =
+      config.text_area_word_wrap ? viewport_width : 0.f;
+  state.layout_cache.rebuild(display_text, wrap_width, line_height,
+                             line_width);
+  const auto &vlines = state.layout_cache.lines();
 
-  // Ensure cursor is visible
-  state.ensure_cursor_visible(viewport_height);
+  // Rows are VISUAL from here down: with wrapping on, one source line can
+  // occupy several, and a caret that counted source lines would drift a row
+  // further off with every wrap above it.
+  const size_t cursor_row =
+      state.layout_cache.line_at_offset(state.cursor_position);
+  const size_t cursor_col =
+      state.layout_cache.column_at_offset(state.cursor_position);
+
+  state.ensure_cursor_visible_at_row(cursor_row, viewport_height,
+                                     vlines.size());
 
   // Calculate first visible line
   size_t first_visible_line =
@@ -159,10 +215,11 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   // Render each visible line as a separate div with fixed height
   // This prevents auto-scaling which would make text fill the entire container
   for (size_t i = first_visible_line;
-       i < lines.size() && i < first_visible_line + visible_line_count; ++i) {
+       i < vlines.size() && i < first_visible_line + visible_line_count; ++i) {
     size_t line_idx = i - first_visible_line;
+    std::string row = state.layout_cache.line_text(display_text, i);
     std::string line_text =
-        lines[i].empty() ? " " : lines[i]; // Space prevents zero-height
+        row.empty() ? " " : row; // Space prevents zero-height
 
     div(ctx, mk(field_entity, static_cast<int>(line_idx)),
         ComponentConfig{}
@@ -191,8 +248,6 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   if (state.is_focused) {
     bool show_cursor = update_blink(state, 0.016f);
 
-    auto font_manager = EntityHelper::get_singleton_cmp<FontManager>();
-
     // Use computed padding for positioning
     float pad_left = field_cmp.computed_padd[Axis::left];
     float pad_top = field_cmp.computed_padd[Axis::top];
@@ -200,39 +255,19 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     float cursor_x = pad_left;
     float cursor_height = std::max(line_height * 0.8f, 12.f);
 
-    if (font_manager && cursor_rc.row >= first_visible_line) {
-      std::string font_name = config.font_name == UIComponent::UNSET_FONT
-                                  ? UIComponent::DEFAULT_FONT
-                                  : config.font_name;
-      Font font = font_manager->get_font(font_name);
-
-      // Get the current line text up to cursor
-      size_t current_line_idx = cursor_rc.row;
-      if (current_line_idx < lines.size()) {
-        std::string text_before_cursor =
-            lines[current_line_idx].substr(0, cursor_rc.column);
-
-        // Measure text width to position cursor using configured font size
-        if (!text_before_cursor.empty()) {
-          // Resolve font_size to pixels
-          float screen_height = 720.f;
-          if (auto *pcr = EntityHelper::get_singleton_cmp<
-                  window_manager::ProvidesCurrentResolution>()) {
-            screen_height = static_cast<float>(pcr->current_resolution.height);
-          }
-          float resolved_font_size =
-              resolve_to_pixels(config.font_size, screen_height);
-          Vector2Type text_size = measure_text(font, text_before_cursor.c_str(),
-                                               resolved_font_size, 1.f);
-          cursor_x = pad_left + text_size.x;
-        }
-      }
+    // Measured through the same line_width the wrap used, so the caret lands
+    // on the break the text actually took.
+    if (cursor_row >= first_visible_line) {
+      const std::string row_text =
+          state.layout_cache.line_text(display_text, cursor_row);
+      cursor_x += line_width(std::string_view(row_text).substr(
+          0, std::min(cursor_col, row_text.size())));
     }
 
     // Calculate cursor Y position based on row
     float cursor_y =
         pad_top +
-        static_cast<float>(cursor_rc.row - first_visible_line) * line_height +
+        static_cast<float>(cursor_row - first_visible_line) * line_height +
         (line_height - cursor_height) / 2.f;
 
     constexpr float CURSOR_WIDTH = 2.0f;
@@ -241,8 +276,8 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     cursor_x = std::min(cursor_x, field_width - pad_right - CURSOR_WIDTH);
 
     // Only render cursor if visible in viewport
-    if (cursor_rc.row >= first_visible_line &&
-        cursor_rc.row < first_visible_line + visible_line_count) {
+    if (cursor_row >= first_visible_line &&
+        cursor_row < first_visible_line + visible_line_count) {
       div(ctx, mk(field_entity, 1000),
           ComponentConfig()
               .with_size(ComponentSize(pixels(CURSOR_WIDTH), pixels(cursor_height)))
@@ -280,11 +315,23 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       }
     }
 
-    // Enter key - insert newline
+    // Enter. A chat composer wants Enter to send and Shift+Enter to break the
+    // line; a plain text area wants Enter to break. Off by default, so the
+    // long-standing behaviour is what you get unless you ask otherwise.
     if (ctx.pressed(InputAction::WidgetPress)) {
-      if (insert_newline(state)) {
-        reset_blink(state);
-        text_changed = true;
+      const bool shift = input::is_key_down(keys::LEFT_SHIFT) ||
+                         input::is_key_down(keys::RIGHT_SHIFT);
+      const bool wants_newline =
+          !config.text_area_submit_on_enter || shift;
+      if (wants_newline) {
+        if (insert_newline(state)) {
+          reset_blink(state);
+          text_changed = true;
+        }
+      } else if (entity.template has<HasTextInputListener>()) {
+        if (auto &listener = entity.template get<HasTextInputListener>();
+            listener.on_submit)
+          listener.on_submit(entity);
       }
     }
 
@@ -330,21 +377,24 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       reset_blink(state);
     }
 
-    // Up arrow
+    // Up/Down move by VISUAL line: on a wrapped paragraph, moving by source
+    // line would jump the whole paragraph at once.
     if (ctx.pressed(InputAction::WidgetUp)) {
-      move_cursor_up(state);
+      move_cursor_visual_row(state, -1, line_width);
       reset_blink(state);
     }
-
-    // Down arrow
     if (ctx.pressed(InputAction::WidgetDown)) {
-      move_cursor_down(state);
+      move_cursor_visual_row(state, +1, line_width);
       reset_blink(state);
     }
 
     // Ensure cursor stays visible after any input
     if (text_changed) {
-      state.ensure_cursor_visible(viewport_height);
+      state.layout_cache.rebuild(state.text(), wrap_width, line_height,
+                                 line_width);
+      state.ensure_cursor_visible_at_row(
+          state.layout_cache.line_at_offset(state.cursor_position),
+          viewport_height, state.layout_cache.line_count());
     }
   }
 

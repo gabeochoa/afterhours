@@ -176,6 +176,8 @@ struct ComponentConfig {
   std::optional<Size> text_area_line_height; // Line height (default: 20px)
   bool text_area_word_wrap = true;           // Enable word wrapping
   size_t text_area_max_lines = 0;            // Max lines (0 = unlimited)
+  bool text_area_auto_grow = false;          // Height follows the content
+  bool text_area_submit_on_enter = false;    // Enter submits, Shift+Enter breaks
 
   // Button variant configuration
   ButtonVariant button_variant = ButtonVariant::Filled;
@@ -399,6 +401,18 @@ struct ComponentConfig {
   }
   ComponentConfig &with_max_lines(size_t max) {
     text_area_max_lines = max;
+    return *this;
+  }
+  // Grow the field to fit its content instead of scrolling inside a fixed box.
+  // with_max_lines caps the growth; past it the field scrolls as before.
+  ComponentConfig &with_auto_grow(bool enabled = true) {
+    text_area_auto_grow = enabled;
+    return *this;
+  }
+  // Chat-composer Enter: submit on Enter, newline on Shift+Enter. Off by
+  // default, so a text_area keeps Enter meaning newline.
+  ComponentConfig &with_submit_on_enter(bool enabled = true) {
+    text_area_submit_on_enter = enabled;
     return *this;
   }
   ComponentConfig &with_alignment(TextAlignment align) {
@@ -902,7 +916,10 @@ struct ComponentConfig {
       merged.hidden = overrides.hidden;
     if (overrides.skips_when_tabbing())
       merged.skip_when_tabbing = overrides.skip_when_tabbing;
-      merged.ignore_pointer_events = overrides.ignore_pointer_events;
+    // Only when asked for: an unconditional copy would clear a base config's
+    // opt-out every time it is overridden.
+    if (overrides.ignore_pointer_events)
+      merged.ignore_pointer_events = true;
     if (overrides.selects_on_focus())
       merged.select_on_focus = overrides.select_on_focus;
     if (overrides.has_click_activation_override())

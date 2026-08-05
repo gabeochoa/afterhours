@@ -219,4 +219,88 @@ TEST(d12_placeholder_does_not_move_the_cursor) {
   CHECK_APPROX(with, without);
 }
 
+// ---------------------------------------------------------------------------
+// D26: control characters in the char queue
+// ---------------------------------------------------------------------------
+
+// macOS delivers Backspace as a CHAR event carrying DEL (0x7F), so a field that
+// only filters `< 32` types a blank glyph on every backspace. Driven through
+// insert_char because that is the one path a CHAR event and a paste share.
+TEST(d26_del_is_not_insertable_text) {
+  text_input::HasTextInputState s("ab");
+  s.cursor_position = 2;
+  CHECK(!text_input::insert_char(s, 0x7F));
+  CHECK(s.text() == std::string("ab"));
+}
+
+// The other end of the same guard: printable input still goes in, or the fix
+// would pass by rejecting everything.
+TEST(d26_printable_text_still_inserts) {
+  text_input::HasTextInputState s("ab");
+  s.cursor_position = 2;
+  CHECK(text_input::insert_char(s, 'c'));
+  CHECK(s.text() == std::string("abc"));
+  // Tab is deliberately allowed; it is the one C0 code that is text.
+  CHECK(text_input::insert_char(s, '\t'));
+  CHECK(s.text() == std::string("abc\t"));
+}
+
+// C1 (0x80-0x9F) are controls too, and reach the field via paste rather than a
+// keystroke -- text copied out of a Windows-1252 source is the usual carrier.
+TEST(d26_c1_controls_are_rejected) {
+  text_input::HasTextInputState s("");
+  CHECK(!text_input::insert_char(s, 0x85)); // NEL
+  CHECK(!text_input::insert_char(s, 0x9F));
+  CHECK(s.text() == std::string(""));
+  // 0xA0 is the first printable above the C1 block, so the range stops there.
+  CHECK(text_input::insert_char(s, 0xA0));
+}
+
+// ---------------------------------------------------------------------------
+// D26: the field clips its own text
+// ---------------------------------------------------------------------------
+
+// Text longer than the field must not paint past the end of it. The field's
+// label is drawn as part of the element, not as a child, so a plain
+// clip-children rule would miss it -- Overflow::Hidden has to clip the element
+// itself. Asserted on compute_intersected_clip_rect because that is the one
+// definition both the render scissor and hit-testing read.
+TEST(d26_field_clips_its_own_overflowing_text) {
+  ImmTestHarness h;
+  std::string text = "a very long value that runs well past the right edge";
+  two_frames(h, [&] {
+    imm::text_input(h.context(), mk(h.root(), 0), text,
+                    ComponentConfig{}.with_size(
+                        ComponentSize{pixels(120), pixels(40)}));
+  });
+
+  Entity *field = find_field_entity();
+  ui_test::check(field != nullptr, "the field exists", __FILE__, __LINE__);
+  if (!field)
+    return;
+  CHECK(field->has<HasClipChildren>());
+
+  auto [clipped, clip] = ui::detail::compute_intersected_clip_rect(*field);
+  CHECK(clipped);
+  const RectangleType fr = field->get<UIComponent>().rect();
+  CHECK_APPROX(clip.x, fr.x);
+  CHECK_APPROX(clip.width, fr.width);
+}
+
+// Pins that the test above measures the flag: an ordinary div holding the same
+// overlong label is not clipped, so nothing about it clips by default.
+TEST(d26_a_plain_div_is_not_clipped) {
+  ImmTestHarness h;
+  h.begin_frame();
+  auto d = div(h.context(), mk(h.root(), 0),
+               ComponentConfig{}
+                   .with_size(ComponentSize{pixels(120), pixels(40)})
+                   .with_label("a very long value that runs past the edge"));
+  h.layout_only();
+  CHECK(!d.ent().has<HasClipChildren>());
+  auto [clipped, clip] = ui::detail::compute_intersected_clip_rect(d.ent());
+  (void)clip;
+  CHECK(!clipped);
+}
+
 int main() { return ui_test::run_registered_tests("text_input"); }

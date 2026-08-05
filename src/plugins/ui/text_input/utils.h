@@ -91,9 +91,18 @@ inline bool delete_selection(AnyTextInputState auto &s) {
   return true;
 }
 
+// True for a codepoint that is a control character, not text: C0, DEL, and C1.
+// The shared guard for anything arriving from outside -- a CHAR event, the
+// clipboard, an app calling insert_char. macOS sends DEL (0x7F) for Backspace
+// through the char queue, which without this inserts a blank glyph.
+inline bool is_control_codepoint(int codepoint) {
+  return (codepoint < 32 && codepoint != '\t') || codepoint == 0x7F ||
+         (codepoint >= 0x80 && codepoint <= 0x9F);
+}
+
 // Insert codepoint at cursor, returns true if inserted
 inline bool insert_char(AnyTextInputState auto &s, int codepoint) {
-  if (codepoint < 32 && codepoint != '\t')
+  if (is_control_codepoint(codepoint))
     return false;
   std::string utf8 = codepoint_to_utf8(codepoint);
   if (utf8.empty())
@@ -337,6 +346,48 @@ inline void move_cursor_down(AnyTextAreaState auto &s) {
   size_t target_row = pos.row + 1;
   size_t target_col = s.line_index.clamp_column(target_row, s.preferred_column);
   s.cursor_position = s.line_index.position_to_offset(target_row, target_col);
+}
+
+/// Move the cursor one VISUAL row, keeping its x position.
+/// `delta` is -1 for up, +1 for down. Columns are useless across a wrap --
+/// proportional glyphs mean column 8 of one row is not under column 8 of the
+/// next -- so this preserves the pixel x and picks the nearest byte to it,
+/// which is what a caret dragged straight up the screen should land on.
+template <typename MeasureFn>
+inline void move_cursor_visual_row(AnyTextAreaState auto &s, int delta,
+                                   MeasureFn &&measure) {
+  const auto &cache = s.layout_cache;
+  if (cache.line_count() == 0)
+    return;
+
+  const size_t row = cache.line_at_offset(s.cursor_position);
+  if (delta < 0 && row == 0)
+    return;
+  if (delta > 0 && row + 1 >= cache.line_count())
+    return;
+  const size_t target = static_cast<size_t>(static_cast<int>(row) + delta);
+
+  const std::string text = s.text();
+  const std::string cur = cache.line_text(text, row);
+  const size_t col = std::min(cache.column_at_offset(s.cursor_position),
+                              cur.size());
+  const float want_x = measure(std::string_view(cur).substr(0, col));
+
+  const std::string dst = cache.line_text(text, target);
+  size_t best = 0;
+  float best_dist = std::abs(want_x);
+  for (size_t i = 0; i < dst.size();) {
+    const size_t len = utf8_char_length(dst, i);
+    const size_t next = i + (len > 0 ? len : 1);
+    const float dist =
+        std::abs(want_x - measure(std::string_view(dst).substr(0, next)));
+    if (dist < best_dist) {
+      best_dist = dist;
+      best = next;
+    }
+    i = next;
+  }
+  s.cursor_position = cache.line(target).source_offset + best;
 }
 
 /// Move cursor to the start of the current line.

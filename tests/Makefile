@@ -89,6 +89,7 @@ ALL_TESTS := \
 	styling_test \
 	system_tags_test \
 	tab_container_test \
+	text_area_test \
 	text_input_test \
 	text_wrap_test \
 	theme_io_test
@@ -112,6 +113,7 @@ RAYLIB_TESTS := \
 	stepper_test \
 	styling_test \
 	tab_container_test \
+	text_area_test \
 	text_input_test \
 	text_wrap_test \
 	theme_io_test
@@ -137,6 +139,11 @@ LDFLAGS_T  =
 $(RAYLIB_BINS): CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(RAYLIB_BINS): INCLUDES_T = $(INCLUDES_RAYLIB)
 $(RAYLIB_BINS): LDFLAGS_T  = $(LDFLAGS_RAYLIB)
+
+# Shift+Enter is a raw is_key_down check, and the key injector is only wired in
+# behind this macro. Without it the backend is asked directly and answers false
+# with no window, so the modifier half of a chord cannot be tested at all.
+$(OUT)/text_area_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 
 # Filter to sources: the .d files list every header as a prerequisite, and a
 # bare $^ would hand them all to clang. .cc is the sokol implementation TU.
