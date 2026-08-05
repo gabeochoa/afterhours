@@ -48,15 +48,19 @@ namespace detail {
 // One visual line, as coloured runs.
 using TextRunLine = std::vector<TextSpan>;
 
-// Greedy word-wrap over coloured runs. Over-wide words get their own line;
+// Greedy word-wrap over styled runs. Over-wide words get their own line;
 // '\n' is a hard break, so '\n\n' leaves a blank line.
 //
-// `measure` sizes the whole joined candidate line, not a sum of per-word
-// widths -- measure_text spaces BETWEEN characters, so a per-word sum drifts
-// further off with every word.
+// `measure(text, weight)` returns the pixel width of `text` in that weight.
+// It is called on the largest same-weight stretch of a candidate line rather
+// than per word -- measure_text spaces BETWEEN characters, so summing pieces
+// loses one spacing per join and drifts further off with every piece. A line
+// of uniform weight is therefore still measured in a single call, exactly as
+// before weights existed; only a genuine weight boundary costs a join.
 //
-// The single wrapping primitive: wrap_text_to_width is one colourless run
-// through here, so plain and styled break identically by construction.
+// The single wrapping primitive: wrap_text_to_width is one colourless
+// regular-weight run through here, so plain and styled break identically by
+// construction.
 template <typename MeasureFn>
 static inline std::vector<TextRunLine>
 wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
@@ -70,8 +74,8 @@ wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
       const size_t nl = run.text.find('\n', start);
       const size_t end = nl == std::string::npos ? run.text.size() : nl;
       if (end > start)
-        source_lines.back().push_back(
-            TextSpan{run.text.substr(start, end - start), run.color});
+        source_lines.back().push_back(TextSpan{
+            run.text.substr(start, end - start), run.color, run.weight});
       if (nl == std::string::npos)
         break;
       source_lines.push_back(TextRunLine{});
@@ -89,8 +93,10 @@ wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
     bool is_space = false;
   };
 
-  const auto same_color = [](const Color &a, const Color &b) {
-    return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+  const auto same_style = [](const TextSpan &a, const TextSpan &b) {
+    return a.color.r == b.color.r && a.color.g == b.color.g &&
+           a.color.b == b.color.b && a.color.a == b.color.a &&
+           a.weight == b.weight;
   };
 
   std::vector<TextRunLine> lines;
@@ -99,11 +105,44 @@ wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
 
   const auto push_parts = [&](const TextRunLine &parts) {
     for (const auto &part : parts) {
-      if (!current.empty() && same_color(current.back().color, part.color))
+      // Merge only when colour AND weight match: coalescing across a weight
+      // boundary would silently render the bold half regular.
+      if (!current.empty() && same_style(current.back(), part))
         current.back().text += part.text;
       else
         current.push_back(part);
     }
+  };
+
+  // Width of a candidate line given as up to three part lists in order.
+  // Adjacent parts of equal weight are measured together, so a uniform line
+  // is a single measure call.
+  const auto measure_candidate = [&](const TextRunLine &a,
+                                     const TextRunLine &b,
+                                     const TextRunLine &c) {
+    float total = 0.f;
+    std::string seg;
+    bool have = false;
+    colors::FontWeight seg_w = colors::FontWeight::Regular;
+    const auto flush_seg = [&]() {
+      if (have && !seg.empty())
+        total += measure(seg, seg_w);
+      seg.clear();
+      have = false;
+    };
+    for (const TextRunLine *list : {&a, &b, &c}) {
+      for (const auto &part : *list) {
+        if (have && part.weight != seg_w)
+          flush_seg();
+        if (!have) {
+          seg_w = part.weight;
+          have = true;
+        }
+        seg += part.text;
+      }
+    }
+    flush_seg();
+    return total;
   };
 
   for (const auto &src : source_lines) {
@@ -117,11 +156,12 @@ wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
           j++;
         const std::string frag = part.text.substr(i, j - i);
         if (!chunks.empty() && chunks.back().is_space == sp) {
-          chunks.back().parts.push_back(TextSpan{frag, part.color});
+          chunks.back().parts.push_back(
+              TextSpan{frag, part.color, part.weight});
           chunks.back().text += frag;
         } else {
-          chunks.push_back(
-              Chunk{TextRunLine{TextSpan{frag, part.color}}, frag, sp});
+          chunks.push_back(Chunk{
+              TextRunLine{TextSpan{frag, part.color, part.weight}}, frag, sp});
         }
         i = j;
       }
@@ -143,7 +183,9 @@ wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
       }
       const std::string candidate =
           current_text + pending_ws.text + chunk.text;
-      if (!current_text.empty() && measure(candidate) > max_width) {
+      if (!current_text.empty() &&
+          measure_candidate(current, pending_ws.parts, chunk.parts) >
+              max_width) {
         lines.push_back(current);
         current.clear();
         push_parts(chunk.parts);
@@ -181,8 +223,13 @@ wrap_text_to_width(const std::string &text, float max_width,
   if (text.empty() || max_width <= 0.f)
     return {text};
   std::vector<std::string> lines;
-  for (const auto &line :
-       wrap_runs_to_width({TextSpan{text, Color{}}}, max_width, measure)) {
+  // One regular-weight run, so the weight argument is never anything else and
+  // callers here keep the plain measure(text) signature.
+  const auto measure_span = [&](const std::string &s, colors::FontWeight) {
+    return measure(s);
+  };
+  for (const auto &line : wrap_runs_to_width({TextSpan{text, Color{}}},
+                                             max_width, measure_span)) {
     std::string joined;
     for (const auto &run : line)
       joined += run.text;

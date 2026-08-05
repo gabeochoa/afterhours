@@ -1404,11 +1404,41 @@ The only gaps in any doc still marked blocking.
 Note these are drag-driven, so D3's `HandleDrags` change is worth re-checking
 against them when they land.
 
-### D31. Styled text: no wrap, no weight
-**hanabi #22 + follow-up.** `with_styled_label` renders on ONE line and does not
-word-wrap, and spans are **colour-only** — bold renders as a colour change, not
-a weight. floatinghotel files the same two as "No Font Weight Support" and "No
-Rich Text". Blocks real markdown. Related: D8, D9.
+### D31. Styled text: no wrap, no weight — **DONE**
+**hanabi #22 + follow-up.** floatinghotel filed the same two as "No Font Weight
+Support" and "No Rich Text". Related: D8, D9.
+
+- **Wrap** — done earlier, in the multi-line text work. `with_styled_label`
+  word-wraps and honours hard `\n`; `draw_runs_in_rect` goes through the same
+  single wrap primitive as plain text.
+- **Weight** — `TextSpan` now carries a `colors::FontWeight`, resolved per run
+  through `FontManager::resolve_weighted` (base + `@bold`). A span's weight
+  wins over the component's; a component with no per-span weights resolves
+  exactly as before. An unloaded variant falls back to the base face, so the
+  feature is adoptable one font at a time.
+
+Weight had to reach the *wrapper*, not just the draw: bold glyphs are wider, so
+measuring a bold run with the regular face under-measures the line and it
+overruns. `wrap_runs_to_width`'s measure is now `measure(text, weight)`, called
+on the largest same-weight stretch of a candidate — a uniform line is still one
+call, so the no-drift property the whole-candidate measurement exists for is
+preserved, and only a genuine weight boundary costs a join.
+
+**Nothing exercised any of this before.** `weight_suffix`, `resolve_weighted`,
+`UIComponent::font_weight` and `with_font_weight` all existed, but no app ever
+registered an `@bold` font, so `resolve_weighted` always fell through to the
+base. wm now bundles `DGOne` / `DGOne@bold` (Oldschool PC Font Pack, CC BY-SA
+4.0) purely because it was the only genuine same-family weight pair available —
+every other bundled bold is a different typeface, and the one true bold,
+Gaegu-Bold, *is* the default face. See the `styled_text_lab` screen.
+
+Found while doing this, **not fixed**: `draw_runs_in_rect` (imm) started
+Left-aligned styled text flush at `rect.x` while the plain path insets by the
+5px margin, so giving a label a colour shifted it 5px left. Fixed for imm and
+covered by a test. The batched renderer insets *neither* plain nor styled, so
+it is internally consistent but sits 5px left of imm for both. That imm/batched
+divergence is pre-existing and untouched — closing it would move every plain
+label in every app by 5px.
 
 ### D32. wm's remaining open items (all low priority)
 Slider knob 0.75 compression (cosmetic); crowded tab bars still need a smaller
