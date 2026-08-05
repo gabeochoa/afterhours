@@ -308,20 +308,11 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       cursor_height = text_pos.rect.height;
       cursor_y = text_pos.rect.y - field_rect.y - pad_top;
 
-      // The text renders starting at field.x + pad_left: draw_text_in_rect adds
-      // its own DRAW_TEXT_MARGIN internally on top of text_x_offset (= pad_w -
-      // DRAW_TEXT_MARGIN), so the net text origin is pad_w == pad_left. The
-      // cursor div is absolutely positioned relative to the field WITHOUT that
-      // internal margin, so its origin must be pad_left directly — using
-      // -DRAW_TEXT_MARGIN put it pad_left+MARGIN too far LEFT, drawing INSIDE the
-      // typed text (hanabi gap #32: "caret inside the last letter").
-      // The caret div is an ABSOLUTE child of the field; autolayout resolves an
-      // absolute child's position as parent_origin + parent_PADDING + abs_pos.
-      // So the caret already gets +pad_left for free — its abs x needs to be
-      // just the measured text width (0 + width) to sit in the gap right after
-      // the last glyph. -DRAW_TEXT_MARGIN put it inside the glyph (gap #32);
-      // pad_left double-counted the padding (caret too far right). 0 is correct.
-      float text_start_x = 0.f;
+      // text_x_offset places the DrawTextEx origin at (pad_w - DRAW_TEXT_MARGIN)
+      // from rect().x. The cursor is positioned within the content area which
+      // starts at pad_w from rect().x. Shift by -DRAW_TEXT_MARGIN so cursor
+      // aligns with the DrawTextEx origin where measure_text values apply.
+      float text_start_x = -DRAW_TEXT_MARGIN;
 
       if (!display_text.empty() && display_cursor_pos > 0) {
         size_t safe_pos = std::min(display_cursor_pos, display_text.size());
@@ -357,7 +348,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                                    : config.font_name;
       Font font = font_manager->get_font(font_name);
 
-      float sel_text_x = 0.f;  // absolute child of the field: pad_left added by autolayout (gap #32)
+      float sel_text_x = -DRAW_TEXT_MARGIN;
 
       auto measure_x = [&](size_t byte_pos) -> float {
         if (byte_pos == 0 || display_text.empty()) return sel_text_x;
