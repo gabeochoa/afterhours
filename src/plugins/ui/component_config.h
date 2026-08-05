@@ -101,6 +101,7 @@ struct ComponentConfig {
   float letter_spacing = 0.f; // Additional spacing between characters (pixels)
   std::optional<CursorType> cursor_type; // Cursor to show on hover
   bool skip_when_tabbing = false;
+  bool ignore_pointer_events = false; // invisible to hit-testing
   bool skip_grid_snap = false;
   bool disabled = false;
   bool hidden = false;
@@ -465,6 +466,12 @@ struct ComponentConfig {
   }
   ComponentConfig &with_skip_tabbing(bool skip) {
     skip_when_tabbing = skip;
+    return *this;
+  }
+  /// Invisible to the mouse: whatever is behind it is hit instead. Distinct
+  /// from with_skip_tabbing, which is keyboard focus order only.
+  ComponentConfig &with_ignore_pointer_events(bool ignore = true) {
+    ignore_pointer_events = ignore;
     return *this;
   }
   ComponentConfig &with_skip_grid_snap(bool skip = true) {
@@ -895,6 +902,7 @@ struct ComponentConfig {
       merged.hidden = overrides.hidden;
     if (overrides.skips_when_tabbing())
       merged.skip_when_tabbing = overrides.skip_when_tabbing;
+      merged.ignore_pointer_events = overrides.ignore_pointer_events;
     if (overrides.selects_on_focus())
       merged.select_on_focus = overrides.select_on_focus;
     if (overrides.has_click_activation_override())

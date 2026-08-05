@@ -696,6 +696,9 @@ private:
   bool is_candidate(const Entity &e, const UIComponent &cmp) const {
     if (e.is_missing<HasClickListener>() && e.is_missing<HasDragListener>())
       return false;
+    // Opted out of hit-testing entirely: the element behind it wins instead.
+    if (e.has<IgnorePointerEvents>())
+      return false;
     if (!cmp.was_rendered_to_screen)
       return false;
     if (cmp.should_hide || e.has<ShouldHide>())

@@ -185,6 +185,37 @@ template <typename InputAction> struct UIContext : BaseComponent {
   bool has_focus(EntityID id) const { return focus_id == id; }
   void set_focus(EntityID id) { focus_id = id; }
 
+  // Walks UP: the tree is cleared each frame, so a caller asking before it has
+  // re-added its children would see an empty subtree. Bounded to avoid a hang.
+  [[nodiscard]] bool contains_in_subtree(EntityID ancestor,
+                                         EntityID descendant) const {
+    EntityID cur = descendant;
+    for (int depth = 0; depth < 64 && cur != -1; depth++) {
+      if (cur == ancestor)
+        return true;
+      OptEntity opt = UICollectionHolder::getEntityForID(cur);
+      if (!opt.has_value() || !opt.asE().template has<UIComponent>())
+        return false;
+      cur = opt.asE().template get<UIComponent>().parent;
+    }
+    return false;
+  }
+
+  /// Mouse over this element or anything inside it. One global hot_id means a
+  /// hoverable child otherwise steals its parent row's hover fill.
+  [[nodiscard]] bool mouse_in_subtree(EntityID id) const {
+    return contains_in_subtree(id, hot_id);
+  }
+  /// Previous frame's answer. Use this while building a screen: hot_id is not
+  /// resolved until after.
+  [[nodiscard]] bool mouse_was_in_subtree(EntityID id) const {
+    return contains_in_subtree(id, prev_hot_id);
+  }
+  /// Does focus sit on this element or anything inside it?
+  [[nodiscard]] bool focus_in_subtree(EntityID id) const {
+    return contains_in_subtree(id, focus_id);
+  }
+
   void active_if_mouse_inside(EntityID id, RectangleType rect) {
     // Check if input is blocked for this element (e.g., by a modal)
     if (!is_input_allowed(id)) {

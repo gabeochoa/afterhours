@@ -1358,8 +1358,28 @@ identical shape over `hot_id` gives `mouse_in_subtree(id)`. And D3's
 so a `HasInputPassthrough` marker is one condition there. This was listed as
 "not doing" in the D3 plan on the grounds nothing needed it; hanabi does.
 
-**Recommended next.** Smallest diff of anything below, reuses two things just
-built, and deletes a documented pile of app code.
+**DONE.** Both halves landed where predicted.
+
+- `UIContext::mouse_in_subtree(id)` — is the mouse over this element or
+  anything inside it. Plus `mouse_was_in_subtree(id)` for the previous frame,
+  which is the one to use while BUILDING a screen: `hot_id` for the current
+  frame is not resolved until after the screen is built, so the live query
+  reads false on the frame the pointer arrives. That is exactly why the app
+  workaround ORed `is_hot || was_hot`.
+- `with_input_passthrough()` / `HasInputPassthrough` — one condition in
+  `ResolveHitTarget::is_candidate`, so the element never becomes hot or active
+  and whatever is behind it is hit instead. Distinct from `with_skip_tabbing`,
+  which is focus order only; there is a test pinning that difference.
+
+The upward walk now lives on `UIContext::contains_in_subtree` and D13's
+`detail::focus_within` delegates to it, so there is one copy rather than two.
+`focus_in_subtree(id)` is the same query over `focus_id`.
+
+**hanabi can now delete** the static per-session entity-id map, the baked-in
+hover wash on the row's base `HasColor`, and the `is_hot(star)||was_hot(star)`
+OR — replaced by one `mouse_was_in_subtree(row_id)` call. That deletion has
+not been attempted yet, and per the D3 lesson it is the only real proof the
+gap is closed.
 
 ### D26. text_input is not a real text field — **hanabi's active pain**
 hanabi wrote a full requirements spec (10 sections) and a priority order for its

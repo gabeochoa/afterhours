@@ -55,19 +55,9 @@ bool menu_lost_focus(Ctx &ctx, EntityID list_id, bool was_open) {
 // and rebuilt every frame and a popover runs this check before its caller has
 // re-added any content, so walking down would always see an empty subtree.
 // ClearUIComponentChildren empties `children` but leaves `parent` intact.
+// The upward walk lives on UIContext so the hover query shares it.
 template <typename Ctx> bool focus_within(Ctx &ctx, EntityID id) {
-  EntityID cur = ctx.focus_id;
-  // Bounded rather than while(true): a malformed parent chain would otherwise
-  // hang the frame, and no real UI nests this deep.
-  for (int depth = 0; depth < 64 && cur != -1; depth++) {
-    if (cur == id)
-      return true;
-    OptEntity opt = UICollectionHolder::getEntityForID(cur);
-    if (!opt.has_value() || !opt.asE().template has<UIComponent>())
-      return false;
-    cur = opt.asE().template get<UIComponent>().parent;
-  }
-  return false;
+  return ctx.focus_in_subtree(id);
 }
 } // namespace detail
 

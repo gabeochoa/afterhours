@@ -95,6 +95,10 @@ struct HasClickActivationMode : BaseComponent {
   explicit HasClickActivationMode(ClickActivationMode mode_) : mode(mode_) {}
 };
 
+// Invisible to hit-testing: never hot or active, the element behind is picked.
+// Not with_skip_tabbing, which is keyboard focus order only.
+struct IgnorePointerEvents : BaseComponent {};
+
 struct HasDragListener : BaseComponent {
   bool down = false;
   std::function<void(Entity &)> cb;

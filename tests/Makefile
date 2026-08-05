@@ -73,6 +73,7 @@ ALL_TESTS := \
 	hit_priority_test \
 	text_selection_test \
 	multiline_text_test \
+	subtree_hover_test \
 	menu_test \
 	overlay_placement_test \
 	progress_bar_test \
