@@ -257,13 +257,6 @@ class E2ERunner {
         reset();
     }
 
-    /// Run only shard `index` of `count` when splitting the suite across
-    /// parallel processes. Must be set before loading a directory.
-    void set_shard(size_t index, size_t count) {
-        shard_index_ = index;
-        shard_count_ = count == 0 ? 1 : count;
-    }
-
     void load_scripts_from_directory(const std::string &dir) {
         commands_.clear();
         script_results_.clear();
@@ -276,17 +269,6 @@ class E2ERunner {
             }
         }
         std::sort(scripts.begin(), scripts.end());
-
-        // Sharding: take every Nth script so the suite can be split across
-        // parallel processes. Round-robin rather than contiguous blocks, so a
-        // run of slow neighbours does not all land on one worker.
-        if (shard_count_ > 1) {
-            std::vector<std::string> mine;
-            for (size_t i = shard_index_; i < scripts.size();
-                 i += shard_count_)
-                mine.push_back(scripts[i]);
-            scripts.swap(mine);
-        }
 
         for (const auto &script_path : scripts) {
             std::string script_name =
@@ -617,8 +599,6 @@ class E2ERunner {
     std::vector<ParsedCommand> commands_;
     std::string script_path_;
     std::size_t index_ = 0;
-    size_t shard_index_ = 0;         // Which shard this process runs
-    size_t shard_count_ = 1;         // Total shards (1 = run everything)
     float wait_time_ = 0.0f;         // Seconds remaining before next command
     float elapsed_time_ = 0.0f;      // Total elapsed time
     float timeout_seconds_ = 10.0f;  // Default 10 second timeout

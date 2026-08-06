@@ -110,10 +110,14 @@ struct HandleKeyCommand : System<PendingE2ECommand> {
 
         auto combo = parse_key_combo(cmd.args[0]);
 
-        // Set modifiers down for this frame
-        if (combo.ctrl) input_injector::set_key_down(keys::LEFT_CONTROL);
-        if (combo.shift) input_injector::set_key_down(keys::LEFT_SHIFT);
-        if (combo.alt) input_injector::set_key_down(keys::LEFT_ALT);
+        // Hold modifiers, do not press them. set_key_down emits a press, and
+        // an app that maps a modifier to an action (LEFT_SHIFT -> WidgetMod)
+        // then fires it alongside the real key; whichever lands last wins
+        // last_action, so pressed(WidgetPress) silently misses. Same reason
+        // shift_tab uses set_key_held.
+        if (combo.ctrl) input_injector::set_key_held(keys::LEFT_CONTROL);
+        if (combo.shift) input_injector::set_key_held(keys::LEFT_SHIFT);
+        if (combo.alt) input_injector::set_key_held(keys::LEFT_ALT);
 
         // Mark key as pressed via injector only. Do NOT also push_key to
         // the queue — the injector has a 1-frame delay which causes the queue

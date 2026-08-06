@@ -905,4 +905,140 @@ TEST(clicking_past_the_end_of_a_row_clamps_to_its_end) {
   CHECK(at == 5);
 }
 
+// ---------------------------------------------------------------------------
+// Double and triple click
+// ---------------------------------------------------------------------------
+
+namespace {
+// Click `times` at the same spot, as consecutive clicks within the multi-click
+// window. Returns the state so the caller can read the selection.
+ti::HasTextAreaState *multi_click(ImmTestHarness &h, std::string &text,
+                                  float local_x, int times,
+                                  bool drag_after = false) {
+  Entity *area = nullptr;
+  auto emit = [&] {
+    auto r = text_area(h.context(), mk(h.root(), 0), text,
+                       area_config(400.f, 200.f));
+    area = &r.ent();
+  };
+  for (int i = 0; i < 3; i++) {
+    h.begin_frame();
+    emit();
+    h.layout_only();
+  }
+  UIComponent *f = h.find("text_area_field");
+  if (!f || !area || !area->has<ti::HasTextAreaState>())
+    return nullptr;
+  h.context().focus_id = f->id;
+
+  const RectangleType fr = f->rect();
+  h.context().mouse.pos =
+      Vector2Type{fr.x + f->computed_padd[Axis::left] + local_x,
+                  fr.y + f->computed_padd[Axis::top] + 5.f};
+  h.context().mouse.left_down = true;
+  h.context().mouse.press_moved = false;
+
+  Entity *fe = nullptr;
+  for (const auto &e : UICollectionHolder::get().collection.get_entities()) {
+    if (e && e->has<UIComponentDebug>() &&
+        e->get<UIComponentDebug>().name() == "text_area_field")
+      fe = e.get();
+  }
+  if (!fe || !fe->has<HasClickListener>())
+    return nullptr;
+
+  for (int i = 0; i < times; i++) {
+    fe->get<HasClickListener>().cb(*fe);
+    // HandleDrags fires on the press as well, so a real click runs both.
+    if (fe->has<HasDragListener>())
+      fe->get<HasDragListener>().cb(*fe);
+  }
+  if (drag_after) {
+    // A drag is a press that MOVED, so move the pointer as well as the flag.
+    h.context().mouse.press_moved = true;
+    h.context().mouse.pos.x += 5.f * CHAR_W;
+    fe->get<HasDragListener>().cb(*fe);
+  }
+  h.context().mouse.left_down = false;
+  return &area->get<ti::HasTextAreaState>();
+}
+} // namespace
+
+// Double-clicking inside a word selects the whole word, not the character
+// under the pointer and not up to it.
+TEST(double_click_in_the_middle_of_a_word_selects_it) {
+  ImmTestHarness h;
+  std::string text = "alpha beta gamma";
+  // Byte 8 is the 't' in "beta", which spans [6, 10).
+  auto *s = multi_click(h, text, 8.f * CHAR_W, 2);
+  ui_test::check(s != nullptr, "state exists", __FILE__, __LINE__);
+  if (s) {
+    CHECK(s->has_selection());
+    CHECK(s->selection_start() == 6);
+    CHECK(s->selection_end() == 10);
+    CHECK(s->selected_text() == "beta");
+  }
+}
+
+// The drag that follows the press must not collapse it. This is the case that
+// broke: HandleDrags fires on the press, not only on movement.
+TEST(the_press_after_a_double_click_does_not_collapse_the_word) {
+  ImmTestHarness h;
+  std::string text = "alpha beta gamma";
+  auto *s = multi_click(h, text, 8.f * CHAR_W, 2);
+  if (s)
+    CHECK(s->selected_text() == "beta");
+}
+
+// A genuine drag -- pointer actually moved -- still extends, so the guard
+// above did not simply disable dragging.
+TEST(a_real_drag_still_extends_the_selection) {
+  ImmTestHarness h;
+  std::string text = "alpha beta gamma";
+  auto *s = multi_click(h, text, 3.f * CHAR_W, 1, /*drag_after=*/true);
+  ui_test::check(s != nullptr, "state exists", __FILE__, __LINE__);
+  if (s)
+    CHECK(s->has_selection());
+}
+
+TEST(triple_click_selects_the_whole_visual_row) {
+  ImmTestHarness h;
+  std::string text = "alpha beta gamma";
+  auto *s = multi_click(h, text, 8.f * CHAR_W, 3);
+  ui_test::check(s != nullptr, "state exists", __FILE__, __LINE__);
+  if (s) {
+    CHECK(s->selection_start() == 0);
+    CHECK(s->selection_end() == text.size());
+  }
+}
+
+// One click is still one click -- pins that the two above measure the count
+// and not "any click selects something".
+TEST(a_single_click_selects_nothing) {
+  ImmTestHarness h;
+  std::string text = "alpha beta gamma";
+  auto *s = multi_click(h, text, 8.f * CHAR_W, 1);
+  ui_test::check(s != nullptr, "state exists", __FILE__, __LINE__);
+  if (s) {
+    CHECK(!s->has_selection());
+    CHECK(s->cursor_position == 8);
+  }
+}
+
+// On a wrapped paragraph, triple click takes the visual row it was clicked on,
+// not the whole source paragraph.
+TEST(triple_click_on_a_wrapped_row_takes_only_that_row) {
+  ImmTestHarness h;
+  // 400px wide at 10px/byte minus padding -> wraps around 39 bytes.
+  std::string text = "aaa bbb ccc ddd eee fff ggg hhh iii jjj kkk lll mmm";
+  auto *s = multi_click(h, text, 5.f * CHAR_W, 3);
+  ui_test::check(s != nullptr, "state exists", __FILE__, __LINE__);
+  if (s) {
+    CHECK(s->selection_start() == 0);
+    // Strictly inside the text: the row ends before the paragraph does.
+    CHECK(s->selection_end() < text.size());
+    CHECK(s->selection_end() > 0);
+  }
+}
+
 int main() { return ui_test::run_registered_tests("text_area"); }
