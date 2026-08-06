@@ -44,8 +44,8 @@ constexpr bool contains(const std::array<T, N> &arr, std::string_view val) {
 
 // Command categories for argument parsing
 // clang-format off
-constexpr std::array<std::string_view, 4> coord_commands = {
-    "click", "double_click", "mouse_move", "mouse_down"
+constexpr std::array<std::string_view, 5> coord_commands = {
+    "click", "double_click", "triple_click", "mouse_move", "mouse_down"
 };
 
 constexpr std::array<std::string_view, 13> single_arg_commands = {
@@ -121,7 +121,8 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
             iss >> x_str >> y_str;
             cmd.args.push_back(x_str);
             cmd.args.push_back(y_str);
-            cmd.wait_seconds = (cmd.name == "double_click") ? 6 * frame
+            cmd.wait_seconds = (cmd.name == "double_click")   ? 6 * frame
+                               : (cmd.name == "triple_click") ? 10 * frame
                                : (cmd.name == "mouse_move") ? 1 * frame
                                                             : 2 * frame;
         } else if (cmd.name == "drag" || cmd.name == "drag_to") {
@@ -161,6 +162,23 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
         } else if (cmd.name == "expect_text") {
             cmd.args.push_back(parse_quoted());
             cmd.wait_seconds = 1 * frame;
+        } else if (cmd.name == "expect_selected_text") {
+            std::string name;
+            iss >> name;
+            cmd.args.push_back(name);
+            cmd.args.push_back(parse_quoted());
+            cmd.wait_seconds = 1 * frame;
+        } else if (cmd.name == "double_click_ui" ||
+                   cmd.name == "triple_click_ui") {
+            // name plus an optional dx dy offset from the element's top left;
+            // no offset means its centre.
+            std::string name, dx, dy;
+            iss >> name >> dx >> dy;
+            cmd.args.push_back(name);
+            cmd.args.push_back(dx.empty() ? "center" : dx);
+            cmd.args.push_back(dy.empty() ? "center" : dy);
+            cmd.wait_seconds =
+                (cmd.name == "triple_click_ui" ? 12 : 8) * frame;
         } else if (cmd.name == "expect_input_text") {
             std::string name;
             iss >> name;
@@ -239,6 +257,13 @@ class E2ERunner {
         reset();
     }
 
+    /// Run only shard `index` of `count` when splitting the suite across
+    /// parallel processes. Must be set before loading a directory.
+    void set_shard(size_t index, size_t count) {
+        shard_index_ = index;
+        shard_count_ = count == 0 ? 1 : count;
+    }
+
     void load_scripts_from_directory(const std::string &dir) {
         commands_.clear();
         script_results_.clear();
@@ -251,6 +276,17 @@ class E2ERunner {
             }
         }
         std::sort(scripts.begin(), scripts.end());
+
+        // Sharding: take every Nth script so the suite can be split across
+        // parallel processes. Round-robin rather than contiguous blocks, so a
+        // run of slow neighbours does not all land on one worker.
+        if (shard_count_ > 1) {
+            std::vector<std::string> mine;
+            for (size_t i = shard_index_; i < scripts.size();
+                 i += shard_count_)
+                mine.push_back(scripts[i]);
+            scripts.swap(mine);
+        }
 
         for (const auto &script_path : scripts) {
             std::string script_name =
@@ -581,6 +617,8 @@ class E2ERunner {
     std::vector<ParsedCommand> commands_;
     std::string script_path_;
     std::size_t index_ = 0;
+    size_t shard_index_ = 0;         // Which shard this process runs
+    size_t shard_count_ = 1;         // Total shards (1 = run everything)
     float wait_time_ = 0.0f;         // Seconds remaining before next command
     float elapsed_time_ = 0.0f;      // Total elapsed time
     float timeout_seconds_ = 10.0f;  // Default 10 second timeout

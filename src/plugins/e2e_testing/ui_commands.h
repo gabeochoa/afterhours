@@ -11,9 +11,11 @@
 #include "../ui/components.h"
 #include "../ui/context.h"
 #include "../ui/text_input/state.h"
+#include "../ui/text_input/text_area_state.h"
 #include "../ui/ui_collection.h"
 
 #include <cmath>
+#include <cstdlib>
 #include <format>
 #include <functional>
 #include <magic_enum/magic_enum.hpp>
@@ -716,6 +718,149 @@ struct HandleExpectInputTextCommand : System<PendingE2ECommand> {
   }
 };
 
+// Handle 'expect_selected_text name "text"' - asserts WHAT is selected rather
+// than which byte offsets. Offsets from a click depend on font metrics, so an
+// offset assertion on a clicked selection is really an assertion about the
+// font; this one says "double clicking there selected that word" and stays
+// true whatever the face measures.
+template <typename InputAction>
+struct HandleExpectSelectedTextCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("expect_selected_text"))
+      return;
+    if (!cmd.has_args(2)) {
+      cmd.fail("expect_selected_text requires name and expected text");
+      return;
+    }
+    const auto &name = cmd.arg(0);
+    const auto &want = cmd.arg(1);
+
+    auto query = ui_query()
+                     .whereHasComponent<ui::UIComponentDebug>()
+                     .whereLambda([&](const Entity &e) {
+                       return e.get<ui::UIComponentDebug>().name() == name &&
+                              (e.has<text_input::HasTextInputState>() ||
+                               e.has<text_input::HasTextAreaState>());
+                     })
+                     .first();
+
+    for (Entity &entity : query.gen()) {
+      const std::string got =
+          entity.has<text_input::HasTextAreaState>()
+              ? entity.get<text_input::HasTextAreaState>().selected_text()
+              : entity.get<text_input::HasTextInputState>().selected_text();
+      if (got == want) {
+        cmd.consume();
+      } else {
+        cmd.fail(std::format("'{}' has \"{}\" selected, expected \"{}\"", name,
+                             got, want));
+      }
+      return;
+    }
+    cmd.fail(std::format("Text field not found: {}", name));
+  }
+};
+
+// Clear a field's multi-click bookkeeping so the next click starts a new
+// gesture rather than extending the last one.
+inline void reset_multi_click(const std::string &name) {
+  auto query = ui_query()
+                   .whereHasComponent<ui::UIComponentDebug>()
+                   .whereLambda([&](const Entity &e) {
+                     return e.get<ui::UIComponentDebug>().name() == name &&
+                            (e.has<text_input::HasTextInputState>() ||
+                             e.has<text_input::HasTextAreaState>());
+                   })
+                   .first();
+  for (Entity &e : query.gen()) {
+    if (e.has<text_input::HasTextAreaState>()) {
+      auto &s = e.get<text_input::HasTextAreaState>();
+      s.click_count = 0;
+      s.last_click_time = -1.f;
+    } else {
+      auto &s = e.get<text_input::HasTextInputState>();
+      s.click_count = 0;
+      s.last_click_time = -1.f;
+    }
+  }
+}
+
+// 'double_click_ui name [dx dy]' and 'triple_click_ui name [dx dy]'.
+//
+// Clicking a named element at an offset rather than at raw screen coordinates:
+// a layout change then retargets the click instead of silently landing on
+// empty space. dx/dy are from the element's top left; omitted means centre.
+namespace multi_click_ui_detail {
+inline int phase = 0;
+inline float x = 0.f, y = 0.f;
+inline void reset() {
+  phase = 0;
+  x = y = 0.f;
+}
+} // namespace multi_click_ui_detail
+
+template <typename InputAction, int Clicks>
+struct HandleMultiClickUICommand : System<PendingE2ECommand> {
+  static constexpr const char *name_for() {
+    return Clicks == 3 ? "triple_click_ui" : "double_click_ui";
+  }
+
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is(name_for()))
+      return;
+    if (!cmd.has_args(1)) {
+      cmd.fail(std::format("{} requires a component name", name_for()));
+      return;
+    }
+    using namespace multi_click_ui_detail;
+
+    if (phase == 0) {
+      auto query = ui_query()
+                       .whereHasComponent<ui::UIComponent>()
+                       .whereHasComponent<ui::UIComponentDebug>()
+                       .whereLambda([&](const Entity &e) {
+                         return e.get<ui::UIComponentDebug>().name() ==
+                                cmd.arg(0);
+                       })
+                       .first();
+      bool found = false;
+      for (Entity &entity : query.gen()) {
+        const RectangleType r = get_screen_rect(entity);
+        const auto off = [&](size_t i, float extent) {
+          if (cmd.args.size() <= i || cmd.arg(i) == "center")
+            return extent * 0.5f;
+          return static_cast<float>(std::atof(cmd.arg(i).c_str()));
+        };
+        x = r.x + off(1, r.width);
+        y = r.y + off(2, r.height);
+        found = true;
+      }
+      if (!found) {
+        cmd.fail(std::format("UI component not found: {}", cmd.arg(0)));
+        return;
+      }
+      // Start a FRESH gesture. Multi-click counts clicks inside a time window,
+      // and get_time() is frozen at 0 headless -- so without this the previous
+      // command's clicks never expire and chain into this one: a double click
+      // followed by a triple click reads as five in a row, which lands back on
+      // a double.
+      reset_multi_click(cmd.arg(0));
+    }
+
+    // Each click needs the previous one's auto-release to land first, so the
+    // clicks sit on every third phase.
+    if (phase % 3 == 0 && phase / 3 < Clicks)
+      test_input::simulate_click(x, y);
+    phase++;
+    if (phase / 3 >= Clicks && phase % 3 == 0) {
+      phase = 0;
+      cmd.consume();
+    } else {
+      cmd.retry();
+    }
+  }
+};
+
 // Handle 'expect_input_selection name start end' - asserts selection range
 template <typename InputAction>
 struct HandleExpectInputSelectionCommand : System<PendingE2ECommand> {
@@ -736,21 +881,32 @@ struct HandleExpectInputSelectionCommand : System<PendingE2ECommand> {
       return;
     }
 
+    // HasTextAreaState is a distinct component, not a HasTextInputState, so a
+    // query for the latter alone never matches a multiline field -- which made
+    // this assert unusable on exactly the widget most likely to need it.
     auto query =
         ui_query()
             .whereHasComponent<ui::UIComponent>()
             .whereHasComponent<ui::UIComponentDebug>()
-            .template whereHasComponent<text_input::HasTextInputState>()
             .whereLambda([&](const Entity &e) {
-              return e.get<ui::UIComponentDebug>().name() == name;
+              return e.get<ui::UIComponentDebug>().name() == name &&
+                     (e.has<text_input::HasTextInputState>() ||
+                      e.has<text_input::HasTextAreaState>());
             })
             .first();
 
     for (Entity &entity : query.gen()) {
-      auto &state =
-          entity.get<text_input::HasTextInputState>();
-      auto actual_start = static_cast<int>(state.selection_start());
-      auto actual_end = static_cast<int>(state.selection_end());
+      const bool multiline = entity.has<text_input::HasTextAreaState>();
+      const auto sel_start =
+          multiline
+              ? entity.get<text_input::HasTextAreaState>().selection_start()
+              : entity.get<text_input::HasTextInputState>().selection_start();
+      const auto sel_end =
+          multiline
+              ? entity.get<text_input::HasTextAreaState>().selection_end()
+              : entity.get<text_input::HasTextInputState>().selection_end();
+      auto actual_start = static_cast<int>(sel_start);
+      auto actual_end = static_cast<int>(sel_end);
       if (actual_start == *expected_start && actual_end == *expected_end) {
         cmd.consume();
         return;
@@ -1085,6 +1241,12 @@ template <typename InputAction> void register_ui_commands(SystemManager &sm) {
       std::make_unique<HandleExpectInputTextCommand<InputAction>>());
   sm.register_update_system(
       std::make_unique<HandleExpectInputSelectionCommand<InputAction>>());
+  sm.register_update_system(
+      std::make_unique<HandleExpectSelectedTextCommand<InputAction>>());
+  sm.register_update_system(
+      std::make_unique<HandleMultiClickUICommand<InputAction, 2>>());
+  sm.register_update_system(
+      std::make_unique<HandleMultiClickUICommand<InputAction, 3>>());
 
   // UI property assertions
   sm.register_update_system(std::make_unique<HandleAssertUICommand>());

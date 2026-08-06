@@ -433,6 +433,11 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
         auto &s = *sp;
         if (s.disabled || !ctx.mouse.left_down)
           return;
+        // HandleDrags fires on the press too, not just on movement. Without
+        // this, the drag that follows a double-click immediately collapses the
+        // word it selected back to the point under the pointer.
+        if (!ctx.mouse.press_moved)
+          return;
         auto &cmp = ent.get<UIComponent>();
         const auto measure = [&s](std::string_view t) {
           return measure_in_field(s, t);

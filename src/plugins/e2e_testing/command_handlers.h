@@ -196,6 +196,56 @@ struct HandleDoubleClickCommand : System<PendingE2ECommand> {
     }
 };
 
+// Handle 'triple_click x y' — three clicks inside the multi-click window, for
+// select-the-line. Same phase machine as double_click with one more round; the
+// gap between clicks has to be long enough for each auto-release and short
+// enough to stay inside MULTI_CLICK_TIME.
+namespace triple_click_detail {
+inline int phase = 0;
+inline float stored_x = 0, stored_y = 0;
+
+inline void reset() {
+    phase = 0;
+    stored_x = 0;
+    stored_y = 0;
+}
+} // namespace triple_click_detail
+
+struct HandleTripleClickCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("triple_click")) return;
+        if (!cmd.has_args(2)) {
+            cmd.fail("triple_click requires x y arguments");
+            return;
+        }
+
+        using namespace triple_click_detail;
+        auto [sw, sh] = e2e_screen_size();
+        float x = cmd.coord_arg(0, sw);
+        float y = cmd.coord_arg(1, sh);
+
+        if (phase == 0) {
+            stored_x = x;
+            stored_y = y;
+            test_input::simulate_click(x, y);
+            phase = 1;
+            cmd.retry();
+        } else if (phase == 3) {
+            test_input::simulate_click(stored_x, stored_y);
+            phase++;
+            cmd.retry();
+        } else if (phase < 6) {
+            phase++;
+            cmd.retry();
+        } else {
+            test_input::simulate_click(stored_x, stored_y);
+            phase = 0;
+            cmd.consume();
+        }
+    }
+};
+
 // Handle 'drag x1 y1 x2 y2' command
 struct HandleDragCommand : System<PendingE2ECommand> {
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
@@ -440,6 +490,7 @@ struct HandleResetTestStateCommand : System<PendingE2ECommand> {
         test_input::reset_all();
         key_release_detail::reset();
         double_click_detail::reset();
+        triple_click_detail::reset();
         shift_tab_detail::reset();
         VisibleTextRegistry::instance().clear();
         cmd.consume();
