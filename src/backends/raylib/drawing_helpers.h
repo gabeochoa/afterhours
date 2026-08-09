@@ -508,7 +508,7 @@ inline bool capture_render_texture(const graphics::RenderTextureType &rt,
     return false;
   }
   raylib::ImageFlipVertical(&img);
-  bool ok = raylib::ExportImage(img, path.c_str());
+  bool ok = raylib::ExportImage(img, path.string().c_str());
   raylib::UnloadImage(img);
   return ok;
 }

@@ -8,6 +8,10 @@
 #if defined(__APPLE__) || defined(__linux__)
 #include <dlfcn.h>
 #endif
+#if defined(_WIN32)
+extern "C" void glFlush(void);
+extern "C" void glFinish(void);
+#endif
 
 #include "../../graphics/platform/headless_gl.h"
 #include "../../graphics_common.h"
@@ -149,8 +153,7 @@ struct RaylibHeadless {
     }
     raylib::ImageFlipVertical(&img);
 
-    // Export using raylib (uses stb_image_write internally)
-    bool success = raylib::ExportImage(img, path.c_str());
+    bool success = raylib::ExportImage(img, path.string().c_str());
 
     raylib::UnloadImage(img);
     return success;

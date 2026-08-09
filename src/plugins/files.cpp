@@ -1,6 +1,14 @@
 #define AFTERHOURS_FILES_CPP_COMPILED
 
+#if defined(_WIN32)
+#undef AFTER_HOURS_USE_RAYLIB
+#endif
+
 #include "files.h"
+
+#if defined(_WIN32)
+#define AFTER_HOURS_USE_RAYLIB
+#endif
 
 // On Emscripten the virtual filesystem provides save/config/resource paths
 // directly — no platform_folders dependency needed.

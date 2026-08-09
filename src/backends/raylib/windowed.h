@@ -120,7 +120,7 @@ struct RaylibWindowed {
       return false;
     }
     raylib::ImageFlipVertical(&img);
-    bool success = raylib::ExportImage(img, path.c_str());
+    bool success = raylib::ExportImage(img, path.string().c_str());
     raylib::UnloadImage(img);
     return success;
   }

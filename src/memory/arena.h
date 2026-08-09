@@ -8,6 +8,9 @@
 #include <new>
 #include <type_traits>
 #include <utility>
+#if defined(_WIN32)
+#include <malloc.h>
+#endif
 
 namespace afterhours {
 
@@ -22,14 +25,23 @@ inline size_t align_up_value(size_t value, size_t alignment) {
 }
 
 inline void *aligned_alloc_compat(size_t alignment, size_t size) {
-  // Prefer std::aligned_alloc when available; fall back to posix_memalign.
 #if defined(__APPLE__)
   void *ptr = nullptr;
   if (posix_memalign(&ptr, alignment, size) != 0)
     return nullptr;
   return ptr;
+#elif defined(_WIN32)
+  return _aligned_malloc(size, alignment);
 #else
   return std::aligned_alloc(alignment, size);
+#endif
+}
+
+inline void aligned_free_compat(void *ptr) {
+#if defined(_WIN32)
+  _aligned_free(ptr);
+#else
+  std::free(ptr);
 #endif
 }
 
@@ -64,7 +76,7 @@ public:
 
   ~Arena() {
     if (owns_memory_ && memory_) {
-      std::free(memory_);
+      detail::aligned_free_compat(memory_);
     }
   }
 
@@ -75,7 +87,7 @@ public:
   Arena &operator=(Arena &&other) noexcept {
     if (this != &other) {
       if (owns_memory_ && memory_) {
-        std::free(memory_);
+        detail::aligned_free_compat(memory_);
       }
       memory_ = nullptr;
       swap(other);

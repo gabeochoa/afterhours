@@ -78,8 +78,17 @@ struct window_manager : developer::Plugin {
 
   static Resolution fetch_maximum_resolution() {
     const int monitor = raylib::GetCurrentMonitor();
-    return Resolution{.width = raylib::GetMonitorWidth(monitor),
-                      .height = raylib::GetMonitorHeight(monitor)};
+    int width = raylib::GetMonitorWidth(monitor);
+    int height = raylib::GetMonitorHeight(monitor);
+    if (width <= 0 || height <= 0) {
+      width = raylib::GetScreenWidth();
+      height = raylib::GetScreenHeight();
+    }
+    if (width <= 0 || height <= 0) {
+      width = 1920;
+      height = 1080;
+    }
+    return Resolution{width, height};
   }
 
   static void set_window_size(const int width, const int height) {
@@ -126,35 +135,22 @@ struct window_manager : developer::Plugin {
 
   static std::vector<Resolution> fetch_available_resolutions() {
     // These come from the steam hardware survey: jan 5 2025
-    std::vector<Resolution> resolutions = {
-        Resolution{.width = 1280, .height = 720},
-        Resolution{.width = 1280, .height = 800},
-        Resolution{.width = 1280, .height = 1024},
-        Resolution{.width = 1360, .height = 768},
-        Resolution{.width = 1366, .height = 768},
-        Resolution{.width = 1440, .height = 900},
-        Resolution{.width = 1600, .height = 900},
-        Resolution{.width = 1680, .height = 1050},
-        Resolution{.width = 1920, .height = 1080},
-        Resolution{.width = 1920, .height = 1200},
-        Resolution{.width = 2560, .height = 1080},
-        Resolution{.width = 2560, .height = 1440},
-        Resolution{.width = 2560, .height = 1600},
-        Resolution{.width = 2880, .height = 1800},
-        Resolution{.width = 3440, .height = 1440},
-        Resolution{.width = 3840, .height = 2160},
-        Resolution{.width = 5120, .height = 1440},
+    static const Resolution kCandidates[] = {
+        {1280, 720},  {1280, 800},  {1280, 1024}, {1360, 768},  {1366, 768},
+        {1440, 900},  {1600, 900},  {1680, 1050}, {1920, 1080}, {1920, 1200},
+        {2560, 1080}, {2560, 1440}, {2560, 1600}, {2880, 1800}, {3440, 1440},
+        {3840, 2160}, {5120, 1440},
     };
 
     const Resolution max = fetch_maximum_resolution();
-
-    // Filter out resolutions that exceed the maximum supported resolution
-    resolutions.erase(std::remove_if(resolutions.begin(), resolutions.end(),
-                                     [&](const Resolution &res) {
-                                       return res.width > max.width ||
-                                              res.height > max.height;
-                                     }),
-                      resolutions.end());
+    std::vector<Resolution> resolutions;
+    resolutions.reserve(sizeof(kCandidates) / sizeof(kCandidates[0]));
+    for (const Resolution &res : kCandidates) {
+      if (res.width <= max.width && res.height <= max.height)
+        resolutions.push_back(res);
+    }
+    if (resolutions.empty())
+      resolutions.push_back(Resolution{1280, 720});
 
     return resolutions;
   }

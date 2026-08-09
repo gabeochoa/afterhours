@@ -24,6 +24,11 @@ using HeadlessGL = HeadlessGLMacOS;
 namespace afterhours::graphics {
 using HeadlessGL = HeadlessGLLinux;
 }
+#elif defined(_WIN32)
+#include "headless_gl_windows.h"
+namespace afterhours::graphics {
+using HeadlessGL = HeadlessGLWindows;
+}
 #else
 #error "Headless GL not supported on this platform"
 #endif
