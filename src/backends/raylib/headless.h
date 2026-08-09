@@ -8,7 +8,7 @@
 #if defined(__APPLE__) || defined(__linux__)
 #include <dlfcn.h>
 #endif
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__EMSCRIPTEN__)
 extern "C" void glFlush(void);
 extern "C" void glFinish(void);
 #endif

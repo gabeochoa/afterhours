@@ -29,6 +29,18 @@ using HeadlessGL = HeadlessGLLinux;
 namespace afterhours::graphics {
 using HeadlessGL = HeadlessGLWindows;
 }
+#elif defined(__EMSCRIPTEN__)
+// Web builds only use the canvas/windowed backend. A stub keeps RaylibHeadless
+// in the backend variant compiling; init() always fails if somehow selected.
+namespace afterhours::graphics {
+struct HeadlessGLEmscripten {
+  bool init(int, int) { return false; }
+  void *get_proc_address() { return nullptr; }
+  void make_current() {}
+  void shutdown() {}
+};
+using HeadlessGL = HeadlessGLEmscripten;
+}
 #else
 #error "Headless GL not supported on this platform"
 #endif
