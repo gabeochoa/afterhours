@@ -143,3 +143,7 @@ inline void request_quit() { PlatformAPI::request_quit(); }
 inline void run(const RunConfig &cfg) { PlatformAPI::run(cfg); }
 
 } // namespace afterhours::graphics
+
+#ifdef __EMSCRIPTEN__
+#include "graphics/web.h"
+#endif

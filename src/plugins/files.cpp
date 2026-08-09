@@ -36,12 +36,11 @@
 
 #ifndef __EMSCRIPTEN__
 #include <cstdint>
+#include <unistd.h> // chdir 
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
 #elif defined(_WIN32)
 #include <windows.h>
-#else
-#include <unistd.h>
 #endif
 #endif
 
@@ -226,6 +225,25 @@ void files::init(const std::string &game_name, const std::string &root_folder) {
   // whether the temp was complete or half-written.
   sweep_temp_files(get_config_path());
   sweep_temp_files(get_save_path());
+}
+
+void files::chdir_to_resource_root(const std::string &root_folder) {
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  if (fs::is_directory(fs::current_path(ec) / root_folder, ec))
+    return;
+#ifdef __EMSCRIPTEN__
+  // Preloaded at /<root_folder> via --preload-file; init() resolves it.
+  (void)root_folder;
+#else
+  const fs::path exe = executable_dir();
+  if (exe.empty())
+    return;
+  if (!fs::is_directory(exe / root_folder, ec))
+    return;
+  if (chdir(exe.string().c_str()) != 0)
+    log_warn("chdir_to_resource_root: chdir(%s) failed", exe.string().c_str());
+#endif
 }
 
 fs::path files::get_resource_path(const std::string &group,

@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- WEB_TITLE is substituted by tools/web.mk at build time. -->
+  <title>WEB_TITLE_PLACEHOLDER</title>
+  <style>
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+    }
+
+    /* raylib/GLFW sets inline canvas sizes — !important keeps us full-bleed. */
+    #canvas {
+      display: block;
+      width: 100vw !important;
+      height: 100vh !important;
+      border: 0;
+      outline: none;
+      background: #000;
+    }
+
+    #status {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      margin: 0;
+      color: #888;
+      font: 14px/1.4 system-ui, sans-serif;
+      pointer-events: none;
+      background: #000;
+      z-index: 1;
+    }
+
+    #status:empty {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <p id="status">Loading…</p>
+  <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+  <script>
+    // Pairs with afterhours graphics::web_* helpers and raylib/miniaudio on
+    // Emscripten. Do not enable ALLOW_MEMORY_GROWTH when linking: miniaudio's
+    // ScriptProcessorNode caches HEAPF32 views that detach on growth. Export
+    // HEAPF32 (see tools/web.mk) so Module.HEAPF32.buffer resolves.
+    var statusEl = document.getElementById('status');
+    var canvas = document.getElementById('canvas');
+    canvas.addEventListener('webglcontextlost', function (e) {
+      alert('WebGL context lost. Reload the page.');
+      e.preventDefault();
+    }, false);
+
+    function enterBrowserFullscreen() {
+      var el = document.documentElement;
+      var req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+      if (req) return req.call(el);
+    }
+    function exitBrowserFullscreen() {
+      var ex = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+      if (ex && document.fullscreenElement) ex.call(document);
+    }
+
+    var Module = {
+      canvas: canvas,
+      pendingFullscreen: false,
+      print: function () { console.log.apply(console, arguments); },
+      printErr: function () { console.error.apply(console, arguments); },
+      // Used by raylib ToggleFullscreen and afterhours::graphics::web_*.
+      // Browsers require a user gesture — pendingFullscreen is fulfilled below.
+      requestFullscreen: function (/*lockPointer, resizeCanvas*/) {
+        enterBrowserFullscreen();
+      },
+      setStatus: function (text) {
+        if (!Module.setStatus.last) Module.setStatus.last = { time: Date.now(), text: '' };
+        if (text === Module.setStatus.last.text) return;
+        var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+        var now = Date.now();
+        if (m && now - Module.setStatus.last.time < 30) return;
+        Module.setStatus.last.time = now;
+        Module.setStatus.last.text = text;
+        statusEl.textContent = text || '';
+      },
+      totalDependencies: 0,
+      monitorRunDependencies: function (left) {
+        this.totalDependencies = Math.max(this.totalDependencies, left);
+        Module.setStatus(left
+          ? 'Preparing… (' + (this.totalDependencies - left) + '/' + this.totalDependencies + ')'
+          : '');
+      }
+    };
+
+    function fulfillPendingFullscreen() {
+      if (!Module.pendingFullscreen) return;
+      if (document.fullscreenElement) {
+        Module.pendingFullscreen = false;
+        return;
+      }
+      Module.pendingFullscreen = false;
+      enterBrowserFullscreen();
+    }
+    document.addEventListener('pointerdown', fulfillPendingFullscreen, true);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'F11') {
+        e.preventDefault();
+        if (document.fullscreenElement) exitBrowserFullscreen();
+        else enterBrowserFullscreen();
+        return;
+      }
+      fulfillPendingFullscreen();
+    }, true);
+
+    Module.setStatus('Loading…');
+    // Audio ScriptProcessorNode glitches should not repaint the loading overlay.
+    window.onerror = function (msg) {
+      console.error(msg);
+      return false;
+    };
+    window.onunhandledrejection = function (ev) {
+      console.error(ev.reason || ev);
+    };
+  </script>
+  {{{ SCRIPT }}}
+</body>
+
+</html>

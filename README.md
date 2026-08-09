@@ -115,6 +115,50 @@ This pairs with the files plugin: a `.app` puts the binary in
 Linux `.desktop` and Windows packaging are not implemented; `--platform` errors
 for them rather than producing something untested.
 
+## Web (Emscripten / raylib)
+
+`tools/web.mk` + `tools/web/shell.html` package a raylib game as
+`index.html` / `.js` / `.wasm` / `.data`. Opt-in — include the makefile when you
+want `make web`:
+
+```make
+WEB_NAME := MyGame
+WEB_VERSION := 0.1.0
+WEB_TITLE := My Game
+WEB_SRCS := $(SRC_FILES) vendor/afterhours/src/plugins/files.cpp
+WEB_CXXFLAGS := -std=c++23 -O2 -DNDEBUG -DPLATFORM_WEB \
+    -DAFTER_HOURS_USE_RAYLIB $(INCLUDES) ...
+OBJ_DIR := ./output
+RAYLIB_WEB_SRC := /path/to/raylib   # source tree; builds PLATFORM_WEB .a
+include vendor/afterhours/tools/web.mk
+```
+
+Prerequisites: Emscripten SDK on PATH (or at `EMSDK`, default `F:/emsdk` with
+MSYS path fix), and a raylib **source** checkout for `make web-raylib`.
+
+Gotchas encoded in the flags (re-test audio if you change them):
+
+- **No `ALLOW_MEMORY_GROWTH`** — miniaudio’s `ScriptProcessorNode` caches
+  `HEAPF32` views; growth detaches them and crashes `onaudioprocess`.
+- **Export `HEAPF32`** (and `ccall`) via `EXPORTED_RUNTIME_METHODS`.
+- **`ASYNCIFY`** so a normal `while (!WindowShouldClose())` main loop works.
+- **Fullscreen** needs a user gesture. Prefer
+  `graphics::web_request_fullscreen_now()` from a click handler, or
+  `graphics::web_apply_fullscreen(want)` which arms `Module.pendingFullscreen`
+  for the shell’s next click/key. Do not rely on raylib’s deferred
+  `ToggleFullscreen` alone on web.
+
+Runtime helpers (available via `graphics.h` only when `__EMSCRIPTEN__` is
+defined; no-ops are unnecessary because desktop never includes `web.h`):
+
+- `files::chdir_to_resource_root()` — packaged exe next to `resources/`
+- `graphics::web_fit_canvas_to_browser()` — size to `innerWidth`/`innerHeight`
+- `graphics::web_apply_fullscreen` / `web_request_fullscreen_now` /
+  `web_exit_fullscreen` / `web_is_fullscreen`
+
+The sokol demo under `examples/web/` is separate (Metal/WebGL2 via sokol_app);
+use `tools/web.mk` for raylib games.
+
 ## behaviour changes worth knowing
 
 - **`FlexWrap` now defaults to `NoWrap`.** It used to be `Wrap`, which meant a

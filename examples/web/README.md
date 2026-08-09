@@ -28,6 +28,23 @@ make          # -> ./demo
 
 ## Web build (Emscripten / WebGL2)
 
+### Sokol (this example)
+
+This directory’s `Makefile` is the **sokol** path (`AFTER_HOURS_USE_METAL` +
+`SOKOL_GLES3`). See below.
+
+### Raylib games
+
+For raylib + afterhours, use the shared opt-in makefile instead of copying
+flags by hand:
+
+```make
+include vendor/afterhours/tools/web.mk
+```
+
+See the main [README](../../README.md#web-emscripten--raylib) for HEAPF32 /
+fullscreen / emsdk notes.
+
 ### 1. Install the Emscripten SDK
 
 ```bash

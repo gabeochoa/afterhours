@@ -109,6 +109,13 @@ struct files : developer::Plugin {
 
   static bool ensure_directory_exists(const fs::path &path);
 
+  // If a <root_folder>/ dir sits next to the executable (packaged layout),
+  // chdir there so cwd-relative "<root_folder>/..." loads resolve. Skipped when
+  // cwd already has that folder (dev: run from the repo root). No-op on
+  // Emscripten (preload mounts at /<root_folder>).
+  static void
+  chdir_to_resource_root(const std::string &root_folder = "resources");
+
   // Suffix for in-progress writes. Distinctive so the sweep never deletes a
   // caller's own .tmp file.
   static constexpr const char *TEMP_SUFFIX = ".afh-tmp";
