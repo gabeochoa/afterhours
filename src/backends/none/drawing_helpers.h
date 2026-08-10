@@ -178,11 +178,18 @@ inline void draw_ellipse(int, int, float, float, Color) {
 inline void draw_ellipse_lines(int, int, float, float, Color) {
   log_error("@notimplemented draw_ellipse_lines");
 }
-inline void draw_triangle(Vector2Type, Vector2Type, Vector2Type, Color) {
-  log_error("@notimplemented draw_triangle");
+// Recorded as the triangle's bounding box: enough for a test to assert a
+// callout tail exists and points the right way, without a polygon in DrawCall.
+inline void draw_triangle(Vector2Type a, Vector2Type b, Vector2Type c,
+                          Color color) {
+  const float x0 = std::min({a.x, b.x, c.x}), x1 = std::max({a.x, b.x, c.x});
+  const float y0 = std::min({a.y, b.y, c.y}), y1 = std::max({a.y, b.y, c.y});
+  draw_calls().push_back(
+      {"triangle", RectangleType{x0, y0, x1 - x0, y1 - y0}, color, ""});
 }
-inline void draw_triangle_lines(Vector2Type, Vector2Type, Vector2Type, Color) {
-  log_error("@notimplemented draw_triangle_lines");
+inline void draw_triangle_lines(Vector2Type a, Vector2Type b, Vector2Type c,
+                                Color color) {
+  draw_triangle(a, b, c, color);
 }
 inline void draw_poly(Vector2Type, int, float, float, Color) {
   log_error("@notimplemented draw_poly");
