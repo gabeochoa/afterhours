@@ -91,6 +91,7 @@ struct ComponentConfig {
   std::optional<TextureConfig> texture_config;
   std::optional<texture_manager::HasTexture::Alignment> image_alignment;
   std::optional<std::bitset<4>> rounded_corners;
+  bool consumes_directional_input = false;
   std::optional<float> roundness; // If unset, uses theme.roundness
   std::optional<int> segments;    // If unset, uses theme.segments
 
@@ -480,6 +481,12 @@ struct ComponentConfig {
   }
   ComponentConfig &with_skip_tabbing(bool skip) {
     skip_when_tabbing = skip;
+    return *this;
+  }
+  /// While focused, WidgetUp/WidgetDown belong to this widget (a value to
+  /// adjust, a list to step) rather than moving focus off it.
+  ComponentConfig &with_consumes_directional_input(bool consumes = true) {
+    consumes_directional_input = consumes;
     return *this;
   }
   /// Invisible to the mouse: whatever is behind it is hit instead. Distinct

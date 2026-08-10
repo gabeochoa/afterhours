@@ -599,11 +599,12 @@ Collected 2026-08-01 from the three apps that consume this library:
 | hanabi | sokol/Metal | `~/p/hanabi/afterhours_gaps.md` (#1-#18) |
 | floatinghotel | sokol/Metal | `~/p/floatinghotel/docs/afterhours-gaps.md`, `afterhours-ui-footguns.md` (F1-F16), `afterhours_issues.md` |
 | wm_afterhours | raylib | no gap doc; it is the reference consumer |
+| puzzle | raylib | `~/p/armchair_coach/puzzle/design/docs/afterhours-focus-gaps.md` (D33-D38) |
 
 Both gap-doc apps are on the **sokol** backend, so their reports skew there;
-wm_afterhours exercises raylib. Neither app has ever patched vendor — every
-item below has a shipped app-side workaround, which is why none of it has
-surfaced as a bug report.
+wm_afterhours exercises raylib. Of the gap-doc apps, only **puzzle** has
+patched vendor (D33-D38, 2026-08-10); the others each have a shipped app-side
+workaround instead, which is why none of it had surfaced as a bug report.
 
 **wm_afterhours regression check (2026-08-01):** submodule fast-forwarded
 `f06268e` → `5fe2e95` (26 commits, all of the ratatui-parity work). `make all`
@@ -1527,6 +1528,136 @@ covered by a test. The batched renderer insets *neither* plain nor styled, so
 it is internally consistent but sits 5px left of imm for both. That imm/batched
 divergence is pre-existing and untouched — closing it would move every plain
 label in every app by 5px.
+
+### D33. `focus_ring_thickness = 0` did not disable the focus ring — **DONE**
+**puzzle.** Four defects that together forced the app to hand-paint its own
+ring across three screens. Repros: `downstream_gaps_test.cpp` d33/d34.
+
+- **`focus_ring_thickness = 0` did not disable it.** Batched routed 0 to
+  `render_rounded_outline_batch`'s `else` (1px line); both renderers drew the
+  contrast outline unconditionally. puzzle set 0 to opt out and shipped a
+  doubled ring for a day without noticing — which is the real severity here.
+(D34 covers the other three.)
+
+### D34. Focus ring: invisible under a fill, unpositionable, unseen on a filled widget — **DONE**
+**puzzle.** Repro: `downstream_gaps_test.cpp` d34.
+
+- **The immediate renderer drew the ring UNDER the widget fill.** `focus_rect`
+  is inset inside `draw_rect`, so any opaque `HasColor` covered it — every
+  default `button()`. Batched was correct (layer+199/+200); the two copies had
+  drifted.
+- **No outset, no sub-pixel offset.** `focus_rect(int)` truncated the float
+  theme value. A negative offset did outset, but `theme.h`'s comment said it
+  couldn't.
+- **Contrast outline was outside-only**, so an amber ring on an amber-filled
+  widget vanished.
+
+Fixed by extracting `detail::focus_ring_for()` — the ~95 lines were duplicated
+between `RenderImm` and `RenderBatched` and had drifted four ways. The
+`FocusClusterRoot` fallback (2 levels vs. `ComputeVisualFocusId`'s 64) is gone
+with it. Prerequisite: the `none` backend's
+`draw_rectangle_rounded_lines[_ex]` were `@notimplemented` stubs, so no outline
+— border or focus ring — was observable in tests at all.
+
+### D35. Hover-follow silently overwrote keyboard focus — **DONE**
+**puzzle.** `ComputeVisualFocusId` runs after every user system and, under
+`FollowsMostRecentInput`, re-grabs focus for whatever is hot. So a game moving
+focus in its build has it undone the same frame whenever the cursor is resting
+on a widget — which on a menu is always. puzzle's arrow keys did nothing on its
+level list. No suppression hook existed; `set_focus` was a bare setter.
+
+`FocusSource { Grab, Pointer, Explicit }`, recorded by `set_focus` (default
+`Explicit`), reset per frame; hover defers to an `Explicit` claim. The
+Grab/Explicit split is load-bearing — `try_to_grab` sets focus every frame, so
+treating that as intent would kill hover-follow outright. Also un-breaks
+`HandleFocusUICommand`, which was being undone identically.
+
+Related: `mouse.moved_this_frame` was an exact float compare — sub-pixel jitter
+read as intent, and a NaN position (no cursor: every headless run) reported
+movement every frame forever. Now a dead-zone distance test with both
+non-finite cases decided explicitly; a plain distance test is also wrong, since
+one NaN frame would then poison `prev` and report *no* movement forever.
+
+### D36. Arrows are welded to Tab; `AcceptsValueInput` was dead — **DONE**
+**puzzle.** `process_tabbing` assigns `WidgetDown` into the same `forward` as
+`WidgetNext`, so "arrows within a group, Tab between groups" was unreachable.
+The documented escape hatch had three references in the library, all
+declarations — nothing attached it, no config setter existed.
+
+Shipped casualty: **a Column tray cannot be arrow-navigated at all**, because
+`process_tabbing` consumes `WidgetDown` nine systems before
+`HandleTrayNavigation` looks. Dropdown option lists are Column trays, and
+nothing covered it.
+
+Renamed the component to `ConsumesDirectionalInput` (`AcceptsValueInput` kept
+as an alias so the five downstream consumers keep compiling) and exposed
+`with_consumes_directional_input()`; `tray()` sets it. The rename is the point:
+a tray stepping its children is not adjusting a value, and the "value" framing
+is why nobody ever wired the hatch up. Added `theme.arrows_tab` (default true)
+so an app with its own directional nav can opt out instead of racing for a
+single-slot `last_action`. Also: `HandleTrayNavigation` now follows `hot_id`, so
+clicking a tray item no longer leaves `selection_index` on the previous one.
+
+Note there is **no `ValueUp`/`ValueDown` action pair** — navigation and value
+adjustment share `WidgetUp`/`WidgetDown` and this component is the only thing
+separating them. Adding real value actions later collides with it silently,
+since `process_tabbing` resolves actions by name via `if constexpr`.
+
+Scope caveat: those `if constexpr` guards mean this only ever affected apps
+whose `InputAction` declares `WidgetUp`/`WidgetDown`.
+
+**Verified against wm_afterhours** (pinned `14222a3`, patch applied in a scratch
+copy): `tray_vertical_navigation` goes **FAIL → PASS**. Before, Down tabbed out
+of the vertical tray — "Expected visual focus on 'V-Beta', but visual focus is
+on 'H-Alpha'". `validate-screenshots` is unaffected: same 8 pre-existing
+failures before and after, with three moving by ≤0.0014 percentage points from
+the new inner contrast edge.
+
+**Why it was never caught:** `wm_afterhours/src/testing/tests/all_tests.h`
+includes only `FontConfigTest.h`. `TrayTest.h`, `TabbingTest.h`,
+`RadioGroupTest.h` and four others are in the directory but compiled by nothing.
+Adding two `#include`s takes that suite from 7 tests to 12 and turns this bug
+red immediately.
+
+### D37. e2e `push_key` used a one-reader-per-frame queue — **DONE**
+**puzzle.** `test_input`'s queue has a global `key_consumed` latch, while
+`InputSystem` polls each action 3x per gamepad id — so a queued key reached
+whichever caller asked first and nobody else. Worked in a minimal example,
+silently dead once a second binding/hotkey/controller existed. puzzle saw Tab
+assertions pass headless while the feature did nothing windowed.
+
+`push_key` now goes through `input_injector` (explicitly multi-reader, and its
+docstring already named this hazard); the queue stays for `push_char`. The
+injector press lands a frame later, so
+`input_injector_mouse_delta_test`'s interleaving case was rewritten — the
+property it protected is now true by construction.
+
+Still open: `register_ui_commands` has no caller **inside this repo**, but five
+downstream — `floatinghotel/src/main.cpp:352`,
+`kart-afterhours/src/e2e_integration.h:76`, `wm_afterhours/src/game.cpp:852` and
+`.../testing/e2e_integration.h:40`, `wordproc/src/testing/e2e_integration.h:56`.
+So it is load-bearing: call it from the e2e setup entry point or document it as
+required — do NOT remove it. An app that forgets it gets "Unknown command" with
+no hint the handlers exist.
+
+### D38. Focus groups, tray hover, scroll-into-view — **OPEN, needs a decision**
+**puzzle.** Three things left deliberately unfixed:
+
+- **Hover cannot reach tray children.** They are force-marked
+  `SkipWhenTabbing` and `can_be_focused` — shared by tabbing and hover — rejects
+  those. The tempting fix (split into tab/pointer predicates, hover ignores the
+  flag) is **wrong**: `with_skip_tabbing` is public API meaning "not
+  reachable", and puzzle uses it for locked rows and a disabled menu item that
+  must not become hover-focusable. The narrower fix is for tabbing to skip tray
+  children structurally (parent has `HasTray`) rather than branding them with a
+  public opt-out.
+- **No scroll-into-view.** `HandleScrollInput` is gated on the cursor and never
+  reads `focus_id`; Tab can focus a row scrolled out of sight.
+- **No focus groups.** `HasTray` (one tab stop, children unfocusable) and
+  `FocusClusterRoot` (cosmetic) are the only grouping primitives. "Arrows scope
+  to a group, Tab moves between groups, children stay mouse-focusable" lives in
+  the app (`menu_section_nav`). A `FocusGroup` marker + group-aware
+  `process_tabbing` would delete it. Feature, not bug.
 
 ### D32. wm's remaining open items (all low priority)
 Slider knob 0.75 compression (cosmetic); crowded tab bars still need a smaller

@@ -277,6 +277,74 @@ static inline void update_scroll_view_content_size(Entity &entity) {
   scroll.clamp_scroll();
 }
 
+// Everything the focus ring needs, resolved in one place. Both renderers ask
+// this and differ only in how they submit the rects.
+struct FocusRing {
+  RectangleType rect;      // the innermost ring rect; thickness grows outward
+  Color color;             // Theme::Usage::Focus
+  Color contrast;          // hairline edge drawn just outside AND just inside
+  float thickness = 0.f;
+  float roundness = 0.f;
+  int segments = 8;
+  std::bitset<4> corners;
+
+  // Outward expansion `t` of the main ring.
+  // TODO: downstream apps keep re-implementing this (puzzle has
+  // rect::Rect::expand/pad). A rect expander belongs in the library so nobody
+  // writes a fifth one.
+  [[nodiscard]] RectangleType expanded(float t) const {
+    return {rect.x - t, rect.y - t, rect.width + t * 2.f,
+            rect.height + t * 2.f};
+  }
+  // The contrast edges: one ring outside the whole stack, one inside it. The
+  // inner one is what makes the ring survive on a widget whose fill is the
+  // same colour as the ring (a selected/active item).
+  [[nodiscard]] RectangleType outer_contrast() const {
+    return expanded(thickness);
+  }
+  [[nodiscard]] RectangleType inner_contrast() const { return expanded(-1.f); }
+};
+
+template <typename InputAction>
+static inline std::optional<FocusRing>
+focus_ring_for(const UIContext<InputAction> &context, const Entity &entity,
+               const UIComponent &cmp, Vector2Type scroll_offset) {
+  if (context.visual_focus_id != entity.id)
+    return {};
+
+  // thickness 0 means "no ring". It has to be checked before anything is
+  // emitted: the contrast edges are not gated on it, so an app that set 0 to
+  // opt out still got lines painted into its widgets.
+  FocusRing ring;
+  ring.thickness = context.theme.focus_ring_thickness;
+  if (ring.thickness <= 0.f)
+    return {};
+
+  ring.rect = cmp.focus_rect(context.theme.focus_ring_offset);
+  ring.rect.x -= scroll_offset.x; // ride the scroll like draw_rect
+  ring.rect.y -= scroll_offset.y;
+  if (entity.has<HasUIModifiers>())
+    ring.rect = entity.get<HasUIModifiers>().apply_modifier(ring.rect);
+
+  const bool custom = entity.has<HasRoundedCorners>();
+  ring.corners = custom ? entity.get<HasRoundedCorners>().rounded_corners
+                        : context.theme.rounded_corners;
+  ring.roundness = custom ? entity.get<HasRoundedCorners>().roundness
+                          : context.theme.roundness;
+  ring.segments =
+      custom ? entity.get<HasRoundedCorners>().segments : context.theme.segments;
+
+  ring.color = context.theme.from_usage(Theme::Usage::Focus);
+  const float lum = colors::luminance(ring.color);
+  ring.contrast = lum > 0.5f ? Color{0, 0, 0, 180} : Color{255, 255, 255, 180};
+  const float opacity = compute_effective_opacity(entity);
+  if (opacity < 1.0f) {
+    ring.color = colors::opacity_pct(ring.color, opacity);
+    ring.contrast = colors::opacity_pct(ring.contrast, opacity);
+  }
+  return ring;
+}
+
 } // namespace detail
 
 // Minimum font size to prevent invalid rendering (font size 0)
@@ -1442,99 +1510,6 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       render_nine_slice(entity, draw_rect, effective_opacity);
     }
 
-    // Focus indicator - draw on entities with FocusClusterRoot when they
-    // contain the focused element Check both visual_focus_id match AND
-    // alternative check for FocusClusterRoot with focused children
-    bool should_draw_focus = (context.visual_focus_id == entity.id);
-
-    // Alternative check: if this entity has FocusClusterRoot and contains the
-    // current focus
-    if (!should_draw_focus && entity.has<FocusClusterRoot>() &&
-        context.focus_id != context.ROOT) {
-      // Check if focus_id is this entity or a descendant
-      if (context.focus_id == entity.id) {
-        should_draw_focus = true;
-      } else {
-        // Check if focus_id is a child of this entity
-        for (EntityID child_id : cmp.children) {
-          if (child_id == context.focus_id) {
-            should_draw_focus = true;
-            break;
-          }
-          // Also check grandchildren (for components with nested children)
-          OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
-          if (child_opt.has_value() && child_opt.asE().has<UIComponent>()) {
-            for (EntityID grandchild_id :
-                 child_opt.asE().get<UIComponent>().children) {
-              if (grandchild_id == context.focus_id) {
-                should_draw_focus = true;
-                break;
-              }
-            }
-          }
-          if (should_draw_focus)
-            break;
-        }
-      }
-    }
-
-    if (should_draw_focus) {
-      Color focus_col = context.theme.from_usage(Theme::Usage::Focus);
-      float effective_focus_opacity = detail::compute_effective_opacity(entity);
-      if (effective_focus_opacity < 1.0f) {
-        focus_col = colors::opacity_pct(focus_col, effective_focus_opacity);
-      }
-      // Use theme's focus ring offset to ensure focus ring is outside component
-      // bounds
-      RectangleType focus_rect =
-          cmp.focus_rect(static_cast<int>(context.theme.focus_ring_offset));
-      focus_rect.x -= scroll_offset.x;  // ride the scroll like draw_rect
-      focus_rect.y -= scroll_offset.y;
-      if (entity.has<HasUIModifiers>()) {
-        focus_rect = entity.get<HasUIModifiers>().apply_modifier(focus_rect);
-      }
-
-      // Respect the entity's corner settings for focus rings
-      // If entity has rounded corners, use those; otherwise use theme defaults
-      auto focus_corner_settings =
-          entity.has<HasRoundedCorners>()
-              ? entity.get<HasRoundedCorners>().rounded_corners
-              : context.theme.rounded_corners;
-      float focus_roundness = entity.has<HasRoundedCorners>()
-                                  ? entity.get<HasRoundedCorners>().roundness
-                                  : context.theme.roundness;
-      int focus_segments = entity.has<HasRoundedCorners>()
-                               ? entity.get<HasRoundedCorners>().segments
-                               : context.theme.segments;
-
-      // Draw dual-color focus ring for universal contrast on any background
-      // Outer contrasting outline (1px outside the focus ring)
-      float thickness = context.theme.focus_ring_thickness;
-      float lum = colors::luminance(focus_col);
-      Color outline_col =
-          lum > 0.5f ? Color{0, 0, 0, 180} : Color{255, 255, 255, 180};
-      if (effective_focus_opacity < 1.0f) {
-        outline_col = colors::opacity_pct(outline_col, effective_focus_opacity);
-      }
-      {
-        RectangleType outlineRect = {focus_rect.x - thickness,
-                                     focus_rect.y - thickness,
-                                     focus_rect.width + thickness * 2.0f,
-                                     focus_rect.height + thickness * 2.0f};
-        draw_rectangle_rounded_lines(outlineRect, focus_roundness,
-                                     focus_segments, outline_col,
-                                     focus_corner_settings);
-      }
-
-      // Draw main focus ring with configurable thickness
-      for (float t = 0; t < thickness; t += 1.0f) {
-        RectangleType thickRect = {focus_rect.x - t, focus_rect.y - t,
-                                   focus_rect.width + t * 2.0f,
-                                   focus_rect.height + t * 2.0f};
-        draw_rectangle_rounded_lines(thickRect, focus_roundness, focus_segments,
-                                     focus_col, focus_corner_settings);
-      }
-    }
 
     // Custom draw (behind): drawn before the widget's own fill.
     if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().bg)
@@ -1624,6 +1599,23 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
           draw_side(border.right, x + w - rt, y + tt, rt, h - tt - bt);
         }
       }
+    }
+
+    // Focus ring: after the fill and border, or an opaque background paints
+    // over it (focus_rect sits inside draw_rect). The batched path gets this
+    // for free by emitting at layer+199/+200.
+    if (auto ring = detail::focus_ring_for(context, entity, cmp,
+                                           scroll_offset)) {
+      draw_rectangle_rounded_lines(ring->outer_contrast(), ring->roundness,
+                                   ring->segments, ring->contrast,
+                                   ring->corners);
+      draw_rectangle_rounded_lines(ring->inner_contrast(), ring->roundness,
+                                   ring->segments, ring->contrast,
+                                   ring->corners);
+      for (float t = 0; t < ring->thickness; t += 1.0f)
+        draw_rectangle_rounded_lines(ring->expanded(t), ring->roundness,
+                                     ring->segments, ring->color,
+                                     ring->corners);
     }
 
     if (entity.has<HasLabel>()) {
@@ -2074,92 +2066,19 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       collect_nine_slice(buffer, entity, draw_rect, effective_opacity, layer);
     }
 
-    // Focus indicator - draw on entities with FocusClusterRoot when they
-    // contain the focused element Check both visual_focus_id match AND
-    // alternative check for FocusClusterRoot with focused children
-    bool should_draw_focus = (context.visual_focus_id == entity.id);
-
-    // Alternative check: if this entity has FocusClusterRoot and contains the
-    // current focus
-    if (!should_draw_focus && entity.has<FocusClusterRoot>() &&
-        context.focus_id != context.ROOT) {
-      // Check if focus_id is this entity or a descendant
-      if (context.focus_id == entity.id) {
-        should_draw_focus = true;
-      } else {
-        // Check if focus_id is a child of this entity
-        for (EntityID child_id : cmp.children) {
-          if (child_id == context.focus_id) {
-            should_draw_focus = true;
-            break;
-          }
-          // Also check grandchildren (for components with nested children)
-          OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
-          if (child_opt.has_value() && child_opt.asE().has<UIComponent>()) {
-            for (EntityID grandchild_id :
-                 child_opt.asE().get<UIComponent>().children) {
-              if (grandchild_id == context.focus_id) {
-                should_draw_focus = true;
-                break;
-              }
-            }
-          }
-          if (should_draw_focus)
-            break;
-        }
-      }
-    }
-
-    if (should_draw_focus) {
-      Color focus_col = context.theme.from_usage(Theme::Usage::Focus);
-      float effective_focus_opacity = detail::compute_effective_opacity(entity);
-      if (effective_focus_opacity < 1.0f) {
-        focus_col = colors::opacity_pct(focus_col, effective_focus_opacity);
-      }
-      // Use theme's focus ring offset to ensure focus ring is outside component
-      // bounds
-      RectangleType focus_rect =
-          cmp.focus_rect(static_cast<int>(context.theme.focus_ring_offset));
-      focus_rect.x -= scroll_offset.x;  // ride the scroll like draw_rect
-      focus_rect.y -= scroll_offset.y;
-      if (entity.has<HasUIModifiers>()) {
-        focus_rect = entity.get<HasUIModifiers>().apply_modifier(focus_rect);
-      }
-
-      // Respect the entity's corner settings for focus rings
-      // If entity has rounded corners, use those; otherwise use theme defaults
-      auto focus_corner_settings =
-          entity.has<HasRoundedCorners>()
-              ? entity.get<HasRoundedCorners>().rounded_corners
-              : context.theme.rounded_corners;
-      float focus_roundness = entity.has<HasRoundedCorners>()
-                                  ? entity.get<HasRoundedCorners>().roundness
-                                  : context.theme.roundness;
-      int focus_segments = entity.has<HasRoundedCorners>()
-                               ? entity.get<HasRoundedCorners>().segments
-                               : context.theme.segments;
-
-      // Dual-color focus ring: contrasting outline for universal visibility
-      float thickness = context.theme.focus_ring_thickness;
-      float lum = colors::luminance(focus_col);
-      Color outline_col =
-          lum > 0.5f ? Color{0, 0, 0, 180} : Color{255, 255, 255, 180};
-      if (effective_focus_opacity < 1.0f) {
-        outline_col = colors::opacity_pct(outline_col, effective_focus_opacity);
-      }
-      RectangleType outline_rect = {focus_rect.x - thickness,
-                                    focus_rect.y - thickness,
-                                    focus_rect.width + thickness * 2.0f,
-                                    focus_rect.height + thickness * 2.0f};
+    // Focus ring, over the widget: layer+199/+200 keeps it above the fill and
+    // border no matter what this entity's own layer is.
+    if (auto ring = detail::focus_ring_for(context, entity, cmp,
+                                           scroll_offset)) {
       buffer.add_rounded_rectangle_outline(
-          outline_rect, outline_col, focus_roundness, focus_segments,
-          focus_corner_settings, layer + 199, entity.id);
-
-      // Main focus ring
+          ring->outer_contrast(), ring->contrast, ring->roundness,
+          ring->segments, ring->corners, layer + 199, entity.id);
       buffer.add_rounded_rectangle_outline(
-          focus_rect, focus_col, focus_roundness, focus_segments,
-          focus_corner_settings, layer + 200, entity.id,
-          context.theme.focus_ring_thickness);
+          ring->inner_contrast(), ring->contrast, ring->roundness,
+          ring->segments, ring->corners, layer + 199, entity.id);
+      buffer.add_rounded_rectangle_outline(
+          ring->rect, ring->color, ring->roundness, ring->segments,
+          ring->corners, layer + 200, entity.id, ring->thickness);
     }
 
     // Custom draw (behind): enqueued before the fill so it renders under the

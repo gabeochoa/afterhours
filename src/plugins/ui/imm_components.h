@@ -374,6 +374,10 @@ ElementResult tray(HasUIContext auto &ctx, EntityParent ep_pair,
   entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
   // Add tray state
   entity.addComponentIfMissing<HasTray>();
+  // The tray owns its own arrow keys: otherwise process_tabbing consumes
+  // WidgetDown nine systems before HandleTrayNavigation looks for it, and a
+  // Column tray -- every dropdown's option list -- cannot be navigated at all.
+  entity.addComponentIfMissing<ConsumesDirectionalInput>();
 
   return ElementResult{false, entity};
 }

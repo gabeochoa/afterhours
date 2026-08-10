@@ -181,9 +181,12 @@ struct UIComponent : BaseComponent {
   float width() const { return rect().width; }
   float height() const { return rect().height; }
 
-  Rectangle focus_rect(int rw = 4) const {
-    return Rectangle{x() + (float)rw, y() + (float)rw,
-                     width() - (2.f * (float)rw), height() - (2.f * (float)rw)};
+  // Positive `rw` insets, negative outsets. Float, not int: the theme's
+  // focus_ring_offset is a float, and truncating it here made sub-pixel
+  // offsets unreachable.
+  Rectangle focus_rect(float rw = 4.f) const {
+    return Rectangle{x() + rw, y() + rw, width() - 2.f * rw,
+                     height() - 2.f * rw};
   }
 
   auto &make_absolute() {

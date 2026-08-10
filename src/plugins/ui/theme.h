@@ -248,10 +248,17 @@ struct Theme {
   void set_color(Usage cu, const Color &c) { color_ref(cu) = c; }
 
   // Focus ring configuration
+  // Whether WidgetUp/WidgetDown also move between widgets. Default true (the
+  // long-standing behaviour). An app with its own directional navigation sets
+  // this false so process_tabbing leaves the arrow keys alone, instead of the
+  // app having to consume them first and win a race for a single-slot action.
+  bool arrows_tab = true;
   float focus_ring_thickness =
       3.0f; // Thickness of focus ring outline (2-3px for visibility)
   float focus_ring_offset =
-      4.0f; // Inset from element edge to focus ring (keeps ring inside bounds)
+      4.0f; // Distance from element edge to focus ring. Positive insets (ring
+            // inside bounds); negative outsets, for a halo around small
+            // controls. Set focus_ring_thickness to 0 to disable the ring.
 
   ClickActivationMode click_activation_mode = ClickActivationMode::Press;
 

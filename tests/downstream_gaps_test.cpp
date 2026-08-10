@@ -973,4 +973,311 @@ TEST(d13_dropdown_flips_up_near_the_bottom) {
   }
 }
 
+// ===========================================================================
+// D33/D34 -- the focus ring, reported by `puzzle`
+//
+// puzzle hand-painted its entire menu focus ring rather than use the theme's,
+// and the two reasons are here. Note these were only testable once the `none`
+// backend stopped dropping draw_rectangle_rounded_lines on the floor -- every
+// outline in the library (borders included) was invisible to this harness.
+// ===========================================================================
+
+namespace {
+// A focused, opaque, borderless button. `focus_col` is what the ring is drawn
+// in; nothing else in the widget uses it, so it identifies the ring.
+constexpr Color kFocusCol{255, 0, 255, 255};
+constexpr Color kFillCol{10, 20, 30, 255};
+
+ElementResult focused_button(ImmTestHarness &h, float ring_thickness) {
+  h.context().theme.focus = kFocusCol;
+  h.context().theme.focus_ring_thickness = ring_thickness;
+  h.context().theme.focus_ring_offset = 4.f;
+  auto b = button(h.context(), mk(h.root(), 0),
+                  ComponentConfig{}
+                      .with_size(ComponentSize{pixels(200), pixels(40)})
+                      .with_custom_background(kFillCol)
+                      .with_debug_name("focus_target"));
+  h.context().focus_id = b.ent().id;
+  h.context().visual_focus_id = b.ent().id;
+  return b;
+}
+
+// Every outline on a borderless widget comes from the focus-ring block -- and
+// counting ALL of them, not just the ones in theme.focus, is deliberate: the
+// contrast outline is drawn in black/white and unconditionally, so a
+// focus-colour-only count would call thickness=0 "off" while it still paints a
+// line into the widget.
+int count_ring_draws(const std::vector<ui_test::DrawCall> &calls) {
+  int n = 0;
+  for (const auto &c : calls)
+    if (c.op == "rectangle_rounded_lines")
+      n++;
+  return n;
+}
+} // namespace
+
+// D33: theme.focus_ring_thickness = 0 is the only way to ask for no ring, and
+// it does not work. The batched path routes 0 to render_rounded_outline_batch's
+// `else` branch (thickness > 1.0f is false) and draws a 1px line anyway, and
+// both paths draw the contrast outline unconditionally. puzzle set 0 to opt out
+// and shipped a doubled ring without noticing.
+TEST(d33_zero_thickness_disables_the_ring_batched) {
+  ImmTestHarness h;
+  focused_button(h, 0.f);
+  const auto &calls = h.render_batched();
+  ui_test::check(count_ring_draws(calls) == 0,
+                 "focus_ring_thickness = 0 draws no ring (batched)", __FILE__,
+                 __LINE__);
+}
+
+TEST(d33_zero_thickness_disables_the_ring_immediate) {
+  ImmTestHarness h;
+  focused_button(h, 0.f);
+  const auto &calls = h.render();
+  ui_test::check(count_ring_draws(calls) == 0,
+                 "focus_ring_thickness = 0 draws no ring (immediate)", __FILE__,
+                 __LINE__);
+}
+
+// ...and a non-zero thickness must still draw one, or the fix above is just a
+// way to delete the feature.
+TEST(d33_nonzero_thickness_still_draws_a_ring) {
+  ImmTestHarness h;
+  focused_button(h, 3.f);
+  ui_test::check(count_ring_draws(h.render_batched()) > 0,
+                 "a ring is drawn when thickness > 0 (batched)", __FILE__,
+                 __LINE__);
+}
+
+TEST(d33_nonzero_thickness_still_draws_a_ring_immediate) {
+  ImmTestHarness h;
+  focused_button(h, 3.f);
+  ui_test::check(count_ring_draws(h.render()) > 0,
+                 "a ring is drawn when thickness > 0 (immediate)", __FILE__,
+                 __LINE__);
+}
+
+// D34: the immediate renderer draws the ring BEFORE the widget's own fill, and
+// focus_rect is inset inside the fill rect -- so any opaque background paints
+// over the ring completely. That is every default Button. The batched path is
+// fine because it emits the ring at layer+199/+200.
+TEST(d34_immediate_ring_draws_over_the_fill_not_under_it) {
+  ImmTestHarness h;
+  focused_button(h, 3.f);
+  const auto &calls = h.render();
+
+  int last_fill = -1, first_ring = -1;
+  for (int i = 0; i < (int)calls.size(); i++) {
+    const auto &c = calls[(size_t)i];
+    const bool is_fill = (c.op == "rectangle_rounded" || c.op == "rectangle") &&
+                         c.color.r == kFillCol.r && c.color.g == kFillCol.g &&
+                         c.color.b == kFillCol.b;
+    const bool is_ring = c.op == "rectangle_rounded_lines" &&
+                         c.color.r == kFocusCol.r && c.color.g == kFocusCol.g &&
+                         c.color.b == kFocusCol.b;
+    if (is_fill)
+      last_fill = i;
+    if (is_ring && first_ring < 0)
+      first_ring = i;
+  }
+
+  ui_test::check(last_fill >= 0, "the widget fill was drawn", __FILE__,
+                 __LINE__);
+  ui_test::check(first_ring >= 0, "the focus ring was drawn", __FILE__,
+                 __LINE__);
+  if (last_fill >= 0 && first_ring >= 0)
+    ui_test::check(first_ring > last_fill,
+                   "focus ring is drawn after the fill, so it is visible",
+                   __FILE__, __LINE__);
+}
+
+// ===========================================================================
+// D35 -- hover-follow silently overwrites an explicit set_focus
+//
+// Reported by `puzzle`: on a menu with the cursor resting anywhere over the
+// list, the arrow keys did nothing. ComputeVisualFocusId runs AFTER every user
+// system, so a game that moves focus during its build has that move undone the
+// same frame. There was no way to say "the keyboard just did this".
+//
+// ComputeVisualFocusId reads the context through the EntityHelper singleton
+// (default collection) while widgets live in the UI collection, so the context
+// here is a separate entity from the harness's.
+// ===========================================================================
+
+using ui_test::TestInputAction;
+
+namespace {
+UIContext<TestInputAction> &singleton_ctx() {
+  if (!EntityHelper::has_singleton<UIContext<TestInputAction>>()) {
+    Entity &e = EntityHelper::createPermanentEntity();
+    e.addComponent<UIContext<TestInputAction>>();
+    EntityHelper::registerSingleton<UIContext<TestInputAction>>(e);
+  }
+  auto *c = EntityHelper::get_singleton_cmp<UIContext<TestInputAction>>();
+  c->reset(); // fresh per test (UIContext is not copy-assignable)
+  c->mouse = MousePointerState{};
+  c->focus_source = FocusSource::Grab;
+  c->theme.highlight_mode = HighlightMode::FollowsMostRecentInput;
+  return *c;
+}
+
+// Two focusable buttons, laid out and marked rendered.
+std::pair<EntityID, EntityID> two_buttons(ImmTestHarness &h) {
+  auto a = button(h.context(), mk(h.root(), 0),
+                  ComponentConfig{}
+                      .with_size(ComponentSize{pixels(100), pixels(20)})
+                      .with_debug_name("btn_a"));
+  auto b = button(h.context(), mk(h.root(), 1),
+                  ComponentConfig{}
+                      .with_size(ComponentSize{pixels(100), pixels(20)})
+                      .with_debug_name("btn_b"));
+  h.layout_only();
+  return {a.ent().id, b.ent().id};
+}
+} // namespace
+
+// The keyboard moved focus to A this frame while the cursor sits on B. A wins.
+TEST(d35_explicit_set_focus_beats_hover) {
+  ImmTestHarness h;
+  auto [a, b] = two_buttons(h);
+  auto &ctx = singleton_ctx();
+  ctx.hot_id = b;
+  ctx.mouse.moved_this_frame = true;
+  ctx.set_focus(a); // what a game's own nav system does
+
+  ComputeVisualFocusId<ui_test::TestInputAction> sys;
+  sys.for_each_with(h.context_entity(), 0.f);
+
+  ui_test::check(ctx.focus_id == a,
+                 "an explicit set_focus this frame survives hover-follow",
+                 __FILE__, __LINE__);
+}
+
+// ...but hover-follow must still work when nothing claimed focus explicitly,
+// or this fix just deletes FollowsMostRecentInput. try_to_grab is the ordinary
+// per-frame re-grab and must NOT count as explicit -- it runs every frame, so
+// treating it as intent would disable hover for good.
+TEST(d35_hover_still_follows_when_focus_was_only_regrabbed) {
+  ImmTestHarness h;
+  auto [a, b] = two_buttons(h);
+  auto &ctx = singleton_ctx();
+  ctx.hot_id = b;
+  ctx.mouse.moved_this_frame = true;
+  ctx.focus_id = a;
+  ctx.try_to_grab(a);
+
+  ComputeVisualFocusId<ui_test::TestInputAction> sys;
+  sys.for_each_with(h.context_entity(), 0.f);
+
+  ui_test::check(ctx.focus_id == b, "hover still claims focus after a re-grab",
+                 __FILE__, __LINE__);
+}
+
+// A stationary cursor must not read as movement. The compare was exact, so
+// sub-pixel jitter counted as intent -- and a NaN position (no cursor at all,
+// which is every headless test) counted as moving every frame forever.
+TEST(d35_tiny_mouse_movement_is_not_movement) {
+  UIContext<TestInputAction> ctx;
+  ctx.mouse.pos = {100.f, 100.f};
+  ui_test::check(!ctx.mouse.moved_since({100.5f, 100.f}),
+                 "half a pixel is not a move", __FILE__, __LINE__);
+  ui_test::check(ctx.mouse.moved_since({140.f, 100.f}),
+                 "forty pixels is a move", __FILE__, __LINE__);
+
+  // No cursor at all is not movement...
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  ctx.mouse.pos = {nan, nan};
+  ui_test::check(!ctx.mouse.moved_since({100.f, 100.f}),
+                 "a NaN cursor position does not read as movement", __FILE__,
+                 __LINE__);
+
+  // ...but a cursor appearing after a NaN frame is, or one bad read would
+  // pin the previous position and hover-follow would never fire again.
+  ctx.mouse.pos = {100.f, 100.f};
+  ui_test::check(ctx.mouse.moved_since({nan, nan}),
+                 "a cursor appearing after NaN counts as movement", __FILE__,
+                 __LINE__);
+}
+
+// ===========================================================================
+// D36 -- arrows are welded to Tab
+//
+// process_tabbing assigns WidgetDown into the same `forward` that WidgetNext
+// sets, so Tab and Down are one code path and no app can have "arrows move
+// within a group, Tab moves between groups". The escape hatch is
+// ConsumesDirectionalInput; under its old name (AcceptsValueInput) nothing ever
+// attached it and there was no config setter -- three references in the whole
+// library, all declarations. Note there is no ValueUp/ValueDown action pair:
+// navigation and value adjustment share WidgetUp/WidgetDown, and this component
+// is the only thing separating them.
+//
+// The shipped casualty: a Column tray (which is what dropdown options are)
+// cannot be arrow-navigated AT ALL, because process_tabbing consumes WidgetDown
+// nine systems before HandleTrayNavigation looks for it.
+// ===========================================================================
+
+TEST(d36_tray_keeps_its_own_arrow_keys) {
+  ImmTestHarness h;
+  auto t = tray(h.context(), mk(h.root(), 0),
+                ComponentConfig{}
+                    .with_size(ComponentSize{pixels(120), pixels(90)})
+                    .with_flex_direction(FlexDirection::Column)
+                    .with_debug_name("opts"));
+  h.layout_only();
+
+  auto &ctx = h.context();
+  ctx.set_focus(t.ent().id);
+  ctx.last_action = ui_test::TestInputAction::WidgetDown;
+  ctx.process_tabbing(t.ent().id);
+
+  ui_test::check(ctx.focus_id == t.ent().id,
+                 "a tray keeps WidgetDown instead of tabbing away", __FILE__,
+                 __LINE__);
+}
+
+// The default must not change: an ordinary widget still tabs on Down, which is
+// what every existing app relies on.
+TEST(d36_plain_widget_still_tabs_on_down) {
+  ImmTestHarness h;
+  auto b = button(h.context(), mk(h.root(), 0),
+                  ComponentConfig{}.with_size(
+                      ComponentSize{pixels(100), pixels(20)}));
+  h.layout_only();
+
+  auto &ctx = h.context();
+  ctx.set_focus(b.ent().id);
+  ctx.last_action = ui_test::TestInputAction::WidgetDown;
+  ctx.process_tabbing(b.ent().id);
+
+  ui_test::check(ctx.focus_id == ctx.ROOT,
+                 "Down still releases focus for the next widget to grab",
+                 __FILE__, __LINE__);
+}
+
+// An app that owns its own directional nav can turn the folding off wholesale
+// rather than racing process_tabbing for a single-slot last_action.
+TEST(d36_theme_can_stop_arrows_tabbing) {
+  ImmTestHarness h;
+  auto b = button(h.context(), mk(h.root(), 0),
+                  ComponentConfig{}.with_size(
+                      ComponentSize{pixels(100), pixels(20)}));
+  h.layout_only();
+
+  auto &ctx = h.context();
+  ctx.theme.arrows_tab = false;
+  ctx.set_focus(b.ent().id);
+  ctx.last_action = ui_test::TestInputAction::WidgetDown;
+  ctx.process_tabbing(b.ent().id);
+
+  ui_test::check(ctx.focus_id == b.ent().id,
+                 "theme.arrows_tab = false leaves Down to the app", __FILE__,
+                 __LINE__);
+
+  // Tab itself must still work with arrows_tab off.
+  ctx.last_action = ui_test::TestInputAction::WidgetNext;
+  ctx.process_tabbing(b.ent().id);
+  ui_test::check(ctx.focus_id == ctx.ROOT, "Tab still tabs", __FILE__,
+                 __LINE__);
+}
+
 int main() { return ui_test::run_registered_tests("Downstream Gaps"); }

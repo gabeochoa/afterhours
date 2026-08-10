@@ -23,11 +23,18 @@ inline bool key_consumed = false;
 inline bool char_consumed = false;
 } // namespace detail
 
-// Queue a key press
+// Press a key for one frame.
+//
+// Routed through the injector, not the queue: the queue's `key_consumed` latch
+// is global and lets exactly ONE caller per frame see a key, while
+// InputSystem polls each action three times per gamepad id. So a queued key
+// worked in a minimal example and silently vanished in a real app the moment a
+// second binding, a hotkey, or a controller existed. consume_press is
+// explicitly multi-reader. The queue stays for push_char, where FIFO order is
+// the point.
 inline void push_key(int key) {
-  KeyPress kp;
-  kp.key = key;
-  detail::key_queue.push(kp);
+  input_injector::set_key_down(key);
+  input_injector::set_key_up(key);
 }
 
 // Queue a character

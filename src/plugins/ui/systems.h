@@ -251,8 +251,9 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
     {
       const auto prev_pos = context.mouse.pos;
       context.mouse.pos = input::get_mouse_position();
-      context.mouse.moved_this_frame = (context.mouse.pos.x != prev_pos.x ||
-                                        context.mouse.pos.y != prev_pos.y);
+      context.mouse.moved_this_frame = context.mouse.moved_since(prev_pos);
+      // Nothing has claimed focus yet this frame.
+      context.focus_source = FocusSource::Grab;
       const bool prev_mouse_down = context.mouse.left_down;
       context.mouse.left_down = input::is_mouse_button_down(0);
       context.mouse.just_pressed = !prev_mouse_down && context.mouse.left_down;
@@ -591,11 +592,15 @@ template <typename InputAction> struct ComputeVisualFocusId : System<> {
     // keyboard focus alone; empty space (hot_id==ROOT) leaves the ring put. Runs
     // here because hot_id is final and focused_ids is populated (HandleTabbing),
     // so EndUIContextManager won't drop the newly-set focus.
+    // ...unless something claimed focus on purpose this frame. This system runs
+    // after every user system, so without the check a game's own keyboard nav
+    // is undone the same frame whenever the cursor happens to rest on a widget.
     if (ctx->theme.highlight_mode == HighlightMode::FollowsMostRecentInput &&
+        ctx->focus_source != FocusSource::Explicit &&
         ctx->mouse.moved_this_frame && ctx->hot_id != ctx->ROOT) {
       const OptEntity hot = UICollectionHolder::getEntityForID(ctx->hot_id);
       if (hot.has_value() && can_be_focused(*ctx, hot.asE()))
-        ctx->set_focus(ctx->hot_id);
+        ctx->set_focus(ctx->hot_id, FocusSource::Pointer);
     }
     ctx->visual_focus_id = ctx->ROOT;
     if (ctx->focus_id == ctx->ROOT || ctx->focus_id == ctx->FAKE)
@@ -989,6 +994,23 @@ struct HandleTrayNavigation : SystemWithUIContext<ui::HasTray> {
     // Clamp selection index
     int count = (int)tray.navigable_children.size();
     tray.selection_index = std::clamp(tray.selection_index, 0, count - 1);
+
+    // Follow the mouse. Tray children are SkipWhenTabbing, so the usual
+    // hover/click focus paths cannot reach them -- without this, clicking or
+    // hovering an item leaves selection_index on the previous one and the next
+    // arrow press jumps somewhere unrelated.
+    for (int i = 0; i < count; i++) {
+      const EntityID cid = tray.navigable_children[(size_t)i];
+      if (cid != context->hot_id)
+        continue;
+      auto child_opt = UICollectionHolder::getEntityForID(cid);
+      const bool clicked = child_opt.has_value() &&
+                           child_opt.asE().has<HasClickListener>() &&
+                           child_opt.asE().get<HasClickListener>().down;
+      if (clicked || context->mouse.moved_this_frame)
+        tray.selection_index = i;
+      break;
+    }
 
     if (!context->has_focus(entity.id))
       return;

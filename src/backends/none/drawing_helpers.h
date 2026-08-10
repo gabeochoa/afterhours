@@ -80,9 +80,8 @@ inline void draw_rectangle_rounded_rotated(const RectangleType, const float,
                                            const std::bitset<4>, const float) {
   log_error("@notimplemented draw_rectangle_rounded_rotated");
 }
-// Recorded, not stubbed: this is the call every outline goes through --
-// borders, and the focus ring. While it logged and dropped, no test could
-// observe either, which is why the ring had no coverage at all.
+// Every outline goes through here -- borders and the focus ring -- so it has
+// to record, not stub, or neither is observable in a test.
 inline void draw_rectangle_rounded_lines(const RectangleType rect, const float,
                                          const int, const Color color,
                                          const std::bitset<4>) {

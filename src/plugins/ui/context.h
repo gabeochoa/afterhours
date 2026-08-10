@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <bitset>
+#include <cmath>
 #include <functional>
 #if __has_include(<magic_enum/magic_enum.hpp>)
 #include <magic_enum/magic_enum.hpp>
@@ -79,11 +80,20 @@ struct RenderInfo {
   int layer = 0;
 };
 
-// Mark an element as wanting directional input for value adjustment
-// when focused (e.g., sliders, spinboxes). When the focused element
-// has this component, WidgetUp/WidgetDown control the value rather
-// than navigating between widgets.
-struct AcceptsValueInput : BaseComponent {};
+// Mark an element as owning WidgetUp/WidgetDown while it is focused, so the
+// arrows do whatever the widget means by them -- adjust a value (spinbox),
+// step a list (tray) -- instead of moving focus off it.
+//
+// NOTE: there is no ValueUp/ValueDown action pair. Navigation and value
+// adjustment are the SAME two keys, and this component is the only thing
+// telling them apart. If dedicated value actions are ever added, they collide
+// with this and the collision is silent, because process_tabbing resolves
+// actions with `if constexpr` on their names.
+struct ConsumesDirectionalInput : BaseComponent {};
+
+// Former name, from when a tray stepping its children had to pretend to be a
+// value widget to get the arrow keys.
+using AcceptsValueInput = ConsumesDirectionalInput;
 
 struct MousePointerState {
   input::MousePosition pos{};
@@ -94,6 +104,35 @@ struct MousePointerState {
   bool press_moved = false;
   bool moved_this_frame = false; // pos changed since last frame (any button)
   static constexpr float press_drag_threshold_px = 6.0f;
+  // Below this, the cursor is parked. An exact compare made sub-pixel jitter
+  // (a hi-DPI position rescaled to render space flickers in the last mantissa
+  // bit) read as intent, which is enough to yank focus away from the keyboard.
+  static constexpr float move_dead_zone_px = 2.0f;
+
+  // A distance test rather than `!=`, because the exact compare counted
+  // sub-pixel jitter as intent. The two non-finite cases have to be handled
+  // explicitly or NaN decides by accident: with no cursor at all (headless)
+  // `!=` reported movement on every frame forever, while a plain distance test
+  // would let one NaN frame poison `prev` and report *no* movement forever.
+  [[nodiscard]] bool moved_since(const input::MousePosition &prev) const {
+    const bool now_ok = std::isfinite(pos.x) && std::isfinite(pos.y);
+    if (!now_ok)
+      return false; // no cursor: not moving
+    if (!std::isfinite(prev.x) || !std::isfinite(prev.y))
+      return true; // a cursor just appeared
+    const float dx = pos.x - prev.x, dy = pos.y - prev.y;
+    return dx * dx + dy * dy > move_dead_zone_px * move_dead_zone_px;
+  }
+};
+
+// Who last claimed focus this frame. Hover-follow must not overwrite a focus
+// move that something asked for on purpose (a game's own arrow-key nav, a test
+// harness, process_tabbing) -- but it must still win over `Grab`, the ordinary
+// per-frame re-grab in try_to_grab, which happens every frame regardless.
+enum struct FocusSource {
+  Grab,
+  Pointer,
+  Explicit
 };
 
 // Forward declaration - full type in styling_defaults.h
@@ -121,6 +160,8 @@ template <typename InputAction> struct UIContext : BaseComponent {
   EntityID prev_active_id = ROOT; // previous frame's active_id (for animations)
   EntityID last_processed =
       ROOT; // last element that was processed (used for reverse tabbing)
+  // Reset to Grab each frame in BeginUIContextManager; see FocusSource.
+  FocusSource focus_source = FocusSource::Grab;
 
   MousePointerState mouse;
   InputAction last_action;
@@ -186,7 +227,10 @@ template <typename InputAction> struct UIContext : BaseComponent {
   void set_active(EntityID id) { active_id = id; }
 
   bool has_focus(EntityID id) const { return focus_id == id; }
-  void set_focus(EntityID id) { focus_id = id; }
+  void set_focus(EntityID id, FocusSource src = FocusSource::Explicit) {
+    focus_id = id;
+    focus_source = src;
+  }
 
   // Walks UP: the tree is cleared each frame, so a caller asking before it has
   // re-added its children would see an empty subtree. Bounded to avoid a hang.
@@ -247,7 +291,9 @@ template <typename InputAction> struct UIContext : BaseComponent {
   void try_to_grab(EntityID id) {
     focused_ids.insert(id);
     if (has_focus(ROOT)) {
-      set_focus(id);
+      // Grab, not Explicit: this runs every frame for whichever widget happens
+      // to be first, so counting it as intent would disable hover-follow.
+      set_focus(id, FocusSource::Grab);
     }
   }
 
@@ -307,22 +353,23 @@ template <typename InputAction> struct UIContext : BaseComponent {
     return a;
   }
 
-  // Check if the currently focused element accepts directional value input.
-  // When true, WidgetUp/WidgetDown should adjust the widget's value
-  // rather than navigate between widgets.
-  [[nodiscard]] bool focused_accepts_value_input() const {
+  // Does the focused element own WidgetUp/WidgetDown? When true they belong to
+  // it and must not move focus.
+  [[nodiscard]] bool focused_consumes_directional_input() const {
     if (focus_id == ROOT)
       return false;
     OptEntity opt = UICollectionHolder::getEntityForID(focus_id);
-    return opt.valid() && opt.asE().template has<AcceptsValueInput>();
+    return opt.valid() &&
+           opt.asE().template has<ConsumesDirectionalInput>();
   }
 
   void process_tabbing(EntityID id) {
     if (has_focus(id)) {
       // Arrow Up/Down move focus just like Tab / Shift+Tab, EXCEPT when the
-      // focused element consumes vertical input for value adjustment (e.g. a
-      // spinbox marked AcceptsValueInput) — then Up/Down belong to it.
-      const bool arrows_navigate = !focused_accepts_value_input();
+      // focused element owns them (a tray stepping its children, a spinbox
+      // adjusting a value) or the app has taken them over wholesale.
+      const bool arrows_navigate =
+          theme.arrows_tab && !focused_consumes_directional_input();
       if constexpr (magic_enum::enum_contains<InputAction>("WidgetNext")) {
         bool forward = pressed(InputAction::WidgetNext);
         if constexpr (magic_enum::enum_contains<InputAction>("WidgetDown")) {

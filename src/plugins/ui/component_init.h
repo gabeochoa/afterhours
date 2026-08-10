@@ -128,6 +128,8 @@ inline ComponentConfig overwrite_defaults(HasUIContext auto &ctx,
 inline void apply_flags(Entity &entity, const ComponentConfig &config) {
   if (config.skip_when_tabbing)
     entity.addComponentIfMissing<SkipWhenTabbing>();
+  if (config.consumes_directional_input)
+    entity.addComponentIfMissing<ConsumesDirectionalInput>();
   if (config.ignore_pointer_events)
     entity.addComponentIfMissing<IgnorePointerEvents>();
   if (config.skip_grid_snap)

@@ -208,16 +208,21 @@ TEST(char_poll_does_not_drop_pending_key) {
   using namespace afterhours::testing::test_input;
   detail::test_mode = true;
   reset_all();
+  input_injector::reset_all();
 
   push_key(afterhours::keys::TAB);
   push_char('x');
 
-  // Char polling should not destroy queued non-char events.
+  // Keys go through the injector and chars through the queue, so the two
+  // cannot interfere -- polling one never consumes the other.
   int c0 = get_char_pressed([]() { return 0; });
-  CHECK(c0 == 0);
+  CHECK(c0 == static_cast<int>('x'));
+
+  // The injector press lands on the NEXT frame, the same way a real key press
+  // is only observable after the input system has polled.
+  CHECK(!is_key_pressed(afterhours::keys::TAB, [](int) { return false; }));
+  input_injector::reset_frame();
   CHECK(is_key_pressed(afterhours::keys::TAB, [](int) { return false; }));
-  int c1 = get_char_pressed([]() { return 0; });
-  CHECK(c1 == static_cast<int>('x'));
 
   detail::test_mode = false;
 }
