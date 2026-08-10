@@ -80,15 +80,18 @@ inline void draw_rectangle_rounded_rotated(const RectangleType, const float,
                                            const std::bitset<4>, const float) {
   log_error("@notimplemented draw_rectangle_rounded_rotated");
 }
-inline void draw_rectangle_rounded_lines(const RectangleType, const float,
-                                         const int, const Color,
+// Recorded, not stubbed: this is the call every outline goes through --
+// borders, and the focus ring. While it logged and dropped, no test could
+// observe either, which is why the ring had no coverage at all.
+inline void draw_rectangle_rounded_lines(const RectangleType rect, const float,
+                                         const int, const Color color,
                                          const std::bitset<4>) {
-  log_error("@notimplemented draw_rectangle_rounded_lines");
+  draw_calls().push_back({"rectangle_rounded_lines", rect, color, ""});
 }
-inline void draw_rectangle_rounded_lines_ex(const RectangleType, const float,
-                                            const int, const float,
-                                            const Color) {
-  log_error("@notimplemented draw_rectangle_rounded_lines_ex");
+inline void draw_rectangle_rounded_lines_ex(const RectangleType rect,
+                                            const float, const int,
+                                            const float, const Color color) {
+  draw_calls().push_back({"rectangle_rounded_lines", rect, color, ""});
 }
 inline void draw_rectangle_gradient_v(const RectangleType, const Color,
                                       const Color) {
