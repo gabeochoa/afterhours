@@ -325,6 +325,114 @@ hsplit(HasUIContext auto &ctx, EntityParent ep_pair, const Size (&sizes)[N],
                             std::move(config));
 }
 
+/// A draggable separator bar. `axis` is the direction it MOVES in: Axis::X for
+/// a vertical bar between a left and right pane, Axis::Y for a horizontal one
+/// between a top and bottom. Sizes itself thin across that axis and full-length
+/// along the other, and sets the matching resize cursor.
+///
+/// Truthy on the frames it moved; `.as<float>()` is that frame's movement in
+/// the same space as rect(). Delta, not position, so grabbing the bar off
+/// centre does not jump it.
+///
+/// ```cpp
+/// if (auto d = divider(ctx, mk(row.ent(), 1), Axis::X))
+///   sidebar_width = std::clamp(sidebar_width + d.as<float>(), 120.f, 400.f);
+/// ```
+ElementResult divider(HasUIContext auto &ctx, EntityParent ep_pair, Axis axis,
+                      ComponentConfig config = ComponentConfig()) {
+  constexpr float default_thickness = 4.f;
+  const bool moves_in_x = (axis == Axis::X);
+
+  if (config.size.is_default)
+    config.with_size(moves_in_x ? ComponentSize{pixels(default_thickness),
+                                                percent(1.f)}
+                                : ComponentSize{percent(1.f),
+                                                pixels(default_thickness)});
+  config.with_cursor(moves_in_x ? CursorType::ResizeH : CursorType::ResizeV);
+
+  auto elem = div(ctx, ep_pair, config);
+  Entity &entity = elem.ent();
+  // The no-op callback is only there to make the element hit-testable; the
+  // movement is read off `down` on the next build pass instead, so the caller
+  // can act on it in normal control flow rather than inside a lambda.
+  entity.addComponentIfMissing<HasDragListener>([](Entity &) {});
+
+  const float moved = entity.get<HasDragListener>().down
+                          ? (moves_in_x ? ctx.mouse.delta.x : ctx.mouse.delta.y)
+                          : 0.f;
+  return ElementResult{moved != 0.f, entity, moved};
+}
+
+namespace detail {
+/// Shared body for hsplit_pane/vsplit_pane.
+std::array<ElementResult, 3>
+split_pane_impl(HasUIContext auto &ctx, EntityParent ep_pair, FlexDirection dir,
+                float &ratio, ComponentConfig config) {
+  const bool row = (dir == FlexDirection::Row);
+  config.with_flex_direction(dir);
+  if (config.size.is_default)
+    config.with_size(ComponentSize{percent(1.f), percent(1.f)});
+  auto container = div(ctx, ep_pair, config);
+
+  ratio = std::clamp(ratio, 0.f, 1.f);
+  const auto region_size = [row](Size along) {
+    return row ? ComponentSize{along, percent(1.f)}
+               : ComponentSize{percent(1.f), along};
+  };
+
+  auto first = div(ctx, mk(container.ent(), 0),
+                   ComponentConfig{}.with_size(region_size(percent(ratio))));
+  auto bar = divider(ctx, mk(container.ent(), 1), row ? Axis::X : Axis::Y);
+  auto second = div(ctx, mk(container.ent(), 2),
+                    ComponentConfig{}.with_size(region_size(expand(1.f))));
+
+  // The container's rect is last frame's, which is all there is during the
+  // build pass and is zero on the very first frame. Resize the first region in
+  // place rather than waiting for the next frame, so the bar tracks the cursor.
+  const Rectangle box = container.cmp().rect();
+  const float extent = row ? box.width : box.height;
+  if (bar && extent > 0.f) {
+    ratio = std::clamp(ratio + (bar.template as<float>() / extent), 0.f, 1.f);
+    UIComponent &cmp = first.cmp();
+    if (row)
+      cmp.set_desired_width(percent(ratio));
+    else
+      cmp.set_desired_height(percent(ratio));
+  }
+
+  return {first, bar, second};
+}
+} // namespace detail
+
+/// hsplit's two-region form with a draggable divider between them. `ratio` is
+/// the left region's share of the container width and is updated in place as
+/// the divider moves; the right region takes whatever is left.
+///
+/// Returns {left, divider, right}. The divider comes back so it can be styled
+/// or resized like any other element -- it is deliberately not a config knob.
+/// Clamped only to [0, 1]: a pane with a minimum width should clamp `ratio`
+/// itself before the next call.
+///
+/// ```cpp
+/// auto [nav, bar, body] = hsplit_pane(ctx, mk(root), state.nav_ratio);
+/// bar.restyle(ctx, ComponentConfig{}.with_custom_background(theme::BORDER));
+/// ```
+std::array<ElementResult, 3>
+hsplit_pane(HasUIContext auto &ctx, EntityParent ep_pair, float &ratio,
+            ComponentConfig config = ComponentConfig()) {
+  return detail::split_pane_impl(ctx, ep_pair, FlexDirection::Row, ratio,
+                                 std::move(config));
+}
+
+/// vsplit's stacked counterpart: `ratio` is the top region's share of the
+/// container height. Returns {top, divider, bottom}.
+std::array<ElementResult, 3>
+vsplit_pane(HasUIContext auto &ctx, EntityParent ep_pair, float &ratio,
+            ComponentConfig config = ComponentConfig()) {
+  return detail::split_pane_impl(ctx, ep_pair, FlexDirection::Column, ratio,
+                                 std::move(config));
+}
+
 /// Invisible flexible spacer — expands to fill remaining space in a flex
 /// container.  Useful for pushing siblings apart (e.g. a label on the left
 /// and a control flush-right).

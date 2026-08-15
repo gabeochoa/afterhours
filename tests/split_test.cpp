@@ -9,6 +9,10 @@
 //   - regions tile the container with no gaps or overlap
 //   - the cross axis spans the container
 //   - N is deduced from the size list, and nesting composes
+//
+// Then imm::divider and imm::hsplit_pane / imm::vsplit_pane, the resizable
+// forms. Those add a drag: the divider reports how far it moved this frame in
+// rect() space, and the pane turns that into a new ratio.
 
 #include "ui_test_harness.h"
 
@@ -21,6 +25,16 @@ using ui_test::ImmTestHarness;
 namespace {
 Rectangle rect_of(const ElementResult &e) {
   return e.ent().get<UIComponent>().rect();
+}
+
+// Stand in for HandleDrags, which the harness does not run. Marking the
+// listener down is exactly what that system does while an element is active,
+// and it is the only thing a divider reads on the next build pass.
+void hold(const ElementResult &bar) {
+  bar.ent().get<HasDragListener>().down = true;
+}
+void release(const ElementResult &bar) {
+  bar.ent().get<HasDragListener>().down = false;
 }
 } // namespace
 
@@ -154,4 +168,237 @@ TEST(split_count_is_deduced) {
   CHECK_APPROX(rect_of(five[4]).width, 100.f);
 }
 
-int main() { return ui_test::run_registered_tests("vsplit / hsplit"); }
+// ---------------------------------------------------------------------------
+// divider / hsplit_pane / vsplit_pane
+// ---------------------------------------------------------------------------
+
+// A bare divider is thin across its drag axis, full-length along the other, and
+// asks for the matching resize cursor.
+TEST(divider_shape_and_cursor) {
+  ImmTestHarness h;
+  auto row = hstack(h.context(), mk(h.root(), 0),
+                    ComponentConfig{}.with_size(
+                        ComponentSize{percent(1.f), percent(1.f)}));
+  auto vbar = divider(h.context(), mk(row.ent(), 0), Axis::X);
+  h.layout_only();
+
+  CHECK_APPROX(rect_of(vbar).width, 4.f);
+  CHECK_APPROX(rect_of(vbar).height, 600.f);
+  CHECK(vbar.ent().has<HasCursor>());
+  CHECK(vbar.ent().get<HasCursor>().cursor == CursorType::ResizeH);
+}
+
+TEST(divider_y_axis_is_a_horizontal_bar) {
+  ImmTestHarness h;
+  auto hbar = divider(h.context(), mk(h.root(), 0), Axis::Y);
+  h.layout_only();
+
+  CHECK_APPROX(rect_of(hbar).width, 800.f);
+  CHECK_APPROX(rect_of(hbar).height, 4.f);
+  CHECK(hbar.ent().get<HasCursor>().cursor == CursorType::ResizeV);
+}
+
+// Not being dragged means no movement, however far the pointer travelled.
+TEST(divider_reports_nothing_when_not_dragged) {
+  ImmTestHarness h;
+  h.context().mouse.delta = {50.f, 50.f};
+  auto bar = divider(h.context(), mk(h.root(), 0), Axis::X);
+  h.layout_only();
+
+  CHECK(!bar);
+  CHECK_APPROX(bar.as<float>(), 0.f);
+}
+
+// While held it reports the frame's movement along its own axis only — a
+// vertical bar ignores vertical mouse travel.
+//
+// Every frame is emitted from ONE call site on purpose: mk() hashes the source
+// location, so the same widget written on two lines is two entities and the
+// second frame would silently start from scratch.
+TEST(divider_reports_delta_on_its_own_axis) {
+  ImmTestHarness h;
+  auto frame = [&] { return divider(h.context(), mk(h.root(), 0), Axis::X); };
+
+  hold(frame());
+  h.layout_only();
+
+  h.begin_frame();
+  h.context().mouse.delta = {12.f, -40.f};
+  auto dragged = frame();
+  h.layout_only();
+
+  CHECK(dragged);
+  CHECK_APPROX(dragged.as<float>(), 12.f);
+}
+
+// The ratio drives the first region's share; the divider sits between them and
+// the second region soaks up the rest.
+TEST(hsplit_pane_initial_geometry) {
+  ImmTestHarness h;
+  float ratio = 0.25f;
+  auto [left, bar, right] = hsplit_pane(h.context(), mk(h.root(), 0), ratio);
+  h.layout_only();
+
+  CHECK_APPROX(rect_of(left).width, 200.f);
+  CHECK_APPROX(rect_of(bar).width, 4.f);
+  CHECK_APPROX(rect_of(right).width, 596.f); // 800 - 200 - 4
+  CHECK_APPROX(rect_of(bar).x, 200.f);
+  CHECK_APPROX(rect_of(right).x, 204.f);
+  CHECK_APPROX(rect_of(left).height, 600.f); // cross axis spans
+}
+
+// Dragging converts a pixel delta into a ratio against the container's width,
+// and the region resizes the SAME frame rather than a frame later.
+TEST(hsplit_pane_drag_updates_ratio_and_width) {
+  ImmTestHarness h;
+  float ratio = 0.25f;
+  auto frame = [&] { return hsplit_pane(h.context(), mk(h.root(), 0), ratio); };
+
+  hold(frame()[1]);
+  h.layout_only();
+
+  h.begin_frame();
+  h.context().mouse.delta = {80.f, 0.f};
+  auto [left, bar, right] = frame();
+  h.layout_only();
+
+  CHECK_APPROX(ratio, 0.35f); // 0.25 + 80/800
+  CHECK_APPROX(rect_of(left).width, 280.f);
+  CHECK_APPROX(rect_of(bar).x, 280.f);
+  CHECK_APPROX(rect_of(right).width, 516.f);
+}
+
+// Dragging back shrinks it, and releasing freezes the ratio even though the
+// pointer keeps moving.
+TEST(hsplit_pane_release_stops_tracking) {
+  ImmTestHarness h;
+  float ratio = 0.5f;
+  auto frame = [&] { return hsplit_pane(h.context(), mk(h.root(), 0), ratio); };
+
+  hold(frame()[1]);
+  h.layout_only();
+
+  h.begin_frame();
+  h.context().mouse.delta = {-120.f, 0.f};
+  release(frame()[1]);
+  h.layout_only();
+  CHECK_APPROX(ratio, 0.35f); // 0.5 - 120/800
+
+  h.begin_frame();
+  h.context().mouse.delta = {200.f, 0.f};
+  frame();
+  h.layout_only();
+  CHECK_APPROX(ratio, 0.35f);
+}
+
+// A drag past either edge stops at it instead of running the ratio negative or
+// past 1, which would make percent() sizing nonsense.
+TEST(hsplit_pane_ratio_clamps_to_unit_range) {
+  ImmTestHarness h;
+  float ratio = 0.9f;
+  auto frame = [&] { return hsplit_pane(h.context(), mk(h.root(), 0), ratio); };
+
+  hold(frame()[1]);
+  h.layout_only();
+
+  h.begin_frame();
+  h.context().mouse.delta = {5000.f, 0.f};
+  frame();
+  h.layout_only();
+  CHECK_APPROX(ratio, 1.f);
+
+  h.begin_frame();
+  h.context().mouse.delta = {-5000.f, 0.f};
+  frame();
+  h.layout_only();
+  CHECK_APPROX(ratio, 0.f);
+}
+
+// The stacked counterpart splits height and reads vertical movement.
+TEST(vsplit_pane_drag_updates_height) {
+  ImmTestHarness h;
+  float ratio = 0.5f;
+  auto frame = [&] { return vsplit_pane(h.context(), mk(h.root(), 0), ratio); };
+
+  {
+    auto [t, bar, b] = frame();
+    h.layout_only();
+    CHECK_APPROX(rect_of(t).height, 300.f);
+    CHECK_APPROX(rect_of(bar).height, 4.f);
+    CHECK_APPROX(rect_of(b).height, 296.f);
+    hold(bar);
+  }
+
+  h.begin_frame();
+  h.context().mouse.delta = {999.f, 60.f}; // x is ignored on this axis
+  auto [top, bar, bottom] = frame();
+  h.layout_only();
+
+  CHECK_APPROX(ratio, 0.6f); // 0.5 + 60/600
+  CHECK_APPROX(rect_of(top).height, 360.f);
+  CHECK_APPROX(rect_of(bottom).y, 364.f);
+}
+
+// Panes nest: a vsplit_pane inside an hsplit_pane's expand() region divides
+// only that region. The inner regions are percent/expand of a parent that is
+// itself expand-sized, which is the arrangement a real sidebar+preview screen
+// produces and the one most likely to resolve to zero.
+TEST(split_panes_nest_inside_an_expand_region) {
+  ImmTestHarness h;
+  float outer = 0.25f, inner = 0.6f;
+  auto [side, vbar, content] =
+      hsplit_pane(h.context(), mk(h.root(), 0), outer);
+  auto [top, hbar, bottom] =
+      vsplit_pane(h.context(), mk(content.ent(), 0), inner);
+  h.layout_only();
+
+  CHECK_APPROX(rect_of(content).width, 596.f); // 800 - 200 - 4
+  CHECK_APPROX(rect_of(top).width, 596.f);     // inner spans the region
+  CHECK_APPROX(rect_of(top).height, 360.f);    // 600 * 0.6
+  CHECK_APPROX(rect_of(hbar).height, 4.f);
+  CHECK_APPROX(rect_of(bottom).height, 236.f); // 600 - 360 - 4
+  CHECK_APPROX(rect_of(bottom).y, 364.f);
+}
+
+// Same nesting, but the outer pane is a fixed box placed absolutely — how a
+// lab screen or a floating panel lays one out.
+TEST(split_panes_nest_inside_an_absolute_box) {
+  ImmTestHarness h;
+  float outer = 0.25f, inner = 0.5f;
+  auto [side, vbar, content] = hsplit_pane(
+      h.context(), mk(h.root(), 0), outer,
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(400), pixels(300)})
+          .with_absolute_position(20.f, 10.f));
+  auto [top, hbar, bottom] =
+      vsplit_pane(h.context(), mk(content.ent(), 0), inner);
+  h.layout_only();
+
+  CHECK_APPROX(rect_of(side).width, 100.f);
+  CHECK_APPROX(rect_of(content).width, 296.f);
+  CHECK_APPROX(rect_of(top).height, 150.f);
+  CHECK_APPROX(rect_of(bottom).height, 146.f);
+  CHECK_APPROX(rect_of(top).x, 124.f); // 20 + 100 + 4
+  CHECK_APPROX(rect_of(bottom).y, 164.f);
+}
+
+// The regions are ordinary containers, and the pane divides only the box its
+// config gives it — same contract as vsplit/hsplit.
+TEST(split_pane_respects_config_and_takes_children) {
+  ImmTestHarness h;
+  float ratio = 0.5f;
+  auto [left, bar, right] = hsplit_pane(
+      h.context(), mk(h.root(), 0), ratio,
+      ComponentConfig{}.with_size(ComponentSize{pixels(404), pixels(200)}));
+  auto b = button(h.context(), mk(left.ent(), 0), "Click Me");
+  h.layout_only();
+
+  CHECK_APPROX(rect_of(left).width, 202.f); // 404 * 0.5
+  CHECK_APPROX(rect_of(right).width, 198.f);
+  CHECK_APPROX(rect_of(left).height, 200.f);
+  CHECK(b.cmp().parent == left.ent().id);
+}
+
+int main() {
+  return ui_test::run_registered_tests("vsplit / hsplit / split panes");
+}

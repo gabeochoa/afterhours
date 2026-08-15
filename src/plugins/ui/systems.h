@@ -252,6 +252,17 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
       const auto prev_pos = context.mouse.pos;
       context.mouse.pos = input::get_mouse_position();
       context.mouse.moved_this_frame = context.mouse.moved_since(prev_pos);
+      // No dead zone here, unlike moved_this_frame: a drag has to track every
+      // pixel. Both ends must be finite or the subtraction yields NaN, which a
+      // caller would then accumulate into its own state permanently.
+      const bool have_both =
+          std::isfinite(context.mouse.pos.x) &&
+          std::isfinite(context.mouse.pos.y) && std::isfinite(prev_pos.x) &&
+          std::isfinite(prev_pos.y);
+      context.mouse.delta =
+          have_both ? input::MousePosition{context.mouse.pos.x - prev_pos.x,
+                                           context.mouse.pos.y - prev_pos.y}
+                    : input::MousePosition{0.f, 0.f};
       // Nothing has claimed focus yet this frame.
       context.focus_source = FocusSource::Grab;
       const bool prev_mouse_down = context.mouse.left_down;
@@ -1086,14 +1097,21 @@ struct HandleDrags : SystemWithUIContext<ui::HasDragListener> {
     // the hit target below: a drag has to keep firing once the cursor leaves
     // the handle, which is exactly what active persisting across frames buys.
 
+    // `down` is how a caller outside the callback -- an imm widget rebuilding
+    // next frame -- asks "is this being dragged". It was never written, so
+    // anyone polling it got false forever.
+    hasDragListener.down = false;
+
     if (context->has_focus(entity.id) &&
         context->pressed(InputAction::WidgetPress)) {
       context->set_focus(entity.id);
+      hasDragListener.down = true;
       hasDragListener.cb(entity);
     }
 
     if (context->is_active(entity.id)) {
       context->set_focus(entity.id);
+      hasDragListener.down = true;
       hasDragListener.cb(entity);
     }
   }

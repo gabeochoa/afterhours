@@ -867,18 +867,25 @@ struct AutoLayout {
     const float ACCEPTABLE_ERROR = 1.f;
 
     SmallVector<UIComponent *, 16> layout_children;
+    // Absolute children take no part in this widget's size budget, but their
+    // own subtrees still have to be solved -- see the recursion at the bottom.
+    SmallVector<UIComponent *, 16> absolute_children;
     for (EntityID child_id : widget.children) {
       UIComponent &child_cmp = cmp(child_id);
-      // Dont worry about any children that are absolutely positioned
       // Ignore anything that should be hidden
-      if (child_cmp.absolute || child_cmp.should_hide)
+      if (child_cmp.should_hide)
         continue;
-      layout_children.push_back(&child_cmp);
+      if (child_cmp.absolute)
+        absolute_children.push_back(&child_cmp);
+      else
+        layout_children.push_back(&child_cmp);
     }
 
     const size_t num_children = layout_children.size();
-    if (num_children == 0)
+    if (num_children == 0) {
+      solve_absolute_children(absolute_children);
       return;
+    }
 
     // Re-resolve Percent children against our now-final size. Percent is first
     // computed in the parent-expectation pass, but a parent sized by Expand
@@ -1122,6 +1129,19 @@ struct AutoLayout {
 
     // Solve for children - apply constraints first, then recurse
     for (UIComponent *child : layout_children) {
+      apply_size_constraints(*child);
+      solve_violations(*child);
+    }
+    solve_absolute_children(absolute_children);
+  }
+
+  // An absolutely-positioned element is skipped everywhere its size would feed
+  // into its parent's, which used to mean its whole subtree was skipped by
+  // solve_violations too. Expand is only ever resolved in there, so every
+  // expand() under an absolutely-positioned element collapsed to 0.
+  void solve_absolute_children(
+      const SmallVector<UIComponent *, 16> &absolute_children) {
+    for (UIComponent *child : absolute_children) {
       apply_size_constraints(*child);
       solve_violations(*child);
     }

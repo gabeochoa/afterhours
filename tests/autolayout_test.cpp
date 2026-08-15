@@ -2353,6 +2353,51 @@ TEST(deeply_nested_mixed_directions) {
 // ============================================================================
 
 // ---------------------------------------------------------------------------
+// Absolute subtrees still get solved: expand() inside one used to collapse
+// ---------------------------------------------------------------------------
+// solve_violations skips absolute children, because their size must not feed
+// into the parent's. It skipped their whole SUBTREE with them, and expand is
+// only ever resolved in there, so an expand() child of an absolutely
+// positioned box came out 0 wide while its percent() sibling was fine.
+TEST(expand_resolves_inside_an_absolute_parent) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(800), pixels(600));
+
+  auto &box = t.make_ui(pixels(400), pixels(300));
+  t.ui(box).make_absolute();
+  t.ui(box).set_flex_direction(FlexDirection::Row);
+  t.add_child(root, box);
+
+  auto &fixed = t.make_ui(pixels(100), percent(1.f));
+  auto &rest = t.make_ui(expand(1.f), percent(1.f));
+  t.add_child(box, fixed);
+  t.add_child(box, rest);
+  t.run(root);
+
+  CHECK_APPROX(t.ui(fixed).computed[Axis::X], 100.f);
+  CHECK_APPROX(t.ui(rest).computed[Axis::X], 300.f);
+  CHECK_APPROX(t.ui(rest).computed[Axis::Y], 300.f);
+}
+
+// The absolute box's only child is itself expand — nothing else in the parent
+// to trigger the solve, so this covers the no-flow-children early return.
+TEST(expand_resolves_as_an_absolute_parents_only_child) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(800), pixels(600));
+
+  auto &box = t.make_ui(pixels(400), pixels(300));
+  t.ui(box).make_absolute();
+  t.add_child(root, box);
+
+  auto &only = t.make_ui(expand(1.f), expand(1.f));
+  t.add_child(box, only);
+  t.run(root);
+
+  CHECK_APPROX(t.ui(only).computed[Axis::X], 400.f);
+  CHECK_APPROX(t.ui(only).computed[Axis::Y], 300.f);
+}
+
+// ---------------------------------------------------------------------------
 // Absolute + margin: margins don't shrink the element size
 // ---------------------------------------------------------------------------
 TEST(absolute_margin_no_shrink) {

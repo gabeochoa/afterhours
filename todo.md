@@ -1471,27 +1471,47 @@ Big, architectural, and worth its own investigation before any code.
 **hanabi #28.** No frontmost-app / window-focus query, so no focus-gated global
 hotkey. Sits with D21 (OS appearance) as the "platform shim" ask.
 
-### D30. Container widgets floatinghotel still hand-rolls — **BLOCKER**
-The only gaps in any doc still marked blocking. **Re-surveyed 2026-08-05: the
-file paths below were stale.** `src/ui/split_panel.h` and `src/ui/tree_view.h`
-no longer exist in floatinghotel.
-- **Draggable divider** (P0) — now inline, in two places:
-  `src/ecs/main_content_system.h:675` (sidebar) and
-  `src/ecs/sidebar_system.h:296`. Both `div()` + `HasDragListener`.
-- **Split pane** (P0, depends on the divider).
+### D30. Container widgets floatinghotel still hand-rolls — **DONE**
+Was the only gap in any doc still marked blocking.
+- **Draggable divider** — `imm::divider(ctx, mk(...), Axis)`. Truthy on the
+  frames it moved; `.as<float>()` is that frame's travel along its own axis, in
+  the same space as `rect()`. Sizes itself thin and sets the resize cursor.
+- **Split pane** — `imm::hsplit_pane` / `imm::vsplit_pane`, taking a `float&`
+  ratio the drag updates in place, and returning `{first, divider, second}`.
+  The divider comes back so it can be styled rather than configured. See wm's
+  `split_pane_lab` screen and `93_split_pane_dividers.e2e`.
 - ~~Tree node (P1)~~ — **afterhours already ships `ui/tree_view.h`**, with
   `TreeNode<T>` and `HasTreeViewState`. floatinghotel has no tree view at all
   any more. Not a gap; an adoption question at most.
 
-The real defect the divider exposes is not the missing widget, it is that
-`HasDragListener` fires a bare callback with **no delta and no coordinate
-space**, so every caller reaches for `graphics::get_mouse_position()` and
-converts by hand — floatinghotel does `mouseX * 1280.0f / sw` in both copies.
-That is D10 leaking through the drag API, and wm's resize box is a third copy.
-A divider widget should hand back a delta in layout space.
+The divider exposed two defects underneath it, both fixed here:
 
-Note these are drag-driven, so D3's `HandleDrags` change is worth re-checking
-against them when they land.
+**`HasDragListener::down` was never written.** Nothing in the library set it,
+so every caller polling it outside the callback — which is the only way an imm
+widget can react to a drag while rebuilding — saw false forever.
+floatinghotel's two dividers (`main_content_system.h`, `sidebar_system.h`) are
+both `if (drag.down)` and have therefore never worked. `HandleDrags` now sets
+it, mirroring `HasClickListener`.
+
+**No delta, and no stated coordinate space.** Callers reached for
+`graphics::get_mouse_position()` and converted by hand (floatinghotel does
+`mouseX * 1280.0f / sw` in both copies; wm's resize box is a third). They did
+not have to: `ctx.mouse.pos` has always been in `rect()` space, because
+`input::get_mouse_position` already undoes letterboxing and resolution scale.
+What was genuinely missing is the frame delta, so `ctx.mouse.delta` is now
+alongside it — derived from `pos`, NOT from the backend's mouse delta, which is
+raw window pixels and would reintroduce the conversion it exists to avoid.
+
+**Found while building the lab screen, and the reason it rendered nothing:**
+`solve_violations` skips absolutely-positioned children, correctly, because
+their size must not feed their parent's — but it skipped their whole *subtree*
+with them, and expand is only ever resolved in there. So any `expand()` under
+an absolutely-positioned element collapsed to 0 while its `percent()` sibling
+was fine. Fixed in `autolayout.h` and covered by two tests; wm's 81 screenshots
+are byte-identical across the change, so nothing was relying on the collapse.
+
+Not done: `restyle` carries a background but not `roundness`, which only lands
+alongside an explicit corner set. Small, and unrelated to panes.
 
 ### D31. Styled text: no wrap, no weight — **DONE**
 **hanabi #22 + follow-up.** floatinghotel filed the same two as "No Font Weight
