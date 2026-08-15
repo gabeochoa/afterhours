@@ -264,7 +264,7 @@ struct UIPluginPostUpdateBridge : System<> {
             std::make_unique<ui::HandleDragGroupsPreLayout<InputAction>>());
         systems.push_back(std::make_unique<ui::BuildUIEntityMapping>());
         systems.push_back(std::make_unique<ui::RunAutoLayout>());
-        systems.push_back(std::make_unique<ui::FixScrollViewPositions>());
+        systems.push_back(std::make_unique<ui::MeasureScrollViews>());
         systems.push_back(std::make_unique<
                           ui::TrackIfComponentWillBeRendered<InputAction>>());
         systems.push_back(std::make_unique<ui::HandleTabbing<InputAction>>());

@@ -116,98 +116,7 @@ static inline RectangleType get_scroll_scissor_rect(const Entity &entity) {
   return {0, 0, 0, 0};
 }
 
-// Recursively shift all descendants by a position delta.
-// Called after a scroll-view direct child is repositioned so that
-// grandchildren (and deeper) stay correct relative to their parent.
-static inline void propagate_position_delta(Entity &entity, float dx,
-                                            float dy) {
-  if (!entity.has<UIComponent>())
-    return;
-  for (EntityID child_id : entity.get<UIComponent>().children) {
-    OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
-    if (!child_opt.valid())
-      continue;
-    Entity &child = child_opt.asE();
-    if (!child.has<UIComponent>())
-      continue;
-    UIComponent &child_cmp = child.get<UIComponent>();
-    child_cmp.computed_rel[Axis::X] += dx;
-    child_cmp.computed_rel[Axis::Y] += dy;
-    propagate_position_delta(child, dx, dy);
-  }
-}
-
-// Recompute children's positions for scroll view containers
-// The layout system constrains children to parent bounds, which stacks overflow
-// items at the same position. This function fixes that by sequentially
-// positioning children based on their sizes.
-static inline void fix_scroll_view_child_positions(Entity &entity) {
-  if (!entity.has<HasScrollView>() || !entity.has<UIComponent>())
-    return;
-
-  UIComponent &cmp = entity.get<UIComponent>();
-  HasScrollView &scroll = entity.get<HasScrollView>();
-  RectangleType parent_rect = cmp.rect();
-
-  // Starting position for children (inside parent's content area)
-  float content_x = parent_rect.x + cmp.computed_padd[Axis::left];
-  float content_y = parent_rect.y + cmp.computed_padd[Axis::top];
-
-  // Determine layout direction based on which scrolling is enabled
-  // If horizontal scrolling enabled, assume row layout
-  bool is_row_layout = scroll.horizontal_enabled && !scroll.vertical_enabled;
-
-  float current_x = content_x;
-  float current_y = content_y;
-
-  for (EntityID child_id : cmp.children) {
-    OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
-    if (!child_opt.valid())
-      continue;
-
-    Entity &child = child_opt.asE();
-    if (!child.has<UIComponent>())
-      continue;
-
-    UIComponent &child_cmp = child.get<UIComponent>();
-
-    float child_margin_top = child_cmp.computed_margin[Axis::top];
-    float child_margin_left = child_cmp.computed_margin[Axis::left];
-    float child_margin_bottom = child_cmp.computed_margin[Axis::bottom];
-    float child_margin_right = child_cmp.computed_margin[Axis::right];
-
-    float old_x = child_cmp.computed_rel[Axis::X];
-    float old_y = child_cmp.computed_rel[Axis::Y];
-
-    if (is_row_layout) {
-      // Row layout: position horizontally
-      child_cmp.computed_rel[Axis::X] = current_x + child_margin_left;
-      child_cmp.computed_rel[Axis::Y] = content_y + child_margin_top;
-
-      // Move right for next child
-      float child_width = child_cmp.computed[Axis::X];
-      current_x += child_margin_left + child_width + child_margin_right;
-    } else {
-      // Column layout: position vertically
-      child_cmp.computed_rel[Axis::X] = content_x + child_margin_left;
-      child_cmp.computed_rel[Axis::Y] = current_y + child_margin_top;
-
-      // Move down for next child
-      float child_height = child_cmp.computed[Axis::Y];
-      current_y += child_margin_top + child_height + child_margin_bottom;
-    }
-
-    float dx = child_cmp.computed_rel[Axis::X] - old_x;
-    float dy = child_cmp.computed_rel[Axis::Y] - old_y;
-    if (dx == 0.0f && dy == 0.0f)
-      continue;
-    propagate_position_delta(child, dx, dy);
-  }
-}
-
-// Compute content size for a scroll view from its children's sizes
-// For scroll views, we sum children's sizes instead of using screen positions
-// because the layout system constrains children to the viewport
+// Content size for a scroll view: sum of its children, not their screen span.
 static inline void update_scroll_view_content_size(Entity &entity) {
   if (!entity.has<HasScrollView>() || !entity.has<UIComponent>())
     return;
@@ -265,13 +174,6 @@ static inline void update_scroll_view_content_size(Entity &entity) {
     scroll.content_size = {total_width, max_height};
   } else {
     scroll.content_size = {max_width, total_height};
-  }
-
-  // In auto mode, only fix child positions when content actually overflows.
-  // When content fits, the layout engine's positions are correct.
-  bool content_overflows = scroll.needs_scroll_y() || scroll.needs_scroll_x();
-  if (!scroll.auto_overflow || content_overflows) {
-    fix_scroll_view_child_positions(entity);
   }
 
   scroll.clamp_scroll();

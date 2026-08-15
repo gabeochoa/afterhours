@@ -492,6 +492,24 @@ TEST(expand_fills_remaining_row) {
 }
 
 // ---------------------------------------------------------------------------
+// Cross-axis expand() stretches, so a percent(1) sibling must not starve it.
+// ---------------------------------------------------------------------------
+TEST(cross_axis_expand_stretches) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(240), pixels(300));
+  t.ui(root).set_flex_direction(FlexDirection::Column);
+  t.ui(root).set_flex_wrap(FlexWrap::NoWrap);
+
+  auto &title = t.make_ui(percent(1.0f), pixels(32));
+  auto &separator = t.make_ui(expand(), pixels(1));
+  t.add_child(root, title);
+  t.add_child(root, separator);
+  t.run(root);
+
+  CHECK_APPROX(t.ui(separator).computed[Axis::X], 240.f);
+}
+
+// ---------------------------------------------------------------------------
 // expand() with padding: remaining space accounts for parent padding
 // ---------------------------------------------------------------------------
 TEST(expand_with_padding) {

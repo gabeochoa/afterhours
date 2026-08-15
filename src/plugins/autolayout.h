@@ -935,6 +935,20 @@ struct AutoLayout {
         static_cast<bool>(widget.flex_direction & FlexDirection::Column);
     bool is_rw = static_cast<bool>(widget.flex_direction & FlexDirection::Row);
 
+    // Cross-axis expand() is stretch: children overlap there, so it takes the
+    // whole content box rather than the slack tax_refund splits on the main one.
+    if (is_col != is_rw) {
+      const Axis cross = is_col ? Axis::X : Axis::Y;
+      const float content =
+          fmaxf(0.f, widget.computed[cross] - widget.computed_padd[cross]);
+      for (UIComponent *child : layout_children) {
+        if (child->desired[cross].dim != Dim::Expand)
+          continue;
+        child->computed[cross] =
+            fmaxf(0.f, content - child->computed_margin[cross]);
+      }
+    }
+
     const auto _solve_error_optional = [&layout_children](Axis axis,
                                                           float *error) {
       int num_optional_children = 0;
@@ -1204,6 +1218,9 @@ struct AutoLayout {
         static_cast<bool>(widget.flex_direction & FlexDirection::Column);
     bool is_row = static_cast<bool>(widget.flex_direction & FlexDirection::Row);
 
+    // Holding oversized children is a scroll view's job; skips the clamp below.
+    bool is_scroll_view = to_ent(widget.id).has<HasScrollView>();
+
     // Count layout children and calculate total size along main axis
     size_t num_layout_children = 0;
     float total_main_size = 0.f;
@@ -1332,8 +1349,9 @@ struct AutoLayout {
       bool will_hit_max_y = cy + offy > sy;
 
       bool no_flex = child.flex_direction == FlexDirection::None;
-      // We cant flex and are going over the limit
-      if (no_flex && (will_hit_max_x || will_hit_max_y)) {
+      // We cant flex and are going over the limit; every child past the edge
+      // lands on the same spot, so an overflowing list collapses into a stack.
+      if (no_flex && !is_scroll_view && (will_hit_max_x || will_hit_max_y)) {
         child.computed_rel[Axis::X] = sx;
         child.computed_rel[Axis::Y] = sy;
         continue;
@@ -1367,7 +1385,6 @@ struct AutoLayout {
       // Warning checks use accumulated tolerance (scaled by child count
       // for children()-sized containers) to avoid false positives from
       // accumulated grid snapping across many children
-      bool parent_is_scroll_view = to_ent(widget.id).has<HasScrollView>();
       constexpr float BASE_WRAP_TOLERANCE = 4.0f;
       bool should_warn_wrap_column =
           is_column &&
@@ -1376,7 +1393,7 @@ struct AutoLayout {
           is_row &&
           (cx + offx > sx + accumulated_snap_tolerance_x + BASE_WRAP_TOLERANCE);
       if ((should_warn_wrap_column || should_warn_wrap_row) &&
-          !parent_is_scroll_view) {
+          !is_scroll_view) {
         bool should_warn = false;
         std::string warn_reason;
 
@@ -1502,7 +1519,7 @@ struct AutoLayout {
           !suppress_y && child_end_y > sy + margin_y +
                                            accumulated_snap_tolerance_y +
                                            BASE_OVERFLOW_TOLERANCE;
-      if ((overflows_x || overflows_y) && !parent_is_scroll_view) {
+      if ((overflows_x || overflows_y) && !is_scroll_view) {
         log_warn("Layout overflow: '{}' extends outside parent '{}' bounds "
                  "(child_rel=[{:.1f},{:.1f}], child_size=[{:.1f},{:.1f}], "
                  "child_end=[{:.1f},{:.1f}], parent_size=[{:.1f},{:.1f}], "

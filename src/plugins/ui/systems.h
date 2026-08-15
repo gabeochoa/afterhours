@@ -168,6 +168,7 @@ static inline RectangleType hit_rect(const Entity &entity,
   rect = apply_scroll_offset(entity, rect);
   return clip_hit_rect(entity, rect);
 }
+
 } // namespace detail
 
 /// Singleton component that caches entity mappings for fast lookups during
@@ -428,14 +429,11 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
   }
 };
 
-/// Fixes scroll view child positions after layout.
-/// The layout system constrains children to parent bounds, stacking overflow
-/// items at the same position. This system repositions them sequentially so
-/// that hit-testing (HandleClicks, HandleDrags) sees correct rects.
-/// Must run after RunAutoLayout and before HandleClicks.
-struct FixScrollViewPositions : System<HasScrollView, UIComponent> {
-  virtual void for_each_with(Entity &, HasScrollView &scroll,
-                             UIComponent &cmp, float) override {
+/// Measures each scroll view's viewport and content size. After RunAutoLayout,
+/// which now positions overflowing children itself rather than stacking them.
+struct MeasureScrollViews : System<HasScrollView, UIComponent> {
+  virtual void for_each_with(Entity &, HasScrollView &scroll, UIComponent &cmp,
+                             float) override {
     RectangleType parent_rect = cmp.rect();
     scroll.viewport_size = {parent_rect.width, parent_rect.height};
 
@@ -479,38 +477,6 @@ struct FixScrollViewPositions : System<HasScrollView, UIComponent> {
     scroll.content_size = is_row_layout
                               ? Vector2Type{total_width + gaps, max_height}
                               : Vector2Type{max_width, total_height + gaps};
-
-    bool content_overflows = scroll.needs_scroll_y() || scroll.needs_scroll_x();
-    if (!scroll.auto_overflow || content_overflows) {
-      // Reposition children sequentially (mirrors rendering.h logic)
-      float content_x = parent_rect.x + cmp.computed_padd[Axis::left];
-      float content_y = parent_rect.y + cmp.computed_padd[Axis::top];
-      float cur_x = content_x;
-      float cur_y = content_y;
-
-      for (EntityID child_id : cmp.children) {
-        OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
-        if (!child_opt.valid())
-          continue;
-        Entity &child = child_opt.asE();
-        if (!child.has<UIComponent>())
-          continue;
-        UIComponent &child_cmp = child.get<UIComponent>();
-        float mt = child_cmp.computed_margin[Axis::top];
-        float ml = child_cmp.computed_margin[Axis::left];
-        float mb = child_cmp.computed_margin[Axis::bottom];
-        float mr = child_cmp.computed_margin[Axis::right];
-        if (is_row_layout) {
-          child_cmp.computed_rel[Axis::X] = cur_x + ml;
-          child_cmp.computed_rel[Axis::Y] = content_y + mt;
-          cur_x += ml + child_cmp.computed[Axis::X] + mr + cmp.gap;
-        } else {
-          child_cmp.computed_rel[Axis::X] = content_x + ml;
-          child_cmp.computed_rel[Axis::Y] = cur_y + mt;
-          cur_y += mt + child_cmp.computed[Axis::Y] + mb + cmp.gap;
-        }
-      }
-    }
 
     scroll.clamp_scroll();
   }

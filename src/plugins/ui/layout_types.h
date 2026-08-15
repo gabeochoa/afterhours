@@ -350,8 +350,8 @@ enum struct SelfAlign {
 /// container size. NoWrap prevents wrapping and generates warnings when
 /// overflow would occur.
 enum struct FlexWrap {
-  Wrap,   // Allow wrapping to new row/column (default behavior)
-  NoWrap, // Never wrap - overflow/clip instead, warn if would overflow
+  Wrap,   // Allow wrapping to new row/column
+  NoWrap, // Never wrap - overflow/clip instead. The default, unlike CSS.
 };
 
 enum struct Axis {
