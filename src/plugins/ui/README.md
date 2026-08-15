@@ -351,7 +351,8 @@ theme.background = Color{...};
 theme.surface = Color{...};
 theme.font = Color{...};
 theme.font_muted = Color{...};
-theme.roundness = 0.08f;
+theme.roundness = 0.08f;     // fraction of each widget's SHORT SIDE
+theme.corner_radius = 4.f;   // or pixels, which wins where both are set
 theme.focus = Color{...};
 
 // Per-language font config

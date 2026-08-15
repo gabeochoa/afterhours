@@ -161,6 +161,39 @@ TEST(rounded_corners_apply) {
   CHECK(d.ent().has<HasRoundedCorners>());
 }
 
+// The point of the px variant: one value means one radius, whatever it lands
+// on. The same roundness fraction does not -- it scales with the short side.
+TEST(corner_radius_px_is_size_independent) {
+  const RectangleType small{0, 0, 200, 40};
+  const RectangleType tall{0, 0, 200, 720};
+
+  // 8px on both, expressed as the fraction each backend draws with.
+  CHECK_APPROX(resolve_roundness(8.f, 0.5f, small) * 40.f / 2.f, 8.f);
+  CHECK_APPROX(resolve_roundness(8.f, 0.5f, tall) * 200.f / 2.f, 8.f);
+
+  // Same roundness, wildly different radius. This is the confusing part.
+  CHECK_APPROX(resolve_roundness(std::nullopt, 0.5f, small), 0.5f);
+  CHECK_APPROX(resolve_roundness(std::nullopt, 0.5f, tall), 0.5f);
+
+  // A radius past half the short side is already a pill, and clamps there.
+  CHECK_APPROX(resolve_roundness(500.f, 0.f, small), 1.0f);
+  // Degenerate rect must not divide by zero.
+  CHECK_APPROX(resolve_roundness(8.f, 0.5f, RectangleType{0, 0, 0, 0}), 0.f);
+}
+
+TEST(corner_radius_px_reaches_the_component) {
+  ImmTestHarness h;
+  auto d = div(h.context(), mk(h.root(), 0),
+               ComponentConfig{}
+                   .with_rounded_corners(std::bitset<4>(0b1111))
+                   .with_corner_radius(6.f));
+  h.layout_only();
+
+  CHECK(d.ent().has<HasRoundedCorners>());
+  CHECK(d.ent().get<HasRoundedCorners>().radius_px.has_value());
+  CHECK_APPROX(d.ent().get<HasRoundedCorners>().radius_px.value(), 6.f);
+}
+
 TEST(cursor_applies_when_set) {
   ImmTestHarness h;
   auto d = div(h.context(), mk(h.root(), 0),

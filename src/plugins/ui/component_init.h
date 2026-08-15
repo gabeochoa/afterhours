@@ -119,6 +119,9 @@ inline ComponentConfig overwrite_defaults(HasUIContext auto &ctx,
   if (!config.roundness.has_value()) {
     config.roundness = ctx.theme.roundness;
   }
+  if (!config.corner_radius.has_value()) {
+    config.corner_radius = ctx.theme.corner_radius;
+  }
   if (!config.segments.has_value()) {
     config.segments = ctx.theme.segments;
   }
@@ -321,6 +324,7 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
     entity.addComponentIfMissing<HasRoundedCorners>()
         .set(config.rounded_corners.value())
         .set_roundness(config.roundness.value_or(0.5f))
+        .set_radius_px(config.corner_radius)
         .set_segments(config.segments.value_or(8));
   }
 

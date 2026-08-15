@@ -120,6 +120,9 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
         entity.template addComponentIfMissing<HasRoundedCorners>();
     corners_cmp.rounded_corners = base_corners.get();
     corners_cmp.roundness = config.roundness.value_or(ctx.theme.roundness);
+    corners_cmp.radius_px = config.corner_radius.has_value()
+                                ? config.corner_radius
+                                : ctx.theme.corner_radius;
     corners_cmp.segments = config.segments.value_or(ctx.theme.segments);
   }
 

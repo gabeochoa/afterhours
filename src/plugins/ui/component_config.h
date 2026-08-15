@@ -3,6 +3,7 @@
 #include <bitset>
 #include <functional>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 
@@ -92,8 +93,9 @@ struct ComponentConfig {
   std::optional<texture_manager::HasTexture::Alignment> image_alignment;
   std::optional<std::bitset<4>> rounded_corners;
   bool consumes_directional_input = false;
-  std::optional<float> roundness; // If unset, uses theme.roundness
-  std::optional<int> segments;    // If unset, uses theme.segments
+  std::optional<float> roundness;     // If unset, uses theme.roundness
+  std::optional<float> corner_radius; // Pixels; wins over roundness when set
+  std::optional<int> segments;        // If unset, uses theme.segments
 
   // TODO should everything be inheritable?
   // inheritable options
@@ -443,8 +445,27 @@ struct ComponentConfig {
     rounded_corners = corners.get();
     return *this;
   }
+  /// Corner rounding as a fraction of the widget's SHORT SIDE, 0..1. The same
+  /// value is a few px on a row and a hundred on a panel -- use
+  /// with_corner_radius for a fixed size.
   ComponentConfig &with_roundness(float r) {
+    if (r > 1.f) {
+      // Almost certainly pixels: both backends clamp the radius to half the
+      // short side, so this silently draws a full pill rather than an r-px
+      // corner. Warn once per value so immediate mode does not spam.
+      static std::set<float> warned;
+      if (warned.insert(r).second)
+        log_warn("with_roundness({}) is out of range: roundness is a 0..1 "
+                 "fraction of the short side and clamps to a full pill. Did "
+                 "you mean with_corner_radius({}) for {}px corners?",
+                 r, r, r);
+    }
     roundness = r;
+    return *this;
+  }
+  /// Corner rounding in pixels, the same on every widget it is applied to.
+  ComponentConfig &with_corner_radius(float px) {
+    corner_radius = px;
     return *this;
   }
   ComponentConfig &with_segments(int s) {
@@ -916,6 +937,8 @@ struct ComponentConfig {
 
     if (overrides.has_any_rounded_corners())
       merged.rounded_corners = overrides.rounded_corners;
+    if (overrides.corner_radius.has_value())
+      merged.corner_radius = overrides.corner_radius;
 
     if (overrides.is_disabled())
       merged.disabled = overrides.disabled;

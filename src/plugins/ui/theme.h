@@ -358,7 +358,10 @@ struct Theme {
   }
 
   std::bitset<4> rounded_corners = std::bitset<4>().set();
-  float roundness = 0.5f; // 0.0 = sharp corners, 1.0 = fully rounded
+  float roundness = 0.5f; // Fraction of the short side. 0.0 = sharp, 1.0 = pill
+  // Pixels. Wins over roundness everywhere it is set, so a theme can pick one
+  // radius instead of one that scales with whatever it lands on.
+  std::optional<float> corner_radius;
   int segments = 8;       // Number of segments per rounded corner
 
   // Deprecated: use font_sizing.get(Tier) instead
@@ -491,6 +494,10 @@ public:
   }
 
   // Set corner roundness
+  Builder &with_corner_radius(float px) {
+    theme_.corner_radius = px;
+    return *this;
+  }
   Builder &with_roundness(float r) {
     theme_.roundness = r;
     return *this;

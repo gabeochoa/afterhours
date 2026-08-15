@@ -223,7 +223,11 @@ struct HasNavigationBarState : ui::HasDropdownState {
 struct HasRoundedCorners : BaseComponent {
   std::bitset<4> rounded_corners = std::bitset<4>().reset();
   float roundness = 0.5f; // 0.0 = sharp, 1.0 = fully rounded
-  int segments = 8;       // Number of segments per corner
+  // A radius in pixels, which wins over roundness when set. roundness is a
+  // fraction of the widget's short side, so one theme value is 8px on a row
+  // and 180px on a full-height panel; say px when you mean px.
+  std::optional<float> radius_px;
+  int segments = 8; // Number of segments per corner
 
   auto &set(std::bitset<4> input) {
     rounded_corners = input;
@@ -233,12 +237,29 @@ struct HasRoundedCorners : BaseComponent {
     roundness = r;
     return *this;
   }
+  auto &set_radius_px(std::optional<float> px) {
+    radius_px = px;
+    return *this;
+  }
   auto &set_segments(int s) {
     segments = s;
     return *this;
   }
   auto &get() const { return rounded_corners; }
 };
+
+/// The 0..1 short-side fraction both backends draw with. A pixel radius is
+/// converted against `rect` and clamped, since a radius past half the short
+/// side is already a pill.
+inline float resolve_roundness(const std::optional<float> &radius_px,
+                               float roundness, const RectangleType &rect) {
+  if (!radius_px.has_value())
+    return roundness;
+  const float shorter = std::min(rect.width, rect.height);
+  if (shorter <= 0.f)
+    return 0.f;
+  return std::clamp(2.f * radius_px.value() / shorter, 0.f, 1.f);
+}
 
 struct HasImage : BaseComponent {
   afterhours::texture_manager::Texture texture;

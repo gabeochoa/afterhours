@@ -231,8 +231,12 @@ focus_ring_for(const UIContext<InputAction> &context, const Entity &entity,
   const bool custom = entity.has<HasRoundedCorners>();
   ring.corners = custom ? entity.get<HasRoundedCorners>().rounded_corners
                         : context.theme.rounded_corners;
-  ring.roundness = custom ? entity.get<HasRoundedCorners>().roundness
-                          : context.theme.roundness;
+  ring.roundness =
+      custom ? resolve_roundness(entity.get<HasRoundedCorners>().radius_px,
+                                 entity.get<HasRoundedCorners>().roundness,
+                                 ring.rect)
+             : resolve_roundness(context.theme.corner_radius,
+                                 context.theme.roundness, ring.rect);
   ring.segments =
       custom ? entity.get<HasRoundedCorners>().segments : context.theme.segments;
 
@@ -1389,9 +1393,11 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     auto corner_settings = entity.has<HasRoundedCorners>()
                                ? entity.get<HasRoundedCorners>().get()
                                : std::bitset<4>().reset();
-    float roundness = entity.has<HasRoundedCorners>()
-                          ? entity.get<HasRoundedCorners>().roundness
-                          : 0.5f;
+    float roundness =
+        entity.has<HasRoundedCorners>()
+            ? resolve_roundness(entity.get<HasRoundedCorners>().radius_px,
+                                entity.get<HasRoundedCorners>().roundness, draw_rect)
+            : 0.5f;
     int segments = entity.has<HasRoundedCorners>()
                        ? entity.get<HasRoundedCorners>().segments
                        : 8;
@@ -1952,9 +1958,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     auto corner_settings = entity.has<HasRoundedCorners>()
                                ? entity.get<HasRoundedCorners>().get()
                                : std::bitset<4>().reset();
-    float roundness = entity.has<HasRoundedCorners>()
-                          ? entity.get<HasRoundedCorners>().roundness
-                          : 0.5f;
+    float roundness =
+        entity.has<HasRoundedCorners>()
+            ? resolve_roundness(entity.get<HasRoundedCorners>().radius_px,
+                                entity.get<HasRoundedCorners>().roundness, draw_rect)
+            : 0.5f;
     int segments = entity.has<HasRoundedCorners>()
                        ? entity.get<HasRoundedCorners>().segments
                        : 8;
