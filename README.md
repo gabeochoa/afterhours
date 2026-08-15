@@ -369,6 +369,11 @@ afterhours::animation::anim(UIKey::Spinner)
 
 
 
+## license
+
+MIT, see `LICENSE`. The vendored libraries under `vendor/` keep their own
+licenses (MIT, zlib, BSL-1.0, public domain); notices are retained in-header.
+
 examples in other repos:
 - https://github.com/gabeochoa/kart-afterhours/
 - https://github.com/gabeochoa/tetr-afterhours/
