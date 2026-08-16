@@ -38,6 +38,17 @@ struct WheelState {
 };
 inline WheelState wheel;
 
+// Trackpad magnification, in NSEvent.magnification units (+0.01 = grow 1%).
+//
+// Survives one extra reset, unlike the wheel. The wheel's consumer is a UI
+// system that always runs after the command that sets it; a pinch is read by
+// app code, which may build its frame before the command system runs. Clearing
+// on the first reset would make the value visible or not depending on system
+// order, which is not something a test should have to know.
+inline float pinch = 0.0f;
+inline bool pinching = false;
+inline bool pinch_fresh = false;
+
 struct PendingClick {
   bool pending = false;
   float x = 0, y = 0;
@@ -197,12 +208,29 @@ inline Position consume_wheel() {
   return Position{detail::wheel.x, detail::wheel.y};
 }
 
+/// Set the pinch magnification delta for the current frame.
+inline void set_pinch(float delta) {
+  detail::pinch = delta;
+  detail::pinching = delta != 0.f;
+  detail::pinch_fresh = true;
+}
+
+/// Read the synthetic pinch delta. Cleared by reset_frame().
+inline float consume_pinch() { return detail::pinch; }
+inline bool is_pinching() { return detail::pinching; }
+
 /// Reset per-frame state (call at start of frame)
 inline void reset_frame() {
   detail::mouse.just_pressed = false;
   detail::mouse.just_released = false;
   detail::mouse.delta = {};
   detail::wheel = {};
+  if (detail::pinch_fresh) {
+    detail::pinch_fresh = false; // survive this reset, clear on the next
+  } else {
+    detail::pinch = 0.0f;
+    detail::pinching = false;
+  }
   // Tick key press delays and consume presses from the previous frame.
   // Delays are decremented here so that all callers within a single
   // frame see the same delay value.  Counts are decremented here so

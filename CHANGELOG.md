@@ -82,6 +82,26 @@ is a fraction of each widget's *short side*, so one value is ~8px on a row and
 panel_height = ui::measure_text_wrapped(body, width, font, 16.f).height;
 ```
 
+**Trackpad pinch (macOS).** `input::get_pinch_delta()` returns the
+magnification since the last frame (+0.01 = grow 1%), `input::is_pinching()`
+the gesture state. Consume as `zoom *= (1.f + delta)`.
+
+Opt-in: build with `-fblocks -framework AppKit
+-DAFTER_HOURS_ENABLE_MACOS_GESTURES` and call
+`gestures::install_pinch_monitor()` once after the window exists. Without it
+everything reads 0, which is correct on a machine with no trackpad — there is
+no per-frame `@notimplemented` log.
+
+Uses a local `NSEvent` monitor via the Objective-C runtime C API, so the
+library stays header-only and no consumer is forced into Objective-C++. Being
+app-wide, it needs no window handle and serves both the raylib and sokol/Metal
+backends from one implementation.
+
+e2e: `pinch <delta>` command, plus `input_injector::set_pinch/consume_pinch`.
+Note an injected pinch survives one extra `reset_frame` where the wheel does
+not — app code may build its frame before the command system runs, and a test
+should not have to know the system order.
+
 **Right-click.** `MousePointerState` tracks the secondary button, and
 `UIContext::is_right_click(id)` answers "a secondary click finished over this
 element or something inside it":

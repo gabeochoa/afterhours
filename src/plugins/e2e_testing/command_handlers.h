@@ -340,6 +340,23 @@ struct HandleMouseUpCommand : System<PendingE2ECommand> {
     }
 };
 
+// Handle 'pinch <delta>' command - inject a trackpad magnification delta,
+// consumed by the next get_pinch_delta(). +0.01 = grow 1%, same units as
+// NSEvent.magnification. Without this a pinch could ship but never be
+// regression-tested, and a gesture nobody can test is one that silently breaks.
+struct HandlePinchCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("pinch")) return;
+        if (!cmd.has_args(1)) {
+            cmd.fail("pinch requires a delta argument");
+            return;
+        }
+        input_injector::set_pinch(cmd.arg_as<float>(0));
+        cmd.consume();
+    }
+};
+
 // Handle 'scroll_wheel dx dy' command - inject a synthetic mouse wheel event.
 // The wheel delta is consumed by the next call to get_mouse_wheel_move_v().
 // dx/dy are float values (positive = right/up in natural scrolling).

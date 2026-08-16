@@ -10,6 +10,7 @@
 #include "../core/key_codes.h"
 #include "../core/system.h"
 #include "../developer.h"
+#include "../gestures_macos.h"
 #include "window_manager.h"
 
 #ifdef AFTER_HOURS_USE_METAL
@@ -802,6 +803,37 @@ struct input : developer::Plugin {
         return "unknown";
     }
 #endif
+
+    // ── Trackpad pinch ─────────────────────────────────────────────────────
+    // Outside the backend arms on purpose: the gesture is read from a local
+    // NSEvent monitor that is app-wide, so raylib and sokol/Metal both get it
+    // from the same place, and every other platform reads the zero that
+    // gestures:: already returns. No @notimplemented arm -- a machine with no
+    // trackpad is not an error, it just never pinches.
+
+    /// Magnification since the previous frame; 0 when no pinch is active.
+    /// +0.01 means "grow by 1%", matching NSEvent.magnification. A delta rather
+    /// than a cumulative scale so callers compose it (`zoom *= 1 + delta`)
+    /// without tracking gesture boundaries.
+    static float get_pinch_delta() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        if (testing::test_input::detail::test_mode) {
+            return testing::input_injector::consume_pinch();
+        }
+#endif
+        return gestures::consume_pinch_delta();
+    }
+
+    /// Whether a pinch is mid-gesture. Useful to anchor the zoom where the
+    /// gesture began, and to suppress momentum scroll while it is live.
+    static bool is_pinching() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        if (testing::test_input::detail::test_mode) {
+            return testing::input_injector::is_pinching();
+        }
+#endif
+        return gestures::is_pinching();
+    }
 
     enum struct DeviceMedium {
         None,
