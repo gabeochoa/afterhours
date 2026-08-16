@@ -2,6 +2,8 @@
 #pragma once
 
 #include <cstdio>
+#include <set>
+#include <utility>
 #include <version> // __cpp_lib_format / __has_include, without pulling <format>
 
 // Decide whether the full std::format-based logger is available/wanted.
@@ -78,6 +80,32 @@ inline void log_once_per(Duration, int, std::format_string<Args...>,
 }
 
 #endif
+
+// A diagnostic that fires from a per-frame path has to be gated or it prints
+// every frame forever. Deliberately outside the mode blocks above: it expands
+// to whichever log_warn is in scope at the call site, including the one a test
+// substitutes via AFTER_HOURS_REPLACE_LOGGING.
+//
+//   warn_once(entity.id, "'{}' will never fire: ...", name);
+//   warn_once(font_key, "No font registered for '{}'", font_key);
+//
+// `key` is what makes two reports distinct -- an entity id, a font name, a
+// value. Each call site gets its own gate, so the same key at two sites does
+// not silence one of them.
+namespace log_detail {
+template <typename Key> inline bool warn_gate(const void *site, Key key) {
+  static std::set<std::pair<const void *, Key>> seen;
+  return seen.insert({site, std::move(key)}).second;
+}
+} // namespace log_detail
+
+#define warn_once(key, ...)                                                    \
+  do {                                                                         \
+    /* Address is unique per expansion, which is what scopes the gate. */      \
+    static const char afterhours_warn_site = 0;                                \
+    if (::log_detail::warn_gate(&afterhours_warn_site, (key)))                 \
+      log_warn(__VA_ARGS__);                                                   \
+  } while (0)
 
 enum {
   VENDOR_LOG_TRACE = 1,

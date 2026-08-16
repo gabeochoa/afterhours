@@ -453,12 +453,11 @@ struct ComponentConfig {
       // Almost certainly pixels: both backends clamp the radius to half the
       // short side, so this silently draws a full pill rather than an r-px
       // corner. Warn once per value so immediate mode does not spam.
-      static std::set<float> warned;
-      if (warned.insert(r).second)
-        log_warn("with_roundness({}) is out of range: roundness is a 0..1 "
-                 "fraction of the short side and clamps to a full pill. Did "
-                 "you mean with_corner_radius({}) for {}px corners?",
-                 r, r, r);
+      warn_once(r,
+                "with_roundness({}) is out of range: roundness is a 0..1 "
+                "fraction of the short side and clamps to a full pill. Did "
+                "you mean with_corner_radius({}) for {}px corners?",
+                r, r, r);
     }
     roundness = r;
     return *this;

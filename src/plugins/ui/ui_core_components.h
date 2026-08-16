@@ -100,8 +100,6 @@ struct UIComponent : BaseComponent {
   bool was_rendered_to_screen = false;
   bool absolute = false;
   bool skip_grid_snap = false;
-  bool warned_expand_collapse = false; // one-shot layout diagnostic guard
-  bool warned_wrap_needs_font_size = false; // ditto, for TextOverflow::Wrap
 
   // Absolute position in pixels, set from with_absolute_position(x, y)
   // during component init. Used by autolayout to set computed_rel for
@@ -428,16 +426,12 @@ struct FontManager : BaseComponent {
     std::string key = base + weight_suffix(w);
     if (fonts.contains(key))
       return key;
-    if (weight_fallback_warned.insert(key).second)
-      log_warn("No font registered for '{}', drawing '{}' at its normal "
-               "weight. Load the variant under that exact name to get it.",
-               key, base);
+    warn_once(key,
+              "No font registered for '{}', drawing '{}' at its normal "
+              "weight. Load the variant under that exact name to get it.",
+              key, base);
     return base;
   }
-
-private:
-  // Asked on every text draw, so it needs a seen-set to warn once.
-  mutable std::set<std::string> weight_fallback_warned;
 };
 
 enum struct TextAlignment {

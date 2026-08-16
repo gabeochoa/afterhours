@@ -166,9 +166,6 @@ template <typename InputAction> struct UIContext : BaseComponent {
   std::set<EntityID> focused_ids;
 
   EntityID hot_id = ROOT;          // hot means the mouse is over this element
-  // Elements already warned about in is_right_click. Mutable so the check can
-  // stay const, like the rest of the query helpers around it.
-  mutable std::set<EntityID> right_click_warned;
   EntityID prev_hot_id = ROOT;     // previous frame's hot_id (for animations)
   EntityID focus_id = ROOT;        // current actual focused element
   EntityID visual_focus_id = ROOT; // the element the ring should be drawn on
@@ -342,12 +339,11 @@ template <typename InputAction> struct UIContext : BaseComponent {
     const Entity &e = opt.asE();
     if (e.has<HasClickListener>() || e.has<HasDragListener>())
       return; // hot could have landed here; the click was simply elsewhere
-    if (!right_click_warned.insert(id).second)
-      return;
-    log_warn("is_right_click({}) will never fire: this element has no click or "
-             "drag listener, so hit-testing never selects it. Put the check on "
-             "the button/row the user actually clicks.",
-             id);
+    warn_once(id,
+              "is_right_click({}) will never fire: this element has no click "
+              "or drag listener, so hit-testing never selects it. Put the "
+              "check on the button/row the user actually clicks.",
+              id);
   }
 
   [[nodiscard]] bool is_mouse_press(EntityID id) const {

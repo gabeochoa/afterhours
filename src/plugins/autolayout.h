@@ -197,15 +197,14 @@ struct AutoLayout {
     // being broken. The requirement is real: auto-fit sizes from the measured
     // text and wrapping changes the measurement.
     if (label.text_overflow == TextOverflow::Wrap &&
-        !widget.font_size_explicitly_set &&
-        !widget.warned_wrap_needs_font_size) {
-      widget.warned_wrap_needs_font_size = true;
-      log_warn("'{}' asks for TextOverflow::Wrap but has no explicit font "
-               "size, so it will not wrap. Add with_font_size(...) -- wrapping "
-               "needs a pinned size to measure against.",
-               ent.has<UIComponentDebug>()
-                   ? ent.get<UIComponentDebug>().name()
-                   : fmt::format("entity_{}", widget.id));
+        !widget.font_size_explicitly_set) {
+      warn_once(widget.id,
+                "'{}' asks for TextOverflow::Wrap but has no explicit font "
+                "size, so it will not wrap. Add with_font_size(...) -- "
+                "wrapping needs a pinned size to measure against.",
+                ent.has<UIComponentDebug>()
+                    ? ent.get<UIComponentDebug>().name()
+                    : fmt::format("entity_{}", widget.id));
     }
     Vector2Type result;
     if (wraps || content.find('\n') != std::string::npos) {
@@ -1137,19 +1136,17 @@ struct AutoLayout {
         const Dim pdim = widget.desired[axis].dim;
         if (pdim != Dim::Children && pdim != Dim::None)
           continue;
-        if (child->warned_expand_collapse)
-          continue;
-        child->warned_expand_collapse = true;
         auto dbg = [this](EntityID id) -> std::string {
           Entity &e = this->to_ent(id);
           return e.has<UIComponentDebug>() ? e.get<UIComponentDebug>().name()
                                            : fmt::format("entity_{}", id);
         };
-        log_warn("Expand child '{}' collapsed to 0: parent '{}' is {}-sized so "
-                 "there is no free space to fill. Give the parent a definite "
-                 "size (pixels/percent/expand) on that axis.",
-                 dbg(child->id), dbg(widget.id),
-                 pdim == Dim::Children ? "content" : "unset");
+        warn_once(child->id,
+                  "Expand child '{}' collapsed to 0: parent '{}' is {}-sized "
+                  "so there is no free space to fill. Give the parent a "
+                  "definite size (pixels/percent/expand) on that axis.",
+                  dbg(child->id), dbg(widget.id),
+                  pdim == Dim::Children ? "content" : "unset");
       }
     }
 
