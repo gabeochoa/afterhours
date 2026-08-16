@@ -166,6 +166,9 @@ template <typename InputAction> struct UIContext : BaseComponent {
   std::set<EntityID> focused_ids;
 
   EntityID hot_id = ROOT;          // hot means the mouse is over this element
+  // Elements already warned about in is_right_click. Mutable so the check can
+  // stay const, like the rest of the query helpers around it.
+  mutable std::set<EntityID> right_click_warned;
   EntityID prev_hot_id = ROOT;     // previous frame's hot_id (for animations)
   EntityID focus_id = ROOT;        // current actual focused element
   EntityID visual_focus_id = ROOT; // the element the ring should be drawn on
@@ -268,14 +271,24 @@ template <typename InputAction> struct UIContext : BaseComponent {
     return contains_in_subtree(id, hot_id);
   }
   /// A secondary click finished over this element or anything inside it --
-  /// what a context menu opens on. Pair it with `mouse.pos` for the anchor.
+  /// what a context menu opens on. Pair it with `mouse.pos` for the anchor:
+  ///
+  ///   if (ctx.is_right_click(row.ent().id)) { at = ctx.mouse.pos; open = true; }
   ///
   /// Uses last frame's hot, like mouse_was_in_subtree, because a screen asks
   /// this while it is being rebuilt and hot_id is not resolved until after.
-  /// The element (or a descendant) has to be hit-testable for hot to land on
-  /// it at all, which today means carrying a click or drag listener.
+  ///
+  /// The element or a descendant must be hit-testable -- carry a click or drag
+  /// listener -- because that is what hot resolves against. Asking about a
+  /// plain div is the obvious first thing to try and would otherwise never
+  /// fire, so it says so rather than quietly answering no.
   [[nodiscard]] bool is_right_click(EntityID id) const {
-    return mouse.right_just_released && contains_in_subtree(id, prev_hot_id);
+    if (!mouse.right_just_released)
+      return false;
+    if (contains_in_subtree(id, prev_hot_id))
+      return true;
+    warn_if_not_hit_testable(id);
+    return false;
   }
   /// Previous frame's answer. Use this while building a screen: hot_id is not
   /// resolved until after.
@@ -319,6 +332,23 @@ template <typename InputAction> struct UIContext : BaseComponent {
       // to be first, so counting it as intent would disable hover-follow.
       set_focus(id, FocusSource::Grab);
     }
+  }
+
+  /// Once per element. A right-click on a non-hit-testable element is a silent
+  /// no-op otherwise, and the caller has nothing to go on.
+  void warn_if_not_hit_testable(EntityID id) const {
+    OptEntity opt = UICollectionHolder::getEntityForID(id);
+    if (!opt.has_value())
+      return;
+    const Entity &e = opt.asE();
+    if (e.has<HasClickListener>() || e.has<HasDragListener>())
+      return; // hot could have landed here; the click was simply elsewhere
+    if (!right_click_warned.insert(id).second)
+      return;
+    log_warn("is_right_click({}) will never fire: this element has no click or "
+             "drag listener, so hit-testing never selects it. Put the check on "
+             "the button/row the user actually clicks.",
+             id);
   }
 
   [[nodiscard]] bool is_mouse_press(EntityID id) const {
