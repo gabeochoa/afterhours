@@ -152,6 +152,23 @@ struct HandleClickCommand : System<PendingE2ECommand> {
     }
 };
 
+// Handle 'right_click x y' command - secondary click at coordinates.
+struct HandleRightClickCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("right_click")) return;
+        if (!cmd.has_args(2)) {
+            cmd.fail("right_click requires x y arguments");
+            return;
+        }
+
+        auto [sw, sh] = e2e_screen_size();
+        test_input::simulate_right_click(cmd.coord_arg(0, sw),
+                                         cmd.coord_arg(1, sh));
+        cmd.consume();
+    }
+};
+
 // Handle 'double_click x y' command — two clicks with frame delay for
 // multi-click detection. Uses a phase counter so the command stays pending
 // across frames while the first click's auto-release completes.

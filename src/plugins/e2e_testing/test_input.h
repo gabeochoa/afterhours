@@ -87,6 +87,17 @@ inline void simulate_click(float x, float y) {
   simulate_mouse_press();
 }
 
+// Secondary click. Held for one frame then released by reset_frame, same as
+// the left button, so the UI sees a clean down-then-up transition.
+inline void simulate_right_click(float x, float y) {
+  set_mouse_position(x, y);
+  auto &m = input_injector::detail::mouse;
+  m.active = true;
+  m.right_down = true;
+  m.press_frames = 1;
+  m.auto_release = true;
+}
+
 // Reset per-frame state
 inline void reset_frame() {
   detail::key_consumed = false;
@@ -102,17 +113,28 @@ inline void reset_frame() {
   // Restore just_pressed if we still have press frames remaining
   // (simulate_mouse_press sets press_frames=1, so just_pressed survives
   // one reset_frame call after the injection frame)
-  if (pf > 0 && m.left_down) {
+  // Either button holds the press open. Gating this on left_down alone left a
+  // right-click held down forever -- press_frames never decremented and
+  // right_down never cleared -- so every later script in the run saw a stuck
+  // secondary button.
+  const bool any_down = m.left_down || m.right_down;
+  if (pf > 0 && any_down) {
     m.press_frames = pf - 1;
-    m.just_pressed = true;
-  } else if (m.auto_release && m.left_down) {
+    if (m.left_down)
+      m.just_pressed = true;
+  } else if (m.auto_release && any_down) {
     // Auto-release: simulate_click/simulate_mouse_press set auto_release
     // and press_frames=1. Once press_frames expires, release the button
     // so subsequent clicks see a clean down-transition and produce
     // just_pressed=true in the UI system.
+    // just_released is the LEFT button's flag; setting it for a right-only
+    // press would fake a left click that never happened.
+    if (m.left_down)
+      m.just_released = true;
     m.left_down = false;
-    m.just_released = true;
+    m.right_down = false;
     m.auto_release = false;
+    m.press_frames = 0;
   }
 }
 
@@ -225,6 +247,8 @@ inline bool is_mouse_button_down(int button, BackendFn backend_fn) {
   if (detail::test_mode) {
     if (button == 0)
       return input_injector::detail::mouse.left_down;
+    if (button == 1)
+      return input_injector::detail::mouse.right_down;
     return false;
   }
   return backend_fn(button);

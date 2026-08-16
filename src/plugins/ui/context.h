@@ -107,6 +107,13 @@ struct MousePointerState {
   bool left_down = false;
   bool just_pressed = false;
   bool just_released = false;
+  // Secondary button. Kept separate rather than generalising to an array: the
+  // left button drives hot/active/drag and the right one only ever asks "was
+  // there a click on this, and where", so sharing the machinery would mean
+  // teaching all of it which button it is talking about.
+  bool right_down = false;
+  bool right_just_pressed = false;
+  bool right_just_released = false;
   input::MousePosition press_pos{};
   bool press_moved = false;
   bool moved_this_frame = false; // pos changed since last frame (any button)
@@ -259,6 +266,16 @@ template <typename InputAction> struct UIContext : BaseComponent {
   /// hoverable child otherwise steals its parent row's hover fill.
   [[nodiscard]] bool mouse_in_subtree(EntityID id) const {
     return contains_in_subtree(id, hot_id);
+  }
+  /// A secondary click finished over this element or anything inside it --
+  /// what a context menu opens on. Pair it with `mouse.pos` for the anchor.
+  ///
+  /// Uses last frame's hot, like mouse_was_in_subtree, because a screen asks
+  /// this while it is being rebuilt and hot_id is not resolved until after.
+  /// The element (or a descendant) has to be hit-testable for hot to land on
+  /// it at all, which today means carrying a click or drag listener.
+  [[nodiscard]] bool is_right_click(EntityID id) const {
+    return mouse.right_just_released && contains_in_subtree(id, prev_hot_id);
   }
   /// Previous frame's answer. Use this while building a screen: hot_id is not
   /// resolved until after.

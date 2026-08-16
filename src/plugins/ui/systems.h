@@ -271,6 +271,13 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
       context.mouse.just_pressed = !prev_mouse_down && context.mouse.left_down;
       context.mouse.just_released = prev_mouse_down && !context.mouse.left_down;
 
+      const bool prev_right_down = context.mouse.right_down;
+      context.mouse.right_down = input::is_mouse_button_down(1);
+      context.mouse.right_just_pressed =
+          !prev_right_down && context.mouse.right_down;
+      context.mouse.right_just_released =
+          prev_right_down && !context.mouse.right_down;
+
       if (context.mouse.just_pressed) {
         context.mouse.press_pos = context.mouse.pos;
         context.mouse.press_moved = false;

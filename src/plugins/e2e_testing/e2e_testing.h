@@ -60,6 +60,7 @@ inline void register_builtin_handlers(SystemManager &sm) {
   sm.register_update_system(std::make_unique<HandleTypeCommand>());
   sm.register_update_system(std::make_unique<HandleKeyCommand>());
   sm.register_update_system(std::make_unique<HandleClickCommand>());
+  sm.register_update_system(std::make_unique<HandleRightClickCommand>());
   sm.register_update_system(std::make_unique<HandleDoubleClickCommand>());
   sm.register_update_system(std::make_unique<HandleTripleClickCommand>());
   sm.register_update_system(std::make_unique<HandleDragCommand>());
