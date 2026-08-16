@@ -1001,6 +1001,58 @@ draw_texture_in_rect(texture_manager::Texture texture, RectangleType rect,
                                     size, 0.f, tint);
 }
 
+// A separate pass because the bar goes on top of its content and the two
+// renderers order output differently (RenderBatched by layer, RenderImm by tree
+// order). One pass after both beats one implementation per renderer.
+template <typename InputAction>
+struct RenderScrollbars : SystemWithUIContext<HasScrollView> {
+  UIContext<InputAction> *context = nullptr;
+
+  virtual void once(float) override {
+    this->context = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+  }
+
+  virtual void for_each_with(Entity &entity, UIComponent &cmp,
+                             HasScrollView &scroll, float) override {
+    if (!context || !cmp.was_rendered_to_screen || cmp.should_hide)
+      return;
+
+    const Theme &theme = context->theme;
+    // Ride an outer view's scroll the same way the frame around us does.
+    RectangleType view = cmp.rect();
+    const Vector2Type outer = detail::accumulated_scroll_offset(entity);
+    view.x -= outer.x;
+    view.y -= outer.y;
+
+    // h720 sizes, so they track the window like the rest of the UI.
+    const float thickness = resolve_to_pixels(
+        scroll.scrollbar_thickness, context->screen_height,
+        cmp.resolved_scaling_mode, 1.f);
+    const float min_thumb = resolve_to_pixels(
+        scroll.scrollbar_min_thumb, context->screen_height,
+        cmp.resolved_scaling_mode, 1.f);
+
+    const auto draw_axis = [&](bool vertical) {
+      const ScrollbarGeometry g =
+          scrollbar_geometry(scroll, view, vertical, thickness, min_thumb);
+      if (!g.visible)
+        return;
+      // Fully rounded: at 6px wide that is a capsule, which reads as a bar.
+      draw_rectangle_rounded(g.track, 1.f, 6,
+                             theme.from_usage(Theme::Usage::Background),
+                             std::bitset<4>().set());
+      draw_rectangle_rounded(g.thumb, 1.f, 6,
+                             theme.from_usage(Theme::Usage::FontMuted),
+                             std::bitset<4>().set());
+    };
+
+    if (scroll.vertical_enabled)
+      draw_axis(true);
+    if (scroll.horizontal_enabled)
+      draw_axis(false);
+  }
+};
+
 template <typename InputAction>
 struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
   InputAction toggle_action;

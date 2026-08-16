@@ -580,7 +580,60 @@ struct HasScrollView : BaseComponent {
   // Check if content exceeds viewport (scrolling needed)
   bool needs_scroll_y() const { return content_size.y > viewport_size.y; }
   bool needs_scroll_x() const { return content_size.x > viewport_size.x; }
+
+  // Off for a view that supplies its own bar, or where one would be noise.
+  bool show_scrollbar = true;
+  // Sizes, not raw px: a 6px bar authored at 720p is half as thick, relative
+  // to everything around it, on a 1440p window. h720 scales with the screen.
+  Size scrollbar_thickness = h720(6.f);
+  Size scrollbar_min_thumb = h720(24.f); // grabbable even on a 10k-row list
 };
+
+// Where a scroll view's bar goes; empty when it needs none. Pure, so it is
+// testable without a renderer and both render paths read the same answer.
+struct ScrollbarGeometry {
+  bool visible = false;
+  RectangleType track{};
+  RectangleType thumb{};
+};
+
+/// `view` is the scroll view's on-screen rect, `vertical` picks the axis, and
+/// the two sizes arrive already resolved to pixels -- the caller has the screen
+/// dimensions, and keeping them out of here keeps this a pure function.
+inline ScrollbarGeometry scrollbar_geometry(const HasScrollView &scroll,
+                                            const RectangleType &view,
+                                            bool vertical, float thickness_px,
+                                            float min_thumb_px) {
+  ScrollbarGeometry g;
+  const bool needed = vertical ? scroll.needs_scroll_y() : scroll.needs_scroll_x();
+  if (!scroll.show_scrollbar || !needed)
+    return g;
+
+  const float thickness = std::max(1.f, thickness_px);
+  const float extent = vertical ? view.height : view.width;
+  const float content = vertical ? scroll.content_size.y : scroll.content_size.x;
+  const float offset = vertical ? scroll.scroll_offset.y : scroll.scroll_offset.x;
+  if (extent <= 0.f || content <= 0.f)
+    return g;
+
+  // Floored to stay grabbable, which is why travel below is (extent - len) and
+  // not the plain ratio -- the ratio parks it short of the end on long content.
+  const float len =
+      std::min(extent, std::max(min_thumb_px, extent * (extent / content)));
+  const float max_scroll = std::max(0.f, content - extent);
+  const float progress = max_scroll > 0.f ? std::clamp(offset / max_scroll, 0.f, 1.f) : 0.f;
+  const float travel = std::max(0.f, extent - len);
+
+  g.visible = true;
+  if (vertical) {
+    g.track = {view.x + view.width - thickness, view.y, thickness, view.height};
+    g.thumb = {g.track.x, view.y + progress * travel, thickness, len};
+  } else {
+    g.track = {view.x, view.y + view.height - thickness, view.width, thickness};
+    g.thumb = {view.x + progress * travel, g.track.y, len, thickness};
+  }
+  return g;
+}
 
 // Marker component that enables scissor clipping for children
 // Unlike HasScrollView, this only clips without scroll functionality

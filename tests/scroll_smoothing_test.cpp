@@ -12,6 +12,7 @@
 #include <string>
 
 using afterhours::ui::HasScrollView;
+using afterhours::ui::scrollbar_geometry;
 
 static int checks_run = 0;
 static int checks_passed = 0;
@@ -110,6 +111,68 @@ int main() {
       fprintf(stderr, "        60fps=%.1f 120fps=%.1f\n", slow.scroll_offset.y,
               fast.scroll_offset.y);
   }
+
+  // --- scrollbar geometry -------------------------------------------------
+  // Pure function, so it is checkable without a renderer -- and both render
+  // paths read it, so these numbers are the ones actually drawn.
+  {
+    const RectangleType view{100.f, 50.f, 200.f, 400.f};
+
+    HasScrollView fits;
+    fits.viewport_size = {200.f, 400.f};
+    fits.content_size = {200.f, 300.f};
+    check(!scrollbar_geometry(fits, view, true, 6.f, 24.f).visible,
+          "no bar when the content fits");
+
+    HasScrollView off;
+    off.viewport_size = {200.f, 400.f};
+    off.content_size = {200.f, 4000.f};
+    off.show_scrollbar = false;
+    check(!scrollbar_geometry(off, view, true, 6.f, 24.f).visible,
+          "no bar when switched off");
+
+    HasScrollView sv;
+    sv.viewport_size = {200.f, 400.f};
+    sv.content_size = {200.f, 800.f};
+    auto g = scrollbar_geometry(sv, view, true, 6.f, 24.f);
+    check(g.visible, "bar when the content overflows");
+    check(std::fabs(g.track.x + g.track.width - (view.x + view.width)) < 0.01f,
+          "track sits on the right edge");
+    check(std::fabs(g.thumb.height - 200.f) < 0.01f,
+          "half the content visible means a half-height thumb");
+    check(std::fabs(g.thumb.y - view.y) < 0.01f, "at rest the thumb is at top");
+
+    // Scrolled to the bottom, the thumb's bottom edge must meet the track's --
+    // this is what the min-thumb floor breaks if travel is computed as the
+    // plain ratio rather than (extent - thumb).
+    sv.scroll_offset.y = 400.f; // content 800 - viewport 400
+    g = scrollbar_geometry(sv, view, true, 6.f, 24.f);
+    check(std::fabs((g.thumb.y + g.thumb.height) -
+                    (view.y + view.height)) < 0.01f,
+          "fully scrolled parks the thumb at the bottom");
+
+    // A tiny thumb still has to be grabbable, and still has to reach the end.
+    HasScrollView huge;
+    huge.viewport_size = {200.f, 400.f};
+    huge.content_size = {200.f, 400000.f};
+    huge.scroll_offset.y = 399600.f;
+    g = scrollbar_geometry(huge, view, true, 6.f, 24.f);
+    check(g.thumb.height >= 24.f - 0.01f,
+          "thumb never shrinks below the minimum");
+    check(std::fabs((g.thumb.y + g.thumb.height) -
+                    (view.y + view.height)) < 0.01f,
+          "a floored thumb still reaches the bottom");
+
+    HasScrollView horiz;
+    horiz.viewport_size = {200.f, 400.f};
+    horiz.content_size = {400.f, 400.f};
+    g = scrollbar_geometry(horiz, view, false, 6.f, 24.f);
+    check(g.visible, "horizontal bar when the content is too wide");
+    check(std::fabs(g.track.y + g.track.height - (view.y + view.height)) <
+              0.01f,
+          "horizontal track sits on the bottom edge");
+  }
+
 
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {

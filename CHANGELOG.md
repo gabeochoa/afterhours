@@ -38,6 +38,17 @@ widest sibling left — usually nothing.
 - *What to do:* nothing, unless you were using a collapsed `expand()` as a
   way to hide something.
 
+**Scroll views draw a scrollbar.** `HasScrollView` had no indicator at all —
+you could scroll 10k rows with no idea where you were.
+
+- *You will see:* a capsule track and thumb on the overflowing edge of every
+  scroll view, on whichever axis is enabled. Six screens changed in wm, all
+  under 0.6%.
+- *What to do:* nothing, or `show_scrollbar = false` on the component for a
+  view that supplies its own. `scrollbar_thickness` and `scrollbar_min_thumb`
+  are h720 Sizes, so the bar tracks the window instead of being 720p-shaped.
+- Not draggable yet — it reports position, it does not set it.
+
 **Menu shortcuts sit one pad in from the panel edge.** They were flush, so
 the last glyph was clipped in half.
 
