@@ -62,6 +62,7 @@ inline void register_builtin_handlers(SystemManager &sm) {
   sm.register_update_system(std::make_unique<HandleClickCommand>());
   sm.register_update_system(std::make_unique<HandleRightClickCommand>());
   sm.register_update_system(std::make_unique<HandlePinchCommand>());
+  sm.register_update_system(std::make_unique<HandleAnimationModeCommand>());
   sm.register_update_system(std::make_unique<HandleDoubleClickCommand>());
   sm.register_update_system(std::make_unique<HandleTripleClickCommand>());
   sm.register_update_system(std::make_unique<HandleDragCommand>());
@@ -73,6 +74,8 @@ inline void register_builtin_handlers(SystemManager &sm) {
   sm.register_update_system(std::make_unique<HandleWaitCommand>());
   sm.register_update_system(std::make_unique<HandleWaitFramesCommand>());
   sm.register_update_system(std::make_unique<HandleExpectTextCommand>());
+  sm.register_update_system(
+      std::make_unique<HandleExpectTextInsensitiveCommand>());
   sm.register_update_system(std::make_unique<HandleExpectNoTextCommand>());
   sm.register_update_system(std::make_unique<HandleResizeCommand>());
   sm.register_update_system(std::make_unique<HandleAssertNoOverflowCommand>());

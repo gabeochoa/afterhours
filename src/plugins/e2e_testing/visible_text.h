@@ -2,9 +2,12 @@
 // Track rendered text for assertions
 #pragma once
 
+#include <cctype>
 #include <mutex>
 #include <string>
 #include <vector>
+
+#include "../../logging.h"
 
 namespace afterhours {
 namespace testing {
@@ -50,6 +53,25 @@ public:
     std::lock_guard<std::mutex> lock(mutex_);
     for (const auto &t : texts_) {
       if (t.find(needle) != std::string::npos)
+        return true;
+    }
+    return false;
+  }
+
+  // Case-insensitive substring. Game text is routinely styled to a different
+  // case than the string in the source, so a test asserting the source spelling
+  // fails for a reason that has nothing to do with what it is testing.
+  bool contains_ignoring_case(const std::string &needle) const {
+    const auto fold = [](std::string v) {
+      for (char &c : v)
+        c = static_cast<char>(
+            std::tolower(static_cast<unsigned char>(c)));
+      return v;
+    };
+    const std::string want = fold(needle);
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (const auto &t : texts_) {
+      if (fold(t).find(want) != std::string::npos)
         return true;
     }
     return false;

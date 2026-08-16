@@ -88,6 +88,20 @@ struct animation : developer::Plugin {
     return t;
   }
 
+  // Instant mode: every animation lands on its final value on the first update.
+  //
+  // Deliberately not an enabled/disabled flag. The animation code still runs and
+  // on_complete still fires, so nothing downstream has to branch on it -- which
+  // is what makes it safe to leave on. Three callers want the same knob: e2e
+  // wants screenshots of the settled state, accessibility wants reduce-motion,
+  // and dev iteration wants to skip the wait.
+  static inline bool &instant_flag() {
+    static bool v = false;
+    return v;
+  }
+  static void set_instant(bool on) { instant_flag() = on; }
+  static bool is_instant() { return instant_flag(); }
+
   template <typename Key> struct AnimationManager {
     using Hasher = typename KeyHasher<Key>::type;
 
@@ -97,9 +111,18 @@ struct animation : developer::Plugin {
         if (!tr.active)
           continue;
 
-        if (tr.duration <= 0.f) {
+        if (tr.duration <= 0.f || instant_flag()) {
+          // Skip to the END of the whole animation, not just this segment --
+          // a queued sequence's last value is the one it was going to settle
+          // on, and stopping at segment one would be a different picture.
+          while (!tr.queue.empty()) {
+            tr.to = tr.queue.front().to_value;
+            tr.queue.pop_front();
+          }
           tr.current = tr.to;
           tr.active = false;
+          if (tr.on_complete)
+            tr.on_complete();
         } else {
           tr.elapsed += dt;
           float u = apply_ease(tr.current_easing, tr.elapsed / tr.duration);
@@ -139,6 +162,9 @@ struct animation : developer::Plugin {
     }
 
     AnimTrack &ensure_track(Key key) { return tracks[key]; }
+    /// Drop every track. A screen change leaves the previous screen's
+    /// animations in here otherwise, still ticking against keys nothing reads.
+    void clear_all() { tracks.clear(); }
     bool is_active(Key key) const {
       auto it = tracks.find(key);
       return it != tracks.end() && it->second.active;

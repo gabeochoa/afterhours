@@ -8,6 +8,7 @@
 
 #include "../../font_helper.h"
 #include "../../logging.h"
+#include "../animation.h"
 #include "../ui/components.h"
 #include "../ui/ui_collection.h"
 #include "../ui/ui_core_components.h"
@@ -340,6 +341,25 @@ struct HandleMouseUpCommand : System<PendingE2ECommand> {
     }
 };
 
+// Handle 'disable_animations' / 'enable_animations'.
+//
+// Thin wrappers over animation::set_instant, which is the real knob -- e2e is
+// only one of its three callers (reduce-motion and dev iteration are the
+// others), which is why it lives in the animation plugin and not here.
+struct HandleAnimationModeCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed()) return;
+        if (cmd.is("disable_animations")) {
+            animation::set_instant(true);
+            cmd.consume();
+        } else if (cmd.is("enable_animations")) {
+            animation::set_instant(false);
+            cmd.consume();
+        }
+    }
+};
+
 // Handle 'pinch <delta>' command - inject a trackpad magnification delta,
 // consumed by the next get_pinch_delta(). +0.01 = grow 1%, same units as
 // NSEvent.magnification. Without this a pinch could ship but never be
@@ -467,6 +487,29 @@ struct HandleExpectTextCommand : System<PendingE2ECommand> {
         } else {
             // Mark for retry - text might appear after rendering
             cmd.retry();
+        }
+    }
+};
+
+// Handle 'expect_text_i "text"' - expect_text, ignoring case.
+//
+// A separate command rather than a flag on expect_text: a flag means parsing
+// optional args, and `expect_text_i "start"` reads better in a script than
+// `expect_text "start" --ignore-case`.
+struct HandleExpectTextInsensitiveCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("expect_text_i")) return;
+        if (cmd.args.empty()) {
+            cmd.fail("expect_text_i requires argument");
+            return;
+        }
+
+        if (VisibleTextRegistry::instance().contains_ignoring_case(
+                cmd.args[0])) {
+            cmd.consume();
+        } else {
+            cmd.retry(); // text may appear after rendering
         }
     }
 };
@@ -700,7 +743,15 @@ struct HandleUnknownCommand : System<PendingE2ECommand> {
         if (cmd.is_consumed() || cmd.is_retry())
             return;  // Skip consumed or retry-pending commands
 
-        cmd.fail(std::format("Unknown command: '{}'", cmd.name));
+        // Naming the ordering rule here because the other way to land on this
+        // is not a typo: register_all_handlers() installs this system, so any
+        // custom handler registered after it never gets a look and every one of
+        // its commands arrives here instead.
+        cmd.fail(std::format(
+            "Unknown command: '{}'. Either a typo, or its handler was "
+            "registered after register_unknown_handler()/"
+            "register_all_handlers() -- custom handlers must come before those.",
+            cmd.name));
     }
 };
 

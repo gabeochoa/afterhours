@@ -60,6 +60,7 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	animation_test \
 	autolayout_test \
 	dialog_test \
 	dump_ui_test \
