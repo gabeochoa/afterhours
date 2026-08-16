@@ -82,6 +82,15 @@ is a fraction of each widget's *short side*, so one value is ~8px on a row and
 panel_height = ui::measure_text_wrapped(body, width, font, 16.f).height;
 ```
 
+**`animation::set_instant(bool)`** — every track lands on its final value on
+the first update. The animation still runs and `on_complete` still fires, so
+nothing downstream branches on it. For e2e (settled screenshots), reduce-motion,
+and skipping the wait during development. `animation::clear_all()` drops tracks
+a screen change left behind. e2e: `disable_animations` / `enable_animations`.
+
+**`expect_text_i`** — `expect_text` ignoring case, for text styled to a
+different case than the source string.
+
 **Trackpad pinch (macOS).** `input::get_pinch_delta()` returns the
 magnification since the last frame (+0.01 = grow 1%), `input::is_pinching()`
 the gesture state. Consume as `zoom *= (1.f + delta)`.
