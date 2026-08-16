@@ -1443,7 +1443,12 @@ struct AutoLayout {
       float child_cross = is_column ? cx : cy;
       float cross_remaining = cross_axis_size - child_cross;
 
-      if (cross_remaining > 0.f) {
+      // Negative is allowed on purpose. A child bigger than the cross axis
+      // still has an alignment: centring it overflows both edges evenly, which
+      // is what CSS does and what the caller asked for. Gating on > 0 dropped
+      // back to FlexStart instead, so the overflow went entirely out one side
+      // and the widget sat off-centre by half its excess.
+      if (cross_remaining != 0.f) {
         // Use child's self_align if set, otherwise fall back to parent's
         // align_items
         if (child.self_align != SelfAlign::Auto) {

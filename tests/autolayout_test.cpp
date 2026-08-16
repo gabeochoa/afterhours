@@ -1270,6 +1270,43 @@ TEST(align_items_center_row) {
 }
 
 // ---------------------------------------------------------------------------
+// A child bigger than the cross axis still gets aligned. Centring it overflows
+// both edges evenly; falling back to FlexStart would put all the excess out one
+// side and sit the widget off-centre by half of it.
+// ---------------------------------------------------------------------------
+TEST(align_items_center_row_child_overflows_cross_axis) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(50));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_align_items(AlignItems::Center);
+  t.ui(root).set_flex_wrap(FlexWrap::NoWrap);
+
+  // 70 tall in a 50 tall parent: 20 of overflow, 10 out of each edge.
+  auto &child = t.make_ui(pixels(100), pixels(70));
+  t.add_child(root, child);
+  t.run(root);
+
+  CHECK_APPROX(t.ui(child).computed_rel[Axis::Y], -10.f);
+  // Centring pushes the bottom edge past the parent, which is the point.
+  EXPECT_WARN("extends outside parent");
+}
+
+TEST(align_items_flex_end_row_child_overflows_cross_axis) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(50));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_align_items(AlignItems::FlexEnd);
+  t.ui(root).set_flex_wrap(FlexWrap::NoWrap);
+
+  auto &child = t.make_ui(pixels(100), pixels(70));
+  t.add_child(root, child);
+  t.run(root);
+
+  // End-aligned: the bottom edges meet, so all 20 overflows off the top.
+  CHECK_APPROX(t.ui(child).computed_rel[Axis::Y], -20.f);
+}
+
+// ---------------------------------------------------------------------------
 // AlignItems with multiple children: each centered independently
 // ---------------------------------------------------------------------------
 TEST(align_items_center_multiple_children) {
