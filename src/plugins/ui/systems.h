@@ -1859,6 +1859,123 @@ template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
 /// Processes mouse wheel input for all entities with HasScrollView.
 /// Runs after RunAutoLayout so that entity rects reflect the current frame.
 /// Replaces the inline wheel handling that was previously in scroll_view().
+// Dragging the scrollbar thumb.
+//
+// The bar is drawn, not an entity, so it cannot go through the normal hit-test.
+// This runs before HandleClicks and swallows the press when it lands on a bar,
+// otherwise grabbing the thumb would also click whatever row is behind it.
+template <typename InputAction>
+struct HandleScrollbarDrag : SystemWithUIContext<HasScrollView> {
+  UIContext<InputAction> *context = nullptr;
+
+  virtual void once(float) override {
+    this->context = EntityHelper::get_singleton_cmp<UIContext<InputAction>>();
+  }
+
+  static bool inside(const RectangleType &r, float x, float y) {
+    return x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height;
+  }
+
+  virtual void for_each_with(Entity &entity, UIComponent &cmp,
+                             HasScrollView &scroll, float) override {
+    if (!context)
+      return;
+    if (!cmp.was_rendered_to_screen || cmp.should_hide ||
+        entity.has<ShouldHide>()) {
+      scroll.dragging_scrollbar = false;
+      return;
+    }
+
+    // Same rect the bar is drawn against, so grabbing it where you see it works
+    // even inside another scroll view.
+    RectangleType view = cmp.rect();
+    const Vector2Type outer = detail::accumulated_scroll_offset(entity);
+    view.x -= outer.x;
+    view.y -= outer.y;
+
+    const ScrollbarMetrics m = scrollbar_metrics(
+        scroll, cmp.resolved_scaling_mode, context->screen_height);
+    const float mx = context->mouse.pos.x, my = context->mouse.pos.y;
+
+    // Turn a thumb position back into a scroll offset. The inverse of what
+    // scrollbar_geometry does, so the thumb lands under the cursor.
+    const auto apply = [&](bool vertical, float near_edge) {
+      const ScrollbarGeometry g =
+          scrollbar_geometry(scroll, view, vertical, m.thickness, m.min_thumb);
+      if (!g.visible)
+        return;
+      const float extent = vertical ? view.height : view.width;
+      const float len = vertical ? g.thumb.height : g.thumb.width;
+      const float travel = extent - len;
+      const float content = vertical ? scroll.content_size.y : scroll.content_size.x;
+      const float max_scroll = std::max(0.f, content - extent);
+      if (travel <= 0.f || max_scroll <= 0.f)
+        return;
+      const float origin = vertical ? view.y : view.x;
+      const float pos = std::clamp(near_edge - origin, 0.f, travel);
+      const float value = (pos / travel) * max_scroll;
+      // Both, explicitly. ease_scroll spots a direct write by comparing
+      // scroll_offset against last_eased_offset -- but clamp_scroll below
+      // resyncs those two, so relying on that signal would let the easing pull
+      // the thumb straight back to a target still sitting where the drag
+      // started. A drag is authoritative: say so on both fields.
+      if (vertical) {
+        scroll.scroll_offset.y = value;
+        scroll.scroll_target.y = value;
+      } else {
+        scroll.scroll_offset.x = value;
+        scroll.scroll_target.x = value;
+      }
+      scroll.clamp_scroll();
+    };
+
+    if (scroll.dragging_scrollbar) {
+      if (!context->mouse.left_down) {
+        scroll.dragging_scrollbar = false;
+        return;
+      }
+      apply(scroll.drag_is_vertical,
+            (scroll.drag_is_vertical ? my : mx) - scroll.drag_grab_offset);
+      // Keep swallowing while held, or the release lands on the content.
+      context->set_hot(context->ROOT);
+      context->set_active(context->ROOT);
+      return;
+    }
+
+    if (!context->mouse.just_pressed)
+      return;
+
+    const auto try_grab = [&](bool vertical) -> bool {
+      const ScrollbarGeometry g =
+          scrollbar_geometry(scroll, view, vertical, m.thickness, m.min_thumb);
+      if (!g.visible || !inside(g.track, mx, my))
+        return false;
+
+      const float len = vertical ? g.thumb.height : g.thumb.width;
+      if (inside(g.thumb, mx, my)) {
+        // Grab where it was clicked, so the thumb does not jump under the
+        // cursor on the first pixel of movement.
+        scroll.drag_grab_offset =
+            (vertical ? my - g.thumb.y : mx - g.thumb.x);
+      } else {
+        // Clicking the track jumps there, centred, and keeps the drag.
+        scroll.drag_grab_offset = len / 2.f;
+      }
+      scroll.dragging_scrollbar = true;
+      scroll.drag_is_vertical = vertical;
+      apply(vertical, (vertical ? my : mx) - scroll.drag_grab_offset);
+      context->set_hot(context->ROOT);
+      context->set_active(context->ROOT);
+      return true;
+    };
+
+    if (scroll.vertical_enabled && try_grab(true))
+      return;
+    if (scroll.horizontal_enabled)
+      (void)try_grab(false);
+  }
+};
+
 template <typename InputAction>
 struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
   UIContext<InputAction> *context;

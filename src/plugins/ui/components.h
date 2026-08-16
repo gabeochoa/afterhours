@@ -583,6 +583,10 @@ struct HasScrollView : BaseComponent {
 
   // Off for a view that supplies its own bar, or where one would be noise.
   bool show_scrollbar = true;
+  // Set while the thumb is held. The drag owns scroll_offset until released.
+  bool dragging_scrollbar = false;
+  bool drag_is_vertical = true;
+  float drag_grab_offset = 0.f; // cursor's distance from the thumb's near edge
   // Sizes, not raw px: a 6px bar authored at 720p is half as thick, relative
   // to everything around it, on a 1440p window. h720 scales with the screen.
   Size scrollbar_thickness = h720(6.f);
@@ -596,6 +600,20 @@ struct ScrollbarGeometry {
   RectangleType track{};
   RectangleType thumb{};
 };
+
+/// Thickness and minimum thumb, resolved to pixels. Both the draw and the drag
+/// need these, and a scrollbar you cannot grab where you can see it is exactly
+/// what two copies of this arithmetic would produce.
+struct ScrollbarMetrics {
+  float thickness = 0.f;
+  float min_thumb = 0.f;
+};
+inline ScrollbarMetrics scrollbar_metrics(const HasScrollView &scroll,
+                                          ScalingMode mode, float screen_h,
+                                          float ui_scale = 1.f) {
+  return {resolve_to_pixels(scroll.scrollbar_thickness, screen_h, mode, ui_scale),
+          resolve_to_pixels(scroll.scrollbar_min_thumb, screen_h, mode, ui_scale)};
+}
 
 /// `view` is the scroll view's on-screen rect, `vertical` picks the axis, and
 /// the two sizes arrive already resolved to pixels -- the caller has the screen

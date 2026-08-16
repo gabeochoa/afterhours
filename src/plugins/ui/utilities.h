@@ -274,6 +274,10 @@ struct UIPluginPostUpdateBridge : System<> {
         // place, and before every consumer of hot/active.
         systems.push_back(
             std::make_unique<ui::ResolveHitTarget<InputAction>>());
+        // Before HandleClicks: a press on the bar must not also click the row
+        // behind it.
+        systems.push_back(
+            std::make_unique<ui::HandleScrollbarDrag<InputAction>>());
         systems.push_back(std::make_unique<ui::HandleClicks<InputAction>>());
         systems.push_back(
             std::make_unique<ui::HandleTrayNavigation<InputAction>>());

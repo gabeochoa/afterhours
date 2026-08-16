@@ -320,6 +320,11 @@ struct HandleMouseDownCommand : System<PendingE2ECommand> {
         m.left_down = true;
         m.just_pressed = true;
         m.press_frames = 0;
+        // mouse_down means HELD until mouse_up. auto_release is sticky global
+        // state -- any earlier click() leaves it set, and reset_frame would
+        // then let go of the button on the very next frame, so nothing could
+        // be dragged.
+        m.auto_release = false;
         m.active = true;
         cmd.consume();
     }

@@ -1024,17 +1024,12 @@ struct RenderScrollbars : SystemWithUIContext<HasScrollView> {
     view.x -= outer.x;
     view.y -= outer.y;
 
-    // h720 sizes, so they track the window like the rest of the UI.
-    const float thickness = resolve_to_pixels(
-        scroll.scrollbar_thickness, context->screen_height,
-        cmp.resolved_scaling_mode, 1.f);
-    const float min_thumb = resolve_to_pixels(
-        scroll.scrollbar_min_thumb, context->screen_height,
-        cmp.resolved_scaling_mode, 1.f);
+    const ScrollbarMetrics m = scrollbar_metrics(
+        scroll, cmp.resolved_scaling_mode, context->screen_height);
 
     const auto draw_axis = [&](bool vertical) {
       const ScrollbarGeometry g =
-          scrollbar_geometry(scroll, view, vertical, thickness, min_thumb);
+          scrollbar_geometry(scroll, view, vertical, m.thickness, m.min_thumb);
       if (!g.visible)
         return;
       // Fully rounded: at 6px wide that is a capsule, which reads as a bar.
