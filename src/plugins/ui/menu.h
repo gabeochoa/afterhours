@@ -101,12 +101,13 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
   // approximated at half the row height -- over-wide is harmless since the
   // shortcut is right-aligned inside it. Half the menu is the ceiling: past
   // that the label has nowhere to go and truncating the shortcut is better.
+  const float shortcut_pad = item_h * 0.25f;
   const float gutter =
       longest_shortcut == 0
           ? 0.f
           : std::min(width * 0.5f, static_cast<float>(longest_shortcut) *
                                            item_h * 0.3f +
-                                       item_h * 0.25f);
+                                       shortcut_pad * 2.f);
 
   const auto placed =
       overlay::place(anchor, width, total_h, ctx.screen_width,
@@ -170,10 +171,16 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Positioned against the LIST, not the item: inside the item it lands in
     // the item's content box (after padding) and spills past the menu edge.
+    //
+    // Held off the right edge by the same pad the gutter reserves. Ending the
+    // box exactly at `width` put right-aligned text hard against the panel
+    // boundary and the last glyph was clipped in half -- there is no bearing
+    // left for it once the box runs out.
     if (!item.shortcut.empty()) {
       div(ctx, mk(list.ent(), 10000 + index),
           ComponentConfig::inherit_from(config, "menu_shortcut")
-              .with_size(ComponentSize{pixels(gutter), pixels(item_h)})
+              .with_size(ComponentSize{pixels(gutter - shortcut_pad),
+                                       pixels(item_h)})
               .with_absolute_position(width - gutter, row_y)
               .with_label(item.shortcut)
               .with_alignment(TextAlignment::Right)

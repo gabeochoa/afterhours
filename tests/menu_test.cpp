@@ -304,6 +304,40 @@ TEST(menu_gutter_grows_with_the_longest_shortcut) {
     fprintf(stderr, "        narrow=%.1f wide=%.1f\n", narrow, wide);
 }
 
+// The shortcut is right-aligned, so its box's right edge is where the last
+// glyph lands. Running that box out to the panel edge left the final character
+// clipped in half -- "Cmd+C" rendered as "Cmd+" and a sliver.
+TEST(menu_shortcut_is_held_off_the_panel_edge) {
+  ImmTestHarness h;
+  bool open = true;
+  std::vector<MenuItem> items{MenuItem{"Copy path", "Cmd+C", false, false}};
+  h.begin_frame();
+  context_menu(h.context(), mk(h.root(), 0), items, Vector2Type{40, 40}, open,
+               ComponentConfig{}.with_size(
+                   ComponentSize{pixels(200), pixels(28)}));
+  h.layout_only();
+
+  UIComponent *list = h.find("menu_list");
+  UIComponent *sc = h.find("menu_shortcut");
+  ui_test::check(list != nullptr && sc != nullptr, "menu and shortcut exist",
+                 __FILE__, __LINE__);
+  if (!list || !sc)
+    return;
+
+  const float panel_right = list->rect().x + list->rect().width;
+  const float shortcut_right = sc->rect().x + sc->rect().width;
+  ui_test::check(shortcut_right < panel_right,
+                 "the shortcut stops before the panel edge", __FILE__,
+                 __LINE__);
+  // And still inside it -- an inset big enough to push the box out the far
+  // side would be its own bug.
+  ui_test::check(sc->rect().x > list->rect().x,
+                 "the shortcut stays within the panel", __FILE__, __LINE__);
+  if (shortcut_right >= panel_right)
+    fprintf(stderr, "        shortcut_right=%.1f panel_right=%.1f\n",
+            shortcut_right, panel_right);
+}
+
 namespace {
 // True when the named element carries rounded corners.
 bool has_rounding(const std::string &name) {
