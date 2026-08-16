@@ -493,13 +493,18 @@ public:
     return *this;
   }
 
-  // Set corner roundness
+  // Corner rounding, in pixels. Clears any fraction, since a theme setting
+  // both would just be asking which one wins.
   Builder &with_corner_radius(float px) {
     theme_.corner_radius = px;
+    theme_.roundness = 0.f;
     return *this;
   }
+  // Corner rounding as a fraction of each widget's short side. Clears any
+  // pixel radius for the same reason.
   Builder &with_roundness(float r) {
     theme_.roundness = r;
+    theme_.corner_radius.reset();
     return *this;
   }
 

@@ -194,6 +194,66 @@ TEST(corner_radius_px_reaches_the_component) {
   CHECK_APPROX(d.ent().get<HasRoundedCorners>().radius_px.value(), 6.f);
 }
 
+// Precedence: caller px > caller roundness > theme px > theme roundness.
+// The middle rung is the one that needs pinning -- radius_px wins inside
+// resolve_roundness, so a theme pixel radius reaching a caller who asked for a
+// fraction would silently override them.
+TEST(caller_roundness_beats_theme_corner_radius) {
+  ImmTestHarness h;
+  h.context().theme.corner_radius = 12.f;
+
+  auto d = div(h.context(), mk(h.root(), 0),
+               ComponentConfig{}
+                   .with_rounded_corners(std::bitset<4>(0b1111))
+                   .with_roundness(0.25f));
+  h.layout_only();
+
+  const auto &rc = d.ent().get<HasRoundedCorners>();
+  CHECK(!rc.radius_px.has_value());
+  CHECK_APPROX(rc.roundness, 0.25f);
+}
+
+TEST(theme_corner_radius_reaches_a_caller_who_did_not_ask) {
+  ImmTestHarness h;
+  h.context().theme.corner_radius = 12.f;
+
+  auto d = div(h.context(), mk(h.root(), 0),
+               ComponentConfig{}.with_rounded_corners(std::bitset<4>(0b1111)));
+  h.layout_only();
+
+  const auto &rc = d.ent().get<HasRoundedCorners>();
+  CHECK(rc.radius_px.has_value());
+  CHECK_APPROX(rc.radius_px.value(), 12.f);
+}
+
+TEST(caller_corner_radius_beats_its_own_roundness) {
+  ImmTestHarness h;
+  auto d = div(h.context(), mk(h.root(), 0),
+               ComponentConfig{}
+                   .with_rounded_corners(std::bitset<4>(0b1111))
+                   .with_roundness(0.9f)
+                   .with_corner_radius(3.f));
+  h.layout_only();
+
+  const RectangleType r{0, 0, 200, 40};
+  const auto &rc = d.ent().get<HasRoundedCorners>();
+  // px wins, so the resolved fraction is 3px worth, not 0.9.
+  CHECK_APPROX(resolve_roundness(rc.radius_px, rc.roundness, r) * 40.f / 2.f,
+               3.f);
+}
+
+// The two theme-level spellings are mutually exclusive: setting one clears the
+// other, so a theme can never be ambiguous about which it meant.
+TEST(theme_roundness_and_corner_radius_are_exclusive) {
+  Theme a = Theme::Builder().with_corner_radius(6.f).with_roundness(0.4f).build();
+  CHECK(!a.corner_radius.has_value());
+  CHECK_APPROX(a.roundness, 0.4f);
+
+  Theme b = Theme::Builder().with_roundness(0.4f).with_corner_radius(6.f).build();
+  CHECK(b.corner_radius.has_value());
+  CHECK_APPROX(b.corner_radius.value(), 6.f);
+}
+
 TEST(cursor_applies_when_set) {
   ImmTestHarness h;
   auto d = div(h.context(), mk(h.root(), 0),

@@ -116,10 +116,15 @@ inline ComponentConfig overwrite_defaults(HasUIContext auto &ctx,
   if (!config.rounded_corners.has_value()) {
     config.with_rounded_corners(ctx.theme.rounded_corners);
   }
+  // Precedence: caller px > caller roundness > theme px > theme roundness.
+  // The theme's pixel radius must not reach a caller who asked for a fraction,
+  // because radius_px wins in resolve_roundness -- filling both in
+  // unconditionally would let a theme default silently beat with_roundness().
+  const bool caller_chose_a_fraction = config.roundness.has_value();
   if (!config.roundness.has_value()) {
     config.roundness = ctx.theme.roundness;
   }
-  if (!config.corner_radius.has_value()) {
+  if (!config.corner_radius.has_value() && !caller_chose_a_fraction) {
     config.corner_radius = ctx.theme.corner_radius;
   }
   if (!config.segments.has_value()) {
