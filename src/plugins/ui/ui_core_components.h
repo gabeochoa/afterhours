@@ -11,6 +11,7 @@
 #include "../../ecs.h"
 #include "../../font_helper.h"
 #include "../../logging.h"
+#include "../../warn_once.h"
 #include "../color.h"
 #include "layout_types.h"
 #include "theme.h"

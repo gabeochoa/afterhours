@@ -23,6 +23,7 @@
 #include "../../drawing_helpers.h"
 #include "../../ecs.h"
 #include "../../logging.h"
+#include "../../warn_once.h"
 #include "../input_system.h"
 #include "components.h"
 #include "theme.h"
