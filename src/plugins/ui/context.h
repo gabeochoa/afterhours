@@ -334,8 +334,7 @@ template <typename InputAction> struct UIContext : BaseComponent {
     }
   }
 
-  /// Once per element. A right-click on a non-hit-testable element is a silent
-  /// no-op otherwise, and the caller has nothing to go on.
+  /// Once per element; otherwise a right-click there is a silent no-op.
   void warn_if_not_hit_testable(EntityID id) const {
     OptEntity opt = UICollectionHolder::getEntityForID(id);
     if (!opt.has_value())

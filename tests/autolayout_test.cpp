@@ -3593,6 +3593,66 @@ TEST(overflow_warning_ignores_margin_but_catches_real_overflow) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// TextOverflow::Wrap does nothing without a pinned font size -- auto-fit sizes
+// from the measured text and wrapping changes the measurement, so the two
+// would chase each other. That is deliberate, but it used to be silent, and a
+// setting that quietly does nothing reads as a broken feature.
+// ---------------------------------------------------------------------------
+namespace {
+// Runs a layout with a stub measure fn: every char 10px wide, 20px tall.
+void layout_with_text(TestLayout &t, Entity &root,
+                      const std::vector<Entity *> &mapping) {
+  AutoLayout al({1280, 720}, mapping);
+  al.set_measure_text_fn([](const std::string &, const std::string &s, float,
+                            float) -> Vector2Type {
+    return {static_cast<float>(s.size()) * 10.f, 20.f};
+  });
+  al.build_cmp_cache();
+  al.prune_stale_children(root.get<UIComponent>());
+  al.reset_and_calculate_standalone(root.get<UIComponent>());
+  al.calculate_those_with_parents(root.get<UIComponent>());
+  al.calculate_those_with_children(root.get<UIComponent>());
+  al.solve_violations(root.get<UIComponent>());
+  (void)t;
+}
+} // namespace
+
+TEST(wrap_without_explicit_font_size_warns) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(300));
+  auto &label = t.make_ui(pixels(200), Size{.dim = Dim::Text, .value = 0.f});
+  auto &lbl = label.addComponent<HasLabel>();
+  lbl.label = "a fairly long line of text that would wrap if it could";
+  lbl.text_overflow = TextOverflow::Wrap;
+  t.add_child(root, label);
+
+  std::vector<Entity *> mapping(static_cast<size_t>(label.id) + 1, nullptr);
+  mapping[root.id] = &root;
+  mapping[label.id] = &label;
+  layout_with_text(t, root, mapping);
+
+  EXPECT_WARN("will not wrap");
+}
+
+TEST(wrap_with_explicit_font_size_is_quiet) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(300));
+  auto &label = t.make_ui(pixels(200), Size{.dim = Dim::Text, .value = 0.f});
+  TestLayout::ui(label).font_size_explicitly_set = true;
+  TestLayout::ui(label).font_size = pixels(20.f);
+  auto &lbl = label.addComponent<HasLabel>();
+  lbl.label = "a fairly long line of text that would wrap if it could";
+  lbl.text_overflow = TextOverflow::Wrap;
+  t.add_child(root, label);
+
+  std::vector<Entity *> mapping(static_cast<size_t>(label.id) + 1, nullptr);
+  mapping[root.id] = &root;
+  mapping[label.id] = &label;
+  layout_with_text(t, root, mapping);
+  // No EXPECT_WARN: the runner fails the test if anything warned.
+}
+
 // ============================================================================
 // Main
 // ============================================================================

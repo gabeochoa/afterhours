@@ -4,6 +4,7 @@
 #include <array>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -100,6 +101,7 @@ struct UIComponent : BaseComponent {
   bool absolute = false;
   bool skip_grid_snap = false;
   bool warned_expand_collapse = false; // one-shot layout diagnostic guard
+  bool warned_wrap_needs_font_size = false; // ditto, for TextOverflow::Wrap
 
   // Absolute position in pixels, set from with_absolute_position(x, y)
   // during component init. Used by autolayout to set computed_rel for
@@ -417,13 +419,25 @@ struct FontManager : BaseComponent {
   // (convention: "<base>@<weight>"), falling back to the base if no variant is
   // loaded. Lets callers use with_font_weight() without every font having a
   // variant registered.
+  //
+  // The fallback warns. Silent, it reads as "no font weight support".
   std::string resolve_weighted(const std::string &base,
                                colors::FontWeight w) const {
     if (w == colors::FontWeight::Regular)
       return base;
     std::string key = base + weight_suffix(w);
-    return fonts.contains(key) ? key : base;
+    if (fonts.contains(key))
+      return key;
+    if (weight_fallback_warned.insert(key).second)
+      log_warn("No font registered for '{}', drawing '{}' at its normal "
+               "weight. Load the variant under that exact name to get it.",
+               key, base);
+    return base;
   }
+
+private:
+  // Asked on every text draw, so it needs a seen-set to warn once.
+  mutable std::set<std::string> weight_fallback_warned;
 };
 
 enum struct TextAlignment {

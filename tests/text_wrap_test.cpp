@@ -11,6 +11,7 @@
 #include "ui_test_harness.h"
 
 #include <afterhours/src/plugins/ui/rendering.h>
+#include <afterhours/src/plugins/ui/text_measure.h>
 
 using afterhours::ui::detail::measure_wrapped;
 using afterhours::ui::detail::wrap_text_to_width;
@@ -172,6 +173,89 @@ TEST(measure_wrapped_counts_blank_lines) {
   auto m = measure_wrapped("a\n\nb", 1000.f, measure10x20);
   CHECK(m.line_count == 3);
   CHECK(m.height == 60.f);        // blank middle line still occupies height
+}
+
+// ---------------------------------------------------------------------------
+// The public measuring API. Same wrapping as the detail:: helpers, but taking a
+// font name and size instead of a callable the caller has to build out of
+// FontManager. This is the thing apps were hand-rolling around.
+//
+// The harness installs a TextMeasureCache stub sized chars * font_size * 0.5,
+// so at font_size 20 each char is 10px wide and a line is 20px tall -- the same
+// numbers as measure10x20 above, which is what makes the two comparable.
+// ---------------------------------------------------------------------------
+TEST(public_wrap_text_matches_the_detail_helper) {
+  ui_test::ImmTestHarness h;
+  const std::string text = "the quick brown fox jumps";
+
+  auto want = wrap_text_to_width(text, 100.f, measure10);
+  auto got = afterhours::ui::wrap_text(text, 100.f, "__default", 20.f);
+
+  ui_test::check(got.size() == want.size(), "same line count", __FILE__,
+                 __LINE__);
+  if (got.size() != want.size()) {
+    fprintf(stderr, "        got=%zu want=%zu\n", got.size(), want.size());
+    return;
+  }
+  for (size_t i = 0; i < got.size(); i++)
+    ui_test::check(got[i] == want[i], "same line text", __FILE__, __LINE__);
+}
+
+TEST(public_measure_text_wrapped_matches_the_detail_helper) {
+  ui_test::ImmTestHarness h;
+  const std::string text = "the quick brown fox jumps over the lazy dog";
+
+  auto want = measure_wrapped(text, 100.f, measure10x20);
+  auto got = afterhours::ui::measure_text_wrapped(text, 100.f, "__default",
+                                                  20.f);
+
+  ui_test::check(got.line_count == want.line_count, "same line count",
+                 __FILE__, __LINE__);
+  CHECK_APPROX(got.width, want.width);
+  CHECK_APPROX(got.height, want.height);
+}
+
+// The height answer is the whole point -- apps were estimating it.
+TEST(public_measure_text_wrapped_reports_a_real_height) {
+  ui_test::ImmTestHarness h;
+  // 100px wide at 10px/char fits ten characters, so this needs several lines.
+  auto m = afterhours::ui::measure_text_wrapped(
+      "aaa bbb ccc ddd eee fff", 100.f, "__default", 20.f);
+  ui_test::check(m.line_count > 1, "wrapped onto multiple lines", __FILE__,
+                 __LINE__);
+  CHECK_APPROX(m.height, static_cast<float>(m.line_count) * 20.f);
+  ui_test::check(m.width <= 100.f, "no line exceeds the wrap width", __FILE__,
+                 __LINE__);
+}
+
+// ---------------------------------------------------------------------------
+// Font weight resolution. Asking for a weight with no registered variant falls
+// back to the base font -- documented and intended -- but it used to do so in
+// silence, which is how "no font weight support" gets filed against a library
+// that has it.
+// ---------------------------------------------------------------------------
+TEST(font_weight_resolves_to_a_registered_variant) {
+  afterhours::ui::FontManager fm;
+  fm.fonts["Inter"] = afterhours::Font{};
+  fm.fonts["Inter@bold"] = afterhours::Font{};
+
+  ui_test::check(fm.resolve_weighted("Inter", afterhours::colors::FontWeight::Bold) ==
+                     "Inter@bold",
+                 "bold resolves to the registered variant", __FILE__,
+                 __LINE__);
+  ui_test::check(fm.resolve_weighted("Inter", afterhours::colors::FontWeight::Regular) ==
+                     "Inter",
+                 "regular is the base font", __FILE__, __LINE__);
+}
+
+TEST(font_weight_without_a_variant_falls_back_to_the_base) {
+  afterhours::ui::FontManager fm;
+  fm.fonts["Inter"] = afterhours::Font{};
+
+  ui_test::check(fm.resolve_weighted("Inter", afterhours::colors::FontWeight::SemiBold) ==
+                     "Inter",
+                 "falls back rather than returning a missing name", __FILE__,
+                 __LINE__);
 }
 
 int main() { return ui_test::run_registered_tests("text wrap tests"); }

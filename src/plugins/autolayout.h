@@ -192,6 +192,21 @@ struct AutoLayout {
     const bool wraps = label.text_overflow == TextOverflow::Wrap &&
                        widget.font_size_explicitly_set &&
                        widget.computed[Axis::X] > 10.f;
+
+    // Wrap without a pinned size silently does nothing, which reads as Wrap
+    // being broken. The requirement is real: auto-fit sizes from the measured
+    // text and wrapping changes the measurement.
+    if (label.text_overflow == TextOverflow::Wrap &&
+        !widget.font_size_explicitly_set &&
+        !widget.warned_wrap_needs_font_size) {
+      widget.warned_wrap_needs_font_size = true;
+      log_warn("'{}' asks for TextOverflow::Wrap but has no explicit font "
+               "size, so it will not wrap. Add with_font_size(...) -- wrapping "
+               "needs a pinned size to measure against.",
+               ent.has<UIComponentDebug>()
+                   ? ent.get<UIComponentDebug>().name()
+                   : fmt::format("entity_{}", widget.id));
+    }
     Vector2Type result;
     if (wraps || content.find('\n') != std::string::npos) {
       const float max_w = wraps ? widget.computed[Axis::X] - 10.f : 1e9f;

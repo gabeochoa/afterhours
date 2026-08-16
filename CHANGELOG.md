@@ -63,6 +63,14 @@ is a fraction of each widget's *short side*, so one value is ~8px on a row and
   `theme.roundness` directly (wordproc zeroes it for square corners) keeps
   working.
 
+**Public text measuring** — `ui::measure_text_wrapped` / `ui::wrap_text`
+(`ui/text_measure.h`). Takes a font name and size instead of the callable the
+`ui::detail::` versions wanted:
+
+```cpp
+panel_height = ui::measure_text_wrapped(body, width, font, 16.f).height;
+```
+
 **Right-click.** `MousePointerState` tracks the secondary button, and
 `UIContext::is_right_click(id)` answers "a secondary click finished over this
 element or something inside it":
@@ -87,6 +95,22 @@ right-only press cannot fake a left click.
 **`is_mouse_button_down(1)` returns injector state in test mode** instead of
 always `false`. If a test relied on button 1 reading false, it will now see
 whatever the injector holds.
+
+### Two silent fallbacks now warn
+
+Same behaviour, they just say so. Expect a burst on first run — pre-existing,
+not new breakage.
+
+- `with_font_weight` needs a variant registered as `"<font>@bold"`; without one
+  it falls back to the base font. This is why it gets filed as "no font weight
+  support".
+- `TextOverflow::Wrap` does nothing unless a font size is also pinned.
+
+### Already works, despite the gap docs
+
+Don't rebuild: styled spans wrap (hanabi #22), `\n` is a hard break (#24),
+ellipsis + `expand()` doesn't hang, `with_styled_label` gives multi-colour
+text, `with_font_tier` is deprecated for `with_font_size(FontSize::Small)`.
 
 ### Docs
 
