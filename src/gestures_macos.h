@@ -25,6 +25,8 @@
 
 #include <atomic>
 
+#include "warn_once.h"
+
 namespace afterhours {
 namespace gestures {
 
@@ -70,14 +72,21 @@ inline void install_pinch_monitor() {
     return;
 
   Class ns_event = objc_getClass("NSEvent");
-  if (!ns_event)
-    return; // no AppKit (headless, or a non-Cocoa build): stay at zero
+  if (!ns_event) {
+    // Headless or a non-Cocoa build. Silent on purpose: no trackpad is normal.
+    return;
+  }
 
   using AddMonitorFn = id (*)(id, SEL, unsigned long long, id (^)(id));
   const SEL add = sel_registerName(
       "addLocalMonitorForEventsMatchingMask:handler:");
-  if (!class_respondsToSelector(object_getClass((id)ns_event), add))
+  if (!class_respondsToSelector(object_getClass((id)ns_event), add)) {
+    // AppKit is here but the API is not, which should not happen. Worth
+    // saying, because the symptom is a pinch that does nothing at all.
+    warn_once(0, "pinch: NSEvent has no local event monitor API; "
+                 "get_pinch_delta() will always read 0.");
     return;
+  }
 
   const SEL magnification = sel_registerName("magnification");
   const SEL phase = sel_registerName("phase");
@@ -111,6 +120,10 @@ inline void install_pinch_monitor() {
 #else
 
 /// No-op off macOS, or when the opt-in macro is not set.
+///
+/// Warns once *if asked for a pinch anyway*, not here -- calling this
+/// unconditionally at startup is the right thing to do, and a mouse-only
+/// machine should not be nagged for it.
 inline void install_pinch_monitor() {}
 
 #endif
