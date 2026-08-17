@@ -389,35 +389,65 @@ inline std::ostream &operator<<(std::ostream &os, const Axis &axis) {
   return os;
 }
 
+// Side names are capitalized because a static `left()` would collide with the
+// `left` field. Prefer the designated form -- Padding{.left = pixels(10)} --
+// which reads the same either way.
 struct Padding {
   Size top;
   Size left;
   Size bottom;
   Size right;
 
-  static Padding all(Size v) { return {v, v, v, v}; }
-  static Padding vertical(Size v) { return {v, {}, v, {}}; }
-  static Padding horizontal(Size v) { return {{}, v, {}, v}; }
-  static Padding Top(Size v) { return {v, {}, {}, {}}; }
-  static Padding Left(Size v) { return {{}, v, {}, {}}; }
-  static Padding Bottom(Size v) { return {{}, {}, v, {}}; }
-  static Padding Right(Size v) { return {{}, {}, {}, v}; }
+  static constexpr Padding all(Size v) { return {v, v, v, v}; }
+  static constexpr Padding vertical(Size v) { return {v, {}, v, {}}; }
+  static constexpr Padding horizontal(Size v) { return {{}, v, {}, v}; }
+  static constexpr Padding Top(Size v) { return {v, {}, {}, {}}; }
+  static constexpr Padding Left(Size v) { return {{}, v, {}, {}}; }
+  static constexpr Padding Bottom(Size v) { return {{}, {}, v, {}}; }
+  static constexpr Padding Right(Size v) { return {{}, {}, {}, v}; }
 };
 
+// Same field order as Padding on purpose: the two are interchangeable at most
+// call sites, and a positional {a, b, c, d} that means different things in each
+// is a mistake nothing would catch.
 struct Margin {
   Size top;
-  Size bottom;
   Size left;
+  Size bottom;
   Size right;
 
-  static Margin all(Size v) { return {v, v, v, v}; }
-  static Margin vertical(Size v) { return {v, v, {}, {}}; }
-  static Margin horizontal(Size v) { return {{}, {}, v, v}; }
-  static Margin Top(Size v) { return {v, {}, {}, {}}; }
-  static Margin Bottom(Size v) { return {{}, v, {}, {}}; }
-  static Margin Left(Size v) { return {{}, {}, v, {}}; }
-  static Margin Right(Size v) { return {{}, {}, {}, v}; }
+  static constexpr Margin all(Size v) { return {v, v, v, v}; }
+  static constexpr Margin vertical(Size v) { return {v, {}, v, {}}; }
+  static constexpr Margin horizontal(Size v) { return {{}, v, {}, v}; }
+  static constexpr Margin Top(Size v) { return {v, {}, {}, {}}; }
+  static constexpr Margin Left(Size v) { return {{}, v, {}, {}}; }
+  static constexpr Margin Bottom(Size v) { return {{}, {}, v, {}}; }
+  static constexpr Margin Right(Size v) { return {{}, {}, {}, v}; }
 };
+
+// Locks each factory to its side, so the order above cannot drift again.
+namespace detail {
+constexpr Size kProbe{Dim::Pixels, 7.f, 1.f};
+constexpr bool set(Size s) { return s.dim == Dim::Pixels; }
+
+static_assert(set(Padding::Top(kProbe).top) && set(Margin::Top(kProbe).top));
+static_assert(set(Padding::Left(kProbe).left) && set(Margin::Left(kProbe).left));
+static_assert(set(Padding::Bottom(kProbe).bottom) &&
+              set(Margin::Bottom(kProbe).bottom));
+static_assert(set(Padding::Right(kProbe).right) &&
+              set(Margin::Right(kProbe).right));
+
+constexpr bool only_vertical(auto p) {
+  return set(p.top) && set(p.bottom) && !set(p.left) && !set(p.right);
+}
+constexpr bool only_horizontal(auto p) {
+  return set(p.left) && set(p.right) && !set(p.top) && !set(p.bottom);
+}
+static_assert(only_vertical(Padding::vertical(kProbe)) &&
+              only_vertical(Margin::vertical(kProbe)));
+static_assert(only_horizontal(Padding::horizontal(kProbe)) &&
+              only_horizontal(Margin::horizontal(kProbe)));
+} // namespace detail
 
 /// Breakpoint helper for responsive layout decisions.
 ///

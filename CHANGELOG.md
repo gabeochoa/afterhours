@@ -146,6 +146,21 @@ not new breakage.
   support".
 - `TextOverflow::Wrap` does nothing unless a font size is also pinned.
 
+### `Margin` field order now matches `Padding`
+
+`Margin` declared `{top, bottom, left, right}` while `Padding` declared
+`{top, left, bottom, right}`, so a positional `{a, b, c, d}` meant different
+things in each with nothing to catch it. `Margin` now uses `Padding`'s order.
+
+- *You will see:* nothing, if you use designated initializers
+  (`Margin{.left = pixels(10)}`) or the `Margin::Left(...)` factories — those
+  are unchanged, and no positional use exists in any project checked.
+- *What to do:* if you wrote `Margin{a, b, c, d}` positionally, swap the middle
+  two. This will not produce a compile error, so grep for it.
+
+The factories are `static constexpr` now, with static_asserts pinning each one
+to its side so the order cannot drift again.
+
 ### Already works, despite the gap docs
 
 Don't rebuild: styled spans wrap (hanabi #22), `\n` is a hard break (#24),
