@@ -146,6 +146,25 @@ not new breakage.
   support".
 - `TextOverflow::Wrap` does nothing unless a font size is also pinned.
 
+### e2e failures are now charged to the script that caused them
+
+Two bugs, both of which made a red suite point at an innocent file.
+
+**A script's own `reset_test_state` ended the script.** That command was also
+the batch loader's internal separator, so a script using it legitimately
+inserted a phantom boundary and every result after it was attributed to the
+following script. The separator is now `__end_of_script`, which is not
+spellable in a script; `reset_test_state` just resets input state.
+
+**The last command of a script was finalized in the tick it was dispatched**,
+before it had run — so in single-script mode a failing final assertion exited
+0. Single-script mode also never consulted the handler error count at all.
+
+- *You will see:* failures land on the right script. If you have been ignoring
+  a flaky script, the blame may move to a different (real) one.
+- *What to do:* nothing. If you named a command `__end_of_script`, rename it —
+  the loader now rejects it.
+
 ### `Margin` field order now matches `Padding`
 
 `Margin` declared `{top, bottom, left, right}` while `Padding` declared

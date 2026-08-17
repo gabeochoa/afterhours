@@ -252,6 +252,12 @@ class E2ERunner {
    public:
     static constexpr float DEFAULT_TIMEOUT_SECONDS = 10.0f;
 
+    // The separator the batch loader puts between scripts. Deliberately not a
+    // spellable command: it used to be `reset_test_state`, so a script using
+    // that legitimately mid-run inserted a phantom boundary and every result
+    // after it was attributed to the following script.
+    static constexpr const char *kScriptBoundary = "__end_of_script";
+
     void load_script(const std::string &path) {
         commands_ = parse_script(path);
         script_path_ = path;
@@ -282,12 +288,17 @@ class E2ERunner {
 
             auto script_cmds = parse_script(script_path);
             for (auto &cmd : script_cmds) {
+                if (cmd.name == kScriptBoundary)
+                    log_error("{}:{}: '{}' is the runner's internal script "
+                              "separator and cannot be used as a command.",
+                              script_name, cmd.line_number, kScriptBoundary);
                 commands_.push_back(cmd);
             }
 
-            // Add reset command between scripts
+            // Close the script off. Scripts may also run `reset_test_state`
+            // themselves; that resets input state without ending the script.
             ParsedCommand reset_cmd;
-            reset_cmd.name = "reset_test_state";
+            reset_cmd.name = kScriptBoundary;
             reset_cmd.wait_seconds = 0.033f;  // ~2 frames at 60fps
             commands_.push_back(reset_cmd);
         }
@@ -306,6 +317,7 @@ class E2ERunner {
         draining_pending_ = false;
         current_script_idx_ = 0;
         current_script_errors_ = 0;
+        reset_command_error_count();
     }
 
     void set_timeout(float seconds) { timeout_seconds_ = seconds; }
@@ -377,10 +389,10 @@ class E2ERunner {
             return;
         }
 
-        // If the next command is reset_test_state, wait for pending
-        // commands to finish before dispatching it.
+        // Let the script's own commands resolve before closing it out,
+        // otherwise their errors land in the next script's window.
         const auto &cmd = commands_[index_];
-        if (cmd.name == "reset_test_state" && has_pending_commands()) {
+        if (cmd.name == kScriptBoundary && has_pending_commands()) {
             draining_pending_ = true;
             return;
         }
@@ -391,11 +403,10 @@ class E2ERunner {
             wait_time_ += slow_delay_;
         }
         index_++;
-
-        if (index_ >= commands_.size()) {
-            finalize_current_script();
-            finished_ = true;
-        }
+        // Deliberately no finalize here even at the end of the stream: the
+        // command just dispatched has not run yet. The index_ >= size branch
+        // above drains it first, which is what makes a single-script run
+        // report the failure instead of a false PASS.
     }
 
     /// Call each frame assuming 60fps (legacy, prefer tick(dt))
@@ -409,7 +420,10 @@ class E2ERunner {
             }
             return false;
         }
-        return failed_;
+        // Single-script mode has no ScriptResult for finalize to tally into,
+        // so ask the handlers directly -- otherwise a failed assertion here
+        // exits 0.
+        return failed_ || get_command_error_count() > 0;
     }
     bool has_timed_out() const { return timed_out_; }
     bool has_commands() const { return !commands_.empty(); }
@@ -458,7 +472,7 @@ class E2ERunner {
     void skip_current_script() {
         finalize_current_script();
         while (index_ < commands_.size()) {
-            if (commands_[index_].name == "reset_test_state") {
+            if (commands_[index_].name == kScriptBoundary) {
                 if (clear_fn_) clear_fn_();
                 test_input::reset_all();
                 key_release_detail::reset();
@@ -512,8 +526,8 @@ class E2ERunner {
             pending.consume();
         }
 
-        // Handle reset_test_state
-        if (cmd.name == "reset_test_state") {
+        // End of a script in a batch run.
+        if (cmd.name == kScriptBoundary) {
             finalize_current_script();
             pending.consume();
             if (clear_fn_) clear_fn_();
@@ -556,7 +570,7 @@ class E2ERunner {
 
     void skip_to_next_script() {
         while (index_ < commands_.size()) {
-            if (commands_[index_].name == "reset_test_state") {
+            if (commands_[index_].name == kScriptBoundary) {
                 test_input::reset_all();
                 key_release_detail::reset();
                 VisibleTextRegistry::instance().clear();
