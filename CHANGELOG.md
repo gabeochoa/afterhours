@@ -146,6 +146,29 @@ not new breakage.
   support".
 - `TextOverflow::Wrap` does nothing unless a font size is also pinned.
 
+### Headless runs degrade instead of collapsing
+
+For apps that run with no window at all. If your headless mode still creates a
+GL context (wm_afterhours' does) none of this changes anything.
+
+- **Resolution.** `GetRenderWidth()` returns 0 without a window, which made
+  `fetch_current_resolution()` report (0,0) and every layout collapse. It now
+  falls back to `window_manager::headless_resolution` (1280x720, assignable)
+  and warns once. Same guard on the sokol path, which also divided by a zero
+  DPI.
+- **Fonts.** `GetFontDefault()` has no atlas without a window, so
+  `MeasureTextEx` returned {0,0} and every text-sized widget did too.
+  `measure_text` now estimates from the font size and warns once.
+  `afterhours::font_is_usable(font)` is public if you want to check yourself.
+- **Shutdown.** New `afterhours::shutdown()` (`src/shutdown.h`) deletes
+  entities and then the backend, in that order. Leaving both to static
+  destruction let the graphics backend die first and entity destructors that
+  still called into it threw `std::bad_variant_access`. Call it at the end of
+  `main()`; idempotent.
+- `SINGLETON_FWD` still does not work in class scope — use
+  `SINGLETON_CLASS_FWD`, which has existed since `e9c662b`. Only a comment
+  changed here.
+
 ### e2e failures are now charged to the script that caused them
 
 Two bugs, both of which made a red suite point at an innocent file.

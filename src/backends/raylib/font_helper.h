@@ -6,6 +6,7 @@
 #include <string>
 
 #include "../../developer.h"
+#include "../../warn_once.h"
 
 namespace afterhours {
 
@@ -116,6 +117,26 @@ inline raylib::Font load_font_for_string(const std::string &content,
   return font;
 }
 
+// raylib builds its default font during InitWindow, so headless runs get one
+// with no atlas. MeasureTextEx returns {0,0} for it rather than crashing,
+// which silently collapses every text-sized widget to nothing.
+inline bool font_is_usable(const raylib::Font font) {
+  return font.texture.id != 0 && font.glyphCount > 0 && font.recs != nullptr;
+}
+
+// Rough advance-per-pixel-of-height for proportional Latin text. Only used
+// when there is no atlas to measure against; tune if your headless layout
+// assertions sit close to a wrap boundary.
+inline constexpr float kUnmeasurableGlyphAspect = 0.5f;
+
+inline raylib::Vector2 estimate_text_size(const char *content,
+                                          const float size) {
+  const size_t len = content ? std::strlen(content) : 0;
+  return raylib::Vector2{static_cast<float>(len) * size *
+                             kUnmeasurableGlyphAspect,
+                         size};
+}
+
 inline float measure_text_internal(const char *content, const float size) {
   return static_cast<float>(
       raylib::MeasureText(content, static_cast<int>(size)));
@@ -123,6 +144,13 @@ inline float measure_text_internal(const char *content, const float size) {
 inline raylib::Vector2 measure_text(const raylib::Font font,
                                     const char *content, const float size,
                                     const float spacing) {
+  if (!font_is_usable(font)) {
+    warn_once(0, "no glyph atlas to measure against, so text is being "
+                 "estimated at {}x its height per character. Expected "
+                 "headless -- load a font to measure for real.",
+              kUnmeasurableGlyphAspect);
+    return estimate_text_size(content, size);
+  }
   return raylib::MeasureTextEx(font, content, size, spacing);
 }
 
@@ -140,7 +168,7 @@ inline raylib::Vector2 measure_text_utf8(const raylib::Font font,
     return raylib::Vector2{0, 0};
   }
 
-  return raylib::MeasureTextEx(font, content, size, spacing);
+  return measure_text(font, content, size, spacing);
 }
 
 // Get the left-side bearing (offsetX) for the first glyph in a string.

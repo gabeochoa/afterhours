@@ -17,6 +17,7 @@
 #include "../graphics.h"
 #endif
 #include "../logging.h"
+#include "../warn_once.h"
 
 // Forward declarations for Metal/Sokol backend (defined in sokol_app.h and
 // the app's .mm translation unit respectively).
@@ -54,6 +55,12 @@ struct window_manager : developer::Plugin {
     }
   };
 
+  // What fetch_current_resolution() reports when the backend has no window to
+  // measure -- a headless run, or a call before the window exists. Without it
+  // the render size is 0, every layout collapses, and nothing says why.
+  // Assign before the first frame to pick a different size.
+  inline static Resolution headless_resolution{1280, 720};
+
 #ifdef AFTER_HOURS_USE_RAYLIB
   static Resolution fetch_current_resolution() {
     const auto scale = raylib::GetWindowScaleDPI();
@@ -61,6 +68,14 @@ struct window_manager : developer::Plugin {
         static_cast<float>(raylib::GetRenderWidth()) / std::max(1.0f, scale.x);
     const float rh =
         static_cast<float>(raylib::GetRenderHeight()) / std::max(1.0f, scale.y);
+
+    if (rw <= 0.f || rh <= 0.f) {
+      warn_once(0, "window reported a {}x{} render size, so layout has "
+                   "nothing to work with; using {}. Normal headless -- set "
+                   "window_manager::headless_resolution to change it.",
+                rw, rh, std::string(headless_resolution));
+      return headless_resolution;
+    }
 
     const float target_aspect = 16.0f / 9.0f;
     int width = 0;
@@ -101,10 +116,19 @@ struct window_manager : developer::Plugin {
     // Return logical (CSS) pixel dimensions so the UI works consistently
     // regardless of DPI scale. The metal_detail accessors return the headless
     // offscreen size (dpi=1) when there is no window.
-    float dpi = graphics::metal_detail::dpi_scale();
+    const float dpi = std::max(0.01f, graphics::metal_detail::dpi_scale());
+    const int w = graphics::metal_detail::screen_w();
+    const int h = graphics::metal_detail::screen_h();
+    if (w <= 0 || h <= 0) {
+      warn_once(0, "sokol reported a {}x{} size, so layout has nothing to "
+                   "work with; using {}. Set "
+                   "window_manager::headless_resolution to change it.",
+                w, h, std::string(headless_resolution));
+      return headless_resolution;
+    }
     return Resolution{
-        .width = static_cast<int>(static_cast<float>(graphics::metal_detail::screen_w()) / dpi),
-        .height = static_cast<int>(static_cast<float>(graphics::metal_detail::screen_h()) / dpi),
+        .width = static_cast<int>(static_cast<float>(w) / dpi),
+        .height = static_cast<int>(static_cast<float>(h) / dpi),
     };
   }
 

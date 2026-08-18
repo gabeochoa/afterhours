@@ -2,6 +2,9 @@
 
 #include <memory>
 
+// Namespace scope only. Inside a struct or class body use
+// SINGLETON_CLASS_FWD -- a plain `inline` member is ill-formed there, and the
+// compiler error does not mention this macro.
 #define SINGLETON_FWD(type) \
     struct type;            \
     inline std::shared_ptr<type> type##_single;

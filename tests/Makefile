@@ -86,6 +86,7 @@ ALL_TESTS := \
 	slider_test \
 	split_test \
 	downstream_gaps_test \
+	headless_fallback_test \
 	stepper_test \
 	styling_test \
 	system_tags_test \
@@ -103,6 +104,7 @@ ALL_TESTS += sokol_blend_test
 endif
 
 RAYLIB_TESTS := \
+	headless_fallback_test \
 	dialog_test \
 	dump_ui_test \
 	progress_bar_test \
