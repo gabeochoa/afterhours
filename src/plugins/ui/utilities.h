@@ -283,6 +283,8 @@ struct UIPluginPostUpdateBridge : System<> {
             std::make_unique<ui::HandleTrayNavigation<InputAction>>());
         systems.push_back(
             std::make_unique<ui::HandleScrollInput<InputAction>>());
+        // After it: the view that moved drives its sync_group.
+        systems.push_back(std::make_unique<ui::SyncScrollViews>());
         systems.push_back(
             std::make_unique<ui::CloseDropdownOnClickOutside<InputAction>>());
         systems.push_back(std::make_unique<ui::HandleDrags<InputAction>>());

@@ -444,7 +444,9 @@ struct MeasureScrollViews : System<HasScrollView, UIComponent> {
     RectangleType parent_rect = cmp.rect();
     scroll.viewport_size = {parent_rect.width, parent_rect.height};
 
-    bool is_row_layout = scroll.horizontal_enabled && !scroll.vertical_enabled;
+    // How children stack, not how we scroll: a scrolling column is a column.
+    bool is_row_layout =
+        static_cast<bool>(cmp.flex_direction & FlexDirection::Row);
 
     // Compute content size from children
     float total_width = 0.0f;
@@ -1973,6 +1975,65 @@ struct HandleScrollbarDrag : SystemWithUIContext<HasScrollView> {
       return;
     if (scroll.horizontal_enabled)
       (void)try_grab(false);
+  }
+};
+
+/// Keeps scroll views that share a HasScrollView::sync_group together.
+///
+/// Runs after HandleScrollInput, so the member the wheel moved is already
+/// authoritative and everyone else is brought to it. Both the target and the
+/// eased offset are copied: matching only targets would leave the followers a
+/// frame behind, and once the offsets agree they stay in lockstep on their own
+/// because each view eases the same distance every frame.
+/// Keeps views sharing a HasScrollView::sync_group at the same offset.
+// Applies in after(): EntityQuery cannot see UI entities from once().
+struct SyncScrollViews : System<HasScrollView> {
+  struct Position {
+    Vector2Type target;
+    Vector2Type offset;
+  };
+
+  std::map<size_t, Position> drivers;
+  std::vector<std::reference_wrapper<HasScrollView>> members;
+
+  virtual void once(float) override {
+    drivers.clear();
+    members.clear();
+  }
+
+  virtual void for_each_with(Entity &, HasScrollView &sv, float) override {
+    if (sv.sync_group == 0)
+      return;
+    members.push_back(sv);
+
+    // Unchanged since we wrote it: a follower.
+    if (sv.scroll_target.x == sv.last_synced.x &&
+        sv.scroll_target.y == sv.last_synced.y)
+      return;
+    drivers[sv.sync_group] = Position{sv.scroll_target, sv.scroll_offset};
+  }
+
+  virtual void after(float) override {
+    if (drivers.empty())
+      return;
+
+    for (HasScrollView &sv : members) {
+      const auto it = drivers.find(sv.sync_group);
+      if (it == drivers.end())
+        continue;
+
+      if (sv.vertical_enabled) {
+        sv.scroll_target.y = it->second.target.y;
+        sv.scroll_offset.y = it->second.offset.y;
+      }
+      if (sv.horizontal_enabled) {
+        sv.scroll_target.x = it->second.target.x;
+        sv.scroll_offset.x = it->second.offset.x;
+      }
+      sv.clamp_scroll();
+      // Post-clamp, or a clamped view reads as a driver.
+      sv.last_synced = sv.scroll_target;
+    }
   }
 };
 

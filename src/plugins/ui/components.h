@@ -528,6 +528,9 @@ struct HasScrollView : BaseComponent {
   bool invert_scroll = false;         // Invert scroll direction (non-natural)
   bool auto_overflow =
       false; // Auto mode: only clip/scroll when content overflows
+  // Non-zero: views sharing an id scroll together, on enabled axes only.
+  size_t sync_group = 0;
+  Vector2Type last_synced = {0, 0}; // what the sync last wrote
 
   HasScrollView() = default;
   explicit HasScrollView(float speed) : scroll_speed(speed) {}

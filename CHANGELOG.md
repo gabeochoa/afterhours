@@ -146,6 +146,36 @@ not new breakage.
   support".
 - `TextOverflow::Wrap` does nothing unless a font size is also pinned.
 
+### A horizontally-scrolling column no longer over-reports its content width
+
+`MeasureScrollViews` decided row-vs-column from the *scroll flags*
+(`horizontal_enabled && !vertical_enabled`) rather than the container's actual
+`flex_direction`. A `vstack` scrolled on X — which is every table — took the
+row branch and summed its rows' widths instead of taking the max.
+
+- *You will see:* a table with N rows reported N times its real content width,
+  so it scrolled roughly N times too far past its end. Now correct.
+- *What to do:* nothing. If you compensated with a fudge factor on
+  `content_size.x`, remove it.
+
+### Synchronized scroll views
+
+`HasScrollView::sync_group` — give two or more views the same non-zero id and
+scrolling any one of them moves the rest. For side-by-side diffs, a frozen
+header over a table, that sort of thing.
+
+```cpp
+auto left  = vstack(ctx, mk(parent, 0), cfg.with_overflow(Overflow::Scroll, Axis::Y));
+left.ent().get<HasScrollView>().sync_group = 1;
+// ...same on the right pane
+```
+
+Only the axes a member has enabled get written, so a header row with
+`vertical_enabled = false` tracks x without picking up the group's y. Each view
+still clamps to its own content, so a shorter pane stops at its own end.
+
+- *You will see:* nothing, unless you set `sync_group`. Purely additive.
+
 ### Headless runs degrade instead of collapsing
 
 For apps that run with no window at all. If your headless mode still creates a
