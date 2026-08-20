@@ -159,8 +159,8 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
                 cmd.args.push_back(rest.substr(eq + 1));
             }
             cmd.wait_seconds = 1 * frame;
-        } else if (cmd.name == "expect_text" ||
-                   cmd.name == "expect_text_i") {
+        } else if (cmd.name == "expect_text" || cmd.name == "expect_text_i" ||
+                   cmd.name == "expect_no_text") {
             cmd.args.push_back(parse_quoted());
             cmd.wait_seconds = 1 * frame;
         } else if (cmd.name == "expect_selected_text") {

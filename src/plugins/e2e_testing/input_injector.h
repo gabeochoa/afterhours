@@ -31,20 +31,25 @@ struct MouseState {
 };
 inline MouseState mouse;
 
-// Synthetic scroll wheel state (consumed once per frame)
+// Synthetic scroll wheel state.
+//
+// Survives one extra reset, because the reader may run before the command that
+// sets it -- HandleScrollInput does exactly that, which is why injected wheel
+// events used to do nothing at all. Not drained on read: raylib's
+// GetMouseWheelMove() returns the same value for every call within a frame,
+// and the injector has to match or it lies about the thing it stands in for.
 struct WheelState {
   float x = 0.0f;
   float y = 0.0f;
 };
 inline WheelState wheel;
+inline bool wheel_fresh = false;
 
 // Trackpad magnification, in NSEvent.magnification units (+0.01 = grow 1%).
 //
-// Survives one extra reset, unlike the wheel. The wheel's consumer is a UI
-// system that always runs after the command that sets it; a pinch is read by
-// app code, which may build its frame before the command system runs. Clearing
-// on the first reset would make the value visible or not depending on system
-// order, which is not something a test should have to know.
+// Same one-frame survival, but drained on read, because the hardware path
+// (gestures::consume_pinch_delta) drains too. Returning it twice made e2e pass
+// a wrong implementation and fail a right one.
 inline float pinch = 0.0f;
 inline bool pinching = false;
 inline bool pinch_fresh = false;
@@ -198,12 +203,12 @@ inline bool is_mouse_button_released() {
 inline void set_mouse_wheel(float dx, float dy) {
   detail::wheel.x = dx;
   detail::wheel.y = dy;
+  detail::wheel_fresh = true;
   // Wheel injection should be observable even if no prior mouse move occurred.
   detail::mouse.active = true;
 }
 
-/// Read the synthetic wheel delta for this frame.
-/// The value is cleared by reset_frame().
+/// Read the synthetic wheel delta. Stable within a frame, like raylib's.
 inline Position consume_wheel() {
   return Position{detail::wheel.x, detail::wheel.y};
 }
@@ -215,8 +220,13 @@ inline void set_pinch(float delta) {
   detail::pinch_fresh = true;
 }
 
-/// Read the synthetic pinch delta. Cleared by reset_frame().
-inline float consume_pinch() { return detail::pinch; }
+/// Read the synthetic pinch delta, then zero it. Delivered exactly once,
+/// whenever the consumer runs, matching the hardware accessor.
+inline float consume_pinch() {
+  const float v = detail::pinch;
+  detail::pinch = 0.f;
+  return v;
+}
 inline bool is_pinching() { return detail::pinching; }
 
 /// Reset per-frame state (call at start of frame)
@@ -224,7 +234,11 @@ inline void reset_frame() {
   detail::mouse.just_pressed = false;
   detail::mouse.just_released = false;
   detail::mouse.delta = {};
-  detail::wheel = {};
+  if (detail::wheel_fresh) {
+    detail::wheel_fresh = false; // survive this reset, clear on the next
+  } else {
+    detail::wheel = {};
+  }
   if (detail::pinch_fresh) {
     detail::pinch_fresh = false; // survive this reset, clear on the next
   } else {
@@ -253,6 +267,10 @@ inline void reset_all() {
   detail::pending_click = {};
   detail::key_hold = {};
   detail::wheel = {};
+  detail::wheel_fresh = false;
+  detail::pinch = 0.0f;
+  detail::pinching = false;
+  detail::pinch_fresh = false;
 }
 
 } // namespace input_injector

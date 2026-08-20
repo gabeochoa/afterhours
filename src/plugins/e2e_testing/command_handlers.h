@@ -531,9 +531,16 @@ struct HandleExpectNoTextCommand : System<PendingE2ECommand> {
             cmd.fail(std::format(
                 "expect_no_text failed: '{}' IS visible but should not be",
                 cmd.args[0]));
-        } else {
-            cmd.consume();
+            return;
         }
+        // An empty registry means nothing has rendered yet, not that the text
+        // is gone. Handlers run before the render that fills it, so accepting
+        // absence here made this command pass unconditionally.
+        if (registry.get_all().empty()) {
+            cmd.retry();
+            return;
+        }
+        cmd.consume();
     }
 };
 

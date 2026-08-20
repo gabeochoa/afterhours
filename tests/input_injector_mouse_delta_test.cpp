@@ -98,7 +98,10 @@ TEST(scheduled_click_sets_press_and_release_edges) {
   CHECK(input_injector::is_mouse_button_released());
 }
 
-TEST(mouse_wheel_is_one_shot) {
+// The wheel survives one reset_frame on purpose: its reader can run before the
+// command that sets it (HandleScrollInput does), and clearing on the first
+// reset meant injected wheel events did nothing at all.
+TEST(mouse_wheel_survives_one_reset_then_clears) {
   input_injector::reset_all();
   CHECK(!input_injector::detail::mouse.active);
   input_injector::set_mouse_wheel(1.5f, -2.0f);
@@ -114,8 +117,21 @@ TEST(mouse_wheel_is_one_shot) {
 
   input_injector::reset_frame();
   auto w3 = input_injector::consume_wheel();
-  CHECK(w3.x == 0.0f);
-  CHECK(w3.y == 0.0f);
+  CHECK(w3.x == 1.5f);
+  CHECK(w3.y == -2.0f);
+
+  input_injector::reset_frame();
+  auto w4 = input_injector::consume_wheel();
+  CHECK(w4.x == 0.0f);
+  CHECK(w4.y == 0.0f);
+}
+
+// Pinch drains on read, unlike the wheel, because the hardware accessor does.
+TEST(pinch_is_delivered_exactly_once) {
+  input_injector::reset_all();
+  input_injector::set_pinch(0.25f);
+  CHECK(input_injector::consume_pinch() == 0.25f);
+  CHECK(input_injector::consume_pinch() == 0.0f);
 }
 
 TEST(last_move_wins_within_frame) {

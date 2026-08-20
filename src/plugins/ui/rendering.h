@@ -2341,11 +2341,18 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         }
 
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        // Register text for E2E testing (only visible-in-viewport text)
+        // Register text for E2E testing. Through the same clip rect the
+        // scissor uses, or text scrolled out of a pane still reads as visible
+        // and expect_text/expect_no_text both lie about it.
         if (testing::test_input::detail::test_mode) {
+          RectangleType vis = draw_rect;
+          auto [has_clip, clip] =
+              detail::compute_intersected_clip_rect(entity);
+          if (has_clip)
+            vis = detail::intersect_rects(draw_rect, clip);
           testing::VisibleTextRegistry::instance().register_text_if_visible(
-              hasLabel.label, draw_rect.x, draw_rect.y, draw_rect.width,
-              draw_rect.height, context.screen_width, context.screen_height);
+              hasLabel.label, vis.x, vis.y, vis.width, vis.height,
+              context.screen_width, context.screen_height);
         }
 #endif
       }

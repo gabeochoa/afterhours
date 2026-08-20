@@ -107,9 +107,9 @@ app-wide, it needs no window handle and serves both the raylib and sokol/Metal
 backends from one implementation.
 
 e2e: `pinch <delta>` command, plus `input_injector::set_pinch/consume_pinch`.
-Note an injected pinch survives one extra `reset_frame` where the wheel does
-not — app code may build its frame before the command system runs, and a test
-should not have to know the system order.
+An injected pinch survives one extra `reset_frame`, because app code may build
+its frame before the command system runs and a test should not have to know the
+system order. It is drained on read, so it is delivered exactly once.
 
 **Right-click.** `MousePointerState` tracks the secondary button, and
 `UIContext::is_right_click(id)` answers "a secondary click finished over this
@@ -145,6 +145,29 @@ not new breakage.
   it falls back to the base font. This is why it gets filed as "no font weight
   support".
 - `TextOverflow::Wrap` does nothing unless a font size is also pinned.
+
+### e2e assertions that were passing without testing anything
+
+Four bugs that all failed green. If you have e2e coverage, expect some of it to
+start failing — that is the point.
+
+- **Injected `scroll_wheel` did nothing.** The reader can run before the
+  command that sets it, and the value was wiped by `reset_frame()` in between.
+  The wheel now survives one reset. It is *not* drained on read, matching
+  raylib's `GetMouseWheelMove()`.
+- **Injected pinch was delivered twice.** Now drained on read, matching
+  `gestures::consume_pinch_delta()`. Fixes the double-apply reported downstream.
+- **`expect_no_text` always passed.** It was missing from `runner.h`'s parse
+  chain, so its argument arrived as `"quoted` fragments, and it treated an
+  empty (not-yet-rendered) registry as proof of absence.
+- **The visible-text registry ignored clip rects.** Text scrolled out of a pane
+  still counted as visible, so `expect_no_text` could not express "scrolled
+  away" and `expect_text` gave false positives for clipped content. It now
+  intersects with the same clip rect the render scissor uses.
+
+*What to do:* re-run your suite and read the new failures before silencing
+them. Two of ours were real: a script that resized to 1080p and never resized
+back, and an assertion on a row that had never been on screen.
 
 ### A horizontally-scrolling column no longer over-reports its content width
 
