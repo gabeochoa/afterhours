@@ -8,6 +8,41 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+### A scroll view no longer squashes its content to fit
+
+`solve_violations` shrinks children that overflow the main axis. It never
+exempted scroll views, where overflowing is the entire point — so a list longer
+than its viewport had every row shrunk toward zero instead of scrolling.
+
+This was latent until `48f808d`, which made `solve_violations` recurse into
+absolutely-positioned subtrees. An app whose panels are absolute (floatinghotel
+builds all of its chrome that way) had never run the solver on them at all;
+after that commit it did, and a 55-row commit list collapsed into a 4px-tall
+smear. Strict `pixels()` children were unaffected, which is why it did not
+show up in wm.
+
+- *You will see:* rows inside a scroll view keep the height you asked for.
+- *What to do:* nothing. If you compensated by pinning strictness to 1 to stop
+  the squashing, you can stop.
+- Only the axis the view actually scrolls is exempt, and only shrinking —
+  under-filled content still expands as before.
+
+### `expect_no_text` waits for a render, by generation not by frames
+
+It concluded from whatever the registry held when the handler ran, which is the
+*previous* render. An app that runs several `tick()`s per rendered frame — one
+draining `wait_frames` in a loop, say — could burn the whole wait without a
+single render, so the assertion tested the frame the preceding click was made
+on. It now waits for `VisibleTextRegistry::generation()` to change, which only
+`clear()` (once per render pass) does.
+
+- Failures also name the label that matched now. Matching is a substring test,
+  so the hit is often a longer string nobody had in mind.
+- *What to do:* nothing. If a script only passed because the assertion read a
+  stale frame, it will now fail — read it before silencing it.
+- Still worth knowing: a wait that renders nothing gives assertions nothing to
+  read. If your loop batches ticks, render between them.
+
 ### Visual changes — expect screenshot baselines to move
 
 **A child bigger than its parent's cross axis is now aligned instead of

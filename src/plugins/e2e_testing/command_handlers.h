@@ -526,18 +526,37 @@ struct HandleExpectNoTextCommand : System<PendingE2ECommand> {
             return;
         }
 
+        // The render pass fills the registry and runs after the handlers, so
+        // what is in there now predates this command: absence would mean
+        // "nothing rendered yet" and a hit would mean "visible before my
+        // command ran". Wait for a render either way -- counted by the
+        // registry's generation, not by frames, because an app is free to tick
+        // many times per rendered frame and only a render refills it.
         auto &registry = VisibleTextRegistry::instance();
-        if (registry.contains(cmd.args[0])) {
-            cmd.fail(std::format(
-                "expect_no_text failed: '{}' IS visible but should not be",
-                cmd.args[0]));
+        const long long gen = static_cast<long long>(registry.generation());
+        if (cmd.seen_render < 0) {
+            cmd.seen_render = gen;
+            cmd.retry();
             return;
         }
-        // An empty registry means nothing has rendered yet, not that the text
-        // is gone. Handlers run before the render that fills it, so accepting
-        // absence here made this command pass unconditionally.
-        if (registry.get_all().empty()) {
+        if (cmd.seen_render == gen || registry.get_all().empty()) {
             cmd.retry();
+            return;
+        }
+        if (registry.contains(cmd.args[0])) {
+            // Name the label that matched: this is a substring test, so the
+            // hit is often some longer string nobody was thinking about.
+            std::string matched;
+            for (const std::string &t : registry.get_texts()) {
+                if (t.find(cmd.args[0]) != std::string::npos) {
+                    matched = t;
+                    break;
+                }
+            }
+            cmd.fail(std::format(
+                "expect_no_text failed: '{}' IS visible but should not be "
+                "(matched label '{}')",
+                cmd.args[0], matched));
             return;
         }
         cmd.consume();

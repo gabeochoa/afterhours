@@ -54,6 +54,9 @@ struct PendingE2ECommand : BaseComponent {
   int line_number = 0;
   std::string error_message;
   int frames_alive = 0; // How many frames this command has existed
+  // VisibleTextRegistry generation this command first looked at, for the
+  // assertions that need a render to have happened since. -1 = not yet looked.
+  long long seen_render = -1;
   static constexpr int MAX_FRAMES = 30; // Commands timeout after 30 frames (~0.5s at 60fps)
   CommandState state = CommandState::Ready;
 

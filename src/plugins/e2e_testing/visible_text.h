@@ -22,6 +22,16 @@ public:
   void clear() {
     std::lock_guard<std::mutex> lock(mutex_);
     texts_.clear();
+    generation_++;
+  }
+
+  /// Bumped by clear(), which runs once per render pass. An assertion that
+  /// needs fresh data waits for this to change rather than counting frames:
+  /// an app is free to tick many times per rendered frame, and only a render
+  /// refills the registry.
+  size_t generation() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return generation_;
   }
 
   void register_text(const std::string &text) {
@@ -106,6 +116,7 @@ private:
   VisibleTextRegistry() = default;
   mutable std::mutex mutex_;
   std::vector<std::string> texts_;
+  size_t generation_ = 0;
 };
 
 } // namespace testing

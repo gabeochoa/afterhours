@@ -1052,6 +1052,14 @@ struct AutoLayout {
           }
         };
 
+    const auto scrolls_on = [this, &widget](Axis axis) {
+      Entity &ent = to_ent(widget.id);
+      if (!ent.has<HasScrollView>())
+        return false;
+      const HasScrollView &sv = ent.get<HasScrollView>();
+      return axis == Axis::X ? sv.horizontal_enabled : sv.vertical_enabled;
+    };
+
     // Resolve explicit gap for this widget
     float resolved_gap = 0.f;
     if (widget.desired_gap.value > 0.f) {
@@ -1061,8 +1069,8 @@ struct AutoLayout {
 
     const auto compute_error =
         [ACCEPTABLE_ERROR, &_total_child, &_max_child, &_solve_error_optional,
-         &fix_violating_children, &widget, num_children,
-         resolved_gap, &layout_children](Axis axis, bool is_main_axis) -> float {
+         &fix_violating_children, &widget, num_children, resolved_gap,
+         &layout_children, &scrolls_on](Axis axis, bool is_main_axis) -> float {
       // Use content area (computed minus padding) as the available space
       // for children. Padding reserves visual inset space and should not
       // be available for child layout. This matches compute_rect_bounds
@@ -1083,6 +1091,12 @@ struct AutoLayout {
       // Only run error correction on the main axis. Cross-axis children
       // overlap so shrinking them to fit a "sum" budget is incorrect.
       if (!is_main_axis) {
+        return error;
+      }
+
+      // Overflowing the axis it scrolls is what a scroll view is for, so
+      // shrinking its children to fit the viewport just squashes the list.
+      if (scrolls_on(axis)) {
         return error;
       }
 

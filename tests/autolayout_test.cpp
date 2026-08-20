@@ -786,6 +786,26 @@ TEST(violation_solver_shrinks_overflow) {
   CHECK(total <= 201.f); // Allow 1px tolerance
 }
 
+TEST(violation_solver_lets_scroll_view_overflow) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(200), pixels(200));
+  t.ui(root).set_flex_direction(FlexDirection::Column);
+  t.ui(root).set_flex_wrap(FlexWrap::NoWrap);
+  root.addComponent<HasScrollView>();
+
+  // Same overflow as violation_solver_shrinks_overflow, but the parent
+  // scrolls: 300px of content in a 200px viewport is the point, not a
+  // violation. Shrinking here squashes every row in a long list.
+  auto &c1 = t.make_ui(pixels(200), pixels(150, 0.5f));
+  auto &c2 = t.make_ui(pixels(200), pixels(150, 0.5f));
+  t.add_child(root, c1);
+  t.add_child(root, c2);
+  t.run(root);
+
+  CHECK_APPROX(t.ui(c1).computed[Axis::Y], 150.f);
+  CHECK_APPROX(t.ui(c2).computed[Axis::Y], 150.f);
+}
+
 // ---------------------------------------------------------------------------
 // Violation solver must NOT mutate the children's desired strictness. desired
 // is persistent user intent and is not reset between layout passes; if the
