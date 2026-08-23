@@ -27,4 +27,15 @@ struct EntityHandle {
   [[nodiscard]] constexpr bool is_invalid() const { return !valid(); }
 };
 
+// Identity is (slot, gen), so a stale handle never compares equal to the live
+// one that reused its slot. Non-member so ADL finds it for derived handles.
+[[nodiscard]] constexpr bool operator==(const EntityHandle &a,
+                                        const EntityHandle &b) {
+  return a.slot == b.slot && a.gen == b.gen;
+}
+[[nodiscard]] constexpr bool operator!=(const EntityHandle &a,
+                                        const EntityHandle &b) {
+  return !(a == b);
+}
+
 } // namespace afterhours
