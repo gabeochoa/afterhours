@@ -5,19 +5,14 @@
 
 namespace afterhours {
 
-// An EntityHandle that records which component the referent is expected to
-// carry. The type is documentation first: it turns "some entity" in a
-// signature into "the entity that owns a T", and it costs nothing at runtime
-// beyond the construction-time check below.
-//
-// Inherits slot/gen rather than wrapping them, so there is no nested `.handle`
-// to reach through and every EntityHandle operation still applies.
+// EntityHandle that documents (and optionally checks) an expected component.
+// Inherits slot/gen -- there is no nested `.handle` member.
 template <typename T> struct TypedEntityHandle : EntityHandle {
+  // TODO allow implicit conversion from EntityHandle
   TypedEntityHandle() : EntityHandle(EntityHandle::invalid()) {}
 
   TypedEntityHandle(EntityHandle handle) : EntityHandle(handle) {
-    // The invalid sentinel is how a default-initialized member starts life;
-    // checking it would log on every such member.
+    // Skip checks for the empty sentinel used by default member init.
     if (handle.is_valid()) {
       validate_entity(handle);
     }
@@ -33,8 +28,6 @@ template <typename T> struct TypedEntityHandle : EntityHandle {
   OptEntity operator->() const { return EntityHelper::resolve(*this); }
 
 private:
-  // Logs rather than throws: a missing component is a programming error worth
-  // surfacing, but not one worth taking the frame down for.
   static void validate_entity(EntityHandle handle) {
     OptEntity entity = EntityHelper::resolve(handle);
     if (!entity) {

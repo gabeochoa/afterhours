@@ -294,6 +294,20 @@ struct EntityQuery {
 
 #endif // SKIP_ENTITY_QUERY_MODIFICATIONS
 
+  // Sort the whole set by projected key; pairs with gen_min_by/gen_max_by,
+  // so orderByMin(k).gen_first() and gen_min_by(k) agree.
+  template <typename KeyFn> TReturn &orderByMin(KeyFn key_fn) {
+    return orderByLambda([key_fn](const Entity &a, const Entity &b) {
+      return key_fn(a) < key_fn(b);
+    });
+  }
+
+  template <typename KeyFn> TReturn &orderByMax(KeyFn key_fn) {
+    return orderByLambda([key_fn](const Entity &a, const Entity &b) {
+      return key_fn(b) < key_fn(a);
+    });
+  }
+
   // -----------------------------------------------------------------------
   // Template tag overloads (shared by both paths, delegate to TagId/Bitset
   // versions defined above).
@@ -447,6 +461,17 @@ struct EntityQuery {
     return gen_first_enforce().template get<Component>();
   }
 
+  // Argmin/argmax by projected key: O(n), no sort, first extreme wins ties.
+  template <typename KeyFn>
+  [[nodiscard]] OptEntity gen_min_by(KeyFn &&key_fn) const {
+    return gen_extreme_by(std::forward<KeyFn>(key_fn), std::less<>{});
+  }
+
+  template <typename KeyFn>
+  [[nodiscard]] OptEntity gen_max_by(KeyFn &&key_fn) const {
+    return gen_extreme_by(std::forward<KeyFn>(key_fn), std::greater<>{});
+  }
+
   [[nodiscard]] std::optional<int> gen_first_id() const {
     auto opt = gen_first();
     if (!opt)
@@ -572,6 +597,40 @@ private:
   std::vector<FilterFn> mods;
   mutable RefEntities ents;
   mutable bool ran_query = false;
+
+  // Strict comparison, so an equal key never displaces the incumbent.
+  template <typename KeyFn, typename Cmp>
+  [[nodiscard]] OptEntity gen_extreme_by(KeyFn &&key_fn, Cmp cmp) const {
+    using Key = std::decay_t<std::invoke_result_t<KeyFn &, const Entity &>>;
+
+    Entity *best = nullptr;
+    std::optional<Key> best_key;
+
+    for (const auto &e_ptr : entities) {
+      if (!e_ptr)
+        continue;
+      Entity &e = *e_ptr;
+      bool ok = true;
+      for (const auto &mod : mods) {
+        if (!mod(e)) {
+          ok = false;
+          break;
+        }
+      }
+      if (!ok)
+        continue;
+
+      Key key = std::invoke(key_fn, static_cast<const Entity &>(e));
+      if (!best_key || cmp(key, *best_key)) {
+        best_key = std::move(key);
+        best = &e;
+      }
+    }
+
+    if (!best)
+      return {};
+    return *best;
+  }
 
   RefEntities run_query(const UnderlyingOptions options) const {
     // Fast path: if we only need to know whether *any* entity matches (or

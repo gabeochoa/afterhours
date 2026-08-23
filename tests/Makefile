@@ -69,6 +69,7 @@ ALL_TESTS := \
 	files_resource_path_test \
 	entity_pool_test \
 	entity_query_test \
+	query_extreme_by_test \
 	typed_entity_handle_test \
 	input_injector_mouse_delta_test \
 	keymap_test \
