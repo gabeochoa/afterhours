@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "../config.h"
@@ -22,691 +23,715 @@
 #endif
 namespace afterhours {
 
-template <typename Derived = void> //
+template<typename Derived = void>  //
 struct EntityQuery {
-  using TReturn =
-      std::conditional_t<std::is_same_v<Derived, void>, EntityQuery, Derived>;
+    using TReturn =
+        std::conditional_t<std::is_same_v<Derived, void>, EntityQuery, Derived>;
 
-  using FilterFn = std::function<bool(const Entity &)>;
-  using OrderByFn = std::function<bool(const Entity &, const Entity &)>;
+    using FilterFn = std::function<bool(const Entity &)>;
+    using OrderByFn = std::function<bool(const Entity &, const Entity &)>;
 
-  // -----------------------------------------------------------------------
-  // Modification base class.
-  //
-  // This is the original virtual-dispatch filter system. It is kept for
-  // backward compatibility so that custom EntityQuery subclasses (e.g.
-  // examples/catalog/core/custom_queries) can still define their own Modification
-  // subclasses and register them via add_mod().
-  //
-  // >>> MIGRATION NOTICE <<<
-  // The built-in Modification subclasses (Not, Limit, WhereID, etc.) are
-  // deprecated. Prefer using add_filter() with a lambda or std::function
-  // instead, which avoids the virtual-dispatch overhead.
-  //
-  // To opt in to the optimized path now, #define
-  // SKIP_ENTITY_QUERY_MODIFICATIONS before including this header. This removes
-  // the built-in struct definitions and makes the where*() methods use direct
-  // lambdas.
-  //
-  // Custom Modification subclasses registered via add_mod() continue to
-  // work regardless of the define.
-  // -----------------------------------------------------------------------
-  struct Modification {
-    virtual ~Modification() = default;
-    virtual bool operator()(const Entity &) const = 0;
-  };
+    // -----------------------------------------------------------------------
+    // Modification base class.
+    //
+    // This is the original virtual-dispatch filter system. It is kept for
+    // backward compatibility so that custom EntityQuery subclasses (e.g.
+    // examples/catalog/core/custom_queries) can still define their own
+    // Modification subclasses and register them via add_mod().
+    //
+    // >>> MIGRATION NOTICE <<<
+    // The built-in Modification subclasses (Not, Limit, WhereID, etc.) are
+    // deprecated. Prefer using add_filter() with a lambda or std::function
+    // instead, which avoids the virtual-dispatch overhead.
+    //
+    // To opt in to the optimized path now, #define
+    // SKIP_ENTITY_QUERY_MODIFICATIONS before including this header. This
+    // removes the built-in struct definitions and makes the where*() methods
+    // use direct lambdas.
+    //
+    // Custom Modification subclasses registered via add_mod() continue to
+    // work regardless of the define.
+    // -----------------------------------------------------------------------
+    struct Modification {
+        virtual ~Modification() = default;
+        virtual bool operator()(const Entity &) const = 0;
+    };
 
-  // add_mod: accepts a heap-allocated Modification* and wraps it into a
-  // FilterFn so that the internal filter pipeline is always uniform.
-  // Custom EntityQuery subclasses should continue to use this.
-  TReturn &add_mod(Modification *mod) {
-    auto sp = std::shared_ptr<Modification>(mod);
-    mods.push_back([sp](const Entity &e) { return (*sp)(e); });
-    return static_cast<TReturn &>(*this);
-  }
+    // add_mod: accepts a heap-allocated Modification* and wraps it into a
+    // FilterFn so that the internal filter pipeline is always uniform.
+    // Custom EntityQuery subclasses should continue to use this.
+    TReturn &add_mod(Modification *mod) {
+        auto sp = std::shared_ptr<Modification>(mod);
+        mods.push_back([sp](const Entity &e) { return (*sp)(e); });
+        return static_cast<TReturn &>(*this);
+    }
 
-  // add_filter: preferred way to register filters in new code.
-  TReturn &add_filter(FilterFn fn) {
-    mods.push_back(std::move(fn));
-    return static_cast<TReturn &>(*this);
-  }
+    // add_filter: preferred way to register filters in new code.
+    TReturn &add_filter(FilterFn fn) {
+        mods.push_back(std::move(fn));
+        return static_cast<TReturn &>(*this);
+    }
 
-  // -----------------------------------------------------------------------
-  // Built-in Modification subclasses (backward-compatible, virtual path).
-  // Define SKIP_ENTITY_QUERY_MODIFICATIONS to remove these and use the
-  // direct-lambda fast path instead.
-  // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // Built-in Modification subclasses (backward-compatible, virtual path).
+    // Define SKIP_ENTITY_QUERY_MODIFICATIONS to remove these and use the
+    // direct-lambda fast path instead.
+    // -----------------------------------------------------------------------
 #ifndef SKIP_ENTITY_QUERY_MODIFICATIONS
 
-  struct Not : Modification {
-    std::unique_ptr<Modification> mod;
-    explicit Not(Modification *m) : mod(m) {}
-    bool operator()(const Entity &entity) const override {
-      return !((*mod)(entity));
-    }
-  };
-
-  struct Limit : Modification {
-    int amount;
-    mutable int amount_taken;
-    explicit Limit(const int amt) : amount(amt), amount_taken(0) {}
-    bool operator()(const Entity &) const override {
-      // Use >= so take(n) yields exactly n entities (and first()==take(1)
-      // yields 1). With > this let through n+1 (first() returned 2).
-      if (amount_taken >= amount)
-        return false;
-      amount_taken++;
-      return true;
-    }
-  };
-  TReturn &take(const int amount) { return add_mod(new Limit(amount)); }
-  TReturn &first() { return take(1); }
-
-  struct WhereID : Modification {
-    int id;
-    explicit WhereID(const int idIn) : id(idIn) {}
-    bool operator()(const Entity &entity) const override {
-      return entity.id == id;
-    }
-  };
-  TReturn &whereID(const int id) { return add_mod(new WhereID(id)); }
-  TReturn &whereNotID(const int id) {
-    return add_mod(new Not(new WhereID(id)));
-  }
-
-  struct WhereMarkedForCleanup : Modification {
-    bool operator()(const Entity &entity) const override {
-      return entity.cleanup;
-    }
-  };
-  TReturn &whereMarkedForCleanup() {
-    return add_mod(new WhereMarkedForCleanup());
-  }
-  TReturn &whereNotMarkedForCleanup() {
-    return add_mod(new Not(new WhereMarkedForCleanup()));
-  }
-
-  template <typename T> struct WhereHasComponent : Modification {
-    bool operator()(const Entity &entity) const override {
-      return entity.has<T>();
-    }
-  };
-  template <typename T> auto &whereHasComponent() {
-    return add_mod(new WhereHasComponent<T>());
-  }
-  template <typename T> auto &whereMissingComponent() {
-    return add_mod(new Not(new WhereHasComponent<T>()));
-  }
-
-  struct WhereLambda : Modification {
-    std::function<bool(const Entity &)> filter;
-    explicit WhereLambda(const std::function<bool(const Entity &)> &cb)
-        : filter(cb) {}
-    bool operator()(const Entity &entity) const override {
-      return filter(entity);
-    }
-  };
-  TReturn &whereLambda(const std::function<bool(const Entity &)> &fn) {
-    return add_mod(new WhereLambda(fn));
-  }
-
-  struct WhereHasTag : Modification {
-    TagId id;
-    explicit WhereHasTag(const TagId idIn) : id(idIn) {}
-    bool operator()(const Entity &entity) const override {
-      return entity.hasTag(id);
-    }
-  };
-  TReturn &whereHasTag(const TagId id) { return add_mod(new WhereHasTag(id)); }
-
-  struct WhereHasAllTags : Modification {
-    TagBitset mask;
-    explicit WhereHasAllTags(const TagBitset &m) : mask(m) {}
-    bool operator()(const Entity &entity) const override {
-      return entity.hasAllTags(mask);
-    }
-  };
-  TReturn &whereHasAllTags(const TagBitset &mask) {
-    return add_mod(new WhereHasAllTags(mask));
-  }
-
-  struct WhereHasAnyTag : Modification {
-    TagBitset mask;
-    explicit WhereHasAnyTag(const TagBitset &m) : mask(m) {}
-    bool operator()(const Entity &entity) const override {
-      return entity.hasAnyTag(mask);
-    }
-  };
-  TReturn &whereHasAnyTag(const TagBitset &mask) {
-    return add_mod(new WhereHasAnyTag(mask));
-  }
-
-  struct WhereHasNoTags : Modification {
-    TagBitset mask;
-    explicit WhereHasNoTags(const TagBitset &m) : mask(m) {}
-    bool operator()(const Entity &entity) const override {
-      return entity.hasNoTags(mask);
-    }
-  };
-  TReturn &whereHasNoTags(const TagBitset &mask) {
-    return add_mod(new WhereHasNoTags(mask));
-  }
-
-  TReturn &
-  whereLambdaExistsAndTrue(const std::function<bool(const Entity &)> &fn) {
-    if (fn)
-      return add_mod(new WhereLambda(fn));
-    return static_cast<TReturn &>(*this);
-  }
-
-  struct OrderBy {
-    virtual ~OrderBy() {}
-    virtual bool operator()(const Entity &a, const Entity &b) = 0;
-  };
-
-  struct OrderByLambda : OrderBy {
-    OrderByFn sortFn;
-    explicit OrderByLambda(const OrderByFn &sortFnIn) : sortFn(sortFnIn) {}
-    bool operator()(const Entity &a, const Entity &b) override {
-      return sortFn(a, b);
-    }
-  };
-
-  TReturn &orderByLambda(const OrderByFn &sortfn) {
-    if (orderby) {
-      log_error("We only apply the first order by in a query at the moment");
-      return static_cast<TReturn &>(*this);
-    }
-    orderby = sortfn;
-    orderby_index = mods.size();
-    return static_cast<TReturn &>(*this);
-  }
-
-#else // SKIP_ENTITY_QUERY_MODIFICATIONS -- optimized direct-lambda path
-
-  TReturn &take(const int amount) {
-    auto taken = std::make_shared<int>(0);
-    return add_filter([amount, taken](const Entity &) {
-      // Use >= so take(n) yields exactly n (first()==take(1) yields 1).
-      if (*taken >= amount)
-        return false;
-      (*taken)++;
-      return true;
-    });
-  }
-  TReturn &first() { return take(1); }
-
-  TReturn &whereID(const int id) {
-    return add_filter([id](const Entity &e) { return e.id == id; });
-  }
-  TReturn &whereNotID(const int id) {
-    return add_filter([id](const Entity &e) { return e.id != id; });
-  }
-
-  TReturn &whereMarkedForCleanup() {
-    return add_filter([](const Entity &e) { return e.cleanup; });
-  }
-  TReturn &whereNotMarkedForCleanup() {
-    return add_filter([](const Entity &e) { return !e.cleanup; });
-  }
-
-  template <typename T> auto &whereHasComponent() {
-    return add_filter([](const Entity &e) { return e.has<T>(); });
-  }
-  template <typename T> auto &whereMissingComponent() {
-    return add_filter([](const Entity &e) { return !e.has<T>(); });
-  }
-
-  TReturn &whereLambda(const std::function<bool(const Entity &)> &fn) {
-    return add_filter(fn);
-  }
-
-  TReturn &whereHasTag(const TagId id) {
-    return add_filter([id](const Entity &e) { return e.hasTag(id); });
-  }
-
-  TReturn &whereHasAllTags(const TagBitset &mask) {
-    return add_filter([mask](const Entity &e) { return e.hasAllTags(mask); });
-  }
-
-  TReturn &whereHasAnyTag(const TagBitset &mask) {
-    return add_filter([mask](const Entity &e) { return e.hasAnyTag(mask); });
-  }
-
-  TReturn &whereHasNoTags(const TagBitset &mask) {
-    return add_filter([mask](const Entity &e) { return e.hasNoTags(mask); });
-  }
-
-  TReturn &
-  whereLambdaExistsAndTrue(const std::function<bool(const Entity &)> &fn) {
-    if (fn)
-      return add_filter(fn);
-    return static_cast<TReturn &>(*this);
-  }
-
-  TReturn &orderByLambda(const OrderByFn &sortfn) {
-    if (orderby) {
-      log_error("We only apply the first order by in a query at the moment");
-      return static_cast<TReturn &>(*this);
-    }
-    orderby = sortfn;
-    orderby_index = mods.size();
-    return static_cast<TReturn &>(*this);
-  }
-
-#endif // SKIP_ENTITY_QUERY_MODIFICATIONS
-
-  // Sort the whole set by projected key; pairs with gen_min_by/gen_max_by,
-  // so orderByMin(k).gen_first() and gen_min_by(k) agree.
-  template <typename KeyFn> TReturn &orderByMin(KeyFn key_fn) {
-    return orderByLambda([key_fn](const Entity &a, const Entity &b) {
-      return key_fn(a) < key_fn(b);
-    });
-  }
-
-  template <typename KeyFn> TReturn &orderByMax(KeyFn key_fn) {
-    return orderByLambda([key_fn](const Entity &a, const Entity &b) {
-      return key_fn(b) < key_fn(a);
-    });
-  }
-
-  // -----------------------------------------------------------------------
-  // Template tag overloads (shared by both paths, delegate to TagId/Bitset
-  // versions defined above).
-  // -----------------------------------------------------------------------
-  template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
-  auto &whereHasTag(const TEnum tag_enum) {
-    return whereHasTag(static_cast<TagId>(tag_enum));
-  }
-
-  template <auto TagEnum,
-            std::enable_if_t<std::is_enum_v<decltype(TagEnum)>, int> = 0>
-  auto &whereHasTag() {
-    return whereHasTag(static_cast<TagId>(TagEnum));
-  }
-
-  template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
-  auto &whereHasAllTags(const TEnum tag_enum) {
-    return whereHasTag(static_cast<TagId>(tag_enum));
-  }
-
-  template <auto TagEnum,
-            std::enable_if_t<std::is_enum_v<decltype(TagEnum)>, int> = 0>
-  auto &whereHasAllTags() {
-    TagBitset mask;
-    mask.set(static_cast<TagId>(TagEnum));
-    return whereHasAllTags(mask);
-  }
-
-  template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
-  auto &whereHasAnyTag(const TEnum tag_enum) {
-    TagBitset mask;
-    mask.set(static_cast<TagId>(tag_enum));
-    return whereHasAnyTag(mask);
-  }
-
-  template <auto TagEnum,
-            std::enable_if_t<std::is_enum_v<decltype(TagEnum)>, int> = 0>
-  auto &whereHasAnyTag() {
-    TagBitset mask;
-    mask.set(static_cast<TagId>(TagEnum));
-    return whereHasAnyTag(mask);
-  }
-
-  template <typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
-  auto &whereHasNoTags(const TEnum tag_enum) {
-    TagBitset mask;
-    mask.set(static_cast<TagId>(tag_enum));
-    return whereHasNoTags(mask);
-  }
-
-  template <auto TagEnum,
-            std::enable_if_t<std::is_enum_v<decltype(TagEnum)>, int> = 0>
-  auto &whereHasNoTags() {
-    TagBitset mask;
-    mask.set(static_cast<TagId>(TagEnum));
-    return whereHasNoTags(mask);
-  }
-
-  struct UnderlyingOptions {
-    bool stop_on_first = false;
-  };
-
-  [[nodiscard]] bool has_values() const {
-    // If we've already materialized results, don't re-run.
-    if (ran_query)
-      return !ents.empty();
-    return !run_query({.stop_on_first = true}).empty();
-  }
-
-  [[nodiscard]] bool is_empty() const { return !has_values(); }
-
-  [[nodiscard]] RefEntities
-  values_ignore_cache(const UnderlyingOptions options) const {
-    ents = run_query(options);
-    ran_query = true;
-    return ents;
-  }
-
-  [[nodiscard]] RefEntities gen() const {
-    if (!ran_query)
-      return values_ignore_cache({});
-    return ents;
-  }
-
-  template <typename Fn> void for_each(Fn &&fn) const {
-    for (Entity &entity : gen()) {
-      std::invoke(std::forward<Fn>(fn), entity);
-    }
-  }
-
-  // Like for_each() but visits entities without materializing a RefEntities
-  // vector. An orderby needs the full set, so delegate to gen() in that case.
-  template <typename Fn> void for_each_stream(Fn &&fn) const {
-    if (orderby) {
-      for (Entity &entity : gen()) {
-        std::invoke(std::forward<Fn>(fn), entity);
-      }
-      return;
-    }
-    for (const auto &e_ptr : entities) {
-      if (!e_ptr)
-        continue;
-      Entity &e = *e_ptr;
-      bool ok = true;
-      for (const auto &mod : mods) {
-        if (!mod(e)) {
-          ok = false;
-          break;
+    struct Not : Modification {
+        std::unique_ptr<Modification> mod;
+        explicit Not(Modification *m) : mod(m) {}
+        bool operator()(const Entity &entity) const override {
+            return !((*mod)(entity));
         }
-      }
-      if (ok)
-        std::invoke(fn, e);
+    };
+
+    struct Limit : Modification {
+        int amount;
+        mutable int amount_taken;
+        explicit Limit(const int amt) : amount(amt), amount_taken(0) {}
+        bool operator()(const Entity &) const override {
+            // Use >= so take(n) yields exactly n entities (and first()==take(1)
+            // yields 1). With > this let through n+1 (first() returned 2).
+            if (amount_taken >= amount) return false;
+            amount_taken++;
+            return true;
+        }
+    };
+    TReturn &take(const int amount) { return add_mod(new Limit(amount)); }
+    TReturn &first() { return take(1); }
+
+    struct WhereID : Modification {
+        int id;
+        explicit WhereID(const int idIn) : id(idIn) {}
+        bool operator()(const Entity &entity) const override {
+            return entity.id == id;
+        }
+    };
+    TReturn &whereID(const int id) { return add_mod(new WhereID(id)); }
+    TReturn &whereNotID(const int id) {
+        return add_mod(new Not(new WhereID(id)));
     }
-  }
 
-  template <typename Component>
-  [[nodiscard]] std::vector<std::reference_wrapper<Component>> gen_as() const {
-    const auto results = gen();
-    std::vector<std::reference_wrapper<Component>> components;
-    components.reserve(results.size());
-    for (Entity &entity : results) {
-      components.push_back(std::ref(entity.get<Component>()));
+    struct WhereMarkedForCleanup : Modification {
+        bool operator()(const Entity &entity) const override {
+            return entity.cleanup;
+        }
+    };
+    TReturn &whereMarkedForCleanup() {
+        return add_mod(new WhereMarkedForCleanup());
     }
-    return components;
-  }
-
-  [[nodiscard]] RefEntities
-  gen_with_options(const UnderlyingOptions options) const {
-    if (!ran_query)
-      return values_ignore_cache(options);
-    return ents;
-  }
-
-  [[nodiscard]] OptEntity gen_first() const {
-    // Avoid calling has_values() here; that would run the query twice.
-    const auto values = run_query({.stop_on_first = true});
-    if (values.empty())
-      return {};
-    return values[0];
-  }
-
-  [[nodiscard]] Entity &gen_first_enforce() const {
-    const auto values = run_query({.stop_on_first = true});
-    if (values.empty()) {
-      log_error("tried to use gen_first_enforce, but found no values");
+    TReturn &whereNotMarkedForCleanup() {
+        return add_mod(new Not(new WhereMarkedForCleanup()));
     }
-    return values[0];
-  }
 
-  template <typename Component> [[nodiscard]] Component &gen_first_as() const {
-    return gen_first_enforce().template get<Component>();
-  }
-
-  // Argmin/argmax by projected key: O(n), no sort, first extreme wins ties.
-  template <typename KeyFn>
-  [[nodiscard]] OptEntity gen_min_by(KeyFn &&key_fn) const {
-    return gen_extreme_by(std::forward<KeyFn>(key_fn), std::less<>{});
-  }
-
-  template <typename KeyFn>
-  [[nodiscard]] OptEntity gen_max_by(KeyFn &&key_fn) const {
-    return gen_extreme_by(std::forward<KeyFn>(key_fn), std::greater<>{});
-  }
-
-  [[nodiscard]] std::optional<int> gen_first_id() const {
-    auto opt = gen_first();
-    if (!opt)
-      return {};
-    return opt.asE().id;
-  }
-
-  // Generate stable handles for the current result set.
-  // This is useful for storing long-lived references without keeping pointers.
-  [[nodiscard]] std::vector<EntityHandle> gen_handles() const {
-    const auto results = gen();
-    std::vector<EntityHandle> handles;
-    handles.reserve(results.size());
-    for (Entity &ent : results) {
-      handles.push_back(EntityHelper::handle_for(ent));
+    template<typename... Ts>
+    struct WhereHasComponent : Modification {
+        bool operator()(const Entity &entity) const override {
+            return entity.has<Ts...>();
+        }
+    };
+    template<typename... Ts>
+    auto &whereHasComponent() {
+        static_assert(sizeof...(Ts) > 0,
+                      "whereHasComponent<> needs at least one component type");
+        return add_mod(new WhereHasComponent<Ts...>());
     }
-    return handles;
-  }
-
-  // Generate the first stable handle for this query (if any).
-  // Returns empty if the query returns no entities or if the entity does not
-  // have a valid handle (e.g., temp pre-merge).
-  [[nodiscard]] std::optional<EntityHandle> gen_first_handle() const {
-    auto opt = gen_first();
-    if (!opt)
-      return {};
-    EntityHandle h = EntityHelper::handle_for(opt.asE());
-    if (h.is_invalid())
-      return {};
-    return h;
-  }
-
-  [[nodiscard]] size_t gen_count() const {
-    if (!ran_query)
-      return values_ignore_cache({}).size();
-    return ents.size();
-  }
-
-  [[nodiscard]] std::vector<int> gen_ids() const {
-    const auto results = ran_query ? ents : values_ignore_cache({});
-    std::vector<int> ids;
-    std::transform(results.begin(), results.end(), std::back_inserter(ids),
-                   [](const Entity &ent) -> int { return ent.id; });
-    return ids;
-  }
-
-  [[nodiscard]] OptEntity gen_random() const {
-    const auto results = gen();
-    if (results.empty()) {
-      return {};
+    template<typename T>
+    auto &whereMissingComponent() {
+        return add_mod(new Not(new WhereHasComponent<T>()));
     }
+
+    struct WhereLambda : Modification {
+        std::function<bool(const Entity &)> filter;
+        explicit WhereLambda(const std::function<bool(const Entity &)> &cb)
+            : filter(cb) {}
+        bool operator()(const Entity &entity) const override {
+            return filter(entity);
+        }
+    };
+    TReturn &whereLambda(const std::function<bool(const Entity &)> &fn) {
+        return add_mod(new WhereLambda(fn));
+    }
+
+    struct WhereHasTag : Modification {
+        TagId id;
+        explicit WhereHasTag(const TagId idIn) : id(idIn) {}
+        bool operator()(const Entity &entity) const override {
+            return entity.hasTag(id);
+        }
+    };
+    TReturn &whereHasTag(const TagId id) {
+        return add_mod(new WhereHasTag(id));
+    }
+
+    struct WhereHasAllTags : Modification {
+        TagBitset mask;
+        explicit WhereHasAllTags(const TagBitset &m) : mask(m) {}
+        bool operator()(const Entity &entity) const override {
+            return entity.hasAllTags(mask);
+        }
+    };
+    TReturn &whereHasAllTags(const TagBitset &mask) {
+        return add_mod(new WhereHasAllTags(mask));
+    }
+
+    struct WhereHasAnyTag : Modification {
+        TagBitset mask;
+        explicit WhereHasAnyTag(const TagBitset &m) : mask(m) {}
+        bool operator()(const Entity &entity) const override {
+            return entity.hasAnyTag(mask);
+        }
+    };
+    TReturn &whereHasAnyTag(const TagBitset &mask) {
+        return add_mod(new WhereHasAnyTag(mask));
+    }
+
+    struct WhereHasNoTags : Modification {
+        TagBitset mask;
+        explicit WhereHasNoTags(const TagBitset &m) : mask(m) {}
+        bool operator()(const Entity &entity) const override {
+            return entity.hasNoTags(mask);
+        }
+    };
+    TReturn &whereHasNoTags(const TagBitset &mask) {
+        return add_mod(new WhereHasNoTags(mask));
+    }
+
+    TReturn &whereLambdaExistsAndTrue(
+        const std::function<bool(const Entity &)> &fn) {
+        if (fn) return add_mod(new WhereLambda(fn));
+        return static_cast<TReturn &>(*this);
+    }
+
+    struct OrderBy {
+        virtual ~OrderBy() {}
+        virtual bool operator()(const Entity &a, const Entity &b) = 0;
+    };
+
+    struct OrderByLambda : OrderBy {
+        OrderByFn sortFn;
+        explicit OrderByLambda(const OrderByFn &sortFnIn) : sortFn(sortFnIn) {}
+        bool operator()(const Entity &a, const Entity &b) override {
+            return sortFn(a, b);
+        }
+    };
+
+    TReturn &orderByLambda(const OrderByFn &sortfn) {
+        if (orderby) {
+            log_error(
+                "We only apply the first order by in a query at the moment");
+            return static_cast<TReturn &>(*this);
+        }
+        orderby = sortfn;
+        orderby_index = mods.size();
+        return static_cast<TReturn &>(*this);
+    }
+
+#else  // SKIP_ENTITY_QUERY_MODIFICATIONS -- optimized direct-lambda path
+
+    TReturn &take(const int amount) {
+        auto taken = std::make_shared<int>(0);
+        return add_filter([amount, taken](const Entity &) {
+            // Use >= so take(n) yields exactly n (first()==take(1) yields 1).
+            if (*taken >= amount) return false;
+            (*taken)++;
+            return true;
+        });
+    }
+    TReturn &first() { return take(1); }
+
+    TReturn &whereID(const int id) {
+        return add_filter([id](const Entity &e) { return e.id == id; });
+    }
+    TReturn &whereNotID(const int id) {
+        return add_filter([id](const Entity &e) { return e.id != id; });
+    }
+
+    TReturn &whereMarkedForCleanup() {
+        return add_filter([](const Entity &e) { return e.cleanup; });
+    }
+    TReturn &whereNotMarkedForCleanup() {
+        return add_filter([](const Entity &e) { return !e.cleanup; });
+    }
+
+    template<typename... Ts>
+    auto &whereHasComponent() {
+        static_assert(sizeof...(Ts) > 0,
+                      "whereHasComponent<> needs at least one component type");
+        return add_filter([](const Entity &e) { return e.has<Ts...>(); });
+    }
+    template<typename T>
+    auto &whereMissingComponent() {
+        return add_filter([](const Entity &e) { return !e.has<T>(); });
+    }
+
+    TReturn &whereLambda(const std::function<bool(const Entity &)> &fn) {
+        return add_filter(fn);
+    }
+
+    TReturn &whereHasTag(const TagId id) {
+        return add_filter([id](const Entity &e) { return e.hasTag(id); });
+    }
+
+    TReturn &whereHasAllTags(const TagBitset &mask) {
+        return add_filter(
+            [mask](const Entity &e) { return e.hasAllTags(mask); });
+    }
+
+    TReturn &whereHasAnyTag(const TagBitset &mask) {
+        return add_filter(
+            [mask](const Entity &e) { return e.hasAnyTag(mask); });
+    }
+
+    TReturn &whereHasNoTags(const TagBitset &mask) {
+        return add_filter(
+            [mask](const Entity &e) { return e.hasNoTags(mask); });
+    }
+
+    TReturn &whereLambdaExistsAndTrue(
+        const std::function<bool(const Entity &)> &fn) {
+        if (fn) return add_filter(fn);
+        return static_cast<TReturn &>(*this);
+    }
+
+    TReturn &orderByLambda(const OrderByFn &sortfn) {
+        if (orderby) {
+            log_error(
+                "We only apply the first order by in a query at the moment");
+            return static_cast<TReturn &>(*this);
+        }
+        orderby = sortfn;
+        orderby_index = mods.size();
+        return static_cast<TReturn &>(*this);
+    }
+
+#endif  // SKIP_ENTITY_QUERY_MODIFICATIONS
+
+    // -----------------------------------------------------------------------
+    // Component-scoped filters (shared by both paths). Both imply has<T>() and
+    // short-circuit on it, so the predicate never sees a missing component.
+    // -----------------------------------------------------------------------
+    template<typename T, typename Fn>
+    TReturn &whereComponentAndLambda(Fn &&pred) {
+        return add_filter([pred = std::forward<Fn>(pred)](const Entity &e) {
+            return e.has<T>() && pred(e.get<T>());
+        });
+    }
+
+    // The value is copied into the filter; a FilterFn outlives the call.
+    template<typename T, typename M>
+    TReturn &whereFieldHasValue(M T::*field, std::type_identity_t<M> value) {
+        return add_filter([field, value = std::move(value)](const Entity &e) {
+            return e.has<T>() && e.get<T>().*field == value;
+        });
+    }
+
+    // Sort the whole set by projected key; pairs with gen_min_by/gen_max_by,
+    // so orderByMin(k).gen_first() and gen_min_by(k) agree.
+    template<typename KeyFn>
+    TReturn &orderByMin(KeyFn key_fn) {
+        return orderByLambda([key_fn](const Entity &a, const Entity &b) {
+            return key_fn(a) < key_fn(b);
+        });
+    }
+
+    template<typename KeyFn>
+    TReturn &orderByMax(KeyFn key_fn) {
+        return orderByLambda([key_fn](const Entity &a, const Entity &b) {
+            return key_fn(b) < key_fn(a);
+        });
+    }
+
+    // -----------------------------------------------------------------------
+    // Template tag overloads (shared by both paths, delegate to TagId/Bitset
+    // versions defined above).
+    // -----------------------------------------------------------------------
+    template<typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
+    auto &whereHasTag(const TEnum tag_enum) {
+        return whereHasTag(static_cast<TagId>(tag_enum));
+    }
+
+    template<auto TagEnum,
+             std::enable_if_t<std::is_enum_v<decltype(TagEnum)>, int> = 0>
+    auto &whereHasTag() {
+        return whereHasTag(static_cast<TagId>(TagEnum));
+    }
+
+    template<typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
+    auto &whereHasAllTags(const TEnum tag_enum) {
+        return whereHasTag(static_cast<TagId>(tag_enum));
+    }
+
+    template<auto TagEnum,
+             std::enable_if_t<std::is_enum_v<decltype(TagEnum)>, int> = 0>
+    auto &whereHasAllTags() {
+        TagBitset mask;
+        mask.set(static_cast<TagId>(TagEnum));
+        return whereHasAllTags(mask);
+    }
+
+    template<typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
+    auto &whereHasAnyTag(const TEnum tag_enum) {
+        TagBitset mask;
+        mask.set(static_cast<TagId>(tag_enum));
+        return whereHasAnyTag(mask);
+    }
+
+    template<auto TagEnum,
+             std::enable_if_t<std::is_enum_v<decltype(TagEnum)>, int> = 0>
+    auto &whereHasAnyTag() {
+        TagBitset mask;
+        mask.set(static_cast<TagId>(TagEnum));
+        return whereHasAnyTag(mask);
+    }
+
+    template<typename TEnum, std::enable_if_t<std::is_enum_v<TEnum>, int> = 0>
+    auto &whereHasNoTags(const TEnum tag_enum) {
+        TagBitset mask;
+        mask.set(static_cast<TagId>(tag_enum));
+        return whereHasNoTags(mask);
+    }
+
+    template<auto TagEnum,
+             std::enable_if_t<std::is_enum_v<decltype(TagEnum)>, int> = 0>
+    auto &whereHasNoTags() {
+        TagBitset mask;
+        mask.set(static_cast<TagId>(TagEnum));
+        return whereHasNoTags(mask);
+    }
+
+    struct UnderlyingOptions {
+        bool stop_on_first = false;
+    };
+
+    [[nodiscard]] bool has_values() const {
+        // If we've already materialized results, don't re-run.
+        if (ran_query) return !ents.empty();
+        return !run_query({.stop_on_first = true}).empty();
+    }
+
+    [[nodiscard]] bool is_empty() const { return !has_values(); }
+
+    [[nodiscard]] RefEntities values_ignore_cache(
+        const UnderlyingOptions options) const {
+        ents = run_query(options);
+        ran_query = true;
+        return ents;
+    }
+
+    [[nodiscard]] RefEntities gen() const {
+        if (!ran_query) return values_ignore_cache({});
+        return ents;
+    }
+
+    template<typename Fn>
+    void for_each(Fn &&fn) const {
+        for (Entity &entity : gen()) {
+            std::invoke(std::forward<Fn>(fn), entity);
+        }
+    }
+
+    // Like for_each() but visits entities without materializing a RefEntities
+    // vector. An orderby needs the full set, so delegate to gen() in that case.
+    template<typename Fn>
+    void for_each_stream(Fn &&fn) const {
+        if (orderby) {
+            for (Entity &entity : gen()) {
+                std::invoke(std::forward<Fn>(fn), entity);
+            }
+            return;
+        }
+        for (const auto &e_ptr : entities) {
+            if (!e_ptr) continue;
+            Entity &e = *e_ptr;
+            bool ok = true;
+            for (const auto &mod : mods) {
+                if (!mod(e)) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (ok) std::invoke(fn, e);
+        }
+    }
+
+    template<typename Component>
+    [[nodiscard]] std::vector<std::reference_wrapper<Component>> gen_as()
+        const {
+        const auto results = gen();
+        std::vector<std::reference_wrapper<Component>> components;
+        components.reserve(results.size());
+        for (Entity &entity : results) {
+            components.push_back(std::ref(entity.get<Component>()));
+        }
+        return components;
+    }
+
+    [[nodiscard]] RefEntities gen_with_options(
+        const UnderlyingOptions options) const {
+        if (!ran_query) return values_ignore_cache(options);
+        return ents;
+    }
+
+    [[nodiscard]] OptEntity gen_first() const {
+        // Avoid calling has_values() here; that would run the query twice.
+        const auto values = run_query({.stop_on_first = true});
+        if (values.empty()) return {};
+        return values[0];
+    }
+
+    [[nodiscard]] Entity &gen_first_enforce() const {
+        const auto values = run_query({.stop_on_first = true});
+        if (values.empty()) {
+            log_error("tried to use gen_first_enforce, but found no values");
+        }
+        return values[0];
+    }
+
+    template<typename Component>
+    [[nodiscard]] Component &gen_first_as() const {
+        return gen_first_enforce().template get<Component>();
+    }
+
+    // Argmin/argmax by projected key: O(n), no sort, first extreme wins ties.
+    template<typename KeyFn>
+    [[nodiscard]] OptEntity gen_min_by(KeyFn &&key_fn) const {
+        return gen_extreme_by(std::forward<KeyFn>(key_fn), std::less<>{});
+    }
+
+    template<typename KeyFn>
+    [[nodiscard]] OptEntity gen_max_by(KeyFn &&key_fn) const {
+        return gen_extreme_by(std::forward<KeyFn>(key_fn), std::greater<>{});
+    }
+
+    [[nodiscard]] std::optional<int> gen_first_id() const {
+        auto opt = gen_first();
+        if (!opt) return {};
+        return opt.asE().id;
+    }
+
+    // Generate stable handles for the current result set.
+    // This is useful for storing long-lived references without keeping
+    // pointers.
+    [[nodiscard]] std::vector<EntityHandle> gen_handles() const {
+        const auto results = gen();
+        std::vector<EntityHandle> handles;
+        handles.reserve(results.size());
+        for (Entity &ent : results) {
+            handles.push_back(EntityHelper::handle_for(ent));
+        }
+        return handles;
+    }
+
+    // Generate the first stable handle for this query (if any).
+    // Returns empty if the query returns no entities or if the entity does not
+    // have a valid handle (e.g., temp pre-merge).
+    [[nodiscard]] std::optional<EntityHandle> gen_first_handle() const {
+        auto opt = gen_first();
+        if (!opt) return {};
+        EntityHandle h = EntityHelper::handle_for(opt.asE());
+        if (h.is_invalid()) return {};
+        return h;
+    }
+
+    [[nodiscard]] size_t gen_count() const {
+        if (!ran_query) return values_ignore_cache({}).size();
+        return ents.size();
+    }
+
+    [[nodiscard]] std::vector<int> gen_ids() const {
+        const auto results = ran_query ? ents : values_ignore_cache({});
+        std::vector<int> ids;
+        std::transform(results.begin(), results.end(), std::back_inserter(ids),
+                       [](const Entity &ent) -> int { return ent.id; });
+        return ids;
+    }
+
+    [[nodiscard]] OptEntity gen_random() const {
+        const auto results = gen();
+        if (results.empty()) {
+            return {};
+        }
 #if AFTER_HOURS_RANDOM_ENABLED
-    // Seedable + unbiased via RandomEngine (empty handled above).
-    size_t random_index =
-        static_cast<size_t>(RandomEngine::get().get_index(results));
+        // Seedable + unbiased via RandomEngine (empty handled above).
+        size_t random_index =
+            static_cast<size_t>(RandomEngine::get().get_index(results));
 #else
-    size_t random_index = rand() % results.size();
+        size_t random_index = rand() % results.size();
 #endif
-    return results[random_index];
-  }
-
-  template <typename RngFunc>
-  [[nodiscard]] OptEntity gen_random(RngFunc &&rng_func) const {
-    const auto results = gen();
-    if (results.empty()) {
-      return {};
+        return results[random_index];
     }
-    size_t random_index = rng_func(results.size());
-    if (random_index >= results.size()) {
-      return {};
-    }
-    return results[random_index];
-  }
 
-  struct QueryOptions {
-    bool force_merge = false;
-    bool ignore_temp_warning = false;
-  };
-
-  EntityQuery(const QueryOptions &options = {})
-      : EntityQuery(EntityHelper::get_default_collection(), options) {}
-
-  explicit EntityQuery(EntityCollection &collection,
-                       const QueryOptions &options = {})
-      : entities(init_entities_ref(collection, options)) {
-    const size_t size = collection.get_temp().size();
-    if (size == 0)
-      return;
-
-    if (!options.force_merge && !options.ignore_temp_warning) {
-      const auto &temp_entities = collection.get_temp();
-      const size_t num_to_print = std::min(size_t(10), temp_entities.size());
-
-      for (size_t i = 0; i < num_to_print; ++i) {
-        const auto &entity = temp_entities[i];
-        if (entity) {
-          log_warn("  temp entity {}: id={}, cleanup={}", i, entity->id,
-                   entity->cleanup);
-        } else {
-          log_warn("  temp entity {}: null", i);
+    template<typename RngFunc>
+    [[nodiscard]] OptEntity gen_random(RngFunc &&rng_func) const {
+        const auto results = gen();
+        if (results.empty()) {
+            return {};
         }
-      }
-      log_error("query will miss {} ents in temp", size);
-    }
-  }
-  explicit EntityQuery(const Entities &entsIn) : entities(entsIn) {}
-
-private:
-  const Entities &entities;
-
-  // Helper to initialize the entities reference in the constructor.
-  // If force_merge is requested, merge first, then return the (now-updated)
-  // reference. Otherwise just return the current entities.
-  static const Entities &init_entities_ref(EntityCollection &collection,
-                                           const QueryOptions &options) {
-    if (options.force_merge && !collection.get_temp().empty()) {
-      collection.merge_entity_arrays();
-    }
-    return collection.get_entities();
-  }
-
-  std::optional<OrderByFn> orderby;
-  // How many mods were registered before the orderby; they run before the sort.
-  std::optional<size_t> orderby_index;
-  std::vector<FilterFn> mods;
-  mutable RefEntities ents;
-  mutable bool ran_query = false;
-
-  // Runs mods[begin, end) in order, short-circuiting like the streaming pass.
-  [[nodiscard]] bool passes(const Entity &e, size_t begin, size_t end) const {
-    for (size_t i = begin; i < end; i++) {
-      if (!mods[i](e))
-        return false;
-    }
-    return true;
-  }
-
-  // Strict comparison, so an equal key never displaces the incumbent.
-  template <typename KeyFn, typename Cmp>
-  [[nodiscard]] OptEntity gen_extreme_by(KeyFn &&key_fn, Cmp cmp) const {
-    using Key = std::decay_t<std::invoke_result_t<KeyFn &, const Entity &>>;
-
-    if (orderby) {
-      // The key decides the winner, so the sort is dead work -- and any mod
-      // placed after it runs here in iteration order, not sorted order.
-      log_warn("gen_min_by/gen_max_by ignores the orderBy on this query");
-    }
-
-    Entity *best = nullptr;
-    std::optional<Key> best_key;
-
-    for (const auto &e_ptr : entities) {
-      if (!e_ptr)
-        continue;
-      Entity &e = *e_ptr;
-      bool ok = true;
-      for (const auto &mod : mods) {
-        if (!mod(e)) {
-          ok = false;
-          break;
+        size_t random_index = rng_func(results.size());
+        if (random_index >= results.size()) {
+            return {};
         }
-      }
-      if (!ok)
-        continue;
-
-      Key key = std::invoke(key_fn, static_cast<const Entity &>(e));
-      if (!best_key || cmp(key, *best_key)) {
-        best_key = std::move(key);
-        best = &e;
-      }
+        return results[random_index];
     }
 
-    if (!best)
-      return {};
-    return *best;
-  }
+    struct QueryOptions {
+        bool force_merge = false;
+        bool ignore_temp_warning = false;
+    };
 
-  RefEntities run_query(const UnderlyingOptions options) const {
-    // Fast path: if we only need to know whether *any* entity matches (or
-    // to return the first match), we can short-circuit as long as we aren't
-    // ordering results. No upfront allocation needed.
-    if (options.stop_on_first && !orderby) {
-      for (const auto &e_ptr : entities) {
-        if (!e_ptr)
-          continue;
-        const Entity &e = *e_ptr;
-        bool ok = true;
-        for (const auto &mod : mods) {
-          if (!mod(e)) {
-            ok = false;
-            break;
-          }
+    EntityQuery(const QueryOptions &options = {})
+        : EntityQuery(EntityHelper::get_default_collection(), options) {}
+
+    explicit EntityQuery(EntityCollection &collection,
+                         const QueryOptions &options = {})
+        : entities(init_entities_ref(collection, options)) {
+        const size_t size = collection.get_temp().size();
+        if (size == 0) return;
+
+        if (!options.force_merge && !options.ignore_temp_warning) {
+            const auto &temp_entities = collection.get_temp();
+            const size_t num_to_print =
+                std::min(size_t(10), temp_entities.size());
+
+            for (size_t i = 0; i < num_to_print; ++i) {
+                const auto &entity = temp_entities[i];
+                if (entity) {
+                    log_warn("  temp entity {}: id={}, cleanup={}", i,
+                             entity->id, entity->cleanup);
+                } else {
+                    log_warn("  temp entity {}: null", i);
+                }
+            }
+            log_error("query will miss {} ents in temp", size);
         }
-        if (ok) {
-          RefEntities result;
-          result.push_back(const_cast<Entity &>(e));
-          return result;
+    }
+    explicit EntityQuery(const Entities &entsIn) : entities(entsIn) {}
+
+   private:
+    const Entities &entities;
+
+    // Helper to initialize the entities reference in the constructor.
+    // If force_merge is requested, merge first, then return the (now-updated)
+    // reference. Otherwise just return the current entities.
+    static const Entities &init_entities_ref(EntityCollection &collection,
+                                             const QueryOptions &options) {
+        if (options.force_merge && !collection.get_temp().empty()) {
+            collection.merge_entity_arrays();
         }
-      }
-      return {};
+        return collection.get_entities();
     }
 
-    RefEntities out;
-    out.reserve(mods.empty() ? entities.size() : entities.size() / 2);
+    std::optional<OrderByFn> orderby;
+    // How many mods were registered before the orderby; they run before the
+    // sort.
+    std::optional<size_t> orderby_index;
+    std::vector<FilterFn> mods;
+    mutable RefEntities ents;
+    mutable bool ran_query = false;
 
-    // Mods registered before the orderby filter the scan; the rest run after
-    // the sort, so each operation applies at its position in the chain.
-    const size_t pre_sort = orderby_index.value_or(mods.size());
-
-    for (const auto &e_ptr : entities) {
-      if (!e_ptr)
-        continue;
-      Entity &e = *e_ptr;
-      if (passes(e, 0, pre_sort))
-        out.push_back(e);
+    // Runs mods[begin, end) in order, short-circuiting like the streaming pass.
+    [[nodiscard]] bool passes(const Entity &e, size_t begin, size_t end) const {
+        for (size_t i = begin; i < end; i++) {
+            if (!mods[i](e)) return false;
+        }
+        return true;
     }
 
-    if (orderby && out.size() > 1) {
-      std::sort(out.begin(), out.end(), [&](const Entity &a, const Entity &b) {
-        return (*orderby)(a, b);
-      });
+    // Strict comparison, so an equal key never displaces the incumbent.
+    template<typename KeyFn, typename Cmp>
+    [[nodiscard]] OptEntity gen_extreme_by(KeyFn &&key_fn, Cmp cmp) const {
+        using Key = std::decay_t<std::invoke_result_t<KeyFn &, const Entity &>>;
+
+        if (orderby) {
+            // The key decides the winner, so the sort is dead work -- and any
+            // mod placed after it runs here in iteration order, not sorted
+            // order.
+            log_warn("gen_min_by/gen_max_by ignores the orderBy on this query");
+        }
+
+        Entity *best = nullptr;
+        std::optional<Key> best_key;
+
+        for (const auto &e_ptr : entities) {
+            if (!e_ptr) continue;
+            Entity &e = *e_ptr;
+            bool ok = true;
+            for (const auto &mod : mods) {
+                if (!mod(e)) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (!ok) continue;
+
+            Key key = std::invoke(key_fn, static_cast<const Entity &>(e));
+            if (!best_key || cmp(key, *best_key)) {
+                best_key = std::move(key);
+                best = &e;
+            }
+        }
+
+        if (!best) return {};
+        return *best;
     }
 
-    if (pre_sort < mods.size()) {
-      size_t kept = 0;
-      for (size_t i = 0; i < out.size(); i++) {
-        if (passes(out[i], pre_sort, mods.size()))
-          out[kept++] = out[i];
-      }
-      out.erase(out.begin() + static_cast<long>(kept), out.end());
-    }
+    RefEntities run_query(const UnderlyingOptions options) const {
+        // Fast path: if we only need to know whether *any* entity matches (or
+        // to return the first match), we can short-circuit as long as we aren't
+        // ordering results. No upfront allocation needed.
+        if (options.stop_on_first && !orderby) {
+            for (const auto &e_ptr : entities) {
+                if (!e_ptr) continue;
+                const Entity &e = *e_ptr;
+                bool ok = true;
+                for (const auto &mod : mods) {
+                    if (!mod(e)) {
+                        ok = false;
+                        break;
+                    }
+                }
+                if (ok) {
+                    RefEntities result;
+                    result.push_back(const_cast<Entity &>(e));
+                    return result;
+                }
+            }
+            return {};
+        }
 
-    return out;
-  }
+        RefEntities out;
+        out.reserve(mods.empty() ? entities.size() : entities.size() / 2);
+
+        // Mods registered before the orderby filter the scan; the rest run
+        // after the sort, so each operation applies at its position in the
+        // chain.
+        const size_t pre_sort = orderby_index.value_or(mods.size());
+
+        for (const auto &e_ptr : entities) {
+            if (!e_ptr) continue;
+            Entity &e = *e_ptr;
+            if (passes(e, 0, pre_sort)) out.push_back(e);
+        }
+
+        if (orderby && out.size() > 1) {
+            std::sort(out.begin(), out.end(),
+                      [&](const Entity &a, const Entity &b) {
+                          return (*orderby)(a, b);
+                      });
+        }
+
+        if (pre_sort < mods.size()) {
+            size_t kept = 0;
+            for (size_t i = 0; i < out.size(); i++) {
+                if (passes(out[i], pre_sort, mods.size())) out[kept++] = out[i];
+            }
+            out.erase(out.begin() + static_cast<long>(kept), out.end());
+        }
+
+        return out;
+    }
 };
-} // namespace afterhours
+}  // namespace afterhours

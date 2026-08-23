@@ -71,6 +71,7 @@ ALL_TESTS := \
 	entity_query_test \
 	get_or_default_test \
 	query_extreme_by_test \
+	query_filters_test \
 	typed_entity_handle_test \
 	input_injector_mouse_delta_test \
 	keymap_test \
