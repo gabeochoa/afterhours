@@ -26,74 +26,52 @@
 >
 > 5. **Exclude vendor directory** - contains third-party code TODOs we don't control
 >
-> 6. **PRESERVE the "Failing tests" section below.** It is hand-written and
->    tracks assertions that fail in the suite rather than TODO comments in the
->    source, so a scan of the codebase will not regenerate it. Carry it across
->    verbatim unless the tests it names are green.
+> 6. **PRESERVE the "Building the tests" section below.** It is hand-written
+>    rather than scanned from source TODO comments, so regeneration will not
+>    recreate it. Carry it across verbatim.
 
 ---
 
-## Failing tests (hand-written — preserve across regeneration)
+## Building the tests (hand-written — preserve across regeneration)
 
-`tests/text_area_test.cpp` reports **132/138, six failures**. They are
-long-standing: the identical set fails at `cf3e0f1`, before the placeholder
-work, so nothing recent caused them. Nobody is watching them, which is the
-problem — a suite with six permanent reds is a suite people stop reading.
-
-Build it with:
+**Any suite that injects input MUST be built with
+`-DAFTER_HOURS_ENABLE_E2E_TESTING`.** Without it `input::is_key_down`,
+`get_char_pressed` and `get_mouse_wheel_move_v` compile straight to the
+backend instead of routing through `testing::test_input`
+(`src/plugins/input_system.h:172` and neighbours), so nothing the test injects
+ever reaches the widget.
 
 ```
-clang++ -std=c++23 -O0 -DAFTER_HOURS_USE_RAYLIB -I. -Isrc -I.. \
-  -I$(brew --prefix fmt)/include -I$(brew --prefix raylib)/include \
+clang++ -std=c++23 -O0 -DAFTER_HOURS_USE_RAYLIB -DAFTER_HOURS_ENABLE_E2E_TESTING \
+  -I. -Isrc -I.. -I$(brew --prefix fmt)/include -I$(brew --prefix raylib)/include \
   tests/text_area_test.cpp -L$(brew --prefix raylib)/lib -lraylib \
   -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo \
   -o /tmp/text_area_test
 ```
 
-### [ ] 1. Shift+Enter submits instead of breaking the line
+`tests/run_mouse_delta_backend_checks.sh:37` already does this for the suites
+it covers; it is the working reference.
 
-`shift_enter_still_breaks_when_submitting_on_enter` (:387, :388). With
-`submit_on_enter` on and Shift held, Enter should insert `\n` and NOT submit.
-It submits and leaves no break.
+### Why this warning exists
 
-Worth noting what PASSES around it: `enter_breaks_the_line_by_default` and
-`submit_on_enter_sends_without_breaking` are both green. So Enter is handled
-and the submit path works — it is specifically the **Shift modifier** that is
-not being distinguished. Suspect the widget reads the press without consulting
-the held-modifier state.
+An earlier version of this section claimed `text_area_test` had six
+long-standing failures and listed them as bugs: Shift+Enter submitting instead
+of breaking the line, the wheel not scrolling, typing not replacing a
+selection, Shift+Left not extending one. **That was wrong.** The suite is
+138/138. Every one of those six was the missing flag.
 
-A downstream app filed this independently as "no Shift+Enter newline", so the
-failing test has been describing a real product gap the whole time.
+The tell was there and got missed: every failing assertion drove the widget
+through `input_injector`, and every passing sibling set
+`h.context().last_action` directly and needed no injection — which is exactly
+why only the *shift* variant of the Enter tests failed while the two beside it
+passed. The wheel test even says so in its own comment.
 
-### [ ] 2. The wheel does not scroll an overflowing text area
+### [ ] A test build recipe
 
-`the_wheel_scrolls_a_field_whose_content_overflows` (:603). Eight rows in a
-three-row box, one wheel notch down, expects `scroll_offset_y == LINE_H`.
-Its sibling `the_wheel_does_not_scroll_past_the_top` passes, which only proves
-clamping-at-zero works, not that scrolling does.
-
-### [ ] 3. Typing does not replace the selection
-
-(:762). With "alpha" selected in "alpha beta", pushing `X` should yield
-`"X beta"`. `insert_char` has a replace-selection path, so the question is
-whether the selection is visible to it at that point.
-
-### [ ] 4. Shift+Left does not extend a selection
-
-(:824, :825). After a Shift-held `WidgetLeft`, expects `has_selection()` and
-`selected_text() == "a"`. Neither holds.
-
-### Common thread
-
-Three of the four — 1, 3 and 4 — are about **held modifiers or injected
-characters not reaching the widget**, and 2 is injected wheel input. Before
-fixing them individually, check whether `text_area` consults the held-modifier
-state at all, and whether the test harness's injection reaches it the way the
-real input path does: if this turns out to be one seam, it is one fix rather
-than four. If it turns out the harness is lying, that is worse, because the
-green 132 are then worth less than they look.
-
-This document contains all TODO comments found in `vendor/afterhours/src/`, analyzed with context to understand the actual issues.
+There is no make target and no CI for `tests/`, so the only way to run a suite
+is to hand-write a compiler invocation — which is how the flag got dropped and
+how a false bug report got published. A `tests` target, or a `run_tests.sh`
+shaped like the mouse-delta script, would make the correct build the easy one.
 
 ## Core System TODOs
 
