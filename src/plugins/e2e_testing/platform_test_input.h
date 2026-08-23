@@ -103,10 +103,10 @@ inline bool is_mouse_button_pressed(int button) {
 }
 
 inline bool is_mouse_button_down(int button) {
-  if (button == 0 && afterhours::testing::test_input::detail::test_mode) {
-    return afterhours::testing::input_injector::is_mouse_button_down();
-  }
-  return afterhours::graphics::is_mouse_button_down(button);
+  // Delegates for all three buttons, like is_key_down above. Special-casing
+  // button 0 here meant a test's right/middle press read real hardware.
+  return afterhours::testing::test_input::is_mouse_button_down(
+      button, [](int b) { return afterhours::graphics::is_mouse_button_down(b); });
 }
 
 inline bool is_mouse_button_released(int button) {

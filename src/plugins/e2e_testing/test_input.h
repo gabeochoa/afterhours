@@ -66,6 +66,7 @@ inline void simulate_mouse_press() {
   auto &m = input_injector::detail::mouse;
   m.left_down = true;
   m.just_pressed = true;
+  m.press_read = false;
   m.press_frames = 1;
   m.auto_release = true;
   m.active = true;
@@ -98,6 +99,18 @@ inline void simulate_right_click(float x, float y) {
   m.auto_release = true;
 }
 
+// Middle click. Same one-frame hold and auto-release as the other two.
+inline void simulate_middle_click(float x, float y) {
+  set_mouse_position(x, y);
+  auto &m = input_injector::detail::mouse;
+  m.active = true;
+  m.middle_down = true;
+  m.middle_just_pressed = true;
+  m.middle_press_read = false;
+  m.press_frames = 1;
+  m.auto_release = true;
+}
+
 // Reset per-frame state
 inline void reset_frame() {
   detail::key_consumed = false;
@@ -106,6 +119,10 @@ inline void reset_frame() {
   // Save press_frames before injector reset clears flags
   auto &m = input_injector::detail::mouse;
   int pf = m.press_frames;
+  const bool press_seen = m.press_read;
+  const bool middle_press_seen = m.middle_press_read;
+  m.press_read = false;
+  m.middle_press_read = false;
 
   // Clears just_pressed/just_released unconditionally
   input_injector::reset_frame();
@@ -117,11 +134,17 @@ inline void reset_frame() {
   // right-click held down forever -- press_frames never decremented and
   // right_down never cleared -- so every later script in the run saw a stuck
   // secondary button.
-  const bool any_down = m.left_down || m.right_down;
+  const bool any_down = m.left_down || m.right_down || m.middle_down;
   if (pf > 0 && any_down) {
     m.press_frames = pf - 1;
-    if (m.left_down)
+    // Only re-raise the edge if nothing read it on the frame just ended. The
+    // window exists for readers that run before the injecting command; holding
+    // it open past an actual read made one `click` fire a cycling handler
+    // twice, and the button stays down either way.
+    if (m.left_down && !press_seen)
       m.just_pressed = true;
+    if (m.middle_down && !middle_press_seen)
+      m.middle_just_pressed = true;
   } else if (m.auto_release && any_down) {
     // Auto-release: simulate_click/simulate_mouse_press set auto_release
     // and press_frames=1. Once press_frames expires, release the button
@@ -133,6 +156,7 @@ inline void reset_frame() {
       m.just_released = true;
     m.left_down = false;
     m.right_down = false;
+    m.middle_down = false;
     m.auto_release = false;
     m.press_frames = 0;
   }
@@ -234,8 +258,12 @@ inline Vec2 get_mouse_position(BackendFn backend_fn) {
 template <typename BackendFn>
 inline bool is_mouse_button_pressed(int button, BackendFn backend_fn) {
   if (detail::test_mode) {
+    // Through the accessor, not the flag: it records that the edge was read,
+    // which is what stops it being re-raised on the following frame.
     if (button == 0)
-      return input_injector::detail::mouse.just_pressed;
+      return input_injector::is_mouse_button_pressed();
+    if (button == 2)
+      return input_injector::is_mouse_middle_button_pressed();
     return false;
   }
   return backend_fn(button);
@@ -249,6 +277,8 @@ inline bool is_mouse_button_down(int button, BackendFn backend_fn) {
       return input_injector::detail::mouse.left_down;
     if (button == 1)
       return input_injector::detail::mouse.right_down;
+    if (button == 2)
+      return input_injector::detail::mouse.middle_down;
     return false;
   }
   return backend_fn(button);

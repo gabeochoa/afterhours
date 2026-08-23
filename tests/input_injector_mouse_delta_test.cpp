@@ -100,13 +100,19 @@ TEST(scheduled_click_sets_press_and_release_edges) {
 
 // The wheel survives one reset_frame on purpose: its reader can run before the
 // command that sets it (HandleScrollInput does), and clearing on the first
-// reset meant injected wheel events did nothing at all.
-TEST(mouse_wheel_survives_one_reset_then_clears) {
+// reset meant injected wheel events did nothing at all. The survival ends the
+// frame it is READ, though -- holding it open past that delivered one injected
+// notch on two consecutive frames, so a once-per-frame consumer applied it
+// twice and a correct implementation failed its test while a double-applying
+// one passed.
+TEST(mouse_wheel_is_stable_within_a_frame_then_clears_once_read) {
   input_injector::reset_all();
   CHECK(!input_injector::detail::mouse.active);
   input_injector::set_mouse_wheel(1.5f, -2.0f);
   CHECK(input_injector::detail::mouse.active);
 
+  // Stable within the frame: raylib returns the same value to every caller,
+  // and several systems legitimately read it in one frame.
   auto w1 = input_injector::consume_wheel();
   CHECK(w1.x == 1.5f);
   CHECK(w1.y == -2.0f);
@@ -115,15 +121,29 @@ TEST(mouse_wheel_survives_one_reset_then_clears) {
   CHECK(w2.x == 1.5f);
   CHECK(w2.y == -2.0f);
 
+  // Read during that frame, so this is where it ends.
   input_injector::reset_frame();
   auto w3 = input_injector::consume_wheel();
-  CHECK(w3.x == 1.5f);
-  CHECK(w3.y == -2.0f);
+  CHECK(w3.x == 0.0f);
+  CHECK(w3.y == 0.0f);
+}
+
+// The case the survival window exists for: nobody read it on the frame it was
+// injected, because the reader ran before the command. It must still arrive.
+TEST(mouse_wheel_unread_survives_one_reset) {
+  input_injector::reset_all();
+  input_injector::set_mouse_wheel(1.5f, -2.0f);
 
   input_injector::reset_frame();
-  auto w4 = input_injector::consume_wheel();
-  CHECK(w4.x == 0.0f);
-  CHECK(w4.y == 0.0f);
+  auto w1 = input_injector::consume_wheel();
+  CHECK(w1.x == 1.5f);
+  CHECK(w1.y == -2.0f);
+
+  // Delivered exactly once: having now been read, it is gone next frame.
+  input_injector::reset_frame();
+  auto w2 = input_injector::consume_wheel();
+  CHECK(w2.x == 0.0f);
+  CHECK(w2.y == 0.0f);
 }
 
 // Pinch drains on read, unlike the wheel, because the hardware accessor does.

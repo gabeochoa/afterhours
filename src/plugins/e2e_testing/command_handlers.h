@@ -170,6 +170,63 @@ struct HandleRightClickCommand : System<PendingE2ECommand> {
     }
 };
 
+// Handle 'middle_click x y' command - tertiary click at coordinates.
+struct HandleMiddleClickCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("middle_click")) return;
+        if (!cmd.has_args(2)) {
+            cmd.fail("middle_click requires x y arguments");
+            return;
+        }
+
+        auto [sw, sh] = e2e_screen_size();
+        test_input::simulate_middle_click(cmd.coord_arg(0, sw),
+                                          cmd.coord_arg(1, sh));
+        cmd.consume();
+    }
+};
+
+// Handle 'middle_down x y' / 'middle_up' - held tertiary press, for anything
+// that drags with the middle button rather than tapping it.
+struct HandleMiddleDownCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("middle_down")) return;
+        if (!cmd.has_args(2)) {
+            cmd.fail("middle_down requires x y arguments");
+            return;
+        }
+
+        auto [sw, sh] = e2e_screen_size();
+        test_input::set_mouse_position(cmd.coord_arg(0, sw),
+                                       cmd.coord_arg(1, sh));
+        auto &m = input_injector::detail::mouse;
+        m.middle_down = true;
+        m.middle_just_pressed = true;
+        m.middle_press_read = false;
+        m.press_frames = 0;
+        // Held until middle_up, so the same sticky-auto_release trap that
+        // mouse_down documents applies here.
+        m.auto_release = false;
+        m.active = true;
+        cmd.consume();
+    }
+};
+
+struct HandleMiddleUpCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("middle_up")) return;
+        auto &m = input_injector::detail::mouse;
+        m.middle_down = false;
+        m.press_frames = 0;
+        m.auto_release = false;
+        m.active = true;
+        cmd.consume();
+    }
+};
+
 // Handle 'double_click x y' command — two clicks with frame delay for
 // multi-click detection. Uses a phase counter so the command stays pending
 // across frames while the first click's auto-release completes.

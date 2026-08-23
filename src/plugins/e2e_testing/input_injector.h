@@ -24,10 +24,19 @@ struct MouseState {
   bool active = false;
   bool left_down = false;     // Matches UI convention
   bool right_down = false;    // Right button (button index 1)
+  bool middle_down = false;   // Middle button (button index 2)
   bool just_pressed = false;  // Matches UI convention
   bool just_released = false; // Matches UI convention
   int press_frames = 0;       // Frame counter for multi-frame clicks
   bool auto_release = false;  // When true, release after press_frames expires
+  // Set by is_mouse_button_pressed(). The press survives one reset so a reader
+  // that runs before the injecting command still sees it; once someone has
+  // actually read it that survival is over, or the edge fires twice.
+  bool press_read = false;
+  // The middle button carries its own edge: is_mouse_button_pressed(2) is a
+  // separate question from the left one, and callers bind to it directly.
+  bool middle_just_pressed = false;
+  bool middle_press_read = false;
 };
 inline MouseState mouse;
 
@@ -44,6 +53,8 @@ struct WheelState {
 };
 inline WheelState wheel;
 inline bool wheel_fresh = false;
+// Same bargain as MouseState::press_read: survive until read, then stop.
+inline bool wheel_read = false;
 
 // Trackpad magnification, in NSEvent.magnification units (+0.01 = grow 1%).
 //
@@ -187,13 +198,25 @@ inline void release_scheduled_click() {
 
 /// Check mouse button state
 inline bool is_mouse_button_pressed() {
-  return detail::mouse.active && detail::mouse.just_pressed;
+  const bool pressed = detail::mouse.active && detail::mouse.just_pressed;
+  if (pressed)
+    detail::mouse.press_read = true;
+  return pressed;
 }
 inline bool is_mouse_button_down() {
   return detail::mouse.active && detail::mouse.left_down;
 }
 inline bool is_mouse_right_button_down() {
   return detail::mouse.active && detail::mouse.right_down;
+}
+inline bool is_mouse_middle_button_down() {
+  return detail::mouse.active && detail::mouse.middle_down;
+}
+inline bool is_mouse_middle_button_pressed() {
+  const bool pressed = detail::mouse.active && detail::mouse.middle_just_pressed;
+  if (pressed)
+    detail::mouse.middle_press_read = true;
+  return pressed;
 }
 inline bool is_mouse_button_released() {
   return detail::mouse.active && detail::mouse.just_released;
@@ -204,12 +227,16 @@ inline void set_mouse_wheel(float dx, float dy) {
   detail::wheel.x = dx;
   detail::wheel.y = dy;
   detail::wheel_fresh = true;
+  detail::wheel_read = false;
   // Wheel injection should be observable even if no prior mouse move occurred.
   detail::mouse.active = true;
 }
 
-/// Read the synthetic wheel delta. Stable within a frame, like raylib's.
+/// Read the synthetic wheel delta. Stable within a frame, like raylib's, so
+/// every reader in a frame sees it -- but the frame it is read is its last.
 inline Position consume_wheel() {
+  if (detail::wheel.x != 0.f || detail::wheel.y != 0.f)
+    detail::wheel_read = true;
   return Position{detail::wheel.x, detail::wheel.y};
 }
 
@@ -233,8 +260,15 @@ inline bool is_pinching() { return detail::pinching; }
 inline void reset_frame() {
   detail::mouse.just_pressed = false;
   detail::mouse.just_released = false;
+  detail::mouse.middle_just_pressed = false;
   detail::mouse.delta = {};
-  if (detail::wheel_fresh) {
+  if (detail::wheel_read) {
+    // Somebody consumed it this frame. Delivering it again next frame is how
+    // one injected notch used to apply twice.
+    detail::wheel = {};
+    detail::wheel_fresh = false;
+    detail::wheel_read = false;
+  } else if (detail::wheel_fresh) {
     detail::wheel_fresh = false; // survive this reset, clear on the next
   } else {
     detail::wheel = {};
@@ -268,6 +302,7 @@ inline void reset_all() {
   detail::key_hold = {};
   detail::wheel = {};
   detail::wheel_fresh = false;
+  detail::wheel_read = false;
   detail::pinch = 0.0f;
   detail::pinching = false;
   detail::pinch_fresh = false;

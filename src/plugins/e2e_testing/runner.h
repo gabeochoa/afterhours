@@ -44,8 +44,9 @@ constexpr bool contains(const std::array<T, N> &arr, std::string_view val) {
 
 // Command categories for argument parsing
 // clang-format off
-constexpr std::array<std::string_view, 5> coord_commands = {
-    "click", "double_click", "triple_click", "mouse_move", "mouse_down"
+constexpr std::array<std::string_view, 7> coord_commands = {
+    "click", "double_click", "triple_click", "mouse_move", "mouse_down",
+    "middle_click", "middle_down"
 };
 
 constexpr std::array<std::string_view, 13> single_arg_commands = {
@@ -63,9 +64,9 @@ constexpr std::array<std::string_view, 1> three_arg_commands = {
     "expect_input_selection"
 };
 
-constexpr std::array<std::string_view, 7> no_arg_commands = {
+constexpr std::array<std::string_view, 8> no_arg_commands = {
     "reset_test_state", "reset", "tab", "shift_tab", "enter", "escape",
-    "mouse_up"
+    "mouse_up", "middle_up"
 };
 // clang-format on
 
