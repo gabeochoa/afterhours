@@ -229,6 +229,8 @@ struct Entity {
 #endif
   }
 
+  // The fallback is the caller's, not T's default member initializer: two
+  // callers can want different values for the same missing component.
   template <typename T, typename Value>
   [[nodiscard]] Value get_or_default(Value T::*member,
                                      const Value &fallback) const {
