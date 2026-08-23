@@ -355,9 +355,13 @@ TEST(order_by_min_composes_with_filters) {
   clear_all();
 }
 
-// take() is a FILTER, and run_query applies filters before the sort. So this
-// is "sort the first n found", not "the top n" -- a trap worth pinning down.
-TEST(take_before_sort_is_not_top_n) {
+// ============================================================================
+// Positional ordering -- each operation applies where it sits in the chain
+// ============================================================================
+
+// Same data, same two calls, opposite order: sort-then-take is the top n,
+// take-then-sort is the first n found, sorted.
+TEST(take_after_sort_is_top_n) {
   clear_all();
   make_scored(30.f, "tagged");
   make_scored(10.f, "tagged");
@@ -370,10 +374,135 @@ TEST(take_before_sort_is_not_top_n) {
                         .take(2)
                         .gen();
   CHECK(two.size() == 2);
-  // Iteration order takes 30 and 10; the sort then orders just those two.
-  // If take() ever starts applying after the sort, this becomes 30 and 20.
+  CHECK(score_of(two[0]) == 30.f);
+  CHECK(score_of(two[1]) == 20.f);
+
+  clear_all();
+}
+
+TEST(take_before_sort_is_first_n_then_sorted) {
+  clear_all();
+  make_scored(30.f, "tagged");
+  make_scored(10.f, "tagged");
+  make_scored(20.f, "tagged");
+
+  RefEntities two = EntityQuery<>()
+                        .whereHasComponent<Score>()
+                        .whereHasComponent<Tag>()
+                        .take(2)
+                        .orderByMax(score_of)
+                        .gen();
+  CHECK(two.size() == 2);
+  // Iteration order keeps 30 and 10; the sort then orders just those two.
   CHECK(score_of(two[0]) == 30.f);
   CHECK(score_of(two[1]) == 10.f);
+
+  clear_all();
+}
+
+TEST(take_after_order_by_min_is_bottom_n) {
+  clear_all();
+  make_scored(30.f);
+  make_scored(10.f);
+  make_scored(20.f);
+  make_scored(5.f);
+
+  RefEntities two = EntityQuery<>()
+                        .whereHasComponent<Score>()
+                        .orderByMin(score_of)
+                        .take(2)
+                        .gen();
+  CHECK(two.size() == 2);
+  CHECK(score_of(two[0]) == 5.f);
+  CHECK(score_of(two[1]) == 10.f);
+
+  clear_all();
+}
+
+TEST(take_past_the_end_returns_everything_sorted) {
+  clear_all();
+  make_scored(3.f);
+  make_scored(1.f);
+
+  RefEntities all = EntityQuery<>()
+                        .whereHasComponent<Score>()
+                        .orderByMax(score_of)
+                        .take(10)
+                        .gen();
+  CHECK(all.size() == 2);
+  CHECK(score_of(all[0]) == 3.f);
+  CHECK(score_of(all[1]) == 1.f);
+
+  clear_all();
+}
+
+TEST(take_zero_after_sort_is_empty) {
+  clear_all();
+  make_scored(3.f);
+  make_scored(1.f);
+
+  RefEntities none = EntityQuery<>()
+                         .whereHasComponent<Score>()
+                         .orderByMax(score_of)
+                         .take(0)
+                         .gen();
+  CHECK(none.empty());
+
+  clear_all();
+}
+
+TEST(where_before_the_order_by_filters_first) {
+  clear_all();
+  make_scored(50.f);           // untagged, would be the top if it survived
+  make_scored(30.f, "tagged");
+  make_scored(10.f, "tagged");
+  make_scored(20.f, "tagged");
+
+  RefEntities two = EntityQuery<>()
+                        .whereHasComponent<Tag>()
+                        .orderByMax(score_of)
+                        .take(2)
+                        .gen();
+  CHECK(two.size() == 2);
+  CHECK(score_of(two[0]) == 30.f);
+  CHECK(score_of(two[1]) == 20.f);
+
+  clear_all();
+}
+
+TEST(where_after_the_order_by_filters_the_sorted_set) {
+  clear_all();
+  make_scored(30.f);
+  make_scored(10.f);
+  make_scored(20.f);
+  make_scored(40.f);
+
+  // take(3) keeps the top 3 (40, 30, 20), then the where drops 30.
+  RefEntities kept = EntityQuery<>()
+                         .whereHasComponent<Score>()
+                         .orderByMax(score_of)
+                         .take(3)
+                         .whereLambda([](const Entity &e) {
+                           return score_of(e) != 30.f;
+                         })
+                         .gen();
+  CHECK(kept.size() == 2);
+  CHECK(score_of(kept[0]) == 40.f);
+  CHECK(score_of(kept[1]) == 20.f);
+
+  clear_all();
+}
+
+TEST(order_by_then_take_leaves_gen_first_on_the_sorted_head) {
+  clear_all();
+  make_scored(30.f);
+  make_scored(10.f);
+  make_scored(20.f);
+
+  OptEntity top =
+      EntityQuery<>().whereHasComponent<Score>().orderByMax(score_of).gen_first();
+  CHECK(top.has_value());
+  CHECK(score_of(top.asE()) == 30.f);
 
   clear_all();
 }

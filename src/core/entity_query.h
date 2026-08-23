@@ -218,6 +218,7 @@ struct EntityQuery {
       return static_cast<TReturn &>(*this);
     }
     orderby = sortfn;
+    orderby_index = mods.size();
     return static_cast<TReturn &>(*this);
   }
 
@@ -289,6 +290,7 @@ struct EntityQuery {
       return static_cast<TReturn &>(*this);
     }
     orderby = sortfn;
+    orderby_index = mods.size();
     return static_cast<TReturn &>(*this);
   }
 
@@ -594,11 +596,24 @@ private:
   }
 
   std::optional<OrderByFn> orderby;
+  // How many mods were registered before the orderby; they run before the sort.
+  std::optional<size_t> orderby_index;
   std::vector<FilterFn> mods;
   mutable RefEntities ents;
   mutable bool ran_query = false;
 
+  // Runs mods[begin, end) in order, short-circuiting like the streaming pass.
+  [[nodiscard]] bool passes(const Entity &e, size_t begin, size_t end) const {
+    for (size_t i = begin; i < end; i++) {
+      if (!mods[i](e))
+        return false;
+    }
+    return true;
+  }
+
   // Strict comparison, so an equal key never displaces the incumbent.
+  // Ignores orderby, so a take() placed after an orderBy is applied here in
+  // iteration order rather than sorted order.
   template <typename KeyFn, typename Cmp>
   [[nodiscard]] OptEntity gen_extreme_by(KeyFn &&key_fn, Cmp cmp) const {
     using Key = std::decay_t<std::invoke_result_t<KeyFn &, const Entity &>>;
@@ -660,18 +675,15 @@ private:
     RefEntities out;
     out.reserve(mods.empty() ? entities.size() : entities.size() / 2);
 
+    // Mods registered before the orderby filter the scan; the rest run after
+    // the sort, so each operation applies at its position in the chain.
+    const size_t pre_sort = orderby_index.value_or(mods.size());
+
     for (const auto &e_ptr : entities) {
       if (!e_ptr)
         continue;
       Entity &e = *e_ptr;
-      bool ok = true;
-      for (const auto &mod : mods) {
-        if (!mod(e)) {
-          ok = false;
-          break;
-        }
-      }
-      if (ok)
+      if (passes(e, 0, pre_sort))
         out.push_back(e);
     }
 
@@ -679,6 +691,15 @@ private:
       std::sort(out.begin(), out.end(), [&](const Entity &a, const Entity &b) {
         return (*orderby)(a, b);
       });
+    }
+
+    if (pre_sort < mods.size()) {
+      size_t kept = 0;
+      for (size_t i = 0; i < out.size(); i++) {
+        if (passes(out[i], pre_sort, mods.size()))
+          out[kept++] = out[i];
+      }
+      out.erase(out.begin() + static_cast<long>(kept), out.end());
     }
 
     return out;
