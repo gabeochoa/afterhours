@@ -64,16 +64,16 @@ endif
 OUT := $(AFTERHOURS_ROOT)/output
 $(shell mkdir -p $(OUT))
 
-EXAMPLE_BINS_PATHS := $(addprefix $(OUT)/,graphics_example drawing_3d_example headless_validation imm_visual_check on_draw_example perf_stress_test calendar_stress_test perf_stress_test_opt calendar_stress_test_opt profile_harness)
-EXAMPLE_BINS := graphics_example drawing_3d_example headless_validation imm_visual_check on_draw_example perf_stress_test calendar_stress_test perf_stress_test_opt calendar_stress_test_opt profile_harness
+EXAMPLE_BINS_PATHS := $(addprefix $(OUT)/,graphics_example drawing_3d_example headless_validation imm_visual_check on_draw_example text_input_placeholder perf_stress_test calendar_stress_test perf_stress_test_opt calendar_stress_test_opt profile_harness)
+EXAMPLE_BINS := graphics_example drawing_3d_example headless_validation imm_visual_check on_draw_example text_input_placeholder perf_stress_test calendar_stress_test perf_stress_test_opt calendar_stress_test_opt profile_harness
 
 # Targets
-.PHONY: all run run-3d test clean graphics_example drawing_3d_example headless_validation imm_visual_check on_draw_example perf_stress_test calendar_stress_test perf_stress_test_opt calendar_stress_test_opt profile_harness
+.PHONY: all run run-3d test clean graphics_example drawing_3d_example headless_validation imm_visual_check on_draw_example text_input_placeholder perf_stress_test calendar_stress_test perf_stress_test_opt calendar_stress_test_opt profile_harness
 
 # Bare names stay usable: `make graphics_example` builds $(OUT)/graphics_example.
 $(EXAMPLE_BINS): %: $(OUT)/%
 
-all: $(addprefix $(OUT)/,graphics_example drawing_3d_example headless_validation perf_stress_test calendar_stress_test profile_harness)
+all: $(addprefix $(OUT)/,graphics_example drawing_3d_example headless_validation text_input_placeholder perf_stress_test calendar_stress_test profile_harness)
 
 $(OUT)/graphics_example: graphics_example.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $(filter %.cpp,$^) $(LDFLAGS_RAYLIB) -o $@
@@ -87,6 +87,13 @@ $(OUT)/drawing_3d_example: drawing_3d_example.cpp
 $(OUT)/headless_validation: headless_validation.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $(filter %.cpp,$^) $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: headless_validation"
+
+# Placeholder repro - clicking a hint and typing used to abort the process.
+# Backend-free: it drives insert_char directly, so it needs no window and no
+# raylib, and runs anywhere.
+$(OUT)/text_input_placeholder: text_input_placeholder.cpp
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -isystem $(INCLUDE_ROOT) -isystem $(BREW_PREFIX)/include $(filter %.cpp,$^) -o $@
+	@echo "Built: text_input_placeholder"
 
 # imm visual regression - renders imm UI to a hidden window, captures a PNG
 $(OUT)/imm_visual_check: imm_visual_check.cpp
@@ -147,7 +154,7 @@ profile-calendar: calendar_stress_test_opt
 	@echo "Profile saved to profile_calendar.txt"
 
 clean:
-	rm -f $(addprefix $(OUT)/,graphics_example drawing_3d_example headless_validation perf_stress_test calendar_stress_test profile_harness)
+	rm -f $(addprefix $(OUT)/,graphics_example drawing_3d_example headless_validation text_input_placeholder perf_stress_test calendar_stress_test profile_harness)
 	rm -f $(addprefix $(OUT)/,perf_stress_test_opt calendar_stress_test_opt)
 	rm -f $(OUT)/imm_visual_check imm_visual_check.png imm_visual_check_batched.png
 	rm -f $(OUT)/on_draw_example on_draw_example.png
