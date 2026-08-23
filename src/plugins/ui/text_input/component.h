@@ -450,8 +450,20 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
         float pad_left = cmp.computed_padd[Axis::left];
         float local_x = ctx.mouse.pos.x - fr.x - pad_left +
                          DRAW_TEXT_MARGIN + s.scroll_offset_x;
-        std::string dt = ent.has<HasLabel>() ? ent.get<HasLabel>().label
-                                             : s.text();
+        // HasLabel carries the masked spelling when there is one, which is
+        // what click positioning wants -- but it also carries the PLACEHOLDER
+        // when the field is empty, which it very much does not. Measuring the
+        // hint put the caret at an offset inside it, and the first keystroke
+        // then inserted past the end of an empty string: std::string::insert
+        // throws rather than clamping, so clicking a placeholder field and
+        // typing aborted the process.
+        //
+        // An empty field has exactly one caret position, so answer 0 directly
+        // rather than measuring anything.
+        const std::string dt =
+            s.text().empty()
+                ? std::string()
+                : (ent.has<HasLabel>() ? ent.get<HasLabel>().label : s.text());
         size_t click_pos = pixel_x_to_byte_offset(dt, local_x, font, afs);
 
         // Multi-click detection (double = word, triple = select all)

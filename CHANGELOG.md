@@ -8,6 +8,24 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+### Clicking a placeholder field and typing aborted the process
+
+`text_input`'s click-to-position measured against `HasLabel`, which holds the
+masked spelling when there is one — and the **placeholder** when the field is
+empty. So a click landed the caret at an offset inside the hint, and the first
+keystroke called `std::string::insert` past the end of an empty string, which
+throws rather than clamping. `std::out_of_range`, `SIGABRT`, on a keystroke.
+
+Anyone who adopted `with_placeholder` and clicked the field before typing hit
+this, which is to say: adopting the feature as documented.
+
+- *You will see:* nothing, unless you were crashing.
+- *What to do:* nothing. `with_placeholder` is safe to adopt now.
+- `insert_char` also clamps the cursor to the text length before inserting.
+  A cursor can legitimately outlive the string it indexed — a host that
+  shortens the bound value between frames does it too — and no arrangement of
+  that should be able to take the process down.
+
 ### A scroll view no longer squashes its content to fit
 
 `solve_violations` shrinks children that overflow the main axis. It never

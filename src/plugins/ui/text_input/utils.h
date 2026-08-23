@@ -111,6 +111,11 @@ inline bool insert_char(AnyTextInputState auto &s, int codepoint) {
     return false;
   if (s.max_length > 0 && s.text_size() + utf8.size() > s.max_length)
     return false;
+  // Clamp before inserting. The cursor can legitimately outlive the text it
+  // indexed -- a host that shortens the bound string between frames, a click
+  // measured against something longer -- and std::string::insert throws rather
+  // than clamping, which takes the whole process down over a keystroke.
+  if (s.cursor_position > s.storage.size()) s.cursor_position = s.storage.size();
   s.storage.insert(s.cursor_position, utf8);
   s.cursor_position += utf8.size();
   s.changed_since = true;

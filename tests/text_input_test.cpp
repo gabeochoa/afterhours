@@ -226,6 +226,29 @@ TEST(d12_placeholder_does_not_move_the_cursor) {
 // macOS delivers Backspace as a CHAR event carrying DEL (0x7F), so a field that
 // only filters `< 32` types a blank glyph on every backspace. Driven through
 // insert_char because that is the one path a CHAR event and a paste share.
+// A cursor can legitimately outlive the text it indexed: a host shortens the
+// bound string between frames, or a click is measured against a longer string
+// than the field holds -- which is exactly what a placeholder is. Before the
+// clamp, std::string::insert threw out_of_range and took the process down over
+// a single keystroke.
+TEST(d12_typing_with_a_stale_cursor_does_not_abort) {
+  text_input::HasTextInputState s;
+  s.storage.clear();                 // empty field
+  s.cursor_position = 15;            // where a placeholder-measured click left it
+  CHECK(text_input::insert_char(s, 'h'));
+  CHECK(s.text() == "h");
+  CHECK(s.cursor_position == 1);
+}
+
+TEST(d12_stale_cursor_clamps_to_the_end_not_the_start) {
+  text_input::HasTextInputState s;
+  s.storage.insert(0, "ab");
+  s.cursor_position = 99;            // past the end
+  CHECK(text_input::insert_char(s, 'c'));
+  // Clamped to the END, so the character lands where the caret appeared to be.
+  CHECK(s.text() == "abc");
+}
+
 TEST(d26_del_is_not_insertable_text) {
   text_input::HasTextInputState s("ab");
   s.cursor_position = 2;
