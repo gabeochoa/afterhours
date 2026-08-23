@@ -25,8 +25,73 @@
 >    - Statistics (total TODOs, by category)
 >
 > 5. **Exclude vendor directory** - contains third-party code TODOs we don't control
+>
+> 6. **PRESERVE the "Failing tests" section below.** It is hand-written and
+>    tracks assertions that fail in the suite rather than TODO comments in the
+>    source, so a scan of the codebase will not regenerate it. Carry it across
+>    verbatim unless the tests it names are green.
 
 ---
+
+## Failing tests (hand-written — preserve across regeneration)
+
+`tests/text_area_test.cpp` reports **132/138, six failures**. They are
+long-standing: the identical set fails at `cf3e0f1`, before the placeholder
+work, so nothing recent caused them. Nobody is watching them, which is the
+problem — a suite with six permanent reds is a suite people stop reading.
+
+Build it with:
+
+```
+clang++ -std=c++23 -O0 -DAFTER_HOURS_USE_RAYLIB -I. -Isrc -I.. \
+  -I$(brew --prefix fmt)/include -I$(brew --prefix raylib)/include \
+  tests/text_area_test.cpp -L$(brew --prefix raylib)/lib -lraylib \
+  -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo \
+  -o /tmp/text_area_test
+```
+
+### [ ] 1. Shift+Enter submits instead of breaking the line
+
+`shift_enter_still_breaks_when_submitting_on_enter` (:387, :388). With
+`submit_on_enter` on and Shift held, Enter should insert `\n` and NOT submit.
+It submits and leaves no break.
+
+Worth noting what PASSES around it: `enter_breaks_the_line_by_default` and
+`submit_on_enter_sends_without_breaking` are both green. So Enter is handled
+and the submit path works — it is specifically the **Shift modifier** that is
+not being distinguished. Suspect the widget reads the press without consulting
+the held-modifier state.
+
+A downstream app filed this independently as "no Shift+Enter newline", so the
+failing test has been describing a real product gap the whole time.
+
+### [ ] 2. The wheel does not scroll an overflowing text area
+
+`the_wheel_scrolls_a_field_whose_content_overflows` (:603). Eight rows in a
+three-row box, one wheel notch down, expects `scroll_offset_y == LINE_H`.
+Its sibling `the_wheel_does_not_scroll_past_the_top` passes, which only proves
+clamping-at-zero works, not that scrolling does.
+
+### [ ] 3. Typing does not replace the selection
+
+(:762). With "alpha" selected in "alpha beta", pushing `X` should yield
+`"X beta"`. `insert_char` has a replace-selection path, so the question is
+whether the selection is visible to it at that point.
+
+### [ ] 4. Shift+Left does not extend a selection
+
+(:824, :825). After a Shift-held `WidgetLeft`, expects `has_selection()` and
+`selected_text() == "a"`. Neither holds.
+
+### Common thread
+
+Three of the four — 1, 3 and 4 — are about **held modifiers or injected
+characters not reaching the widget**, and 2 is injected wheel input. Before
+fixing them individually, check whether `text_area` consults the held-modifier
+state at all, and whether the test harness's injection reaches it the way the
+real input path does: if this turns out to be one seam, it is one fix rather
+than four. If it turns out the harness is lying, that is worse, because the
+green 132 are then worth less than they look.
 
 This document contains all TODO comments found in `vendor/afterhours/src/`, analyzed with context to understand the actual issues.
 
