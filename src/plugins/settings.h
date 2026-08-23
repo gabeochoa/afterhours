@@ -11,6 +11,7 @@
 #include "../core/system.h"
 #include "../developer.h"
 #include "../logging.h"
+#include "../type_name.h"
 #include "files.h"
 
 // Compile-time check: ensure settings.cpp is compiled in your project
@@ -107,17 +108,18 @@ struct settings : developer::Plugin {
     try {
       std::ifstream ifs(settings_path);
       if (!ifs.is_open()) {
-        log_warn("Failed to open settings file: %s",
+        log_warn("Failed to open settings file: {}",
                  settings_path.string().c_str());
         return false;
       }
       ifs >> j;
       ifs.close();
       provider->data = SettingsData::from_json(j);
-      log_info("Settings loaded from JSON: %s", settings_path.string().c_str());
+      log_info("{} loaded from JSON: {}", type_name<SettingsData>(),
+               settings_path.string().c_str());
       return true;
     } catch (const std::exception &e) {
-      log_error("Failed to parse settings JSON: %s", e.what());
+      log_error("Failed to parse settings JSON: {}", e.what());
       return false;
     }
   }
@@ -129,7 +131,7 @@ struct settings : developer::Plugin {
     try {
       std::ifstream ifs(settings_path);
       if (!ifs.is_open()) {
-        log_warn("Failed to open settings file: %s",
+        log_warn("Failed to open settings file: {}",
                  settings_path.string().c_str());
         return false;
       }
@@ -138,11 +140,11 @@ struct settings : developer::Plugin {
       ifs.close();
       bitsery::quickDeserialization<BitsInputAdapter>(
           {buf_str.begin(), buf_str.size()}, provider->data);
-      log_info("Settings loaded from bitsery: %s",
+      log_info("{} loaded from bitsery: {}", type_name<SettingsData>(),
                settings_path.string().c_str());
       return true;
     } catch (const std::exception &e) {
-      log_error("Failed to parse settings bitsery: %s", e.what());
+      log_error("Failed to parse settings bitsery: {}", e.what());
       return false;
     }
   }
@@ -155,7 +157,7 @@ struct settings : developer::Plugin {
     try {
       std::ifstream ifs(settings_path);
       if (!ifs.is_open()) {
-        log_warn("Failed to open settings file: %s",
+        log_warn("Failed to open settings file: {}",
                  settings_path.string().c_str());
         return false;
       }
@@ -163,11 +165,11 @@ struct settings : developer::Plugin {
                           std::istreambuf_iterator<char>());
       ifs.close();
       provider->data = SettingsData::from_string(content);
-      log_info("Settings loaded from raw string: %s",
+      log_info("{} loaded from raw string: {}", type_name<SettingsData>(),
                settings_path.string().c_str());
       return true;
     } catch (const std::exception &e) {
-      log_error("Failed to parse settings from raw string: %s", e.what());
+      log_error("Failed to parse settings from raw string: {}", e.what());
       return false;
     }
   }
@@ -178,17 +180,18 @@ struct settings : developer::Plugin {
     try {
       std::ofstream ofs(settings_path);
       if (!ofs.is_open()) {
-        log_warn("Failed to open settings file for writing: %s",
+        log_warn("Failed to open settings file for writing: {}",
                  settings_path.string().c_str());
         return false;
       }
       json j = provider->data.to_json();
       ofs << j.dump(2); // Pretty print with 2-space indent
       ofs.close();
-      log_info("Settings saved to JSON: %s", settings_path.string().c_str());
+      log_info("{} saved to JSON: {}", type_name<SettingsData>(),
+               settings_path.string().c_str());
       return true;
     } catch (const std::exception &e) {
-      log_error("Failed to serialize settings to JSON: %s", e.what());
+      log_error("Failed to serialize settings to JSON: {}", e.what());
       return false;
     }
   }
@@ -200,7 +203,7 @@ struct settings : developer::Plugin {
     try {
       std::ofstream ofs(settings_path);
       if (!ofs.is_open()) {
-        log_warn("Failed to open settings file for writing: %s",
+        log_warn("Failed to open settings file for writing: {}",
                  settings_path.string().c_str());
         return false;
       }
@@ -208,10 +211,11 @@ struct settings : developer::Plugin {
       bitsery::quickSerialization(BitsOutputAdapter{buffer}, provider->data);
       ofs << buffer;
       ofs.close();
-      log_info("Settings saved to bitsery: %s", settings_path.string().c_str());
+      log_info("{} saved to bitsery: {}", type_name<SettingsData>(),
+               settings_path.string().c_str());
       return true;
     } catch (const std::exception &e) {
-      log_error("Failed to serialize settings with bitsery: %s", e.what());
+      log_error("Failed to serialize settings with bitsery: {}", e.what());
       return false;
     }
   }
@@ -224,18 +228,18 @@ struct settings : developer::Plugin {
     try {
       std::ofstream ofs(settings_path);
       if (!ofs.is_open()) {
-        log_warn("Failed to open settings file for writing: %s",
+        log_warn("Failed to open settings file for writing: {}",
                  settings_path.string().c_str());
         return false;
       }
       std::string content = provider->data.to_string();
       ofs << content;
       ofs.close();
-      log_info("Settings saved to raw string: %s",
+      log_info("{} saved to raw string: {}", type_name<SettingsData>(),
                settings_path.string().c_str());
       return true;
     } catch (const std::exception &e) {
-      log_error("Failed to serialize settings to raw string: %s", e.what());
+      log_error("Failed to serialize settings to raw string: {}", e.what());
       return false;
     }
   }
@@ -268,12 +272,12 @@ struct settings : developer::Plugin {
 
       std::ifstream ifs(settings_path);
       if (!ifs.is_open()) {
-        log_warn("Failed to find settings file: %s",
+        log_warn("Failed to find settings file: {}",
                  settings_path.string().c_str());
         return;
       }
 
-      log_trace("Reading settings file: %s", settings_path.string().c_str());
+      log_trace("Reading settings file: {}", settings_path.string().c_str());
 
 #if defined(AFTERHOURS_SETTINGS_OUTPUT_JSON)
       load_from_json(provider, settings_path);
@@ -423,12 +427,12 @@ struct settings : developer::Plugin {
 
     std::ifstream ifs(settings_path);
     if (!ifs.is_open()) {
-      log_warn("Failed to find settings file: %s",
+      log_warn("Failed to find settings file: {}",
                settings_path.string().c_str());
       return false;
     }
 
-    log_trace("Reading settings file: %s", settings_path.string().c_str());
+    log_trace("Reading settings file: {}", settings_path.string().c_str());
 
 #if defined(AFTERHOURS_SETTINGS_OUTPUT_JSON)
     return load_from_json(provider, settings_path);
