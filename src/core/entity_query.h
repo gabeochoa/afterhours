@@ -612,11 +612,15 @@ private:
   }
 
   // Strict comparison, so an equal key never displaces the incumbent.
-  // Ignores orderby, so a take() placed after an orderBy is applied here in
-  // iteration order rather than sorted order.
   template <typename KeyFn, typename Cmp>
   [[nodiscard]] OptEntity gen_extreme_by(KeyFn &&key_fn, Cmp cmp) const {
     using Key = std::decay_t<std::invoke_result_t<KeyFn &, const Entity &>>;
+
+    if (orderby) {
+      // The key decides the winner, so the sort is dead work -- and any mod
+      // placed after it runs here in iteration order, not sorted order.
+      log_warn("gen_min_by/gen_max_by ignores the orderBy on this query");
+    }
 
     Entity *best = nullptr;
     std::optional<Key> best_key;

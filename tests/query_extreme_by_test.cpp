@@ -241,6 +241,7 @@ TEST(an_orderby_on_the_query_does_not_change_the_answer) {
 
   // Ordering ascending would put "one" first; gen_max_by must still say
   // "eight", because the key defines the ordering, not the orderby.
+  // This combination is warned about -- the expected log line is the point.
   OptEntity hi = EntityQuery<>()
                      .whereHasComponent<Score>()
                      .orderByLambda([](const Entity &a, const Entity &b) {
