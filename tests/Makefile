@@ -86,6 +86,7 @@ ALL_TESTS := \
 	render_order_test \
 	scroll_smoothing_test \
 	setup_test \
+	slot_at_creation_test \
 	size_constraints_test \
 	slider_test \
 	split_test \

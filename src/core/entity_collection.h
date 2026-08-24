@@ -233,6 +233,9 @@ struct EntityCollection {
       e = std::make_shared<Entity>(alloc_entity_id());
     }
     temp_entities.push_back(e);
+    // Identity does not wait for the merge: handle_for works immediately, so a
+    // caller building an entity and its children needs no mid-frame merge.
+    assign_slot_to_entity(e);
 
     if (options.is_permanent) {
       permanant_ids.insert(e->id);
@@ -248,8 +251,12 @@ struct EntityCollection {
     for (const auto &entity : temp_entities) {
       if (!entity)
         continue;
-      if (entity->cleanup)
+      if (entity->cleanup) {
+        // Dropped here rather than reaching cleanup()'s sweep, so this is the
+        // only place its slot can be released.
+        invalidate_entity_slot_if_any(entity);
         continue;
+      }
       entities_DO_NOT_USE.push_back(entity);
       assign_slot_to_entity(entity);
     }
