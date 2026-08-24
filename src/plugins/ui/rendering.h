@@ -205,6 +205,20 @@ struct FocusRing {
     return expanded(thickness);
   }
   [[nodiscard]] RectangleType inner_contrast() const { return expanded(-1.f); }
+
+  // roundness is a FRACTION of the shorter side, so reusing it on an expanded
+  // rect grows the radius with the rect and the outer rings bow away from the
+  // inner ones -- the bracket marks hanging off each corner. Offsetting a
+  // rounded rect outward by t keeps concentric corners only if the radius grows
+  // by exactly t, so convert back to the fraction that yields r0 + t here.
+  [[nodiscard]] float roundness_at(float t) const {
+    const RectangleType r = expanded(t);
+    const float shorter = std::min(r.width, r.height);
+    if (shorter <= 0.f)
+      return 0.f;
+    const float r0 = roundness * 0.5f * std::min(rect.width, rect.height);
+    return std::clamp(2.f * std::max(0.f, r0 + t) / shorter, 0.f, 1.f);
+  }
 };
 
 template <typename InputAction>
@@ -1561,14 +1575,15 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     // for free by emitting at layer+199/+200.
     if (auto ring = detail::focus_ring_for(context, entity, cmp,
                                            scroll_offset)) {
-      draw_rectangle_rounded_lines(ring->outer_contrast(), ring->roundness,
+      draw_rectangle_rounded_lines(ring->outer_contrast(),
+                                   ring->roundness_at(ring->thickness),
                                    ring->segments, ring->contrast,
                                    ring->corners);
-      draw_rectangle_rounded_lines(ring->inner_contrast(), ring->roundness,
-                                   ring->segments, ring->contrast,
-                                   ring->corners);
+      draw_rectangle_rounded_lines(ring->inner_contrast(),
+                                   ring->roundness_at(-1.f), ring->segments,
+                                   ring->contrast, ring->corners);
       for (float t = 0; t < ring->thickness; t += 1.0f)
-        draw_rectangle_rounded_lines(ring->expanded(t), ring->roundness,
+        draw_rectangle_rounded_lines(ring->expanded(t), ring->roundness_at(t),
                                      ring->segments, ring->color,
                                      ring->corners);
     }
@@ -2028,10 +2043,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     if (auto ring = detail::focus_ring_for(context, entity, cmp,
                                            scroll_offset)) {
       buffer.add_rounded_rectangle_outline(
-          ring->outer_contrast(), ring->contrast, ring->roundness,
-          ring->segments, ring->corners, layer + 199, entity.id);
+          ring->outer_contrast(), ring->contrast,
+          ring->roundness_at(ring->thickness), ring->segments, ring->corners,
+          layer + 199, entity.id);
       buffer.add_rounded_rectangle_outline(
-          ring->inner_contrast(), ring->contrast, ring->roundness,
+          ring->inner_contrast(), ring->contrast, ring->roundness_at(-1.f),
           ring->segments, ring->corners, layer + 199, entity.id);
       buffer.add_rounded_rectangle_outline(
           ring->rect, ring->color, ring->roundness, ring->segments,

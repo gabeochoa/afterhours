@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <bitset>
 #include <cstring>
 #include <functional>
@@ -643,14 +644,25 @@ private:
     for (size_t i = start; i < end; ++i) {
       const auto &outline = cmds[i].data.outline;
       if (outline.thickness > 1.0f) {
-        // Draw multiple outlines for thickness effect
+        // roundness is a FRACTION of the shorter side, so reusing it on the
+        // grown rect grows the radius too and the rings bow apart at the
+        // corners. An outward offset of t keeps them concentric only if the
+        // radius also grows by t.
+        const float base =
+            std::min(outline.rect.width, outline.rect.height);
+        const float r0 = outline.roundness * 0.5f * base;
         for (float t = 0; t < outline.thickness; t += 1.0f) {
           RectangleType thickRect = {outline.rect.x - t, outline.rect.y - t,
                                      outline.rect.width + t * 2.0f,
                                      outline.rect.height + t * 2.0f};
-          draw_rectangle_rounded_lines(thickRect, outline.roundness,
-                                       outline.segments, outline.color,
-                                       outline.corners);
+          const float shorter =
+              std::min(thickRect.width, thickRect.height);
+          const float rn =
+              shorter <= 0.f
+                  ? 0.f
+                  : std::clamp(2.f * (r0 + t) / shorter, 0.f, 1.f);
+          draw_rectangle_rounded_lines(thickRect, rn, outline.segments,
+                                       outline.color, outline.corners);
         }
       } else {
         draw_rectangle_rounded_lines(outline.rect, outline.roundness,
