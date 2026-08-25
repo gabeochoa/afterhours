@@ -75,6 +75,7 @@ ALL_TESTS := \
 	typed_entity_handle_test \
 	input_injector_mouse_delta_test \
 	keymap_test \
+	label_clear_test \
 	hit_priority_test \
 	text_selection_test \
 	multiline_text_test \

@@ -197,7 +197,10 @@ inline void resolve_scaling_mode(Entity &entity,
 
 inline void apply_label(HasUIContext auto &ctx, Entity &entity,
                         const ComponentConfig &config) {
-  if (config.label.empty())
+  // An empty label CLEARS an existing one rather than being ignored: the tree
+  // is rebuilt every frame, so a widget whose text went away this frame must
+  // not keep rendering last frame's. Only skips when there is nothing to clear.
+  if (config.label.empty() && !entity.has<ui::HasLabel>())
     return;
   auto &lbl =
       entity.addComponentIfMissing<ui::HasLabel>(config.label, config.disabled);
