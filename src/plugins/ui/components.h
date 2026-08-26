@@ -515,7 +515,10 @@ struct HasScrollView : BaseComponent {
                                       // here; scroll_offset eases toward it for
                                       // smooth, momentum-like scrolling)
   Vector2Type content_size = {0, 0};  // Total size of all children (computed)
-  Vector2Type viewport_size = {0, 0}; // Visible area size
+  // Unset until a layout pass has measured it. A plain {0,0} could not be told
+  // apart from a view genuinely measured as empty, so a consumer windowing its
+  // content read zero on frame one and quietly built everything.
+  std::optional<Vector2Type> viewport_size;
   float scroll_speed = 20.0f;         // Pixels per scroll wheel notch
   // Fraction of the remaining distance covered per 60fps frame. 1.0 (default)
   // snaps, matching the behaviour before smoothing existed; ~0.25 glides.
@@ -537,13 +540,23 @@ struct HasScrollView : BaseComponent {
   HasScrollView(bool vert, bool horiz)
       : vertical_enabled(vert), horizontal_enabled(horiz) {}
 
+  // Measured size, or zero while unmeasured. Callers that must tell the two
+  // apart should read viewport_size directly.
+  Vector2Type viewport_or_zero() const {
+    return viewport_size.value_or(Vector2Type{0, 0});
+  }
+
   // Clamp scroll offset AND target to valid bounds (0 to max scrollable).
   void clamp_scroll() {
-    float max_scroll_y = std::max(0.0f, content_size.y - viewport_size.y);
+    // An unmeasured view has no bounds to clamp against; clamping to a zero
+    // viewport would pin the offset to the top before the first layout.
+    if (!viewport_size.has_value())
+      return;
+    float max_scroll_y = std::max(0.0f, content_size.y - viewport_size->y);
     scroll_offset.y = std::clamp(scroll_offset.y, 0.0f, max_scroll_y);
     scroll_target.y = std::clamp(scroll_target.y, 0.0f, max_scroll_y);
     // Horizontal scrolling (not enabled in MVP but structure is here)
-    float max_scroll_x = std::max(0.0f, content_size.x - viewport_size.x);
+    float max_scroll_x = std::max(0.0f, content_size.x - viewport_size->x);
     scroll_offset.x = std::clamp(scroll_offset.x, 0.0f, max_scroll_x);
     scroll_target.x = std::clamp(scroll_target.x, 0.0f, max_scroll_x);
     // Clamping is our own edit, not a caller's, so do not let the next ease
@@ -581,8 +594,8 @@ struct HasScrollView : BaseComponent {
   }
 
   // Check if content exceeds viewport (scrolling needed)
-  bool needs_scroll_y() const { return content_size.y > viewport_size.y; }
-  bool needs_scroll_x() const { return content_size.x > viewport_size.x; }
+  bool needs_scroll_y() const { return content_size.y > viewport_or_zero().y; }
+  bool needs_scroll_x() const { return content_size.x > viewport_or_zero().x; }
 
   // Off for a view that supplies its own bar, or where one would be noise.
   bool show_scrollbar = true;

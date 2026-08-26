@@ -172,22 +172,29 @@ ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
     return {true, entity};
 
   // Window from last frame's scroll state (persisted on the container entity).
+  // An unmeasured viewport is nullopt rather than zero, so "the layout has not
+  // run yet" is not mistaken for "this view is empty".
   float offset = 0.f, viewport = 0.f;
+  bool measured = false;
   if (entity.template has<HasScrollView>()) {
     const auto &sv = entity.template get<HasScrollView>();
     offset = sv.scroll_offset.y;
-    viewport = sv.viewport_size.y;
+    measured = sv.viewport_size.has_value();
+    if (measured)
+      viewport = sv.viewport_size->y;
   }
   constexpr long OVERSCAN = 4;
   const long n = static_cast<long>(count);
   size_t first = 0, last = static_cast<size_t>(n - 1);
-  if (viewport > 0.f) {
+  if (measured && viewport > 0.f) {
     long f = static_cast<long>(offset / row_height) - OVERSCAN;
     long l = static_cast<long>((offset + viewport) / row_height) + OVERSCAN;
     first = static_cast<size_t>(std::clamp<long>(f, 0, n - 1));
     last = static_cast<size_t>(std::clamp<long>(l, 0, n - 1));
   } else {
-    // First frame (viewport not measured yet): render an initial window.
+    // Nothing has measured this view yet, so there is no honest window: build a
+    // bounded guess and correct next frame. Safe only because the retirement
+    // sweep destroys the excess -- it used to be a permanent plateau.
     last = static_cast<size_t>(std::min<long>(n - 1, 60));
   }
 

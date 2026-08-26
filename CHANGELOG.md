@@ -8,6 +8,9 @@ Started partway through the project's life, so it does not go all the way back.
 
 ### Breaking
 
+**`HasScrollView::viewport_size` is now `std::optional`.** A plain `{0,0}` could not be told apart from a view genuinely measured as empty, so a consumer windowing its content read zero on frame one and silently built everything — which, before widget retirement, was a permanent plateau.
+*What to do:* every read site is a compile error. `viewport_or_zero()` restores the old reading where you do not care; check `has_value()` where "not measured yet" is a real case, which it is for anything that windows.
+
 **Labels lost their free 5px inset.** `Theme::text_inset` replaces a hardcoded 5 and defaults to **0**: edge-aligned text shifts, wrapped text re-breaks, auto-fit grows. Centred text does not move, so most screens are untouched — 97 of wm's 99 baselines were unaffected.
 *Old pixels back:* build `-DAFTERHOURS_DEFAULT_TEXT_INSET=5.f`, verified pixel-identical. Per widget: `with_text_inset()`. Assigning a whole theme replaces it, so a screen swapping themes must re-state it.
 *Also fixed by consolidating it:* the inset scales with `ui_scale` now (it was device pixels, so labels crept leading-ward on zoom), and `Dim::Text` charges it, so a box sized to its own text finally fits it.
