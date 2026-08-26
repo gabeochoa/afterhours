@@ -29,6 +29,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 - **`with_corner_radius(px)`** beside `with_roundness(fraction)`, which is a fraction of the *short side* and so means ~8px on a row and 180px on a panel. On `ComponentConfig`, `Theme::Builder`, `HasRoundedCorners`; precedence caller px > caller fraction > theme px > theme fraction, mutually exclusive at theme level. Default unchanged.
   `with_roundness(r > 1.f)` now warns once and names the fix — **floatinghotel hits this immediately** at `diff_renderer.h:614`, `main_content_system.h:815`, `sidebar_system.h:700`, `:706`, `:781`.
+- **`measure_config(cfg, available_w, available_h)`** (`ui/measure_config.h`) sizes a config without minting an entity, returning the box, its margins and a `pitch()` — so windowing a variable-height list stops meaning "restate the box model in app code". Answers Pixels, ScreenPercent, Percent and Text; Children and Expand need siblings and come back 0.
 - **Public text measuring** — `ui::measure_text_wrapped` / `ui::wrap_text` (`ui/text_measure.h`) take a font name and size instead of a callable: `ui::measure_text_wrapped(body, width, font, 16.f).height`.
 - **`animation::set_instant(bool)`** lands every track on its final value on the first update, still firing `on_complete`. Plus `animation::clear_all()`, and e2e `disable_animations`/`enable_animations`.
 - **`expect_text_i`** — `expect_text` ignoring case.
