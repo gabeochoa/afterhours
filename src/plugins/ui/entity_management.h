@@ -19,6 +19,8 @@ using UI_UUID = size_t;
 struct UIElementRecord {
   EntityID id;
   size_t last_built_frame;
+  // Which item this slot currently holds. 0 means the caller never said.
+  size_t key = 0;
 };
 inline std::map<UI_UUID, UIElementRecord> existing_ui_elements;
 
@@ -35,9 +37,26 @@ inline std::pair<Entity &, Entity &> deref(EntityParent p) {
   return {p.first.get(), p.second.get()};
 }
 
+// Slot-recycled identity. The entity belongs to the call site plus otherID --
+// the SLOT -- while `key` says which item is sitting in that slot right now.
+// Reusing the slot's entity is what stops a scrolling list minting one entity
+// per row it ever reached; *key_changed_out reports that the slot has moved to
+// a different item, so a caller can cancel a press or re-evaluate a hover
+// rather than silently applying either to the wrong row.
+inline EntityParent
+mk_keyed(Entity &parent, EntityID otherID, size_t key,
+         bool *key_changed_out = nullptr,
+         const std::source_location location = std::source_location::current());
+
 inline EntityParent
 mk(Entity &parent, EntityID otherID = -1,
-   const std::source_location location = std::source_location::current()) {
+   const std::source_location location = std::source_location::current());
+
+// Shared by mk() and mk_keyed(): resolve the call site to its entity, stamp it
+// built, and report whether the slot changed item.
+inline EntityParent mk_impl(Entity &parent, EntityID otherID, size_t key,
+                            bool has_key, bool *key_changed_out,
+                            const std::source_location &location) {
   std::stringstream pre_hash;
   pre_hash << parent.id << otherID << "file: " << location.file_name() << '('
            << location.line() << ':' << location.column() << ") `"
@@ -45,9 +64,17 @@ mk(Entity &parent, EntityID otherID = -1,
 
   UI_UUID hash = std::hash<std::string>{}(pre_hash.str());
 
+  if (key_changed_out)
+    *key_changed_out = false;
+
   if (existing_ui_elements.contains(hash)) {
     auto &record = existing_ui_elements.at(hash);
     record.last_built_frame = ui_build_frame;
+    if (has_key) {
+      if (key_changed_out && record.key != key)
+        *key_changed_out = true;
+      record.key = key;
+    }
     auto entityID = record.id;
     log_trace("Reusing element {} for {}", hash, entityID);
 
@@ -70,9 +97,22 @@ mk(Entity &parent, EntityID otherID = -1,
   }
 
   Entity &entity = UICollectionHolder::get().collection.createEntity();
-  existing_ui_elements[hash] = {entity.id, ui_build_frame};
+  existing_ui_elements[hash] = {entity.id, ui_build_frame, has_key ? key : 0};
+  // A slot seen for the first time has not changed item; it has no history.
   log_trace("Creating element {} for {}", hash, entity.id);
   return {entity, parent};
+}
+
+inline EntityParent
+mk(Entity &parent, EntityID otherID,
+   const std::source_location location) {
+  return mk_impl(parent, otherID, 0, false, nullptr, location);
+}
+
+inline EntityParent mk_keyed(Entity &parent, EntityID otherID, size_t key,
+                             bool *key_changed_out,
+                             const std::source_location location) {
+  return mk_impl(parent, otherID, key, true, key_changed_out, location);
 }
 
 // Mark for destruction; the collection's own cleanup() does the freeing.

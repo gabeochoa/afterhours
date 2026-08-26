@@ -138,15 +138,131 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
   return {true, entity};
 }
 
-/// Windowed (virtualized) list — a scroll container that only builds the rows
-/// currently visible in the viewport (plus a small overscan), with top/bottom
-/// spacers reserving the full scroll extent so the scrollbar behaves normally.
-/// Keeps huge diffs / long commit logs snappy (O(visible) entities per frame
-/// instead of O(count)).
+/// The slice of a long list worth building this frame.
+///
+/// A scroll view clips what you built; it gives you no way to build less. So
+/// every consumer with a long list re-implemented windowing against state the
+/// library writes AFTER the build -- and got the same three things wrong:
+/// windowing against the settled offset so a fling shows a blank strip, minting
+/// an entity per row ever scrolled past, and faking the un-built extent with
+/// invisible spacer divs.
+///
+/// ```cpp
+/// auto win = virtual_window(ctx, mk(parent), items.size(), 26.f);
+/// for (size_t i = win.first; i < win.last; i++) {
+///   bool moved = false;
+///   auto row = div(ctx, win.slot(i, &moved), cfg.with_label(items[i]));
+///   if (moved) { /* this slot now shows a different item */ }
+/// }
+/// ```
+struct VirtualWindow {
+  size_t first = 0; // half-open: [first, last)
+  size_t last = 0;
+  Entity *container = nullptr;
+  size_t capacity = 1;
+
+  bool empty() const { return first >= last; }
+  size_t size() const { return empty() ? 0 : last - first; }
+
+  /// Entity for item `i`, recycled by slot rather than minted per item.
+  /// *key_changed_out says the slot has moved to a different item, so a press
+  /// begun on the old one can be cancelled instead of landing on the new one.
+  EntityParent slot(size_t i, bool *key_changed_out = nullptr) const {
+    return mk_keyed(*container, static_cast<EntityID>(i % capacity), i + 1,
+                    key_changed_out);
+  }
+};
+
+inline VirtualWindow virtual_window(HasUIContext auto &ctx, EntityParent ep_pair,
+                                    size_t count, float item_height,
+                                    ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+  if (config.size.is_default)
+    config.with_size(ComponentSize{percent(1.0f), percent(1.0f)});
+  config.with_overflow(Overflow::Scroll, Axis::Y)
+      .with_flex_direction(FlexDirection::Column);
+  init_component(ctx, ep_pair, config, ComponentType::Div);
+
+  VirtualWindow win;
+  win.container = &entity;
+  if (item_height <= 0.f)
+    item_height = 1.f;
+  if (count == 0)
+    return win;
+
+  float lo = 0.f, hi = 0.f;
+  bool measured = false;
+  if (entity.template has<HasScrollView>()) {
+    const auto &sv = entity.template get<HasScrollView>();
+    measured = sv.viewport_size.has_value();
+    const float vh = measured ? sv.viewport_size->y : 0.f;
+    // Cover where the view is AND where it is easing to. Windowing on the
+    // settled offset alone shows a strip of nothing for a frame on every fling,
+    // which is never seen in development and is reported as "flickers".
+    lo = std::min(sv.scroll_offset.y, sv.scroll_target.y);
+    hi = std::max(sv.scroll_offset.y, sv.scroll_target.y) + vh;
+    // Bounded, because a scrollbar drag throws the target the length of the
+    // list: covering every row in between is the whole list, which is the cost
+    // this exists to avoid. Past a few viewports the intermediate rows go by
+    // faster than they can be read, so favour the end being travelled toward.
+    const float max_span = std::max(vh * 3.f, 1.f);
+    if (hi - lo > max_span) {
+      if (sv.scroll_target.y >= sv.scroll_offset.y)
+        lo = hi - max_span;
+      else
+        hi = lo + max_span;
+    }
+  }
+  const float offset = lo;
+  const float viewport = hi - lo;
+
+  constexpr long OVERSCAN = 4;
+  const long n = static_cast<long>(count);
+  if (measured && viewport > 0.f) {
+    long f = static_cast<long>(offset / item_height) - OVERSCAN;
+    long l = static_cast<long>((offset + viewport) / item_height) + OVERSCAN + 1;
+    win.first = static_cast<size_t>(std::clamp<long>(f, 0, n));
+    win.last = static_cast<size_t>(std::clamp<long>(l, 0, n));
+  } else {
+    // Nothing has measured this view yet, so there is no honest window: build a
+    // bounded guess and correct next frame. Only defensible because the
+    // retirement sweep destroys the excess -- it used to be permanent.
+    win.last = static_cast<size_t>(std::min<long>(n, 60));
+  }
+  win.capacity = std::max<size_t>(win.size() + 2 * OVERSCAN + 4, 1);
+
+  // ponytail: the leading extent is a real div because scroll offset is applied
+  // at RENDER time, so without one the first built row lays out at y=0 and is
+  // then shifted off-screen. The trailing extent needs no div -- it only has to
+  // count toward the scroll range, which content_extra does. Collapsing the
+  // leading one too means offsetting children in layout, which is a bigger
+  // change than this owed.
+  if (win.first > 0) {
+    div(ctx, mk(entity, 0),
+        ComponentConfig{}
+            .with_size(ComponentSize{
+                percent(1.0f),
+                pixels(static_cast<float>(win.first) * item_height)})
+            .with_transparent_bg()
+            .with_debug_name("vwindow_leading"));
+  }
+  if (entity.template has<HasScrollView>()) {
+    const size_t below = (win.last < count) ? (count - win.last) : 0;
+    entity.template get<HasScrollView>().content_extra.y =
+        static_cast<float>(below) * item_height;
+  }
+  return win;
+}
+
+/// Windowed (virtualized) list — builds only the rows currently visible, with
+/// the scroll extent still reporting the whole list.
 ///
 /// `render_row(index, row_parent)` builds one row's contents; every row is
-/// exactly `row_height` px tall. Row entities use the item index as their id so
-/// per-row state persists across frames and scrolling.
+/// exactly `row_height` px tall.
+///
+/// A thin wrapper over virtual_window, which is the same thing without the
+/// inverted control -- reach for that one if a row needs to know its slot
+/// changed item.
 ///
 /// Usage:
 /// ```cpp
@@ -159,71 +275,16 @@ template <typename RenderRow>
 ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
                            size_t count, float row_height, RenderRow &&render_row,
                            ComponentConfig config = ComponentConfig()) {
-  auto [entity, parent] = deref(ep_pair);
-  if (config.size.is_default)
-    config.with_size(ComponentSize{percent(1.0f), percent(1.0f)});
-  config.with_overflow(Overflow::Scroll, Axis::Y)
-      .with_flex_direction(FlexDirection::Column);
-  init_component(ctx, ep_pair, config, ComponentType::Div);
-
-  if (row_height <= 0.f)
-    row_height = 1.f;
-  if (count == 0)
-    return {true, entity};
-
-  // Window from last frame's scroll state (persisted on the container entity).
-  // An unmeasured viewport is nullopt rather than zero, so "the layout has not
-  // run yet" is not mistaken for "this view is empty".
-  float offset = 0.f, viewport = 0.f;
-  bool measured = false;
-  if (entity.template has<HasScrollView>()) {
-    const auto &sv = entity.template get<HasScrollView>();
-    offset = sv.scroll_offset.y;
-    measured = sv.viewport_size.has_value();
-    if (measured)
-      viewport = sv.viewport_size->y;
-  }
-  constexpr long OVERSCAN = 4;
-  const long n = static_cast<long>(count);
-  size_t first = 0, last = static_cast<size_t>(n - 1);
-  if (measured && viewport > 0.f) {
-    long f = static_cast<long>(offset / row_height) - OVERSCAN;
-    long l = static_cast<long>((offset + viewport) / row_height) + OVERSCAN;
-    first = static_cast<size_t>(std::clamp<long>(f, 0, n - 1));
-    last = static_cast<size_t>(std::clamp<long>(l, 0, n - 1));
-  } else {
-    // Nothing has measured this view yet, so there is no honest window: build a
-    // bounded guess and correct next frame. Safe only because the retirement
-    // sweep destroys the excess -- it used to be a permanent plateau.
-    last = static_cast<size_t>(std::min<long>(n - 1, 60));
-  }
-
-  if (first > 0) {
-    div(ctx, mk(entity, 0),
-        ComponentConfig{}
-            .with_size(ComponentSize{percent(1.0f),
-                                     pixels(static_cast<float>(first) * row_height)})
-            .with_transparent_bg()
-            .with_debug_name("vlist_top_spacer"));
-  }
-  for (size_t i = first; i <= last && i < count; ++i) {
-    auto row = div(ctx, mk(entity, static_cast<int>(i) + 1),
+  auto win = virtual_window(ctx, ep_pair, count, row_height, config);
+  for (size_t i = win.first; i < win.last; ++i) {
+    auto row = div(ctx, win.slot(i),
                    ComponentConfig{}
                        .with_size(ComponentSize{percent(1.0f), pixels(row_height)})
                        .with_transparent_bg()
                        .with_debug_name("vlist_row"));
     render_row(i, row.ent());
   }
-  size_t below = (last + 1 < count) ? (count - 1 - last) : 0;
-  if (below > 0) {
-    div(ctx, mk(entity, n + 2),
-        ComponentConfig{}
-            .with_size(ComponentSize{percent(1.0f),
-                                     pixels(static_cast<float>(below) * row_height)})
-            .with_transparent_bg()
-            .with_debug_name("vlist_bottom_spacer"));
-  }
-  return {true, entity};
+  return {true, *win.container};
 }
 
 /// Horizontal stack — a div with FlexDirection::Row preset.

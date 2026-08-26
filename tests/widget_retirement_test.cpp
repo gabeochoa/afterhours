@@ -102,8 +102,43 @@ static void test_clear_destroys_rather_than_orphans() {
   CHECK(imm::existing_ui_elements.empty());
 }
 
+// A slot keeps its entity as the item in it changes, and says when it changed.
+// Keying on the item instead would mint an entity per row ever scrolled past,
+// which is the leak the windowing exists to avoid.
+//
+// One call site on purpose: the source location is part of a widget's
+// identity, so calling mk_keyed from four lines would be four slots.
+static EntityID build_slot(Entity &parent, size_t key, bool *changed) {
+  return imm::mk_keyed(parent, 0, key, changed).first.get().id;
+}
+
+static void test_keyed_slot_recycles_and_reports() {
+  reset_world();
+  imm::ui_retire_grace_frames = 90;
+  Entity &parent = UICollectionHolder::get().collection.createEntity();
+  UICollectionHolder::get().collection.merge_entity_arrays();
+
+  bool changed = false;
+  const EntityID first = build_slot(parent, 100, &changed);
+  CHECK(!changed); // a slot with no history has not changed
+
+  // Same slot, same item: no change, same entity.
+  CHECK(build_slot(parent, 100, &changed) == first);
+  CHECK(!changed);
+
+  // Same slot, different item: same entity, and the caller is told.
+  CHECK(build_slot(parent, 101, &changed) == first);
+  CHECK(changed);
+
+  // And it settles again rather than latching.
+  CHECK(build_slot(parent, 101, &changed) == first);
+  CHECK(!changed);
+}
+
 int main() {
   printf("Running widget retirement tests...\n\n");
+  printf("  keyed_slot_recycles_and_reports\n");
+  test_keyed_slot_recycles_and_reports();
   printf("  unbuilt_widget_is_retired_after_grace\n");
   test_unbuilt_widget_is_retired_after_grace();
   printf("  rebuilding_keeps_it_alive\n");

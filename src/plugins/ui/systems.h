@@ -487,6 +487,10 @@ struct MeasureScrollViews : System<HasScrollView, UIComponent> {
     scroll.content_size = is_row_layout
                               ? Vector2Type{total_width + gaps, max_height}
                               : Vector2Type{max_width, total_height + gaps};
+    // A virtualized list did not build its tail, but the scroll range is still
+    // the whole list's.
+    scroll.content_size.x += scroll.content_extra.x;
+    scroll.content_size.y += scroll.content_extra.y;
 
     scroll.clamp_scroll();
   }

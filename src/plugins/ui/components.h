@@ -515,6 +515,9 @@ struct HasScrollView : BaseComponent {
                                       // here; scroll_offset eases toward it for
                                       // smooth, momentum-like scrolling)
   Vector2Type content_size = {0, 0};  // Total size of all children (computed)
+  // Extent the content has beyond its actual children, for a virtualized list
+  // whose un-built tail still has to count toward the scroll range.
+  Vector2Type content_extra = {0, 0};
   // Unset until a layout pass has measured it. A plain {0,0} could not be told
   // apart from a view genuinely measured as empty, so a consumer windowing its
   // content read zero on frame one and quietly built everything.
