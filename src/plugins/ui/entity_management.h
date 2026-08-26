@@ -15,7 +15,19 @@ namespace ui {
 namespace imm {
 
 using UI_UUID = size_t;
-inline std::map<UI_UUID, EntityID> existing_ui_elements;
+
+struct UIElementRecord {
+  EntityID id;
+  size_t last_built_frame;
+};
+inline std::map<UI_UUID, UIElementRecord> existing_ui_elements;
+
+// Bumped once per frame by retire_unbuilt_ui_elements().
+inline size_t ui_build_frame = 0;
+
+// Frames a widget may go unbuilt before it is destroyed. 0 disables the sweep,
+// for an app that holds EntityIDs across screens and does its own lifetime.
+inline size_t ui_retire_grace_frames = 90;
 
 using EntityParent = std::pair<RefEntity, RefEntity>;
 
@@ -34,7 +46,9 @@ mk(Entity &parent, EntityID otherID = -1,
   UI_UUID hash = std::hash<std::string>{}(pre_hash.str());
 
   if (existing_ui_elements.contains(hash)) {
-    auto entityID = existing_ui_elements.at(hash);
+    auto &record = existing_ui_elements.at(hash);
+    record.last_built_frame = ui_build_frame;
+    auto entityID = record.id;
     log_trace("Reusing element {} for {}", hash, entityID);
 
     // Look up via UICollectionHolder (checks UI collection first, then default)
@@ -56,14 +70,43 @@ mk(Entity &parent, EntityID otherID = -1,
   }
 
   Entity &entity = UICollectionHolder::get().collection.createEntity();
-  existing_ui_elements[hash] = entity.id;
-  // TODO - add a count of how many elements are created
-  // so we can track if its growing every frame
+  existing_ui_elements[hash] = {entity.id, ui_build_frame};
   log_trace("Creating element {} for {}", hash, entity.id);
   return {entity, parent};
 }
 
-inline void clear_existing_ui_elements() { existing_ui_elements.clear(); }
+// Mark for destruction; the collection's own cleanup() does the freeing.
+inline void mark_ui_element_for_cleanup(EntityID id) {
+  OptEntity opt = UICollectionHolder::getEntityForID(id);
+  if (opt.valid())
+    opt.asE().cleanup = true;
+}
+
+inline void clear_existing_ui_elements() {
+  for (const auto &[hash, record] : existing_ui_elements)
+    mark_ui_element_for_cleanup(record.id);
+  existing_ui_elements.clear();
+}
+
+// Destroy widgets nothing has built for ui_retire_grace_frames. Retaining an
+// entity per call site with nothing to retire one is not a cache, it is a leak
+// with a bounded key space: every system then walks the union of every screen
+// the app has ever shown.
+inline void retire_unbuilt_ui_elements() {
+  if (ui_retire_grace_frames > 0) {
+    for (auto it = existing_ui_elements.begin();
+         it != existing_ui_elements.end();) {
+      if (ui_build_frame - it->second.last_built_frame <=
+          ui_retire_grace_frames) {
+        ++it;
+        continue;
+      }
+      mark_ui_element_for_cleanup(it->second.id);
+      it = existing_ui_elements.erase(it);
+    }
+  }
+  ui_build_frame++;
+}
 
 } // namespace imm
 

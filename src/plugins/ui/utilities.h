@@ -18,6 +18,7 @@
 #include "../../font_helper.h"
 #include "../autolayout.h"
 #include "../window_manager.h"
+#include "entity_management.h"
 #include "components.h"
 #include "context.h"
 #include "ui_collection.h"
@@ -305,6 +306,8 @@ struct UIPluginPostUpdateBridge : System<> {
 
     virtual void once(float dt) override {
         run_systems_on_ui_entities(systems, dt);
+        // Before cleanup(), which is what actually frees what this marks.
+        imm::retire_unbuilt_ui_elements();
         UICollectionHolder::get().collection.cleanup();
     }
 };
