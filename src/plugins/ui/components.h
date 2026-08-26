@@ -518,6 +518,17 @@ struct HasScrollView : BaseComponent {
   // Pixels of rows a virtualized list chose not to build, added into
   // content_size so the scrollbar still spans the whole list.
   Vector2Type unbuilt_content_size = {0, 0};
+
+  // Hold the viewport on whatever child is at the top of it when content is
+  // added or removed above, the way a browser does. Off by default: it costs a
+  // scan of the children, and a view that only ever grows at the bottom does
+  // not need it.
+  bool anchor_scroll = false;
+  // The child the viewport is pinned to, and where it sat inside the content
+  // last frame. Comparing that position against this frame's is how a change
+  // above the fold is detected without anyone reporting one.
+  EntityID anchor_child = -1;
+  float anchor_child_y = 0.f;
   // Unset until a layout pass has measured it. A plain {0,0} could not be told
   // apart from a view genuinely measured as empty, so a consumer windowing its
   // content read zero on frame one and quietly built everything.

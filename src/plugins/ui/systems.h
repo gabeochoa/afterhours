@@ -492,7 +492,65 @@ struct MeasureScrollViews : System<HasScrollView, UIComponent> {
     scroll.content_size.x += scroll.unbuilt_content_size.x;
     scroll.content_size.y += scroll.unbuilt_content_size.y;
 
+    // Only here, not in the render path's copy of the content-size maths: this
+    // moves the offset, and doing it twice a frame would move it twice.
+    if (scroll.anchor_scroll && !is_row_layout)
+      apply_scroll_anchor(scroll, cmp, parent_rect.y);
+
     scroll.clamp_scroll();
+  }
+
+private:
+  // Where a child sits inside the content, top of its margin box, measured
+  // from the top of the content rather than the top of the screen.
+  static float child_y_in_content(const UIComponent &child_cmp,
+                                  float container_y) {
+    return child_cmp.rect().y - child_cmp.computed_margin[Axis::top] -
+           container_y;
+  }
+
+  // Keep whatever is at the top of the viewport at the top of the viewport.
+  //
+  // scroll_offset counts pixels from the top of the content, so inserting
+  // anything above the fold leaves the same pixel showing older content and
+  // the view appears to jump. Nothing reports such an insertion, so instead
+  // pin a child and watch where it lands: if it moved, everything above it
+  // changed size by that much, and following it holds the view still.
+  static void apply_scroll_anchor(HasScrollView &scroll, UIComponent &cmp,
+                                  float container_y) {
+    if (scroll.anchor_child != -1) {
+      OptEntity prev = UICollectionHolder::getEntityForID(scroll.anchor_child);
+      if (prev.valid() && prev.asE().has<UIComponent>()) {
+        const float now =
+            child_y_in_content(prev.asE().get<UIComponent>(), container_y);
+        const float moved = now - scroll.anchor_child_y;
+        if (moved != 0.f) {
+          scroll.scroll_offset.y += moved;
+          scroll.scroll_target.y += moved;
+          // The easing treats a caller's edit as authoritative; this is one.
+          scroll.last_eased_offset = scroll.scroll_offset;
+        }
+      }
+    }
+
+    // Re-pin for next frame, against the offset as it now stands: the topmost
+    // child the viewport still shows.
+    scroll.anchor_child = -1;
+    for (EntityID child_id : cmp.children) {
+      OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
+      if (!child_opt.valid() || !child_opt.asE().has<UIComponent>())
+        continue;
+      const UIComponent &child_cmp = child_opt.asE().get<UIComponent>();
+      const float top = child_y_in_content(child_cmp, container_y);
+      const float bottom = top + child_cmp.computed[Axis::Y] +
+                           child_cmp.computed_margin[Axis::top] +
+                           child_cmp.computed_margin[Axis::bottom];
+      if (bottom > scroll.scroll_offset.y) {
+        scroll.anchor_child = child_id;
+        scroll.anchor_child_y = top;
+        break;
+      }
+    }
   }
 };
 

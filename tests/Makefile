@@ -64,7 +64,9 @@ ALL_TESTS := \
 	autolayout_test \
 	dialog_test \
 	dump_ui_test \
+	scroll_anchor_test \
 	measure_config_test \
+	scroll_anchor_test \
 	widget_retirement_test \
 	entity_mapping_test \
 	files_atomic_write_test \
@@ -116,7 +118,9 @@ RAYLIB_TESTS := \
 	headless_fallback_test \
 	dialog_test \
 	dump_ui_test \
+	scroll_anchor_test \
 	measure_config_test \
+	scroll_anchor_test \
 	widget_retirement_test \
 	progress_bar_test \
 	render_order_test \
