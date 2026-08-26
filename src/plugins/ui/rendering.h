@@ -175,6 +175,12 @@ static inline void update_scroll_view_content_size(Entity &entity) {
   } else {
     scroll.content_size = {max_width, total_height};
   }
+  // A virtualized list did not build every row, and this is the second place
+  // that recomputes content_size. Leaving the skipped rows out here clamped
+  // the offset to what happened to be on screen, so a scrollbar drag to the
+  // end crept forward one window per frame instead of arriving.
+  scroll.content_size.x += scroll.unbuilt_content_size.x;
+  scroll.content_size.y += scroll.unbuilt_content_size.y;
 
   scroll.clamp_scroll();
 }

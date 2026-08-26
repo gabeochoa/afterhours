@@ -19,7 +19,7 @@ using UI_UUID = size_t;
 struct UIElementRecord {
   EntityID id;
   size_t last_built_frame;
-  // Which item this slot currently holds. 0 means the caller never said.
+  // Which item a recycled row is currently showing. 0 means not recycled.
   size_t key = 0;
 };
 inline std::map<UI_UUID, UIElementRecord> existing_ui_elements;
@@ -37,20 +37,21 @@ inline std::pair<Entity &, Entity &> deref(EntityParent p) {
   return {p.first.get(), p.second.get()};
 }
 
-// Slot-recycled identity. The entity belongs to the call site plus otherID --
-// the SLOT -- while `key` says which item is sitting in that slot right now.
-// Reusing the slot's entity is what stops a scrolling list minting one entity
-// per row it ever reached; *key_changed_out reports that the slot has moved to
-// a different item, so a caller can cancel a press or re-evaluate a hover
-// rather than silently applying either to the wrong row.
+inline EntityParent
+mk(Entity &parent, EntityID otherID = -1,
+   const std::source_location location = std::source_location::current());
+
+namespace detail {
+// A recycled list row reuses one entity for a position in the visible window
+// rather than creating one per item. `otherID` is that position and `key` is
+// the item currently in it, so *key_changed_out reports the position has moved
+// to a different item and whatever the old one was doing has to be undone.
+// Internal: virtual_list owns both halves, so no caller has to know.
 inline EntityParent
 mk_keyed(Entity &parent, EntityID otherID, size_t key,
          bool *key_changed_out = nullptr,
          const std::source_location location = std::source_location::current());
-
-inline EntityParent
-mk(Entity &parent, EntityID otherID = -1,
-   const std::source_location location = std::source_location::current());
+} // namespace detail
 
 // Shared by mk() and mk_keyed(): resolve the call site to its entity, stamp it
 // built, and report whether the slot changed item.
@@ -109,11 +110,13 @@ mk(Entity &parent, EntityID otherID,
   return mk_impl(parent, otherID, 0, false, nullptr, location);
 }
 
+namespace detail {
 inline EntityParent mk_keyed(Entity &parent, EntityID otherID, size_t key,
                              bool *key_changed_out,
                              const std::source_location location) {
   return mk_impl(parent, otherID, key, true, key_changed_out, location);
 }
+} // namespace detail
 
 // Mark for destruction; the collection's own cleanup() does the freeing.
 inline void mark_ui_element_for_cleanup(EntityID id) {

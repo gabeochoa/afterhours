@@ -109,7 +109,7 @@ static void test_clear_destroys_rather_than_orphans() {
 // One call site on purpose: the source location is part of a widget's
 // identity, so calling mk_keyed from four lines would be four slots.
 static EntityID build_slot(Entity &parent, size_t key, bool *changed) {
-  return imm::mk_keyed(parent, 0, key, changed).first.get().id;
+  return imm::detail::mk_keyed(parent, 0, key, changed).first.get().id;
 }
 
 static void test_keyed_slot_recycles_and_reports() {

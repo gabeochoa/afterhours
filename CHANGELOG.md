@@ -40,6 +40,7 @@ Started partway through the project's life, so it does not go all the way back.
 - **Synchronized scroll views** — `HasScrollView::sync_group`, same non-zero id on two or more views and scrolling one moves the rest. Only their enabled axes are written and each still clamps to its own content. Purely additive.
 
 ### Fixes
+- **`virtual_list` culls for real.** Rows are recycled by slot so a 10k list holds ~30 entities instead of one per row ever scrolled past, the un-built rows count toward the scroll range so the bar spans the whole list, the window covers where the view is easing to so a fling does not flash blank, and the first frame sizes itself from the container instead of guessing 60. A press whose row scrolls out from under it is cancelled rather than firing on the row that replaced it. No API change.
 
 - **Clicking a placeholder field and typing aborted the process.** Click-to-position measured against `HasLabel`, which holds the *placeholder* when the field is empty, so the first keystroke inserted past the end of an empty string — `std::out_of_range`, `SIGABRT`. `with_placeholder` is safe to adopt now.
 - **A scroll view no longer squashes its content to fit.** `solve_violations` never exempted scroll views, where overflowing is the point, so a list longer than its viewport had every row shrunk toward zero. Latent until `48f808d` made the solver recurse into absolute subtrees. If you pinned strictness to 1 to stop this, you can stop.
