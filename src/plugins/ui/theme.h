@@ -14,6 +14,13 @@
 #include "../color.h"
 #include "../language.h" // only needs translation::Language, not translation.h's fmt-heavy machinery
 
+// Seeds Theme::text_inset. 0 means a label sits flush in its own box and any
+// breathing room is padding the caller asked for. Define this to 5.f to keep
+// the inset the renderer used to apply unconditionally.
+#ifndef AFTERHOURS_DEFAULT_TEXT_INSET
+#define AFTERHOURS_DEFAULT_TEXT_INSET 0.f
+#endif
+
 namespace afterhours {
 
 namespace ui {
@@ -279,6 +286,20 @@ struct Theme {
   // In Proportional mode this is ignored. In Adaptive mode, all pixels()
   // values are multiplied by this factor (like browser Ctrl+/- zoom).
   float ui_scale = 1.0f;
+
+  // ===== Text inset =====
+  // Space reserved between a label and its own box, on each side, in
+  // unscaled pixels. This used to be a hardcoded 5 inside the renderer that
+  // no caller could reach: padding on a label-only element did nothing,
+  // right-aligned text could never sit flush, and a Dim::Text box came out
+  // narrower than the text the renderer then drew into it.
+  //
+  // It defaults to 0 -- a caller who wants breathing room asks for padding.
+  // Build with -DAFTERHOURS_DEFAULT_TEXT_INSET=5.f to restore the old value
+  // everywhere; set this field for one app, or with_text_inset() for one
+  // widget.
+  Vector2Type text_inset = {AFTERHOURS_DEFAULT_TEXT_INSET,
+                            AFTERHOURS_DEFAULT_TEXT_INSET};
 
   // ===== Font configuration =====
   // Per-language font configuration

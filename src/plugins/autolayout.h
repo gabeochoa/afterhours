@@ -52,6 +52,10 @@ struct AutoLayout {
   std::vector<UIComponent *> cmp_cache_;
   bool enable_grid_snapping = false;
   float ui_scale = 1.0f;
+  // Theme::text_inset.x, already scaled. Sizing a box to its own text has to
+  // charge the same inset the renderer will reserve inside it, or a Dim::Text
+  // box comes out narrower than the text it is about to be handed.
+  float text_inset_x = 0.f;
 
   AutoLayout(window_manager::Resolution rez = {},
              const std::vector<Entity *> &mapping_ = {})
@@ -156,6 +160,18 @@ struct AutoLayout {
     return *this;
   }
 
+  // Per-side inset for this entity: its own override if it set one, else the
+  // theme's. The override is stored unscaled, so it scales here the way
+  // text_inset_x already was.
+  float inset_for(const Entity &ent) const {
+    if (ent.has<HasLabel>()) {
+      const auto &over = ent.get<HasLabel>().text_inset;
+      if (over.has_value())
+        return over->x * ui_scale;
+    }
+    return text_inset_x;
+  }
+
   float get_text_size_for_axis(UIComponent &widget, Axis axis) {
     const std::string &font_name = widget.font_name;
 
@@ -189,10 +205,11 @@ struct AutoLayout {
     // as its widest line and as tall as all of them. Wrapping is only measured
     // when the renderer would also wrap -- it needs a pinned font size and a
     // width to wrap against -- so the two never disagree about line count.
-    // The -10 matches the margin draw_text_in_rect reserves.
+    // Both sides come off, matching what draw_text_in_rect reserves.
+    const float inset_both = 2.f * inset_for(ent);
     const bool wraps = label.text_overflow == TextOverflow::Wrap &&
                        widget.font_size_explicitly_set &&
-                       widget.computed[Axis::X] > 10.f;
+                       widget.computed[Axis::X] > inset_both;
 
     // Wrap without a pinned size silently does nothing, which reads as Wrap
     // being broken. The requirement is real: auto-fit sizes from the measured
@@ -209,12 +226,17 @@ struct AutoLayout {
     }
     Vector2Type result;
     if (wraps || content.find('\n') != std::string::npos) {
-      const float max_w = wraps ? widget.computed[Axis::X] - 10.f : 1e9f;
+      const float max_w =
+          wraps ? widget.computed[Axis::X] - inset_both : 1e9f;
       const auto m = ui::detail::measure_wrapped(content, max_w, measure_one);
       result = Vector2Type{m.width, m.height};
     } else {
       result = measure_one(content);
     }
+    // Charge the inset the renderer will reserve. Without this a Dim::Text box
+    // is sized to the bare glyphs and then drawn into with both sides taken
+    // off, so the text it was measured from no longer fits.
+    result.x += inset_both;
 
     switch (axis) {
     case Axis::X:
@@ -1661,10 +1683,11 @@ struct AutoLayout {
                          const window_manager::Resolution resolution,
                          const std::vector<Entity *> &map,
                          bool enable_grid_snapping = false,
-                         float ui_scale = 1.0f) {
+                         float ui_scale = 1.0f, float text_inset_x = 0.f) {
     AutoLayout al(resolution, map);
     al.set_grid_snapping(enable_grid_snapping);
     al.ui_scale = ui_scale;
+    al.text_inset_x = text_inset_x;
     al.build_cmp_cache();
     al.prune_stale_children(widget);
 

@@ -102,6 +102,9 @@ struct ComponentConfig {
   TextAlignment label_alignment = TextAlignment::None;
   TextOverflow text_overflow = TextOverflow::Clip;
   float letter_spacing = 0.f; // Additional spacing between characters (pixels)
+  // Per-side space between this label and its own box, overriding
+  // Theme::text_inset. Unset means the theme's value.
+  std::optional<Vector2Type> text_inset;
   std::optional<CursorType> cursor_type; // Cursor to show on hover
   bool skip_when_tabbing = false;
   bool ignore_pointer_events = false; // invisible to hit-testing
@@ -432,6 +435,13 @@ struct ComponentConfig {
   ComponentConfig &with_letter_spacing(float spacing) {
     letter_spacing = spacing;
     return *this;
+  }
+  ComponentConfig &with_text_inset(float x, float y) {
+    text_inset = Vector2Type{x, y};
+    return *this;
+  }
+  ComponentConfig &with_text_inset(float both) {
+    return with_text_inset(both, both);
   }
   ComponentConfig &with_cursor(CursorType cursor) {
     cursor_type = cursor;

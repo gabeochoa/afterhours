@@ -470,6 +470,8 @@ struct HasLabel : BaseComponent {
   TextAlignment alignment = TextAlignment::None;
   TextOverflow text_overflow = TextOverflow::Clip;
   float letter_spacing = 0.f; // Additional spacing between characters (pixels)
+  // Per-side space between this label and its box; unset means Theme's value.
+  std::optional<Vector2Type> text_inset;
 
   std::string label;
   // When non-empty, the label is drawn as a sequence of colored runs (each with
@@ -522,6 +524,11 @@ struct HasLabel : BaseComponent {
 
   auto &set_letter_spacing(float spacing) {
     letter_spacing = spacing;
+    return *this;
+  }
+
+  auto &set_text_inset(const std::optional<Vector2Type> &inset) {
+    text_inset = inset;
     return *this;
   }
 

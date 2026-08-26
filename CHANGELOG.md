@@ -8,6 +8,41 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+### Labels no longer get a free 5px inset — text will move
+
+**Read this one before you bump.** The renderer used to reserve 5px between
+every label and its own box. It now reserves `Theme::text_inset`, which
+defaults to **0**.
+
+- *You will see:* left- and right-aligned text sitting 5px closer to its edge,
+  wrapped text re-breaking (it has 10px more to work with, so often one line
+  fewer), and auto-fit text growing into the freed space. Centred text does not
+  move at all — an equal inset on both sides never shifted it — so in practice
+  most screens are untouched. wm_afterhours: 97 of its 99 baselines were
+  unaffected.
+- *What to do, if you want the old pixels back:* build with
+  `-DAFTERHOURS_DEFAULT_TEXT_INSET=5.f`. That seeds the default member
+  initialiser, so every `Theme` and every preset carries it, and the result is
+  pixel-identical — verified against all 99 wm_afterhours baselines.
+- *What to do instead, eventually:* ask for the space you want.
+  `Theme::text_inset` sets it app-wide, `with_text_inset()` per widget, and
+  padding on the element is what a caller reaching for either of those probably
+  meant. **Note:** assigning a whole theme (`context.theme = some_preset()`)
+  replaces `text_inset` along with everything else, so a screen that swaps its
+  theme has to re-state it.
+
+Why it moved: the 5 was unreachable. Padding on a label-only element did
+nothing, right-aligned text could never sit flush, and it was duplicated across
+ten sites — three in the renderer, five more as a bare `- 10.f`, and two inside
+the layout engine, one of them commented "matches the margin
+draw_text_in_rect reserves". Two bugs fell out of consolidating it:
+
+- The inset was in **device** pixels, so every label slid toward its leading
+  edge as `ui_scale` rose. It scales now.
+- `Dim::Text` measured the bare glyphs and the renderer then took both sides
+  off, so a box sized to its own text could not fit that text. Sizing charges
+  the inset now.
+
 ### Clicking a placeholder field and typing aborted the process
 
 `text_input`'s click-to-position measured against `HasLabel`, which holds the

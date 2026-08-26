@@ -427,10 +427,11 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
     bool enable_grid = styling_defaults.enable_grid_snapping;
 
     // Get ui_scale from ThemeDefaults (set each frame from the active theme).
-    float ui_scale = imm::ThemeDefaults::get().theme.ui_scale;
+    const Theme &theme = imm::ThemeDefaults::get().theme;
+    float ui_scale = theme.ui_scale;
 
     AutoLayout::autolayout(cmp, resolution, cache->components, enable_grid,
-                           ui_scale);
+                           ui_scale, theme.text_inset.x * ui_scale);
 
     // print_debug_autolayout_tree(entity, cmp);
   }

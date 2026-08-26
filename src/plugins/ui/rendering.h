@@ -606,6 +606,29 @@ measure_text_wrapped(TextMeasureCache &cache, std::string_view text,
       });
 }
 
+// Space reserved between a label and its own box, per side. A widget's own
+// override wins over the theme, and the result scales with ui_scale -- held as
+// a device-pixel constant it slid every label toward its leading edge as the
+// app zoomed in.
+//
+// Takes the theme rather than reaching for ThemeDefaults, because a screen is
+// free to assign context.theme a whole preset and that is what the colour and
+// focus-ring paths read. Resolving the inset from the other struct would let
+// one label take its colour from one theme and its geometry from another.
+static inline Vector2Type
+resolve_text_inset(const Theme &theme,
+                   const std::optional<Vector2Type> &override_ = std::nullopt) {
+  const Vector2Type base = override_.value_or(theme.text_inset);
+  return Vector2Type{base.x * theme.ui_scale, base.y * theme.ui_scale};
+}
+
+// For the free draw helpers, which are not handed a context. ThemeDefaults is
+// what context.theme is seeded from each frame, so this agrees with the entity
+// path for every screen that does not swap its theme.
+static inline Vector2Type default_text_inset() {
+  return resolve_text_inset(imm::ThemeDefaults::get().theme);
+}
+
 static inline void draw_text_in_rect(
     const ui::FontManager &fm, const std::string &text, RectangleType rect,
     TextAlignment alignment, Color color, bool show_debug_indicator = false,
@@ -619,7 +642,8 @@ static inline void draw_text_in_rect(
     // rect exactly one line tall, which can never contain that line once the
     // 5px margins come off -- so they would all report overflow. Whether the
     // block fits is the parent call's question, and it has already answered it.
-    bool report_overflow = true) {
+    bool report_overflow = true,
+    Vector2Type inset = default_text_inset()) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
   // Register text for E2E testing assertions (only visible-in-viewport text)
   if (testing::test_input::detail::test_mode) {
@@ -651,11 +675,11 @@ static inline void draw_text_in_rect(
     float font_size = explicit_font_size;
     if (font_size <= 0.f)
       font_size = position_text_ex(fm, text, rect, alignment,
-                                   Vector2Type{5.f, 5.f}, explicit_font_size,
+                                   inset, explicit_font_size,
                                    letter_spacing, text_overflow)
                       .rect.height;
     // Only soft-wrap when asked; otherwise break on '\n' alone.
-    float max_width = soft_wraps ? rect.width - 10.f : 1e9f;
+    float max_width = soft_wraps ? rect.width - 2.f * inset.x : 1e9f;
 
     auto line_width = [&](const std::string &s) {
       return measure_text(font, s.c_str(), font_size, spacing).x;
@@ -683,7 +707,8 @@ static inline void draw_text_in_rect(
         draw_text_in_rect(fm, ln, line_rect, alignment, color,
                           show_debug_indicator, stroke, shadow, rotation,
                           rot_center_x, rot_center_y, TextOverflow::Clip,
-                          letter_spacing, font_size, /*report_overflow=*/false);
+                          letter_spacing, font_size, /*report_overflow=*/false,
+                          inset);
         y += line_h;
       }
       return;
@@ -754,7 +779,7 @@ static inline void draw_text_in_rect(
     Font font = fm.get_active_font();
     float font_size = result.rect.height;
     float spacing = 1.f + letter_spacing;
-    float max_width = rect.width - 10.f; // Account for margins (5px each side)
+    float max_width = rect.width - 2.f * inset.x;
     if (max_width <= 0.f)
       return text;
 
@@ -849,7 +874,8 @@ static inline void draw_runs_in_rect(
     const std::optional<TextShadow> &shadow = std::nullopt,
     float rotation = 0.0f, float rot_center_x = 0.0f, float rot_center_y = 0.0f,
     TextOverflow text_overflow = TextOverflow::Clip, float letter_spacing = 0.0f,
-    float explicit_font_size = 0.0f, const std::string &joined = "") {
+    float explicit_font_size = 0.0f, const std::string &joined = "",
+    Vector2Type inset = default_text_inset()) {
   if (runs.empty() || rect.width <= 0.f)
     return;
 
@@ -857,7 +883,7 @@ static inline void draw_runs_in_rect(
   float font_size = explicit_font_size;
   if (font_size <= 0.f) {
     font_size = position_text_ex(fm, joined, rect, alignment,
-                                 Vector2Type{5.f, 5.f}, explicit_font_size,
+                                 inset, explicit_font_size,
                                  letter_spacing, text_overflow)
                     .rect.height;
   }
@@ -880,7 +906,7 @@ static inline void draw_runs_in_rect(
   // Only wrap when asked and a size is known, matching draw_text_in_rect.
   const bool wants_wrap =
       text_overflow == TextOverflow::Wrap && explicit_font_size > 0.f;
-  const float wrap_width = wants_wrap ? (rect.width - 10.f) : 1e9f;
+  const float wrap_width = wants_wrap ? (rect.width - 2.f * inset.x) : 1e9f;
   if (wrap_width <= 0.f)
     return;
 
@@ -940,7 +966,8 @@ static inline void draw_runs_in_rect(
       draw_text_in_rect(fm, run.text, run_rect, TextAlignment::Left, run.color,
                         show_debug_indicator, stroke, shadow, rotation,
                         rot_center_x, rot_center_y, TextOverflow::Clip,
-                        letter_spacing, font_size, /*report_overflow=*/false);
+                        letter_spacing, font_size, /*report_overflow=*/false,
+                        inset);
       if (swap)
         fm.set_active(base_font);
       x += w;
@@ -1627,6 +1654,9 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                                         cmp.resolved_scaling_mode, uis);
       }
 
+      const Vector2Type immediate_inset =
+          resolve_text_inset(context.theme, hasLabel.text_inset);
+
       RectangleType label_rect = text_rect;
       label_rect.x += hasLabel.text_x_offset;
       label_rect.width -= hasLabel.text_x_offset;
@@ -1638,13 +1668,14 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                           hasLabel.alignment, SHOW_TEXT_OVERFLOW_DEBUG, stroke,
                           shadow, rotation, centerX, centerY,
                           hasLabel.text_overflow, hasLabel.letter_spacing,
-                          explicit_fs, hasLabel.label);
+                          explicit_fs, hasLabel.label, immediate_inset);
       } else {
         draw_text_in_rect(font_manager, hasLabel.label.c_str(), label_rect,
                           hasLabel.alignment, font_col,
                           SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation,
                           centerX, centerY, hasLabel.text_overflow,
-                          hasLabel.letter_spacing, explicit_fs);
+                          hasLabel.letter_spacing, explicit_fs,
+                          /*report_overflow=*/true, immediate_inset);
       }
     }
 
@@ -2196,10 +2227,13 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                                         cmp.resolved_scaling_mode, uis);
       }
 
+      const Vector2Type label_inset =
+          resolve_text_inset(context.theme, hasLabel.text_inset);
+
       // Position text to get font size
       TextPositionResult result = position_text_ex(
           font_manager, hasLabel.label.c_str(), text_rect, hasLabel.alignment,
-          Vector2Type{5.f, 5.f}, explicit_fs, hasLabel.letter_spacing,
+          label_inset, explicit_fs, hasLabel.letter_spacing,
           hasLabel.text_overflow,
           // An element that clips on purpose has already answered the question
           // the overflow warning asks.
@@ -2213,7 +2247,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           Font font = font_manager.get_active_font();
           float font_size = result.rect.height;
           float spacing = 1.f + hasLabel.letter_spacing;
-          float max_width = text_rect.width - 10.f;
+          float max_width = text_rect.width - 2.f * label_inset.x;
           if (max_width > 0.f) {
             Vector2Type ts =
                 measure_text(font, hasLabel.label.c_str(), font_size, spacing);
@@ -2288,7 +2322,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           };
           // Unwrapped styled text uses the same loop, unbounded width.
           const float wrap_width =
-              wants_wrap ? (label_rect.width - 10.f) : 1e9f;
+              wants_wrap ? (label_rect.width - 2.f * label_inset.x)
+                        : 1e9f;
 
           if (wrap_width > 0.f) {
             const std::vector<TextSpan> runs =
