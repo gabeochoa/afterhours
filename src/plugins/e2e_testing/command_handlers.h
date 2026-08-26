@@ -826,14 +826,15 @@ struct HandleUnknownCommand : System<PendingE2ECommand> {
         if (cmd.is_consumed() || cmd.is_retry())
             return;  // Skip consumed or retry-pending commands
 
-        // Naming the ordering rule here because the other way to land on this
-        // is not a typo: register_all_handlers() installs this system, so any
-        // custom handler registered after it never gets a look and every one of
-        // its commands arrives here instead.
+        // State the observation, then the likely causes. Asserting "typo or
+        // registration order" as the only two sends the reader to audit their
+        // own register_* calls even when the handler is one the library owns
+        // and forgot to register.
         cmd.fail(std::format(
-            "Unknown command: '{}'. Either a typo, or its handler was "
-            "registered after register_unknown_handler()/"
-            "register_all_handlers() -- custom handlers must come before those.",
+            "No handler consumed '{}'. Either a typo, a handler registered "
+            "after register_unknown_handler()/register_all_handlers() (custom "
+            "handlers must come before those), or a command the library "
+            "defines but does not register.",
             cmd.name));
     }
 };
@@ -867,17 +868,28 @@ struct E2ECommandCleanupSystem : System<PendingE2ECommand> {
         // Check for command timeout (wait commands are exempt)
         if (!cmd.is_wait_command() && cmd.tick_frame()) {
             std::string error_msg;
-            if (cmd.name == "expect_text" && !cmd.args.empty()) {
-                // Provide more helpful error for expect_text timeout
-                auto &registry = VisibleTextRegistry::instance();
+            const bool is_text_assertion = cmd.name == "expect_text" ||
+                                           cmd.name == "expect_text_i" ||
+                                           cmd.name == "expect_no_text";
+            if (is_text_assertion && !cmd.args.empty()) {
+                // One label per line, untruncated: a 200-char cap prints the
+                // same first dozen labels for every failure on a given screen,
+                // so the evidence stops distinguishing the failures.
+                const auto texts = VisibleTextRegistry::instance().get_texts();
+                std::string visible;
+                for (const auto &t : texts) visible += std::format("\n  | {}", t);
                 error_msg = std::format(
-                    "Text not found: '{}'. Visible: {:.200}", cmd.args[0],
-                    registry.get_all().empty() ? "(empty)"
-                                               : registry.get_all());
+                    "Text not found: '{}'. Visible ({}):{}", cmd.args[0],
+                    texts.size(), texts.empty() ? " (empty)" : visible);
             } else {
-                error_msg =
-                    std::format("Command '{}' timed out after {} frames",
-                                cmd.name, PendingE2ECommand::MAX_FRAMES);
+                // Name what the command was about. Without this, four
+                // assertions against one missing element produce four
+                // identical lines and the reader has to count script lines.
+                error_msg = std::format(
+                    "Command '{}'{} timed out after {} frames", cmd.name,
+                    cmd.args.empty() ? std::string{}
+                                     : std::format(" ('{}')", cmd.args[0]),
+                    PendingE2ECommand::MAX_FRAMES);
             }
             cmd.fail(error_msg);
             detail::command_error_count()++;

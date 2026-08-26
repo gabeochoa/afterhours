@@ -1188,7 +1188,9 @@ struct HandleDumpUICommand : System<PendingE2ECommand> {
       }
     }
 
+    // No sink means log it: a dump that goes nowhere reads as a broken command.
     if (dump_fn_) dump_fn_(dump_name, xml);
+    else log_info("[E2E] dump_ui '{}':\n{}", dump_name, xml);
     cmd.consume();
   }
 
@@ -1196,8 +1198,11 @@ private:
   DumpFn dump_fn_;
 };
 
-// Register all UI command handlers
-template <typename InputAction> void register_ui_commands(SystemManager &sm) {
+// Register all UI command handlers.
+// dump_fn receives (name, xml) for `dump_ui`; without one the dump is logged.
+template <typename InputAction>
+void register_ui_commands(SystemManager &sm,
+                          HandleDumpUICommand::DumpFn dump_fn = nullptr) {
   // Semantic actions (preferred - works with your InputAction enum)
   sm.register_update_system(
       std::make_unique<HandleActionCommand<InputAction>>());
@@ -1251,6 +1256,10 @@ template <typename InputAction> void register_ui_commands(SystemManager &sm) {
   // UI property assertions
   sm.register_update_system(std::make_unique<HandleAssertUICommand>());
   sm.register_update_system(std::make_unique<HandleAssertUITextCommand>());
+
+  // Diagnostics
+  sm.register_update_system(
+      std::make_unique<HandleDumpUICommand>(std::move(dump_fn)));
 }
 
 } // namespace ui_commands
