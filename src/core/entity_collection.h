@@ -364,48 +364,45 @@ struct EntityCollection {
       singleton_entities.insert(ptr);
     }
 
-    std::size_t i = 0;
-    while (i < entities.size()) {
-      const auto &sp = entities[i];
+    // Stable compaction: survivors keep their relative order. Read cursor
+    // scans, write cursor packs, and the tail is dropped once at the end.
+    std::size_t write = 0;
+    for (std::size_t read = 0; read < entities.size(); ++read) {
+      const auto &sp = entities[read];
       if (sp && !sp->cleanup) {
-        ++i;
+        if (write != read)
+          entities[write] = std::move(entities[read]);
+        ++write;
         continue;
       }
       // Remove any singleton registrations pointing at this entity,
       // but only if this entity is actually a singleton.
       if (sp && singleton_entities.count(sp.get())) {
-        Entity *removed = sp.get();
+        Entity *removed_ptr = sp.get();
         for (auto it = singletonMap.begin(); it != singletonMap.end();) {
-          if (it->second == removed) {
+          if (it->second == removed_ptr) {
             it = singletonMap.erase(it);
           } else {
             ++it;
           }
         }
-        singleton_entities.erase(removed);
+        singleton_entities.erase(removed_ptr);
       }
       // invalidate removed entity slot/id mapping
-      invalidate_entity_slot_if_any(entities[i]);
+      invalidate_entity_slot_if_any(entities[read]);
 
-      EntityType removed = std::move(entities[i]);
-      if (i != entities.size() - 1) {
-        entities[i] = std::move(entities.back());
-      }
-      entities.pop_back();
-
-      if (removed && entity_pool_.size() < max_pool_size_) {
+      EntityType removed = std::move(entities[read]);
+      if (removed) {
         EntityID old_id = removed->id;
         if (old_id >= 0) {
           free_ids_.push_back(old_id);
         }
-        entity_pool_.push_back(std::move(removed));
-      } else if (removed) {
-        EntityID old_id = removed->id;
-        if (old_id >= 0) {
-          free_ids_.push_back(old_id);
+        if (entity_pool_.size() < max_pool_size_) {
+          entity_pool_.push_back(std::move(removed));
         }
       }
     }
+    entities.resize(write);
   }
 
   void delete_all_entities_NO_REALLY_I_MEAN_ALL() {
