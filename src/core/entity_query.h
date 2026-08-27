@@ -102,6 +102,18 @@ struct EntityQuery {
     TReturn &take(const int amount) { return add_mod(new Limit(amount)); }
     TReturn &first() { return take(1); }
 
+    // An id names at most one entity and the collection can already answer
+    // that in O(1), so a scan comparing every id is the slowest spelling of
+    // the most obvious question. Seeds the candidate set instead, leaving the
+    // filter in place so ordering and every other mod behave unchanged.
+    void seed_from_id(const int id) {
+        if (!source || !source_temp_empty || seed.has_value()) return;
+        seed.emplace();
+        const OptEntity found = source->getEntityForID(id);
+        if (found)
+            seed->push_back(source->getEntityAsSharedPtr(found.asE()));
+    }
+
     struct WhereID : Modification {
         int id;
         explicit WhereID(const int idIn) : id(idIn) {}
@@ -109,7 +121,10 @@ struct EntityQuery {
             return entity.id == id;
         }
     };
-    TReturn &whereID(const int id) { return add_mod(new WhereID(id)); }
+    TReturn &whereID(const int id) {
+        seed_from_id(id);
+        return add_mod(new WhereID(id));
+    }
     TReturn &whereNotID(const int id) {
         return add_mod(new Not(new WhereID(id)));
     }
@@ -243,6 +258,7 @@ struct EntityQuery {
     TReturn &first() { return take(1); }
 
     TReturn &whereID(const int id) {
+        seed_from_id(id);
         return add_filter([id](const Entity &e) { return e.id == id; });
     }
     TReturn &whereNotID(const int id) {
@@ -443,7 +459,7 @@ struct EntityQuery {
             }
             return;
         }
-        for (const auto &e_ptr : entities) {
+        for (const auto &e_ptr : pool()) {
             if (!e_ptr) continue;
             Entity &e = *e_ptr;
             bool ok = true;
@@ -587,7 +603,9 @@ struct EntityQuery {
 
     explicit EntityQuery(EntityCollection &collection,
                          const QueryOptions &options = {})
-        : entities(init_entities_ref(collection, options)) {
+        : entities(init_entities_ref(collection, options)),
+          source(&collection),
+          source_temp_empty(collection.get_temp().empty()) {
         const size_t size = collection.get_temp().size();
         if (size == 0) return;
 
@@ -612,6 +630,18 @@ struct EntityQuery {
 
    private:
     const Entities &entities;
+    // Only set when built from a collection, so the raw-vector ctor never
+    // takes a shortcut that assumes one.
+    const EntityCollection *source = nullptr;
+    // A shortcut may only answer from the slot table when the scan would have
+    // seen the same entities. The slot table includes temp; `entities` does
+    // not, so a pending temp entity makes the two disagree.
+    bool source_temp_empty = true;
+    // A candidate set to walk instead of the whole collection. Empty-but-set
+    // means "provably nothing matches", which is different from unset.
+    std::optional<Entities> seed;
+
+    const Entities &pool() const { return seed ? *seed : entities; }
 
     // Helper to initialize the entities reference in the constructor.
     // If force_merge is requested, merge first, then return the (now-updated)
@@ -655,7 +685,7 @@ struct EntityQuery {
         Entity *best = nullptr;
         std::optional<Key> best_key;
 
-        for (const auto &e_ptr : entities) {
+        for (const auto &e_ptr : pool()) {
             if (!e_ptr) continue;
             Entity &e = *e_ptr;
             bool ok = true;
@@ -683,7 +713,7 @@ struct EntityQuery {
         // to return the first match), we can short-circuit as long as we aren't
         // ordering results. No upfront allocation needed.
         if (options.stop_on_first && !orderby) {
-            for (const auto &e_ptr : entities) {
+            for (const auto &e_ptr : pool()) {
                 if (!e_ptr) continue;
                 const Entity &e = *e_ptr;
                 bool ok = true;
@@ -710,7 +740,7 @@ struct EntityQuery {
         // chain.
         const size_t pre_sort = orderby_index.value_or(mods.size());
 
-        for (const auto &e_ptr : entities) {
+        for (const auto &e_ptr : pool()) {
             if (!e_ptr) continue;
             Entity &e = *e_ptr;
             if (passes(e, 0, pre_sort)) out.push_back(e);
