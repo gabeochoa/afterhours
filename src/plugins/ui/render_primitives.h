@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../../capture.h"
+
 #include <algorithm>
 #include <bitset>
 #include <cstring>
@@ -498,6 +500,7 @@ public:
     size_t i = 0;
     while (i < commands.size()) {
       const auto &cmd = commands[i];
+      capture::Scope attribute(cmd.entity_id, cmd.layer);
 
       switch (cmd.type) {
       case RenderPrimitiveType::Rectangle: {
@@ -605,6 +608,7 @@ private:
   void render_rectangle_batch(const ArenaVector<RenderPrimitive> &cmds,
                               size_t start, size_t end) {
     for (size_t i = start; i < end; ++i) {
+      capture::Scope attribute(cmds[i].entity_id, cmds[i].layer);
       const auto &rect = cmds[i].data.rectangle;
       draw_rectangle_rounded_rotated(rect.rect, 0.0f, 0, rect.fill_color,
                                      std::bitset<4>().reset(), rect.rotation);
@@ -614,6 +618,7 @@ private:
   void render_rounded_rectangle_batch(const ArenaVector<RenderPrimitive> &cmds,
                                       size_t start, size_t end) {
     for (size_t i = start; i < end; ++i) {
+      capture::Scope attribute(cmds[i].entity_id, cmds[i].layer);
       const auto &rect = cmds[i].data.rectangle;
       draw_rectangle_rounded_rotated(rect.rect, rect.roundness, rect.segments,
                                      rect.fill_color, rect.corners,
@@ -624,6 +629,7 @@ private:
   void render_outline_batch(const ArenaVector<RenderPrimitive> &cmds,
                             size_t start, size_t end) {
     for (size_t i = start; i < end; ++i) {
+      capture::Scope attribute(cmds[i].entity_id, cmds[i].layer);
       const auto &outline = cmds[i].data.outline;
       if (outline.thickness > 1.0f) {
         // Draw multiple outlines for thickness effect
@@ -642,6 +648,7 @@ private:
   void render_rounded_outline_batch(const ArenaVector<RenderPrimitive> &cmds,
                                     size_t start, size_t end) {
     for (size_t i = start; i < end; ++i) {
+      capture::Scope attribute(cmds[i].entity_id, cmds[i].layer);
       const auto &outline = cmds[i].data.outline;
       if (outline.thickness > 1.0f) {
         // roundness is a FRACTION of the shorter side, so reusing it on the

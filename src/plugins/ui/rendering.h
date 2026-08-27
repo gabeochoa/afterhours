@@ -1832,6 +1832,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       if (!opt_ent.valid())
         continue; // Skip stale entity IDs
       Entity &ent = opt_ent.asE();
+      capture::Scope attribute(ent.id, cmd.layer);
       render(context, font_manager, ent);
       if (context.is_hot(ent.id) && ent.has<HasCursor>()) {
         cursor_to_set = to_cursor_id(ent.get<HasCursor>().cursor);

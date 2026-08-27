@@ -26,6 +26,36 @@ struct DrawnCall {
   RectangleType rect{};
   ColorType color{};
   std::string text;
+  // Which widget drew it, and on which layer. -1 when the draw happened
+  // outside any widget, which is honest rather than blaming whoever ran last.
+  int entity_id = -1;
+  int layer = 0;
+};
+
+inline int &current_entity() {
+  static int id = -1;
+  return id;
+}
+
+inline int &current_layer() {
+  static int layer = 0;
+  return layer;
+}
+
+// Attributes every draw made while it is alive to one widget. Restores on
+// exit, including on the early returns the render path is full of.
+struct Scope {
+  int prev_entity;
+  int prev_layer;
+  Scope(int entity_id, int layer)
+      : prev_entity(current_entity()), prev_layer(current_layer()) {
+    current_entity() = entity_id;
+    current_layer() = layer;
+  }
+  ~Scope() {
+    current_entity() = prev_entity;
+    current_layer() = prev_layer;
+  }
 };
 
 inline bool &enabled() {
@@ -46,7 +76,7 @@ inline void record(const char *op, const RectangleType &rect, const ColorType &c
                    const std::string &text = "") {
   if (!enabled())
     return;
-  calls().push_back({op, rect, color, text});
+  calls().push_back({op, rect, color, text, current_entity(), current_layer()});
 }
 
 } // namespace capture

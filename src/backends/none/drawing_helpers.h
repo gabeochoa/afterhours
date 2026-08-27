@@ -41,35 +41,37 @@ inline std::vector<DrawCall> &draw_calls() { return capture::calls(); }
 
 inline void clear_draw_calls() { capture::clear(); }
 
+// Recording is this backend's whole purpose, so it does not wait for a caller
+// to switch capture on the way a real backend does.
+inline const bool capture_always_on = (capture::enable(), true);
+
 inline void draw_text_ex(const afterhours::Font, const char *text,
                          const Vector2Type position, const float,
                          const float, const Color color, const float = 0.0f,
                          const float = 0.0f, const float = 0.0f) {
-  draw_calls().push_back({"text",
-                          RectangleType{position.x, position.y, 0.f, 0.f},
-                          color,
-                          text ? text : ""});
+  capture::record("text", RectangleType{position.x, position.y, 0.f, 0.f},
+                  color, text ? text : "");
 }
 inline void draw_text(const char *text, const float x, const float y,
                       const float, const Color color) {
-  draw_calls().push_back(
-      {"text", RectangleType{x, y, 0.f, 0.f}, color, text ? text : ""});
+  capture::record("text", RectangleType{x, y, 0.f, 0.f}, color,
+                  text ? text : "");
 }
 inline void draw_rectangle(const RectangleType rect, const Color color) {
-  draw_calls().push_back({"rectangle", rect, color, ""});
+  capture::record("rectangle", rect, color);
 }
 inline void draw_rectangle_outline(const RectangleType rect,
                                    const Color color) {
-  draw_calls().push_back({"rectangle_outline", rect, color, ""});
+  capture::record("rectangle_outline", rect, color);
 }
 inline void draw_rectangle_outline(const RectangleType rect, const Color color,
                                    const float) {
-  draw_calls().push_back({"rectangle_outline", rect, color, ""});
+  capture::record("rectangle_outline", rect, color);
 }
 inline void draw_rectangle_rounded(const RectangleType rect, const float,
                                    const int, const Color color,
                                    const std::bitset<4>) {
-  draw_calls().push_back({"rectangle_rounded", rect, color, ""});
+  capture::record("rectangle_rounded", rect, color);
 }
 inline void draw_rectangle_rounded_rotated(const RectangleType, const float,
                                            const int, const Color,
@@ -81,12 +83,12 @@ inline void draw_rectangle_rounded_rotated(const RectangleType, const float,
 inline void draw_rectangle_rounded_lines(const RectangleType rect, const float,
                                          const int, const Color color,
                                          const std::bitset<4>) {
-  draw_calls().push_back({"rectangle_rounded_lines", rect, color, ""});
+  capture::record("rectangle_rounded_lines", rect, color);
 }
 inline void draw_rectangle_rounded_lines_ex(const RectangleType rect,
                                             const float, const int,
                                             const float, const Color color) {
-  draw_calls().push_back({"rectangle_rounded_lines", rect, color, ""});
+  capture::record("rectangle_rounded_lines", rect, color);
 }
 inline void draw_rectangle_gradient_v(const RectangleType, const Color,
                                       const Color) {
@@ -180,8 +182,7 @@ inline void draw_triangle(Vector2Type a, Vector2Type b, Vector2Type c,
                           Color color) {
   const float x0 = std::min({a.x, b.x, c.x}), x1 = std::max({a.x, b.x, c.x});
   const float y0 = std::min({a.y, b.y, c.y}), y1 = std::max({a.y, b.y, c.y});
-  draw_calls().push_back(
-      {"triangle", RectangleType{x0, y0, x1 - x0, y1 - y0}, color, ""});
+  capture::record("triangle", RectangleType{x0, y0, x1 - x0, y1 - y0}, color);
 }
 inline void draw_triangle_lines(Vector2Type a, Vector2Type b, Vector2Type c,
                                 Color color) {

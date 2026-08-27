@@ -27,6 +27,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ### New APIs
 - **`capture::enable()`** records what the app drew, on any backend, into one buffer (`capture.h`). Only the `none` backend could do this before, which is why an app-level test asserting on rendering meant profiling pixel columns out of a PNG. Off by default; a shipping build pays one branch per draw. The `none` backend's `draw_calls()` is now an alias for the same buffer.
+- **A recorded draw says which widget made it.** `DrawnCall` carries `entity_id` and `layer`, so a test asks "did this row's border get painted" rather than "did anything paint a blue outline". Both renderers attribute; a draw made outside a widget reports -1 rather than being blamed on whoever rendered last.
 
 - **`with_corner_radius(px)`** beside `with_roundness(fraction)`, which is a fraction of the *short side* and so means ~8px on a row and 180px on a panel. On `ComponentConfig`, `Theme::Builder`, `HasRoundedCorners`; precedence caller px > caller fraction > theme px > theme fraction, mutually exclusive at theme level. Default unchanged.
   `with_roundness(r > 1.f)` now warns once and names the fix — **floatinghotel hits this immediately** at `diff_renderer.h:614`, `main_content_system.h:815`, `sidebar_system.h:700`, `:706`, `:781`.
