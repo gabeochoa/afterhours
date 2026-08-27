@@ -344,7 +344,17 @@ struct HandleExpectFocusedCommand : System<PendingE2ECommand> {
           return;
         }
       }
-      cmd.fail(std::format("Component '{}' is not focused", name));
+      // Naming what DOES hold focus, and what set it. "not focused" alone
+      // sends the reader looking for a cause with nothing to go on.
+      std::string holder = "nothing";
+      if (ctx->focus_id != ctx->ROOT) {
+        auto opt = ui::UICollectionHolder::getEntityForID(ctx->focus_id);
+        holder = (opt.valid() && opt.asE().template has<ui::UIComponentDebug>())
+                     ? opt.asE().template get<ui::UIComponentDebug>().name()
+                     : std::format("entity {}", ctx->focus_id);
+      }
+      cmd.fail(std::format("'{}' is not focused, '{}' is. Focus set by {}",
+                           name, holder, ctx->focus_origin()));
       return;
     }
     cmd.fail(std::format("UI component not found: {}", cmd.arg(0)));
@@ -1135,6 +1145,30 @@ struct HandleAssertUITextCommand : System<PendingE2ECommand> {
   }
 };
 
+// What holds focus and what set it. dump_ui says WHICH widget is focused; it
+// could not say WHY, so a screen whose Tab order broke had nothing to read.
+template <typename InputAction>
+struct HandleDumpFocusCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("dump_focus")) return;
+    auto *ctx = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    if (!ctx) {
+      cmd.fail("dump_focus: UIContext not found");
+      return;
+    }
+    std::string holder = "nothing";
+    if (ctx->focus_id != ctx->ROOT) {
+      auto opt = ui::UICollectionHolder::getEntityForID(ctx->focus_id);
+      holder = (opt.valid() && opt.asE().template has<ui::UIComponentDebug>())
+                   ? opt.asE().template get<ui::UIComponentDebug>().name()
+                   : std::format("entity {}", ctx->focus_id);
+    }
+    log_info("[E2E] dump_focus: '{}' holds focus, set by {}", holder,
+             ctx->focus_origin());
+    cmd.consume();
+  }
+};
+
 struct HandleDumpUICommand : System<PendingE2ECommand> {
   using DumpFn = std::function<void(const std::string &, const std::string &)>;
 
@@ -1259,6 +1293,8 @@ void register_ui_commands(SystemManager &sm,
   sm.register_update_system(std::make_unique<HandleAssertUITextCommand>());
 
   // Diagnostics
+  sm.register_update_system(
+      std::make_unique<HandleDumpFocusCommand<InputAction>>());
   sm.register_update_system(
       std::make_unique<HandleDumpUICommand>(std::move(dump_fn)));
 

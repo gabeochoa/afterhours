@@ -1,5 +1,8 @@
 #pragma once
 
+#include <format>
+#include <source_location>
+
 // TODO: Consider using C++20 concepts for type constraints in this plugin.
 // See e2e_testing/concepts.h for examples (HasPosition, MouseStateLike, etc.)
 // Potential uses:
@@ -177,6 +180,8 @@ template <typename InputAction> struct UIContext : BaseComponent {
       ROOT; // last element that was processed (used for reverse tabbing)
   // Reset to Grab each frame in BeginUIContextManager; see FocusSource.
   FocusSource focus_source = FocusSource::Grab;
+  const char *focus_set_file = nullptr;
+  int focus_set_line = 0;
 
   MousePointerState mouse;
   InputAction last_action;
@@ -242,9 +247,37 @@ template <typename InputAction> struct UIContext : BaseComponent {
   void set_active(EntityID id) { active_id = id; }
 
   bool has_focus(EntityID id) const { return focus_id == id; }
-  void set_focus(EntityID id, FocusSource src = FocusSource::Explicit) {
+  // Records WHERE focus was set, not just that it was. A screen whose Tab
+  // order breaks has to find the last writer, and nothing reported it: the
+  // search was guess-and-rebuild. File and line rather than a built string,
+  // so this stays free enough to leave on.
+  void set_focus(EntityID id, FocusSource src = FocusSource::Explicit,
+                 const std::source_location loc =
+                     std::source_location::current()) {
+    // Only a change is news. try_to_grab re-asserts focus every frame, so
+    // recording every write would report the grab and bury whatever actually
+    // moved focus, which is the question worth answering.
+    if (focus_id != id) {
+      focus_source = src;
+      focus_set_file = loc.file_name();
+      focus_set_line = static_cast<int>(loc.line());
+    }
     focus_id = id;
-    focus_source = src;
+  }
+
+  // "Pointer at systems.h:331", for a diagnostic to print.
+  [[nodiscard]] std::string focus_origin() const {
+    const char *src = focus_source == FocusSource::Grab      ? "Grab"
+                      : focus_source == FocusSource::Pointer ? "Pointer"
+                                                             : "Explicit";
+    if (!focus_set_file)
+      return std::string(src) + " (never set)";
+    const std::string path = focus_set_file;
+    const size_t slash = path.find_last_of('/');
+    return std::format("{} at {}:{}", src,
+                       slash == std::string::npos ? path
+                                                  : path.substr(slash + 1),
+                       focus_set_line);
   }
 
   // Walks UP: the tree is cleared each frame, so a caller asking before it has
