@@ -301,14 +301,25 @@ struct EntityCollection {
     return *entity_ptr;
   }
 
+  // Null when there is no such singleton. It used to reach that null by taking
+  // the address of a downcast of a null component on the dummy entity, which
+  // is UB that clang and g++ happened to turn into the right answer. A build
+  // with UBSan on, which is what zig c++ gives you in Debug, trapped on the
+  // first singleton queried before registration and killed the process.
+  // Callers that require the singleton want get_singleton_cmp_enforce, which
+  // logs and aborts.
   template <typename Component> Component *get_singleton_cmp() const {
     Entity &ent = get_singleton<Component>();
+    if (!ent.has<Component>())
+      return nullptr;
     return &(ent.get<Component>());
   }
 
   template <typename Component>
   const Component *get_singleton_cmp_const() const {
     Entity &ent = get_singleton<Component>();
+    if (!ent.has<Component>())
+      return nullptr;
     return &(ent.get<Component>());
   }
 
