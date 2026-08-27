@@ -166,6 +166,19 @@ struct EntityHelper {
 
   static void cleanup() { get_default_collection().cleanup(); }
 
+  template <typename C, typename KeyFn> static void add_index(KeyFn key_fn) {
+    get_default_collection().add_index<C>(std::move(key_fn));
+  }
+
+  template <typename C, typename Key>
+  static const std::vector<EntityHandle> &indexed(const Key &key) {
+    return get_default_collection().indexed<C, Key>(key);
+  }
+
+  static void invalidate_indexes() {
+    get_default_collection().invalidate_indexes();
+  }
+
   static void delete_all_entities_NO_REALLY_I_MEAN_ALL() {
     get_default_collection().delete_all_entities_NO_REALLY_I_MEAN_ALL();
   }

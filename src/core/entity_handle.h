@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
 
 namespace afterhours {
@@ -38,3 +40,11 @@ struct EntityHandle {
 }
 
 } // namespace afterhours
+
+// A handle already compares by (slot, gen); without a hash it still could not
+// be a map key, which is the natural way to say "the children of this entity".
+template <> struct std::hash<afterhours::EntityHandle> {
+  std::size_t operator()(const afterhours::EntityHandle &h) const noexcept {
+    return (static_cast<std::size_t>(h.slot) << 32) ^ h.gen;
+  }
+};

@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <set>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -58,6 +59,118 @@ struct EntityCollection {
   struct CreationOptions {
     bool is_permanent;
   };
+
+  // Bumped whenever an entity enters or leaves the slot table. An index built
+  // at an older version is out of date.
+  std::size_t version = 0;
+
+  // Counters for the scaling test. An increment next to work that already
+  // costs a virtual call or a std::function is not worth hiding behind a
+  // define, and a claim about complexity nobody can count is just a claim.
+  struct Stats {
+    std::size_t index_considers = 0; // entities examined during a rebuild
+    std::size_t index_rebuilds = 0;  // passes over the entity vector
+    std::size_t bucket_resolves = 0; // handles turned back into entities
+  };
+  static Stats &stats() {
+    static Stats s;
+    return s;
+  }
+
+  // ---- Secondary indexes -------------------------------------------------
+  // Rebuilt from the entity vector, never maintained incrementally. There is
+  // no write interception on a component field (get<C>() hands out a mutable
+  // reference), so an index kept up to date by hooks would go stale silently
+  // the first time anyone assigned to the key. See invalidate_indexes().
+  //
+  // Buckets hold EntityHandle, not shared_ptr. A shared_ptr bucket would keep
+  // a deleted entity alive with every component still attached, so a stale
+  // bucket would hand back something indistinguishable from a live entity. A
+  // handle fails the generation check and resolves to nothing instead.
+  struct IndexBase {
+    virtual ~IndexBase() = default;
+    virtual void clear() = 0;
+    virtual void consider(const Entity &e, EntityHandle h) = 0;
+  };
+
+  template <typename C, typename Key> struct Index : IndexBase {
+    std::function<Key(const C &)> key_of;
+    std::unordered_map<Key, std::vector<EntityHandle>> buckets;
+
+    void clear() override { buckets.clear(); }
+    void consider(const Entity &e, EntityHandle h) override {
+      ++stats().index_considers;
+      if (!e.has<C>())
+        return;
+      buckets[key_of(e.get<C>())].push_back(h);
+    }
+  };
+
+  std::unordered_map<ComponentID, std::unique_ptr<IndexBase>> indexes;
+  std::size_t indexed_version = static_cast<std::size_t>(-1);
+
+  // Register once at startup. The key is whatever key_fn returns.
+  template <typename C, typename KeyFn> void add_index(KeyFn key_fn) {
+    using Key = std::decay_t<std::invoke_result_t<KeyFn, const C &>>;
+    auto idx = std::make_unique<Index<C, Key>>();
+    idx->key_of = std::move(key_fn);
+    indexes[components::get_type_id<C>()] = std::move(idx);
+    invalidate_indexes();
+  }
+
+  // Version gating sees entities appear and disappear. It cannot see a write
+  // to an indexed field, because nothing in the ECS can. Call this after
+  // assigning one.
+  void invalidate_indexes() {
+    indexed_version = static_cast<std::size_t>(-1);
+  }
+
+  bool indexes_are_fresh() const {
+    return indexes.empty() || indexed_version == version;
+  }
+
+  // One pass over the entities feeds every registered index. Doing it per
+  // index is what the hand-rolled versions downstream ended up paying.
+  void ensure_indexes_fresh() {
+    if (indexes_are_fresh())
+      return;
+    for (auto &[_, idx] : indexes)
+      idx->clear();
+    ++stats().index_rebuilds;
+    for (const auto &sp : entities_DO_NOT_USE) {
+      if (!sp || sp->cleanup)
+        continue;
+      const EntityHandle h = handle_for(*sp);
+      if (h.is_invalid())
+        continue;
+      for (auto &[_, idx] : indexes)
+        idx->consider(*sp, h);
+    }
+    indexed_version = version;
+  }
+
+  template <typename C, typename Key>
+  const std::vector<EntityHandle> &indexed(const Key &key) {
+    static const std::vector<EntityHandle> none;
+    ensure_indexes_fresh();
+
+    const auto it = indexes.find(components::get_type_id<C>());
+    if (it == indexes.end()) {
+      log_error("indexed<{}>: no index registered, call add_index first",
+                type_name<C>());
+      return none;
+    }
+    // dynamic_cast rather than static_cast: asking with a key type the index
+    // was not registered with is a silent wrong answer otherwise.
+    auto *idx = dynamic_cast<Index<C, Key> *>(it->second.get());
+    if (!idx) {
+      log_error("indexed<{}>: key type does not match the registered index",
+                type_name<C>());
+      return none;
+    }
+    const auto found = idx->buckets.find(key);
+    return found == idx->buckets.end() ? none : found->second;
+  }
 
   // Bump a slot generation counter so old handles become stale.
   // Returns a non-zero generation (wraparound skips 0).
@@ -138,6 +251,10 @@ struct EntityCollection {
     }
     slots[slot].ent = sp;
     sp->ah_slot_index = slot;
+    // An entity entered the slot table, so any index built before now is short
+    // one row. Bumping here rather than at each caller means a path added later
+    // cannot forget to.
+    ++version;
 
     ensure_id_mapping_size(sp->id);
     if (sp->id >= 0)
@@ -175,6 +292,9 @@ struct EntityCollection {
     }
     s.gen = bump_gen(s.gen);
     free_slots.push_back(slot);
+    // An entity left, so an index built before now holds a row that resolves
+    // to nothing. The same reason as assign_slot_to_entity above.
+    ++version;
   }
 
   // Return a stable handle for a currently-merged entity.
@@ -489,6 +609,9 @@ struct EntityCollection {
   // Note: this does NOT preserve handle values across rebuilds; it creates a
   // fresh slot table consistent with the current entities.
   void rebuild_handle_store_from_entities() {
+    // Every handle recorded anywhere is about to mean something else, and
+    // clearing to an empty entity list would otherwise bump nothing.
+    ++version;
     slots.clear();
     free_slots.clear();
     id_to_slot.clear();

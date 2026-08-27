@@ -72,6 +72,7 @@ ALL_TESTS := \
 	files_atomic_write_test \
 	files_resource_path_test \
 	capture_test \
+	entity_index_test \
 	query_seed_test \
 	capture_attribution_test \
 	draw_commands_test \
