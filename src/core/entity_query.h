@@ -114,6 +114,29 @@ struct EntityQuery {
             seed->push_back(source->getEntityAsSharedPtr(found.asE()));
     }
 
+    // The entities registered under `key` in an index built by
+    // EntityCollection::add_index. The filter is always added and is on its
+    // own the correct answer, so seeding is purely a narrowing of what gets
+    // walked: an unseedable query still returns the same set, just slower.
+    template<typename C, typename Key>
+    TReturn &whereIndexed(const Key &key) {
+        if (!source) {
+            log_error("whereIndexed needs a query built from a collection");
+            return add_filter([](const Entity &) { return false; });
+        }
+        if (source_temp_empty && !seed.has_value()) {
+            seed.emplace();
+            for (const EntityHandle h : source->indexed<C, Key>(key)) {
+                ++EntityCollection::stats().bucket_resolves;
+                // A row whose entity died since the last rebuild resolves to
+                // nothing and is dropped, which is why buckets hold handles.
+                if (const OptEntity e = source->resolve(h))
+                    seed->push_back(source->getEntityAsSharedPtr(e.asE()));
+            }
+        }
+        return add_filter(source->index_predicate<C, Key>(key));
+    }
+
     struct WhereID : Modification {
         int id;
         explicit WhereID(const int idIn) : id(idIn) {}

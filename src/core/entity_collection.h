@@ -106,8 +106,10 @@ struct EntityCollection {
     }
   };
 
-  std::unordered_map<ComponentID, std::unique_ptr<IndexBase>> indexes;
-  std::size_t indexed_version = static_cast<std::size_t>(-1);
+  // mutable: an index is a cache of what the entities already say, so
+  // refreshing one does not change the collection and a const query can do it.
+  mutable std::unordered_map<ComponentID, std::unique_ptr<IndexBase>> indexes;
+  mutable std::size_t indexed_version = static_cast<std::size_t>(-1);
 
   // Register once at startup. The key is whatever key_fn returns.
   template <typename C, typename KeyFn> void add_index(KeyFn key_fn) {
@@ -121,7 +123,7 @@ struct EntityCollection {
   // Version gating sees entities appear and disappear. It cannot see a write
   // to an indexed field, because nothing in the ECS can. Call this after
   // assigning one.
-  void invalidate_indexes() {
+  void invalidate_indexes() const {
     indexed_version = static_cast<std::size_t>(-1);
   }
 
@@ -131,7 +133,7 @@ struct EntityCollection {
 
   // One pass over the entities feeds every registered index. Doing it per
   // index is what the hand-rolled versions downstream ended up paying.
-  void ensure_indexes_fresh() {
+  void ensure_indexes_fresh() const {
     if (indexes_are_fresh())
       return;
     for (auto &[_, idx] : indexes)
@@ -150,7 +152,7 @@ struct EntityCollection {
   }
 
   template <typename C, typename Key>
-  const std::vector<EntityHandle> &indexed(const Key &key) {
+  const std::vector<EntityHandle> &indexed(const Key &key) const {
     static const std::vector<EntityHandle> none;
     ensure_indexes_fresh();
 
@@ -170,6 +172,26 @@ struct EntityCollection {
     }
     const auto found = idx->buckets.find(key);
     return found == idx->buckets.end() ? none : found->second;
+  }
+
+  // What the index means, as a plain predicate. A seeded query still runs
+  // this, so seeding only ever narrows what gets walked and never changes the
+  // answer, including when something else seeded first.
+  template <typename C, typename Key>
+  std::function<bool(const Entity &)> index_predicate(const Key &key) const {
+    const auto it = indexes.find(components::get_type_id<C>());
+    auto *idx = it == indexes.end()
+                    ? nullptr
+                    : dynamic_cast<Index<C, Key> *>(it->second.get());
+    if (!idx) {
+      log_error("index_predicate<{}>: no index registered for this key type",
+                type_name<C>());
+      return [](const Entity &) { return false; };
+    }
+    auto key_of = idx->key_of;
+    return [key_of, key](const Entity &e) {
+      return e.has<C>() && key_of(e.get<C>()) == key;
+    };
   }
 
   // Bump a slot generation counter so old handles become stale.

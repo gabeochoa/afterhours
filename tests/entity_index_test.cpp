@@ -204,6 +204,74 @@ int main() {
     CHECK(ec.indexes_are_fresh());
   }
 
+  // whereIndexed must agree with the spelling it replaces, exactly.
+  {
+    EntityCollection ec;
+    Entity &p1 = ec.createEntity();
+    Entity &p2 = ec.createEntity();
+    ec.cleanup();
+    const EntityHandle h1 = ec.handle_for(p1);
+    const EntityHandle h2 = ec.handle_for(p2);
+    for (int i = 0; i < 7; i++)
+      ec.createEntity().addComponent<Child>().parent = (i % 3) ? h1 : h2;
+    ec.cleanup();
+    index_children(ec);
+
+    const auto scanned = EntityQuery(ec)
+                             .whereHasComponent<Child>()
+                             .whereLambda([&](const Entity &e) {
+                               return e.get<Child>().parent == h1;
+                             })
+                             .gen();
+    const auto seeded = EntityQuery(ec).whereIndexed<Child>(h1).gen();
+    CHECK(scanned.size() == seeded.size());
+    CHECK(!seeded.empty());
+
+    // Same answer, not just the same count.
+    bool same = scanned.size() == seeded.size();
+    for (std::size_t i = 0; i < seeded.size() && same; i++) {
+      bool found = false;
+      for (const auto &sc : scanned)
+        if (sc.get().id == seeded[i].get().id) found = true;
+      same = found;
+    }
+    CHECK(same);
+
+    // Every terminal, because the query has four separate loops.
+    CHECK(EntityQuery(ec).whereIndexed<Child>(h1).gen_count() == seeded.size());
+    CHECK(EntityQuery(ec).whereIndexed<Child>(h1).gen_first().has_value());
+    CHECK(EntityQuery(ec)
+              .whereIndexed<Child>(h1)
+              .gen_min_by([](const Entity &e) { return (float)e.id; })
+              .has_value());
+    std::size_t streamed = 0;
+    EntityQuery(ec).whereIndexed<Child>(h1).for_each_stream(
+        [&](const Entity &) { streamed++; });
+    CHECK(streamed == seeded.size());
+  }
+
+  // Seeding narrows, it does not bypass. A second filter still applies.
+  {
+    EntityCollection ec;
+    Entity &p = ec.createEntity();
+    ec.cleanup();
+    const EntityHandle h = ec.handle_for(p);
+    for (int i = 0; i < 5; i++) {
+      Entity &e = ec.createEntity();
+      e.addComponent<Child>().parent = h;
+      if (i < 2) e.addComponent<Unrelated>();
+    }
+    ec.cleanup();
+    index_children(ec);
+    CHECK(EntityQuery(ec).whereIndexed<Child>(h).gen().size() == 5);
+    CHECK(EntityQuery(ec)
+              .whereIndexed<Child>(h)
+              .whereHasComponent<Unrelated>()
+              .gen()
+              .size() == 2);
+    CHECK(EntityQuery(ec).whereIndexed<Child>(h).take(3).gen().size() == 3);
+  }
+
   std::printf("%d/%d checks passed\n", checks - failures, checks);
   if (failures == 0) std::printf("All checks passed!\n");
   return failures == 0 ? 0 : 1;
