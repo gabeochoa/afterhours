@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <vector>
 
+#include "../../capture.h"
 #include "../../developer.h"
 #include "../../graphics.h"
 #include "../../plugins/color.h"
@@ -171,6 +172,8 @@ inline void draw_text_ex(const raylib::Font font, const char *content,
                          const float rotation = 0.0f,
                          const float centerX = 0.0f,
                          const float centerY = 0.0f) {
+  capture::record("text", {position.x, position.y, 0.f, font_size}, color,
+                  content);
   if (std::abs(rotation) < 0.001f) {
     raylib::DrawTextEx(font, content, position, font_size, spacing, color);
     return;
@@ -191,15 +194,18 @@ inline void draw_text(const char *content, const float x, const float y,
 
 inline void draw_rectangle_outline(const RectangleType rect,
                                    const Color color) {
+  capture::record("rectangle_outline", rect, color);
   raylib::DrawRectangleLinesEx(rect, 3.f, color);
 }
 
 inline void draw_rectangle_outline(const RectangleType rect, const Color color,
                                    const float thickness) {
+  capture::record("rectangle_outline", rect, color);
   raylib::DrawRectangleLinesEx(rect, thickness, color);
 }
 
 inline void draw_rectangle(const RectangleType rect, const Color color) {
+  capture::record("rectangle", rect, color);
   raylib::DrawRectangleRec(rect, color);
 }
 
@@ -207,6 +213,7 @@ inline void draw_rectangle_rounded(
     const RectangleType rect, const float roundness, const int segments,
     const Color color,
     const std::bitset<4> corners = std::bitset<4>().reset()) {
+  capture::record("rectangle_rounded", rect, color);
   if (corners.all()) {
     raylib::DrawRectangleRounded(rect, roundness, segments, color);
     return;
@@ -231,6 +238,7 @@ inline void draw_rectangle_rounded_lines(
     const RectangleType rect, const float roundness, const int segments,
     const Color color,
     const std::bitset<4> corners = std::bitset<4>().reset()) {
+  capture::record("rectangle_rounded_lines", rect, color);
   if (corners.all()) {
     raylib::DrawRectangleRoundedLines(rect, roundness, segments, color);
     return;

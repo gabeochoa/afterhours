@@ -71,6 +71,7 @@ ALL_TESTS := \
 	entity_mapping_test \
 	files_atomic_write_test \
 	files_resource_path_test \
+	capture_test \
 	cleanup_order_test \
 	entity_pool_test \
 	entity_query_test \

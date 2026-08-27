@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "../../capture.h"
 #include "../../developer.h"
 #include "../../graphics_common.h"
 #include "../../plugins/color.h"
@@ -31,19 +32,14 @@ namespace afterhours {
 //
 // Tests are responsible for clearing between frames -- see clear_draw_calls().
 // ---------------------------------------------------------------------------
-struct DrawCall {
-  std::string op;
-  RectangleType rect{};
-  Color color{};
-  std::string text;
-};
+// One buffer for every backend, so a test asks the same question whichever it
+// built against. This backend exists to record, so it records unconditionally
+// rather than waiting for capture::enable().
+using DrawCall = capture::DrawnCall;
 
-inline std::vector<DrawCall> &draw_calls() {
-  static std::vector<DrawCall> calls;
-  return calls;
-}
+inline std::vector<DrawCall> &draw_calls() { return capture::calls(); }
 
-inline void clear_draw_calls() { draw_calls().clear(); }
+inline void clear_draw_calls() { capture::clear(); }
 
 inline void draw_text_ex(const afterhours::Font, const char *text,
                          const Vector2Type position, const float,

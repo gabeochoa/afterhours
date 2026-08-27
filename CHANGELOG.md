@@ -26,6 +26,7 @@ Started partway through the project's life, so it does not go all the way back.
 - **Menu shortcuts sit one pad in from the panel edge** — they were flush, clipping the last glyph in half.
 
 ### New APIs
+- **`capture::enable()`** records what the app drew, on any backend, into one buffer (`capture.h`). Only the `none` backend could do this before, which is why an app-level test asserting on rendering meant profiling pixel columns out of a PNG. Off by default; a shipping build pays one branch per draw. The `none` backend's `draw_calls()` is now an alias for the same buffer.
 
 - **`with_corner_radius(px)`** beside `with_roundness(fraction)`, which is a fraction of the *short side* and so means ~8px on a row and 180px on a panel. On `ComponentConfig`, `Theme::Builder`, `HasRoundedCorners`; precedence caller px > caller fraction > theme px > theme fraction, mutually exclusive at theme level. Default unchanged.
   `with_roundness(r > 1.f)` now warns once and names the fix — **floatinghotel hits this immediately** at `diff_renderer.h:614`, `main_content_system.h:815`, `sidebar_system.h:700`, `:706`, `:781`.
