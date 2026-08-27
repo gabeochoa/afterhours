@@ -73,6 +73,7 @@ ALL_TESTS := \
 	files_resource_path_test \
 	capture_test \
 	entity_index_test \
+	index_scaling_test \
 	query_seed_test \
 	capture_attribution_test \
 	draw_commands_test \
