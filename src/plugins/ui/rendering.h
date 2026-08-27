@@ -1825,6 +1825,11 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         [](RenderInfo a, RenderInfo b) { return a.layer < b.layer; });
 #endif
 
+    // The buffer holds THIS frame, so an assertion reads what is on screen
+    // rather than everything drawn since the process started.
+    if (capture::enabled())
+      capture::clear();
+
     int cursor_to_set = 0; // Default cursor
     for (auto &cmd : context.render_cmds) {
       auto id = cmd.id;
@@ -2518,6 +2523,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     // Reset arena for new frame
     Arena &arena = get_render_arena();
     arena.reset();
+
+    // Same reason as RenderImm: the buffer is one frame, not the whole run.
+    if (capture::enabled())
+      capture::clear();
 
     // Create command buffer
     RenderCommandBuffer buffer(arena);

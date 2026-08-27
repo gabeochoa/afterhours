@@ -4,6 +4,7 @@
 #pragma once
 
 #include "../../core/key_codes.h"
+#include "draw_commands.h"
 #include "pending_command.h"
 #include "test_input.h"
 
@@ -1260,6 +1261,17 @@ void register_ui_commands(SystemManager &sm,
   // Diagnostics
   sm.register_update_system(
       std::make_unique<HandleDumpUICommand>(std::move(dump_fn)));
+
+  // Assertions over what was drawn. Registered here, in the function every
+  // consumer already calls, because dump_ui shipped for months in a file
+  // nobody registered and read as a typo when a script asked for it.
+  capture::enable();
+  sm.register_update_system(
+      std::make_unique<draw_commands::HandleExpectDrawnCommand>());
+  sm.register_update_system(
+      std::make_unique<draw_commands::HandleExpectNotDrawnCommand>());
+  sm.register_update_system(
+      std::make_unique<draw_commands::HandleDumpDrawsCommand>());
 }
 
 } // namespace ui_commands

@@ -73,6 +73,7 @@ ALL_TESTS := \
 	files_resource_path_test \
 	capture_test \
 	capture_attribution_test \
+	draw_commands_test \
 	cleanup_order_test \
 	entity_pool_test \
 	entity_query_test \
