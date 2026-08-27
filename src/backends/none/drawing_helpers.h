@@ -46,15 +46,17 @@ inline void clear_draw_calls() { capture::clear(); }
 inline const bool capture_always_on = (capture::enable(), true);
 
 inline void draw_text_ex(const afterhours::Font, const char *text,
-                         const Vector2Type position, const float,
+                         const Vector2Type position, const float font_size,
                          const float, const Color color, const float = 0.0f,
                          const float = 0.0f, const float = 0.0f) {
-  capture::record("text", RectangleType{position.x, position.y, 0.f, 0.f},
+  // Height is the font size, matching raylib, so a geometry assertion reads
+  // the same on either backend.
+  capture::record("text", RectangleType{position.x, position.y, 0.f, font_size},
                   color, text ? text : "");
 }
 inline void draw_text(const char *text, const float x, const float y,
-                      const float, const Color color) {
-  capture::record("text", RectangleType{x, y, 0.f, 0.f}, color,
+                      const float font_size, const Color color) {
+  capture::record("text", RectangleType{x, y, 0.f, font_size}, color,
                   text ? text : "");
 }
 inline void draw_rectangle(const RectangleType rect, const Color color) {

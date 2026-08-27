@@ -7,7 +7,10 @@
 // on any palette change, and silently measures the wrong element.
 #pragma once
 
+#include <cmath>
+#include <cstdlib>
 #include <format>
+#include <vector>
 #include <string>
 
 #include "../../capture.h"
@@ -71,10 +74,38 @@ struct Filter {
   }
 };
 
+// A position assertion, in whichever axes the caller named.
+struct Position {
+  bool has_x = false, has_y = false, has_w = false, has_h = false;
+  float x = 0, y = 0, w = 0, h = 0;
+  float tol = 1.f;
+  int min_count = 1;
+
+  bool any() const { return has_x || has_y || has_w || has_h; }
+
+  bool near(float a, float b) const { return std::fabs(a - b) <= tol; }
+
+  bool matches(const RectangleType &r) const {
+    if (has_x && !near(r.x, x)) return false;
+    if (has_y && !near(r.y, y)) return false;
+    if (has_w && !near(r.width, w)) return false;
+    if (has_h && !near(r.height, h)) return false;
+    return true;
+  }
+
+  std::string describe() const {
+    std::string d = "at";
+    if (has_x) d += std::format(" x={:.0f}", x);
+    if (has_y) d += std::format(" y={:.0f}", y);
+    if (has_w) d += std::format(" w={:.0f}", w);
+    if (has_h) d += std::format(" h={:.0f}", h);
+    return d + std::format(" (tol {:.0f})", tol);
+  }
+};
+
 // Shared arg parsing: args[0] is the op, the rest are key=value.
-inline bool build_filter(PendingE2ECommand &cmd, Filter &f, int &min_count) {
+inline bool build_filter(PendingE2ECommand &cmd, Filter &f, Position &pos) {
   f.op = cmd.args[0];
-  min_count = 1;
   for (size_t i = 1; i < cmd.args.size(); i++) {
     const std::string &a = cmd.args[i];
     const size_t eq = a.find('=');
@@ -83,7 +114,16 @@ inline bool build_filter(PendingE2ECommand &cmd, Filter &f, int &min_count) {
       return false;
     }
     const std::string key = a.substr(0, eq);
-    const std::string val = a.substr(eq + 1);
+    std::string val = a.substr(eq + 1);
+    // The runner splits on whitespace, so text="Click Me!" arrives in pieces.
+    // Rejoin until the closing quote, or a label with a space is unmatchable.
+    if (val.size() >= 1 && val.front() == '"') {
+      val.erase(0, 1);
+      while (!(val.size() && val.back() == '"') && i + 1 < cmd.args.size())
+        val += " " + cmd.args[++i];
+      if (val.size() && val.back() == '"')
+        val.pop_back();
+    }
     if (key == "color") {
       if (!parse_hex_color(val, f.color)) {
         cmd.fail(std::format("bad colour '{}', want #rrggbb or #rrggbbaa", val));
@@ -94,10 +134,21 @@ inline bool build_filter(PendingE2ECommand &cmd, Filter &f, int &min_count) {
       f.text = val;
       f.has_text = true;
     } else if (key == "min_count") {
-      min_count = std::atoi(val.c_str());
+      pos.min_count = std::atoi(val.c_str());
+    } else if (key == "x") {
+      pos.has_x = true; pos.x = std::strtof(val.c_str(), nullptr);
+    } else if (key == "y") {
+      pos.has_y = true; pos.y = std::strtof(val.c_str(), nullptr);
+    } else if (key == "w") {
+      pos.has_w = true; pos.w = std::strtof(val.c_str(), nullptr);
+    } else if (key == "h") {
+      pos.has_h = true; pos.h = std::strtof(val.c_str(), nullptr);
+    } else if (key == "tol") {
+      pos.tol = std::strtof(val.c_str(), nullptr);
     } else {
-      cmd.fail(std::format("unknown filter '{}', want color, text or min_count",
-                           key));
+      cmd.fail(std::format(
+          "unknown filter '{}', want color, text, min_count, x, y, w, h or tol",
+          key));
       return false;
     }
   }
@@ -112,7 +163,9 @@ inline std::string summarize(size_t limit = 12) {
   for (const auto &c : calls) {
     if (shown++ >= limit)
       break;
-    out += std::format("\n  | {} #{:02x}{:02x}{:02x}{:02x} eid={}", c.op,
+    out += std::format("\n  | {} ({:.0f},{:.0f}) {:.0f}x{:.0f} "
+                       "#{:02x}{:02x}{:02x}{:02x} eid={}",
+                       c.op, c.rect.x, c.rect.y, c.rect.width, c.rect.height,
                        c.color.r, c.color.g, c.color.b, c.color.a, c.entity_id);
     if (!c.text.empty())
       out += std::format(" '{}'", c.text);
@@ -129,8 +182,8 @@ struct HandleExpectDrawnCommand : System<PendingE2ECommand> {
       return;
     }
     Filter f;
-    int min_count = 1;
-    if (!build_filter(cmd, f, min_count))
+    Position pos;
+    if (!build_filter(cmd, f, pos))
       return;
 
     int found = 0;
@@ -139,7 +192,7 @@ struct HandleExpectDrawnCommand : System<PendingE2ECommand> {
         found++;
 
     // Retry rather than fail: the frame carrying it may not have rendered yet.
-    if (found < min_count) {
+    if (found < pos.min_count) {
       cmd.retry();
       return;
     }
@@ -155,8 +208,8 @@ struct HandleExpectNotDrawnCommand : System<PendingE2ECommand> {
       return;
     }
     Filter f;
-    int min_count = 1;
-    if (!build_filter(cmd, f, min_count))
+    Position pos;
+    if (!build_filter(cmd, f, pos))
       return;
 
     // Absence needs a rendered frame to be absent FROM, or this passes before
@@ -173,6 +226,54 @@ struct HandleExpectNotDrawnCommand : System<PendingE2ECommand> {
       return;
     }
     cmd.consume();
+  }
+};
+
+// Where a draw landed, and if it did not, where it actually is. hanabi bisected
+// geometry back out of a PNG for want of this.
+struct HandleExpectDrawnAtCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("expect_drawn_at")) return;
+    if (!cmd.has_args(2)) {
+      cmd.fail("expect_drawn_at requires: <op> x=N y=N [text=..] [w=N] [h=N] "
+               "[tol=N]");
+      return;
+    }
+    Filter f;
+    Position want;
+    if (!build_filter(cmd, f, want))
+      return;
+    if (!want.any()) {
+      cmd.fail("expect_drawn_at needs at least one of x, y, w, h");
+      return;
+    }
+
+    std::vector<const capture::DrawnCall *> candidates;
+    for (const auto &c : capture::calls())
+      if (f.matches(c))
+        candidates.push_back(&c);
+
+    // Nothing of that shape yet: it may not have rendered, so wait.
+    if (candidates.empty()) {
+      cmd.retry();
+      return;
+    }
+
+    for (const auto *c : candidates)
+      if (want.matches(c->rect)) {
+        cmd.consume();
+        return;
+      }
+
+    // It IS drawn, just not there. That is a real failure, and the useful
+    // part is saying where it landed instead.
+    std::string got;
+    for (size_t i = 0; i < candidates.size() && i < 6; i++)
+      got += std::format("\n  | at ({:.0f},{:.0f}) {:.0f}x{:.0f}",
+                         candidates[i]->rect.x, candidates[i]->rect.y,
+                         candidates[i]->rect.width, candidates[i]->rect.height);
+    cmd.fail(std::format("{} drawn, but not {}. {} found:{}", f.describe(),
+                         want.describe(), candidates.size(), got));
   }
 };
 

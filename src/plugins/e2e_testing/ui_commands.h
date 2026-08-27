@@ -1271,6 +1271,8 @@ void register_ui_commands(SystemManager &sm,
   sm.register_update_system(
       std::make_unique<draw_commands::HandleExpectNotDrawnCommand>());
   sm.register_update_system(
+      std::make_unique<draw_commands::HandleExpectDrawnAtCommand>());
+  sm.register_update_system(
       std::make_unique<draw_commands::HandleDumpDrawsCommand>());
 }
 
