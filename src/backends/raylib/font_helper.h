@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include "../../measure_memo.h"
+
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -151,7 +153,21 @@ inline raylib::Vector2 measure_text(const raylib::Font font,
               kUnmeasurableGlyphAspect);
     return estimate_text_size(content, size);
   }
-  return raylib::MeasureTextEx(font, content, size, spacing);
+  // baseSize and glyphCount alongside the texture id, so a handle reused by a
+  // differently built atlas is a different key rather than a stale hit.
+  const std::uint64_t font_id =
+      (static_cast<std::uint64_t>(font.texture.id) << 32) ^
+      (static_cast<std::uint64_t>(font.baseSize) << 16) ^
+      static_cast<std::uint64_t>(font.glyphCount);
+  const std::uint64_t key =
+      measure_memo::hash(content ? content : "", size, spacing, font_id);
+  Vector2Type cached{};
+  if (measure_memo::lookup(key, cached))
+    return cached;
+  const raylib::Vector2 measured =
+      raylib::MeasureTextEx(font, content, size, spacing);
+  measure_memo::store(key, measured);
+  return measured;
 }
 
 // Add proper UTF-8 text measurement for CJK support

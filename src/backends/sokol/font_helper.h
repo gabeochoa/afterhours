@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include "../../measure_memo.h"
+
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -76,6 +78,15 @@ inline Vector2Type measure_text(const Font font, const char *text,
                                       : graphics::metal_detail::g_active_font;
   if (fid == FONS_INVALID)
     return Vector2Type{0, 0};
+  // dpi is part of the answer, so it is part of the key.
+  const float dpi_now = graphics::metal_detail::dpi_scale();
+  const std::uint64_t font_id = (static_cast<std::uint64_t>(fid) << 32) ^
+                                static_cast<std::uint64_t>(dpi_now * 1024.f);
+  const std::uint64_t key =
+      measure_memo::hash(text ? text : "", size, 1.f, font_id);
+  Vector2Type cached{};
+  if (measure_memo::lookup(key, cached))
+    return cached;
   fonsSetFont(ctx, fid);
   // Measure at DPI-scaled size (matching draw_text_ex) and convert back.
   float dpi = graphics::metal_detail::dpi_scale();
@@ -86,7 +97,9 @@ inline Vector2Type measure_text(const Font font, const char *text,
   float w = (bounds[2] - bounds[0]) / dpi;
   float ascender, descender, lineh;
   fonsVertMetrics(ctx, &ascender, &descender, &lineh);
-  return Vector2Type{w, lineh / dpi};
+  const Vector2Type measured{w, lineh / dpi};
+  measure_memo::store(key, measured);
+  return measured;
 }
 
 inline Vector2Type measure_text_utf8(const Font font, const char *text,
