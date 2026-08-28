@@ -122,6 +122,7 @@ ALL_TESTS += sokol_blend_test
 endif
 
 RAYLIB_TESTS := \
+	mk_cost_test \
 	headless_fallback_test \
 	dialog_test \
 	dump_ui_test \

@@ -53,17 +53,44 @@ mk_keyed(Entity &parent, EntityID otherID, size_t key,
          const std::source_location location = std::source_location::current());
 } // namespace detail
 
+// The same bytes the old stringstream spelled out, hashed in place. mk() runs
+// once per widget per frame, and building a stringstream and materialising the
+// string it holds cost about five allocations and 1.5 KB every single time,
+// for a question that is pure lookup once the widget exists.
+inline UI_UUID hash_call_site(EntityID parent_id, EntityID otherID,
+                              const std::source_location &loc) {
+  UI_UUID h = 1469598103934665603ull; // FNV-1a offset basis
+  const auto mix = [&h](unsigned char c) {
+    h ^= c;
+    h *= 1099511628211ull;
+  };
+  const auto mix_int = [&mix](long long v) {
+    for (int i = 0; i < 8; i++)
+      mix(static_cast<unsigned char>((v >> (i * 8)) & 0xff));
+  };
+  // The characters, not the pointer: the same call site in a header gets a
+  // different literal address per translation unit, and must still hash alike.
+  const auto mix_str = [&mix](const char *s) {
+    if (!s)
+      return;
+    while (*s)
+      mix(static_cast<unsigned char>(*s++));
+  };
+  mix_int(parent_id);
+  mix_int(otherID);
+  mix_str(loc.file_name());
+  mix_int(loc.line());
+  mix_int(loc.column());
+  mix_str(loc.function_name());
+  return h;
+}
+
 // Shared by mk() and mk_keyed(): resolve the call site to its entity, stamp it
 // built, and report whether the slot changed item.
 inline EntityParent mk_impl(Entity &parent, EntityID otherID, size_t key,
                             bool has_key, bool *key_changed_out,
                             const std::source_location &location) {
-  std::stringstream pre_hash;
-  pre_hash << parent.id << otherID << "file: " << location.file_name() << '('
-           << location.line() << ':' << location.column() << ") `"
-           << location.function_name() << "`: " << '\n';
-
-  UI_UUID hash = std::hash<std::string>{}(pre_hash.str());
+  UI_UUID hash = hash_call_site(parent.id, otherID, location);
 
   if (key_changed_out)
     *key_changed_out = false;
