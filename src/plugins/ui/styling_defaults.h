@@ -211,6 +211,9 @@ struct UIStylingDefaults {
   std::optional<ComponentConfig>
   get_component_config(ComponentType component_type) const;
 
+  // Non-copying lookup, for the per-widget path.
+  const ComponentConfig *find_component_config(ComponentType) const;
+
   // Check if defaults exist for a component type
   bool has_component_defaults(ComponentType component_type) const;
 

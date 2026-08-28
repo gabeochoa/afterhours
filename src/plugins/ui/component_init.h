@@ -34,6 +34,14 @@ UIStylingDefaults::set_component_config(ComponentType component_type,
   return *this;
 }
 
+// The optional-returning version below copies a whole ComponentConfig, three
+// strings and a vector, every time a widget asks for its type's defaults.
+inline const ComponentConfig *
+UIStylingDefaults::find_component_config(ComponentType component_type) const {
+  auto it = component_configs.find(component_type);
+  return it != component_configs.end() ? &it->second : nullptr;
+}
+
 inline std::optional<ComponentConfig>
 UIStylingDefaults::get_component_config(ComponentType component_type) const {
   auto it = component_configs.find(component_type);
@@ -51,7 +59,7 @@ UIStylingDefaults::has_component_defaults(ComponentType component_type) const {
 inline ComponentConfig
 UIStylingDefaults::merge_with_defaults(ComponentType component_type,
                                        const ComponentConfig &config) const {
-  auto defaults = get_component_config(component_type);
+  const ComponentConfig *defaults = find_component_config(component_type);
   ComponentConfig result = config;
 
   // Apply default font name if the user didn't set one explicitly
@@ -67,19 +75,19 @@ UIStylingDefaults::merge_with_defaults(ComponentType component_type,
     result.font_size = default_font_size;
   }
 
-  if (!defaults.has_value()) {
+  if (!defaults) {
     return result;
   }
 
-  return defaults.value().apply_overrides(result);
+  return defaults->apply_overrides(result);
 }
 
 namespace detail {
 
-inline ComponentConfig overwrite_defaults(HasUIContext auto &ctx,
-                                          ComponentConfig config,
-                                          ComponentType component_type,
-                                          bool enable_color = false) {
+inline void overwrite_defaults(HasUIContext auto &ctx,
+                               ComponentConfig &config,
+                               ComponentType component_type,
+                               bool enable_color = false) {
   auto &styling_defaults = UIStylingDefaults::get();
 
   if (!config.is_internal) {
@@ -130,7 +138,6 @@ inline ComponentConfig overwrite_defaults(HasUIContext auto &ctx,
   if (!config.segments.has_value()) {
     config.segments = ctx.theme.segments;
   }
-  return config;
 }
 
 inline void apply_flags(Entity &entity, const ComponentConfig &config) {
@@ -694,8 +701,7 @@ inline bool init_component(HasUIContext auto &ctx, EntityParent ep_pair,
                            bool enable_color = false,
                            const std::string &debug_name = "") {
   auto [entity, parent] = ep_pair;
-  config =
-      detail::overwrite_defaults(ctx, config, component_type, enable_color);
+  detail::overwrite_defaults(ctx, config, component_type, enable_color);
   detail::validate_config(config, debug_name);
   return detail::add_missing_components(ctx, entity, parent, config,
                                         debug_name);
