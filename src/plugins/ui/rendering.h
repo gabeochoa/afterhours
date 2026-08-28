@@ -462,22 +462,24 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
       }
     }
 
-    // Clamp to minimum font size to prevent invalid rendering
-    text_fits = font_size >= MIN_FONT_SIZE;
-    if (font_size < MIN_FONT_SIZE) {
+    // The search starts at the floor and only ever raises, so asking whether
+    // font_size landed below it is always false. Measure instead.
+    const Vector2Type fitted = measure_laid_out(font_size);
+    text_fits = fitted.y <= max_text_size.y &&
+                (!width_constrained || fitted.x <= max_text_size.x);
+    if (!text_fits) {
 #ifdef AFTERHOURS_DEBUG_TEXT_OVERFLOW
       // Only log once per unique text to avoid spamming
       static std::unordered_set<std::string> logged_texts;
       if (logged_texts.find(text) == logged_texts.end()) {
         logged_texts.insert(text);
-        log_warn("Text '{}' cannot fit in container {}x{} with margins {}x{} - "
-                 "clamping font size from {} to {}",
+        log_warn("Text '{}' cannot fit in container {}x{} with margins {}x{} "
+                 "even at the {} floor - it will be clipped",
                  text.length() > 20 ? text.substr(0, 20) + "..." : text,
                  container.width, container.height, margin_px.x, margin_px.y,
-                 font_size, MIN_FONT_SIZE);
+                 MIN_FONT_SIZE);
       }
 #endif
-      font_size = MIN_FONT_SIZE;
     }
   }
 

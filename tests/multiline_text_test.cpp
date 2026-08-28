@@ -280,6 +280,27 @@ TEST(a_wrapping_label_that_fits_does_not_report_overflow) {
   CHECK(res.text_fits);
 }
 
+// Auto-fit (no explicit size) reports overflow when even the floor is too big.
+// The old test was `font_size >= MIN_FONT_SIZE`, which the search cannot make
+// false, so every auto-fitted label claimed to fit however far it spilled.
+TEST(auto_fit_reports_overflow_at_the_floor) {
+  ImmTestHarness h;
+  // 30 chars needs 15*MIN_FONT_SIZE of width; 40px cannot hold it at any size.
+  auto res = position_text_ex(*h.render_font(), std::string(30, 'x'),
+                              RectangleType{0.f, 0.f, 40.f, 20.f},
+                              TextAlignment::Left, Vector2Type{0.f, 0.f});
+  CHECK(!res.text_fits);
+}
+
+// And still says so when the text genuinely fits, or the flag is just constant.
+TEST(auto_fit_reports_fitting_when_it_fits) {
+  ImmTestHarness h;
+  auto res = position_text_ex(*h.render_font(), "ok",
+                              RectangleType{0.f, 0.f, 300.f, 100.f},
+                              TextAlignment::Left, Vector2Type{0.f, 0.f});
+  CHECK(res.text_fits);
+}
+
 // The same text in a box too short for the lines it wraps to still overflows.
 // The fix must not silence real overflow.
 TEST(a_wrapping_label_too_short_still_reports_overflow) {
