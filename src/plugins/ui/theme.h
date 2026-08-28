@@ -176,6 +176,9 @@ struct Theme {
     Secondary,
     Accent,
     Error,
+    // Without these a consumer routes status through whatever is to hand.
+    Success,
+    Warning,
     Focus, // Dedicated focus ring color for accessibility
 
     //
@@ -195,6 +198,8 @@ struct Theme {
     case Usage::Secondary:
     case Usage::Accent:
     case Usage::Error:
+    case Usage::Success:
+    case Usage::Warning:
     case Usage::Focus:
       return true;
     case Usage::Custom:
@@ -216,6 +221,8 @@ struct Theme {
   Color secondary{80, 100, 140, 255}; // Dark blue
   Color accent{200, 160, 100, 255};   // Gold
   Color error{200, 80, 80, 255};      // Red
+  Color success{80, 170, 90, 255};    // Green
+  Color warning{225, 165, 45, 255};   // Amber
   Color focus{255, 255, 255, 255};    // White - high contrast focus ring
 
   // Get a reference to a color by usage
@@ -240,6 +247,10 @@ struct Theme {
       return accent;
     case Usage::Error:
       return error;
+    case Usage::Success:
+      return success;
+    case Usage::Warning:
+      return warning;
     case Usage::Focus:
       return focus;
     default:
