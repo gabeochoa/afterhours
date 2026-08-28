@@ -819,6 +819,12 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
 
     float icon_w = config.icon_source_rect->width;
     float icon_h = config.icon_source_rect->height;
+    // Native size means a 256px icon in a 46px button, covering the label.
+    if (config.size.y_axis.dim == Dim::Pixels && icon_h > 0.f) {
+      const float fit = config.size.y_axis.value * 0.6f;
+      icon_w *= fit / icon_h;
+      icon_h = fit;
+    }
 
     auto make_icon = [&](int child_id) {
       sprite(ctx, mk(entity, child_id), config.icon_texture.value(),
@@ -830,16 +836,11 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
                  .with_debug_name("btn_icon"));
     };
 
-    // Label was already applied by init_component via apply_label,
-    // so child_id 0 = before label, 1 = after label.
-    switch (config.icon_position) {
-    case IconPosition::Left:
-      make_icon(0);
-      break;
-    case IconPosition::Right:
-      make_icon(1);
-      break;
-    }
+    // The label is not a child, so child index cannot order it against one.
+    make_icon(0);
+    entity.get<UIComponent>().justify_content =
+        config.icon_position == IconPosition::Right ? JustifyContent::FlexEnd
+                                                    : JustifyContent::FlexStart;
   }
 
   entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
