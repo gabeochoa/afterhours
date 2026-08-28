@@ -62,6 +62,7 @@ Started partway through the project's life, so it does not go all the way back.
 - **`SINGLETON_FWD` still does not work in class scope** — use `SINGLETON_CLASS_FWD`, which has existed since `e9c662b`. Comment-only change.
 
 ### e2e
+- **The harness ships with the engine** (`e2e_testing/harness.h`): `E2EArgs`, `parse_e2e_args`, `should_run_e2e`, `screenshot_path`, `count_e2e_scripts`, `configure_runner`. Every consumer was writing its own ~150 line parser and they had drifted. New flags while there: `--screenshot-dir` and `--e2e-speed` (an accepted spelling of `--time-scale`).
 - **`wait_frames N` waits N frames.** It stored `N/60` seconds and the runner counted that down with `dt`, so it was a frame count only if the host ticked at exactly 60Hz, and `--time-scale` changed it again. Whether a suite was reproducible was the host's undocumented decision.
 - **`right_click_ui <name>` and `right_click_text "..."`** open a context menu the way the app does. A secondary click could only be aimed at a coordinate, which goes stale the moment the layout moves.
 
