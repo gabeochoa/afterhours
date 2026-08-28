@@ -103,10 +103,10 @@ TEST(hard_newline_lines_are_stacked_and_centered) {
 // or it paints outside the box.
 TEST(auto_fit_shrinks_so_every_line_fits) {
   ImmTestHarness h;
-  // Four lines in a 40px box: each line can be at most 10px tall.
+  // 80px box, so 20px lines: shrinking is needed but stays above MIN_FONT_SIZE.
   div(h.context(), mk(h.root(), 0),
       ComponentConfig{}
-          .with_size(ComponentSize{pixels(300), pixels(40)})
+          .with_size(ComponentSize{pixels(300), pixels(80)})
           .with_label("a\nb\nc\nd"));
   h.render();
 
@@ -116,9 +116,9 @@ TEST(auto_fit_shrinks_so_every_line_fits) {
     return;
   const float top = calls.front().rect.y;
   const float bottom = block_bottom(calls);
-  fprintf(stderr, "        block y %.1f..%.1f (box 0..40)\n", top, bottom);
+  fprintf(stderr, "        block y %.1f..%.1f (box 0..80)\n", top, bottom);
   CHECK(top >= -0.5f);
-  CHECK(bottom <= 40.5f);
+  CHECK(bottom <= 80.5f);
 }
 
 // ---------------------------------------------------------------------------

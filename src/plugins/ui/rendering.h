@@ -273,9 +273,11 @@ focus_ring_for(const UIContext<InputAction> &context, const Entity &entity,
 
 } // namespace detail
 
-// Minimum font size to prevent invalid rendering (font size 0)
-// This ensures text is always readable - 10px is the practical minimum
-constexpr float MIN_FONT_SIZE = 10.0f;
+// Auto-fit's floor, matching TypographyScale::MIN_ACCESSIBLE_SIZE_720P.
+#ifndef AFTERHOURS_MIN_FONT_SIZE
+#define AFTERHOURS_MIN_FONT_SIZE 16.0f
+#endif
+constexpr float MIN_FONT_SIZE = AFTERHOURS_MIN_FONT_SIZE;
 // Font size threshold for debug visualization - text is likely unreadable
 constexpr float DEBUG_FONT_SIZE_THRESHOLD = 8.0f;
 
