@@ -329,9 +329,6 @@ class E2ERunner {
     }
 
     void set_timeout(float seconds) { timeout_seconds_ = seconds; }
-    void set_timeout_frames(int frames) {
-        timeout_seconds_ = frames / 60.0f;
-    }  // Legacy
     void set_slow_mode(bool enabled, float delay_seconds = 0.5f) {
         slow_mode_ = enabled;
         slow_delay_ = delay_seconds;
