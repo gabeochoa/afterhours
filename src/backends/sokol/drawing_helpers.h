@@ -918,6 +918,34 @@ inline void set_mouse_cursor(int cursor_id) {
 inline afterhours::Font get_default_font() { return afterhours::Font(); }
 inline afterhours::Font get_unset_font() { return afterhours::Font(); }
 
+// Reused across render textures. Not destroyed on unload: sokol_gl's pipeline
+// pool is not reachable from here, so destroying a context strands its
+// pipelines. Bounded by the number of distinct format combinations, which is
+// one or two in practice.
+inline sgl_context sgl_context_for(sg_pixel_format color_fmt,
+                                   sg_pixel_format depth_fmt, int sample_count) {
+  struct Key {
+    int c, d, s;
+    bool operator==(const Key &o) const {
+      return c == o.c && d == o.d && s == o.s;
+    }
+  };
+  static std::vector<std::pair<Key, uint32_t>> cache;
+  const Key key{(int)color_fmt, (int)depth_fmt, sample_count};
+  for (const auto &[k, id] : cache)
+    if (k == key)
+      return {id};
+
+  sgl_context_desc_t ctx_desc{};
+  ctx_desc.color_format = color_fmt;
+  ctx_desc.depth_format = depth_fmt;
+  ctx_desc.sample_count = sample_count;
+  const sgl_context ctx = sgl_make_context(&ctx_desc);
+  if (ctx.id != SG_INVALID_ID)
+    cache.push_back({key, ctx.id});
+  return ctx;
+}
+
 inline graphics::RenderTextureType load_render_texture(int w, int h) {
   graphics::RenderTextureType rt;
   rt.width = w;
@@ -1023,13 +1051,12 @@ inline graphics::RenderTextureType load_render_texture(int w, int h) {
     return rt;
   }
 
-  // Create an sgl context matching the render texture's format so that
-  // sgl_draw() uses a pipeline compatible with the offscreen pass.
-  sgl_context_desc_t ctx_desc{};
-  ctx_desc.color_format = color_fmt;
-  ctx_desc.depth_format = depth_fmt;
-  ctx_desc.sample_count = sc;
-  sgl_context sgl_ctx = sgl_make_context(&ctx_desc);
+  // An sgl context depends on the pixel formats and sample count, never on the
+  // size, so a resize does not need a new one. It used to get one anyway, and
+  // sgl_destroy_context does not release the five render pipelines the context
+  // made, so every resize leaked them: 4.8 MB per 1000 frames of a resize
+  // loop. Keyed and reused instead, so a resize makes none.
+  sgl_context sgl_ctx = sgl_context_for(color_fmt, depth_fmt, sc);
   if (sgl_ctx.id == SG_INVALID_ID) {
     log_error("load_render_texture: sgl context creation failed");
     sg_destroy_sampler(smp);
@@ -1052,8 +1079,7 @@ inline graphics::RenderTextureType load_render_texture(int w, int h) {
 }
 
 inline void unload_render_texture(graphics::RenderTextureType &rt) {
-  if (rt.sgl_ctx_id)
-    sgl_destroy_context({rt.sgl_ctx_id});
+  // The sgl context is shared and outlives this texture, see sgl_context_for.
   if (rt.tex_view_id)
     sg_destroy_view({rt.tex_view_id});
   if (rt.depth_view_id)
