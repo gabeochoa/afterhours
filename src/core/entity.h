@@ -80,8 +80,12 @@ struct Entity {
     log_trace("checking for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
-    for (const auto &component : componentArray) {
-      if (child_of<T>(component.get())) {
+    // componentSet already knows which of the 128 slots hold anything, so
+    // only those get the RTTI check rather than every slot every call.
+    for (size_t i = 0; i < max_num_components; i++) {
+      if (!componentSet[i])
+        continue;
+      if (child_of<T>(componentArray[i].get())) {
         return true;
       }
     }
@@ -182,9 +186,11 @@ struct Entity {
     log_trace("fetching for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
-    for (const auto &component : componentArray) {
-      if (child_of<T>(component.get())) {
-        return static_cast<T &>(*component);
+    for (size_t i = 0; i < max_num_components; i++) {
+      if (!componentSet[i])
+        continue;
+      if (child_of<T>(componentArray[i].get())) {
+        return static_cast<T &>(*componentArray[i]);
       }
     }
     warnIfMissingComponent<T>();
@@ -196,9 +202,11 @@ struct Entity {
     log_trace("fetching for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
-    for (const auto &component : componentArray) {
-      if (child_of<T>(component.get())) {
-        return static_cast<const T &>(*component);
+    for (size_t i = 0; i < max_num_components; i++) {
+      if (!componentSet[i])
+        continue;
+      if (child_of<T>(componentArray[i].get())) {
+        return static_cast<const T &>(*componentArray[i]);
       }
     }
     return get<T>();
