@@ -70,7 +70,7 @@ UIStylingDefaults::merge_with_defaults(ComponentType component_type,
 
   // Apply default font size only if the user didn't explicitly set one
   // (via with_font_size, with_font_tier, or with_font)
-  if (!result.font_size_explicitly_set &&
+  if (result.font_size_is_default &&
       default_font_name != UIComponent::UNSET_FONT) {
     result.font_size = default_font_size;
   }

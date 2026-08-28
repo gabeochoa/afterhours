@@ -90,7 +90,23 @@ TEST(d11_text_input_derives_font_size_when_unset) {
 
   UIComponent *field = find_field(h);
   ui_test::check(field != nullptr, "the field exists", __FILE__, __LINE__);
-  // Half the field height, the long-standing behaviour when nothing is set.
+  // The type scale, not half the field height: size comes from role, not box.
+  if (field)
+    CHECK_APPROX(field->font_size.value, TypographyScale::base().value);
+}
+
+// with_autofit() brings the height-derived size back for callers that want it.
+TEST(d10b_text_input_autofit_derives_from_field_height) {
+  std::string text = "hello";
+  ImmTestHarness h;
+  two_frames(h, [&] {
+    imm::text_input(h.context(), mk(h.root(), 0), text,
+                    ComponentConfig{}
+                        .with_size(ComponentSize{pixels(220), pixels(80)})
+                        .with_autofit());
+  });
+
+  UIComponent *field = find_field(h);
   if (field)
     CHECK_APPROX(field->font_size.value, 40.f);
 }

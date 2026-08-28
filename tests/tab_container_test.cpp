@@ -19,7 +19,10 @@ using ui_test::ImmTestHarness;
 // A tab whose label is longer than the equal 1/N slice grows to fit its text.
 TEST(tab_container_long_label_not_truncated) {
   ImmTestHarness h;
-  std::vector<std::string> tabs = {"A", "B", "LongCategoryName", "C", "D"};
+  // Long enough to beat the 160px slice at the type scale: 16 chars used to
+  // overflow only because auto-fit sized the label off the box.
+  std::vector<std::string> tabs = {"A", "B", "LongCategoryNameThatOverflows",
+                                   "C", "D"};
   size_t active = 0;
 
   tab_container(h.context(), mk(h.root(), 0), tabs, active,

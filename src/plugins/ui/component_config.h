@@ -133,8 +133,12 @@ struct ComponentConfig {
   std::string font_name = UIComponent::UNSET_FONT;
   colors::FontWeight font_weight = colors::FontWeight::Regular;
   std::vector<TextSpan> styled_label; // multi-color runs (see with_styled_label)
-  Size font_size = pixels(50.f);
-  bool font_size_explicitly_set = false;
+  Size font_size = TypographyScale::base();
+  // Auto-fit is opt-in via with_autofit(); the type scale is the default.
+  bool font_size_explicitly_set = true;
+  // Distinguishes "still the library default" from "the caller chose a size",
+  // which font_size_explicitly_set can no longer say now that it starts true.
+  bool font_size_is_default = true;
   bool is_internal = false;
 
   // Shadow configuration
@@ -646,6 +650,7 @@ struct ComponentConfig {
     font_name = font_name_;
     font_size = font_size_;
     font_size_explicitly_set = true;
+    font_size_is_default = false;
     return *this;
   }
 
@@ -679,12 +684,22 @@ struct ComponentConfig {
   ComponentConfig &with_font_size(Size font_size_) {
     font_size = font_size_;
     font_size_explicitly_set = true;
+    font_size_is_default = false;
     return *this;
   }
 
   /// Float overload for backwards compatibility - converts to pixels
   ComponentConfig &with_font_size(float font_size_px) {
     return with_font_size(pixels(font_size_px));
+  }
+
+  /// Size the text to its box instead of the type scale. For genuinely
+  /// size-constrained cases (badges, gauge readouts) -- it makes font size a
+  /// function of string length, so siblings disagree.
+  ComponentConfig &with_autofit() {
+    font_size_explicitly_set = false;
+    font_size_is_default = false;
+    return *this;
   }
 
   /// Set the font size from a FontSize tier (Small/Medium/Large/XL).
@@ -694,6 +709,7 @@ struct ComponentConfig {
     auto &theme = imm::ThemeDefaults::get().theme;
     font_size = h720(theme.font_sizing.get(tier));
     font_size_explicitly_set = true;
+    font_size_is_default = false;
     return *this;
   }
 
@@ -706,6 +722,7 @@ struct ComponentConfig {
     auto &theme = imm::ThemeDefaults::get().theme;
     font_size = h720(theme.font_sizing.get(tier));
     font_size_explicitly_set = true;
+    font_size_is_default = false;
     return *this;
   }
 
@@ -973,6 +990,7 @@ struct ComponentConfig {
     if (overrides.has_font_override() || overrides.has_font_size_override()) {
       merged.font_size = overrides.font_size;
       merged.font_size_explicitly_set = overrides.font_size_explicitly_set;
+      merged.font_size_is_default = overrides.font_size_is_default;
     }
 
     if (overrides.has_texture())
@@ -1024,6 +1042,7 @@ struct ComponentConfig {
     font_weight = parent.font_weight;
     font_size = parent.font_size;
     font_size_explicitly_set = parent.font_size_explicitly_set;
+    font_size_is_default = parent.font_size_is_default;
     is_internal = parent.is_internal;
     render_layer = std::max(render_layer, parent.render_layer);
     image_alignment = parent.image_alignment.value_or(

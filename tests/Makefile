@@ -74,6 +74,7 @@ ALL_TESTS := \
 	capture_test \
 	polyline_test \
 	measure_memo_test \
+	design_defaults_test \
 	entity_index_test \
 	index_scaling_test \
 	query_seed_test \

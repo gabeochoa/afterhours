@@ -198,16 +198,19 @@ TEST(dim_text_height_matches_the_wrapped_line_count) {
 }
 
 // Wrapping is only measured when the renderer would also wrap, which needs a
-// pinned font size. Without one neither side wraps, so the box stays one line
-// and the text is auto-fit onto it -- consistent, if not what you wanted.
-TEST(wrap_without_a_font_size_stays_one_line_on_both_sides) {
+// pinned font size. Under with_autofit() there is none, so neither side wraps
+// and the box stays one line -- consistent, if not what you wanted. The type
+// scale is the default now, so this is the opt-in case rather than the plain
+// one; the test above covers what a caller gets without asking.
+TEST(wrap_under_autofit_stays_one_line_on_both_sides) {
   ImmTestHarness h;
   auto para = div(h.context(), mk(h.root(), 0),
                   ComponentConfig{}
                       .with_size(ComponentSize{pixels(200),
                                                Size{Dim::Text, 0.f, 1.f}})
                       .with_label("the quick brown fox jumps over the lazy dog")
-                      .with_text_overflow(TextOverflow::Wrap));
+                      .with_text_overflow(TextOverflow::Wrap)
+                      .with_autofit());
   h.render();
 
   CHECK(drawn_lines(h).size() == 1);
