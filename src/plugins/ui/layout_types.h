@@ -218,29 +218,20 @@ inline float resolve_to_pixels(const Size &size, float screen_dimension,
   return size.value;
 }
 
+// Shorthand spelling of the 8pt grid. Each step is an alias for the
+// DefaultSpacing method of the same rank, so there is one scale rather than
+// two that disagree.
 enum struct Spacing {
-  xs, // Extra small: 0.01f (7.2px at 720p)
-  sm, // Small: 0.02f (14.4px at 720p)
-  md, // Medium: 0.04f (28.8px at 720p)
-  lg, // Large: 0.08f (57.6px at 720p)
-  xl, // Extra large: 0.16f (115.2px at 720p)
+  xs, // tiny:      8px at 720p
+  sm, // small:    16px
+  md, // medium:   24px
+  lg, // large:    32px
+  xl, // xlarge:   48px
 };
 
-inline Size spacing_to_size(Spacing spacing) {
-  switch (spacing) {
-  case Spacing::xs:
-    return screen_pct(0.01f);
-  case Spacing::sm:
-    return screen_pct(0.02f);
-  case Spacing::md:
-    return screen_pct(0.04f);
-  case Spacing::lg:
-    return screen_pct(0.08f);
-  case Spacing::xl:
-    return screen_pct(0.16f);
-  }
-  return screen_pct(0.04f); // Default to medium
-}
+// Defined in styling_defaults.h, which is where DefaultSpacing lives; that
+// header includes this one, so the body cannot be written here.
+Size spacing_to_size(Spacing spacing);
 
 struct ComponentSize {
   Size x_axis;

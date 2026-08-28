@@ -236,6 +236,27 @@ concept HasUIContext = requires(T a) {
 
 } // namespace imm
 
+// The Spacing enum used to carry its own screen-percentage values (7.2 / 14.4 /
+// 28.8 / 57.6 / 115.2 at 720p) that agreed with DefaultSpacing at no step and
+// grew on a different curve, so any layout mixing the two spellings sat
+// permanently off-grid. Routing through DefaultSpacing also makes the enum
+// mode-aware, which raw screen_pct never was.
+inline Size spacing_to_size(Spacing spacing) {
+  switch (spacing) {
+  case Spacing::xs:
+    return imm::DefaultSpacing::tiny();
+  case Spacing::sm:
+    return imm::DefaultSpacing::small();
+  case Spacing::md:
+    return imm::DefaultSpacing::medium();
+  case Spacing::lg:
+    return imm::DefaultSpacing::large();
+  case Spacing::xl:
+    return imm::DefaultSpacing::xlarge();
+  }
+  return imm::DefaultSpacing::medium();
+}
+
 } // namespace ui
 
 } // namespace afterhours
