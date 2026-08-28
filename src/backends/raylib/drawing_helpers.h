@@ -381,6 +381,7 @@ inline void draw_line(int x1, int y1, int x2, int y2, Color color) {
 
 inline void draw_line_ex(Vector2Type start, Vector2Type end, float thickness,
                          Color color) {
+  capture::record("line", RectangleType{start.x, start.y, end.x - start.x, end.y - start.y}, color, "");
   raylib::DrawLineEx(start, end, thickness, color);
 }
 

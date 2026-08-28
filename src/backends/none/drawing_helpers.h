@@ -132,8 +132,14 @@ inline void pop_rotation() { log_error("@notimplemented pop_rotation"); }
 inline void draw_line(int, int, int, int, Color) {
   log_error("@notimplemented draw_line");
 }
-inline void draw_line_ex(Vector2Type, Vector2Type, float, Color) {
-  log_error("@notimplemented draw_line_ex");
+inline void draw_line_ex(Vector2Type start, Vector2Type end, float thickness,
+                         Color color) {
+  // Recorded rather than unimplemented: a dashed polyline is a run of these,
+  // and a test asserting on the pattern has nothing else to read.
+  capture::record("line", RectangleType{start.x, start.y, end.x - start.x,
+                                        end.y - start.y},
+                  color, "");
+  (void)thickness;
 }
 inline void draw_line_strip(Vector2Type *, int, Color) {
   log_error("@notimplemented draw_line_strip");

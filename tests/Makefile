@@ -72,6 +72,7 @@ ALL_TESTS := \
 	files_atomic_write_test \
 	files_resource_path_test \
 	capture_test \
+	polyline_test \
 	measure_memo_test \
 	entity_index_test \
 	index_scaling_test \
