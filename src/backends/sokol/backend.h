@@ -60,6 +60,13 @@ extern "C" const void *metal_create_system_device(void);
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id, int width,
                                              int height, const char *path);
 
+// One R8 atlas, allocated once at init and never grown. 2048 is 4 MB and fits
+// four faces at fourteen sizes over ASCII with room to spare; CJK or a
+// font-size slider will want more.
+#ifndef AFTERHOURS_FONT_ATLAS_SIZE
+#define AFTERHOURS_FONT_ATLAS_SIZE 2048
+#endif
+
 namespace afterhours::graphics {
 
 namespace metal_detail {
@@ -102,12 +109,35 @@ inline void setup_sokol_gl_and_fonts() {
   g_blend_pip = sgl_make_pipeline(&blend_desc);
 
   sfons_desc_t sfons_desc{};
-  sfons_desc.width = 2048;
-  sfons_desc.height = 2048;
+  sfons_desc.width = AFTERHOURS_FONT_ATLAS_SIZE;
+  sfons_desc.height = AFTERHOURS_FONT_ATLAS_SIZE;
   g_fons_ctx = sfons_create(&sfons_desc);
   if (g_fons_ctx == nullptr) {
-    log_error("sfons_create failed (2048x2048 atlas); text rendering disabled");
+    log_error("sfons_create failed ({}x{} atlas); text rendering disabled",
+              AFTERHOURS_FONT_ATLAS_SIZE, AFTERHOURS_FONT_ATLAS_SIZE);
+    return;
   }
+
+  // fontstash drops a glyph it cannot fit, and drops the measurement with it,
+  // so measure_text starts returning widths that are short or zero. Every
+  // wrap, hug and ellipsize is computed from that number, which makes a full
+  // atlas silent layout corruption whose only visible cause is a big font.
+  // Nothing registered this callback, so nobody found out.
+  fonsSetErrorCallback(
+      g_fons_ctx,
+      [](void *, int error, int) {
+        if (error == FONS_ATLAS_FULL) {
+          warn_once(0,
+                    "font atlas is full at {}x{}. Glyphs past this point are "
+                    "dropped AND measure text returns short or zero for them, "
+                    "so text will lay out wrong rather than look wrong. Raise "
+                    "AFTERHOURS_FONT_ATLAS_SIZE.",
+                    AFTERHOURS_FONT_ATLAS_SIZE, AFTERHOURS_FONT_ATLAS_SIZE);
+        } else {
+          warn_once(1, "fontstash error {}", error);
+        }
+      },
+      nullptr);
 }
 
 // ── Input state ──
