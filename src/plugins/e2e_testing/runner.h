@@ -29,6 +29,8 @@ struct ParsedCommand {
     std::vector<std::string> args;
     int line_number = 0;
     float wait_seconds = 0.0f;  // Time to wait after this command
+    // Ticks to wait, counted rather than timed. `wait_frames` means frames.
+    int wait_ticks = 0;
 };
 
 namespace detail {
@@ -150,7 +152,10 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
             int frames = 1;
             iss >> frames;
             if (frames <= 0) frames = 1;
-            cmd.wait_seconds = frames * frame;
+            // Frames, not the seconds those frames would take at 60Hz. The
+            // host decides its own tick rate, and --time-scale changes dt, so
+            // a duration here made the count depend on both.
+            cmd.wait_ticks = frames;
         } else if (cmd.name == "validate") {
             std::string rest;
             std::getline(iss >> std::ws, rest);
@@ -311,6 +316,7 @@ class E2ERunner {
     void reset() {
         index_ = 0;
         wait_time_ = 0.0f;
+        wait_ticks_ = 0;
         elapsed_time_ = 0.0f;
         finished_ = false;
         failed_ = false;
@@ -345,6 +351,10 @@ class E2ERunner {
         // Handle wait between commands - don't count explicit wait time
         // against the per-script timeout so that `wait 5` doesn't eat into
         // the timeout budget.
+        if (wait_ticks_ > 0) {
+            wait_ticks_--;
+            return;
+        }
         if (wait_time_ > 0) {
             wait_time_ -= dt;
             return;
@@ -400,6 +410,7 @@ class E2ERunner {
 
         dispatch_command(cmd);
         wait_time_ = cmd.wait_seconds;
+        wait_ticks_ = cmd.wait_ticks;
         if (slow_mode_) {
             wait_time_ += slow_delay_;
         }
@@ -616,6 +627,7 @@ class E2ERunner {
     std::string script_path_;
     std::size_t index_ = 0;
     float wait_time_ = 0.0f;         // Seconds remaining before next command
+    int wait_ticks_ = 0;             // Ticks remaining, for wait_frames
     float elapsed_time_ = 0.0f;      // Total elapsed time
     float timeout_seconds_ = 10.0f;  // Default 10 second timeout
     bool slow_mode_ = false;   // Add delay between commands for visibility
