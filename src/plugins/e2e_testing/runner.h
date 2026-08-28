@@ -51,11 +51,12 @@ constexpr std::array<std::string_view, 7> coord_commands = {
     "middle_click", "middle_down"
 };
 
-constexpr std::array<std::string_view, 13> single_arg_commands = {
+constexpr std::array<std::string_view, 15> single_arg_commands = {
     "key", "select_all", "screenshot", "arrow",
     "action", "hold", "release", "click_ui",
     "click_text", "click_button", "focus_ui",
-    "toggle_checkbox", "expect_focused"
+    "toggle_checkbox", "expect_focused",
+    "right_click_ui", "right_click_text"
 };
 
 constexpr std::array<std::string_view, 4> two_arg_commands = {

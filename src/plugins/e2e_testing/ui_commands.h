@@ -139,6 +139,50 @@ struct HandleClickUICommand : System<PendingE2ECommand> {
   }
 };
 
+// Handle 'right_click_ui name' - secondary click on a component by debug name.
+// A context menu is opened by name in the app and could only be opened by
+// coordinate in a test, which goes stale the moment the layout moves.
+template <typename InputAction>
+struct HandleRightClickUICommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("right_click_ui"))
+      return;
+    if (!cmd.has_args(1)) {
+      cmd.fail("right_click_ui requires component name");
+      return;
+    }
+
+    auto pos = find_component_center<InputAction>(cmd.arg(0));
+    if (pos) {
+      test_input::simulate_right_click(pos->x, pos->y);
+      cmd.consume();
+    } else {
+      cmd.fail(std::format("UI component not found: {}", cmd.arg(0)));
+    }
+  }
+};
+
+// Handle 'right_click_text "text"' - secondary click on a component by label.
+template <typename InputAction>
+struct HandleRightClickTextCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("right_click_text"))
+      return;
+    if (!cmd.has_args(1)) {
+      cmd.fail("right_click_text requires text");
+      return;
+    }
+
+    auto pos = find_component_with_text<InputAction>(cmd.arg(0));
+    if (pos) {
+      test_input::simulate_right_click(pos->x, pos->y);
+      cmd.consume();
+    } else {
+      cmd.fail(std::format("No UI with text: {}", cmd.arg(0)));
+    }
+  }
+};
+
 // Handle 'click_text "text"' - clicks UI component containing text
 template <typename InputAction>
 struct HandleClickTextCommand : System<PendingE2ECommand> {
@@ -1249,6 +1293,10 @@ void register_ui_commands(SystemManager &sm,
   // Component interactions (auto-find by name/text)
   sm.register_update_system(
       std::make_unique<HandleClickUICommand<InputAction>>());
+  sm.register_update_system(
+      std::make_unique<HandleRightClickUICommand<InputAction>>());
+  sm.register_update_system(
+      std::make_unique<HandleRightClickTextCommand<InputAction>>());
   sm.register_update_system(
       std::make_unique<HandleClickTextCommand<InputAction>>());
   sm.register_update_system(

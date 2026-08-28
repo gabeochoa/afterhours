@@ -63,6 +63,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ### e2e
 - **`wait_frames N` waits N frames.** It stored `N/60` seconds and the runner counted that down with `dt`, so it was a frame count only if the host ticked at exactly 60Hz, and `--time-scale` changed it again. Whether a suite was reproducible was the host's undocumented decision.
+- **`right_click_ui <name>` and `right_click_text "..."`** open a context menu the way the app does. A secondary click could only be aimed at a coordinate, which goes stale the moment the layout moves.
 
 - **Assertions that passed without testing anything.** Injected `scroll_wheel` did nothing (wiped by `reset_frame` before the reader ran; now survives one reset, not drained on read, matching raylib). Injected pinch was delivered twice (now drained on read). `expect_no_text` always passed (missing from the parse chain, and treated a not-yet-rendered registry as absence). The visible-text registry ignored clip rects, so scrolled-away text still counted.
 - **`expect_no_text` waits for a render**, by `VisibleTextRegistry::generation()` rather than frames — an app running several `tick()`s per render could burn the whole wait without one. Failures also name the label that matched, which is often a longer string nobody had in mind.
