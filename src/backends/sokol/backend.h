@@ -188,6 +188,28 @@ inline uint32_t pop_char() {
   return c;
 }
 
+// Sokol's pools are fixed at setup and exhausting one asserts inside sokol
+// rather than returning an error, so a consumer that makes a lot of GPU
+// objects cannot size its way out of a crash it cannot see coming. Raise these
+// at build time if you hit one; the defaults are sokol's own, doubled for
+// pipelines because that is the pool a per-format sgl context draws from.
+#ifndef AFTERHOURS_SG_PIPELINE_POOL_SIZE
+#define AFTERHOURS_SG_PIPELINE_POOL_SIZE 128
+#endif
+#ifndef AFTERHOURS_SG_IMAGE_POOL_SIZE
+#define AFTERHOURS_SG_IMAGE_POOL_SIZE 256
+#endif
+#ifndef AFTERHOURS_SG_BUFFER_POOL_SIZE
+#define AFTERHOURS_SG_BUFFER_POOL_SIZE 256
+#endif
+
+// Applied at both setup sites, windowed and headless, so they cannot drift.
+inline void apply_pool_sizes(sg_desc &desc) {
+  desc.pipeline_pool_size = AFTERHOURS_SG_PIPELINE_POOL_SIZE;
+  desc.image_pool_size = AFTERHOURS_SG_IMAGE_POOL_SIZE;
+  desc.buffer_pool_size = AFTERHOURS_SG_BUFFER_POOL_SIZE;
+}
+
 // ── Sokol callbacks ──
 
 inline void sokol_init_cb() {
@@ -195,11 +217,11 @@ inline void sokol_init_cb() {
   desc.environment = sglue_environment();
   desc.logger.func = slog_func;
   // sgl sample_count: the default sgl context here matches the swapchain (4x
-  // MSAA); offscreen render textures are drawn through their own per-texture
-  // sgl_context created with the render texture's sample_count (see
-  // load_render_texture + begin_texture_mode in drawing_helpers.h), so each
-  // pass draws with a pipeline whose sample_count matches its target. Validation
-  // is enabled (no disable_validation).
+  // MSAA); an offscreen render texture draws through a context keyed on its
+  // format and sample count, shared by every texture with the same ones (see
+  // sgl_context_for in drawing_helpers.h), so each pass draws with a pipeline
+  // whose sample_count matches its target.
+  apply_pool_sizes(desc);
   sg_setup(&desc);
   stm_setup();
   g_start_time = stm_now();
@@ -795,6 +817,7 @@ inline bool metal_init(const Config &cfg) {
     desc.environment.defaults.depth_format = SG_PIXELFORMAT_DEPTH_STENCIL;
     desc.environment.defaults.sample_count = 1;
     desc.logger.func = slog_func;
+    metal_detail::apply_pool_sizes(desc);
     sg_setup(&desc);
     if (!sg_isvalid()) {
       log_error("metal headless: sg_setup failed");
