@@ -174,6 +174,7 @@ inline void draw_text_ex(const raylib::Font font, const char *content,
                          const float centerY = 0.0f) {
   capture::record("text", {position.x, position.y, 0.f, font_size}, color,
                   content);
+  warn_on_missing_glyphs(font, content);
   if (std::abs(rotation) < 0.001f) {
     raylib::DrawTextEx(font, content, position, font_size, spacing, color);
     return;

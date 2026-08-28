@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include <vector>
+
 #include "../../measure_memo.h"
 
 #include <cstdlib>
@@ -15,12 +17,75 @@ namespace afterhours {
 using Font = raylib::Font;
 using vec2 = raylib::Vector2;
 
+// Passing nullptr asks raylib for its default set, which is 95 ASCII glyphs.
+// So an arrow, a chevron, a checkmark or an ellipsis drew nothing at all, and
+// both floatinghotel and hanabi shipped invisible UI furniture before noticing.
+// These are the ranges a UI actually types: Latin-1 for accents, punctuation
+// for dashes and the ellipsis, then arrows, box drawing, shapes and check
+// marks. A glyph the face does not have is still skipped by raylib, so this
+// widens what CAN render rather than promising it will.
+inline std::vector<int> default_codepoints() {
+  static constexpr int kRanges[][2] = {
+      {0x0020, 0x007E}, // ASCII
+      {0x00A0, 0x00FF}, // Latin-1 supplement
+      {0x2010, 0x2027}, // dashes, quotes, ellipsis
+      {0x2190, 0x21FF}, // arrows
+      {0x2500, 0x257F}, // box drawing
+      {0x25A0, 0x25FF}, // geometric shapes
+      {0x2713, 0x2717}, // check and cross
+  };
+  std::vector<int> cps;
+  for (const auto &r : kRanges)
+    for (int c = r[0]; c <= r[1]; c++)
+      cps.push_back(c);
+  return cps;
+}
+
 inline raylib::Font load_font_from_file(const char *file, int size = 0) {
-  raylib::Font font = (size > 0)
-                           ? raylib::LoadFontEx(file, size, nullptr, 0)
-                           : raylib::LoadFont(file);
+  std::vector<int> cps = default_codepoints();
+  const int px = size > 0 ? size : 32;
+  raylib::Font font =
+      raylib::LoadFontEx(file, px, cps.data(), (int)cps.size());
+  if (font.glyphCount <= 0) {
+    // Fall back rather than leaving the caller with no font at all.
+    font = (size > 0) ? raylib::LoadFontEx(file, size, nullptr, 0)
+                      : raylib::LoadFont(file);
+  }
   raylib::SetTextureFilter(font.texture, raylib::TEXTURE_FILTER_BILINEAR);
   return font;
+}
+
+// Whether the loaded face actually covers a codepoint. raylib maps anything it
+// does not have to glyph 0, so asking is the only way to tell a real glyph
+// from a silent nothing.
+inline bool font_has_glyph(const raylib::Font font, int codepoint) {
+  if (font.glyphCount <= 0)
+    return false;
+  const int idx = raylib::GetGlyphIndex(font, codepoint);
+  // Index 0 is the fallback. It is a real answer only when it IS the codepoint.
+  return idx > 0 || (font.glyphs && font.glyphs[0].value == codepoint);
+}
+
+// A codepoint the font lacks draws nothing: no box, no warning, no log. Both
+// floatinghotel and hanabi shipped UI with invisible arrows and chevrons and
+// found out by looking. load_font_from_file asks raylib for the default set,
+// which is 95 ASCII glyphs, so any symbol is a blank unless the caller loaded
+// codepoints for it.
+inline void warn_on_missing_glyphs(const raylib::Font font, const char *text) {
+  if (!text)
+    return;
+  for (const unsigned char *p = (const unsigned char *)text; *p; p++) {
+    if (*p < 0x80)
+      continue; // ASCII is always covered by the default set
+    // Warn once per byte value rather than decoding UTF-8 here: the point is
+    // to say "this string has glyphs the font does not", not to be a decoder.
+    warn_once(0x1000 + *p,
+              "text contains a non-ASCII byte {} and the font may not cover "
+              "it, which draws nothing at all rather than a missing-glyph box. "
+              "Load the font with codepoints for the ranges you use.",
+              (int)*p);
+    return;
+  }
 }
 
 // Add codepoint-based font loading for CJK support
