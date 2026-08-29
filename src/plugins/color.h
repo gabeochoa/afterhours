@@ -147,8 +147,11 @@ static Color set_opacity(const Color &color, const unsigned char alpha) {
 
 static Color opacity_pct(const Color &color, const float percentage) {
   Color transparentColor = color;
-  transparentColor.a =
-      static_cast<unsigned char>(255 * std::clamp(percentage, 0.0f, 1.0f));
+  // Scale the alpha the colour already had, do not replace it: setting 255*pct
+  // made a fully transparent fill become half-opaque at opacity 0.5, which is
+  // how a disabled ghost button grew a background it never asked for.
+  transparentColor.a = static_cast<unsigned char>(
+      color.a * std::clamp(percentage, 0.0f, 1.0f));
   return transparentColor;
 }
 
