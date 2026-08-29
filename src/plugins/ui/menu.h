@@ -80,6 +80,7 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
   ComponentConfig root_config =
       ComponentConfig::inherit_from(config, "menu_root")
           .with_size(ComponentSize{pixels(0.f), pixels(0.f)})
+          .without_border()
           .with_skip_tabbing(true);
   init_component(ctx, ep_pair, root_config, ComponentType::Div, false,
                  "menu_root");
@@ -125,10 +126,17 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
   // separator reads as a band on a continuous surface. Square, like everything
   // else in the menu -- a rounded panel shows through the last row whenever
   // that row is disabled, since disabled backgrounds are translucent.
+  // A border draws inside the panel rect and layout does not inset children,
+  // so without this the rows paint over three of its four edges.
+  const float bw = config.border_config.has_value()
+                       ? config.border_config->top.thickness.value
+                       : 0.f;
+
   auto list = tray(ctx, mk(entity),
                    ComponentConfig::inherit_from(config, "menu_list")
                        .with_background(Theme::Usage::Surface)
                        .disable_rounded_corners()
+                       .with_padding(Padding::all(pixels(bw)))
                        .with_size(ComponentSize{pixels(width), children(item_h)})
                        .with_flex_direction(FlexDirection::Column)
                        .with_no_wrap()
@@ -147,6 +155,7 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
           ComponentConfig::inherit_from(config, "menu_separator")
               .with_size(ComponentSize{percent(1.0f), pixels(item_h * 0.25f)})
               .disable_rounded_corners()
+              .without_border()
               .with_transparent_bg()
               .with_skip_tabbing(true));
       row_y += item_h * 0.25f;
@@ -160,11 +169,31 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
                    config, fmt::format("menu_item_{}", index))
                    .with_size(ComponentSize{percent(1.0f), pixels(item_h)})
                    .disable_rounded_corners()
+                   .without_border()
                    .with_label(item.label)
                    .with_disabled(item.disabled);
     // Labels default to centred, which walks straight into the gutter.
     if (gutter > 0.f)
       row.with_alignment(TextAlignment::Left);
+
+    // A disabled row still has to read as a row. Its own background is muted
+    // to near-transparent, which left it 5/255 from the panel and looking
+    // like a wide separator, so the fill comes from an underlay instead and
+    // only the label dims.
+    if (item.disabled) {
+      div(ctx, mk(list.ent(), 20000 + index),
+          ComponentConfig::inherit_from(config, "menu_item_fill")
+              .with_size(ComponentSize{pixels(width - bw * 2.f),
+                                       pixels(item_h)})
+              .with_absolute_position(0.f, row_y)
+              .disable_rounded_corners()
+              .without_border()
+              .with_custom_background(colors::lighten(
+                  ctx.theme.from_usage(Theme::Usage::Surface), 0.06f))
+              .with_skip_tabbing(true)
+              .with_render_layer(config.render_layer + 1));
+      row.with_custom_background(colors::transparent());
+    }
     auto item_el = button(ctx, mk(list.ent(), index), row);
     if (item_el && !item.disabled)
       chosen = index;
@@ -181,6 +210,7 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
           ComponentConfig::inherit_from(config, "menu_shortcut")
               .with_size(ComponentSize{pixels(gutter - shortcut_pad),
                                        pixels(item_h)})
+              .without_border()
               .with_absolute_position(width - gutter, row_y)
               .with_label(item.shortcut)
               .with_alignment(TextAlignment::Right)
@@ -274,6 +304,7 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
   ComponentConfig root_config =
       ComponentConfig::inherit_from(config, "popover_root")
           .with_size(ComponentSize{pixels(0.f), pixels(0.f)})
+          .without_border()
           .with_skip_tabbing(true);
   init_component(ctx, ep_pair, root_config, ComponentType::Div, false,
                  "popover_root");

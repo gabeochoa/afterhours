@@ -284,6 +284,13 @@ struct ComponentConfig {
     return *this;
   }
   // Per-side border methods
+  // For composites: the caller's edge belongs on the outer panel, not on
+  // every child that inherits from the same config.
+  ComponentConfig &without_border() {
+    border_config.reset();
+    return *this;
+  }
+
   ComponentConfig &with_border_top(Color color, Size thickness = pixels(1.0f),
                                    BorderStyle style = BorderStyle::Solid) {
     if (!border_config.has_value())
@@ -1066,6 +1073,13 @@ struct ComponentConfig {
       custom_text_color = parent.custom_text_color;
       auto_text_color = parent.auto_text_color;
     }
+    // Same rule: a composite dropped the caller's edge and corner silently.
+    if (parent.roundness.has_value())
+      roundness = parent.roundness;
+    if (parent.corner_radius.has_value())
+      corner_radius = parent.corner_radius;
+    if (parent.border_config.has_value())
+      border_config = parent.border_config;
     render_layer = std::max(render_layer, parent.render_layer);
     image_alignment = parent.image_alignment.value_or(
         texture_manager::HasTexture::Alignment::Center);
