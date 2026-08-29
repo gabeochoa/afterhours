@@ -2374,6 +2374,13 @@ ElementResult decorative_frame(
   float fill_h = h > 0 ? h : 100.f;
   ComponentSize fill_size{pixels(fill_w), pixels(fill_h)};
 
+  // An inset layer has to shrink by twice the inset, not just shift by it, or
+  // it overhangs the bottom-right instead of nesting inside the frame.
+  auto inset_fill = [&](float px) {
+    return ComponentSize{pixels(std::max(0.f, fill_w - 2.f * px)),
+                         pixels(std::max(0.f, fill_h - 2.f * px))};
+  };
+
   if (style == DecorativeFrameStyle::KraftPaper) {
     // Kraft paper style: multiple layered borders with corner accents
 
@@ -2391,13 +2398,9 @@ ElementResult decorative_frame(
     Size inset1 = pixels(frame_thickness * 0.3f);
     div(ctx, mk(entity, 1),
         ComponentConfig{}
-            .with_size(fill_size)
+            .with_size(inset_fill(frame_thickness * 0.3f))
             .with_absolute_position()
             .with_translate(inset1, inset1)
-            .with_margin(Margin{.top = inset1,
-                                .bottom = inset1,
-                                .left = inset1,
-                                .right = inset1})
             .with_custom_background(lighter_frame)
             .with_skip_tabbing(true)
             .with_debug_name("frame_inner1"));
@@ -2406,13 +2409,9 @@ ElementResult decorative_frame(
     Size inset2 = pixels(frame_thickness);
     div(ctx, mk(entity, 2),
         ComponentConfig{}
-            .with_size(fill_size)
+            .with_size(inset_fill(frame_thickness))
             .with_absolute_position()
             .with_translate(inset2, inset2)
-            .with_margin(Margin{.top = inset2,
-                                .bottom = inset2,
-                                .left = inset2,
-                                .right = inset2})
             .with_custom_background(bg_color)
             .with_skip_tabbing(true)
             .with_debug_name("frame_bg"));
@@ -2420,7 +2419,8 @@ ElementResult decorative_frame(
     // Corner accents for "hand-made" feel (only render when size is computed)
     if (has_computed_size) {
       Size corner_size = h720(8.0f);
-      Size corner_offset = h720(2.0f);
+      // Sit the accents on the frame band, clear of the rounded corner arc.
+      Size corner_offset = pixels(frame_thickness);
       float corner_size_px = resolve_to_pixels(corner_size, screen_height);
       float corner_offset_px = resolve_to_pixels(corner_offset, screen_height);
       Color corner_color = colors::darken(frame_color, 0.85f);
@@ -2544,11 +2544,9 @@ ElementResult decorative_frame(
     Size inset = pixels(frame_thickness);
     div(ctx, mk(entity, 5),
         ComponentConfig{}
-            .with_size(fill_size)
+            .with_size(inset_fill(frame_thickness))
             .with_absolute_position()
             .with_translate(inset, inset)
-            .with_margin(Margin{
-                .top = inset, .bottom = inset, .left = inset, .right = inset})
             .with_custom_background(bg_color)
             .with_skip_tabbing(true)
             .with_debug_name("frame_bg"));
