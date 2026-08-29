@@ -1471,10 +1471,6 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
     slider_bg.addComponent<ui::HasSliderState>(owned_value);
 
   HasSliderState &sliderState = slider_bg.get<ui::HasSliderState>();
-  // Reset each frame; apply_slider_value (below) sets it true only on a real
-  // value change. Previously this was unconditionally set true, so the slider's
-  // ElementResult bool was always true and `if (slider(...))` fired every frame.
-  sliderState.changed_since = false;
 
   // Create value update function
   auto apply_slider_value = [&](Entity &target, float new_value_pct) {
@@ -1594,7 +1590,12 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   owned_value = sliderState.value;
   entity.template addComponentIfMissing<FocusClusterRoot>();
-  return ElementResult{sliderState.changed_since, entity, sliderState.value};
+  // Consumed on read, not cleared at the top of the build: the drag system runs
+  // after it, so clearing first threw away the change it had just recorded and
+  // any caller reading the returned bool never saw the drag at all.
+  const bool changed = sliderState.changed_since;
+  sliderState.changed_since = false;
+  return ElementResult{changed, entity, sliderState.value};
 }
 
 template <typename Container>
