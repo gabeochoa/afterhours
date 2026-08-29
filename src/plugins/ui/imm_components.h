@@ -1249,9 +1249,17 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
   // explicitly (parent_width - track_width) to avoid expand() resolution issues
   // inside absolutely-positioned containers. Falls back to expand() otherwise.
   if (!label.empty()) {
-    Size label_width = (config.size.x_axis.dim == Dim::Pixels)
-                           ? pixels(config.size.x_axis.value - track_w)
-                           : expand();
+    // Padding shrinks the content box, so a label sized to the full width puts
+    // the track that many pixels past the right edge.
+    const auto px_or_zero = [](Size s) {
+      return s.dim == Dim::Pixels ? s.value : 0.f;
+    };
+    const float pad_x =
+        px_or_zero(config.padding.left) + px_or_zero(config.padding.right);
+    Size label_width =
+        (config.size.x_axis.dim == Dim::Pixels)
+            ? pixels(std::max(0.f, config.size.x_axis.value - track_w - pad_x))
+            : expand();
     div(ctx, mk(entity),
         ComponentConfig::inherit_from(config, "toggle_label")
             .with_size(ComponentSize{label_width, config.size.y_axis})
