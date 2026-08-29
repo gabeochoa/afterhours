@@ -1510,13 +1510,6 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     render_shadow(entity, draw_rect, corner_settings, effective_opacity,
                   roundness, segments);
 
-    // Draw 9-slice border texture if configured
-    // Nine-slice replaces regular background color when present
-    if (entity.has<HasNineSliceBorder>()) {
-      render_nine_slice(entity, draw_rect, effective_opacity);
-    }
-
-
     // Custom draw (behind): drawn before the widget's own fill.
     if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().bg)
       entity.get<HasOnDraw>().bg(draw_rect);
@@ -1540,6 +1533,12 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         draw_rectangle_rounded(draw_rect, roundness, segments, col,
                                corner_settings);
       }
+    }
+
+    // Over the fill: filled panel art would otherwise be hidden by it, and a
+    // transparent-center border still lets the fill show through.
+    if (entity.has<HasNineSliceBorder>()) {
+      render_nine_slice(entity, draw_rect, effective_opacity);
     }
 
     render_bevel(entity, draw_rect, effective_opacity);
@@ -2080,11 +2079,6 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     collect_shadow(buffer, entity, draw_rect, corner_settings,
                    effective_opacity, layer, roundness, segments);
 
-    // Nine-slice border
-    if (entity.has<HasNineSliceBorder>()) {
-      collect_nine_slice(buffer, entity, draw_rect, effective_opacity, layer);
-    }
-
     // Focus ring, over the widget: layer+199/+200 keeps it above the fill and
     // border no matter what this entity's own layer is.
     if (auto ring = detail::focus_ring_for(context, entity, cmp,
@@ -2129,6 +2123,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                                      corner_settings, layer, entity.id,
                                      rotation);
       }
+    }
+
+    // Over the fill: filled panel art would otherwise be hidden by it, and a
+    // transparent-center border still lets the fill show through.
+    if (entity.has<HasNineSliceBorder>()) {
+      collect_nine_slice(buffer, entity, draw_rect, effective_opacity, layer);
     }
 
     // Bevel border

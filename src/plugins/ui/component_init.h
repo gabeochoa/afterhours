@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <functional>
 #include <string>
 #include <unordered_set>
@@ -97,6 +98,14 @@ inline void overwrite_defaults(HasUIContext auto &ctx,
   }
 
   config.with_internal(true);
+
+  // The frame art covers the rect's edges, so a label has to be inset past it
+  // or it renders underneath the border rather than inside the panel.
+  if (config.nine_slice_config.has_value() && !config.text_inset.has_value()) {
+    const NineSliceBorder &ns = config.nine_slice_config.value();
+    config.with_text_inset((float)std::max(ns.left, ns.right),
+                           (float)std::max(ns.top, ns.bottom));
+  }
 
   // Button-specific defaults
   if (component_type == ComponentType::Button) {
