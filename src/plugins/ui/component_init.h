@@ -117,8 +117,13 @@ inline void overwrite_defaults(HasUIContext auto &ctx,
   if (enable_color && config.color_usage == Theme::Usage::Default)
     config.with_color_usage(Theme::Usage::Primary);
 
+  // A control centres its own label; a Div is a text container and reads left.
+  // Centring both made every unaligned list row and table cell centre itself,
+  // so a column of eight had eight left edges.
   if (config.label_alignment == TextAlignment::None) {
-    config.with_alignment(TextAlignment::Center);
+    config.with_alignment(component_type == ComponentType::Div
+                              ? TextAlignment::Left
+                              : TextAlignment::Center);
   }
 
   if (!config.rounded_corners.has_value()) {
