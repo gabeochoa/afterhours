@@ -406,7 +406,9 @@ struct modal : developer::Plugin {
                         .with_flex_direction(FlexDirection::Row)
                         .with_justify_content(JustifyContent::SpaceBetween)
                         .with_align_items(AlignItems::Center)
-                        .with_margin(Margin{.bottom = DefaultSpacing::small()})
+                        // Title belongs with its message, not floating between
+                        // it and the panel edge.
+                        .with_margin(Margin{.bottom = DefaultSpacing::tiny()})
                         .with_render_layer(config.render_layer)
                         .with_debug_name("modal_header"));
 
@@ -414,7 +416,10 @@ struct modal : developer::Plugin {
                     ComponentConfig{}
                         .with_label(config.title)
                         .with_size(ComponentSize{children(), percent(1.0f)})
-                        .with_font(UIComponent::DEFAULT_FONT, h720(18.0f))
+                        // Was the body's own 18px, so the title did not read
+                        // as one. One step up the scale from the body.
+                        .with_font(UIComponent::DEFAULT_FONT,
+                                   TypographyScale::size(1))
                         .with_auto_text_color(true)
                         .with_render_layer(config.render_layer)
                         .with_debug_name("modal_title"));
@@ -463,8 +468,9 @@ struct modal : developer::Plugin {
                 ComponentConfig{}
                     .with_label(message)
                     .with_size(ComponentSize{percent(1.0f), h720(96)})
-                    .with_padding(Spacing::md)
-                    .with_font(UIComponent::DEFAULT_FONT, h720(18.0f))
+                    .with_padding(Spacing::sm)
+                    .with_font(UIComponent::DEFAULT_FONT,
+                               TypographyScale::base())
                     .with_text_overflow(TextOverflow::Wrap)
                     .with_render_layer(content_layer)
                     .with_debug_name("dialog_message"));
