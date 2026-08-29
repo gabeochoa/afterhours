@@ -428,14 +428,15 @@ namespace detail {
 /// Shared body for hsplit_pane/vsplit_pane.
 std::array<ElementResult, 3>
 split_pane_impl(HasUIContext auto &ctx, EntityParent ep_pair, FlexDirection dir,
-                float &ratio, ComponentConfig config) {
+                float &ratio, ComponentConfig config, float min_ratio,
+                float max_ratio) {
   const bool row = (dir == FlexDirection::Row);
   config.with_flex_direction(dir);
   if (config.size.is_default)
     config.with_size(ComponentSize{percent(1.f), percent(1.f)});
   auto container = div(ctx, ep_pair, config);
 
-  ratio = std::clamp(ratio, 0.f, 1.f);
+  ratio = std::clamp(ratio, min_ratio, max_ratio);
   const auto region_size = [row](Size along) {
     return row ? ComponentSize{along, percent(1.f)}
                : ComponentSize{percent(1.f), along};
@@ -453,7 +454,12 @@ split_pane_impl(HasUIContext auto &ctx, EntityParent ep_pair, FlexDirection dir,
   const Rectangle box = container.cmp().rect();
   const float extent = row ? box.width : box.height;
   if (bar && extent > 0.f) {
-    ratio = std::clamp(ratio + (bar.template as<float>() / extent), 0.f, 1.f);
+    // Clamped here rather than by the caller after the fact: the in place
+    // resize below uses this value, so a caller clamping afterwards left the
+    // layout showing the overshoot and the bar bounced every frame of a drag
+    // past its limit.
+    ratio = std::clamp(ratio + (bar.template as<float>() / extent), min_ratio,
+                       max_ratio);
     UIComponent &cmp = first.cmp();
     if (row)
       cmp.set_desired_width(percent(ratio));
@@ -480,18 +486,20 @@ split_pane_impl(HasUIContext auto &ctx, EntityParent ep_pair, FlexDirection dir,
 /// ```
 std::array<ElementResult, 3>
 hsplit_pane(HasUIContext auto &ctx, EntityParent ep_pair, float &ratio,
-            ComponentConfig config = ComponentConfig()) {
+            ComponentConfig config = ComponentConfig(), float min_ratio = 0.f,
+            float max_ratio = 1.f) {
   return detail::split_pane_impl(ctx, ep_pair, FlexDirection::Row, ratio,
-                                 std::move(config));
+                                 std::move(config), min_ratio, max_ratio);
 }
 
 /// vsplit's stacked counterpart: `ratio` is the top region's share of the
 /// container height. Returns {top, divider, bottom}.
 std::array<ElementResult, 3>
 vsplit_pane(HasUIContext auto &ctx, EntityParent ep_pair, float &ratio,
-            ComponentConfig config = ComponentConfig()) {
+            ComponentConfig config = ComponentConfig(), float min_ratio = 0.f,
+            float max_ratio = 1.f) {
   return detail::split_pane_impl(ctx, ep_pair, FlexDirection::Column, ratio,
-                                 std::move(config));
+                                 std::move(config), min_ratio, max_ratio);
 }
 
 /// Invisible flexible spacer — expands to fill remaining space in a flex
