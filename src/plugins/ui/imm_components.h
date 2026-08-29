@@ -937,6 +937,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   bool has_label_child = !label.empty();
+  bool label_clicked = false;
   bool user_specified_corners = config.rounded_corners.has_value();
 
   // Helper: resolve color_usage for child components
@@ -966,9 +967,22 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
       label_config.with_rounded_corners(RoundedCorners().right_sharp());
     }
 
-    div(ctx, mk(entity), label_config)
-        .ent()
-        .template addComponentIfMissing<InFocusCluster>();
+    Entity &label_ent = div(ctx, mk(entity), label_config).ent();
+    label_ent.template addComponentIfMissing<InFocusCluster>();
+    // A checkbox's label is part of its hit target; only the indicator was.
+    if (config.disabled) {
+      label_ent.template removeComponentIfExists<HasClickListener>();
+    } else {
+      label_ent.template addComponentIfMissing<HasClickListener>(
+          [](Entity &) {});
+      // A click listener is what makes a thing focusable, and the indicator
+      // beside it is already the tab stop for this checkbox.
+      label_ent.template addComponentIfMissing<SkipWhenTabbing>();
+      if (label_ent.template get<HasClickListener>().down) {
+        state.on = !state.on;
+        label_clicked = true;
+      }
+    }
   }
 
   // Build toggle button config with checkbox visual defaults
@@ -1006,7 +1020,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
       primitive::toggle_button(ctx, mk(entity), toggle_config, state.on);
   toggle_result.ent().template addComponentIfMissing<InFocusCluster>();
 
-  if (toggle_result) {
+  if (toggle_result || label_clicked) {
     state.changed_since = true;
   }
 
