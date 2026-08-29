@@ -1044,6 +1044,17 @@ struct ComponentConfig {
     font_size_explicitly_set = parent.font_size_explicitly_set;
     font_size_is_default = parent.font_size_is_default;
     is_internal = parent.is_internal;
+    // Only when the caller actually set one, so untouched configs keep their
+    // theme defaults; without this a custom colour on a composite was accepted
+    // and silently dropped.
+    if (parent.custom_color.has_value()) {
+      color_usage = parent.color_usage;
+      custom_color = parent.custom_color;
+    }
+    if (parent.custom_text_color.has_value()) {
+      custom_text_color = parent.custom_text_color;
+      auto_text_color = parent.auto_text_color;
+    }
     render_layer = std::max(render_layer, parent.render_layer);
     image_alignment = parent.image_alignment.value_or(
         texture_manager::HasTexture::Alignment::Center);
