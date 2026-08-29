@@ -458,6 +458,7 @@ struct HandleScrollWheelCommand : System<PendingE2ECommand> {
 // frame 3).
 struct HandleDragToCommand : System<PendingE2ECommand> {
     int phase = 0;  // 0=press, 1=move, 2=release
+    int owner_line = -1;
 
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
                                float) override {
@@ -467,9 +468,13 @@ struct HandleDragToCommand : System<PendingE2ECommand> {
             return;
         }
 
-        // Reset phase for a fresh command (guards against stale state from a
-        // prior drag_to that timed out mid-sequence).
-        if (!cmd.is_retry()) phase = 0;
+        // Keyed on the line, not is_retry: reset_retry() clears Retry back to
+        // Ready every frame, so is_retry() reset the phase on every frame and
+        // the drag pressed forever without ever moving or releasing.
+        if (owner_line != cmd.line_number) {
+            owner_line = cmd.line_number;
+            phase = 0;
+        }
 
         auto [sw, sh] = e2e_screen_size();
 
