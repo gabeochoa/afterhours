@@ -174,6 +174,10 @@ struct ComponentConfig {
   std::optional<std::string> checkbox_checked_indicator;
   std::optional<std::string> checkbox_unchecked_indicator;
 
+  // Glyphs on a toggle_switch track. Unset draws nothing.
+  std::optional<std::string> toggle_on_indicator;
+  std::optional<std::string> toggle_off_indicator;
+
   // Dropdown indicator characters (default: " v" for closed, " ^" for open)
   // TODO: Replace " v" / " ^" with real chevron glyphs (▾ ▴ or ▼ ▲) once
   // afterhours ships a built-in icon font or vector glyph set.
@@ -386,6 +390,13 @@ struct ComponentConfig {
     text_readonly = ro;
     return *this;
   }
+  ComponentConfig &with_toggle_indicators(const std::string &on,
+                                          const std::string &off) {
+    toggle_on_indicator = on;
+    toggle_off_indicator = off;
+    return *this;
+  }
+
   ComponentConfig &
   with_checkbox_indicators(const std::string &checked,
                            const std::string &unchecked = " ") {

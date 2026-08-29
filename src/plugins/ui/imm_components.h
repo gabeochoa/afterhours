@@ -1300,34 +1300,34 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
   track_btn.ent().template get<HasColor>().skip_hover_override = true;
   bool clicked = track_btn;
 
-  // I/O indicators on the track for non-color state differentiation
-  // "|" (I) on left side visible when ON (knob moves right)
-  // "O" on right side visible when OFF (knob moves left)
-  div(ctx, mk(track_btn.ent(), 10),
-      ComponentConfig{}
-          .with_debug_name("toggle_on_indicator")
-          .with_size(ComponentSize{pixels(track_w / 2.0f - pad),
-                                   pixels(track_h - pad * 2.0f)})
-          .with_absolute_position()
-          .with_translate(pixels(pad + 1.0f), pixels(pad))
-          .with_label("|")
-          .with_font_size(pixels(14.f))
-          .with_custom_text_color(Color{255, 255, 255, 200})
-          .with_alignment(TextAlignment::Center)
-          .with_skip_tabbing(true));
+  // Opt-in: the knob's position already carries state.
+  if (config.toggle_on_indicator.has_value())
+    div(ctx, mk(track_btn.ent(), 10),
+        ComponentConfig{}
+            .with_debug_name("toggle_on_indicator")
+            .with_size(ComponentSize{pixels(track_w / 2.0f - pad),
+                                     pixels(track_h - pad * 2.0f)})
+            .with_absolute_position()
+            .with_translate(pixels(pad + 1.0f), pixels(pad))
+            .with_label(config.toggle_on_indicator.value())
+            .with_font_size(pixels(14.f))
+            .with_custom_text_color(Color{255, 255, 255, 200})
+            .with_alignment(TextAlignment::Center)
+            .with_skip_tabbing(true));
 
-  div(ctx, mk(track_btn.ent(), 11),
-      ComponentConfig{}
-          .with_debug_name("toggle_off_indicator")
-          .with_size(ComponentSize{pixels(track_w / 2.0f - pad),
-                                   pixels(track_h - pad * 2.0f)})
-          .with_absolute_position()
-          .with_translate(pixels(track_w / 2.0f), pixels(pad))
-          .with_label("O")
-          .with_font_size(pixels(12.f))
-          .with_custom_text_color(Color{255, 255, 255, 160})
-          .with_alignment(TextAlignment::Center)
-          .with_skip_tabbing(true));
+  if (config.toggle_off_indicator.has_value())
+    div(ctx, mk(track_btn.ent(), 11),
+        ComponentConfig{}
+            .with_debug_name("toggle_off_indicator")
+            .with_size(ComponentSize{pixels(track_w / 2.0f - pad),
+                                     pixels(track_h - pad * 2.0f)})
+            .with_absolute_position()
+            .with_translate(pixels(track_w / 2.0f), pixels(pad))
+            .with_label(config.toggle_off_indicator.value())
+            .with_font_size(pixels(12.f))
+            .with_custom_text_color(Color{255, 255, 255, 160})
+            .with_alignment(TextAlignment::Center)
+            .with_skip_tabbing(true));
 
   // Knob — white circle with subtle dark border for visibility
   float knob_x = pad + travel * state.animation_progress;

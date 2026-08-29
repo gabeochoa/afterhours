@@ -448,7 +448,8 @@ struct modal : developer::Plugin {
 
         // ---- Shared dialog content helpers (consistent look across presets) --
         // Button emphasis for dialog action buttons.
-        enum class DialogButton { Neutral, Primary, Danger };
+        // Tertiary has its own look; as Neutral it matched the dismiss beside it.
+        enum class DialogButton { Neutral, Primary, Danger, Tertiary };
 
         // Wrapping, comfortably-padded message body. Uses a fixed height (not
         // expand()) so it never eats the button row's space (expand is greedy
@@ -516,6 +517,9 @@ struct modal : developer::Plugin {
                 cfg.with_background(Theme::Usage::Primary);
             else if (kind == DialogButton::Danger)
                 cfg.with_background(Theme::Usage::Error);
+            else if (kind == DialogButton::Tertiary)
+                // Ghost, so it reads as the quieter third option.
+                cfg.with_custom_background(colors::transparent());
             else
                 // Neutral: a lighter shade of the Surface panel so the button is
                 // visible (plain Surface blends into the panel it sits on).
@@ -639,7 +643,7 @@ struct modal : developer::Plugin {
                 // rightmost).
                 if (!tertiary_label.empty()) {
                     if (dialog_button(ctx, mk(row.ent(), 0), tertiary_label,
-                                      DialogButton::Neutral, content_layer)) {
+                                      DialogButton::Tertiary, content_layer)) {
                         dialog_result = DialogResult::Custom;
                         open = false;
                     }
@@ -701,7 +705,9 @@ struct modal : developer::Plugin {
                 imm::text_input(
                     ctx, mk(result.ent(), 1), value,
                     ComponentConfig{}
-                        .with_size(ComponentSize{percent(1.0f), h720(40)})
+                        // expand(), not percent: percent ignores the margins
+                        // and the field ran past the dialog's right edge.
+                        .with_size(ComponentSize{expand(), h720(40)})
                         .with_margin(
                             Margin{.left = DefaultSpacing::medium(),
                                    .right = DefaultSpacing::medium()})
