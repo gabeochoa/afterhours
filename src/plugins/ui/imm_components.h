@@ -2396,6 +2396,7 @@ ElementResult decorative_frame(
     div(ctx, mk(entity, 0),
         ComponentConfig{}
             .with_size(fill_size)
+            .with_absolute_position()
             .with_custom_background(frame_color)
             .with_skip_tabbing(true)
             .with_debug_name("frame_outer"));
@@ -2482,6 +2483,7 @@ ElementResult decorative_frame(
     div(ctx, mk(entity, 0),
         ComponentConfig{}
             .with_size(fill_size)
+            .with_absolute_position()
             .with_custom_background(bg_color)
             .with_border(frame_color, frame_thickness)
             .with_skip_tabbing(true)
@@ -2497,6 +2499,7 @@ ElementResult decorative_frame(
     div(ctx, mk(entity, 0),
         ComponentConfig{}
             .with_size(fill_size)
+            .with_absolute_position()
             .with_custom_background(frame_color)
             .with_skip_tabbing(true)
             .with_debug_name("frame_outer"));
