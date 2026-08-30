@@ -10,6 +10,7 @@
 
 #include "../../graphics_common.h"
 #include "../../logging.h"
+#include "../../warn_once.h"
 
 // The implementation must be compiled in exactly one .cpp/.mm file
 // with SOKOL_IMPL defined before including these headers.
