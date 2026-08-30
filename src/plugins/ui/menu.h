@@ -182,7 +182,7 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
     // only the label dims.
     if (item.disabled) {
       div(ctx, mk(list.ent(), 20000 + index),
-          ComponentConfig::inherit_from(config, "menu_item_fill")
+          ComponentConfig::inherit_from(config, "menu_row_fill")
               .with_size(ComponentSize{pixels(width - bw * 2.f),
                                        pixels(item_h)})
               .with_absolute_position(0.f, row_y)
