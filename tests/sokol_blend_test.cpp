@@ -200,56 +200,9 @@ int main() {
 
   g::shutdown();
 
-  // D19: headless capture ignored Config.hidpi, so screenshots came out 1x and
-  // soft. With hidpi the target is denser while drawing stays in logical
-  // coords, giving a true supersample rather than a bigger canvas.
-  {
-    g::Config hi;
-    hi.display = g::DisplayMode::Headless;
-    hi.width = W;
-    hi.height = H;
-    hi.hidpi = true;
-    hi.title = "hidpi test";
-    if (g::init(hi)) {
-      const int scale = g::render_scale();
-      check(scale == 2, "hidpi headless sets a 2x render scale");
-
-      auto &rt = g::metal_detail::g_headless_rt;
-      check(rt.width == W * 2 && rt.height == H * 2,
-            "the offscreen target is allocated at 2x");
-      check(rt.scale == 2 && rt.width / rt.scale == W &&
-                rt.height / rt.scale == H,
-            "the target reports its scale, so logical size is derivable");
-
-      // Fill the LEFT HALF in logical coords. If the projection were physical,
-      // it would only cover a quarter of the image.
-      g::begin_drawing();
-      afterhours::draw_rectangle(RectangleType{0, 0, W, H}, opaque_blue);
-      afterhours::draw_rectangle(RectangleType{0, 0, W / 2, H}, opaque_green);
-      g::end_drawing();
-
-      std::vector<uint8_t> px =
-          afterhours::capture_render_texture_to_memory(rt);
-      check(px.size() == static_cast<size_t>(W * 2) * (H * 2) * 4,
-            "capture returns the full 2x pixel buffer");
-      if (px.size() == static_cast<size_t>(W * 2) * (H * 2) * 4) {
-        const int pw = W * 2;
-        auto at = [&](int x, int y) {
-          const size_t i = (static_cast<size_t>(y) * pw + x) * 4;
-          return Px{px[i], px[i + 1], px[i + 2], px[i + 3]};
-        };
-        const Px left = at(pw / 4, H);   // inside the logical left half
-        const Px right = at(pw * 3 / 4, H); // inside the logical right half
-        check(near(left.g, 255) && near(left.r, 0),
-              "logical left half is green across the 2x image");
-        check(near(right.b, 255) && near(right.g, 0),
-              "logical right half is blue across the 2x image");
-      }
-      g::shutdown();
-    } else {
-      printf("SKIP: hidpi headless init failed\n");
-    }
-  }
+  // The D19 hidpi assertions live in sokol_hidpi_test: they need their own
+  // process, because a second init() after this shutdown yields a render
+  // target that silently never receives draws.
 
   // D20: load_texture built no mip chain, so a texture drawn much smaller than
   // its source sampled the full-res level and thin detail aliased. sokol has no

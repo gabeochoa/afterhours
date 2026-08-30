@@ -122,6 +122,9 @@ ifeq ($(UNAME_S),Darwin)
 ALL_TESTS += bundle_test
 # Sokol is Metal here, so macOS-only; renders headless, no window.
 ALL_TESTS += sokol_blend_test
+# Own process: the Metal backend cannot be re-initialised, so this cannot be a
+# section of sokol_blend_test.
+ALL_TESTS += sokol_hidpi_test
 endif
 
 RAYLIB_TESTS := \
@@ -195,6 +198,9 @@ SOKOL_FRAMEWORKS := -framework Metal -framework MetalKit -framework Cocoa \
 $(OUT)/sokol_blend_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_blend_test: CXXFLAGS_T += -DSOKOL_METAL -x objective-c++
 $(OUT)/sokol_blend_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_hidpi_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_hidpi_test: CXXFLAGS_T += -DSOKOL_METAL -x objective-c++
+$(OUT)/sokol_hidpi_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 
 # Runs every test even when one fails, then reports. The old loop dropped each
 # exit code, so only the last test's status escaped and a red suite read green.
