@@ -1607,8 +1607,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     }
 
     // Focus ring: after the fill and border, or an opaque background paints
-    // over it (focus_rect sits inside draw_rect). The batched path gets this
-    // for free by emitting at layer+199/+200.
+    // over it (focus_rect sits inside draw_rect).
     if (auto ring = detail::focus_ring_for(context, entity, cmp,
                                            scroll_offset)) {
       draw_rectangle_rounded_lines(ring->outer_contrast(),
@@ -2079,22 +2078,6 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     collect_shadow(buffer, entity, draw_rect, corner_settings,
                    effective_opacity, layer, roundness, segments);
 
-    // Focus ring, over the widget: layer+199/+200 keeps it above the fill and
-    // border no matter what this entity's own layer is.
-    if (auto ring = detail::focus_ring_for(context, entity, cmp,
-                                           scroll_offset)) {
-      buffer.add_rounded_rectangle_outline(
-          ring->outer_contrast(), ring->contrast,
-          ring->roundness_at(ring->thickness), ring->segments, ring->corners,
-          layer + 199, entity.id);
-      buffer.add_rounded_rectangle_outline(
-          ring->inner_contrast(), ring->contrast, ring->roundness_at(-1.f),
-          ring->segments, ring->corners, layer + 199, entity.id);
-      buffer.add_rounded_rectangle_outline(
-          ring->rect, ring->color, ring->roundness, ring->segments,
-          ring->corners, layer + 200, entity.id, ring->thickness);
-    }
-
     // Custom draw (behind): enqueued before the fill so it renders under the
     // widget; the fn pointer is stable on the HasOnDraw component for the frame.
     if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().bg) {
@@ -2200,6 +2183,22 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           add_side(border.right, x + w - rt, y + tt, rt, h - tt - bt);
         }
       }
+    }
+
+    // Focus ring: after the fill and border, same as RenderImm. The buffer
+    // renders in insertion order, so a higher layer here would buy nothing.
+    if (auto ring = detail::focus_ring_for(context, entity, cmp,
+                                           scroll_offset)) {
+      buffer.add_rounded_rectangle_outline(
+          ring->outer_contrast(), ring->contrast,
+          ring->roundness_at(ring->thickness), ring->segments, ring->corners,
+          layer, entity.id);
+      buffer.add_rounded_rectangle_outline(
+          ring->inner_contrast(), ring->contrast, ring->roundness_at(-1.f),
+          ring->segments, ring->corners, layer, entity.id);
+      buffer.add_rounded_rectangle_outline(
+          ring->rect, ring->color, ring->roundness, ring->segments,
+          ring->corners, layer, entity.id, ring->thickness);
     }
 
     // Label/text
