@@ -104,6 +104,7 @@ ALL_TESTS := \
 	setup_test \
 	slot_at_creation_test \
 	size_constraints_test \
+	sizing_repro_test \
 	slider_test \
 	split_test \
 	downstream_gaps_test \

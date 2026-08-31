@@ -310,7 +310,15 @@ struct AutoLayout {
     return screenValue;
   }
 
-  float snap_to_8pt_grid(float value, Axis axis) {
+  // Which way a snap is allowed to move a value. Snapping is cosmetic
+  // alignment, so it must never break a containment invariant: an expander
+  // rounded up overflows the space it was measured into, and a children() box
+  // rounded down ends up shorter than the child it exists to hold. Both were
+  // filed as separate layout bugs before they turned out to be this.
+  enum struct SnapDir { Nearest, Down, Up };
+
+  float snap_to_8pt_grid(float value, Axis axis,
+                         SnapDir dir = SnapDir::Nearest) {
     (void)axis;
     constexpr float GRID_UNIT_720P = 4.0f;
     // Always derive grid unit from screen HEIGHT (the 720p reference axis).
@@ -322,7 +330,11 @@ struct AutoLayout {
     float screen_height = fetch_screen_value_(Axis::Y);
     float grid_unit =
         fmaxf(1.f, std::round(GRID_UNIT_720P * (screen_height / 720.0f)));
-    float snapped = std::round(value / grid_unit) * grid_unit;
+    const float units = value / grid_unit;
+    float snapped = (dir == SnapDir::Down    ? std::floor(units)
+                     : dir == SnapDir::Up    ? std::ceil(units)
+                                             : std::round(units)) *
+                    grid_unit;
     // Never snap a positive value to zero — this caused pixels(1) dividers
     // to compute as height 0.
     if (value > 0.f && snapped == 0.f)
@@ -1222,13 +1234,21 @@ struct AutoLayout {
       // specifies pixels(150), they expect exactly 150px, not a
       // grid-snapped value like 152. Only snap non-pixel sizes (percents,
       // screen_pct, etc.) where grid alignment improves consistency.
+      // Expand fills what is left, so it may only round down; Children holds
+      // its content, so it may only round up. Rounding either to nearest
+      // breaks the very thing the dimension is for.
+      auto dir_for = [](Dim d) {
+        return d == Dim::Expand     ? SnapDir::Down
+               : d == Dim::Children ? SnapDir::Up
+                                    : SnapDir::Nearest;
+      };
       if (widget.desired[Axis::X].dim != Dim::Pixels) {
-        widget.computed[Axis::X] =
-            snap_to_8pt_grid(widget.computed[Axis::X], Axis::X);
+        widget.computed[Axis::X] = snap_to_8pt_grid(
+            widget.computed[Axis::X], Axis::X, dir_for(widget.desired[Axis::X].dim));
       }
       if (widget.desired[Axis::Y].dim != Dim::Pixels) {
-        widget.computed[Axis::Y] =
-            snap_to_8pt_grid(widget.computed[Axis::Y], Axis::Y);
+        widget.computed[Axis::Y] = snap_to_8pt_grid(
+            widget.computed[Axis::Y], Axis::Y, dir_for(widget.desired[Axis::Y].dim));
       }
     }
 

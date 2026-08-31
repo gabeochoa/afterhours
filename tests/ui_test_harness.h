@@ -211,7 +211,11 @@ struct ImmTestHarness {
         e->get<UIComponent>().children.clear();
   }
 
-  void layout_only() {
+  // grid_snap defaults off, but apps ship with it on (wm does), and it changes
+  // computed sizes, so anything reproducing an app-side layout must pass true.
+  // Resolution follows suit: the grid unit is derived from screen height.
+  void layout_only(bool grid_snap = false,
+                   window_manager::Resolution res = {800, 600}) {
     coll.merge_entity_arrays();
     auto &entities = coll.get_entities();
     EntityID max_id = 0;
@@ -222,9 +226,8 @@ struct ImmTestHarness {
     for (const auto &e : entities)
       if (e)
         mapping[static_cast<size_t>(e->id)] = e.get();
-    AutoLayout::autolayout(root_entity->get<UIComponent>(),
-                           window_manager::Resolution{800, 600}, mapping, false,
-                           1.0f);
+    AutoLayout::autolayout(root_entity->get<UIComponent>(), res, mapping,
+                           grid_snap, 1.0f);
     for (const auto &e : entities)
       if (e && e->has<UIComponent>())
         e->get<UIComponent>().was_rendered_to_screen = true;
