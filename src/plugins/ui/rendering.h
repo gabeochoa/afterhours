@@ -429,8 +429,12 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
                       (int)container.height / kBucket, (int)font_size);
       if (logged_explicit.size() < kMaxLogged &&
           logged_explicit.insert(key).second) {
+        // Name the API: with_wrap() is flex wrap and does nothing here, and
+        // that is the first thing people reach for.
         log_warn("Text '{}' at explicit font {} overflows container {}x{} "
-                 "(margins {}x{}) - it will be clipped, not downscaled",
+                 "(margins {}x{}) - it will be clipped, not downscaled. To "
+                 "wrap it use with_text_overflow(TextOverflow::Wrap); "
+                 "with_wrap() is flex wrap and will not help",
                  text.length() > 20 ? text.substr(0, 20) + "..." : text,
                  font_size, container.width, container.height, margin_px.x,
                  margin_px.y);

@@ -603,6 +603,8 @@ struct ComponentConfig {
     self_align = sa;
     return *this;
   }
+  /// Flex wrap: whether CHILDREN flow onto a new row/column. NOT text
+  /// wrapping -- for that use with_text_overflow(TextOverflow::Wrap).
   ComponentConfig &with_no_wrap() {
     flex_wrap = FlexWrap::NoWrap;
     return *this;
@@ -611,10 +613,14 @@ struct ComponentConfig {
     placeholder = std::move(hint);
     return *this;
   }
+  /// Flex wrap: lets CHILDREN flow onto a new row/column. NOT text wrapping --
+  /// adding this to a label that overflows does nothing. Use
+  /// with_text_overflow(TextOverflow::Wrap) for text.
   ComponentConfig &with_wrap() {
     flex_wrap = FlexWrap::Wrap;
     return *this;
   }
+  /// See with_wrap: this is child layout, not text.
   ComponentConfig &with_flex_wrap(FlexWrap fw) {
     flex_wrap = fw;
     return *this;
