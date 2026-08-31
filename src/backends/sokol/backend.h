@@ -827,6 +827,18 @@ namespace metal_backend {
 
 inline bool metal_init(const Config &cfg) {
   if (cfg.display == DisplayMode::Headless) {
+    // A second init after shutdown hands back a render target that silently
+    // never receives a draw: sokol reports it valid and identical to a working
+    // one, and readback is uniform magenta. Refuse instead, until someone
+    // root-causes it on a Metal consumer. See POLISH_PASS_AFTERHOURS_GAPS.md.
+    static bool ever_initialised = false;
+    if (ever_initialised) {
+      log_error("metal backend cannot be re-initialised after shutdown; run "
+                "one graphics session per process");
+      return false;
+    }
+    ever_initialised = true;
+
     // Windowless offscreen rendering: create our own Metal device (no
     // sokol_app / WindowServer), set up sokol_gfx against it with no swapchain,
     // and render into an offscreen texture we can read back to PNG.
