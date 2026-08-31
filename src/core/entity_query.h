@@ -524,7 +524,12 @@ struct EntityQuery {
     [[nodiscard]] Entity &gen_first_enforce() const {
         const auto values = run_query({.stop_on_first = true});
         if (values.empty()) {
+            // Not just log_error: this library's own log_error is a plain
+            // fprintf (and a no-op without <format>), so without the abort we
+            // return a reference into an empty vector. A consumer whose
+            // log_error does crash loses nothing.
             log_error("tried to use gen_first_enforce, but found no values");
+            std::abort();
         }
         return values[0];
     }
