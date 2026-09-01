@@ -59,11 +59,15 @@ inline raylib::Font load_font_from_file(const char *file, int size = 0) {
 // does not have to glyph 0, so asking is the only way to tell a real glyph
 // from a silent nothing.
 inline bool font_has_glyph(const raylib::Font font, int codepoint) {
-  if (font.glyphCount <= 0)
+  if (font.glyphCount <= 0 || !font.glyphs)
     return false;
   const int idx = raylib::GetGlyphIndex(font, codepoint);
-  // Index 0 is the fallback. It is a real answer only when it IS the codepoint.
-  return idx > 0 || (font.glyphs && font.glyphs[0].value == codepoint);
+  if (idx < 0 || idx >= font.glyphCount)
+    return false;
+  // GetGlyphIndex falls back to the index of '?', not to 0, so a nonzero index
+  // says nothing on its own -- it is the answer for every codepoint the face
+  // lacks. Only the entry actually holding this codepoint counts.
+  return font.glyphs[idx].value == codepoint;
 }
 
 // A codepoint the font lacks draws nothing: no box, no warning, no log. Both
@@ -74,17 +78,24 @@ inline bool font_has_glyph(const raylib::Font font, int codepoint) {
 inline void warn_on_missing_glyphs(const raylib::Font font, const char *text) {
   if (!text)
     return;
-  for (const unsigned char *p = (const unsigned char *)text; *p; p++) {
-    if (*p < 0x80)
-      continue; // ASCII is always covered by the default set
-    // Warn once per byte value rather than decoding UTF-8 here: the point is
-    // to say "this string has glyphs the font does not", not to be a decoder.
-    warn_once(0x1000 + *p,
-              "text contains a non-ASCII byte {} and the font may not cover "
-              "it, which draws nothing at all rather than a missing-glyph box. "
-              "Load the font with codepoints for the ranges you use.",
-              (int)*p);
-    return;
+  // Decode and ask the font, rather than warning on any byte >= 0x80. The
+  // byte-range guess fired on every correctly-rendered CJK string -- an app
+  // that loaded the right codepoints got warned for text it draws perfectly,
+  // which is how the warning ended up being ignored, taking the real missing
+  // glyphs with it.
+  for (int i = 0; text[i] != '\0';) {
+    int advance = 0;
+    const int cp = raylib::GetCodepointNext(&text[i], &advance);
+    i += advance > 0 ? advance : 1;
+    if (cp < 0x80)
+      continue; // the default set is the 95 ASCII glyphs
+    if (font_has_glyph(font, cp))
+      continue;
+    warn_once(0x110000 + cp,
+              "font has no glyph for U+{:04X}, which draws nothing at all "
+              "rather than a missing-glyph box. Load the font with codepoints "
+              "for the ranges you use.",
+              cp);
   }
 }
 
