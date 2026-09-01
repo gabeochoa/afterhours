@@ -1647,15 +1647,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         shadow->color = colors::opacity_pct(shadow->color, effective_opacity);
       }
 
-      // Inset text rect when there's a 9-slice border to keep text inside
+      // No nine-slice inset here: component_init already put the slice into
+      // text_inset, which position_text applies. Subtracting it again left a
+      // 70px box with a 16px slice only 6px of room for a 15px font.
       RectangleType text_rect = draw_rect;
-      if (entity.has<HasNineSliceBorder>()) {
-        const NineSliceBorder &ns = entity.get<HasNineSliceBorder>().nine_slice;
-        text_rect.x += static_cast<float>(ns.left);
-        text_rect.y += static_cast<float>(ns.top);
-        text_rect.width -= static_cast<float>(ns.left + ns.right);
-        text_rect.height -= static_cast<float>(ns.top + ns.bottom);
-      }
 
       // TODO: unify this font-size resolution with the batched path
       // (see position_text_ex call ~100 lines below) so they don't diverge.
@@ -2224,14 +2219,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         shadow->color = colors::opacity_pct(shadow->color, effective_opacity);
       }
 
+      // See render_me: the slice is already in text_inset.
       RectangleType text_rect = draw_rect;
-      if (entity.has<HasNineSliceBorder>()) {
-        const NineSliceBorder &ns = entity.get<HasNineSliceBorder>().nine_slice;
-        text_rect.x += static_cast<float>(ns.left);
-        text_rect.y += static_cast<float>(ns.top);
-        text_rect.width -= static_cast<float>(ns.left + ns.right);
-        text_rect.height -= static_cast<float>(ns.top + ns.bottom);
-      }
 
       // When a font size was explicitly set (via with_font / with_font_size),
       // use it as an upper bound so text doesn't auto-grow beyond that size.
