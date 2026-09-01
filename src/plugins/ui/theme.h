@@ -576,9 +576,21 @@ inline Theme::Builder Theme::create() { return Builder(); }
 
 namespace imm {
 
-// Singleton for managing global theme defaults
+// Singleton for managing global theme defaults.
+//
+// Two slots, because these are different lifetimes and conflating them meant a
+// screen that set a theme changed every screen rendered after it:
+//   app_default -- what the app configured at startup. Persists.
+//   theme       -- what is in effect this frame. Reset from app_default at the
+//                  top of every frame, so a per-screen theme dies with the
+//                  frame instead of leaking forward.
+// Everything that resolves a colour or a metric reads `theme`.
 struct ThemeDefaults {
   Theme theme;
+  Theme app_default;
+
+  // Called once per frame before any UI is built.
+  void begin_frame() { theme = app_default; }
 
   ThemeDefaults() = default;
 
@@ -592,25 +604,31 @@ struct ThemeDefaults {
   ThemeDefaults(const ThemeDefaults &) = delete;
   ThemeDefaults &operator=(const ThemeDefaults &) = delete;
 
-  // Theme configuration methods
+  // Configuring the app writes both slots: it takes effect now and survives
+  // begin_frame. For a theme that should only last the current frame, use
+  // UIContext::set_theme instead.
   ThemeDefaults &set_theme_color(Theme::Usage usage, const Color &color) {
     theme.set_color(usage, color);
+    app_default.set_color(usage, color);
     return *this;
   }
 
   // Set the entire theme at once
   ThemeDefaults &set_theme(const Theme &new_theme) {
     theme = new_theme;
+    app_default = new_theme;
     return *this;
   }
 
   ThemeDefaults &set_click_activation_mode(ClickActivationMode mode) {
     theme.click_activation_mode = mode;
+    app_default.click_activation_mode = mode;
     return *this;
   }
 
   ThemeDefaults &set_highlight_mode(HighlightMode mode) {
     theme.highlight_mode = mode;
+    app_default.highlight_mode = mode;
     return *this;
   }
 

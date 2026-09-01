@@ -244,8 +244,11 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
   virtual void for_each_with(Entity &entity, UIContext<InputAction> &context,
                              float dt) override {
     context.dt = dt;
-    // Apply theme defaults first
+    // Apply theme defaults first. begin_frame drops whatever theme the last
+    // frame's screen set and restores the app's own, so a per-screen theme
+    // cannot leak forward.
     auto &theme_defaults = imm::ThemeDefaults::get();
+    theme_defaults.begin_frame();
     context.theme = theme_defaults.get_theme();
 
     // Mouse input handling

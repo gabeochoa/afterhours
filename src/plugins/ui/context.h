@@ -196,6 +196,17 @@ template <typename InputAction> struct UIContext : BaseComponent {
 
   Theme theme;
 
+  // Prefer this over assigning `theme` directly. Colour resolution and layout
+  // metrics are read through ThemeDefaults by code that cannot see this
+  // context, so the setter pushes there too and the change applies to sizing
+  // as well as to colour. It lasts one frame: ThemeDefaults::begin_frame
+  // restores the app's configured theme, so a per-screen theme cannot leak
+  // into whatever renders next.
+  void set_theme(const Theme &t) {
+    theme = t;
+    imm::ThemeDefaults::get().theme = t;
+  }
+
   // Per-screen scaling mode override. If set, overrides the app-wide default
   // from UIStylingDefaults. Components can further override via
   // ComponentConfig::with_scaling_mode().
