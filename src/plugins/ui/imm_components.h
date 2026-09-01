@@ -1245,24 +1245,14 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
   constexpr float knob_sz = track_h - pad * 2.0f;          // 20px
   constexpr float travel = track_w - knob_sz - pad * 2.0f; // 24px
 
-  // Optional label — when parent width is known in pixels, compute label width
-  // explicitly (parent_width - track_width) to avoid expand() resolution issues
-  // inside absolutely-positioned containers. Falls back to expand() otherwise.
+  // The label takes whatever the track leaves. This used to be computed by
+  // hand as parent_width - track_w - padding, to dodge expand() resolving
+  // wrong; that was grid snapping rounding an expander up past its space, and
+  // it is fixed, so let layout do the arithmetic.
   if (!label.empty()) {
-    // Padding shrinks the content box, so a label sized to the full width puts
-    // the track that many pixels past the right edge.
-    const auto px_or_zero = [](Size s) {
-      return s.dim == Dim::Pixels ? s.value : 0.f;
-    };
-    const float pad_x =
-        px_or_zero(config.padding.left) + px_or_zero(config.padding.right);
-    Size label_width =
-        (config.size.x_axis.dim == Dim::Pixels)
-            ? pixels(std::max(0.f, config.size.x_axis.value - track_w - pad_x))
-            : expand();
     div(ctx, mk(entity),
         ComponentConfig::inherit_from(config, "toggle_label")
-            .with_size(ComponentSize{label_width, config.size.y_axis})
+            .with_size(ComponentSize{expand(), config.size.y_axis})
             .with_label(label)
             .with_color_usage(Theme::Usage::None))
         .ent()
