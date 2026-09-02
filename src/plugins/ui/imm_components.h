@@ -2183,11 +2183,14 @@ ElementResult progress_bar(
 
   // Add label on top if specified
   if (!label_text.empty()) {
+    // Not absolute: it is the track's only flow child, so it covers the track
+    // either way, and render_layer already puts it above the fill. Absolute plus
+    // fill_parent on both axes is the pattern the library's own lint warns
+    // about, and the component was tripping it on every caller.
     div(ctx, mk(track.ent(), 1),
         ComponentConfig::inherit_from(config, "progress_label")
             .with_size(ComponentSize{percent(1.0f), percent(1.0f)})
             .with_label(label_text)
-            .with_absolute_position()
             .with_color_usage(Theme::Usage::None)
             .with_auto_text_color(true)
             .with_skip_tabbing(true)
