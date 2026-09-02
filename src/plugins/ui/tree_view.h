@@ -76,9 +76,7 @@ void render_tree_node(HasUIContext auto &ctx, Entity &scroll_entity,
                         .with_flex_direction(FlexDirection::Row)
                         .with_align_items(AlignItems::Center)
                         .with_no_wrap()
-                        .with_padding(Padding::Left(pixels(indent_px)))
-                        .with_label(row_label)
-                        .with_alignment(TextAlignment::Left);
+                        .with_padding(Padding::Left(pixels(indent_px)));
 
   if (is_selected) {
     row_config.with_color_usage(Theme::Usage::Primary);
@@ -86,13 +84,25 @@ void render_tree_node(HasUIContext auto &ctx, Entity &scroll_entity,
     row_config.with_custom_background(colors::transparent());
   }
 
-  if (button(ctx, mk(scroll_entity, child_index), row_config)) {
+  auto row = button(ctx, mk(scroll_entity, child_index), row_config);
+  if (row) {
     if (expandable) {
       state.toggle_expanded(node_id);
     }
     state.selected_node_id = node_id;
     state.changed_since = true;
   }
+
+  // The label is a child, not the button's own. An element's padding offsets
+  // its children but not its own label, so a label on the button ignored
+  // indent_px entirely and every depth rendered flush left.
+  div(ctx, mk(row.ent(), 0),
+      ComponentConfig::inherit_from(base_config, "tree_row_label")
+          .with_size(ComponentSize{expand(), percent(1.0f)})
+          .with_label(row_label)
+          .with_alignment(TextAlignment::Left)
+          .with_color_usage(Theme::Usage::None)
+          .with_skip_tabbing(true));
   child_index++;
 
   // Render children if expanded
