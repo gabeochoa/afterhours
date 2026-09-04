@@ -582,11 +582,13 @@ draw_text_at_position(const ui::FontManager &fm, const std::string &text,
 // Explicit override, else auto-contrast, else theme font; disabled in each.
 // Shared by RenderImm and RenderBatched, which had identical copies.
 // Disabled text darkens by 0.5 while disabled backgrounds use
-// Theme::disabled_variant -- kept as-is, see todo.md D14b.
+// Theme::disabled_variant -- kept as-is, see todo.md D14b. An EXPLICIT text
+// colour is exempt: it is the caller's decision, and halving it has no
+// theme-aware floor (a dark-theme label lands at ~1.5:1). The caller that
+// wants the muted look asks for the muted colour.
 inline Color resolve_label_color(const HasLabel &hasLabel, const Theme &theme) {
   if (hasLabel.explicit_text_color.has_value()) {
-    const Color c = hasLabel.explicit_text_color.value();
-    return hasLabel.is_disabled ? colors::darken(c, 0.5f) : c;
+    return hasLabel.explicit_text_color.value();
   }
   if (hasLabel.background_hint.has_value()) {
     const Color c = colors::auto_text_color(hasLabel.background_hint.value(),
