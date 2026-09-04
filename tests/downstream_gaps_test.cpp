@@ -502,12 +502,42 @@ TEST(d14_disabled_theme_background_still_dims) {
   }
 }
 
-// Disabled TEXT uses colors::darken(col, 0.5f) -- a different transform from
-// the background's mix+alpha+desaturate. That inconsistency is deliberate for
-// now (unifying it would change how every existing app's disabled text looks),
-// so pin today's behaviour: the four duplicated copies of this logic get
-// collapsed into one helper, and this proves that was behaviour-preserving.
-TEST(d14_disabled_text_keeps_its_own_darken_transform) {
+TEST(d14_theme_derived_disabled_text_still_dims) {
+  ImmTestHarness h;
+  div(h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(200), pixels(40)})
+          .with_label("disabled")
+          .with_disabled(true));
+  h.render();
+
+  auto texts = h.drawn("text");
+  ui_test::check(!texts.empty(), "disabled label was drawn", __FILE__,
+                 __LINE__);
+  if (texts.empty())
+    return;
+  const Color disabled_ink = texts[0].color;
+
+  ImmTestHarness h2;
+  div(h2.context(), mk(h2.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(200), pixels(40)})
+          .with_label("enabled"));
+  h2.render();
+  auto enabled_texts = h2.drawn("text");
+  ui_test::check(!enabled_texts.empty(), "enabled label was drawn", __FILE__,
+                 __LINE__);
+  if (enabled_texts.empty())
+    return;
+  ui_test::check(!same_color(disabled_ink, enabled_texts[0].color),
+                 "a theme-derived disabled label still dims", __FILE__,
+                 __LINE__);
+  ui_test::check(
+      same_color(disabled_ink, colors::darken(enabled_texts[0].color, 0.5f)),
+      "and it dims by the engine's own transform", __FILE__, __LINE__);
+}
+
+TEST(d14_explicit_disabled_text_color_is_preserved) {
   ImmTestHarness h;
   const Color text_color{240, 240, 240, 255};
   div(h.context(), mk(h.root(), 0),
@@ -521,9 +551,37 @@ TEST(d14_disabled_text_keeps_its_own_darken_transform) {
   auto texts = h.drawn("text");
   ui_test::check(!texts.empty(), "disabled label was drawn", __FILE__,
                  __LINE__);
-  if (!texts.empty())
-    ui_test::check(same_color(texts[0].color, colors::darken(text_color, 0.5f)),
-                   "disabled text is darkened by 0.5", __FILE__, __LINE__);
+  if (texts.empty())
+    return;
+  ui_test::check(same_color(texts[0].color, text_color),
+                 "an explicit disabled text colour is drawn as given",
+                 __FILE__, __LINE__);
+  ui_test::check(!same_color(texts[0].color, colors::darken(text_color, 0.5f)),
+                 "an explicit disabled text colour is not halved", __FILE__,
+                 __LINE__);
+}
+
+TEST(d14_disabled_stays_disabled_for_input) {
+  ImmTestHarness h;
+  auto result = button(h.context(), mk(h.root(), 0),
+                       ComponentConfig{}
+                           .with_size(ComponentSize{pixels(200), pixels(40)})
+                           .with_label("disabled")
+                           .with_custom_text_color(Color{240, 240, 240, 255})
+                           .with_disabled(true));
+  h.render();
+
+  const Entity &e = result.ent();
+  ui_test::check(e.has<HasLabel>(), "the button has a label", __FILE__,
+                 __LINE__);
+  if (!e.has<HasLabel>())
+    return;
+  ui_test::check(e.get<HasLabel>().is_disabled,
+                 "an explicit text colour does not clear is_disabled",
+                 __FILE__, __LINE__);
+  ui_test::check(!static_cast<bool>(result),
+                 "a disabled button does not report activation", __FILE__,
+                 __LINE__);
 }
 
 // ===========================================================================
