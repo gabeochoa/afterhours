@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "../../core/base_component.h"
+#include "../animation.h"
 
 namespace afterhours {
 namespace ui {
@@ -262,6 +263,18 @@ inline bool spring(AnimTrack &t, float freq, float decay, float dt) {
   if (!t.is_active)
     return true;
 
+  // Same knob the animation plugin already honours, for the same three
+  // callers: a headless capture wants the settled picture, reduce-motion wants
+  // no motion, and dev iteration wants to skip the wait. Without this a
+  // capture showed whatever value two frames happened to reach, so screens
+  // had to start their animations near the resting value to look right.
+  if (animation::is_instant()) {
+    t.current = t.target;
+    t.velocity = 0.0f;
+    t.is_active = false;
+    return true;
+  }
+
   float delta = t.target - t.current;
   float spring_force = delta * freq * freq;
   float damping_force = -t.velocity * 2.0f * decay;
@@ -300,6 +313,13 @@ inline float apply_easing(float t, AnimCurve curve) {
 inline bool ease(AnimTrack &t, AnimCurve curve, float duration, float dt) {
   if (!t.is_active)
     return true;
+
+  // See spring(): settle immediately when the app asked for no motion.
+  if (animation::is_instant()) {
+    t.current = t.target;
+    t.is_active = false;
+    return true;
+  }
 
   t.elapsed += dt;
   float progress = std::min(t.elapsed / duration, 1.0f);
