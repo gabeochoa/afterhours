@@ -2146,10 +2146,14 @@ ElementResult progress_bar(
   // the track compounds a percent size against the entity (e.g. percent(0.7)
   // becomes 0.7 * 0.7 of the parent). The fill/label below then fill the track.
   auto track_corners = config.rounded_corners.value_or(RoundedCorners().get());
+  // At 100% the fill covers the track exactly, so drawing both is two
+  // identical boxes. Colour the track instead and skip the fill.
+  const bool full = normalized > 0.999f;
   auto track = div(ctx, mk(entity, 0),
                    ComponentConfig::inherit_from(config, "progress_track")
                        .with_size(ComponentSize{percent(1.0f), percent(1.0f)})
-                       .with_color_usage(Theme::Usage::Secondary)
+                       .with_color_usage(full ? Theme::Usage::Primary
+                                              : Theme::Usage::Secondary)
                        .with_rounded_corners(RoundedCorners(track_corners))
                        .with_skip_tabbing(true)
                        .with_render_layer(config.render_layer));
@@ -2163,8 +2167,9 @@ ElementResult progress_bar(
   // percent-of-track resolves to the right pixels.
   Size fill_width = percent(normalized);
 
-  // Only render fill if there's something to show
-  if (normalized > 0.001f) {
+  // Only render fill if there's something to show, and not when it would just
+  // repaint the whole track.
+  if (normalized > 0.001f && !full) {
     auto fill_corners = RoundedCorners(track_corners);
     // If not fully filled, make right side sharp for clean edge
     if (normalized < 0.99f) {

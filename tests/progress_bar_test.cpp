@@ -78,8 +78,11 @@ TEST(progress_bar_pixel_sizing_fills_track) {
   }
 }
 
-// A full (100%) bar's fill spans the whole track width.
-TEST(progress_bar_full_value_fills_width) {
+// At 1.0 the fill would cover the track exactly, so the bar emits the track
+// alone and colours it. Asserting the fill exists here pinned the old
+// implementation rather than the behaviour: what matters is that a completed
+// bar is full-width and drawn once, not that two boxes are stacked.
+TEST(progress_bar_full_value_is_one_full_width_box) {
   ImmTestHarness h;
 
   auto row = hstack(h.context(), mk(h.root(), 0),
@@ -96,9 +99,9 @@ TEST(progress_bar_full_value_fills_width) {
   UIComponent *track = h.find("progress_track");
   UIComponent *fill = h.find("progress_fill");
   CHECK(track != nullptr);
-  CHECK(fill != nullptr);
-  if (track && fill)
-    CHECK_APPROX(fill->rect().width, track->rect().width);
+  CHECK(fill == nullptr); // no second box on top of an identical one
+  if (track)
+    CHECK_APPROX(track->rect().width, 400.f);
 }
 
 int main() { return ui_test::run_registered_tests("progress_bar tests"); }
