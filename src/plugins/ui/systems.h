@@ -406,6 +406,22 @@ static void print_debug_autolayout_tree(Entity &entity, UIComponent &cmp,
   }
 }
 
+/// Publishes the frame's theme so layout and colour resolution see it.
+///
+/// Those readers are not templated on InputAction and so cannot reach a
+/// UIContext; they go through ThemeDefaults. UIContext::set_theme pushes there
+/// directly, but plenty of code assigns `context.theme`, and that reached
+/// rendering while silently missing layout -- a screen's spacing came from one
+/// theme and its colours from another. Runs immediately before RunAutoLayout,
+/// once this frame's screen has had its say.
+template <typename InputAction>
+struct PublishContextTheme : System<UIContext<InputAction>> {
+  virtual void for_each_with(Entity &, UIContext<InputAction> &context,
+                             float) override {
+    imm::ThemeDefaults::get().theme = context.theme;
+  }
+};
+
 struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
   UIEntityMappingCache *cache = nullptr;
   window_manager::Resolution resolution;
