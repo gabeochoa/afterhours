@@ -244,6 +244,10 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
   virtual void for_each_with(Entity &entity, UIContext<InputAction> &context,
                              float dt) override {
     context.dt = dt;
+    // Before anything builds UI: work a previous frame's callback asked to
+    // postpone, now that nothing is iterating the systems or entities it may
+    // destroy.
+    context.run_deferred();
     // Apply theme defaults first. begin_frame drops whatever theme the last
     // frame's screen set and restores the app's own, so a per-screen theme
     // cannot leak forward.

@@ -196,6 +196,27 @@ template <typename InputAction> struct UIContext : BaseComponent {
 
   Theme theme;
 
+  // Work to run at the top of the next frame, once nothing is iterating this
+  // one. A click handler that tears down UI -- swapping screens is the usual
+  // case -- frees the very entities and systems the callback is running
+  // inside, so doing it inline is a use-after-free. Every app hits this the
+  // first time it wires a menu button.
+  std::vector<std::function<void()>> deferred;
+
+  void defer(std::function<void()> fn) { deferred.push_back(std::move(fn)); }
+
+  // Called once per frame before any UI is built. Takes a copy so a callback
+  // may defer more work without invalidating the range being walked.
+  void run_deferred() {
+    if (deferred.empty())
+      return;
+    auto pending = std::move(deferred);
+    deferred.clear();
+    for (auto &fn : pending)
+      if (fn)
+        fn();
+  }
+
   // Prefer this over assigning `theme` directly. Colour resolution and layout
   // metrics are read through ThemeDefaults by code that cannot see this
   // context, so the setter pushes there too and the change applies to sizing
