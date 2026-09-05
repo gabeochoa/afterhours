@@ -501,6 +501,39 @@ template <typename InputAction> struct UIContext : BaseComponent {
 
 using DefaultUIContext = UIContext<DefaultAction>;
 
+// Gives a subtree its own theme for as long as it is in scope.
+//
+//   {
+//     ui::ThemeScope scope(ctx, panel_theme);
+//     div(ctx, mk(parent), ...);   // resolves against panel_theme
+//   }                              // restored
+//
+// A ComponentConfig field cannot do this: children are built by their own
+// div()/button() calls after the parent's config is long gone, so the theme
+// has to be live for a span of statements rather than attached to one element.
+// Restores both the context and ThemeDefaults, because colour resolution reads
+// the first and layout metrics read the second.
+template <typename InputAction> struct ThemeScopeT {
+  UIContext<InputAction> &ctx_;
+  Theme saved_ctx_;
+  Theme saved_global_;
+
+  ThemeScopeT(UIContext<InputAction> &ctx, const Theme &t)
+      : ctx_(ctx), saved_ctx_(ctx.theme),
+        saved_global_(imm::ThemeDefaults::get().theme) {
+    ctx.theme = t;
+    imm::ThemeDefaults::get().theme = t;
+  }
+  ~ThemeScopeT() {
+    ctx_.theme = saved_ctx_;
+    imm::ThemeDefaults::get().theme = saved_global_;
+  }
+
+  ThemeScopeT(const ThemeScopeT &) = delete;
+  ThemeScopeT &operator=(const ThemeScopeT &) = delete;
+};
+
+
 } // namespace ui
 
 } // namespace afterhours
