@@ -105,6 +105,14 @@ struct UIStylingDefaults {
   Size default_font_size = pixels(16.f);
   bool enable_grid_snapping = false;
 
+  // Order the batched renderer's draw commands by layer before flushing.
+  // Off by default: the collectors emit in the correct paint order already,
+  // and every `layer` they pass to the buffer is otherwise decorative. Turn it
+  // on if you need a widget's own layer to reorder it against its siblings --
+  // and note that a scissor still cannot be reordered relative to what it
+  // clips, so sorting is by layer only.
+  bool sort_draws_by_layer = false;
+
   // Scaling mode: Proportional (default) or Adaptive (web-like).
   // See docs/30_adaptive_scaling.md for details.
   ScalingMode scaling_mode = ScalingMode::Proportional;

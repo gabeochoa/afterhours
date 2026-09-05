@@ -2578,6 +2578,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     set_mouse_cursor(cursor_to_set);
     context.render_cmds.clear();
 
+    if (imm::UIStylingDefaults::get().sort_draws_by_layer)
+      buffer.sort();
+
     // Execute all commands with batching
     BatchedRenderer renderer;
     renderer.render(buffer, font_manager);

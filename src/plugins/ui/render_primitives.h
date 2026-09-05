@@ -453,17 +453,21 @@ public:
         rect, texture, left, top, right, bottom, tint, layer, entity_id));
   }
 
-  // Sort commands by layer and type for optimal batching
+  // Order commands by layer. Stable, so within a layer the collectors' own
+  // emission order is preserved -- that is the correct paint order, and it is
+  // what keeps a ScissorStart/ScissorEnd pair wrapped around the geometry it
+  // brackets. An earlier version also tiebroke on primitive type, which would
+  // have moved scissors off their contents; nothing called it, so nothing
+  // noticed.
+  //
+  // Off by default: see UIStylingDefaults::sort_draws_by_layer.
   void sort() {
-    // Simple insertion sort for arena-backed vector (stable for same
-    // layer/type)
+    // Insertion sort over an arena-backed vector, stable because it only
+    // shifts on a strictly greater layer.
     for (size_t i = 1; i < commands_.size(); ++i) {
       RenderPrimitive key = commands_[i];
       size_t j = i;
-      while (j > 0 && (commands_[j - 1].layer > key.layer ||
-                       (commands_[j - 1].layer == key.layer &&
-                        static_cast<int>(commands_[j - 1].type) >
-                            static_cast<int>(key.type)))) {
+      while (j > 0 && commands_[j - 1].layer > key.layer) {
         commands_[j] = commands_[j - 1];
         --j;
       }

@@ -106,6 +106,7 @@ ALL_TESTS := \
 	size_constraints_test \
 	theme_scope_test \
 	defer_test \
+	draw_sort_test \
 	sizing_repro_test \
 	slider_test \
 	split_test \
