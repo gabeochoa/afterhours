@@ -401,6 +401,19 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
     // Text may overflow; report that accurately via text_fits so the overflow
     // debug indicator + warning cover explicitly-sized text too (previously
     // hardcoded true, so an oversized explicit font silently clipped).
+    // Report a too-small request rather than only resizing it silently.
+    if (const float warn_at =
+            imm::ThemeDefaults::get().theme.min_font_size_warn_720p;
+        warn_at > 0.f && explicit_font_size < warn_at) {
+      warn_once(static_cast<int>(explicit_font_size * 100.f),
+                "text asks for {}px, below this app's {}px readability floor",
+                explicit_font_size, warn_at);
+    }
+    // Still clamped, which the warning above now makes visible instead of
+    // silent. Removing the clamp is the stated intent, but it cannot go yet:
+    // resolve_to_pixels hands back an h720() font size as its raw fraction in
+    // Adaptive mode, so h720(20) resolves to 0.028px and the clamp is the only
+    // reason that text is not invisible today. See the gap doc.
     font_size = std::max(explicit_font_size, MIN_FONT_SIZE);
     Vector2Type ts = measure_laid_out(font_size);
     // A block is centred in the FULL rect with no vertical margin (see the
