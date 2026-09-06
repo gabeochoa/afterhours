@@ -230,6 +230,12 @@ inline uint32_t pop_char() {
 #ifndef AFTERHOURS_SG_IMAGE_POOL_SIZE
 #define AFTERHOURS_SG_IMAGE_POOL_SIZE 256
 #endif
+// Sokol defaults this to 64, which is the smallest of the pools load_texture
+// draws from, so it is the one that runs out first. Sized with the images it
+// pairs with.
+#ifndef AFTERHOURS_SG_SAMPLER_POOL_SIZE
+#define AFTERHOURS_SG_SAMPLER_POOL_SIZE 256
+#endif
 #ifndef AFTERHOURS_SG_BUFFER_POOL_SIZE
 #define AFTERHOURS_SG_BUFFER_POOL_SIZE 256
 #endif
@@ -238,6 +244,7 @@ inline uint32_t pop_char() {
 inline void apply_pool_sizes(sg_desc &desc) {
   desc.pipeline_pool_size = AFTERHOURS_SG_PIPELINE_POOL_SIZE;
   desc.image_pool_size = AFTERHOURS_SG_IMAGE_POOL_SIZE;
+  desc.sampler_pool_size = AFTERHOURS_SG_SAMPLER_POOL_SIZE;
   desc.buffer_pool_size = AFTERHOURS_SG_BUFFER_POOL_SIZE;
 }
 

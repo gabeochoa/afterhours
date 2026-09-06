@@ -1438,6 +1438,18 @@ inline TextureType load_texture_from_pixels(const unsigned char *rgba, int w,
   }
 
   sg_sampler smp = make_sampler_for_filter(filter);
+  // Checked like the image and the view. Without this a texture past the
+  // sampler pool came back with a real width, real height, valid image and
+  // view ids and sampler_id 0, which every "did it load?" a caller can write
+  // reads as success.
+  if (smp.id == 0) {
+    log_error("load_texture_from_pixels: sg_make_sampler failed ({}x{}); the "
+              "sampler pool is full, raise AFTERHOURS_SG_SAMPLER_POOL_SIZE",
+              w, h);
+    sg_destroy_view(view);
+    sg_destroy_image(img);
+    return TextureType{};
+  }
 
   TextureType tex{};
   tex.width = static_cast<float>(w);
