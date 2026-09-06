@@ -1,5 +1,8 @@
 #pragma once
 
+#include <list>
+#include <unordered_map>
+
 // Text selection geometry, with no graphics backend.
 //
 // Everything here works off `measure`, a callable from string to pixel width,
@@ -61,6 +64,85 @@ using TextRunLine = std::vector<TextSpan>;
 // The single wrapping primitive: wrap_text_to_width is one colourless
 // regular-weight run through here, so plain and styled break identically by
 // construction.
+namespace wrap_memo {
+
+// LRU on content + width, same shape as measure_memo. The draw path otherwise
+// re-wraps unchanged text every frame, which hanabi measured as their biggest
+// allocation site.
+constexpr std::size_t kMaxEntries = 512;
+
+struct Entry {
+  std::uint64_t key;
+  std::vector<TextRunLine> lines;
+};
+
+inline std::list<Entry> &lru() {
+  static std::list<Entry> l;
+  return l;
+}
+inline std::unordered_map<std::uint64_t, std::list<Entry>::iterator> &index() {
+  static std::unordered_map<std::uint64_t, std::list<Entry>::iterator> m;
+  return m;
+}
+inline std::uint64_t &hits() {
+  static std::uint64_t n = 0;
+  return n;
+}
+inline std::uint64_t &misses() {
+  static std::uint64_t n = 0;
+  return n;
+}
+
+inline std::uint64_t key_for(const std::vector<TextSpan> &runs,
+                             float max_width) {
+  std::uint64_t h = 1469598103934665603ull;
+  const auto mix = [&h](std::uint64_t v) {
+    h ^= v;
+    h *= 1099511628211ull;
+  };
+  for (const auto &r : runs) {
+    for (unsigned char c : r.text)
+      mix(c);
+    mix(0xff); // run boundary, so ["ab"]["c"] and ["a"]["bc"] differ
+    mix(static_cast<std::uint64_t>(r.weight));
+    mix(r.color.r | (r.color.g << 8) | (r.color.b << 16) | (r.color.a << 24));
+  }
+  mix(static_cast<std::uint64_t>(max_width * 64.f));
+  return h;
+}
+
+inline const std::vector<TextRunLine> *lookup(std::uint64_t key) {
+  auto &idx = index();
+  const auto it = idx.find(key);
+  if (it == idx.end()) {
+    misses()++;
+    return nullptr;
+  }
+  lru().splice(lru().begin(), lru(), it->second);
+  hits()++;
+  return &it->second->lines;
+}
+
+inline const std::vector<TextRunLine> &store(std::uint64_t key,
+                                             std::vector<TextRunLine> lines) {
+  auto &idx = index();
+  while (idx.size() >= kMaxEntries) {
+    idx.erase(lru().back().key);
+    lru().pop_back();
+  }
+  lru().push_front({key, std::move(lines)});
+  idx[key] = lru().begin();
+  return lru().front().lines;
+}
+
+// A font swap changes the measurement, and the key cannot see the font.
+inline void clear() {
+  lru().clear();
+  index().clear();
+}
+
+} // namespace wrap_memo
+
 template <typename MeasureFn>
 static inline std::vector<TextRunLine>
 wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,

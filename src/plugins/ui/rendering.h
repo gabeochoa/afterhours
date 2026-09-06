@@ -939,8 +939,16 @@ static inline void draw_runs_in_rect(
   if (wrap_width <= 0.f)
     return;
 
-  const auto lines =
-      detail::wrap_runs_to_width(runs, wrap_width, weighted_width);
+  // Memoised: this runs every frame, usually on text that hasn't changed.
+  const std::uint64_t wrap_key = detail::wrap_memo::key_for(runs, wrap_width);
+  const std::vector<detail::TextRunLine> *cached =
+      detail::wrap_memo::lookup(wrap_key);
+  const std::vector<detail::TextRunLine> &lines =
+      cached ? *cached
+             : detail::wrap_memo::store(
+                   wrap_key,
+                   detail::wrap_runs_to_width(runs, wrap_width,
+                                              weighted_width));
   float line_h = measure_text(font, "Ag", font_size, spacing).y;
   // Auto-fit above sized the font against the joined text, i.e. for a single
   // line. Hard breaks still split it, so shrink to fit every line.
@@ -2354,8 +2362,16 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                 has_spans ? hasLabel.spans
                           : std::vector<TextSpan>{
                                 TextSpan{display_text, font_col}};
-            const auto lines =
-                detail::wrap_runs_to_width(runs, wrap_width, weighted_width);
+            // Memoised, same as the immediate path.
+            const std::uint64_t wrap_key =
+                detail::wrap_memo::key_for(runs, wrap_width);
+            const std::vector<detail::TextRunLine> *cached =
+                detail::wrap_memo::lookup(wrap_key);
+            const std::vector<detail::TextRunLine> &lines =
+                cached ? *cached
+                       : detail::wrap_memo::store(
+                             wrap_key, detail::wrap_runs_to_width(
+                                           runs, wrap_width, weighted_width));
 
             // A single colourless line is what the path below already draws.
             if (lines.size() > 1 || has_spans) {
