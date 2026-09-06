@@ -389,15 +389,27 @@ struct FontManager : BaseComponent {
     return *this;
   }
 
-  Font get_active_font() const {
-    if (!fonts.contains(active_font)) {
-      log_warn("{} missing from font manager. Did you call load_font() on it "
-               "previously?",
-               active_font.c_str());
-    }
-    return fonts.at(active_font);
+  // Warning and then calling .at() anyway threw on the very case the warning
+  // is about, so a missing font name took the app down instead of drawing in
+  // the wrong face.
+  Font font_or_fallback(const std::string &name) const {
+    auto it = fonts.find(name);
+    if (it != fonts.end())
+      return it->second;
+    log_warn("{} missing from font manager. Did you call load_font() on it "
+             "previously?",
+             name.c_str());
+    if (auto def = fonts.find(UIComponent::DEFAULT_FONT); def != fonts.end())
+      return def->second;
+    if (!fonts.empty())
+      return fonts.begin()->second;
+    return Font{};
   }
-  Font get_font(const std::string &name) const { return fonts.at(name); }
+
+  Font get_active_font() const { return font_or_fallback(active_font); }
+  Font get_font(const std::string &name) const {
+    return font_or_fallback(name);
+  }
 
   static std::string weight_suffix(colors::FontWeight w) {
     switch (w) {
