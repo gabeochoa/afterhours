@@ -1043,6 +1043,152 @@ struct ComponentConfig {
     if (overrides.debug_wrap)
       merged.debug_wrap = overrides.debug_wrap;
 
+    // Visual modifiers. These were missing, so anything with a registered
+    // styling default silently lost its opacity, transform, gap, border,
+    // shadows and custom draw callbacks.
+    if (overrides.opacity != 1.0f)
+      merged.opacity = overrides.opacity;
+    if (overrides.scale != 1.0f)
+      merged.scale = overrides.scale;
+    if (overrides.translate_x.value != 0.0f)
+      merged.translate_x = overrides.translate_x;
+    if (overrides.translate_y.value != 0.0f)
+      merged.translate_y = overrides.translate_y;
+    if (overrides.flex_gap.value != 0.0f)
+      merged.flex_gap = overrides.flex_gap;
+    if (overrides.border_config.has_value())
+      merged.border_config = overrides.border_config;
+    if (overrides.shadow_config.has_value())
+      merged.shadow_config = overrides.shadow_config;
+    if (overrides.text_shadow_config.has_value())
+      merged.text_shadow_config = overrides.text_shadow_config;
+    if (overrides.on_draw_bg)
+      merged.on_draw_bg = overrides.on_draw_bg;
+    if (overrides.on_draw_fg)
+      merged.on_draw_fg = overrides.on_draw_fg;
+
+    // Size constraints
+    if (overrides.min_width.dim != Dim::None)
+      merged.min_width = overrides.min_width;
+    if (overrides.max_width.dim != Dim::None)
+      merged.max_width = overrides.max_width;
+    if (overrides.min_height.dim != Dim::None)
+      merged.min_height = overrides.min_height;
+    if (overrides.max_height.dim != Dim::None)
+      merged.max_height = overrides.max_height;
+
+    // Clipping, overflow and scaling
+    if (overrides.clip_children)
+      merged.clip_children = true;
+    if (overrides.draggable_children)
+      merged.draggable_children = true;
+    if (overrides.scaling_mode.has_value())
+      merged.scaling_mode = overrides.scaling_mode;
+    if (overrides.overflow_x != Overflow::Visible)
+      merged.overflow_x = overrides.overflow_x;
+    if (overrides.overflow_y != Overflow::Visible)
+      merged.overflow_y = overrides.overflow_y;
+
+    // Colour and corner detail
+    if (overrides.hover_color.has_value())
+      merged.hover_color = overrides.hover_color;
+    // Defaults true, so only a caller turning it off can be detected.
+    if (!overrides.auto_text_color)
+      merged.auto_text_color = false;
+    if (overrides.roundness.has_value())
+      merged.roundness = overrides.roundness;
+    if (overrides.segments.has_value())
+      merged.segments = overrides.segments;
+    if (overrides.bevel_config.has_value())
+      merged.bevel_config = overrides.bevel_config;
+    if (overrides.nine_slice_config.has_value())
+      merged.nine_slice_config = overrides.nine_slice_config;
+
+    // Text detail
+    if (overrides.text_overflow != TextOverflow::Clip)
+      merged.text_overflow = overrides.text_overflow;
+    if (overrides.letter_spacing != 0.f)
+      merged.letter_spacing = overrides.letter_spacing;
+    if (overrides.text_inset.has_value())
+      merged.text_inset = overrides.text_inset;
+    if (overrides.text_stroke_config.has_value())
+      merged.text_stroke_config = overrides.text_stroke_config;
+    if (!overrides.styled_label.empty())
+      merged.styled_label = overrides.styled_label;
+
+    // Interaction
+    if (overrides.cursor_type.has_value())
+      merged.cursor_type = overrides.cursor_type;
+    if (overrides.consumes_directional_input)
+      merged.consumes_directional_input = true;
+    if (overrides.skip_grid_snap)
+      merged.skip_grid_snap = true;
+    if (overrides.is_internal)
+      merged.is_internal = true;
+
+    // Text input and text area
+    if (overrides.mask_char.has_value())
+      merged.mask_char = overrides.mask_char;
+    if (overrides.text_readonly)
+      merged.text_readonly = true;
+    if (!overrides.placeholder.empty())
+      merged.placeholder = overrides.placeholder;
+    if (overrides.text_area_line_height.has_value())
+      merged.text_area_line_height = overrides.text_area_line_height;
+    // Defaults true; see auto_text_color.
+    if (!overrides.text_area_word_wrap)
+      merged.text_area_word_wrap = false;
+    if (overrides.text_area_max_lines != 0)
+      merged.text_area_max_lines = overrides.text_area_max_lines;
+    if (overrides.text_area_auto_grow)
+      merged.text_area_auto_grow = true;
+    if (overrides.text_area_submit_on_enter)
+      merged.text_area_submit_on_enter = true;
+
+    // Indicator glyphs
+    if (overrides.checkbox_checked_indicator.has_value())
+      merged.checkbox_checked_indicator = overrides.checkbox_checked_indicator;
+    if (overrides.checkbox_unchecked_indicator.has_value())
+      merged.checkbox_unchecked_indicator =
+          overrides.checkbox_unchecked_indicator;
+    if (overrides.toggle_on_indicator.has_value())
+      merged.toggle_on_indicator = overrides.toggle_on_indicator;
+    if (overrides.toggle_off_indicator.has_value())
+      merged.toggle_off_indicator = overrides.toggle_off_indicator;
+    if (overrides.dropdown_open_indicator.has_value())
+      merged.dropdown_open_indicator = overrides.dropdown_open_indicator;
+    if (overrides.dropdown_closed_indicator.has_value())
+      merged.dropdown_closed_indicator = overrides.dropdown_closed_indicator;
+
+    // Button and icon
+    if (overrides.button_variant != ButtonVariant::Filled)
+      merged.button_variant = overrides.button_variant;
+    if (overrides.icon_texture.has_value())
+      merged.icon_texture = overrides.icon_texture;
+    if (overrides.icon_source_rect.has_value())
+      merged.icon_source_rect = overrides.icon_source_rect;
+    if (overrides.icon_position != IconPosition::Left)
+      merged.icon_position = overrides.icon_position;
+
+    if (!overrides.animations.empty())
+      merged.animations = overrides.animations;
+
+    // TODO: this list is hand-maintained, so a field added to ComponentConfig
+    // is dropped here until someone notices. 43 of 86 were, for long enough
+    // that a downstream slide-in silently did nothing. Replace it with a
+    // set-flag per field, written by the with_* setters, so the merge is a
+    // loop over flags and a new field cannot be forgotten. The assert below is
+    // a stopgap: it fires when the struct grows, which is the moment to add
+    // the field here.
+    // 64-bit only: the size is ABI-dependent and this is a reminder, not a
+    // correctness gate, so it must not break a 32-bit or mingw build.
+    if constexpr (sizeof(void *) == 8) {
+      static_assert(sizeof(ComponentConfig) == 1152,
+                    "ComponentConfig changed size. A new field stays dropped "
+                    "by apply_overrides until it is merged above. Add it, then "
+                    "update this number.");
+    }
+
     return merged;
   }
 
