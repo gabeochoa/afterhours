@@ -90,6 +90,47 @@ constexpr static InputValidationMode validation_mode =
         }                                                                   \
     } while (0);
 
+// Every text-editing action the UI plugin looks up by name. Each site is an
+// `if constexpr (enum_contains<InputAction>("..."))`, so an enum that does not
+// carry the name compiles the feature out to nothing: no error, no warning,
+// nothing to grep. hanabi lost word editing for the life of the project to a
+// name nobody had written down.
+//
+// Optional, so a missing one is not an error. Reported together, once, naming
+// what stopped existing.
+template<typename InputAction>
+static void warn_missing_text_actions() {
+    std::string missing;
+    const auto note = [&missing](const char *name) {
+        if (!missing.empty())
+            missing += ", ";
+        missing += name;
+    };
+#define AH_CHECK_TEXT_ACTION(name)                                          \
+    if constexpr (!magic_enum::enum_contains<InputAction>(name))            \
+    note(name)
+
+    AH_CHECK_TEXT_ACTION("TextCopy");
+    AH_CHECK_TEXT_ACTION("TextCut");
+    AH_CHECK_TEXT_ACTION("TextPaste");
+    AH_CHECK_TEXT_ACTION("TextUndo");
+    AH_CHECK_TEXT_ACTION("TextRedo");
+    AH_CHECK_TEXT_ACTION("TextSelectAll");
+    AH_CHECK_TEXT_ACTION("TextSelectLeft");
+    AH_CHECK_TEXT_ACTION("TextSelectRight");
+    AH_CHECK_TEXT_ACTION("TextWordLeft");
+    AH_CHECK_TEXT_ACTION("TextWordRight");
+    AH_CHECK_TEXT_ACTION("TextDeleteWordBack");
+    AH_CHECK_TEXT_ACTION("TextDeleteWordForward");
+#undef AH_CHECK_TEXT_ACTION
+
+    if (!missing.empty())
+        log_warn("InputAction is missing {}. Those text-editing features are "
+                 "compiled out, so the keys will do nothing. Add the names to "
+                 "your enum, or ignore this if the app has no text input.",
+                 missing);
+}
+
 // Initialize the UI plugin. Creates the root UI entity and all singletons
 // in the UI collection. Singletons are also registered in the default
 // collection so external code (toast, modal, game code) can find them.
@@ -171,6 +212,7 @@ static Entity &init_ui_plugin() {
     validate_enum_has_value(InputAction, "WidgetBack",
                             "'tab' back between ui elements");
     validate_enum_has_value(InputAction, "WidgetPress", "click on element");
+    warn_missing_text_actions<InputAction>();
 
     // In split-collection mode, also add root entity to default collection so
     // that screen systems (which iterate default collection entities via
