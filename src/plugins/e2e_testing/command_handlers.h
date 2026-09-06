@@ -722,7 +722,15 @@ struct HandleResizeCommand : System<PendingE2ECommand> {
 struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
                                float) override {
-        if (cmd.is_consumed() || !cmd.is("assert_no_overflow")) return;
+        // Two names, one walk. assert_no_overflow keeps meaning what it has
+        // always meant, the viewport and text checks, because changing that
+        // silently changes every script in every project that calls it.
+        // assert_within_parents adds the containment question, which is the
+        // one the older name sounds like it answers and does not.
+        const bool check_parents = cmd.is("assert_within_parents");
+        if (cmd.is_consumed() ||
+            (!cmd.is("assert_no_overflow") && !check_parents))
+            return;
 
         auto [vw, vh] = e2e_screen_size();
         constexpr float TOLERANCE = 2.0f;
@@ -752,6 +760,60 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
             bool rect_out = (rect.x < -TOLERANCE) || (rect.y < -TOLERANCE) ||
                             (rect.x + rect.width > vw + TOLERANCE) ||
                             (rect.y + rect.height > vh + TOLERANCE);
+
+            // --- Check 1b: element outside its PARENT's content box ---
+            // The viewport check above answers "is it on screen", which is not
+            // the question the command's name asks. A row overflowing a panel
+            // in the middle of the screen passed it. On a real report of
+            // "many buttons are going outside the bounds" the viewport check
+            // named 1 of 55.
+            //
+            // Overflow is legitimate in three places, so they are skipped
+            // rather than reported: a scrolling or clipping parent (that is
+            // what scrolling is), an absolutely positioned child (menus and
+            // popovers are placed outside their parent on purpose), and the
+            // root, which has no parent to be inside of.
+            bool parent_out = false;
+            std::string parent_detail;
+            if (check_parents && !rect_out && !cmp.absolute && cmp.parent >= 0) {
+                OptEntity parent_opt =
+                    ui::UICollectionHolder::getEntityForID(cmp.parent);
+                if (parent_opt.valid() &&
+                    parent_opt.asE().has<ui::UIComponent>()) {
+                    Entity &pe = parent_opt.asE();
+                    auto &pc = pe.get<ui::UIComponent>();
+                    const bool parent_contains_overflow =
+                        pe.has<ui::HasScrollView>() ||
+                        pe.has<ui::HasClipChildren>();
+                    auto pr = pc.rect();
+                    if (!parent_contains_overflow && pr.width >= 1.f &&
+                        pr.height >= 1.f) {
+                        const float l = pr.x + pc.computed_padd[ui::Axis::left];
+                        const float t = pr.y + pc.computed_padd[ui::Axis::top];
+                        const float r = pr.x + pr.width -
+                                        pc.computed_padd[ui::Axis::right];
+                        const float b = pr.y + pr.height -
+                                        pc.computed_padd[ui::Axis::bottom];
+                        // Looser than the viewport check on purpose. The
+                        // content box is rect minus padding, and at a
+                        // non-integer ui_scale each term rounds separately, so
+                        // it reads a couple of pixels tighter than it is. A
+                        // panel that fits exactly at 720p overhung by 3px at
+                        // 1920x1080 with nothing wrong.
+                        constexpr float PARENT_TOLERANCE = 4.0f;
+                        if (rect.x < l - PARENT_TOLERANCE ||
+                            rect.y < t - PARENT_TOLERANCE ||
+                            rect.x + rect.width > r + PARENT_TOLERANCE ||
+                            rect.y + rect.height > b + PARENT_TOLERANCE) {
+                            parent_out = true;
+                            parent_detail = std::format(
+                                " (outside parent content box "
+                                "{:.0f},{:.0f} {:.0f}x{:.0f})",
+                                l, t, r - l, b - t);
+                        }
+                    }
+                }
+            }
 
             // --- Check 2: text truncation (text wider than container) ---
             // Skip text check for elements at origin (0,0) - likely
@@ -795,7 +857,7 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
                 }
             }
 
-            if (!rect_out && !text_truncated) continue;
+            if (!rect_out && !parent_out && !text_truncated) continue;
 
             std::string name;
             if (entity.has<ui::UIComponentDebug>()) {
@@ -806,15 +868,17 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
                 name = "entity_" + std::to_string(entity.id);
             }
 
-            std::string reason = rect_out ? "RECT" : "TEXT";
+            const char *reason =
+                rect_out ? "RECT" : (parent_out ? "PARENT" : "TEXT");
             violations.push_back(std::format(
-                "  [{}] {} at ({:.0f},{:.0f}) size {:.0f}x{:.0f}{}", reason,
-                name, rect.x, rect.y, rect.width, rect.height, text_detail));
+                "  [{}] {} at ({:.0f},{:.0f}) size {:.0f}x{:.0f}{}{}", reason,
+                name, rect.x, rect.y, rect.width, rect.height, parent_detail,
+                text_detail));
         }
 
         if (!violations.empty()) {
             std::string msg = std::format(
-                "assert_no_overflow: {} violation(s) at {:.0f}x{:.0f}:\n",
+                "{}: {} violation(s) at {:.0f}x{:.0f}:\n", cmd.name,
                 violations.size(), vw, vh);
             for (auto &v : violations) msg += v + "\n";
             cmd.fail(msg);
