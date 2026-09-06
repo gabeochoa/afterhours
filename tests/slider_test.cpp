@@ -137,4 +137,54 @@ TEST(slider_reports_unchanged_without_interaction) {
   CHECK(!static_cast<bool>(result)); // no interaction => not changed
 }
 
+// A colour set on the slider reaches its parts. They used to take a theme
+// usage unconditionally, which left custom_color populated and unread, so the
+// track and handle could not be styled at all.
+TEST(a_custom_colour_reaches_the_track_and_handle) {
+  ImmTestHarness h;
+  float value = 0.5f;
+  const Color want{200, 30, 90, 255};
+
+  slider(h.context(), mk(h.root(), 0), value,
+         ComponentConfig{}
+             .with_size(ComponentSize{pixels(300), pixels(40)})
+             .with_custom_background(want)
+             .with_debug_name("styled"));
+  h.layout_only();
+
+  for (const char *part : {"slider_background", "slider_handle"}) {
+    UIComponent *c = h.find(part);
+    CHECK(c != nullptr);
+    if (!c)
+      continue;
+    Entity &e = AutoLayout::to_ent_static(c->id);
+    CHECK(e.has<HasColor>());
+    if (e.has<HasColor>()) {
+      const Color got = e.get<HasColor>().color();
+      CHECK(got.r == want.r && got.g == want.g && got.b == want.b);
+    }
+  }
+}
+
+// Without a colour it still takes the theme's, or every unstyled slider would
+// go transparent.
+TEST(an_unstyled_slider_still_takes_the_theme) {
+  ImmTestHarness h;
+  float value = 0.5f;
+  slider(h.context(), mk(h.root(), 0), value,
+         ComponentConfig{}
+             .with_size(ComponentSize{pixels(300), pixels(40)})
+             .with_debug_name("plain"));
+  h.layout_only();
+
+  UIComponent *bg = h.find("slider_background");
+  CHECK(bg != nullptr);
+  if (bg) {
+    Entity &e = AutoLayout::to_ent_static(bg->id);
+    CHECK(e.has<HasColor>());
+    if (e.has<HasColor>())
+      CHECK(e.get<HasColor>().color().a > 0);
+  }
+}
+
 int main() { return ui_test::run_registered_tests("slider tests"); }

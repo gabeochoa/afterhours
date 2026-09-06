@@ -1400,6 +1400,14 @@ static void update_main_label(Entity &slider_entity,
 
 } // namespace detail
 
+// The parts of a composite take a theme usage by default, but setting one
+// clobbers a colour the caller inherited down: with_color_usage leaves
+// custom_color populated and unread. Only fill in the default.
+inline void default_color_usage(ComponentConfig &cfg, Theme::Usage usage) {
+  if (!cfg.custom_color.has_value())
+    cfg.with_color_usage(usage);
+}
+
 ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                      float &owned_value,
                      ComponentConfig config = ComponentConfig(),
@@ -1428,13 +1436,13 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                              .sharp(TOP_RIGHT)
                              .sharp(BOTTOM_RIGHT);
 
-    auto label = div(ctx, mk(entity, entity.id + 0),
-                     ComponentConfig::inherit_from(config, "slider_text")
-                         .with_size(config.size)
-                         .with_label(main_label_text)
-                         .with_color_usage(Theme::Usage::Primary)
-                         .with_rounded_corners(label_corners)
-                         .with_render_layer(config.render_layer + 0));
+    auto label_config = ComponentConfig::inherit_from(config, "slider_text")
+                            .with_size(config.size)
+                            .with_label(main_label_text)
+                            .with_rounded_corners(label_corners)
+                            .with_render_layer(config.render_layer + 0);
+    default_color_usage(label_config, Theme::Usage::Primary);
+    auto label = div(ctx, mk(entity, entity.id + 0), label_config);
     label.ent()
         .template get<UIComponent>()
         .set_desired_width(config.size.scale_x(0.5f).x_axis)
@@ -1461,12 +1469,12 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
         0.0f, bg_size.x_axis.value - (layout_overflow_tolerance_px / 100.f));
   }
 
-  auto elem = div(ctx, mk(entity, parent.id + entity.id + 0),
-                  ComponentConfig::inherit_from(config, "slider_background")
-                      .with_size(bg_size)
-                      .with_color_usage(Theme::Usage::Secondary)
-                      .with_rounded_corners(elem_corners)
-                      .with_render_layer(config.render_layer + 1));
+  auto bg_config = ComponentConfig::inherit_from(config, "slider_background")
+                       .with_size(bg_size)
+                       .with_rounded_corners(elem_corners)
+                       .with_render_layer(config.render_layer + 1);
+  default_color_usage(bg_config, Theme::Usage::Secondary);
+  auto elem = div(ctx, mk(entity, parent.id + entity.id + 0), bg_config);
 
   elem.ent().template get<UIComponent>().set_desired_width(bg_size.x_axis);
 
@@ -1560,10 +1568,10 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
           .with_size(ComponentSize{handle_width_size, bg_size.y_axis})
           .with_absolute_position()
           .with_margin(Margin{.left = handle_left_size})
-          .with_color_usage(Theme::Usage::Primary)
           .with_rounded_corners(config.rounded_corners.value())
           .with_debug_name("slider_handle")
           .with_render_layer(config.render_layer + 2);
+  default_color_usage(handle_config, Theme::Usage::Primary);
 
   auto handle = div(ctx, mk(slider_bg), handle_config);
   handle.cmp()
