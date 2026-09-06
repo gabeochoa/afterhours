@@ -276,11 +276,12 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       screen_height = static_cast<float>(pcr->current_resolution.height);
     }
 
-    float derived_fs = field_cmp.font_size.value;
     float uis = imm::ThemeDefaults::get().theme.ui_scale;
+    // Pass the Size, not its raw .value re-tagged as pixels: an h720() font
+    // size carries the 20/720 fraction, so that resolved to 0.028px.
     float actual_font_size = resolve_to_pixels(
-        pixels(derived_fs), screen_height,
-        field_cmp.resolved_scaling_mode, uis);
+        field_cmp.font_size, screen_height, field_cmp.resolved_scaling_mode,
+        uis);
 
     float pad_left = field_cmp.computed_padd[Axis::left];
     float pad_top = field_cmp.computed_padd[Axis::top];
