@@ -411,8 +411,10 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
                 "text asks for {}px, below this app's {}px readability floor",
                 explicit_font_size, warn_at);
     }
-    // Clamp stays until h720() font sizes resolve correctly; see the gap doc.
-    font_size = std::max(explicit_font_size, MIN_FONT_SIZE);
+    font_size = explicit_font_size;
+    if (std::getenv("AH_TRACE_LBL") && !text.empty())
+      log_warn("LBL '{}' fs={} box={}x{}", text.substr(0, 14), font_size,
+               container.width, container.height);
     Vector2Type ts = measure_laid_out(font_size);
     // A block is centred in the FULL rect with no vertical margin (see the
     // multi-line branch of draw_text_in_rect), so charging it the y-margin
@@ -790,8 +792,10 @@ static inline void draw_text_in_rect(
                    border_color);
   }
 
-  // Don't attempt to render if font size is effectively zero
-  if (result.rect.height < MIN_FONT_SIZE) {
+  // Effectively zero, as in nothing to rasterise. This used to test
+  // MIN_FONT_SIZE, so any text below the floor was silently not drawn, and the
+  // clamp above was the only thing keeping that from happening.
+  if (result.rect.height < 1.f) {
     return;
   }
 
@@ -2258,7 +2262,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           // the overflow warning asks.
           !entity.template has<HasClipChildren>());
 
-      if (result.rect.height >= MIN_FONT_SIZE) {
+      // See render_me: effectively zero, not the readability floor.
+      if (result.rect.height >= 1.f) {
         // Handle text overflow ellipsis truncation for batched path
         std::string display_text = hasLabel.label;
         if (hasLabel.text_overflow == TextOverflow::Ellipsis &&
