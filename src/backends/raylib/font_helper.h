@@ -41,6 +41,38 @@ inline std::vector<int> default_codepoints() {
   return cps;
 }
 
+// LoadFontEx returns glyphs but no texture when there is no GL context, and a
+// font with glyphs and texture.id 0 draws nothing. Build the atlas by hand
+// instead of failing. Both wm_afterhours and kart-afterhours had written this
+// same routine in their own preload before it lived here.
+inline raylib::Font build_font_atlas(const char *file, int px,
+                                     const int *codepoints, int count) {
+  raylib::Font font{};
+  int data_size = 0;
+  unsigned char *data = raylib::LoadFileData(file, &data_size);
+  if (!data || data_size <= 0) {
+    log_error("build_font_atlas: could not read '{}'", file);
+    return font;
+  }
+  font.baseSize = px;
+  font.glyphCount = count;
+  font.glyphPadding = 1;
+  font.glyphs = raylib::LoadFontData(data, data_size, px,
+                                     const_cast<int *>(codepoints), count,
+                                     raylib::FONT_DEFAULT);
+  if (!font.glyphs) {
+    log_error("build_font_atlas: no glyph data from '{}'", file);
+    raylib::UnloadFileData(data);
+    return raylib::Font{};
+  }
+  raylib::Image atlas = raylib::GenImageFontAtlas(font.glyphs, &font.recs,
+                                                  font.glyphCount, px, 1, 0);
+  font.texture = raylib::LoadTextureFromImage(atlas);
+  raylib::UnloadImage(atlas);
+  raylib::UnloadFileData(data);
+  return font;
+}
+
 inline raylib::Font load_font_from_file(const char *file, int size = 0) {
   std::vector<int> cps = default_codepoints();
   const int px = size > 0 ? size : 32;
@@ -51,6 +83,9 @@ inline raylib::Font load_font_from_file(const char *file, int size = 0) {
     font = (size > 0) ? raylib::LoadFontEx(file, size, nullptr, 0)
                       : raylib::LoadFont(file);
   }
+  // Glyphs but no texture is the headless case, and it draws nothing.
+  if (font.texture.id == 0)
+    font = build_font_atlas(file, px, cps.data(), (int)cps.size());
   raylib::SetTextureFilter(font.texture, raylib::TEXTURE_FILTER_BILINEAR);
   return font;
 }
@@ -111,6 +146,9 @@ load_font_from_file_with_codepoints(const char *file, int *codepoints,
     return raylib::GetFontDefault();
   }
   raylib::Font font = raylib::LoadFontEx(file, size, codepoints, codepoint_count);
+  // See load_font_from_file: no GL context means no texture.
+  if (font.texture.id == 0)
+    font = build_font_atlas(file, size, codepoints, codepoint_count);
   raylib::SetTextureFilter(font.texture, raylib::TEXTURE_FILTER_BILINEAR);
   return font;
 }
