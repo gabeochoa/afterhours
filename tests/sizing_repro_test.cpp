@@ -269,4 +269,29 @@ TEST(expand_in_a_button_row_takes_only_what_is_left) {
   }
 }
 
+// kart: checkbox_row's children are taller than the row, logging
+// "checkbox label extends outside parent checkbox_row".
+TEST(checkbox_children_fit_their_row) {
+  ImmTestHarness h;
+  bool on = true;
+  checkbox(h.context(), mk(h.root(), 0), on,
+           ComponentConfig{}
+               .with_size(ComponentSize{pixels(240), pixels(32)})
+               .with_label("enabled")
+               .with_debug_name("cb"));
+  h.layout_only();
+
+  UIComponent *row = h.find("cb");
+  CHECK(row != nullptr);
+  if (row) {
+    for (EntityID cid : row->children) {
+      UIComponent &c = AutoLayout::to_cmp_static(cid);
+      printf("  [checkbox] child %.0fx%.0f in row %.0fx%.0f\n",
+             c.rect().width, c.rect().height, row->rect().width,
+             row->rect().height);
+      CHECK(c.rect().height <= row->rect().height);
+    }
+  }
+}
+
 int main() { return ui_test::run_registered_tests("sizing repro"); }
