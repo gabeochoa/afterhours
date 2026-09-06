@@ -248,15 +248,17 @@ focus_ring_for(const UIContext<InputAction> &context, const Entity &entity,
   if (entity.has<HasUIModifiers>())
     ring.rect = entity.get<HasUIModifiers>().apply_modifier(ring.rect);
 
+  // No HasRoundedCorners means square, the same reading the fill uses. Falling
+  // back to the theme here instead drew a rounded ring inside a square border
+  // on anything that called disable_rounded_corners().
   const bool custom = entity.has<HasRoundedCorners>();
   ring.corners = custom ? entity.get<HasRoundedCorners>().rounded_corners
-                        : context.theme.rounded_corners;
+                        : std::bitset<4>().reset();
   ring.roundness =
       custom ? resolve_roundness(entity.get<HasRoundedCorners>().radius_px,
                                  entity.get<HasRoundedCorners>().roundness,
                                  ring.rect)
-             : resolve_roundness(context.theme.corner_radius,
-                                 context.theme.roundness, ring.rect);
+             : 0.f;
   ring.segments =
       custom ? entity.get<HasRoundedCorners>().segments : context.theme.segments;
 
