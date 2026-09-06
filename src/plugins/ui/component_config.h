@@ -1177,18 +1177,8 @@ struct ComponentConfig {
     // is dropped here until someone notices. 43 of 86 were, for long enough
     // that a downstream slide-in silently did nothing. Replace it with a
     // set-flag per field, written by the with_* setters, so the merge is a
-    // loop over flags and a new field cannot be forgotten. The assert below is
-    // a stopgap: it fires when the struct grows, which is the moment to add
-    // the field here.
-    // 64-bit only: the size is ABI-dependent and this is a reminder, not a
-    // correctness gate, so it must not break a 32-bit or mingw build.
-    if constexpr (sizeof(void *) == 8) {
-      static_assert(sizeof(ComponentConfig) == 1152,
-                    "ComponentConfig changed size. A new field stays dropped "
-                    "by apply_overrides until it is merged above. Add it, then "
-                    "update this number.");
-    }
-
+    // loop over flags and a new field cannot be forgotten.
+    // config_size_test guards the list until then.
     return merged;
   }
 

@@ -205,4 +205,68 @@ TEST(snapped_children_is_shorter_than_its_child) {
   }
 }
 
+// floatinghotel: in a Row, expand() is reported to take the full parent width
+// instead of what fixed siblings leave. The Column cases above pass, so if this
+// is real the two axes disagree.
+TEST(expand_in_a_row_takes_only_what_is_left) {
+  ImmTestHarness h;
+  auto row = div(h.context(), mk(h.root(), 0),
+                 ComponentConfig{}
+                     .with_size(ComponentSize{pixels(200), pixels(40)})
+                     .with_flex_direction(FlexDirection::Row)
+                     .with_debug_name("row"));
+  div(h.context(), mk(row.ent(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(16), pixels(40)})
+          .with_debug_name("status"));
+  div(h.context(), mk(row.ent(), 1),
+      ComponentConfig{}
+          .with_size(ComponentSize{expand(), pixels(40)})
+          .with_debug_name("filename"));
+  h.layout_only();
+
+  UIComponent *f = h.find("filename");
+  CHECK(f != nullptr);
+  if (f) {
+    printf("  [row] expander width = %.2f (200 - 16 = 184)\n", f->rect().width);
+    CHECK_APPROX(f->rect().width, 184.f);
+  }
+}
+
+// Their exact shape: a button with Row children, where the button also has a
+// label of its own.
+TEST(expand_in_a_button_row_takes_only_what_is_left) {
+  ImmTestHarness h;
+  auto btn = button(h.context(), mk(h.root(), 0),
+                    ComponentConfig{}
+                        .with_size(ComponentSize{pixels(200), pixels(40)})
+                        .with_flex_direction(FlexDirection::Row)
+                        .with_debug_name("btn"));
+  div(h.context(), mk(btn.ent(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(16), pixels(40)})
+          .with_label("S")
+          .with_debug_name("btn_status"));
+  div(h.context(), mk(btn.ent(), 1),
+      ComponentConfig{}
+          .with_size(ComponentSize{expand(), pixels(40)})
+          .with_label("filename.txt")
+          .with_debug_name("btn_filename"));
+  h.layout_only();
+
+  UIComponent *f = h.find("btn_filename");
+  UIComponent *st = h.find("btn_status");
+  UIComponent *b = h.find("btn");
+  CHECK(f != nullptr && st != nullptr && b != nullptr);
+  if (f && st && b) {
+    printf("  [button row] status=%.0f expander=%.0f in %.0f\n",
+           st->rect().width, f->rect().width, b->rect().width);
+    // Not a fixed number: expand() fills the content box, so the button's own
+    // padding comes off first. What matters is that the two share the row.
+    CHECK_APPROX(st->rect().y, f->rect().y); // the reported symptom: no wrap
+    CHECK(st->rect().width + f->rect().width <= b->rect().width);
+    CHECK(f->rect().width > st->rect().width * 4); // took the remainder
+  }
+}
+
 int main() { return ui_test::run_registered_tests("sizing repro"); }
