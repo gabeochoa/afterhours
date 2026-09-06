@@ -244,9 +244,7 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
   virtual void for_each_with(Entity &entity, UIContext<InputAction> &context,
                              float dt) override {
     context.dt = dt;
-    // Before anything builds UI: work a previous frame's callback asked to
-    // postpone, now that nothing is iterating the systems or entities it may
-    // destroy.
+    // Before anything builds UI, so teardown cannot free what is iterating.
     context.run_deferred();
     // Apply theme defaults first. begin_frame drops whatever theme the last
     // frame's screen set and restores the app's own, so a per-screen theme
@@ -410,14 +408,8 @@ static void print_debug_autolayout_tree(Entity &entity, UIComponent &cmp,
   }
 }
 
-/// Publishes the frame's theme so layout and colour resolution see it.
-///
-/// Those readers are not templated on InputAction and so cannot reach a
-/// UIContext; they go through ThemeDefaults. UIContext::set_theme pushes there
-/// directly, but plenty of code assigns `context.theme`, and that reached
-/// rendering while silently missing layout -- a screen's spacing came from one
-/// theme and its colours from another. Runs immediately before RunAutoLayout,
-/// once this frame's screen has had its say.
+/// Publishes the frame's theme, so layout sees it and not only colour does.
+/// Those readers cannot reach a UIContext, so they go through ThemeDefaults.
 template <typename InputAction>
 struct PublishContextTheme : System<UIContext<InputAction>> {
   virtual void for_each_with(Entity &, UIContext<InputAction> &context,

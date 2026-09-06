@@ -196,17 +196,12 @@ template <typename InputAction> struct UIContext : BaseComponent {
 
   Theme theme;
 
-  // Work to run at the top of the next frame, once nothing is iterating this
-  // one. A click handler that tears down UI -- swapping screens is the usual
-  // case -- frees the very entities and systems the callback is running
-  // inside, so doing it inline is a use-after-free. Every app hits this the
-  // first time it wires a menu button.
+  // Teardown a handler asks for inline would free what it is running inside.
   std::vector<std::function<void()>> deferred;
 
   void defer(std::function<void()> fn) { deferred.push_back(std::move(fn)); }
 
-  // Called once per frame before any UI is built. Takes a copy so a callback
-  // may defer more work without invalidating the range being walked.
+  // Copies first, so a callback may defer more work.
   void run_deferred() {
     if (deferred.empty())
       return;
@@ -522,18 +517,8 @@ template <typename InputAction> struct UIContext : BaseComponent {
 
 using DefaultUIContext = UIContext<DefaultAction>;
 
-// Gives a subtree its own theme for as long as it is in scope.
-//
-//   {
-//     ui::ThemeScope scope(ctx, panel_theme);
-//     div(ctx, mk(parent), ...);   // resolves against panel_theme
-//   }                              // restored
-//
-// A ComponentConfig field cannot do this: children are built by their own
-// div()/button() calls after the parent's config is long gone, so the theme
-// has to be live for a span of statements rather than attached to one element.
-// Restores both the context and ThemeDefaults, because colour resolution reads
-// the first and layout metrics read the second.
+// Gives a subtree its own theme while in scope. Not a ComponentConfig field:
+// children are built by later calls, so the theme must outlive one config.
 template <typename InputAction> struct ThemeScopeT {
   UIContext<InputAction> &ctx_;
   Theme saved_ctx_;

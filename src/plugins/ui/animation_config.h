@@ -263,11 +263,7 @@ inline bool spring(AnimTrack &t, float freq, float decay, float dt) {
   if (!t.is_active)
     return true;
 
-  // Same knob the animation plugin already honours, for the same three
-  // callers: a headless capture wants the settled picture, reduce-motion wants
-  // no motion, and dev iteration wants to skip the wait. Without this a
-  // capture showed whatever value two frames happened to reach, so screens
-  // had to start their animations near the resting value to look right.
+  // Same knob the animation plugin honours; the UI's integrator is separate.
   if (animation::is_instant()) {
     t.current = t.target;
     t.velocity = 0.0f;
@@ -314,7 +310,7 @@ inline bool ease(AnimTrack &t, AnimCurve curve, float duration, float dt) {
   if (!t.is_active)
     return true;
 
-  // See spring(): settle immediately when the app asked for no motion.
+  // See spring().
   if (animation::is_instant()) {
     t.current = t.target;
     t.is_active = false;

@@ -1,8 +1,5 @@
 // defer_test.cpp
-// UIContext::defer exists so a click handler can ask for teardown without
-// performing it inline. Swapping screens from a handler frees the systems and
-// entities the handler is running inside, which is a use-after-free every app
-// hits the first time it wires a menu button.
+// A handler that tears down UI inline frees what it is running inside.
 
 #include "ui_test_harness.h"
 
@@ -29,8 +26,7 @@ TEST(deferred_work_runs_once) {
   CHECK(ran == 1);
 }
 
-// The reentrant case: a deferred callback that defers more work must not
-// invalidate the range being walked. run_deferred takes a copy for this.
+// Reentrant: deferring from a callback must not invalidate the walk.
 TEST(a_callback_may_defer_more_work) {
   ImmTestHarness h;
   int outer = 0, inner = 0;

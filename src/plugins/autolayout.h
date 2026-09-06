@@ -1238,9 +1238,7 @@ struct AutoLayout {
       // its content, so it may only round up. Rounding either to nearest
       // breaks the very thing the dimension is for.
       auto dir_for = [](Dim d) {
-        // Text is a content size like Children: snapped to nearest it can land
-        // below the string it was measured from, and the element then reports
-        // its own label as overflowing.
+        // Text is a content size like Children: nearest can land below it.
         return d == Dim::Expand ? SnapDir::Down
                : (d == Dim::Children || d == Dim::Text) ? SnapDir::Up
                                                         : SnapDir::Nearest;

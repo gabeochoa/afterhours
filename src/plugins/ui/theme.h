@@ -312,11 +312,8 @@ struct Theme {
   Vector2Type text_inset = {AFTERHOURS_DEFAULT_TEXT_INSET,
                             AFTERHOURS_DEFAULT_TEXT_INSET};
 
-  // Warn, do not resize, when a caller asks for text below this (at 720p).
-  // An explicit size is a decision; silently clamping it up drew 16px into a
-  // box measured for 12 and then reported the caller's own box as overflowing.
-  // 0 disables the warning. The auto-fit floor is separate and still clamps --
-  // that is the one protecting against text shrinking to nothing.
+  // Warn, do not resize, below this at 720p. 0 disables. Auto-fit's own
+  // floor is separate and still clamps.
   float min_font_size_warn_720p = 0.f;
 
   // ===== Font configuration =====

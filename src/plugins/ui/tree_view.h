@@ -93,9 +93,7 @@ void render_tree_node(HasUIContext auto &ctx, Entity &scroll_entity,
     state.changed_since = true;
   }
 
-  // The label is a child, not the button's own. An element's padding offsets
-  // its children but not its own label, so a label on the button ignored
-  // indent_px entirely and every depth rendered flush left.
+  // A child, not the button's own label: padding offsets children only.
   div(ctx, mk(row.ent(), 0),
       ComponentConfig::inherit_from(base_config, "tree_row_label")
           .with_size(ComponentSize{expand(), percent(1.0f)})

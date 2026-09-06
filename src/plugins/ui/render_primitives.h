@@ -453,17 +453,10 @@ public:
         rect, texture, left, top, right, bottom, tint, layer, entity_id));
   }
 
-  // Order commands by layer. Stable, so within a layer the collectors' own
-  // emission order is preserved -- that is the correct paint order, and it is
-  // what keeps a ScissorStart/ScissorEnd pair wrapped around the geometry it
-  // brackets. An earlier version also tiebroke on primitive type, which would
-  // have moved scissors off their contents; nothing called it, so nothing
-  // noticed.
-  //
-  // Off by default: see UIStylingDefaults::sort_draws_by_layer.
+  // By layer only: a type tiebreak would move scissors off what they clip.
+  // Stable, so emission order still decides within a layer. Opt-in via
+  // UIStylingDefaults::sort_draws_by_layer.
   void sort() {
-    // Insertion sort over an arena-backed vector, stable because it only
-    // shifts on a strictly greater layer.
     for (size_t i = 1; i < commands_.size(); ++i) {
       RenderPrimitive key = commands_[i];
       size_t j = i;

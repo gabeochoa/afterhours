@@ -264,8 +264,7 @@ struct UIPluginPostUpdateBridge : System<> {
         systems.push_back(
             std::make_unique<ui::HandleDragGroupsPreLayout<InputAction>>());
         systems.push_back(std::make_unique<ui::BuildUIEntityMapping>());
-        // Before layout: the theme this frame's screen set has to reach the
-        // metrics readers, not only the colour ones.
+        // Before layout, so the screen's theme reaches the metrics readers.
         systems.push_back(
             std::make_unique<ui::PublishContextTheme<InputAction>>());
         systems.push_back(std::make_unique<ui::RunAutoLayout>());

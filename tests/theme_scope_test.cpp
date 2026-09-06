@@ -1,10 +1,6 @@
 // theme_scope_test.cpp
-// ThemeScope gives a subtree its own theme and puts the old one back.
-//
-// The case it exists for: persistent chrome drawn over themed content. A dev
-// sidebar or an overlay took whatever theme the current screen had set, so it
-// changed colour every time you switched screens, and the only fix was to pin
-// an explicit colour on every element in it.
+// ThemeScope gives a subtree its own theme and puts the old one back, so
+// persistent chrome stops changing colour with whatever screen is up.
 
 #include "ui_test_harness.h"
 
@@ -65,8 +61,7 @@ TEST(scope_restores_both_the_context_and_the_global) {
   {
     ThemeScopeT<ui_test::TestInputAction> scope(h.context(), red_theme());
     CHECK(h.context().theme.primary.r > 150);
-    // Layout metrics read the global, so the scope has to move that too or a
-    // scoped theme would colour correctly and size wrongly.
+    // Layout reads the global too, or it would colour right and size wrong.
     CHECK(ThemeDefaults::get().theme.primary.r > 150);
   }
 

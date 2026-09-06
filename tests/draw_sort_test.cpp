@@ -1,11 +1,6 @@
 // draw_sort_test.cpp
-// RenderCommandBuffer::sort() had no callers at all, so every `layer` the
-// batched collectors passed to the buffer was decorative and the focus ring
-// shipped invisible on the assumption that it worked. It is opt-in now, which
-// only means anything if it is also correct.
-//
-// The trap it used to contain: a tiebreak on primitive type, which reorders a
-// ScissorStart/ScissorEnd pair away from the geometry it brackets.
+// sort() had no callers, so its type tiebreak had never moved a scissor off
+// what it clips. Opt-in now, which only helps if it is also correct.
 
 #include <cstdio>
 #include <string>
@@ -72,8 +67,7 @@ int main() {
           "within one layer the sort is stable");
   }
 
-  // The regression the old tiebreak would have caused: a scissor bracketing
-  // geometry on the same layer must still bracket it afterwards.
+  // A scissor must still bracket its geometry afterwards.
   {
     Arena arena(Arena::DEFAULT_CAPACITY);
     RenderCommandBuffer buf(arena);

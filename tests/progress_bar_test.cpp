@@ -78,10 +78,8 @@ TEST(progress_bar_pixel_sizing_fills_track) {
   }
 }
 
-// At 1.0 the fill would cover the track exactly, so the bar emits the track
-// alone and colours it. Asserting the fill exists here pinned the old
-// implementation rather than the behaviour: what matters is that a completed
-// bar is full-width and drawn once, not that two boxes are stacked.
+// At 1.0 the bar is the coloured track alone. Asserting a fill exists pinned
+// the implementation; what matters is one full-width box.
 TEST(progress_bar_full_value_is_one_full_width_box) {
   ImmTestHarness h;
 
