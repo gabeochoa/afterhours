@@ -106,6 +106,20 @@ struct AutoLayout {
     return value;
   }
 
+  // The axis a gap runs along.
+  static Axis main_axis(const UIComponent &widget) {
+    return static_cast<bool>(widget.flex_direction & FlexDirection::Column)
+               ? Axis::Y
+               : Axis::X;
+  }
+
+  // Takes the Size, not its .value: for h720(20) that is the 20/720 fraction,
+  // so the float overload above resolves the gap to 0.028px.
+  float resolve_gap(const Size &gap, const UIComponent &widget, Axis axis) {
+    return resolve_to_pixels(gap, fetch_screen_value_(axis),
+                             widget.resolved_scaling_mode, ui_scale);
+  }
+
   auto &set_grid_snapping(bool enabled) {
     enable_grid_snapping = enabled;
     return *this;
@@ -687,7 +701,7 @@ struct AutoLayout {
           ++visible_children;
       }
       if (is_main_axis && visible_children > 1) {
-        total_child_size += resolve_pixels(widget.desired_gap.value, widget) *
+        total_child_size += resolve_gap(widget.desired_gap, widget, axis) *
                             static_cast<float>(visible_children - 1);
       }
     }
@@ -1097,7 +1111,7 @@ struct AutoLayout {
     // Resolve explicit gap for this widget
     float resolved_gap = 0.f;
     if (widget.desired_gap.value > 0.f) {
-      resolved_gap = resolve_pixels(widget.desired_gap.value, widget);
+      resolved_gap = resolve_gap(widget.desired_gap, widget, main_axis(widget));
       widget.gap = resolved_gap;
     }
 
@@ -1324,7 +1338,7 @@ struct AutoLayout {
     // Resolve explicit gap from desired_gap
     float explicit_gap = 0.f;
     if (widget.desired_gap.value > 0.f) {
-      explicit_gap = resolve_pixels(widget.desired_gap.value, widget);
+      explicit_gap = resolve_gap(widget.desired_gap, widget, main_axis(widget));
       widget.gap = explicit_gap;
     }
 
