@@ -109,6 +109,7 @@ ALL_TESTS := \
 	draw_sort_test \
 	config_size_test \
 	overdraw_audit_test \
+	virtual_list_test \
 	sizing_repro_test \
 	slider_test \
 	split_test \

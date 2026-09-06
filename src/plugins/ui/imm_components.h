@@ -139,6 +139,64 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
   return {true, entity};
 }
 
+namespace detail {
+// Row geometry for a windowed list. Uniform rows keep the arithmetic O(1);
+// measured rows carry a prefix sum and binary-search it. Every list in a real
+// app has differing heights, so hanabi hand-rolled this window three times
+// before it lived here.
+struct RowMetrics {
+  float uniform = 0.f;      // used when prefix is empty
+  std::vector<float> prefix; // prefix[i] = height of rows [0, i)
+  size_t count = 0;
+
+  static RowMetrics uniform_rows(size_t n, float h) {
+    RowMetrics m;
+    m.uniform = h > 0.f ? h : 1.f;
+    m.count = n;
+    return m;
+  }
+
+  template <typename HeightFn>
+  static RowMetrics measured_rows(size_t n, HeightFn &&height_of) {
+    RowMetrics m;
+    m.count = n;
+    m.prefix.resize(n + 1, 0.f);
+    for (size_t i = 0; i < n; i++) {
+      const float h = height_of(i);
+      m.prefix[i + 1] = m.prefix[i] + (h > 0.f ? h : 1.f);
+    }
+    return m;
+  }
+
+  [[nodiscard]] bool is_uniform() const { return prefix.empty(); }
+  [[nodiscard]] float height_of(size_t i) const {
+    return is_uniform() ? uniform : prefix[i + 1] - prefix[i];
+  }
+  [[nodiscard]] float offset_of(size_t i) const {
+    return is_uniform() ? uniform * static_cast<float>(i) : prefix[i];
+  }
+  [[nodiscard]] float total() const { return offset_of(count); }
+  // Largest index whose offset is <= y, clamped to the list.
+  [[nodiscard]] long index_at(float y) const {
+    if (y <= 0.f)
+      return 0;
+    if (is_uniform())
+      return static_cast<long>(y / uniform);
+    const auto it = std::upper_bound(prefix.begin(), prefix.end(), y);
+    return std::max<long>(0, std::distance(prefix.begin(), it) - 1);
+  }
+  // Shortest row, for sizing the recycle pool against the worst case.
+  [[nodiscard]] float shortest() const {
+    if (is_uniform())
+      return uniform;
+    float m = 0.f;
+    for (size_t i = 0; i < count; i++)
+      m = (i == 0) ? height_of(i) : std::min(m, height_of(i));
+    return m > 0.f ? m : 1.f;
+  }
+};
+} // namespace detail
+
 /// Windowed (virtualized) list. Builds only the rows that are on screen, while
 /// the scroll bar still spans the whole list.
 ///
@@ -153,18 +211,18 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
 ///   });
 /// ```
 template <typename RenderRow>
-ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
-                           size_t count, float row_height, RenderRow &&render_row,
-                           ComponentConfig config = ComponentConfig()) {
+ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
+                                const detail::RowMetrics &rows,
+                                RenderRow &&render_row,
+                                ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
+  const size_t count = rows.count;
   if (config.size.is_default)
     config.with_size(ComponentSize{percent(1.0f), percent(1.0f)});
   config.with_overflow(Overflow::Scroll, Axis::Y)
       .with_flex_direction(FlexDirection::Column);
   init_component(ctx, ep_pair, config, ComponentType::Div);
 
-  if (row_height <= 0.f)
-    row_height = 1.f;
   if (count == 0)
     return {true, entity};
 
@@ -208,8 +266,8 @@ ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
 
   size_t first = 0, last = static_cast<size_t>(std::min<long>(n, 1));
   if (hi > lo) {
-    long f = static_cast<long>(lo / row_height) - OVERSCAN;
-    long l = static_cast<long>(hi / row_height) + OVERSCAN + 1;
+    long f = rows.index_at(lo) - OVERSCAN;
+    long l = rows.index_at(hi) + OVERSCAN + 1;
     first = static_cast<size_t>(std::clamp<long>(f, 0, n));
     last = static_cast<size_t>(std::clamp<long>(l, 0, n));
   }
@@ -226,7 +284,7 @@ ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
     if (sv.viewport_size.has_value()) {
       // Has to cover the widest window the span bound above can ask for, or
       // two items would land on the same row entity.
-      const float widest = (3.f * sv.viewport_size->y) / row_height;
+      const float widest = (3.f * sv.viewport_size->y) / rows.shortest();
       capacity = static_cast<size_t>(widest) + 2 * (size_t)OVERSCAN + 8;
     }
     constexpr size_t BLOCK = 32;
@@ -236,7 +294,7 @@ ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
     // Only the rows BELOW: the leading spacer is a real child, so the rows
     // above are already in the measured total. Counting them here too made
     // content_size grow as the list scrolled, and a scrollbar drag chased it.
-    sv.unbuilt_content_size.y = static_cast<float>(count - last) * row_height;
+    sv.unbuilt_content_size.y = rows.total() - rows.offset_of(last);
   }
 
   // The rows that were skipped above still have to occupy their space, because
@@ -248,7 +306,7 @@ ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
         ComponentConfig{}
             .with_size(ComponentSize{
                 percent(1.0f),
-                pixels(static_cast<float>(first) * row_height)})
+                pixels(rows.offset_of(first))})
             .with_transparent_bg()
             .with_debug_name("vlist_skipped_above"));
   }
@@ -259,7 +317,8 @@ ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
                    detail::mk_keyed(entity, static_cast<EntityID>(i % capacity),
                                     i + 1, &now_a_different_item),
                    ComponentConfig{}
-                       .with_size(ComponentSize{percent(1.0f), pixels(row_height)})
+                       .with_size(
+                           ComponentSize{percent(1.0f), pixels(rows.height_of(i))})
                        .with_transparent_bg()
                        .with_debug_name("vlist_row"));
     // This entity was showing another item a moment ago, and everything the
@@ -278,6 +337,38 @@ ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
     render_row(i, row.ent());
   }
   return {true, entity};
+}
+
+/// Every row the same height.
+template <typename RenderRow>
+ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
+                           size_t count, float row_height,
+                           RenderRow &&render_row,
+                           ComponentConfig config = ComponentConfig()) {
+  return virtual_list_impl(ctx, ep_pair,
+                           detail::RowMetrics::uniform_rows(count, row_height),
+                           std::forward<RenderRow>(render_row), config);
+}
+
+/// Rows of differing heights: `height_of(index)` is asked once per row per
+/// frame and the window is found by binary search over the running total.
+///
+/// ```cpp
+/// virtual_list(ctx, mk(parent), msgs.size(),
+///   [&](size_t i) { return msgs[i].wrapped_height; },
+///   [&](size_t i, Entity &row) { ... });
+/// ```
+template <typename HeightFn, typename RenderRow>
+ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
+                           size_t count, HeightFn &&height_of,
+                           RenderRow &&render_row,
+                           ComponentConfig config = ComponentConfig())
+  requires std::invocable<HeightFn, size_t>
+{
+  return virtual_list_impl(
+      ctx, ep_pair,
+      detail::RowMetrics::measured_rows(count, std::forward<HeightFn>(height_of)),
+      std::forward<RenderRow>(render_row), config);
 }
 
 /// Horizontal stack — a div with FlexDirection::Row preset.
