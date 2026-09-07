@@ -919,8 +919,19 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
     float icon_w = config.icon_source_rect->width;
     float icon_h = config.icon_source_rect->height;
     // Native size means a 256px icon in a 46px button, covering the label.
-    if (config.size.y_axis.dim == Dim::Pixels && icon_h > 0.f) {
-      const float fit = config.size.y_axis.value * 0.6f;
+    // ScreenPercent counts as a known height too: with_720p_size is the
+    // spelling responsive buttons use, and gating on Pixels alone meant those
+    // were exactly the ones that got a native-size icon.
+    const Dim ydim = config.size.y_axis.dim;
+    if ((ydim == Dim::Pixels || ydim == Dim::ScreenPercent) && icon_h > 0.f) {
+      float screen_height = 720.f;
+      if (auto *pcr = EntityHelper::get_singleton_cmp<
+              window_manager::ProvidesCurrentResolution>()) {
+        screen_height = static_cast<float>(pcr->current_resolution.height);
+      }
+      const float button_h = resolve_to_pixels(config.size.y_axis,
+                                               screen_height);
+      const float fit = button_h * 0.6f;
       icon_w *= fit / icon_h;
       icon_h = fit;
     }
