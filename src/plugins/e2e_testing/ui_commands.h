@@ -3,6 +3,8 @@
 // Include this if you're using both e2e_testing and ui plugins
 #pragma once
 
+#include <algorithm>
+
 #include "../../core/key_codes.h"
 #include "draw_commands.h"
 #include "pending_command.h"
@@ -475,6 +477,24 @@ struct HandleToggleCheckboxCommand : System<PendingE2ECommand> {
   }
 };
 
+// slider() puts the caller's name on the outer entity and the state on a
+// child, so no entity has both. Find the state under the named widget.
+template <typename StateT>
+inline OptEntity find_state_under(Entity &named) {
+  if (named.has<StateT>())
+    return OptEntity{named};
+  if (!named.has<ui::UIComponent>())
+    return {};
+  for (EntityID child_id : named.get<ui::UIComponent>().children) {
+    OptEntity child = ui::UICollectionHolder::getEntityForID(child_id);
+    if (!child.valid())
+      continue;
+    if (OptEntity found = find_state_under<StateT>(child.asE()); found.valid())
+      return found;
+  }
+  return {};
+}
+
 // Handle 'set_slider name value' - sets slider value by debug name
 template <typename InputAction>
 struct HandleSetSliderCommand : System<PendingE2ECommand> {
@@ -496,20 +516,24 @@ struct HandleSetSliderCommand : System<PendingE2ECommand> {
     auto query = ui_query()
                      .whereHasComponent<ui::UIComponent>()
                      .whereHasComponent<ui::UIComponentDebug>()
-                     .whereHasComponent<ui::HasSliderState>()
                      .whereLambda([&](const Entity &e) {
                        return e.get<ui::UIComponentDebug>().name() == name &&
                               e.get<ui::UIComponent>().was_rendered_to_screen;
                      })
                      .first();
 
-    for (Entity &entity : query.gen()) {
-      // Click the center of the slider for now
-      // TODO: calculate pct from slider min/max when HasSliderState supports
-      // range
-      (void)value;
+    for (Entity &named : query.gen()) {
+      OptEntity target = find_state_under<ui::HasSliderState>(named);
+      if (!target.valid())
+        continue;
+      Entity &entity = target.asE();
+      // The drag handler reads pct = (x - rect.x) / rect.width, so invert it.
+      // Used to be `(void)value;` and a click on the centre.
       auto rect = get_screen_rect(entity);
-      float x = rect.x + rect.width / 2;
+      const float pct = std::clamp(*value, 0.f, 1.f);
+      // Half a pixel in: a click on the boundary can miss the rect.
+      const float x =
+          std::min(rect.x + pct * rect.width, rect.x + rect.width - 0.5f);
       float y = rect.y + rect.height / 2;
       test_input::simulate_click(x, y);
       cmd.consume();
@@ -618,14 +642,17 @@ struct HandleExpectSliderCommand : System<PendingE2ECommand> {
     auto query = ui_query()
                      .whereHasComponent<ui::UIComponent>()
                      .whereHasComponent<ui::UIComponentDebug>()
-                     .whereHasComponent<ui::HasSliderState>()
+
                      .whereLambda([&](const Entity &e) {
                        return e.get<ui::UIComponentDebug>().name() == name;
                      })
                      .first();
 
-    for (Entity &entity : query.gen()) {
-      auto &slider = entity.get<ui::HasSliderState>();
+    for (Entity &named : query.gen()) {
+      OptEntity target = find_state_under<ui::HasSliderState>(named);
+      if (!target.valid())
+        continue;
+      auto &slider = target.asE().get<ui::HasSliderState>();
       if (std::abs(slider.value - *expected) <= tolerance) {
         cmd.consume();
         return;
