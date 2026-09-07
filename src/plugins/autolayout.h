@@ -240,8 +240,14 @@ struct AutoLayout {
     }
     Vector2Type result;
     if (wraps || content.find('\n') != std::string::npos) {
-      const float max_w =
-          wraps ? widget.computed[Axis::X] - inset_both : 1e9f;
+      // max_width gets applied after this, so wrap against the capped width
+      // or we count lines for a width the box never has.
+      float wrap_w = widget.computed[Axis::X];
+      const float cap =
+          resolve_constraint(widget, widget.max_size[Axis::X], Axis::X);
+      if (cap >= 0.f && wrap_w > cap)
+        wrap_w = cap;
+      const float max_w = wraps ? wrap_w - inset_both : 1e9f;
       const auto m = ui::detail::measure_wrapped(content, max_w, measure_one);
       result = Vector2Type{m.width, m.height};
     } else {

@@ -294,4 +294,71 @@ TEST(checkbox_children_fit_their_row) {
   }
 }
 
+// hanabi #136 wants fit_content(max): hug the text, cap it, wrap past that.
+// Dim::Text hugs and with_max_width caps, so check if that's already enough.
+TEST(text_sized_box_hugs_short_text_and_caps_long_text) {
+  ImmTestHarness h;
+  auto shortb = div(h.context(), mk(h.root(), 0),
+                    ComponentConfig{}
+                        .with_size(ComponentSize{Size{Dim::Text, 0.f, 1.f},
+                                                 pixels(24)})
+                        .with_max_width(pixels(200))
+                        .with_label("hi")
+                        .with_debug_name("bubble_short"));
+  auto longb = div(h.context(), mk(h.root(), 1),
+                   ComponentConfig{}
+                       .with_size(ComponentSize{Size{Dim::Text, 0.f, 1.f},
+                                                pixels(24)})
+                       .with_max_width(pixels(200))
+                       .with_text_overflow(TextOverflow::Wrap)
+                       .with_label("a much longer message that should have to "
+                                   "wrap onto more than one line")
+                       .with_debug_name("bubble_long"));
+  h.layout_only();
+  (void)shortb;
+  (void)longb;
+
+  UIComponent *sb = h.find("bubble_short");
+  UIComponent *lb = h.find("bubble_long");
+  CHECK(sb != nullptr && lb != nullptr);
+  if (sb && lb) {
+    printf("  [#136] short=%.0f long=%.0f (cap 200)\n", sb->rect().width,
+           lb->rect().width);
+    CHECK(sb->rect().width < 100.f);  // hugged, nowhere near the cap
+    CHECK(lb->rect().width <= 200.f); // capped rather than run on
+  }
+}
+
+// Other half of a bubble: once it wraps, it has to get taller too.
+TEST(a_capped_wrapping_box_grows_for_its_lines) {
+  ImmTestHarness h;
+  div(h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{Size{Dim::Text, 0.f, 1.f}, Size{Dim::Text, 0.f, 1.f}})
+          .with_max_width(pixels(200))
+          .with_text_overflow(TextOverflow::Wrap)
+          .with_font_size(16.f)
+          .with_label("one line")
+          .with_debug_name("bub_one"));
+  div(h.context(), mk(h.root(), 1),
+      ComponentConfig{}
+          .with_size(ComponentSize{Size{Dim::Text, 0.f, 1.f}, Size{Dim::Text, 0.f, 1.f}})
+          .with_max_width(pixels(200))
+          .with_text_overflow(TextOverflow::Wrap)
+          .with_font_size(16.f)
+          .with_label("a much longer message that has to wrap onto several "
+                      "lines once its width is capped at two hundred")
+          .with_debug_name("bub_many"));
+  h.layout_only();
+
+  UIComponent *one = h.find("bub_one");
+  UIComponent *many = h.find("bub_many");
+  CHECK(one != nullptr && many != nullptr);
+  if (one && many) {
+    printf("  [#136] heights one=%.0f many=%.0f\n", one->rect().height,
+           many->rect().height);
+    CHECK(many->rect().height > one->rect().height);
+  }
+}
+
 int main() { return ui_test::run_registered_tests("sizing repro"); }
