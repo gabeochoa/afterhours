@@ -815,13 +815,23 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
                                         pc.computed_padd[ui::Axis::right];
                         const float b = pr.y + pr.height -
                                         pc.computed_padd[ui::Axis::bottom];
-                        // Looser than the viewport check on purpose. The
-                        // content box is rect minus padding, and at a
-                        // non-integer ui_scale each term rounds separately, so
-                        // it reads a couple of pixels tighter than it is. A
-                        // panel that fits exactly at 720p overhung by 3px at
-                        // 1920x1080 with nothing wrong.
-                        constexpr float PARENT_TOLERANCE = 4.0f;
+                        // Looser than the viewport check on purpose, and it
+                        // has to scale. Sizes and positions snap to the grid;
+                        // padding does not, so the content box is off-grid
+                        // while the child in it is on-grid, and the child can
+                        // sit up to a grid unit past the edge with nothing
+                        // wrong. Size and position round separately, and again
+                        // at each level of nesting, so the budget is two units.
+                        //
+                        // The unit scales with screen height, so a fixed 4px
+                        // was right at 720p and too tight at 1080p, where it
+                        // called 124 roundings across 22 screens overflow.
+                        // That also means overflow smaller than two units does
+                        // not get reported here.
+                        const float grid_unit = std::max(
+                            1.f, std::round(4.f * (static_cast<float>(vh) /
+                                                   720.f)));
+                        const float PARENT_TOLERANCE = 2.f * grid_unit;
                         if (rect.x < l - PARENT_TOLERANCE ||
                             rect.y < t - PARENT_TOLERANCE ||
                             rect.x + rect.width > r + PARENT_TOLERANCE ||
