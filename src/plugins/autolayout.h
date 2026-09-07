@@ -337,19 +337,31 @@ struct AutoLayout {
   // filed as separate layout bugs before they turned out to be this.
   enum struct SnapDir { Nearest, Down, Up };
 
+  // Expand fills what is left so it may only round down; Children and Text
+  // hold their content so they may only round up. Text is a content size like
+  // Children: nearest can land below it.
+  static SnapDir snap_dir_for(Dim d) {
+    return d == Dim::Expand                              ? SnapDir::Down
+           : (d == Dim::Children || d == Dim::Text) ? SnapDir::Up
+                                                    : SnapDir::Nearest;
+  }
+
+  // Always derive the grid unit from screen HEIGHT (the 720p reference axis).
+  // Using the per-axis screen dimension caused a grid_unit of 7 for the X axis
+  // at 1280x720 (4.0 * 1280/720 = 7.111, rounded to 7). Since 1280 is not
+  // divisible by 7, screen_pct(1.0) snapped to 1281 and similar errors
+  // affected every screen_pct width. Height gives 4 for both axes at 720p, and
+  // 1280 IS divisible by 4.
+  float grid_unit() {
+    constexpr float GRID_UNIT_720P = 4.0f;
+    float screen_height = fetch_screen_value_(Axis::Y);
+    return fmaxf(1.f, std::round(GRID_UNIT_720P * (screen_height / 720.0f)));
+  }
+
   float snap_to_8pt_grid(float value, Axis axis,
                          SnapDir dir = SnapDir::Nearest) {
     (void)axis;
-    constexpr float GRID_UNIT_720P = 4.0f;
-    // Always derive grid unit from screen HEIGHT (the 720p reference axis).
-    // Using the per-axis screen dimension caused a grid_unit of 7 for the
-    // X axis at 1280x720 (4.0 * 1280/720 = 7.111, rounded to 7). Since
-    // 1280 is not divisible by 7, screen_pct(1.0) snapped to 1281 and
-    // similar errors affected every screen_pct width. Using the height
-    // gives grid_unit=4 for both axes at 720p, and 1280 IS divisible by 4.
-    float screen_height = fetch_screen_value_(Axis::Y);
-    float grid_unit =
-        fmaxf(1.f, std::round(GRID_UNIT_720P * (screen_height / 720.0f)));
+    const float grid_unit = this->grid_unit();
     const float units = value / grid_unit;
     float snapped = (dir == SnapDir::Down    ? std::floor(units)
                      : dir == SnapDir::Up    ? std::ceil(units)
@@ -879,16 +891,52 @@ struct AutoLayout {
     }
 
     if (total_expand_weight > 0.f) {
-      // Distribute remaining space to Expand children proportionally
       float available_space = std::abs(error);
+
+      // Each share is snapped down later, on its own, so a plain proportional
+      // split loses up to a grid unit per child. Eight cards in a row came to
+      // 47px short and the slack all piled up on the right. Hand out whole
+      // units and give the remainder to the largest fractions instead, which
+      // fills the row and leaves siblings at most one unit apart.
+      SmallVector<UIComponent *, 16> expanders;
+      bool all_snappable = enable_grid_snapping;
       for (UIComponent *child : layout_children) {
-        if (child->desired[axis].dim == Dim::Expand) {
-          float weight = child->desired[axis].value;
-          float share = available_space * (weight / total_expand_weight);
-          child->computed[axis] = share;
-        }
+        if (child->desired[axis].dim != Dim::Expand)
+          continue;
+        expanders.push_back(child);
+        if (child->skip_grid_snap)
+          all_snappable = false;
       }
-      // All extra space was distributed to Expand children
+
+      if (all_snappable && !expanders.empty()) {
+        const float unit = grid_unit();
+        const int total_units =
+            static_cast<int>(std::floor(available_space / unit));
+        SmallVector<std::pair<float, UIComponent *>, 16> fractions;
+        int assigned = 0;
+        for (UIComponent *child : expanders) {
+          const float ideal =
+              static_cast<float>(total_units) *
+              (child->desired[axis].value / total_expand_weight);
+          const int whole = static_cast<int>(std::floor(ideal));
+          child->computed[axis] = static_cast<float>(whole) * unit;
+          assigned += whole;
+          fractions.push_back({ideal - static_cast<float>(whole), child});
+        }
+        std::sort(
+            fractions.begin(), fractions.end(),
+            [](const auto &a, const auto &b) { return a.first > b.first; });
+        for (int i = 0;
+             i < total_units - assigned && i < static_cast<int>(fractions.size());
+             i++)
+          fractions[static_cast<size_t>(i)].second->computed[axis] += unit;
+        return;
+      }
+
+      for (UIComponent *child : expanders)
+        child->computed[axis] =
+            available_space *
+            (child->desired[axis].value / total_expand_weight);
       return;
     }
 
@@ -1257,19 +1305,15 @@ struct AutoLayout {
       // Expand fills what is left, so it may only round down; Children holds
       // its content, so it may only round up. Rounding either to nearest
       // breaks the very thing the dimension is for.
-      auto dir_for = [](Dim d) {
-        // Text is a content size like Children: nearest can land below it.
-        return d == Dim::Expand ? SnapDir::Down
-               : (d == Dim::Children || d == Dim::Text) ? SnapDir::Up
-                                                        : SnapDir::Nearest;
-      };
       if (widget.desired[Axis::X].dim != Dim::Pixels) {
-        widget.computed[Axis::X] = snap_to_8pt_grid(
-            widget.computed[Axis::X], Axis::X, dir_for(widget.desired[Axis::X].dim));
+        widget.computed[Axis::X] =
+            snap_to_8pt_grid(widget.computed[Axis::X], Axis::X,
+                             snap_dir_for(widget.desired[Axis::X].dim));
       }
       if (widget.desired[Axis::Y].dim != Dim::Pixels) {
-        widget.computed[Axis::Y] = snap_to_8pt_grid(
-            widget.computed[Axis::Y], Axis::Y, dir_for(widget.desired[Axis::Y].dim));
+        widget.computed[Axis::Y] =
+            snap_to_8pt_grid(widget.computed[Axis::Y], Axis::Y,
+                             snap_dir_for(widget.desired[Axis::Y].dim));
       }
     }
 
@@ -1431,9 +1475,18 @@ struct AutoLayout {
         continue;
       }
 
-      // computed bounds - use margin for layout spacing
-      float cx = child.computed[Axis::X] + child.computed_margin[Axis::X];
-      float cy = child.computed[Axis::Y] + child.computed_margin[Axis::Y];
+      // The child snaps its own size later in the pass, so place it by the
+      // size it will end up with or the stride and the width disagree: eight
+      // expand() tabs each drawn 114 wide but placed 120 apart.
+      const auto placement_extent = [&](Axis ax) {
+        if (!enable_grid_snapping || child.skip_grid_snap ||
+            child.desired[ax].dim == Dim::Pixels)
+          return child.computed[ax];
+        return snap_to_8pt_grid(child.computed[ax], ax,
+                                snap_dir_for(child.desired[ax].dim));
+      };
+      float cx = placement_extent(Axis::X) + child.computed_margin[Axis::X];
+      float cy = placement_extent(Axis::Y) + child.computed_margin[Axis::Y];
 
       bool will_hit_max_x = cx + offx > sx;
       bool will_hit_max_y = cy + offy > sy;

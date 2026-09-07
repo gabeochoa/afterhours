@@ -361,4 +361,70 @@ TEST(a_capped_wrapping_box_grows_for_its_lines) {
   }
 }
 
+
+// deadspace's tab strip: eight expand() tabs in a fixed-width row. The last one
+// hung 6px outside the row at 1080p and fit at 720p, so the divide is landing
+// off the grid and the remainder is going somewhere.
+TEST(expand_children_stay_inside_a_row_that_does_not_divide_evenly) {
+  for (float row_w : {948.f, 950.f, 632.f, 1000.f, 777.f}) {
+    ImmTestHarness h;
+    auto row = hstack(h.context(), mk(h.root(), 0),
+                      ComponentConfig{}
+                          .with_size(ComponentSize{pixels(row_w), pixels(32)})
+                          .with_debug_name("row"));
+    for (int i = 0; i < 8; i++)
+      div(h.context(), mk(row.ent(), i),
+          ComponentConfig{}
+              .with_size(ComponentSize{expand(), percent(1.f)})
+              .with_debug_name("tab_" + std::to_string(i)));
+    h.layout_only(true, {1920, 1080});
+
+    UIComponent *r = h.find("row");
+    UIComponent *last = h.find("tab_7");
+    CHECK(r != nullptr && last != nullptr);
+    if (!r || !last)
+      continue;
+    const float row_end = r->rect().x + r->rect().width;
+    const float last_end = last->rect().x + last->rect().width;
+    printf("  row %.0f: last tab ends %.0f, row ends %.0f (over by %.0f)\n",
+           row_w, last_end, row_end, last_end - row_end);
+    for (int i = 0; i < 8; i++) {
+      UIComponent *t = h.find("tab_" + std::to_string(i));
+      if (t)
+        printf("      tab_%d x=%.1f w=%.1f\n", i, t->rect().x, t->rect().width);
+    }
+    CHECK(last_end <= row_end + 0.5f);
+  }
+}
+
+
+// A row whose width is not a whole number of grid units cannot be filled by
+// equal grid-aligned children: it is either slack or a one-unit difference.
+// We take the difference, so this pins that it never grows past one unit.
+TEST(equal_weight_expanders_stay_equal) {
+  for (float row_w : {1100.f, 1098.f, 948.f, 1000.f}) {
+    ImmTestHarness h;
+    auto row = hstack(h.context(), mk(h.root(), 0),
+                      ComponentConfig{}
+                          .with_size(ComponentSize{pixels(row_w), pixels(40)})
+                          .with_debug_name("prow"));
+    for (int i = 0; i < 2; i++)
+      div(h.context(), mk(row.ent(), i),
+          ComponentConfig{}
+              .with_size(ComponentSize{expand(), percent(1.f)})
+              .with_debug_name("panel_" + std::to_string(i)));
+    h.layout_only(true, {1280, 720});
+    UIComponent *a = h.find("panel_0");
+    UIComponent *b = h.find("panel_1");
+    CHECK(a != nullptr && b != nullptr);
+    if (a && b) {
+      printf("  row %.0f: panels %.0f and %.0f (diff %.0f)\n", row_w,
+             a->rect().width, b->rect().width,
+             a->rect().width - b->rect().width);
+      CHECK(std::abs(a->rect().width - b->rect().width) <= 6.f);
+      CHECK(a->rect().width + b->rect().width >= row_w - 6.f);
+    }
+  }
+}
+
 int main() { return ui_test::run_registered_tests("sizing repro"); }
