@@ -427,4 +427,38 @@ TEST(equal_weight_expanders_stay_equal) {
   }
 }
 
+
+// A Dim::Children parent has to be wide enough for the children it is sized to
+// hold. It summed their pre-snap sizes while they drew at their snapped ones,
+// so a strip of ten segments measured 120 around content that drew 156.
+//
+// It cannot come out exact here: a 2px margin has no representation on a 4px
+// grid, so the snapped positions still run a couple of pixels past the sum.
+// What this pins is that the parent is sized from the same numbers the
+// children are drawn at.
+TEST(a_children_sized_row_includes_child_margins) {
+  ImmTestHarness h;
+  auto row = hstack(h.context(), mk(h.root(), 0),
+                    ComponentConfig{}
+                        .with_size(ComponentSize{children(), pixels(20)})
+                        .with_debug_name("mrow"));
+  for (int i = 0; i < 5; i++)
+    div(h.context(), mk(row.ent(), i),
+        ComponentConfig{}
+            .with_size(ComponentSize{w1280(10), pixels(20)})
+            .with_margin(i > 0 ? Margin{.left = pixels(2)} : Margin{})
+            .with_debug_name("seg_" + std::to_string(i)));
+  h.layout_only(true, {1280, 720});
+
+  UIComponent *r = h.find("mrow");
+  UIComponent *last = h.find("seg_4");
+  CHECK(r != nullptr && last != nullptr);
+  if (r && last) {
+    // Five segments that snap to 12 wide, with four 2px margins.
+    printf("  children row = %.0f (want 68), content spans %.0f\n",
+           r->rect().width, last->rect().x + last->rect().width - r->rect().x);
+    CHECK(r->rect().width == 68.f);
+  }
+}
+
 int main() { return ui_test::run_registered_tests("sizing repro"); }

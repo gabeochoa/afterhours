@@ -346,6 +346,18 @@ struct AutoLayout {
                                                     : SnapDir::Nearest;
   }
 
+  // A child snaps its own size later in the pass, so a parent measuring or
+  // placing one has to ask for the size it will end up with. Reading
+  // computed directly is how a row came out 60 wide around content that
+  // drew 74.
+  float snapped_extent(const UIComponent &child, Axis axis) {
+    if (!enable_grid_snapping || child.skip_grid_snap ||
+        child.desired[axis].dim == Dim::Pixels)
+      return child.computed[axis];
+    return snap_to_8pt_grid(child.computed[axis], axis,
+                            snap_dir_for(child.desired[axis].dim));
+  }
+
   // Always derive the grid unit from screen HEIGHT (the 720p reference axis).
   // Using the per-axis screen dimension caused a grid_unit of 7 for the X axis
   // at 1280x720 (4.0 * 1280/720 = 7.111, rounded to 7). Since 1280 is not
@@ -681,7 +693,7 @@ struct AutoLayout {
 
       // Include child margins so Dim::Children parents are sized to fit
       // children including their external spacing.
-      float cs = child.computed[axis] + child.computed_margin[axis];
+      float cs = snapped_extent(child, axis) + child.computed_margin[axis];
 
       if ( //
           child.desired[axis].dim == Dim::Percent &&
@@ -1475,18 +1487,8 @@ struct AutoLayout {
         continue;
       }
 
-      // The child snaps its own size later in the pass, so place it by the
-      // size it will end up with or the stride and the width disagree: eight
-      // expand() tabs each drawn 114 wide but placed 120 apart.
-      const auto placement_extent = [&](Axis ax) {
-        if (!enable_grid_snapping || child.skip_grid_snap ||
-            child.desired[ax].dim == Dim::Pixels)
-          return child.computed[ax];
-        return snap_to_8pt_grid(child.computed[ax], ax,
-                                snap_dir_for(child.desired[ax].dim));
-      };
-      float cx = placement_extent(Axis::X) + child.computed_margin[Axis::X];
-      float cy = placement_extent(Axis::Y) + child.computed_margin[Axis::Y];
+      float cx = snapped_extent(child, Axis::X) + child.computed_margin[Axis::X];
+      float cy = snapped_extent(child, Axis::Y) + child.computed_margin[Axis::Y];
 
       bool will_hit_max_x = cx + offx > sx;
       bool will_hit_max_y = cy + offy > sy;
