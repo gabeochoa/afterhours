@@ -622,6 +622,11 @@ struct HasScrollView : BaseComponent {
   // to everything around it, on a 1440p window. h720 scales with the screen.
   Size scrollbar_thickness = h720(6.f);
   Size scrollbar_min_thumb = h720(24.f); // grabbable even on a 10k-row list
+  // Usages by default so a bar follows a theme swap; explicit colours win.
+  Theme::Usage scrollbar_track_usage = Theme::Usage::Background;
+  Theme::Usage scrollbar_thumb_usage = Theme::Usage::FontMuted;
+  std::optional<ColorType> scrollbar_track_color;
+  std::optional<ColorType> scrollbar_thumb_color;
 };
 
 // Where a scroll view's bar goes; empty when it needs none. Pure, so it is

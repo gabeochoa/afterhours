@@ -1110,13 +1110,15 @@ struct RenderScrollbars : SystemWithUIContext<HasScrollView> {
           scrollbar_geometry(scroll, view, vertical, m.thickness, m.min_thumb);
       if (!g.visible)
         return;
+      const ColorType track_c =
+          scroll.scrollbar_track_color.value_or(
+              theme.from_usage(scroll.scrollbar_track_usage));
+      const ColorType thumb_c =
+          scroll.scrollbar_thumb_color.value_or(
+              theme.from_usage(scroll.scrollbar_thumb_usage));
       // Fully rounded: at 6px wide that is a capsule, which reads as a bar.
-      draw_rectangle_rounded(g.track, 1.f, 6,
-                             theme.from_usage(Theme::Usage::Background),
-                             std::bitset<4>().set());
-      draw_rectangle_rounded(g.thumb, 1.f, 6,
-                             theme.from_usage(Theme::Usage::FontMuted),
-                             std::bitset<4>().set());
+      draw_rectangle_rounded(g.track, 1.f, 6, track_c, std::bitset<4>().set());
+      draw_rectangle_rounded(g.thumb, 1.f, 6, thumb_c, std::bitset<4>().set());
     };
 
     if (scroll.vertical_enabled)
