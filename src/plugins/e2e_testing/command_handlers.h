@@ -758,10 +758,29 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
             if (cmp.computed[ui::Axis::X] < 0 || cmp.computed[ui::Axis::Y] < 0)
                 continue;
 
+            // Anything inside a scroller is off-screen by design as soon as
+            // it is scrolled past, so the viewport question does not apply to
+            // it. The parent check below skips a scrolling parent for the same
+            // reason, but only the immediate one: a row nested three deep in a
+            // scroll view still has to be measured against something.
+            bool inside_scroller = false;
+            for (int pid = cmp.parent; pid >= 0;) {
+                OptEntity anc = ui::UICollectionHolder::getEntityForID(pid);
+                if (!anc.valid() || !anc.asE().has<ui::UIComponent>()) break;
+                Entity &ae = anc.asE();
+                if (ae.has<ui::HasScrollView>() ||
+                    ae.has<ui::HasClipChildren>()) {
+                    inside_scroller = true;
+                    break;
+                }
+                pid = ae.get<ui::UIComponent>().parent;
+            }
+
             // --- Check 1: element rect outside viewport ---
-            bool rect_out = (rect.x < -TOLERANCE) || (rect.y < -TOLERANCE) ||
-                            (rect.x + rect.width > vw + TOLERANCE) ||
-                            (rect.y + rect.height > vh + TOLERANCE);
+            bool rect_out = !inside_scroller &&
+                            ((rect.x < -TOLERANCE) || (rect.y < -TOLERANCE) ||
+                             (rect.x + rect.width > vw + TOLERANCE) ||
+                             (rect.y + rect.height > vh + TOLERANCE));
 
             // --- Check 1b: element outside its PARENT's content box ---
             // The viewport check above answers "is it on screen", which is not
