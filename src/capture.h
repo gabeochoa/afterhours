@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "developer.h"
@@ -72,11 +73,14 @@ inline void enable() { enabled() = true; }
 inline void disable() { enabled() = false; }
 inline void clear() { calls().clear(); }
 
-inline void record(const char *op, const RectangleType &rect, const ColorType &color,
-                   const std::string &text = "") {
+// A view, not a `const std::string &`: that made every `const char *` caller
+// build a string before this could return early.
+inline void record(const char *op, const RectangleType &rect,
+                   const ColorType &color, std::string_view text = {}) {
   if (!enabled())
     return;
-  calls().push_back({op, rect, color, text, current_entity(), current_layer()});
+  calls().push_back({op, rect, color, std::string(text), current_entity(),
+                     current_layer()});
 }
 
 } // namespace capture

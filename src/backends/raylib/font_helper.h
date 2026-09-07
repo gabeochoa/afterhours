@@ -118,6 +118,17 @@ inline void warn_on_missing_glyphs(const raylib::Font font, const char *text) {
   // that loaded the right codepoints got warned for text it draws perfectly,
   // which is how the warning ended up being ignored, taking the real missing
   // glyphs with it.
+  // Pure ASCII cannot be missing -- the default set is the 95 ASCII glyphs --
+  // so answer it with a byte scan instead of a decode per character.
+  bool ascii_only = true;
+  for (int i = 0; text[i] != '\0'; i++)
+    if (static_cast<unsigned char>(text[i]) >= 0x80) {
+      ascii_only = false;
+      break;
+    }
+  if (ascii_only)
+    return;
+
   for (int i = 0; text[i] != '\0';) {
     int advance = 0;
     const int cp = raylib::GetCodepointNext(&text[i], &advance);
