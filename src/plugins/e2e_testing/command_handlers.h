@@ -735,7 +735,13 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
             return;
 
         auto [vw, vh] = e2e_screen_size();
-        constexpr float TOLERANCE = 2.0f;
+        // Same reason the parent tolerance scales: a full-width element snaps
+        // up to the grid and can sit a unit past the edge with nothing wrong,
+        // and the unit grows with screen height. A fixed 2px meant the check
+        // got stricter the larger the window.
+        const float e2e_grid_unit = std::max(
+            1.f, std::round(4.f * (static_cast<float>(vh) / 720.f)));
+        const float TOLERANCE = e2e_grid_unit;
         constexpr float TEXT_TOLERANCE =
             4.0f;  // extra tolerance for text fitting
 
@@ -828,10 +834,7 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
                         // called 124 roundings across 22 screens overflow.
                         // That also means overflow smaller than two units does
                         // not get reported here.
-                        const float grid_unit = std::max(
-                            1.f, std::round(4.f * (static_cast<float>(vh) /
-                                                   720.f)));
-                        const float PARENT_TOLERANCE = 2.f * grid_unit;
+                        const float PARENT_TOLERANCE = 2.f * e2e_grid_unit;
                         if (rect.x < l - PARENT_TOLERANCE ||
                             rect.y < t - PARENT_TOLERANCE ||
                             rect.x + rect.width > r + PARENT_TOLERANCE ||
