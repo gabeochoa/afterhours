@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include "../../blend.h"
+
 #include <bitset>
 #include <algorithm>
 #include <cmath>
@@ -517,6 +519,39 @@ inline void draw_ring(float centerX, float centerY, float innerRadius,
   draw_ring_segment(centerX, centerY, innerRadius, outerRadius, 0.0f, 360.0f,
                     segments, color);
 }
+
+// sokol has no rlSetBlendMode, so each mode is its own pipeline. Skipped when
+// already active: a pipeline swap breaks the batch.
+inline void set_blend_mode(blend::Mode mode) {
+  if (mode == blend::detail::current_mode())
+    return;
+  blend::detail::current_mode() = mode;
+  blend::detail::transition_count()++;
+  switch (mode) {
+  case blend::Mode::Alpha:
+    sgl_load_pipeline(graphics::metal_detail::g_blend_pip);
+    break;
+  case blend::Mode::Additive:
+    sgl_load_pipeline(graphics::metal_detail::g_blend_pip_additive);
+    break;
+  case blend::Mode::Multiplied:
+    sgl_load_pipeline(graphics::metal_detail::g_blend_pip_multiplied);
+    break;
+  case blend::Mode::AlphaPremultiply:
+    sgl_load_pipeline(graphics::metal_detail::g_blend_pip_premultiplied);
+    break;
+  }
+}
+
+struct blend_scope {
+  blend::Mode previous;
+  explicit blend_scope(blend::Mode mode) : previous(blend::current()) {
+    set_blend_mode(mode);
+  }
+  ~blend_scope() { set_blend_mode(previous); }
+  blend_scope(const blend_scope &) = delete;
+  blend_scope &operator=(const blend_scope &) = delete;
+};
 
 inline void begin_scissor_mode(int x, int y, int w, int h) {
   // Scissor operates in framebuffer pixels; scale logical coords by DPI.

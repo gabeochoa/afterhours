@@ -89,6 +89,10 @@ inline RenderTextureType g_headless_rt{};
 // src-over for 2D drawing; sgl_defaults() loads a pipeline with blending off,
 // which discarded every alpha byte. Opaque draws are unchanged (a=255).
 inline sgl_pipeline g_blend_pip{};
+// The other modes set_blend_mode swaps to.
+inline sgl_pipeline g_blend_pip_additive{};
+inline sgl_pipeline g_blend_pip_multiplied{};
+inline sgl_pipeline g_blend_pip_premultiplied{};
 
 // sokol_gl + fontstash setup shared by the windowed (sokol_init_cb) and headless
 // (metal_init) bootstraps. Assumes sg_setup() has already run.
@@ -108,6 +112,35 @@ inline void setup_sokol_gl_and_fonts() {
   blend_desc.colors[0].blend.dst_factor_alpha =
       SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
   g_blend_pip = sgl_make_pipeline(&blend_desc);
+
+  // One pipeline per mode, built up front so set_blend_mode can swap.
+  {
+    sg_pipeline_desc d{};
+    d.colors[0].blend.enabled = true;
+    d.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
+    d.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE;
+    d.colors[0].blend.src_factor_alpha = SG_BLENDFACTOR_ONE;
+    d.colors[0].blend.dst_factor_alpha = SG_BLENDFACTOR_ONE;
+    g_blend_pip_additive = sgl_make_pipeline(&d);
+  }
+  {
+    sg_pipeline_desc d{};
+    d.colors[0].blend.enabled = true;
+    d.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_DST_COLOR;
+    d.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    d.colors[0].blend.src_factor_alpha = SG_BLENDFACTOR_DST_ALPHA;
+    d.colors[0].blend.dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    g_blend_pip_multiplied = sgl_make_pipeline(&d);
+  }
+  {
+    sg_pipeline_desc d{};
+    d.colors[0].blend.enabled = true;
+    d.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_ONE;
+    d.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    d.colors[0].blend.src_factor_alpha = SG_BLENDFACTOR_ONE;
+    d.colors[0].blend.dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    g_blend_pip_premultiplied = sgl_make_pipeline(&d);
+  }
 
   sfons_desc_t sfons_desc{};
   sfons_desc.width = AFTERHOURS_FONT_ATLAS_SIZE;

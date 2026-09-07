@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include "../../blend.h"
+
 #include <bitset>
 #include <cmath>
 #include <cstdint>
@@ -356,6 +358,40 @@ inline void draw_ring(float centerX, float centerY, float innerRadius,
 
 // Begin scissor mode (clipping rectangle). Scissor is device-pixel, so scale
 // logical coords by the supersample factor to match the render texture.
+// Skips the call when the mode is already active: rlSetBlendMode flushes the
+// GPU batch whenever it differs.
+inline void set_blend_mode(blend::Mode mode) {
+  if (mode == blend::detail::current_mode())
+    return;
+  blend::detail::current_mode() = mode;
+  blend::detail::transition_count()++;
+  switch (mode) {
+  case blend::Mode::Alpha:
+    raylib::rlSetBlendMode(raylib::RL_BLEND_ALPHA);
+    break;
+  case blend::Mode::Additive:
+    raylib::rlSetBlendMode(raylib::RL_BLEND_ADDITIVE);
+    break;
+  case blend::Mode::Multiplied:
+    raylib::rlSetBlendMode(raylib::RL_BLEND_MULTIPLIED);
+    break;
+  case blend::Mode::AlphaPremultiply:
+    raylib::rlSetBlendMode(raylib::RL_BLEND_ALPHA_PREMULTIPLY);
+    break;
+  }
+}
+
+// Restores the previous mode, so a scope inside a matching one is free.
+struct blend_scope {
+  blend::Mode previous;
+  explicit blend_scope(blend::Mode mode) : previous(blend::current()) {
+    set_blend_mode(mode);
+  }
+  ~blend_scope() { set_blend_mode(previous); }
+  blend_scope(const blend_scope &) = delete;
+  blend_scope &operator=(const blend_scope &) = delete;
+};
+
 inline void begin_scissor_mode(int x, int y, int width, int height) {
   const int s = graphics::render_scale();
   raylib::BeginScissorMode(x * s, y * s, width * s, height * s);

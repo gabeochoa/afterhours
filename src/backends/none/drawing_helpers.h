@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include "../../blend.h"
+
 #include <algorithm>
 #include <bitset>
 #include <cstdint>
@@ -119,6 +121,25 @@ inline void draw_ring_segment(float, float, float, float, float, float, int,
 inline void draw_ring(float, float, float, float, int, Color) {
   log_error("@notimplemented draw_ring");
 }
+// Bookkeeping only, so capture tests can assert transition counts.
+inline void set_blend_mode(blend::Mode mode) {
+  if (mode == blend::detail::current_mode())
+    return;
+  blend::detail::current_mode() = mode;
+  blend::detail::transition_count()++;
+  capture::record("blend", RectangleType{}, ColorType{});
+}
+
+struct blend_scope {
+  blend::Mode previous;
+  explicit blend_scope(blend::Mode mode) : previous(blend::current()) {
+    set_blend_mode(mode);
+  }
+  ~blend_scope() { set_blend_mode(previous); }
+  blend_scope(const blend_scope &) = delete;
+  blend_scope &operator=(const blend_scope &) = delete;
+};
+
 inline void begin_scissor_mode(int, int, int, int) {
   log_error("@notimplemented begin_scissor_mode");
 }
