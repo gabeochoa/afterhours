@@ -461,4 +461,37 @@ TEST(a_children_sized_row_includes_child_margins) {
   }
 }
 
+
+// Padding wider than the box is the mistake that ran through most of the
+// screens a containment sweep flagged: a fixed-pixel size next to a theme
+// padding that scales, right at 720p and inverted above it. The clamp makes
+// the content area 0 rather than negative, which is safe and silent, so this
+// pins that the number is the clamped one and not something below zero.
+TEST(padding_wider_than_the_box_leaves_no_content_area) {
+  ImmTestHarness h;
+  auto boxed = div(h.context(), mk(h.root(), 0),
+                   ComponentConfig{}
+                       .with_size(ComponentSize{pixels(200), pixels(46)})
+                       .with_padding(Padding{.top = pixels(30),
+                                             .left = pixels(10),
+                                             .bottom = pixels(30),
+                                             .right = pixels(10)})
+                       .with_debug_name("squeezed"));
+  div(h.context(), mk(boxed.ent(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{percent(1.f), percent(1.f)})
+          .with_debug_name("inner"));
+  h.layout_only();
+
+  UIComponent *inner = h.find("inner");
+  CHECK(inner != nullptr);
+  if (inner) {
+    // 46 tall with 60 of vertical padding: clamped to 0, never negative.
+    printf("  inner is %.0fx%.0f\n", inner->rect().width,
+           inner->rect().height);
+    CHECK(inner->rect().height >= 0.f);
+    CHECK(inner->rect().width >= 0.f);
+  }
+}
+
 int main() { return ui_test::run_registered_tests("sizing repro"); }

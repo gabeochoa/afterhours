@@ -1338,6 +1338,36 @@ struct AutoLayout {
     float container_h =
         fmaxf(0.f, widget.computed[Axis::Y] - widget.computed_padd[Axis::Y]);
 
+    // Padding wider than the box leaves nowhere to put anything, and the clamp
+    // above turns that into silence rather than a negative number. Nearly
+    // always the same mistake: a fixed-pixel box whose padding is a theme size
+    // that scales with the screen. Correct at 720p, inverted above it.
+    //
+    // Only worth saying when something has to be placed in that space. A
+    // button's label is drawn, not laid out, so buttons routinely carry more
+    // padding than height and are none the worse for it.
+    const bool places_children =
+        std::any_of(widget.children.begin(), widget.children.end(),
+                    [this](EntityID cid) {
+                      const UIComponent &c = cmp(cid);
+                      return !c.absolute && !c.should_hide;
+                    });
+    for (Axis ax : {Axis::X, Axis::Y}) {
+      if (!places_children || widget.computed[ax] <= 0.f ||
+          widget.computed_padd[ax] <= widget.computed[ax])
+        continue;
+      Entity &pe = this->to_ent(widget.id);
+      warn_once(widget.id,
+                "'{}' has {:.0f}px of padding on {} but is only {:.0f}px "
+                "there, so its content area is empty. A fixed-pixel size with "
+                "theme padding does this above 720p; scale the size too.",
+                pe.has<UIComponentDebug>()
+                    ? pe.get<UIComponentDebug>().name()
+                    : fmt::format("entity_{}", widget.id),
+                widget.computed_padd[ax], ax == Axis::X ? "x" : "y",
+                widget.computed[ax]);
+    }
+
     // Wrap boundary = content area (children should wrap before exceeding it)
     float sx = container_w;
     float sy = container_h;

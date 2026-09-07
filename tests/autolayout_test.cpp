@@ -355,6 +355,11 @@ TEST(negative_dimension_clamped) {
   t.add_child(root, child);
   t.run(root);
 
+  // Clamped, not negative -- but a child asked to live in that space and
+  // there is none, so the layout says so rather than sizing it to nothing
+  // quietly.
+  EXPECT_WARN("content area is empty");
+
   // When padding exceeds parent, content area goes negative internally.
   // The rect() function clamps dimensions to 0 to prevent negative rendering.
   auto r = t.ui(child).rect();
