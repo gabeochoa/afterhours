@@ -1712,7 +1712,9 @@ struct AutoLayout {
       // Setup for next child placement (include gap for justify)
       if (is_column) {
         float next_y = offy + cy + gap;
-        // Snap only the final position, not the inter-child spacing accumulator.
+        // Snapping the running total keeps rows evenly spaced when their own
+        // size is off-grid. Dropping it honours each pixel size exactly and
+        // makes the spacing alternate instead, which reads as banding.
         if (enable_grid_snapping) {
           next_y = snap_to_8pt_grid(next_y, Axis::Y);
         }
@@ -1720,7 +1722,7 @@ struct AutoLayout {
       }
       if (is_row) {
         float next_x = offx + cx + gap;
-        // Snap only the final position, not the inter-child spacing accumulator.
+        // See above: uniform spacing beats honouring each size exactly.
         if (enable_grid_snapping) {
           next_x = snap_to_8pt_grid(next_x, Axis::X);
         }

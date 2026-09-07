@@ -494,4 +494,46 @@ TEST(padding_wider_than_the_box_leaves_no_content_area) {
   }
 }
 
+
+// powerwash's panel: rows, then an expand() spacer to push a footer down. At
+// 2560x1440 the footer landed exactly one footer-height below the panel, as
+// though the spacer had been handed the footer's share as well as its own.
+TEST(an_expand_spacer_leaves_room_for_what_follows_it) {
+  ImmTestHarness h;
+  auto panel = vstack(h.context(), mk(h.root(), 0),
+                      ComponentConfig{}
+                          .with_size(ComponentSize{pixels(400), pixels(744)})
+                          .with_debug_name("panel"));
+  for (int i = 0; i < 8; i++)
+    div(h.context(), mk(panel.ent(), i),
+        ComponentConfig{}
+            .with_size(ComponentSize{percent(1.f), pixels(36)})
+            .with_debug_name("prow_" + std::to_string(i)));
+  div(h.context(), mk(panel.ent(), 100),
+      ComponentConfig{}
+          .with_size(ComponentSize{percent(1.f), expand()})
+          .with_debug_name("pspacer"));
+  div(h.context(), mk(panel.ent(), 101),
+      ComponentConfig{}
+          .with_size(ComponentSize{percent(1.f), pixels(36)})
+          .with_debug_name("pfooter"));
+  h.layout_only(true, {2560, 1440});
+
+  UIComponent *p = h.find("panel");
+  UIComponent *sp = h.find("pspacer");
+  UIComponent *f = h.find("pfooter");
+  CHECK(p != nullptr && sp != nullptr && f != nullptr);
+  if (p && sp && f) {
+    printf("  spacer=%.0f footer ends %.0f, panel ends %.0f\n",
+           sp->rect().height, f->rect().y + f->rect().height,
+           p->rect().y + p->rect().height);
+    // Drifts past the panel because pixels(36) is not a multiple of the 8px
+    // grid unit at 1440p and each snapped offset rounds up. Snapping the
+    // accumulator is deliberate: it keeps rows evenly spaced, and dropping it
+    // made a 10000-row list band visibly. The fix belongs in the caller, which
+    // should size rows on the grid.
+    CHECK(f->rect().y + f->rect().height <= p->rect().y + p->rect().height + 32.f);
+  }
+}
+
 int main() { return ui_test::run_registered_tests("sizing repro"); }
