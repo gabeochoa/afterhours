@@ -5,7 +5,15 @@
 #include <concepts>
 #include <functional>
 #include <memory>
+#include <string>
+#include <string_view>
 #include <type_traits>
+#include <typeinfo>
+
+#if defined(__GNUC__) || defined(__clang__)
+#include <cxxabi.h>
+#include <cstdlib>
+#endif
 
 #include "base_component.h"
 #include "entity.h"
@@ -88,10 +96,34 @@ struct filter_components<T, Rest...> {
                                         !is_not_component<T>::value,
                                     typename list_prepend<prev, T>::type, prev>;
 };
+namespace detail {
+// typeid hands back a mangled name. Called once per system, off the frame path.
+inline std::string demangle_type(const char *mangled) {
+#if defined(__GNUC__) || defined(__clang__)
+    int status = 0;
+    char *out = abi::__cxa_demangle(mangled, nullptr, nullptr, &status);
+    if (status == 0 && out) {
+        std::string result(out);
+        std::free(out);
+        return result;
+    }
+#endif
+    return std::string(mangled ? mangled : "?");
+}
+} // namespace detail
+
 class SystemBase {
    public:
     SystemBase() {}
     virtual ~SystemBase() {}
+
+    // What a profile calls this system. Defaults to the derived type so
+    // nothing has to be named by hand.
+    virtual std::string_view name() const {
+        if (cached_name_.empty())
+            cached_name_ = detail::demangle_type(typeid(*this).name());
+        return cached_name_;
+    }
 
     virtual bool should_run(const float) { return true; }
     virtual bool should_run(const float) const { return true; }
@@ -113,6 +145,9 @@ class SystemBase {
 
     virtual void for_each_derived(Entity &, const float) = 0;
     virtual void for_each_derived(const Entity &, const float) const = 0;
+
+   private:
+    mutable std::string cached_name_;
 };
 
 template<typename S>
@@ -429,7 +464,50 @@ struct CallbackSystem : System<> {
     void once(const float dt) override { cb_(dt); }
 };
 
+// Separates a render cost from an update cost with the same name.
+enum struct SystemPhase { Update, FixedUpdate, Render };
+
+// Brackets every system the manager runs, including the library's own. Without
+// it a consumer can only time systems it wrote.
+struct SystemProfileHook {
+    std::function<void(std::string_view, SystemPhase)> begin;
+    std::function<void(std::string_view, SystemPhase)> end;
+    explicit operator bool() const { return begin && end; }
+};
+
 struct SystemManager {
+    // Static: set once, not per manager. Apps often have several.
+    static SystemProfileHook &profile_hook() {
+        static SystemProfileHook hook;
+        return hook;
+    }
+    static void set_profile_hook(SystemProfileHook hook) {
+        profile_hook() = std::move(hook);
+    }
+
+   private:
+    // Brackets one system. Costs a bool test when no hook is set.
+    struct ProfileScope {
+        const SystemBase *sys = nullptr;
+        SystemPhase phase{};
+        ProfileScope(const SystemBase *s, SystemPhase p) {
+            if (profile_hook()) {
+                sys = s;
+                phase = p;
+                profile_hook().begin(s->name(), p);
+            }
+        }
+        // Re-checked: a system may clear the hook while it runs, and calling
+        // a cleared std::function here would throw out of a destructor.
+        ~ProfileScope() {
+            if (sys && profile_hook().end)
+                profile_hook().end(sys->name(), phase);
+        }
+        ProfileScope(const ProfileScope &) = delete;
+        ProfileScope &operator=(const ProfileScope &) = delete;
+    };
+
+   public:
     constexpr static float FIXED_TICK_RATE = 1.f / 120.f;
     float accumulator = 0.f;
 
@@ -464,6 +542,7 @@ struct SystemManager {
     void tick(Entities &entities, const float dt) {
         for (auto &system : update_systems_) {
             if (!system->should_run(dt)) continue;
+            ProfileScope profile_scope(system.get(), SystemPhase::Update);
             system->once(dt);
             if (system->should_iterate()) {
                 system->on_iteration_begin(dt);
@@ -488,6 +567,7 @@ struct SystemManager {
     void fixed_tick(Entities &entities, const float dt) {
         for (auto &system : fixed_update_systems_) {
             if (!system->should_run(dt)) continue;
+            ProfileScope profile_scope(system.get(), SystemPhase::FixedUpdate);
             system->once(dt);
             if (system->should_iterate()) {
                 system->on_iteration_begin(dt);
@@ -511,6 +591,7 @@ struct SystemManager {
     void render(Entities &entities, const float dt) {
         for (auto &system : render_systems_) {
             if (!system->should_run(dt)) continue;
+            ProfileScope profile_scope(system.get(), SystemPhase::Render);
             system->once(dt);
             if (system->should_iterate()) {
                 system->on_iteration_begin(dt);

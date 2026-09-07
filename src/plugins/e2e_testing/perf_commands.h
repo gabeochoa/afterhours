@@ -1,6 +1,9 @@
 // Optional perf-oriented E2E commands.
 // This module is intentionally opt-in: projects must explicitly register it.
 #pragma once
+#include <utility>
+#include <map>
+#include <chrono>
 
 #include <functional>
 #include <optional>
@@ -35,6 +38,80 @@ inline PerfProvider &provider() {
 }
 
 inline void set_provider(PerfProvider p) { provider() = std::move(p); }
+
+// A profile the library fills in itself, so dump_profile works without the
+// consumer writing one.
+namespace builtin_profile {
+
+struct Accum {
+    double total_ms = 0.0;
+    int calls = 0;
+};
+
+inline std::map<std::string, Accum> &totals() {
+    static std::map<std::string, Accum> m;
+    return m;
+}
+
+inline std::vector<std::pair<std::string, std::chrono::steady_clock::time_point>>
+    &open_frames() {
+    static std::vector<
+        std::pair<std::string, std::chrono::steady_clock::time_point>>
+        v;
+    return v;
+}
+
+inline void reset() {
+    totals().clear();
+    open_frames().clear();
+}
+
+// Installs both halves: the hook that measures and the provider that reads.
+inline void enable() {
+    reset();
+    SystemManager::set_profile_hook(SystemProfileHook{
+        [](std::string_view name, SystemPhase) {
+            open_frames().emplace_back(std::string(name),
+                                       std::chrono::steady_clock::now());
+        },
+        [](std::string_view, SystemPhase) {
+            if (open_frames().empty())
+                return;
+            auto [name, start] = open_frames().back();
+            open_frames().pop_back();
+            const auto elapsed =
+                std::chrono::duration<double, std::milli>(
+                    std::chrono::steady_clock::now() - start)
+                    .count();
+            Accum &a = totals()[name];
+            a.total_ms += elapsed;
+            a.calls++;
+        }});
+
+    PerfProvider p = provider();
+    p.top_entries = [](int count) {
+        std::vector<PerfEntry> out;
+        out.reserve(totals().size());
+        for (const auto &[name, acc] : totals())
+            out.push_back(PerfEntry{name, static_cast<float>(acc.total_ms),
+                                    acc.calls});
+        std::sort(out.begin(), out.end(),
+                  [](const PerfEntry &a, const PerfEntry &b) {
+                      return a.ms > b.ms;
+                  });
+        if (static_cast<int>(out.size()) > count && count > 0)
+            out.resize(static_cast<size_t>(count));
+        return out;
+    };
+    set_provider(std::move(p));
+}
+
+inline void disable() {
+    SystemManager::set_profile_hook(SystemProfileHook{});
+    reset();
+}
+
+} // namespace builtin_profile
 
 struct HandleDumpProfileCommand : System<PendingE2ECommand> {
     void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {

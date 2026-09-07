@@ -61,6 +61,7 @@ $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
 	animation_test \
+	system_profile_test \
 	autolayout_test \
 	dialog_test \
 	dump_ui_test \
