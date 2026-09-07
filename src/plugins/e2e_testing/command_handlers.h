@@ -2,9 +2,11 @@
 // Systems that process PendingE2ECommand entities
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <format>
 #include <functional>
+#include <sstream>
 
 #include "../../font_helper.h"
 #include "../../logging.h"
@@ -838,8 +840,24 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
                         float font_size = cmp.font_size.value;
                         if (font_size < 1.0f) font_size = 14.0f;
 
-                        auto text_sz = measure_text(font, label.label.c_str(),
-                                                    font_size, 1.0f);
+                        // Wrapped text is meant to be wider than the box on
+                        // one line, so measuring the whole label calls every
+                        // wrap a violation. What cannot fit is a single word.
+                        const bool wraps = label.text_overflow ==
+                                           ui::TextOverflow::Wrap;
+                        Vector2Type text_sz{};
+                        if (wraps) {
+                            std::istringstream words(label.label);
+                            std::string word;
+                            while (words >> word) {
+                                auto w = measure_text(font, word.c_str(),
+                                                      font_size, 1.0f);
+                                text_sz.x = std::max(text_sz.x, w.x);
+                            }
+                        } else {
+                            text_sz = measure_text(font, label.label.c_str(),
+                                                   font_size, 1.0f);
+                        }
 
                         // Text wider than container = truncation
                         if (text_sz.x > rect.width + TEXT_TOLERANCE) {
