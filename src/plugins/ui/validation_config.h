@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../../warn_once.h"
+
 #include "../../logging.h"
 #include <string>
 
@@ -179,8 +181,12 @@ inline void report_violation(const ValidationConfig &config,
                              " (entity: " + std::to_string(entity_id) + ")";
 
   if (config.mode == ValidationMode::Warn) {
-    // Warn mode: always use log_warn (never asserts)
-    log_warn("{}", full_message);
+    // Once per element per category, not once per frame. This runs on the
+    // frame path, so an element that fails one check reports it sixty times a
+    // second and buries everything else; cartographer reported the log as
+    // unusable for that reason. The category is part of the key so a second,
+    // different problem on the same element still gets said.
+    warn_once(category + "#" + std::to_string(entity_id), "{}", full_message);
   } else if (config.mode == ValidationMode::Strict) {
     // Strict mode: use log_error which will assert
     log_error("{}", full_message);
