@@ -240,30 +240,40 @@ inline void run_systems_on_ui_entities(
         auto &entities = ui_coll.get_entities_for_mod();
 
         system->once(dt);
-        system->on_iteration_begin(dt);
-        for (auto &entity : entities) {
-            if (!entity) continue;
-            if (system->include_derived_children)
-                system->for_each_derived(*entity, dt);
-            else
-                system->for_each(*entity, dt);
+        // should_iterate() was ignored here, unlike SystemManager's own loops.
+        // A system that only wants singletons -- which the bridges are -- still
+        // visited every UI entity to find the one holding them. puzzle profiled
+        // that at 37% of a frame on a screen with no visible UI.
+        if (system->should_iterate()) {
+            system->on_iteration_begin(dt);
+            for (auto &entity : entities) {
+                // A widget retired this frame but not yet cleaned costs the
+                // same as a live one, and cannot match anything anyway.
+                if (!entity || entity->cleanup) continue;
+                if (system->include_derived_children)
+                    system->for_each_derived(*entity, dt);
+                else
+                    system->for_each(*entity, dt);
+            }
+            system->on_iteration_end(dt);
         }
-        system->on_iteration_end(dt);
         system->after(dt);
 
         if (is_render) {
             const SystemBase &csys = *system;
             csys.once(dt);
-            csys.on_iteration_begin(dt);
-            for (auto &entity : entities) {
-                if (!entity) continue;
-                const Entity &e = *entity;
-                if (csys.include_derived_children)
-                    csys.for_each_derived(e, dt);
-                else
-                    csys.for_each(e, dt);
+            if (csys.should_iterate()) {
+                csys.on_iteration_begin(dt);
+                for (auto &entity : entities) {
+                    if (!entity || entity->cleanup) continue;
+                    const Entity &e = *entity;
+                    if (csys.include_derived_children)
+                        csys.for_each_derived(e, dt);
+                    else
+                        csys.for_each(e, dt);
+                }
+                csys.on_iteration_end(dt);
             }
-            csys.on_iteration_end(dt);
             csys.after(dt);
         }
 
