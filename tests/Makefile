@@ -65,6 +65,7 @@ ALL_TESTS := \
 	blend_mode_test \
 	rect_test \
 	viewport_test \
+	grid_test \
 	autolayout_test \
 	dialog_test \
 	dump_ui_test \
