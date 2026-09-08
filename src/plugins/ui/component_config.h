@@ -127,6 +127,8 @@ struct ComponentConfig {
 
   // Custom-draw callbacks (see HasOnDraw): bg draws behind the widget's fill,
   // fg on top of all its primitives, both receiving the widget's final rect.
+  std::string tooltip_text;
+  float tooltip_delay = 0.5f;
   RenderPrimitive::CustomDrawFn on_draw_bg;
   RenderPrimitive::CustomDrawFn on_draw_fg;
 
@@ -509,6 +511,12 @@ struct ComponentConfig {
   }
   ComponentConfig &with_debug_name(const std::string &name) {
     debug_name = name;
+    return *this;
+  }
+  // Hover text. Placement flips at a screen edge the way a dropdown does.
+  ComponentConfig &with_tooltip(const std::string &text, float delay = 0.5f) {
+    tooltip_text = text;
+    tooltip_delay = delay;
     return *this;
   }
   ComponentConfig &with_render_layer(int layer) {
@@ -1028,6 +1036,10 @@ struct ComponentConfig {
       merged.flex_direction = overrides.flex_direction;
     if (overrides.render_layer != 0)
       merged.render_layer = overrides.render_layer;
+    if (!overrides.tooltip_text.empty()) {
+      merged.tooltip_text = overrides.tooltip_text;
+      merged.tooltip_delay = overrides.tooltip_delay;
+    }
     if (!overrides.debug_name.empty())
       merged.debug_name = overrides.debug_name;
 

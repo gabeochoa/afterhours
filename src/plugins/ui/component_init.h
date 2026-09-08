@@ -1,5 +1,7 @@
 #pragma once
 
+#include "tooltip.h"
+
 #include <algorithm>
 #include <functional>
 #include <string>
@@ -221,6 +223,11 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
   // An empty label CLEARS an existing one rather than being ignored: the tree
   // is rebuilt every frame, so a widget whose text went away this frame must
   // not keep rendering last frame's. Only skips when there is nothing to clear.
+  if (!config.tooltip_text.empty())
+    entity.addComponentIfMissing<ui::HasTooltip>(
+        config.tooltip_text, config.tooltip_delay,
+        ui::overlay::Placement::Below);
+
   if (config.label.empty() && !entity.has<ui::HasLabel>())
     return;
   auto &lbl =

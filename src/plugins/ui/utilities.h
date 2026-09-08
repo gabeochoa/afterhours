@@ -417,6 +417,13 @@ template<typename InputAction>
 static void register_after_ui_updates(SystemManager &sm) {
     sm.register_update_system(
         std::make_unique<ui::UIPluginPostUpdateBridge<InputAction>>());
+    if (!EntityHelper::has_singleton<ui::TooltipState>()) {
+        Entity &e = EntityHelper::createPermanentEntity();
+        e.addComponent<ui::TooltipState>();
+        EntityHelper::registerSingleton<ui::TooltipState>(e);
+    }
+    sm.register_update_system(
+        std::make_unique<ui::UpdateTooltips<InputAction>>());
 }
 
 /// setup() with an explicit starting resolution.
@@ -461,6 +468,7 @@ static void register_render_systems(
     sm.register_render_system(
         std::make_unique<ui::UIPluginRenderBridge<InputAction>>(
             toggle_debug, /*use_batched=*/false));
+    sm.register_render_system(std::make_unique<ui::RenderTooltip<InputAction>>());
 }
 
 template<typename InputAction>
@@ -469,6 +477,7 @@ static void register_batched_render_systems(
     sm.register_render_system(
         std::make_unique<ui::UIPluginRenderBridge<InputAction>>(
             toggle_debug, /*use_batched=*/true));
+    sm.register_render_system(std::make_unique<ui::RenderTooltip<InputAction>>());
 }
 
 /// Conventional key bindings for the UI's own actions.
