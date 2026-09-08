@@ -113,11 +113,49 @@ inline ElementResult grid(HasUIContext auto &ctx, EntityParent ep_pair,
                                                    grid_config.row_height})
                           .with_gap(grid_config.gap)
                           .with_no_wrap()
+                          // Structural only. Painting here covers whatever the
+                          // grid sits on and fills the gaps between cells.
+                          .with_background(Theme::Usage::None)
                           .with_debug_name("grid_row"));
     state.rows.push_back(row.ent().id);
   }
 
   return ElementResult{true, entity};
+}
+
+// The row a cell belongs in, so a caller can put any widget in a grid, not
+// just the div grid_cell makes. Minesweeper's cells are buttons.
+inline OptEntity grid_row(ElementResult grid_elem, int row) {
+  Entity &grid_entity = grid_elem.ent();
+  if (!grid_entity.template has<HasGridRows>())
+    return {};
+  auto &state = grid_entity.template get<HasGridRows>();
+  if (row < 0 || row >= static_cast<int>(state.rows.size()))
+    return {};
+  return UICollectionHolder::getEntityForID(state.rows[(size_t)row]);
+}
+
+// The size a cell in this column should take. Pair it with grid_row when
+// building the cell yourself; grid_cell uses the same thing.
+inline ComponentSize grid_track(ElementResult grid_elem, int col,
+                                int col_span = 1) {
+  Entity &grid_entity = grid_elem.ent();
+  if (!grid_entity.template has<HasGridRows>())
+    return ComponentSize{percent(1.f), percent(1.f)};
+  auto &state = grid_entity.template get<HasGridRows>();
+  const int span = std::max(1, std::min(col_span, state.cols - col));
+
+  // A spanning cell takes its own track plus the ones it covers, so the rest
+  // of the row still lines up with every other row.
+  // strictness 0, matching expand(): 1 means "do not resize me", which leaves
+  // every cell at nothing.
+  if (state.col_widths.empty())
+    return ComponentSize{expand(static_cast<float>(span)), percent(1.f)};
+  float total = 0.f;
+  for (int i = col; i < col + span && i < (int)state.col_widths.size(); i++)
+    total += state.col_widths[(size_t)i].value;
+  return ComponentSize{Size{state.col_widths[(size_t)col].dim, total, 1.f},
+                       percent(1.f)};
 }
 
 // Placed by coordinate rather than by call order, so a caller can skip a cell
@@ -135,24 +173,11 @@ inline ElementResult grid_cell(HasUIContext auto &ctx, ElementResult grid_elem,
       col >= state.cols)
     return ElementResult{false, grid_entity};
 
-  OptEntity row_opt = UICollectionHolder::getEntityForID(state.rows[(size_t)row]);
+  OptEntity row_opt = grid_row(grid_elem, row);
   if (!row_opt.valid())
     return ElementResult{false, grid_entity};
 
-  const int span = std::max(1, std::min(col_span, state.cols - col));
-
-  // A spanning cell takes its own track plus the ones it covers, so the rest
-  // of the row still lines up with every other row.
-  const auto track_size = [&]() -> Size {
-    // Equal columns: expand() with a weight, so span n is n times as wide.
-    if (state.col_widths.empty())
-      return Size{Dim::Expand, static_cast<float>(span), 1.f};
-    float total = 0.f;
-    for (int i = col; i < col + span && i < (int)state.col_widths.size(); i++)
-      total += state.col_widths[(size_t)i].value;
-    return Size{state.col_widths[(size_t)col].dim, total, 1.f};
-  };
-  const ComponentSize size{track_size(), percent(1.f)};
+  const ComponentSize size = grid_track(grid_elem, col, col_span);
 
   ComponentConfig cell = std::move(config);
   cell = cell.with_size(size);

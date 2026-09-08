@@ -123,4 +123,34 @@ TEST(a_grid_with_no_rows_or_cols_builds_nothing) {
   CHECK(!tbl);
 }
 
+
+// Cells plus the gaps between them have to fit the row. minesweeper's board is
+// 16 columns in 580px with a 1px gap: 16 cells of 36 plus 15 gaps is 591, and
+// the last column falls off. The old hand-tuned code had the same bug and
+// worked around it by picking 35 with a comment saying 36 overflowed.
+TEST(cells_and_gaps_together_fit_the_row) {
+  ImmTestHarness h;
+  auto tbl = grid(h.context(), mk(h.root(), 0),
+                  GridConfig{}.with_rows(2).with_cols(16).with_gap(pixels(1)),
+                  ComponentConfig{}
+                      .with_size(ComponentSize{pixels(580), pixels(80)})
+                      .with_debug_name("gaps"));
+  for (int r = 0; r < 2; r++)
+    for (int c = 0; c < 16; c++)
+      grid_cell(h.context(), tbl, r, c,
+                ComponentConfig{}.with_debug_name(
+                    fmt::format("cell_{}_{}", r, c)));
+  h.layout_only();
+
+  UIComponent *first = cell_at(h, 0, 0);
+  UIComponent *last = cell_at(h, 0, 15);
+  CHECK(first != nullptr && last != nullptr);
+  if (first && last) {
+    const float span = (last->rect().x + last->rect().width) - first->rect().x;
+    printf("  16 cells of %.1f + 15 gaps span %.0f (row is 580)\n",
+           first->rect().width, span);
+    CHECK(span <= 580.5f);
+  }
+}
+
 int main() { return ui_test::run_registered_tests("grid"); }
