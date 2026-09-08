@@ -473,10 +473,6 @@ struct AutoLayout {
                                             Axis axis) {
     const Size &exp = widget.desired[axis];
 
-    if (widget.absolute && exp.dim == Dim::Percent) {
-      VALIDATE(false, "Absolute widgets should not use Percent");
-    }
-
     // Expand is resolved later in distribute_expand_space (tax_refund); in this
     // pass its size is always 0, independent of the parent. Handle it before the
     // parent-size guards below: when the parent is children()-sized it isn't

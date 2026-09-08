@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include <cstdlib>
+
 #include <cstdio>
 #include <version> // __cpp_lib_format / __has_include, without pulling <format>
 
@@ -86,6 +88,22 @@ enum {
   VENDOR_LOG_ERROR = 4
 };
 
+// A macro, so release does not evaluate the arguments -- sizeof doesn't
+// evaluate its operand, and it keeps the compiler quiet about variables only
+// used in a check.
 #if !defined(AFTER_HOURS_REPLACE_VALIDATE)
-inline void VALIDATE(...) {}
+#if defined(NDEBUG)
+#define VALIDATE(condition, message)                                           \
+  ((void)sizeof((condition)), (void)sizeof((message)))
+#else
+[[noreturn]] inline void validate_failed(const char *file, int line,
+                                         const char *condition,
+                                         const char *message) {
+  log_error("VALIDATE({}) failed at {}:{}: {}", condition, file, line, message);
+  std::abort();
+}
+#define VALIDATE(condition, message)                                           \
+  ((condition) ? (void)0                                                       \
+               : validate_failed(__FILE__, __LINE__, #condition, message))
+#endif
 #endif
