@@ -158,7 +158,9 @@ namespace imm {
 struct UIStylingDefaults;
 } // namespace imm
 
-template <typename InputAction> struct UIContext : BaseComponent {
+// final for the same reason as FontManager: the render systems look it up
+// with has_child_of on every entity, every frame.
+template <typename InputAction> struct UIContext final : BaseComponent {
   using value_type = InputAction;
 
   // TODO move to input system

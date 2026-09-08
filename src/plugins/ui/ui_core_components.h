@@ -340,7 +340,9 @@ struct UIComponent : BaseComponent {
   }
 };
 
-struct FontManager : BaseComponent {
+// final so has_child_of can answer in one test instead of a dynamic_cast
+// per occupied slot. Nothing derives from it, and now nothing can.
+struct FontManager final : BaseComponent {
   std::string active_font = UIComponent::DEFAULT_FONT;
   std::map<std::string, Font> fonts;
 

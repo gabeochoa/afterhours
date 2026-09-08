@@ -83,6 +83,12 @@ struct Entity {
     // Exactly T is the common case and needs no scan at all.
     if (componentSet.test(components::get_type_id<T>()))
       return true;
+
+    // Nothing can derive from a final type, so there is nothing left to find.
+    // The compiler enforces that, unlike a comment saying so.
+    if constexpr (std::is_final_v<T>)
+      return false;
+
     // Otherwise it can only be a subclass, stored under its own id. Walk the
     // slots that hold something rather than asking all 128.
     for (size_t i = componentSet.next_set(0); i < max_num_components;
