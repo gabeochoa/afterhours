@@ -743,7 +743,16 @@ struct MetalPlatformAPI {
     // sokol reports mouse coords in framebuffer pixels (scaled by DPI on
     // macOS Retina), but all UI layout/rendering uses logical pixels.
     float dpi = sapp_dpi_scale();
-    return {s.mouse_x / dpi, s.mouse_y / dpi};
+    const float lx = s.mouse_x / dpi;
+    const float ly = s.mouse_y / dpi;
+    // Then the same letterbox raylib applies. This used to stop at the DPI
+    // divide, so a sokol app whose content resolution differed from its window
+    // laid out UI in content space and reported a cursor in window space.
+    const int win_w = static_cast<int>(sapp_width() / dpi);
+    const int win_h = static_cast<int>(sapp_height() / dpi);
+    const Vector2Type mapped = window_manager::window_to_content(
+        Vector2Type{lx, ly}, win_w, win_h);
+    return {mapped.x, mapped.y};
   }
   static Vec2 get_screen_to_world_2d(const Vec2 &position,
                                      const Camera2D &camera) {

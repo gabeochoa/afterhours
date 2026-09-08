@@ -179,6 +179,72 @@ struct window_manager : developer::Plugin {
     return resolutions;
   }
 
+  // Where content lands inside the window, and the scale between them.
+  //
+  // A fixed content resolution presented into a differently-shaped window is
+  // letterboxed. That transform used to be derived inline inside
+  // get_mouse_position and exposed nowhere, so an app presenting its own
+  // render texture had to re-derive it and keep the two in step by comment.
+  // It also has an inverse now, which an OS cursor rect, an IME candidate
+  // window or a drag hit region all need.
+  struct Viewport {
+    RectangleType dest{}; // content's rect in window space
+    float scale = 1.f;    // content pixels per window pixel
+  };
+
+  // Identity when there is no resolution to letterbox against, so a caller
+  // that does not use one is unaffected.
+  static Viewport content_viewport(int window_w, int window_h) {
+    Viewport vp;
+    vp.dest = RectangleType{0.f, 0.f, static_cast<float>(window_w),
+                            static_cast<float>(window_h)};
+    const auto *pcr =
+        EntityHelper::get_singleton_cmp<ProvidesCurrentResolution>();
+    if (pcr == nullptr || window_w <= 0 || window_h <= 0)
+      return vp;
+
+    const float content_w = static_cast<float>(pcr->current_resolution.width);
+    const float content_h = static_cast<float>(pcr->current_resolution.height);
+    if (content_w <= 0.f || content_h <= 0.f)
+      return vp;
+
+    int dest_w = window_w;
+    int dest_h = static_cast<int>(
+        std::round((double)dest_w * content_h / content_w));
+    if (dest_h > window_h) {
+      dest_h = window_h;
+      dest_w = static_cast<int>(
+          std::round((double)dest_h * content_w / content_h));
+    }
+    vp.dest = RectangleType{static_cast<float>((window_w - dest_w) / 2),
+                            static_cast<float>((window_h - dest_h) / 2),
+                            static_cast<float>(dest_w),
+                            static_cast<float>(dest_h)};
+    vp.scale = dest_w > 0 ? content_w / static_cast<float>(dest_w) : 1.f;
+    return vp;
+  }
+
+  // Outside the letterbox returns the point unchanged, matching what
+  // get_mouse_position did with a cursor over a bar.
+  static Vector2Type window_to_content(Vector2Type p, int window_w,
+                                       int window_h) {
+    const Viewport vp = content_viewport(window_w, window_h);
+    if (p.x < vp.dest.x || p.x > vp.dest.x + vp.dest.width ||
+        p.y < vp.dest.y || p.y > vp.dest.y + vp.dest.height)
+      return p;
+    return Vector2Type{(p.x - vp.dest.x) * vp.scale,
+                       (p.y - vp.dest.y) * vp.scale};
+  }
+
+  static Vector2Type content_to_window(Vector2Type p, int window_w,
+                                       int window_h) {
+    const Viewport vp = content_viewport(window_w, window_h);
+    if (vp.scale <= 0.f)
+      return p;
+    return Vector2Type{vp.dest.x + p.x / vp.scale,
+                       vp.dest.y + p.y / vp.scale};
+  }
+
   struct ProvidesCurrentResolution : public BaseComponent {
     bool should_refetch = true;
     Resolution current_resolution;
