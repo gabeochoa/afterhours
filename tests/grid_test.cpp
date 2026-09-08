@@ -150,6 +150,55 @@ TEST(cells_and_gaps_together_fit_the_row) {
     printf("  16 cells of %.1f + 15 gaps span %.0f (row is 580)\n",
            first->rect().width, span);
     CHECK(span <= 580.5f);
+
+    // The total fitting is not enough: 16 cells of 36 and no gap at all also
+    // fits 580. The stride is what says the gap is really there.
+    UIComponent *second = cell_at(h, 0, 1);
+    CHECK(second != nullptr);
+    if (second) {
+      const float stride = second->rect().x - first->rect().x;
+      printf("  stride %.2f vs cell %.2f (gap should be 1)\n", stride,
+             first->rect().width);
+      CHECK(std::abs(stride - (first->rect().width + 1.f)) < 0.5f);
+    }
+  }
+}
+
+
+// The same grid with snapping on, which is how an app runs. A 1px gap has no
+// representation on a 4px grid, so it rounds away and the cells butt together
+// -- which is why converting minesweeper's board made it render as one slab
+// while every measurement said 36x36 in a 580px row.
+TEST(a_sub_unit_gap_does_not_survive_grid_snapping) {
+  ImmTestHarness h;
+  auto tbl = grid(h.context(), mk(h.root(), 0),
+                  GridConfig{}.with_rows(2).with_cols(16).with_gap(pixels(1)),
+                  ComponentConfig{}
+                      .with_size(ComponentSize{pixels(580), pixels(80)})
+                      .with_debug_name("snapped"));
+  for (int r = 0; r < 2; r++)
+    for (int c = 0; c < 16; c++)
+      grid_cell(h.context(), tbl, r, c,
+                ComponentConfig{}.with_debug_name(
+                    fmt::format("cell_{}_{}", r, c)));
+  h.layout_only(true, {1280, 720});
+
+  UIComponent *first = cell_at(h, 0, 0);
+  UIComponent *second = cell_at(h, 0, 1);
+  CHECK(first != nullptr && second != nullptr);
+  if (first && second) {
+    const float stride = second->rect().x - first->rect().x;
+    printf("  snapped: cell %.0f, stride %.0f (gap asked 1, got %.0f)\n",
+           first->rect().width, stride, stride - first->rect().width);
+  }
+
+  // The vertical gap between rows comes from the container, not the row, and
+  // is a separate thing to get wrong.
+  UIComponent *below = cell_at(h, 1, 0);
+  if (first && below) {
+    const float vstride = below->rect().y - first->rect().y;
+    printf("  rows: cell h %.0f, stride %.0f\n", first->rect().height,
+           vstride);
   }
 }
 
