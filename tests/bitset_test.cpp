@@ -12,6 +12,7 @@
 
 #include <bitset>
 #include <chrono>
+#include <vector>
 
 #include <afterhours/src/core/bitset.h>
 
@@ -162,6 +163,73 @@ TEST(it_is_faster_than_std_bitset_unoptimised) {
   // means this change is not worth having and should be said out loud rather
   // than asserted around.
   CHECK(ratio > 0.9);
+}
+
+
+// next_set must visit exactly the set bits, and nothing else. This is the
+// property has_child_of relies on to stop asking all 128 slots.
+TEST(next_set_visits_only_the_set_bits) {
+  Bitset<128> b;
+  const std::size_t placed[] = {0, 5, 63, 64, 65, 127};
+  for (std::size_t i : placed)
+    b.set(i);
+
+  std::vector<std::size_t> seen;
+  for (std::size_t i = b.next_set(0); i < b.size(); i = b.next_set(i + 1))
+    seen.push_back(i);
+
+  printf("  visited %zu of %zu slots\n", seen.size(), b.size());
+  CHECK(seen.size() == 6);
+  for (std::size_t k = 0; k < 6; k++)
+    CHECK(seen[k] == placed[k]);
+}
+
+TEST(next_set_on_an_empty_bitset_ends_immediately) {
+  Bitset<128> b;
+  CHECK(b.next_set(0) == b.size());
+  // Past the end is not an infinite loop or an out-of-bounds read.
+  CHECK(b.next_set(200) == b.size());
+}
+
+// A size that is not a multiple of 64 has bits in the last word past N.
+TEST(next_set_respects_a_ragged_size) {
+  Bitset<kOdd> b;
+  b.set(99);
+  CHECK(b.next_set(0) == 99);
+  CHECK(b.next_set(100) == kOdd);
+}
+
+// The scan has_child_of does: ask every slot, versus walk the set ones.
+// Same binary, same run.
+TEST(walking_set_bits_beats_asking_every_slot) {
+  constexpr int kScans = 20000;
+  Bitset<128> b;
+  for (std::size_t i : {std::size_t{2}, std::size_t{17}, std::size_t{61},
+                        std::size_t{90}, std::size_t{120}})
+    b.set(i);
+
+  const auto start_all = std::chrono::steady_clock::now();
+  std::size_t hits_all = 0;
+  for (int s = 0; s < kScans; s++)
+    for (std::size_t i = 0; i < 128; i++)
+      if (b.test(i))
+        hits_all++;
+  const double t_all = std::chrono::duration<double, std::milli>(
+                           std::chrono::steady_clock::now() - start_all)
+                           .count();
+
+  const auto start_set = std::chrono::steady_clock::now();
+  std::size_t hits_set = 0;
+  for (int s = 0; s < kScans; s++)
+    for (std::size_t i = b.next_set(0); i < b.size(); i = b.next_set(i + 1))
+      hits_set++;
+  const double t_set = std::chrono::duration<double, std::milli>(
+                           std::chrono::steady_clock::now() - start_set)
+                           .count();
+
+  CHECK(hits_all == hits_set);
+  printf("  every slot %.2fms, set bits only %.2fms, ratio %.2fx\n", t_all,
+         t_set, t_set > 0.0 ? t_all / t_set : 0.0);
 }
 
 int main() { return ui_test::run_registered_tests("bitset"); }

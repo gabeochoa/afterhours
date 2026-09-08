@@ -52,10 +52,9 @@ struct Entity {
   virtual ~Entity() {}
 
   void recycle(EntityID new_id) {
-    for (size_t i = 0; i < max_num_components; ++i) {
-      if (componentSet.test(i)) {
-        componentArray[i].reset();
-      }
+    for (size_t i = componentSet.next_set(0); i < max_num_components;
+         i = componentSet.next_set(i + 1)) {
+      componentArray[i].reset();
     }
     componentSet.reset();
     tags.reset();
@@ -81,11 +80,13 @@ struct Entity {
     log_trace("checking for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
-    // componentSet already knows which of the 128 slots hold anything, so
-    // only those get the RTTI check rather than every slot every call.
-    for (size_t i = 0; i < max_num_components; i++) {
-      if (!componentSet[i])
-        continue;
+    // Exactly T is the common case and needs no scan at all.
+    if (componentSet.test(components::get_type_id<T>()))
+      return true;
+    // Otherwise it can only be a subclass, stored under its own id. Walk the
+    // slots that hold something rather than asking all 128.
+    for (size_t i = componentSet.next_set(0); i < max_num_components;
+         i = componentSet.next_set(i + 1)) {
       if (child_of<T>(componentArray[i].get())) {
         return true;
       }
@@ -187,9 +188,8 @@ struct Entity {
     log_trace("fetching for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
-    for (size_t i = 0; i < max_num_components; i++) {
-      if (!componentSet[i])
-        continue;
+    for (size_t i = componentSet.next_set(0); i < max_num_components;
+         i = componentSet.next_set(i + 1)) {
       if (child_of<T>(componentArray[i].get())) {
         return static_cast<T &>(*componentArray[i]);
       }
@@ -203,9 +203,8 @@ struct Entity {
     log_trace("fetching for child components {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
 #endif
-    for (size_t i = 0; i < max_num_components; i++) {
-      if (!componentSet[i])
-        continue;
+    for (size_t i = componentSet.next_set(0); i < max_num_components;
+         i = componentSet.next_set(i + 1)) {
       if (child_of<T>(componentArray[i].get())) {
         return static_cast<const T &>(*componentArray[i]);
       }
