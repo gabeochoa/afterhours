@@ -63,6 +63,7 @@ ALL_TESTS := \
 	animation_test \
 	system_profile_test \
 	blend_mode_test \
+	rect_test \
 	autolayout_test \
 	dialog_test \
 	dump_ui_test \

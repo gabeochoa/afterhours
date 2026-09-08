@@ -1,6 +1,9 @@
 
 #pragma once
 
+// Rect geometry lives beside the draw calls that consume it.
+#include "rect.h"
+
 #ifdef AFTER_HOURS_USE_RAYLIB
 #include "backends/raylib/drawing_helpers.h"
 #elif defined(AFTER_HOURS_USE_METAL)
