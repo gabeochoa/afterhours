@@ -11,6 +11,7 @@
 #include "../config.h"
 #include "../type_name.h"
 #include "base_component.h"
+#include "bitset.h"
 #include "entity_handle.h"
 #include "pointer_policy.h"
 
@@ -21,7 +22,7 @@ template <typename Base, typename Derived> bool child_of(Derived *derived) {
   return dynamic_cast<Base *>(derived) != nullptr;
 }
 
-using ComponentBitSet = std::bitset<max_num_components>;
+using ComponentBitSet = Bitset<max_num_components>;
 using ComponentArray =
     std::array<std::unique_ptr<BaseComponent>, max_num_components>;
 using EntityID = int;
@@ -69,7 +70,7 @@ struct Entity {
 #if defined(AFTER_HOURS_DEBUG)
     log_trace("checking component {} {} on entity {}",
               components::get_type_id<T>(), type_name<T>(), id);
-    log_trace("your set is now {}", componentSet);
+    log_trace("your set is now {}", componentSet.to_string());
     log_trace("and the result was {}", result);
 #endif
     return result;
@@ -120,7 +121,7 @@ struct Entity {
 #endif
       return;
     }
-    componentSet[components::get_type_id<T>()] = false;
+    componentSet.set(components::get_type_id<T>(), false);
     componentArray[components::get_type_id<T>()].reset();
   }
 
@@ -142,10 +143,10 @@ struct Entity {
     auto component = std::make_unique<T>(std::forward<TArgs>(args)...);
     const ComponentID component_id = components::get_type_id<T>();
     componentArray[component_id] = std::move(component);
-    componentSet[component_id] = true;
+    componentSet.set(component_id, true);
 
 #if defined(AFTER_HOURS_DEBUG)
-    log_trace("your set is now {}", componentSet);
+    log_trace("your set is now {}", componentSet.to_string());
 #endif
 
     return get<T>();

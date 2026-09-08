@@ -66,6 +66,7 @@ ALL_TESTS := \
 	rect_test \
 	viewport_test \
 	grid_test \
+	bitset_test \
 	autolayout_test \
 	dialog_test \
 	dump_ui_test \
