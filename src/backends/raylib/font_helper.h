@@ -45,8 +45,44 @@ inline std::vector<int> default_codepoints() {
 // font with glyphs and texture.id 0 draws nothing. Build the atlas by hand
 // instead of failing. Both wm_afterhours and kart-afterhours had written this
 // same routine in their own preload before it lived here.
-inline raylib::Font build_font_atlas(const char *file, int px,
-                                     const int *codepoints, int count) {
+// Skyline (packMethod 1) rather than raylib's simple row packer, and padding
+// wide enough to survive downscaling.
+//
+// The row packer drops glyphs on a large atlas -- raylib logs "Failed to
+// package character" -- and the library's own default_codepoints() is 556, so
+// the shipped default is the likeliest case to hit it. 1px of padding also
+// bleeds between glyphs when an app downscales the atlas under mipmapping.
+enum struct FontAtlasPacker {
+  Row = 0,     // raylib's default; drops glyphs on a large atlas
+  Skyline = 1, // slower to pack, fits more
+};
+
+struct FontAtlasConfig {
+  int padding = 4;
+  FontAtlasPacker packer = FontAtlasPacker::Skyline;
+};
+
+// What every load uses unless a caller passes its own. Set it once at startup:
+// fonts are loaded from several places, and threading a parameter through all
+// of them would move the problem rather than solve it.
+//
+//   set_font_atlas_config({.padding = 8, .packer = FontAtlasPacker::Row});
+//
+// Unnamed fields keep their defaults, so setting one does not silently reset
+// the others.
+inline FontAtlasConfig &default_font_atlas_config() {
+  static FontAtlasConfig config;
+  return config;
+}
+
+inline void set_font_atlas_config(const FontAtlasConfig &config) {
+  default_font_atlas_config() = config;
+}
+
+inline raylib::Font
+build_font_atlas(const char *file, int px, const int *codepoints, int count,
+                 const FontAtlasConfig &atlas_config =
+                     default_font_atlas_config()) {
   raylib::Font font{};
   int data_size = 0;
   unsigned char *data = raylib::LoadFileData(file, &data_size);
@@ -56,7 +92,7 @@ inline raylib::Font build_font_atlas(const char *file, int px,
   }
   font.baseSize = px;
   font.glyphCount = count;
-  font.glyphPadding = 1;
+  font.glyphPadding = atlas_config.padding;
   font.glyphs = raylib::LoadFontData(data, data_size, px,
                                      const_cast<int *>(codepoints), count,
                                      raylib::FONT_DEFAULT);
@@ -65,8 +101,9 @@ inline raylib::Font build_font_atlas(const char *file, int px,
     raylib::UnloadFileData(data);
     return raylib::Font{};
   }
-  raylib::Image atlas = raylib::GenImageFontAtlas(font.glyphs, &font.recs,
-                                                  font.glyphCount, px, 1, 0);
+  raylib::Image atlas = raylib::GenImageFontAtlas(
+      font.glyphs, &font.recs, font.glyphCount, px, atlas_config.padding,
+      static_cast<int>(atlas_config.packer));
   font.texture = raylib::LoadTextureFromImage(atlas);
   raylib::UnloadImage(atlas);
   raylib::UnloadFileData(data);

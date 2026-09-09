@@ -29,7 +29,34 @@ static void check(bool cond, const std::string &what) {
   }
 }
 
+
 int main() {
+  // The packer is the part that fails quietly: raylib's row packer drops
+  // glyphs on a large atlas and only says so in a log line. The library's own
+  // default_codepoints() is 556, so the shipped default is the likeliest thing
+  // to hit it, which is why this defaults to skyline.
+  //
+  // Pins the defaults, not raylib's packing: proving glyphs survive needs a
+  // real font file and the library has none to test against.
+  {
+    const afterhours::FontAtlasConfig atlas_defaults;
+    printf("  atlas defaults: padding %d, packer %d\n", atlas_defaults.padding,
+           (int)atlas_defaults.packer);
+    check(atlas_defaults.packer == afterhours::FontAtlasPacker::Skyline,
+          "atlas packer defaults to skyline");
+    // An app changes it for every load in one call, and fields it does not
+    // name keep their defaults.
+    afterhours::set_font_atlas_config({.padding = 9});
+    check(afterhours::default_font_atlas_config().padding == 9,
+          "set_font_atlas_config takes");
+    check(afterhours::default_font_atlas_config().packer ==
+              afterhours::FontAtlasPacker::Skyline,
+          "and an unnamed field keeps its default");
+    afterhours::set_font_atlas_config({});
+    // 1px bleeds between glyphs when an app downscales the atlas.
+    check(atlas_defaults.padding >= 4, "atlas padding survives downscaling");
+  }
+
   printf("Running headless fallback tests...\n\n");
 
   using WM = afterhours::window_manager;
