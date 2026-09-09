@@ -28,6 +28,10 @@
 #error "afterhours: <format> not available (need libstdc++ 13+/libc++ 17+ or a newer compiler). Unset AFTER_HOURS_REQUIRE_FORMAT to fall back to no-op logging."
 #endif
 
+// Somewhere else for the log to go. log_file.h is the one in the box; a
+// pointer, not an include, so a TU that does not want it pays nothing.
+inline void (*log_sink_fn)(const char *level, const char *message) = nullptr;
+
 #if (defined(AFTER_HOURS_LEAN_LOGGING) || !AFTER_HOURS_HAS_FORMAT) &&           \
     !defined(AFTER_HOURS_REPLACE_LOGGING)
 
@@ -38,6 +42,7 @@ template <typename... Args> inline void log_error(const char *, Args &&...) {}
 template <typename... Args> inline void log_clean(const char *, Args &&...) {}
 template <typename Duration, typename... Args>
 inline void log_once_per(Duration, int, const char *, Args &&...) {}
+
 
 #elif !defined(AFTER_HOURS_REPLACE_LOGGING)
 
@@ -52,20 +57,26 @@ inline void log_trace(std::format_string<Args...>, Args &&...) {
 
 template <typename... Args>
 inline void log_info(std::format_string<Args...> fmt, Args &&...args) {
-  std::fprintf(stdout, "[INFO] %s\n",
-               std::format(fmt, std::forward<Args>(args)...).c_str());
+  const std::string message = std::format(fmt, std::forward<Args>(args)...);
+  std::fprintf(stdout, "[INFO] %s\n", message.c_str());
+  if (log_sink_fn)
+    log_sink_fn("[INFO]", message.c_str());
 }
 
 template <typename... Args>
 inline void log_warn(std::format_string<Args...> fmt, Args &&...args) {
-  std::fprintf(stdout, "[WARN] %s\n",
-               std::format(fmt, std::forward<Args>(args)...).c_str());
+  const std::string message = std::format(fmt, std::forward<Args>(args)...);
+  std::fprintf(stdout, "[WARN] %s\n", message.c_str());
+  if (log_sink_fn)
+    log_sink_fn("[WARN]", message.c_str());
 }
 
 template <typename... Args>
 inline void log_error(std::format_string<Args...> fmt, Args &&...args) {
-  std::fprintf(stderr, "[ERROR] %s\n",
-               std::format(fmt, std::forward<Args>(args)...).c_str());
+  const std::string message = std::format(fmt, std::forward<Args>(args)...);
+  std::fprintf(stderr, "[ERROR] %s\n", message.c_str());
+  if (log_sink_fn)
+    log_sink_fn("[ERROR]", message.c_str());
 }
 
 template <typename... Args>
