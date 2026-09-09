@@ -156,11 +156,26 @@ inline bool build_filter(PendingE2ECommand &cmd, Filter &f, Position &pos) {
 }
 
 // A summary of what WAS drawn, so a failure says more than "no".
-inline std::string summarize(size_t limit = 12) {
+// `op_filter` empty means everything. It used to be ignored entirely, so
+// `dump_draws line` printed rectangles and text and looked like there were no
+// lines to find.
+inline std::string summarize(size_t limit = 12,
+                             const std::string &op_filter = "") {
   const auto &calls = capture::calls();
-  std::string out = std::format("{} draws this frame", calls.size());
+  size_t matching = 0;
+  for (const auto &c : calls)
+    if (op_filter.empty() || c.op == op_filter)
+      matching++;
+
+  std::string out =
+      op_filter.empty()
+          ? std::format("{} draws this frame", calls.size())
+          : std::format("{} '{}' draws this frame, of {}", matching, op_filter,
+                        calls.size());
   size_t shown = 0;
   for (const auto &c : calls) {
+    if (!op_filter.empty() && c.op != op_filter)
+      continue;
     if (shown++ >= limit)
       break;
     out += std::format("\n  | {} ({:.0f},{:.0f}) {:.0f}x{:.0f} "
@@ -280,8 +295,10 @@ struct HandleExpectDrawnAtCommand : System<PendingE2ECommand> {
 struct HandleDumpDrawsCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("dump_draws")) return;
-    const std::string name = cmd.has_args(1) ? cmd.args[0] : "draws";
-    log_info("[E2E] dump_draws '{}': {}", name, summarize(10000));
+    const std::string op_filter = cmd.has_args(1) ? cmd.args[0] : "";
+    log_info("[E2E] dump_draws '{}': {}",
+             op_filter.empty() ? "all" : op_filter,
+             summarize(10000, op_filter));
     cmd.consume();
   }
 };

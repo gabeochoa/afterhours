@@ -73,6 +73,22 @@ inline void enable() { enabled() = true; }
 inline void disable() { enabled() = false; }
 inline void clear() { calls().clear(); }
 
+// Who decides when a frame starts.
+//
+// The UI render pass used to clear the buffer at its own start, which threw
+// away everything drawn before it -- for a game, the entire world. An app that
+// calls begin_frame() takes that over, so world draws survive to be asserted
+// on. One that never calls it keeps the old behaviour.
+inline bool &app_owns_frame() {
+  static bool owned = false;
+  return owned;
+}
+
+inline void begin_frame() {
+  app_owns_frame() = true;
+  clear();
+}
+
 // A view, not a `const std::string &`: that made every `const char *` caller
 // build a string before this could return early.
 inline void record(const char *op, const RectangleType &rect,

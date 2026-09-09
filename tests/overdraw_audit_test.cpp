@@ -257,4 +257,39 @@ TEST(audit_composites_for_hidden_draws) {
   CHECK(true);
 }
 
+
+// The UI render pass used to clear the capture buffer at its own start, so
+// anything the app drew first -- for a game, the whole world -- was recorded
+// and then discarded before a command could assert on it. An app that calls
+// begin_frame() owns the boundary instead.
+TEST(a_draw_before_the_ui_pass_survives_when_the_app_owns_the_frame) {
+  capture::enable();
+  capture::begin_frame();
+
+  // Stands in for the world pass: drawn before any UI exists.
+  draw_line_ex(Vector2Type{0, 0}, Vector2Type{10, 10}, 1.f,
+               afterhours::Color{255, 0, 0, 255});
+  const size_t after_world = capture::calls().size();
+  CHECK(after_world >= 1);
+
+  ImmTestHarness h;
+  button(h.context(), mk(h.root(), 0),
+         ComponentConfig{}
+             .with_size(ComponentSize{pixels(80), pixels(24)})
+             .with_label("ui"));
+  h.render();
+
+  size_t lines = 0;
+  for (const auto &c : capture::calls())
+    if (c.op == "line")
+      lines++;
+  printf("  %zu draws total, %zu of them the pre-UI line\n",
+         capture::calls().size(), lines);
+  CHECK(lines >= 1);
+
+  capture::app_owns_frame() = false;
+  capture::disable();
+  capture::clear();
+}
+
 int main() { return ui_test::run_registered_tests("overdraw audit"); }

@@ -277,7 +277,10 @@ struct ImmTestHarness {
     layout_only();
     render_font();
 
-    clear_draw_calls();
+    // Same rule as the UI render pass: an app that took the frame boundary
+    // with capture::begin_frame() keeps what it drew before this.
+    if (!capture::app_owns_frame())
+      clear_draw_calls();
     Renderer renderer;
     renderer.for_each_with_derived(*root_entity, *ctx,
                                    font_entity->get<FontManager>(), 0.f);

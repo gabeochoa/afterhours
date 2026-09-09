@@ -1852,8 +1852,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 #endif
 
     // The buffer holds THIS frame, so an assertion reads what is on screen
-    // rather than everything drawn since the process started.
-    if (capture::enabled())
+    // rather than everything drawn since the process started. Skipped when the
+    // app calls capture::begin_frame(): clearing here would throw away what it
+    // drew before the UI, which for a game is the whole world.
+    if (capture::enabled() && !capture::app_owns_frame())
       capture::clear();
 
     int cursor_to_set = 0; // Default cursor
@@ -2555,7 +2557,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     arena.reset();
 
     // Same reason as RenderImm: the buffer is one frame, not the whole run.
-    if (capture::enabled())
+    if (capture::enabled() && !capture::app_owns_frame())
       capture::clear();
 
     // Create command buffer
