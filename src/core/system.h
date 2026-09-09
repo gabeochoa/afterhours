@@ -15,6 +15,7 @@
 #include <cstdlib>
 #endif
 
+#include "../crash_handler.h"
 #include "base_component.h"
 #include "entity.h"
 #include "entity_helper.h"
@@ -491,6 +492,10 @@ struct SystemManager {
         const SystemBase *sys = nullptr;
         SystemPhase phase{};
         ProfileScope(const SystemBase *s, SystemPhase p) {
+            // Unconditional, unlike the hook: a crash report wants the system
+            // name whether or not anyone is profiling, and it is a pointer
+            // store.
+            crash::set_running_system(s->name().data());
             if (profile_hook()) {
                 sys = s;
                 phase = p;
@@ -502,6 +507,7 @@ struct SystemManager {
         ~ProfileScope() {
             if (sys && profile_hook().end)
                 profile_hook().end(sys->name(), phase);
+            crash::set_running_system(nullptr);
         }
         ProfileScope(const ProfileScope &) = delete;
         ProfileScope &operator=(const ProfileScope &) = delete;
