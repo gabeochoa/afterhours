@@ -1,5 +1,8 @@
 #pragma once
 
+#include <string>
+#include <string_view>
+
 #include "../../clipboard.h"
 #include "../../input_system.h"
 #include "../../../core/key_codes.h"
@@ -17,6 +20,43 @@ namespace text_input {
 
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
+
+// Opted into by naming them in the consumer's InputAction enum, so a typo
+// silently removes the feature.
+inline constexpr std::string_view optional_editing_actions[] = {
+    "TextUndo",      "TextRedo",       "TextCopy",
+    "TextCut",       "TextPaste",      "TextWordLeft",
+    "TextWordRight", "TextSelectLeft", "TextSelectRight",
+    "TextDeleteWordBack", "TextDeleteWordForward",
+};
+
+template <typename InputAction>
+constexpr bool has_editing_action(std::string_view name) {
+  return magic_enum::enum_contains<InputAction>(name);
+}
+
+// Names whatever resolved to nothing, once per run.
+template <typename InputAction> inline void report_missing_editing_actions() {
+  static bool reported = false;
+  if (reported)
+    return;
+  reported = true;
+
+  std::string missing;
+  for (const std::string_view name : optional_editing_actions) {
+    if (!has_editing_action<InputAction>(name)) {
+      if (!missing.empty())
+        missing += ", ";
+      missing += name;
+    }
+  }
+  if (missing.empty())
+    return;
+  log_warn("text_input: these editing actions are off because {} has no "
+           "enumerator by that name: {}. Add the enumerator and bind it, or "
+           "ignore this if you meant to leave them out.",
+           type_name<InputAction>(), missing);
+}
 
 // Given a local x coordinate within a text field, find the byte offset
 // in the display text that's closest to that position.
@@ -508,6 +548,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Handle input when focused
   if (state.is_focused) {
+    report_missing_editing_actions<InputAction>();
     bool editable = !state.readonly;
 
     // Undo/Redo (before clipboard/char input so Ctrl+Z doesn't insert)
