@@ -71,6 +71,7 @@ ALL_TESTS := \
 	crash_handler_test \
 	setting_row_style_test \
 	singleton_iteration_test \
+	fixed_timestep_test \
 	headless_runconfig_test \
 	fit_content_test \
 	label_inset_test \
@@ -174,6 +175,7 @@ RAYLIB_TESTS := \
 	label_inset_test \
 	fit_content_test \
 	headless_runconfig_test \
+	fixed_timestep_test \
 	text_wrap_test \
 	theme_io_test
 

@@ -219,6 +219,16 @@ struct RunConfig {
   // --headless was parsed and did nothing.
   DisplayMode display = DisplayMode::Windowed;
 
+  float fixed_dt = 0.f;
+  int sim_steps = 1;
+
+  float step_dt(float wall_dt, float time_scale = 1.f) const {
+    return fixed_dt > 0.f ? fixed_dt : wall_dt * time_scale;
+  }
+  int step_count() const {
+    return fixed_dt > 0.f && sim_steps > 0 ? sim_steps : 1;
+  }
+
   std::function<void()> init = nullptr;
   std::function<void()> frame = nullptr;
   std::function<void()> cleanup = nullptr;
