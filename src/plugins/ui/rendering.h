@@ -1,5 +1,6 @@
 #pragma once
 
+#include <set>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -310,6 +311,45 @@ constexpr bool SHOW_TEXT_OVERFLOW_DEBUG = false;
 #endif
 
 // Result struct for position_text that includes whether text fits properly
+// Where a label sits inside its box. Device pixels, so it does not scale.
+inline constexpr float kTextInset = 5.f;
+
+// kTextInset, or less on a box too small to spend it.
+inline Vector2Type text_inset_for(const RectangleType &rect) {
+  if (rect.width <= 0.0f || rect.height <= 0.0f)
+    return Vector2Type{0.0f, 0.0f};
+  return Vector2Type{std::min(kTextInset, rect.width * 0.4f),
+                     std::min(kTextInset, rect.height * 0.4f)};
+}
+
+// Padding on a label-only element does nothing. Honouring it would move every
+// existing label, so say so instead.
+inline void warn_ignored_label_padding(const Entity &entity,
+                                      const UIComponent &cmp) {
+  if (cmp.children.size() > 0)
+    return;
+  const float padd = cmp.computed_padd[Axis::X] + cmp.computed_padd[Axis::Y];
+  if (padd <= 0.f)
+    return;
+  // Once per run: wm alone has 541 of these.
+  static bool warned = false;
+  static int suppressed = 0;
+  if (warned) {
+    suppressed++;
+    return;
+  }
+  warned = true;
+  const std::string name = entity.has<UIComponentDebug>()
+                               ? entity.get<UIComponentDebug>().name()
+                               : std::string();
+  log_warn("'{}' sets padding on a label with no children. That does nothing "
+           "-- the text sits at a fixed {}px inset either way (kTextInset, and "
+           "text_inset_for() if you need to line something up with it). Use "
+           "margin, or padding on a wrapper. Further cases are not repeated.",
+           name.empty() ? "<unnamed>" : name, kTextInset);
+  (void)suppressed;
+}
+
 struct TextPositionResult {
   RectangleType rect;
   bool text_fits; // false if font was clamped to minimum (text won't fit)
@@ -744,13 +784,7 @@ static inline void draw_text_in_rect(
   }
 
   TextPositionResult result = [&]() {
-    Vector2Type margin_px{5.f, 5.f};
-    if (rect.width <= 0.0f || rect.height <= 0.0f) {
-      margin_px = Vector2Type{0.0f, 0.0f};
-    } else {
-      margin_px.x = std::min(margin_px.x, rect.width * 0.4f);
-      margin_px.y = std::min(margin_px.y, rect.height * 0.4f);
-    }
+    const Vector2Type margin_px = text_inset_for(rect);
     return position_text_ex(fm, text, rect, alignment, margin_px,
                             explicit_font_size, letter_spacing, text_overflow);
   }();
@@ -1654,6 +1688,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
     if (entity.has<HasLabel>()) {
       const HasLabel &hasLabel = entity.get<HasLabel>();
+      warn_ignored_label_padding(entity, cmp);
       Color font_col = detail::resolve_label_color(hasLabel, context.theme);
 
       if (effective_opacity < 1.0f) {
@@ -2230,6 +2265,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     // Label/text
     if (entity.has<HasLabel>()) {
       const HasLabel &hasLabel = entity.get<HasLabel>();
+      warn_ignored_label_padding(entity, cmp);
       Color font_col = detail::resolve_label_color(hasLabel, context.theme);
 
       if (effective_opacity < 1.0f) {
