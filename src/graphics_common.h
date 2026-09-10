@@ -215,6 +215,10 @@ struct RunConfig {
   int target_fps = 60;
   unsigned int flags = 0;
 
+  // Headless skips the window. run() used to open one unconditionally, so
+  // --headless was parsed and did nothing.
+  DisplayMode display = DisplayMode::Windowed;
+
   std::function<void()> init = nullptr;
   std::function<void()> frame = nullptr;
   std::function<void()> cleanup = nullptr;

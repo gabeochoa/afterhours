@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <string>
 
+#include "../../graphics_common.h"
 #include "runner.h"
 
 namespace afterhours {
@@ -32,6 +33,12 @@ struct E2EArgs {
   // counts ticks; it changes `wait <seconds>`.
   float time_scale = 1.0f;
   int capture_interval = 0;
+
+  // For RunConfig::display, so a consumer need not map the bool themselves.
+  graphics::DisplayMode display_mode() const {
+    return headless ? graphics::DisplayMode::Headless
+                    : graphics::DisplayMode::Windowed;
+  }
 };
 
 inline bool should_run_e2e(int argc, char *argv[]) {

@@ -299,20 +299,25 @@ struct RaylibPlatformAPI {
   // ── Unified run loop ──
   static void run(const RunConfig &cfg) {
     quit_flag() = false;
-    if (cfg.flags)
-      set_config_flags(cfg.flags);
-    init_window(cfg.width, cfg.height, cfg.title);
-    if (cfg.target_fps > 0)
-      set_target_fps(cfg.target_fps);
+    const bool headless = cfg.display == DisplayMode::Headless;
+    if (!headless) {
+      if (cfg.flags)
+        set_config_flags(cfg.flags);
+      init_window(cfg.width, cfg.height, cfg.title);
+      if (cfg.target_fps > 0)
+        set_target_fps(cfg.target_fps);
+    }
     if (cfg.init)
       cfg.init();
-    while (!window_should_close() && !quit_flag()) {
+    // No window to ask whether it should close, so run until the app quits.
+    while ((headless || !window_should_close()) && !quit_flag()) {
       if (cfg.frame)
         cfg.frame();
     }
     if (cfg.cleanup)
       cfg.cleanup();
-    close_window();
+    if (!headless)
+      close_window();
   }
 };
 
