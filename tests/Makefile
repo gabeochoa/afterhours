@@ -70,6 +70,7 @@ ALL_TESTS := \
 	log_file_test \
 	crash_handler_test \
 	setting_row_style_test \
+	singleton_iteration_test \
 	autolayout_test \
 	dialog_test \
 	dump_ui_test \

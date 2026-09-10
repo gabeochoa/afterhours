@@ -138,6 +138,12 @@ class SystemBase {
     virtual void after(const float) const {}
     virtual bool should_iterate() const { return true; }
 
+    // The only entity that can possibly match. Empty when the caller has to
+    // scan. See System's override.
+    virtual OptEntity only_possible_match(const EntityCollection &) const {
+        return {};
+    }
+
     virtual void for_each(Entity &, const float) = 0;
     virtual void for_each(const Entity &, const float) const = 0;
 
@@ -454,6 +460,45 @@ struct System
         }
     }
 
+    // Every component this system wants is a registered singleton, so at most
+    // one entity holds them all and the rest cannot match. Hand that entity
+    // back and the caller skips the scan. Null means scan as before.
+    template<typename>
+    struct OnlySingletons;
+    template<typename... Cs>
+    struct OnlySingletons<type_list<Cs...>> {
+        static OptEntity find(const EntityCollection &coll) {
+            OptEntity match;
+            const bool ok = (one<Cs>(coll, match) && ...);
+            return ok ? match : OptEntity{};
+        }
+
+       private:
+        template<typename C>
+        static bool one(const EntityCollection &coll, OptEntity &match) {
+            // Not<T> rules entities out rather than in, so it says nothing
+            // about where to look. for_each still checks it.
+            if constexpr (is_not_component<C>::value) return true;
+            else {
+                OptEntity ent = coll.singleton_entity_if_registered(
+                    components::get_type_id<C>());
+                if (!ent.has_value()) return false;
+                // Two singletons on different entities: nothing has both.
+                if (match.has_value() && match.value() != ent.value())
+                    return false;
+                match = ent;
+                return true;
+            }
+        }
+    };
+
+    OptEntity only_possible_match(const EntityCollection &coll) const override {
+        // A derived component is not the one in the singleton map, so the
+        // entity holding it is not the one we would find.
+        if (include_derived_children) return {};
+        return OnlySingletons<ComponentsOnly>::find(coll);
+    }
+
     using ForEachBase::for_each_with;
     using ForEachBase::for_each_with_derived;
 };
@@ -475,6 +520,41 @@ struct SystemProfileHook {
     std::function<void(std::string_view, SystemPhase)> end;
     explicit operator bool() const { return begin && end; }
 };
+
+// One iteration pass, shared by every phase and by the UI collection runner.
+// Templated on the system so the const render pass still picks the const
+// for_each overloads.
+template<typename Sys>
+inline void run_system_over(Sys &system, Entities &entities, const float dt,
+                            const EntityCollection &coll,
+                            const bool skip_cleanup) {
+    if (!system.should_iterate()) return;
+    system.on_iteration_begin(dt);
+
+    auto visit = [&](auto &entity) {
+        if (system.include_derived_children)
+            system.for_each_derived(entity, dt);
+        else
+            system.for_each(entity, dt);
+    };
+
+    if (OptEntity only = system.only_possible_match(coll);
+        only.has_value()) {
+        Entity &ent = *only.value();
+        if (!skip_cleanup || !ent.cleanup) visit(ent);
+    } else {
+        // Index-based so a push_back to entities (e.g. a for_each that
+        // triggers a merge) doesn't invalidate our iterator.
+        const std::size_t entity_count = entities.size();
+        for (std::size_t idx = 0; idx < entity_count; ++idx) {
+            const auto &entity = entities[idx];
+            if (!entity) continue;
+            if (skip_cleanup && entity->cleanup) continue;
+            visit(*entity);
+        }
+    }
+    system.on_iteration_end(dt);
+}
 
 struct SystemManager {
     // Static: set once, not per manager. Apps often have several.
@@ -550,21 +630,8 @@ struct SystemManager {
             if (!system->should_run(dt)) continue;
             ProfileScope profile_scope(system.get(), SystemPhase::Update);
             system->once(dt);
-            if (system->should_iterate()) {
-                system->on_iteration_begin(dt);
-                // Index-based so a push_back to entities (e.g. a for_each that
-                // triggers a merge) doesn't invalidate our iterator.
-                const std::size_t entity_count = entities.size();
-                for (std::size_t idx = 0; idx < entity_count; ++idx) {
-                    const auto &entity = entities[idx];
-                    if (!entity) continue;
-                    if (system->include_derived_children)
-                        system->for_each_derived(*entity, dt);
-                    else
-                        system->for_each(*entity, dt);
-                }
-                system->on_iteration_end(dt);
-            }
+            run_system_over(*system, entities, dt,
+                            EntityHelper::get_default_collection(), false);
             system->after(dt);
             EntityHelper::merge_entity_arrays();
         }
@@ -575,21 +642,8 @@ struct SystemManager {
             if (!system->should_run(dt)) continue;
             ProfileScope profile_scope(system.get(), SystemPhase::FixedUpdate);
             system->once(dt);
-            if (system->should_iterate()) {
-                system->on_iteration_begin(dt);
-                // Index-based so a push_back to entities (e.g. a for_each that
-                // triggers a merge) doesn't invalidate our iterator.
-                const std::size_t entity_count = entities.size();
-                for (std::size_t idx = 0; idx < entity_count; ++idx) {
-                    const auto &entity = entities[idx];
-                    if (!entity) continue;
-                    if (system->include_derived_children)
-                        system->for_each_derived(*entity, dt);
-                    else
-                        system->for_each(*entity, dt);
-                }
-                system->on_iteration_end(dt);
-            }
+            run_system_over(*system, entities, dt,
+                            EntityHelper::get_default_collection(), false);
             system->after(dt);
         }
     }
@@ -599,41 +653,14 @@ struct SystemManager {
             if (!system->should_run(dt)) continue;
             ProfileScope profile_scope(system.get(), SystemPhase::Render);
             system->once(dt);
-            if (system->should_iterate()) {
-                system->on_iteration_begin(dt);
-                // Index-based so a push_back to entities (e.g. a for_each that
-                // triggers a merge) doesn't invalidate our iterator.
-                const std::size_t entity_count = entities.size();
-                for (std::size_t idx = 0; idx < entity_count; ++idx) {
-                    const auto &entity = entities[idx];
-                    if (!entity) continue;
-                    if (system->include_derived_children)
-                        system->for_each_derived(*entity, dt);
-                    else
-                        system->for_each(*entity, dt);
-                }
-                system->on_iteration_end(dt);
-            }
+            run_system_over(*system, entities, dt,
+                            EntityHelper::get_default_collection(), false);
             system->after(dt);
 #ifndef AFTERHOURS_SINGLE_RENDER_PASS
             const SystemBase &sys = *system;
             sys.once(dt);
-            if (sys.should_iterate()) {
-                sys.on_iteration_begin(dt);
-                // Index-based so a push_back to entities doesn't invalidate our
-                // iterator (see note in tick).
-                const std::size_t entity_count = entities.size();
-                for (std::size_t idx = 0; idx < entity_count; ++idx) {
-                    const auto &entity = entities[idx];
-                    if (!entity) continue;
-                    const Entity &e = *entity;
-                    if (sys.include_derived_children)
-                        sys.for_each_derived(e, dt);
-                    else
-                        sys.for_each(e, dt);
-                }
-                sys.on_iteration_end(dt);
-            }
+            run_system_over(sys, entities, dt,
+                            EntityHelper::get_default_collection(), false);
             sys.after(dt);
 #endif
         }

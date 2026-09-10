@@ -476,6 +476,16 @@ struct EntityCollection {
     return ent.get<Component>();
   }
 
+  // Empty when it is not registered, and quiet about it. get_singleton warns,
+  // which is right when a caller needs the singleton and wrong here: the
+  // iteration shortcut asks about components that are usually not one.
+  OptEntity singleton_entity_if_registered(ComponentID id) const {
+    const auto it = singletonMap.find(id);
+    if (it == singletonMap.end() || !it->second)
+      return {};
+    return *it->second;
+  }
+
   template <typename Component> bool has_singleton() const {
     const ComponentID id = components::get_type_id<Component>();
     return singletonMap.contains(id);
