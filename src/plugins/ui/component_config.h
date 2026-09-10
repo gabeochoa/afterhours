@@ -449,6 +449,16 @@ struct ComponentConfig {
     label_alignment = align;
     return *this;
   }
+  /// Hug the text, wrapping at max_w. Four settings that must agree: three of
+  /// four caps the width and silently does not wrap. font_size is required
+  /// because wrapping cannot measure without one.
+  ComponentConfig &with_fit_content(Size max_w, Size font_size_) {
+    size = ComponentSize{Size{Dim::Text}, Size{Dim::Text}};
+    max_width = max_w;
+    text_overflow = TextOverflow::Wrap;
+    return with_font_size(font_size_);
+  }
+
   /// TextOverflow::Wrap additionally needs with_font_size(): soft wrapping is
   /// only defined at a known size, and without one the text is auto-fit onto a
   /// single line instead. A hard '\n' breaks either way.

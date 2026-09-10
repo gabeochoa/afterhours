@@ -71,6 +71,7 @@ ALL_TESTS := \
 	crash_handler_test \
 	setting_row_style_test \
 	singleton_iteration_test \
+	fit_content_test \
 	label_inset_test \
 	editing_capability_test \
 	autolayout_test \
@@ -170,6 +171,7 @@ RAYLIB_TESTS := \
 	text_input_test \
 	editing_capability_test \
 	label_inset_test \
+	fit_content_test \
 	text_wrap_test \
 	theme_io_test
 
