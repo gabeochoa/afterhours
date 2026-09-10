@@ -16,6 +16,9 @@ namespace input_injector {
 namespace detail {
 inline std::array<bool, 512> synthetic_keys{};
 inline std::array<int, 512> synthetic_press_count{};
+// Frames an injected press waits before consume_press reports it. A script
+// that presses and asserts in the same step sees nothing -- put a `wait`
+// between them.
 inline std::array<int, 512> synthetic_press_delay{};
 
 struct MouseState {
@@ -79,7 +82,9 @@ struct KeyHold {
 inline KeyHold key_hold;
 } // namespace detail
 
-/// Set a key as synthetically held down
+/// Set a key as synthetically held down.
+///
+/// Visible to consume_press on the NEXT frame (see synthetic_press_delay).
 inline void set_key_down(int key) {
   if (key >= 0 && key < 512) {
     detail::synthetic_keys[key] = true;
