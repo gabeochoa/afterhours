@@ -1033,21 +1033,25 @@ struct AutoLayout {
 
     // me -> left -> right
 
-    const auto _total_child = [&layout_children](Axis axis) {
+    // snapped_extent, not computed: placement rounds each child up to the grid
+    // and the solver has to budget for the size it will actually get. Summing
+    // the raw one hands an expand() sibling slack that is already spent, and
+    // the last child lands outside the row.
+    const auto _total_child = [this, &layout_children](Axis axis) {
       float sum = 0.f;
       for (UIComponent *child : layout_children) {
-        // Include child margins: positioning uses computed + margin for
+        // Include child margins: positioning uses extent + margin for
         // layout spacing, so the solver must account for the same total.
-        sum += child->computed[axis] + child->computed_margin[axis];
+        sum += snapped_extent(*child, axis) + child->computed_margin[axis];
       }
       return sum;
     };
 
-    const auto _max_child = [&layout_children](Axis axis) {
+    const auto _max_child = [this, &layout_children](Axis axis) {
       float max_val = 0.f;
       for (UIComponent *child : layout_children) {
-        max_val =
-            fmaxf(max_val, child->computed[axis] + child->computed_margin[axis]);
+        max_val = fmaxf(max_val, snapped_extent(*child, axis) +
+                                     child->computed_margin[axis]);
       }
       return max_val;
     };
@@ -1404,9 +1408,10 @@ struct AutoLayout {
 
       num_layout_children++;
 
-      // Use the child's full size (computed + margin) for layout
-      float cx = child.computed[Axis::X] + child.computed_margin[Axis::X];
-      float cy = child.computed[Axis::Y] + child.computed_margin[Axis::Y];
+      // Snapped, like the placement below: remaining_space is what FlexEnd
+      // and Center offset by, so an under-count pushes the row off its end.
+      float cx = snapped_extent(child, Axis::X) + child.computed_margin[Axis::X];
+      float cy = snapped_extent(child, Axis::Y) + child.computed_margin[Axis::Y];
 
       if (is_column) {
         total_main_size += cy;

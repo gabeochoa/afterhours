@@ -536,4 +536,48 @@ TEST(an_expand_spacer_leaves_room_for_what_follows_it) {
   }
 }
 
+// The solver used to budget children by their raw computed size while
+// placement rounded each one up to the grid, so an expand() spacer was handed
+// slack that was already spent and the last button landed outside the row.
+// floatinghotel hit this as a toolbar button clipped 15px past its bar and a
+// FlexEnd dialog row starting 11px too far right.
+TEST(snapped_children_stay_inside_expand_and_flex_end_rows) {
+  // Each width sits 2px under a grid line so nearest-snapping rounds all
+  // eight up: 16px the raw sum does not know about. Whole-unit margin so the
+  // position accumulator cannot drift on its own.
+  const float widths[] = {86.f, 102.f, 122.f, 78.f, 58.f, 58.f, 66.f, 94.f};
+  for (bool with_spacer : {true, false}) {
+    ImmTestHarness h;
+    auto cfg = ComponentConfig{}
+                   .with_size(ComponentSize{pixels(1256.f), pixels(30.f)})
+                   .with_debug_name("row");
+    if (!with_spacer)
+      cfg = cfg.with_justify_content(JustifyContent::FlexEnd);
+    auto row = hstack(h.context(), mk(h.root(), 0), cfg);
+    int id = 0;
+    for (int i = 0; i < 8; i++) {
+      if (with_spacer && i == 7)
+        div(h.context(), mk(row.ent(), id++),
+            ComponentConfig{}
+                .with_size(ComponentSize{expand(), h720(1.f)})
+                .with_debug_name("spacer"));
+      div(h.context(), mk(row.ent(), id++),
+          ComponentConfig{}
+              .with_size(ComponentSize{w1280(widths[i]), h720(28.f)})
+              .with_margin(Margin{.right = w1280(4.f)})
+              .with_debug_name("btn_" + std::to_string(i)));
+    }
+    h.layout_only(true, {1280, 720});
+    UIComponent *r = h.find("row");
+    UIComponent *last = h.find("btn_7");
+    CHECK(r != nullptr && last != nullptr);
+    if (!r || !last) continue;
+    const float row_end = r->rect().x + r->rect().width;
+    const float last_end = last->rect().x + last->rect().width;
+    printf("  %s: last button ends %.0f, row ends %.0f\n",
+           with_spacer ? "expand spacer" : "flex-end", last_end, row_end);
+    CHECK(last_end <= row_end + 0.5f);
+  }
+}
+
 int main() { return ui_test::run_registered_tests("sizing repro"); }

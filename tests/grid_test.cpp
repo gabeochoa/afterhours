@@ -202,4 +202,38 @@ TEST(a_sub_unit_gap_does_not_survive_grid_snapping) {
   }
 }
 
+// A grid sized to children holds its rows at the height that was asked for.
+// GridLab used to hand-total the container (three h720(30) rows as h720(90)),
+// which is 6px short once each row snaps up to 32 -- the solver then squeezed
+// every row to 28, under its own row_height. Hand-totalling is the bug; this
+// pins that children() gets it right.
+TEST(a_grid_sized_to_children_keeps_its_row_height) {
+  ImmTestHarness h;
+  auto grid_elem = grid(h.context(), mk(h.root(), 0),
+                        GridConfig{}.with_rows(3).with_cols(4)
+                            .with_row_height(h720(30)),
+                        ComponentConfig{}
+                            .with_size(ComponentSize{percent(1.f), children()})
+                            .with_debug_name("probe_grid"));
+  for (int r = 0; r < 3; r++)
+    for (int c = 0; c < 4; c++)
+      grid_cell(h.context(), grid_elem, r, c,
+                ComponentConfig{}.with_debug_name(
+                    "probe_" + std::to_string(r) + "_" + std::to_string(c)));
+  h.layout_only(true, {1280, 720});
+
+  UIComponent *container = h.find("probe_grid");
+  UIComponent *cell = h.find("probe_0_1");
+  UIComponent *last = h.find("probe_2_3");
+  CHECK(container != nullptr && cell != nullptr && last != nullptr);
+  if (!container || !cell || !last) return;
+  printf("  container h=%.1f, cell h=%.1f\n", container->rect().height,
+         cell->rect().height);
+  // Never shorter than the row height asked for.
+  CHECK(cell->rect().height >= 30.f);
+  // And the container actually covers the last row rather than clipping it.
+  CHECK(last->rect().y + last->rect().height <=
+        container->rect().y + container->rect().height + 0.5f);
+}
+
 int main() { return ui_test::run_registered_tests("grid"); }
