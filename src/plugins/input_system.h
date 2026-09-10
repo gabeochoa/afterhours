@@ -517,15 +517,23 @@ struct input : developer::Plugin {
         explicit GamepadButton(int v) : value(v) {}
     };
 
+    // The backend hands back window space; the letterbox is applied here
+    // because backend.h cannot see window_manager. Same split as raylib.
+    static MousePosition letterboxed_mouse_position() {
+        auto p = graphics::MetalPlatformAPI::get_mouse_position();
+        const Vector2Type mapped = window_manager::window_to_content(
+            Vector2Type{p.x, p.y},
+            graphics::MetalPlatformAPI::get_screen_width(),
+            graphics::MetalPlatformAPI::get_screen_height());
+        return {mapped.x, mapped.y};
+    }
+
     static MousePosition get_mouse_position() {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        return testing::test_input::get_mouse_position<MousePosition>([]() {
-            auto p = graphics::MetalPlatformAPI::get_mouse_position();
-            return MousePosition{p.x, p.y};
-        });
+        return testing::test_input::get_mouse_position<MousePosition>(
+            []() { return letterboxed_mouse_position(); });
 #else
-        auto p = graphics::MetalPlatformAPI::get_mouse_position();
-        return {p.x, p.y};
+        return letterboxed_mouse_position();
 #endif
     }
     static MousePosition get_mouse_delta() {
