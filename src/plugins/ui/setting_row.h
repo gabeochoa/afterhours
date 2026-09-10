@@ -184,8 +184,12 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
   // Add consistent spacing between rows
   config.with_margin(Margin{.bottom = pixels(row_config.row_spacing)});
 
-  // Set appropriate font size for settings UI (larger for readability)
-  config.font_size = pixels(22.0f);
+  // Guarded like size above. It used to be unconditional, so a caller asking
+  // for a bigger face got 22px anyway -- and 22 is under some apps' own
+  // accessibility floor.
+  if (config.font_size_is_default) {
+    config.font_size = pixels(22.0f);
+  }
 
   // Use row layout with SpaceBetween - label on left, control on right
   config.flex_direction = FlexDirection::Row;
@@ -249,7 +253,13 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
                        .with_label(row_config.label)
                        .with_alignment(TextAlignment::Left)
                        .with_background(Theme::Usage::None)
-                       .with_font(UIComponent::DEFAULT_FONT, config.font_size)
+                       // The icon and stepper honour config.font_name; the
+                       // label is the row's primary text and was the one
+                       // stuck on the default face.
+                       .with_font(config.font_name.empty()
+                                      ? UIComponent::DEFAULT_FONT
+                                      : config.font_name,
+                                  config.font_size)
                        .with_custom_text_color(
                            config.custom_text_color.value_or(ctx.theme.font))
                        .with_debug_name("setting_row_label");
@@ -269,8 +279,11 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
       // Build toggle with sensible defaults
       // Use children() sizing to let the container fit the toggle_switch's
       // internal sizing (which uses h720() for resolution scaling)
+      // The margin belongs in the chain, ahead of the merge below: it used
+      // to be set after, which overwrote whatever the caller asked for.
       auto toggle_cfg = ComponentConfig{}
                             .with_size(ComponentSize{children(), children()})
+                            .with_margin(Margin{.right = pixels(4)})
                             .with_debug_name("setting_row_toggle");
 
       // Apply user override if provided
@@ -278,10 +291,6 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
         toggle_cfg =
             toggle_cfg.apply_overrides(*row_config.slot_control_config);
       }
-
-      // Use the built-in toggle_switch component (iOS-style pill)
-      // Add right margin so the focus ring stays inside the row container.
-      toggle_cfg.with_margin(Margin{.right = pixels(4)});
 
       auto toggle_result = toggle_switch(ctx, mk(entity), *value, toggle_cfg);
 

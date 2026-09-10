@@ -69,6 +69,7 @@ ALL_TESTS := \
 	bitset_test \
 	log_file_test \
 	crash_handler_test \
+	setting_row_style_test \
 	autolayout_test \
 	dialog_test \
 	dump_ui_test \
