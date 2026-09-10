@@ -459,6 +459,78 @@ static void bench_component_access() {
   EntityHelper::set_default_collection(nullptr);
 }
 
+// ── Singleton iteration shortcut ──
+//
+// A system whose components are all registered singletons can only ever match
+// one entity, so run_system_over asks the singleton map instead of walking the
+// list. This measures what that is worth.
+//
+// Both sides run in the same process and the same run, and both do exactly one
+// for_each call -- the only difference is how they find the entity. Comparing
+// two separate runs produced a bogus win earlier in this work, where every
+// unrelated number moved by the same amount. The ratio is the signal.
+
+struct OnlyMarker : BaseComponent {};
+struct SameButNotRegistered : BaseComponent {};
+
+template <typename C> struct CountingSystem : System<C> {
+  int hits = 0;
+  void for_each_with(Entity &, C &, const float) override { hits++; }
+};
+
+static void bench_singleton_iteration() {
+  printf("\n=== Singleton iteration shortcut ===\n");
+
+  for (int N : {500, 5431}) {
+    EntityCollection coll;
+    auto &entities = coll.get_entities_for_mod();
+
+    // One entity carries both markers, so both systems do the same single
+    // for_each. Only one of the two components is registered.
+    Entity &host = coll.createEntity();
+    host.addComponent<OnlyMarker>();
+    host.addComponent<SameButNotRegistered>();
+    coll.registerSingleton<OnlyMarker>(host);
+
+    // puzzle's shape: thousands of entities, none of them a match.
+    for (int i = 0; i < N; i++)
+      coll.createEntity().addComponent<Position>(1.f, 2.f);
+    coll.merge_entity_arrays();
+
+    CountingSystem<SameButNotRegistered> scanning;
+    CountingSystem<OnlyMarker> shortcut;
+
+    char name[128];
+    snprintf(name, sizeof(name), "scan every entity to find one (%d ents)", N);
+    const double scan_ms = time_ms(
+        [&]() { run_system_over(scanning, entities, 0.f, coll, false); }, 2000);
+    printf("  %-50s %8.2f ms\n", name, scan_ms);
+
+    snprintf(name, sizeof(name), "singleton map finds it (%d ents)", N);
+    const double fast_ms = time_ms(
+        [&]() { run_system_over(shortcut, entities, 0.f, coll, false); }, 2000);
+    printf("  %-50s %8.2f ms\n", name, fast_ms);
+
+    // If they did different amounts of work the ratio means nothing.
+    if (scanning.hits != shortcut.hits) {
+      printf("  MISMATCH: scan hit %d, shortcut hit %d -- not comparable\n",
+             scanning.hits, shortcut.hits);
+    } else {
+      // afterhours has roughly 20 singleton-only systems, so the per-frame
+      // saving is that scan cost times 20. At N=5431 that lands on puzzle's
+      // profiled 37%, which is the number this change was aimed at.
+      const double scan_per_call = scan_ms / 2000.0;
+      printf("  -> %.0fx faster (%d for_each calls each)\n",
+             scan_ms / fast_ms, shortcut.hits);
+      printf("     %.3f ms per system per frame, ~%.1f ms for 20 of them\n",
+             scan_per_call, scan_per_call * 20.0);
+    }
+  }
+
+  // Deliberately not in g_results: that summary is in milliseconds and a
+  // ratio is not.
+}
+
 // ── Summary ──
 
 static void print_summary() {
@@ -502,6 +574,8 @@ int main(int argc, char *argv[]) {
     bench_text_cache();
   if (should_run("component"))
     bench_component_access();
+  if (should_run("singleton"))
+    bench_singleton_iteration();
 
   print_summary();
   return 0;
