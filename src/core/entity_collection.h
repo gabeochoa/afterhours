@@ -36,7 +36,7 @@ using RefEntities = std::vector<RefEntity>;
 struct EntityCollection {
   Entities entities_DO_NOT_USE;
   Entities temp_entities;
-  std::set<int> permanant_ids;
+  std::set<int> permanent_ids;
   std::unordered_map<ComponentID, Entity *> singletonMap;
 
   // Handle store:
@@ -380,7 +380,7 @@ struct EntityCollection {
     assign_slot_to_entity(e);
 
     if (options.is_permanent) {
-      permanant_ids.insert(e->id);
+      permanent_ids.insert(e->id);
     }
 
     return *e;
@@ -581,7 +581,7 @@ struct EntityCollection {
 
     entities.clear();
     temp_entities.clear();
-    permanant_ids.clear();
+    permanent_ids.clear();
     singletonMap.clear();
   }
 
@@ -605,7 +605,7 @@ struct EntityCollection {
     std::size_t i = 0;
     while (i < entities.size()) {
       const auto &sp = entities[i];
-      const bool keep = sp && permanant_ids.contains(sp->id);
+      const bool keep = sp && permanent_ids.contains(sp->id);
       if (keep) {
         ++i;
         continue;
@@ -670,7 +670,7 @@ struct EntityCollection {
     // Clear all runtime-only state.
     entities_DO_NOT_USE.clear();
     temp_entities.clear();
-    permanant_ids.clear();
+    permanent_ids.clear();
     singletonMap.clear();
 
     // Replace and rebuild indices.

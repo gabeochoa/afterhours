@@ -221,7 +221,7 @@ static Entity &init_ui_plugin() {
 #ifndef AFTER_HOURS_UI_SINGLE_COLLECTION
     auto &default_coll = EntityHelper::get_default_collection();
     default_coll.temp_entities.push_back(root_shared);
-    default_coll.permanant_ids.insert(ui_root.id);
+    default_coll.permanent_ids.insert(ui_root.id);
 #endif
 
     return ui_root;

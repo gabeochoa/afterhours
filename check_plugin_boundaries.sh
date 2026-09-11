@@ -34,11 +34,11 @@ echo "Checking for direct access to private EntityHelper members..."
 PRIVATE_MEMBERS=(
   "EntityHelper::singletonMap"
   "EntityHelper::entities_DO_NOT_USE"
-  "EntityHelper::permanant_ids"
+  "EntityHelper::permanent_ids"
   "EntityHelper::temp_entities"
   "EntityHelper::get\\(\\)\\.singletonMap"
   "EntityHelper::get\\(\\)\\.entities_DO_NOT_USE"
-  "EntityHelper::get\\(\\)\\.permanant_ids"
+  "EntityHelper::get\\(\\)\\.permanent_ids"
   "EntityHelper::get\\(\\)\\.temp_entities"
 )
 

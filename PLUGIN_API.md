@@ -130,7 +130,7 @@ Plugins must **NOT** directly access the following private members:
 
 - `EntityHelper::singletonMap` - Use `get_singleton<Component>()` instead
 - `EntityHelper::entities_DO_NOT_USE` - Use `get_entities()` or `EntityQuery` instead
-- `EntityHelper::permanant_ids` - Use `createPermanentEntity()` instead
+- `EntityHelper::permanent_ids` - Use `createPermanentEntity()` instead
 - `EntityHelper::temp_entities` - Use `get_temp()` if needed, or `createEntity()` for creation
 
 ## ECS Macros
@@ -242,7 +242,7 @@ auto *component = EntityHelper::get_singleton_cmp<MySingleton>();
 ❌ **Don't** include `core/entity_helper.h` directly - use `ecs.h` instead
 ❌ **Don't** access `EntityHelper::singletonMap` directly
 ❌ **Don't** access `EntityHelper::entities_DO_NOT_USE` directly
-❌ **Don't** access `EntityHelper::permanant_ids` directly
+❌ **Don't** access `EntityHelper::permanent_ids` directly
 ❌ **Don't** access `EntityHelper::temp_entities` directly
 
 ✅ **Do** use `EntityHelper::get_singleton<Component>()` for singletons
