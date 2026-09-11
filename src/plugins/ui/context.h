@@ -182,6 +182,10 @@ template <typename InputAction> struct UIContext final : BaseComponent {
       ROOT; // last element that was processed (used for reverse tabbing)
   // Reset to Grab each frame in BeginUIContextManager; see FocusSource.
   FocusSource focus_source = FocusSource::Grab;
+  // The ring stays off until something is actually interacted with. try_to_grab
+  // re-grabs focus every frame for whichever widget is first, so without this
+  // an app opens with a ring around a row nobody touched.
+  bool has_interacted = false;
   const char *focus_set_file = nullptr;
   int focus_set_line = 0;
 
@@ -288,6 +292,8 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     // moved focus, which is the question worth answering.
     if (focus_id != id) {
       focus_source = src;
+      if (src != FocusSource::Grab)
+        has_interacted = true;
       focus_set_file = loc.file_name();
       focus_set_line = static_cast<int>(loc.line());
     }

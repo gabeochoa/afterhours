@@ -49,4 +49,38 @@ TEST(focus_never_set_says_so) {
   CHECK(h.context().focus_origin().find("never set") != std::string::npos);
 }
 
+// A ring painted at rest sits on whatever was focusable first, so an app opens
+// with a box around a row nobody touched. 14 wm baselines had one.
+TEST(nothing_is_ring_worthy_until_something_is_interacted_with) {
+  ImmTestHarness h;
+  CHECK(!h.context().has_interacted);
+
+  // try_to_grab is the per-frame re-grab. It gives focus, but it is not intent.
+  h.context().try_to_grab(7);
+  CHECK(h.context().has_focus(7));
+  CHECK(!h.context().has_interacted);
+}
+
+TEST(a_deliberate_focus_move_counts_as_interaction) {
+  ImmTestHarness h;
+  h.context().try_to_grab(7);
+  CHECK(!h.context().has_interacted);
+
+  h.context().set_focus(9, FocusSource::Explicit);
+  CHECK(h.context().has_interacted);
+}
+
+TEST(pointer_focus_counts_too) {
+  ImmTestHarness h;
+  h.context().set_focus(3, FocusSource::Pointer);
+  CHECK(h.context().has_interacted);
+}
+
+// Grabbing a different widget is still the framework re-grabbing, not a user.
+TEST(a_grab_onto_a_new_widget_is_still_not_interaction) {
+  ImmTestHarness h;
+  h.context().set_focus(4, FocusSource::Grab);
+  CHECK(!h.context().has_interacted);
+}
+
 int main() { return ui_test::run_registered_tests("focus origin tests"); }

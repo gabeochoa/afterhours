@@ -286,6 +286,9 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
       if (context.mouse.just_pressed) {
         context.mouse.press_pos = context.mouse.pos;
         context.mouse.press_moved = false;
+        // A click on the already-focused widget does not move focus, so
+        // set_focus never sees it.
+        context.has_interacted = true;
       }
 
       if (!context.mouse.left_down) {
@@ -667,6 +670,8 @@ template <typename InputAction> struct ComputeVisualFocusId : System<> {
         ctx->set_focus(ctx->hot_id, FocusSource::Pointer);
     }
     ctx->visual_focus_id = ctx->ROOT;
+    if (!ctx->has_interacted)
+      return;
     if (ctx->focus_id == ctx->ROOT || ctx->focus_id == ctx->FAKE)
       return;
     OptEntity focused = UICollectionHolder::getEntityForID(ctx->focus_id);
