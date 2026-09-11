@@ -733,6 +733,7 @@ struct ComponentConfig {
     font_size = font_size_;
     font_size_explicitly_set = true;
     font_size_is_default = false;
+    warn_if_off_the_type_scale(font_size_);
     return *this;
   }
 
@@ -748,6 +749,23 @@ struct ComponentConfig {
     font_size_explicitly_set = false;
     font_size_is_default = false;
     return *this;
+  }
+
+  // Off by default.
+  void warn_if_off_the_type_scale(Size s) const {
+    if (!imm::UIStylingDefaults::get().get_validation_config()
+             .enforce_font_size_tiers)
+      return;
+    const auto &sizing = imm::ThemeDefaults::get().theme.font_sizing;
+    for (const auto tier : {FontSizing::Tier::Small, FontSizing::Tier::Medium,
+                            FontSizing::Tier::Large, FontSizing::Tier::XL}) {
+      if (std::fabs(h720(sizing.get(tier)).value - s.value) < 0.001f)
+        return;
+    }
+    warn_once(static_cast<int>(s.value * 100.f),
+              "font size {} is not one of the Small/Medium/Large/XL tiers. "
+              "Use with_font_size(FontSize::...) so the scale stays a scale.",
+              s.value);
   }
 
   /// Set the font size from a FontSize tier (Small/Medium/Large/XL).

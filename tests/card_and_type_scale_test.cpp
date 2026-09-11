@@ -46,6 +46,14 @@ int main() {
           "a later call still overrides what the preset set");
   }
 
+  // The type-scale lint is off unless asked for, so a codebase mid-adoption
+  // is not drowned.
+  {
+    check(!UIStylingDefaults::get().get_validation_config()
+               .enforce_font_size_tiers,
+          "the type scale lint is opt-in");
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);

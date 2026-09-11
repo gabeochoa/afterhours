@@ -49,6 +49,10 @@ struct ValidationConfig {
   // Minimum font size in pixels
   float min_font_size = 14.0f;
 
+  // Flag a font size that is not one of the FontSizing tiers, so typography
+  // does not drift a pixel at a time across a codebase.
+  bool enforce_font_size_tiers = false;
+
   // === Resolution Independence (Design Rules Section G) ===
   // Flag components using Dim::Pixels instead of resolution-relative units
   // (screen_pct, h720, percent, etc.)
