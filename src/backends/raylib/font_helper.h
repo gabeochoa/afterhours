@@ -301,10 +301,6 @@ inline raylib::Vector2 estimate_text_size(const char *content,
                          size};
 }
 
-inline float measure_text_internal(const char *content, const float size) {
-  return static_cast<float>(
-      raylib::MeasureText(content, static_cast<int>(size)));
-}
 inline raylib::Vector2 measure_text(const raylib::Font font,
                                     const char *content, const float size,
                                     const float spacing) {

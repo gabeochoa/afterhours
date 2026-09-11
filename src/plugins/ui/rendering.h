@@ -1264,8 +1264,11 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
         "{:03} (x{:05.2f} y{:05.2f}) w{:05.2f}xh{:05.2f} {}", (int)entity.id,
         cmp.x(), cmp.y(), cmp.rect().width, cmp.rect().height, component_name);
 
+    auto *debug_fm = EntityHelper::get_singleton_cmp<FontManager>();
+    const Font debug_font =
+        debug_fm ? debug_fm->get_active_font() : get_default_font();
     const float text_width =
-        measure_text_internal(widget_str.c_str(), fontSize);
+        measure_text(debug_font, widget_str.c_str(), fontSize, 1.f).x;
     const Rectangle debug_label_location =
         Rectangle{x, y, text_width, fontSize};
 
@@ -1300,7 +1303,8 @@ struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
     Color baseText = this->context->is_hot(entity.id)
                          ? this->context->theme.from_usage(Theme::Usage::Error)
                          : this->context->theme.from_usage(Theme::Usage::Font);
-    draw_text(widget_str.c_str(), x, y, fontSize, color_or_hidden(baseText));
+    draw_text_ex(debug_font, widget_str.c_str(), Vector2Type{x, y}, fontSize,
+                 1.f, color_or_hidden(baseText));
 
     const bool left_released = input::is_mouse_button_released(0);
     const bool right_released = input::is_mouse_button_released(1);

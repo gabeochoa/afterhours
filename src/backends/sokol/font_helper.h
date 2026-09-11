@@ -58,17 +58,6 @@ inline Font load_font_for_string(const std::string &,
 }
 
 // Advance width, same as measure_text.
-inline float measure_text_internal(const char *text, const float size) {
-  auto *ctx = graphics::metal_detail::g_fons_ctx;
-  if (!ctx || graphics::metal_detail::g_active_font == FONS_INVALID)
-    return 0.f;
-  fonsSetFont(ctx, graphics::metal_detail::g_active_font);
-  // Measure at DPI-scaled size (matching draw_text) and convert back to logical pixels.
-  float dpi = graphics::metal_detail::dpi_scale();
-  fonsSetSize(ctx, size * dpi);
-  fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
-  return fonsTextBounds(ctx, 0, 0, text, nullptr, nullptr) / dpi;
-}
 
 inline Vector2Type measure_text(const Font font, const char *text,
                                 const float size, const float /*spacing*/) {

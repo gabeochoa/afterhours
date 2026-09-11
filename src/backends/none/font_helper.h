@@ -61,14 +61,6 @@ inline Vector2Type measure_text(const Font, const char *text, const float size,
            "set_measure_text_fn()");
   return Vector2Type{0, 0};
 }
-inline float measure_text_internal(const char *text, const float size) {
-  if (measure_text_fn())
-    return measure_text_fn()(text ? text : "", size, 1.f).x;
-  log_warn("Text size measuring not supported. Either use "
-           "AFTER_HOURS_USE_RAYLIB or provide your own through "
-           "set_measure_text_fn()");
-  return 0.f;
-}
 inline Vector2Type measure_text_utf8(const Font f, const char *text,
                                      const float size, const float spacing) {
   return measure_text(f, text, size, spacing);
