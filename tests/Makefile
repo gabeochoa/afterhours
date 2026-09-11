@@ -72,6 +72,7 @@ ALL_TESTS := \
 	setting_row_style_test \
 	singleton_iteration_test \
 	press_delay_test \
+	card_and_type_scale_test \
 	fixed_timestep_test \
 	headless_runconfig_test \
 	fit_content_test \
@@ -177,6 +178,7 @@ RAYLIB_TESTS := \
 	fit_content_test \
 	headless_runconfig_test \
 	fixed_timestep_test \
+	card_and_type_scale_test \
 	press_delay_test \
 	text_wrap_test \
 	theme_io_test

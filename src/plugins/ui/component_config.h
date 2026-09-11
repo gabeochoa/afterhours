@@ -515,6 +515,12 @@ struct ComponentConfig {
     segments = s;
     return *this;
   }
+  ComponentConfig &with_card(Size pad = pixels(12.f)) {
+    return with_background(Theme::Usage::Surface)
+        .with_rounded_corners(std::bitset<4>(0b1111))
+        .with_padding(Padding::all(pad));
+  }
+
   ComponentConfig &disable_rounded_corners() {
     rounded_corners = std::bitset<4>().reset();
     return *this;
