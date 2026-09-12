@@ -1,5 +1,6 @@
 
 #pragma once
+#include <array>
 
 #include <cmath>
 #include <map>
@@ -947,12 +948,50 @@ struct input : developer::Plugin {
         return is_gamepad_button_down(id, button) ? 1.f : 0.f;
     }
 
+    enum class Device { KeyboardMouse, Gamepad };
+
+    struct BindingActivity {
+        bool keyboard = false;
+        bool gamepad_button = false;
+        std::uint8_t gamepad_axes = 0;
+    };
+
+    class DeviceActivity {
+     public:
+        Device preferred() const { return preferred_; }
+        void begin_frame() {
+            keyboard_ = gamepad_button_ = false;
+            axes_.fill(0);
+        }
+        void observe(GamepadID id, BindingActivity activity) {
+            keyboard_ |= activity.keyboard;
+            gamepad_button_ |= activity.gamepad_button;
+            if (id < 0 || static_cast<std::size_t>(id) >= axes_.size()) return;
+            axes_[id] |= activity.gamepad_axes;
+        }
+        void end_frame(bool pointer_down = false) {
+            const bool pointer_pressed = pointer_down && !pointer_was_down_;
+            pointer_was_down_ = pointer_down;
+            bool new_axis = false;
+            for (std::size_t i = 0; i < axes_.size(); ++i)
+                new_axis |= (axes_[i] & ~previous_axes_[i]) != 0;
+            previous_axes_ = axes_;
+            if (keyboard_ || pointer_pressed) { preferred_ = Device::KeyboardMouse; return; }
+            if (gamepad_button_ || new_axis) preferred_ = Device::Gamepad;
+        }
+     private:
+        Device preferred_ = Device::KeyboardMouse;
+        bool keyboard_ = false, gamepad_button_ = false, pointer_was_down_ = false;
+        std::array<std::uint8_t, MAX_GAMEPAD_ID> axes_{}, previous_axes_{};
+    };
+
     struct ActionCheckResult {
         DeviceMedium medium = DeviceMedium::None;
         float value = 0.f;
         KeyCode matched_key = 0;
         uint8_t matched_modifiers = 0;
         bool matched_explicit = false;
+        BindingActivity activity;
     };
 
     template <typename KeyCheckFn, typename ButtonCheckFn>
@@ -990,6 +1029,14 @@ struct input : developer::Plugin {
             } else if (inp.index() == 3) {
                 temp_medium = DeviceMedium::MouseAxis;
                 temp = visit_mouse_axis(std::get<3>(inp));
+            }
+            if (!std::isfinite(temp) || temp <= 0) continue;
+            if (temp_medium == DeviceMedium::Keyboard) result.activity.keyboard = true;
+            if (temp_medium == DeviceMedium::GamepadButton) result.activity.gamepad_button = true;
+            if (temp_medium == DeviceMedium::GamepadAxis) {
+                const int axis = static_cast<int>(std::get<1>(inp).axis);
+                if (axis >= 0 && axis < 6)
+                    result.activity.gamepad_axes |= static_cast<std::uint8_t>(1u << axis);
             }
             if (temp > result.value) {
                 result.value = temp;
@@ -1043,6 +1090,7 @@ struct input : developer::Plugin {
     }
 
     struct InputCollector : public BaseComponent {
+        DeviceActivity device_activity;
         std::vector<input::ActionDone> inputs;
         std::vector<input::ActionDone> inputs_pressed;
         std::vector<input::ActionDone> inputs_pressed_repeat;
@@ -1134,10 +1182,12 @@ struct input : developer::Plugin {
             collector.inputs.clear();
             collector.inputs_pressed.clear();
             collector.inputs_pressed_repeat.clear();
+            collector.device_activity.begin_frame();
 
             auto collect = [&](auto check_fn, std::vector<ActionDone> &dest,
                                int gid, int action, const ValidInputs &vis) {
                 const auto r = check_fn(gid, vis);
+                if (&dest == &collector.inputs_pressed) collector.device_activity.observe(gid, r.activity);
                 if (r.value > 0.f)
                     dest.push_back(ActionDone(r.medium, gid, action, r.value,
                                              dt, r.matched_key,
@@ -1158,6 +1208,7 @@ struct input : developer::Plugin {
                 } while (i <= mxGamepadID.max_gamepad_available);
             }
 
+            collector.device_activity.end_frame(is_mouse_button_down(0) || is_mouse_button_down(1));
             suppress_permissive_duplicates(collector.inputs);
             suppress_permissive_duplicates(collector.inputs_pressed);
             suppress_permissive_duplicates(collector.inputs_pressed_repeat);
@@ -1295,10 +1346,12 @@ struct LayeredInputSystem
         collector.inputs.clear();
         collector.inputs_pressed.clear();
         collector.inputs_pressed_repeat.clear();
+        collector.device_activity.begin_frame();
 
         // Get the active layer's mapping
         auto layer_it = mapper.layers.find(mapper.active_layer);
         if (layer_it == mapper.layers.end()) {
+            collector.device_activity.end_frame(input::is_mouse_button_down(0) || input::is_mouse_button_down(1));
             // No mapping for this layer, nothing to poll
             if (collector.inputs.empty()) {
                 collector.since_last_input += dt;
@@ -1309,6 +1362,7 @@ struct LayeredInputSystem
         auto collect = [&](auto check_fn, std::vector<input::ActionDone> &dest,
                            int gid, int action, const input::ValidInputs &vis) {
             const auto r = check_fn(gid, vis);
+            if (&dest == &collector.inputs_pressed) collector.device_activity.observe(gid, r.activity);
             if (r.value > 0.f)
                 dest.push_back(input::ActionDone(r.medium, gid, action, r.value,
                                                  dt, r.matched_key,
@@ -1325,6 +1379,7 @@ struct LayeredInputSystem
             }
         }
 
+        collector.device_activity.end_frame(input::is_mouse_button_down(0) || input::is_mouse_button_down(1));
         input::suppress_permissive_duplicates(collector.inputs);
         input::suppress_permissive_duplicates(collector.inputs_pressed);
         input::suppress_permissive_duplicates(collector.inputs_pressed_repeat);
