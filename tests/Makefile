@@ -69,6 +69,7 @@ ALL_TESTS := \
 	input_prompts_test \
 	input_device_activity_test \
 	file_watcher_test \
+	render_capture_test \
 	system_profile_test \
 	blend_mode_test \
 	rect_test \
@@ -157,6 +158,7 @@ ALL_TESTS := \
 ifeq ($(UNAME_S),Darwin)
 ALL_TESTS += bundle_test
 ALL_TESTS += native_dialogs_macos_test
+ALL_TESTS += render_capture_metal_test
 # Sokol is Metal here, so macOS-only; renders headless, no window.
 ALL_TESTS += sokol_blend_test
 # Own process: the Metal backend cannot be re-initialised, so this cannot be a
@@ -167,6 +169,7 @@ endif
 
 RAYLIB_TESTS := \
 	input_device_activity_test \
+	render_capture_test \
 	clipboard_test \
 	mk_cost_test \
 	headless_fallback_test \
@@ -265,6 +268,9 @@ $(OUT)/sokol_hidpi_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_include_order_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_include_order_test: CXXFLAGS_T += -DSOKOL_METAL -x objective-c++
 $(OUT)/sokol_include_order_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+
+$(OUT)/render_capture_metal_test: render_capture_test.cpp ../examples/web/sokol_impl.cc
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DSOKOL_METAL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
 
 # Runs every test even when one fails, then reports. The old loop dropped each
 # exit code, so only the last test's status escaped and a red suite read green.

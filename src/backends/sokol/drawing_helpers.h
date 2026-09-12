@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "../../developer.h"
+#include "../../render_capture.h"
 #include "../../graphics.h"
 #include "../../plugins/color.h"
 #include "../../plugins/texture_manager.h"
@@ -1332,6 +1333,9 @@ extern "C" bool metal_capture_render_texture(uint32_t color_img_id,
 extern "C" int metal_capture_render_texture_to_memory(
     uint32_t color_img_id, int width, int height,
     uint8_t **out_data, int *out_size);
+extern "C" int metal_capture_render_texture_png_to_memory(
+    uint32_t color_img_id, int width, int height,
+    uint8_t **out_data, int *out_size);
 
 inline bool capture_render_texture(const graphics::RenderTextureType &rt,
                                    const std::filesystem::path &path) {
@@ -1341,8 +1345,8 @@ inline bool capture_render_texture(const graphics::RenderTextureType &rt,
                                       path.c_str());
 }
 
-inline std::vector<uint8_t>
-capture_render_texture_to_memory(const graphics::RenderTextureType &rt) {
+inline std::optional<RgbaCapture>
+capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   if (rt.color_img_id == 0)
     return {};
   uint8_t *data = nullptr;
@@ -1351,9 +1355,38 @@ capture_render_texture_to_memory(const graphics::RenderTextureType &rt) {
                                               rt.height, &data, &size)) {
     return {};
   }
-  std::vector<uint8_t> result(data, data + size);
+  const auto expected = static_cast<size_t>(rt.width) * static_cast<size_t>(rt.height) * 4;
+  if (!data || size < 0 || static_cast<size_t>(size) != expected) {
+    free(data);
+    return std::nullopt;
+  }
+  RgbaCapture result{rt.width, rt.height, {data, data + size}};
   free(data);
   return result;
+}
+
+inline std::optional<PngCapture>
+capture_render_texture_png(const graphics::RenderTextureType &rt) {
+  if (rt.color_img_id == 0) return std::nullopt;
+  uint8_t *data = nullptr;
+  int size = 0;
+  if (!metal_capture_render_texture_png_to_memory(rt.color_img_id, rt.width,
+                                                 rt.height, &data, &size))
+    return std::nullopt;
+  if (!data || size <= 0) {
+    free(data);
+    return std::nullopt;
+  }
+  PngCapture result{{data, data + size}};
+  free(data);
+  return result;
+}
+
+inline std::vector<uint8_t>
+capture_render_texture_to_memory(const graphics::RenderTextureType &rt) {
+  auto result = capture_render_texture_png(rt);
+  if (!result) return {};
+  return std::move(result->bytes);
 }
 
 inline std::vector<uint8_t> capture_screen_to_memory() {

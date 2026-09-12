@@ -85,7 +85,7 @@ int main() {
   afterhours::draw_rectangle(RectangleType{0, 0, W / 2, H}, opaque_green);
   g::end_drawing();
 
-  std::vector<uint8_t> px = afterhours::capture_render_texture_to_memory(rt);
+  std::vector<uint8_t> px = afterhours::capture_render_texture_rgba(rt).value().pixels;
   check(px.size() == static_cast<size_t>(W * 2) * (H * 2) * 4,
         "capture returns the full 2x pixel buffer");
   if (px.size() == static_cast<size_t>(W * 2) * (H * 2) * 4) {

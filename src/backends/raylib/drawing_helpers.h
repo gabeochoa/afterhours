@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "../../capture.h"
+#include "../../render_capture.h"
 #include "../../developer.h"
 #include "../../graphics.h"
 #include "../../plugins/color.h"
@@ -561,8 +562,27 @@ inline bool capture_render_texture(const graphics::RenderTextureType &rt,
   return ok;
 }
 
-inline std::vector<uint8_t>
-capture_render_texture_to_memory(const graphics::RenderTextureType &rt) {
+inline std::optional<RgbaCapture>
+capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
+  if (rt.texture.id == 0) return std::nullopt;
+  raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
+  if (!img.data) return std::nullopt;
+  raylib::ImageFlipVertical(&img);
+  raylib::ImageFormat(&img, raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+  if (!img.data || img.width <= 0 || img.height <= 0) {
+    raylib::UnloadImage(img);
+    return std::nullopt;
+  }
+  const auto *bytes = static_cast<const uint8_t *>(img.data);
+  const auto size = static_cast<size_t>(img.width) * static_cast<size_t>(img.height) * 4;
+  RgbaCapture result{img.width, img.height, {bytes, bytes + size}};
+  raylib::UnloadImage(img);
+  return result;
+}
+
+inline std::optional<PngCapture>
+capture_render_texture_png(const graphics::RenderTextureType &rt) {
+  if (rt.texture.id == 0) return std::nullopt;
   raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
   if (img.data == nullptr)
     return {};
@@ -576,7 +596,15 @@ capture_render_texture_to_memory(const graphics::RenderTextureType &rt) {
     raylib::MemFree(png_data);
   }
   raylib::UnloadImage(img);
-  return result;
+  if (result.empty()) return std::nullopt;
+  return PngCapture{std::move(result)};
+}
+
+inline std::vector<uint8_t>
+capture_render_texture_to_memory(const graphics::RenderTextureType &rt) {
+  auto result = capture_render_texture_png(rt);
+  if (!result) return {};
+  return std::move(result->bytes);
 }
 
 inline std::vector<uint8_t> capture_screen_to_memory() {

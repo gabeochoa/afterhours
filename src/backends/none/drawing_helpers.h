@@ -1,5 +1,6 @@
 
 #pragma once
+#include "../../render_capture.h"
 
 #include "../../blend.h"
 
@@ -272,6 +273,12 @@ capture_render_texture_to_memory(const graphics::RenderTextureType &) {
   log_error("@notimplemented capture_render_texture_to_memory");
   return {};
 }
+
+inline std::optional<RgbaCapture>
+capture_render_texture_rgba(const graphics::RenderTextureType &) { return std::nullopt; }
+
+inline std::optional<PngCapture>
+capture_render_texture_png(const graphics::RenderTextureType &) { return std::nullopt; }
 
 inline std::vector<uint8_t> capture_screen_to_memory() {
   log_error("@notimplemented capture_screen_to_memory");

@@ -66,8 +66,8 @@ static bool render_and_sample(const Color &under, const Color &over, Px &out) {
   g::end_drawing();
 
   // Raw RGBA, w*h*4 -- not PNG (capture_impl.h), so index it directly.
-  std::vector<uint8_t> px = afterhours::capture_render_texture_to_memory(
-      g::metal_detail::g_headless_rt);
+  std::vector<uint8_t> px = afterhours::capture_render_texture_rgba(
+      g::metal_detail::g_headless_rt).value().pixels;
   if (px.size() != static_cast<size_t>(W) * H * 4) {
     fprintf(stderr, "  capture returned %zu bytes, expected %d\n", px.size(),
             W * H * 4);
@@ -103,8 +103,8 @@ static bool render_ui_over_blue(Px &out) {
   renderer.for_each_with_derived(h.root(), h.context(), fm, 0.f);
   g::end_drawing();
 
-  std::vector<uint8_t> px = afterhours::capture_render_texture_to_memory(
-      g::metal_detail::g_headless_rt);
+  std::vector<uint8_t> px = afterhours::capture_render_texture_rgba(
+      g::metal_detail::g_headless_rt).value().pixels;
   if (px.size() != static_cast<size_t>(W) * H * 4)
     return false;
   const size_t i = (static_cast<size_t>(H / 2) * W + (W / 2)) * 4;

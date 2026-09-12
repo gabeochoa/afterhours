@@ -17,6 +17,7 @@
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #include <cstdint>
+#include <climits>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
@@ -121,6 +122,8 @@ static uint8_t *metal_read_image_pixels(sg_image img_id, int width,
       (__bridge id<MTLTexture>)info.tex[info.active_slot];
   if (!tex)
     return nullptr;
+  if (static_cast<NSUInteger>(width) != [tex width] ||
+      static_cast<NSUInteger>(height) != [tex height]) return nullptr;
 
   // Get a host-readable, single-sample texture:
   //  - MSAA: resolve to a Shared single-sample texture.
@@ -224,6 +227,9 @@ extern "C" bool metal_capture_render_texture(uint32_t color_img_id,
 extern "C" int metal_capture_render_texture_to_memory(
     uint32_t color_img_id, int width, int height,
     uint8_t **out_data, int *out_size) {
+  if (width <= 0 || height <= 0 ||
+      static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * 4 > INT_MAX)
+    return 0;
   sg_image img = {color_img_id};
   uint8_t *rgba = metal_read_image_pixels(img, width, height);
   if (!rgba)
@@ -231,6 +237,42 @@ extern "C" int metal_capture_render_texture_to_memory(
   size_t data_size = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
   *out_data = rgba;
   *out_size = static_cast<int>(data_size);
+  return 1;
+}
+
+extern "C" int metal_capture_render_texture_png_to_memory(
+    uint32_t color_img_id, int width, int height,
+    uint8_t **out_data, int *out_size) {
+  uint8_t *rgba = nullptr;
+  int rgba_size = 0;
+  if (!metal_capture_render_texture_to_memory(color_img_id, width, height,
+                                              &rgba, &rgba_size)) return 0;
+  auto provider = CGDataProviderCreateWithData(nullptr, rgba, rgba_size, nullptr);
+  auto colors = CGColorSpaceCreateDeviceRGB();
+  auto image = CGImageCreate(width, height, 8, 32, static_cast<size_t>(width) * 4,
+                            colors, kCGImageAlphaLast, provider, nullptr, false,
+                            kCGRenderingIntentDefault);
+  CGColorSpaceRelease(colors);
+  CGDataProviderRelease(provider);
+  if (!image) { free(rgba); return 0; }
+  auto data = CFDataCreateMutable(nullptr, 0);
+  auto destination = CGImageDestinationCreateWithData(data, kUTTypePNG, 1, nullptr);
+  bool ok = false;
+  if (destination) {
+    CGImageDestinationAddImage(destination, image, nullptr);
+    ok = CGImageDestinationFinalize(destination);
+    CFRelease(destination);
+  }
+  CGImageRelease(image);
+  free(rgba);
+  const auto length = CFDataGetLength(data);
+  if (!ok || length <= 0 || length > INT_MAX) { CFRelease(data); return 0; }
+  auto bytes = static_cast<uint8_t *>(malloc(static_cast<size_t>(length)));
+  if (!bytes) { CFRelease(data); return 0; }
+  memcpy(bytes, CFDataGetBytePtr(data), static_cast<size_t>(length));
+  CFRelease(data);
+  *out_data = bytes;
+  *out_size = static_cast<int>(length);
   return 1;
 }
 
