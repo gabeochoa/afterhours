@@ -25,10 +25,16 @@ namespace afterhours {
 
 struct input : developer::Plugin {
     static constexpr float DEADZONE = 0.25f;
+    static constexpr float MOUSE_DELTA_SCALE = 40.f;
     static constexpr int MAX_GAMEPAD_ID = 8;
 
     struct ProvidesInputConfig : BaseComponent {
         float gamepad_deadzone = DEADZONE;
+        // Pixels of mouse movement that count as a full-strength action, so a
+        // mouse axis reports roughly what a gamepad stick at full tilt does.
+        // Without it the two mediums report different units through the same
+        // float and anything comparing them is wrong.
+        float mouse_delta_scale = MOUSE_DELTA_SCALE;
     };
 
     using MouseButton = int;
@@ -814,6 +820,7 @@ struct input : developer::Plugin {
         Keyboard,
         GamepadButton,
         GamepadAxis,
+        MouseAxis,
     };
 
     struct ActionDone {
@@ -883,7 +890,15 @@ struct input : developer::Plugin {
         int dir = -1;
     };
 
-    using AnyInput = std::variant<KeyChord, GamepadAxisWithDir, GamepadButton>;
+    enum struct MouseAxis { X, Y };
+
+    struct MouseAxisWithDir {
+        MouseAxis axis;
+        int dir = -1;
+    };
+
+    using AnyInput =
+        std::variant<KeyChord, GamepadAxisWithDir, GamepadButton, MouseAxisWithDir>;
     using ValidInputs = std::vector<AnyInput>;
 
     static float visit_key(const int keycode) {
@@ -905,6 +920,21 @@ struct input : developer::Plugin {
             return abs(mvt);
         }
         return 0.f;
+    }
+
+    // Normalised against mouse_delta_scale so a mouse axis and a stick report
+    // the same units. Clamped, because a fast flick is not more than full.
+    static float visit_mouse_axis(const MouseAxisWithDir axis_with_dir) {
+        const auto d = get_mouse_delta();
+        const float raw = axis_with_dir.axis == MouseAxis::X ? d.x : d.y;
+        if (raw == 0.f || util::sgn(raw) != axis_with_dir.dir)
+            return 0.f;
+        float scale = MOUSE_DELTA_SCALE;
+        if (const auto *cfg = EntityHelper::get_singleton_cmp<ProvidesInputConfig>())
+            scale = cfg->mouse_delta_scale;
+        if (scale <= 0.f)
+            return 0.f;
+        return std::min(1.f, std::abs(raw) / scale);
     }
 
     static float visit_button(const GamepadID id, const GamepadButton button) {
@@ -956,6 +986,9 @@ struct input : developer::Plugin {
             } else if (inp.index() == 2) {
                 temp_medium = DeviceMedium::GamepadButton;
                 temp = button_check(id, std::get<2>(inp));
+            } else if (inp.index() == 3) {
+                temp_medium = DeviceMedium::MouseAxis;
+                temp = visit_mouse_axis(std::get<3>(inp));
             }
             if (temp > result.value) {
                 result.value = temp;
