@@ -210,6 +210,51 @@ TEST(respects_where_filters) {
   clear_all();
 }
 
+// An ordered gen_first used to scan and then fully sort to return one entity.
+// It takes the minimum now, so these pin that the answer did not move -- and
+// the post-sort-filter case, where the minimum can be rejected and the answer
+// is the next one, so the full sort still has to run.
+TEST(an_ordered_first_still_returns_the_extreme) {
+  clear_all();
+  make_scored(4.f, "four");
+  make_scored(-2.f, "minus_two");
+  make_scored(11.f, "eleven");
+
+  OptEntity lowest = EntityQuery<>()
+                         .whereHasComponent<Score>()
+                         .orderByLambda([](const Entity &a, const Entity &b) {
+                           return a.get<Score>().value < b.get<Score>().value;
+                         })
+                         .gen_first();
+  CHECK(lowest.has_value());
+  if (lowest)
+    CHECK(lowest->get<Score>().value == -2.f);
+  clear_all();
+}
+
+TEST(a_stateful_mod_after_the_sort_still_gets_the_sorted_order) {
+  clear_all();
+  // Storage order puts 11 first, so a take(1) applied during an unsorted scan
+  // would keep 11 and throw the rest away. Registered after the orderby it
+  // means "the smallest one", which is -2. Limit counts as it goes, so it is
+  // the case where taking the minimum of a pre-filtered set is wrong.
+  make_scored(11.f, "eleven");
+  make_scored(4.f, "four");
+  make_scored(-2.f, "minus_two");
+
+  OptEntity smallest = EntityQuery<>()
+                           .whereHasComponent<Score>()
+                           .orderByLambda([](const Entity &a, const Entity &b) {
+                             return a.get<Score>().value < b.get<Score>().value;
+                           })
+                           .take(1)
+                           .gen_first();
+  CHECK(smallest.has_value());
+  if (smallest)
+    CHECK(smallest->get<Score>().value == -2.f);
+  clear_all();
+}
+
 TEST(agrees_with_the_order_by_idiom_it_replaces) {
   clear_all();
   make_scored(4.f);

@@ -760,6 +760,31 @@ struct EntityQuery {
             return {};
         }
 
+        // One ordered result needs the minimum, not a sorted list. Only when
+        // nothing filters after the sort: a post-sort mod can reject the
+        // minimum, and then the answer is the next one, which min_element
+        // cannot give.
+        const bool filters_after_sort =
+            orderby_index.has_value() && *orderby_index < mods.size();
+        if (options.stop_on_first && orderby && !filters_after_sort) {
+            RefEntities candidates;
+            candidates.reserve(entities.size() / 2);
+            for (const auto &e_ptr : pool()) {
+                if (!e_ptr) continue;
+                Entity &e = *e_ptr;
+                if (passes(e, 0, mods.size())) candidates.push_back(e);
+            }
+            if (candidates.empty()) return {};
+            auto best = std::min_element(
+                candidates.begin(), candidates.end(),
+                [&](const Entity &a, const Entity &b) {
+                    return (*orderby)(a, b);
+                });
+            RefEntities result;
+            result.push_back(*best);
+            return result;
+        }
+
         RefEntities out;
         out.reserve(mods.empty() ? entities.size() : entities.size() / 2);
 
