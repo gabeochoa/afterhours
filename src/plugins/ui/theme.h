@@ -394,10 +394,15 @@ struct Theme {
   }
 
   std::bitset<4> rounded_corners = std::bitset<4>().set();
-  float roundness = 0.5f; // Fraction of the short side. 0.0 = sharp, 1.0 = pill
+  // A fraction of the short side, so it means a different number of pixels on
+  // every element it lands on. Opt in with with_roundness() when that is what
+  // you want -- a pill, a circle -- and leave the default alone otherwise.
+  float roundness = 0.f;
   // Pixels. Wins over roundness everywhere it is set, so a theme can pick one
-  // radius instead of one that scales with whatever it lands on.
-  std::optional<float> corner_radius;
+  // radius instead of one that scales with whatever it lands on. This is the
+  // default because the fraction is not safe as one: at 0.5 a full-screen
+  // backdrop rounds by 180px without anyone asking for it.
+  std::optional<float> corner_radius = 8.f;
   int segments = 8;       // Number of segments per rounded corner
 
   // Deprecated: use font_sizing.get(Tier) instead
