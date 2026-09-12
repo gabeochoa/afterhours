@@ -101,6 +101,9 @@ struct settings : developer::Plugin {
   };
 
   // Helper functions for loading/saving
+#if defined(AFTERHOURS_SETTINGS_OUTPUT_JSON) || \
+    (!defined(AFTERHOURS_SETTINGS_OUTPUT_BITSERY) && \
+     !defined(AFTERHOURS_SETTINGS_OUTPUT_RAW_STRING))
   template <typename SettingsData>
   static bool load_from_json(ProvidesSettings<SettingsData> *provider,
                              const fs::path &settings_path) {
@@ -123,6 +126,7 @@ struct settings : developer::Plugin {
       return false;
     }
   }
+#endif
 
 #if defined(AFTERHOURS_SETTINGS_OUTPUT_BITSERY)
   template <typename SettingsData>
@@ -174,19 +178,16 @@ struct settings : developer::Plugin {
     }
   }
 
+#if defined(AFTERHOURS_SETTINGS_OUTPUT_JSON) || \
+    (!defined(AFTERHOURS_SETTINGS_OUTPUT_BITSERY) && \
+     !defined(AFTERHOURS_SETTINGS_OUTPUT_RAW_STRING))
   template <typename SettingsData>
   static bool save_to_json(ProvidesSettings<SettingsData> *provider,
                            const fs::path &settings_path) {
     try {
-      std::ofstream ofs(settings_path);
-      if (!ofs.is_open()) {
-        log_warn("Failed to open settings file for writing: {}",
-                 settings_path.string().c_str());
-        return false;
-      }
       json j = provider->data.to_json();
-      ofs << j.dump(2); // Pretty print with 2-space indent
-      ofs.close();
+      const auto content = j.dump(2); // Pretty print with 2-space indent
+      if (!files::write_string_atomic(settings_path, content)) return false;
       log_info("{} saved to JSON: {}", type_name<SettingsData>(),
                settings_path.string().c_str());
       return true;
@@ -195,22 +196,16 @@ struct settings : developer::Plugin {
       return false;
     }
   }
+#endif
 
 #if defined(AFTERHOURS_SETTINGS_OUTPUT_BITSERY)
   template <typename SettingsData>
   static bool save_to_bitsery(ProvidesSettings<SettingsData> *provider,
                               const fs::path &settings_path) {
     try {
-      std::ofstream ofs(settings_path);
-      if (!ofs.is_open()) {
-        log_warn("Failed to open settings file for writing: {}",
-                 settings_path.string().c_str());
-        return false;
-      }
       BitsBuffer buffer;
-      bitsery::quickSerialization(BitsOutputAdapter{buffer}, provider->data);
-      ofs << buffer;
-      ofs.close();
+      bitsery::quickSerialization<BitsOutputAdapter>(buffer, provider->data);
+      if (!files::write_string_atomic(settings_path, buffer)) return false;
       log_info("{} saved to bitsery: {}", type_name<SettingsData>(),
                settings_path.string().c_str());
       return true;
@@ -226,15 +221,8 @@ struct settings : developer::Plugin {
   static bool save_to_raw_string(ProvidesSettings<SettingsData> *provider,
                                  const fs::path &settings_path) {
     try {
-      std::ofstream ofs(settings_path);
-      if (!ofs.is_open()) {
-        log_warn("Failed to open settings file for writing: {}",
-                 settings_path.string().c_str());
-        return false;
-      }
       std::string content = provider->data.to_string();
-      ofs << content;
-      ofs.close();
+      if (!files::write_string_atomic(settings_path, content)) return false;
       log_info("{} saved to raw string: {}", type_name<SettingsData>(),
                settings_path.string().c_str());
       return true;

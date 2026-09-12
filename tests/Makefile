@@ -62,6 +62,7 @@ $(shell mkdir -p $(OUT))
 ALL_TESTS := \
 	animation_test \
 	sound_volume_test \
+	settings_save_test \
 	system_profile_test \
 	blend_mode_test \
 	rect_test \

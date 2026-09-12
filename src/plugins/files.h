@@ -149,8 +149,8 @@ struct files : developer::Plugin {
       }
       out.write(content.data(), static_cast<std::streamsize>(content.size()));
       out.flush();
+      out.close();
       if (!out) {
-        out.close();
         fs::remove(tmp, ec);
         log_warn("write_string_atomic: write failed for {}", tmp.string());
         return false;
