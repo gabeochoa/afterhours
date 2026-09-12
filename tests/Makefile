@@ -61,6 +61,7 @@ $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
 	animation_test \
+	sound_volume_test \
 	system_profile_test \
 	blend_mode_test \
 	rect_test \
@@ -226,6 +227,8 @@ $(OUT)/%: %.cpp
 $(OUT)/entity_mapping_test: ../examples/entity_mapping_test_helper.cpp
 $(OUT)/entity_mapping_test: INCLUDES_T += -I../examples
 $(OUT)/random_engine_test:  CXXFLAGS_T += -DAFTER_HOURS_ENABLE_RANDOM
+$(OUT)/sound_volume_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
+$(OUT)/sound_volume_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
 $(OUT)/bundle_test: ../src/plugins/files.cpp

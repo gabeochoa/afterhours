@@ -38,6 +38,8 @@ struct sound_system : developer::Plugin {
         }
         void load(const char *filename, const char *name) {
             impl.load(filename, name);
+            ::afterhours::SetSoundVolume(get(name),
+                                        current_volume * get_master_volume());
         }
 
         void play(const char *const name) {
@@ -89,8 +91,8 @@ struct sound_system : developer::Plugin {
         }
 
         void update_volume(const float new_v) {
-            impl.update_volume(new_v);
             current_volume = new_v;
+            impl.update_volume(current_volume * get_master_volume());
         }
 
         void unload_all() { impl.unload_all(); }
@@ -135,8 +137,8 @@ struct sound_system : developer::Plugin {
         }
         void load(const char *filename, const char *name) {
             impl.load(filename, name);
-            // Update volume for newly loaded music
-            update_volume(current_volume);
+            ::afterhours::SetMusicVolume(get(name),
+                                        current_volume * get_master_volume());
         }
 
         void play(const std::string &name) {
@@ -150,8 +152,8 @@ struct sound_system : developer::Plugin {
         }
 
         void update_volume(const float new_v) {
-            impl.update_volume(new_v);
             current_volume = new_v;
+            impl.update_volume(current_volume * get_master_volume());
         }
 
         void unload_all() { impl.unload_all(); }
@@ -340,11 +342,13 @@ struct sound_system : developer::Plugin {
         entity.addComponent<PlaySoundRequest>(name);
     }
 
-    // Volume management helpers
+    // Volumes are independent preferences; backend gains are master * category.
     static void set_master_volume(float volume) {
-        // Master volume affects both sounds and music
-        SoundLibrary::get().update_volume(volume);
-        MusicLibrary::get().update_volume(volume);
+        master_volume = volume;
+        auto &sounds = SoundLibrary::get();
+        auto &music = MusicLibrary::get();
+        sounds.update_volume(sounds.get_volume());
+        music.update_volume(music.get_volume());
     }
 
     static void set_sound_volume(float volume) {
@@ -358,6 +362,11 @@ struct sound_system : developer::Plugin {
     static float get_sound_volume() { return SoundLibrary::get().get_volume(); }
 
     static float get_music_volume() { return MusicLibrary::get().get_volume(); }
+
+    static float get_master_volume() { return master_volume; }
+
+   private:
+    inline static float master_volume = 1.f;
 };
 
 // Compile-time verification that sound_system satisfies the PluginCore concept
