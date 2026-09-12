@@ -63,6 +63,7 @@ ALL_TESTS := \
 	animation_test \
 	sound_volume_test \
 	settings_save_test \
+	clipboard_test \
 	system_profile_test \
 	blend_mode_test \
 	rect_test \
@@ -159,6 +160,7 @@ ALL_TESTS += sokol_include_order_test
 endif
 
 RAYLIB_TESTS := \
+	clipboard_test \
 	mk_cost_test \
 	headless_fallback_test \
 	dialog_test \

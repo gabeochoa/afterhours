@@ -518,8 +518,6 @@ template <typename State> inline void insert_newline_if_multiline(State &s) {
 /// are not. Each action is guarded on existing in the app's enum, so a smaller
 /// InputAction still compiles.
 ///
-/// text_input still carries its own copy of this. Converging it is a separate
-/// change against working editing code that has no clipboard coverage.
 template <typename Ctx, typename State>
 inline bool handle_clipboard_and_undo(Ctx &ctx, State &s, bool editable) {
   using InputAction = typename std::remove_reference_t<Ctx>::value_type;
