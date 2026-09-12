@@ -369,6 +369,13 @@ class E2ERunner {
             std::string script_name = current_script_name();
             log_warn("[TIMEOUT] {} after {:.2f}s (at command index {})",
                      script_name, elapsed_time_, index_);
+            const std::string stuck = unconsumed_command_names();
+            if (!stuck.empty()) {
+                log_warn("  nothing consumed: {}. If the active SystemManager "
+                         "never got register_all_handlers(), every command on "
+                         "it stalls until this timeout.",
+                         stuck);
+            }
 
             // In batch mode, skip to the next script instead of aborting
             if (is_batch_mode()) {
@@ -569,6 +576,25 @@ class E2ERunner {
                 e.cleanup = true;
             }
         }
+    }
+
+    // Commands sitting unconsumed right now. The runner blocks on these, so at
+    // a timeout they are usually the reason -- and the message that would say
+    // so lives in register_unknown_handler, which is part of the pack you
+    // forgot to register.
+    std::string unconsumed_command_names() const {
+        std::string names;
+        auto pending =
+            EntityQuery().whereHasComponent<PendingE2ECommand>().gen();
+        for (const Entity &e : pending) {
+            const auto &cmd = e.get<PendingE2ECommand>();
+            if (cmd.is_consumed())
+                continue;
+            if (!names.empty())
+                names += ", ";
+            names += cmd.name;
+        }
+        return names;
     }
 
     std::string current_script_name() const {
