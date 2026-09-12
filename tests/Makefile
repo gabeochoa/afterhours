@@ -64,6 +64,7 @@ ALL_TESTS := \
 	sound_volume_test \
 	settings_save_test \
 	clipboard_test \
+	native_dialogs_test \
 	system_profile_test \
 	blend_mode_test \
 	rect_test \
@@ -151,6 +152,7 @@ ALL_TESTS := \
 # .app packaging is macOS-only, and the test shells out to plutil.
 ifeq ($(UNAME_S),Darwin)
 ALL_TESTS += bundle_test
+ALL_TESTS += native_dialogs_macos_test
 # Sokol is Metal here, so macOS-only; renders headless, no window.
 ALL_TESTS += sokol_blend_test
 # Own process: the Metal backend cannot be re-initialised, so this cannot be a
@@ -235,6 +237,9 @@ $(OUT)/sound_volume_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
 $(OUT)/bundle_test: ../src/plugins/files.cpp
+
+$(OUT)/native_dialogs_macos_test: native_dialogs_macos_test.mm ../src/plugins/native_dialogs_macos.mm
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) $(filter %.mm,$^) -framework Cocoa -o $@
 
 # Sokol's implementation TU must be Objective-C++ for Metal; reuse the web
 # example's rather than keeping a second copy.
