@@ -71,6 +71,13 @@ struct ValidationConfig {
   // Flag elements with a label but no font set (font_name == UNSET_FONT)
   bool enforce_label_has_font = false;
 
+  // Flag a corner radius that came from a roundness fraction and landed far
+  // larger than any radius a designer picks on purpose. roundness is a
+  // fraction of the short side, so one theme value is 8px on a row and 58px
+  // on a full-screen backdrop.
+  bool enforce_corner_radius_scale = false;
+  float max_corner_radius_px = 24.0f;
+
   // === Accessibility: Touch/Click Targets (Design Rules Section T) ===
   // TODO: Implement validation system for this flag. Flag interactive elements
   // (HasClickListener, HasCheckboxState, HasToggleSwitchState, HasSliderState)
@@ -100,6 +107,7 @@ struct ValidationConfig {
     enforce_zero_size_detection = true;
     enforce_absolute_margin_conflict = true;
     enforce_label_has_font = true;
+    enforce_corner_radius_scale = true;
     highlight_violations = true;
     return *this;
   }
@@ -118,6 +126,7 @@ struct ValidationConfig {
     enforce_zero_size_detection = true;
     enforce_absolute_margin_conflict = true;
     enforce_label_has_font = true;
+    enforce_corner_radius_scale = true;
     return *this;
   }
 

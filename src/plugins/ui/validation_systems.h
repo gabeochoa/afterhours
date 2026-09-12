@@ -581,6 +581,57 @@ struct ValidateLabelHasFont : System<UIComponent, HasLabel> {
   }
 };
 
+// Validates that a roundness fraction did not scale into an absurd radius.
+// radius_px is exempt: a caller who said px got what they asked for.
+struct ValidateCornerRadiusScale : System<AutoLayoutRoot, UIComponent> {
+
+  void validate_element(UIComponent &cmp, const ValidationConfig &config) {
+    if (!cmp.was_rendered_to_screen || cmp.should_hide) return;
+    OptEntity opt_ent = UICollectionHolder::getEntityForID(cmp.id);
+    if (!opt_ent.valid()) return;
+    Entity &ent = opt_ent.asE();
+    if (!ent.has<HasRoundedCorners>()) return;
+    const auto &corners = ent.get<HasRoundedCorners>();
+    if (corners.radius_px.has_value() || !corners.get().any()) return;
+
+    const auto rect = cmp.rect();
+    const float shorter = std::min(rect.width, rect.height);
+    const float radius = corners.roundness * 0.5f * shorter;
+    if (!(radius > config.max_corner_radius_px)) return;
+
+    std::string name_hint;
+    if (ent.has<UIComponentDebug>())
+      name_hint = " [" + ent.get<UIComponentDebug>().name() + "]";
+
+    std::string msg = fmt::format(
+        "Corner radius resolved to {:.0f}px on a {:.0f}x{:.0f} "
+        "element{}. roundness {:.2f} is a fraction of the short side, so "
+        "it grows with the element. Say with_corner_radius(px), or "
+        "with_corner_radius(0) if this is a full-bleed backdrop.",
+        radius, rect.width, rect.height, name_hint, corners.roundness);
+
+    report_violation(config, "CornerRadiusScale", msg, cmp.id, 0.5f);
+
+    if (config.highlight_violations && !ent.has<ValidationViolation>())
+      ent.addComponent<ValidationViolation>(msg, "CornerRadiusScale", 0.5f);
+  }
+
+  void validate_radius(UIComponent &cmp, const ValidationConfig &config) {
+    validate_element(cmp, config);
+    for (EntityID child_id : cmp.children)
+      validate_radius(AutoLayout::to_cmp_static(child_id), config);
+  }
+
+  virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
+                             float) override {
+    auto &styling_defaults = imm::UIStylingDefaults::get();
+    const auto &config = styling_defaults.get_validation_config();
+    if (!config.enforce_corner_radius_scale)
+      return;
+    validate_radius(cmp, config);
+  }
+};
+
 // Validates that computed margins and padding follow 4/8/16 spacing rhythm
 struct ValidateSpacingRhythm : System<AutoLayoutRoot, UIComponent> {
 
@@ -807,6 +858,7 @@ static void register_update_systems(SystemManager &sm) {
   sm.register_update_system(std::make_unique<ValidateZeroSize>());
   sm.register_update_system(std::make_unique<ValidateAbsoluteMarginConflict>());
   sm.register_update_system(std::make_unique<ValidateLabelHasFont>());
+  sm.register_update_system(std::make_unique<ValidateCornerRadiusScale>());
   sm.register_update_system(std::make_unique<ValidateSpacingRhythm>());
   sm.register_update_system(std::make_unique<ValidatePixelAlignment>());
 }
@@ -830,6 +882,7 @@ static void register_systems(SystemManager &sm) {
   sm.register_update_system(std::make_unique<ValidateZeroSize>());
   sm.register_update_system(std::make_unique<ValidateAbsoluteMarginConflict>());
   sm.register_update_system(std::make_unique<ValidateLabelHasFont>());
+  sm.register_update_system(std::make_unique<ValidateCornerRadiusScale>());
   sm.register_update_system(std::make_unique<ValidateSpacingRhythm>());
   sm.register_update_system(std::make_unique<ValidatePixelAlignment>());
 
