@@ -65,6 +65,7 @@ ALL_TESTS := \
 	settings_save_test \
 	clipboard_test \
 	native_dialogs_test \
+	input_binding_codec_test \
 	system_profile_test \
 	blend_mode_test \
 	rect_test \

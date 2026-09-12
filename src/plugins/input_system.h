@@ -4,6 +4,7 @@
 #include <cmath>
 #include <map>
 #include <variant>
+#include "../../vendor/magic_enum/magic_enum.hpp"
 
 #include "../core/base_component.h"
 #include "../core/entity_query.h"
