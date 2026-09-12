@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "../../logging.h"
+#include "../profiling.h"
 #include "pending_command.h"
 
 namespace afterhours {
@@ -21,6 +22,7 @@ struct PerfEntry {
     std::string name;
     float ms = 0.f;
     std::optional<int> entity_count;
+    std::optional<std::uint64_t> calls;
 };
 
 struct PerfProvider {
@@ -43,73 +45,34 @@ inline void set_provider(PerfProvider p) { provider() = std::move(p); }
 // consumer writing one.
 namespace builtin_profile {
 
-struct Accum {
-    double total_ms = 0.0;
-    int calls = 0;
-};
+inline void reset() { profiling::default_collector().reset(); }
 
-inline std::map<std::string, Accum> &totals() {
-    static std::map<std::string, Accum> m;
-    return m;
-}
-
-inline std::vector<std::pair<std::string, std::chrono::steady_clock::time_point>>
-    &open_frames() {
-    static std::vector<
-        std::pair<std::string, std::chrono::steady_clock::time_point>>
-        v;
-    return v;
-}
-
-inline void reset() {
-    totals().clear();
-    open_frames().clear();
-}
-
-// Installs both halves: the hook that measures and the provider that reads.
 inline void enable() {
-    reset();
-    SystemManager::set_profile_hook(SystemProfileHook{
-        [](std::string_view name, SystemPhase) {
-            open_frames().emplace_back(std::string(name),
-                                       std::chrono::steady_clock::now());
-        },
-        [](std::string_view, SystemPhase) {
-            if (open_frames().empty())
-                return;
-            auto [name, start] = open_frames().back();
-            open_frames().pop_back();
-            const auto elapsed =
-                std::chrono::duration<double, std::milli>(
-                    std::chrono::steady_clock::now() - start)
-                    .count();
-            Accum &a = totals()[name];
-            a.total_ms += elapsed;
-            a.calls++;
-        }});
-
+    profiling::default_collector().start();
     PerfProvider p = provider();
+    p.get_fps = []() -> std::optional<float> {
+        const auto snapshot = profiling::default_collector().snapshot();
+        if (!snapshot.frames) return std::nullopt;
+        return static_cast<float>(snapshot.fps);
+    };
+    p.get_p99_ms = []() -> std::optional<float> {
+        const auto snapshot = profiling::default_collector().snapshot();
+        if (!snapshot.frames) return std::nullopt;
+        return static_cast<float>(snapshot.p99_ms);
+    };
     p.top_entries = [](int count) {
         std::vector<PerfEntry> out;
-        out.reserve(totals().size());
-        for (const auto &[name, acc] : totals())
-            out.push_back(PerfEntry{name, static_cast<float>(acc.total_ms),
-                                    acc.calls});
-        std::sort(out.begin(), out.end(),
-                  [](const PerfEntry &a, const PerfEntry &b) {
-                      return a.ms > b.ms;
-                  });
-        if (static_cast<int>(out.size()) > count && count > 0)
-            out.resize(static_cast<size_t>(count));
+        for (const auto &sample : profiling::default_collector().snapshot().systems) {
+            out.push_back({sample.name, static_cast<float>(sample.mean_ms()), std::nullopt, sample.calls});
+        }
+        std::sort(out.begin(), out.end(), [](const auto &a, const auto &b) { return a.ms > b.ms; });
+        if (count > 0 && out.size() > static_cast<std::size_t>(count)) out.resize(count);
         return out;
     };
     set_provider(std::move(p));
 }
 
-inline void disable() {
-    SystemManager::set_profile_hook(SystemProfileHook{});
-    reset();
-}
+inline void disable() { profiling::default_collector().stop(); }
 
 } // namespace builtin_profile
 
@@ -129,7 +92,7 @@ struct HandleDumpProfileCommand : System<PendingE2ECommand> {
                   [](const PerfEntry &a, const PerfEntry &b) {
                       return a.ms > b.ms;
                   });
-        if (static_cast<int>(entries.size()) > count) entries.resize(count);
+        if (count > 0 && static_cast<int>(entries.size()) > count) entries.resize(count);
 
         log_info("=== PERFORMANCE PROFILE ===");
         if (p.get_fps) {
@@ -142,7 +105,9 @@ struct HandleDumpProfileCommand : System<PendingE2ECommand> {
         }
         log_info("--- Top {} systems by avg time ---", entries.size());
         for (const PerfEntry &e : entries) {
-            if (e.entity_count.has_value()) {
+            if (e.calls) {
+                log_info("  {:.2f}ms mean  {} ({} calls)", e.ms, e.name, *e.calls);
+            } else if (e.entity_count.has_value()) {
                 log_info("  {:.2f}ms  {} ({} entities)", e.ms, e.name,
                          *e.entity_count);
             } else {

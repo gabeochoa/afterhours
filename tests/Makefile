@@ -72,6 +72,8 @@ ALL_TESTS := \
 	render_capture_test \
 	charts_test \
 	system_profile_test \
+	profiling_test \
+	profiling_disabled_test \
 	blend_mode_test \
 	rect_test \
 	viewport_test \
@@ -288,3 +290,29 @@ clean:
 	rm -rf $(INCLUDE_ROOT)
 
 -include $(wildcard $(OUT)/*.d)
+
+$(OUT)/profiling_benchmark_on: profiling_benchmark.cpp
+	$(CXX) $(CXXFLAGS) -O2 -DAFTERHOURS_ENABLE_PROFILING=1 $(DEPFLAGS) $(INCLUDES) $< -o $@
+
+$(OUT)/profiling_benchmark_off: profiling_benchmark.cpp
+	$(CXX) $(CXXFLAGS) -O2 -DAFTERHOURS_ENABLE_PROFILING=0 $(DEPFLAGS) $(INCLUDES) $< -o $@
+
+.PHONY: profiling-benchmark
+profiling-benchmark: $(OUT)/profiling_benchmark_on $(OUT)/profiling_benchmark_off
+	$(OUT)/profiling_benchmark_off stopped
+	$(OUT)/profiling_benchmark_on stopped
+	$(OUT)/profiling_benchmark_on record
+	$(OUT)/profiling_benchmark_on panel
+
+$(OUT)/profiling_render_benchmark_on: profiling_benchmark.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) -O2 -DAFTERHOURS_ENABLE_PROFILING=1 $(DEPFLAGS) $(INCLUDES_RAYLIB) $< $(LDFLAGS_RAYLIB) -o $@
+
+$(OUT)/profiling_render_benchmark_off: profiling_benchmark.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) -O2 -DAFTERHOURS_ENABLE_PROFILING=0 $(DEPFLAGS) $(INCLUDES_RAYLIB) $< $(LDFLAGS_RAYLIB) -o $@
+
+.PHONY: profiling-render-benchmark
+profiling-render-benchmark: $(OUT)/profiling_render_benchmark_on $(OUT)/profiling_render_benchmark_off
+	$(OUT)/profiling_render_benchmark_off stopped 3000 "$(PROFILING_FONT)"
+	$(OUT)/profiling_render_benchmark_on stopped 3000 "$(PROFILING_FONT)"
+	$(OUT)/profiling_render_benchmark_on record 3000 "$(PROFILING_FONT)"
+	$(OUT)/profiling_render_benchmark_on panel 3000 "$(PROFILING_FONT)"

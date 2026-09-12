@@ -5,6 +5,7 @@
 // Before the hook a consumer could only time its own systems, so a per-draw
 // regression in the library had to be found by bisect.
 
+#define AFTERHOURS_ENABLE_PROFILING 1
 #include "ui_test_harness.h"
 
 #include <afterhours/src/plugins/e2e_testing/perf_commands.h>
@@ -151,7 +152,7 @@ TEST(the_builtin_profile_names_systems_the_consumer_never_wrote) {
       found_update = true;
       // Three frames, so three calls -- a profile that loses calls is worse
       // than none.
-      CHECK(e.entity_count.value_or(0) == 3);
+      CHECK(e.calls.value_or(0) == 3);
     }
     if (e.name.find("UnnamedRenderSystem") != std::string::npos)
       found_render = true;

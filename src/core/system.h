@@ -19,6 +19,7 @@
 #include "base_component.h"
 #include "entity.h"
 #include "entity_helper.h"
+#include "system_timing.h"
 
 namespace afterhours {
 
@@ -567,11 +568,17 @@ struct SystemManager {
     }
 
    private:
-    // Brackets one system. Costs a bool test when no hook is set.
     struct ProfileScope {
         const SystemBase *sys = nullptr;
         SystemPhase phase{};
-        ProfileScope(const SystemBase *s, SystemPhase p) {
+#if AFTERHOURS_ENABLE_PROFILING
+        profiling::detail::TimingScope timing;
+#endif
+        ProfileScope(const SystemBase *s, SystemPhase p)
+#if AFTERHOURS_ENABLE_PROFILING
+            : timing(s->name(), p)
+#endif
+        {
             // Unconditional, unlike the hook: a crash report wants the system
             // name whether or not anyone is profiling, and it is a pointer
             // store.
