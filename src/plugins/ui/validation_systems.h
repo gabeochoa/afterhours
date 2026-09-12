@@ -594,6 +594,13 @@ struct ValidateCornerRadiusScale : System<AutoLayoutRoot, UIComponent> {
     const auto &corners = ent.get<HasRoundedCorners>();
     if (corners.radius_px.has_value() || !corners.get().any()) return;
 
+    // A roundness at the top of the range says "circle" or "pill", which
+    // is intent, not an accident of size. The ambiguous values are the
+    // ones in the middle, where the author picked a look and got a
+    // different number of pixels on every element it landed on.
+    const bool asked_for_a_pill = corners.roundness >= 0.95f;
+    if (asked_for_a_pill) return;
+
     const auto rect = cmp.rect();
     const float shorter = std::min(rect.width, rect.height);
     const float radius = corners.roundness * 0.5f * shorter;
