@@ -68,6 +68,7 @@ ALL_TESTS := \
 	input_binding_codec_test \
 	input_prompts_test \
 	input_device_activity_test \
+	file_watcher_test \
 	system_profile_test \
 	blend_mode_test \
 	rect_test \
@@ -243,6 +244,10 @@ $(OUT)/sound_volume_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
 $(OUT)/bundle_test: ../src/plugins/files.cpp
+$(OUT)/file_watcher_test: ../src/plugins/file_watcher.cpp
+ifeq ($(UNAME_S),Darwin)
+$(OUT)/file_watcher_test: LDFLAGS_T += -framework CoreServices
+endif
 
 $(OUT)/native_dialogs_macos_test: native_dialogs_macos_test.mm ../src/plugins/native_dialogs_macos.mm
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) $(filter %.mm,$^) -framework Cocoa -o $@
