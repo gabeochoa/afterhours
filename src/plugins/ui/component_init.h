@@ -332,9 +332,13 @@ inline void apply_on_draw(Entity &entity, const ComponentConfig &config) {
 
 inline void apply_render_layer(HasUIContext auto &ctx, Entity &entity,
                                Entity &parent, ComponentConfig &config) {
-  // Inherit render layer from parent (child is at least on parent's layer)
+  const int parent_layer = parent.get<UIComponent>().render_layer;
+  // An offset is relative to the parent; otherwise inherit, so a child is at
+  // least on its parent's layer.
   config.render_layer =
-      std::max(config.render_layer, parent.get<UIComponent>().render_layer);
+      config.render_layer_offset != 0
+          ? parent_layer + config.render_layer_offset
+          : std::max(config.render_layer, parent_layer);
   entity.get<UIComponent>().render_layer = config.render_layer;
   ctx.queue_render(RenderInfo{entity.id, config.render_layer});
 }

@@ -72,6 +72,7 @@ ALL_TESTS := \
 	setting_row_style_test \
 	singleton_iteration_test \
 	press_delay_test \
+	overlay_layer_test \
 	unhandled_command_test \
 	mouse_axis_action_test \
 	card_and_type_scale_test \
@@ -183,6 +184,7 @@ RAYLIB_TESTS := \
 	card_and_type_scale_test \
 	mouse_axis_action_test \
 	unhandled_command_test \
+	overlay_layer_test \
 	press_delay_test \
 	text_wrap_test \
 	theme_io_test

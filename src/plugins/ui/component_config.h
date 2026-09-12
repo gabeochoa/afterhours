@@ -124,6 +124,9 @@ struct ComponentConfig {
   // debugs
   std::string debug_name = "";
   int render_layer = 0;
+  // Layers above the parent, resolved in apply_render_layer where the parent
+  // is known. An absolute number cannot say "above whatever contains me".
+  int render_layer_offset = 0;
 
   // Custom-draw callbacks (see HasOnDraw): bg draws behind the widget's fill,
   // fg on top of all its primitives, both receiving the widget's final rect.
@@ -790,6 +793,16 @@ struct ComponentConfig {
     font_size_explicitly_set = true;
     font_size_is_default = false;
     return *this;
+  }
+
+  /// Absolute, and drawn above whatever contains it. The layer is relative
+  /// because the parent's is not known until the element is built.
+  ///
+  /// Opt-in: absolute is used for full-screen underlays too, and defaulting
+  /// every absolute element above its parent paints those over the content.
+  ComponentConfig &with_overlay(int levels_above = 1) {
+    render_layer_offset = levels_above;
+    return with_absolute_position();
   }
 
   // TODO eventually rename this to is_absolute() instead 0
