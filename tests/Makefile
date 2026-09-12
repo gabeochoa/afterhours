@@ -70,6 +70,7 @@ ALL_TESTS := \
 	input_device_activity_test \
 	file_watcher_test \
 	render_capture_test \
+	charts_test \
 	system_profile_test \
 	blend_mode_test \
 	rect_test \
