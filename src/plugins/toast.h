@@ -20,6 +20,8 @@ namespace afterhours {
 
 struct toast : developer::Plugin {
     enum class Level { Info, Success, Warning, Error, Custom };
+    enum class Position { TopLeft, TopRight, BottomLeft, BottomRight, BottomCenter };
+    static inline Position position = Position::BottomCenter;
 
     // Resolution-scaled sizes (designed for 720p, scales proportionally)
     static inline ui::Size WIDTH = ui::h720(340.0f);
@@ -290,12 +292,17 @@ struct toast : developer::Plugin {
                     static_cast<float>(index) * (toast_height + gap_px);
                 float y_pos = static_cast<float>(screen_h) - padding_px -
                               toast_height - y_offset;
-                // Bottom-center, stacking upward; slide up on entry.
+                const bool at_top = position == Position::TopLeft || position == Position::TopRight;
+                if (at_top) y_pos = padding_px + y_offset;
                 float x_pos = (static_cast<float>(screen_w) - width_px) / 2.0f;
+                if (position == Position::TopLeft || position == Position::BottomLeft)
+                    x_pos = padding_px;
+                if (position == Position::TopRight || position == Position::BottomRight)
+                    x_pos = static_cast<float>(screen_w) - padding_px - width_px;
 
                 float alpha_ease = detail::ease_out_expo(t.progress());
                 float slide_offset = (1.0f - alpha_ease) * 24.0f;
-                y_pos += slide_offset;
+                y_pos += at_top ? -slide_offset : slide_offset;
 
                 ui.computed_rel[ui::Axis::X] = x_pos;
                 ui.computed_rel[ui::Axis::Y] = y_pos;
