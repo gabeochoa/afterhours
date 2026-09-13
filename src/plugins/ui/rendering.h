@@ -326,7 +326,7 @@ inline Vector2Type text_inset_for(const RectangleType &rect) {
 // existing label, so say so instead.
 inline void warn_ignored_label_padding(const Entity &entity,
                                       const UIComponent &cmp) {
-  if (cmp.children.size() > 0)
+  if (cmp.padding_is_default || !cmp.children.empty())
     return;
   const float padd = cmp.computed_padd[Axis::X] + cmp.computed_padd[Axis::Y];
   if (padd <= 0.f)

@@ -9,6 +9,7 @@
 
 #include <cstdio>
 #include <string>
+#include <string_view>
 
 using namespace afterhours;
 using namespace afterhours::ui;
@@ -54,9 +55,36 @@ static void padding_probe() {
         "padding on a label-only element does nothing, hence the warning");
 }
 
+static void default_padding_does_not_warn() {
+  ui_test::ImmTestHarness h;
+  static std::string warnings;
+  const auto previous_sink = log_sink_fn;
+  log_sink_fn = [](const char *level, const char *message) {
+    if (std::string_view(level).find("WARN") != std::string_view::npos)
+      warnings += message;
+  };
+  auto render_button = [&](ComponentConfig config) {
+    auto result =
+        button(h.context(), mk(h.root(), 0),
+               config.with_label("hello").with_debug_name("padding_warning_probe"));
+    h.layout_only();
+    warn_ignored_label_padding(result.ent(), result.ent().get<UIComponent>());
+  };
+  render_button(ComponentConfig{});
+  check(warnings.find("padding_warning_probe") == std::string::npos,
+        "built-in button padding does not produce a user styling warning");
+  check(h.find("padding_warning_probe")->computed_padd[Axis::X] > 0.f,
+        "default button padding remains available for children");
+  render_button(ComponentConfig{}.with_padding(Spacing::sm));
+  check(warnings.find("padding_warning_probe") != std::string::npos,
+        "explicit padding equal to the default still warns on a leaf label");
+  log_sink_fn = previous_sink;
+}
+
 int main() {
   printf("=== label inset ===\n\n");
 
+  default_padding_does_not_warn();
   padding_probe();
 
   check(kTextInset == 5.f, "the inset is exposed, not buried in rendering.h");

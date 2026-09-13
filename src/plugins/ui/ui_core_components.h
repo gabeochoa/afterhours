@@ -77,6 +77,7 @@ struct UIComponent : BaseComponent {
     }
   };
 
+  bool padding_is_default = false;
   AxisArray<Size> desired;
   AxisArray<Size>
       min_size; // Minimum size constraint (Dim::None = no constraint)
@@ -275,6 +276,7 @@ struct UIComponent : BaseComponent {
   }
 
   auto &set_desired_padding(Size s, Axis axis) {
+    padding_is_default = false;
     if (axis == Axis::X) {
       // TODO do you think this should be 5 and 5 or 10 and 10?
       // .set_desired_padding(pixels(10.f), Axis::Y)
@@ -295,6 +297,7 @@ struct UIComponent : BaseComponent {
   }
 
   auto &set_desired_padding(Padding padding) {
+    padding_is_default = false;
     desired_padding[Axis::top] = padding.top;
     desired_padding[Axis::left] = padding.left;
     desired_padding[Axis::bottom] = padding.bottom;

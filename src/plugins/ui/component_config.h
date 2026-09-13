@@ -53,6 +53,7 @@ struct ComponentConfig {
   Size max_height;
 
   Padding padding;
+  bool padding_is_default = false;
   Margin margin;
   std::string label;
   bool is_absolute = false;
@@ -254,6 +255,7 @@ struct ComponentConfig {
   }
   ComponentConfig &with_padding(const Padding &padding_) {
     padding = padding_;
+    padding_is_default = false;
     return *this;
   }
   ComponentConfig &with_margin(const Margin &margin_) {
@@ -269,6 +271,7 @@ struct ComponentConfig {
     return *this;
   }
   ComponentConfig &with_padding(Spacing spacing) {
+    padding_is_default = false;
     auto gap_size = spacing_to_size(spacing);
     padding = Padding{.top = gap_size,
                       .left = gap_size,
@@ -1016,8 +1019,10 @@ struct ComponentConfig {
   ComponentConfig apply_overrides(const ComponentConfig &overrides) const {
     ComponentConfig merged = *this;
 
-    if (overrides.has_padding())
+    if (overrides.has_padding()) {
       merged.padding = overrides.padding;
+      merged.padding_is_default = overrides.padding_is_default;
+    }
     if (overrides.has_margin())
       merged.margin = overrides.margin;
     if (overrides.has_size_override())

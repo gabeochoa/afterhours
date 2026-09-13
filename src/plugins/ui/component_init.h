@@ -122,6 +122,7 @@ inline void overwrite_defaults(HasUIContext auto &ctx,
                               config.padding.right.dim == Dim::None;
     if (padding_is_default) {
       config.with_padding(Spacing::sm);
+      config.padding_is_default = true;
     }
   }
 
@@ -197,6 +198,7 @@ inline void apply_layout(Entity &entity, const ComponentConfig &config) {
       .set_flex_wrap(config.flex_wrap)
       .set_debug_wrap(config.debug_wrap)
       .set_flex_direction(config.flex_direction);
+  entity.get<UIComponent>().padding_is_default = config.padding_is_default;
   entity.get<UIComponent>().desired_gap = config.flex_gap;
 
   if (config.is_absolute)
