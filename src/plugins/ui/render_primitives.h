@@ -10,6 +10,7 @@
 
 #include "../../memory/arena.h"
 #include "components.h"
+#include "text_stroke.h"
 
 namespace afterhours {
 namespace ui {
@@ -742,17 +743,10 @@ private:
                    cmd.data.text.shadow_color, rotation, rot_cx, rot_cy);
     }
 
-    // Draw stroke (8 directions)
     if (cmd.data.text.has_stroke) {
-      float t = cmd.data.text.stroke_thickness;
-      const float offsets[][2] = {{-t, -t}, {0, -t}, {t, -t}, {-t, 0},
-                                  {t, 0},   {-t, t}, {0, t},  {t, t}};
-      for (const auto &offset : offsets) {
-        Vector2Type strokePos = {startPos.x + offset[0],
-                                 startPos.y + offset[1]};
-        draw_text_ex(font, cmd.data.text.text, strokePos, fontSize, spacing,
-                     cmd.data.text.stroke_color, rotation, rot_cx, rot_cy);
-      }
+      text_stroke::draw(font, cmd.data.text.text, startPos, fontSize, spacing,
+                         cmd.data.text.stroke_thickness, cmd.data.text.stroke_color,
+                         rotation, rot_cx, rot_cy);
     }
 
     // Draw main text

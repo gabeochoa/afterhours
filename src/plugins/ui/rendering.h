@@ -13,6 +13,7 @@
 #include "../../logging.h"
 #include "../animation.h"
 #include "text_selection.h"
+#include "text_stroke.h"
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
 #include "../e2e_testing/test_input.h"
 #include "../e2e_testing/visible_text.h"
@@ -977,24 +978,14 @@ static inline void draw_text_in_rect(
                                   rot_center_x, rot_center_y, letter_spacing);
   }
 
-  // Draw text stroke/outline if configured
-  // Renders text at 8 offset positions to create an outline effect
   if (stroke.has_value() && stroke->has_stroke()) {
-    float t = stroke->thickness;
-    Color stroke_color = stroke->color;
-
-    // 8-direction offsets for stroke rendering
-    const std::array<std::pair<float, float>, 8> offsets = {
-        {{-t, -t}, {0, -t}, {t, -t}, {-t, 0}, {t, 0}, {-t, t}, {0, t}, {t, t}}};
-
-    for (const auto &[ox, oy] : offsets) {
-      RectangleType offset_sizing = sizing;
-      offset_sizing.x += ox;
-      offset_sizing.y += oy;
-      detail::draw_text_at_position(fm, render_text, rect, alignment,
-                                    offset_sizing, stroke_color, rotation,
-                                    rot_center_x, rot_center_y, letter_spacing);
-    }
+    const float center_x = (rot_center_x != 0.f || rot_center_y != 0.f)
+                               ? rot_center_x : rect.x + rect.width / 2.f;
+    const float center_y = (rot_center_x != 0.f || rot_center_y != 0.f)
+                               ? rot_center_y : rect.y + rect.height / 2.f;
+    text_stroke::draw(fm.get_active_font(), render_text, {sizing.x, sizing.y},
+                       sizing.height, 1.f + letter_spacing, stroke->thickness,
+                       stroke->color, rotation, center_x, center_y);
   }
 
   // Draw main text on top

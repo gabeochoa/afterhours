@@ -127,6 +127,8 @@ ALL_TESTS := \
 	label_clear_test \
 	hit_priority_test \
 	text_selection_test \
+	text_stroke_test \
+	text_stroke_render_test \
 	multiline_text_test \
 	subtree_hover_test \
 	menu_test \
@@ -174,6 +176,7 @@ ALL_TESTS += sokol_include_order_test
 endif
 
 RAYLIB_TESTS := \
+	text_stroke_render_test \
 	input_device_activity_test \
 	render_capture_test \
 	clipboard_test \
