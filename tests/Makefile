@@ -60,6 +60,8 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	ui_update_lifecycle_test \
+	ui_update_lifecycle_single_test \
 	drag_preview_test \
 	animation_test \
 	sound_volume_test \
@@ -248,6 +250,9 @@ $(OUT)/%: %.cpp
 
 # Exceptions. A rule with prerequisites and no recipe adds to the pattern rule
 # above instead of replacing it.
+$(OUT)/ui_update_lifecycle_single_test: ui_update_lifecycle_single_test.cpp
+	$(CXX) $(CXXFLAGS_T) $(DEPFLAGS) $(INCLUDES_T) $< $(LDFLAGS_T) -o $@
+
 $(OUT)/entity_mapping_test: ../examples/entity_mapping_test_helper.cpp
 $(OUT)/entity_mapping_test: INCLUDES_T += -I../examples
 $(OUT)/random_engine_test:  CXXFLAGS_T += -DAFTER_HOURS_ENABLE_RANDOM

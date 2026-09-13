@@ -243,6 +243,7 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
 
   virtual void for_each_with(Entity &entity, UIContext<InputAction> &context,
                              float dt) override {
+    context.render_cmds.clear();
     context.dt = dt;
     context.last_action = InputAction::None;
     context.last_action_modifiers = 0;

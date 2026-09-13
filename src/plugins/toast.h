@@ -343,7 +343,7 @@ struct toast : developer::Plugin {
 
     template<typename InputAction>
     static void register_layout_systems(SystemManager &sm) {
-        sm.register_update_system(
+        sm.register_render_system(
             std::make_unique<ToastLayoutSystem<InputAction>>());
     }
 };
