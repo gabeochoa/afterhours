@@ -1051,12 +1051,13 @@ struct CloseDropdownOnClickOutside : System<HasDropdownState, UIComponent> {
 
 // Single source of truth for "can this widget take focus?" - shared by
 // HandleTabbing and the FollowsMostRecentInput hover arbitration so the two can
-// never drift. Focusable <=> has a click or drag listener, not SkipWhenTabbing,
+// never drift. Focusable <=> has a click, drag or left/right listener, not SkipWhenTabbing,
 // not ShouldHide, was rendered this frame, and input is allowed.
 template <typename InputAction>
 bool can_be_focused(UIContext<InputAction> &ctx, const Entity &e) {
   if (e.template is_missing<HasClickListener>() &&
-      e.template is_missing<HasDragListener>())
+      e.template is_missing<HasDragListener>() &&
+      e.template is_missing<HasLeftRightListener>())
     return false;
   if (e.template has<SkipWhenTabbing>())
     return false;
@@ -1258,13 +1259,10 @@ struct HandleLeftRight : SystemWithUIContext<ui::HasLeftRightListener> {
     if (!context->has_focus(entity.id))
       return;
 
-    // TODO consider using a different repeat rate
-    if (context->pressed(InputAction::WidgetLeft) ||
-        context->is_held_down(InputAction::WidgetLeft)) {
+    if (direction_triggered(entity, InputAction::WidgetLeft)) {
       listener.cb(entity, -1);
     }
-    if (context->pressed(InputAction::WidgetRight) ||
-        context->is_held_down(InputAction::WidgetRight)) {
+    if (direction_triggered(entity, InputAction::WidgetRight)) {
       listener.cb(entity, +1);
     }
 
@@ -1272,6 +1270,11 @@ struct HandleLeftRight : SystemWithUIContext<ui::HasLeftRightListener> {
   }
 
 private:
+  bool direction_triggered(const Entity &entity, InputAction action) {
+    if (entity.has<HasStepperState>()) return context->pressed_or_repeat(action);
+    return context->pressed(action) || context->is_held_down(action);
+  }
+
   void process_derived_children(Entity &parent, UIComponent &parent_component) {
     if (!parent.has<UIComponent>()) {
       return;
@@ -1298,13 +1301,10 @@ private:
       if (!context->has_focus(child.id))
         continue;
 
-      // TODO consider using a different repeat rate
-      if (context->pressed(InputAction::WidgetLeft) ||
-          context->is_held_down(InputAction::WidgetLeft)) {
+      if (direction_triggered(child, InputAction::WidgetLeft)) {
         child_listener.cb(child, -1);
       }
-      if (context->pressed(InputAction::WidgetRight) ||
-          context->is_held_down(InputAction::WidgetRight)) {
+      if (direction_triggered(child, InputAction::WidgetRight)) {
         child_listener.cb(child, +1);
       }
 

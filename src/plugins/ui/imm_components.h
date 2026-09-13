@@ -2731,9 +2731,9 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
   // State + keyboard + focus setup
   HasStepperState &stepperState = init_state<HasStepperState>(
       entity, [&](auto &) {}, option_index, options.size());
-  stepperState.index = option_index;
+  if (!stepperState.changed_since) stepperState.index = option_index;
+  stepperState.index %= options.size();
   stepperState.num_options = options.size();
-  stepperState.changed_since = false;
 
   entity.addComponentIfMissing<ui::HasLeftRightListener>(
       [](Entity &ent, int dir) {
@@ -2748,6 +2748,7 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
   // Shared arrow button config
   const float arrow_w = 24.0f;
   auto arrow_cfg = ComponentConfig::inherit_from(config, "stepper_arrow")
+            .without_border()
                        .with_size(ComponentSize{pixels(arrow_w), percent(1.0f)})
                        .with_background(Theme::Usage::None)
                        .with_custom_text_color(ctx.theme.font_muted)
@@ -2778,6 +2779,7 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
   auto label_container =
       hstack(ctx, mk(entity),
              ComponentConfig::inherit_from(config, "stepper_labels")
+            .without_border()
                  .with_size(ComponentSize{children(), percent(1.0f)})
                  .with_justify_content(JustifyContent::SpaceAround)
                  .with_align_items(AlignItems::Center)
@@ -2804,6 +2806,7 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
     bool is_center = (offset == 0);
     div(ctx, mk(label_container.ent(), static_cast<int>(i)),
         ComponentConfig::inherit_from(config, "stepper_value")
+            .without_border()
             .with_label(options[display_idx % options.size()])
             .with_size(ComponentSize{children(), percent(1.0f)})
             .with_background(Theme::Usage::None)
@@ -2825,8 +2828,8 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Write state back to caller
   option_index = stepperState.index;
-  return ElementResult{stepperState.changed_since, entity,
-                       static_cast<int>(option_index)};
+  const bool changed = std::exchange(stepperState.changed_since, false);
+  return ElementResult{changed, entity, static_cast<int>(option_index)};
 }
 
 } // namespace imm
