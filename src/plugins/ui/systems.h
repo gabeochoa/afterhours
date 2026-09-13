@@ -1678,8 +1678,7 @@ inline void untag_all(DragTag tag) {
 }
 
 /// Create or update the floating overlay entity at the given position.
-/// On the first call (no existing overlay), creates a new entity and copies
-/// visual properties from the DragTag::DraggedItem entity.
+/// On the first call, creates an overlay that renders the dragged subtree.
 /// On subsequent calls, just updates the position of the existing overlay.
 inline void create_or_update_drag_overlay(DragGroupState &state, float mouse_x,
                                           float mouse_y) {
@@ -1687,6 +1686,7 @@ inline void create_or_update_drag_overlay(DragGroupState &state, float mouse_x,
   auto existing = find_drag_tagged(DragTag::Overlay);
   if (existing && existing.asE().has<UIComponent>()) {
     auto &cmp = existing.asE().get<UIComponent>();
+    cmp.was_rendered_to_screen = true;
     cmp.computed_rel[Axis::X] = mouse_x - state.dragged_width / 2.0f;
     cmp.computed_rel[Axis::Y] = mouse_y - state.dragged_height / 2.0f;
     return;
@@ -1714,20 +1714,7 @@ inline void create_or_update_drag_overlay(DragGroupState &state, float mouse_x,
     overlay_cmp.computed_rel[Axis::Y] = mouse_y - state.dragged_height / 2.0f;
   }
 
-  // Copy visual properties from the dragged entity.
-  // TODO: Only flat properties (HasLabel, HasColor) are copied. Dragged items
-  //       with children (nested divs, icons, etc.) won't render correctly in
-  //       the overlay. Consider deep-cloning the subtree or re-parenting.
-  Entity &d = dragged_opt.asE();
-  if (d.has<HasLabel>()) {
-    auto &src_label = d.get<HasLabel>();
-    overlay.addComponent<HasLabel>(src_label.label, src_label.is_disabled);
-    auto &src_cmp = d.get<UIComponent>();
-    overlay_cmp.enable_font(src_cmp.font_name, src_cmp.font_size);
-  }
-  if (d.has<HasColor>()) {
-    overlay.addComponent<HasColor>(d.get<HasColor>().color());
-  }
+  overlay.addComponent<HasDragPreview>(dragged_opt.asE().id);
 }
 
 /// Create or reuse a spacer entity sized to match the dragged item, then

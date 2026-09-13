@@ -1663,7 +1663,7 @@ struct AutoLayout {
       float final_x = is_column ? (offx + cross_offset) : offx;
       float final_y = is_column ? offy : (offy + cross_offset);
 
-      if (enable_grid_snapping) {
+      if (enable_grid_snapping && !widget.skip_grid_snap && !child.skip_grid_snap) {
         child.computed_rel[Axis::X] = snap_to_8pt_grid(final_x, Axis::X);
         child.computed_rel[Axis::Y] = snap_to_8pt_grid(final_y, Axis::Y);
       } else {
@@ -1716,7 +1716,7 @@ struct AutoLayout {
         // Snapping the running total keeps rows evenly spaced when their own
         // size is off-grid. Dropping it honours each pixel size exactly and
         // makes the spacing alternate instead, which reads as banding.
-        if (enable_grid_snapping) {
+        if (enable_grid_snapping && !widget.skip_grid_snap && !child.skip_grid_snap) {
           next_y = snap_to_8pt_grid(next_y, Axis::Y);
         }
         offy = next_y;
@@ -1724,7 +1724,7 @@ struct AutoLayout {
       if (is_row) {
         float next_x = offx + cx + gap;
         // See above: uniform spacing beats honouring each size exactly.
-        if (enable_grid_snapping) {
+        if (enable_grid_snapping && !widget.skip_grid_snap && !child.skip_grid_snap) {
           next_x = snap_to_8pt_grid(next_x, Axis::X);
         }
         offx = next_x;

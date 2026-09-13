@@ -371,20 +371,19 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
         .set_segments(config.segments.value_or(8));
   }
 
-  if (config.clip_children) {
-    entity.addComponentIfMissing<HasClipChildren>();
-  }
-
   // Scroll implies clipping, so both Scroll and Hidden add HasClipChildren.
   // Auto does NOT add HasClipChildren — clipping is dynamic based on content
   // size.
   {
-    bool needs_clip = config.overflow_x == Overflow::Hidden ||
+    bool needs_clip = config.clip_children ||
+                      config.overflow_x == Overflow::Hidden ||
                       config.overflow_x == Overflow::Scroll ||
                       config.overflow_y == Overflow::Hidden ||
                       config.overflow_y == Overflow::Scroll;
     if (needs_clip) {
       entity.addComponentIfMissing<HasClipChildren>();
+    } else if (!overlay) {
+      entity.removeComponentIfExists<HasClipChildren>();
     }
 
     bool needs_scroll = config.overflow_x == Overflow::Scroll ||

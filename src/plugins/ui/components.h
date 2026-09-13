@@ -705,6 +705,11 @@ enum class UITag : TagId {
 // Tag IDs for drag-and-drop entity roles.
 // These are set/cleared by the HandleDragGroups systems so that tagged
 // entities can be discovered via queries instead of storing EntityIDs.
+struct HasDragPreview : BaseComponent {
+  EntityID source;
+  explicit HasDragPreview(EntityID source_) : source(source_) {}
+};
+
 enum class DragTag : TagId {
   // TODO build more confidence around how to set these number to avoid
   // conflicts

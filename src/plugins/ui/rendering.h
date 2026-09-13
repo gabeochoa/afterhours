@@ -37,6 +37,59 @@ namespace ui {
 
 namespace detail {
 
+static inline float compute_effective_opacity(const Entity &entity);
+
+static inline bool is_hidden_for_render(const Entity &entity) {
+  const Entity *current = &entity;
+  for (int depth = 0; depth < 64; ++depth) {
+    if (current->has<ShouldHide>()) return true;
+    if (!current->has<UIComponent>()) return false;
+    const auto &cmp = current->get<UIComponent>();
+    if (cmp.should_hide) return true;
+    if (cmp.parent < 0 || cmp.parent == current->id) return false;
+    auto parent = UICollectionHolder::getEntityForID(cmp.parent);
+    if (!parent) return false;
+    current = &parent.asE();
+  }
+  return false;
+}
+
+template <typename Draw>
+void draw_drag_preview(Entity &overlay, Draw draw) {
+  auto source = UICollectionHolder::getEntityForID(overlay.get<HasDragPreview>().source);
+  if (!source || !source.asE().has<UIComponent>()) return;
+  auto &root = source.asE().get<UIComponent>();
+  const auto from = root.rect();
+  const auto to = overlay.get<UIComponent>().rect();
+  const Vector2Type offset{to.x - from.x, to.y - from.y};
+  const EntityID parent = root.parent;
+  const bool had_opacity = source.asE().has<HasOpacity>();
+  const float original_opacity = had_opacity ? source.asE().get<HasOpacity>().value : 1.f;
+  const float opacity = compute_effective_opacity(source.asE());
+  source.asE().addComponentIfMissing<HasOpacity>().value = opacity;
+  root.parent = -1;
+  const auto visit = [&](auto &&self, Entity &entity, bool first) -> void {
+    auto &cmp = entity.get<UIComponent>();
+    if (entity.has<ShouldHide>() || (!first && cmp.should_hide)) return;
+    const auto position = cmp.computed_rel;
+    const bool hidden = cmp.should_hide;
+    cmp.should_hide = false;
+    cmp.computed_rel[Axis::X] += offset.x;
+    cmp.computed_rel[Axis::Y] += offset.y;
+    draw(entity);
+    for (auto id : cmp.children) {
+      auto child = UICollectionHolder::getEntityForID(id);
+      if (child && child.asE().has<UIComponent>()) self(self, child.asE(), false);
+    }
+    cmp.computed_rel = position;
+    cmp.should_hide = hidden;
+  };
+  visit(visit, source.asE(), true);
+  root.parent = parent;
+  if (had_opacity) source.asE().get<HasOpacity>().value = original_opacity;
+  else source.asE().removeComponent<HasOpacity>();
+}
+
 static inline float compute_effective_opacity(const Entity &entity) {
   float result = 1.0f;
   EntityID current_id = entity.id;
@@ -235,7 +288,7 @@ std::optional<FocusPaint> prepare_focus_paint(const UIContext<InputAction> &cont
   if (!opt.valid() || !opt->template has<UIComponent>()) return {};
   const Entity &entity = opt.asE();
   const auto &cmp = entity.get<UIComponent>();
-  if (cmp.should_hide || entity.has<ShouldHide>()) return {};
+  if (is_hidden_for_render(entity)) return {};
   auto ring = focus_ring_for(context, entity, cmp, accumulated_scroll_offset(entity));
   if (!ring) return {};
   std::set<EntityID> descendants{entity.id};
@@ -1804,13 +1857,15 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
   void render(UIContext<InputAction> &context, FontManager &font_manager,
               Entity &entity) {
+    if (detail::is_hidden_for_render(entity)) return;
+    if (entity.has<HasDragPreview>()) {
+      detail::draw_drag_preview(entity, [&](Entity &source) { render(context, font_manager, source); });
+      return;
+    }
     // Defensive check: entity must have UIComponent
     if (!entity.has<UIComponent>())
       return;
     const UIComponent &cmp = entity.get<UIComponent>();
-    if (cmp.should_hide || entity.has<ShouldHide>())
-      return;
-
     if (cmp.font_name != UIComponent::UNSET_FONT) {
       font_manager.set_active(
           font_manager.resolve_weighted(cmp.font_name, cmp.font_weight));
@@ -2540,13 +2595,15 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
   void collect(RenderCommandBuffer &buffer, UIContext<InputAction> &context,
                FontManager &font_manager, Entity &entity, int layer) {
+    if (detail::is_hidden_for_render(entity)) return;
+    if (entity.has<HasDragPreview>()) {
+      detail::draw_drag_preview(entity, [&](Entity &source) { collect(buffer, context, font_manager, source, layer); });
+      return;
+    }
     // Defensive check: entity must have UIComponent to be rendered
     if (!entity.has<UIComponent>())
       return;
     const UIComponent &cmp = entity.get<UIComponent>();
-    if (cmp.should_hide || entity.has<ShouldHide>())
-      return;
-
     if (cmp.font_name != UIComponent::UNSET_FONT) {
       font_manager.set_active(
           font_manager.resolve_weighted(cmp.font_name, cmp.font_weight));
