@@ -28,6 +28,8 @@ struct HasTextAreaStateT : HasTextInputStateT<Storage> {
   float scroll_offset_y = 0.f;      // Vertical scroll position
   size_t preferred_column = 0;      // For Up/Down preserving column
   uint64_t last_layout_version = 0; // For invalidation
+  std::optional<size_t> last_scroll_cursor_position;
+  uint64_t last_scroll_layout_version = 0;
   TextAreaConfig area_config;       // Text area specific config
 
   // The font the field last rendered with. Listeners have to measure text to

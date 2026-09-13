@@ -560,7 +560,8 @@ TEST(end_goes_to_the_end_of_the_wrapped_row) {
 
 namespace {
 // Put the mouse over the field, turn the wheel, and report the scroll offset.
-float scroll_after_wheel(const std::string &content, float box_h, float wheel) {
+float scroll_after_wheel(const std::string &content, float box_h, float wheel,
+                         int idle_frames = 0) {
   ImmTestHarness h;
   std::string text = content;
   Entity *area = nullptr;
@@ -591,6 +592,11 @@ float scroll_after_wheel(const std::string &content, float box_h, float wheel) {
   h.layout_only();
   testing::input_injector::reset_all();
   testing::test_input::detail::test_mode = false;
+  for (int i = 0; i < idle_frames; ++i) {
+    h.begin_frame();
+    emit();
+    h.layout_only();
+  }
   return area && area->has<ti::HasTextAreaState>()
              ? area->get<ti::HasTextAreaState>().scroll_offset_y
              : -1.f;
@@ -601,6 +607,59 @@ TEST(the_wheel_scrolls_a_field_whose_content_overflows) {
   // Eight rows in a three-row box.
   const float down = scroll_after_wheel("a\nb\nc\nd\ne\nf\ng\nh", 70.f, -1.f);
   CHECK_APPROX(down, LINE_H);
+}
+
+TEST(wheel_scrolling_survives_idle_frames) {
+  CHECK_APPROX(scroll_after_wheel("a\nb\nc\nd\ne\nf\ng\nh", 70.f, -2.f, 4), 40.f);
+}
+
+TEST(fractional_scrolling_aligns_rows_and_caret_and_survives_focus) {
+  ImmTestHarness h;
+  std::string text = "a\nb\nc\nd\ne\nf\ng\nh";
+  Entity *area = nullptr;
+  auto emit = [&] {
+    area = &text_area(h.context(), mk(h.root(), 0), text,
+                      area_config(200.f, 70.f)).ent();
+  };
+  two_frames(h, emit);
+  auto &state = area->get<ti::HasTextAreaState>();
+  auto *field = h.find("text_area_field");
+  CHECK(field != nullptr);
+  if (!field) return;
+  h.context().focus_id = field->id;
+  state.cursor_position = 0;
+  two_frames(h, emit);
+  auto *initial_row = h.find("text_area_line");
+  auto *initial_caret = h.find("text_area_cursor");
+  CHECK(initial_row != nullptr);
+  CHECK(initial_caret != nullptr);
+  if (!initial_row || !initial_caret) return;
+  const float row_y = initial_row->rect().y;
+  const float caret_y = initial_caret->rect().y;
+  state.scroll_offset_y = 19.f;
+  two_frames(h, emit);
+  CHECK_APPROX(state.scroll_offset_y, 19.f);
+  auto *row = h.find("text_area_line");
+  auto *caret = h.find("text_area_cursor");
+  CHECK(row != nullptr);
+  CHECK(caret != nullptr);
+  if (!row || !caret) return;
+  auto row_entity = UICollectionHolder::getEntityForID(row->id);
+  CHECK(row_entity.valid());
+  if (!row_entity.valid()) return;
+  const auto row_rect = row_entity.asE().get<HasUIModifiers>().apply_modifier(row->rect());
+  CHECK_APPROX(row_rect.y, row_y - 19.f);
+  CHECK_APPROX(caret->rect().y, caret_y - 19.f);
+  CHECK(count_line_divs() == 5);
+
+  h.context().last_action = ui_test::TestInputAction::TextHome;
+  two_frames(h, emit);
+  CHECK_APPROX(state.scroll_offset_y, 0.f);
+  h.context().last_action = ui_test::TestInputAction::None;
+  state.scroll_offset_y = 98.f;
+  text = "short";
+  two_frames(h, emit);
+  CHECK_APPROX(state.scroll_offset_y, 0.f);
 }
 
 TEST(the_wheel_does_not_scroll_past_the_top) {

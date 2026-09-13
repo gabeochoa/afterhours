@@ -9,6 +9,7 @@
 #include "text_area_state.h"
 #include "utils.h"
 #include <algorithm>
+#include <cmath>
 
 namespace afterhours {
 namespace text_input {
@@ -237,14 +238,51 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   const size_t cursor_col =
       state.layout_cache.column_at_offset(state.cursor_position);
 
-  state.ensure_cursor_visible_at_row(cursor_row, viewport_height,
-                                     vlines.size());
+  // Update focus state
+  field_entity.template addComponentIfMissing<InFocusCluster>();
+  bool field_has_focus = ctx.has_focus(field_entity.id);
+  bool parent_has_focus = ctx.has_focus(entity.id);
+  const bool gained_focus = !state.is_focused && (field_has_focus || parent_has_focus);
+  state.is_focused = field_has_focus || parent_has_focus;
+
+  if (gained_focus || state.last_scroll_cursor_position != state.cursor_position ||
+      state.last_scroll_layout_version != state.last_layout_version) {
+    state.ensure_cursor_visible_at_row(cursor_row, viewport_height, vlines.size());
+  }
+  state.last_scroll_cursor_position = state.cursor_position;
+  state.last_scroll_layout_version = state.last_layout_version;
+  state.scroll_offset_y = std::clamp(
+      state.scroll_offset_y, 0.f,
+      std::max(0.f, static_cast<float>(vlines.size()) * line_height - viewport_height));
+
+  // Wheel scrolling. Works on hover rather than focus, which is what a wheel
+  // over a box is expected to do, and is deliberately NOT consumed when the
+  // content already fits: the wheel is consume-once, so a field that cannot
+  // scroll must leave it for whatever scroll view encloses it.
+  {
+    const float max_scroll =
+        std::max(0.f, static_cast<float>(vlines.size()) * line_height -
+                          viewport_height);
+    const RectangleType fr = field_cmp.rect();
+    const bool hovered = ctx.mouse.pos.x >= fr.x &&
+                         ctx.mouse.pos.x <= fr.x + fr.width &&
+                         ctx.mouse.pos.y >= fr.y &&
+                         ctx.mouse.pos.y <= fr.y + fr.height;
+    if (max_scroll > 0.f && hovered) {
+      const float wheel = input::get_mouse_wheel_move_v().y;
+      if (wheel != 0.f) {
+        state.scroll_offset_y = std::clamp(
+            state.scroll_offset_y - wheel * line_height, 0.f, max_scroll);
+      }
+    }
+  }
 
   // Calculate first visible line
   size_t first_visible_line =
       static_cast<size_t>(state.scroll_offset_y / line_height);
   size_t visible_line_count =
-      static_cast<size_t>(viewport_height / line_height) + 1;
+      static_cast<size_t>(std::ceil(
+          (viewport_height + std::fmod(state.scroll_offset_y, line_height)) / line_height));
 
   // Render each visible line as a separate div with fixed height
   // This prevents auto-scaling which would make text fill the entire container
@@ -267,16 +305,11 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_custom_text_color(
                 config.custom_text_color.value_or(ctx.theme.font))
             .with_alignment(TextAlignment::Left)
+            .with_translate(0.f, -std::fmod(state.scroll_offset_y, line_height))
             .with_skip_tabbing(true)
             .with_render_layer(config.render_layer + 2)
             .with_debug_name("text_area_line"));
   }
-
-  // Update focus state
-  field_entity.template addComponentIfMissing<InFocusCluster>();
-  bool field_has_focus = ctx.has_focus(field_entity.id);
-  bool parent_has_focus = ctx.has_focus(entity.id);
-  state.is_focused = field_has_focus || parent_has_focus;
 
   // Selection highlight: one band per visual row the range touches, so a
   // selection across a wrapped paragraph reads as a block rather than a
@@ -334,7 +367,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     // Calculate cursor Y position based on row
     float cursor_y =
         pad_top +
-        static_cast<float>(cursor_row - first_visible_line) * line_height +
+        static_cast<float>(cursor_row) * line_height - state.scroll_offset_y +
         (line_height - cursor_height) / 2.f;
 
     constexpr float CURSOR_WIDTH = 2.0f;
@@ -452,28 +485,6 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
         reset_blink(s);
       });
 
-  // Wheel scrolling. Works on hover rather than focus, which is what a wheel
-  // over a box is expected to do, and is deliberately NOT consumed when the
-  // content already fits: the wheel is consume-once, so a field that cannot
-  // scroll must leave it for whatever scroll view encloses it.
-  {
-    const float max_scroll =
-        std::max(0.f, static_cast<float>(vlines.size()) * line_height -
-                          viewport_height);
-    const RectangleType fr = field_cmp.rect();
-    const bool hovered = ctx.mouse.pos.x >= fr.x &&
-                         ctx.mouse.pos.x <= fr.x + fr.width &&
-                         ctx.mouse.pos.y >= fr.y &&
-                         ctx.mouse.pos.y <= fr.y + fr.height;
-    if (max_scroll > 0.f && hovered) {
-      const float wheel = input::get_mouse_wheel_move_v().y;
-      if (wheel != 0.f) {
-        state.scroll_offset_y = std::clamp(
-            state.scroll_offset_y - wheel * line_height, 0.f, max_scroll);
-      }
-    }
-  }
-
   // Handle input when focused
   if (state.is_focused) {
     bool text_changed = false;
@@ -489,6 +500,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     const bool shift_held = input::is_key_down(keys::LEFT_SHIFT) ||
                             input::is_key_down(keys::RIGHT_SHIFT);
     const auto navigate = [&](auto move_fn) {
+      state.last_scroll_cursor_position.reset();
       if (shift_held && !state.selection_anchor)
         state.selection_anchor = state.cursor_position;
       move_fn();
