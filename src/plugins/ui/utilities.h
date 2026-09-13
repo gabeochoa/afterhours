@@ -334,6 +334,8 @@ struct UIPluginPostUpdateBridge : System<> {
         systems.push_back(
             std::make_unique<ui::ComputeVisualFocusId<InputAction>>());
         systems.push_back(
+            std::make_unique<ui::RevealKeyboardFocus<InputAction>>());
+        systems.push_back(
             std::make_unique<ui::EndUIContextManager<InputAction>>());
     }
 

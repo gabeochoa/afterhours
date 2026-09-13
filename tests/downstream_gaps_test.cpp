@@ -1280,4 +1280,89 @@ TEST(d36_theme_can_stop_arrows_tabbing) {
                  __LINE__);
 }
 
+TEST(focus_ring_survives_opaque_children_in_both_renderers) {
+  for (bool batched : {false, true}) {
+    ImmTestHarness h;
+    auto target = focused_button(h, 3.f);
+    div(h.context(), mk(target.ent(), 0), ComponentConfig{}
+        .with_size({percent(1.f), percent(1.f)})
+        .with_custom_background(Color{71, 83, 97, 255}).disable_rounded_corners());
+    div(h.context(), mk(h.root(), 1), ComponentConfig{}
+        .with_size({pixels(200), pixels(40)})
+        .with_absolute_position(0, 0).with_render_layer(100)
+        .with_custom_background(Color{73, 89, 101, 255}).disable_rounded_corners());
+    const auto &calls = batched ? h.render_batched() : h.render();
+    int child = -1, ring = -1, overlay = -1;
+    for (size_t i = 0; i < calls.size(); ++i) {
+      const auto &c = calls[i];
+      if (c.color.r == 71 && c.color.g == 83) child = static_cast<int>(i);
+      if (c.color.r == 255 && c.color.g == 0 && c.color.b == 255) ring = static_cast<int>(i);
+      if (c.color.r == 73 && c.color.g == 89) overlay = static_cast<int>(i);
+    }
+    CHECK(child >= 0);
+    CHECK(ring > child);
+    CHECK(overlay > ring);
+  }
+}
+
+TEST(focus_ring_insets_preserve_corner_centers_and_thin_targets) {
+  ImmTestHarness h;
+  auto target = focused_button(h, 3.f);
+  target.ent().get<HasRoundedCorners>().radius_px = 12.f;
+  h.layout_only();
+  auto ring = afterhours::ui::detail::focus_ring_for(h.context(), target.ent(), target.cmp(), {0, 0});
+  CHECK(ring.has_value());
+  CHECK_APPROX(ring->roundness * std::min(ring->rect.width, ring->rect.height) * .5f, 8.f);
+  target.cmp().computed[Axis::X] = 4.f;
+  target.cmp().computed[Axis::Y] = 120.f;
+  ring = afterhours::ui::detail::focus_ring_for(h.context(), target.ent(), target.cmp(), {0, 0});
+  CHECK(ring->rect.width >= 1.f);
+  CHECK(ring->rect.height > 0.f);
+}
+
+TEST(keyboard_focus_reveals_scrolled_controls_in_both_directions) {
+  ImmTestHarness h;
+  auto viewport = div(h.context(), mk(h.root(), 0), ComponentConfig{}
+      .with_size({pixels(200), pixels(100)}).with_overflow(Overflow::Scroll, Axis::Y));
+  std::vector<EntityID> ids;
+  for (int i = 0; i < 10; ++i) {
+    auto row = button(h.context(), mk(viewport.ent(), i), ComponentConfig{}
+        .with_size({pixels(180), pixels(30)}));
+    ids.push_back(row.ent().id);
+  }
+  h.layout_only();
+  auto &scroll = viewport.ent().get<HasScrollView>();
+  scroll.viewport_size = Vector2Type{200, 100};
+  scroll.content_size = {200, 300};
+  h.context().visual_focus_id = ids.back();
+  reveal_focused_component(h.context());
+  CHECK_APPROX(scroll.scroll_offset.y, 200.f);
+  CHECK_APPROX(scroll.scroll_target.y, 200.f);
+  h.context().visual_focus_id = ids.front();
+  reveal_focused_component(h.context());
+  CHECK_APPROX(scroll.scroll_offset.y, 0.f);
+  CHECK_APPROX(focus_scroll_delta(20, 150, 0, 100), 20.f);
+}
+
+TEST(scroll_extent_includes_padding_and_gap_in_update_and_render) {
+  ImmTestHarness h;
+  auto viewport = div(h.context(), mk(h.root(), 0), ComponentConfig{}
+      .with_size({pixels(200), pixels(100)})
+      .with_flex_direction(FlexDirection::Column).with_no_wrap()
+      .with_padding(Padding::all(pixels(12)))
+      .with_gap(pixels(4)).with_overflow(Overflow::Scroll, Axis::Y));
+  for (int i = 0; i < 4; ++i)
+    button(h.context(), mk(viewport.ent(), i), ComponentConfig{}
+        .with_size({pixels(160), pixels(40)}));
+  h.layout_only();
+  auto &scroll = viewport.ent().get<HasScrollView>();
+  MeasureScrollViews measure;
+  measure.for_each_with(viewport.ent(), scroll, viewport.cmp(), 0);
+  CHECK_APPROX(scroll.content_size.y, 196.f);
+  scroll.scroll_offset.y = 96.f;
+  afterhours::ui::detail::update_scroll_view_content_size(viewport.ent());
+  CHECK_APPROX(scroll.content_size.y, 196.f);
+  CHECK_APPROX(scroll.scroll_offset.y, 96.f);
+}
+
 int main() { return ui_test::run_registered_tests("Downstream Gaps"); }

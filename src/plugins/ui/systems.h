@@ -455,6 +455,57 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
   }
 };
 
+inline Vector2Type measure_scroll_content(const UIComponent &cmp, const HasScrollView &scroll) {
+  // How children stack, not how we scroll: a scrolling column is a column.
+  bool is_row_layout =
+      static_cast<bool>(cmp.flex_direction & FlexDirection::Row);
+
+  // Compute content size from children
+  float total_width = 0.0f;
+  float total_height = 0.0f;
+  float max_width = 0.0f;
+  float max_height = 0.0f;
+  int laid_out = 0;
+
+  for (EntityID child_id : cmp.children) {
+    OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
+    if (!child_opt.valid())
+      continue;
+    Entity &child = child_opt.asE();
+    if (!child.has<UIComponent>())
+      continue;
+    const UIComponent &child_cmp = child.get<UIComponent>();
+    float cw = child_cmp.computed[Axis::X];
+    float ch = child_cmp.computed[Axis::Y];
+    float ml = child_cmp.computed_margin[Axis::left];
+    float mr = child_cmp.computed_margin[Axis::right];
+    float mt = child_cmp.computed_margin[Axis::top];
+    float mb = child_cmp.computed_margin[Axis::bottom];
+    if (is_row_layout) {
+      total_width += cw + ml + mr;
+      max_height = std::max(max_height, ch + mt + mb);
+    } else {
+      total_height += ch + mt + mb;
+      max_width = std::max(max_width, cw + ml + mr);
+    }
+    laid_out++;
+  }
+
+  // The flex gap sits between children but isn't part of any child's box, so
+  // fold it into the content size along the layout axis — otherwise a gapped
+  // list reports content ~= viewport and never registers as overflowing.
+  const float gaps = cmp.gap * (float)std::max(0, laid_out - 1);
+  Vector2Type content = is_row_layout
+                            ? Vector2Type{total_width + gaps, max_height}
+                            : Vector2Type{max_width, total_height + gaps};
+  // A virtualized list did not build every row, but the scroll range is
+  // still the whole list's.
+  content.x += scroll.unbuilt_content_size.x + cmp.computed_padd[Axis::X];
+  content.y += scroll.unbuilt_content_size.y + cmp.computed_padd[Axis::Y];
+
+  return content;
+}
+
 /// Measures each scroll view's viewport and content size. After RunAutoLayout,
 /// which now positions overflowing children itself rather than stacking them.
 struct MeasureScrollViews : System<HasScrollView, UIComponent> {
@@ -463,54 +514,10 @@ struct MeasureScrollViews : System<HasScrollView, UIComponent> {
     RectangleType parent_rect = cmp.rect();
     scroll.viewport_size = {parent_rect.width, parent_rect.height};
 
-    // How children stack, not how we scroll: a scrolling column is a column.
-    bool is_row_layout =
-        static_cast<bool>(cmp.flex_direction & FlexDirection::Row);
+    const bool is_row_layout = static_cast<bool>(cmp.flex_direction & FlexDirection::Row);
+    scroll.content_size = measure_scroll_content(cmp, scroll);
 
-    // Compute content size from children
-    float total_width = 0.0f;
-    float total_height = 0.0f;
-    float max_width = 0.0f;
-    float max_height = 0.0f;
-    int laid_out = 0;
-
-    for (EntityID child_id : cmp.children) {
-      OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
-      if (!child_opt.valid())
-        continue;
-      Entity &child = child_opt.asE();
-      if (!child.has<UIComponent>())
-        continue;
-      const UIComponent &child_cmp = child.get<UIComponent>();
-      float cw = child_cmp.computed[Axis::X];
-      float ch = child_cmp.computed[Axis::Y];
-      float ml = child_cmp.computed_margin[Axis::left];
-      float mr = child_cmp.computed_margin[Axis::right];
-      float mt = child_cmp.computed_margin[Axis::top];
-      float mb = child_cmp.computed_margin[Axis::bottom];
-      if (is_row_layout) {
-        total_width += cw + ml + mr;
-        max_height = std::max(max_height, ch + mt + mb);
-      } else {
-        total_height += ch + mt + mb;
-        max_width = std::max(max_width, cw + ml + mr);
-      }
-      laid_out++;
-    }
-
-    // The flex gap sits between children but isn't part of any child's box, so
-    // fold it into the content size along the layout axis — otherwise a gapped
-    // list reports content ~= viewport and never registers as overflowing.
-    const float gaps = cmp.gap * (float)std::max(0, laid_out - 1);
-    scroll.content_size = is_row_layout
-                              ? Vector2Type{total_width + gaps, max_height}
-                              : Vector2Type{max_width, total_height + gaps};
-    // A virtualized list did not build every row, but the scroll range is
-    // still the whole list's.
-    scroll.content_size.x += scroll.unbuilt_content_size.x;
-    scroll.content_size.y += scroll.unbuilt_content_size.y;
-
-    // Only here, not in the render path's copy of the content-size maths: this
+    // Only here, not in the render path: this
     // moves the offset, and doing it twice a frame would move it twice.
     if (scroll.anchor_scroll && !is_row_layout)
       apply_scroll_anchor(scroll, cmp, parent_rect.y);
@@ -703,6 +710,60 @@ template <typename InputAction> struct ComputeVisualFocusId : System<> {
       current = &parent;
     }
     ctx->visual_focus_id = fe.id;
+  }
+};
+
+inline float focus_scroll_delta(float start, float extent, float viewport_start,
+                                float viewport_extent) {
+  if (start < viewport_start) return start - viewport_start;
+  if (start + extent > viewport_start + viewport_extent)
+    return std::min(start - viewport_start,
+                    start + extent - viewport_start - viewport_extent);
+  return 0.f;
+}
+
+template <typename InputAction>
+void reveal_focused_component(UIContext<InputAction> &context) {
+  auto opt = UICollectionHolder::getEntityForID(context.visual_focus_id);
+  if (!opt.valid() || !opt->template has<UIComponent>()) return;
+  const Entity &focused = opt.asE();
+  const auto &cmp = focused.get<UIComponent>();
+  EntityID parent_id = cmp.parent;
+  int guard = 0;
+  while (parent_id >= 0 && ++guard <= 64) {
+    auto parent = UICollectionHolder::getEntityForID(parent_id);
+    if (!parent.valid() || !parent->template has<UIComponent>()) return;
+    const auto &parent_cmp = parent->template get<UIComponent>();
+    parent_id = parent_cmp.parent;
+    if (!parent->template has<HasScrollView>()) continue;
+    auto &scroll = parent->template get<HasScrollView>();
+    auto target = detail::apply_scroll_offset(focused, cmp.rect());
+    if (focused.has<HasUIModifiers>())
+      target = focused.get<HasUIModifiers>().apply_modifier(target);
+    const auto viewport = detail::apply_scroll_offset(parent.asE(), parent_cmp.rect());
+    if (scroll.horizontal_enabled)
+      scroll.scroll_offset.x += focus_scroll_delta(target.x, target.width, viewport.x, viewport.width);
+    if (scroll.vertical_enabled)
+      scroll.scroll_offset.y += focus_scroll_delta(target.y, target.height, viewport.y, viewport.height);
+    scroll.scroll_target = scroll.scroll_offset;
+    scroll.clamp_scroll();
+  }
+}
+
+template <typename InputAction> struct RevealKeyboardFocus : System<> {
+  EntityID previous_focus = -1;
+  EntityID previous_visual = -1;
+
+  bool should_iterate() const override { return false; }
+
+  void once(float) override {
+    auto *context = EntityHelper::get_singleton_cmp<UIContext<InputAction>>();
+    if (!context) return;
+    if (previous_focus == context->focus_id && previous_visual == context->visual_focus_id) return;
+    previous_focus = context->focus_id;
+    previous_visual = context->visual_focus_id;
+    if (context->focus_source == FocusSource::Pointer) return;
+    reveal_focused_component(*context);
   }
 };
 

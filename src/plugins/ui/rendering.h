@@ -119,70 +119,10 @@ static inline RectangleType get_scroll_scissor_rect(const Entity &entity) {
 
 // Content size for a scroll view: sum of its children, not their screen span.
 static inline void update_scroll_view_content_size(Entity &entity) {
-  if (!entity.has<HasScrollView>() || !entity.has<UIComponent>())
-    return;
-
-  HasScrollView &scroll = entity.get<HasScrollView>();
-  const UIComponent &cmp = entity.get<UIComponent>();
-
-  // Start with viewport size from the rect (accounts for margins/padding)
-  RectangleType parent_rect = cmp.rect();
-  scroll.viewport_size = {parent_rect.width, parent_rect.height};
-
-  // Determine layout direction based on which scrolling is enabled
-  bool is_row_layout = scroll.horizontal_enabled && !scroll.vertical_enabled;
-
-  float total_width = 0.0f;
-  float total_height = 0.0f;
-  float max_width = 0.0f;
-  float max_height = 0.0f;
-
-  for (EntityID child_id : cmp.children) {
-    OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
-    if (!child_opt.valid())
-      continue;
-
-    Entity &child = child_opt.asE();
-    if (!child.has<UIComponent>())
-      continue;
-
-    const UIComponent &child_cmp = child.get<UIComponent>();
-
-    float child_width = child_cmp.computed[Axis::X];
-    float child_height = child_cmp.computed[Axis::Y];
-    float child_margin_left = child_cmp.computed_margin[Axis::left];
-    float child_margin_right = child_cmp.computed_margin[Axis::right];
-    float child_margin_top = child_cmp.computed_margin[Axis::top];
-    float child_margin_bottom = child_cmp.computed_margin[Axis::bottom];
-
-    float child_total_width =
-        child_width + child_margin_left + child_margin_right;
-    float child_total_height =
-        child_height + child_margin_top + child_margin_bottom;
-
-    if (is_row_layout) {
-      // Row layout: sum widths, take max height
-      total_width += child_total_width;
-      max_height = std::max(max_height, child_total_height);
-    } else {
-      // Column layout: sum heights, take max width
-      total_height += child_total_height;
-      max_width = std::max(max_width, child_total_width);
-    }
-  }
-
-  if (is_row_layout) {
-    scroll.content_size = {total_width, max_height};
-  } else {
-    scroll.content_size = {max_width, total_height};
-  }
-  // A virtualized list did not build every row, and this is the second place
-  // that recomputes content_size. Leaving the skipped rows out here clamped
-  // the offset to what happened to be on screen, so a scrollbar drag to the
-  // end crept forward one window per frame instead of arriving.
-  scroll.content_size.x += scroll.unbuilt_content_size.x;
-  scroll.content_size.y += scroll.unbuilt_content_size.y;
-
+  if (!entity.has<HasScrollView>() || !entity.has<UIComponent>()) return;
+  auto &scroll = entity.get<HasScrollView>();
+  const auto &cmp = entity.get<UIComponent>();
+  scroll.content_size = measure_scroll_content(cmp, scroll);
   scroll.clamp_scroll();
 }
 
@@ -255,11 +195,17 @@ focus_ring_for(const UIContext<InputAction> &context, const Entity &entity,
   const bool custom = entity.has<HasRoundedCorners>();
   ring.corners = custom ? entity.get<HasRoundedCorners>().rounded_corners
                         : std::bitset<4>().reset();
-  ring.roundness =
-      custom ? resolve_roundness(entity.get<HasRoundedCorners>().radius_px,
-                                 entity.get<HasRoundedCorners>().roundness,
-                                 ring.rect)
-             : 0.f;
+  if (custom) {
+    const auto &corners = entity.get<HasRoundedCorners>();
+    const auto rect = cmp.rect();
+    const float radius = resolve_roundness(corners.radius_px, corners.roundness, rect) *
+                         std::min(rect.width, rect.height) * .5f;
+    const float inset = std::min(context.theme.focus_ring_offset,
+                                std::max(0.f, (std::min(rect.width, rect.height) - 1.f) * .5f));
+    const float scale = entity.has<HasUIModifiers>() ? entity.get<HasUIModifiers>().scale : 1.f;
+    const float shorter = std::min(ring.rect.width, ring.rect.height);
+    ring.roundness = shorter > 0.f ? std::clamp(2.f * std::max(0.f, radius - inset) * scale / shorter, 0.f, 1.f) : 0.f;
+  }
   ring.segments =
       custom ? entity.get<HasRoundedCorners>().segments : context.theme.segments;
 
@@ -272,6 +218,87 @@ focus_ring_for(const UIContext<InputAction> &context, const Entity &entity,
     ring.contrast = colors::opacity_pct(ring.contrast, opacity);
   }
   return ring;
+}
+
+struct FocusPaint {
+  FocusRing ring;
+  EntityID entity_id;
+  size_t after_command;
+  int layer;
+  float rotation;
+  std::optional<RectangleType> clip;
+};
+
+template <typename InputAction>
+std::optional<FocusPaint> prepare_focus_paint(const UIContext<InputAction> &context) {
+  auto opt = UICollectionHolder::getEntityForID(context.visual_focus_id);
+  if (!opt.valid() || !opt->template has<UIComponent>()) return {};
+  const Entity &entity = opt.asE();
+  const auto &cmp = entity.get<UIComponent>();
+  if (cmp.should_hide || entity.has<ShouldHide>()) return {};
+  auto ring = focus_ring_for(context, entity, cmp, accumulated_scroll_offset(entity));
+  if (!ring) return {};
+  std::set<EntityID> descendants{entity.id};
+  std::vector<EntityID> pending{entity.id};
+  while (!pending.empty()) {
+    const auto id = pending.back();
+    pending.pop_back();
+    auto child = UICollectionHolder::getEntityForID(id);
+    if (!child.valid() || !child->template has<UIComponent>()) continue;
+    for (auto next : child->template get<UIComponent>().children)
+      if (descendants.insert(next).second) pending.push_back(next);
+  }
+  for (size_t i = context.render_cmds.size(); i > 0; --i) {
+    const auto &cmd = context.render_cmds[i - 1];
+    if (!descendants.contains(cmd.id)) continue;
+    const auto [has_clip, clip] = compute_intersected_clip_rect(entity);
+    return FocusPaint{*ring, entity.id, i - 1, cmd.layer,
+                      entity.has<HasUIModifiers>() ? entity.get<HasUIModifiers>().rotation : 0.f,
+                      has_clip && !entity.has<HasScrollView>() ? std::optional{clip} : std::nullopt};
+  }
+  return {};
+}
+
+inline void draw_focus_paint(const FocusPaint &paint) {
+  const auto &ring = paint.ring;
+  if (paint.clip) {
+    const auto &r = *paint.clip;
+    begin_scissor_mode(static_cast<int>(r.x), static_cast<int>(r.y),
+                       static_cast<int>(r.width), static_cast<int>(r.height));
+  }
+  capture::Scope attribute(paint.entity_id, paint.layer);
+  push_rotation(ring.rect.x + ring.rect.width * .5f,
+                ring.rect.y + ring.rect.height * .5f, paint.rotation);
+  draw_rectangle_rounded_lines(ring.outer_contrast(), ring.roundness_at(ring.thickness),
+                               ring.segments, ring.contrast, ring.corners);
+  if (ring.rect.width > 2.f && ring.rect.height > 2.f)
+    draw_rectangle_rounded_lines(ring.inner_contrast(), ring.roundness_at(-1.f),
+                                 ring.segments, ring.contrast, ring.corners);
+  for (float t = 0; t < ring.thickness; t += 1.f)
+    draw_rectangle_rounded_lines(ring.expanded(t), ring.roundness_at(t),
+                                 ring.segments, ring.color, ring.corners);
+  pop_rotation();
+  if (paint.clip) end_scissor_mode();
+}
+
+inline void collect_focus_paint(RenderCommandBuffer &buffer, const FocusPaint &paint) {
+  const auto &ring = paint.ring;
+  if (paint.clip) {
+    const auto &r = *paint.clip;
+    buffer.add_scissor_start(static_cast<int>(r.x), static_cast<int>(r.y),
+                              static_cast<int>(r.width), static_cast<int>(r.height),
+                              paint.layer, paint.entity_id);
+  }
+  buffer.add_rounded_rectangle_outline(ring.outer_contrast(), ring.contrast,
+      ring.roundness_at(ring.thickness), ring.segments, ring.corners,
+      paint.layer, paint.entity_id, 0.f, paint.rotation);
+  if (ring.rect.width > 2.f && ring.rect.height > 2.f)
+    buffer.add_rounded_rectangle_outline(ring.inner_contrast(), ring.contrast,
+        ring.roundness_at(-1.f), ring.segments, ring.corners,
+        paint.layer, paint.entity_id, 0.f, paint.rotation);
+  buffer.add_rounded_rectangle_outline(ring.rect, ring.color, ring.roundness,
+      ring.segments, ring.corners, paint.layer, paint.entity_id, ring.thickness, paint.rotation);
+  if (paint.clip) buffer.add_scissor_end(paint.layer, paint.entity_id);
 }
 
 } // namespace detail
@@ -1673,23 +1700,6 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       }
     }
 
-    // Focus ring: after the fill and border, or an opaque background paints
-    // over it (focus_rect sits inside draw_rect).
-    if (auto ring = detail::focus_ring_for(context, entity, cmp,
-                                           scroll_offset)) {
-      draw_rectangle_rounded_lines(ring->outer_contrast(),
-                                   ring->roundness_at(ring->thickness),
-                                   ring->segments, ring->contrast,
-                                   ring->corners);
-      draw_rectangle_rounded_lines(ring->inner_contrast(),
-                                   ring->roundness_at(-1.f), ring->segments,
-                                   ring->contrast, ring->corners);
-      for (float t = 0; t < ring->thickness; t += 1.0f)
-        draw_rectangle_rounded_lines(ring->expanded(t), ring->roundness_at(t),
-                                     ring->segments, ring->color,
-                                     ring->corners);
-    }
-
     if (entity.has<HasLabel>()) {
       const HasLabel &hasLabel = entity.get<HasLabel>();
       warn_ignored_label_padding(entity, cmp);
@@ -1897,8 +1907,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     if (capture::enabled() && !capture::app_owns_frame())
       capture::clear();
 
+    const auto focus_paint = detail::prepare_focus_paint(context);
     int cursor_to_set = 0; // Default cursor
-    for (auto &cmd : context.render_cmds) {
+    for (size_t index = 0; index < context.render_cmds.size(); ++index) {
+      const auto &cmd = context.render_cmds[index];
       auto id = cmd.id;
       OptEntity opt_ent = UICollectionHolder::getEntityForID(id);
       if (!opt_ent.valid())
@@ -1906,6 +1918,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       Entity &ent = opt_ent.asE();
       capture::Scope attribute(ent.id, cmd.layer);
       render(context, font_manager, ent);
+      if (focus_paint && focus_paint->after_command == index)
+        detail::draw_focus_paint(*focus_paint);
       if (context.is_hot(ent.id) && ent.has<HasCursor>()) {
         cursor_to_set = to_cursor_id(ent.get<HasCursor>().cursor);
       }
@@ -2248,22 +2262,6 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           add_side(border.right, x + w - rt, y + tt, rt, h - tt - bt);
         }
       }
-    }
-
-    // Focus ring: after the fill and border, same as RenderImm. The buffer
-    // renders in insertion order, so a higher layer here would buy nothing.
-    if (auto ring = detail::focus_ring_for(context, entity, cmp,
-                                           scroll_offset)) {
-      buffer.add_rounded_rectangle_outline(
-          ring->outer_contrast(), ring->contrast,
-          ring->roundness_at(ring->thickness), ring->segments, ring->corners,
-          layer, entity.id);
-      buffer.add_rounded_rectangle_outline(
-          ring->inner_contrast(), ring->contrast, ring->roundness_at(-1.f),
-          ring->segments, ring->corners, layer, entity.id);
-      buffer.add_rounded_rectangle_outline(
-          ring->rect, ring->color, ring->roundness, ring->segments,
-          ring->corners, layer, entity.id, ring->thickness);
     }
 
     // Label/text
@@ -2625,8 +2623,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 #endif
 
     // Collect all commands
+    const auto focus_paint = detail::prepare_focus_paint(context);
     int cursor_to_set = 0; // Default cursor
-    for (const auto &cmd : context.render_cmds) {
+    for (size_t index = 0; index < context.render_cmds.size(); ++index) {
+      const auto &cmd = context.render_cmds[index];
       auto id = cmd.id;
       auto layer = cmd.layer;
       OptEntity opt_ent = UICollectionHolder::getEntityForID(id);
@@ -2634,6 +2634,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         continue; // Skip stale entity IDs
       Entity &ent = opt_ent.asE();
       collect(buffer, context, font_manager, ent, layer);
+      if (focus_paint && focus_paint->after_command == index)
+        detail::collect_focus_paint(buffer, *focus_paint);
       if (context.is_hot(ent.id) && ent.has<HasCursor>()) {
         cursor_to_set = to_cursor_id(ent.get<HasCursor>().cursor);
       }

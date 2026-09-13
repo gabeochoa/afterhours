@@ -187,8 +187,10 @@ struct UIComponent : BaseComponent {
   // focus_ring_offset is a float, and truncating it here made sub-pixel
   // offsets unreachable.
   Rectangle focus_rect(float rw = 4.f) const {
-    return Rectangle{x() + rw, y() + rw, width() - 2.f * rw,
-                     height() - 2.f * rw};
+    const float inset_x = std::min(rw, std::max(0.f, (width() - 1.f) * .5f));
+    const float inset_y = std::min(rw, std::max(0.f, (height() - 1.f) * .5f));
+    return Rectangle{x() + inset_x, y() + inset_y, width() - 2.f * inset_x,
+                     height() - 2.f * inset_y};
   }
 
   auto &make_absolute() {
