@@ -407,4 +407,38 @@ TEST(escape_blurs_without_swallowing_dialog_dismissal) {
   CHECK(text == "Draft");
 }
 
+TEST(text_field_padding_does_not_hide_a_real_leaf_padding_warning) {
+  ImmTestHarness h;
+  static std::string warnings;
+  warnings.clear();
+  const auto previous_sink = log_sink_fn;
+  log_sink_fn = [](const char *level, const char *message) {
+    if (std::string_view(level).find("WARN") != std::string_view::npos)
+      warnings += message;
+  };
+  std::string text = "Draft";
+  two_frames(h, [&] {
+    imm::text_input(h.context(), mk(h.root(), 0), text,
+        ComponentConfig{}.with_size({pixels(220), pixels(40)}));
+  });
+  auto *field = find_field_entity();
+  CHECK(field != nullptr);
+  if (field) {
+    auto &cmp = field->get<UIComponent>();
+    warn_ignored_label_padding(*field, cmp);
+    CHECK(warnings.find("text_input_field") == std::string::npos);
+    CHECK_APPROX(cmp.computed_padd[Axis::left], 14.f);
+    CHECK_APPROX(field->get<HasLabel>().text_x_offset + kTextInset, 14.f);
+  }
+  auto label = div(h.context(), mk(h.root(), 1), ComponentConfig{}
+      .with_label("Leaf").with_size({pixels(220), pixels(40)})
+      .with_padding(Padding{.top = pixels(8), .left = pixels(8),
+                            .bottom = pixels(8), .right = pixels(8)})
+      .with_debug_name("ignored_padding_probe"));
+  h.layout_only();
+  warn_ignored_label_padding(label.ent(), label.cmp());
+  CHECK(warnings.find("ignored_padding_probe") != std::string::npos);
+  log_sink_fn = previous_sink;
+}
+
 int main() { return ui_test::run_registered_tests("text_input"); }

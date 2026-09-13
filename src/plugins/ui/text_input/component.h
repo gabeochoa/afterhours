@@ -264,6 +264,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                                             .bottom = pixels(pad_h),
                                             .left = pixels(pad_w),
                                             .right = pixels(pad_w)});
+      field_cmp.padding_is_default = true;
 
       // draw_text_in_rect adds DRAW_TEXT_MARGIN internally; subtract it so
       // the total inset from the field edge equals pad_w. Apply horizontal
