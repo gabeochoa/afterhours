@@ -130,6 +130,7 @@ TEST(no_hook_means_no_events) {
 // writing a profiler. puzzle wrote 518 lines of one and still saw no library
 // systems; this asserts the library can now answer for itself.
 TEST(the_builtin_profile_names_systems_the_consumer_never_wrote) {
+  afterhours::testing::perf_commands::builtin_profile::reset();
   afterhours::testing::perf_commands::builtin_profile::enable();
 
   SystemManager sm;
@@ -140,6 +141,7 @@ TEST(the_builtin_profile_names_systems_the_consumer_never_wrote) {
   for (int frame = 0; frame < 3; frame++) {
     sm.tick(entities, 0.016f);
     sm.render(entities, 0.016f);
+    profiling::default_collector().end_frame(16.0);
   }
 
   auto entries = afterhours::testing::perf_commands::provider().top_entries(10);
