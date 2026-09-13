@@ -510,11 +510,13 @@ struct ComponentConfig {
                 r, r, r);
     }
     roundness = r;
+    corner_radius.reset();
     return *this;
   }
   /// Corner rounding in pixels, the same on every widget it is applied to.
   ComponentConfig &with_corner_radius(float px) {
     corner_radius = px;
+    roundness.reset();
     return *this;
   }
   ComponentConfig &with_segments(int s) {

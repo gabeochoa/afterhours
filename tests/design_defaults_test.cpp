@@ -166,4 +166,21 @@ TEST(the_status_colours_are_distinct) {
               t.color_ref(Theme::Usage::Warning)));
 }
 
+TEST(last_corner_unit_setter_controls_the_rendered_radius) {
+  ImmTestHarness h;
+  auto circle = button(h.context(), mk(h.root(), 0), ComponentConfig{}
+      .with_size({pixels(44), pixels(44)}).with_corner_radius(0).with_roundness(1));
+  auto fixed = button(h.context(), mk(h.root(), 1), ComponentConfig{}
+      .with_size({pixels(44), pixels(44)}).with_roundness(1).with_corner_radius(4));
+  h.layout_only();
+  const auto radius = [](auto &item) {
+    const auto &corners = item.ent().template get<HasRoundedCorners>();
+    auto rect = item.cmp().rect();
+    return resolve_roundness(corners.radius_px, corners.roundness, rect) *
+        std::min(rect.width, rect.height) * .5f;
+  };
+  CHECK_APPROX(radius(circle), 22.f);
+  CHECK_APPROX(radius(fixed), 4.f);
+}
+
 int main() { return ui_test::run_registered_tests("design defaults"); }
