@@ -71,6 +71,7 @@ struct ModalConfig {
     ui::Size height = ui::h720(200);
     std::string title;
     ModalAnchor anchor = ModalAnchor::Center;
+    std::optional<ui::imm::ComponentConfig> panel;
     ClosedBy closed_by = ClosedBy::CloseRequest;
     bool show_close_button = true;
     Color backdrop_color = {0, 0, 0, 128};
@@ -79,6 +80,11 @@ struct ModalConfig {
     ModalConfig &with_size(ui::Size w, ui::Size h) {
         width = w;
         height = h;
+        return *this;
+    }
+
+    ModalConfig &with_panel(ui::imm::ComponentConfig value) {
+        panel = std::move(value);
         return *this;
     }
 
@@ -208,19 +214,36 @@ struct modal : developer::Plugin {
         }
 
         static bool is_entity_in_tree(EntityID root_id, EntityID search_id) {
-            if (root_id == search_id) return true;
-
-            OptEntity opt = ui::UICollectionHolder::getEntityForID(root_id);
-            if (!opt.has_value()) return false;
-
-            Entity &entity = opt.asE();
-            if (!entity.has<ui::UIComponent>()) return false;
-
-            const ui::UIComponent &cmp = entity.get<ui::UIComponent>();
-            for (EntityID child_id : cmp.children) {
-                if (is_entity_in_tree(child_id, search_id)) return true;
+            for (int depth = 0; depth < 64 && search_id != -1; ++depth) {
+                if (root_id == search_id) return true;
+                auto opt = ui::UICollectionHolder::getEntityForID(search_id);
+                if (!opt.valid() || !opt->has<ui::UIComponent>()) return false;
+                search_id = opt->get<ui::UIComponent>().parent;
             }
             return false;
+        }
+
+        static Entity &layout_root(Entity &parent) {
+            Entity *root = &parent;
+            for (int depth = 0; depth < 64; ++depth) {
+                if (root->has<ui::AutoLayoutRoot>() || !root->has<ui::UIComponent>()) break;
+                auto next = ui::UICollectionHolder::getEntityForID(root->get<ui::UIComponent>().parent);
+                if (!next.valid()) break;
+                root = &next.asE();
+            }
+            return *root;
+        }
+
+        static void sync_input(ui::imm::HasUIContext auto &ctx) {
+            const auto &stack = get_modal_root().modal_stack;
+            if (stack.empty()) { ctx.remove_input_gate("modal"); return; }
+            const auto top = stack.back();
+            ctx.add_input_gate("modal", [top](EntityID id) {
+                return id == -1 || is_entity_in_tree(top, id);
+            });
+            if (!is_entity_in_tree(top, ctx.focus_id)) ctx.focus_id = ctx.ROOT;
+            if (!is_entity_in_tree(top, ctx.hot_id)) ctx.hot_id = ctx.ROOT;
+            if (!is_entity_in_tree(top, ctx.active_id)) ctx.active_id = ctx.ROOT;
         }
 
         static float resolve_size(const ui::Size &size, int screen_w,
@@ -297,16 +320,19 @@ struct modal : developer::Plugin {
 
                 // Restore focus
                 if (m.previously_focused_element >= 0) {
-                    ctx.focus_id = m.previously_focused_element;
+                    if (ctx.focus_id == ctx.ROOT || is_entity_in_tree(entity.id, ctx.focus_id))
+                        ctx.set_focus(m.previously_focused_element);
                 }
             }
 
             m.was_open_last_frame = is_open;
+            if (is_open != was_open) sync_input(ctx);
 
             // Always get/create the backdrop entity so we can manage its
             // visibility
             EntityID backdrop_id = entity.id + 1000000;
-            auto backdrop_ep = mk(parent, backdrop_id);
+            auto &overlay_root = layout_root(parent);
+            auto backdrop_ep = mk(overlay_root, backdrop_id);
             auto [backdrop_entity, backdrop_parent] = deref(backdrop_ep);
 
             if (!is_open) {
@@ -355,9 +381,8 @@ struct modal : developer::Plugin {
             case ModalAnchor::Right: x_pos = sw - width_px; break;
             }
 
-            // Create full-screen backdrop overlay as a SIBLING of the modal
-            // (child of parent). This ensures it renders before the modal and
-            // blocks input. We use a div (not button) to avoid hover state
+            // Create the full-screen backdrop at the layout root. Its layer
+            // ensures it renders before the modal and blocks input. We use a div (not button) to avoid hover state
             // color changes. Visual backdrop (div) - this provides the dimmed
             // background appearance
             auto backdrop_visual =
@@ -367,6 +392,7 @@ struct modal : developer::Plugin {
                             ComponentSize{pixels(static_cast<float>(screen_w)),
                                           pixels(static_cast<float>(screen_h))})
                         .with_absolute_position()
+                        .with_corner_radius(0.f)
                         .with_custom_background(config.backdrop_color)
                         .with_render_layer(config.render_layer - 1)
                         .with_debug_name("modal_backdrop"));
@@ -382,20 +408,19 @@ struct modal : developer::Plugin {
             // centered position is stored as absolute_pos_x/y and survives the
             // autolayout pass (poking computed_rel directly would be overwritten
             // by compute_relative_positions).
-            init_component(ctx, ep_pair,
-                           // TODO add support for configuration
-                           ComponentConfig{}
-                               .with_size(ComponentSize{pixels(width_px),
-                                                        pixels(height_px)})
-                               .with_absolute_position(x_pos, y_pos)
-                               .with_flex_direction(FlexDirection::Column)
-                               .with_no_wrap()
-                               .with_background(Theme::Usage::Surface)
-                               .with_roundness(0.05f)
-                               .with_padding(Spacing::md)
-                               .with_render_layer(config.render_layer)
-                               .with_debug_name("modal"),
-                           ComponentType::Div);
+            auto panel_config = config.panel.value_or(
+                ComponentConfig{}
+                    .with_size(ComponentSize{pixels(width_px), pixels(height_px)})
+                    .with_absolute_position(x_pos, y_pos)
+                    .with_flex_direction(FlexDirection::Column)
+                    .with_no_wrap()
+                    .with_background(Theme::Usage::Surface)
+                    .with_roundness(0.05f)
+                    .with_padding(Spacing::md)
+                    .with_debug_name("modal"));
+            panel_config.with_render_layer(config.render_layer);
+            init_component(ctx, EntityParent{entity, config.panel ? parent : overlay_root},
+                           panel_config, ComponentType::Div);
 
             // Add title if specified
             if (!config.title.empty()) {
@@ -790,7 +815,8 @@ struct modal : developer::Plugin {
     struct ModalCloseWatcherSystem : ui::SystemWithUIContext<Modal> {
         ui::UIContext<InputAction> *context = nullptr;
         input::MousePosition press_pos{};
-        bool modal_active_on_press = false;
+        EntityID previous_top = -1;
+        EntityID pressed_modal = -1;
 
         virtual void once(float) override {
             context =
@@ -798,16 +824,20 @@ struct modal : developer::Plugin {
             if (!context) return;
 
             auto &root = detail::get_modal_root();
-            if (root.modal_stack.empty()) return;
+            const EntityID top_id = root.modal_stack.empty() ? -1 : root.modal_stack.back();
 
             // Track mouse press state for backdrop click detection
             if (context->mouse.just_pressed) {
                 press_pos = context->mouse.pos;
-                modal_active_on_press = !root.modal_stack.empty();
+                pressed_modal = previous_top == top_id ? top_id : -1;
+            }
+            previous_top = top_id;
+            if (top_id == -1) {
+                pressed_modal = -1;
+                return;
             }
 
             // Handle escape key for topmost modal
-            EntityID top_id = root.modal_stack.back();
             OptEntity top_opt = ui::UICollectionHolder::getEntityForID(top_id);
             if (!top_opt.has_value()) return;
 
@@ -827,7 +857,7 @@ struct modal : developer::Plugin {
             }
 
             // Handle backdrop click for light dismiss
-            if (top_modal.closed_by == ClosedBy::Any && modal_active_on_press &&
+            if (top_modal.closed_by == ClosedBy::Any && pressed_modal == top_id &&
                 context->mouse.just_released) {
                 // Check if click was outside the modal
                 if (!ui::is_point_inside_entity_tree(top_id, press_pos) &&
@@ -836,6 +866,7 @@ struct modal : developer::Plugin {
                     modal::close(top_id, DialogResult::Dismissed);
                 }
             }
+            if (context->mouse.just_released) pressed_modal = -1;
         }
 
         virtual void for_each_with(Entity &, ui::UIComponent &, Modal &,
@@ -857,35 +888,21 @@ struct modal : developer::Plugin {
 
             auto &root = detail::get_modal_root();
 
-            // If no modal is active, remove the input gate
-            if (root.modal_stack.empty()) {
-                context->remove_input_gate(GATE_NAME);
-                return;
-            }
-
-            EntityID top_id = root.modal_stack.back();
-
-            // Add/update input gate to block input to elements outside the
-            // topmost modal. This is checked in active_if_mouse_inside() before
-            // setting hot/active.
-            context->add_input_gate(GATE_NAME, [top_id](EntityID id) {
-                // Always allow input to the ROOT
-                if (id == -1) return true;
-                // Check if this entity is inside the modal tree
-                return detail::is_entity_in_tree(top_id, id);
+            std::erase_if(root.modal_stack, [&](EntityID id) {
+                auto opt = ui::UICollectionHolder::getEntityForID(id);
+                if (!opt.valid() || !opt->template has<ui::UIComponent>()) return true;
+                if (opt->template get<ui::UIComponent>().was_rendered_to_screen) return false;
+                if (opt->template has<Modal>()) {
+                    auto &m = opt->template get<Modal>();
+                    if (context->focus_id == context->ROOT ||
+                        detail::is_entity_in_tree(id, context->focus_id))
+                        context->set_focus(m.previously_focused_element);
+                    m.was_open_last_frame = false;
+                    m.pending_close = false;
+                }
+                return true;
             });
-
-            // Also clear any existing hot/active that's outside the modal
-            if (context->hot_id != context->ROOT &&
-                !detail::is_entity_in_tree(top_id, context->hot_id)) {
-                context->hot_id = context->ROOT;
-            }
-
-            if (context->active_id != context->ROOT &&
-                context->active_id != context->FAKE &&
-                !detail::is_entity_in_tree(top_id, context->active_id)) {
-                context->active_id = context->ROOT;
-            }
+            detail::sync_input(*context);
         }
 
         virtual void for_each_with(Entity &, ui::UIComponent &,
