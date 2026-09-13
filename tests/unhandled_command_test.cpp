@@ -100,6 +100,25 @@ int main() {
     check(cmd.is_consumed(), "a consumed command does not stall the runner");
   }
 
+  {
+    EntityCollection coll;
+    EntityHelper::set_default_collection(&coll);
+    Entity &e = coll.createEntity();
+    auto &cmd = e.addComponent<PendingE2ECommand>();
+    cmd.name = "expect_text";
+    cmd.args = {"absent text from skipped script"};
+    coll.merge_entity_arrays();
+    testing::reset_command_error_count();
+    testing::E2ERunner runner;
+    runner.skip_current_script();
+    check(cmd.is_consumed(), "skipping a script cancels its pending assertion");
+    testing::E2ECommandCleanupSystem cleanup;
+    cleanup.for_each_with(e, cmd, 0.f);
+    check(testing::get_command_error_count() == 0,
+          "cancelled assertions cannot fail the following script");
+    EntityHelper::set_default_collection(nullptr);
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);

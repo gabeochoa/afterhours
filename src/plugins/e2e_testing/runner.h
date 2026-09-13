@@ -487,22 +487,11 @@ class E2ERunner {
     bool is_batch_mode() const { return !script_results_.empty(); }
 
     void skip_current_script() {
+        consume_all_pending_commands();
         finalize_current_script();
-        while (index_ < commands_.size()) {
-            if (commands_[index_].name == kScriptBoundary) {
-                if (clear_fn_) clear_fn_();
-                test_input::reset_all();
-                key_release_detail::reset();
-                VisibleTextRegistry::instance().clear();
-                current_script_idx_++;
-                current_script_errors_ = 0;
-                elapsed_time_ = 0.0f;
-                index_++;
-                return;
-            }
-            index_++;
-        }
-        finished_ = true;
+        wait_time_ = 0.f;
+        wait_ticks_ = 0;
+        skip_to_next_script();
     }
 
     // Backward compatibility aliases
@@ -572,7 +561,7 @@ class E2ERunner {
         for (Entity &e : pending) {
             auto &cmd = e.get<PendingE2ECommand>();
             if (!cmd.is_consumed()) {
-                cmd.fail("Cancelled due to script timeout");
+                cmd.consume();
                 e.cleanup = true;
             }
         }
