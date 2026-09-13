@@ -60,6 +60,7 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	ui_texture_lifecycle_test \
 	ui_update_lifecycle_test \
 	ui_update_lifecycle_single_test \
 	drag_preview_test \

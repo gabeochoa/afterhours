@@ -283,9 +283,16 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
   }
 }
 
+struct ConfiguredTexture : BaseComponent {};
+
 inline void apply_texture(Entity &entity, const ComponentConfig &config) {
-  if (!config.texture_config.has_value())
+  if (!config.texture_config.has_value()) {
+    if (!entity.has<ConfiguredTexture>()) return;
+    entity.removeComponentIfExists<texture_manager::HasTexture>();
+    entity.removeComponent<ConfiguredTexture>();
     return;
+  }
+  entity.addComponentIfMissing<ConfiguredTexture>();
   const TextureConfig &conf = config.texture_config.value();
   auto &ht = entity.addComponentIfMissing<texture_manager::HasTexture>(
       conf.texture, conf.alignment);
