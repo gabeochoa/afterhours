@@ -148,6 +148,8 @@ struct RowMetrics {
   float uniform = 0.f;      // used when prefix is empty
   std::vector<float> prefix; // prefix[i] = height of rows [0, i)
   size_t count = 0;
+  float scale = 1.f;
+  float gap = 0.f;
 
   static RowMetrics uniform_rows(size_t n, float h) {
     RowMetrics m;
@@ -170,25 +172,32 @@ struct RowMetrics {
 
   [[nodiscard]] bool is_uniform() const { return prefix.empty(); }
   [[nodiscard]] float height_of(size_t i) const {
-    return is_uniform() ? uniform : prefix[i + 1] - prefix[i];
+    return (is_uniform() ? uniform : prefix[i + 1] - prefix[i]) * scale;
   }
   [[nodiscard]] float offset_of(size_t i) const {
-    return is_uniform() ? uniform * static_cast<float>(i) : prefix[i];
+    return (is_uniform() ? uniform * static_cast<float>(i) : prefix[i]) * scale +
+           static_cast<float>(i) * gap;
   }
-  [[nodiscard]] float total() const { return offset_of(count); }
+  [[nodiscard]] float total() const { return count ? offset_of(count) - gap : 0.f; }
   // Largest index whose offset is <= y, clamped to the list.
   [[nodiscard]] long index_at(float y) const {
     if (y <= 0.f)
       return 0;
+    if (y >= total()) return static_cast<long>(count);
     if (is_uniform())
-      return static_cast<long>(y / uniform);
-    const auto it = std::upper_bound(prefix.begin(), prefix.end(), y);
-    return std::max<long>(0, std::distance(prefix.begin(), it) - 1);
+      return static_cast<long>(y / (uniform * scale + gap));
+    size_t lo = 0, hi = count;
+    while (lo < hi) {
+      const size_t mid = lo + (hi - lo) / 2;
+      if (offset_of(mid) <= y) lo = mid + 1;
+      else hi = mid;
+    }
+    return static_cast<long>(lo ? lo - 1 : 0);
   }
   // Shortest row, for sizing the recycle pool against the worst case.
   [[nodiscard]] float shortest() const {
     if (is_uniform())
-      return uniform;
+      return uniform * scale;
     float m = 0.f;
     for (size_t i = 0; i < count; i++)
       m = (i == 0) ? height_of(i) : std::min(m, height_of(i));
@@ -201,7 +210,7 @@ struct RowMetrics {
 /// the scroll bar still spans the whole list.
 ///
 /// `render_row(index, row_parent)` builds one row's contents; every row is
-/// exactly `row_height` px tall. Give it ten thousand items and it builds the
+/// `row_height` in the list's pixels() units, including Adaptive zoom. It builds the
 /// thirty you can see.
 ///
 /// ```cpp
@@ -212,7 +221,7 @@ struct RowMetrics {
 /// ```
 template <typename RenderRow>
 ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
-                                const detail::RowMetrics &rows,
+                                detail::RowMetrics rows,
                                 RenderRow &&render_row,
                                 ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
@@ -220,11 +229,41 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
   if (config.size.is_default)
     config.with_size(ComponentSize{percent(1.0f), percent(1.0f)});
   config.with_overflow(Overflow::Scroll, Axis::Y)
-      .with_flex_direction(FlexDirection::Column);
+      .with_flex_direction(FlexDirection::Column)
+      .with_justify_content(JustifyContent::FlexStart)
+      .with_no_wrap();
   init_component(ctx, ep_pair, config, ComponentType::Div);
-
-  if (count == 0)
+  auto &cmp = entity.template get<UIComponent>();
+  auto &scroll = entity.template get<HasScrollView>();
+  scroll.unbuilt_content_size.y = 0.f;
+  if (count == 0) {
+    scroll.scroll_offset.y = 0.f;
+    scroll.scroll_target.y = 0.f;
     return {true, entity};
+  }
+  const auto mode = cmp.resolved_scaling_mode;
+  rows.scale = mode == ScalingMode::Adaptive ? ctx.theme.ui_scale : 1.f;
+  const float screen_h = detail::measure_screen_dim(Axis::Y);
+  rows.gap = config.flex_gap.value > 0.f
+      ? resolve_to_pixels(config.flex_gap, screen_h, mode, ctx.theme.ui_scale) : 0.f;
+  float parent_h = 0.f, parent_padding = 0.f;
+  if (parent.template has<UIComponent>()) {
+    const auto &parent_cmp = parent.template get<UIComponent>();
+    parent_h = parent_cmp.computed[Axis::Y];
+    parent_padding = parent_cmp.computed_padd[Axis::Y];
+    const auto &desired = parent_cmp.desired[Axis::Y];
+    if (desired.dim == Dim::Pixels || desired.dim == Dim::ScreenPercent)
+      parent_h = resolve_to_pixels(desired, screen_h, parent_cmp.resolved_scaling_mode,
+                                   ctx.theme.ui_scale);
+  }
+  const auto resolve_padding = [&](const Size &size) {
+    if (size.dim == Dim::Percent) return size.value * parent_h;
+    if (size.dim == Dim::Pixels || size.dim == Dim::ScreenPercent)
+      return resolve_to_pixels(size, screen_h, mode, ctx.theme.ui_scale);
+    return 0.f;
+  };
+  const float top_padding = resolve_padding(config.padding.top);
+  const float bottom_padding = resolve_padding(config.padding.bottom);
 
   const long n = static_cast<long>(count);
   constexpr long OVERSCAN = 4;
@@ -233,24 +272,28 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
   if (entity.template has<HasScrollView>()) {
     auto &sv = entity.template get<HasScrollView>();
     float view_h = 0.f;
-    if (sv.viewport_size.has_value()) {
+    if (config.size.y_axis.dim == Dim::Pixels) {
+      view_h = resolve_to_pixels(config.size.y_axis, screen_h, mode, ctx.theme.ui_scale);
+    } else if (sv.viewport_size.has_value()) {
       view_h = sv.viewport_size->y;
+    } else if (config.size.y_axis.dim == Dim::Percent && parent_h > 0.f) {
+      view_h = config.size.y_axis.value * std::max(0.f, parent_h - parent_padding);
     } else {
       // Nothing has measured this view yet. Ask what it was configured to be
       // rather than guessing a row count: a wrong guess on frame one used to
       // be permanent, and is still a frame of wasted work.
-      float parent_h = 0.f;
-      if (parent.template has<UIComponent>())
-        parent_h = parent.template get<UIComponent>().computed[Axis::Y];
-      view_h = measure_config(config, 0.f, parent_h).size.y;
+      view_h = measure_config(config, 0.f, std::max(0.f, parent_h - parent_padding)).size.y;
     }
 
     // Cover where the view is AND where it is easing to. Windowing on the
     // settled offset alone shows a strip of nothing for a frame on every
     // fling, which is never seen in development and gets reported as
     // "flickers when I scroll fast".
-    lo = std::min(sv.scroll_offset.y, sv.scroll_target.y);
-    hi = std::max(sv.scroll_offset.y, sv.scroll_target.y) + view_h;
+    const float max_offset = std::max(0.f, rows.total() + top_padding + bottom_padding - view_h);
+    sv.scroll_offset.y = std::clamp(sv.scroll_offset.y, 0.f, max_offset);
+    sv.scroll_target.y = std::clamp(sv.scroll_target.y, 0.f, max_offset);
+    lo = std::min(sv.scroll_offset.y, sv.scroll_target.y) - top_padding;
+    hi = std::max(sv.scroll_offset.y, sv.scroll_target.y) + view_h - top_padding;
     // Bounded, because dragging the scroll bar throws the target the length of
     // the list, and building every row in between is the whole list, which is
     // the cost this exists to avoid. Rows travelled past that fast cannot be
@@ -285,7 +328,7 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
       // Has to cover the widest window the span bound above can ask for, or
       // two items would land on the same row entity.
       const float widest = (3.f * sv.viewport_size->y) / rows.shortest();
-      capacity = static_cast<size_t>(widest) + 2 * (size_t)OVERSCAN + 8;
+      capacity = std::max(capacity, static_cast<size_t>(widest) + 2 * (size_t)OVERSCAN + 8);
     }
     constexpr size_t BLOCK = 32;
     capacity = ((capacity + BLOCK - 1) / BLOCK) * BLOCK;
@@ -294,7 +337,8 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
     // Only the rows BELOW: the leading spacer is a real child, so the rows
     // above are already in the measured total. Counting them here too made
     // content_size grow as the list scrolled, and a scrollbar drag chased it.
-    sv.unbuilt_content_size.y = rows.total() - rows.offset_of(last);
+    sv.unbuilt_content_size.y = last < count
+        ? rows.total() - rows.offset_of(last) + rows.gap : 0.f;
   }
 
   // The rows that were skipped above still have to occupy their space, because
@@ -306,7 +350,9 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
         ComponentConfig{}
             .with_size(ComponentSize{
                 percent(1.0f),
-                pixels(rows.offset_of(first))})
+                pixels((rows.offset_of(first) - rows.gap) / rows.scale)})
+            .with_scaling_mode(mode)
+            .with_skip_grid_snap()
             .with_transparent_bg()
             .with_debug_name("vlist_skipped_above"));
   }
@@ -318,7 +364,9 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
                                     i + 1, &now_a_different_item),
                    ComponentConfig{}
                        .with_size(
-                           ComponentSize{percent(1.0f), pixels(rows.height_of(i))})
+                           ComponentSize{percent(1.0f), pixels(rows.height_of(i) / rows.scale)})
+                       .with_scaling_mode(mode)
+                       .with_skip_grid_snap()
                        .with_transparent_bg()
                        .with_debug_name("vlist_row"));
     // This entity was showing another item a moment ago, and everything the
