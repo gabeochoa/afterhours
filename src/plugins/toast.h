@@ -316,11 +316,9 @@ struct toast : developer::Plugin {
 
     static void enforce_singletons(SystemManager &) {
         // Create singleton immediately if it doesn't exist
-        auto *root = EntityHelper::get_singleton_cmp<ToastRoot>();
-        if (!root) {
-            Entity &singleton = EntityHelper::createEntity();
-            detail::init_singleton(singleton);
-        }
+        if (EntityHelper::has_singleton<ToastRoot>()) return;
+        Entity &singleton = EntityHelper::createEntity();
+        detail::init_singleton(singleton);
     }
 
     static void register_update_systems(SystemManager &sm) {
