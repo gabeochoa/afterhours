@@ -569,4 +569,95 @@ TEST(popover_survives_focus_on_its_own_content) {
   ui_test::check(!open, "focus outside dismisses it", __FILE__, __LINE__);
 }
 
+
+TEST(escape_closes_menu_and_restores_its_trigger) {
+  ImmTestHarness h;
+  auto trigger = button(h.context(), mk(h.root(), 9), ComponentConfig{}.with_label("Open"));
+  h.context().set_focus(trigger.ent().id);
+  bool open = true;
+  auto emit = [&] {
+    context_menu(h.context(), mk(h.root(), 0), sample(), Vector2Type{100, 100},
+                 open, ComponentConfig{}.with_size({pixels(180), pixels(28)}));
+  };
+  emit(); h.layout_only();
+  h.context().last_action = ui_test::TestInputAction::MenuBack;
+  h.begin_frame(); emit();
+  CHECK(!open);
+  CHECK(h.context().focus_id == trigger.ent().id);
+  CHECK(!h.context().pressed(ui_test::TestInputAction::MenuBack));
+}
+
+TEST(clicking_blank_space_dismisses_popover_without_focus_transfer) {
+  ImmTestHarness h;
+  bool open = true;
+  auto emit = [&] {
+    popover(h.context(), mk(h.root(), 0), {100, 100, 100, 30}, open,
+            overlay::Placement::Below,
+            ComponentConfig{}.with_size({pixels(180), pixels(100)}));
+  };
+  emit(); h.layout_only();
+  h.context().mouse.pos = {700, 500};
+  h.context().mouse.just_pressed = true;
+  h.begin_frame(); emit();
+  CHECK(!open);
+}
+
+TEST(dropdown_closes_on_blank_space_press) {
+  ImmTestHarness h;
+  std::vector<std::string> options{"First", "Second"};
+  size_t selected = 0;
+  auto emit = [&] { return dropdown(h.context(), mk(h.root(), 0), options, selected,
+      ComponentConfig{}.with_size({pixels(200), pixels(40)})); };
+  auto holder = emit();
+  holder.ent().get<HasDropdownState>().on = true;
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  CHECK(holder.ent().get<HasDropdownState>().on);
+  h.begin_frame();
+  h.context().mouse.pos = {1000.f, 700.f};
+  h.context().mouse.just_pressed = true;
+  emit();
+  CHECK(!holder.ent().get<HasDropdownState>().on);
+  CHECK(selected == 0);
+}
+
+TEST(dropdown_trigger_fills_resolved_percentage_width) {
+  for (const bool labeled : {false, true}) {
+    ImmTestHarness h;
+    std::vector<std::string> options{"First", "Second"};
+    size_t selected = 0;
+    auto holder = dropdown(h.context(), mk(h.root(), 0), options, selected,
+        ComponentConfig{}.with_size({percent(.8f), pixels(40)})
+            .with_label(labeled ? "Label" : ""));
+    h.layout_only();
+    float width = 0;
+    for (auto id : holder.cmp().children) {
+      auto child = UICollectionHolder::getEntityForID(id);
+      width += child->get<UIComponent>().rect().width;
+    }
+    CHECK_APPROX(width, holder.cmp().rect().width);
+  }
+}
+
+TEST(menu_delivers_pending_selection_before_focus_loss_dismissal) {
+  ImmTestHarness h;
+  bool open = true;
+  auto emit = [&] {
+    return context_menu(h.context(), mk(h.root(), 0), sample(), Vector2Type{100, 100},
+        open, ComponentConfig{}.with_size({pixels(180), pixels(28)}));
+  };
+  emit(); h.layout_only();
+  auto *item = h.find("menu_item_0");
+  CHECK(item != nullptr);
+  if (!item) return;
+  auto entity = UICollectionHolder::getEntityForID(item->id);
+  entity->get<HasClickListener>().down = true;
+  h.context().set_focus(h.root().id);
+  h.begin_frame();
+  CHECK(emit() == 0);
+  CHECK(!open);
+  h.layout_only();
+}
+
 int main() { return ui_test::run_registered_tests("menu"); }

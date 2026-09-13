@@ -1115,7 +1115,8 @@ struct HandleTrayNavigation : SystemWithUIContext<ui::HasTray> {
       child.addComponentIfMissing<SkipWhenTabbing>();
       // Only navigable if it has a click listener and is rendered
       if (child.has<HasClickListener>() && child.has<UIComponent>() &&
-          child.get<UIComponent>().was_rendered_to_screen) {
+          child.get<UIComponent>().was_rendered_to_screen &&
+          !(child.has<HasLabel>() && child.get<HasLabel>().is_disabled)) {
         tray.navigable_children.push_back(child_id);
       }
     }

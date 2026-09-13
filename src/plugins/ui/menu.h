@@ -33,18 +33,30 @@ struct MenuItem {
 // Result of a menu: index of the item chosen this frame, or -1.
 inline constexpr int kNoMenuSelection = -1;
 
-// Per-menu state. Only the open/closed edge, which is what tells a genuine
-// outside click apart from the click that opened the menu in the first place.
+// Tracks the opening edge, panel, and focus to restore on dismissal.
 struct HasMenuState : BaseComponent {
   bool was_open_last_frame = false;
+  EntityID panel = -1;
+  EntityID restore_focus = -1;
 };
 
 namespace detail {
-// Menus close when focus leaves them, which is also how a click outside is
-// noticed -- the same rule dropdown already relies on.
 template <typename Ctx>
-bool menu_lost_focus(Ctx &ctx, EntityID list_id, bool was_open) {
-  return was_open && !ctx.has_focus(list_id);
+bool dismiss_menu(Ctx &ctx, HasMenuState &state, bool open) {
+  if (!state.was_open_last_frame) return !open;
+  const bool inside = ctx.focus_in_subtree(state.panel);
+  const bool outside_press = ctx.mouse.just_pressed &&
+      !is_point_inside_entity_tree(state.panel, ctx.mouse.pos);
+  using Action = std::remove_cvref_t<decltype(ctx.last_action)>;
+  bool escape = false;
+  if constexpr (magic_enum::enum_contains<Action>("MenuBack"))
+    escape = inside && ctx.pressed(Action::MenuBack);
+  if (open && inside && !escape && !outside_press) return false;
+  if (inside) ctx.set_focus(state.restore_focus);
+  state.was_open_last_frame = false;
+  auto panel = UICollectionHolder::getEntityForID(state.panel);
+  if (panel.valid()) panel.asE().template addComponentIfMissing<ShouldHide>();
+  return true;
 }
 
 // Focus anywhere in a subtree. A menu can use exact-id focus because focusing
@@ -71,6 +83,8 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
   auto [entity, parent] = deref(ep_pair);
   auto &state = entity.template addComponentIfMissing<HasMenuState>();
   if (!open || items.empty()) {
+    detail::dismiss_menu(ctx, state, false);
+    open = false;
     state.was_open_last_frame = false;
     return kNoMenuSelection;
   }
@@ -222,19 +236,13 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
     index++;
   }
 
-  if (chosen != kNoMenuSelection)
-    open = false;
-
-  // Dismissal, the same rule dropdown uses: the list takes focus when it
-  // opens, and losing it closes the menu. That covers a click outside and a
-  // tab away with one check. Gated on was_open_last_frame because focus does
-  // not reach the list until the frame after it is built, so without the gate
-  // a menu would close on the very frame it opened.
+  state.panel = list.ent().id;
   if (!state.was_open_last_frame) {
-    ctx.set_focus(list.ent().id);
-  } else if (detail::menu_lost_focus(ctx, list.ent().id, open)) {
-    open = false;
+    state.restore_focus = ctx.focus_id;
+    ctx.set_focus(state.panel);
   }
+  if (chosen != kNoMenuSelection) open = false;
+  if (detail::dismiss_menu(ctx, state, open)) open = false;
   state.was_open_last_frame = open;
 
   return chosen;
@@ -296,7 +304,8 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
         ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
   auto &state = entity.template addComponentIfMissing<HasMenuState>();
-  if (!open) {
+  if (detail::dismiss_menu(ctx, state, open)) {
+    open = false;
     state.was_open_last_frame = false;
     return ElementResult{false, entity};
   }
@@ -332,12 +341,12 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
                                        placed.y - root_rect.y)
                .with_render_layer(config.render_layer + 1));
 
+  state.panel = panel.ent().id;
   if (!state.was_open_last_frame) {
-    ctx.set_focus(panel.ent().id);
-  } else if (!detail::focus_within(ctx, panel.ent().id)) {
-    open = false;
+    state.restore_focus = ctx.focus_id;
+    ctx.set_focus(state.panel);
   }
-  state.was_open_last_frame = open;
+  state.was_open_last_frame = true;
 
   return ElementResult{true, panel.ent()};
 }

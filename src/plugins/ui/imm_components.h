@@ -1852,10 +1852,12 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
       config.rounded_corners.value_or(ctx.theme.rounded_corners);
 
   auto config_size = config.size;
+  if (config_size.x_axis.dim != Dim::Children)
+    config_size.x_axis = percent(1.f);
 
   bool has_label_child = !label_str.empty();
   if (has_label_child) {
-    config_size = config.size.scale_x(0.5f);
+    config_size = config_size.scale_x(0.5f);
     button_corners = RoundedCorners(button_corners).left_sharp();
 
     auto label = div(
@@ -1930,8 +1932,11 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
     // Flip above the trigger when the tray would run off the bottom. Options
     // are uniform, so the height is known before layout.
     const RectangleType anchor = entity.template get<UIComponent>().rect();
-    const float tray_h =
-        static_cast<float>(options.size()) * config.size.y_axis.value;
+    const float row_height = main_btn.cmp().height() > 0.f
+        ? main_btn.cmp().height() : config.size.y_axis.value;
+    const float available = std::max(anchor.y, ctx.screen_height - anchor.y - anchor.height);
+    const float tray_h = std::min(static_cast<float>(options.size()) * row_height,
+                                  std::max(1.f, available));
     const auto placed = overlay::place(
         anchor, anchor.width, tray_h, ctx.screen_width, ctx.screen_height,
         overlay::Placement::Below);
@@ -1940,7 +1945,8 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
         tray(ctx, mk(entity),
              ComponentConfig::inherit_from(config, "dropdown_options_tray")
                  .with_size(ComponentSize{percent(1.0f),
-                                          children(config.size.y_axis.value)})
+                                          pixels(tray_h)})
+                 .with_overflow(Overflow::Scroll, Axis::Y)
                  .with_flex_direction(FlexDirection::Column)
                  .with_no_wrap()
                  .with_absolute_position()
@@ -1959,7 +1965,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
               ctx, mk(options_tray.ent(), i),
               ComponentConfig::inherit_from(config,
                                             fmt::format("dropdown_opt_{}", i))
-                  .with_size(ComponentSize{percent(1.0f), config.size.y_axis})
+                  .with_size(ComponentSize{percent(1.0f), pixels(row_height)})
                   .with_label(std::string(options[i])))) {
         on_option_click(entity, i);
       }
@@ -1970,9 +1976,12 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
       ctx.set_focus(options_tray.ent().id);
     }
 
-    // Escape closes without changing selection
+    // Escape or an outside press closes without changing selection
     using IA = typename std::remove_reference_t<decltype(ctx)>::value_type;
-    if (ctx.pressed(IA::MenuBack)) {
+    const bool outside_press = dropdownState.was_open_last_frame &&
+        ctx.mouse.just_pressed &&
+        !is_point_inside_entity_tree(entity.id, ctx.mouse.pos);
+    if (ctx.pressed(IA::MenuBack) || outside_press) {
       dropdownState.on = false;
       EntityID trigger_id =
           entity.get<UIComponent>().children[trigger_child_index];
