@@ -693,7 +693,7 @@ struct HandleActionCommand : System<PendingE2ECommand> {
       return;
     }
 
-    ctx->last_action = *action;
+    ctx->defer([ctx, action = *action] { ctx->last_action = action; });
     cmd.consume();
   }
 };

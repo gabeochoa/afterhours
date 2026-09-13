@@ -83,4 +83,20 @@ TEST(a_grab_onto_a_new_widget_is_still_not_interaction) {
   CHECK(!h.context().has_interacted);
 }
 
+
+TEST(unconsumed_action_expires_at_next_ui_frame) {
+  ImmTestHarness h;
+  auto &ctx = h.context();
+  ctx.last_action = ui_test::TestInputAction::MenuBack;
+  BeginUIContextManager<ui_test::TestInputAction> begin;
+  begin.for_each_with(h.context_entity(), ctx, .016f);
+  CHECK(!ctx.pressed(ui_test::TestInputAction::MenuBack));
+  ctx.defer([&ctx] { ctx.last_action = ui_test::TestInputAction::WidgetPress; });
+  begin.for_each_with(h.context_entity(), ctx, .016f);
+  CHECK(ctx.pressed(ui_test::TestInputAction::WidgetPress));
+  ctx.last_action = ui_test::TestInputAction::MenuBack;
+  ctx.reset();
+  CHECK(!ctx.pressed(ui_test::TestInputAction::MenuBack));
+}
+
 int main() { return ui_test::run_registered_tests("focus origin tests"); }

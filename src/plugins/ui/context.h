@@ -190,7 +190,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   int focus_set_line = 0;
 
   MousePointerState mouse;
-  InputAction last_action;
+  InputAction last_action = InputAction::None;
   uint8_t last_action_modifiers = 0;
   InputBitset all_actions;
   InputBitset all_actions_repeat;
@@ -389,6 +389,10 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     focused_ids.clear();
     render_cmds.clear();
     input_gates.clear();
+    last_action = InputAction::None;
+    last_action_modifiers = 0;
+    all_actions.reset();
+    all_actions_repeat.reset();
   }
 
   void try_to_grab(EntityID id) {

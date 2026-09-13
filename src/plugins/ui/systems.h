@@ -244,6 +244,8 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
   virtual void for_each_with(Entity &entity, UIContext<InputAction> &context,
                              float dt) override {
     context.dt = dt;
+    context.last_action = InputAction::None;
+    context.last_action_modifiers = 0;
     // Before anything builds UI, so teardown cannot free what is iterating.
     context.run_deferred();
     // Apply theme defaults first. begin_frame drops whatever theme the last
