@@ -173,6 +173,12 @@ struct toast : developer::Plugin {
         auto &ui = entity.get<UIComponent>();
         ui.make_absolute();
         ui.flex_direction = FlexDirection::Row;
+        const auto &defaults = imm::UIStylingDefaults::get();
+        const auto &font_name = defaults.default_font_name == UIComponent::UNSET_FONT
+                                    ? UIComponent::DEFAULT_FONT
+                                    : defaults.default_font_name;
+        ui.enable_font(font_name, defaults.default_font_size, true);
+        ui.resolved_scaling_mode = ctx.scaling_mode.value_or(defaults.scaling_mode);
 
         // Get screen resolution to resolve sizes
         auto *res = EntityHelper::get_singleton_cmp<
@@ -189,7 +195,10 @@ struct toast : developer::Plugin {
             .set(std::bitset<4>().set())
             .set_roundness(0.15f);
         entity.addComponent<Toast>(Toast(level, duration, bg_color));
-        entity.addComponent<ui::HasLabel>("");
+        auto &label = entity.addComponent<ui::HasLabel>("");
+        label.font_name = font_name;
+        label.explicit_text_color =
+            colors::auto_text_color(bg_color, ctx.theme.font, ctx.theme.darkfont);
         entity.addComponent<ui::UIComponentDebug>("toast");
 
         // Note: Don't queue for render here - ToastLayoutSystem handles

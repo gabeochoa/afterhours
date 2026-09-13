@@ -154,6 +154,7 @@ ALL_TESTS := \
 	tab_container_test \
 	text_area_test \
 	text_input_test \
+	toast_test \
 	text_wrap_test \
 	theme_io_test
 
