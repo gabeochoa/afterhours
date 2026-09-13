@@ -35,9 +35,12 @@
 // Image decoding + the impl-TU sentinel (referenced from run() below so a
 // missing SOKOL_IMPL translation unit produces a self-describing link error).
 #include "image_decode.h"
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
+#include <optional>
+#include <utility>
 #include <string>
 #include <unordered_map>
 
@@ -85,6 +88,36 @@ inline uint32_t g_active_shader_id = 0;
 
 // Offscreen render target for headless (windowless) mode, created in metal_init.
 inline RenderTextureType g_headless_rt{};
+inline std::optional<std::pair<int, int>> g_pending_headless_size;
+
+inline bool request_headless_resize(int width, int height) {
+  if (!g_headless || !g_initialized || width <= 0 || height <= 0)
+    return false;
+  const int scale = std::max(1, g_headless_rt.scale);
+  const int limit = sg_query_limits().max_image_size_2d / scale;
+  if (width > limit || height > limit)
+    return false;
+  g_pending_headless_size = std::pair{width, height};
+  return true;
+}
+
+inline void apply_headless_resize() {
+  if (!g_pending_headless_size || g_pass_active)
+    return;
+  const auto [width, height] = *g_pending_headless_size;
+  g_pending_headless_size.reset();
+  if (width == g_headless_w && height == g_headless_h)
+    return;
+  const int scale = std::max(1, g_headless_rt.scale);
+  auto replacement = ::afterhours::load_render_texture(width * scale, height * scale);
+  if (replacement.color_img_id == 0)
+    return;
+  replacement.scale = scale;
+  ::afterhours::unload_render_texture(g_headless_rt);
+  g_headless_rt = replacement;
+  g_headless_w = width;
+  g_headless_h = height;
+}
 
 // src-over for 2D drawing; sgl_defaults() loads a pipeline with blending off,
 // which discarded every alpha byte. Opaque draws are unchanged (a=255).
@@ -431,19 +464,8 @@ struct MetalPlatformAPI {
     log_error("@notimplemented minimize_window");
   }
   static void set_window_size(int w, int h) {
-    // Headless: there is no window, but we can honor a resize by re-sizing the
-    // offscreen render target + reported screen dims, so layout/e2e that depend
-    // on a specific viewport size work windowlessly. Called on resize events
-    // only (not per-frame), so recreating the render texture here is fine.
     if (metal_detail::g_headless) {
-      if (w <= 0 || h <= 0)
-        return;
-      if (w == metal_detail::g_headless_w && h == metal_detail::g_headless_h)
-        return;
-      metal_detail::g_headless_w = w;
-      metal_detail::g_headless_h = h;
-      ::afterhours::unload_render_texture(metal_detail::g_headless_rt);
-      metal_detail::g_headless_rt = ::afterhours::load_render_texture(w, h);
+      metal_detail::request_headless_resize(w, h);
       return;
     }
     log_error("@notimplemented set_window_size");
@@ -474,6 +496,7 @@ struct MetalPlatformAPI {
     // Headless: no swapchain — render into the offscreen texture instead. This
     // sets up the ortho projection + GL→Metal fixup internally, so we return.
     if (metal_detail::g_headless) {
+      metal_detail::apply_headless_resize();
       ::afterhours::begin_texture_mode(metal_detail::g_headless_rt);
       return;
     }
@@ -886,6 +909,7 @@ inline bool metal_init(const Config &cfg) {
     // Windowless offscreen rendering: create our own Metal device (no
     // sokol_app / WindowServer), set up sokol_gfx against it with no swapchain,
     // and render into an offscreen texture we can read back to PNG.
+    metal_detail::g_pending_headless_size.reset();
     metal_detail::g_headless = true;
     metal_detail::g_headless_w = cfg.width;
     metal_detail::g_headless_h = cfg.height;
@@ -939,6 +963,7 @@ inline bool metal_init(const Config &cfg) {
 inline void metal_shutdown() {
   if (!metal_detail::g_headless)
     return;
+  metal_detail::g_pending_headless_size.reset();
   unload_render_texture(metal_detail::g_headless_rt);
   if (metal_detail::g_fons_ctx) {
     sfons_destroy(metal_detail::g_fons_ctx);
