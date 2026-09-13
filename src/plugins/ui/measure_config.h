@@ -47,7 +47,7 @@ inline float measure_edge(const Size &s, float available, float screen_dim) {
   case Dim::Pixels:
     return s.value;
   case Dim::ScreenPercent:
-    return s.value * screen_dim;
+    return resolve_to_pixels(s, screen_dim, measure_screen_dim(Axis::Y));
   case Dim::Percent:
     return s.value * available;
   case Dim::Text:
@@ -88,7 +88,7 @@ inline MeasuredConfig measure_config(const ComponentConfig &config,
     case Dim::Pixels:
       return s.value;
     case Dim::ScreenPercent:
-      return s.value * screen_dim;
+      return resolve_to_pixels(s, screen_dim, screen_h);
     case Dim::Percent:
       return s.value * available;
     case Dim::Text: {

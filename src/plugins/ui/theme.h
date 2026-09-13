@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cmath>
 #include <map>
+#include <optional>
 #include <string>
 #if __has_include(<magic_enum/magic_enum.hpp>)
 #include <magic_enum/magic_enum.hpp>
@@ -210,20 +211,46 @@ struct Theme {
     return false;
   }
 
-  // Default to pure white/black for auto_text_color to work properly
-  Color font{255, 255, 255, 255};       // White - for dark backgrounds
-  Color darkfont{30, 30, 30, 255};      // Near-black - for light backgrounds
-  Color font_muted{150, 150, 150, 255}; // Gray - for secondary text
-  Color background{45, 45, 55, 255};    // Dark gray
-  Color surface{60, 60, 70, 255};       // Slightly lighter gray
+  // Light and dark text candidates for automatic contrast selection
+  Color font{235, 240, 247, 255};
+  Color darkfont{25, 32, 44, 255}; // Near-black - for light backgrounds
+  Color font_muted{179, 190, 205, 255}; // Gray - for secondary text
+  Color background{16, 22, 31, 255}; // Dark gray
+  Color surface{25, 34, 47, 255}; // Slightly lighter gray
 
-  Color primary{100, 140, 200, 255};  // Blue
-  Color secondary{80, 100, 140, 255}; // Dark blue
-  Color accent{200, 160, 100, 255};   // Gold
-  Color error{200, 80, 80, 255};      // Red
-  Color success{80, 170, 90, 255};    // Green
-  Color warning{225, 165, 45, 255};   // Amber
-  Color focus{255, 255, 255, 255};    // White - high contrast focus ring
+  Color primary{53, 101, 201, 255}; // Blue
+  Color secondary{47, 61, 80, 255}; // Dark blue
+  Color accent{130, 179, 255, 255};
+  Color error{192, 57, 71, 255}; // Red
+  Color success{43, 126, 87, 255}; // Green
+  Color warning{178, 116, 23, 255}; // Amber
+  Color focus{155, 199, 255, 255};
+
+  std::optional<Color> border;
+  std::optional<Color> border_muted;
+  std::optional<Color> surface_raised;
+  float panel_corner_radius = 12.f;
+
+  Color raised_surface() const {
+    if (surface_raised) return *surface_raised;
+    return colors::mix(surface, colors::auto_text_color(surface, font, darkfont),
+                       0.06f);
+  }
+
+  Color control_border(Color on_surface) const {
+    if (border) return *border;
+    return colors::ensure_contrast(
+        colors::mix(on_surface, colors::auto_text_color(on_surface, font, darkfont),
+                    0.4f), on_surface, 3.f);
+  }
+
+  Color control_border() const { return control_border(surface); }
+
+  Color subtle_border() const {
+    if (border_muted) return *border_muted;
+    return colors::mix(surface, colors::auto_text_color(surface, font, darkfont),
+                       0.16f);
+  }
 
   // Get a reference to a color by usage
   // Returns primary for Custom/Default/None (invalid usages)
@@ -348,14 +375,7 @@ struct Theme {
   }
 
   // Default constructor - uses a dark theme with good defaults
-  Theme()
-      : font(colors::isabelline), darkfont(colors::oxford_blue),
-        font_muted(colors::darken(colors::isabelline, 0.25f)),
-        background(colors::oxford_blue),
-        surface(colors::lighten(colors::oxford_blue, 0.1f)),
-        primary(colors::pacific_blue), secondary(colors::tea_green),
-        accent(colors::orange_soda), error(colors::red),
-        focus(colors::isabelline) {}
+  Theme() = default;
 
   Color from_usage(Usage cu, bool disabled = false) const {
     if (!is_valid(cu)) {
@@ -387,10 +407,12 @@ struct Theme {
   }
 
   // Validate that the theme meets WCAG AA accessibility standards
-  // Checks font on background and darkfont on surface
+  // Checks the text colors actually selected for the default surfaces
   bool validate_accessibility() const {
-    return colors::meets_wcag_aa(font, background) &&
-           colors::meets_wcag_aa(darkfont, surface);
+    return colors::meets_wcag_aa(auto_font_for(Usage::Background), background) &&
+           colors::meets_wcag_aa(auto_font_for(Usage::Surface), surface) &&
+           colors::meets_wcag_aa(font_muted, background) &&
+           colors::meets_wcag_aa(font_muted, surface);
   }
 
   std::bitset<4> rounded_corners = std::bitset<4>().set();

@@ -25,7 +25,7 @@ struct toast : developer::Plugin {
 
     // Resolution-scaled sizes (designed for 720p, scales proportionally)
     static inline ui::Size WIDTH = ui::h720(340.0f);
-    static inline ui::Size HEIGHT = ui::h720(32.0f);
+    static inline ui::Size HEIGHT = ui::h720(48.0f);
     static inline ui::Size PADDING = ui::h720(14.0f);
     static inline ui::Size TOAST_GAP = ui::h720(8.0f);
 
@@ -158,9 +158,9 @@ struct toast : developer::Plugin {
             }
             switch (level) {
                 case Level::Success:
-                    return ctx.theme.secondary;
+                    return ctx.theme.success;
                 case Level::Warning:
-                    return ctx.theme.accent;
+                    return ctx.theme.warning;
                 case Level::Error:
                     return ctx.theme.error;
                 case Level::Custom:
@@ -174,11 +174,10 @@ struct toast : developer::Plugin {
         entity.addComponent<UIComponent>(entity.id);
         auto &ui = entity.get<UIComponent>();
         ui.make_absolute();
+        ui.set_desired_width(WIDTH).set_desired_height(HEIGHT);
         ui.flex_direction = FlexDirection::Row;
         const auto &defaults = imm::UIStylingDefaults::get();
-        const auto &font_name = defaults.default_font_name == UIComponent::UNSET_FONT
-                                    ? UIComponent::DEFAULT_FONT
-                                    : defaults.default_font_name;
+        const auto &font_name = defaults.resolved_font_name();
         ui.enable_font(font_name, defaults.default_font_size, true);
         ui.resolved_scaling_mode = ctx.scaling_mode.value_or(defaults.scaling_mode);
 
@@ -194,11 +193,13 @@ struct toast : developer::Plugin {
 
         entity.addComponent<HasColor>(bg_color);
         entity.addComponent<ui::HasRoundedCorners>()
-            .set(std::bitset<4>().set())
-            .set_roundness(0.15f);
+            .set(ctx.theme.rounded_corners)
+            .set_roundness(ctx.theme.roundness)
+            .set_radius_px(ctx.theme.corner_radius);
         entity.addComponent<Toast>(Toast(level, duration, bg_color));
         auto &label = entity.addComponent<ui::HasLabel>("");
         label.font_name = font_name;
+        label.text_inset = Vector2Type{12.f, 8.f};
         label.explicit_text_color =
             colors::auto_text_color(bg_color, ctx.theme.font, ctx.theme.darkfont);
         entity.addComponent<ui::UIComponentDebug>("toast");
@@ -280,10 +281,13 @@ struct toast : developer::Plugin {
                 Toast &t = entity.get<Toast>();
                 ui::UIComponent &ui = entity.get<ui::UIComponent>();
 
-                // Ensure size is set for absolute elements
-                if (ui.computed[ui::Axis::X] <= 0)
+                if (ui.desired[ui::Axis::X].dim != ui::Dim::None)
+                    ui.computed[ui::Axis::X] = resolve_size(ui.desired[ui::Axis::X], screen_w, screen_h);
+                else if (ui.computed[ui::Axis::X] <= 0)
                     ui.computed[ui::Axis::X] = width_px;
-                if (ui.computed[ui::Axis::Y] <= 0)
+                if (ui.desired[ui::Axis::Y].dim != ui::Dim::None)
+                    ui.computed[ui::Axis::Y] = resolve_size(ui.desired[ui::Axis::Y], screen_w, screen_h);
+                else if (ui.computed[ui::Axis::Y] <= 0)
                     ui.computed[ui::Axis::Y] = height_px;
 
                 float toast_height = ui.computed[ui::Axis::Y];
@@ -294,11 +298,12 @@ struct toast : developer::Plugin {
                               toast_height - y_offset;
                 const bool at_top = position == Position::TopLeft || position == Position::TopRight;
                 if (at_top) y_pos = padding_px + y_offset;
-                float x_pos = (static_cast<float>(screen_w) - width_px) / 2.0f;
+                const float toast_width = ui.computed[ui::Axis::X];
+                float x_pos = (static_cast<float>(screen_w) - toast_width) / 2.0f;
                 if (position == Position::TopLeft || position == Position::BottomLeft)
                     x_pos = padding_px;
                 if (position == Position::TopRight || position == Position::BottomRight)
-                    x_pos = static_cast<float>(screen_w) - padding_px - width_px;
+                    x_pos = static_cast<float>(screen_w) - padding_px - toast_width;
 
                 float alpha_ease = detail::ease_out_expo(t.progress());
                 float slide_offset = (1.0f - alpha_ease) * 24.0f;

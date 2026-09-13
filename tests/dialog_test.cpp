@@ -245,4 +245,78 @@ TEST(opening_press_does_not_light_dismiss_its_new_modal) {
       components::get_type_id<UIContext<ui_test::TestInputAction>>());
 }
 
+TEST(modal_inherits_the_app_family_and_uses_a_pixel_panel_radius) {
+  ui_test::ImmTestHarness h;
+  auto &defaults = UIStylingDefaults::get();
+  const auto saved_name = defaults.default_font_name;
+  const auto saved_size = defaults.default_font_size;
+  UIStylingDefaults::get().set_default_font("Interface", pixels(20));
+  ensure_modal_singleton();
+  bool open = true;
+  auto panel = afterhours::modal(h.context(), mk(h.root(), 0), open,
+      ModalConfig{}.with_title("Settings"));
+  h.layout_only();
+  const auto *title = h.find("modal_title");
+  CHECK(title != nullptr);
+  if (title) {
+    CHECK(title->font_name == "Interface");
+    CHECK(title->font_weight == colors::FontWeight::Bold);
+  }
+  CHECK(panel.ent().get<HasRoundedCorners>().radius_px.has_value());
+  CHECK_APPROX(panel.ent().get<HasRoundedCorners>().radius_px.value_or(-1.f),
+               h.context().theme.panel_corner_radius);
+  CHECK(panel.ent().has<HasBorder>());
+  defaults.set_default_font(saved_name, saved_size);
+}
+
+TEST(explicit_modal_panel_styling_is_preserved) {
+  ui_test::ImmTestHarness h;
+  ensure_modal_singleton();
+  bool open = true;
+  const Color custom{80, 34, 62, 255};
+  auto panel = afterhours::modal(h.context(), mk(h.root(), 0), open,
+      ModalConfig{}.with_panel(ComponentConfig{}
+          .with_size({pixels(300), pixels(200)})
+          .with_custom_background(custom).with_corner_radius(3.f)));
+  CHECK_APPROX(panel.ent().get<HasRoundedCorners>().radius_px.value_or(-1.f), 3.f);
+  const auto actual = panel.ent().get<HasColor>().color();
+  CHECK(actual.r == custom.r && actual.g == custom.g && actual.b == custom.b &&
+        actual.a == custom.a);
+  CHECK(!panel.ent().has<HasBorder>());
+}
+
+TEST(modal_chrome_inherits_or_overrides_adaptive_scaling) {
+  auto &defaults = UIStylingDefaults::get();
+  const auto saved_mode = defaults.scaling_mode;
+  for (bool context_override : {false, true}) {
+    ImmTestHarness h;
+    defaults.scaling_mode = context_override ? ScalingMode::Proportional : ScalingMode::Adaptive;
+    h.context().scaling_mode = context_override
+        ? std::optional{ScalingMode::Adaptive} : std::nullopt;
+    auto *resolution = EntityHelper::get_singleton_cmp<window_manager::ProvidesCurrentResolution>();
+    const auto saved_resolution = resolution->current_resolution;
+    resolution->current_resolution = {1920, 1080};
+    ensure_modal_singleton();
+    modal::detail::get_modal_root().modal_stack.clear();
+    bool open = true;
+    afterhours::modal(h.context(), mk(h.root(), 0), open,
+        ModalConfig{}.with_size(pixels(420), pixels(400)).with_title("About this theme"));
+    h.layout_only(false, {1920, 1080});
+    auto *header = h.find("modal_header");
+    auto *close = h.find("modal_close");
+    auto *title = h.find("modal_title");
+    CHECK(header && close && title);
+    if (header && close && title) {
+      CHECK_APPROX(header->rect().height, 36.f);
+      CHECK_APPROX(close->rect().width, 36.f);
+      CHECK_APPROX(close->rect().height, 36.f);
+      CHECK(title->font_size.dim == Dim::Pixels);
+      CHECK_APPROX(title->font_size.value, 25.f);
+      CHECK(title->rect().x + title->rect().width <= close->rect().x + 1.f);
+    }
+    resolution->current_resolution = saved_resolution;
+  }
+  defaults.scaling_mode = saved_mode;
+}
+
 int main() { return ui_test::run_registered_tests("dialog tests"); }

@@ -439,7 +439,8 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
       entity.addComponentIfMissing<HasColor>(colors::UI_PINK);
       entity.get<HasColor>().set(colors::UI_PINK);
     }
-  } else if (!overlay && config.color_usage == Theme::Usage::Default) {
+  } else if (config.color_usage == Theme::Usage::None ||
+             (!overlay && config.color_usage == Theme::Usage::Default)) {
     // Auto-add transparent background for elements that don't specify
     // a color, so child divs don't retain stale backgrounds.
     entity.addComponentIfMissing<HasColor>(colors::transparent());
@@ -521,7 +522,8 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
 inline void apply_restyle(HasUIContext auto &ctx, Entity &entity,
                           const ComponentConfig &config) {
   const bool sets_background = Theme::is_valid(config.color_usage) ||
-                               config.color_usage == Theme::Usage::Custom;
+                               config.color_usage == Theme::Usage::Custom ||
+                               config.color_usage == Theme::Usage::None;
 
   apply_visuals(ctx, entity, config, /*overlay=*/true);
 
@@ -530,7 +532,9 @@ inline void apply_restyle(HasUIContext auto &ctx, Entity &entity,
   // new background has to refresh it or light text stays on a light fill.
   if (sets_background && entity.has<HasLabel>() && entity.has<HasColor>() &&
       entity.get<HasLabel>().background_hint.has_value()) {
-    entity.get<HasLabel>().set_background_hint(entity.get<HasColor>().color());
+    entity.get<HasLabel>().set_background_hint(
+        config.color_usage == Theme::Usage::None ? ctx.theme.background
+                                                 : entity.get<HasColor>().color());
   }
 }
 

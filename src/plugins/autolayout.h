@@ -117,7 +117,8 @@ struct AutoLayout {
   // so the float overload above resolves the gap to 0.028px.
   float resolve_gap(const Size &gap, const UIComponent &widget, Axis axis) {
     return resolve_to_pixels(gap, fetch_screen_value_(axis),
-                             widget.resolved_scaling_mode, ui_scale);
+                             widget.resolved_scaling_mode, ui_scale,
+                             fetch_screen_value_(Axis::Y));
   }
 
   auto &set_grid_snapping(bool enabled) {
@@ -285,7 +286,7 @@ struct AutoLayout {
       case Dim::Text:
         log_error("Margin by dimension text not supported");
       case Dim::ScreenPercent:
-        return exp.value * screenValue;
+        return resolve_to_pixels(exp, screenValue, fetch_screen_value_(Axis::Y));
       case Dim::Children:
         log_error("Margin by dimension children not supported");
       case Dim::Percent:
@@ -395,7 +396,7 @@ struct AutoLayout {
       case Dim::Pixels:
         return resolve_pixels(exp.value, widget);
       case Dim::ScreenPercent:
-        return exp.value * screenValue;
+        return resolve_to_pixels(exp, screenValue, fetch_screen_value_(Axis::Y));
         //
       case Dim::Text:
         log_error("Padding by dimension text not supported");
@@ -435,7 +436,7 @@ struct AutoLayout {
       case Dim::Pixels:
         return resolve_pixels(exp.value, widget);
       case Dim::ScreenPercent:
-        return exp.value * screenValue;
+        return resolve_to_pixels(exp, screenValue, fetch_screen_value_(Axis::Y));
       case Dim::Text:
         return get_text_size_for_axis(widget, axis);
       case Dim::Percent:
@@ -845,8 +846,8 @@ struct AutoLayout {
     case Dim::Pixels:
       return resolve_pixels(constraint.value, widget);
     case Dim::ScreenPercent:
-      return constraint.value *
-             (axis == Axis::X ? resolution.width : resolution.height);
+      return resolve_to_pixels(constraint, fetch_screen_value_(axis),
+                               fetch_screen_value_(Axis::Y));
     case Dim::Percent: {
       // Percent of parent's content area (computed minus padding only;
       // margins are external spacing and not included in computed).

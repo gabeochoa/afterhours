@@ -13,6 +13,8 @@
 #include "components.h"
 #include "context.h"
 #include "overlay.h"
+#include "styling_defaults.h"
+#include "text_selection.h"
 
 namespace afterhours {
 namespace ui {
@@ -38,18 +40,10 @@ struct TooltipState : BaseComponent {
   EntityID showing = -1;
   RectangleType anchor{};
   std::string text;
+  overlay::Placement placement = overlay::Placement::Below;
 
   bool is_showing() const { return showing != -1 && !text.empty(); }
 };
-
-namespace tooltip_detail {
-
-// Rough, but it only decides a box size and the renderer clips to it anyway.
-inline float measure_width(const std::string &text, float font_size) {
-  return static_cast<float>(text.size()) * font_size * 0.5f;
-}
-
-} // namespace tooltip_detail
 
 template <typename InputAction>
 struct UpdateTooltips : System<UIContext<InputAction>> {
@@ -66,6 +60,7 @@ struct UpdateTooltips : System<UIContext<InputAction>> {
     RectangleType anchor{};
     std::string text;
     float delay = 0.5f;
+    auto placement = overlay::Placement::Below;
 
     for (int id = context.hot_id; id >= 0;) {
       OptEntity oe = UICollectionHolder::getEntityForID(id);
@@ -77,6 +72,7 @@ struct UpdateTooltips : System<UIContext<InputAction>> {
         anchor = e.get<UIComponent>().rect();
         text = e.get<HasTooltip>().text;
         delay = e.get<HasTooltip>().delay;
+        placement = e.get<HasTooltip>().placement;
         break;
       }
       if (!e.has<UIComponent>())
@@ -110,6 +106,7 @@ struct UpdateTooltips : System<UIContext<InputAction>> {
     state->showing = owner;
     state->anchor = anchor;
     state->text = text;
+    state->placement = placement;
   }
 };
 
@@ -123,30 +120,64 @@ struct RenderTooltip : System<UIContext<InputAction>> {
     if (state == nullptr || !state->is_showing())
       return;
 
-    const float font_size = 14.f;
-    const float pad_x = 8.f, pad_y = 5.f;
-    const float w = tooltip_detail::measure_width(state->text, font_size) +
-                    pad_x * 2.f;
-    const float h = font_size + pad_y * 2.f;
+    auto *fonts = EntityHelper::get_singleton_cmp<FontManager>();
+    if (fonts == nullptr || context.screen_width <= 0 || context.screen_height <= 0)
+      return;
 
+    const auto &defaults = imm::UIStylingDefaults::get();
+    const auto font = fonts->get_font(defaults.resolved_font_name());
+    const auto mode = context.scaling_mode.value_or(defaults.scaling_mode);
+    const float font_size = resolve_to_pixels(defaults.default_font_size,
+        context.screen_height, mode, context.theme.ui_scale);
+    if (font_size <= 0.f)
+      return;
+
+    const float scale = mode == ScalingMode::Adaptive
+                            ? context.theme.ui_scale
+                            : context.screen_height / 720.f;
+    const float padding = 8.f * scale;
+    const float max_width = std::min(360.f * scale,
+                                    context.screen_width - padding * 2.f);
+    if (max_width <= padding * 2.f)
+      return;
+
+    const auto measure = [&](const std::string &text) {
+      return measure_text(font, text.c_str(), font_size, 1.f).x;
+    };
+    const auto lines = detail::wrap_text_to_width(
+        state->text, max_width - padding * 2.f, measure);
+    float width = 0.f;
+    for (const auto &line : lines)
+      width = std::max(width, measure(line));
+    const float line_height = std::max(font_size,
+        measure_text(font, "Ag", font_size, 1.f).y) * 1.5f;
+    const float w = std::min(max_width, width + padding * 2.f);
+    const float h = std::min(context.screen_height,
+        line_height * static_cast<float>(lines.size()) + padding * 2.f);
     const auto placed = overlay::place(state->anchor, w, h,
-                                       context.screen_width,
-                                       context.screen_height,
-                                       overlay::Placement::Below, 4.f);
+        context.screen_width, context.screen_height, state->placement, 4.f * scale);
 
     const RectangleType box{placed.x, placed.y, w, h};
-    draw_rectangle_rounded(box, 0.25f, 6, context.theme.from_usage(
-                                              Theme::Usage::Surface, false),
-                           std::bitset<4>().set());
-    draw_rectangle_rounded_lines(
-        box, 0.25f, 6, context.theme.from_usage(Theme::Usage::Accent, false),
-        std::bitset<4>().set());
-    auto *fm = EntityHelper::get_singleton_cmp<FontManager>();
-    if (fm == nullptr)
-      return;
-    draw_text_ex(fm->get_active_font(), state->text.c_str(),
-                 Vector2Type{box.x + pad_x, box.y + pad_y}, font_size, 1.f,
-                 context.theme.from_usage(Theme::Usage::Font, false));
+    const float roundness = resolve_roundness(context.theme.corner_radius,
+                                             context.theme.roundness, box);
+    const auto background = context.theme.raised_surface();
+    draw_rectangle_rounded(box, roundness, context.theme.segments, background,
+                           context.theme.rounded_corners);
+    draw_rectangle_rounded_lines(box, roundness, context.theme.segments,
+        context.theme.subtle_border(), context.theme.rounded_corners);
+    begin_scissor_mode(static_cast<int>(box.x + padding),
+                       static_cast<int>(box.y + padding),
+                       static_cast<int>(std::max(0.f, w - padding * 2.f)),
+                       static_cast<int>(std::max(0.f, h - padding * 2.f)));
+    float y = box.y + padding;
+    const auto foreground = colors::auto_text_color(
+        background, context.theme.font, context.theme.darkfont);
+    for (const auto &line : lines) {
+      draw_text_ex(font, line.c_str(), Vector2Type{box.x + padding, y},
+                   font_size, 1.f, foreground);
+      y += line_height;
+    }
+    end_scissor_mode();
   }
 };
 

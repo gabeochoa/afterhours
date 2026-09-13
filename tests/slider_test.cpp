@@ -187,4 +187,25 @@ TEST(an_unstyled_slider_still_takes_the_theme) {
   }
 }
 
+TEST(slider_thumb_stays_within_track_for_every_size_unit) {
+  for (const auto width : {pixels(400), percent(.8f), w1280(600)}) {
+    for (float value : {0.f, .6f, 1.f}) {
+      ImmTestHarness h;
+      auto control = slider(h.context(), mk(h.root(), 0), value,
+          ComponentConfig{}.with_size({width, h720(44)}));
+      h.layout_only();
+      auto *track = h.find("slider_background");
+      auto *thumb = h.find("slider_handle");
+      CHECK(track && thumb);
+      if (!track || !thumb) continue;
+      CHECK(std::abs(track->rect().width - control.cmp().rect().width) < .05f);
+      CHECK(std::abs(thumb->rect().width - track->rect().width * .25f) < .05f);
+      CHECK(std::abs(thumb->rect().height - track->rect().height) < .05f);
+      CHECK(std::abs(thumb->rect().x - track->rect().x -
+          value * .75f * track->rect().width) < .05f);
+      CHECK(thumb->rect().x + thumb->rect().width <= track->rect().x + track->rect().width + .05f);
+    }
+  }
+}
+
 int main() { return ui_test::run_registered_tests("slider tests"); }

@@ -22,19 +22,21 @@ static constexpr float MIN_TOUCH_TARGET = 44.0f;
 
 static Vector2Type default_component_size = {200.f, 50.f};
 
-// Mode-aware spacing: returns pixels() in Adaptive mode (scales with
-// ui_scale), h720() in Proportional mode (scales with resolution).
+// Mode-aware spacing: logical pixels in Adaptive mode, or a lazy fraction
+// of screen height in Proportional mode, independent of the layout axis.
 // See docs/30_adaptive_scaling.md Design Decision #2.
 struct DefaultSpacing {
   static bool is_adaptive();
-  static Size tiny() { return is_adaptive() ? pixels(8.0f) : h720(8.0f); }
-  static Size small() { return is_adaptive() ? pixels(16.0f) : h720(16.0f); }
-  static Size medium() { return is_adaptive() ? pixels(24.0f) : h720(24.0f); }
-  static Size large() { return is_adaptive() ? pixels(32.0f) : h720(32.0f); }
-  static Size xlarge() { return is_adaptive() ? pixels(48.0f) : h720(48.0f); }
-  static Size container() {
-    return is_adaptive() ? pixels(64.0f) : h720(64.0f);
+  static Size resolve(float value) {
+    return is_adaptive() ? pixels(value) : screen_height_pct(value / 720.f);
   }
+  static Size micro() { return resolve(4.f); }
+  static Size tiny() { return resolve(8.f); }
+  static Size small() { return resolve(16.f); }
+  static Size medium() { return resolve(24.f); }
+  static Size large() { return resolve(32.f); }
+  static Size xlarge() { return resolve(48.f); }
+  static Size container() { return resolve(64.f); }
 };
 
 // Mode-aware typography: returns pixels() in Adaptive mode (scales with
@@ -117,6 +119,12 @@ struct UIStylingDefaults {
   ValidationConfig validation;
 
   UIStylingDefaults() = default;
+
+  std::string resolved_font_name() const {
+    return default_font_name == UIComponent::UNSET_FONT
+               ? UIComponent::DEFAULT_FONT
+               : default_font_name;
+  }
 
   // Theme configuration methods
   UIStylingDefaults &set_theme_color(Theme::Usage usage, const Color &color) {

@@ -65,15 +65,19 @@ inline std::ostream &operator<<(std::ostream &os, const Dim &dim) {
   return os;
 }
 
+enum class ScreenReference { LayoutAxis, Height };
+
 struct Size {
   Dim dim = Dim::None;
   float value = -1;
   float strictness = 1.f;
+  ScreenReference screen_reference = ScreenReference::LayoutAxis;
 };
 
 inline std::ostream &operator<<(std::ostream &os, const Size &size) {
   os << "Size(dim: " << size.dim << ", value: " << size.value
-     << ", strictness: " << size.strictness << ")";
+     << ", strictness: " << size.strictness << ", screen_reference: "
+     << (size.screen_reference == ScreenReference::Height ? "Height" : "LayoutAxis") << ")";
   return os;
 }
 
@@ -120,8 +124,10 @@ template <> struct formatter<afterhours::ui::Size> {
 
   auto format(const afterhours::ui::Size &size,
               std::format_context &ctx) const {
-    return std::format_to(ctx.out(), "Size(dim: {}, value: {}, strictness: {})",
-                          size.dim, size.value, size.strictness);
+    return std::format_to(ctx.out(), "Size(dim: {}, value: {}, strictness: {}, screen_reference: {})",
+                          size.dim, size.value, size.strictness,
+                          size.screen_reference == afterhours::ui::ScreenReference::Height
+                              ? "Height" : "LayoutAxis");
   }
 };
 } // namespace std
@@ -152,6 +158,12 @@ inline Size screen_pct(const float value, const float strictness = 0.9f) {
       .dim = ui::Dim::ScreenPercent, .value = value, .strictness = strictness};
 }
 
+inline Size screen_height_pct(const float value, const float strictness = 0.9f) {
+  auto size = screen_pct(value, strictness);
+  size.screen_reference = ScreenReference::Height;
+  return size;
+}
+
 inline Size children(const float value = -1) {
   return ui::Size{.dim = ui::Dim::Children, .value = value};
 }
@@ -175,12 +187,14 @@ inline Size w1280(const float px) { return screen_pct(px / 1280.f); }
 // Resolve a Size to pixels given a screen dimension (height for h720, width
 // for w1280). Does NOT apply ui_scale — use the overload with ScalingMode for
 // that.
-inline float resolve_to_pixels(const Size &size, float screen_dimension) {
+inline float resolve_to_pixels(const Size &size, float screen_dimension,
+                               float screen_height = -1.f) {
   switch (size.dim) {
   case Dim::Pixels:
     return size.value;
   case Dim::ScreenPercent:
-    return size.value * screen_dimension;
+    return size.value * (size.screen_reference == ScreenReference::Height && screen_height >= 0.f
+                             ? screen_height : screen_dimension);
   case Dim::Percent:
   case Dim::Children:
   case Dim::Text:
@@ -197,7 +211,8 @@ inline float resolve_to_pixels(const Size &size, float screen_dimension) {
 // Use this overload when resolving sizes that should respect the scaling mode
 // (e.g., translate/absolute position values, font sizes for rendering).
 inline float resolve_to_pixels(const Size &size, float screen_dimension,
-                               ScalingMode mode, float ui_scale) {
+                               ScalingMode mode, float ui_scale,
+                               float screen_height = -1.f) {
   switch (size.dim) {
   case Dim::Pixels:
     if (mode == ScalingMode::Adaptive) {
@@ -205,7 +220,8 @@ inline float resolve_to_pixels(const Size &size, float screen_dimension,
     }
     return size.value;
   case Dim::ScreenPercent:
-    return size.value * screen_dimension;
+    return size.value * (size.screen_reference == ScreenReference::Height && screen_height >= 0.f
+                             ? screen_height : screen_dimension);
   case Dim::Percent:
   case Dim::Children:
   case Dim::Text:
@@ -297,6 +313,7 @@ inline Size half_size(Size size) {
         .dim = size.dim,
         .value = size.value / 2.f,
         .strictness = size.strictness,
+        .screen_reference = size.screen_reference,
     };
   }
   return size;

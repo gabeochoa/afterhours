@@ -1030,8 +1030,8 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
       config.size.x_axis = pixels(max_width.value / labels.size());
     } else if (max_width.dim == Dim::Percent ||
                max_width.dim == Dim::ScreenPercent) {
-      config.size.x_axis = Size{max_width.dim, max_width.value / labels.size(),
-                                max_width.strictness};
+      config.size.x_axis = max_width;
+      config.size.x_axis.value /= labels.size();
     } else {
       config.size.x_axis = max_width;
     }
@@ -1591,33 +1591,22 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                             .with_label(main_label_text)
                             .with_rounded_corners(label_corners)
                             .with_render_layer(config.render_layer + 0);
-    default_color_usage(label_config, Theme::Usage::Primary);
+    if (original_color_usage == Theme::Usage::Default && !label_config.custom_color)
+      label_config.with_color_usage(Theme::Usage::None);
     auto label = div(ctx, mk(entity, entity.id + 0), label_config);
     label.ent()
         .template get<UIComponent>()
-        .set_desired_width(config.size.scale_x(0.5f).x_axis)
-        .set_desired_height(config.size.y_axis);
+        .set_desired_width(percent(0.5f))
+        .set_desired_height(percent(1.f));
     label.ent().template addComponentIfMissing<InFocusCluster>();
   }
 
   // Create slider background
   // In compact mode, use full rounded corners; otherwise sharp on left
-  // Guard against occasional 1-2px overflow when parent layout constrains this
-  // row tighter than configured widths.
-  constexpr float layout_overflow_tolerance_px = 2.0f;
   auto elem_corners =
       compact ? RoundedCorners(config.rounded_corners.value())
               : RoundedCorners(config.rounded_corners.value()).left_sharp();
-  ComponentSize bg_size = config.size;
-  if (bg_size.x_axis.dim == Dim::Pixels) {
-    bg_size.x_axis.value = std::max(
-        0.0f, bg_size.x_axis.value - 4.0f - layout_overflow_tolerance_px);
-  } else if (bg_size.x_axis.dim == Dim::Percent ||
-             bg_size.x_axis.dim == Dim::ScreenPercent) {
-    bg_size = bg_size.scale_x(0.95f);
-    bg_size.x_axis.value = std::max(
-        0.0f, bg_size.x_axis.value - (layout_overflow_tolerance_px / 100.f));
-  }
+  ComponentSize bg_size{percent(compact ? 1.f : .5f), percent(1.f)};
 
   auto bg_config = ComponentConfig::inherit_from(config, "slider_background")
                        .with_size(bg_size)
@@ -1637,7 +1626,8 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   HasSliderState &sliderState = slider_bg.get<ui::HasSliderState>();
 
   // Create value update function
-  auto apply_slider_value = [&](Entity &target, float new_value_pct) {
+  auto apply_slider_value = [&sliderState, original_label, handle_label_position](
+                                Entity &target, float new_value_pct) {
     float clamped = std::clamp(new_value_pct, 0.f, 1.f);
     if (clamped == sliderState.value)
       return;
@@ -1645,13 +1635,12 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
     sliderState.changed_since = true;
 
     UIComponent &cmp = target.get<UIComponent>();
-    Rectangle rect = cmp.rect();
     if (!cmp.children.empty()) {
       EntityID child_id = cmp.children[0];
       Entity &child = UICollectionHolder::getEntityForIDEnforce(child_id);
       UIComponent &child_cmp = child.get<UIComponent>();
       child_cmp.set_desired_margin(
-          pixels(sliderState.value * 0.75f * rect.width), Axis::left);
+          percent(sliderState.value * 0.75f), Axis::left);
 
       // Update labels based on position
       if (handle_label_position == SliderHandleValueLabelPosition::OnHandle) {
@@ -1677,8 +1666,8 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       });
 
   // Create handle - use bg_size (not original config) so handle stays within track
-  const auto dim = bg_size.x_axis.dim;
-  const float track_val = bg_size.x_axis.value;
+  const auto dim = config.size.x_axis.dim;
+  const float track_val = config.size.x_axis.value * (compact ? 1.f : .5f);
 
   // Warn about tiny widths
   const bool tiny_width =
@@ -1690,32 +1679,14 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
              (int)dim, track_val, config.debug_name.c_str());
   }
 
-  Size handle_width_size{dim, track_val * 0.25f, bg_size.x_axis.strictness};
-  if (dim == Dim::Pixels)
-    handle_width_size.value = std::max(2.0f, handle_width_size.value);
-  else if (dim == Dim::Percent || dim == Dim::ScreenPercent)
-    handle_width_size.value = std::max(0.02f, handle_width_size.value);
-
-  // Handle left offset positions the knob along the track. The handle is a
-  // child of the track, so a Percent/ScreenPercent margin already resolves
-  // against the track width — it must NOT be multiplied by track_val again
-  // (that double-application pinned the knob near the start). Pixels dims do
-  // need the track width to convert the fraction to pixels.
-  float handle_left_frac = owned_value * 0.75f;
-  Size handle_left_size{dim,
-                        (dim == Dim::Pixels) ? handle_left_frac * track_val
-                                             : handle_left_frac,
-                        bg_size.x_axis.strictness};
-  if (dim == Dim::Pixels)
-    handle_left_size.value = std::max(0.0f, handle_left_size.value);
-  else if (dim == Dim::Percent || dim == Dim::ScreenPercent)
-    handle_left_size.value = std::max(0.0f, handle_left_size.value);
+  const Size handle_width_size = percent(0.25f);
+  const Size handle_left_size = percent(owned_value * 0.75f);
 
   // TODO: Support custom handle height via a dedicated config field
   // (e.g. with_slider_handle_height) to allow oversized knob-style handles.
   auto handle_config =
       ComponentConfig::inherit_from(config, "slider_handle")
-          .with_size(ComponentSize{handle_width_size, bg_size.y_axis})
+          .with_size(ComponentSize{handle_width_size, percent(1.f)})
           .with_absolute_position()
           .with_margin(Margin{.left = handle_left_size})
           .with_rounded_corners(config.rounded_corners.value())
@@ -1726,7 +1697,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   auto handle = div(ctx, mk(slider_bg), handle_config);
   handle.cmp()
       .set_desired_width(handle_config.size.x_axis)
-      .set_desired_height(bg_size.y_axis);
+      .set_desired_height(percent(1.f));
   handle.ent().template addComponentIfMissing<InFocusCluster>();
 
   // Add handle label if needed
@@ -1913,7 +1884,8 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
         ComponentConfig::inherit_from(config, "dropdown_label")
             .with_size(config_size)
             .with_label(std::string(label_str))
-            .with_color_usage(Theme::Usage::Primary)
+            .with_color_usage(config.color_usage == Theme::Usage::Default
+                ? Theme::Usage::None : config.color_usage)
             .with_rounded_corners(RoundedCorners(button_corners).right_sharp())
             .with_render_layer(config.render_layer + 0));
     label.ent().template addComponentIfMissing<InFocusCluster>();
@@ -1959,12 +1931,17 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   //   and passed it via with_hot_siblings({label_id}) to the main button.
   // Re-adding this would require restoring: ComponentConfig hot_siblings api,
   // ui::BringsHotSiblings component, and the rendering propagation logic.
-  auto main_btn = button(ctx, mk(entity),
-                         ComponentConfig::inherit_from(config, "option 1")
-                             .with_size(config_size)
-                             .with_label(main_button_label)
-                             .with_rounded_corners(button_corners)
-                             .with_render_layer(config.render_layer));
+  auto trigger_config = ComponentConfig::inherit_from(config, "option 1")
+      .with_size(config_size)
+      .with_label(main_button_label)
+      .with_rounded_corners(button_corners)
+      .with_render_layer(config.render_layer);
+  if (config.color_usage == Theme::Usage::Default && !config.custom_color) {
+    trigger_config.with_color_usage(Theme::Usage::Secondary);
+    if (!trigger_config.has_border())
+      trigger_config.with_border(ctx.theme.control_border(ctx.theme.secondary), 1.f);
+  }
+  auto main_btn = button(ctx, mk(entity), trigger_config);
   if (main_btn) {
     dropdownState.on = !dropdownState.on;
   }

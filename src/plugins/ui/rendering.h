@@ -424,10 +424,9 @@ inline void warn_ignored_label_padding(const Entity &entity,
                                ? entity.get<UIComponentDebug>().name()
                                : std::string();
   log_warn("'{}' sets padding on a label with no children. That does nothing "
-           "-- the text sits at a fixed {}px inset either way (kTextInset, and "
-           "text_inset_for() if you need to line something up with it). Use "
-           "margin, or padding on a wrapper. Further cases are not repeated.",
-           name.empty() ? "<unnamed>" : name, kTextInset);
+           "Use text_inset for text spacing, margin for external spacing, or "
+           "padding on a wrapper. Further cases are not repeated.",
+           name.empty() ? "<unnamed>" : name);
   (void)suppressed;
 }
 
@@ -865,8 +864,7 @@ static inline void draw_text_in_rect(
   }
 
   TextPositionResult result = [&]() {
-    const Vector2Type margin_px = text_inset_for(rect);
-    return position_text_ex(fm, text, rect, alignment, margin_px,
+    return position_text_ex(fm, text, rect, alignment, inset,
                             explicit_font_size, letter_spacing, text_overflow);
   }();
 
@@ -1067,10 +1065,6 @@ static inline void draw_runs_in_rect(
   const float total_h = line_h * static_cast<float>(lines.size());
   float y = rect.y + std::max(0.f, (rect.height - total_h) * 0.5f);
 
-  // draw_text_in_rect insets by min(5, width*0.4); pad each side so the
-  // inset stays 5 and the glyphs land on `x`.
-  constexpr float kInset = 5.f;
-
   for (const auto &line : lines) {
     if (line.empty()) {
       y += line_h; // blank line from a "\n\n"
@@ -1084,19 +1078,17 @@ static inline void draw_runs_in_rect(
       line_w += weighted_width(run.text, run.weight);
 
     // Mirror position_text_ex's alignment maths so a label lands in the same
-    // place whether it is drawn as plain text or as styled runs. Left used to
-    // start flush at rect.x here while the plain path insets by the margin, so
-    // giving a label a colour shifted it kInset to the left.
-    float x = rect.x + kInset;
+    // place whether it is drawn as plain text or as styled runs.
+    float x = rect.x + inset.x;
     if (alignment == TextAlignment::Center)
-      x = std::max(rect.x + kInset,
-                   rect.x + kInset + (rect.width - 2.f * kInset - line_w) / 2.f);
+      x = std::max(rect.x + inset.x,
+                   rect.x + inset.x + (rect.width - 2.f * inset.x - line_w) / 2.f);
     else if (alignment == TextAlignment::Right)
-      x = rect.x + rect.width - kInset - line_w;
+      x = rect.x + rect.width - inset.x - line_w;
 
     for (const auto &run : line) {
       const float w = weighted_width(run.text, run.weight);
-      RectangleType run_rect{x - kInset, y, w + kInset * 2.f, line_h};
+      RectangleType run_rect{x, y, w, line_h};
       // draw_text_in_rect draws with the ACTIVE font, so the weight has to be
       // swapped in around the call and put back afterwards.
       const std::string want = fm.resolve_weighted(base_font, run.weight);
@@ -1109,7 +1101,7 @@ static inline void draw_runs_in_rect(
                         show_debug_indicator, stroke, shadow, rotation,
                         rot_center_x, rot_center_y, TextOverflow::Clip,
                         letter_spacing, font_size, /*report_overflow=*/false,
-                        inset);
+                        Vector2Type{0.f, 0.f});
       if (swap)
         fm.set_active(base_font);
       x += w;
@@ -2406,6 +2398,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         label_rect.x += hasLabel.text_x_offset;
         label_rect.width -= hasLabel.text_x_offset;
         label_rect.y += hasLabel.text_y_offset;
+        label_rect.x += label_inset.x;
+        label_rect.y += label_inset.y;
+        label_rect.width = std::max(0.f, label_rect.width - 2.f * label_inset.x);
+        label_rect.height = std::max(0.f, label_rect.height - 2.f * label_inset.y);
         float centerX = draw_rect.x + draw_rect.width / 2.0f;
         float centerY = draw_rect.y + draw_rect.height / 2.0f;
 
@@ -2442,8 +2438,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           };
           // Unwrapped styled text uses the same loop, unbounded width.
           const float wrap_width =
-              wants_wrap ? (label_rect.width - 2.f * label_inset.x)
-                        : 1e9f;
+              wants_wrap ? label_rect.width : 1e9f;
 
           if (wrap_width > 0.f) {
             const std::vector<TextSpan> runs =

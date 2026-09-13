@@ -23,6 +23,22 @@ using namespace afterhours::ui::imm;
 using ui_test::ImmTestHarness;
 
 namespace {
+struct SpacingDefaultsScope {
+  ScalingMode previous_mode = UIStylingDefaults::get().scaling_mode;
+  window_manager::ProvidesCurrentResolution &resolution =
+      *EntityHelper::get_singleton_cmp<window_manager::ProvidesCurrentResolution>();
+  window_manager::Resolution previous_resolution = resolution.current_resolution;
+
+  SpacingDefaultsScope(ScalingMode mode, window_manager::Resolution next) {
+    UIStylingDefaults::get().scaling_mode = mode;
+    resolution.current_resolution = next;
+  }
+  ~SpacingDefaultsScope() {
+    UIStylingDefaults::get().scaling_mode = previous_mode;
+    resolution.current_resolution = previous_resolution;
+  }
+};
+
 // Resolved font size for `text` auto-fitted into `box`. Auto-fit is the path
 // taken whenever font_size is not explicitly set, which is 82 of 101 screens.
 float autofit_size(ImmTestHarness &h, const std::string &text, float w,
@@ -96,6 +112,8 @@ TEST(a_label_too_long_for_its_box_clamps_no_lower_than_accessible) {
 // screens use both, so elements land 1.6px apart forever. Resolved at the same
 // screen height they must agree, or neither is a scale.
 TEST(the_two_spacing_scales_agree) {
+  ImmTestHarness h;
+  SpacingDefaultsScope settings(ScalingMode::Proportional, {1280, 720});
   const float screen_h = 720.f;
   struct Pair {
     const char *name;
@@ -127,6 +145,8 @@ TEST(the_two_spacing_scales_agree) {
 // screen_pct lands on fractional pixels at 720p, which is where the soft
 // off-by-one edges come from. Spacing must resolve to whole pixels.
 TEST(spacing_resolves_to_whole_pixels) {
+  ImmTestHarness h;
+  SpacingDefaultsScope settings(ScalingMode::Proportional, {1280, 720});
   const float screen_h = 720.f;
   for (Spacing s : {Spacing::xs, Spacing::sm, Spacing::md, Spacing::lg,
                     Spacing::xl}) {
@@ -181,6 +201,131 @@ TEST(last_corner_unit_setter_controls_the_rendered_radius) {
   };
   CHECK_APPROX(radius(circle), 22.f);
   CHECK_APPROX(radius(fixed), 4.f);
+}
+
+TEST(spacing_uses_baseline_before_window_dimensions_are_available) {
+  ImmTestHarness h;
+  SpacingDefaultsScope settings(ScalingMode::Proportional, {0, 0});
+  CHECK(DefaultSpacing::medium().dim == Dim::ScreenPercent);
+  CHECK(DefaultSpacing::medium().screen_reference == ScreenReference::Height);
+  CHECK(std::abs(resolve_to_pixels(DefaultSpacing::medium(), 1280.f, 720.f) - 24.f) < .01f);
+}
+
+TEST(spacing_uses_screen_height_equally_for_both_layout_axes) {
+  for (const auto mode : {ScalingMode::Proportional, ScalingMode::Adaptive}) {
+    for (const auto resolution : {window_manager::Resolution{1280, 720},
+                                  window_manager::Resolution{2560, 720},
+                                  window_manager::Resolution{1920, 1080},
+                                  window_manager::Resolution{800, 600}}) {
+      for (const float zoom : {1.f, 1.4f, 2.f}) {
+        for (const auto direction : {FlexDirection::Row, FlexDirection::Column}) {
+          ImmTestHarness h;
+          SpacingDefaultsScope settings(mode, resolution);
+          h.context().theme.ui_scale = zoom;
+          h.context().scaling_mode = mode;
+          const float expected = 24.f * (mode == ScalingMode::Adaptive
+              ? zoom : static_cast<float>(resolution.height) / 720.f);
+          auto box = div(h.context(), mk(h.root(), 0), ComponentConfig{}
+              .with_size({pixels(200), pixels(160)})
+              .with_flex_direction(direction).with_no_wrap()
+              .with_padding(Spacing::md).with_gap(DefaultSpacing::medium()));
+          auto first = div(h.context(), mk(box.ent(), 0), ComponentConfig{}
+              .with_size({pixels(20), pixels(20)}));
+          auto second = div(h.context(), mk(box.ent(), 1), ComponentConfig{}
+              .with_size({pixels(20), pixels(20)}));
+          auto margin = div(h.context(), mk(h.root(), 1), ComponentConfig{}
+              .with_size({pixels(20), pixels(20)}).with_absolute_position(0, 0)
+              .with_margin(Spacing::md));
+          h.coll.merge_entity_arrays();
+          std::vector<Entity *> mapping;
+          for (const auto &entity : h.coll.get_entities()) {
+            if (!entity) continue;
+            mapping.resize(std::max(mapping.size(), static_cast<size_t>(entity->id) + 1));
+            mapping[static_cast<size_t>(entity->id)] = entity.get();
+          }
+          AutoLayout::autolayout(h.root().get<UIComponent>(), resolution, mapping, false, zoom);
+          const auto close = [](float a, float b) { return std::abs(a - b) < .01f; };
+          CHECK(close(box.cmp().computed_padd[Axis::left], expected));
+          CHECK(close(box.cmp().computed_padd[Axis::right], expected));
+          CHECK(close(box.cmp().computed_padd[Axis::top], expected));
+          CHECK(close(box.cmp().computed_padd[Axis::bottom], expected));
+          CHECK(close(first.cmp().rect().x - box.cmp().rect().x, expected));
+          CHECK(close(first.cmp().rect().y - box.cmp().rect().y, expected));
+          CHECK(close(margin.cmp().computed_margin[Axis::left], expected));
+          CHECK(close(margin.cmp().computed_margin[Axis::top], expected));
+          const Axis axis = direction == FlexDirection::Row ? Axis::X : Axis::Y;
+          CHECK(close(second.cmp().computed_rel[axis] - first.cmp().computed_rel[axis] -
+                      first.cmp().computed[axis], expected));
+          for (const auto spacing : {DefaultSpacing::micro(), DefaultSpacing::tiny(),
+               DefaultSpacing::small(), DefaultSpacing::medium(), DefaultSpacing::large(),
+               DefaultSpacing::xlarge(), DefaultSpacing::container()}) {
+            CHECK(spacing.dim == (mode == ScalingMode::Adaptive ? Dim::Pixels : Dim::ScreenPercent));
+            CHECK(close(resolve_to_pixels(spacing, static_cast<float>(resolution.width), mode, zoom,
+                                          static_cast<float>(resolution.height)),
+                        resolve_to_pixels(spacing, static_cast<float>(resolution.height), mode, zoom,
+                                          static_cast<float>(resolution.height))));
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST(persistent_spacing_created_before_resolution_tracks_later_resizes) {
+  auto &defaults = UIStylingDefaults::get();
+  const auto old_mode = defaults.scaling_mode;
+  defaults.scaling_mode = ScalingMode::Proportional;
+  EntityCollection startup;
+  auto *old_collection = EntityHelper::get_thread_default_collection_ptr();
+  EntityHelper::set_default_collection(&startup);
+  CHECK(!EntityHelper::has_singleton<window_manager::ProvidesCurrentResolution>());
+  const auto medium = DefaultSpacing::medium();
+  const auto large = DefaultSpacing::large();
+  const auto persistent = ComponentConfig{}.with_size({pixels(500), pixels(400)})
+      .with_flex_direction(FlexDirection::Row).with_no_wrap()
+      .with_padding(Spacing::md).with_margin(Spacing::md).with_gap(medium);
+  EntityHelper::set_default_collection(old_collection);
+  defaults.scaling_mode = old_mode;
+  ImmTestHarness h;
+  SpacingDefaultsScope settings(ScalingMode::Proportional, {1280, 720});
+  auto box = div(h.context(), mk(h.root(), 0), persistent);
+  auto first = div(h.context(), mk(box.ent(), 0), ComponentConfig{}.with_size({medium, medium}));
+  auto second = div(h.context(), mk(box.ent(), 1), ComponentConfig{}
+      .with_size({half_size(medium), half_size(medium)}));
+  auto constrained = div(h.context(), mk(box.ent(), 2), ComponentConfig{}
+      .with_size({pixels(200), pixels(200)}).with_max_width(large).with_max_height(large));
+  for (const auto resolution : {window_manager::Resolution{1280, 720},
+                                window_manager::Resolution{1920, 1080},
+                                window_manager::Resolution{2560, 720},
+                                window_manager::Resolution{1280, 720}}) {
+    settings.resolution.current_resolution = resolution;
+    h.layout_only(false, resolution);
+    const float expected = 24.f * static_cast<float>(resolution.height) / 720.f;
+    const auto close = [](float a, float b) { return std::abs(a - b) < .01f; };
+    for (const Axis edge : {Axis::left, Axis::right, Axis::top, Axis::bottom}) {
+      CHECK(close(box.cmp().computed_padd[edge], expected));
+      CHECK(close(box.cmp().computed_margin[edge], expected));
+    }
+    CHECK(close(first.cmp().rect().width, expected));
+    CHECK(close(first.cmp().rect().height, expected));
+    CHECK(close(second.cmp().rect().width, expected / 2.f));
+    CHECK(close(second.cmp().rect().height, expected / 2.f));
+    CHECK(close(second.cmp().rect().x - first.cmp().rect().x - first.cmp().rect().width, expected));
+    CHECK(close(constrained.cmp().rect().width, expected * 32.f / 24.f));
+    CHECK(close(constrained.cmp().rect().height, expected * 32.f / 24.f));
+    const auto measured = measure_config(ComponentConfig{}.with_size({medium, medium})
+        .with_margin(Spacing::md), 500.f, 400.f);
+    CHECK(close(measured.size.x, expected));
+    CHECK(close(measured.size.y, expected));
+    CHECK(close(measured.margin.x, expected * 2.f));
+    CHECK(close(measured.margin.y, expected * 2.f));
+    CHECK(close(resolve_to_pixels(h720(24), static_cast<float>(resolution.width),
+                                  static_cast<float>(resolution.height)),
+                24.f * static_cast<float>(resolution.width) / 720.f));
+    CHECK(close(resolve_to_pixels(w1280(24), static_cast<float>(resolution.height),
+                                  static_cast<float>(resolution.height)),
+                24.f * static_cast<float>(resolution.height) / 1280.f));
+  }
 }
 
 int main() { return ui_test::run_registered_tests("design defaults"); }

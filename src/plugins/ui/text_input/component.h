@@ -172,7 +172,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
         ComponentConfig::inherit_from(config, "text_input_label")
             .with_size(field_size)
             .with_label(label)
-            .with_background(Theme::Usage::Primary)
+            .with_background(config.color_usage == Theme::Usage::Default
+                ? Theme::Usage::None : config.color_usage)
             .with_rounded_corners(base_corners.right_sharp())
             .with_skip_tabbing(true)
             .with_render_layer(config.render_layer))
@@ -214,8 +215,11 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       config.custom_color.has_value();
   if (caller_set_background)
     field_config.with_custom_background(config.custom_color.value());
-  else
+  else {
     field_config.with_background(Theme::Usage::Secondary);
+    if (!field_config.has_border())
+      field_config.with_border(ctx.theme.control_border(ctx.theme.secondary), 1.f);
+  }
 
   auto field_result = div(ctx, mk(entity, has_label ? 1 : 0), field_config);
 

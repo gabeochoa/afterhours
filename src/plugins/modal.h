@@ -362,6 +362,11 @@ struct modal : developer::Plugin {
             int screen_w = res ? res->current_resolution.width : 1280;
             int screen_h = res ? res->current_resolution.height : 720;
 
+            const auto chrome_size = [&](float value) {
+                const float scale = ctx.scaling_mode.value_or(UIStylingDefaults::get().scaling_mode) == ScalingMode::Adaptive
+                    ? 1.f : static_cast<float>(screen_h) / 720.f;
+                return pixels(value * scale);
+            };
             float width_px = resolve_size(config.width, screen_w, screen_h);
             float height_px = resolve_size(config.height, screen_w, screen_h);
 
@@ -415,8 +420,9 @@ struct modal : developer::Plugin {
                     .with_flex_direction(FlexDirection::Column)
                     .with_no_wrap()
                     .with_background(Theme::Usage::Surface)
-                    .with_roundness(0.05f)
-                    .with_padding(Spacing::md)
+                    .with_corner_radius(ctx.theme.panel_corner_radius)
+                    .with_border(ctx.theme.subtle_border(), 1.f)
+                    .with_padding(Padding::all(chrome_size(24)))
                     .with_debug_name("modal"));
             panel_config.with_render_layer(config.render_layer);
             init_component(ctx, EntityParent{entity, config.panel ? parent : overlay_root},
@@ -427,24 +433,24 @@ struct modal : developer::Plugin {
                 auto header = div(
                     ctx, mk(entity, 0),
                     ComponentConfig{}
-                        .with_size(ComponentSize{percent(1.0f), h720(36)})
+                        .with_size(ComponentSize{percent(1.0f), chrome_size(36)})
                         .with_flex_direction(FlexDirection::Row)
                         .with_justify_content(JustifyContent::SpaceBetween)
                         .with_align_items(AlignItems::Center)
                         // Title belongs with its message, not floating between
                         // it and the panel edge.
-                        .with_margin(Margin{.bottom = DefaultSpacing::tiny()})
+                        .with_margin(Margin{.bottom = chrome_size(8)})
                         .with_render_layer(config.render_layer)
                         .with_debug_name("modal_header"));
 
                 div(ctx, mk(header.ent(), 0),
                     ComponentConfig{}
                         .with_label(config.title)
-                        .with_size(ComponentSize{children(), percent(1.0f)})
+                        .with_size(ComponentSize{expand(), percent(1.0f)})
                         // Was the body's own 18px, so the title did not read
                         // as one. One step up the scale from the body.
-                        .with_font(UIComponent::DEFAULT_FONT,
-                                   TypographyScale::size(1))
+                        .with_font_size(chrome_size(TypographyScale::BASE_SIZE_720P * TypographyScale::RATIO))
+                        .with_font_weight(colors::FontWeight::Bold)
                         .with_auto_text_color(true)
                         .with_render_layer(config.render_layer)
                         .with_debug_name("modal_title"));
@@ -453,7 +459,12 @@ struct modal : developer::Plugin {
                     if (button(ctx, mk(header.ent(), 1),
                                ComponentConfig{}
                                    .with_label("X")
-                                   .with_size(ComponentSize{h720(28), h720(28)})
+                                   .with_size(ComponentSize{chrome_size(36), chrome_size(36)})
+                                   .with_padding(Padding::all(pixels(0)))
+                                   .with_custom_background(colors::transparent())
+                                   .with_custom_text_color(colors::auto_text_color(
+                                       ctx.theme.surface, ctx.theme.font, ctx.theme.darkfont))
+                                   .with_corner_radius(ctx.theme.corner_radius.value_or(8.f))
                                    .with_render_layer(config.render_layer)
                                    .with_debug_name("modal_close"))) {
                         m.result = DialogResult::Dismissed;
@@ -495,8 +506,7 @@ struct modal : developer::Plugin {
                     .with_label(message)
                     .with_size(ComponentSize{percent(1.0f), h720(96)})
                     .with_padding(Spacing::sm)
-                    .with_font(UIComponent::DEFAULT_FONT,
-                               TypographyScale::base())
+                    .with_font_size(TypographyScale::base())
                     .with_text_overflow(TextOverflow::Wrap)
                     .with_render_layer(content_layer)
                     .with_debug_name("dialog_message"));
@@ -534,7 +544,7 @@ struct modal : developer::Plugin {
                 ComponentConfig{}
                     .with_label(label)
                     .with_size(ComponentSize{w1280(130), h720(44)})
-                    .with_font(UIComponent::DEFAULT_FONT, h720(16.0f))
+                    .with_font_size(h720(16.0f))
                     .with_alignment(TextAlignment::Center)
                     .with_margin(Margin{.left = DefaultSpacing::medium()})
                     .with_render_layer(content_layer);
@@ -546,10 +556,8 @@ struct modal : developer::Plugin {
                 // Ghost, so it reads as the quieter third option.
                 cfg.with_custom_background(colors::transparent());
             else
-                // Neutral: a lighter shade of the Surface panel so the button is
-                // visible (plain Surface blends into the panel it sits on).
-                cfg.with_custom_background(colors::lighten(
-                    ctx.theme.from_usage(Theme::Usage::Surface), 0.18f));
+                cfg.with_custom_background(ctx.theme.raised_surface())
+                    .with_border(ctx.theme.control_border(ctx.theme.raised_surface()), 1.f);
             return button(ctx, ep_pair, cfg);
         }
 
@@ -723,7 +731,7 @@ struct modal : developer::Plugin {
                         .with_label(message)
                         .with_size(ComponentSize{percent(1.0f), h720(56)})
                         .with_padding(Spacing::md)
-                        .with_font(UIComponent::DEFAULT_FONT, h720(18.0f))
+                        .with_font_size(h720(18.0f))
                         .with_text_overflow(TextOverflow::Wrap)
                         .with_render_layer(content_layer));
 
@@ -738,7 +746,7 @@ struct modal : developer::Plugin {
                                    .right = DefaultSpacing::medium()})
                         .with_background(Theme::Usage::Background)
                         .with_rounded_corners(RoundedCorners().all_round())
-                        .with_roundness(0.1f)
+                        .with_corner_radius(ctx.theme.corner_radius.value_or(8.f))
                         .with_render_layer(content_layer));
 
                 auto row =
