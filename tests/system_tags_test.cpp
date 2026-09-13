@@ -129,10 +129,36 @@ void test_no_requirement_visits_all() {
   CHECK(raw->seen == 3);
 }
 
+void test_derived_dispatch_with_tag_filter() {
+  reset_world();
+  auto &enemy = make(GTag::Enemy);
+  auto &friendly = make(GTag::Friendly);
+  struct Derived : System<Health, tags::All<GTag::Enemy>> {
+    int mutable_calls = 0;
+    mutable int const_calls = 0;
+    void for_each_with_derived(Entity &, Health &, float) override {
+      ++mutable_calls;
+    }
+    void for_each_with_derived(const Entity &, const Health &,
+                               float) const override {
+      ++const_calls;
+    }
+  } system;
+  SystemBase &base = system;
+  base.for_each_derived(enemy, 0.f);
+  base.for_each_derived(friendly, 0.f);
+  const SystemBase &const_base = system;
+  const_base.for_each_derived(enemy, 0.f);
+  const_base.for_each_derived(friendly, 0.f);
+  CHECK(system.mutable_calls == 1);
+  CHECK(system.const_calls == 1);
+}
+
 int main() {
   printf("=== system tag-filtering tests (#41 regression) ===\n\n");
   struct T { const char *n; void (*f)(); };
   T tests[] = {
+    {"derived_dispatch_with_tag_filter", test_derived_dispatch_with_tag_filter},
     {"all_filters_untagged", test_all_filters_untagged},
     {"all_requires_every_tag", test_all_requires_every_tag},
     {"none_excludes", test_none_excludes},

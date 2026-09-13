@@ -427,7 +427,7 @@ struct System
         }
     }
 
-    void for_each(Entity &entity, const float dt) {
+    void for_each(Entity &entity, const float dt) override {
         if (!tags_ok(entity)) return;
         bool has_all = HasAllComponents<ComponentsOnly>::value(entity);
         if (has_all) {
@@ -435,26 +435,22 @@ struct System
         }
     }
 
-    void for_each_derived(Entity &entity, const float dt) {
+    void for_each_derived(Entity &entity, const float dt) override {
         if (!tags_ok(entity)) return;
         if (HasAllComponents<ComponentsOnly>::value_child(entity)) {
             CallWithChildComponents<ComponentsOnly>::call(this, entity, dt);
         }
     }
 
-    void for_each_derived(const Entity &entity, const float dt) const {
+    void for_each_derived(const Entity &entity, const float dt) const override {
         if (!tags_ok(entity)) return;
         if (HasAllComponents<ComponentsOnly>::value_child(entity)) {
             CallWithChildComponents<ComponentsOnly>::call_const(this, entity,
                                                                 dt);
         }
     }
-    virtual void for_each_with_derived(Entity &, Components &..., const float) {
-    }
-    virtual void for_each_with_derived(const Entity &, const Components &...,
-                                       const float) const {}
 
-    void for_each(const Entity &entity, const float dt) const {
+    void for_each(const Entity &entity, const float dt) const override {
         if (!tags_ok(entity)) return;
         if (HasAllComponents<ComponentsOnly>::value(entity)) {
             CallWithComponents<ComponentsOnly>::call_const(this, entity, dt);
