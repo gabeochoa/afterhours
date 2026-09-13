@@ -206,4 +206,106 @@ TEST(paused_view_retains_a_snapshot_while_collection_continues) {
     CHECK(collector.snapshot().frames == 2);
 }
 
+TEST(selected_frames_use_matching_system_history_after_ring_wrap) {
+    profiling::Collector collector({3, 4, 1, false});
+    collector.start();
+    for (int i = 1; i <= 5; ++i) {
+        for (const auto &observer : profiling::detail::observers)
+            if (observer.context == &collector)
+                observer.callback(observer.context, "work", SystemPhase::Update, i * 2.);
+        collector.end_frame(i * 10.);
+    }
+    CHECK(collector.snapshot().systems[0].frame_history.empty());
+    const auto frozen = collector.snapshot(true);
+    CHECK(frozen.systems[0].frame_history == std::vector<double>({6, 8, 10}));
+    collector.end_frame(100);
+    const auto selected = profiling::select_frames(frozen, 1, 0);
+    CHECK(selected.frame_ms == std::vector<double>({30, 40}));
+    CHECK(selected.frames == 4);
+    CHECK(selected.average_frame_ms == 35);
+    CHECK(selected.p95_ms == 40);
+    CHECK(selected.systems[0].recent_average_frame_ms == 7);
+    CHECK(selected.systems[0].last_frame_ms == 8);
+    CHECK(selected.systems[0].peak_frame_ms == 8);
+    CHECK(!selected.cpu_percent);
+    CHECK(selected.counters.empty());
+    CHECK(profiling::select_frames({}, 0, 100).frame_ms.empty());
+    const auto single = profiling::select_frames(frozen, 99, 99);
+    CHECK(single.frame_ms == std::vector<double>({50}));
+    CHECK(single.systems[0].recent_average_frame_ms == 10);
+}
+
+TEST(recording_controls_do_not_replace_the_selected_timeline) {
+    ui_test::ImmTestHarness harness;
+    profiling::Collector collector;
+    collector.start();
+    collector.end_frame(10);
+    collector.end_frame(20);
+    ui::imm::ProfilerState state;
+    state.paused = true;
+    state.snapshot = collector.snapshot(true);
+    state.selection = std::pair<std::size_t, std::size_t>{0, 1};
+    state.selection_snapshot = profiling::select_frames(state.snapshot, 0, 1);
+    const auto draw = [&] {
+        harness.begin_frame();
+        ui::imm::profiler_panel(harness.context(), ui::imm::mk(harness.root()), collector, state);
+        harness.layout_only();
+    };
+    draw();
+    collector.end_frame(90);
+    auto *record = harness.find("profiler_record");
+    CHECK(record != nullptr);
+    if (!record) return;
+    auto &control = ui::AutoLayout::to_ent_static(record->id);
+    control.get<ui::HasClickListener>().down = true;
+    draw();
+    CHECK(!collector.recording());
+    CHECK(state.snapshot.frames == 2);
+    CHECK(state.snapshot.frame_ms == std::vector<double>({10, 20}));
+    CHECK(state.selection_snapshot.frame_ms == std::vector<double>({10, 20}));
+    draw();
+    CHECK(collector.recording());
+    CHECK(state.paused);
+    CHECK(state.selection.has_value());
+    CHECK(state.snapshot.frames == 2);
+    CHECK(state.selection_snapshot.average_frame_ms == 15);
+    control.get<ui::HasClickListener>().down = false;
+}
+
+TEST(selected_system_rows_can_sort_by_peak_instead_of_average) {
+    ui_test::ImmTestHarness harness;
+    profiling::Collector collector;
+    ui::imm::ProfilerState state;
+    state.paused = true;
+    state.snapshot.frames = 2;
+    state.snapshot.frame_ms = {10, 20};
+    profiling::SystemSample spike;
+    spike.name = "spike";
+    spike.frame_history = {0, 9};
+    profiling::SystemSample steady;
+    steady.name = "steady";
+    steady.frame_history = {5, 5};
+    state.snapshot.systems = {spike, steady};
+    state.selection = std::pair<std::size_t, std::size_t>{0, 1};
+    state.selection_snapshot = profiling::select_frames(state.snapshot, 0, 1);
+    const auto draw = [&] {
+        harness.begin_frame();
+        ui::imm::profiler_panel(harness.context(), ui::imm::mk(harness.root()), collector, state);
+        harness.layout_only();
+    };
+    draw();
+    CHECK(state.selection_snapshot.systems.front().name == "steady");
+    auto *sort = harness.find("profiler_sort");
+    CHECK(sort != nullptr);
+    if (!sort) return;
+    auto &control = ui::AutoLayout::to_ent_static(sort->id);
+    control.get<ui::HasClickListener>().down = true;
+    draw();
+    control.get<ui::HasClickListener>().down = false;
+    draw();
+    CHECK(state.sort_by_overall);
+    CHECK(state.selection_snapshot.systems.front().name == "spike");
+    CHECK(control.get<ui::HasLabel>().label == "Sort: peak");
+}
+
 int main() { return ui_test::run_registered_tests("profiling collector"); }

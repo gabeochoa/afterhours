@@ -15,7 +15,14 @@ struct LineChartOptions {
     std::string unit;
     std::optional<std::size_t> selected_index;
     float label_font_size = 12;
+    std::optional<std::pair<std::size_t, std::size_t>> selected_range;
 };
+
+inline RectangleType chart_plot_bounds(RectangleType rect, float label_size) {
+    const float left = std::max(58.f, label_size * 4.f + 10.f);
+    const float vertical = std::max(28.f, label_size + 12.f);
+    return {rect.x + left, rect.y + vertical, rect.width - left - 16, rect.height - vertical * 2};
+}
 
 inline ElementResult line_chart(HasUIContext auto &ctx, EntityParent parent,
                                  std::vector<ChartSeries> series,
@@ -34,9 +41,7 @@ inline ElementResult line_chart(HasUIContext auto &ctx, EntityParent parent,
             draw_text_ex(font, text, {x, y}, size, 1, color);
         };
         const float label_size = std::max(1.f, options.label_font_size);
-        const float left = std::max(58.f, label_size * 4.f + 10.f);
-        const float vertical = std::max(28.f, label_size + 12.f);
-        const RectangleType plot{rect.x + left, rect.y + vertical, rect.width - left - 16, rect.height - vertical * 2};
+        const RectangleType plot = chart_plot_bounds(rect, label_size);
         if (plot.width <= 0 || plot.height <= 0) return;
         std::optional<charts::Bounds> extent;
         for (const auto &line : series) {
@@ -59,6 +64,16 @@ inline ElementResult line_chart(HasUIContext auto &ctx, EntityParent parent,
         for (int i = 0; i <= 4; ++i) {
             const float y = plot.y + plot.height * static_cast<float>(i) / 4.f;
             draw_line_ex({plot.x, y}, {plot.x + plot.width, y}, 1, grid_color);
+        }
+        if (options.selected_range && !series.empty() && !series.front().points.empty()) {
+            const auto &points = series.front().points;
+            auto [first, last] = *options.selected_range;
+            first = std::min(first, points.size() - 1);
+            last = std::min(last, points.size() - 1);
+            const float a = position(points[first]).x;
+            const float b = position(points[last]).x;
+            draw_rectangle({std::min(a, b), plot.y, std::max(2.f, std::abs(b - a)), plot.height},
+                           Color{90, 170, 240, 65});
         }
         const auto high = fmt::format("{:.3g}", extent->max_y);
         const auto low = fmt::format("{:.3g}", extent->min_y);

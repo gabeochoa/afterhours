@@ -28,7 +28,9 @@ struct SystemSample {
     double last_frame_ms = 0;
     double average_frame_ms = 0;
     double recent_average_frame_ms = 0;
+    double peak_frame_ms = 0;
     std::uint64_t calls = 0;
+    std::vector<double> frame_history;
     double mean_ms() const { return calls ? total_ms / static_cast<double>(calls) : 0; }
 };
 struct Counter { std::string name, unit; double value = 0; };
@@ -41,6 +43,42 @@ struct Snapshot {
     double fps = 0, average_frame_ms = 0, p50_ms = 0, p95_ms = 0, p99_ms = 0;
     std::optional<double> cpu_percent, resident_mb;
 };
+
+
+inline Snapshot select_frames(const Snapshot &source, std::size_t first, std::size_t last) {
+    Snapshot result;
+    if (source.frame_ms.empty()) return result;
+    first = std::min(first, source.frame_ms.size() - 1);
+    last = std::min(last, source.frame_ms.size() - 1);
+    if (first > last) std::swap(first, last);
+    const auto count = last - first + 1;
+    result.frames = source.frames - source.frame_ms.size() + last + 1;
+    result.frame_ms.assign(source.frame_ms.begin() + first, source.frame_ms.begin() + last + 1);
+    double total = 0;
+    for (const auto ms : result.frame_ms) total += ms;
+    result.average_frame_ms = total / static_cast<double>(count);
+    result.fps = total > 0 ? 1000. * static_cast<double>(count) / total : 0;
+    auto sorted = result.frame_ms;
+    std::sort(sorted.begin(), sorted.end());
+    const auto percentile = [&](double p) { return sorted[static_cast<std::size_t>(std::ceil(p * count)) - 1]; };
+    result.p50_ms = percentile(.5);
+    result.p95_ms = percentile(.95);
+    result.p99_ms = percentile(.99);
+    for (const auto &sample : source.systems) {
+        if (sample.frame_history.size() != source.frame_ms.size()) continue;
+        SystemSample selected;
+        selected.name = sample.name;
+        selected.phase = sample.phase;
+        for (auto i = first; i <= last; ++i) {
+            selected.total_ms += sample.frame_history[i];
+            selected.peak_frame_ms = std::max(selected.peak_frame_ms, sample.frame_history[i]);
+        }
+        selected.average_frame_ms = selected.recent_average_frame_ms = selected.total_ms / static_cast<double>(count);
+        selected.last_frame_ms = sample.frame_history[last];
+        result.systems.push_back(std::move(selected));
+    }
+    return result;
+}
 
 class Collector {
  public:
@@ -143,7 +181,7 @@ class Collector {
         return false;
 #endif
     }
-    Snapshot snapshot() const {
+    Snapshot snapshot(bool include_system_history = false) const {
         Snapshot result;
 #if AFTERHOURS_ENABLE_PROFILING
         result.cpu_percent = cpu_percent_;
@@ -157,6 +195,11 @@ class Collector {
             auto sample = value.sample;
             sample.recent_average_frame_ms = count ? std::max(0., value.recent_ms) / static_cast<double>(count) : 0;
             sample.average_frame_ms = frames_ ? sample.total_ms / static_cast<double>(frames_) : 0;
+            if (include_system_history) {
+                sample.frame_history.reserve(count);
+                for (auto frame = frames_ - count; frame < frames_; ++frame)
+                    sample.frame_history.push_back(value.history[frame % history_.size()]);
+            }
             result.systems.push_back(std::move(sample));
         }
         std::sort(result.systems.begin(), result.systems.end(), [](const auto &a, const auto &b) {
@@ -178,6 +221,9 @@ class Collector {
         result.p50_ms = percentile(.50);
         result.p95_ms = percentile(.95);
         result.p99_ms = percentile(.99);
+#endif
+#if !AFTERHOURS_ENABLE_PROFILING
+        (void)include_system_history;
 #endif
         return result;
     }
