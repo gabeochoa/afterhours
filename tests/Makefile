@@ -112,6 +112,7 @@ ALL_TESTS := \
 	query_seed_test \
 	capture_attribution_test \
 	draw_commands_test \
+	scissor_coalescing_test \
 	focus_origin_test \
 	cleanup_order_test \
 	entity_pool_test \

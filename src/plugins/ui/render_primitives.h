@@ -498,6 +498,7 @@ public:
     const auto &commands = buffer.commands();
     stats_.total_commands = commands.size();
 
+    std::optional<std::array<int, 4>> active_clip;
     size_t i = 0;
     while (i < commands.size()) {
       const auto &cmd = commands[i];
@@ -547,6 +548,8 @@ public:
         break;
 
       case RenderPrimitiveType::ScissorStart:
+        active_clip = {cmd.data.scissor.x, cmd.data.scissor.y,
+                       cmd.data.scissor.width, cmd.data.scissor.height};
         begin_scissor_mode(cmd.data.scissor.x, cmd.data.scissor.y,
                            cmd.data.scissor.width, cmd.data.scissor.height);
         stats_.scissor_operations++;
@@ -554,6 +557,15 @@ public:
         break;
 
       case RenderPrimitiveType::ScissorEnd:
+        if (active_clip && i + 1 < commands.size() &&
+            commands[i + 1].type == RenderPrimitiveType::ScissorStart) {
+          const auto &next = commands[i + 1].data.scissor;
+          if (*active_clip == std::array<int, 4>{next.x, next.y, next.width, next.height}) {
+            i += 2;
+            break;
+          }
+        }
+        active_clip.reset();
         end_scissor_mode();
         stats_.scissor_operations++;
         i++;
