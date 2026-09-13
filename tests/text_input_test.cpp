@@ -390,4 +390,21 @@ TEST(d26_clicking_the_field_reaches_the_widget_state) {
   CHECK_APPROX(s->cursor_blink_timer, 0.f);
 }
 
+TEST(escape_blurs_without_swallowing_dialog_dismissal) {
+  ImmTestHarness h;
+  std::string text = "Draft";
+  auto emit = [&] { imm::text_input(h.context(), mk(h.root(), 0), text,
+      ComponentConfig{}.with_size({pixels(220), pixels(40)})); };
+  two_frames(h, emit);
+  auto *field = find_field_entity();
+  CHECK(field != nullptr);
+  if (!field) return;
+  h.context().set_focus(field->id);
+  h.context().last_action = ui_test::TestInputAction::MenuBack;
+  emit();
+  CHECK(h.context().focus_id == h.context().FAKE);
+  CHECK(h.context().pressed(ui_test::TestInputAction::MenuBack));
+  CHECK(text == "Draft");
+}
+
 int main() { return ui_test::run_registered_tests("text_input"); }

@@ -755,9 +755,9 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       navigate([&] { state.cursor_position = state.text_size(); });
     }
 
-    // Escape blurs the text field. Use FAKE instead of ROOT to prevent
-    // try_to_grab from immediately re-focusing the first tabbable widget.
-    if (ctx.pressed(InputAction::MenuBack)) {
+    // Escape blurs the field and remains available to its enclosing dialog.
+    // FAKE prevents try_to_grab from immediately re-focusing the first widget.
+    if (ctx.last_action == InputAction::MenuBack) {
       state.clear_selection();
       ctx.set_focus(ctx.FAKE);
     }
