@@ -335,6 +335,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
               .with_size(ComponentSize(pixels(std::max(r.width, 2.f)),
                                        pixels(r.height)))
               .with_custom_background(sel_color)
+              .with_corner_radius(0)
               .with_absolute_position()
               .with_translate(r.x, r.y)
               .with_skip_tabbing(true)
@@ -383,6 +384,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
               .with_size(ComponentSize(pixels(CURSOR_WIDTH), pixels(cursor_height)))
               .with_custom_background(
                   config.custom_text_color.value_or(ctx.theme.font))
+              .with_corner_radius(0)
               .with_absolute_position()
               .with_translate(cursor_x, cursor_y)
               .with_opacity(show_cursor ? 1.0f : 0.0f)

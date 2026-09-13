@@ -441,4 +441,60 @@ TEST(text_field_padding_does_not_hide_a_real_leaf_padding_warning) {
   log_sink_fn = previous_sink;
 }
 
+TEST(input_selection_and_caret_stay_square_under_rounded_theme) {
+  ImmTestHarness h;
+  h.context().theme.corner_radius = 12;
+  if (!EntityHelper::has_singleton<FontManager>()) {
+    auto &fonts = EntityHelper::createPermanentEntity();
+    auto &manager = fonts.addComponent<FontManager>();
+    static raylib::GlyphInfo glyph{};
+    glyph.value = '?';
+    glyph.advanceX = 10;
+    static raylib::Rectangle rectangle{0, 0, 10, 20};
+    Font font{};
+    font.baseSize = 20;
+    font.glyphCount = 1;
+    font.glyphs = &glyph;
+    font.recs = &rectangle;
+    font.texture.id = 1;
+    manager.load_font(UIComponent::DEFAULT_FONT, font);
+    EntityHelper::registerSingleton<FontManager>(fonts);
+  }
+  std::string text = "Selected text";
+  auto emit = [&] {
+    imm::text_input(h.context(), mk(h.root(), 0), text,
+        ComponentConfig{}.with_size({pixels(260), pixels(48)})
+            .with_font(UIComponent::DEFAULT_FONT, pixels(20))
+            .with_corner_radius(12));
+  };
+  two_frames(h, emit);
+  auto *field = find_field_entity();
+  CHECK(field != nullptr);
+  if (!field) return;
+  h.context().set_focus(field->id);
+  two_frames(h, emit);
+  auto *state = text_input::state_for_field<text_input::HasTextInputState>(*field);
+  CHECK(state != nullptr);
+  if (!state) return;
+  CHECK(state->has_selection());
+  CHECK(state->selected_text() == text);
+  for (const char *name : {"selection", "cursor"}) {
+    auto *cmp = h.find(name);
+    CHECK(cmp != nullptr);
+    if (!cmp) continue;
+    auto &visual = AutoLayout::to_ent_static(cmp->id);
+    CHECK(visual.has<HasRoundedCorners>());
+    if (!visual.has<HasRoundedCorners>()) continue;
+    const auto &corners = visual.get<HasRoundedCorners>();
+    CHECK_APPROX(resolve_roundness(corners.radius_px, corners.roundness, cmp->rect()), 0);
+    CHECK(cmp->rect().height > 0);
+    if (std::string_view(name) == "selection") {
+      CHECK(cmp->rect().width > 2);
+      CHECK_APPROX(cmp->rect().width, text.size() * 10.f + text.size() - 1);
+    } else {
+      CHECK_APPROX(cmp->rect().width, 2);
+    }
+  }
+}
+
 int main() { return ui_test::run_registered_tests("text_input"); }

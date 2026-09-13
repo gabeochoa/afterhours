@@ -1100,4 +1100,52 @@ TEST(triple_click_on_a_wrapped_row_takes_only_that_row) {
   }
 }
 
+TEST(area_selection_and_caret_stay_square_under_rounded_theme) {
+  ImmTestHarness h;
+  h.context().theme.corner_radius = 12;
+  std::string text = "alpha beta gamma";
+  Entity *area = nullptr;
+  auto emit = [&] {
+    auto result = text_area(h.context(), mk(h.root(), 0), text,
+        area_config(100, 160).with_corner_radius(12));
+    area = &result.ent();
+  };
+  two_frames(h, emit);
+  auto *field = h.find("text_area_field");
+  CHECK(field != nullptr);
+  if (!field || !area) return;
+  h.context().set_focus(field->id);
+  auto &state = area->get<ti::HasTextAreaState>();
+  state.selection_anchor = 0;
+  state.cursor_position = text.size();
+  two_frames(h, emit);
+  CHECK(state.has_selection());
+  CHECK(state.selected_text() == text);
+  CHECK(state.layout_cache.line_count() > 1);
+  size_t selections = 0;
+  size_t cursors = 0;
+  for (const auto &node : h.coll.get_entities()) {
+    if (!node || !node->has<UIComponentDebug>()) continue;
+    const auto name = node->get<UIComponentDebug>().name();
+    if (name != "text_area_selection" && name != "text_area_cursor") continue;
+    const auto rect = node->get<UIComponent>().rect();
+    if (name == "text_area_selection") {
+      ++selections;
+      CHECK(rect.width > 2);
+      CHECK_APPROX(rect.height, LINE_H);
+    } else {
+      ++cursors;
+      CHECK_APPROX(rect.width, 2);
+      CHECK(rect.height > 0);
+    }
+    CHECK(node->has<HasRoundedCorners>());
+    if (!node->has<HasRoundedCorners>()) continue;
+    const auto &corners = node->get<HasRoundedCorners>();
+    CHECK_APPROX(resolve_roundness(corners.radius_px, corners.roundness,
+                                   node->get<UIComponent>().rect()), 0);
+  }
+  CHECK(selections == state.layout_cache.line_count());
+  CHECK(cursors == 1);
+}
+
 int main() { return ui_test::run_registered_tests("text_area"); }
