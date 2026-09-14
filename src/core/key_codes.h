@@ -294,25 +294,17 @@ struct KeyCombo {
 // Parse a key combo string like "CTRL+SHIFT+A" or "ALT+F4"
 inline KeyCombo parse_key_combo(const std::string &str) {
   KeyCombo combo;
-  std::string s = str;
+  std::string s = detail::to_upper(str);
 
   static constexpr std::pair<const char *, bool KeyCombo::*> modifiers[] = {
       {"CTRL+", &KeyCombo::ctrl},
-      {"ctrl+", &KeyCombo::ctrl},
-      {"CMD+", &KeyCombo::ctrl}, // Mac convention: Cmd = Ctrl for shortcuts
-      {"cmd+", &KeyCombo::ctrl},
+      {"CMD+", &KeyCombo::super},
       {"SHIFT+", &KeyCombo::shift},
-      {"shift+", &KeyCombo::shift},
       {"ALT+", &KeyCombo::alt},
-      {"alt+", &KeyCombo::alt},
       {"OPTION+", &KeyCombo::alt}, // Mac name for Alt
-      {"option+", &KeyCombo::alt},
       {"SUPER+", &KeyCombo::super},
-      {"super+", &KeyCombo::super},
       {"WIN+", &KeyCombo::super},
-      {"win+", &KeyCombo::super},
       {"META+", &KeyCombo::super},
-      {"meta+", &KeyCombo::super},
   };
 
   bool found = true;

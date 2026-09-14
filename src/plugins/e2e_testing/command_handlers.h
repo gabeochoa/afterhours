@@ -57,6 +57,7 @@ namespace key_release_detail {
 inline bool pending_ctrl = false;
 inline bool pending_shift = false;
 inline bool pending_alt = false;
+inline bool pending_super = false;
 inline int pending_key = 0;
 inline int release_countdown = 0;
 
@@ -64,6 +65,7 @@ inline void reset() {
     pending_ctrl = false;
     pending_shift = false;
     pending_alt = false;
+    pending_super = false;
     pending_key = 0;
     release_countdown = 0;
 }
@@ -75,28 +77,16 @@ struct HandleKeyReleaseSystem : System<> {
     bool should_iterate() const override { return false; }
     virtual void once(float) override {
         using namespace key_release_detail;
-        if (release_countdown > 0) {
-            release_countdown--;
-            if (release_countdown == 0) {
-                // Release all pending keys
-                if (pending_ctrl) {
-                    input_injector::set_key_up(keys::LEFT_CONTROL);
-                    pending_ctrl = false;
-                }
-                if (pending_shift) {
-                    input_injector::set_key_up(keys::LEFT_SHIFT);
-                    pending_shift = false;
-                }
-                if (pending_alt) {
-                    input_injector::set_key_up(keys::LEFT_ALT);
-                    pending_alt = false;
-                }
-                if (pending_key > 0) {
-                    input_injector::set_key_up(pending_key);
-                    pending_key = 0;
-                }
-            }
-        }
+        if (release_countdown == 0) return;
+        if (--release_countdown > 0) return;
+
+        // Release all pending keys
+        if (pending_ctrl) input_injector::set_key_up(keys::LEFT_CONTROL);
+        if (pending_shift) input_injector::set_key_up(keys::LEFT_SHIFT);
+        if (pending_alt) input_injector::set_key_up(keys::LEFT_ALT);
+        if (pending_super) input_injector::set_key_up(keys::LEFT_SUPER);
+        if (pending_key > 0) input_injector::set_key_up(pending_key);
+        reset();
     }
 };
 
@@ -121,6 +111,7 @@ struct HandleKeyCommand : System<PendingE2ECommand> {
         if (combo.ctrl) input_injector::set_key_held(keys::LEFT_CONTROL);
         if (combo.shift) input_injector::set_key_held(keys::LEFT_SHIFT);
         if (combo.alt) input_injector::set_key_held(keys::LEFT_ALT);
+        if (combo.super) input_injector::set_key_held(keys::LEFT_SUPER);
 
         // Mark key as pressed via injector only. Do NOT also push_key to
         // the queue — the injector has a 1-frame delay which causes the queue
@@ -131,6 +122,7 @@ struct HandleKeyCommand : System<PendingE2ECommand> {
         pending_ctrl = combo.ctrl;
         pending_shift = combo.shift;
         pending_alt = combo.alt;
+        pending_super = combo.super;
         pending_key = combo.key;
         release_countdown = 2;
 

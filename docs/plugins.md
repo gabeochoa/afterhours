@@ -65,3 +65,9 @@ Use `capture_render_texture_png` for owned encoded PNG bytes. Both return `std::
 The older `capture_render_texture_to_memory` now consistently returns encoded PNG on both raylib and Metal, or an empty buffer on failure. Metal callers that previously indexed its raw bytes must move to `capture_render_texture_rgba`. The library's Metal tests have been migrated. The reviewed external caller in endless-dance-chaos supplies PNG screenshots to MCP and retains that behavior.
 
 Backend tests capture the same nonsquare target with a translucent red top and opaque blue bottom. They verify dimensions, channel order, orientation, alpha, legacy PNG signatures, byte-for-byte PNG decode versus RGBA, and failed readback. No CPU image editing or mutable texture upload API is added here.
+
+## E2E key chords
+
+`key Cmd+A` holds the actual Super modifier (Command on macOS, Windows/Super elsewhere). `Cmd`, `Super`, `Win` and `Meta` are case-insensitive aliases; `Ctrl` remains Control and `Option` means Alt. Combine modifiers with `+`. Scripts that intended Control must use `Ctrl+`, not `Cmd+`.
+
+The action key emits one delayed press; modifiers are held without press events. The handler releases the chord after two frames. Reset, skip and timeout clear injected input.

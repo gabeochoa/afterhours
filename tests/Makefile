@@ -89,6 +89,7 @@ ALL_TESTS := \
 	setting_row_style_test \
 	singleton_iteration_test \
 	press_delay_test \
+	e2e_key_command_test \
 	overlay_layer_test \
 	unhandled_command_test \
 	mouse_axis_action_test \

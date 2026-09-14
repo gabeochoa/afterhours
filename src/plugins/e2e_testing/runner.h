@@ -315,6 +315,8 @@ class E2ERunner {
     }
 
     void reset() {
+        test_input::reset_all();
+        key_release_detail::reset();
         index_ = 0;
         wait_time_ = 0.0f;
         wait_ticks_ = 0;
@@ -388,6 +390,9 @@ class E2ERunner {
             }
 
             finalize_current_script();
+            consume_all_pending_commands();
+            test_input::reset_all();
+            key_release_detail::reset();
             finished_ = true;
             return;
         }
@@ -594,10 +599,10 @@ class E2ERunner {
     }
 
     void skip_to_next_script() {
+        test_input::reset_all();
+        key_release_detail::reset();
         while (index_ < commands_.size()) {
             if (commands_[index_].name == kScriptBoundary) {
-                test_input::reset_all();
-                key_release_detail::reset();
                 VisibleTextRegistry::instance().clear();
                 if (clear_fn_) clear_fn_();
                 current_script_idx_++;
