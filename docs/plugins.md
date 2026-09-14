@@ -1,0 +1,67 @@
+# Optional plugin APIs
+
+All paths below are relative to afterhours. Include only the APIs you use.
+
+## Timing charts
+
+Include `src/plugins/charts.h` for backend-independent point bounds and nearest-sample lookup. Include `src/plugins/ui/line_chart.h` for `ui::imm::line_chart`.
+
+Pass owned `ChartSeries` values (name, points, color), optional unit and selected sample index, and an ordinary `ComponentConfig`. The widget retains its data through the draw callback. Mouse hover selects the nearest X sample in each series. Applications can expose keyboard sample controls through `selected_index`.
+
+The plot shares axes across series, displays bounds and a legend, handles empty and constant series, and leaves gaps at nonfinite samples. X values should be ordered for connected lines. Use short series names for the compact legend. The widget uses theme text/grid colors and explicit series colors. The minimum drawing area is 120 by 90 pixels.
+
+`wm --screen=chart_lab` demonstrates empty, single, constant, negative, multiple and live series, plus keyboard-accessible sample controls. The first release covers timing line plots; bars, histograms, pie charts and broader chart interactions remain future work.
+
+`LineChartOptions::label_font_size` sets the legend, axis and hover-label text size. It defaults to 12px. The plot reserves more space for larger labels.
+
+## File watching
+
+Include `src/plugins/file_watcher.h` and compile `file_watcher.cpp`. Link CoreServices on macOS. Other platforms expose the same API and return `Unsupported` from `start`.
+
+Own a `Watcher`, call `start` with existing roots, and check the `Started`, `Unsupported` or `Error` result. Starting again stops the previous watch first. Use `drain` on the app thread to receive owned paths and rescan hints. Events are notifications to inspect current state, not a complete filesystem journal. Native coalescing can combine changes. Rename may report old and new paths.
+
+The macOS backend uses FSEvents on a private serial dispatch queue. It never calls application code from that queue. The event buffer is bounded; overflow produces one event with an empty path and `must_rescan = true`, meaning rescan all watched roots. Native dropped-event and root-change flags also request rescans. Choose the limit and latency through `Options`.
+
+Call start, stop and destruction from the owning app thread. `stop` waits for in-flight native callbacks and clears pending events; destruction calls stop. No callbacks can retain the watcher after stop. Filtering, debounce, Git state and refresh policy remain application-owned.
+
+## Input binding persistence
+
+Include `src/plugins/input_binding_codec.h`. `encode` and `decode` handle one binding; `encode_bindings` and `decode_bindings` handle an ordered binding list. Decoding returns `std::nullopt` for malformed data, unsupported versions/tags, unknown key/button/axis codes, invalid modifiers or invalid directions.
+
+The format uses versioned strings, suitable for a JSON array or another application-owned container. For example, `v1:key:65:3:1` records A with Shift+Ctrl and explicit modifiers. `v1:key:65:0:0` is a permissive A binding; `v1:key:65:0:1` requires no modifiers. All four current binding alternatives are supported. Numeric codes follow the shared afterhours key/gamepad codes.
+
+Decoding builds a separate complete list. Apply it to the active mapping only after successful decoding, so invalid input does not partially replace live bindings. Action names, layers, filenames, file containers and migrations from old application-specific formats remain caller-owned. This header adds no JSON dependency and is independent of binding display.
+
+`v1` identifies the library's binding wire format, independently of the app's settings schema version. It is not configurable: a decoder version must agree with the bytes it accepts. Apps may keep their own schema version around these strings or serialize the public `AnyInput` alternatives using a different codec. Using afterhours input does not require using this persistence format.
+
+## Input prompts
+
+Include `src/plugins/input_prompts.h`. Device activity belongs to the normal `InputCollector`: both the standard and layered collection systems update it while checking bindings, before alternatives are reduced to one action. Prompts read `collector.device_activity.preferred()`; they do not poll inputs or maintain a second input history. Activity uses the same deadzone-filtered axis samples as gameplay. Axis identity is the physical axis and controller, so two bindings for one action cannot hide a held axis from device tracking.
+
+Mapped key/button presses, new stick excursions and mouse clicks select the device. Incidental mouse motion and a held stick do not repeatedly switch prompts. Keyboard or mouse clicks win simultaneous activity. Unmapped keyboard or controller inputs do not affect prompts.
+
+Pass `prompt_for(mapping, action, collector, preference)` to read the current layer and bindings. `DevicePreference::pinned` optionally overrides presentation; reset it to resume automatic selection. It never disables device input. An unbound device returns `std::nullopt`. The result retains the typed binding for artwork or glyphs.
+
+English text is the default. `format_binding(binding, key_name)` accepts an app-owned key-name lookup, for example to show Return instead of Enter. `prompt_for` accepts an optional `BindingFormatter` for the entire binding. Use this for localization so modifier names, ordering and separators can follow the locale. The library does not impose a translation catalog or global mutable label map. Default gamepad labels describe button positions without assuming a controller brand. Persistence remains in a separate optional header.
+
+## Native dialogs
+
+Include `src/plugins/native_dialogs.h`. Compile `native_dialogs_macos.mm` and link Cocoa on macOS; compile `native_dialogs.cpp` elsewhere. The public types and calls are identical. Other platforms currently return `Unsupported`.
+
+Own a `native_dialogs::Queue` on the main thread. Submit a `Request` with `Kind::OpenFile`, `Kind::SaveFile` or `Kind::Directory`. Requests own their title, initial directory, default filename and extension filters.
+
+Call `process_pending()` from the application loop after ECS execution has returned, never inside a system, query iteration or widget callback. Submission does not open a dialog. Processing may enter the native modal event loop; recursive processing is ignored, and results stay unavailable until processing returns. Work submitted during processing waits for the next drain.
+
+Retrieve a result once with `take_result(id)`. Its alternatives are `Selected` with an owned path, `Cancelled`, `Unsupported`, and `Error` with a message. Cancellation does not modify application state. Selected paths are not read or written by the plugin. Keep the queue alive throughout processing.
+
+For tests, include `src/plugins/e2e_testing/native_dialog_responses.h`, create `testing::NativeDialogResponses`, push results, and construct the queue with `std::ref(responses)`. The responses object must outlive the queue. Each request consumes one response; exhaustion reports an error without opening an OS dialog. Tests can run with this provider on any platform.
+
+## Render capture formats
+
+Use `capture_render_texture_rgba` for owned RGBA8 pixels and physical pixel dimensions. Rows run from top to bottom; each row contains width times four bytes in red, green, blue, alpha order, without padding. Values are the stored render-target channels. The operation does not change their alpha convention.
+
+Use `capture_render_texture_png` for owned encoded PNG bytes. Both return `std::optional` and report failure with `std::nullopt`. The backend with no graphics support returns failure. Invalid or unloaded targets fail rather than returning an empty successful image.
+
+The older `capture_render_texture_to_memory` now consistently returns encoded PNG on both raylib and Metal, or an empty buffer on failure. Metal callers that previously indexed its raw bytes must move to `capture_render_texture_rgba`. The library's Metal tests have been migrated. The reviewed external caller in endless-dance-chaos supplies PNG screenshots to MCP and retains that behavior.
+
+Backend tests capture the same nonsquare target with a translucent red top and opaque blue bottom. They verify dimensions, channel order, orientation, alpha, legacy PNG signatures, byte-for-byte PNG decode versus RGBA, and failed readback. No CPU image editing or mutable texture upload API is added here.

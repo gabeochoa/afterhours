@@ -1,78 +1,15 @@
-# afterhours web example (sokol backend)
+# Sokol web example
 
-A small graphical afterhours demo — ECS entities bouncing around the window —
-that builds for the web (WebAssembly + WebGL2) using the **sokol** backend
-(`AFTER_HOURS_USE_METAL`). Sokol targets WebGL natively, so the web build is a
-single `emcc` command with no separate library to cross-compile.
+`main.cpp` runs bouncing ECS entities with `graphics::run`. `sokol_impl.cc` is the
+single SOKOL_IMPL/Fontstash translation unit. Build selects SOKOL_METAL on macOS or
+SOKOL_GLES3 on web; AFTER_HOURS_USE_METAL selects the Sokol adapter in both cases.
 
-The same source builds natively on macOS (where sokol uses Metal) for quick
-local testing.
+From this directory, `make` builds the macOS `demo`; `make web` produces
+index.html/js/wasm. Install and activate the Emscripten SDK and source its
+emsdk_env.sh first. `make serve` serves http://localhost:8000/index.html;
+WebAssembly needs HTTP, not file URLs.
 
-## How it's wired
-
-- `main.cpp` — the app. Selects the sokol backend, sets up an ECS
-  `MovementSystem`, and hands `init`/`frame` callbacks to
-  `afterhours::graphics::run(...)`. The backend owns the window and main loop;
-  on the web it drives the Emscripten `requestAnimationFrame` loop for you (no
-  `emscripten_set_main_loop` needed).
-- `sokol_impl.cc` — the single translation unit that compiles the sokol +
-  fontstash implementations (`SOKOL_IMPL`). The GPU backend is picked by the
-  build: `-DSOKOL_GLES3` for web, `-DSOKOL_METAL` (Objective-C++) for macOS.
-
-## Native build (macOS / Metal)
-
-```bash
-make          # -> ./demo
-./demo
-```
-
-## Web build (Emscripten / WebGL2)
-
-### Sokol (this example)
-
-This directory’s `Makefile` is the **sokol** path (`AFTER_HOURS_USE_METAL` +
-`SOKOL_GLES3`). See below.
-
-### Raylib games
-
-For raylib + afterhours, use the shared opt-in makefile instead of copying
-flags by hand:
-
-```make
-include vendor/afterhours/tools/web.mk
-```
-
-See the main [README](../../README.md#web-emscripten--raylib) for HEAPF32 /
-fullscreen / emsdk notes.
-
-### 1. Install the Emscripten SDK
-
-```bash
-git clone https://github.com/emscripten-core/emsdk.git
-cd emsdk && ./emsdk install latest && ./emsdk activate latest
-source ./emsdk_env.sh          # puts emcc on your PATH
-```
-
-### 2. Build
-
-From this directory (`examples/web`):
-
-```bash
-make web        # -> index.html, index.js, index.wasm
-```
-
-### 3. Run it
-
-Browsers won't load wasm over `file://`, so serve it over HTTP:
-
-```bash
-make serve      # then open http://localhost:8000/index.html
-```
-
-## Key flags (see the `Makefile`)
-
-- `-DAFTER_HOURS_USE_METAL` — selects the sokol backend (defined in `main.cpp`).
-- `-DSOKOL_GLES3` — sokol's WebGL2/GLES3 GPU backend (required for emscripten).
-- `-sUSE_WEBGL2=1 -sFULL_ES3=1` — enable WebGL2 in the emscripten runtime.
-- sokol renders into the page's default `<canvas id="canvas">`, so the stock
-  emcc HTML shell works out of the box.
+The Makefile enables WebGL2/GLES3. Sokol drives requestAnimationFrame; do not add
+another Emscripten main loop. The stock shell supplies canvas id `canvas`.
+Raylib applications instead use `tools/web.mk`; see the root
+[web setup](../../README.md#web-emscripten--raylib) for audio memory and fullscreen requirements.
