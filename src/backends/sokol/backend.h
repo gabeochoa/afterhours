@@ -185,19 +185,15 @@ inline void setup_sokol_gl_and_fonts() {
     return;
   }
 
-  // fontstash drops a glyph it cannot fit, and drops the measurement with it,
-  // so measure_text starts returning widths that are short or zero. Every
-  // wrap, hug and ellipsize is computed from that number, which makes a full
-  // atlas silent layout corruption whose only visible cause is a big font.
-  // Nothing registered this callback, so nobody found out.
+  // Fontstash drops glyph images that cannot fit. Measurement reads font
+  // advances separately, so exhaustion affects drawing without shortening layout.
   fonsSetErrorCallback(
       g_fons_ctx,
       [](void *, int error, int) {
         if (error == FONS_ATLAS_FULL) {
           warn_once(0,
                     "font atlas is full at {}x{}. Glyphs past this point are "
-                    "dropped AND measure text returns short or zero for them, "
-                    "so text will lay out wrong rather than look wrong. Raise "
+                    "not drawn. Text measurement remains available. Raise "
                     "AFTERHOURS_FONT_ATLAS_SIZE.",
                     AFTERHOURS_FONT_ATLAS_SIZE, AFTERHOURS_FONT_ATLAS_SIZE);
         } else {

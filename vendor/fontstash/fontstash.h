@@ -130,6 +130,7 @@ FONS_DEF float fonsDrawText(FONScontext* s, float x, float y, const char* string
 
 // Measure text
 FONS_DEF float fonsTextBounds(FONScontext* s, float x, float y, const char* string, const char* end, float* bounds);
+FONS_DEF float fonsTextAdvance(FONScontext* s, const char* string, const char* end);
 FONS_DEF void fonsLineBounds(FONScontext* s, float y, float* miny, float* maxy);
 FONS_DEF void fonsVertMetrics(FONScontext* s, float* ascender, float* descender, float* lineh);
 
@@ -1483,6 +1484,80 @@ FONS_DEF void fonsDrawDebug(FONScontext* stash, float x, float y)
 	}
 
 	fons__flush(stash);
+}
+
+static int fons__tt_glyphAdvance(FONSttFontImpl* font, int glyph, float size)
+{
+#ifdef FONS_USE_FREETYPE
+	FT_Fixed advance;
+	if (FT_Set_Pixel_Sizes(font->font, 0, (FT_UInt)(size * (float)font->font->units_per_EM / (float)(font->font->ascender - font->font->descender)))) return 0;
+	if (FT_Get_Advance(font->font, glyph, FT_LOAD_NO_SCALE, &advance)) return 0;
+	return (int)advance;
+#else
+	int advance, bearing;
+	FONS_NOTUSED(size);
+	stbtt_GetGlyphHMetrics(&font->font, glyph, &advance, &bearing);
+	return advance;
+#endif
+}
+
+FONS_DEF float fonsTextAdvance(FONScontext* stash, const char* str, const char* end)
+{
+	FONSstate* state;
+	FONSfont* font;
+	unsigned int codepoint, utf8state = 0;
+	int previous = -1;
+	short isize;
+	float size, scale, width = 0;
+	if (stash == NULL || str == NULL) return 0;
+	state = fons__getState(stash);
+	if (state->font < 0 || state->font >= stash->nfonts) return 0;
+	font = stash->fonts[state->font];
+	if (font->data == NULL) return 0;
+	isize = (short)(state->size * 10.0f);
+	if (isize < 2) return 0;
+	size = isize / 10.0f;
+	scale = fons__tt_getPixelHeightScale(&font->font, size);
+	if (end == NULL) end = str + strlen(str);
+	for (; str != end; ++str) {
+		FONSfont* renderFont = font;
+		int glyph, i;
+		short advance;
+		if (fons__decutf8(&utf8state, &codepoint, *(const unsigned char*)str)) continue;
+		FONSglyph* cached = NULL;
+		const unsigned int hash = fons__hashint(codepoint) & (FONS_HASH_LUT_SIZE - 1);
+		for (i = font->lut[hash]; i != -1; i = font->glyphs[i].next) {
+			FONSglyph* candidate = &font->glyphs[i];
+			if (candidate->codepoint != codepoint || candidate->size != isize || candidate->blur != (short)state->blur) continue;
+			cached = candidate;
+			break;
+		}
+		if (cached != NULL) {
+			glyph = cached->index;
+			advance = cached->xadv;
+		} else {
+			glyph = fons__tt_getGlyphIndex(&font->font, codepoint);
+			if (glyph == 0) {
+				for (i = 0; i < font->nfallbacks; ++i) {
+					FONSfont* fallback = stash->fonts[font->fallbacks[i]];
+					int index = fons__tt_getGlyphIndex(&fallback->font, codepoint);
+					if (index == 0) continue;
+					glyph = index;
+					renderFont = fallback;
+					break;
+				}
+			}
+			advance = (short)(fons__tt_getPixelHeightScale(&renderFont->font, size) *
+				fons__tt_glyphAdvance(&renderFont->font, glyph, size) * 10.0f);
+		}
+		if (previous != -1) {
+			float kern = fons__tt_getGlyphKernAdvance(&font->font, previous, glyph) * scale;
+			width += (int)(kern + state->spacing + 0.5f);
+		}
+		width += (int)(advance / 10.0f + 0.5f);
+		previous = glyph;
+	}
+	return width;
 }
 
 FONS_DEF float fonsTextBounds(FONScontext* stash,

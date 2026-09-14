@@ -84,7 +84,7 @@ inline Vector2Type measure_text(const Font font, const char *text,
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   // Advance, not the ink box: ink drops the side bearings, so text sized from
   // it comes up short and clips.
-  float w = fonsTextBounds(ctx, 0, 0, text, nullptr, nullptr) / dpi;
+  float w = fonsTextAdvance(ctx, text, nullptr) / dpi;
   float ascender, descender, lineh;
   fonsVertMetrics(ctx, &ascender, &descender, &lineh);
   const Vector2Type measured{w, lineh / dpi};

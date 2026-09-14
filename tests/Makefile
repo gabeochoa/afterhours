@@ -60,6 +60,7 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	font_atlas_measure_test \
 	ui_texture_lifecycle_test \
 	ui_update_lifecycle_test \
 	ui_update_lifecycle_single_test \
@@ -333,3 +334,5 @@ profiling-render-benchmark: $(OUT)/profiling_render_benchmark_on $(OUT)/profilin
 	$(OUT)/profiling_render_benchmark_on stopped 3000 "$(PROFILING_FONT)"
 	$(OUT)/profiling_render_benchmark_on record 3000 "$(PROFILING_FONT)"
 	$(OUT)/profiling_render_benchmark_on panel 3000 "$(PROFILING_FONT)"
+
+$(OUT)/font_atlas_measure_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
