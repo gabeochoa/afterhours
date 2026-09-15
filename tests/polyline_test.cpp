@@ -6,7 +6,22 @@
 #include <fmt/format.h>
 
 #include <afterhours/ah.h>
+#include <afterhours/src/drawing_helpers.h>
+
+#include <stdexcept>
+
+namespace afterhours {
+inline void bounded_draw_line(Vector2Type a, Vector2Type b, float thickness,
+                              Color color) {
+  if (capture::calls().size() >= 1000)
+    throw std::runtime_error("dash draw budget exceeded");
+  draw_line_ex(a, b, thickness, color);
+}
+} // namespace afterhours
+
+#define draw_line_ex bounded_draw_line
 #include <afterhours/src/polyline.h>
+#undef draw_line_ex
 
 #include <cmath>
 #include <cstdio>
@@ -75,6 +90,34 @@ int main() {
     std::vector<Vector2Type> line{{0.f, 0.f}, {100.f, 0.f}};
     polyline::draw_dashed(line, 1.f, Color{}, 10.f, 0.f);
     CHECK(capture::calls().size() == 10);
+  }
+
+  // Short curved cables can land just below a fractional dash boundary.
+  // Stop excess draws in the test before a regression allocates millions.
+  {
+    capture::clear();
+    const std::vector<Vector2Type> curve{
+        {0.f, 0.f}, {6.39941406f, 0.584088445f},
+        {10.7890625f, 0.743716359f}, {13.4560547f, 0.5250265f},
+        {14.6875f, -0.025838837f}, {14.7705078f, -0.862736821f},
+        {13.9921875f, -1.93952501f}, {12.6396484f, -3.21006107f},
+        {11.f, -4.62820148f}, {9.36035156f, -6.14780521f},
+        {8.0078125f, -7.72272825f}, {7.22949219f, -9.3068285f},
+        {7.3125f, -10.8539639f}, {8.54394531f, -12.3179913f},
+        {11.2109375f, -13.6527681f}, {15.6005859f, -14.8121519f},
+        {22.f, -15.75f}};
+    const float period = polyline::total_length(curve) / 2.5f;
+    const float dash = period * .28f;
+    try {
+      polyline::draw_dashed(curve, 2.f, Color{}, dash, period - dash);
+      CHECK(capture::calls().size() <= 20);
+      float inked_length = 0.f;
+      for (const auto &call : capture::calls())
+        inked_length += std::hypot(call.rect.width, call.rect.height);
+      CHECK(near(inked_length, 3.f * dash, .001f));
+    } catch (const std::runtime_error &) {
+      CHECK(false);
+    }
   }
 
   // Resampling: evenly spaced by DISTANCE, which is the whole point. A

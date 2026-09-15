@@ -76,9 +76,11 @@ inline void draw_dashed(const std::vector<Vector2Type> &pts, float thickness,
     return;
 
   const float period = dash + gap;
-  float travelled = std::fmod(phase, period);
-  if (travelled < 0.f)
-    travelled += period;
+  float in_period = std::fmod(phase, period);
+  if (in_period < 0.f)
+    in_period += period;
+  bool inked = in_period < dash;
+  float remaining = inked ? dash - in_period : period - in_period;
 
   for (size_t i = 0; i + 1 < pts.size(); i++) {
     const Vector2Type a = pts[i];
@@ -89,16 +91,18 @@ inline void draw_dashed(const std::vector<Vector2Type> &pts, float thickness,
 
     float t = 0.f;
     while (t < seg) {
-      const float in_period = std::fmod(travelled, period);
-      const bool inked = in_period < dash;
-      const float until_switch =
-          inked ? (dash - in_period) : (period - in_period);
-      const float run = std::min(until_switch, seg - t);
-      if (inked)
+      const float run = std::min(remaining, seg - t);
+      if (inked && run > 0.f)
         draw_line_ex(lerp(a, b, t / seg), lerp(a, b, (t + run) / seg),
                      thickness, color);
       t += run;
-      travelled += run;
+      remaining -= run;
+      // Switch explicitly: adding a tiny run to total arc length can round
+      // back to the same float and leave the pattern stuck at its boundary.
+      if (remaining <= 0.f) {
+        inked = !inked;
+        remaining = inked ? dash : gap;
+      }
     }
   }
 }
