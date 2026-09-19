@@ -60,6 +60,7 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	border_width_test \
 	checkbox_mark_test \
 	touch_target_test \
 	touch_target_single_test \
@@ -196,6 +197,7 @@ ALL_TESTS += sokol_include_order_test
 endif
 
 RAYLIB_TESTS := \
+	border_width_test \
 	text_visibility_test \
 	image_tint_test \
 	scroll_input_gate_test \

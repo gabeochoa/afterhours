@@ -1726,7 +1726,11 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     render_circular_progress(entity, draw_rect, effective_opacity);
 
     if (entity.has<HasBorder>()) {
-      const Border &border = entity.template get<HasBorder>().border;
+      Border border = entity.template get<HasBorder>().border;
+      for (auto *side : {&border.top, &border.right, &border.bottom, &border.left}) {
+        side->thickness = pixels(resolve_to_pixels(side->thickness, context.screen_height,
+            cmp.resolved_scaling_mode, context.theme.ui_scale));
+      }
       if (border.has_border()) {
         // Draw a dashed run of small rects along a side rect. Orientation is
         // inferred from aspect: wider-than-tall = horizontal, else vertical.
@@ -1754,8 +1758,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
           if (effective_opacity < 1.0f) {
             border_col = colors::opacity_pct(border_col, effective_opacity);
           }
-          draw_rectangle_rounded_lines(draw_rect, roundness, segments,
-                                       border_col, corner_settings);
+          draw_uniform_border(draw_rect, roundness, segments, corner_settings,
+                              border.uniform_thickness().value, border_col);
         } else {
           // Per-side (and uniform-dotted) border rendering
           float x = draw_rect.x, y = draw_rect.y;
@@ -2304,7 +2308,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
     // Border
     if (entity.has<HasBorder>()) {
-      const Border &border = entity.template get<HasBorder>().border;
+      Border border = entity.template get<HasBorder>().border;
+      for (auto *side : {&border.top, &border.right, &border.bottom, &border.left}) {
+        side->thickness = pixels(resolve_to_pixels(side->thickness, context.screen_height,
+            cmp.resolved_scaling_mode, context.theme.ui_scale));
+      }
       if (border.has_border()) {
         // Add a dashed run of small rects along a side rect. Orientation is
         // inferred from aspect: wider-than-tall = horizontal, else vertical.
@@ -2332,9 +2340,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           if (effective_opacity < 1.0f) {
             border_col = colors::opacity_pct(border_col, effective_opacity);
           }
-          buffer.add_rounded_rectangle_outline(draw_rect, border_col, roundness,
-                                               segments, corner_settings, layer,
-                                               entity.id);
+          buffer.add_border(draw_rect, border_col, roundness, segments, corner_settings,
+                            border.uniform_thickness().value, layer, entity.id);
         } else {
           // Per-side (and uniform-dotted) border rendering (filled rectangles)
           float x = draw_rect.x, y = draw_rect.y;

@@ -148,3 +148,5 @@ The check uses click/drag listener bounds after transforms, scrolling, ancestor 
 ## Checkbox marks
 
 `ui::imm::checkbox` draws a font-independent checkmark when checked and leaves the unchecked indicator empty. Marks use the existing text color, alignment and inset settings, scale with the control, and respect disabled styling and opacity. `with_checkbox_indicators("yes", "no")` supplies custom text; `("", "")` hides both indicators. See WM’s `checkboxes` screen.
+
+Uniform UI borders draw inside the component bounds at their configured width, with widths resolved for the component’s scaling mode. Rounded and mixed corners preserve the outer radius; oversized widths fill the available interior. Focus rings use separate outward outlines.

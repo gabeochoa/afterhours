@@ -10,6 +10,7 @@
 
 #include "../../memory/arena.h"
 #include "components.h"
+#include "border_rendering.h"
 #include "text_stroke.h"
 
 namespace afterhours {
@@ -17,6 +18,7 @@ namespace ui {
 
 enum class RenderPrimitiveType {
   Line,
+  Border,
   Rectangle,
   RoundedRectangle,
   RectangleOutline,
@@ -353,6 +355,14 @@ public:
         rect, fill, roundness, segments, corners, layer, entity_id, rotation));
   }
 
+  void add_border(RectangleType rect, Color color, float roundness, int segments,
+                  std::bitset<4> corners, float thickness, int layer, EntityID id) {
+    auto command = RenderPrimitive::rounded_rectangle_outline(
+        rect, color, roundness, segments, corners, layer, id, thickness);
+    command.type = RenderPrimitiveType::Border;
+    commands_.push_back(command);
+  }
+
   // Add rectangle outline
   void add_rectangle_outline(const RectangleType &rect, Color color, int layer,
                              EntityID entity_id = -1, float thickness = 0.0f) {
@@ -527,6 +537,13 @@ public:
       capture::Scope attribute(cmd.entity_id, cmd.layer);
 
       switch (cmd.type) {
+      case RenderPrimitiveType::Border: {
+        const auto &border = cmd.data.outline;
+        draw_uniform_border(border.rect, border.roundness, border.segments,
+                            border.corners, border.thickness, border.color);
+        ++i;
+        break;
+      }
       case RenderPrimitiveType::Line:
         draw_line_ex(cmd.data.line.start, cmd.data.line.end,
                      cmd.data.line.thickness, cmd.data.line.color);
