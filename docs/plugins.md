@@ -2,6 +2,27 @@
 
 All paths below are relative to afterhours. Include only the APIs you use.
 
+## Terminal
+
+Include `src/plugins/terminal/terminal.h`. Own a `terminal::Console` and register synchronous callbacks:
+
+```cpp
+terminal::Console console;
+console.add_command({"greet", "Say hello", [](terminal::Arguments args) {
+  if (args.size() != 1) return terminal::Result{"Usage: greet <name>", false};
+  return terminal::Result{"Hello, " + args[0]};
+}, {"world", "player"}});
+console.execute("greet world");
+```
+
+Or register a struct with `console.add_command(std::make_unique<MyCommand>())`. Inherit `terminal::CommandBase` and override `name()` and `help()` returning `std::string_view`, plus `run(Arguments)` returning `Result`. Optionally override `completions()`. The console owns the command; removal releases it after any active call returns. Metadata is copied at registration. WM's `TerminalDemo::CountCommand` demonstrates this alongside callback commands.
+
+`args.get<int>(0)` and `args.get<double>(0)` return an expected value or `ArgumentError::Missing` / `Invalid`. `args.get<int>(0, 1)` defaults only when missing. Numeric conversion consumes the entire argument, rejects overflow and nonfinite floats, and follows `std::from_chars` syntax: decimal integers, dot-decimal floats, no leading `+` or whitespace. Use `if (!value)` to check errors, then `*value`. Raw indexing and iteration still provide strings.
+
+`help` and `clear` are built in. Registration returns false for duplicate/reserved names or missing callbacks. Arguments support single/double quotes, empty strings and escaped quotes/backslashes; other backslashes remain literal. Argument views last only through the callback. Capture app state with a lifetime at least as long as the registered command; use `remove_command` when retiring it. Output and history default to 200 and 100 entries, configurable in the constructor.
+
+Call `terminal::panel(ctx, mk(parent), console, config)` during UI construction. It uses the existing UI input mapping: Enter runs, Up/Down recall history, Tab completes, Shift+Tab navigates, and Escape blurs. Supply an ordinary `ComponentConfig` for dimensions, font and background. Opening/closing an overlay and game-input blocking stay app-owned. For use without a renderer, include only `src/plugins/terminal/console.h`.
+
 ## Timing charts
 
 Include `src/plugins/charts.h` for backend-independent point bounds and nearest-sample lookup. Include `src/plugins/ui/line_chart.h` for `ui::imm::line_chart`.
