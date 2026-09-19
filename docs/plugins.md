@@ -21,7 +21,9 @@ Or register a struct with `console.add_command(std::make_unique<MyCommand>())`. 
 
 `help` and `clear` are built in. Registration returns false for duplicate/reserved names or missing callbacks. Arguments support single/double quotes, empty strings and escaped quotes/backslashes; other backslashes remain literal. Argument views last only through the callback. Capture app state with a lifetime at least as long as the registered command; use `remove_command` when retiring it. Output and history default to 200 and 100 entries, configurable in the constructor.
 
-Call `terminal::panel(ctx, mk(parent), console, config)` during UI construction. It uses the existing UI input mapping: Enter runs, Up/Down recall history, Tab completes, Shift+Tab navigates, and Escape blurs. Supply an ordinary `ComponentConfig` for dimensions, font and background. Opening/closing an overlay and game-input blocking stay app-owned. For use without a renderer, include only `src/plugins/terminal/console.h`.
+Call `terminal::panel(ctx, mk(parent), console, config)` during UI construction. Suggestions appear above the input while typing. Up/Down select; Tab, Enter, or clicking accepts without executing. Enter runs when no suggestions are open. Escape dismisses suggestions first, then blurs. Up/Down recall history when the list is closed; Shift+Tab navigates. Command names, `help` targets, and registered first-argument choices complete, including unfinished quotes. Supply an ordinary `ComponentConfig` for dimensions, font and background. Opening/closing an overlay and game-input blocking stay app-owned. For use without a renderer, include only `src/plugins/terminal/console.h`.
+
+Pass an optional fifth `AutocompleteStyle` argument to style one terminal. Its `list`, `row`, `selected_row`, and `description` fields accept ordinary `ComponentConfig` overrides. Selection overrides apply after row overrides. Defaults use flat rows with command/help columns and the current theme; no global theme changes are needed.
 
 ## Timing charts
 

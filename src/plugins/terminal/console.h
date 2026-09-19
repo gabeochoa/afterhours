@@ -14,6 +14,7 @@ namespace afterhours::terminal {
 class Console {
  public:
   std::string input;
+  bool enter_accepts_first_suggestion = true;
 
   explicit Console(size_t output_limit = 200, size_t history_limit = 100)
       : output_limit_(output_limit), history_limit_(history_limit) {}
@@ -24,7 +25,9 @@ class Console {
     for (unsigned char c : command.name)
       if (!std::isalnum(c) && c != '_' && c != '-' && c != '.') return false;
     auto name = command.name;
-    return commands_.emplace(std::move(name), std::move(command)).second;
+    const bool added = commands_.emplace(std::move(name), std::move(command)).second;
+    if (added) ++command_revision_;
+    return added;
   }
 
   bool add_command(std::unique_ptr<CommandBase> command) {
@@ -35,7 +38,12 @@ class Console {
                         owned->completions()});
   }
 
-  bool remove_command(const std::string &name) { return commands_.erase(name) != 0; }
+  bool remove_command(const std::string &name) {
+    if (!commands_.erase(name)) return false;
+    ++command_revision_;
+    return true;
+  }
+  size_t command_revision() const { return command_revision_; }
   const std::deque<Result> &output() const { return output_; }
   size_t output_revision() const { return output_revision_; }
   const std::deque<std::string> &history() const { return history_; }
@@ -65,21 +73,42 @@ class Console {
     return result;
   }
 
+  std::string_view command_help(std::string_view name) const {
+    if (name == "help") return "List commands or show help";
+    if (name == "clear") return "Clear output";
+    auto it = commands_.find(std::string(name));
+    if (it == commands_.end()) return {};
+    return it->second.help;
+  }
+
   std::vector<std::string> complete(std::string_view line) const {
-    const auto split = line.find_first_of(" \t");
+    const auto parsed = detail::parse(line, true);
+    const bool trailing_space = !line.empty() &&
+        std::isspace(static_cast<unsigned char>(line.back())) &&
+        detail::parse(line).error.empty();
     std::vector<std::string> matches;
-    if (split == std::string_view::npos) {
+    const auto &words = parsed.words;
+    if (words.empty() || (words.size() == 1 && !trailing_space)) {
+      const std::string_view prefix = words.empty() ? std::string_view{} : words[0];
       for (const auto &name : {"clear", "help"})
-        if (std::string_view(name).starts_with(line)) matches.emplace_back(name);
+        if (std::string_view(name).starts_with(prefix)) matches.emplace_back(name);
       for (const auto &[name, command] : commands_)
-        if (name.starts_with(line)) matches.push_back(name);
+        if (name.starts_with(prefix)) matches.push_back(name);
       std::sort(matches.begin(), matches.end());
       return matches;
     }
-    auto it = commands_.find(std::string(line.substr(0, split)));
+    if (words.size() > 2 || (words.size() == 2 && trailing_space)) return matches;
+    const std::string_view prefix = words.size() == 2 ? words[1] : std::string_view{};
+    if (words[0] == "help") {
+      for (const auto &name : {"clear", "help"})
+        if (std::string_view(name).starts_with(prefix)) matches.push_back(std::string("help ") + name);
+      for (const auto &[name, command] : commands_)
+        if (name.starts_with(prefix)) matches.push_back("help " + name);
+      std::sort(matches.begin(), matches.end());
+      return matches;
+    }
+    auto it = commands_.find(words[0]);
     if (it == commands_.end()) return matches;
-    const auto start = line.find_first_not_of(" \t", split);
-    const auto prefix = start == std::string_view::npos ? std::string_view{} : line.substr(start);
     for (const auto &option : it->second.completions) {
       if (!option.starts_with(prefix)) continue;
       std::ostringstream completed;
@@ -159,6 +188,7 @@ class Console {
   size_t output_limit_;
   size_t history_limit_;
   size_t output_revision_ = 0;
+  size_t command_revision_ = 0;
   size_t distance_ = 0;
   std::string draft_;
 };

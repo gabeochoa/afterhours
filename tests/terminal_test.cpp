@@ -1,4 +1,4 @@
-#include <afterhours/src/plugins/terminal/console.h>
+#include <afterhours/src/plugins/terminal/autocomplete.h>
 #include <cassert>
 #include <limits>
 
@@ -140,6 +140,11 @@ int main() {
   assert(!console.execute("clear extra").success);
   assert(console.execute("clear").success && console.output().empty());
 
+  assert(console.command_help("echo") == "echo <text>");
+  assert(console.command_help("help") == "List commands or show help");
+  assert(console.command_help("clear") == "Clear output");
+  assert(console.command_help("missing").empty());
+
   Console other;
   other.previous();
   other.next();
@@ -162,6 +167,65 @@ int main() {
   assert(other.input.empty() && !other.output().empty());
   other.next();
   assert(other.input.empty());
+
+  {
+    Console completing;
+    completing.add_command({"choose", "", [](Arguments args) { return Result{args[0]}; },
+                            {"two words", "two words", "two more", "it's fine", "a\"b"}});
+    assert((completing.complete("  ch") == std::vector<std::string>{"choose"}));
+    assert(completing.complete("choose \"two").size() == 2);
+    assert(completing.complete("choose 'two").size() == 2);
+    assert(completing.complete("choose two more").empty());
+    assert(completing.complete("choose 'two words' ").empty());
+    assert((completing.complete("help ch") == std::vector<std::string>{"help choose"}));
+    for (const auto &line : completing.complete("choose ")) assert(completing.execute(line).success);
+
+    detail::Autocomplete suggestions;
+    suggestions.refresh(completing);
+    assert(suggestions.matches.empty());
+    completing.input = "ch";
+    suggestions.refresh(completing);
+    assert(suggestions.matches.size() == 1);
+    const auto output_size = completing.output().size();
+    suggestions.accept(completing);
+    assert(completing.input == "choose ");
+    assert(completing.output().size() == output_size);
+    suggestions.refresh(completing);
+    assert(suggestions.matches.empty());
+    completing.input = "choose 'two";
+    suggestions.refresh(completing);
+    assert(suggestions.matches.size() == 2);
+    suggestions.move(false);
+    assert(suggestions.selected == 1);
+    suggestions.move(true);
+    assert(suggestions.selected == 0);
+    suggestions.dismiss(completing);
+    suggestions.refresh(completing);
+    assert(suggestions.matches.empty());
+    suggestions.refresh(completing, true);
+    assert(suggestions.matches.size() == 2);
+    completing.input = "choose 'two words'";
+    suggestions.refresh(completing);
+    assert(suggestions.matches.empty());
+    completing.input = "new";
+    suggestions.refresh(completing);
+    assert(suggestions.matches.empty());
+    completing.add_command({"new_command", "", [](Arguments) { return Result{}; }});
+    suggestions.refresh(completing);
+    assert(suggestions.matches.size() == 1);
+    completing.remove_command("new_command");
+    suggestions.refresh(completing);
+    assert(suggestions.matches.empty());
+    completing.input.clear();
+    suggestions.refresh(completing, true);
+    assert(suggestions.matches.size() == 3);
+    completing.add_command({"choose_more", "", [](Arguments) { return Result{}; }});
+    completing.input = "choose";
+    suggestions.refresh(completing);
+    assert(suggestions.matches.empty());
+    suggestions.refresh(completing, true);
+    assert(suggestions.matches.size() == 2);
+  }
 
   Console disabled(0, 0);
   disabled.execute("help");

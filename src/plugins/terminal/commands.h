@@ -37,7 +37,7 @@ struct ParsedLine {
   std::string error;
 };
 
-inline ParsedLine parse(std::string_view line) {
+inline ParsedLine parse(std::string_view line, bool allow_unclosed = false) {
   ParsedLine result;
   std::string word;
   char quote = 0;
@@ -69,7 +69,7 @@ inline ParsedLine parse(std::string_view line) {
     started = true;
     word += c;
   }
-  if (quote) return {{}, "Unclosed quote"};
+  if (quote && !allow_unclosed) return {{}, "Unclosed quote"};
   if (started) result.words.push_back(std::move(word));
   return result;
 }

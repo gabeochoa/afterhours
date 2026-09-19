@@ -1,13 +1,22 @@
 #pragma once
 
-#include "console.h"
+#include "autocomplete.h"
 #include "../ui/text_input/component.h"
 
 namespace afterhours::terminal {
 
+struct AutocompleteStyle {
+  ui::imm::ComponentConfig list;
+  ui::imm::ComponentConfig row;
+  ui::imm::ComponentConfig selected_row;
+  ui::imm::ComponentConfig description;
+};
+
 namespace detail {
 
 struct PanelState : BaseComponent {
+  Autocomplete autocomplete;
+  std::vector<EntityID> suggestion_ids;
   bool focus_requested = true;
   EntityID input_id = -1;
   EntityID field_id = -1;
@@ -19,7 +28,8 @@ struct PanelState : BaseComponent {
 
 inline auto panel(ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent parent,
                   Console &console,
-                  ui::imm::ComponentConfig config = {}) {
+                  ui::imm::ComponentConfig config = {},
+                  const AutocompleteStyle &autocomplete_style = {}) {
   using namespace ui;
   using namespace ui::imm;
   using Action = typename std::remove_reference_t<decltype(ctx)>::value_type;
@@ -28,16 +38,32 @@ inline auto panel(ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent parent,
 
   const bool focused = state.input_id >= 0 &&
       (ctx.has_focus(state.input_id) || ctx.has_focus(state.field_id));
-  bool submit = false;
+  auto &completion = state.autocomplete;
+  completion.refresh(console);
+  const bool suggestion_active = std::any_of(state.suggestion_ids.begin(),
+      state.suggestion_ids.end(), [&](EntityID id) { return ctx.has_focus(id) || ctx.was_hot(id); });
+  if (!focused && !suggestion_active && !state.focus_requested) completion.dismiss(console);
   if (focused) {
-    if (ctx.pressed(Action::WidgetUp)) console.previous();
-    if (ctx.pressed(Action::WidgetDown)) console.next();
-    if (!ctx.is_held_down(Action::WidgetMod) && ctx.pressed(Action::WidgetNext)) {
-      console.complete_input();
+    if (!completion.matches.empty() && ctx.pressed(Action::MenuBack)) completion.dismiss(console);
+    if (ctx.pressed(Action::WidgetUp)) {
+      if (!completion.matches.empty()) completion.move(false);
+      else { console.previous(); completion.dismiss(console); }
     }
-    submit = ctx.pressed(Action::WidgetPress);
+    if (ctx.pressed(Action::WidgetDown)) {
+      if (!completion.matches.empty()) completion.move(true);
+      else { console.next(); completion.dismiss(console); }
+    }
+    if (!ctx.is_held_down(Action::WidgetMod) && ctx.pressed(Action::WidgetNext)) {
+      if (completion.matches.empty()) completion.refresh(console, true);
+      completion.accept(console);
+    }
+    if (ctx.pressed(Action::WidgetPress)) {
+      if (!completion.matches.empty() &&
+          (console.enter_accepts_first_suggestion || completion.explicitly_selected))
+        completion.accept(console);
+      else console.submit();
+    }
   }
-  if (submit) console.submit();
 
   if (config.size.is_default) config.with_size({percent(1.f), h720(420.f)});
   if (config.font_size_is_default) config.with_font_size(h720(20.f));
@@ -70,6 +96,70 @@ inline auto panel(ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent parent,
     scroll.scroll_offset.y = std::max(0.f, scroll.content_size.y - scroll.viewport_or_zero().y);
     scroll.scroll_target.y = scroll.scroll_offset.y;
     --state.follow_frames;
+  }
+
+  state.suggestion_ids.clear();
+  if (!completion.matches.empty()) {
+    const size_t visible = std::min(size_t{5}, completion.matches.size());
+    const size_t first = completion.selected >= visible ? completion.selected - visible + 1 : 0;
+    const float scale = ctx.screen_height / 720.f;
+    auto list_config = child
+        .with_size({percent(1.f), children()})
+        .with_border_top(ctx.theme.control_border(ctx.theme.surface), pixels(1.f))
+        .with_padding(Padding{.top = h720(8.f), .bottom = h720(4.f)})
+        .with_corner_radius(0)
+        .apply_overrides(autocomplete_style.list)
+        .with_flex_direction(FlexDirection::Column)
+        .with_debug_name("terminal_suggestions");
+    auto suggestions = div(ctx, mk(root.ent(), 2), list_config);
+    for (size_t i = first; i < first + visible; ++i) {
+      const bool selected = i == completion.selected;
+      auto row_config = ComponentConfig{}
+          .with_font(config.font_name, config.font_size)
+          .with_render_layer(config.render_layer)
+          .with_size({percent(1.f), h720(32.f)})
+          .with_padding(Padding::all(pixels(0.f)))
+          .with_text_inset(10.f * scale, 0.f)
+          .with_corner_radius(0)
+          .with_transparent_bg().with_custom_hover_bg(ctx.theme.secondary)
+          .with_custom_text_color(ctx.theme.font)
+          .apply_overrides(autocomplete_style.row);
+      if (selected) {
+        row_config.with_custom_text_color(ctx.theme.accent)
+            .with_border_left(ctx.theme.accent, h720(2.f));
+        row_config = row_config.apply_overrides(autocomplete_style.selected_row);
+      }
+      auto option = button(ctx, mk(suggestions.ent(), static_cast<int>(i)), row_config
+          .with_flex_direction(FlexDirection::Row).with_alignment(TextAlignment::Left)
+          .with_skip_tabbing(true)
+          .with_debug_name("terminal_suggestion_" + std::to_string(i)));
+      auto text_config = ComponentConfig::inherit_from(row_config)
+          .with_custom_text_color(row_config.custom_text_color.value_or(ctx.theme.font))
+          .with_text_inset(row_config.text_inset->x, row_config.text_inset->y)
+          .with_transparent_bg().with_ignore_pointer_events()
+          .with_render_layer(config.render_layer)
+          .with_alignment(TextAlignment::Left).with_text_overflow(TextOverflow::Ellipsis);
+      text_config.border_config.reset();
+      div(ctx, mk(option.ent(), 0), text_config
+          .with_size({percent(0.22f), percent(1.f)})
+          .with_label(completion.matches[i])
+          .with_debug_name("terminal_suggestion_name_" + std::to_string(i)));
+      const std::string_view match = completion.matches[i];
+      const auto command_name = match.substr(0, match.find(' '));
+      auto description_config = text_config;
+      if (!selected) description_config.with_custom_text_color(ctx.theme.font_muted);
+      div(ctx, mk(option.ent(), 1), description_config
+          .apply_overrides(autocomplete_style.description)
+          .with_size({expand(), percent(1.f)})
+          .with_label(std::string(console.command_help(command_name)))
+          .with_debug_name("terminal_suggestion_description_" + std::to_string(i)));
+      state.suggestion_ids.push_back(option.ent().id);
+      if (!option) continue;
+      completion.selected = i;
+      completion.accept(console);
+      state.focus_requested = true;
+      break;
+    }
   }
 
   auto row = div(ctx, mk(root.ent(), 1), ComponentConfig{}
