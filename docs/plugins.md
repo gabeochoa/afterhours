@@ -118,3 +118,9 @@ Backend tests capture the same nonsquare target with a translucent red top and o
 `key Cmd+A` holds the actual Super modifier (Command on macOS, Windows/Super elsewhere). `Cmd`, `Super`, `Win` and `Meta` are case-insensitive aliases; `Ctrl` remains Control and `Option` means Alt. Combine modifiers with `+`. Scripts that intended Control must use `Ctrl+`, not `Cmd+`.
 
 The action key emits one delayed press; modifiers are held without press events. The handler releases the chord after two frames. Reset, skip and timeout clear injected input.
+
+## E2E arguments
+
+Quote arguments containing spaces: `assert_ui header "text=My Project" hidden=false` or `assert_ui header text="My Project"`. Inside double quotes, `\"` means a literal quote and `\\` means a backslash. Other backslash sequences stay literal; `""` is an empty argument. Unclosed quotes fail the script with its line number.
+
+Text commands such as `type`, `expect_text` and the value in `expect_input_text` still accept the unquoted rest of the line verbatim. To use escapes there, quote the entire text. Custom handlers receive decoded arguments and should not tokenize them again.

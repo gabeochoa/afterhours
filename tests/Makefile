@@ -60,6 +60,7 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	e2e_arguments_test \
 	scrollbar_render_test \
 	scroll_input_gate_test \
 	command_picker_test \

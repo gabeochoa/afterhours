@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -31,9 +32,54 @@ struct ParsedCommand {
     float wait_seconds = 0.0f;  // Time to wait after this command
     // Ticks to wait, counted rather than timed. `wait_frames` means frames.
     int wait_ticks = 0;
+    std::string parse_error;
 };
 
 namespace detail {
+
+struct ScriptArguments {
+    std::istream &input;
+    std::string error;
+
+    bool empty() {
+        input >> std::ws;
+        return input.peek() == std::char_traits<char>::eof();
+    }
+
+    std::string next() {
+        if (empty()) return {};
+        std::string result;
+        bool quoted = false;
+        while (input.peek() != std::char_traits<char>::eof()) {
+            const char ch = static_cast<char>(input.peek());
+            if (!quoted && std::isspace(static_cast<unsigned char>(ch))) break;
+            input.get();
+            if (ch == '"') {
+                quoted = !quoted;
+                continue;
+            }
+            if (quoted && ch == '\\' && (input.peek() == '"' || input.peek() == '\\')) {
+                result += static_cast<char>(input.get());
+                continue;
+            }
+            result += ch;
+        }
+        if (quoted) error = "Unclosed double quote";
+        return result;
+    }
+
+    std::string rest() {
+        if (empty()) return {};
+        if (input.peek() != '"') {
+            std::string result;
+            std::getline(input, result);
+            return result;
+        }
+        auto result = next();
+        if (!empty() && error.empty()) error = "Unexpected argument after quoted text";
+        return result;
+    }
+};
 
 // constexpr helper to check if a value is in an array
 template<typename T, std::size_t N>
@@ -85,6 +131,7 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
 
     while (std::getline(file, line)) {
         line_num++;
+        if (!line.empty() && line.back() == '\r') line.pop_back();
         size_t start = line.find_first_not_of(" \t");
         if (start == std::string::npos) continue;
         line = line.substr(start);
@@ -95,25 +142,17 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
         std::istringstream iss(line);
         iss >> cmd.name;
 
-        auto parse_quoted = [&]() {
-            std::string result;
-            std::getline(iss >> std::ws, result);
-            if (!result.empty() && result.front() == '"')
-                result = result.substr(1);
-            if (!result.empty() && result.back() == '"') result.pop_back();
-            return result;
-        };
+        detail::ScriptArguments args{iss, {}};
 
         // Determine command type and parse accordingly
         // Wait times in seconds (assuming ~60fps for frame-based defaults)
         constexpr float frame = 1.0f / 60.0f;
 
         if (cmd.name == "type") {
-            cmd.args.push_back(parse_quoted());
+            cmd.args.push_back(args.rest());
             cmd.wait_seconds = (cmd.args[0].size() + 2) * frame;
         } else if (cmd.name == "key" || cmd.name == "select_all") {
-            std::string arg;
-            iss >> arg;
+            std::string arg = args.next();
             if (cmd.name == "select_all") {
                 arg = "CTRL+A";
                 cmd.name = "key";
@@ -121,8 +160,7 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
             cmd.args.push_back(arg);
             cmd.wait_seconds = 3 * frame;
         } else if (detail::contains(detail::coord_commands, cmd.name)) {
-            std::string x_str, y_str;
-            iss >> x_str >> y_str;
+            std::string x_str = args.next(), y_str = args.next();
             cmd.args.push_back(x_str);
             cmd.args.push_back(y_str);
             cmd.wait_seconds = (cmd.name == "double_click")   ? 6 * frame
@@ -130,87 +168,74 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
                                : (cmd.name == "mouse_move") ? 1 * frame
                                                             : 2 * frame;
         } else if (cmd.name == "drag" || cmd.name == "drag_to") {
-            std::string x1, y1, x2, y2;
-            iss >> x1 >> y1 >> x2 >> y2;
+            std::string x1 = args.next(), y1 = args.next();
+            std::string x2 = args.next(), y2 = args.next();
             cmd.args.push_back(x1);
             cmd.args.push_back(y1);
             cmd.args.push_back(x2);
             cmd.args.push_back(y2);
             cmd.wait_seconds = (cmd.name == "drag_to") ? 10 * frame : 5 * frame;
         } else if (cmd.name == "resize") {
-            std::string w_str, h_str;
-            iss >> w_str >> h_str;
+            std::string w_str = args.next(), h_str = args.next();
             cmd.args.push_back(w_str);
             cmd.args.push_back(h_str);
             cmd.wait_seconds = 5 * frame;
         } else if (cmd.name == "wait") {
             float seconds = 1.0f;
-            iss >> seconds;
+            std::istringstream(args.next()) >> seconds;
             if (seconds <= 0) seconds = 1.0f;
             cmd.args.push_back(std::to_string(seconds));
             cmd.wait_seconds = seconds;
         } else if (cmd.name == "wait_frames") {
             int frames = 1;
-            iss >> frames;
+            std::istringstream(args.next()) >> frames;
             if (frames <= 0) frames = 1;
             // Frames, not the seconds those frames would take at 60Hz. The
             // host decides its own tick rate, and --time-scale changes dt, so
             // a duration here made the count depend on both.
             cmd.wait_ticks = frames;
         } else if (cmd.name == "validate") {
-            std::string rest;
-            std::getline(iss >> std::ws, rest);
+            const bool quoted = !args.empty() && iss.peek() == '"';
+            const std::string rest = args.rest();
             size_t eq = rest.find('=');
             if (eq != std::string::npos) {
                 cmd.args.push_back(rest.substr(0, eq));
-                cmd.args.push_back(rest.substr(eq + 1));
+                std::string value = rest.substr(eq + 1);
+                if (!quoted && !value.empty() && value.front() == '"') {
+                    std::istringstream value_stream(value);
+                    detail::ScriptArguments value_args{value_stream, {}};
+                    value = value_args.rest();
+                    args.error = value_args.error;
+                }
+                cmd.args.push_back(std::move(value));
             }
             cmd.wait_seconds = 1 * frame;
         } else if (cmd.name == "expect_text" || cmd.name == "expect_text_i" ||
                    cmd.name == "expect_no_text") {
-            cmd.args.push_back(parse_quoted());
+            cmd.args.push_back(args.rest());
             cmd.wait_seconds = 1 * frame;
         } else if (cmd.name == "expect_selected_text") {
-            std::string name;
-            iss >> name;
+            std::string name = args.next();
             cmd.args.push_back(name);
-            cmd.args.push_back(parse_quoted());
+            cmd.args.push_back(args.rest());
             cmd.wait_seconds = 1 * frame;
         } else if (cmd.name == "double_click_ui" ||
                    cmd.name == "triple_click_ui") {
             // name plus an optional dx dy offset from the element's top left;
             // no offset means its centre.
-            std::string name, dx, dy;
-            iss >> name >> dx >> dy;
+            std::string name = args.next(), dx = args.next(), dy = args.next();
             cmd.args.push_back(name);
             cmd.args.push_back(dx.empty() ? "center" : dx);
             cmd.args.push_back(dy.empty() ? "center" : dy);
             cmd.wait_seconds =
                 (cmd.name == "triple_click_ui" ? 12 : 8) * frame;
         } else if (cmd.name == "expect_input_text") {
-            std::string name;
-            iss >> name;
+            std::string name = args.next();
             cmd.args.push_back(name);
-            cmd.args.push_back(parse_quoted());
+            cmd.args.push_back(args.rest());
             cmd.wait_seconds = 1 * frame;
-        } else if (cmd.name == "assert_ui_text") {
-            std::string text;
-            iss >> std::ws;
-            if (iss.peek() == '"') {
-                iss.get();
-                std::getline(iss, text, '"');
-            } else {
-                iss >> text;
-            }
-            cmd.args.push_back(text);
-            std::string arg;
-            while (iss >> arg) {
-                cmd.args.push_back(arg);
-            }
-            cmd.wait_seconds = 2 * frame;
         } else if (cmd.name == "screenshot") {
-            std::string name;
-            iss >> name;
+            std::string name = args.next();
             cmd.args.push_back(name);
             cmd.wait_seconds = 1 * frame;
         } else if (cmd.name == "assert_no_overflow") {
@@ -221,34 +246,24 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
         } else if (detail::contains(detail::no_arg_commands, cmd.name)) {
             cmd.wait_seconds = 2 * frame;
         } else if (cmd.name == "arrow") {
-            std::string dir;
-            iss >> dir;
+            std::string dir = args.next();
             cmd.args.push_back(dir);
             cmd.wait_seconds = 2 * frame;
         } else if (detail::contains(detail::single_arg_commands, cmd.name)) {
-            std::string arg = parse_quoted();
-            if (!arg.empty()) cmd.args.push_back(arg);
+            if (!args.empty()) cmd.args.push_back(args.rest());
             cmd.wait_seconds = 2 * frame;
-        } else if (detail::contains(detail::two_arg_commands, cmd.name)) {
-            std::string arg1, arg2;
-            iss >> arg1 >> arg2;
-            if (!arg1.empty()) cmd.args.push_back(arg1);
-            if (!arg2.empty()) cmd.args.push_back(arg2);
-            cmd.wait_seconds = 2 * frame;
-        } else if (detail::contains(detail::three_arg_commands, cmd.name)) {
-            std::string arg1, arg2, arg3;
-            iss >> arg1 >> arg2 >> arg3;
-            if (!arg1.empty()) cmd.args.push_back(arg1);
-            if (!arg2.empty()) cmd.args.push_back(arg2);
-            if (!arg3.empty()) cmd.args.push_back(arg3);
+        } else if (detail::contains(detail::two_arg_commands, cmd.name) ||
+                   detail::contains(detail::three_arg_commands, cmd.name)) {
+            const size_t count = detail::contains(detail::two_arg_commands, cmd.name) ? 2 : 3;
+            while (cmd.args.size() < count && !args.empty())
+                cmd.args.push_back(args.next());
             cmd.wait_seconds = 2 * frame;
         } else {
-            std::string arg;
-            while (iss >> arg) {
-                cmd.args.push_back(arg);
-            }
+            while (!args.empty()) cmd.args.push_back(args.next());
             cmd.wait_seconds = 2 * frame;
         }
+        cmd.parse_error = args.error;
+        if (!cmd.parse_error.empty()) cmd.args.clear();
 
         cmds.push_back(cmd);
     }
@@ -507,6 +522,13 @@ class E2ERunner {
 
    private:
     void dispatch_command(const ParsedCommand &cmd) {
+        if (!cmd.parse_error.empty()) {
+            log_warn("[E2E ERROR] {}:{}: {}: {}", current_script_name(),
+                     cmd.line_number, cmd.name, cmd.parse_error);
+            failed_ = true;
+            current_script_errors_++;
+            return;
+        }
         auto &entity = EntityHelper::createEntity();
         auto &pending = entity.addComponent<PendingE2ECommand>();
         pending.name = cmd.name;
