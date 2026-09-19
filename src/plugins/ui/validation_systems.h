@@ -32,6 +32,7 @@
 #include "components.h"
 #include "context.h"
 #include "theme.h"
+#include "systems.h"
 #include "ui_collection.h"
 #include "validation_config.h"
 
@@ -44,10 +45,69 @@ namespace validation {
 // ============================================================
 
 // Clears validation violations from previous frame
-struct ClearViolations : System<ValidationViolation> {
-  virtual void for_each_with(Entity &entity, ValidationViolation &,
-                             float) override {
-    entity.removeComponent<ValidationViolation>();
+struct ClearViolations : System<> {
+  bool should_iterate() const override { return false; }
+
+  void once(float) override {
+    for (Entity &entity : EntityQuery(UICollectionHolder::get().collection)
+                              .whereHasComponent<ValidationViolation>().gen())
+      entity.removeComponent<ValidationViolation>();
+  }
+};
+
+struct ValidateMinTouchTarget : System<> {
+  bool should_iterate() const override { return false; }
+
+  void once(float) override {
+    const auto &config = imm::UIStylingDefaults::get().get_validation_config();
+    if (!config.enforce_min_touch_target || config.mode == ValidationMode::Silent)
+      return;
+
+    const auto &resolution = EntityHelper::get_singleton_cmp<
+        window_manager::ProvidesCurrentResolution>()->current_resolution;
+    const RectangleType screen{0, 0, static_cast<float>(resolution.width),
+                               static_cast<float>(resolution.height)};
+    for (Entity &entity : EntityQuery(UICollectionHolder::get().collection)
+                              .whereHasComponent<UIComponent>().gen()) {
+      if (entity.cleanup ||
+          (!entity.has<HasClickListener>() && !entity.has<HasDragListener>()) ||
+          entity.has<IgnorePointerEvents>())
+        continue;
+      const auto &cmp = entity.get<UIComponent>();
+      if (!cmp.was_rendered_to_screen || excluded(entity))
+        continue;
+      const auto rect = ui::detail::intersect_rects(
+          ui::detail::hit_rect(entity, cmp), screen);
+      if (rect.width <= 0 || rect.height <= 0)
+        continue;
+      if (rect.width >= config.min_touch_target_size &&
+          rect.height >= config.min_touch_target_size)
+        continue;
+      const auto message = fmt::format("Clickable area {}x{} is below {}x{}",
+          rect.width, rect.height, config.min_touch_target_size,
+          config.min_touch_target_size);
+      report_violation(config, "MinTouchTarget", message, entity.id);
+      if (config.highlight_violations)
+        entity.addComponentIfMissing<ValidationViolation>(message, "MinTouchTarget", 1.f);
+    }
+  }
+
+private:
+  static bool excluded(const Entity &entity) {
+    const Entity *current = &entity;
+    for (int depth = 0; current && depth < 64; ++depth) {
+      if (current->has<ShouldHide>() ||
+          (current->has<HasLabel>() && current->get<HasLabel>().is_disabled))
+        return true;
+      if (!current->has<UIComponent>())
+        return false;
+      const auto &cmp = current->get<UIComponent>();
+      if (cmp.should_hide)
+        return true;
+      auto parent = UICollectionHolder::getEntityForID(cmp.parent);
+      current = parent.valid() ? &parent.asE() : nullptr;
+    }
+    return false;
   }
 };
 
@@ -785,9 +845,15 @@ struct RenderOverlay : System<UIContext<InputAction>> {
     if (!config.highlight_violations)
       return;
 
+    const auto &resolution = EntityHelper::get_singleton_cmp<
+        window_manager::ProvidesCurrentResolution>()->current_resolution;
+    const RectangleType screen{0, 0, static_cast<float>(resolution.width),
+                               static_cast<float>(resolution.height)};
+
     // Find all entities with validation violations
     auto violations =
-        EntityQuery().whereHasComponent<ValidationViolation>().gen();
+        EntityQuery(UICollectionHolder::get().collection)
+            .whereHasComponent<ValidationViolation>().gen();
 
     for (Entity &entity : violations) {
       if (!entity.has<UIComponent>())
@@ -798,12 +864,10 @@ struct RenderOverlay : System<UIContext<InputAction>> {
         continue;
 
       const ValidationViolation &violation = entity.get<ValidationViolation>();
-      RectangleType rect = cmp.rect();
-
-      // Apply any modifiers
-      if (entity.has<HasUIModifiers>()) {
-        rect = entity.get<HasUIModifiers>().apply_modifier(rect);
-      }
+      const RectangleType rect = ui::detail::intersect_rects(
+          ui::detail::hit_rect(entity, cmp), screen);
+      if (rect.width <= 0 || rect.height <= 0)
+        continue;
 
       // Color based on severity (red for critical, orange for medium, yellow
       // for low)
@@ -855,6 +919,7 @@ struct RenderOverlay : System<UIContext<InputAction>> {
 static void register_update_systems(SystemManager &sm) {
   // Clear previous frame's violations first
   sm.register_update_system(std::make_unique<ClearViolations>());
+  sm.register_update_system(std::make_unique<ValidateMinTouchTarget>());
 
   // Run validation checks (these only do work if enabled in ValidationConfig)
   sm.register_update_system(std::make_unique<ValidateScreenBounds>());
@@ -881,6 +946,7 @@ template <typename InputAction>
 static void register_systems(SystemManager &sm) {
   // Register update systems (validation checks)
   sm.register_update_system(std::make_unique<ClearViolations>());
+  sm.register_update_system(std::make_unique<ValidateMinTouchTarget>());
   sm.register_update_system(std::make_unique<ValidateScreenBounds>());
   sm.register_update_system(std::make_unique<ValidateChildContainment>());
   sm.register_update_system(std::make_unique<ValidateComponentContrast>());

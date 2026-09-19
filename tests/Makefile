@@ -60,6 +60,8 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	touch_target_test \
+	touch_target_single_test \
 	font_tier_scaling_test \
 	text_visibility_test \
 	image_tint_test \
@@ -271,6 +273,9 @@ $(OUT)/%: %.cpp
 # Exceptions. A rule with prerequisites and no recipe adds to the pattern rule
 # above instead of replacing it.
 $(OUT)/ui_update_lifecycle_single_test: ui_update_lifecycle_single_test.cpp
+	$(CXX) $(CXXFLAGS_T) $(DEPFLAGS) $(INCLUDES_T) $< $(LDFLAGS_T) -o $@
+
+$(OUT)/touch_target_single_test: touch_target_single_test.cpp
 	$(CXX) $(CXXFLAGS_T) $(DEPFLAGS) $(INCLUDES_T) $< $(LDFLAGS_T) -o $@
 
 $(OUT)/entity_mapping_test: ../examples/entity_mapping_test_helper.cpp

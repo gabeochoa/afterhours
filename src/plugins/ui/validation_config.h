@@ -79,10 +79,6 @@ struct ValidationConfig {
   float max_corner_radius_px = 24.0f;
 
   // === Accessibility: Touch/Click Targets (Design Rules Section T) ===
-  // TODO: Implement validation system for this flag. Flag interactive elements
-  // (HasClickListener, HasCheckboxState, HasToggleSwitchState, HasSliderState)
-  // whose hit rect is smaller than min_touch_target_size on either axis.
-  // See docs/a11y_checklist_validation_mapping.md for full spec.
   bool enforce_min_touch_target = false;
   float min_touch_target_size = 44.0f;
 

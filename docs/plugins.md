@@ -138,3 +138,9 @@ Use `assert_ui row_name text="Label"` to check the label's value even when it is
 ## Font tiers and zoom
 
 `with_font_size(FontSize::Medium)` and `with_font("Inter", FontSize::Medium)` use the theme's tier size. Adaptive mode multiplies it by `ui_scale`; Proportional mode scales it from the 720px reference height. Component mode overrides screen mode, which overrides the app default. Explicit `pixels(...)` and `h720(...)` sizes retain their units. Config copies preserve both interpretations until measurement or rendering.
+
+## Minimum touch targets
+
+Set `enforce_min_touch_target = true` in `UIStylingDefaults::get().get_validation_config_mut()`, with `mode = ValidationMode::Warn`. `min_touch_target_size` defaults to 44 UI pixels on each axis, measured after layout and zoom. `highlight_violations` enables outlines.
+
+The check uses click/drag listener bounds after transforms, scrolling, ancestor clipping and window clipping. Hidden, disabled, pointer-ignored and fully clipped controls are excluded. Partially clipped controls use their remaining clickable area. Register validation updates after UI layout and the overlay after UI rendering, before ending the frame. Both collection modes are supported.
