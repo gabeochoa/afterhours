@@ -34,6 +34,7 @@ inline auto panel(ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent parent,
   using namespace ui::imm;
   using Action = typename std::remove_reference_t<decltype(ctx)>::value_type;
 
+  const auto name = config.debug_name.empty() ? std::string("terminal") : config.debug_name;
   auto &state = deref(parent).first.template addComponentIfMissing<detail::PanelState>();
 
   const bool focused = state.input_id >= 0 &&
@@ -79,7 +80,7 @@ inline auto panel(ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent parent,
       .with_size({percent(1.f), expand()})
       .with_flex_direction(FlexDirection::Column)
       .with_overflow(Overflow::Scroll, Axis::Y)
-      .with_debug_name("terminal_output"));
+      .with_debug_name(name + "_output"));
   int index = 0;
   for (const auto &line : console.output()) {
     div(ctx, mk(output.ent(), index++), ComponentConfig{}
@@ -89,7 +90,7 @@ inline auto panel(ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent parent,
         .with_label(line.text).with_alignment(TextAlignment::Left)
         .with_custom_text_color(line.success ? ctx.theme.font : ctx.theme.error)
         .with_transparent_bg().with_ignore_pointer_events()
-        .with_debug_name("terminal_line"));
+        .with_debug_name(name + "_line"));
   }
   if (state.follow_frames > 0 && output.ent().template has<HasScrollView>()) {
     auto &scroll = output.ent().template get<HasScrollView>();
@@ -110,7 +111,7 @@ inline auto panel(ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent parent,
         .with_corner_radius(0)
         .apply_overrides(autocomplete_style.list)
         .with_flex_direction(FlexDirection::Column)
-        .with_debug_name("terminal_suggestions");
+        .with_debug_name(name + "_suggestions");
     auto suggestions = div(ctx, mk(root.ent(), 2), list_config);
     for (size_t i = first; i < first + visible; ++i) {
       const bool selected = i == completion.selected;
@@ -132,7 +133,7 @@ inline auto panel(ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent parent,
       auto option = button(ctx, mk(suggestions.ent(), static_cast<int>(i)), row_config
           .with_flex_direction(FlexDirection::Row).with_alignment(TextAlignment::Left)
           .with_skip_tabbing(true)
-          .with_debug_name("terminal_suggestion_" + std::to_string(i)));
+          .with_debug_name(name + "_suggestion_" + std::to_string(i)));
       auto text_config = ComponentConfig::inherit_from(row_config)
           .with_custom_text_color(row_config.custom_text_color.value_or(ctx.theme.font))
           .with_text_inset(row_config.text_inset->x, row_config.text_inset->y)
@@ -143,7 +144,7 @@ inline auto panel(ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent parent,
       div(ctx, mk(option.ent(), 0), text_config
           .with_size({percent(0.22f), percent(1.f)})
           .with_label(completion.matches[i])
-          .with_debug_name("terminal_suggestion_name_" + std::to_string(i)));
+          .with_debug_name(name + "_suggestion_name_" + std::to_string(i)));
       const std::string_view match = completion.matches[i];
       const auto command_name = match.substr(0, match.find(' '));
       auto description_config = text_config;
@@ -152,7 +153,7 @@ inline auto panel(ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent parent,
           .apply_overrides(autocomplete_style.description)
           .with_size({expand(), percent(1.f)})
           .with_label(std::string(console.command_help(command_name)))
-          .with_debug_name("terminal_suggestion_description_" + std::to_string(i)));
+          .with_debug_name(name + "_suggestion_description_" + std::to_string(i)));
       state.suggestion_ids.push_back(option.ent().id);
       if (!option) continue;
       completion.selected = i;
@@ -177,7 +178,7 @@ inline auto panel(ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent parent,
       .with_render_layer(config.render_layer)
       .with_size({expand(), percent(1.f)})
       .with_placeholder("Type help to see commands")
-      .with_debug_name("terminal_input"));
+      .with_debug_name(name + "_input"));
   state.input_id = field.ent().id;
   for (auto id : field.cmp().children) {
     auto found = UICollectionHolder::getEntityForID(id);
@@ -186,14 +187,14 @@ inline auto panel(ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent parent,
     break;
   }
   if (state.focus_requested) {
-    ctx.set_focus(state.field_id);
+    if (ctx.is_input_allowed(state.field_id)) ctx.set_focus(state.field_id);
     state.focus_requested = false;
   }
   if (button(ctx, mk(row.ent(), 1), ComponentConfig{}
       .with_font(config.font_name, config.font_size)
       .with_render_layer(config.render_layer)
       .with_size({h720(88.f), percent(1.f)})
-      .with_label("Run").with_debug_name("terminal_run"))) {
+      .with_label("Run").with_debug_name(name + "_run"))) {
     console.submit();
     state.focus_requested = true;
   }

@@ -2,3 +2,4 @@
 
 #include "console.h"
 #include "ui.h"
+#include "overlay.h"

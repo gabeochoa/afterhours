@@ -250,4 +250,109 @@ TEST(terminal_autocomplete_style_is_local_and_resets) {
   CHECK(row_entity.asE().get<HasRoundedCorners>().radius_px.value() == 0.f);
 }
 
+TEST(terminal_overlay_restores_layers_and_discards_stale_actions) {
+  using namespace afterhours;
+  enum class Layer { Game, Terminal, Menu, Missing };
+  ProvidesLayeredInputMapping<Layer> mapping;
+  mapping.layers[Layer::Game] = {{1, {keys::SPACE}}};
+  mapping.layers[Layer::Terminal] = {{2, {keys::ENTER}}};
+  mapping.active_layer = Layer::Game;
+  auto &entity = EntityHelper::createPermanentEntity();
+  auto &collector = entity.addComponent<input::InputCollector>();
+  EntityHelper::registerSingleton<input::InputCollector>(entity);
+  collector.inputs.push_back({});
+  collector.inputs_pressed.push_back({});
+  collector.inputs_pressed_repeat.push_back({});
+  {
+    terminal::Overlay controls(mapping, Layer::Terminal);
+    CHECK(controls.open());
+    CHECK(controls.is_open());
+    CHECK(mapping.active_layer == Layer::Terminal);
+    CHECK(mapping.get_bindings(1).empty());
+    CHECK(!mapping.get_bindings(2).empty());
+    CHECK(collector.inputs.empty() && collector.inputs_pressed.empty() &&
+          collector.inputs_pressed_repeat.empty());
+    CHECK(controls.open());
+    controls.close();
+    controls.close();
+    CHECK(mapping.active_layer == Layer::Game);
+    controls.toggle();
+    CHECK(mapping.active_layer == Layer::Terminal);
+  }
+  CHECK(mapping.active_layer == Layer::Game);
+  {
+    terminal::Overlay controls(mapping, Layer::Terminal);
+    controls.open();
+    mapping.active_layer = Layer::Menu;
+    controls.close();
+    CHECK(mapping.active_layer == Layer::Menu);
+  }
+  terminal::Overlay missing(mapping, Layer::Missing);
+  CHECK(!missing.open());
+  CHECK(!missing.is_open() && mapping.active_layer == Layer::Menu);
+}
+
+TEST(terminal_overlay_focus_escape_and_reopening) {
+  using namespace afterhours;
+  using namespace afterhours::ui;
+  using namespace afterhours::ui::imm;
+  ui_test::ImmTestHarness h;
+  if (!EntityHelper::has_singleton<modal::ModalRoot>()) {
+    auto &entity = EntityHelper::createPermanentEntity();
+    modal::detail::init_singleton(entity);
+  }
+  enum class Layer { Game, Terminal };
+  ProvidesLayeredInputMapping<Layer> mapping;
+  mapping.layers[Layer::Terminal] = {};
+  terminal::Overlay controls(mapping, Layer::Terminal);
+  terminal::Console console;
+  terminal::OverlayStyle style;
+  style.window.with_size(pixels(700), pixels(500));
+  style.panel.with_debug_name("overlay_console");
+  auto frame = [&] {
+    h.begin_frame();
+    button(h.context(), mk(h.root(), 0), ComponentConfig{}
+        .with_size({pixels(100), pixels(40)}).with_label("Open")
+        .with_debug_name("overlay_opener"));
+    terminal::overlay(h.context(), mk(h.root(), 1), console, controls, style);
+    if (controls.is_open()) terminal::panel(h.context(), mk(h.root(), 2), console,
+        ComponentConfig{}.with_size({pixels(300), pixels(200)})
+            .with_debug_name("background_terminal"));
+    h.layout_only();
+  };
+  frame();
+  auto *opener = h.find("overlay_opener");
+  CHECK(opener != nullptr);
+  if (!opener) return;
+  h.context().set_focus(opener->id);
+  controls.open();
+  frame();
+  auto *field = h.find("overlay_console_input");
+  CHECK(field != nullptr);
+  if (!field) return;
+  CHECK(h.context().focus_in_subtree(field->id));
+  CHECK(!h.context().is_input_allowed(opener->id));
+  CHECK(modal::is_active());
+  console.input = "h";
+  frame();
+  h.context().last_action = ui_test::TestInputAction::MenuBack;
+  frame();
+  CHECK(controls.is_open());
+  CHECK(h.context().focus_in_subtree(field->id));
+  h.context().last_action = ui_test::TestInputAction::MenuBack;
+  frame();
+  CHECK(!controls.is_open());
+  CHECK(mapping.active_layer == Layer::Game);
+  CHECK(h.context().has_focus(opener->id));
+  CHECK(h.context().is_input_allowed(opener->id));
+  CHECK(!modal::is_active());
+  controls.open();
+  frame();
+  CHECK(h.context().focus_in_subtree(field->id));
+  CHECK(console.input == "h");
+  controls.close();
+  frame();
+  CHECK(h.context().has_focus(opener->id));
+}
+
 int main() { return ui_test::run_registered_tests("terminal UI"); }

@@ -1192,6 +1192,8 @@ struct RenderScrollbars : SystemWithUIContext<HasScrollView> {
     if (!context || !cmp.was_rendered_to_screen || cmp.should_hide)
       return;
 
+    if (detail::is_hidden_for_render(entity)) return;
+
     const Theme &theme = context->theme;
     // Ride an outer view's scroll the same way the frame around us does.
     RectangleType view = cmp.rect();
