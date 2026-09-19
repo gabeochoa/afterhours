@@ -11,9 +11,12 @@
 
 namespace afterhours::terminal {
 
+enum class Execution { Immediate, Queued };
+
 class Console {
  public:
   std::string input;
+  Execution execution = Execution::Immediate;
   bool enter_accepts_first_suggestion = true;
 
   explicit Console(size_t output_limit = 200, size_t history_limit = 100)
@@ -65,15 +68,39 @@ class Console {
   Result execute(std::string_view line) {
     auto parsed = detail::parse(line);
     if (parsed.words.empty() && parsed.error.empty()) return {};
-    const std::string owned_line(line);
-    print({"> " + owned_line});
-    if (history_limit_ && (history_.empty() || history_.back() != owned_line)) {
-      history_.push_back(owned_line);
-      while (history_.size() > history_limit_) history_.pop_front();
-    }
+    record(line);
     Result result = parsed.error.empty() ? run(Arguments(parsed.words)) : Result{parsed.error, false};
     print(result);
     return result;
+  }
+
+  bool enqueue(std::string_view line) {
+    auto parsed = detail::parse(line);
+    if (parsed.words.empty() && parsed.error.empty()) return false;
+    record(line);
+    if (!parsed.error.empty()) {
+      print({std::move(parsed.error), false});
+      return false;
+    }
+    pending_.push_back(std::move(parsed.words));
+    return true;
+  }
+
+  size_t pending_count() const { return pending_.size(); }
+
+  void drain() {
+    if (draining_) return;
+    draining_ = true;
+    struct Reset {
+      bool &value;
+      ~Reset() { value = false; }
+    } reset{draining_};
+    const auto count = pending_.size();
+    for (size_t i = 0; i < count; ++i) {
+      auto words = std::move(pending_.front());
+      pending_.pop_front();
+      print(run(Arguments(words)));
+    }
   }
 
   std::string_view command_help(std::string_view name) const {
@@ -157,7 +184,8 @@ class Console {
   }
 
   void submit() {
-    execute(input);
+    if (execution == Execution::Queued) enqueue(input);
+    else execute(input);
     input.clear();
     draft_.clear();
     distance_ = 0;
@@ -174,6 +202,15 @@ class Console {
   }
 
  private:
+  void record(std::string_view line) {
+    const std::string owned_line(line);
+    print({"> " + owned_line});
+    if (history_limit_ && (history_.empty() || history_.back() != owned_line)) {
+      history_.push_back(owned_line);
+      while (history_.size() > history_limit_) history_.pop_front();
+    }
+  }
+
   Result run(Arguments words) {
     const auto &name = words.front();
     const auto args = words.subspan(1);
@@ -203,6 +240,8 @@ class Console {
     return {std::move(text)};
   }
 
+  std::deque<std::vector<std::string>> pending_;
+  bool draining_ = false;
   std::map<std::string, Command> commands_;
   std::deque<Result> output_;
   std::deque<std::string> history_;

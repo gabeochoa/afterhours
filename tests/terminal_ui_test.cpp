@@ -42,9 +42,39 @@ TEST(terminal_submission_requires_input_focus) {
   CHECK(console.input == "count");
 }
 
+TEST(terminal_panel_queues_until_app_drains) {
+  ui_test::ImmTestHarness h;
+  afterhours::terminal::Console console;
+  console.execution = afterhours::terminal::Execution::Queued;
+  int calls = 0;
+  console.add_command({"count", "", [&](afterhours::terminal::Arguments) {
+    ++calls;
+    return afterhours::terminal::Result{"done"};
+  }});
+  auto frame = [&] {
+    h.begin_frame();
+    afterhours::terminal::panel(h.context(), afterhours::ui::imm::mk(h.root(), 0), console);
+    h.layout_only();
+  };
+  frame();
+  console.input = "count";
+  h.context().last_action = ui_test::TestInputAction::WidgetPress;
+  frame();
+  CHECK(calls == 0);
+  CHECK(console.input.empty());
+  CHECK(console.pending_count() == 1);
+  CHECK(console.output().back().text == "> count");
+  console.drain();
+  CHECK(calls == 1);
+  CHECK(console.output().back().text == "done");
+  frame();
+  CHECK(h.find("terminal_output") != nullptr);
+}
+
 TEST(terminal_autocomplete_keyboard_and_dismissal) {
   ui_test::ImmTestHarness h;
   afterhours::terminal::Console console;
+  console.enter_accepts_first_suggestion = false;
   int calls = 0;
   console.add_command({"count", "", [&](afterhours::terminal::Arguments) {
     ++calls;
@@ -86,9 +116,74 @@ TEST(terminal_autocomplete_keyboard_and_dismissal) {
   CHECK(calls == 1);
 }
 
+TEST(terminal_enter_submits_unless_a_suggestion_was_selected) {
+  ui_test::ImmTestHarness h;
+  afterhours::terminal::Console console;
+  console.enter_accepts_first_suggestion = false;
+  console.execution = afterhours::terminal::Execution::Queued;
+  auto frame = [&] {
+    h.begin_frame();
+    afterhours::terminal::panel(h.context(), afterhours::ui::imm::mk(h.root(), 0), console);
+    h.layout_only();
+  };
+  auto press = [&](ui_test::TestInputAction action) {
+    h.context().last_action = action;
+    frame();
+  };
+  frame();
+  console.input = "help ";
+  frame();
+  CHECK(h.find("terminal_suggestions") != nullptr);
+  press(ui_test::TestInputAction::WidgetPress);
+  CHECK(console.input.empty());
+  CHECK(console.history().back() == "help ");
+  CHECK(console.pending_count() == 1);
+  console.drain();
+  CHECK(console.output().back().text == "help [command] - List commands or show help");
+
+  console.input = "h";
+  frame();
+  press(ui_test::TestInputAction::WidgetUp);
+  press(ui_test::TestInputAction::WidgetPress);
+  CHECK(console.input == "help ");
+  CHECK(console.pending_count() == 0);
+  press(ui_test::TestInputAction::WidgetPress);
+  CHECK(console.input.empty());
+  CHECK(console.pending_count() == 1);
+  console.drain();
+
+  console.input = "help ";
+  frame();
+  press(ui_test::TestInputAction::WidgetDown);
+  console.input = "help";
+  frame();
+  console.input = "help ";
+  frame();
+  press(ui_test::TestInputAction::WidgetPress);
+  CHECK(console.input.empty());
+  CHECK(console.history().back() == "help ");
+  console.drain();
+
+  console.input = "h";
+  frame();
+  press(ui_test::TestInputAction::WidgetNext);
+  CHECK(console.input == "help ");
+  press(ui_test::TestInputAction::WidgetPress);
+  CHECK(console.input.empty());
+  console.drain();
+
+  console.enter_accepts_first_suggestion = true;
+  console.input = "help ";
+  frame();
+  press(ui_test::TestInputAction::WidgetPress);
+  CHECK(console.input == "help clear ");
+  CHECK(console.pending_count() == 0);
+}
+
 TEST(terminal_autocomplete_accepts_pointer_after_input_blurs) {
   ui_test::ImmTestHarness h;
   afterhours::terminal::Console console;
+  console.enter_accepts_first_suggestion = false;
   auto frame = [&] {
     h.begin_frame();
     afterhours::terminal::panel(h.context(), afterhours::ui::imm::mk(h.root(), 0), console);

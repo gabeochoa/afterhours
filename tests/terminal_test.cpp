@@ -1,6 +1,7 @@
 #include <afterhours/src/plugins/terminal/autocomplete.h>
 #include <cassert>
 #include <limits>
+#include <stdexcept>
 
 using namespace afterhours::terminal;
 
@@ -24,6 +25,72 @@ struct ObjectCommand : CommandBase {
 };
 
 int main() {
+  {
+    Console queued;
+    queued.execution = Execution::Queued;
+    std::vector<std::string> received;
+    queued.add_command({"save", "", [&](Arguments args) {
+      received.assign(args.begin(), args.end());
+      return Result{"saved"};
+    }});
+    queued.input = R"(save "two words" "" last)";
+    queued.submit();
+    queued.input = "changed";
+    assert(received.empty() && queued.pending_count() == 1);
+    assert(queued.output().size() == 1 && queued.history().size() == 1);
+    queued.drain();
+    assert((received == std::vector<std::string>{"two words", "", "last"}));
+    assert(queued.pending_count() == 0 && queued.output().back().text == "saved");
+    assert(queued.output().size() == 2 && queued.history().size() == 1);
+    queued.drain();
+    assert(queued.output().size() == 2);
+    assert(queued.execute("save immediate").text == "saved");
+    assert(received.front() == "immediate" && queued.pending_count() == 0);
+    assert(!queued.enqueue("   "));
+    assert(!queued.enqueue("save \"unfinished"));
+    assert(!queued.output().back().success && queued.pending_count() == 0);
+    queued.enqueue("save removed");
+    queued.remove_command("save");
+    queued.drain();
+    assert(!queued.output().back().success && received.front() == "immediate");
+    queued.enqueue("missing");
+    queued.enqueue("clear");
+    queued.enqueue("help");
+    queued.drain();
+    assert(queued.output().size() == 2);
+    assert(queued.output().front().text == "clear - Clear output");
+  }
+  {
+    Console queued;
+    std::vector<std::string> order;
+    queued.add_command({"step", "", [&](Arguments args) {
+      order.push_back(args[0]);
+      if (args[0] == "first") {
+        queued.enqueue("step later");
+        queued.drain();
+      }
+      return Result{args[0]};
+    }});
+    queued.enqueue("step first");
+    queued.enqueue("step second");
+    queued.drain();
+    assert((order == std::vector<std::string>{"first", "second"}));
+    assert(queued.pending_count() == 1 && queued.output().back().text == "second");
+    queued.drain();
+    assert(order.back() == "later" && queued.pending_count() == 0);
+    queued.add_command({"fail", "", [](Arguments) -> Result {
+      throw std::runtime_error("failed");
+    }});
+    queued.enqueue("fail");
+    queued.enqueue("step recovery");
+    bool threw = false;
+    try { queued.drain(); }
+    catch (const std::runtime_error &) { threw = true; }
+    assert(threw && queued.pending_count() == 1);
+    queued.drain();
+    assert(order.back() == "recovery" && queued.pending_count() == 0);
+  }
+
   {
     std::vector<std::string> words{"-42", "1.25", "2e3", "0", "255"};
     Arguments args(words);
