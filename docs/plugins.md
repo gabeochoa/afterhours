@@ -41,6 +41,14 @@ For a toggleable terminal, construct `terminal::Overlay controls(mapping, termin
 
 Opening focuses the input and blocks background UI. Escape dismisses suggestions first, then closes and restores focus. Closing restores the previous input layer unless the app has already switched to another layer. Layer transitions clear collected actions; handle toggling before gameplay consumers run. Raw keyboard polling bypasses input layers and remains the app's responsibility. The mapping must outlive the controls; destruction restores its layer. WM uses F2 and an Open overlay button; Space increments a jump counter outside the overlay and only types spaces inside it.
 
+## Command picker
+
+Include `src/plugins/command_picker/command_picker.h`. Own a `command_picker::Picker` with entries `{command_line, label, category, shortcut_label}` and call `command_picker::panel(ctx, mk(parent), console, picker, config, style)`. Entries reference commands in an existing `terminal::Console`; command lines can include preset arguments. No terminal panel is required. Shortcut labels are display metadata; applications bind their own shortcuts.
+
+Search matches command lines, labels and categories using case-insensitive ASCII subsequences. Up/Down select, Enter or clicking executes, and Escape clears search. The virtual list reveals keyboard selection. Unavailable commands remain discoverable and show their reason. Execution respects `console.execution`; queued results remain in `console.output()` after the app calls `drain()`. The panel returns true when execution succeeds or is queued. It preserves the terminal input draft.
+
+`picker.query`, `set_entries()`, and `result` support app control. `Style` provides search, row, selected-row and detail overrides. For custom rendering, include only `picker.h` and use `refresh()`, `count()`, `entry()`, `select()` / `move()` and `activate(console)`. WM's `command_picker` screen demonstrates counter, color, grid and zoom commands.
+
 ## Timing charts
 
 Include `src/plugins/charts.h` for backend-independent point bounds and nearest-sample lookup. Include `src/plugins/ui/line_chart.h` for `ui::imm::line_chart`.

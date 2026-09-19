@@ -60,6 +60,8 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	command_picker_test \
+	command_picker_ui_test \
 	terminal_test \
 	terminal_ui_test \
 	font_atlas_measure_test \
@@ -185,6 +187,7 @@ ALL_TESTS += sokol_include_order_test
 endif
 
 RAYLIB_TESTS := \
+	command_picker_ui_test \
 	terminal_ui_test \
 	text_stroke_render_test \
 	input_device_activity_test \
