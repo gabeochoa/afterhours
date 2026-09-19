@@ -16,6 +16,7 @@ namespace afterhours {
 namespace ui {
 
 enum class RenderPrimitiveType {
+  Line,
   Rectangle,
   RoundedRectangle,
   RectangleOutline,
@@ -44,6 +45,12 @@ struct RenderPrimitive {
 
   // Union of all primitive data types
   union PrimitiveData {
+    struct {
+      Vector2Type start, end;
+      float thickness;
+      Color color;
+    } line;
+
     struct {
       RectangleType rect;
       Color fill_color;
@@ -146,6 +153,14 @@ private:
       : type(t), layer(l), entity_id(eid), data() {}
 
 public:
+  static RenderPrimitive line(Vector2Type start, Vector2Type end,
+                              float thickness, Color color, int layer,
+                              EntityID entity_id) {
+    RenderPrimitive p(RenderPrimitiveType::Line, layer, entity_id);
+    p.data.line = {start, end, thickness, color};
+    return p;
+  }
+
   // Factory methods for cleaner construction
   static RenderPrimitive rectangle(const RectangleType &rect, Color fill,
                                    int layer, EntityID entity_id = -1,
@@ -315,6 +330,12 @@ private:
 public:
   explicit RenderCommandBuffer(Arena &arena, size_t initial_capacity = 512)
       : commands_(arena, initial_capacity), arena_(&arena) {}
+
+  void add_line(Vector2Type start, Vector2Type end, float thickness,
+                Color color, int layer, EntityID entity_id) {
+    commands_.push_back(RenderPrimitive::line(start, end, thickness, color,
+                                               layer, entity_id));
+  }
 
   // Add a filled rectangle
   void add_rectangle(const RectangleType &rect, Color fill, int layer,
@@ -506,6 +527,12 @@ public:
       capture::Scope attribute(cmd.entity_id, cmd.layer);
 
       switch (cmd.type) {
+      case RenderPrimitiveType::Line:
+        draw_line_ex(cmd.data.line.start, cmd.data.line.end,
+                     cmd.data.line.thickness, cmd.data.line.color);
+        ++i;
+        break;
+
       case RenderPrimitiveType::Rectangle: {
         size_t batch_end = find_batch_end(commands, i);
         render_rectangle_batch(commands, i, batch_end);

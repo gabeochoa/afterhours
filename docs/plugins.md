@@ -144,3 +144,7 @@ Use `assert_ui row_name text="Label"` to check the label's value even when it is
 Set `enforce_min_touch_target = true` in `UIStylingDefaults::get().get_validation_config_mut()`, with `mode = ValidationMode::Warn`. `min_touch_target_size` defaults to 44 UI pixels on each axis, measured after layout and zoom. `highlight_violations` enables outlines.
 
 The check uses click/drag listener bounds after transforms, scrolling, ancestor clipping and window clipping. Hidden, disabled, pointer-ignored and fully clipped controls are excluded. Partially clipped controls use their remaining clickable area. Register validation updates after UI layout and the overlay after UI rendering, before ending the frame. Both collection modes are supported.
+
+## Checkbox marks
+
+`ui::imm::checkbox` draws a font-independent checkmark when checked and leaves the unchecked indicator empty. Marks use the existing text color, alignment and inset settings, scale with the control, and respect disabled styling and opacity. `with_checkbox_indicators("yes", "no")` supplies custom text; `("", "")` hides both indicators. See WM’s `checkboxes` screen.

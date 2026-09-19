@@ -485,6 +485,8 @@ inline bool operator==(const TextSpan &a, const TextSpan &b) {
          a.color.a == b.color.a && a.weight == b.weight;
 }
 
+struct HasCheckboxMark : BaseComponent {};
+
 struct HasLabel : BaseComponent {
   TextAlignment alignment = TextAlignment::None;
   TextOverflow text_overflow = TextOverflow::Clip;

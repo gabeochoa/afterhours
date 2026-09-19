@@ -1069,6 +1069,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   HasCheckboxState &state =
       init_state<HasCheckboxState>(entity, [&](auto &) {}, value);
 
+  const auto indicator_alignment = config.label_alignment;
   auto label = config.label;
   config.label = "";
 
@@ -1149,6 +1150,9 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
           config, fmt::format("checkbox indiv from {}", config.debug_name))
           .with_size(config.size);
   apply_color(toggle_config);
+  toggle_config.label_alignment = indicator_alignment;
+  toggle_config.text_color_usage = config.text_color_usage;
+  toggle_config.text_inset = config.text_inset;
 
   if (!user_specified_corners) {
     if (has_label_child) {
@@ -1157,26 +1161,23 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
     // No-label case: keep default rounded corners from theme (no override)
   }
 
-  // Set check/X indicator label
-  std::string checked_indicator = config.checkbox_checked_indicator.value_or(
-      ComponentConfig::DEFAULT_CHECKBOX_CHECKED);
-  std::string unchecked_indicator =
-      config.checkbox_unchecked_indicator.value_or(
-          ComponentConfig::DEFAULT_CHECKBOX_UNCHECKED);
-  toggle_config.label = state.on ? checked_indicator : unchecked_indicator;
-
-  if (!toggle_config.has_font_override()) {
-    toggle_config.font_name = UIComponent::SYMBOL_FONT;
-    toggle_config.font_size = pixels(20.f);
-  }
   if (!toggle_config.has_text_color_override()) {
     toggle_config.with_auto_text_color(true);
   }
 
-  // Delegate to toggle_button primitive
+  auto toggle_pair = mk(entity);
+  auto &indicator = deref(toggle_pair).first;
+  indicator.template addComponentIfMissing<HasLabel>();
   auto toggle_result =
-      primitive::toggle_button(ctx, mk(entity), toggle_config, state.on);
-  toggle_result.ent().template addComponentIfMissing<InFocusCluster>();
+      primitive::toggle_button(ctx, toggle_pair, toggle_config, state.on);
+  indicator.template addComponentIfMissing<InFocusCluster>();
+  const auto &text = state.on ? config.checkbox_checked_indicator
+                              : config.checkbox_unchecked_indicator;
+  indicator.template get<HasLabel>().set_label(text.value_or(""));
+  if (state.on && !text.has_value())
+    indicator.template addComponentIfMissing<HasCheckboxMark>();
+  else
+    indicator.template removeComponentIfExists<HasCheckboxMark>();
 
   if (toggle_result || label_clicked) {
     state.changed_since = true;

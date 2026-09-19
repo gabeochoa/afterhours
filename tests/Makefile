@@ -60,6 +60,7 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	checkbox_mark_test \
 	touch_target_test \
 	touch_target_single_test \
 	font_tier_scaling_test \

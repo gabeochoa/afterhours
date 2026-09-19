@@ -800,6 +800,26 @@ resolve_text_inset(const Theme &theme,
   return Vector2Type{base.x * theme.ui_scale, base.y * theme.ui_scale};
 }
 
+template <typename DrawLine>
+void render_checkbox_mark(RectangleType rect, const HasLabel &style,
+                          const Theme &theme, float opacity, DrawLine draw) {
+  const auto inset = resolve_text_inset(theme, style.text_inset);
+  const float size = std::max(0.f, std::min({rect.width * .5f, rect.height * .5f,
+                                          rect.width - 2.f * inset.x,
+                                          rect.height - 2.f * inset.y}));
+  if (size <= 0.f) return;
+  float x = rect.x + (rect.width - size) * .5f;
+  if (style.alignment == TextAlignment::Left) x = rect.x + inset.x;
+  if (style.alignment == TextAlignment::Right) x = rect.x + rect.width - inset.x - size;
+  const float y = rect.y + (rect.height - size) * .5f;
+  const auto color = colors::opacity_pct(detail::resolve_label_color(style, theme), opacity);
+  const Vector2Type start{x + size * .20f, y + size * .50f};
+  const Vector2Type joint{x + size * .43f, y + size * .73f};
+  const Vector2Type end{x + size * .82f, y + size * .25f};
+  draw(start, joint, size / 11.f, color);
+  draw(joint, end, size / 11.f, color);
+}
+
 // For the free draw helpers, which are not handed a context. ThemeDefaults is
 // what context.theme is seeded from each frame, so this agrees with the entity
 // path for every screen that does not swap its theme.
@@ -1764,7 +1784,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       }
     }
 
-    if (entity.has<HasLabel>()) {
+    if (entity.has<HasCheckboxMark>()) {
+      render_checkbox_mark(draw_rect, entity.get<HasLabel>(), context.theme,
+                           effective_opacity, draw_line_ex);
+    } else if (entity.has<HasLabel>()) {
       const HasLabel &hasLabel = entity.get<HasLabel>();
       warn_ignored_label_padding(entity, cmp);
       Color font_col = detail::resolve_label_color(hasLabel, context.theme);
@@ -2344,7 +2367,13 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     }
 
     // Label/text
-    if (entity.has<HasLabel>()) {
+    if (entity.has<HasCheckboxMark>()) {
+      render_checkbox_mark(draw_rect, entity.get<HasLabel>(), context.theme,
+                           effective_opacity,
+                           [&](Vector2Type start, Vector2Type end, float thickness, Color color) {
+        buffer.add_line(start, end, thickness, color, layer, entity.id);
+      });
+    } else if (entity.has<HasLabel>()) {
       const HasLabel &hasLabel = entity.get<HasLabel>();
       warn_ignored_label_padding(entity, cmp);
       Color font_col = detail::resolve_label_color(hasLabel, context.theme);
