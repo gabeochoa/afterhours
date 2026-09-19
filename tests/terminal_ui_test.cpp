@@ -207,6 +207,53 @@ TEST(terminal_autocomplete_accepts_pointer_after_input_blurs) {
   CHECK(h.context().focus_id != h.context().FAKE);
 }
 
+TEST(terminal_usage_and_unavailable_reason_follow_live_state) {
+  using namespace afterhours;
+  ui_test::ImmTestHarness h;
+  terminal::Console console;
+  console.enter_accepts_first_suggestion = false;
+  bool ready = false;
+  int calls = 0;
+  console.add_command({"save", "Save the document", [&](terminal::Arguments) {
+    ++calls;
+    return terminal::Result{"saved"};
+  }, {}, {}, "save [path]", [&]() -> std::optional<std::string> {
+    if (!ready) return "Open a document first";
+    return {};
+  }});
+  auto frame = [&] {
+    h.begin_frame();
+    terminal::panel(h.context(), ui::imm::mk(h.root(), 0), console);
+    h.layout_only();
+  };
+  auto label = [&](const char *name) {
+    auto *component = h.find(name);
+    if (!component) return std::string{};
+    return ui::UICollectionHolder::getEntityForID(component->id).asE().get<ui::HasLabel>().label;
+  };
+  console.input = "sa";
+  frame();
+  CHECK(label("terminal_usage") == "Usage: save [path]");
+  CHECK(label("terminal_suggestion_description_0") == "Unavailable: Open a document first");
+  CHECK(label("terminal_unavailable") == "Unavailable: Open a document first");
+  ready = true;
+  frame();
+  CHECK(label("terminal_suggestion_description_0") == "Save the document");
+  console.input = "save";
+  frame();
+  CHECK(label("terminal_usage") == "Usage: save [path]");
+  ready = false;
+  h.context().last_action = ui_test::TestInputAction::WidgetPress;
+  frame();
+  CHECK(calls == 0);
+  CHECK(console.output().back().text == "Unavailable: Open a document first");
+  ready = true;
+  console.input = "save";
+  h.context().last_action = ui_test::TestInputAction::WidgetPress;
+  frame();
+  CHECK(calls == 1);
+}
+
 TEST(terminal_autocomplete_style_is_local_and_resets) {
   using namespace afterhours;
   using namespace afterhours::ui;

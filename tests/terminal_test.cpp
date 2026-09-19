@@ -26,6 +26,71 @@ struct ObjectCommand : CommandBase {
 
 int main() {
   {
+    Console console;
+    bool ready = false;
+    int calls = 0;
+    console.add_command({"save", "Save the document", [&](Arguments) {
+      ++calls;
+      ready = false;
+      return Result{"saved"};
+    }, {}, {}, "save [path]", [&]() -> std::optional<std::string> {
+      if (!ready) return "Open a document first";
+      return {};
+    }});
+    assert(console.command_usage("save") == "save [path]");
+    assert(console.command_usage("help") == "help [command]");
+    assert(console.command_usage("clear") == "clear");
+    assert(console.command_usage("missing").empty());
+    assert(console.command_unavailable_reason("missing"));
+    assert(!console.command_unavailable_reason("help"));
+    assert(console.complete("sa") == std::vector<std::string>{"save"});
+    assert(console.execute("help save").text ==
+        "save - Save the document\nUsage: save [path]\nUnavailable: Open a document first");
+    assert(!console.execute("save").success && calls == 0);
+    assert(console.output().back().text == "Unavailable: Open a document first");
+    ready = true;
+    assert(!console.command_unavailable_reason("save"));
+    assert(console.execute("save").success && calls == 1);
+    ready = true;
+    console.enqueue("save");
+    ready = false;
+    console.drain();
+    assert(calls == 1 && !console.output().back().success);
+    console.enqueue("save");
+    ready = true;
+    console.drain();
+    assert(calls == 2 && console.output().back().success);
+    ready = true;
+    console.enqueue("save");
+    console.enqueue("save");
+    console.drain();
+    assert(calls == 3 && !console.output().back().success);
+
+    struct Reset : CommandBase {
+      int &value;
+      explicit Reset(int &target) : value(target) {}
+      std::string_view name() const override { return "reset"; }
+      std::string_view help() const override { return "Reset the value"; }
+      std::string_view usage() const override { return "reset"; }
+      std::optional<std::string> unavailable_reason() const override {
+        if (value == 0) return "Already zero";
+        return {};
+      }
+      Result run(Arguments) override { value = 0; return {"reset"}; }
+    };
+    int value = 0;
+    console.add_command(std::make_unique<Reset>(value));
+    assert(console.command_usage("reset") == "reset");
+    assert(!console.execute("reset").success);
+    value = 5;
+    assert(console.execute("reset").success && value == 0);
+    assert(!console.execute("reset").success);
+    console.add_command({"empty", "", [](Arguments) { assert(false); return Result{}; },
+        {}, {}, {}, [] { return std::optional<std::string>{""}; }});
+    assert(console.execute("empty").text == "Unavailable: Command unavailable");
+  }
+
+  {
     Console queued;
     queued.execution = Execution::Queued;
     std::vector<std::string> received;

@@ -3,6 +3,7 @@
 #include "arguments.h"
 #include <cctype>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -27,6 +28,8 @@ struct CommandBase {
   virtual std::string_view name() const = 0;
   virtual std::string_view help() const = 0;
   virtual Result run(Arguments args) = 0;
+  virtual std::string_view usage() const { return {}; }
+  virtual std::optional<std::string> unavailable_reason() const { return {}; }
   virtual std::vector<std::string> completions() const { return {}; }
   virtual std::vector<std::string> complete(const CompletionRequest &request) const {
     if (request.argument_index != 0) return {};
@@ -40,6 +43,8 @@ struct Command {
   std::function<Result(Arguments)> run;
   std::vector<std::string> completions = {};
   std::function<std::vector<std::string>(const CompletionRequest &)> complete = {};
+  std::string usage = {};
+  std::function<std::optional<std::string>()> unavailable_reason = {};
 };
 
 namespace detail {

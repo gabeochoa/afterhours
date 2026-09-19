@@ -40,7 +40,8 @@ class Console {
                         [owned](Arguments args) { return owned->run(args); },
                         {}, [owned](const CompletionRequest &request) {
                           return owned->complete(request);
-                        }});
+                        }, std::string(owned->usage()),
+                        [owned] { return owned->unavailable_reason(); }});
   }
 
   bool remove_command(const std::string &name) {
@@ -109,6 +110,25 @@ class Console {
     auto it = commands_.find(std::string(name));
     if (it == commands_.end()) return {};
     return it->second.help;
+  }
+
+  std::string_view command_usage(std::string_view name) const {
+    if (name == "help") return "help [command]";
+    if (name == "clear") return "clear";
+    const auto it = commands_.find(std::string(name));
+    if (it == commands_.end()) return {};
+    return it->second.usage.empty() ? it->first : it->second.usage;
+  }
+
+  std::optional<std::string> command_unavailable_reason(std::string_view name) const {
+    if (name == "help" || name == "clear") return {};
+    const auto it = commands_.find(std::string(name));
+    if (it == commands_.end()) return "Unknown command: " + std::string(name);
+    const auto check = it->second.unavailable_reason;
+    if (!check) return {};
+    auto reason = check();
+    if (reason && reason->empty()) return "Command unavailable";
+    return reason;
   }
 
   std::vector<std::string> complete(std::string_view line) const {
@@ -223,6 +243,8 @@ class Console {
     const auto it = commands_.find(name);
     if (it == commands_.end()) return {"Unknown command: " + name + ". Type help.", false};
     auto callback = it->second.run;
+    if (const auto reason = command_unavailable_reason(name))
+      return {"Unavailable: " + *reason, false};
     return callback(args);
   }
 
@@ -233,7 +255,11 @@ class Console {
       if (args[0] == "clear") return {"clear - Clear output"};
       const auto it = commands_.find(args[0]);
       if (it == commands_.end()) return {"Unknown command: " + args[0], false};
-      return {it->first + " - " + it->second.help};
+      std::string text = it->first + " - " + it->second.help;
+      if (!it->second.usage.empty()) text += "\nUsage: " + it->second.usage;
+      if (const auto reason = command_unavailable_reason(args[0]))
+        text += "\nUnavailable: " + *reason;
+      return {std::move(text)};
     }
     std::string text = "clear - Clear output\nhelp [command] - List commands or show help";
     for (const auto &[name, command] : commands_) text += "\n" + name + " - " + command.help;

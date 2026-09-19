@@ -147,12 +147,15 @@ inline auto panel(ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent parent,
           .with_debug_name(name + "_suggestion_name_" + std::to_string(i)));
       const std::string_view match = completion.matches[i];
       const auto command_name = match.substr(0, match.find(' '));
+      std::string description(console.command_help(command_name));
+      if (const auto reason = console.command_unavailable_reason(command_name))
+        description = "Unavailable: " + *reason;
       auto description_config = text_config;
       if (!selected) description_config.with_custom_text_color(ctx.theme.font_muted);
       div(ctx, mk(option.ent(), 1), description_config
           .apply_overrides(autocomplete_style.description)
           .with_size({expand(), percent(1.f)})
-          .with_label(std::string(console.command_help(command_name)))
+          .with_label(description)
           .with_debug_name(name + "_suggestion_description_" + std::to_string(i)));
       state.suggestion_ids.push_back(option.ent().id);
       if (!option) continue;
@@ -160,6 +163,31 @@ inline auto panel(ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent parent,
       completion.accept(console);
       state.focus_requested = true;
       break;
+    }
+  }
+
+  const auto typed = detail::parse(console.input, true);
+  std::string hint_command = typed.words.empty() ? std::string{} : typed.words.front();
+  if ((completion.explicitly_selected || console.command_usage(hint_command).empty()) &&
+      !completion.matches.empty()) {
+    const auto selected = detail::parse(completion.matches[completion.selected], true);
+    if (!selected.words.empty()) hint_command = selected.words.front();
+  }
+  const std::string usage(console.command_usage(hint_command));
+  if (!usage.empty()) {
+    auto hint_config = ComponentConfig{}
+        .with_font(config.font_name, config.font_size)
+        .with_render_layer(config.render_layer).with_transparent_bg()
+        .with_size({percent(1.f), h720(28.f)})
+        .with_alignment(TextAlignment::Left).with_text_overflow(TextOverflow::Ellipsis)
+        .with_ignore_pointer_events();
+    div(ctx, mk(root.ent(), 3), hint_config
+        .with_label("Usage: " + usage).with_custom_text_color(ctx.theme.font_muted)
+        .with_debug_name(name + "_usage"));
+    if (const auto reason = console.command_unavailable_reason(hint_command)) {
+      div(ctx, mk(root.ent(), 4), hint_config
+          .with_label("Unavailable: " + *reason).with_custom_text_color(ctx.theme.error)
+          .with_debug_name(name + "_unavailable"));
     }
   }
 
