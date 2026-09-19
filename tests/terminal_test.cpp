@@ -91,7 +91,7 @@ int main() {
     assert(objects.execute("object again").text == "2");
     assert(!objects.execute("object").success);
     assert(objects.execute("help object").text == "object - Count calls or remove this command");
-    assert((objects.complete("object ag") == std::vector<std::string>{"object \"again\""}));
+    assert((objects.complete("object ag") == std::vector<std::string>{"object again"}));
     assert(objects.execute("object remove").text == "3");
     assert(destroyed);
     assert(!objects.execute("object again").success);
@@ -190,8 +190,9 @@ int main() {
     suggestions.accept(completing);
     assert(completing.input == "choose ");
     assert(completing.output().size() == output_size);
+    assert(suggestions.matches.size() == 4);
     suggestions.refresh(completing);
-    assert(suggestions.matches.empty());
+    assert(suggestions.matches.size() == 4);
     completing.input = "choose 'two";
     suggestions.refresh(completing);
     assert(suggestions.matches.size() == 2);
@@ -225,6 +226,126 @@ int main() {
     assert(suggestions.matches.empty());
     suggestions.refresh(completing, true);
     assert(suggestions.matches.size() == 2);
+  }
+
+  {
+    Console live;
+    std::vector<std::string> values{"two words", "loft"};
+    size_t argument_index = 99;
+    std::string prefix;
+    std::string line;
+    std::vector<std::string> arguments;
+    std::vector<std::string> executed;
+    int provider_calls = 0;
+    live.add_command({"set", "", [&](Arguments args) {
+      executed.assign(args.begin(), args.end());
+      return Result{};
+    }, {}, [&](const CompletionRequest &request) -> std::vector<std::string> {
+      ++provider_calls;
+      argument_index = request.argument_index;
+      prefix = request.prefix;
+      line = request.line;
+      arguments.assign(request.arguments.begin(), request.arguments.end());
+      if (argument_index == 0) return values;
+      if (argument_index == 1 && request.arguments[0] == "two words")
+        return {"on", "off", "off", "unrelated"};
+      if (argument_index == 2) return {"x y", "a\"b", "C:\\temp", ""};
+      return {};
+    }});
+    assert(live.complete("set ").size() == 2);
+    assert(argument_index == 0 && prefix.empty() && arguments.empty());
+    const auto second = live.complete("set 'two words' o");
+    assert(second.size() == 2);
+    assert(argument_index == 1 && prefix == "o" && line == "set 'two words' o");
+    assert((arguments == std::vector<std::string>{"two words", "o"}));
+    live.execute(second.front());
+    assert((executed == std::vector<std::string>{"two words", "off"}));
+    assert(live.complete("set 'two words' \"o").size() == 2);
+    assert(live.complete("set 'two words'   ").size() == 3);
+    assert(argument_index == 1 && prefix.empty());
+    assert((arguments == std::vector<std::string>{"two words"}));
+    assert(live.complete("set 'two ").size() == 1);
+    assert(argument_index == 0 && prefix == "two ");
+    const auto third = live.complete("set 'two words' on ");
+    assert(argument_index == 2 && third.size() == 4);
+    for (const auto &candidate : third) {
+      live.execute(candidate);
+      assert(executed.size() == 3 && executed[0] == "two words" && executed[1] == "on");
+    }
+    assert(live.complete("set 'two words' on \"a\\\"").size() == 1);
+    assert(prefix == "a\"");
+    assert(live.complete("help set extra").empty());
+
+    detail::Autocomplete suggestions;
+    live.input = "se";
+    suggestions.refresh(live);
+    suggestions.accept(live);
+    assert(live.input == "set " && suggestions.matches.size() == 2);
+    suggestions.move(true);
+    suggestions.accept(live);
+    assert(argument_index == 1 && suggestions.matches.size() == 3);
+    suggestions.accept(live);
+    assert(argument_index == 2 && suggestions.matches.size() == 4);
+    suggestions.accept(live);
+    assert(argument_index == 3 && suggestions.matches.empty());
+    assert((detail::parse(live.input).words == std::vector<std::string>{"set", "two words", "off", ""}));
+    live.input = "set l";
+    provider_calls = 0;
+    suggestions.refresh(live);
+    assert(provider_calls == 1 && suggestions.matches.size() == 1);
+    for (int i = 0; i < 120; ++i) suggestions.refresh(live);
+    assert(provider_calls == 1);
+    values.push_back("library");
+    live.invalidate_completions();
+    suggestions.refresh(live);
+    assert(provider_calls == 2 && suggestions.matches.size() == 2);
+    values.clear();
+    suggestions.refresh(live, true);
+    assert(provider_calls == 3 && suggestions.matches.empty());
+
+    struct LiveCommand : CommandBase {
+      std::vector<std::string> &values;
+      explicit LiveCommand(std::vector<std::string> &source) : values(source) {}
+      std::string_view name() const override { return "live"; }
+      std::string_view help() const override { return "Live values"; }
+      Result run(Arguments) override { return {}; }
+      std::vector<std::string> complete(const CompletionRequest &request) const override {
+        if (request.argument_index != 1) return {};
+        return values;
+      }
+    };
+    live.add_command(std::make_unique<LiveCommand>(values));
+    assert(live.complete("live first ").empty());
+    values.push_back("new value");
+    assert((live.complete("live first n") == std::vector<std::string>{"live first \"new value\""}));
+    live.add_command({"remove", "", [](Arguments) { return Result{}; }, {},
+        [&](const CompletionRequest &) {
+          live.remove_command("remove");
+          return std::vector<std::string>{"done"};
+        }});
+    assert(live.complete("remove ").size() == 1);
+    assert(live.complete("remove ").empty());
+  }
+
+  {
+    Console quoting;
+    std::vector<std::string> options{"amber", "-2.5", "path/to/file", "two words", "can't",
+                                     "a\"b", "C:\\temp", "x\ty", "", "line\nbreak"};
+    std::vector<std::string> received;
+    quoting.add_command({"quote", "", [&](Arguments args) {
+      assert(args.size() == 1);
+      received.push_back(args[0]);
+      return Result{};
+    }, options});
+    const auto matches = quoting.complete("quote ");
+    assert(std::find(matches.begin(), matches.end(), "quote amber") != matches.end());
+    assert(std::find(matches.begin(), matches.end(), "quote -2.5") != matches.end());
+    assert(std::find(matches.begin(), matches.end(), "quote path/to/file") != matches.end());
+    assert(std::find(matches.begin(), matches.end(), "quote \"two words\"") != matches.end());
+    for (const auto &match : matches) assert(quoting.execute(match).success);
+    std::sort(options.begin(), options.end());
+    std::sort(received.begin(), received.end());
+    assert(received == options);
   }
 
   Console disabled(0, 0);

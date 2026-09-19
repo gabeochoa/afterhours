@@ -35,7 +35,9 @@ class Console {
     auto owned = std::shared_ptr<CommandBase>(std::move(command));
     return add_command({std::string(owned->name()), std::string(owned->help()),
                         [owned](Arguments args) { return owned->run(args); },
-                        owned->completions()});
+                        {}, [owned](const CompletionRequest &request) {
+                          return owned->complete(request);
+                        }});
   }
 
   bool remove_command(const std::string &name) {
@@ -44,6 +46,7 @@ class Console {
     return true;
   }
   size_t command_revision() const { return command_revision_; }
+  void invalidate_completions() { ++command_revision_; }
   const std::deque<Result> &output() const { return output_; }
   size_t output_revision() const { return output_revision_; }
   const std::deque<std::string> &history() const { return history_; }
@@ -97,9 +100,10 @@ class Console {
       std::sort(matches.begin(), matches.end());
       return matches;
     }
-    if (words.size() > 2 || (words.size() == 2 && trailing_space)) return matches;
-    const std::string_view prefix = words.size() == 2 ? words[1] : std::string_view{};
+    const size_t argument_index = words.size() - (trailing_space ? 1 : 2);
+    const std::string_view prefix = trailing_space ? std::string_view{} : words.back();
     if (words[0] == "help") {
+      if (argument_index != 0) return matches;
       for (const auto &name : {"clear", "help"})
         if (std::string_view(name).starts_with(prefix)) matches.push_back(std::string("help ") + name);
       for (const auto &[name, command] : commands_)
@@ -109,14 +113,31 @@ class Console {
     }
     auto it = commands_.find(words[0]);
     if (it == commands_.end()) return matches;
-    for (const auto &option : it->second.completions) {
+    const CompletionRequest request{Arguments(words).subspan(1), argument_index, prefix, line};
+    const auto provider = it->second.complete;
+    auto options = provider ? provider(request) :
+        (argument_index == 0 ? it->second.completions : std::vector<std::string>{});
+    std::sort(options.begin(), options.end());
+    options.erase(std::unique(options.begin(), options.end()), options.end());
+    auto append_argument = [](std::ostream &out, const std::string &word) {
+      out << ' ';
+      const bool needs_quotes = word.empty() || std::any_of(word.begin(), word.end(), [](unsigned char c) {
+        return std::isspace(c) || c == '"' || c == '\'' || c == '\\';
+      });
+      if (needs_quotes) {
+        out << std::quoted(word);
+        return;
+      }
+      out << word;
+    };
+    for (const auto &option : options) {
       if (!option.starts_with(prefix)) continue;
       std::ostringstream completed;
-      completed << it->first << ' ' << std::quoted(option);
+      completed << words[0];
+      for (size_t i = 0; i < argument_index; ++i) append_argument(completed, words[i + 1]);
+      append_argument(completed, option);
       matches.push_back(completed.str());
     }
-    std::sort(matches.begin(), matches.end());
-    matches.erase(std::unique(matches.begin(), matches.end()), matches.end());
     return matches;
   }
 

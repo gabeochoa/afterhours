@@ -42,7 +42,7 @@ struct Autocomplete {
   void accept(Console &console) {
     if (matches.empty()) return;
     console.input = matches[selected] + ' ';
-    dismiss(console);
+    refresh(console);
   }
 
  private:

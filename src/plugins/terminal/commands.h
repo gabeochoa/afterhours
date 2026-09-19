@@ -15,12 +15,23 @@ struct Result {
   bool success = true;
 };
 
+struct CompletionRequest {
+  Arguments arguments;
+  size_t argument_index;
+  std::string_view prefix;
+  std::string_view line;
+};
+
 struct CommandBase {
   virtual ~CommandBase() = default;
   virtual std::string_view name() const = 0;
   virtual std::string_view help() const = 0;
   virtual Result run(Arguments args) = 0;
   virtual std::vector<std::string> completions() const { return {}; }
+  virtual std::vector<std::string> complete(const CompletionRequest &request) const {
+    if (request.argument_index != 0) return {};
+    return completions();
+  }
 };
 
 struct Command {
@@ -28,6 +39,7 @@ struct Command {
   std::string help;
   std::function<Result(Arguments)> run;
   std::vector<std::string> completions = {};
+  std::function<std::vector<std::string>(const CompletionRequest &)> complete = {};
 };
 
 namespace detail {
