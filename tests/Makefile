@@ -60,6 +60,7 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	font_tier_scaling_test \
 	text_visibility_test \
 	image_tint_test \
 	e2e_arguments_test \

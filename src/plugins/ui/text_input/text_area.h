@@ -155,6 +155,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       div(ctx, mk(entity, 0),
           ComponentConfig::inherit_from(config, "text_area_field")
               .with_size(config.size)
+              .with_scaling_mode(entity.template get<UIComponent>().resolved_scaling_mode)
               .with_background(Theme::Usage::Secondary)
               .with_rounded_corners(base_corners)
               .with_alignment(TextAlignment::Left)
@@ -206,7 +207,8 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
           window_manager::ProvidesCurrentResolution>())
     screen_height = static_cast<float>(pcr->current_resolution.height);
   const float resolved_font_size =
-      resolve_to_pixels(config.font_size, screen_height);
+      resolve_to_pixels(config.font_size, screen_height,
+                        field_cmp.resolved_scaling_mode, ctx.theme.ui_scale);
   // Published for the listeners, which cannot see any of this by the time they
   // run. area_config.line_height is already refreshed in init_state above.
   state.render_font_name = font_name;
@@ -296,6 +298,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     div(ctx, mk(field_entity, static_cast<int>(line_idx)),
         ComponentConfig{}
             .with_label(line_text)
+            .with_scaling_mode(field_cmp.resolved_scaling_mode)
             .with_size(
                 ComponentSize{pixels(viewport_width), pixels(line_height)})
             .with_font(config.font_name == UIComponent::UNSET_FONT

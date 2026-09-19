@@ -1153,4 +1153,32 @@ TEST(area_selection_and_caret_stay_square_under_rounded_theme) {
   CHECK(cursors == 1);
 }
 
+TEST(text_area_wrap_measurement_matches_its_line_labels) {
+  const float old_scale = ThemeDefaults::get().theme.ui_scale;
+  ThemeDefaults::get().theme.ui_scale = 1.4f;
+  for (auto mode : {ScalingMode::Adaptive, ScalingMode::Proportional}) {
+    ui_test::ImmTestHarness h;
+    h.context().theme.ui_scale = 1.4f;
+    h.context().scaling_mode = mode == ScalingMode::Adaptive
+                                  ? ScalingMode::Proportional : ScalingMode::Adaptive;
+    std::string value = "Tier text";
+    for (int frame = 0; frame < 2; ++frame) {
+      h.begin_frame();
+      auto area = text_area(h.context(), mk(h.root(), 0), value,
+          ComponentConfig{}.with_size({pixels(300), pixels(150)})
+              .with_font_size(FontSize::Medium).with_scaling_mode(mode));
+      h.layout_only();
+      const float base = ThemeDefaults::get().theme.font_sizing.get(FontSize::Medium);
+      const float expected = base * (mode == ScalingMode::Adaptive ? 1.4f : 600.f / 720.f);
+      CHECK_APPROX(area.ent().get<afterhours::text_input::HasTextAreaState>().render_font_size, expected);
+      const auto *line = h.find("text_area_line");
+      CHECK(line != nullptr);
+      if (!line) continue;
+      CHECK(line->resolved_scaling_mode == mode);
+      CHECK_APPROX(resolve_to_pixels(line->font_size, 600.f, mode, 1.4f), expected);
+    }
+  }
+  ThemeDefaults::get().theme.ui_scale = old_scale;
+}
+
 int main() { return ui_test::run_registered_tests("text_area"); }

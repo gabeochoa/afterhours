@@ -134,3 +134,7 @@ Use `ComponentConfig{}.with_image_tint({255, 120, 60, 200})` with `image`, `spri
 `expect_text "Label"` accepts a label whose bounds overlap the window and all ancestor clips by at least one pixel. `expect_text_fully_visible "Label"` requires its entire label bounds inside that area. Both use substring matching and work with immediate and batched rendering, including composed styled labels. These are bounds checks, not tests for glyph occlusion by another widget.
 
 Use `assert_ui row_name text="Label"` to check the label's value even when it is clipped or hidden. Custom draw code using `register_text` asserts visibility itself; use `register_text_in_clip` when it has clipping bounds.
+
+## Font tiers and zoom
+
+`with_font_size(FontSize::Medium)` and `with_font("Inter", FontSize::Medium)` use the theme's tier size. Adaptive mode multiplies it by `ui_scale`; Proportional mode scales it from the 720px reference height. Component mode overrides screen mode, which overrides the app default. Explicit `pixels(...)` and `h720(...)` sizes retain their units. Config copies preserve both interpretations until measurement or rendering.

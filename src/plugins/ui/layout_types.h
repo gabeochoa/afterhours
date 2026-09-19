@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <ostream>
 #include <string_view>
 
@@ -72,6 +73,7 @@ struct Size {
   float value = -1;
   float strictness = 1.f;
   ScreenReference screen_reference = ScreenReference::LayoutAxis;
+  std::optional<float> adaptive_pixels;
 };
 
 inline std::ostream &operator<<(std::ostream &os, const Size &size) {
@@ -213,6 +215,8 @@ inline float resolve_to_pixels(const Size &size, float screen_dimension,
 inline float resolve_to_pixels(const Size &size, float screen_dimension,
                                ScalingMode mode, float ui_scale,
                                float screen_height = -1.f) {
+  if (mode == ScalingMode::Adaptive && size.adaptive_pixels.has_value())
+    return *size.adaptive_pixels * ui_scale;
   switch (size.dim) {
   case Dim::Pixels:
     if (mode == ScalingMode::Adaptive) {

@@ -75,7 +75,8 @@ inline MeasuredConfig measure_config(const ComponentConfig &config,
   const float screen_h = detail::measure_screen_dim(Axis::Y);
 
   const float font_px =
-      resolve_to_pixels(config.font_size, screen_h, ScalingMode::Adaptive,
+      resolve_to_pixels(config.font_size, screen_h,
+                        config.scaling_mode.value_or(UIStylingDefaults::get().scaling_mode),
                         theme.ui_scale);
   // The renderer reserves this inside the box, and Dim::Text charges for it,
   // so a measurement that skipped it would be short by both sides.

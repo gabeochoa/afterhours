@@ -711,6 +711,11 @@ struct ComponentConfig {
     return *this;
   }
 
+  ComponentConfig &with_font(const std::string &font_name_, FontSize tier) {
+    font_name = font_name_;
+    return with_font_size(tier);
+  }
+
   // Float overload for backwards compatibility - converts to pixels
   ComponentConfig &with_font(const std::string &font_name_,
                              float font_size_px) {
@@ -782,7 +787,9 @@ struct ComponentConfig {
   /// Example: .with_font_size(FontSize::Large)
   ComponentConfig &with_font_size(FontSize tier) {
     auto &theme = imm::ThemeDefaults::get().theme;
-    font_size = h720(theme.font_sizing.get(tier));
+    const float base_pixels = theme.font_sizing.get(tier);
+    font_size = h720(base_pixels);
+    font_size.adaptive_pixels = base_pixels;
     font_size_explicitly_set = true;
     font_size_is_default = false;
     return *this;
@@ -794,11 +801,7 @@ struct ComponentConfig {
   /// Example: .with_font_tier(FontSizing::Tier::Large)
   [[deprecated("Use with_font_size(FontSize::Small) instead")]]
   ComponentConfig &with_font_tier(FontSizing::Tier tier) {
-    auto &theme = imm::ThemeDefaults::get().theme;
-    font_size = h720(theme.font_sizing.get(tier));
-    font_size_explicitly_set = true;
-    font_size_is_default = false;
-    return *this;
+    return with_font_size(tier);
   }
 
   /// Absolute, and drawn above whatever contains it. The layer is relative
