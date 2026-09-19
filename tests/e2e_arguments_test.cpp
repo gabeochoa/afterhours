@@ -77,6 +77,11 @@ TEST(quoted_property_reaches_the_assertion_handler) {
   CHECK(pending.error_message.empty());
 }
 
+TEST(full_visibility_command_preserves_quoted_and_unquoted_text) {
+  check_args(R"e2e(expect_text_fully_visible "Clip probe")e2e", {"Clip probe"});
+  check_args("expect_text_fully_visible Clip probe", {"Clip probe"});
+}
+
 TEST(validation_keeps_free_text_and_decodes_quoted_values) {
   check_args(R"e2e(validate title=plain  text)e2e", {"title", "plain  text"});
   check_args(R"e2e(validate title="quoted  text")e2e", {"title", "quoted  text"});

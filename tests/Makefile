@@ -60,6 +60,7 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	text_visibility_test \
 	image_tint_test \
 	e2e_arguments_test \
 	scrollbar_render_test \
@@ -191,6 +192,7 @@ ALL_TESTS += sokol_include_order_test
 endif
 
 RAYLIB_TESTS := \
+	text_visibility_test \
 	image_tint_test \
 	scroll_input_gate_test \
 	command_picker_ui_test \

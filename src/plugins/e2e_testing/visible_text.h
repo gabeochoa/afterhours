@@ -2,6 +2,7 @@
 // Track rendered text for assertions
 #pragma once
 
+#include <algorithm>
 #include <cctype>
 #include <mutex>
 #include <string>
@@ -22,6 +23,7 @@ public:
   void clear() {
     std::lock_guard<std::mutex> lock(mutex_);
     texts_.clear();
+    fully_visible_texts_.clear();
     generation_++;
   }
 
@@ -39,6 +41,7 @@ public:
       return;
     std::lock_guard<std::mutex> lock(mutex_);
     texts_.push_back(text);
+    fully_visible_texts_.push_back(text);
   }
 
   /// Register text only if its bounding rect is at least partially visible
@@ -46,17 +49,32 @@ public:
   void register_text_if_visible(const std::string &text, float rect_x,
                                 float rect_y, float rect_w, float rect_h,
                                 float viewport_w, float viewport_h) {
-    if (text.empty())
-      return;
-    // Must have at least 1px of the rect visible inside the viewport
-    if (rect_x + rect_w <= 0 || rect_y + rect_h <= 0 || rect_x >= viewport_w ||
-        rect_y >= viewport_h)
-      return;
-    // Degenerate rects (zero/negative size) are not visible
-    if (rect_w < 1.f || rect_h < 1.f)
-      return;
+    register_text_in_clip(text, rect_x, rect_y, rect_w, rect_h,
+                          0.f, 0.f, viewport_w, viewport_h);
+  }
+
+  void register_text_in_clip(const std::string &text, float x, float y,
+                             float w, float h, float clip_x, float clip_y,
+                             float clip_w, float clip_h) {
+    if (text.empty() || w <= 0.f || h <= 0.f ||
+        clip_w <= 0.f || clip_h <= 0.f) return;
+    const float left = std::max(x, clip_x);
+    const float top = std::max(y, clip_y);
+    const float right = std::min(x + w, clip_x + clip_w);
+    const float bottom = std::min(y + h, clip_y + clip_h);
+    if (right - left < 1.f || bottom - top < 1.f) return;
     std::lock_guard<std::mutex> lock(mutex_);
     texts_.push_back(text);
+    if (left == x && top == y && right == x + w && bottom == y + h)
+      fully_visible_texts_.push_back(text);
+  }
+
+  bool contains_fully_visible(const std::string &needle) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (const auto &text : fully_visible_texts_) {
+      if (text.find(needle) != std::string::npos) return true;
+    }
+    return false;
   }
 
   bool contains(const std::string &needle) const {
@@ -116,6 +134,7 @@ private:
   VisibleTextRegistry() = default;
   mutable std::mutex mutex_;
   std::vector<std::string> texts_;
+  std::vector<std::string> fully_visible_texts_;
   size_t generation_ = 0;
 };
 

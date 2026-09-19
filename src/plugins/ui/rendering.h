@@ -727,6 +727,30 @@ draw_text_at_position(const ui::FontManager &fm, const std::string &text,
                centerX, centerY);
 }
 
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+inline void register_label_for_testing(const Entity &entity,
+                                       const std::string &text,
+                                       RectangleType bounds,
+                                       float screen_width, float screen_height) {
+  if (!testing::test_input::detail::test_mode) return;
+  RectangleType viewport{0.f, 0.f, screen_width, screen_height};
+  if (!entity.has<HasScrollView>()) {
+    const auto [has_clip, clip] = compute_intersected_clip_rect(entity);
+    if (has_clip) {
+      const RectangleType scissor{
+          static_cast<float>(static_cast<int>(clip.x)),
+          static_cast<float>(static_cast<int>(clip.y)),
+          static_cast<float>(static_cast<int>(clip.width)),
+          static_cast<float>(static_cast<int>(clip.height))};
+      viewport = intersect_rects(viewport, scissor);
+    }
+  }
+  testing::VisibleTextRegistry::instance().register_text_in_clip(
+      text, bounds.x, bounds.y, bounds.width, bounds.height,
+      viewport.x, viewport.y, viewport.width, viewport.height);
+}
+#endif
+
 // Explicit override, else auto-contrast, else theme font; disabled in each.
 // Shared by RenderImm and RenderBatched, which had identical copies.
 // Disabled text darkens by 0.5 while disabled backgrounds use
@@ -797,10 +821,11 @@ static inline void draw_text_in_rect(
     // 5px margins come off -- so they would all report overflow. Whether the
     // block fits is the parent call's question, and it has already answered it.
     bool report_overflow = true,
-    Vector2Type inset = default_text_inset()) {
+    Vector2Type inset = default_text_inset(),
+    bool register_text = true) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
   // Register text for E2E testing assertions (only visible-in-viewport text)
-  if (testing::test_input::detail::test_mode) {
+  if (register_text && testing::test_input::detail::test_mode) {
     auto *pcr = EntityHelper::get_singleton_cmp<
         window_manager::ProvidesCurrentResolution>();
     float vw = pcr ? static_cast<float>(pcr->width()) : 1280.f;
@@ -809,6 +834,8 @@ static inline void draw_text_in_rect(
         text, rect.x, rect.y, rect.width, rect.height, vw, vh);
   }
 #endif
+
+  (void)register_text;
 
   // Multi-line: split into lines and draw each stacked vertically. Two ways in
   // -- a hard '\n', which always breaks, or TextOverflow::Wrap with an explicit
@@ -862,7 +889,7 @@ static inline void draw_text_in_rect(
                           show_debug_indicator, stroke, shadow, rotation,
                           rot_center_x, rot_center_y, TextOverflow::Clip,
                           letter_spacing, font_size, /*report_overflow=*/false,
-                          inset);
+                          inset, false);
         y += line_h;
       }
       return;
@@ -1014,7 +1041,8 @@ static inline void draw_runs_in_rect(
     float rotation = 0.0f, float rot_center_x = 0.0f, float rot_center_y = 0.0f,
     TextOverflow text_overflow = TextOverflow::Clip, float letter_spacing = 0.0f,
     float explicit_font_size = 0.0f, const std::string &joined = "",
-    Vector2Type inset = default_text_inset()) {
+    Vector2Type inset = default_text_inset(),
+    bool register_text = true) {
   if (runs.empty() || rect.width <= 0.f)
     return;
 
@@ -1108,7 +1136,7 @@ static inline void draw_runs_in_rect(
                         show_debug_indicator, stroke, shadow, rotation,
                         rot_center_x, rot_center_y, TextOverflow::Clip,
                         letter_spacing, font_size, /*report_overflow=*/false,
-                        Vector2Type{0.f, 0.f});
+                        Vector2Type{0.f, 0.f}, register_text);
       if (swap)
         fm.set_active(base_font);
       x += w;
@@ -1785,15 +1813,19 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                           hasLabel.alignment, SHOW_TEXT_OVERFLOW_DEBUG, stroke,
                           shadow, rotation, centerX, centerY,
                           hasLabel.text_overflow, hasLabel.letter_spacing,
-                          explicit_fs, hasLabel.label, immediate_inset);
+                          explicit_fs, hasLabel.label, immediate_inset, false);
       } else {
         draw_text_in_rect(font_manager, hasLabel.label.c_str(), label_rect,
                           hasLabel.alignment, font_col,
                           SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation,
                           centerX, centerY, hasLabel.text_overflow,
                           hasLabel.letter_spacing, explicit_fs,
-                          /*report_overflow=*/true, immediate_inset);
+                          /*report_overflow=*/true, immediate_inset, false);
       }
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+      detail::register_label_for_testing(entity, hasLabel.label, label_rect,
+                                         context.screen_width, context.screen_height);
+#endif
     }
 
     if (entity.has<texture_manager::HasTexture>()) {
@@ -2524,19 +2556,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         }
 
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
-        // Register text for E2E testing. Through the same clip rect the
-        // scissor uses, or text scrolled out of a pane still reads as visible
-        // and expect_text/expect_no_text both lie about it.
-        if (testing::test_input::detail::test_mode) {
-          RectangleType vis = draw_rect;
-          auto [has_clip, clip] =
-              detail::compute_intersected_clip_rect(entity);
-          if (has_clip)
-            vis = detail::intersect_rects(draw_rect, clip);
-          testing::VisibleTextRegistry::instance().register_text_if_visible(
-              hasLabel.label, vis.x, vis.y, vis.width, vis.height,
-              context.screen_width, context.screen_height);
-        }
+        RectangleType visibility_bounds = text_rect;
+        visibility_bounds.x += hasLabel.text_x_offset;
+        visibility_bounds.width -= hasLabel.text_x_offset;
+        visibility_bounds.y += hasLabel.text_y_offset;
+        detail::register_label_for_testing(entity, hasLabel.label, visibility_bounds,
+                                           context.screen_width, context.screen_height);
 #endif
       }
     }

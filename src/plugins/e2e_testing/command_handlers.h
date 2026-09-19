@@ -531,14 +531,17 @@ struct HandleWaitFramesCommand : System<PendingE2ECommand> {
 struct HandleExpectTextCommand : System<PendingE2ECommand> {
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
                                float) override {
-        if (cmd.is_consumed() || !cmd.is("expect_text")) return;
+        if (cmd.is_consumed() ||
+            (!cmd.is("expect_text") && !cmd.is("expect_text_fully_visible"))) return;
         if (cmd.args.empty()) {
-            cmd.fail("expect_text requires argument");
+            cmd.fail(cmd.name + " requires argument");
             return;
         }
 
         auto &registry = VisibleTextRegistry::instance();
-        if (registry.contains(cmd.args[0])) {
+        if (cmd.is("expect_text_fully_visible")
+                ? registry.contains_fully_visible(cmd.args[0])
+                : registry.contains(cmd.args[0])) {
             cmd.consume();
         } else {
             // Mark for retry - text might appear after rendering
@@ -980,6 +983,7 @@ struct E2ECommandCleanupSystem : System<PendingE2ECommand> {
         if (!cmd.is_wait_command() && cmd.tick_frame()) {
             std::string error_msg;
             const bool is_text_assertion = cmd.name == "expect_text" ||
+                                           cmd.name == "expect_text_fully_visible" ||
                                            cmd.name == "expect_text_i" ||
                                            cmd.name == "expect_no_text";
             if (is_text_assertion && !cmd.args.empty()) {

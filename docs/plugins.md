@@ -128,3 +128,9 @@ Text commands such as `type`, `expect_text` and the value in `expect_input_text`
 ## Image tint
 
 Use `ComponentConfig{}.with_image_tint({255, 120, 60, 200})` with `image`, `sprite`, `image_button`, or `with_texture`. RGB multiplies the source pixels; tint alpha multiplies the widget's opacity and ancestor opacity. Omitting the option restores white tint on a reused widget. Backgrounds and labels keep their own colors.
+
+## Text visibility assertions
+
+`expect_text "Label"` accepts a label whose bounds overlap the window and all ancestor clips by at least one pixel. `expect_text_fully_visible "Label"` requires its entire label bounds inside that area. Both use substring matching and work with immediate and batched rendering, including composed styled labels. These are bounds checks, not tests for glyph occlusion by another widget.
+
+Use `assert_ui row_name text="Label"` to check the label's value even when it is clipped or hidden. Custom draw code using `register_text` asserts visibility itself; use `register_text_in_clip` when it has clipping bounds.
