@@ -91,6 +91,7 @@ struct ComponentConfig {
   bool auto_text_color = true;
 
   std::optional<TextureConfig> texture_config;
+  std::optional<Color> image_tint;
   std::optional<texture_manager::HasTexture::Alignment> image_alignment;
   std::optional<std::bitset<4>> rounded_corners;
   bool consumes_directional_input = false;
@@ -850,6 +851,11 @@ struct ComponentConfig {
     return *this;
   }
 
+  ComponentConfig &with_image_tint(Color tint) {
+    image_tint = tint;
+    return *this;
+  }
+
   // Shadow configuration methods
   ComponentConfig &with_shadow(const Shadow &shadow) {
     shadow_config = shadow;
@@ -1081,6 +1087,8 @@ struct ComponentConfig {
 
     if (overrides.has_texture())
       merged.texture_config = overrides.texture_config;
+    if (overrides.image_tint.has_value())
+      merged.image_tint = overrides.image_tint;
     if (overrides.has_image_alignment())
       merged.image_alignment = overrides.image_alignment;
 
@@ -1289,6 +1297,7 @@ struct ComponentConfig {
     if (parent.border_config.has_value())
       border_config = parent.border_config;
     render_layer = std::max(render_layer, parent.render_layer);
+    if (parent.image_tint.has_value()) image_tint = parent.image_tint;
     image_alignment = parent.image_alignment.value_or(
         texture_manager::HasTexture::Alignment::Center);
     return *this;

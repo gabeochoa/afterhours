@@ -275,6 +275,11 @@ struct HasImage : BaseComponent {
       : texture(tex), source_rect(src), alignment(align) {}
 };
 
+struct HasImageTint : BaseComponent {
+  Color color;
+  explicit HasImageTint(Color value) : color(value) {}
+};
+
 struct HasOpacity : BaseComponent {
   float value = 1.0f;
   HasOpacity() = default;

@@ -40,6 +40,13 @@ namespace detail {
 
 static inline float compute_effective_opacity(const Entity &entity);
 
+static inline Color resolve_image_tint(const Entity &entity, float opacity) {
+  const Color tint = entity.has<HasImageTint>()
+                         ? entity.get<HasImageTint>().color
+                         : Color{255, 255, 255, 255};
+  return colors::opacity_pct(tint, opacity);
+}
+
 static inline bool is_hidden_for_render(const Entity &entity) {
   const Entity *current = &entity;
   for (int depth = 0; depth < 64; ++depth) {
@@ -1792,10 +1799,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     if (entity.has<texture_manager::HasTexture>()) {
       const texture_manager::HasTexture &texture =
           entity.get<texture_manager::HasTexture>();
-      Color tex_col = colors::UI_WHITE;
-      if (effective_opacity < 1.0f) {
-        tex_col = colors::opacity_pct(tex_col, effective_opacity);
-      }
+      const Color tex_col = detail::resolve_image_tint(entity, effective_opacity);
       draw_texture_in_rect(texture.texture, draw_rect, texture.alignment,
                            tex_col);
     } else if (entity.has<ui::HasImage>()) {
@@ -1810,10 +1814,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       Vector2Type location =
           position_texture(img.texture, size, draw_rect, img.alignment);
 
-      Color img_col = colors::UI_WHITE;
-      if (effective_opacity < 1.0f) {
-        img_col = colors::opacity_pct(img_col, effective_opacity);
-      }
+      const Color img_col = detail::resolve_image_tint(entity, effective_opacity);
       texture_manager::draw_texture_pro(img.texture, src,
                                         RectangleType{
                                             .x = location.x,
@@ -2556,9 +2557,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                            (float)texture.texture.height};
       // Honor with_opacity like the HasImage branch below (and the direct
       // render path); previously HasTexture ignored it in the buffered pass.
-      Color tex_col = colors::UI_WHITE;
-      if (effective_opacity < 1.0f)
-        tex_col = colors::opacity_pct(tex_col, effective_opacity);
+      const Color tex_col = detail::resolve_image_tint(entity, effective_opacity);
       buffer.add_image(dest, src, texture.texture, tex_col, layer, entity.id);
     } else if (entity.has<ui::HasImage>()) {
       const ui::HasImage &img = entity.get<ui::HasImage>();
@@ -2571,10 +2570,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       Vector2Type location =
           position_texture(img.texture, size, draw_rect, img.alignment);
 
-      Color img_col = colors::UI_WHITE;
-      if (effective_opacity < 1.0f) {
-        img_col = colors::opacity_pct(img_col, effective_opacity);
-      }
+      const Color img_col = detail::resolve_image_tint(entity, effective_opacity);
 
       RectangleType dest = {location.x, location.y, size.x, size.y};
       buffer.add_image(dest, src, img.texture, img_col, layer, entity.id);

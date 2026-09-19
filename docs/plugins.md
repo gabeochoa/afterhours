@@ -124,3 +124,7 @@ The action key emits one delayed press; modifiers are held without press events.
 Quote arguments containing spaces: `assert_ui header "text=My Project" hidden=false` or `assert_ui header text="My Project"`. Inside double quotes, `\"` means a literal quote and `\\` means a backslash. Other backslash sequences stay literal; `""` is an empty argument. Unclosed quotes fail the script with its line number.
 
 Text commands such as `type`, `expect_text` and the value in `expect_input_text` still accept the unquoted rest of the line verbatim. To use escapes there, quote the entire text. Custom handlers receive decoded arguments and should not tokenize them again.
+
+## Image tint
+
+Use `ComponentConfig{}.with_image_tint({255, 120, 60, 200})` with `image`, `sprite`, `image_button`, or `with_texture`. RGB multiplies the source pixels; tint alpha multiplies the widget's opacity and ancestor opacity. Omitting the option restores white tint on a reused widget. Backgrounds and labels keep their own colors.

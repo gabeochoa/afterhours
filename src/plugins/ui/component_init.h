@@ -450,6 +450,12 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   if (config.hover_color.has_value() && entity.has<HasColor>()) {
     entity.get<HasColor>().hover_color = config.hover_color;
   }
+  if (config.image_tint.has_value()) {
+    entity.addComponentIfMissing<HasImageTint>(*config.image_tint).color =
+        *config.image_tint;
+  } else if (!overlay) {
+    entity.removeComponentIfExists<HasImageTint>();
+  }
   // opacity has no "unset" value, so in overlay mode a default 1.0 is treated
   // as "not mentioned" rather than "make it opaque".
   if (!overlay || config.opacity != 1.0f) {
