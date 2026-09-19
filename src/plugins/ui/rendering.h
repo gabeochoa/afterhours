@@ -1176,56 +1176,47 @@ draw_texture_in_rect(texture_manager::Texture texture, RectangleType rect,
                                     size, 0.f, tint);
 }
 
-// A separate pass because the bar goes on top of its content and the two
-// renderers order output differently (RenderBatched by layer, RenderImm by tree
-// order). One pass after both beats one implementation per renderer.
-template <typename InputAction>
-struct RenderScrollbars : SystemWithUIContext<HasScrollView> {
-  UIContext<InputAction> *context = nullptr;
+namespace detail {
 
-  virtual void once(float) override {
-    this->context = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
-  }
-
-  virtual void for_each_with(Entity &entity, UIComponent &cmp,
-                             HasScrollView &scroll, float) override {
-    if (!context || !cmp.was_rendered_to_screen || cmp.should_hide)
-      return;
-
-    if (detail::is_hidden_for_render(entity)) return;
-
-    const Theme &theme = context->theme;
+template <typename InputAction, typename Draw>
+void draw_layer_scrollbars(UIContext<InputAction> &context, size_t begin,
+                           size_t end, Draw draw) {
+  for (size_t index = begin; index < end; ++index) {
+    const auto &cmd = context.render_cmds[index];
+    auto owner = UICollectionHolder::getEntityForID(cmd.id);
+    if (!owner.valid()) continue;
+    Entity &entity = owner.asE();
+    if (!entity.has<HasScrollView>() || !entity.has<UIComponent>()) continue;
+    const auto &cmp = entity.get<UIComponent>();
+    if (!cmp.was_rendered_to_screen || detail::is_hidden_for_render(entity)) continue;
+    const auto &scroll = entity.get<HasScrollView>();
     // Ride an outer view's scroll the same way the frame around us does.
     RectangleType view = cmp.rect();
     const Vector2Type outer = detail::accumulated_scroll_offset(entity);
     view.x -= outer.x;
     view.y -= outer.y;
-
-    const ScrollbarMetrics m = scrollbar_metrics(
-        scroll, cmp.resolved_scaling_mode, context->screen_height);
-
+    const auto metrics = scrollbar_metrics(
+        scroll, cmp.resolved_scaling_mode, context.screen_height);
+    const auto [has_clip, clip] = detail::compute_intersected_clip_rect(entity);
+    const float opacity = detail::compute_effective_opacity(entity);
     const auto draw_axis = [&](bool vertical) {
-      const ScrollbarGeometry g =
-          scrollbar_geometry(scroll, view, vertical, m.thickness, m.min_thumb);
-      if (!g.visible)
-        return;
-      const ColorType track_c =
-          scroll.scrollbar_track_color.value_or(
-              theme.from_usage(scroll.scrollbar_track_usage));
-      const ColorType thumb_c =
-          scroll.scrollbar_thumb_color.value_or(
-              theme.from_usage(scroll.scrollbar_thumb_usage));
+      const auto geometry = scrollbar_geometry(
+          scroll, view, vertical, metrics.thickness, metrics.min_thumb);
+      if (!geometry.visible) return;
+      const auto track = colors::opacity_pct(scroll.scrollbar_track_color.value_or(
+          context.theme.from_usage(scroll.scrollbar_track_usage)), opacity);
+      const auto thumb = colors::opacity_pct(scroll.scrollbar_thumb_color.value_or(
+          context.theme.from_usage(scroll.scrollbar_thumb_usage)), opacity);
       // Fully rounded: at 6px wide that is a capsule, which reads as a bar.
-      draw_rectangle_rounded(g.track, 1.f, 6, track_c, std::bitset<4>().set());
-      draw_rectangle_rounded(g.thumb, 1.f, 6, thumb_c, std::bitset<4>().set());
+      draw(cmd, geometry.track, track, has_clip, clip);
+      draw(cmd, geometry.thumb, thumb, has_clip, clip);
     };
-
-    if (scroll.vertical_enabled)
-      draw_axis(true);
-    if (scroll.horizontal_enabled)
-      draw_axis(false);
+    if (scroll.vertical_enabled) draw_axis(true);
+    if (scroll.horizontal_enabled) draw_axis(false);
   }
-};
+}
+
+}
 
 template <typename InputAction>
 struct RenderDebugAutoLayoutRoots : SystemWithUIContext<AutoLayoutRoot> {
@@ -1948,9 +1939,23 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       capture::clear();
 
     const auto focus_paint = detail::prepare_focus_paint(context);
+    const auto scrollbar = [](const RenderInfo &cmd, RectangleType rect,
+                              ColorType color, bool has_clip, RectangleType clip) {
+      capture::Scope attribute(cmd.id, cmd.layer);
+      if (has_clip)
+        begin_scissor_mode(static_cast<int>(clip.x), static_cast<int>(clip.y),
+                           static_cast<int>(clip.width), static_cast<int>(clip.height));
+      draw_rectangle_rounded(rect, 1.f, 6, color, std::bitset<4>().set());
+      if (has_clip) end_scissor_mode();
+    };
+    size_t layer_begin = 0;
     int cursor_to_set = 0; // Default cursor
     for (size_t index = 0; index < context.render_cmds.size(); ++index) {
       const auto &cmd = context.render_cmds[index];
+      if (cmd.layer != context.render_cmds[layer_begin].layer) {
+        detail::draw_layer_scrollbars(context, layer_begin, index, scrollbar);
+        layer_begin = index;
+      }
       auto id = cmd.id;
       OptEntity opt_ent = UICollectionHolder::getEntityForID(id);
       if (!opt_ent.valid())
@@ -1964,6 +1969,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         cursor_to_set = to_cursor_id(ent.get<HasCursor>().cursor);
       }
     }
+    detail::draw_layer_scrollbars(context, layer_begin, context.render_cmds.size(), scrollbar);
     set_mouse_cursor(cursor_to_set);
     context.render_cmds.clear();
   }
@@ -2669,9 +2675,24 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
     // Collect all commands
     const auto focus_paint = detail::prepare_focus_paint(context);
+    const auto scrollbar = [&](const RenderInfo &cmd, RectangleType rect,
+                               ColorType color, bool has_clip, RectangleType clip) {
+      if (has_clip)
+        buffer.add_scissor_start(static_cast<int>(clip.x), static_cast<int>(clip.y),
+                                 static_cast<int>(clip.width), static_cast<int>(clip.height),
+                                 cmd.layer, cmd.id);
+      buffer.add_rounded_rectangle(rect, color, 1.f, 6, std::bitset<4>().set(),
+                                   cmd.layer, cmd.id);
+      if (has_clip) buffer.add_scissor_end(cmd.layer, cmd.id);
+    };
+    size_t layer_begin = 0;
     int cursor_to_set = 0; // Default cursor
     for (size_t index = 0; index < context.render_cmds.size(); ++index) {
       const auto &cmd = context.render_cmds[index];
+      if (cmd.layer != context.render_cmds[layer_begin].layer) {
+        detail::draw_layer_scrollbars(context, layer_begin, index, scrollbar);
+        layer_begin = index;
+      }
       auto id = cmd.id;
       auto layer = cmd.layer;
       OptEntity opt_ent = UICollectionHolder::getEntityForID(id);
@@ -2685,6 +2706,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         cursor_to_set = to_cursor_id(ent.get<HasCursor>().cursor);
       }
     }
+    detail::draw_layer_scrollbars(context, layer_begin, context.render_cmds.size(), scrollbar);
     set_mouse_cursor(cursor_to_set);
     context.render_cmds.clear();
 

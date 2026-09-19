@@ -268,7 +268,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                          ctx.mouse.pos.x <= fr.x + fr.width &&
                          ctx.mouse.pos.y >= fr.y &&
                          ctx.mouse.pos.y <= fr.y + fr.height;
-    if (max_scroll > 0.f && hovered) {
+    if (max_scroll > 0.f && hovered && ctx.is_input_allowed(field_entity.id)) {
       const float wheel = input::get_mouse_wheel_move_v().y;
       if (wheel != 0.f) {
         state.scroll_offset_y = std::clamp(

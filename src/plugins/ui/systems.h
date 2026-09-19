@@ -2018,7 +2018,7 @@ struct HandleScrollbarDrag : SystemWithUIContext<HasScrollView> {
     if (!context)
       return;
     if (!cmp.was_rendered_to_screen || cmp.should_hide ||
-        entity.has<ShouldHide>()) {
+        entity.has<ShouldHide>() || !context->is_input_allowed(entity.id)) {
       scroll.dragging_scrollbar = false;
       return;
     }
@@ -2216,6 +2216,8 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
     RectangleType rect = cmp.rect();
     if (rect.width <= 0.0f || rect.height <= 0.0f)
       return;
+
+    if (!context || !context->is_input_allowed(entity.id)) return;
 
     if (!is_mouse_inside(context->mouse.pos, rect))
       return;

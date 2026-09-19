@@ -361,8 +361,6 @@ struct UIPluginRenderBridge : System<> {
         } else {
             systems.push_back(std::make_unique<ui::RenderImm<InputAction>>());
         }
-        // After the renderer (bar on top of content), before the debug overlay.
-        systems.push_back(std::make_unique<ui::RenderScrollbars<InputAction>>());
         systems.push_back(
             std::make_unique<ui::RenderDebugAutoLayoutRoots<InputAction>>(
                 toggle_debug));

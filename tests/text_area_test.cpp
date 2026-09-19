@@ -561,7 +561,7 @@ TEST(end_goes_to_the_end_of_the_wrapped_row) {
 namespace {
 // Put the mouse over the field, turn the wheel, and report the scroll offset.
 float scroll_after_wheel(const std::string &content, float box_h, float wheel,
-                         int idle_frames = 0) {
+                         int idle_frames = 0, bool blocked = false) {
   ImmTestHarness h;
   std::string text = content;
   Entity *area = nullptr;
@@ -586,6 +586,7 @@ float scroll_after_wheel(const std::string &content, float box_h, float wheel,
   testing::test_input::detail::test_mode = true;
   testing::input_injector::reset_all();
   testing::input_injector::set_mouse_wheel(0.f, wheel);
+  if (blocked) h.context().add_input_gate("modal", [](EntityID) { return false; });
 
   h.begin_frame();
   emit();
@@ -607,6 +608,10 @@ TEST(the_wheel_scrolls_a_field_whose_content_overflows) {
   // Eight rows in a three-row box.
   const float down = scroll_after_wheel("a\nb\nc\nd\ne\nf\ng\nh", 70.f, -1.f);
   CHECK_APPROX(down, LINE_H);
+}
+
+TEST(input_gate_blocks_text_area_wheel) {
+  CHECK_APPROX(scroll_after_wheel("a\nb\nc\nd\ne\nf\ng\nh", 70.f, -2.f, 0, true), 0.f);
 }
 
 TEST(wheel_scrolling_survives_idle_frames) {
