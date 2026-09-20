@@ -24,8 +24,8 @@ static void check_marks(bool batched) {
       auto pair = mk(parent.ent(), 0);
       auto &row = deref(pair).first;
       bool value = phase != 1;
-      if (row.has<HasCheckboxState>()) row.get<HasCheckboxState>().on = value;
-      checkbox(h.context(), pair, value, style);
+      CHECK(!checkbox(h.context(), pair, value, style));
+      CHECK(value == (phase != 1));
       auto &indicator = UICollectionHolder::getEntityForID(row.get<UIComponent>().children.back()).asE();
       ids[static_cast<size_t>(i)] = indicator.id;
       CHECK(indicator.has<HasCheckboxMark>() == (phase == 0 || phase == 4));
@@ -77,6 +77,60 @@ TEST(click_updates_mark_and_custom_text_in_same_frame) {
     CHECK(value == (phase % 2 == 1));
     CHECK(indicator.has<HasCheckboxMark>() == (phase == 1));
     CHECK(indicator.get<HasLabel>().label == (phase == 2 ? "no" : phase == 3 ? "yes" : ""));
+    h.layout_only();
+  }
+}
+
+TEST(external_changes_precede_input_and_do_not_report_clicks) {
+  for (bool label_click : {false, true}) {
+    ui_test::ImmTestHarness h;
+    Entity *input = nullptr;
+    for (int phase = 0; phase < 6; ++phase) {
+      h.begin_frame();
+      bool value = phase == 1 || phase == 3;
+      const bool click = phase == 2 || phase == 3 || phase == 4;
+      const bool disabled = phase >= 4;
+      if (input && input->has<HasClickListener>())
+        input->get<HasClickListener>().down = click;
+      auto result = checkbox(h.context(), mk(h.root(), 0), value,
+          ComponentConfig{}.with_size({pixels(200), pixels(44)})
+              .with_label("Enabled").with_checkbox_indicators("yes", "no")
+              .with_disabled(disabled));
+      const bool expected = phase == 1 || phase == 2;
+      CHECK(value == expected);
+      CHECK(static_cast<bool>(result) == (click && !disabled));
+      CHECK(result.ent().get<HasCheckboxState>().on == expected);
+      const auto &children = result.cmp().children;
+      auto &indicator = UICollectionHolder::getEntityForID(children.back()).asE();
+      CHECK(indicator.get<HasLabel>().label == (expected ? "yes" : "no"));
+      input = &UICollectionHolder::getEntityForID(children[label_click ? 0 : 1]).asE();
+      h.layout_only();
+    }
+  }
+}
+
+TEST(group_reset_updates_marks_and_selection_limits) {
+  ui_test::ImmTestHarness h;
+  std::bitset<3> values;
+  for (int phase = 0; phase < 3; ++phase) {
+    h.begin_frame();
+    values = phase == 1 ? 0b110 : 0b001;
+    const auto expected = values;
+    auto result = checkbox_group(h.context(), mk(h.root(), 0), values,
+        std::array<std::string_view, 3>{"A", "B", "C"}, {1, 2},
+        ComponentConfig{}.with_size({pixels(200), pixels(44)}));
+    CHECK(!result);
+    CHECK(values == expected);
+    const auto &rows = result.cmp().children;
+    CHECK(rows.size() == 3);
+    for (size_t i = 0; i < rows.size(); ++i) {
+      auto &row = UICollectionHolder::getEntityForID(rows[i]).asE();
+      auto &indicator = UICollectionHolder::getEntityForID(row.get<UIComponent>().children.back()).asE();
+      CHECK(row.get<HasCheckboxState>().on == expected.test(i));
+      CHECK(indicator.has<HasCheckboxMark>() == expected.test(i));
+      const bool disabled = expected.count() == 1 ? expected.test(i) : !expected.test(i);
+      CHECK(indicator.has<HasClickListener>() == !disabled);
+    }
     h.layout_only();
   }
 }

@@ -1065,9 +1065,9 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
                        ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
-  // --- State management (convenience: caller doesn't need to track state) ---
   HasCheckboxState &state =
       init_state<HasCheckboxState>(entity, [&](auto &) {}, value);
+  state.on = value;
 
   const auto indicator_alignment = config.label_alignment;
   auto label = config.label;
