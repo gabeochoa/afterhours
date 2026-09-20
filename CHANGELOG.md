@@ -8,6 +8,10 @@ Started partway through the project's life, so it does not go all the way back.
 
 ### Breaking
 
+**The animation plugin is rewritten around `afterhours::motion`.** `animation::anim<Key>(k).to(v, dur, EasingType)`, `AnimationManager`, `AnimHandle`, `sequence`, `loop_sequence`, `one_shot`, `clamp_value`, `get_value`, `register_update_systems<Key>()` and the declarative `with_animation(Anim::on_hover()...)` / `HasAnimationState` are gone. Every old call is a compile error.
+*What to do:* `motion::anim(key, entity.id)` (or `motion::anim(key)` for a value with no entity) returns a `Track<float>`; `.from(v).to(target, Spring::snappy())` for springs, `.to(target, Timeline{.keys = {{0,0},{0.3f,1}}, .curve = curves::ease_out_quad})` for a timed ease, `.then(...)` to chain, `.delay(s)`, `.value()` / `.value_or(d)` to read, `.active()` instead of `is_active`. `Spring::from_freq_decay(freq, decay)` reproduces the old ui spring numbers. Register once with `animation::register_update_systems(systems)` (no key type). Widgets use `.on_hover({.scale = 1.05f}, Spring::snappy())`, `.on_press`, `.on_focus`, `.on_appear({.opacity = {0.f, 1.f}})`, `.on_state(bool, ...)`, `.on_change(stamp, ...)`. `animation::set_instant` is unchanged. Tracks live on the entity (`motion::HasTracks`) and die with it; there is no `clear_all`.
+*Why:* springs are solved in closed form so frame rate and stalls never change where a motion lands, retargeting keeps velocity, and hover/press/focus resolve to one target per property instead of fighting over a track.
+
 **`HasScrollView::viewport_size` is now `std::optional`.** A plain `{0,0}` could not be told apart from a view genuinely measured as empty, so a consumer windowing its content read zero on frame one and silently built everything — which, before widget retirement, was a permanent plateau.
 *What to do:* every read site is a compile error. `viewport_or_zero()` restores the old reading where you do not care; check `has_value()` where "not measured yet" is a real case, which it is for anything that windows.
 

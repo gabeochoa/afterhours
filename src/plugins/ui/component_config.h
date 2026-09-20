@@ -10,7 +10,6 @@
 #include "../autolayout.h"
 #include "../color.h"
 #include "../texture_manager.h"
-#include "animation_config.h"
 #include "components.h"
 #include "motion_config.h"
 #include "render_primitives.h"
@@ -206,8 +205,6 @@ struct ComponentConfig {
   // Nine-slice border configuration
   std::optional<NineSliceBorder> nine_slice_config;
 
-  // Animation configurations
-  std::vector<AnimationDef> animations;
   std::vector<MotionRule> motion;
 
   ComponentConfig() = default;
@@ -608,12 +605,6 @@ struct ComponentConfig {
   /// Use this for smooth scale animations instead of changing size.
   ComponentConfig &with_scale(float s) {
     scale = s;
-    return *this;
-  }
-  /// Add a declarative animation that triggers automatically.
-  /// Example: .with_animation(Anim::on_click().scale(0.9f, 1.0f).spring())
-  ComponentConfig &with_animation(const Anim &anim) {
-    animations.push_back(anim.build());
     return *this;
   }
   ComponentConfig &on_appear(MotionProps props,
@@ -1278,8 +1269,6 @@ struct ComponentConfig {
     if (overrides.icon_position != IconPosition::Left)
       merged.icon_position = overrides.icon_position;
 
-    if (!overrides.animations.empty())
-      merged.animations = overrides.animations;
     if (!overrides.motion.empty())
       merged.motion = overrides.motion;
 

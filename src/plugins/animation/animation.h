@@ -4,4 +4,4 @@
 #include "timeline.h"
 #include "track.h"
 #include "store.h"
-#include "legacy.h"
+#include "plugin.h"

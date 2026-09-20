@@ -21,7 +21,6 @@
 #include "../../memory/arena.h"
 #include "../input_system.h"
 #include "../texture_manager.h"
-#include "animation_keys.h"
 #include "components.h"
 #include "context.h"
 #include "fmt/format.h"

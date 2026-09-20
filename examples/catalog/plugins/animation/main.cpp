@@ -7,8 +7,9 @@
 #include "../../../../src/plugins/animation.h"
 
 using namespace afterhours;
+using motion::Spring;
+using motion::Timeline;
 
-// Define animation keys as an enum
 enum struct AnimKey {
     FadeIn,
     Position,
@@ -18,112 +19,70 @@ enum struct AnimKey {
 int main() {
     std::cout << "=== Animation Plugin Example ===" << std::endl;
 
-    // Register animation update system
     SystemManager systems;
-    animation::register_update_systems<AnimKey>(systems);
+    animation::register_update_systems(systems);
+    auto step = [&](float seconds, float dt = 1.f / 60.f) {
+        for (float t = 0.f; t < seconds - 1e-6f; t += dt) systems.run(dt);
+    };
 
-    // Test 1: Simple fade-in animation
-    std::cout << "\n1. Simple fade-in animation:" << std::endl;
-    animation::anim<AnimKey>(AnimKey::FadeIn)
-        .from(0.0f)
-        .to(1.0f, 0.5f, animation::EasingType::Linear);
+    std::cout << "\n1. Timed fade-in (0.0 -> 1.0 over 0.5s, linear):" << std::endl;
+    motion::anim(AnimKey::FadeIn).from(0.f).to(1.f, Timeline{.keys = {{0.f, 0.f}, {0.5f, 1.f}}});
+    assert(motion::anim(AnimKey::FadeIn).active());
+    step(0.25f);
+    float val = motion::anim(AnimKey::FadeIn).value();
+    std::cout << "  - After 0.25s: value = " << val << " (expected ~0.5)" << std::endl;
+    assert(val > 0.4f && val < 0.6f);
+    step(0.3f);
+    assert(!motion::anim(AnimKey::FadeIn).active());
+    std::cout << "  - After 0.55s: settled at " << motion::anim(AnimKey::FadeIn).value() << std::endl;
 
-    assert(animation::manager<AnimKey>().is_active(AnimKey::FadeIn));
-    std::cout << "  - Fade animation started (0.0 -> 1.0 over 0.5s)" << std::endl;
+    std::cout << "\n2. Spring (0 -> 100, snappy):" << std::endl;
+    motion::anim(AnimKey::Position).from(0.f).to(100.f, Spring::snappy());
+    step(0.1f);
+    val = motion::anim(AnimKey::Position).value();
+    std::cout << "  - At 0.1s: " << val << " (should be well past 50)" << std::endl;
+    assert(val > 50.f);
+    step(1.f);
+    val = motion::anim(AnimKey::Position).value();
+    std::cout << "  - Settled: " << val << std::endl;
+    assert(val > 99.9f && val < 100.1f);
 
-    // Simulate time passing
-    float dt = 0.25f;
-    animation::manager<AnimKey>().update(dt);
-    auto val = animation::manager<AnimKey>().get_value(AnimKey::FadeIn);
-    assert(val.has_value());
-    std::cout << "  - After 0.25s: value = " << val.value() << " (expected ~0.5)" << std::endl;
-    assert(val.value() > 0.4f && val.value() < 0.6f);
+    std::cout << "\n3. Chained steps (1.0 -> 2.0 -> 0.5 -> 1.0):" << std::endl;
+    const Timeline half_second{.keys = {{0.f, 0.f}, {0.5f, 1.f}}};
+    motion::anim(AnimKey::Scale).from(1.f).to(2.f, half_second).then(0.5f, half_second).then(1.f, half_second);
+    step(0.5f);
+    val = motion::anim(AnimKey::Scale).value();
+    std::cout << "  - After segment 1: " << val << " (expected 2.0)" << std::endl;
+    assert(val > 1.9f && val < 2.1f);
+    step(0.5f);
+    val = motion::anim(AnimKey::Scale).value();
+    std::cout << "  - After segment 2: " << val << " (expected 0.5)" << std::endl;
+    assert(val > 0.4f && val < 0.6f);
+    step(0.6f);
+    val = motion::anim(AnimKey::Scale).value();
+    std::cout << "  - After segment 3: " << val << " (expected 1.0)" << std::endl;
+    assert(val > 0.9f && val < 1.1f);
 
-    animation::manager<AnimKey>().update(dt);
-    val = animation::manager<AnimKey>().get_value(AnimKey::FadeIn);
-    if (val.has_value()) {
-        std::cout << "  - After 0.50s: value = " << val.value() << " (expected 1.0)" << std::endl;
-    } else {
-        std::cout << "  - After 0.50s: animation completed (track inactive)" << std::endl;
-    }
-    assert(!animation::manager<AnimKey>().is_active(AnimKey::FadeIn));
-
-    // Test 2: Easing functions
-    std::cout << "\n2. Easing functions:" << std::endl;
-    animation::anim<AnimKey>(AnimKey::Position)
-        .from(0.0f)
-        .to(100.0f, 1.0f, animation::EasingType::EaseOutQuad);
-
-    // Check at 50% time - EaseOutQuad should be more than 50% there
-    animation::manager<AnimKey>().update(0.5f);
-    val = animation::manager<AnimKey>().get_value(AnimKey::Position);
-    std::cout << "  - EaseOutQuad at 50% time: " << val.value() << " (should be > 50)" << std::endl;
-    assert(val.value() > 50.0f); // EaseOutQuad is faster at start
-
-    animation::manager<AnimKey>().update(0.5f);
-    val = animation::manager<AnimKey>().get_value(AnimKey::Position);
-    if (val.has_value()) {
-        std::cout << "  - EaseOutQuad at 100% time: " << val.value() << std::endl;
-    } else {
-        std::cout << "  - EaseOutQuad at 100% time: animation completed" << std::endl;
-    }
-
-    // Test 3: Animation sequence
-    std::cout << "\n3. Animation sequence (chained animations):" << std::endl;
-    animation::anim<AnimKey>(AnimKey::Scale)
-        .from(1.0f)
-        .sequence({
-            {.to_value = 2.0f, .duration = 0.5f, .easing = animation::EasingType::Linear},
-            {.to_value = 0.5f, .duration = 0.5f, .easing = animation::EasingType::Linear},
-            {.to_value = 1.0f, .duration = 0.5f, .easing = animation::EasingType::Linear},
-        });
-
-    std::cout << "  - Sequence: 1.0 -> 2.0 -> 0.5 -> 1.0" << std::endl;
-
-    animation::manager<AnimKey>().update(0.5f);
-    val = animation::manager<AnimKey>().get_value(AnimKey::Scale);
-    std::cout << "  - After segment 1: " << val.value() << " (expected 2.0)" << std::endl;
-    assert(val.value() > 1.9f && val.value() < 2.1f);
-
-    animation::manager<AnimKey>().update(0.5f);
-    val = animation::manager<AnimKey>().get_value(AnimKey::Scale);
-    std::cout << "  - After segment 2: " << val.value() << " (expected 0.5)" << std::endl;
-    assert(val.value() > 0.4f && val.value() < 0.6f);
-
-    animation::manager<AnimKey>().update(0.5f);
-    val = animation::manager<AnimKey>().get_value(AnimKey::Scale);
-    if (val.has_value()) {
-        std::cout << "  - After segment 3: " << val.value() << " (expected 1.0)" << std::endl;
-        assert(val.value() > 0.9f && val.value() < 1.1f);
-    } else {
-        std::cout << "  - After segment 3: animation completed (track inactive)" << std::endl;
-    }
-
-    // Test 4: on_complete callback
-    std::cout << "\n4. Animation completion callback:" << std::endl;
+    std::cout << "\n4. Completion callback:" << std::endl;
     bool callback_fired = false;
-    animation::anim<AnimKey>(AnimKey::FadeIn)
-        .from(0.0f)
-        .to(1.0f, 0.1f, animation::EasingType::Linear)
+    motion::anim(AnimKey::FadeIn)
+        .from(0.f)
+        .to(1.f, Timeline{.keys = {{0.f, 0.f}, {0.1f, 1.f}}})
         .on_complete([&callback_fired]() {
             callback_fired = true;
             std::cout << "  - on_complete callback fired!" << std::endl;
         });
-
-    animation::manager<AnimKey>().update(0.1f);
+    step(0.2f);
     assert(callback_fired);
 
-    // Test 5: one_shot helper
-    std::cout << "\n5. one_shot animation (only starts once):" << std::endl;
-    int setup_count = 0;
-    for (int i = 0; i < 3; ++i) {
-        animation::one_shot<AnimKey>(AnimKey::Position, [&setup_count](auto anim) {
-            setup_count++;
-            anim.from(0.0f).to(100.0f, 1.0f, animation::EasingType::Linear);
-        });
-    }
-    std::cout << "  - Called one_shot 3 times, setup ran " << setup_count << " time(s)" << std::endl;
-    assert(setup_count == 1);
+    std::cout << "\n5. Instant mode lands on the last step immediately:" << std::endl;
+    animation::set_instant(true);
+    motion::anim(AnimKey::Scale).from(1.f).to(2.f, half_second).then(3.f, half_second);
+    systems.run(1.f / 60.f);
+    val = motion::anim(AnimKey::Scale).value();
+    std::cout << "  - After one frame: " << val << " (expected 3.0)" << std::endl;
+    assert(val == 3.f);
+    animation::set_instant(false);
 
     std::cout << "\n=== All animation tests passed! ===" << std::endl;
     return 0;
