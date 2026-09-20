@@ -11,6 +11,7 @@
 #include "../core/system.h"
 #include "../developer.h"
 #include "../drawing_helpers.h"
+#include "animation.h"
 #include "color.h"
 #include "ui/element_result.h"
 #include "ui/imm_components.h"
@@ -64,6 +65,8 @@ enum struct RenderLayer : int {
 // spacing value, not a layer of its own.
 constexpr int MODAL_LAYER_STRIDE = 10;
 
+constexpr size_t kPresenceTrack = 900;
+
 // TODO eventually it would be nice to use ComponentConfig
 // Modal configuration
 struct ModalConfig {
@@ -76,6 +79,14 @@ struct ModalConfig {
     bool show_close_button = true;
     Color backdrop_color = {0, 0, 0, 128};
     int render_layer = static_cast<int>(RenderLayer::Modal);
+    std::optional<motion::Mode> enter_motion;
+    std::optional<motion::Mode> exit_motion;
+
+    ModalConfig &with_motion(motion::Mode enter, motion::Mode exit) {
+        enter_motion = std::move(enter);
+        exit_motion = std::move(exit);
+        return *this;
+    }
 
     ModalConfig &with_size(ui::Size w, ui::Size h) {
         width = w;
@@ -128,6 +139,9 @@ struct modal : developer::Plugin {
 
     // Component attached to individual modal entities
     struct Modal : BaseComponent {
+        enum struct Phase { Hidden, Entering, Visible, Exiting };
+        Phase phase = Phase::Hidden;
+        std::optional<motion::Mode> exit_motion;
         bool was_open_last_frame = false;
         DialogResult result = DialogResult::Pending;
         std::string return_value;
@@ -155,9 +169,13 @@ struct modal : developer::Plugin {
             render_layer = config.render_layer;
             title = config.title;
             previously_focused_element = focus_to_restore;
+            exit_motion = config.exit_motion;
             pending_close = false;
             pending_close_result = DialogResult::Pending;
         }
+
+        bool presenting() const { return phase != Phase::Hidden; }
+        bool exiting() const { return phase == Phase::Exiting; }
 
         // Request the modal to close (used by systems that don't have access to
         // open&)
@@ -238,8 +256,12 @@ struct modal : developer::Plugin {
             const auto &stack = get_modal_root().modal_stack;
             if (stack.empty()) { ctx.remove_input_gate("modal"); return; }
             const auto top = stack.back();
-            ctx.add_input_gate("modal", [top](EntityID id) {
-                return id == -1 || is_entity_in_tree(top, id);
+            bool exiting = false;
+            if (auto opt = ui::UICollectionHolder::getEntityForID(top);
+                opt.valid() && opt->template has<Modal>())
+                exiting = opt->template get<Modal>().exiting();
+            ctx.add_input_gate("modal", [top, exiting](EntityID id) {
+                return id == -1 || (!exiting && is_entity_in_tree(top, id));
             });
             if (!is_entity_in_tree(top, ctx.focus_id)) ctx.focus_id = ctx.ROOT;
             if (!is_entity_in_tree(top, ctx.hot_id)) ctx.hot_id = ctx.ROOT;
@@ -291,7 +313,7 @@ struct modal : developer::Plugin {
 
             // Check if a system requested this modal to close
             if (m.pending_close) {
-                m.result = m.pending_close_result;
+                if (!m.exiting()) m.result = m.pending_close_result;
                 m.pending_close = false;
                 m.pending_close_result = DialogResult::Pending;
                 open = false;  // This modifies the user's bool reference
@@ -300,33 +322,53 @@ struct modal : developer::Plugin {
             // Handle state transitions
             bool was_open = m.was_open_last_frame;
             bool is_open = open;
+            const Modal::Phase phase_before = m.phase;
+            auto &presence = entity.template addComponentIfMissing<motion::HasTracks>()
+                                 .template track<float>(kPresenceTrack);
 
-            if (is_open && !was_open) {
-                // Modal just opened
-                m.open_with(config, ctx.focus_id);
-
-                // Add to modal stack
-                auto &root = get_modal_root();
-                m.open_order = root.modal_sequence++;
-                root.modal_stack.push_back(entity.id);
-            } else if (!is_open && was_open) {
-                // Modal just closed
+            const auto finish_close = [&] {
                 auto &root = get_modal_root();
                 auto it = std::find(root.modal_stack.begin(),
                                     root.modal_stack.end(), entity.id);
                 if (it != root.modal_stack.end()) {
                     root.modal_stack.erase(it);
                 }
-
-                // Restore focus
                 if (m.previously_focused_element >= 0) {
                     if (ctx.focus_id == ctx.ROOT || is_entity_in_tree(entity.id, ctx.focus_id))
                         ctx.set_focus(m.previously_focused_element);
                 }
+                m.phase = Modal::Phase::Hidden;
+            };
+
+            if (is_open && !was_open) {
+                if (m.exiting()) {
+                    presence.to(1.f, config.enter_motion.value_or(motion::Spring::smooth()));
+                } else {
+                    m.open_with(config, ctx.focus_id);
+                    auto &root = get_modal_root();
+                    m.open_order = root.modal_sequence++;
+                    root.modal_stack.push_back(entity.id);
+                    if (config.enter_motion.has_value() && !motion::is_instant())
+                        presence.from(0.f).to(1.f, *config.enter_motion);
+                    else
+                        presence.from(1.f);
+                }
+                m.phase = Modal::Phase::Entering;
+            } else if (!is_open && was_open) {
+                if (m.exit_motion.has_value() && !motion::is_instant()) {
+                    m.phase = Modal::Phase::Exiting;
+                    presence.to(0.f, *m.exit_motion);
+                } else {
+                    finish_close();
+                }
             }
+            if (m.phase == Modal::Phase::Entering && !presence.active())
+                m.phase = Modal::Phase::Visible;
+            if (m.exiting() && !presence.active())
+                finish_close();
 
             m.was_open_last_frame = is_open;
-            if (is_open != was_open) sync_input(ctx);
+            if (is_open != was_open || m.phase != phase_before) sync_input(ctx);
 
             // Always get/create the backdrop entity so we can manage its
             // visibility
@@ -335,12 +377,13 @@ struct modal : developer::Plugin {
             auto backdrop_ep = mk(overlay_root, backdrop_id);
             auto [backdrop_entity, backdrop_parent] = deref(backdrop_ep);
 
-            if (!is_open) {
+            if (!m.presenting()) {
                 // Add ShouldHide to modal and backdrop when not open
                 entity.template addComponentIfMissing<ShouldHide>();
                 backdrop_entity.template addComponentIfMissing<ShouldHide>();
                 return {false, entity};
             }
+            const float presence_value = presence.started() ? presence.value() : 1.f;
 
             // Remove ShouldHide when open
             entity.template removeComponentIfExists<ShouldHide>();
@@ -403,6 +446,7 @@ struct modal : developer::Plugin {
                         .with_debug_name("modal_backdrop"));
             backdrop_visual.cmp().computed_rel[Axis::X] = 0;
             backdrop_visual.cmp().computed_rel[Axis::Y] = 0;
+            backdrop_entity.template addComponentIfMissing<HasOpacity>().value *= presence_value;
 
             // Note: Backdrop clicks for light dismiss are handled by
             // ModalCloseWatcherSystem which checks if clicks are outside the
@@ -427,6 +471,7 @@ struct modal : developer::Plugin {
             panel_config.with_render_layer(config.render_layer);
             init_component(ctx, EntityParent{entity, config.panel ? parent : overlay_root},
                            panel_config, ComponentType::Div);
+            entity.template addComponentIfMissing<HasOpacity>().value *= presence_value;
 
             // Add title if specified
             if (!config.title.empty()) {
@@ -907,6 +952,7 @@ struct modal : developer::Plugin {
                         context->set_focus(m.previously_focused_element);
                     m.was_open_last_frame = false;
                     m.pending_close = false;
+                    m.phase = Modal::Phase::Hidden;
                 }
                 return true;
             });
