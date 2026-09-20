@@ -80,6 +80,7 @@ ALL_TESTS := \
 	ui_update_lifecycle_single_test \
 	drag_preview_test \
 	animation_test \
+	motion_config_test \
 	sound_volume_test \
 	settings_save_test \
 	clipboard_test \
