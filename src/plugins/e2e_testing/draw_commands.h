@@ -303,6 +303,28 @@ struct HandleDumpDrawsCommand : System<PendingE2ECommand> {
   }
 };
 
+struct HandleExpectDrawCallsBelowCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("expect_draw_calls_below")) return;
+    if (!cmd.has_args(1)) {
+      cmd.fail("expect_draw_calls_below requires: <count>");
+      return;
+    }
+    const size_t limit = static_cast<size_t>(std::stoul(cmd.args[0]));
+    const size_t count = capture::calls().size();
+    if (count == 0) {
+      cmd.retry();
+      return;
+    }
+    if (count >= limit) {
+      cmd.fail(std::format("expected fewer than {} draw calls, got {}: {}",
+                           limit, count, summarize(20)));
+      return;
+    }
+    cmd.consume();
+  }
+};
+
 } // namespace draw_commands
 } // namespace testing
 } // namespace afterhours

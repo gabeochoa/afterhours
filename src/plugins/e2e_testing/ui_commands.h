@@ -1385,6 +1385,8 @@ void register_ui_commands(SystemManager &sm,
       std::make_unique<draw_commands::HandleExpectDrawnAtCommand>());
   sm.register_update_system(
       std::make_unique<draw_commands::HandleDumpDrawsCommand>());
+  sm.register_update_system(
+      std::make_unique<draw_commands::HandleExpectDrawCallsBelowCommand>());
 }
 
 } // namespace ui_commands
