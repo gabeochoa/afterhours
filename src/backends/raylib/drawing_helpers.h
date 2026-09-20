@@ -4,6 +4,7 @@
 #include "../../blend.h"
 
 #include <bitset>
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -448,6 +449,7 @@ inline void draw_circle(int centerX, int centerY, float radius, Color color) {
 }
 
 inline void draw_circle_v(Vector2Type center, float radius, Color color) {
+  capture::record("circle", RectangleType{center.x - radius, center.y - radius, 2 * radius, 2 * radius}, color, "");
   raylib::DrawCircleV(center, radius, color);
 }
 
@@ -484,6 +486,9 @@ inline void draw_ellipse_lines(int centerX, int centerY, float radiusH,
 // Triangle drawing primitives
 inline void draw_triangle(Vector2Type v1, Vector2Type v2, Vector2Type v3,
                           Color color) {
+  const float min_x = std::min({v1.x, v2.x, v3.x}), max_x = std::max({v1.x, v2.x, v3.x});
+  const float min_y = std::min({v1.y, v2.y, v3.y}), max_y = std::max({v1.y, v2.y, v3.y});
+  capture::record("triangle", RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, color, "");
   raylib::DrawTriangle(v1, v2, v3, color);
 }
 

@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "../../developer.h"
+#include "../../capture.h"
 #include "../../render_capture.h"
 #include "../../graphics.h"
 #include "../../plugins/color.h"
@@ -699,6 +700,7 @@ inline void draw_circle(int centerX, int centerY, float radius, Color color) {
 }
 
 inline void draw_circle_v(Vector2Type center, float radius, Color color) {
+  capture::record("circle", RectangleType{center.x - radius, center.y - radius, 2 * radius, 2 * radius}, color, "");
   draw_circle(static_cast<int>(center.x), static_cast<int>(center.y), radius,
               color);
 }
@@ -845,6 +847,9 @@ inline void draw_ellipse_lines(int centerX, int centerY, float radiusH,
 
 inline void draw_triangle(Vector2Type v1, Vector2Type v2, Vector2Type v3,
                           Color color) {
+  const float min_x = std::min({v1.x, v2.x, v3.x}), max_x = std::max({v1.x, v2.x, v3.x});
+  const float min_y = std::min({v1.y, v2.y, v3.y}), max_y = std::max({v1.y, v2.y, v3.y});
+  capture::record("triangle", RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, color, "");
   sgl_begin_triangles();
   metal_draw_detail::set_color(color);
   sgl_v2f(v1.x, v1.y);
