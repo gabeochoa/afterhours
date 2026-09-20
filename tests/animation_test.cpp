@@ -465,6 +465,14 @@ int main() {
           "over-damped inputs clamp to critically damped");
   }
 
+  {
+    enum struct OtherProp { Slide };
+    motion::anim(Prop::Slide).from(0.f).to(1.f, Spring{});
+    motion::anim(OtherProp::Slide).from(5.f);
+    check(motion::anim(Prop::Slide).target() == 1.f && motion::anim(OtherProp::Slide).value() == 5.f,
+          "two enums with the same value keep separate root tracks");
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <memory>
+#include <typeindex>
+#include <typeinfo>
 #include <unordered_map>
 
 #include "../../core/system.h"
@@ -72,15 +74,19 @@ inline Entity &root_entity() {
   return EntityHelper::get_singleton<MotionRoot>().get();
 }
 
+template <typename E> size_t track_key(E key) {
+  const size_t type_salt = std::hash<std::type_index>{}(std::type_index(typeid(E)));
+  return (type_salt * 1099511628211ull) ^ static_cast<size_t>(key);
+}
+
 template <typename T = float, typename E> Track<T> &anim(E key) {
-  return root_entity().addComponentIfMissing<HasTracks>().track<T>(
-      static_cast<size_t>(key));
+  return root_entity().addComponentIfMissing<HasTracks>().track<T>(track_key(key));
 }
 
 template <typename T = float, typename E> Track<T> &anim(E key, EntityID id) {
   return EntityHelper::getEntityForIDEnforce(id)
       .addComponentIfMissing<HasTracks>()
-      .track<T>(static_cast<size_t>(key));
+      .track<T>(track_key(key));
 }
 
 struct AdvanceTracks : System<HasTracks> {
