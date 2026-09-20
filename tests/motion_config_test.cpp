@@ -157,6 +157,52 @@ int main() {
           "and the other fires on its own change");
   }
 
+  {
+    HasMotionState st;
+    st.rest[static_cast<size_t>(MotionProperty::CornerRadius)] = 8.f;
+    const ColorType red{255, 0, 0, 255}, blue{0, 0, 255, 255};
+    std::vector<MotionRule> rules{
+        {MotionTrigger::Hover, {.corner_radius = 40.f, .background = red},
+         hover_spring}};
+    auto t = resolve_motion(rules, {}, st);
+    const size_t kRadius = static_cast<size_t>(MotionProperty::CornerRadius);
+    check(t[kRadius].set && t[kRadius].value == 8.f,
+          "corner radius rests at the value the caller supplied");
+    check(t.background.mentioned && !t.background.set,
+          "background at rest is flagged mentioned but unset, so the caller "
+          "uses the configured colour");
+    t = resolve_motion(rules, {.hot = true}, st);
+    check(t[kRadius].value == 40.f && t.background.set &&
+              t.background.value.r == 255 && t.background.value.b == 0,
+          "hover targets the radius and colour");
+    t = resolve_motion(rules, {}, st);
+    check(!t.background.set && is_spring(t.background.mode, 0.11f),
+          "hover off releases the colour along the hover spring");
+
+    std::vector<MotionRule> state{
+        {MotionTrigger::State, {.background = {blue, red}}, motion::Spring::smooth()}};
+    state[0].state = false;
+    t = resolve_motion(state, {}, st);
+    check(t.background.set && t.background.value.b == 255,
+          "state false with a from colour targets from");
+    state[0].state = true;
+    t = resolve_motion(state, {}, st);
+    check(t.background.set && t.background.value.r == 255,
+          "state true targets to");
+  }
+
+  {
+    HasMotionState st;
+    const ColorType red{255, 0, 0, 255}, blue{0, 0, 255, 255};
+    std::vector<MotionRule> rules{{MotionTrigger::Appear, {.background = {red, blue}}, motion::Spring::smooth()}};
+    auto t = resolve_motion(rules, {}, st);
+    check(t.background.set && t.background.reset_to.has_value() && t.background.value.b == 255,
+          "appear starts the background at from and targets to");
+    t = resolve_motion(rules, {}, st);
+    check(!t.background.set && t.background.rest.has_value() && t.background.rest->b == 255,
+          "later frames keep appear's colour as the rest instead of the config colour");
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);

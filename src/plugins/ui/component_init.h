@@ -573,7 +573,11 @@ inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
   resolve_scaling_mode(entity, ctx, config);
   apply_visuals(ctx, entity, config);
   if (!config.motion.empty()) {
-    const MotionValues mv = apply_motion(ctx, entity, config.motion);
+    MotionRests rests;
+    rests.corner_radius = config.corner_radius.value_or(0.f);
+    if (entity.has<HasColor>())
+      rests.background = entity.get<HasColor>().color();
+    const MotionValues mv = apply_motion(ctx, entity, config.motion, rests);
     auto &mods = entity.addComponentIfMissing<HasUIModifiers>();
     mods.scale *= mv.scale;
     mods.translate_x += mv.translate_x;
@@ -581,6 +585,17 @@ inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
     mods.rotation += mv.rotation;
     if (mv.opacity != 1.f)
       entity.addComponentIfMissing<HasOpacity>().value *= mv.opacity;
+    if (mv.corner_radius.has_value()) {
+      auto &rc = entity.addComponentIfMissing<HasRoundedCorners>();
+      if (!rc.rounded_corners.any())
+        rc.set(std::bitset<4>().set());
+      rc.set_radius_px(*mv.corner_radius);
+    }
+    if (mv.background.has_value()) {
+      auto &hc = entity.addComponentIfMissing<HasColor>(*mv.background);
+      hc.set(*mv.background);
+      hc.skip_hover_override = true;
+    }
   }
   if (config.origin_x != 0.5f || config.origin_y != 0.5f) {
     auto &mods = entity.addComponentIfMissing<HasUIModifiers>();
