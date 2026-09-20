@@ -629,6 +629,20 @@ int main() {
     afterhours::animation::set_instant(false);
   }
 
+  {
+    check(Spring::smooth().bounce == 0.f && Spring::gentle().bounce == 0.f &&
+              Spring::snappy().response < Spring::smooth().response &&
+              Spring::bouncy().bounce > Spring::snappy().bounce,
+          "presets are ordered as their names suggest");
+    const Spring s = Spring::from_freq_decay(12.f, 8.f);
+    check(near(afterhours::motion::spring_omega(s), 12.f) &&
+              std::fabs(afterhours::motion::spring_zeta(s) - 8.f / 12.f) < 1e-4f,
+          "from_freq_decay reproduces the old ui spring's omega and zeta");
+    check(Spring::from_freq_decay(10.f, 10.f).bounce == 0.f &&
+              Spring::from_freq_decay(10.f, 20.f).bounce == 0.f,
+          "over-damped inputs clamp to critically damped");
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);

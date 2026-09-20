@@ -59,6 +59,16 @@ struct Spring {
   float bounce = 0.f;
   float rest_delta = 0.f;
   float rest_speed = 0.f;
+
+  static Spring smooth() { return {.response = 0.3f, .bounce = 0.f}; }
+  static Spring snappy() { return {.response = 0.22f, .bounce = 0.15f}; }
+  static Spring bouncy() { return {.response = 0.35f, .bounce = 0.35f}; }
+  static Spring gentle() { return {.response = 0.5f, .bounce = 0.f}; }
+  static Spring from_freq_decay(float freq, float decay) {
+    freq = std::max(freq, 1e-4f);
+    return {.response = 2.f * 3.14159265358979f / freq,
+            .bounce = std::clamp(1.f - decay / freq, 0.f, 0.999f)};
+  }
 };
 
 struct SpringState {
