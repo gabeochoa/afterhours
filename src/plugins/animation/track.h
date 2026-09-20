@@ -80,12 +80,13 @@ template <typename T> struct Track {
   T target() const {
     if (!queue.empty())
       return C::from(queue.back().target);
-    return C::from(is_active ? step.target : pos);
+    return C::from(has_step ? step.target : pos);
   }
   bool active() const { return is_active; }
 
   Track &from(T v) {
     has_started = true;
+    has_step = false;
     pos = C::to(v);
     vel.fill(0.f);
     queue.clear();
@@ -227,6 +228,7 @@ private:
   }
 
   void begin(const Step &s) {
+    has_step = true;
     if (!is_active)
       chain_start = pos;
     step = s;
@@ -305,6 +307,7 @@ private:
   bool is_active = false;
   bool repeating = false;
   bool has_started = false;
+  bool has_step = false;
   bool is_essential = false;
   std::function<void()> complete_cb;
   std::vector<Watcher> watchers;

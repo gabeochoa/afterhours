@@ -445,6 +445,9 @@ int main() {
                                        .repeat = Timeline::Repeat::Loop});
     shimmer.advance(0.01f);
     check(!shimmer.active(), "non-essential loops stop under instant");
+    check(shimmer.target() == 1.f,
+          "a landed step still reports its target, so a resolver comparing "
+          "target against goal does not restart it");
     afterhours::animation::set_instant(false);
   }
 
