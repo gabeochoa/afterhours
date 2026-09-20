@@ -16,9 +16,9 @@ struct MotionProp {
   float from = 0.f;
   float to = 0.f;
   MotionProp() = default;
-  MotionProp(float to_) : set(true), to(to_) {}
-  MotionProp(float from_, float to_)
-      : set(true), has_from(true), from(from_), to(to_) {}
+  MotionProp(float value) : set(true), to(value) {}
+  MotionProp(float start, float end)
+      : set(true), has_from(true), from(start), to(end) {}
 };
 
 struct MotionProps {
