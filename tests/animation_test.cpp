@@ -531,6 +531,104 @@ int main() {
     afterhours::animation::set_instant(false);
   }
 
+  namespace motion = afterhours::motion;
+  using afterhours::Entity;
+  using afterhours::EntityHelper;
+  enum struct Prop { Slide, Tint };
+
+  {
+    afterhours::SystemManager sm;
+    motion::register_update_systems(sm);
+
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+    const auto id = e.id;
+
+    motion::anim(Prop::Slide, id).from(0.f).to(100.f, Spring{});
+    motion::anim<ColorType>(Prop::Tint, id)
+        .from(ColorType{0, 0, 0, 255})
+        .to(ColorType{255, 0, 0, 255}, Spring{});
+    check(e.has<motion::HasTracks>(), "anim(key, id) stores on the entity");
+    check(motion::anim(Prop::Slide, id).value_or(-1.f) == 0.f,
+          "value_or reads a started track");
+    check(motion::anim(Prop::Tint).value_or(-1.f) == -1.f,
+          "value_or falls back for a track nobody started");
+
+    for (int i = 0; i < 120; ++i)
+      sm.run(1.f / 60.f);
+    check(near(motion::anim(Prop::Slide, id).value(), 100.f) &&
+              motion::anim<ColorType>(Prop::Tint, id).value().r == 255,
+          "the registered system advances every track on the entity");
+
+    motion::anim(Prop::Slide).from(0.f).to(1.f, Spring{});
+    check(EntityHelper::has_singleton<motion::MotionRoot>(),
+          "keyless anim lives on a hidden root entity");
+    for (int i = 0; i < 120; ++i)
+      sm.run(1.f / 60.f);
+    check(near(motion::anim(Prop::Slide).value(), 1.f),
+          "root tracks advance too");
+
+    e.cleanup = true;
+    EntityHelper::cleanup();
+    check(!EntityHelper::getEntityForID(id).has_value(),
+          "entity is gone after cleanup");
+    Entity &again = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+    check(!motion::anim(Prop::Slide, again.id).started(),
+          "a fresh entity inherits no tracks");
+  }
+
+  {
+    afterhours::SystemManager sm;
+    motion::register_update_systems(sm);
+    Entity &e = EntityHelper::createEntity();
+    EntityHelper::merge_entity_arrays();
+    motion::anim(Prop::Slide, e.id).from(0.f).to(100.f, Spring{});
+
+    motion::pause(true);
+    for (int i = 0; i < 30; ++i)
+      sm.run(1.f / 60.f);
+    check(near(motion::anim(Prop::Slide, e.id).value(), 0.f),
+          "pause freezes progress");
+    motion::pause(false);
+
+    motion::set_time_scale(0.f);
+    for (int i = 0; i < 30; ++i)
+      sm.run(1.f / 60.f);
+    check(near(motion::anim(Prop::Slide, e.id).value(), 0.f),
+          "time scale 0 freezes progress");
+
+    motion::set_time_scale(4.f);
+    sm.run(1.f / 60.f);
+    const float fast = motion::anim(Prop::Slide, e.id).value();
+    motion::set_time_scale(1.f);
+    motion::anim(Prop::Slide, e.id).from(0.f).to(100.f, Spring{});
+    for (int i = 0; i < 4; ++i)
+      sm.run(1.f / 60.f);
+    check(near(fast, motion::anim(Prop::Slide, e.id).value()),
+          "time scale 4 covers four frames in one");
+    e.cleanup = true;
+    EntityHelper::cleanup();
+  }
+
+  {
+    afterhours::animation::set_instant(true);
+    motion::Track<float> spinner;
+    spinner.from(0.f)
+        .to(360.f, Timeline{.keys = {{0.f, 0.f}, {0.9f, 1.f}},
+                            .repeat = Timeline::Repeat::Loop})
+        .essential();
+    run(spinner, 0.45f);
+    check(spinner.active() && near(spinner.value(), 180.f),
+          "essential loops keep running under instant");
+    motion::Track<float> shimmer;
+    shimmer.from(0.f).to(1.f, Timeline{.keys = {{0.f, 0.f}, {2.f, 1.f}},
+                                       .repeat = Timeline::Repeat::Loop});
+    shimmer.advance(0.01f);
+    check(!shimmer.active(), "non-essential loops stop under instant");
+    afterhours::animation::set_instant(false);
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);

@@ -14,6 +14,7 @@
 
 #include "../core/system.h"
 #include "../developer.h"
+#include "profiling.h"
 
 namespace afterhours {
 
@@ -221,6 +222,8 @@ template <typename T> struct Track {
   };
 
   T value() const { return C::from(x_); }
+  T value_or(T fallback) const { return started_ ? value() : fallback; }
+  bool started() const { return started_; }
   T target() const {
     if (!queue_.empty())
       return C::from(queue_.back().target);
@@ -229,6 +232,7 @@ template <typename T> struct Track {
   bool active() const { return active_; }
 
   Track &from(T v) {
+    started_ = true;
     x_ = C::to(v);
     v_.fill(0.f);
     queue_.clear();
@@ -239,6 +243,7 @@ template <typename T> struct Track {
   }
 
   Track &to(T v, Mode mode = Spring{}) {
+    started_ = true;
     queue_.clear();
     chain_.clear();
     repeat_ = false;
@@ -274,6 +279,11 @@ template <typename T> struct Track {
     return *this;
   }
 
+  Track &essential(bool on = true) {
+    essential_ = on;
+    return *this;
+  }
+
   Track &on_complete(std::function<void()> fn) {
     on_complete_ = std::move(fn);
     return *this;
@@ -298,7 +308,7 @@ template <typename T> struct Track {
   void advance(float dt) {
     if (!active_)
       return;
-    if (instant_flag()) {
+    if (instant_flag() && !essential_) {
       while (!queue_.empty()) {
         x0_ = step_.target;
         step_ = queue_.front();
@@ -441,10 +451,102 @@ private:
   float remaining_delay_ = 0.f;
   bool active_ = false;
   bool repeat_ = false;
+  bool started_ = false;
+  bool essential_ = false;
   std::function<void()> on_complete_;
   std::vector<Watcher> watchers_;
 };
 
+
+inline bool &paused_flag() {
+  static bool v = false;
+  return v;
+}
+inline float &time_scale_ref() {
+  static float v = 1.f;
+  return v;
+}
+inline void pause(bool on) { paused_flag() = on; }
+inline bool is_paused() { return paused_flag(); }
+inline void set_time_scale(float scale) {
+  time_scale_ref() = std::max(scale, 0.f);
+}
+inline float time_scale() { return time_scale_ref(); }
+inline float scaled_dt(float dt) {
+  return is_paused() ? 0.f : dt * time_scale();
+}
+
+struct HasTracks : BaseComponent {
+  std::unordered_map<size_t, Track<float>> floats;
+  std::unordered_map<size_t, Track<Vector2Type>> vec2s;
+  std::unordered_map<size_t, Track<RectangleType>> rects;
+  std::unordered_map<size_t, Track<ColorType>> colors;
+
+  template <typename T> Track<T> &track(size_t key) {
+    if constexpr (std::is_same_v<T, float>)
+      return floats[key];
+    else if constexpr (std::is_same_v<T, Vector2Type>)
+      return vec2s[key];
+    else if constexpr (std::is_same_v<T, RectangleType>)
+      return rects[key];
+    else
+      return colors[key];
+  }
+
+  void advance(float dt) {
+    for (auto &[k, t] : floats)
+      t.advance(dt);
+    for (auto &[k, t] : vec2s)
+      t.advance(dt);
+    for (auto &[k, t] : rects)
+      t.advance(dt);
+    for (auto &[k, t] : colors)
+      t.advance(dt);
+  }
+
+  size_t size() const {
+    return floats.size() + vec2s.size() + rects.size() + colors.size();
+  }
+};
+
+struct MotionRoot : BaseComponent {};
+
+inline Entity &root_entity() {
+  if (!EntityHelper::has_singleton<MotionRoot>()) {
+    Entity &e = EntityHelper::createPermanentEntity();
+    e.addComponent<MotionRoot>();
+    EntityHelper::registerSingleton<MotionRoot>(e);
+  }
+  return EntityHelper::get_singleton<MotionRoot>().get();
+}
+
+template <typename T = float, typename E> Track<T> &anim(E key) {
+  return root_entity().addComponentIfMissing<HasTracks>().track<T>(
+      static_cast<size_t>(key));
+}
+
+template <typename T = float, typename E> Track<T> &anim(E key, EntityID id) {
+  return EntityHelper::getEntityForIDEnforce(id)
+      .addComponentIfMissing<HasTracks>()
+      .track<T>(static_cast<size_t>(key));
+}
+
+struct AdvanceTracks : System<HasTracks> {
+  size_t total = 0;
+  void once(const float) override { total = 0; }
+  void for_each_with(Entity &, HasTracks &tracks, const float dt) override {
+    tracks.advance(scaled_dt(dt));
+    total += tracks.size();
+  }
+  void after(const float) override {
+    AFTERHOURS_PROFILE_COUNTER(profiling::default_collector(), "motion.tracks",
+                               "count", static_cast<double>(total));
+  }
+};
+
+inline void register_update_systems(SystemManager &sm) {
+  sm.register_update_system(std::make_unique<AdvanceTracks>());
+}
 } // namespace motion
 
 struct animation : developer::Plugin {
