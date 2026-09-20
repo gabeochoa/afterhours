@@ -671,6 +671,16 @@ inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
   resolve_scaling_mode(entity, ctx, config);
   apply_visuals(ctx, entity, config);
   apply_animations(ctx, entity, config);
+  if (!config.motion.empty()) {
+    const MotionValues mv = apply_motion(ctx, entity, config.motion);
+    auto &mods = entity.addComponentIfMissing<HasUIModifiers>();
+    mods.scale *= mv.scale;
+    mods.translate_x += mv.translate_x;
+    mods.translate_y += mv.translate_y;
+    mods.rotation += mv.rotation;
+    if (mv.opacity != 1.f)
+      entity.addComponentIfMissing<HasOpacity>().value *= mv.opacity;
+  }
   apply_label(ctx, entity, config);
   apply_texture(entity, config);
   apply_shadow(entity, config);

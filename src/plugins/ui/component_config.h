@@ -12,6 +12,7 @@
 #include "../texture_manager.h"
 #include "animation_config.h"
 #include "components.h"
+#include "motion_config.h"
 #include "render_primitives.h"
 #include "rounded_corners.h"
 #include "styling_defaults.h"
@@ -207,6 +208,7 @@ struct ComponentConfig {
 
   // Animation configurations
   std::vector<AnimationDef> animations;
+  std::vector<MotionRule> motion;
 
   ComponentConfig() = default;
 
@@ -612,6 +614,41 @@ struct ComponentConfig {
   /// Example: .with_animation(Anim::on_click().scale(0.9f, 1.0f).spring())
   ComponentConfig &with_animation(const Anim &anim) {
     animations.push_back(anim.build());
+    return *this;
+  }
+  ComponentConfig &on_appear(MotionProps props,
+                             motion::Mode mode = motion::Spring::smooth(),
+                             float delay = 0.f) {
+    motion.push_back({MotionTrigger::Appear, props, std::move(mode), delay});
+    return *this;
+  }
+  ComponentConfig &on_hover(MotionProps props,
+                            motion::Mode mode = motion::Spring::snappy()) {
+    motion.push_back({MotionTrigger::Hover, props, std::move(mode)});
+    return *this;
+  }
+  ComponentConfig &on_press(MotionProps props,
+                            motion::Mode mode = motion::Spring::snappy()) {
+    motion.push_back({MotionTrigger::Press, props, std::move(mode)});
+    return *this;
+  }
+  ComponentConfig &on_focus(MotionProps props,
+                            motion::Mode mode = motion::Spring::snappy()) {
+    motion.push_back({MotionTrigger::Focus, props, std::move(mode)});
+    return *this;
+  }
+  ComponentConfig &on_state(bool state, MotionProps props,
+                            motion::Mode mode = motion::Spring::smooth()) {
+    MotionRule r{MotionTrigger::State, props, std::move(mode)};
+    r.state = state;
+    motion.push_back(std::move(r));
+    return *this;
+  }
+  ComponentConfig &on_change(size_t stamp, MotionProps props,
+                             motion::Mode mode = motion::Spring::bouncy()) {
+    MotionRule r{MotionTrigger::Change, props, std::move(mode)};
+    r.stamp = stamp;
+    motion.push_back(std::move(r));
     return *this;
   }
   ComponentConfig &with_flex_direction(FlexDirection dir) {
@@ -1243,6 +1280,8 @@ struct ComponentConfig {
 
     if (!overrides.animations.empty())
       merged.animations = overrides.animations;
+    if (!overrides.motion.empty())
+      merged.motion = overrides.motion;
 
     // TODO: this list is hand-maintained, so a field added to ComponentConfig
     // is dropped here until someone notices. 43 of 86 were, for long enough
