@@ -467,6 +467,15 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   if (config.cursor_type.has_value()) {
     entity.addComponentIfMissing<HasCursor>(config.cursor_type.value());
   }
+  if (entity.has<HasUIModifiers>()) {
+    auto &prior = entity.get<HasUIModifiers>();
+    prior.scale = 1.0f;
+    prior.translate_x = 0.f;
+    prior.translate_y = 0.f;
+    prior.rotation = 0.f;
+    prior.origin_x = 0.5f;
+    prior.origin_y = 0.5f;
+  }
   // Apply UI modifiers (scale, translate) if any are non-default
   bool needs_modifiers = config.scale != 1.0f ||
                          config.translate_x.value != 0.0f ||
