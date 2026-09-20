@@ -200,6 +200,125 @@ int main() {
     mgr.clear_all();
   }
 
+  using Spring = afterhours::animation::Spring;
+  using SpringState = afterhours::animation::SpringState;
+  auto spring_solve = [](const Spring &s, const SpringState &st, float t) {
+    return afterhours::animation::spring_solve(s, st, t);
+  };
+  auto spring_settle_time = [](const Spring &s, const SpringState &st) {
+    return afterhours::animation::spring_settle_time(s, st);
+  };
+
+  auto step_to = [&](const Spring &s, SpringState st, float total, float dt) {
+    afterhours::animation::SpringSample out{st.x0, st.v0};
+    for (float t = 0.f; t < total - 1e-6f; t += dt) {
+      out = spring_solve(s, st, std::min(dt, total - t));
+      st.x0 = out.x;
+      st.v0 = out.v;
+    }
+    return out;
+  };
+
+  {
+    const Spring s{.response = 0.3f, .bounce = 0.2f};
+    const SpringState st{.x0 = 0.f, .v0 = 0.f, .target = 100.f};
+    const auto direct = spring_solve(s, st, 0.25f);
+    const auto at30 = step_to(s, st, 0.25f, 1.f / 30.f);
+    const auto at60 = step_to(s, st, 0.25f, 1.f / 60.f);
+    const auto at144 = step_to(s, st, 0.25f, 1.f / 144.f);
+    const auto irregular = [&] {
+      SpringState cur = st;
+      afterhours::animation::SpringSample out{};
+      for (float dt : {0.001f, 0.05f, 0.0163f, 0.1f, 0.0827f}) {
+        out = spring_solve(s, cur, dt);
+        cur.x0 = out.x;
+        cur.v0 = out.v;
+      }
+      return out;
+    }();
+    check(std::fabs(at30.x - direct.x) < 1e-2f &&
+              std::fabs(at60.x - direct.x) < 1e-2f &&
+              std::fabs(at144.x - direct.x) < 1e-2f,
+          "re-solving from the current sample each frame lands where one "
+          "solve does at 30/60/144 fps");
+    check(std::fabs(irregular.x - direct.x) < 1e-2f,
+          "irregular frame times land at the same place");
+  }
+
+  {
+    const Spring s{.response = 0.3f, .bounce = 0.3f};
+    SpringState st{.x0 = 0.f, .v0 = 0.f, .target = 100.f};
+    const auto before = spring_solve(s, st, 0.05f);
+    st.x0 = before.x;
+    st.v0 = before.v;
+    st.target = 0.f;
+    const auto after = spring_solve(s, st, 0.f);
+    check(std::fabs(after.x - before.x) < 1e-3f &&
+              std::fabs(after.v - before.v) < 1e-2f,
+          "retarget keeps position and velocity");
+    const auto later = spring_solve(s, st, 0.02f);
+    check(later.x > before.x,
+          "momentum carries past the reversal instead of snapping back");
+  }
+
+  {
+    const Spring s{.response = 0.3f, .bounce = 0.4f};
+    SpringState st{.x0 = 0.f, .v0 = 0.f, .target = 100.f};
+    for (int i = 0; i < 6; ++i) {
+      const auto smp = spring_solve(s, st, 0.03f);
+      st.x0 = smp.x;
+      st.v0 = smp.v;
+      st.target = (i % 2 == 0) ? 0.f : 100.f;
+    }
+    const float settle = spring_settle_time(s, st);
+    const float w = afterhours::animation::spring_omega(s);
+    bool residual_ok = true;
+    for (float t = settle; t < settle + 2.f; t += 0.01f) {
+      const auto smp = spring_solve(s, st, t);
+      if (std::fabs(smp.x - st.target) > 0.1f || std::fabs(smp.v) > 0.1f * w)
+        residual_ok = false;
+    }
+    check(residual_ok,
+          "after rapid reversals the snap at settle time hides a residual "
+          "under 0.1% of the motion for every later t");
+    check(settle > 0.f && settle < 3.f, "settle time is finite and sane");
+  }
+
+  {
+    const Spring s{};
+    const SpringState st{.x0 = 0.f, .v0 = 0.f, .target = 40.f};
+    const auto stalled = spring_solve(s, st, 2.f);
+    check(std::fabs(stalled.x - 40.f) < 1e-3f,
+          "a 2s stalled frame lands on the target instead of slowing down");
+    check(spring_settle_time(s, st) < 2.f, "default spring settles within 2s");
+  }
+
+  {
+    const SpringState st{.x0 = 0.f, .v0 = 0.f, .target = 1.f};
+    bool crossed = false, overshot = false;
+    for (float t = 0.f; t < 2.f; t += 0.005f) {
+      if (spring_solve(Spring{.bounce = 0.f}, st, t).x > 1.f + 1e-4f)
+        crossed = true;
+      if (spring_solve(Spring{.bounce = 0.5f}, st, t).x > 1.05f)
+        overshot = true;
+    }
+    check(!crossed, "bounce 0 never crosses the target");
+    check(overshot, "bounce 0.5 overshoots");
+  }
+
+  {
+    const Spring s{};
+    check(spring_settle_time(s, SpringState{.x0 = 5.f, .target = 5.f}) == 0.f,
+          "already at rest settles immediately");
+    const float small = spring_settle_time(
+        s, SpringState{.x0 = 0.f, .v0 = 0.f, .target = 1.f});
+    const float large = spring_settle_time(
+        s, SpringState{.x0 = 0.f, .v0 = 0.f, .target = 400.f});
+    check(std::fabs(small - large) < 1e-3f,
+          "default tolerances scale with the motion, so settle time does not "
+          "depend on distance");
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);
