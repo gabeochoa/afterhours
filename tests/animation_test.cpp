@@ -109,6 +109,97 @@ int main() {
     check(!mgr.is_active(Key::Fade), "clear_all drops it");
   }
 
+  {
+    constexpr EasingType easings[] = {
+        EasingType::Linear, EasingType::EaseOutQuad, EasingType::Hold};
+    const auto midpoint = [](EasingType easing) {
+      switch (easing) {
+      case EasingType::Linear: return 0.5f;
+      case EasingType::EaseOutQuad: return 0.75f;
+      case EasingType::Hold: return 0.f;
+      }
+      return -1.f;
+    };
+    for (auto first : easings) {
+      for (auto second : easings) {
+        mgr.clear_all();
+        for (int replay = 0; replay < 2; ++replay) {
+          afterhours::animation::anim<Key>(Key::Fade).from(0.f).sequence(
+              {{10.f, .5f, first}, {20.f, .5f, second}});
+          mgr.update(.25f);
+          check(std::abs(mgr.ensure_track(Key::Fade).current -
+                         10.f * midpoint(first)) < .00001f,
+                "fresh and replayed sequences use the first easing");
+          mgr.update(.25f);
+          check(mgr.ensure_track(Key::Fade).current == 10.f,
+                "first segment reaches its endpoint");
+          mgr.update(.25f);
+          check(std::abs(mgr.ensure_track(Key::Fade).current -
+                         (10.f + 10.f * midpoint(second))) < .00001f,
+                "queued segment uses its own easing");
+          mgr.update(.25f);
+          check(!mgr.is_active(Key::Fade) &&
+                    mgr.ensure_track(Key::Fade).current == 20.f,
+                "sequence finishes at its endpoint");
+        }
+      }
+    }
+  }
+
+  {
+    mgr.clear_all();
+    afterhours::animation::anim<Key>(Key::Fade).from(0.f).sequence(
+        {{1.15f, .6f, EasingType::EaseOutQuad},
+         {1.f, .4f, EasingType::EaseOutQuad}});
+    mgr.update(.5f);
+    check(std::abs(mgr.ensure_track(Key::Fade).current - 1.1180556f) < .00001f,
+          "WM scale sequence matches its half-second preview");
+  }
+
+  {
+    mgr.clear_all();
+    afterhours::animation::anim<Key>(Key::Fade).from(0.f)
+        .to(10.f, .5f, EasingType::Hold);
+    mgr.update(.5f);
+    afterhours::animation::anim<Key>(Key::Fade).sequence(
+        {{0.f, .5f, EasingType::EaseOutQuad}});
+    mgr.update(.25f);
+    check(std::abs(mgr.ensure_track(Key::Fade).current - 2.5f) < .00001f,
+          "sequence replaces an idle track's previous easing without from");
+  }
+
+  {
+    mgr.clear_all();
+    afterhours::animation::anim<Key>(Key::Fade).from(0.f)
+        .to(10.f, .5f, EasingType::Linear)
+        .sequence({{20.f, .5f, EasingType::EaseOutQuad}});
+    mgr.update(.25f);
+    check(mgr.ensure_track(Key::Fade).current == 5.f,
+          "appending a sequence preserves the active segment's easing");
+    mgr.update(.25f);
+    mgr.update(.25f);
+    check(mgr.ensure_track(Key::Fade).current == 17.5f,
+          "appended sequence starts with its own easing");
+  }
+
+  {
+    mgr.clear_all();
+    afterhours::animation::anim<Key>(Key::Fade).from(0.f).loop_sequence(
+        {{10.f, .5f, EasingType::EaseOutQuad},
+         {0.f, .5f, EasingType::Hold}});
+    for (int cycle = 0; cycle < 3; ++cycle) {
+      mgr.update(.25f);
+      check(mgr.ensure_track(Key::Fade).current == 7.5f,
+            "loop restores first easing after a different final easing");
+      mgr.update(.25f);
+      mgr.update(.5f);
+      check(mgr.is_active(Key::Fade) &&
+                mgr.ensure_track(Key::Fade).current == 0.f,
+            "loop restarts from its final value");
+    }
+    mgr.clear_all();
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);

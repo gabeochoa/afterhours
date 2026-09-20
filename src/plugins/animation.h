@@ -220,6 +220,7 @@ struct animation : developer::Plugin {
         tr.from = tr.current;
         tr.to = segments[0].to_value;
         tr.duration = segments[0].duration;
+        tr.current_easing = segments[0].easing;
         tr.elapsed = 0.f;
         tr.active = true;
         for (size_t i = 1; i < segments.size(); ++i)
