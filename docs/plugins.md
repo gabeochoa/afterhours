@@ -150,3 +150,7 @@ The check uses click/drag listener bounds after transforms, scrolling, ancestor 
 `ui::imm::checkbox` draws a font-independent checkmark when checked and leaves the unchecked indicator empty. Marks use the existing text color, alignment and inset settings, scale with the control, and respect disabled styling and opacity. `with_checkbox_indicators("yes", "no")` supplies custom text; `("", "")` hides both indicators. The supplied boolean is authoritative on every call; pending clicks toggle that value. External changes update the mark without reporting user input. See WM’s `checkboxes` screen.
 
 Uniform UI borders draw inside the component bounds at their configured width, with widths resolved for the component’s scaling mode. Rounded and mixed corners preserve the outer radius; oversized widths fill the available interior. Focus rings use separate outward outlines.
+
+## Tab navigation
+
+`with_skip_tabbing(true)` excludes a control from keyboard traversal without changing pointer input. Passing false or omitting it on a later frame restores traversal. A manually added `SkipWhenTabbing` tag remains independent and must be removed by its owner. Config state is available as `UIComponent::skip_when_tabbing`.

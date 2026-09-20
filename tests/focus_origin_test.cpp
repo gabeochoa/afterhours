@@ -99,4 +99,64 @@ TEST(unconsumed_action_expires_at_next_ui_frame) {
   CHECK(!ctx.pressed(ui_test::TestInputAction::MenuBack));
 }
 
+TEST(config_skip_tabbing_tracks_each_frame_in_both_directions) {
+  using namespace afterhours::ui::imm;
+  ImmTestHarness h;
+  auto &ctx = h.context();
+  HandleTabbing<ui_test::TestInputAction> tabbing;
+  tabbing.context = &ctx;
+  for (int mode : {1, 0, 1, 2, 1, 0}) {
+    h.begin_frame();
+    auto first = button(ctx, mk(h.root(), 0), ComponentConfig{});
+    auto config = ComponentConfig{};
+    if (mode != 2)
+      config.with_skip_tabbing(mode == 1);
+    auto middle = button(ctx, mk(h.root(), 1), config);
+    auto last = button(ctx, mk(h.root(), 2), ComponentConfig{});
+    h.layout_only();
+    const bool skip = mode == 1;
+    CHECK(can_be_focused(ctx, middle.ent()) == !skip);
+
+    ctx.focused_ids.clear();
+    ctx.set_focus(first.ent().id);
+    ctx.last_action = ui_test::TestInputAction::WidgetNext;
+    for (Entity *e : {&first.ent(), &middle.ent(), &last.ent()})
+      tabbing.for_each_with(*e, e->get<UIComponent>(), .016f);
+    CHECK(ctx.has_focus(skip ? last.ent().id : middle.ent().id));
+    CHECK(ctx.focused_ids.contains(middle.ent().id) == !skip);
+
+    ctx.set_focus(last.ent().id);
+    ctx.last_action = ui_test::TestInputAction::WidgetBack;
+    for (Entity *e : {&first.ent(), &middle.ent(), &last.ent()})
+      tabbing.for_each_with(*e, e->get<UIComponent>(), .016f);
+    CHECK(ctx.has_focus(skip ? first.ent().id : middle.ent().id));
+  }
+}
+
+TEST(manual_skip_tabbing_is_independent_of_config) {
+  using namespace afterhours::ui::imm;
+  for (bool manual_first : {false, true}) {
+    ImmTestHarness h;
+    const auto build = [&](bool skip) -> Entity & {
+      h.begin_frame();
+      auto result = button(h.context(), mk(h.root(), 0),
+                           ComponentConfig{}.with_skip_tabbing(skip));
+      h.layout_only();
+      return result.ent();
+    };
+    Entity &entity = build(!manual_first);
+    entity.addComponentIfMissing<SkipWhenTabbing>();
+    for (bool skip : {true, false, true, false}) {
+      CHECK(&build(skip) == &entity);
+      CHECK(entity.has<SkipWhenTabbing>());
+      CHECK(!can_be_focused(h.context(), entity));
+    }
+    build(true);
+    entity.removeComponent<SkipWhenTabbing>();
+    CHECK(!can_be_focused(h.context(), entity));
+    build(false);
+    CHECK(can_be_focused(h.context(), entity));
+  }
+}
+
 int main() { return ui_test::run_registered_tests("focus origin tests"); }

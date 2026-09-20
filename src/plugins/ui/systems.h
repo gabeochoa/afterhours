@@ -1065,6 +1065,7 @@ bool can_be_focused(UIContext<InputAction> &ctx, const Entity &e) {
   if (e.template has<ShouldHide>())
     return false;
   if (e.template is_missing<UIComponent>() ||
+      e.template get<UIComponent>().skip_when_tabbing ||
       !e.template get<UIComponent>().was_rendered_to_screen)
     return false;
   if (!ctx.is_input_allowed(e.id))
