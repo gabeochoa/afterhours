@@ -369,6 +369,168 @@ int main() {
           "single key holds its value");
   }
 
+  auto run = [](auto &track, float total, float dt = 1.f / 60.f) {
+    for (float t = 0.f; t < total - 1e-6f; t += dt)
+      track.advance(std::min(dt, total - t));
+  };
+
+  {
+    afterhours::motion::Track<float> tr;
+    tr.from(0.f).to(100.f, Spring{.response = 0.3f});
+    check(tr.active(), "to() starts the track");
+    run(tr, 0.1f);
+    const float mid = tr.value();
+    check(mid > 0.f && mid < 100.f, "mid-flight value is between");
+    run(tr, 2.f);
+    check(!tr.active() && near(tr.value(), 100.f),
+          "float track settles on its target and deactivates");
+  }
+
+  {
+    afterhours::motion::Track<Vector2Type> tr;
+    tr.from({0.f, 0.f}).to({10.f, -20.f}, Spring{});
+    run(tr, 2.f);
+    check(near(tr.value().x, 10.f) && near(tr.value().y, -20.f),
+          "vector track lands on both components");
+    afterhours::motion::Track<RectangleType> rt;
+    rt.from({0.f, 0.f, 100.f, 50.f}).to({10.f, 10.f, 200.f, 80.f}, Spring{});
+    run(rt, 2.f);
+    check(near(rt.value().width, 200.f) && near(rt.value().height, 80.f),
+          "rectangle track lands on size");
+    afterhours::motion::Track<ColorType> ct;
+    ct.from(ColorType{0, 0, 0, 255}).to(ColorType{200, 100, 50, 255},
+                                         Spring{});
+    run(ct, 2.f);
+    check(ct.value().r == 200 && ct.value().g == 100 && ct.value().b == 50 &&
+              ct.value().a == 255,
+          "color track lands on every channel");
+  }
+
+  {
+    afterhours::motion::Track<float> tr;
+    tr.from(0.f).to(100.f, Spring{.response = 0.3f}).delay(0.2f);
+    run(tr, 0.19f);
+    check(near(tr.value(), 0.f), "delay holds the start value");
+    run(tr, 0.1f);
+    check(tr.value() > 0.f, "motion begins after the delay");
+  }
+
+  {
+    afterhours::motion::Track<float> tr;
+    int completions = 0;
+    tr.from(0.f)
+        .to(10.f, Spring{.response = 0.2f})
+        .then(20.f, Spring{.response = 0.2f})
+        .then(0.f, Spring{.response = 0.2f})
+        .on_complete([&] { completions++; });
+    check(near(tr.target(), 0.f), "target() reports the end of the chain");
+    run(tr, 0.6f);
+    check(tr.active() && tr.value() > 10.f,
+          "chain is on a later step after the first settles");
+    run(tr, 3.f);
+    check(!tr.active() && near(tr.value(), 0.f) && completions == 1,
+          "chain finishes at its last target and completes once");
+  }
+
+  {
+    afterhours::motion::Track<float> tr;
+    tr.from(0.f).to(100.f, Spring{.response = 0.3f}).then(200.f, Spring{});
+    run(tr, 0.1f);
+    const float before = tr.value();
+    tr.to(0.f, Spring{.response = 0.3f});
+    check(near(tr.value(), before) && near(tr.target(), 0.f),
+          "to() mid-flight keeps the current value and drops the queue");
+    tr.advance(0.01f);
+    check(tr.value() > before,
+          "momentum carries through the interrupt before reversing");
+  }
+
+  {
+    afterhours::motion::Track<float> tr;
+    tr.from(0.f).to(6.f, Timeline{.keys = {{0.f, 0.f},
+                                           {.08f, 1.f},
+                                           {.16f, -1.f},
+                                           {.22f, .667f},
+                                           {.28f, 0.f}}});
+    run(tr, 0.08f);
+    check(near(tr.value(), 6.f), "timeline progress scales the target");
+    run(tr, 0.08f);
+    check(near(tr.value(), -6.f), "timeline can overshoot below the start");
+    run(tr, 0.2f);
+    check(!tr.active() && near(tr.value(), 0.f),
+          "once-timeline finishes at its length");
+  }
+
+  {
+    afterhours::motion::Track<ColorType> tr;
+    tr.from(ColorType{0, 0, 0, 255})
+        .to(ColorType{255, 255, 255, 255},
+            Timeline{.keys = {{0.f, 0.f}, {0.5f, 1.f}},
+                     .repeat = Timeline::Repeat::PingPong});
+    run(tr, 0.5f);
+    check(tr.value().r == 255, "looping color timeline reaches its peak");
+    run(tr, 0.5f);
+    check(tr.value().r == 0 && tr.active(),
+          "pingpong color timeline returns and stays active");
+  }
+
+  {
+    afterhours::motion::Track<float> tr;
+    tr.from(0.f)
+        .to(1.f, Spring{.response = 0.2f})
+        .then(0.f, Spring{.response = 0.2f})
+        .repeat();
+    run(tr, 5.f);
+    check(tr.active(), "repeat() keeps a chain alive");
+  }
+
+  {
+    afterhours::motion::Track<float> tr;
+    const Timeline tenth{.keys = {{0.f, 0.f}, {0.1f, 1.f}}};
+    tr.from(0.f).to(1.f, tenth).then(2.f, tenth);
+    tr.advance(0.15f);
+    check(tr.active() && near(tr.value(), 1.5f),
+          "time left over when a step lands carries into the next step");
+    afterhours::motion::Track<float> looped;
+    looped.from(0.f).to(1.f, tenth).then(0.f, tenth).repeat();
+    looped.advance(0.25f);
+    check(near(looped.value(), 0.5f), "carry-over also crosses a repeat boundary");
+  }
+
+  {
+    afterhours::motion::Track<float> tr;
+    tr.from(1.f).to(1.f).repeat();
+    tr.advance(0.016f);
+    check(near(tr.value(), 1.f), "repeating an already-settled spring returns");
+  }
+
+  {
+    afterhours::motion::Track<float> tr;
+    std::vector<int> steps;
+    tr.from(0.f)
+        .to(10.f, Spring{})
+        .on_step(2.5f, [&](int s) { steps.push_back(s); });
+    run(tr, 2.f);
+    check(steps.size() >= 4 && steps.back() == 4,
+          "on_step fires for each quantised step and ends on the last");
+  }
+
+  {
+    afterhours::animation::set_instant(true);
+    afterhours::motion::Track<float> tr;
+    bool done = false;
+    tr.from(0.f)
+        .to(10.f, Spring{})
+        .then(50.f, Spring{})
+        .delay(5.f)
+        .on_complete([&] { done = true; });
+    tr.advance(0.001f);
+    check(!tr.active() && near(tr.value(), 50.f) && done,
+          "instant jumps to the chain's last target, skipping delays, and "
+          "still completes");
+    afterhours::animation::set_instant(false);
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);
