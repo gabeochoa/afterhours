@@ -319,6 +319,56 @@ int main() {
           "depend on distance");
   }
 
+  using Timeline = afterhours::animation::Timeline;
+  using Repeat = Timeline::Repeat;
+  auto near = [](float a, float b) { return std::fabs(a - b) < 1e-4f; };
+
+  {
+    const Timeline shake{.keys = {{0.f, 0.f},
+                                  {.08f, 6.f},
+                                  {.16f, -6.f},
+                                  {.22f, 4.f},
+                                  {.28f, 0.f}}};
+    check(near(shake.at(0.f), 0.f) && near(shake.at(.08f), 6.f) &&
+              near(shake.at(.16f), -6.f) && near(shake.at(.22f), 4.f) &&
+              near(shake.at(.28f), 0.f),
+          "timeline hits every key exactly");
+    check(near(shake.at(.04f), 3.f) && near(shake.at(.12f), 0.f),
+          "timeline is linear between keys");
+    check(near(shake.at(-1.f), 0.f) && near(shake.at(5.f), 0.f),
+          "timeline clamps before the first and after the last key");
+    check(!shake.finished(.27f) && shake.finished(.28f),
+          "once finishes at its length");
+    check(near(shake.length(), .28f), "length is the last key");
+  }
+
+  {
+    const Timeline spin{.keys = {{0.f, 0.f}, {0.9f, 360.f}},
+                        .repeat = Repeat::Loop};
+    check(near(spin.at(0.45f), 180.f) && near(spin.at(1.35f), 180.f) &&
+              near(spin.at(9.45f), 180.f),
+          "loop wraps every cycle");
+    check(!spin.finished(100.f), "loop never finishes");
+  }
+
+  {
+    const Timeline pulse{.keys = {{0.f, 1.f}, {0.5f, 0.5f}},
+                         .repeat = Repeat::PingPong};
+    check(near(pulse.at(0.25f), 0.75f) && near(pulse.at(0.5f), 0.5f) &&
+              near(pulse.at(0.75f), 0.75f) && near(pulse.at(1.f), 1.f) &&
+              near(pulse.at(1.25f), 0.75f),
+          "pingpong runs forward then back");
+  }
+
+  {
+    Timeline eased{.keys = {{0.f, 0.f}, {1.f, 10.f}}};
+    eased.curve = [](float u) { return u * u; };
+    check(near(eased.at(0.5f), 2.5f), "curve applies per segment");
+    check(near(Timeline{}.at(3.f), 0.f), "empty timeline reads 0");
+    check(near(Timeline{.keys = {{0.f, 7.f}}}.at(3.f), 7.f),
+          "single key holds its value");
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);
