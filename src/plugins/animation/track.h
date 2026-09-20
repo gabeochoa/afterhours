@@ -76,6 +76,7 @@ template <typename T> struct Track {
   T value() const { return C::from(pos); }
   T value_or(T fallback) const { return has_started ? value() : fallback; }
   bool started() const { return has_started; }
+  float elapsed() const { return time; }
   T target() const {
     if (!queue.empty())
       return C::from(queue.back().target);
@@ -180,12 +181,12 @@ template <typename T> struct Track {
         if (dt <= 0.f)
           return;
       }
-      elapsed += dt;
+      time += dt;
       sample();
       notify();
-      if (elapsed < settle_at)
+      if (time < settle_at)
         return;
-      const float carry = elapsed - settle_at;
+      const float carry = time - settle_at;
       land();
       if (!queue.empty()) {
         Step next = queue.front();
@@ -217,7 +218,7 @@ private:
 
   void land() {
     if (std::holds_alternative<Timeline>(step.mode)) {
-      elapsed = std::get<Timeline>(step.mode).length();
+      time = std::get<Timeline>(step.mode).length();
       sample();
     } else {
       pos = step.target;
@@ -231,7 +232,7 @@ private:
     step = s;
     start_pos = pos;
     start_vel = vel;
-    elapsed = 0.f;
+    time = 0.f;
     delay_left = s.delay;
     is_active = true;
     settle_at = std::visit(
@@ -261,12 +262,12 @@ private:
           if constexpr (std::is_same_v<M, Spring>) {
             for (size_t i = 0; i < N; ++i) {
               const auto smp =
-                  spring_solve(m, SpringState{start_pos[i], start_vel[i], step.target[i]}, elapsed);
+                  spring_solve(m, SpringState{start_pos[i], start_vel[i], step.target[i]}, time);
               pos[i] = smp.x;
               vel[i] = smp.v;
             }
           } else {
-            const float p = m.at(elapsed);
+            const float p = m.at(time);
             for (size_t i = 0; i < N; ++i)
               pos[i] = std::lerp(start_pos[i], step.target[i], p);
           }
@@ -298,7 +299,7 @@ private:
   Step step{};
   std::deque<Step> queue;
   std::vector<Step> chain;
-  float elapsed = 0.f;
+  float time = 0.f;
   float settle_at = 0.f;
   float delay_left = 0.f;
   bool is_active = false;
