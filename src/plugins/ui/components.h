@@ -295,17 +295,19 @@ struct HasUIModifiers : BaseComponent {
   float translate_x = 0.f;
   float translate_y = 0.f;
   float rotation = 0.f; // Rotation in degrees
+  float origin_x = 0.5f;
+  float origin_y = 0.5f;
 
   RectangleType apply_modifier(RectangleType rect) const {
     // Apply scale first
     float s = scale;
     if (s != 1.0f) {
-      float cx = rect.x + rect.width / 2.0f;
-      float cy = rect.y + rect.height / 2.0f;
+      float px = rect.x + rect.width * origin_x;
+      float py = rect.y + rect.height * origin_y;
       float new_w = rect.width * s;
       float new_h = rect.height * s;
-      rect.x = cx - new_w / 2.0f;
-      rect.y = cy - new_h / 2.0f;
+      rect.x = px - new_w * origin_x;
+      rect.y = py - new_h * origin_y;
       rect.width = new_w;
       rect.height = new_h;
     }

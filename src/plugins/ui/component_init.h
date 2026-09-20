@@ -582,6 +582,11 @@ inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
     if (mv.opacity != 1.f)
       entity.addComponentIfMissing<HasOpacity>().value *= mv.opacity;
   }
+  if (config.origin_x != 0.5f || config.origin_y != 0.5f) {
+    auto &mods = entity.addComponentIfMissing<HasUIModifiers>();
+    mods.origin_x = config.origin_x;
+    mods.origin_y = config.origin_y;
+  }
   apply_label(ctx, entity, config);
   apply_texture(entity, config);
   apply_shadow(entity, config);

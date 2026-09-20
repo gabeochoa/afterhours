@@ -206,6 +206,8 @@ struct ComponentConfig {
   std::optional<NineSliceBorder> nine_slice_config;
 
   std::vector<MotionRule> motion;
+  float origin_x = 0.5f;
+  float origin_y = 0.5f;
 
   ComponentConfig() = default;
 
@@ -605,6 +607,11 @@ struct ComponentConfig {
   /// Use this for smooth scale animations instead of changing size.
   ComponentConfig &with_scale(float s) {
     scale = s;
+    return *this;
+  }
+  ComponentConfig &with_origin(float x, float y) {
+    origin_x = x;
+    origin_y = y;
     return *this;
   }
   ComponentConfig &on_appear(MotionProps props,
@@ -1271,6 +1278,10 @@ struct ComponentConfig {
 
     if (!overrides.motion.empty())
       merged.motion = overrides.motion;
+    if (overrides.origin_x != 0.5f || overrides.origin_y != 0.5f) {
+      merged.origin_x = overrides.origin_x;
+      merged.origin_y = overrides.origin_y;
+    }
 
     // TODO: this list is hand-maintained, so a field added to ComponentConfig
     // is dropped here until someone notices. 43 of 86 were, for long enough
