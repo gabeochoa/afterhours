@@ -50,6 +50,11 @@ static inline Vector2Type accumulated_scroll_offset(const Entity &entity) {
         total.y += sv.scroll_offset.y;
       }
     }
+    if (parent.has<HasUIModifiers>()) {
+      const HasUIModifiers &mods = parent.get<HasUIModifiers>();
+      total.x -= mods.translate_x;
+      total.y -= mods.translate_y;
+    }
     if (!parent.has<UIComponent>())
       break;
     pid = parent.get<UIComponent>().parent;
