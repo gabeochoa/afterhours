@@ -255,6 +255,10 @@ inline void end_texture_mode() {
   log_error("@notimplemented end_texture_mode");
 }
 
+inline void copy_screen_to_render_texture(graphics::RenderTextureType &, RectangleType) {
+  log_error("@notimplemented copy_screen_to_render_texture");
+}
+
 inline void draw_render_texture(const graphics::RenderTextureType &, float,
                                 float, Color) {
   log_error("@notimplemented draw_render_texture");

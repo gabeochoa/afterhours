@@ -1214,6 +1214,10 @@ inline void begin_texture_mode(graphics::RenderTextureType &rt) {
   graphics::metal_detail::g_in_texture_mode = true;
 }
 
+inline void copy_screen_to_render_texture(graphics::RenderTextureType &, RectangleType) {
+  log_error("@notimplemented copy_screen_to_render_texture");
+}
+
 inline void end_texture_mode() {
   auto unwind_camera_stack = []() {
     if (graphics::metal_detail::g_camera_mode_depth <= 0)

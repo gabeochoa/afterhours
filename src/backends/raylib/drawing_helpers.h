@@ -572,6 +572,16 @@ inline void begin_texture_mode(graphics::RenderTextureType &rt) {
 
 inline void end_texture_mode() { raylib::EndTextureMode(); }
 
+inline void copy_screen_to_render_texture(graphics::RenderTextureType &dst, RectangleType src) {
+  raylib::rlDrawRenderBatchActive();
+  raylib::rlBindFramebuffer(RL_READ_FRAMEBUFFER, 0);
+  raylib::rlBindFramebuffer(RL_DRAW_FRAMEBUFFER, dst.id);
+  raylib::rlBlitFramebuffer(static_cast<int>(src.x), static_cast<int>(src.y), static_cast<int>(src.x + src.width),
+                            static_cast<int>(src.y + src.height), 0, 0, dst.texture.width, dst.texture.height, 0x00004000);
+  raylib::rlBindFramebuffer(RL_READ_FRAMEBUFFER, 0);
+  raylib::rlBindFramebuffer(RL_DRAW_FRAMEBUFFER, 0);
+}
+
 inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
                                 float y, Color tint) {
   raylib::DrawTextureRec(

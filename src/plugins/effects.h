@@ -139,26 +139,21 @@ struct BlurPass {
     ready = true;
   }
 
-  void apply(graphics::RenderTextureType &frame, RectangleType rect, float radius) {
-    radius = std::clamp(radius, 0.f, 8.f);
-    if (!effect.ok() || radius < 0.25f || rect.width < 2.f || rect.height < 2.f)
-      return;
-    const float fw = static_cast<float>(frame.texture.width);
-    const float fh = static_cast<float>(frame.texture.height);
+  static bool usable(const Effect &effect, float radius, RectangleType rect) {
+    return effect.ok() && radius >= 0.25f && rect.width >= 2.f && rect.height >= 2.f;
+  }
+
+  static RectangleType clamp_to(RectangleType rect, float fw, float fh) {
     rect.x = std::clamp(rect.x, 0.f, fw);
     rect.y = std::clamp(rect.y, 0.f, fh);
     rect.width = std::min(rect.width, fw - rect.x);
     rect.height = std::min(rect.height, fh - rect.y);
-    end_texture_mode();
-    ensure(static_cast<int>(rect.width / 2.f), static_cast<int>(rect.height / 2.f));
+    return rect;
+  }
+
+  void blur_a(float radius) {
     const RectangleType half{0.f, 0.f, static_cast<float>(w), static_cast<float>(h)};
-    const RectangleType src{rect.x, fh - rect.y - rect.height, rect.width, -rect.height};
     const ColorType white{255, 255, 255, 255};
-
-    begin_texture_mode(a);
-    draw_texture_pro(frame.texture, src, half, {0.f, 0.f}, 0.f, white);
-    end_texture_mode();
-
     begin_texture_mode(b);
     effect.set("direction", Vector2Type{radius / 6.46f / static_cast<float>(w), 0.f});
     {
@@ -174,9 +169,43 @@ struct BlurPass {
       draw_texture_pro(b.texture, {0.f, 0.f, half.width, -half.height}, half, {0.f, 0.f}, 0.f, white);
     }
     end_texture_mode();
+  }
+
+  void apply(graphics::RenderTextureType &frame, RectangleType rect, float radius) {
+    radius = std::clamp(radius, 0.f, 8.f);
+    if (!usable(effect, radius, rect))
+      return;
+    const float fw = static_cast<float>(frame.texture.width);
+    const float fh = static_cast<float>(frame.texture.height);
+    rect = clamp_to(rect, fw, fh);
+    end_texture_mode();
+    ensure(static_cast<int>(rect.width / 2.f), static_cast<int>(rect.height / 2.f));
+    const RectangleType half{0.f, 0.f, static_cast<float>(w), static_cast<float>(h)};
+    const RectangleType src{rect.x, fh - rect.y - rect.height, rect.width, -rect.height};
+    const ColorType white{255, 255, 255, 255};
+
+    begin_texture_mode(a);
+    draw_texture_pro(frame.texture, src, half, {0.f, 0.f}, 0.f, white);
+    end_texture_mode();
+
+    blur_a(radius);
 
     begin_texture_mode(frame);
     draw_texture_pro(a.texture, {0.f, 0.f, half.width, -half.height}, rect, {0.f, 0.f}, 0.f, white);
+  }
+
+  void apply_screen(RectangleType rect, float radius, float pixel_scale, Vector2Type screen_px) {
+    radius = std::clamp(radius, 0.f, 8.f);
+    if (!usable(effect, radius, rect) || pixel_scale <= 0.f)
+      return;
+    rect = clamp_to(rect, screen_px.x / pixel_scale, screen_px.y / pixel_scale);
+    const RectangleType src{rect.x * pixel_scale, screen_px.y - (rect.y + rect.height) * pixel_scale,
+                            rect.width * pixel_scale, rect.height * pixel_scale};
+    ensure(static_cast<int>(src.width / 2.f), static_cast<int>(src.height / 2.f));
+    copy_screen_to_render_texture(a, src);
+    blur_a(radius);
+    const RectangleType half{0.f, 0.f, static_cast<float>(w), static_cast<float>(h)};
+    draw_texture_pro(a.texture, {0.f, 0.f, half.width, -half.height}, rect, {0.f, 0.f}, 0.f, {255, 255, 255, 255});
   }
 };
 

@@ -20,6 +20,7 @@ struct Particle {
   float spin = 0.f;
   float age = 0.f;
   float life = 1.f;
+  float rest_offset = 0.f;
   ColorType color{255, 255, 255, 255};
   float progress() const { return life > 0.f ? std::clamp(age / life, 0.f, 1.f) : 1.f; }
 };
@@ -76,10 +77,12 @@ template <size_t Capacity = 512> struct Emitter {
       p.pos.x += p.vel.x * dt;
       p.pos.y += p.vel.y * dt;
       p.rotation += p.spin * dt;
-      if (floor_y && p.pos.y + p.size / 2.f > *floor_y && p.vel.y > 0.f) {
-        p.pos.y = *floor_y - p.size / 2.f;
+      const float rest_y = floor_y ? *floor_y - p.rest_offset : 0.f;
+      if (floor_y && p.pos.y + p.size / 2.f > rest_y && p.vel.y > 0.f) {
+        p.pos.y = rest_y - p.size / 2.f;
         p.vel.y = -p.vel.y * restitution;
         p.vel.x *= 0.85f;
+        p.spin *= 0.5f;
         if (std::fabs(p.vel.y) < 20.f)
           p.vel.y = 0.f;
       }
