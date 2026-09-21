@@ -614,7 +614,14 @@ inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
       hc.set(*mv.background);
       hc.skip_hover_override = true;
     }
+    if (mv.blur.has_value())
+      entity.addComponentIfMissing<HasBlur>().radius = *mv.blur;
   }
+  if (config.blur > 0.f)
+    entity.addComponentIfMissing<HasBlur>().radius = config.blur;
+  else if (entity.has<HasBlur>() && (config.motion.empty() || !entity.has<motion::HasTracks>() ||
+                                     !entity.get<motion::HasTracks>().floats.count(static_cast<size_t>(MotionProperty::Blur))))
+    entity.removeComponentIfExists<HasBlur>();
   if (config.origin_x != 0.5f || config.origin_y != 0.5f) {
     auto &mods = entity.addComponentIfMissing<HasUIModifiers>();
     mods.origin_x = config.origin_x;

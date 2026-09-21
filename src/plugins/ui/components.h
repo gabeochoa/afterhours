@@ -290,6 +290,19 @@ struct HasButtonAnimState : BaseComponent {
   bool hovered = false;
 };
 
+struct HasBlur : BaseComponent {
+  float radius = 0.f;
+};
+
+struct BlurRequest {
+  RectangleType rect;
+  float radius;
+};
+inline std::vector<BlurRequest> &blur_requests() {
+  static std::vector<BlurRequest> requests;
+  return requests;
+}
+
 struct HasUIModifiers : BaseComponent {
   float scale = 1.0f;
   float translate_x = 0.f;

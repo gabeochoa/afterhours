@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "../drawing_helpers.h"
 #include "../graphics.h"
 #include "files.h"
 #include "terminal/commands.h"
@@ -104,6 +105,78 @@ struct Effect {
   static std::vector<Effect *> &registry() {
     static std::vector<Effect *> effects;
     return effects;
+  }
+};
+
+struct BlurPass {
+  Effect effect;
+  graphics::RenderTextureType a{};
+  graphics::RenderTextureType b{};
+  int w = 0, h = 0;
+  bool ready = false;
+
+  BlurPass() : effect(Effect::load("blur")) {}
+  ~BlurPass() {
+    if (ready) {
+      unload_render_texture(a);
+      unload_render_texture(b);
+    }
+  }
+
+  void ensure(int width, int height) {
+    if (ready && width == w && height == h)
+      return;
+    if (ready) {
+      unload_render_texture(a);
+      unload_render_texture(b);
+    }
+    w = std::max(1, width);
+    h = std::max(1, height);
+    a = load_render_texture(w, h);
+    b = load_render_texture(w, h);
+    graphics::set_render_texture_filter(a, graphics::TEXTURE_FILTER_BILINEAR);
+    graphics::set_render_texture_filter(b, graphics::TEXTURE_FILTER_BILINEAR);
+    ready = true;
+  }
+
+  void apply(graphics::RenderTextureType &frame, RectangleType rect, float radius) {
+    radius = std::clamp(radius, 0.f, 8.f);
+    if (!effect.ok() || radius < 0.25f || rect.width < 2.f || rect.height < 2.f)
+      return;
+    const float fw = static_cast<float>(frame.texture.width);
+    const float fh = static_cast<float>(frame.texture.height);
+    rect.x = std::clamp(rect.x, 0.f, fw);
+    rect.y = std::clamp(rect.y, 0.f, fh);
+    rect.width = std::min(rect.width, fw - rect.x);
+    rect.height = std::min(rect.height, fh - rect.y);
+    end_texture_mode();
+    ensure(static_cast<int>(rect.width / 2.f), static_cast<int>(rect.height / 2.f));
+    const RectangleType half{0.f, 0.f, static_cast<float>(w), static_cast<float>(h)};
+    const RectangleType src{rect.x, fh - rect.y - rect.height, rect.width, -rect.height};
+    const ColorType white{255, 255, 255, 255};
+
+    begin_texture_mode(a);
+    draw_texture_pro(frame.texture, src, half, {0.f, 0.f}, 0.f, white);
+    end_texture_mode();
+
+    begin_texture_mode(b);
+    effect.set("direction", Vector2Type{radius / 6.46f / static_cast<float>(w), 0.f});
+    {
+      Effect::Scope scope(effect);
+      draw_texture_pro(a.texture, {0.f, 0.f, half.width, -half.height}, half, {0.f, 0.f}, 0.f, white);
+    }
+    end_texture_mode();
+
+    begin_texture_mode(a);
+    effect.set("direction", Vector2Type{0.f, radius / 6.46f / static_cast<float>(h)});
+    {
+      Effect::Scope scope(effect);
+      draw_texture_pro(b.texture, {0.f, 0.f, half.width, -half.height}, half, {0.f, 0.f}, 0.f, white);
+    }
+    end_texture_mode();
+
+    begin_texture_mode(frame);
+    draw_texture_pro(a.texture, {0.f, 0.f, half.width, -half.height}, rect, {0.f, 0.f}, 0.f, white);
   }
 };
 

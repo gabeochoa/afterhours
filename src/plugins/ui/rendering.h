@@ -2630,6 +2630,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     }
 
     // Texture
+    if (entity.has<HasBlur>() && entity.get<HasBlur>().radius > 0.f)
+      blur_requests().push_back({draw_rect, entity.get<HasBlur>().radius});
+
     if (entity.has<texture_manager::HasTexture>()) {
       const texture_manager::HasTexture &texture =
           entity.get<texture_manager::HasTexture>();

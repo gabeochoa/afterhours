@@ -39,6 +39,7 @@ struct MotionProps {
   MotionProp rotation;
   MotionProp opacity;
   MotionProp corner_radius;
+  MotionProp blur;
   MotionColor background;
 };
 
@@ -49,6 +50,7 @@ enum struct MotionProperty : size_t {
   Rotation,
   Opacity,
   CornerRadius,
+  Blur,
   Count
 };
 constexpr size_t kMotionProperties = static_cast<size_t>(MotionProperty::Count);
@@ -76,6 +78,8 @@ inline const MotionProp &motion_prop(const MotionProps &p, size_t i) {
     return p.rotation;
   case MotionProperty::CornerRadius:
     return p.corner_radius;
+  case MotionProperty::Blur:
+    return p.blur;
   case MotionProperty::Opacity:
   case MotionProperty::Count:
     break;
@@ -263,6 +267,7 @@ struct MotionValues {
   float rotation = 0.f;
   float opacity = 1.f;
   std::optional<float> corner_radius;
+  std::optional<float> blur;
   std::optional<ColorType> background;
 };
 
@@ -333,6 +338,9 @@ inline MotionValues apply_motion(Ctx &ctx, Entity &entity,
   if (auto it = tracks.floats.find(static_cast<size_t>(MotionProperty::CornerRadius));
       it != tracks.floats.end())
     out.corner_radius = it->second.value();
+  if (auto it = tracks.floats.find(static_cast<size_t>(MotionProperty::Blur));
+      it != tracks.floats.end())
+    out.blur = it->second.value();
   return out;
 }
 
