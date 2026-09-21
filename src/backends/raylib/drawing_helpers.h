@@ -487,6 +487,41 @@ inline void draw_ellipse_lines(int centerX, int centerY, float radiusH,
 }
 
 // Triangle drawing primitives
+inline void draw_quad(const Vector2Type (&p)[4], Color color) {
+  const float min_x = std::min({p[0].x, p[1].x, p[2].x, p[3].x}), max_x = std::max({p[0].x, p[1].x, p[2].x, p[3].x});
+  const float min_y = std::min({p[0].y, p[1].y, p[2].y, p[3].y}), max_y = std::max({p[0].y, p[1].y, p[2].y, p[3].y});
+  capture::record("quad", RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, color, "");
+  const raylib::Texture2D shapes = raylib::GetShapesTexture();
+  const raylib::Rectangle shapes_rec = raylib::GetShapesTextureRectangle();
+  const float u = (shapes_rec.x + shapes_rec.width * 0.5f) / shapes.width;
+  const float v = (shapes_rec.y + shapes_rec.height * 0.5f) / shapes.height;
+  raylib::rlSetTexture(shapes.id);
+  raylib::rlBegin(RL_QUADS);
+  raylib::rlColor4ub(color.r, color.g, color.b, color.a);
+  for (int i = 3; i >= 0; --i) {
+    raylib::rlTexCoord2f(u, v);
+    raylib::rlVertex2f(p[i].x, p[i].y);
+  }
+  raylib::rlEnd();
+  raylib::rlSetTexture(0);
+}
+
+inline void draw_texture_quad(TextureType tex, const Vector2Type (&p)[4], Color tint) {
+  const float min_x = std::min({p[0].x, p[1].x, p[2].x, p[3].x}), max_x = std::max({p[0].x, p[1].x, p[2].x, p[3].x});
+  const float min_y = std::min({p[0].y, p[1].y, p[2].y, p[3].y}), max_y = std::max({p[0].y, p[1].y, p[2].y, p[3].y});
+  capture::record("texture_quad", RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, tint, "");
+  static const float uv[4][2] = {{0.f, 0.f}, {1.f, 0.f}, {1.f, 1.f}, {0.f, 1.f}};
+  raylib::rlSetTexture(tex.id);
+  raylib::rlBegin(RL_QUADS);
+  raylib::rlColor4ub(tint.r, tint.g, tint.b, tint.a);
+  for (int i = 3; i >= 0; --i) {
+    raylib::rlTexCoord2f(uv[i][0], uv[i][1]);
+    raylib::rlVertex2f(p[i].x, p[i].y);
+  }
+  raylib::rlEnd();
+  raylib::rlSetTexture(0);
+}
+
 inline void draw_triangle(Vector2Type v1, Vector2Type v2, Vector2Type v3,
                           Color color) {
   const float min_x = std::min({v1.x, v2.x, v3.x}), max_x = std::max({v1.x, v2.x, v3.x});

@@ -848,6 +848,20 @@ inline void draw_ellipse_lines(int centerX, int centerY, float radiusH,
   sgl_end();
 }
 
+inline void draw_texture_pro(TextureType tex, RectangleType src, RectangleType dest,
+                             Vector2Type origin, float rotation, Color tint);
+inline void draw_quad(const Vector2Type (&p)[4], Color color) {
+  const float min_x = std::min({p[0].x, p[1].x, p[2].x, p[3].x}), max_x = std::max({p[0].x, p[1].x, p[2].x, p[3].x});
+  const float min_y = std::min({p[0].y, p[1].y, p[2].y, p[3].y}), max_y = std::max({p[0].y, p[1].y, p[2].y, p[3].y});
+  draw_rectangle(RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, color);
+}
+inline void draw_texture_quad(TextureType tex, const Vector2Type (&p)[4], Color tint) {
+  const float min_x = std::min({p[0].x, p[1].x, p[2].x, p[3].x}), max_x = std::max({p[0].x, p[1].x, p[2].x, p[3].x});
+  const float min_y = std::min({p[0].y, p[1].y, p[2].y, p[3].y}), max_y = std::max({p[0].y, p[1].y, p[2].y, p[3].y});
+  draw_texture_pro(tex, RectangleType{0.f, 0.f, float(tex.width), float(tex.height)},
+                   RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, Vector2Type{0.f, 0.f}, 0.f, tint);
+}
+
 inline void draw_triangle(Vector2Type v1, Vector2Type v2, Vector2Type v3,
                           Color color) {
   const float min_x = std::min({v1.x, v2.x, v3.x}), max_x = std::max({v1.x, v2.x, v3.x});

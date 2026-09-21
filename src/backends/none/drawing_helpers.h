@@ -211,6 +211,9 @@ inline void draw_ellipse_lines(int, int, float, float, Color) {
 }
 // Recorded as the triangle's bounding box: enough for a test to assert a
 // callout tail exists and points the right way, without a polygon in DrawCall.
+inline void draw_quad(const Vector2Type (&)[4], Color) {}
+inline void draw_texture_quad(TextureType, const Vector2Type (&)[4], Color) {}
+
 inline void draw_triangle(Vector2Type a, Vector2Type b, Vector2Type c,
                           Color color) {
   const float x0 = std::min({a.x, b.x, c.x}), x1 = std::max({a.x, b.x, c.x});
