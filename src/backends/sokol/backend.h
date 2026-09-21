@@ -435,6 +435,8 @@ struct MetalPlatformAPI {
   static constexpr int TEXTURE_FILTER_BILINEAR = 1;
   static constexpr int TEXTURE_FILTER_POINT = 0;
   static constexpr int SHADER_UNIFORM_VEC2 = 1;
+  static constexpr int SHADER_UNIFORM_FLOAT = 0;
+  static constexpr int SHADER_UNIFORM_VEC4 = 3;
 
   // ── Window lifecycle (legacy API -- prefer run()) ──
   static void init_window(int, int, const char *) {

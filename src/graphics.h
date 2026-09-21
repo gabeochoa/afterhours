@@ -27,6 +27,8 @@ inline constexpr int TEXTURE_FILTER_BILINEAR =
     PlatformAPI::TEXTURE_FILTER_BILINEAR;
 inline constexpr int TEXTURE_FILTER_POINT = PlatformAPI::TEXTURE_FILTER_POINT;
 inline constexpr int SHADER_UNIFORM_VEC2 = PlatformAPI::SHADER_UNIFORM_VEC2;
+inline constexpr int SHADER_UNIFORM_FLOAT = PlatformAPI::SHADER_UNIFORM_FLOAT;
+inline constexpr int SHADER_UNIFORM_VEC4 = PlatformAPI::SHADER_UNIFORM_VEC4;
 
 inline void init_window(int w, int h, const char *title) {
   PlatformAPI::init_window(w, h, title);

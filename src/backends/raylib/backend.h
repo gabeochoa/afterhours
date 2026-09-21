@@ -166,6 +166,8 @@ struct RaylibPlatformAPI {
       raylib::TEXTURE_FILTER_BILINEAR;
   static constexpr int TEXTURE_FILTER_POINT = raylib::TEXTURE_FILTER_POINT;
   static constexpr int SHADER_UNIFORM_VEC2 = raylib::SHADER_UNIFORM_VEC2;
+  static constexpr int SHADER_UNIFORM_FLOAT = raylib::SHADER_UNIFORM_FLOAT;
+  static constexpr int SHADER_UNIFORM_VEC4 = raylib::SHADER_UNIFORM_VEC4;
 
   // ── Window lifecycle ──
   static void init_window(int w, int h, const char *title) {
