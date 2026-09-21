@@ -617,6 +617,10 @@ inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
     if (mv.blur.has_value())
       entity.addComponentIfMissing<HasBlur>().radius = *mv.blur;
   }
+  if (config.shader)
+    entity.addComponentIfMissing<HasShader>().shader = config.shader;
+  else
+    entity.removeComponentIfExists<HasShader>();
   if (config.blur > 0.f)
     entity.addComponentIfMissing<HasBlur>().radius = config.blur;
   else if (entity.has<HasBlur>() && (config.motion.empty() || !entity.has<motion::HasTracks>() ||

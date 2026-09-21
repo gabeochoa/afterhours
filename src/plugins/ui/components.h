@@ -294,6 +294,10 @@ struct HasBlur : BaseComponent {
   float radius = 0.f;
 };
 
+struct HasShader : BaseComponent {
+  graphics::ShaderType *shader = nullptr;
+};
+
 struct BlurRequest {
   RectangleType rect;
   float radius;

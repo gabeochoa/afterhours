@@ -85,6 +85,28 @@ int main() {
     }
   }
 
+  // A shader scope around one entity must survive the sort as a scope.
+  {
+    Arena arena(Arena::DEFAULT_CAPACITY);
+    RenderCommandBuffer buf(arena);
+    graphics::ShaderType shader{};
+    buf.add_rectangle(r, c, 5, 1);
+    buf.add_shader_start(&shader, 2, 7);
+    buf.add_rectangle(r, c, 2, 7);
+    buf.add_text(r, "x", "", 10.f, c, TextAlignment::Left, 2, 7);
+    buf.add_shader_end(2, 7);
+    buf.add_rectangle(r, c, 1, 3);
+    buf.sort();
+    std::vector<RenderPrimitiveType> types;
+    for (const auto &cmd : buf.commands())
+      types.push_back(cmd.type);
+    check(types == std::vector<RenderPrimitiveType>(
+                       {RenderPrimitiveType::Rectangle, RenderPrimitiveType::ShaderStart,
+                        RenderPrimitiveType::Rectangle, RenderPrimitiveType::Text,
+                        RenderPrimitiveType::ShaderEnd, RenderPrimitiveType::Rectangle}),
+          "shader start and end still bracket the entity's commands");
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);

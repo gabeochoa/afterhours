@@ -1952,7 +1952,13 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         entity.has<FocusClusterRoot>() || entity.has<HasOnDraw>() ||
         entity.has<HasCircularProgressState>() || entity.has<HasScrollView>() ||
         context.visual_focus_id == entity.id) {
+      const bool shaded = entity.has<HasShader>() && entity.get<HasShader>().shader &&
+                          entity.get<HasShader>().shader->id != 0;
+      if (shaded)
+        begin_shader_mode(*entity.get<HasShader>().shader);
       render_me(context, font_manager, entity);
+      if (shaded)
+        end_shader_mode();
     }
 
     if (needs_scissor) {
@@ -2717,7 +2723,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         entity.has<FocusClusterRoot>() || entity.has<HasOnDraw>() ||
         entity.has<HasCircularProgressState>() || entity.has<HasScrollView>() ||
         context.visual_focus_id == entity.id) {
+      const bool shaded = entity.has<HasShader>() && entity.get<HasShader>().shader;
+      if (shaded)
+        buffer.add_shader_start(entity.get<HasShader>().shader, layer, entity.id);
       collect_me(buffer, context, font_manager, entity, layer);
+      if (shaded)
+        buffer.add_shader_end(layer, entity.id);
     }
 
     if (needs_scissor) {

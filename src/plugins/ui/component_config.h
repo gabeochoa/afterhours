@@ -209,6 +209,7 @@ struct ComponentConfig {
   std::vector<MotionRule> motion;
   std::optional<TextUnitMotion> unit_motion;
   float blur = 0.f;
+  graphics::ShaderType *shader = nullptr;
   float origin_x = 0.5f;
   float origin_y = 0.5f;
 
@@ -610,6 +611,10 @@ struct ComponentConfig {
   /// Use this for smooth scale animations instead of changing size.
   ComponentConfig &with_scale(float s) {
     scale = s;
+    return *this;
+  }
+  ComponentConfig &with_shader(graphics::ShaderType &s) {
+    shader = &s;
     return *this;
   }
   ComponentConfig &with_blur(float radius) {
@@ -1293,6 +1298,8 @@ struct ComponentConfig {
       merged.unit_motion = overrides.unit_motion;
     if (overrides.blur != 0.f)
       merged.blur = overrides.blur;
+    if (overrides.shader)
+      merged.shader = overrides.shader;
     if (overrides.origin_x != 0.5f || overrides.origin_y != 0.5f) {
       merged.origin_x = overrides.origin_x;
       merged.origin_y = overrides.origin_y;

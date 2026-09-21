@@ -141,6 +141,9 @@ struct blend_scope {
   blend_scope &operator=(const blend_scope &) = delete;
 };
 
+inline void begin_shader_mode(graphics::ShaderType &) {}
+inline void end_shader_mode() {}
+
 inline void begin_scissor_mode(int, int, int, int) {
   log_error("@notimplemented begin_scissor_mode");
 }

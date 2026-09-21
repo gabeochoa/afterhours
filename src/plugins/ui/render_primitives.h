@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../../graphics_common.h"
+
 #include "../../capture.h"
 
 #include <algorithm>
@@ -27,6 +29,8 @@ enum class RenderPrimitiveType {
   Image,
   ScissorStart,
   ScissorEnd,
+  ShaderStart,
+  ShaderEnd,
   Ring,
   RingSegment,
   NineSlice,
@@ -107,6 +111,10 @@ struct RenderPrimitive {
       int width;
       int height;
     } scissor;
+
+    struct {
+      graphics::ShaderType *shader;
+    } shader;
 
     struct {
       float center_x;
@@ -250,6 +258,17 @@ public:
 
   static RenderPrimitive scissor_end(int layer, EntityID entity_id = -1) {
     return RenderPrimitive(RenderPrimitiveType::ScissorEnd, layer, entity_id);
+  }
+
+  static RenderPrimitive shader_start(graphics::ShaderType *shader, int layer,
+                                      EntityID entity_id = -1) {
+    RenderPrimitive cmd(RenderPrimitiveType::ShaderStart, layer, entity_id);
+    cmd.data.shader.shader = shader;
+    return cmd;
+  }
+
+  static RenderPrimitive shader_end(int layer, EntityID entity_id = -1) {
+    return RenderPrimitive(RenderPrimitiveType::ShaderEnd, layer, entity_id);
   }
 
   static RenderPrimitive ring(float center_x, float center_y,
@@ -462,6 +481,14 @@ public:
     commands_.push_back(RenderPrimitive::scissor_end(layer, entity_id));
   }
 
+  void add_shader_start(graphics::ShaderType *shader, int layer, EntityID entity_id = -1) {
+    commands_.push_back(RenderPrimitive::shader_start(shader, layer, entity_id));
+  }
+
+  void add_shader_end(int layer, EntityID entity_id = -1) {
+    commands_.push_back(RenderPrimitive::shader_end(layer, entity_id));
+  }
+
   // Add ring (for circular progress background)
   void add_ring(float center_x, float center_y, float inner_radius,
                 float outer_radius, int segments, Color color, int layer,
@@ -613,6 +640,17 @@ public:
         active_clip.reset();
         end_scissor_mode();
         stats_.scissor_operations++;
+        i++;
+        break;
+
+      case RenderPrimitiveType::ShaderStart:
+        if (cmd.data.shader.shader && cmd.data.shader.shader->id != 0)
+          begin_shader_mode(*cmd.data.shader.shader);
+        i++;
+        break;
+
+      case RenderPrimitiveType::ShaderEnd:
+        end_shader_mode();
         i++;
         break;
 
