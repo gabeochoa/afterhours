@@ -2581,7 +2581,35 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           }
         }
 
-        if (!wrapped) {
+        const bool per_unit = !wrapped && entity.template has<HasTextUnitMotion>() &&
+                              hasLabel.alignment == TextAlignment::Left &&
+                              display_text == hasLabel.label &&
+                              hasLabel.label.find('\n') == std::string::npos;
+        if (per_unit) {
+          const auto &units = entity.template get<HasTextUnitMotion>();
+          const std::string resolved =
+              font_manager.resolve_weighted(cmp.font_name, cmp.font_weight);
+          Font font = font_manager.get_font(resolved);
+          const float font_size = result.rect.height;
+          const float spacing = 1.f + hasLabel.letter_spacing;
+          for (size_t i = 0; i < units.spans.size(); ++i) {
+            const UnitSpan &sp = units.spans[i];
+            const UnitDraw d = unit_draw(entity, i);
+            if (d.opacity <= 0.f)
+              continue;
+            const float prefix_w =
+                sp.begin == 0 ? 0.f
+                              : measure_text(font, hasLabel.label.substr(0, sp.begin).c_str(),
+                                             font_size, spacing).x;
+            const float w = measure_text(font, units.units[i].c_str(), font_size, spacing).x;
+            RectangleType ur{label_rect.x + prefix_w + d.x, label_rect.y + d.y,
+                             std::max(w * d.scale, 1.f), label_rect.height};
+            buffer.add_text(ur, units.units[i], resolved, font_size * d.scale,
+                            colors::opacity_pct(font_col, d.opacity), TextAlignment::Left,
+                            layer, entity.id, stroke, shadow, rotation, centerX, centerY,
+                            hasLabel.letter_spacing);
+          }
+        } else if (!wrapped) {
           buffer.add_text(
               label_rect, display_text,
               font_manager.resolve_weighted(cmp.font_name, cmp.font_weight),

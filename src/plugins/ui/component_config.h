@@ -12,6 +12,7 @@
 #include "../texture_manager.h"
 #include "components.h"
 #include "motion_config.h"
+#include "text_unit_motion.h"
 #include "render_primitives.h"
 #include "rounded_corners.h"
 #include "styling_defaults.h"
@@ -206,6 +207,7 @@ struct ComponentConfig {
   std::optional<NineSliceBorder> nine_slice_config;
 
   std::vector<MotionRule> motion;
+  std::optional<TextUnitMotion> unit_motion;
   float origin_x = 0.5f;
   float origin_y = 0.5f;
 
@@ -607,6 +609,10 @@ struct ComponentConfig {
   /// Use this for smooth scale animations instead of changing size.
   ComponentConfig &with_scale(float s) {
     scale = s;
+    return *this;
+  }
+  ComponentConfig &with_unit_motion(TextUnitMotion m) {
+    unit_motion = m;
     return *this;
   }
   ComponentConfig &with_origin(float x, float y) {
@@ -1278,6 +1284,8 @@ struct ComponentConfig {
 
     if (!overrides.motion.empty())
       merged.motion = overrides.motion;
+    if (overrides.unit_motion.has_value())
+      merged.unit_motion = overrides.unit_motion;
     if (overrides.origin_x != 0.5f || overrides.origin_y != 0.5f) {
       merged.origin_x = overrides.origin_x;
       merged.origin_y = overrides.origin_y;

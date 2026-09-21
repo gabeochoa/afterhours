@@ -282,6 +282,13 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
   } else {
     lbl.clear_text_shadow();
   }
+  if (config.unit_motion.has_value()) {
+    auto &st = entity.addComponentIfMissing<HasTextUnitMotion>();
+    st.cfg = *config.unit_motion;
+    update_text_units(entity, config.label);
+  } else {
+    entity.removeComponentIfExists<HasTextUnitMotion>();
+  }
 }
 
 struct ConfiguredTexture : BaseComponent {};
