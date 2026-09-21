@@ -165,9 +165,6 @@ static inline Vector2Type get_scroll_offset(const Entity &entity) {
   return {0.0f, 0.0f};
 }
 
-// accumulated_scroll_offset lives in systems.h (included above) — one helper
-// shared by render (here) and hit-test so they stay aligned.
-
 // Get the scissor rect from a scroll view ancestor (viewport bounds)
 static inline RectangleType get_scroll_scissor_rect(const Entity &entity) {
   OptEntity scroll_ancestor = find_scroll_view_ancestor(entity);
@@ -231,7 +228,7 @@ struct FocusRing {
 template <typename InputAction>
 static inline std::optional<FocusRing>
 focus_ring_for(const UIContext<InputAction> &context, const Entity &entity,
-               const UIComponent &cmp, Vector2Type scroll_offset) {
+               const UIComponent &cmp) {
   if (context.visual_focus_id != entity.id)
     return {};
 
@@ -244,10 +241,9 @@ focus_ring_for(const UIContext<InputAction> &context, const Entity &entity,
     return {};
 
   ring.rect = cmp.focus_rect(context.theme.focus_ring_offset);
-  ring.rect.x -= scroll_offset.x; // ride the scroll like draw_rect
-  ring.rect.y -= scroll_offset.y;
   if (entity.has<HasUIModifiers>())
     ring.rect = entity.get<HasUIModifiers>().apply_modifier(ring.rect);
+  ring.rect = detail::apply_ancestor_transform(entity, ring.rect);
 
   // No HasRoundedCorners means square, the same reading the fill uses. Falling
   // back to the theme here instead drew a rounded ring inside a square border
@@ -296,7 +292,7 @@ std::optional<FocusPaint> prepare_focus_paint(const UIContext<InputAction> &cont
   const Entity &entity = opt.asE();
   const auto &cmp = entity.get<UIComponent>();
   if (is_hidden_for_render(entity)) return {};
-  auto ring = focus_ring_for(context, entity, cmp, accumulated_scroll_offset(entity));
+  auto ring = focus_ring_for(context, entity, cmp);
   if (!ring) return {};
   std::set<EntityID> descendants{entity.id};
   std::vector<EntityID> pending{entity.id};
@@ -1245,10 +1241,7 @@ void draw_layer_scrollbars(UIContext<InputAction> &context, size_t begin,
     if (!cmp.was_rendered_to_screen || detail::is_hidden_for_render(entity)) continue;
     const auto &scroll = entity.get<HasScrollView>();
     // Ride an outer view's scroll the same way the frame around us does.
-    RectangleType view = cmp.rect();
-    const Vector2Type outer = detail::accumulated_scroll_offset(entity);
-    view.x -= outer.x;
-    view.y -= outer.y;
+    const RectangleType view = detail::apply_ancestor_transform(entity, cmp.rect());
     const auto metrics = scrollbar_metrics(
         scroll, cmp.resolved_scaling_mode, context.screen_height);
     const auto [has_clip, clip] = detail::compute_intersected_clip_rect(entity);
@@ -1649,15 +1642,9 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     const UIComponent &cmp = entity.get<UIComponent>();
     const float effective_opacity = detail::compute_effective_opacity(entity);
     RectangleType draw_rect = cmp.rect();
-
-    // Scroll of all scroll-view ancestors; reused for focus_rect below.
-    const Vector2Type scroll_offset = detail::accumulated_scroll_offset(entity);
-    draw_rect.y -= scroll_offset.y;
-    draw_rect.x -= scroll_offset.x;
-
-    if (entity.has<HasUIModifiers>()) {
+    if (entity.has<HasUIModifiers>())
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
-    }
+    draw_rect = detail::apply_ancestor_transform(entity, draw_rect);
 
     // Get rotation from modifiers (applied separately since rectangles rotate
     // around center)
@@ -1925,10 +1912,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         // is offset by apply_modifier() (translate/rotate) which we don't model
         // here, so culling on the untransformed rect could wrongly drop them.
         if (!entity.has<HasUIModifiers>()) {
-          RectangleType er = cmp.rect();
-          const Vector2Type so = detail::accumulated_scroll_offset(entity);
-          er.x -= so.x;
-          er.y -= so.y;
+          const RectangleType er = detail::apply_ancestor_transform(entity, cmp.rect());
           RectangleType vis = detail::intersect_rects(er, clip_rect);
           if (vis.width <= 0.0f || vis.height <= 0.0f)
             return;
@@ -2236,15 +2220,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
     const float effective_opacity = detail::compute_effective_opacity(entity);
     RectangleType draw_rect = cmp.rect();
-
-    // See render_me. Reused for focus_rect below.
-    const Vector2Type scroll_offset = detail::accumulated_scroll_offset(entity);
-    draw_rect.y -= scroll_offset.y;
-    draw_rect.x -= scroll_offset.x;
-
-    if (entity.has<HasUIModifiers>()) {
+    if (entity.has<HasUIModifiers>())
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
-    }
+    draw_rect = detail::apply_ancestor_transform(entity, draw_rect);
 
     // Get rotation from modifiers (applied separately since rectangles rotate
     // around center)

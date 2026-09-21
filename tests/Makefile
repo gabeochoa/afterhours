@@ -84,6 +84,7 @@ ALL_TESTS := \
 	animation_presets_test \
 	particles_test \
 	ui_modifiers_test \
+	ancestor_transform_test \
 	text_units_test \
 	text_unit_motion_test \
 	sound_volume_test \

@@ -1310,12 +1310,12 @@ TEST(focus_ring_insets_preserve_corner_centers_and_thin_targets) {
   auto target = focused_button(h, 3.f);
   target.ent().get<HasRoundedCorners>().radius_px = 12.f;
   h.layout_only();
-  auto ring = afterhours::ui::detail::focus_ring_for(h.context(), target.ent(), target.cmp(), {0, 0});
+  auto ring = afterhours::ui::detail::focus_ring_for(h.context(), target.ent(), target.cmp());
   CHECK(ring.has_value());
   CHECK_APPROX(ring->roundness * std::min(ring->rect.width, ring->rect.height) * .5f, 8.f);
   target.cmp().computed[Axis::X] = 4.f;
   target.cmp().computed[Axis::Y] = 120.f;
-  ring = afterhours::ui::detail::focus_ring_for(h.context(), target.ent(), target.cmp(), {0, 0});
+  ring = afterhours::ui::detail::focus_ring_for(h.context(), target.ent(), target.cmp());
   CHECK(ring->rect.width >= 1.f);
   CHECK(ring->rect.height > 0.f);
 }

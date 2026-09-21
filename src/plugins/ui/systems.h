@@ -27,50 +27,6 @@ namespace afterhours {
 namespace ui {
 
 namespace detail {
-// Adjust a rect for scroll offset so hit-testing matches visual position.
-// Mirrors the scroll offset subtraction in rendering.h.
-// Sum scroll of ALL HasScrollView ancestors, walking past HasClipChildren.
-// The one source of truth used by both render (rendering.h) and hit-test below,
-// so clicks land where things render — including content clipped inside a view.
-static inline Vector2Type accumulated_scroll_offset(const Entity &entity) {
-  Vector2Type total = {0.0f, 0.0f};
-  if (!entity.has<UIComponent>())
-    return total;
-  EntityID pid = entity.get<UIComponent>().parent;
-  int guard = 0;
-  while (pid >= 0 && guard < 64) {
-    OptEntity opt_parent = UICollectionHolder::getEntityForID(pid);
-    if (!opt_parent.valid())
-      break;
-    Entity &parent = opt_parent.asE();
-    if (parent.has<HasScrollView>()) {
-      const HasScrollView &sv = parent.get<HasScrollView>();
-      if (!(sv.auto_overflow && !sv.needs_scroll_y() && !sv.needs_scroll_x())) {
-        total.x += sv.scroll_offset.x;
-        total.y += sv.scroll_offset.y;
-      }
-    }
-    if (parent.has<HasUIModifiers>()) {
-      const HasUIModifiers &mods = parent.get<HasUIModifiers>();
-      total.x -= mods.translate_x;
-      total.y -= mods.translate_y;
-    }
-    if (!parent.has<UIComponent>())
-      break;
-    pid = parent.get<UIComponent>().parent;
-    ++guard;
-  }
-  return total;
-}
-
-static inline RectangleType apply_scroll_offset(const Entity &entity,
-                                                 RectangleType rect) {
-  Vector2Type off = accumulated_scroll_offset(entity);
-  rect.x -= off.x;
-  rect.y -= off.y;
-  return rect;
-}
-
 static inline RectangleType intersect_rects(const RectangleType &a,
                                             const RectangleType &b) {
   float x1 = std::max(a.x, b.x);
@@ -107,9 +63,9 @@ compute_intersected_clip_rect(const Entity &entity) {
   // viewport, and the renderer already treats them as defining their own.
   if (entity.has<HasClipChildren>() && !entity.has<HasScrollView>()) {
     result = entity.get<UIComponent>().rect();
-    Vector2Type own_off = accumulated_scroll_offset(entity);
-    result.x -= own_off.x;
-    result.y -= own_off.y;
+    if (entity.has<HasUIModifiers>())
+      result = entity.get<HasUIModifiers>().apply_modifier(result);
+    result = apply_ancestor_transform(entity, result);
     found = true;
   }
 
@@ -134,9 +90,9 @@ compute_intersected_clip_rect(const Entity &entity) {
       }
 
       RectangleType ancestor_rect = parent.get<UIComponent>().rect();
-      Vector2Type aoff = accumulated_scroll_offset(parent);
-      ancestor_rect.x -= aoff.x;
-      ancestor_rect.y -= aoff.y;
+      if (parent.has<HasUIModifiers>())
+        ancestor_rect = parent.get<HasUIModifiers>().apply_modifier(ancestor_rect);
+      ancestor_rect = apply_ancestor_transform(parent, ancestor_rect);
       if (!found) {
         result = ancestor_rect;
         found = true;
@@ -170,7 +126,7 @@ static inline RectangleType hit_rect(const Entity &entity,
   RectangleType rect = component.rect();
   if (entity.has<HasUIModifiers>())
     rect = entity.get<HasUIModifiers>().apply_modifier(rect);
-  rect = apply_scroll_offset(entity, rect);
+  rect = apply_ancestor_transform(entity, rect);
   return clip_hit_rect(entity, rect);
 }
 
@@ -745,10 +701,10 @@ void reveal_focused_component(UIContext<InputAction> &context) {
     parent_id = parent_cmp.parent;
     if (!parent->template has<HasScrollView>()) continue;
     auto &scroll = parent->template get<HasScrollView>();
-    auto target = detail::apply_scroll_offset(focused, cmp.rect());
+    auto target = detail::apply_ancestor_transform(focused, cmp.rect());
     if (focused.has<HasUIModifiers>())
       target = focused.get<HasUIModifiers>().apply_modifier(target);
-    const auto viewport = detail::apply_scroll_offset(parent.asE(), parent_cmp.rect());
+    const auto viewport = detail::apply_ancestor_transform(parent.asE(), parent_cmp.rect());
     if (scroll.horizontal_enabled)
       scroll.scroll_offset.x += focus_scroll_delta(target.x, target.width, viewport.x, viewport.width);
     if (scroll.vertical_enabled)
@@ -937,7 +893,7 @@ inline bool is_point_inside_entity_tree(EntityID entity_id,
   if (entity.has<HasUIModifiers>()) {
     rect = entity.get<HasUIModifiers>().apply_modifier(rect);
   }
-  rect = detail::apply_scroll_offset(entity, rect);
+  rect = detail::apply_ancestor_transform(entity, rect);
   rect = detail::clip_hit_rect(entity, rect);
   if (is_mouse_inside(pos, rect))
     return true;
@@ -2031,10 +1987,7 @@ struct HandleScrollbarDrag : SystemWithUIContext<HasScrollView> {
 
     // Same rect the bar is drawn against, so grabbing it where you see it works
     // even inside another scroll view.
-    RectangleType view = cmp.rect();
-    const Vector2Type outer = detail::accumulated_scroll_offset(entity);
-    view.x -= outer.x;
-    view.y -= outer.y;
+    const RectangleType view = detail::apply_ancestor_transform(entity, cmp.rect());
 
     const ScrollbarMetrics m = scrollbar_metrics(
         scroll, cmp.resolved_scaling_mode, context->screen_height);

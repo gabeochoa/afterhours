@@ -552,6 +552,54 @@ template <typename InputAction> struct ThemeScopeT {
 };
 
 
+namespace detail {
+
+// Maps a rect from an entity's layout space to where its ancestors put it:
+// each ancestor's scroll, then its scale about its origin, then its translate,
+// nearest ancestor first. The one source of truth for render and hit-test, so
+// a child of a scaled or translated parent is clickable where it is drawn.
+static inline RectangleType apply_ancestor_transform(const Entity &entity,
+                                                     RectangleType rect) {
+  if (!entity.has<UIComponent>())
+    return rect;
+  EntityID pid = entity.get<UIComponent>().parent;
+  int guard = 0;
+  while (pid >= 0 && guard < 64) {
+    OptEntity opt_parent = UICollectionHolder::getEntityForID(pid);
+    if (!opt_parent.valid())
+      break;
+    Entity &parent = opt_parent.asE();
+    if (parent.has<HasScrollView>()) {
+      const HasScrollView &sv = parent.get<HasScrollView>();
+      if (!(sv.auto_overflow && !sv.needs_scroll_y() && !sv.needs_scroll_x())) {
+        rect.x -= sv.scroll_offset.x;
+        rect.y -= sv.scroll_offset.y;
+      }
+    }
+    if (!parent.has<UIComponent>())
+      break;
+    if (parent.has<HasUIModifiers>()) {
+      const HasUIModifiers &mods = parent.get<HasUIModifiers>();
+      if (mods.scale != 1.f) {
+        const RectangleType pr = parent.get<UIComponent>().rect();
+        const float px = pr.x + pr.width * mods.origin_x;
+        const float py = pr.y + pr.height * mods.origin_y;
+        rect.x = px + (rect.x - px) * mods.scale;
+        rect.y = py + (rect.y - py) * mods.scale;
+        rect.width *= mods.scale;
+        rect.height *= mods.scale;
+      }
+      rect.x += mods.translate_x;
+      rect.y += mods.translate_y;
+    }
+    pid = parent.get<UIComponent>().parent;
+    ++guard;
+  }
+  return rect;
+}
+
+} // namespace detail
+
 } // namespace ui
 
 } // namespace afterhours
