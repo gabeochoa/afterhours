@@ -10,6 +10,10 @@ namespace motion {
 namespace curves {
 inline float ease_in_quad(float u) { return u * u; }
 inline float ease_out_quad(float u) { return 1.f - (1.f - u) * (1.f - u); }
+inline float ease_out_cubic(float u) {
+  const float r = 1.f - u;
+  return 1.f - r * r * r;
+}
 inline float ease_in_out_quad(float u) {
   return u < 0.5f ? 2.f * u * u : 1.f - (-2.f * u + 2.f) * (-2.f * u + 2.f) / 2.f;
 }
