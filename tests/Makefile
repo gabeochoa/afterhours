@@ -81,6 +81,7 @@ ALL_TESTS := \
 	drag_preview_test \
 	animation_test \
 	motion_config_test \
+	animation_presets_test \
 	ui_modifiers_test \
 	text_units_test \
 	text_unit_motion_test \
