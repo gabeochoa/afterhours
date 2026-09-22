@@ -1,11 +1,11 @@
-#include <afterhours/src/plugins/ui/motion_config.h>
+#include <afterhours/src/plugins/ui_motion.h>
 
 #include <cmath>
 #include <cstdio>
 #include <string>
 
 using namespace afterhours;
-using namespace afterhours::ui;
+using namespace afterhours::ui_motion;
 
 static int checks_run = 0;
 static int checks_passed = 0;
@@ -201,6 +201,22 @@ int main() {
     t = resolve_motion(rules, {}, st);
     check(!t.background.set && t.background.rest.has_value() && t.background.rest->b == 255,
           "later frames keep appear's colour as the rest instead of the config colour");
+  }
+
+  check(kMotionProperties == 7 &&
+            kMotionProperties == magic_enum::enum_count<MotionProperty>(),
+        "kMotionProperties comes from magic_enum, no Count sentinel");
+
+  {
+    ui::imm::ComponentConfig cfg;
+    cfg.with(on_hover({.scale = 1.05f})).with(on_press({.scale = 0.92f}));
+    check(ui::imm::extensions_all<MotionExt>(cfg).size() == 2,
+          "with() accumulates one extension per trigger block");
+    check(ui::imm::extensions_of<MotionExt>(cfg) != nullptr &&
+              motion_rules(cfg).size() == 2,
+          "extensions_of finds the bridge rules ui used to own");
+    check(ui::imm::extensions_of<int>(cfg) == nullptr,
+          "extensions_of returns null for an absent type");
   }
 
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);

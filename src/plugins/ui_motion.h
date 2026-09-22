@@ -4,11 +4,20 @@
 #include <optional>
 #include <vector>
 
-#include "../../core/base_component.h"
-#include "../animation.h"
+#if __has_include(<magic_enum/magic_enum.hpp>)
+#include <magic_enum/magic_enum.hpp>
+#else
+#include "../../vendor/magic_enum/magic_enum.hpp"
+#endif
+
+#include "../core/base_component.h"
+#include "animation.h"
+#include "ui/context.h"
+#include "ui/component_config.h"
+#include "ui/components.h"
 
 namespace afterhours {
-namespace ui {
+namespace ui_motion {
 
 struct MotionProp {
   bool set = false;
@@ -50,10 +59,9 @@ enum struct MotionProperty : size_t {
   Rotation,
   Opacity,
   CornerRadius,
-  Blur,
-  Count
+  Blur
 };
-constexpr size_t kMotionProperties = static_cast<size_t>(MotionProperty::Count);
+constexpr size_t kMotionProperties = magic_enum::enum_count<MotionProperty>();
 
 enum struct MotionTrigger { Appear, State, Focus, Hover, Press, Change };
 
@@ -81,7 +89,6 @@ inline const MotionProp &motion_prop(const MotionProps &p, size_t i) {
   case MotionProperty::Blur:
     return p.blur;
   case MotionProperty::Opacity:
-  case MotionProperty::Count:
     break;
   }
   return p.opacity;
@@ -344,5 +351,94 @@ inline MotionValues apply_motion(Ctx &ctx, Entity &entity,
   return out;
 }
 
-} // namespace ui
+struct MotionExt {
+  MotionRule rule;
+};
+
+inline MotionExt on_appear(MotionProps props,
+                           motion::Mode mode = motion::Spring::smooth(),
+                           float delay = 0.f) {
+  return {{MotionTrigger::Appear, props, std::move(mode), delay}};
+}
+inline MotionExt on_hover(MotionProps props,
+                          motion::Mode mode = motion::Spring::snappy()) {
+  return {{MotionTrigger::Hover, props, std::move(mode)}};
+}
+inline MotionExt on_press(MotionProps props,
+                          motion::Mode mode = motion::Spring::snappy()) {
+  return {{MotionTrigger::Press, props, std::move(mode)}};
+}
+inline MotionExt on_focus(MotionProps props,
+                          motion::Mode mode = motion::Spring::snappy()) {
+  return {{MotionTrigger::Focus, props, std::move(mode)}};
+}
+inline MotionExt on_state(bool state, MotionProps props,
+                          motion::Mode mode = motion::Spring::smooth()) {
+  MotionRule r{MotionTrigger::State, props, std::move(mode)};
+  r.state = state;
+  return {r};
+}
+inline MotionExt on_change(size_t stamp, MotionProps props,
+                           motion::Mode mode = motion::Spring::bouncy()) {
+  MotionRule r{MotionTrigger::Change, props, std::move(mode)};
+  r.stamp = stamp;
+  return {r};
+}
+
+inline std::vector<MotionRule> motion_rules(const ui::imm::ComponentConfig &config) {
+  std::vector<MotionRule> rules;
+  for (const MotionExt *ext : ui::imm::extensions_all<MotionExt>(config))
+    rules.push_back(ext->rule);
+  return rules;
+}
+
+template <typename Ctx>
+inline void apply_motion_hook(Ctx &ctx, Entity &entity,
+                              const ui::imm::ComponentConfig &config) {
+  const std::vector<MotionRule> rules = motion_rules(config);
+  if (rules.empty())
+    return;
+  MotionRests rests;
+  rests.corner_radius = config.corner_radius.value_or(0.f);
+  if (entity.has<HasColor>())
+    rests.background = entity.get<HasColor>().color();
+  const MotionValues mv = apply_motion(ctx, entity, rules, rests);
+  auto &mods = entity.addComponentIfMissing<ui::HasUIModifiers>();
+  mods.scale *= mv.scale;
+  mods.translate_x += mv.translate_x;
+  mods.translate_y += mv.translate_y;
+  mods.rotation += mv.rotation;
+  if (mv.opacity != 1.f)
+    entity.addComponentIfMissing<ui::HasOpacity>().value *= mv.opacity;
+  if (mv.corner_radius.has_value()) {
+    auto &rc = entity.addComponentIfMissing<ui::HasRoundedCorners>();
+    if (!rc.rounded_corners.any())
+      rc.set(std::bitset<4>().set());
+    rc.set_radius_px(*mv.corner_radius);
+  }
+  if (mv.background.has_value()) {
+    auto &hc = entity.addComponentIfMissing<HasColor>(*mv.background);
+    hc.set(*mv.background);
+    hc.skip_hover_override = true;
+  }
+  if (mv.blur.has_value())
+    entity.addComponentIfMissing<ui::HasBlur>().radius = *mv.blur;
+  else if (config.blur == 0.f)
+    entity.removeComponentIfExists<ui::HasBlur>();
+}
+
+template <typename Ctx> inline void register_bridge() {
+  static const bool once = [] {
+    ui::imm::register_init_hook([](void *raw, Entity &entity,
+                                   const ui::imm::ComponentConfig &config) {
+      apply_motion_hook(*static_cast<Ctx *>(raw), entity, config);
+    });
+    ui::imm::register_ui_extension_system(
+        [] { return std::make_unique<motion::AdvanceTracks>(); });
+    return true;
+  }();
+  (void)once;
+}
+
+} // namespace ui_motion
 } // namespace afterhours

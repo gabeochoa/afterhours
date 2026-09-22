@@ -11,7 +11,6 @@
 #include "../../ecs.h"
 #include "../../font_helper.h"
 #include "../../logging.h"
-#include "../animation.h"
 #include "text_selection.h"
 #include "text_stroke.h"
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING

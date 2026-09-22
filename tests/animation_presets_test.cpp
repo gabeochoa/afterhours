@@ -21,15 +21,15 @@ static void check(bool cond, const std::string &what) {
 int main() {
   printf("Running animation presets tests...\n\n");
   const auto fu = presets::fade_up(12.f, 0.5f, 0.1f);
-  check(fu.trigger == ui::MotionTrigger::Appear && fu.props.translate_y.from == 12.f &&
+  check(fu.trigger == ui_motion::MotionTrigger::Appear && fu.props.translate_y.from == 12.f &&
             fu.props.opacity.to == 1.f && fu.delay == 0.1f,
         "fade_up is an appear rule with the given distance and delay");
   check(std::holds_alternative<motion::Timeline>(fu.mode) &&
             std::get<motion::Timeline>(fu.mode).length() == 0.5f,
         "fade_up runs on a timeline of the given length");
-  check(presets::hover_lift().trigger == ui::MotionTrigger::Hover &&
-            presets::press_squash().trigger == ui::MotionTrigger::Press &&
-            presets::pop_in().trigger == ui::MotionTrigger::Appear,
+  check(presets::hover_lift().trigger == ui_motion::MotionTrigger::Hover &&
+            presets::press_squash().trigger == ui_motion::MotionTrigger::Press &&
+            presets::pop_in().trigger == ui_motion::MotionTrigger::Appear,
         "hover_lift, press_squash and pop_in use their triggers");
   const auto sh = presets::shake(0.28f);
   check(std::fabs(sh.at(0.08f) - 1.f) < 1e-3f && std::fabs(sh.at(0.16f) + 1.f) < 1e-3f &&

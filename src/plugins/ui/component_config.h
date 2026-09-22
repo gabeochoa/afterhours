@@ -1,5 +1,6 @@
 #pragma once
 
+#include <any>
 #include <bitset>
 #include <functional>
 #include <optional>
@@ -11,7 +12,7 @@
 #include "../color.h"
 #include "../texture_manager.h"
 #include "components.h"
-#include "motion_config.h"
+#include "extension.h"
 #include "text_unit_motion.h"
 #include "render_primitives.h"
 #include "rounded_corners.h"
@@ -206,7 +207,7 @@ struct ComponentConfig {
   // Nine-slice border configuration
   std::optional<NineSliceBorder> nine_slice_config;
 
-  std::vector<MotionRule> motion;
+  std::vector<std::any> extensions;
   std::optional<TextUnitMotion> unit_motion;
   float blur = 0.f;
   graphics::ShaderType *shader = nullptr;
@@ -630,39 +631,8 @@ struct ComponentConfig {
     origin_y = y;
     return *this;
   }
-  ComponentConfig &on_appear(MotionProps props,
-                             motion::Mode mode = motion::Spring::smooth(),
-                             float delay = 0.f) {
-    motion.push_back({MotionTrigger::Appear, props, std::move(mode), delay});
-    return *this;
-  }
-  ComponentConfig &on_hover(MotionProps props,
-                            motion::Mode mode = motion::Spring::snappy()) {
-    motion.push_back({MotionTrigger::Hover, props, std::move(mode)});
-    return *this;
-  }
-  ComponentConfig &on_press(MotionProps props,
-                            motion::Mode mode = motion::Spring::snappy()) {
-    motion.push_back({MotionTrigger::Press, props, std::move(mode)});
-    return *this;
-  }
-  ComponentConfig &on_focus(MotionProps props,
-                            motion::Mode mode = motion::Spring::snappy()) {
-    motion.push_back({MotionTrigger::Focus, props, std::move(mode)});
-    return *this;
-  }
-  ComponentConfig &on_state(bool state, MotionProps props,
-                            motion::Mode mode = motion::Spring::smooth()) {
-    MotionRule r{MotionTrigger::State, props, std::move(mode)};
-    r.state = state;
-    motion.push_back(std::move(r));
-    return *this;
-  }
-  ComponentConfig &on_change(size_t stamp, MotionProps props,
-                             motion::Mode mode = motion::Spring::bouncy()) {
-    MotionRule r{MotionTrigger::Change, props, std::move(mode)};
-    r.stamp = stamp;
-    motion.push_back(std::move(r));
+  template <typename T> ComponentConfig &with(T ext) {
+    extensions.push_back(std::move(ext));
     return *this;
   }
   ComponentConfig &with_flex_direction(FlexDirection dir) {
@@ -1292,8 +1262,8 @@ struct ComponentConfig {
     if (overrides.icon_position != IconPosition::Left)
       merged.icon_position = overrides.icon_position;
 
-    if (!overrides.motion.empty())
-      merged.motion = overrides.motion;
+    if (!overrides.extensions.empty())
+      merged.extensions = overrides.extensions;
     if (overrides.unit_motion.has_value())
       merged.unit_motion = overrides.unit_motion;
     if (overrides.blur != 0.f)
@@ -1421,6 +1391,15 @@ inline ComponentConfig form_style() {
 [[deprecated("Unused — will be removed in a future version")]]
 inline ComponentConfig auto_spacing() {
   return ComponentConfig{}.apply_automatic_defaults();
+}
+
+template <typename T>
+inline std::vector<const T *> extensions_all(const ComponentConfig &config) {
+  std::vector<const T *> out;
+  for (const std::any &ext : config.extensions)
+    if (const T *p = std::any_cast<T>(&ext))
+      out.push_back(p);
+  return out;
 }
 
 } // namespace imm

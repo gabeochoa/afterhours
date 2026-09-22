@@ -20,6 +20,7 @@
 #include "../window_manager.h"
 #include "entity_management.h"
 #include "components.h"
+#include "extension.h"
 #include "context.h"
 #include "ui_collection.h"
 
@@ -268,7 +269,8 @@ struct UIPluginPreUpdateBridge : System<> {
     std::vector<std::unique_ptr<SystemBase>> systems;
 
     UIPluginPreUpdateBridge() {
-        systems.push_back(std::make_unique<motion::AdvanceTracks>());
+        for (const auto &factory : imm::ui_extension_system_factories())
+            systems.push_back(factory());
         systems.push_back(std::make_unique<ui::ClearUIComponentChildren>());
         systems.push_back(
             std::make_unique<ui::BeginUIContextManager<InputAction>>());
