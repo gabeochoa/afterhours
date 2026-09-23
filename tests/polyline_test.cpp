@@ -120,6 +120,21 @@ int main() {
     }
   }
 
+  // Fractional boundary from the gaps doc: dash 8, gap 5.6, period
+  // 13.6000004; at travelled 68 the boundary run is below the float ulp of
+  // both accumulators and the march used to loop forever. The bounded draw
+  // turns a regression into a failure instead of a hang.
+  {
+    capture::clear();
+    std::vector<Vector2Type> line{{0.f, 0.f}, {200.f, 0.f}};
+    try {
+      polyline::draw_dashed(line, 1.f, Color{}, 8.f, 5.6f);
+      CHECK(capture::calls().size() == 15);
+    } catch (const std::runtime_error &) {
+      CHECK(false);
+    }
+  }
+
   // Resampling: evenly spaced by DISTANCE, which is the whole point. A
   // uniform-t sampler bunches where the curve is tight.
   {

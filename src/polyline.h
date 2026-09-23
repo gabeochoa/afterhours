@@ -92,13 +92,24 @@ inline void draw_dashed(const std::vector<Vector2Type> &pts, float thickness,
     float t = 0.f;
     while (t < seg) {
       const float run = std::min(remaining, seg - t);
-      if (inked && run > 0.f)
-        draw_line_ex(lerp(a, b, t / seg), lerp(a, b, (t + run) / seg),
+      const float next_t = t + run;
+      const float next_remaining = remaining - run;
+      if (inked && run > 0.f && next_t > t)
+        draw_line_ex(lerp(a, b, t / seg), lerp(a, b, next_t / seg),
                      thickness, color);
-      t += run;
-      remaining -= run;
-      // Switch explicitly: adding a tiny run to total arc length can round
-      // back to the same float and leave the pattern stuck at its boundary.
+      // A boundary run can fall below the float ulp of t, of remaining, or
+      // both (dash 8, gap 5.6 at travelled 68 leaves a 1.9e-6 run): the
+      // accumulators round back to themselves and the march loops forever.
+      // The pattern boundary is within one ulp, so snapping to it is
+      // invisible and guarantees progress.
+      if (next_t == t || next_remaining == remaining) {
+        remaining = 0.f;
+        if (next_t > t)
+          t = next_t;
+      } else {
+        t = next_t;
+        remaining = next_remaining;
+      }
       if (remaining <= 0.f) {
         inked = !inked;
         remaining = inked ? dash : gap;
