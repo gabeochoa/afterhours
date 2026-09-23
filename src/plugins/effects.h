@@ -12,6 +12,31 @@
 namespace afterhours {
 namespace effects {
 
+inline TextureType texture_of(graphics::RenderTextureType &rt) {
+#ifdef AFTER_HOURS_USE_METAL
+  return TextureType{static_cast<float>(rt.width), static_cast<float>(rt.height),
+                     rt.color_img_id, rt.tex_view_id, rt.sampler_id};
+#else
+  return rt.texture;
+#endif
+}
+
+inline float texture_width(graphics::RenderTextureType &rt) {
+#ifdef AFTER_HOURS_USE_METAL
+  return static_cast<float>(rt.width);
+#else
+  return static_cast<float>(rt.texture.width);
+#endif
+}
+
+inline float texture_height(graphics::RenderTextureType &rt) {
+#ifdef AFTER_HOURS_USE_METAL
+  return static_cast<float>(rt.height);
+#else
+  return static_cast<float>(rt.texture.height);
+#endif
+}
+
 struct Effect {
   std::string name;
   std::string path;
@@ -154,11 +179,20 @@ struct BlurPass {
   void blur_a(float radius) {
     const RectangleType half{0.f, 0.f, static_cast<float>(w), static_cast<float>(h)};
     const ColorType white{255, 255, 255, 255};
+#ifdef AFTER_HOURS_USE_METAL
+    begin_texture_mode(b);
+    blur_render_texture(a, b, radius / 6.46f / static_cast<float>(w), 0.f);
+    end_texture_mode();
+    begin_texture_mode(a);
+    blur_render_texture(b, a, 0.f, radius / 6.46f / static_cast<float>(h));
+    end_texture_mode();
+    return;
+#endif
     begin_texture_mode(b);
     effect.set("direction", Vector2Type{radius / 6.46f / static_cast<float>(w), 0.f});
     {
       Effect::Scope scope(effect);
-      draw_texture_pro(a.texture, {0.f, 0.f, half.width, -half.height}, half, {0.f, 0.f}, 0.f, white);
+      draw_texture_pro(texture_of(a), {0.f, 0.f, half.width, -half.height}, half, {0.f, 0.f}, 0.f, white);
     }
     end_texture_mode();
 
@@ -166,7 +200,7 @@ struct BlurPass {
     effect.set("direction", Vector2Type{0.f, radius / 6.46f / static_cast<float>(h)});
     {
       Effect::Scope scope(effect);
-      draw_texture_pro(b.texture, {0.f, 0.f, half.width, -half.height}, half, {0.f, 0.f}, 0.f, white);
+      draw_texture_pro(texture_of(b), {0.f, 0.f, half.width, -half.height}, half, {0.f, 0.f}, 0.f, white);
     }
     end_texture_mode();
   }
@@ -175,8 +209,8 @@ struct BlurPass {
     radius = std::clamp(radius, 0.f, 8.f);
     if (!usable(effect, radius, rect))
       return;
-    const float fw = static_cast<float>(frame.texture.width);
-    const float fh = static_cast<float>(frame.texture.height);
+    const float fw = texture_width(frame);
+    const float fh = texture_height(frame);
     rect = clamp_to(rect, fw, fh);
     end_texture_mode();
     ensure(static_cast<int>(rect.width / 2.f), static_cast<int>(rect.height / 2.f));
@@ -185,13 +219,37 @@ struct BlurPass {
     const ColorType white{255, 255, 255, 255};
 
     begin_texture_mode(a);
-    draw_texture_pro(frame.texture, src, half, {0.f, 0.f}, 0.f, white);
+#ifdef AFTER_HOURS_USE_METAL
+    {
+      const TexturedQuadParams quad{{0.f, 0.f},
+                                    {0.f, 0.f},
+                                    {half.width, half.height},
+                                    {half.width, half.height},
+                                    {rect.x / fw, 1.f - (rect.y + rect.height) / fh},
+                                    {rect.width / fw, rect.height / fh}};
+      textured_quad_render_texture(frame, a, quad);
+    }
+#else
+    draw_texture_pro(texture_of(frame), src, half, {0.f, 0.f}, 0.f, white);
+#endif
     end_texture_mode();
 
     blur_a(radius);
 
     begin_texture_mode(frame);
-    draw_texture_pro(a.texture, {0.f, 0.f, half.width, -half.height}, rect, {0.f, 0.f}, 0.f, white);
+#ifdef AFTER_HOURS_USE_METAL
+    {
+      const TexturedQuadParams quad{{0.f, 0.f},
+                                    {rect.x, rect.y},
+                                    {rect.width, rect.height},
+                                    {fw, fh},
+                                    {0.f, 1.f},
+                                    {1.f, -1.f}};
+      textured_quad_render_texture(a, frame, quad);
+    }
+    return;
+#endif
+    draw_texture_pro(texture_of(a), {0.f, 0.f, half.width, -half.height}, rect, {0.f, 0.f}, 0.f, white);
   }
 
   void apply_screen(RectangleType rect, float radius, float pixel_scale, Vector2Type screen_px) {
@@ -205,7 +263,7 @@ struct BlurPass {
     copy_screen_to_render_texture(a, src);
     blur_a(radius);
     const RectangleType half{0.f, 0.f, static_cast<float>(w), static_cast<float>(h)};
-    draw_texture_pro(a.texture, {0.f, 0.f, half.width, -half.height}, rect, {0.f, 0.f}, 0.f, {255, 255, 255, 255});
+    draw_texture_pro(texture_of(a), {0.f, 0.f, half.width, -half.height}, rect, {0.f, 0.f}, 0.f, {255, 255, 255, 255});
   }
 };
 
