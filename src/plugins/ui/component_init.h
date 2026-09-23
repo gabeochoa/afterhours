@@ -184,8 +184,13 @@ inline void apply_flags(Entity &entity, const ComponentConfig &config) {
 }
 
 inline void apply_layout(Entity &entity, const ComponentConfig &config) {
-  entity.get<UIComponent>()
-      .set_desired_width(config.size.x_axis)
+  auto &cmp = entity.get<UIComponent>();
+  if (cmp.desired[Axis::X].dim != config.size.x_axis.dim ||
+      cmp.desired[Axis::X].value != config.size.x_axis.value ||
+      cmp.desired[Axis::Y].dim != config.size.y_axis.dim ||
+      cmp.desired[Axis::Y].value != config.size.y_axis.value)
+    cmp.size_dirty = true;
+  cmp.set_desired_width(config.size.x_axis)
       .set_desired_height(config.size.y_axis)
       .set_min_width(config.min_width)
       .set_max_width(config.max_width)

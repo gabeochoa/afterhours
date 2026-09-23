@@ -1829,6 +1829,36 @@ struct AutoLayout {
     al.compute_rect_bounds(widget);
   }
 
+  // Re-lay out one widget and its descendants against the parent's current
+  // computed size. Only valid for absolute-position widgets: their size
+  // cannot change ancestors or siblings, so the rest of the tree keeps its
+  // computed values.
+  static void autolayout_subtree(UIComponent &widget,
+                                 const window_manager::Resolution resolution,
+                                 const std::vector<Entity *> &map,
+                                 bool enable_grid_snapping = false,
+                                 float ui_scale = 1.0f, float text_inset_x = 0.f) {
+    AutoLayout al(resolution, map);
+    al.set_grid_snapping(enable_grid_snapping);
+    al.ui_scale = ui_scale;
+    al.text_inset_x = text_inset_x;
+    al.build_cmp_cache();
+    al.prune_stale_children(widget);
+
+    if (widget.parent != -1) {
+      for (Axis axis : {Axis::X, Axis::Y})
+        if (widget.desired[axis].dim == Dim::Percent ||
+            widget.desired[axis].dim == Dim::Expand)
+          widget.computed[axis] = al.compute_size_for_parent_expectation(widget, axis);
+    }
+    al.reset_and_calculate_standalone(widget);
+    al.calculate_those_with_parents(widget);
+    al.calculate_those_with_children(widget);
+    al.solve_violations(widget);
+    al.compute_relative_positions(widget);
+    al.compute_rect_bounds(widget);
+  }
+
   static Entity &to_ent_static(EntityID id) {
     return ui::UICollectionHolder::getEntityForIDEnforce(id);
   }

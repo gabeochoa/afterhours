@@ -78,6 +78,8 @@ struct UIComponent : BaseComponent {
   };
 
   bool padding_is_default = false;
+  bool size_dirty = false;
+  bool laid_out = false;
   AxisArray<Size> desired;
   AxisArray<Size>
       min_size; // Minimum size constraint (Dim::None = no constraint)

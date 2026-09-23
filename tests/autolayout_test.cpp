@@ -726,6 +726,36 @@ TEST(margin_offsets_percent_child_into_overflow) {
 // ---------------------------------------------------------------------------
 // Absolute-positioned child is excluded from flex layout flow
 // ---------------------------------------------------------------------------
+TEST(subtree_relayout_scopes_to_absolute_widget) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(400));
+  auto &panel = t.make_ui(pixels(100), pixels(100));
+  t.ui(panel).make_absolute();
+  t.add_child(root, panel);
+  auto &inner = t.make_ui(percent(0.5f), pixels(20));
+  t.add_child(panel, inner);
+  auto &sibling = t.make_ui(pixels(50), pixels(50));
+  t.add_child(root, sibling);
+  t.run(root);
+  CHECK_APPROX(t.ui(inner).computed[Axis::X], 50.f);
+
+  t.ui(panel).set_desired_width(pixels(200));
+  t.ui(sibling).computed[Axis::X] = -777.f;
+  AutoLayout::autolayout_subtree(t.ui(panel), t.resolution, [&] {
+    std::vector<Entity *> m;
+    EntityID max_id = 0;
+    for (auto &e : t.entities)
+      max_id = std::max(max_id, e->id);
+    m.assign(static_cast<size_t>(max_id) + 1, nullptr);
+    for (auto &e : t.entities)
+      m[e->id] = e.get();
+    return m;
+  }());
+  CHECK_APPROX(t.ui(panel).computed[Axis::X], 200.f);
+  CHECK_APPROX(t.ui(inner).computed[Axis::X], 100.f);
+  CHECK_APPROX(t.ui(sibling).computed[Axis::X], -777.f);
+}
+
 TEST(absolute_child_excluded_from_flow) {
   TestLayout t;
   auto &root = t.make_ui(pixels(400), pixels(400));

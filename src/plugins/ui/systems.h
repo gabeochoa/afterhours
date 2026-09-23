@@ -408,14 +408,41 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
     auto &styling_defaults = imm::UIStylingDefaults::get();
     bool enable_grid = styling_defaults.enable_grid_snapping;
 
-    // Get ui_scale from ThemeDefaults (set each frame from the active theme).
     const Theme &theme = imm::ThemeDefaults::get().theme;
     float ui_scale = theme.ui_scale;
 
-    AutoLayout::autolayout(cmp, resolution, cache->components, enable_grid,
-                           ui_scale, theme.text_inset.x * ui_scale);
-
-    // print_debug_autolayout_tree(entity, cmp);
+    std::vector<UIComponent *> dirty;
+    const std::function<void(UIComponent &)> collect = [&](UIComponent &w) {
+      if (w.size_dirty)
+        dirty.push_back(&w);
+      for (EntityID child : w.children) {
+        auto opt = UICollectionHolder::getEntityForID(child);
+        if (opt.valid() && opt.asE().has<UIComponent>())
+          collect(opt.asE().get<UIComponent>());
+      }
+    };
+    collect(cmp);
+    bool scoped = cmp.laid_out && !dirty.empty();
+    for (UIComponent *w : dirty)
+      scoped = scoped && w->absolute;
+    if (scoped) {
+      for (UIComponent *w : dirty)
+        AutoLayout::autolayout_subtree(*w, resolution, cache->components, enable_grid,
+                                       ui_scale, theme.text_inset.x * ui_scale);
+    } else {
+      AutoLayout::autolayout(cmp, resolution, cache->components, enable_grid,
+                             ui_scale, theme.text_inset.x * ui_scale);
+      cmp.laid_out = true;
+    }
+    const std::function<void(UIComponent &)> clear = [&](UIComponent &w) {
+      w.size_dirty = false;
+      for (EntityID child : w.children) {
+        auto opt = UICollectionHolder::getEntityForID(child);
+        if (opt.valid() && opt.asE().has<UIComponent>())
+          clear(opt.asE().get<UIComponent>());
+      }
+    };
+    clear(cmp);
   }
 };
 
