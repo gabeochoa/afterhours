@@ -77,6 +77,20 @@ int main() {
     EntityHelper::cleanup();
   }
 
+  {
+    Arena arena(64 * 1024);
+    RenderCommandBuffer buffer(arena);
+    std::vector<TextUnitInstance> units;
+    for (int i = 0; i < 40; ++i)
+      units.push_back({"x", float(i) * 10.f, float(i), 20.f, Color{255, 255, 255, 255}});
+    buffer.add_text_units({0.f, 0.f, 400.f, 24.f}, units.data(), units.size(), "default", 3, 42);
+    check(buffer.commands().size() == 1, "forty units batch into one command");
+    const auto &cmd = buffer.commands()[0];
+    check(cmd.type == RenderPrimitiveType::TextUnits && cmd.data.text_units.count == 40 &&
+              cmd.data.text_units.units[39].x == 390.f && cmd.layer == 3 && cmd.entity_id == 42,
+          "the batched command carries every instance, layer and entity");
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);

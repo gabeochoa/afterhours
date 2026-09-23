@@ -18,6 +18,14 @@
 namespace afterhours {
 namespace ui {
 
+struct TextUnitInstance {
+  const char *text;
+  float x;
+  float y;
+  float font_size;
+  Color color;
+};
+
 enum class RenderPrimitiveType {
   Line,
   Border,
@@ -26,6 +34,7 @@ enum class RenderPrimitiveType {
   RectangleOutline,
   RoundedRectangleOutline,
   Text,
+  TextUnits,
   Image,
   ScissorStart,
   ScissorEnd,
@@ -97,6 +106,24 @@ struct RenderPrimitive {
       Color shadow_color;
       float letter_spacing;
     } text;
+
+    struct {
+      RectangleType rect;
+      const char *font_name;
+      const TextUnitInstance *units;
+      size_t count;
+      float letter_spacing;
+      float rotation;
+      float rot_center_x;
+      float rot_center_y;
+      bool has_stroke;
+      float stroke_thickness;
+      Color stroke_color;
+      bool has_shadow;
+      float shadow_offset_x;
+      float shadow_offset_y;
+      Color shadow_color;
+    } text_units;
 
     struct {
       RectangleType dest_rect;
@@ -453,6 +480,45 @@ public:
     cmd.data.text.letter_spacing = letter_spacing;
   }
 
+  void add_text_units(const RectangleType &rect, const TextUnitInstance *units, size_t count,
+                      const std::string &font_name, int layer, EntityID entity_id = -1,
+                      const std::optional<TextStroke> &stroke = std::nullopt,
+                      const std::optional<TextShadow> &shadow = std::nullopt,
+                      float rotation = 0.0f, float rot_center_x = 0.0f,
+                      float rot_center_y = 0.0f, float letter_spacing = 0.0f) {
+    TextUnitInstance *copy = arena_->create_array_uninitialized<TextUnitInstance>(count);
+    if (copy)
+      std::copy(units, units + count, copy);
+    char *font_copy = arena_->create_array_uninitialized<char>(font_name.size() + 1);
+    if (font_copy) {
+      std::copy(font_name.begin(), font_name.end(), font_copy);
+      font_copy[font_name.size()] = '\0';
+    }
+    auto &cmd = commands_.emplace_back();
+    cmd.type = RenderPrimitiveType::TextUnits;
+    cmd.layer = layer;
+    cmd.entity_id = entity_id;
+    cmd.data.text_units.rect = rect;
+    cmd.data.text_units.font_name = font_copy;
+    cmd.data.text_units.units = copy;
+    cmd.data.text_units.count = count;
+    cmd.data.text_units.letter_spacing = letter_spacing;
+    cmd.data.text_units.rotation = rotation;
+    cmd.data.text_units.rot_center_x = rot_center_x;
+    cmd.data.text_units.rot_center_y = rot_center_y;
+    cmd.data.text_units.has_stroke = stroke.has_value() && stroke->has_stroke();
+    if (cmd.data.text_units.has_stroke) {
+      cmd.data.text_units.stroke_thickness = stroke->thickness;
+      cmd.data.text_units.stroke_color = stroke->color;
+    }
+    cmd.data.text_units.has_shadow = shadow.has_value() && shadow->has_shadow();
+    if (cmd.data.text_units.has_shadow) {
+      cmd.data.text_units.shadow_offset_x = shadow->offset_x;
+      cmd.data.text_units.shadow_offset_y = shadow->offset_y;
+      cmd.data.text_units.shadow_color = shadow->color;
+    }
+  }
+
   // Add image
   void add_image(const RectangleType &dest_rect,
                  const RectangleType &source_rect, TextureType texture,
@@ -609,6 +675,12 @@ public:
 
       case RenderPrimitiveType::Text:
         render_text(cmd, fonts);
+        stats_.text_commands++;
+        i++;
+        break;
+
+      case RenderPrimitiveType::TextUnits:
+        render_text_units(cmd, fonts);
         stats_.text_commands++;
         i++;
         break;
@@ -834,6 +906,31 @@ private:
     // Draw main text
     draw_text_ex(font, cmd.data.text.text, startPos, fontSize, spacing,
                  cmd.data.text.color, rotation, rot_cx, rot_cy);
+  }
+
+  void render_text_units(const RenderPrimitive &cmd, FontManager &fonts) {
+    const auto &tu = cmd.data.text_units;
+    if (!tu.units || tu.count == 0)
+      return;
+    if (tu.font_name && tu.font_name[0] != '\0')
+      fonts.set_active(tu.font_name);
+    Font font = fonts.get_active_font();
+    const float spacing = 1.0f + tu.letter_spacing;
+    for (size_t i = 0; i < tu.count; ++i) {
+      const TextUnitInstance &u = tu.units[i];
+      if (!u.text)
+        continue;
+      Vector2Type size = measure_text_utf8(font, u.text, u.font_size, spacing);
+      Vector2Type pos{tu.rect.x + u.x, tu.rect.y + u.y + (tu.rect.height - size.y) / 2.0f};
+      if (tu.has_shadow)
+        draw_text_ex(font, u.text, {pos.x + tu.shadow_offset_x, pos.y + tu.shadow_offset_y},
+                     u.font_size, spacing, tu.shadow_color, tu.rotation, tu.rot_center_x, tu.rot_center_y);
+      if (tu.has_stroke)
+        text_stroke::draw(font, u.text, pos, u.font_size, spacing, tu.stroke_thickness,
+                          tu.stroke_color, tu.rotation, tu.rot_center_x, tu.rot_center_y);
+      draw_text_ex(font, u.text, pos, u.font_size, spacing, u.color, tu.rotation,
+                   tu.rot_center_x, tu.rot_center_y);
+    }
   }
 
   void render_image(const RenderPrimitive &cmd) {
