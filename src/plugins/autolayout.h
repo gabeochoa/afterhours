@@ -1855,6 +1855,10 @@ struct AutoLayout {
     al.calculate_those_with_parents(widget);
     al.calculate_those_with_children(widget);
     al.solve_violations(widget);
+    if (widget.absolute) {
+      widget.computed_rel[Axis::X] = widget.absolute_pos_x;
+      widget.computed_rel[Axis::Y] = widget.absolute_pos_y;
+    }
     al.compute_relative_positions(widget);
     al.compute_rect_bounds(widget);
   }

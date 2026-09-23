@@ -739,6 +739,11 @@ TEST(subtree_relayout_scopes_to_absolute_widget) {
   t.run(root);
   CHECK_APPROX(t.ui(inner).computed[Axis::X], 50.f);
 
+  t.ui(panel).absolute_pos_x = 30.f;
+  t.ui(panel).absolute_pos_y = 40.f;
+  t.run(root);
+  CHECK_APPROX(t.ui(panel).rect().x, 30.f);
+  CHECK_APPROX(t.ui(panel).rect().y, 40.f);
   t.ui(panel).set_desired_width(pixels(200));
   t.ui(sibling).computed[Axis::X] = -777.f;
   AutoLayout::autolayout_subtree(t.ui(panel), t.resolution, [&] {
@@ -754,6 +759,8 @@ TEST(subtree_relayout_scopes_to_absolute_widget) {
   CHECK_APPROX(t.ui(panel).computed[Axis::X], 200.f);
   CHECK_APPROX(t.ui(inner).computed[Axis::X], 100.f);
   CHECK_APPROX(t.ui(sibling).computed[Axis::X], -777.f);
+  CHECK_APPROX(t.ui(panel).rect().x, 30.f);
+  CHECK_APPROX(t.ui(panel).rect().y, 40.f);
 }
 
 TEST(absolute_child_excluded_from_flow) {
