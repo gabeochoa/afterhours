@@ -55,6 +55,20 @@ int main() {
     }
     check(permuted && not_forward,
           "random stagger is a permutation of the forward delays, not forward order");
+    bool reshuffles = false, seeded_permutes = true;
+    for (size_t i = 0; i < 6; ++i)
+      reshuffles |= !near(stagger_delay(i, 6, 0.05f, StaggerOrder::Random, 0),
+                          stagger_delay(i, 6, 0.05f, StaggerOrder::Random, 1));
+    {
+      std::vector<float> seeded;
+      for (size_t i = 0; i < 6; ++i)
+        seeded.push_back(stagger_delay(i, 6, 0.05f, StaggerOrder::Random, 1));
+      std::sort(seeded.begin(), seeded.end());
+      for (size_t i = 0; i < 6; ++i)
+        seeded_permutes &= near(seeded[i], 0.05f * float(i));
+    }
+    check(reshuffles && seeded_permutes,
+          "a new seed reshuffles the random order and stays a permutation");
   }
 
   {

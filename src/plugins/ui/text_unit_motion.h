@@ -25,7 +25,8 @@ struct TextUnitMotion {
   StaggerOrder order = StaggerOrder::Forward;
 };
 
-inline float stagger_delay(size_t index, size_t count, float step, StaggerOrder order) {
+inline float stagger_delay(size_t index, size_t count, float step, StaggerOrder order,
+                           size_t seed = 0) {
   if (count == 0)
     return 0.f;
   size_t rank = index;
@@ -41,17 +42,22 @@ inline float stagger_delay(size_t index, size_t count, float step, StaggerOrder 
     break;
   }
   case StaggerOrder::Random: {
-    const auto hash = [](size_t i) {
-      size_t h = i + 0x9e3779b97f4a7c15ULL;
+    size_t state = seed * 0x9e3779b97f4a7c15ULL + count * 131u + 0x2545F4914F6CDD1DULL;
+    const auto next = [&state] {
+      state += 0x9e3779b97f4a7c15ULL;
+      size_t h = state;
       h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9ULL;
       h = (h ^ (h >> 27)) * 0x94d049bb133111ebULL;
       return h ^ (h >> 31);
     };
-    const size_t mine = hash(index + count * 131u);
-    rank = 0;
-    for (size_t j = 0; j < count; ++j)
-      if (j != index && hash(j + count * 131u) < mine)
-        ++rank;
+    std::vector<size_t> order(count);
+    for (size_t i = 0; i < count; ++i)
+      order[i] = i;
+    for (size_t i = count - 1; i > 0; --i)
+      std::swap(order[i], order[next() % (i + 1)]);
+    for (size_t i = 0; i < count; ++i)
+      if (order[i] == index)
+        rank = i;
     break;
   }
   }
@@ -71,6 +77,7 @@ struct HasTextUnitMotion : BaseComponent {
   std::vector<std::string> units;
   std::vector<std::string> last;
   bool primed = false;
+  size_t seed = 0;
 };
 
 struct UnitDraw {
@@ -96,7 +103,8 @@ inline void update_text_units(Entity &entity, const std::string &label) {
     if (!st.primed || i >= st.last.size() || st.last[i] != st.units[i])
       changed_indices.push_back(i);
   for (size_t i : changed_indices) {
-    const float delay = stagger_delay(changed, changed_indices.size(), st.cfg.stagger, st.cfg.order);
+    const float delay =
+        stagger_delay(changed, changed_indices.size(), st.cfg.stagger, st.cfg.order, st.seed);
     ++changed;
     tracks.track<float>(unit_key(i, UnitProp::X)).from(st.cfg.from_x).to(0.f, ease).delay(delay);
     tracks.track<float>(unit_key(i, UnitProp::Y)).from(st.cfg.from_y).to(0.f, ease).delay(delay);
@@ -108,8 +116,11 @@ inline void update_text_units(Entity &entity, const std::string &label) {
 }
 
 inline void restart_text_units(Entity &entity) {
-  if (entity.has<HasTextUnitMotion>())
-    entity.get<HasTextUnitMotion>().primed = false;
+  if (entity.has<HasTextUnitMotion>()) {
+    auto &st = entity.get<HasTextUnitMotion>();
+    st.primed = false;
+    ++st.seed;
+  }
 }
 
 inline UnitDraw unit_draw(const Entity &entity, size_t index) {
