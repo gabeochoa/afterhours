@@ -24,6 +24,7 @@ struct TextUnitInstance {
   float y;
   float font_size;
   Color color;
+  float rotation = 0.f;
 };
 
 enum class RenderPrimitiveType {
@@ -922,14 +923,17 @@ private:
         continue;
       Vector2Type size = measure_text_utf8(font, u.text, u.font_size, spacing);
       Vector2Type pos{tu.rect.x + u.x, tu.rect.y + u.y + (tu.rect.height - size.y) / 2.0f};
+      const float rotation = tu.rotation + u.rotation;
+      const float center_x = u.rotation != 0.f ? pos.x + size.x / 2.f : tu.rot_center_x;
+      const float center_y = u.rotation != 0.f ? pos.y + size.y / 2.f : tu.rot_center_y;
       if (tu.has_shadow)
         draw_text_ex(font, u.text, {pos.x + tu.shadow_offset_x, pos.y + tu.shadow_offset_y},
-                     u.font_size, spacing, tu.shadow_color, tu.rotation, tu.rot_center_x, tu.rot_center_y);
+                     u.font_size, spacing, tu.shadow_color, rotation, center_x, center_y);
       if (tu.has_stroke)
         text_stroke::draw(font, u.text, pos, u.font_size, spacing, tu.stroke_thickness,
-                          tu.stroke_color, tu.rotation, tu.rot_center_x, tu.rot_center_y);
-      draw_text_ex(font, u.text, pos, u.font_size, spacing, u.color, tu.rotation,
-                   tu.rot_center_x, tu.rot_center_y);
+                          tu.stroke_color, rotation, center_x, center_y);
+      draw_text_ex(font, u.text, pos, u.font_size, spacing, u.color, rotation,
+                   center_x, center_y);
     }
   }
 

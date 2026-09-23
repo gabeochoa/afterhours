@@ -9,6 +9,7 @@
 #include "ui/overlay.h"
 #include "ui/rendering.h"
 #include "ui/systems.h"
+#include "ui/curved_text.h"
 #include "ui/text_measure.h"
 #include "ui/theme.h"
 #include "ui/theme_io.h"
