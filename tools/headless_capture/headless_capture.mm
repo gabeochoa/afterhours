@@ -29,6 +29,13 @@
 #include <afterhours/ah.h>
 #include <afterhours/src/drawing_helpers.h>
 #include <afterhours/src/graphics.h>
+#include <afterhours/src/plugins/effects.h>
+#include <afterhours/src/plugins/files.h>
+
+extern "C" int metal_capture_render_texture_to_memory(uint32_t color_img_id,
+                                                      int width, int height,
+                                                      uint8_t **out_data,
+                                                      int *out_size);
 
 // Metal device creation for the headless sg_environment.
 #import <Metal/Metal.h>
@@ -75,8 +82,59 @@ static void clear_render_texture(const g::RenderTextureType &rt, Color c) {
   sg_end_pass();
 }
 
+static int run_blur_test(const char *out_path, const char *resource_dir) {
+  afterhours::files::init("headless_capture", resource_dir);
+  constexpr int W = 800, H = 600;
+  g::RenderTextureType rt = load_render_texture(W, H);
+  clear_render_texture(rt, Color{0, 0, 0, 255});
+  TextureType checker = make_checker_texture();
+  begin_texture_mode(rt);
+  draw_texture_rec(checker, RectangleType{0, 0, checker.width, checker.height},
+                   Vector2Type{700, 500}, Color{255, 255, 255, 255});
+  draw_rectangle(RectangleType{0, 0, W / 2.f, static_cast<float>(H)},
+                 Color{255, 255, 255, 255});
+  draw_rectangle(RectangleType{0, 0, 50, 50}, Color{0, 0, 0, 255});
+  end_texture_mode();
+  // checker kept alive until process exit (blur test)
+
+  afterhours::effects::BlurPass pass;
+  if (!pass.effect.ok()) {
+    std::fprintf(stderr, "blur test: blur shader did not load\n");
+    return 1;
+  }
+  begin_texture_mode(rt);
+  pass.apply(rt, RectangleType{0, 0, static_cast<float>(W), static_cast<float>(H)}, 8.f);
+  end_texture_mode();
+  sg_commit();
+
+  uint8_t *px = nullptr;
+  int px_size = 0;
+  if (!metal_capture_render_texture_to_memory(rt.color_img_id, W, H, &px, &px_size)) {
+    std::fprintf(stderr, "blur test: readback failed\n");
+    return 1;
+  }
+  const auto sample = [&](int x, int y) {
+    return static_cast<int>(px[(static_cast<size_t>(y) * W + x) * 4]);
+  };
+  const int left = sample(60, H / 2), right = sample(W - 60, H / 2);
+  const int edge_in = sample(W / 2, H / 2), edge_out = sample(W / 2 + 2, H / 2);
+  const int corner_top = sample(25, 25), corner_bottom = sample(25, H - 25);
+  std::printf("blur test: left=%d right=%d edge_in=%d edge_out=%d corner_top=%d "
+              "corner_bottom=%d\n",
+              left, right, edge_in, edge_out, corner_top, corner_bottom);
+  capture_render_texture(rt, out_path);
+  const bool ok = left > 200 && right < 55 && edge_in > 30 && edge_in < 225 &&
+                  edge_out > 30 && edge_out < 225 && corner_top < 55 &&
+                  corner_bottom > 200;
+  std::printf("blur test: %s\n", ok ? "PASS" : "FAIL");
+  free(px);
+  unload_render_texture(rt);
+  return ok ? 0 : 1;
+}
+
 int main(int argc, char **argv) {
   const char *out_path = (argc > 1) ? argv[1] : "out.png";
+  const bool blur_mode = argc > 2 && std::strcmp(argv[2], "blur") == 0;
 
   // ---- Headless sokol setup: Metal device, NO swapchain / window ----
   id<MTLDevice> device = MTLCreateSystemDefaultDevice();
@@ -86,6 +144,7 @@ int main(int argc, char **argv) {
   }
 
   sg_desc desc{};
+  desc.logger.func = slog_func;
   desc.environment.metal.device = (__bridge const void *)device;
   // No swapchain defaults are provided; render textures below pick sane
   // formats (BGRA8 color, DEPTH_STENCIL depth, 1x sample) when the swapchain
@@ -96,10 +155,13 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  sgl_desc_t sgl_desc{};
-  sgl_desc.max_vertices = 1 << 18;
-  sgl_desc.max_commands = 1 << 16;
-  sgl_setup(&sgl_desc);
+  // The backend bootstrap (blend pipelines + fontstash), not a bare
+  // sgl_setup: begin_texture_mode loads g_blend_pip, and drawing into a
+  // pass whose pipeline handle is invalid aborts at flush time.
+  afterhours::graphics::metal_detail::setup_sokol_gl_and_fonts();
+
+  if (blur_mode)
+    return run_blur_test(out_path, argc > 3 ? argv[3] : "../../../resources");
 
   // ---- Offscreen render target ----
   g::RenderTextureType rt = load_render_texture(RT_W, RT_H);
@@ -154,7 +216,7 @@ int main(int argc, char **argv) {
   std::printf("wrote %s (%dx%d)\n", out_path, RT_W, RT_H);
 
   unload_render_texture(rt);
-  unload_texture(checker);
+  // checker kept alive until process exit (blur test)
   sgl_shutdown();
   sg_shutdown();
   return 0;

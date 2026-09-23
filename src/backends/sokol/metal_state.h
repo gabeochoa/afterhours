@@ -52,6 +52,14 @@ struct ShaderRuntimeState {
 };
 inline ShaderRuntimeState g_shader_runtime;
 
+struct BlurPipelineState {
+  sg_pipeline pip{};
+  sg_shader shader{};
+  bool ready = false;
+  bool failed = false;
+};
+inline BlurPipelineState g_blur_pipeline;
+
 } // namespace afterhours::graphics::metal_detail
 
 #endif // AFTER_HOURS_USE_METAL

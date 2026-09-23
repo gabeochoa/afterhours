@@ -26,11 +26,18 @@ FRAMEWORKS := -framework Metal -framework MetalKit -framework Cocoa \
 headless_capture: headless_capture.mm sokol_impl.mm
 	clang++ $(CXXFLAGS) $(INCLUDES) -x objective-c++ -c sokol_impl.mm -o sokol_impl.o
 	clang++ $(CXXFLAGS) $(INCLUDES) -x objective-c++ -c headless_capture.mm -o headless_capture.o
-	clang++ headless_capture.o sokol_impl.o $(FRAMEWORKS) -o headless_capture
+	clang++ $(CXXFLAGS) $(INCLUDES) -c $(AH_INC)/afterhours/src/plugins/files.cpp -o files.o
+	clang++ headless_capture.o sokol_impl.o files.o $(FRAMEWORKS) -o headless_capture
 	codesign -s - -f headless_capture
 
 run: headless_capture
 	./headless_capture out.png
+
+# BlurPass on Metal: renders a sharp edge, blurs it, asserts the edge
+# softened (and the image was not flipped). Needs a resources dir with
+# shaders/blur.fs (argv 3, default ../../../resources).
+run-blur: headless_capture
+	./headless_capture blur.png blur
 
 clean:
 	rm -f headless_capture headless_capture.o sokol_impl.o out.png

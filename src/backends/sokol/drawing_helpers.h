@@ -1247,6 +1247,127 @@ inline void end_texture_mode() {
   graphics::metal_detail::g_in_texture_mode = false;
 }
 
+// Textured-quad pipeline (translation of resources/shaders/blur.fs) drawn
+// with raw sokol-gfx, because sokol-gl has one fixed fragment shader.
+// direction (0,0) is an exact copy (the blur weights sum to 1). The
+// destination render texture's pass must be active (begin_texture_mode).
+// Any queued sgl work is flushed first.
+struct TexturedQuadParams {
+  float direction[2];
+  float dst_pos[2];
+  float dst_size[2];
+  float dst_extent[2];
+  float src_pos[2];
+  float src_size[2];
+};
+
+inline bool textured_quad_render_texture(const graphics::RenderTextureType &src,
+                                         const graphics::RenderTextureType &dst,
+                                         const TexturedQuadParams &params) {
+  auto &state = graphics::metal_detail::g_blur_pipeline;
+  if (state.failed)
+    return false;
+  if (!state.ready) {
+    static constexpr const char *VS_SOURCE = R"MSL(
+#include <metal_stdlib>
+using namespace metal;
+struct VsOut { float4 pos [[position]]; float2 uv; };
+struct Params {
+  float2 direction; float2 dst_pos; float2 dst_size; float2 dst_extent;
+  float2 src_pos; float2 src_size;
+};
+vertex VsOut _main(uint vid [[vertex_id]], constant Params &p [[buffer(0)]]) {
+  float2 q = float2(float((vid << 1) & 2), float(vid & 2)) * 0.5f;
+  float2 px = p.dst_pos + q * p.dst_size;
+  VsOut o;
+  o.uv = p.src_pos + q * p.src_size;
+  o.pos = float4(px.x / p.dst_extent.x * 2.0f - 1.0f,
+                 1.0f - px.y / p.dst_extent.y * 2.0f, 0.0f, 1.0f);
+  return o;
+}
+)MSL";
+    static constexpr const char *FS_SOURCE = R"MSL(
+#include <metal_stdlib>
+using namespace metal;
+struct FsIn { float4 pos [[position]]; float2 uv; };
+struct Params {
+  float2 direction; float2 dst_pos; float2 dst_size; float2 dst_extent;
+  float2 src_pos; float2 src_size;
+};
+fragment float4 _main(FsIn in [[stage_in]], texture2d<float> tex [[texture(0)]],
+                      sampler smp [[sampler(0)]], constant Params &p [[buffer(0)]]) {
+  float4 sum = tex.sample(smp, in.uv) * 0.2270270270f;
+  sum += tex.sample(smp, in.uv + p.direction * 1.3846153846f) * 0.3162162162f;
+  sum += tex.sample(smp, in.uv - p.direction * 1.3846153846f) * 0.3162162162f;
+  sum += tex.sample(smp, in.uv + p.direction * 3.2307692308f) * 0.0702702703f;
+  sum += tex.sample(smp, in.uv - p.direction * 3.2307692308f) * 0.0702702703f;
+  return sum;
+}
+)MSL";
+    sg_shader_desc sd{};
+    sd.vertex_func.source = VS_SOURCE;
+    sd.fragment_func.source = FS_SOURCE;
+    sd.uniform_blocks[0].stage = SG_SHADERSTAGE_VERTEX;
+    sd.uniform_blocks[0].size = sizeof(TexturedQuadParams);
+    sd.uniform_blocks[0].msl_buffer_n = 0;
+    sd.uniform_blocks[1].stage = SG_SHADERSTAGE_FRAGMENT;
+    sd.uniform_blocks[1].size = sizeof(TexturedQuadParams);
+    sd.uniform_blocks[1].msl_buffer_n = 0;
+    sd.views[0].texture.stage = SG_SHADERSTAGE_FRAGMENT;
+    sd.views[0].texture.image_type = SG_IMAGETYPE_2D;
+    sd.views[0].texture.sample_type = SG_IMAGESAMPLETYPE_FLOAT;
+    sd.views[0].texture.msl_texture_n = 0;
+    sd.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
+    sd.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
+    sd.samplers[0].msl_sampler_n = 0;
+    sd.texture_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
+    sd.texture_sampler_pairs[0].view_slot = 0;
+    sd.texture_sampler_pairs[0].sampler_slot = 0;
+    sd.label = "ah-textured-quad-shader";
+    state.shader = sg_make_shader(&sd);
+    if (sg_query_shader_state(state.shader) != SG_RESOURCESTATE_VALID) {
+      state.failed = true;
+      log_error("textured_quad_render_texture: shader creation failed");
+      return false;
+    }
+    const auto dst_desc = sg_query_image_desc({dst.color_img_id});
+    sg_pipeline_desc pd{};
+    pd.shader = state.shader;
+    pd.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+    pd.colors[0].pixel_format = dst_desc.pixel_format;
+    pd.depth.pixel_format = SG_PIXELFORMAT_DEPTH_STENCIL;
+    pd.depth.write_enabled = false;
+    pd.depth.compare = SG_COMPAREFUNC_ALWAYS;
+    pd.sample_count = dst_desc.sample_count;
+    pd.label = "ah-textured-quad-pipeline";
+    state.pip = sg_make_pipeline(&pd);
+    if (sg_query_pipeline_state(state.pip) != SG_RESOURCESTATE_VALID) {
+      state.failed = true;
+      log_error("textured_quad_render_texture: pipeline creation failed");
+      return false;
+    }
+    state.ready = true;
+  }
+  sgl_context_draw(sgl_get_context());
+  sg_apply_pipeline(state.pip);
+  sg_bindings bind{};
+  bind.views[0] = {src.tex_view_id};
+  bind.samplers[0] = {src.sampler_id};
+  sg_apply_bindings(&bind);
+  sg_apply_uniforms(0, SG_RANGE(params));
+  sg_apply_uniforms(1, SG_RANGE(params));
+  sg_draw(0, 4, 1);
+  return true;
+}
+
+inline bool blur_render_texture(const graphics::RenderTextureType &src,
+                                const graphics::RenderTextureType &dst,
+                                float dir_x, float dir_y) {
+  const float w = static_cast<float>(dst.width), h = static_cast<float>(dst.height);
+  const TexturedQuadParams params{{dir_x, dir_y}, {0.f, 0.f}, {w, h}, {w, h}, {0.f, 1.f}, {1.f, -1.f}};
+  return textured_quad_render_texture(src, dst, params);
+}
+
 inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
                                 float y, Color tint) {
   sg_view tv = {rt.tex_view_id};

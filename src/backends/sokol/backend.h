@@ -81,7 +81,9 @@ inline int g_camera_mode_depth = 0;
 inline uint32_t g_next_shader_id = 1;
 struct ShaderRecord {
   bool is_ps1_post = false;
+  bool is_blur = false;
   float resolution[2] = {0.0f, 0.0f};
+  float direction[2] = {0.0f, 0.0f};
 };
 inline std::unordered_map<uint32_t, ShaderRecord> g_shaders;
 inline uint32_t g_active_shader_id = 0;
@@ -646,9 +648,17 @@ struct MetalPlatformAPI {
       return shader;
     }
 
-    const uint32_t id = metal_detail::g_next_shader_id++;
+    const std::string file(fsFileName);
     metal_detail::ShaderRecord rec{};
-    rec.is_ps1_post = std::string(fsFileName).find("ps1_post.fs") != std::string::npos;
+    rec.is_ps1_post = file.find("ps1_post.fs") != std::string::npos;
+    rec.is_blur = file.find("blur.fs") != std::string::npos;
+    if (!rec.is_ps1_post && !rec.is_blur) {
+      log_error("load_shader: '{}' has no Metal implementation (only blur.fs "
+                "and ps1_post.fs are supported); failing closed",
+                fsFileName);
+      return shader;
+    }
+    const uint32_t id = metal_detail::g_next_shader_id++;
     metal_detail::g_shaders[id] = rec;
     shader.id = id;
     return shader;
@@ -668,6 +678,10 @@ struct MetalPlatformAPI {
       return -1;
     if (std::strcmp(uniformName, "resolution") == 0)
       return 1;
+    auto it = metal_detail::g_shaders.find(shader.id);
+    if (it != metal_detail::g_shaders.end() && it->second.is_blur &&
+        std::strcmp(uniformName, "direction") == 0)
+      return 2;
     return -1;
   }
   static void set_shader_value(ShaderType &shader, int locIndex, const void *value,
@@ -677,10 +691,15 @@ struct MetalPlatformAPI {
     auto it = metal_detail::g_shaders.find(shader.id);
     if (it == metal_detail::g_shaders.end())
       return;
-    if (locIndex == 1 && uniformType == SHADER_UNIFORM_VEC2) {
+    if (uniformType == SHADER_UNIFORM_VEC2) {
       const float *vec2 = static_cast<const float *>(value);
-      it->second.resolution[0] = vec2[0];
-      it->second.resolution[1] = vec2[1];
+      if (locIndex == 1) {
+        it->second.resolution[0] = vec2[0];
+        it->second.resolution[1] = vec2[1];
+      } else if (locIndex == 2) {
+        it->second.direction[0] = vec2[0];
+        it->second.direction[1] = vec2[1];
+      }
     }
   }
   static void begin_shader_mode(ShaderType &shader) {
