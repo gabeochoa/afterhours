@@ -43,6 +43,18 @@ int main() {
     check(in_range && near(stagger_delay(3, 16, 0.04f, StaggerOrder::Random),
                            stagger_delay(3, 16, 0.04f, StaggerOrder::Random)),
           "random stagger stays in range and is deterministic");
+    bool permuted = true, not_forward = false;
+    std::vector<float> delays;
+    for (size_t i = 0; i < 5; ++i)
+      delays.push_back(stagger_delay(i, 5, 0.05f, StaggerOrder::Random));
+    std::vector<float> sorted = delays;
+    std::sort(sorted.begin(), sorted.end());
+    for (size_t i = 0; i < 5; ++i) {
+      permuted &= near(sorted[i], 0.05f * float(i));
+      not_forward |= !near(delays[i], 0.05f * float(i));
+    }
+    check(permuted && not_forward,
+          "random stagger is a permutation of the forward delays, not forward order");
   }
 
   {

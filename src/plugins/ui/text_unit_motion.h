@@ -40,9 +40,20 @@ inline float stagger_delay(size_t index, size_t count, float step, StaggerOrder 
     rank = static_cast<size_t>(std::lround(std::fabs(static_cast<float>(index) - centre)));
     break;
   }
-  case StaggerOrder::Random:
-    rank = (index * 2654435761u + count * 40503u) % count;
+  case StaggerOrder::Random: {
+    const auto hash = [](size_t i) {
+      size_t h = i + 0x9e3779b97f4a7c15ULL;
+      h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9ULL;
+      h = (h ^ (h >> 27)) * 0x94d049bb133111ebULL;
+      return h ^ (h >> 31);
+    };
+    const size_t mine = hash(index + count * 131u);
+    rank = 0;
+    for (size_t j = 0; j < count; ++j)
+      if (j != index && hash(j + count * 131u) < mine)
+        ++rank;
     break;
+  }
   }
   return step * static_cast<float>(rank);
 }
