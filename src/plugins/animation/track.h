@@ -40,16 +40,47 @@ template <> struct Components<RectangleType> {
     return RectangleType{a[0], a[1], a[2], a[3]};
   }
 };
+namespace detail {
+inline float srgb_to_linear(float u) {
+  return u <= 0.04045f ? u / 12.92f : std::pow((u + 0.055f) / 1.055f, 2.4f);
+}
+inline float linear_to_srgb(float u) {
+  u = std::clamp(u, 0.f, 1.f);
+  return u <= 0.0031308f ? u * 12.92f : 1.055f * std::pow(u, 1.f / 2.4f) - 0.055f;
+}
+inline std::array<float, 3> srgb_to_oklab(float r, float g, float b) {
+  const float lr = srgb_to_linear(r), lg = srgb_to_linear(g), lb = srgb_to_linear(b);
+  const float l = std::cbrt(0.4122214708f * lr + 0.5363325363f * lg + 0.0514459929f * lb);
+  const float m = std::cbrt(0.2119034982f * lr + 0.6806995451f * lg + 0.1073969566f * lb);
+  const float s = std::cbrt(0.0883024619f * lr + 0.2817188376f * lg + 0.6299787005f * lb);
+  return {0.2104542553f * l + 0.7936177850f * m - 0.0040720468f * s,
+          1.9779984951f * l - 2.4285922050f * m + 0.4505937099f * s,
+          0.0259040371f * l + 0.7827717662f * m - 0.8086757660f * s};
+}
+inline std::array<float, 3> oklab_to_srgb(float L, float a, float b) {
+  const float l0 = L + 0.3963377774f * a + 0.2158037573f * b;
+  const float m0 = L - 0.1055613458f * a - 0.0638541728f * b;
+  const float s0 = L - 0.0894841775f * a - 1.2914855480f * b;
+  const float l = l0 * l0 * l0, m = m0 * m0 * m0, s = s0 * s0 * s0;
+  return {linear_to_srgb(4.0767416621f * l - 3.3077115913f * m + 0.2309699292f * s),
+          linear_to_srgb(-1.2684380046f * l + 2.6097574011f * m - 0.3413193965f * s),
+          linear_to_srgb(-0.0041960863f * l - 0.7034186147f * m + 1.7076147010f * s)};
+}
+} // namespace detail
+
 template <> struct Components<ColorType> {
   static constexpr size_t N = 4;
   static std::array<float, 4> to(ColorType c) {
-    return {float(c.r), float(c.g), float(c.b), float(c.a)};
+    const auto lab = detail::srgb_to_oklab(c.r / 255.f, c.g / 255.f, c.b / 255.f);
+    return {lab[0], lab[1], lab[2], float(c.a)};
   }
   static ColorType from(const std::array<float, 4> &a) {
+    const auto rgb = detail::oklab_to_srgb(a[0], a[1], a[2]);
     auto ch = [](float v) {
-      return static_cast<unsigned char>(std::clamp(v + 0.5f, 0.f, 255.f));
+      return static_cast<unsigned char>(std::clamp(v * 255.f + 0.5f, 0.f, 255.f));
     };
-    return ColorType{ch(a[0]), ch(a[1]), ch(a[2]), ch(a[3])};
+    const auto alpha = static_cast<unsigned char>(std::clamp(a[3] + 0.5f, 0.f, 255.f));
+    return ColorType{ch(rgb[0]), ch(rgb[1]), ch(rgb[2]), alpha};
   }
 };
 

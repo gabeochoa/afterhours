@@ -223,6 +223,18 @@ int main() {
     check(ct.value().r == 200 && ct.value().g == 100 && ct.value().b == 50 &&
               ct.value().a == 255,
           "color track lands on every channel");
+    afterhours::motion::Track<ColorType> still;
+    still.from(ColorType{12, 200, 88, 255});
+    check(still.value().r == 12 && still.value().g == 200 && still.value().b == 88,
+          "color conversion round-trips a still colour exactly");
+    afterhours::motion::Track<ColorType> fade;
+    fade.from(ColorType{255, 0, 0, 255})
+        .to(ColorType{0, 0, 255, 255}, afterhours::motion::Timeline{.keys = {{0.f, 0.f}, {1.f, 1.f}}});
+    run(fade, 0.5f);
+    const ColorType mid = fade.value();
+    check(std::abs(int(mid.r) - 140) <= 2 && std::abs(int(mid.g) - 83) <= 2 &&
+              std::abs(int(mid.b) - 162) <= 2 && mid.g > 40,
+          "red to blue fades through the OKLab midpoint, not the grey sRGB midpoint");
   }
 
   {
