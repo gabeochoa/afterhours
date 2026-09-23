@@ -39,6 +39,42 @@ int main() {
             presets::pulse().repeat == motion::Timeline::Repeat::PingPong,
         "spin loops and pulse ping-pongs");
 
+  check(presets::effect_presets.size() == 17, "effect preset ships 17 effects");
+  {
+    bool unique = true;
+    for (size_t i = 0; i < presets::effect_presets.size(); ++i)
+      for (size_t j = i + 1; j < presets::effect_presets.size(); ++j)
+        unique &= presets::effect_presets[i].id != presets::effect_presets[j].id;
+    check(unique, "effect preset ids are unique");
+    bool modes_ok = true;
+    for (const auto &e : presets::effect_presets)
+      modes_ok &= (e.shader == presets::EffectShader::None || static_cast<int>(e.shader) >= 0);
+    check(modes_ok && presets::effect_preset(presets::EffectId::Tumble) != nullptr,
+          "shader effects carry an EffectShader and effect_preset resolves ids");
+  }
+  {
+    const auto *flip = presets::effect_preset(presets::EffectId::Flip);
+    const RectangleType r{0.f, 0.f, 100.f, 50.f};
+    const auto q0 = presets::effect_quad(*flip, r, 0.f);
+    const auto qh = presets::effect_quad(*flip, r, 0.5f);
+    check(std::fabs(q0.corners[1].x - q0.corners[0].x - 100.f) < 1e-3f &&
+              std::fabs(qh.corners[1].x - qh.corners[0].x) < 1e-3f,
+          "flip is full width at p=0 and edge-on at p=0.5");
+    const auto *recede = presets::effect_preset(presets::EffectId::Recede);
+    const auto *emerge = presets::effect_preset(presets::EffectId::Emerge);
+    check(presets::effect_quad(*recede, r, 1.f).opacity < 0.3f &&
+              presets::effect_quad(*emerge, r, 0.f).opacity == 0.f &&
+              presets::effect_quad(*emerge, r, 1.f).opacity == 1.f,
+          "recede fades out and emerge fades in over progress");
+    const auto *blur = presets::effect_preset(presets::EffectId::Blur);
+    const auto *unblur = presets::effect_preset(presets::EffectId::Unblur);
+    check(presets::effect_blur_radius(*blur, 1.f) == 6.f && presets::effect_blur_radius(*unblur, 1.f) == 0.f &&
+              presets::effect_blur_radius(*recede, 1.f) == 0.f,
+          "blur ramps 0 to 6, unblur ramps back, other effects stay sharp");
+    check(std::fabs(presets::effect_timeline(0.9f).length() - 0.9f) < 1e-6f,
+          "effect preset timeline has the requested length");
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);
