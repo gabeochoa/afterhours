@@ -81,6 +81,7 @@ ALL_TESTS := \
 	drag_preview_test \
 	animation_test \
 	motion_config_test \
+	reduced_motion_test \
 	animation_presets_test \
 	particles_test \
 	ui_modifiers_test \
@@ -303,6 +304,10 @@ endif
 
 $(OUT)/native_dialogs_macos_test: native_dialogs_macos_test.mm ../src/plugins/native_dialogs_macos.mm
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) $(filter %.mm,$^) -framework Cocoa -o $@
+
+ifeq ($(UNAME_S),Darwin)
+$(OUT)/reduced_motion_test: LDFLAGS_T += -framework AppKit
+endif
 
 # Sokol's implementation TU must be Objective-C++ for Metal; reuse the web
 # example's rather than keeping a second copy.
