@@ -7,6 +7,7 @@
 // dropdown uses, so a tooltip on an element near an edge turns to the other
 // side instead of going off screen.
 
+#include <optional>
 #include <string>
 
 #include "../../developer.h"
@@ -25,10 +26,16 @@ struct HasTooltip : BaseComponent {
   // crosses something flashes at anyone moving across the screen.
   float delay = 0.5f;
   overlay::Placement placement = overlay::Placement::Below;
+  std::optional<Size> font_size;
+  float padding = 8.f;
+  float gap = 4.f;
 
   HasTooltip() = default;
-  HasTooltip(std::string t, float d, overlay::Placement p)
-      : text(std::move(t)), delay(d), placement(p) {}
+  HasTooltip(std::string t, float d, overlay::Placement p,
+             std::optional<Size> fs = std::nullopt, float pad = 8.f,
+             float g = 4.f)
+      : text(std::move(t)), delay(d), placement(p), font_size(fs),
+        padding(pad), gap(g) {}
 };
 
 // Which tooltip is up, and how long its element has been hovered. Singleton:
@@ -41,6 +48,9 @@ struct TooltipState : BaseComponent {
   RectangleType anchor{};
   std::string text;
   overlay::Placement placement = overlay::Placement::Below;
+  std::optional<Size> font_size;
+  float padding = 8.f;
+  float gap = 4.f;
 
   bool is_showing() const { return showing != -1 && !text.empty(); }
 };
@@ -61,6 +71,9 @@ struct UpdateTooltips : System<UIContext<InputAction>> {
     std::string text;
     float delay = 0.5f;
     auto placement = overlay::Placement::Below;
+    std::optional<Size> font_size;
+    float padding = 8.f;
+    float gap = 4.f;
 
     for (int id = context.hot_id; id >= 0;) {
       OptEntity oe = UICollectionHolder::getEntityForID(id);
@@ -73,6 +86,9 @@ struct UpdateTooltips : System<UIContext<InputAction>> {
         text = e.get<HasTooltip>().text;
         delay = e.get<HasTooltip>().delay;
         placement = e.get<HasTooltip>().placement;
+        font_size = e.get<HasTooltip>().font_size;
+        padding = e.get<HasTooltip>().padding;
+        gap = e.get<HasTooltip>().gap;
         break;
       }
       if (!e.has<UIComponent>())
@@ -107,6 +123,9 @@ struct UpdateTooltips : System<UIContext<InputAction>> {
     state->anchor = anchor;
     state->text = text;
     state->placement = placement;
+    state->font_size = font_size;
+    state->padding = padding;
+    state->gap = gap;
   }
 };
 
@@ -127,7 +146,8 @@ struct RenderTooltip : System<UIContext<InputAction>> {
     const auto &defaults = imm::UIStylingDefaults::get();
     const auto font = fonts->get_font(defaults.resolved_font_name());
     const auto mode = context.scaling_mode.value_or(defaults.scaling_mode);
-    const float font_size = resolve_to_pixels(defaults.default_font_size,
+    const float font_size = resolve_to_pixels(
+        state->font_size.value_or(defaults.default_font_size),
         context.screen_height, mode, context.theme.ui_scale);
     if (font_size <= 0.f)
       return;
@@ -135,7 +155,7 @@ struct RenderTooltip : System<UIContext<InputAction>> {
     const float scale = mode == ScalingMode::Adaptive
                             ? context.theme.ui_scale
                             : context.screen_height / 720.f;
-    const float padding = 8.f * scale;
+    const float padding = state->padding * scale;
     const float max_width = std::min(360.f * scale,
                                     context.screen_width - padding * 2.f);
     if (max_width <= padding * 2.f)
@@ -155,7 +175,7 @@ struct RenderTooltip : System<UIContext<InputAction>> {
     const float h = std::min(context.screen_height,
         line_height * static_cast<float>(lines.size()) + padding * 2.f);
     const auto placed = overlay::place(state->anchor, w, h,
-        context.screen_width, context.screen_height, state->placement, 4.f * scale);
+        context.screen_width, context.screen_height, state->placement, state->gap * scale);
 
     const RectangleType box{placed.x, placed.y, w, h};
     const float roundness = resolve_roundness(context.theme.corner_radius,

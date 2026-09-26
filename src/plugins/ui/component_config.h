@@ -136,6 +136,9 @@ struct ComponentConfig {
   // fg on top of all its primitives, both receiving the widget's final rect.
   std::string tooltip_text;
   float tooltip_delay = 0.5f;
+  std::optional<Size> tooltip_font_size;
+  float tooltip_padding = 8.f;
+  float tooltip_gap = 4.f;
   RenderPrimitive::CustomDrawFn on_draw_bg;
   RenderPrimitive::CustomDrawFn on_draw_fg;
 
@@ -542,6 +545,18 @@ struct ComponentConfig {
   ComponentConfig &with_tooltip(const std::string &text, float delay = 0.5f) {
     tooltip_text = text;
     tooltip_delay = delay;
+    return *this;
+  }
+  ComponentConfig &with_tooltip_font_size(Size size) {
+    tooltip_font_size = size;
+    return *this;
+  }
+  ComponentConfig &with_tooltip_padding(float padding) {
+    tooltip_padding = padding;
+    return *this;
+  }
+  ComponentConfig &with_tooltip_gap(float gap) {
+    tooltip_gap = gap;
     return *this;
   }
   ComponentConfig &with_render_layer(int layer) {
@@ -1119,6 +1134,9 @@ struct ComponentConfig {
     if (!overrides.tooltip_text.empty()) {
       merged.tooltip_text = overrides.tooltip_text;
       merged.tooltip_delay = overrides.tooltip_delay;
+      merged.tooltip_font_size = overrides.tooltip_font_size;
+      merged.tooltip_padding = overrides.tooltip_padding;
+      merged.tooltip_gap = overrides.tooltip_gap;
     }
     if (!overrides.debug_name.empty())
       merged.debug_name = overrides.debug_name;

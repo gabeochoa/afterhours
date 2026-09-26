@@ -234,7 +234,8 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
   if (!config.tooltip_text.empty())
     entity.addComponentIfMissing<ui::HasTooltip>(
         config.tooltip_text, config.tooltip_delay,
-        ui::overlay::Placement::Below);
+        ui::overlay::Placement::Below, config.tooltip_font_size,
+        config.tooltip_padding, config.tooltip_gap);
 
   if (config.label.empty() && !entity.has<ui::HasLabel>())
     return;

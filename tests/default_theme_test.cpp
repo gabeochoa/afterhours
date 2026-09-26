@@ -93,6 +93,82 @@ TEST(tooltip_uses_measured_width_matching_font_size_and_requested_placement) {
   if (!text.empty()) CHECK_APPROX(text.front().rect.height, 20.f);
 }
 
+TEST(tooltip_caller_config_reaches_state) {
+  ui_test::ImmTestHarness h;
+  h.begin_frame();
+  auto widget = div(h.context(), mk(h.root(), 0),
+                    ComponentConfig{}
+                        .with_size({pixels(40), pixels(40)})
+                        .with_tooltip("hint", 0.25f)
+                        .with_tooltip_font_size(pixels(12))
+                        .with_tooltip_padding(20.f)
+                        .with_tooltip_gap(10.f));
+  CHECK(widget.ent().has<HasTooltip>());
+  const auto &tip = widget.ent().get<HasTooltip>();
+  CHECK(tip.font_size.has_value());
+  if (tip.font_size.has_value())
+    CHECK_APPROX(tip.font_size->value, 12.f);
+  CHECK_APPROX(tip.padding, 20.f);
+  CHECK_APPROX(tip.gap, 10.f);
+
+  if (!EntityHelper::has_singleton<TooltipState>()) {
+    auto &e = EntityHelper::createPermanentEntity();
+    e.addComponent<TooltipState>();
+    EntityHelper::registerSingleton<TooltipState>(e);
+  }
+  auto &state = *EntityHelper::get_singleton_cmp<TooltipState>();
+  state.hovered = -1;
+  state.showing = -1;
+  state.elapsed = 0.f;
+  state.text.clear();
+  h.context().hot_id = widget.ent().id;
+  UpdateTooltips<ui_test::TestInputAction> update;
+  update.for_each_with(h.context_entity(), h.context(), 0.f);
+  update.for_each_with(h.context_entity(), h.context(), 1.f);
+  CHECK(state.is_showing());
+  CHECK(state.font_size.has_value());
+  if (state.font_size.has_value())
+    CHECK_APPROX(state.font_size->value, 12.f);
+  CHECK_APPROX(state.padding, 20.f);
+  CHECK_APPROX(state.gap, 10.f);
+}
+
+TEST(tooltip_state_config_sizes_and_places_the_box) {
+  ui_test::ImmTestHarness h;
+  FontDefaults restore;
+  UIStylingDefaults::get().set_default_font("Interface", pixels(20));
+  h.context().scaling_mode = ScalingMode::Adaptive;
+  h.render_font()->load_font("Interface", get_default_font());
+  if (!EntityHelper::has_singleton<TooltipState>()) {
+    auto &e = EntityHelper::createPermanentEntity();
+    e.addComponent<TooltipState>();
+    EntityHelper::registerSingleton<TooltipState>(e);
+  }
+  auto &state = *EntityHelper::get_singleton_cmp<TooltipState>();
+  state.showing = 1;
+  state.anchor = {200, 200, 40, 40};
+  state.text = "Wide WWW and narrow iii";
+  state.placement = overlay::Placement::Left;
+  state.font_size = pixels(10);
+  state.padding = 20.f;
+  state.gap = 10.f;
+  set_measure_text_fn([](const char *, float size, float) {
+    return Vector2Type{13.f, size};
+  });
+  clear_draw_calls();
+  RenderTooltip<ui_test::TestInputAction> renderer;
+  renderer.for_each_with(h.context_entity(), h.context(), 0.f);
+  const auto boxes = h.drawn("rectangle_rounded");
+  const auto text = h.drawn("text");
+  CHECK(boxes.size() == 1);
+  CHECK(text.size() == 1);
+  if (!boxes.empty()) {
+    CHECK_APPROX(boxes.front().rect.width, 53.f);
+    CHECK_APPROX(boxes.front().rect.x, 137.f);
+  }
+  if (!text.empty()) CHECK_APPROX(text.front().rect.height, 10.f);
+}
+
 TEST(explicit_no_background_clears_a_previous_status_fill) {
   ui_test::ImmTestHarness h;
   auto emit = [&](Theme::Usage usage) {
