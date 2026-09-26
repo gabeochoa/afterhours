@@ -591,6 +591,37 @@ TEST(nowrap_column_no_wrapping) {
 }
 
 // ---------------------------------------------------------------------------
+// Layout warnings warn once per (child, parent), not once per frame
+// ---------------------------------------------------------------------------
+TEST(layout_wrap_and_overflow_warn_once_per_child_parent_pair) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(100), pixels(50));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_flex_wrap(FlexWrap::NoWrap);
+  auto &c1 = t.make_ui(pixels(80), pixels(50));
+  auto &c2 = t.make_ui(pixels(80), pixels(50));
+  t.add_child(root, c1);
+  t.add_child(root, c2);
+
+  auto count = [](const char *needle) {
+    size_t n = 0;
+    for (const auto &m : captured_warnings())
+      if (m.find(needle) != std::string::npos)
+        ++n;
+    return n;
+  };
+
+  t.run(root);
+  t.run(root);
+  t.run(root);
+  // Three frames of the same violation: one warning each, not three.
+  CHECK(count("Layout wrap") == 1);
+  CHECK(count("Layout overflow") == 1);
+  EXPECT_WARN("Layout wrap");
+  EXPECT_WARN("Layout overflow");
+}
+
+// ---------------------------------------------------------------------------
 // Wrap column: children that exceed parent height DO wrap to a new column
 // ---------------------------------------------------------------------------
 TEST(wrap_column_wraps_children) {

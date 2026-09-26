@@ -1589,11 +1589,15 @@ struct AutoLayout {
         }
 
         if (should_warn) {
-          log_warn("Layout wrap: '{}' in parent '{}' - {} (child_size={:.1f}, "
-                   "offset={:.1f}, container={:.1f})",
-                   get_child_debug_name(), get_parent_debug_name(), warn_reason,
-                   will_wrap_column ? cy : cx, will_wrap_column ? offy : offx,
-                   will_wrap_column ? sy : sx);
+          warn_once(get_child_debug_name() + " in " +
+                        get_parent_debug_name() + ": " + warn_reason,
+                    "Layout wrap: '{}' in parent '{}' - {} "
+                    "(child_size={:.1f}, "
+                    "offset={:.1f}, container={:.1f})",
+                    get_child_debug_name(), get_parent_debug_name(),
+                    warn_reason, will_wrap_column ? cy : cx,
+                    will_wrap_column ? offy : offx,
+                    will_wrap_column ? sy : sx);
         }
       }
 
@@ -1702,13 +1706,14 @@ struct AutoLayout {
                                            accumulated_snap_tolerance_y +
                                            BASE_OVERFLOW_TOLERANCE;
       if ((overflows_x || overflows_y) && !is_scroll_view) {
-        log_warn("Layout overflow: '{}' extends outside parent '{}' bounds "
-                 "(child_rel=[{:.1f},{:.1f}], child_size=[{:.1f},{:.1f}], "
-                 "child_end=[{:.1f},{:.1f}], parent_size=[{:.1f},{:.1f}], "
-                 "gap={:.1f}, start_offset={:.1f})",
-                 get_child_debug_name(), get_parent_debug_name(),
-                 child.computed_rel[Axis::X], child.computed_rel[Axis::Y], cx,
-                 cy, child_end_x, child_end_y, sx, sy, gap, start_offset);
+        warn_once(get_child_debug_name() + " in " + get_parent_debug_name(),
+                  "Layout overflow: '{}' extends outside parent '{}' bounds "
+                  "(child_rel=[{:.1f},{:.1f}], child_size=[{:.1f},{:.1f}], "
+                  "child_end=[{:.1f},{:.1f}], parent_size=[{:.1f},{:.1f}], "
+                  "gap={:.1f}, start_offset={:.1f})",
+                  get_child_debug_name(), get_parent_debug_name(),
+                  child.computed_rel[Axis::X], child.computed_rel[Axis::Y], cx,
+                  cy, child_end_x, child_end_y, sx, sy, gap, start_offset);
       }
 
       // Setup for next child placement (include gap for justify)
