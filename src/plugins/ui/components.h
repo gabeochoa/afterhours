@@ -567,6 +567,7 @@ struct HasScrollView : BaseComponent {
   bool vertical_enabled = true;       // Allow vertical scrolling
   bool horizontal_enabled = false;    // Allow horizontal scrolling
   bool invert_scroll = false;         // Invert scroll direction (non-natural)
+  bool config_owned = false;
   bool auto_overflow =
       false; // Auto mode: only clip/scroll when content overflows
   // Non-zero: views sharing an id scroll together, on enabled axes only.

@@ -485,6 +485,37 @@ int main() {
           "two enums with the same value keep separate root tracks");
   }
 
+  {
+    // Same total time, any step rate, same value.
+    auto run_track = [](int steps) {
+      motion::Track<float> tr;
+      tr.from(0.f);
+      Timeline tl{.keys = {{0.f, 0.f}, {1.f, 1.f}}, .curve = motion::curves::ease_in_out_quad};
+      tr.to(100.f, tl);
+      const float dt = 0.5f / static_cast<float>(steps);
+      for (int i = 0; i < steps; ++i)
+        tr.advance(dt);
+      return tr.value();
+    };
+    const float one = run_track(1), thirty = run_track(30), sixty = run_track(60),
+                fast = run_track(240);
+    check(std::fabs(one - sixty) < 0.01f && std::fabs(thirty - sixty) < 0.01f &&
+              std::fabs(fast - sixty) < 0.01f && sixty > 40.f && sixty < 60.f,
+          "track value after 0.5s is independent of step rate");
+    auto run_spring = [](int steps) {
+      motion::Track<float> tr;
+      tr.from(0.f);
+      tr.to(100.f, Spring::bouncy());
+      const float dt = 0.35f / static_cast<float>(steps);
+      for (int i = 0; i < steps; ++i)
+        tr.advance(dt);
+      return tr.value();
+    };
+    const float s_one = run_spring(1), s_sixty = run_spring(60), s_fast = run_spring(240);
+    check(std::fabs(s_one - s_sixty) < 0.5f && std::fabs(s_fast - s_sixty) < 0.5f,
+          "spring value after 0.35s is independent of step rate");
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);

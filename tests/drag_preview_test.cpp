@@ -249,4 +249,29 @@ TEST(changing_overflow_releases_and_restores_clipping) {
   CHECK(parent.has<HasClipChildren>());
 }
 
+TEST(changing_overflow_releases_and_restores_scroll_view) {
+  ImmTestHarness h;
+  const auto frame = [&](Overflow overflow) {
+    h.begin_frame();
+    auto parent = div(h.context(), mk(h.root(), 0), positioned(100, 100, 200, 120)
+        .with_overflow(overflow));
+    h.layout_only();
+    return parent.id();
+  };
+  const auto id = frame(Overflow::Scroll);
+  auto &parent = AutoLayout::to_ent_static(id);
+  CHECK(parent.has<HasScrollView>());
+  parent.get<HasScrollView>().scroll_offset = {0.f, 50.f};
+  frame(Overflow::Visible);
+  CHECK(!parent.has<HasScrollView>());
+  frame(Overflow::Scroll);
+  CHECK(parent.has<HasScrollView>());
+  CHECK(parent.get<HasScrollView>().scroll_offset.y == 0.f);
+  // App-installed scroll views are not config-owned and survive.
+  frame(Overflow::Visible);
+  parent.addComponent<HasScrollView>();
+  frame(Overflow::Visible);
+  CHECK(parent.has<HasScrollView>());
+}
+
 int main() { return ui_test::run_registered_tests("drag preview and exact layout tests"); }

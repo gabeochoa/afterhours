@@ -280,20 +280,7 @@ struct ValidateComponentContrast : System<UIComponent, HasColor, HasLabel> {
     Theme theme = theme_defaults.get_theme();
 
     Color bg_color = bg.color();
-    Color text_color;
-
-    // Check if auto_text_color is enabled (indicated by background_hint)
-    if (label.background_hint.has_value()) {
-      // auto_text_color picks the best contrast between font and darkfont
-      text_color =
-          colors::auto_text_color(bg_color, theme.font, theme.darkfont);
-    } else if (label.explicit_text_color.has_value()) {
-      // Explicit text color was set
-      text_color = label.explicit_text_color.value();
-    } else {
-      // Default to theme font color
-      text_color = theme.font;
-    }
+    Color text_color = detail::resolve_label_color(label, theme);
 
     float ratio = colors::contrast_ratio(text_color, bg_color);
 

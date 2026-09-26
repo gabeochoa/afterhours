@@ -412,12 +412,16 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
                         config.overflow_y == Overflow::Auto;
     if (needs_scroll) {
       auto &sv = entity.addComponentIfMissing<HasScrollView>();
+      sv.config_owned = true;
       sv.horizontal_enabled = (config.overflow_x == Overflow::Scroll ||
                                config.overflow_x == Overflow::Auto);
       sv.vertical_enabled = (config.overflow_y == Overflow::Scroll ||
                              config.overflow_y == Overflow::Auto);
       sv.auto_overflow = (config.overflow_x == Overflow::Auto ||
                           config.overflow_y == Overflow::Auto);
+    } else if (entity.has<HasScrollView>() &&
+               entity.get<HasScrollView>().config_owned) {
+      entity.removeComponentIfExists<HasScrollView>();
     }
   }
 
