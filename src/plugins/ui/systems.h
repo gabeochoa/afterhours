@@ -670,6 +670,12 @@ template <typename InputAction> struct ComputeVisualFocusId : System<> {
     ctx->visual_focus_id = ctx->ROOT;
     if (!ctx->has_interacted)
       return;
+    // :focus-visible: pointer-given focus draws no ring. Exempt
+    // FollowsMostRecentInput, where driving the ring with the mouse is the
+    // mode's whole point.
+    if (ctx->theme.highlight_mode == HighlightMode::Split &&
+        !ctx->focus_visible())
+      return;
     if (ctx->focus_id == ctx->ROOT || ctx->focus_id == ctx->FAKE)
       return;
     OptEntity focused = UICollectionHolder::getEntityForID(ctx->focus_id);
@@ -890,7 +896,7 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
     }
 
     if (context->mouse_activates(entity.id)) {
-      context->set_focus(entity.id);
+      context->set_focus(entity.id, FocusSource::Pointer);
       hasClickListener.cb(entity);
       hasClickListener.down = true;
     }
@@ -1223,7 +1229,7 @@ struct HandleDrags : SystemWithUIContext<ui::HasDragListener> {
     }
 
     if (context->is_active(entity.id)) {
-      context->set_focus(entity.id);
+      context->set_focus(entity.id, FocusSource::Pointer);
       hasDragListener.down = true;
       hasDragListener.cb(entity);
     }

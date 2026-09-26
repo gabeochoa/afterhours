@@ -239,7 +239,9 @@ focus_ring_for(const UIContext<InputAction> &context, const Entity &entity,
   if (ring.thickness <= 0.f)
     return {};
 
-  ring.rect = cmp.focus_rect(context.theme.focus_ring_offset);
+  const float ring_offset =
+      cmp.focus_ring_offset.value_or(context.theme.focus_ring_offset);
+  ring.rect = cmp.focus_rect(ring_offset);
   if (entity.has<HasUIModifiers>())
     ring.rect = entity.get<HasUIModifiers>().apply_modifier(ring.rect);
   ring.rect = detail::apply_ancestor_transform(entity, ring.rect);
@@ -255,7 +257,7 @@ focus_ring_for(const UIContext<InputAction> &context, const Entity &entity,
     const auto rect = cmp.rect();
     const float radius = resolve_roundness(corners.radius_px, corners.roundness, rect) *
                          std::min(rect.width, rect.height) * .5f;
-    const float inset = std::min(context.theme.focus_ring_offset,
+    const float inset = std::min(ring_offset,
                                 std::max(0.f, (std::min(rect.width, rect.height) - 1.f) * .5f));
     const float scale = entity.has<HasUIModifiers>() ? entity.get<HasUIModifiers>().scale : 1.f;
     const float shorter = std::min(ring.rect.width, ring.rect.height);
@@ -291,7 +293,7 @@ std::optional<FocusPaint> prepare_focus_paint(const UIContext<InputAction> &cont
   const Entity &entity = opt.asE();
   const auto &cmp = entity.get<UIComponent>();
   if (is_hidden_for_render(entity)) return {};
-  auto ring = focus_ring_for(context, entity, cmp);
+  auto ring = detail::focus_ring_for(context, entity, cmp);
   if (!ring) return {};
   std::set<EntityID> descendants{entity.id};
   std::vector<EntityID> pending{entity.id};
@@ -357,6 +359,18 @@ inline void collect_focus_paint(RenderCommandBuffer &buffer, const FocusPaint &p
 }
 
 } // namespace detail
+
+// The public focus-ring resolution: what both renderers draw for the
+// visually focused widget, and what a custom widget asks for instead of
+// hand-rolling its own ring.
+using FocusRing = detail::FocusRing;
+
+template <typename InputAction>
+inline std::optional<FocusRing>
+focus_ring_for(const UIContext<InputAction> &context, const Entity &entity,
+               const UIComponent &cmp) {
+  return detail::focus_ring_for(context, entity, cmp);
+}
 
 // Auto-fit's floor, matching TypographyScale::MIN_ACCESSIBLE_SIZE_720P.
 #ifndef AFTERHOURS_MIN_FONT_SIZE

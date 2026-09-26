@@ -76,6 +76,47 @@ TEST(pointer_focus_counts_too) {
   CHECK(h.context().has_interacted);
 }
 
+// :focus-visible: a ring is for keyboard users. A click already shows the
+// user where their pointer is, so pointer-given focus draws no ring until
+// focus next moves for a non-pointer reason.
+TEST(pointer_focus_is_not_focus_visible_until_focus_moves_on) {
+  ImmTestHarness h;
+  h.context().set_focus(3, FocusSource::Pointer);
+  CHECK(!h.context().focus_visible());
+  h.context().set_focus(4, FocusSource::Explicit);
+  CHECK(h.context().focus_visible());
+  // A re-grab of the same widget does not rewrite the modality.
+  h.context().set_focus(4, FocusSource::Grab);
+  CHECK(h.context().focus_visible());
+}
+
+TEST(visual_focus_skips_pointer_focus_in_split_mode_only) {
+  using namespace afterhours::ui::imm;
+  ImmTestHarness h;
+  auto &ctx = h.context();
+  EntityHelper::registerSingleton<UIContext<ui_test::TestInputAction>>(
+      h.context_entity());
+  h.begin_frame();
+  auto a = button(ctx, mk(h.root(), 0),
+                  ComponentConfig{}.with_size({pixels(100), pixels(40)}));
+  auto b = button(ctx, mk(h.root(), 1),
+                  ComponentConfig{}.with_size({pixels(100), pixels(40)}));
+  h.layout_only();
+  ComputeVisualFocusId<ui_test::TestInputAction> derive;
+  ctx.set_focus(a.ent().id, FocusSource::Pointer);
+  derive.for_each_with(h.context_entity(), 0.f);
+  CHECK(ctx.visual_focus_id == ctx.ROOT);
+  ctx.set_focus(b.ent().id, FocusSource::Explicit);
+  derive.for_each_with(h.context_entity(), 0.f);
+  CHECK(ctx.visual_focus_id == b.ent().id);
+  // FollowsMostRecentInput drives the ring with the mouse on purpose; the
+  // :focus-visible gate must not suppress it there.
+  ctx.theme.highlight_mode = HighlightMode::FollowsMostRecentInput;
+  ctx.set_focus(a.ent().id, FocusSource::Pointer);
+  derive.for_each_with(h.context_entity(), 0.f);
+  CHECK(ctx.visual_focus_id == a.ent().id);
+}
+
 // Grabbing a different widget is still the framework re-grabbing, not a user.
 TEST(a_grab_onto_a_new_widget_is_still_not_interaction) {
   ImmTestHarness h;

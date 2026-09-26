@@ -1310,14 +1310,50 @@ TEST(focus_ring_insets_preserve_corner_centers_and_thin_targets) {
   auto target = focused_button(h, 3.f);
   target.ent().get<HasRoundedCorners>().radius_px = 12.f;
   h.layout_only();
-  auto ring = afterhours::ui::detail::focus_ring_for(h.context(), target.ent(), target.cmp());
+  auto ring = afterhours::ui::focus_ring_for(h.context(), target.ent(), target.cmp());
   CHECK(ring.has_value());
   CHECK_APPROX(ring->roundness * std::min(ring->rect.width, ring->rect.height) * .5f, 8.f);
   target.cmp().computed[Axis::X] = 4.f;
   target.cmp().computed[Axis::Y] = 120.f;
-  ring = afterhours::ui::detail::focus_ring_for(h.context(), target.ent(), target.cmp());
+  ring = afterhours::ui::focus_ring_for(h.context(), target.ent(), target.cmp());
   CHECK(ring->rect.width >= 1.f);
   CHECK(ring->rect.height > 0.f);
+}
+
+TEST(focus_ring_offset_config_reaches_the_component) {
+  ImmTestHarness h;
+  h.begin_frame();
+  auto custom = button(h.context(), mk(h.root(), 0),
+                       ComponentConfig{}
+                           .with_size({pixels(100), pixels(40)})
+                           .with_focus_ring_offset(9.f));
+  CHECK(custom.cmp().focus_ring_offset.has_value());
+  if (custom.cmp().focus_ring_offset.has_value())
+    CHECK_APPROX(*custom.cmp().focus_ring_offset, 9.f);
+  auto plain = button(h.context(), mk(h.root(), 1),
+                      ComponentConfig{}.with_size({pixels(100), pixels(40)}));
+  CHECK(!plain.cmp().focus_ring_offset.has_value());
+}
+
+TEST(focus_ring_offset_can_be_overridden_per_widget) {
+  ImmTestHarness h;
+  auto target = focused_button(h, 3.f);
+  h.layout_only();
+  auto ring = afterhours::ui::focus_ring_for(h.context(), target.ent(),
+                                             target.cmp());
+  CHECK(ring.has_value());
+  if (ring.has_value()) {
+    CHECK_APPROX(ring->rect.width, 192.f);
+    CHECK_APPROX(ring->rect.height, 32.f);
+  }
+  target.cmp().focus_ring_offset = 12.f;
+  ring = afterhours::ui::focus_ring_for(h.context(), target.ent(),
+                                        target.cmp());
+  CHECK(ring.has_value());
+  if (ring.has_value()) {
+    CHECK_APPROX(ring->rect.width, 176.f);
+    CHECK_APPROX(ring->rect.height, 16.f);
+  }
 }
 
 TEST(keyboard_focus_reveals_scrolled_controls_in_both_directions) {

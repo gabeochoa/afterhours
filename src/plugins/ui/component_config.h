@@ -111,6 +111,7 @@ struct ComponentConfig {
   std::optional<Vector2Type> text_inset;
   std::optional<CursorType> cursor_type; // Cursor to show on hover
   bool skip_when_tabbing = false;
+  std::optional<float> focus_ring_offset;
   bool ignore_pointer_events = false; // invisible to hit-testing
   bool skip_grid_snap = false;
   bool disabled = false;
@@ -581,6 +582,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_skip_tabbing(bool skip) {
     skip_when_tabbing = skip;
+    return *this;
+  }
+  ComponentConfig &with_focus_ring_offset(float offset) {
+    focus_ring_offset = offset;
     return *this;
   }
   /// While focused, WidgetUp/WidgetDown belong to this widget (a value to
@@ -1097,6 +1102,8 @@ struct ComponentConfig {
       merged.hidden = overrides.hidden;
     if (overrides.skips_when_tabbing())
       merged.skip_when_tabbing = overrides.skip_when_tabbing;
+    if (overrides.focus_ring_offset.has_value())
+      merged.focus_ring_offset = overrides.focus_ring_offset;
     // Only when asked for: an unconditional copy would clear a base config's
     // opt-out every time it is overridden.
     if (overrides.ignore_pointer_events)

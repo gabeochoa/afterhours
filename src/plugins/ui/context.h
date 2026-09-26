@@ -182,6 +182,10 @@ template <typename InputAction> struct UIContext final : BaseComponent {
       ROOT; // last element that was processed (used for reverse tabbing)
   // Reset to Grab each frame in BeginUIContextManager; see FocusSource.
   FocusSource focus_source = FocusSource::Grab;
+  // The source that last MOVED focus, kept across frames (focus_source is
+  // reset every frame, so it cannot answer for the current holder). Drives
+  // :focus-visible: pointer-given focus draws no ring.
+  FocusSource focus_modality = FocusSource::Grab;
   // The ring stays off until something is actually interacted with. try_to_grab
   // re-grabs focus every frame for whichever widget is first, so without this
   // an app opens with a ring around a row nobody touched.
@@ -292,12 +296,18 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     // moved focus, which is the question worth answering.
     if (focus_id != id) {
       focus_source = src;
+      focus_modality = src;
       if (src != FocusSource::Grab)
         has_interacted = true;
       focus_set_file = loc.file_name();
       focus_set_line = static_cast<int>(loc.line());
     }
     focus_id = id;
+  }
+
+  // :focus-visible: the ring exists for users who cannot see a pointer.
+  [[nodiscard]] bool focus_visible() const {
+    return focus_modality != FocusSource::Pointer;
   }
 
   // "Pointer at systems.h:331", for a diagnostic to print.

@@ -105,6 +105,7 @@ struct UIComponent : BaseComponent {
   bool absolute = false;
   bool skip_grid_snap = false;
   bool skip_when_tabbing = false;
+  std::optional<float> focus_ring_offset;
 
   // Absolute position in pixels, set from with_absolute_position(x, y)
   // during component init. Used by autolayout to set computed_rel for
