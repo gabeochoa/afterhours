@@ -144,4 +144,100 @@ TEST(malformed_script_does_not_fail_the_next_batch_script) {
   CHECK(captured.find("[PASS] next") != std::string::npos);
 }
 
+static PendingE2ECommand pending_for(std::string name, std::vector<std::string> args) {
+  PendingE2ECommand pending;
+  pending.name = std::move(name);
+  pending.args = std::move(args);
+  return pending;
+}
+
+TEST(assert_ui_colour_properties) {
+  ui_test::ImmTestHarness h;
+  h.begin_frame();
+  ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
+               ui::imm::ComponentConfig{}
+                   .with_size({ui::pixels(200), ui::pixels(40)})
+                   .with_label("swatch")
+                   .with_custom_background(Color{200, 30, 30, 255})
+                   .with_custom_text_color(Color{30, 200, 30, 255})
+                   .with_debug_name("swatch"));
+  h.layout_only();
+  auto good = pending_for("assert_ui", {"swatch", "bg=#c81e1e", "fg=#1ec81e"});
+  ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), good, 0.f);
+  CHECK(good.is_consumed() && good.error_message.empty());
+  auto bad = pending_for("assert_ui", {"swatch", "bg=#000000"});
+  ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), bad, 0.f);
+  CHECK(bad.is_consumed() && !bad.error_message.empty());
+}
+
+TEST(parse_hex_color_accepts_six_and_eight_digits) {
+  Color c{};
+  CHECK(ui_commands::parse_hex_color("#102030", c));
+  CHECK(c.r == 0x10 && c.g == 0x20 && c.b == 0x30 && c.a == 255);
+  CHECK(ui_commands::parse_hex_color("04050607", c));
+  CHECK(c.r == 0x04 && c.g == 0x05 && c.b == 0x06 && c.a == 0x07);
+  CHECK(ui_commands::parse_hex_color("#ABCDEF", c));
+  CHECK(c.r == 0xab && c.g == 0xcd && c.b == 0xef && c.a == 255);
+  CHECK(!ui_commands::parse_hex_color("", c));
+  CHECK(!ui_commands::parse_hex_color("#abc", c));
+  CHECK(!ui_commands::parse_hex_color("#gggggg", c));
+  CHECK(!ui_commands::parse_hex_color("10203g", c));
+  CHECK(!ui_commands::parse_hex_color("-10203", c));
+  CHECK(!ui_commands::parse_hex_color("+10203", c));
+  CHECK(!ui_commands::parse_hex_color("0x1020", c));
+}
+
+TEST(expect_no_ui_waits_a_frame_then_judges_absence) {
+  ui_test::ImmTestHarness h;
+  h.begin_frame();
+  ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
+               ui::imm::ComponentConfig{}
+                   .with_size({ui::pixels(100), ui::pixels(40)})
+                   .with_label("here")
+                   .with_debug_name("present_label"));
+  h.layout_only();
+  auto absent = pending_for("expect_no_ui", {"missing_label"});
+  ui_commands::HandleExpectNoUICommand{}.for_each_with(h.root(), absent, 0.f);
+  CHECK(absent.is_retry());
+  absent.reset_retry();
+  absent.frames_alive = 1;
+  ui_commands::HandleExpectNoUICommand{}.for_each_with(h.root(), absent, 0.f);
+  CHECK(absent.is_consumed() && absent.error_message.empty());
+  auto present = pending_for("expect_no_ui", {"present_label"});
+  present.frames_alive = 1;
+  ui_commands::HandleExpectNoUICommand{}.for_each_with(h.root(), present, 0.f);
+  CHECK(present.is_consumed() && !present.error_message.empty());
+}
+
+TEST(assert_ui_text_scoped_to_parent) {
+  ui_test::ImmTestHarness h;
+  h.begin_frame();
+  auto scope_a = ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
+                              ui::imm::ComponentConfig{}
+                                  .with_size({ui::pixels(300), ui::pixels(100)})
+                                  .with_debug_name("scope_a"));
+  ui::imm::div(h.context(), ui::imm::mk(scope_a.ent(), 0),
+               ui::imm::ComponentConfig{}
+                   .with_size({ui::pixels(100), ui::pixels(40)})
+                   .with_label("Same")
+                   .with_debug_name("child_a"));
+  auto scope_b = ui::imm::div(h.context(), ui::imm::mk(h.root(), 1),
+                              ui::imm::ComponentConfig{}
+                                  .with_size({ui::pixels(300), ui::pixels(100)})
+                                  .with_absolute_position(0, 120)
+                                  .with_debug_name("scope_b"));
+  ui::imm::div(h.context(), ui::imm::mk(scope_b.ent(), 0),
+               ui::imm::ComponentConfig{}
+                   .with_size({ui::pixels(220), ui::pixels(40)})
+                   .with_label("Same")
+                   .with_debug_name("child_b"));
+  h.layout_only();
+  auto scoped = pending_for("assert_ui_text", {"Same", "in=scope_b", "w=220"});
+  ui_commands::HandleAssertUITextCommand{}.for_each_with(h.root(), scoped, 0.f);
+  CHECK(scoped.is_consumed() && scoped.error_message.empty());
+  auto wrong_scope = pending_for("assert_ui_text", {"Same", "in=scope_a", "w=220"});
+  ui_commands::HandleAssertUITextCommand{}.for_each_with(h.root(), wrong_scope, 0.f);
+  CHECK(wrong_scope.is_consumed() && !wrong_scope.error_message.empty());
+}
+
 int main() { return ui_test::run_registered_tests("E2E arguments"); }

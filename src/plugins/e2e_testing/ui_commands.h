@@ -6,21 +6,27 @@
 #include <algorithm>
 
 #include "../../core/key_codes.h"
+#include "command_handlers.h"
 #include "draw_commands.h"
+#include "e2e_testing.h"
 #include "pending_command.h"
+#include "perf_commands.h"
 #include "test_input.h"
 
 #include "../autolayout.h"
 #include "../ui/components.h"
 #include "../ui/context.h"
+#include "../ui.h"
 #include "../ui/text_input/state.h"
 #include "../ui/text_input/text_area_state.h"
 #include "../ui/ui_collection.h"
 
+#include <charconv>
 #include <cmath>
 #include <cstdlib>
 #include <format>
 #include <functional>
+#include <string_view>
 #include <magic_enum/magic_enum.hpp>
 
 namespace afterhours {
@@ -1048,6 +1054,40 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
   }
 }
 
+inline bool parse_hex_color(const std::string &s, Color &out) {
+  std::string_view hex = s;
+  hex.remove_prefix(!hex.empty() && hex.front() == '#');
+  const char *end = hex.data() + hex.size();
+  unsigned int value = 0;
+  if ((hex.size() != 6 && hex.size() != 8) ||
+      std::from_chars(hex.data(), end, value, 16).ptr != end)
+    return false;
+  const unsigned int shift = (8 - static_cast<unsigned int>(hex.size())) * 4;
+  value = (value << shift) | (0xffu >> (8 - shift));
+  out = Color{static_cast<unsigned char>((value >> 24) & 0xff),
+              static_cast<unsigned char>((value >> 16) & 0xff),
+              static_cast<unsigned char>((value >> 8) & 0xff),
+              static_cast<unsigned char>(value & 0xff)};
+  return true;
+}
+
+inline std::string format_hex_color(const Color &c) {
+  return std::format("#{:02x}{:02x}{:02x}{:02x}", c.r, c.g, c.b, c.a);
+}
+
+inline bool is_within_scope(Entity &entity, EntityID scope) {
+  EntityID current = entity.id;
+  for (int depth = 0; depth < 64 && current != -1; ++depth) {
+    if (current == scope)
+      return true;
+    OptEntity parent = ui::UICollectionHolder::getEntityForID(current);
+    if (!parent.valid() || !parent.asE().has<ui::UIComponent>())
+      return false;
+    current = parent.asE().get<ui::UIComponent>().parent;
+  }
+  return false;
+}
+
 // Parse "w=399" into {"w", "399"}, returns false if malformed
 inline bool parse_prop_assertion(const std::string &arg, std::string &prop,
                                   std::string &expected) {
@@ -1085,6 +1125,27 @@ inline std::string check_ui_property(Entity &entity, const std::string &prop,
     auto &label = entity.get<ui::HasLabel>().label;
     if (label != expected)
       return std::format("text=\"{}\" but got \"{}\"", expected, label);
+    return "";
+  }
+  else if (prop == "bg" || prop == "fg") {
+    Color want;
+    if (!parse_hex_color(expected, want))
+      return std::format("{}={} is not a #rrggbb[aa] colour", prop, expected);
+    Color actual;
+    if (prop == "bg") {
+      if (!entity.has<HasColor>())
+        return std::format("bg={} but element has no colour", expected);
+      actual = entity.get<HasColor>().color();
+    } else {
+      if (!entity.has<ui::HasLabel>())
+        return std::format("fg={} but element has no label", expected);
+      actual = ui::detail::resolve_label_color(
+          entity.get<ui::HasLabel>(), ui::imm::ThemeDefaults::get().get_theme());
+    }
+    if (actual.r != want.r || actual.g != want.g || actual.b != want.b ||
+        actual.a != want.a)
+      return std::format("{}={} but got {}", prop, format_hex_color(want),
+                         format_hex_color(actual));
     return "";
   }
   else {
@@ -1152,12 +1213,39 @@ struct HandleAssertUITextCommand : System<PendingE2ECommand> {
 
     std::string text = cmd.args[0];
 
+    // in=<debug_name> restricts the match to that element's subtree.
+    EntityID scope = -1;
+    std::vector<size_t> prop_args;
+    for (size_t i = 1; i < cmd.args.size(); i++) {
+      std::string prop, expected;
+      if (!parse_prop_assertion(cmd.args[i], prop, expected)) {
+        cmd.fail(std::format("assert_ui_text: malformed '{}'", cmd.args[i]));
+        return;
+      }
+      if (prop == "in") {
+        auto scope_opt = ui_query()
+            .whereHasComponent<ui::UIComponentDebug>()
+            .whereLambda([&](const Entity &e) {
+              return e.get<ui::UIComponentDebug>().name_value == expected;
+            })
+            .gen_first();
+        if (!scope_opt.has_value()) {
+          cmd.fail(std::format("assert_ui_text: scope '{}' not found", expected));
+          return;
+        }
+        scope = scope_opt.asE().id;
+      } else {
+        prop_args.push_back(i);
+      }
+    }
+
     auto opt = ui_query()
         .whereHasComponent<ui::UIComponent>()
         .whereHasComponent<ui::HasLabel>()
         .whereLambda([&](const Entity &e) {
           return e.get<ui::HasLabel>().label == text &&
-                 e.get<ui::UIComponent>().was_rendered_to_screen;
+                 e.get<ui::UIComponent>().was_rendered_to_screen &&
+                 (scope == -1 || is_within_scope(const_cast<Entity &>(e), scope));
         })
         .gen_first();
 
@@ -1167,17 +1255,43 @@ struct HandleAssertUITextCommand : System<PendingE2ECommand> {
     }
 
     Entity &entity = opt.asE();
-    for (size_t i = 1; i < cmd.args.size(); i++) {
+    for (size_t i : prop_args) {
       std::string prop, expected;
-      if (!parse_prop_assertion(cmd.args[i], prop, expected)) {
-        cmd.fail(std::format("assert_ui_text: malformed '{}'", cmd.args[i]));
-        return;
-      }
+      parse_prop_assertion(cmd.args[i], prop, expected);
       std::string err = check_ui_property(entity, prop, expected);
       if (!err.empty()) {
         cmd.fail(std::format("assert_ui_text \"{}\": {}", text, err));
         return;
       }
+    }
+    cmd.consume();
+  }
+};
+
+// expect_no_ui <debug_name>: fails if a rendered element has the name.
+struct HandleExpectNoUICommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("expect_no_ui")) return;
+    if (!cmd.has_args(1)) {
+      cmd.fail("expect_no_ui requires: <debug_name>");
+      return;
+    }
+    if (cmd.frames_alive == 0) {
+      cmd.retry();
+      return;
+    }
+    const std::string name = cmd.args[0];
+    auto opt = ui_query()
+        .whereHasComponent<ui::UIComponent>()
+        .whereHasComponent<ui::UIComponentDebug>()
+        .whereLambda([&](const Entity &e) {
+          return e.get<ui::UIComponentDebug>().name_value == name &&
+                 e.get<ui::UIComponent>().was_rendered_to_screen;
+        })
+        .gen_first();
+    if (opt.has_value()) {
+      cmd.fail(std::format("expect_no_ui failed: '{}' IS rendered but should not be", name));
+      return;
     }
     cmd.consume();
   }
@@ -1333,6 +1447,7 @@ void register_ui_commands(SystemManager &sm,
   // UI property assertions
   sm.register_update_system(std::make_unique<HandleAssertUICommand>());
   sm.register_update_system(std::make_unique<HandleAssertUITextCommand>());
+  sm.register_update_system(std::make_unique<HandleExpectNoUICommand>());
 
   // Diagnostics
   sm.register_update_system(
@@ -1354,6 +1469,17 @@ void register_ui_commands(SystemManager &sm,
       std::make_unique<draw_commands::HandleDumpDrawsCommand>());
   sm.register_update_system(
       std::make_unique<draw_commands::HandleExpectDrawCallsBelowCommand>());
+}
+
+// All command packs in one call, in registration order.
+template <typename InputAction>
+void register_full_pack(SystemManager &sm,
+                        HandleDumpUICommand::DumpFn dump_fn = nullptr) {
+  register_builtin_handlers(sm);
+  register_ui_commands<InputAction>(sm, std::move(dump_fn));
+  perf_commands::register_perf_commands(sm);
+  register_unknown_handler(sm);
+  register_cleanup(sm);
 }
 
 } // namespace ui_commands
