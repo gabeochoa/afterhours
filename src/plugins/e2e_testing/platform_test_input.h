@@ -96,10 +96,11 @@ inline int get_char_pressed() {
 // ============================================================
 
 inline bool is_mouse_button_pressed(int button) {
-  if (button == 0 && afterhours::testing::test_input::detail::test_mode) {
-    return afterhours::testing::input_injector::is_mouse_button_pressed();
-  }
-  return afterhours::graphics::is_mouse_button_pressed(button);
+  // Delegates for all three buttons, like is_mouse_button_down below.
+  // Special-casing button 0 here meant a test's right/middle press read
+  // real hardware (hanabi #526).
+  return afterhours::testing::test_input::is_mouse_button_pressed(
+      button, [](int b) { return afterhours::graphics::is_mouse_button_pressed(b); });
 }
 
 inline bool is_mouse_button_down(int button) {
@@ -110,10 +111,8 @@ inline bool is_mouse_button_down(int button) {
 }
 
 inline bool is_mouse_button_released(int button) {
-  if (button == 0 && afterhours::testing::test_input::detail::test_mode) {
-    return afterhours::testing::input_injector::is_mouse_button_released();
-  }
-  return afterhours::graphics::is_mouse_button_released(button);
+  return afterhours::testing::test_input::is_mouse_button_released(
+      button, [](int b) { return afterhours::graphics::is_mouse_button_released(b); });
 }
 
 inline bool is_mouse_button_up(int button) {
@@ -128,8 +127,10 @@ inline Vector2Type get_mouse_position() {
 }
 
 inline float get_mouse_wheel_move() {
+  // In test mode the scripted wheel is the input; returning 0 here made
+  // scroll_wheel invisible to anything polling directly.
   if (afterhours::testing::test_input::detail::test_mode)
-    return 0.0f;
+    return afterhours::testing::input_injector::consume_wheel().y;
   return afterhours::graphics::get_mouse_wheel_move();
 }
 

@@ -205,6 +205,55 @@ TEST(simulate_click_multi_frame_lifecycle) {
   detail::test_mode = false;
 }
 
+// Pointer parity: a synthetic right click must be visible to code that
+// polls buttons directly, with the same press/release edges the left
+// button has. Before this the right button had no press edge at all, so
+// is_mouse_button_pressed(1) could never be true for injected input.
+TEST(right_click_reaches_direct_polling_with_press_and_release_edges) {
+  using namespace afterhours::testing::test_input;
+  detail::test_mode = true;
+  reset_all();
+  auto backend = [](int) { return false; };
+
+  simulate_right_click(30.0f, 40.0f);
+  CHECK(is_mouse_button_down(1, backend));
+  CHECK(is_mouse_button_pressed(1, backend));
+  CHECK(!is_mouse_button_pressed(0, backend));
+  CHECK(!is_mouse_button_pressed(2, backend));
+
+  reset_frame();
+  CHECK(is_mouse_button_down(1, backend));
+
+  reset_frame();
+  CHECK(!is_mouse_button_down(1, backend));
+  CHECK(is_mouse_button_released(1, backend));
+  CHECK(!is_mouse_button_released(0, backend));
+
+  detail::test_mode = false;
+}
+
+TEST(middle_click_reaches_direct_polling_with_press_and_release_edges) {
+  using namespace afterhours::testing::test_input;
+  detail::test_mode = true;
+  reset_all();
+  auto backend = [](int) { return false; };
+
+  simulate_middle_click(30.0f, 40.0f);
+  CHECK(is_mouse_button_down(2, backend));
+  CHECK(is_mouse_button_pressed(2, backend));
+  CHECK(!is_mouse_button_pressed(1, backend));
+
+  reset_frame();
+  CHECK(is_mouse_button_down(2, backend));
+
+  reset_frame();
+  CHECK(!is_mouse_button_down(2, backend));
+  CHECK(is_mouse_button_released(2, backend));
+  CHECK(!is_mouse_button_released(0, backend));
+
+  detail::test_mode = false;
+}
+
 TEST(manual_release_before_reset_does_not_reassert_pressed) {
   using namespace afterhours::testing::test_input;
   detail::test_mode = true;

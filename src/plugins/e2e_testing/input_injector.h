@@ -40,6 +40,13 @@ struct MouseState {
   // separate question from the left one, and callers bind to it directly.
   bool middle_just_pressed = false;
   bool middle_press_read = false;
+  // The right button carries the same pair of edges, plus release edges for
+  // both non-left buttons: without them is_mouse_button_pressed(1) could
+  // never be true for synthetic input.
+  bool right_just_pressed = false;
+  bool right_press_read = false;
+  bool right_just_released = false;
+  bool middle_just_released = false;
 };
 inline MouseState mouse;
 
@@ -204,8 +211,7 @@ inline void release_scheduled_click() {
 /// Check mouse button state
 inline bool is_mouse_button_pressed() {
   const bool pressed = detail::mouse.active && detail::mouse.just_pressed;
-  if (pressed)
-    detail::mouse.press_read = true;
+  detail::mouse.press_read |= pressed;
   return pressed;
 }
 inline bool is_mouse_button_down() {
@@ -219,12 +225,22 @@ inline bool is_mouse_middle_button_down() {
 }
 inline bool is_mouse_middle_button_pressed() {
   const bool pressed = detail::mouse.active && detail::mouse.middle_just_pressed;
-  if (pressed)
-    detail::mouse.middle_press_read = true;
+  detail::mouse.middle_press_read |= pressed;
+  return pressed;
+}
+inline bool is_mouse_right_button_pressed() {
+  const bool pressed = detail::mouse.active && detail::mouse.right_just_pressed;
+  detail::mouse.right_press_read |= pressed;
   return pressed;
 }
 inline bool is_mouse_button_released() {
   return detail::mouse.active && detail::mouse.just_released;
+}
+inline bool is_mouse_right_button_released() {
+  return detail::mouse.active && detail::mouse.right_just_released;
+}
+inline bool is_mouse_middle_button_released() {
+  return detail::mouse.active && detail::mouse.middle_just_released;
 }
 
 /// Set scroll wheel delta for the current frame
@@ -266,6 +282,9 @@ inline void reset_frame() {
   detail::mouse.just_pressed = false;
   detail::mouse.just_released = false;
   detail::mouse.middle_just_pressed = false;
+  detail::mouse.right_just_pressed = false;
+  detail::mouse.right_just_released = false;
+  detail::mouse.middle_just_released = false;
   detail::mouse.delta = {};
   if (detail::wheel_read) {
     // Somebody consumed it this frame. Delivering it again next frame is how

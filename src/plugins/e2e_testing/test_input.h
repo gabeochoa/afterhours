@@ -95,6 +95,8 @@ inline void simulate_right_click(float x, float y) {
   auto &m = input_injector::detail::mouse;
   m.active = true;
   m.right_down = true;
+  m.right_just_pressed = true;
+  m.right_press_read = false;
   m.press_frames = 1;
   m.auto_release = true;
 }
@@ -121,8 +123,10 @@ inline void reset_frame() {
   int pf = m.press_frames;
   const bool press_seen = m.press_read;
   const bool middle_press_seen = m.middle_press_read;
+  const bool right_press_seen = m.right_press_read;
   m.press_read = false;
   m.middle_press_read = false;
+  m.right_press_read = false;
 
   // Clears just_pressed/just_released unconditionally
   input_injector::reset_frame();
@@ -141,19 +145,20 @@ inline void reset_frame() {
     // window exists for readers that run before the injecting command; holding
     // it open past an actual read made one `click` fire a cycling handler
     // twice, and the button stays down either way.
-    if (m.left_down && !press_seen)
-      m.just_pressed = true;
-    if (m.middle_down && !middle_press_seen)
-      m.middle_just_pressed = true;
+    m.just_pressed |= m.left_down && !press_seen;
+    m.middle_just_pressed |= m.middle_down && !middle_press_seen;
+    m.right_just_pressed |= m.right_down && !right_press_seen;
   } else if (m.auto_release && any_down) {
     // Auto-release: simulate_click/simulate_mouse_press set auto_release
     // and press_frames=1. Once press_frames expires, release the button
     // so subsequent clicks see a clean down-transition and produce
     // just_pressed=true in the UI system.
     // just_released is the LEFT button's flag; setting it for a right-only
-    // press would fake a left click that never happened.
-    if (m.left_down)
-      m.just_released = true;
+    // press would fake a left click that never happened. Each button gets
+    // its own release edge instead.
+    m.just_released |= m.left_down;
+    m.right_just_released |= m.right_down;
+    m.middle_just_released |= m.middle_down;
     m.left_down = false;
     m.right_down = false;
     m.middle_down = false;
@@ -262,6 +267,8 @@ inline bool is_mouse_button_pressed(int button, BackendFn backend_fn) {
     // which is what stops it being re-raised on the following frame.
     if (button == 0)
       return input_injector::is_mouse_button_pressed();
+    if (button == 1)
+      return input_injector::is_mouse_right_button_pressed();
     if (button == 2)
       return input_injector::is_mouse_middle_button_pressed();
     return false;
@@ -290,6 +297,10 @@ inline bool is_mouse_button_released(int button, BackendFn backend_fn) {
   if (detail::test_mode) {
     if (button == 0)
       return input_injector::detail::mouse.just_released;
+    if (button == 1)
+      return input_injector::is_mouse_right_button_released();
+    if (button == 2)
+      return input_injector::is_mouse_middle_button_released();
     return false;
   }
   return backend_fn(button);
