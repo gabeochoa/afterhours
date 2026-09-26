@@ -563,6 +563,88 @@ ElementResult divider(HasUIContext auto &ctx, EntityParent ep_pair, Axis axis,
   return ElementResult{moved != 0.f, entity, moved};
 }
 
+/// A static rule, the non-draggable sibling of divider(): `axis` is the
+/// direction the line runs, so Axis::X is a horizontal rule (full width,
+/// 1px tall) and Axis::Y a vertical one. Colour is the theme's subtle
+/// border unless the config sets one.
+ElementResult divider_line(HasUIContext auto &ctx, EntityParent ep_pair,
+                           Axis axis,
+                           ComponentConfig config = ComponentConfig()) {
+  const bool horizontal = (axis == Axis::X);
+  if (config.size.is_default)
+    config.with_size(horizontal ? ComponentSize{percent(1.f), pixels(1.f)}
+                                : ComponentSize{pixels(1.f), percent(1.f)});
+  if (config.color_usage == Theme::Usage::Default &&
+      !config.custom_color.has_value())
+    config.with_custom_background(ctx.theme.subtle_border());
+  return div(ctx, ep_pair, config);
+}
+
+/// A small rounded readout chip, the value shown next to a slider or
+/// stepper. Sizes to its text with 12px of horizontal padding; 28px tall.
+/// Text is centred unless the caller picks an alignment.
+ElementResult value_pill(HasUIContext auto &ctx, EntityParent ep_pair,
+                         const std::string &text,
+                         ComponentConfig config = ComponentConfig()) {
+  if (!text.empty())
+    config.with_label(text);
+  if (config.label_alignment == TextAlignment::None)
+    config.with_alignment(TextAlignment::Center);
+  if (config.size.is_default)
+    config.with_size(ComponentSize{children(), pixels(28.f)});
+  if (!config.has_padding())
+    config.with_padding(Padding::horizontal(pixels(12.f)));
+  if (!config.corner_radius.has_value())
+    config.with_roundness(1.f);
+  if (config.color_usage == Theme::Usage::Default &&
+      !config.custom_color.has_value())
+    config.with_color_usage(Theme::Usage::Surface);
+  config.with_align_items(AlignItems::Center)
+      .with_justify_content(JustifyContent::Center);
+  return div(ctx, ep_pair, config);
+}
+
+/// A compact settings column: rows added with settings_row() stack with
+/// no gap; each row carries its own divider.
+ElementResult settings_list(HasUIContext auto &ctx, EntityParent ep_pair,
+                            ComponentConfig config = ComponentConfig()) {
+  config.flex_direction = FlexDirection::Column;
+  if (config.size.is_default)
+    config.with_size(ComponentSize{percent(1.f), children()});
+  return div(ctx, ep_pair, config);
+}
+
+/// One settings row: the label on the left, and the returned element is
+/// the right-aligned value area the caller parents its control into. A
+/// divider_line sits under the row.
+ElementResult settings_row(HasUIContext auto &ctx, EntityParent ep_pair,
+                           const std::string &label,
+                           ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+  config.flex_direction = FlexDirection::Column;
+  if (config.size.is_default)
+    config.with_size(ComponentSize{percent(1.f), children()});
+  div(ctx, ep_pair, config);
+  auto line = div(ctx, mk(entity, 0),
+                  ComponentConfig{}
+                      .with_size(ComponentSize{percent(1.f), pixels(36.f)})
+                      .with_flex_direction(FlexDirection::Row)
+                      .with_align_items(AlignItems::Center));
+  div(ctx, mk(line.ent(), 0),
+      ComponentConfig{}
+          .with_label(label)
+          .with_size(ComponentSize{children(), pixels(36.f)})
+          .with_align_items(AlignItems::Center));
+  auto value = div(ctx, mk(line.ent(), 1),
+                   ComponentConfig{}
+                       .with_size(ComponentSize{expand(), pixels(36.f)})
+                       .with_flex_direction(FlexDirection::Row)
+                       .with_justify_content(JustifyContent::FlexEnd)
+                       .with_align_items(AlignItems::Center));
+  divider_line(ctx, mk(entity, 1), Axis::X);
+  return value;
+}
+
 namespace detail {
 /// Shared body for hsplit_pane/vsplit_pane.
 std::array<ElementResult, 3>

@@ -185,6 +185,7 @@ ALL_TESTS := \
 	styling_test \
 	system_tags_test \
 	tab_container_test \
+	small_components_test \
 	text_area_test \
 	text_input_test \
 	toast_test \
@@ -233,6 +234,7 @@ RAYLIB_TESTS := \
 	stepper_test \
 	styling_test \
 	tab_container_test \
+	small_components_test \
 	text_area_test \
 	text_input_test \
 	editing_capability_test \
