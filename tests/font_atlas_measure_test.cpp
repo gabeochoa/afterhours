@@ -12,6 +12,7 @@
 #define FONTSTASH_IMPLEMENTATION
 #include <fontstash/fontstash.h>
 #undef FONTSTASH_IMPLEMENTATION
+#include <sokol/sokol_gfx.h>
 #include <afterhours/src/backends/sokol/font_helper.h>
 #include <afterhours/src/core/text_cache.h>
 
@@ -126,8 +127,32 @@ static int benchmark() {
   return 0;
 }
 
+static void coverage() {
+  namespace md = afterhours::graphics::metal_detail;
+  auto *ctx = context(2048);
+  md::g_fons_ctx = ctx;
+  md::g_active_font = 0;
+  const auto path = std::filesystem::path(AFTERHOURS_TEST_FIXTURES) /
+                    "AtkinsonHyperlegible-Regular.ttf";
+  // Font 0 went in through fonsAddFont directly: no recorded cmap, so the
+  // query reports unknown as covered rather than crying missing.
+  CHECK(afterhours::font_has_glyph(afterhours::Font{0}, 0x21B5));
+  const afterhours::Font loaded =
+      afterhours::load_font_from_file(path.c_str());
+  CHECK(loaded.id != FONS_INVALID);
+  CHECK(afterhours::font_has_glyph(loaded, 'A'));
+  CHECK(afterhours::font_has_glyph(loaded, 0xE9));
+  CHECK(!afterhours::font_has_glyph(loaded, 0x21B5));
+  CHECK(!afterhours::font_has_glyph(loaded, 0x2605));
+  CHECK(!afterhours::font_has_glyph(loaded, 0x2191));
+  fonsDeleteInternal(ctx);
+  md::g_fons_ctx = nullptr;
+  CHECK(!afterhours::font_has_glyph(loaded, 'A'));
+}
+
 int main(int argc, char **argv) {
   if (argc == 2 && std::strcmp(argv[1], "--benchmark") == 0) return benchmark();
+  coverage();
   namespace md = afterhours::graphics::metal_detail;
   const std::string text = "AVATAR wide words 0123456789 caf\xc3\xa9";
   auto *large = context(2048);

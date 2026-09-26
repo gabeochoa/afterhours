@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "../../font_coverage.h"
 #include "../../measure_memo.h"
 
 #include <cstdlib>
@@ -17,6 +18,12 @@ struct Font {
   int id = FONS_INVALID;
 };
 
+inline void record_coverage(int font_id, const char *file) {
+  font_coverage::Ranges ranges;
+  if (font_coverage::parse_file(file, ranges))
+    graphics::metal_detail::g_font_coverage[font_id] = std::move(ranges);
+}
+
 inline Font load_font_from_file(const char *file, int = 0) {
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx) {
@@ -27,6 +34,7 @@ inline Font load_font_from_file(const char *file, int = 0) {
   if (id == FONS_INVALID) {
     log_warn("Failed to load font: {}", file);
   } else {
+    record_coverage(id, file);
     // Track loaded fonts and set the first one as active default
     auto &md = graphics::metal_detail::g_font_ids;
     if (graphics::metal_detail::g_font_count <
@@ -100,5 +108,26 @@ inline Vector2Type measure_text_utf8(const Font font, const char *text,
 inline float get_first_glyph_bearing(const Font, const char *) { return 0.0f; }
 
 inline bool is_font_loaded(const Font &font) { return font.id != FONS_INVALID; }
+
+// Whether the face can draw a codepoint, from the cmap recorded at load.
+// A font with no recorded cmap (added to fontstash directly, not through
+// load_font_from_file) reports true: unknown is not missing.
+inline bool font_has_glyph(const Font font, int codepoint) {
+  if (codepoint < 0)
+    return false;
+  auto *ctx = graphics::metal_detail::g_fons_ctx;
+  if (!ctx)
+    return false;
+  const int fid = (font.id != FONS_INVALID)
+                      ? font.id
+                      : graphics::metal_detail::g_active_font;
+  if (fid == FONS_INVALID)
+    return false;
+  const auto it = graphics::metal_detail::g_font_coverage.find(fid);
+  if (it == graphics::metal_detail::g_font_coverage.end())
+    return true;
+  return font_coverage::covers(it->second,
+                               static_cast<uint32_t>(codepoint));
+}
 
 } // namespace afterhours

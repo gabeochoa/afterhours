@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "../../ecs.h"
+#include "../../measure_memo.h"
 #include "ui_core_components.h"
 
 namespace afterhours {
@@ -73,6 +74,7 @@ constexpr std::size_t kMaxEntries = 512;
 
 struct Entry {
   std::uint64_t key;
+  std::uint64_t generation = 0;
   std::vector<TextRunLine> lines;
 };
 
@@ -93,8 +95,12 @@ inline std::uint64_t &misses() {
   return n;
 }
 
+// Everything the wrap depends on is in the key: the runs, the width, the
+// face, the size and the spacing. Omitting the last three served one size's
+// line breaks to every other size of the same text.
 inline std::uint64_t key_for(const std::vector<TextSpan> &runs,
-                             float max_width) {
+                             float max_width, float font_size, float spacing,
+                             const std::string &font_name) {
   std::uint64_t h = 1469598103934665603ull;
   const auto mix = [&h](std::uint64_t v) {
     h ^= v;
@@ -107,7 +113,11 @@ inline std::uint64_t key_for(const std::vector<TextSpan> &runs,
     mix(static_cast<std::uint64_t>(r.weight));
     mix(r.color.r | (r.color.g << 8) | (r.color.b << 16) | (r.color.a << 24));
   }
+  for (unsigned char c : font_name)
+    mix(c);
   mix(static_cast<std::uint64_t>(max_width * 64.f));
+  mix(static_cast<std::uint64_t>(font_size * 64.f));
+  mix(static_cast<std::uint64_t>(spacing * 64.f));
   return h;
 }
 
@@ -115,6 +125,12 @@ inline const std::vector<TextRunLine> *lookup(std::uint64_t key) {
   auto &idx = index();
   const auto it = idx.find(key);
   if (it == idx.end()) {
+    misses()++;
+    return nullptr;
+  }
+  if (it->second->generation != measure_memo::generation()) {
+    lru().erase(it->second);
+    idx.erase(it);
     misses()++;
     return nullptr;
   }
@@ -126,16 +142,20 @@ inline const std::vector<TextRunLine> *lookup(std::uint64_t key) {
 inline const std::vector<TextRunLine> &store(std::uint64_t key,
                                              std::vector<TextRunLine> lines) {
   auto &idx = index();
+  const auto dup = idx.find(key);
+  if (dup != idx.end()) {
+    lru().erase(dup->second);
+    idx.erase(dup);
+  }
   while (idx.size() >= kMaxEntries) {
     idx.erase(lru().back().key);
     lru().pop_back();
   }
-  lru().push_front({key, std::move(lines)});
+  lru().push_front({key, measure_memo::generation(), std::move(lines)});
   idx[key] = lru().begin();
   return lru().front().lines;
 }
 
-// A font swap changes the measurement, and the key cannot see the font.
 inline void clear() {
   lru().clear();
   index().clear();
@@ -292,6 +312,39 @@ wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
 
   current.clear();
   return lines;
+}
+
+// Where each run of a laid-out line starts, and how wide the line is.
+// Measured on the JOINED text the way wrap_runs_to_width measures it --
+// maximal same-weight stretches, one call each -- because backend
+// measurement charges between characters: summing per-run widths loses a
+// spacing at every colour boundary and a monospace block's columns drift
+// further with every run. Within a stretch a run starts at the stretch's
+// own prefix measurement, so a run's offset is where its byte range sits
+// in the measurement of the whole line.
+template <typename MeasureFn>
+static inline std::vector<float>
+text_run_offsets(const TextRunLine &line, MeasureFn &&measure,
+                 float &total_width) {
+  std::vector<float> offsets(line.size(), 0.f);
+  float stretch_x = 0.f;
+  for (size_t i = 0; i < line.size();) {
+    size_t j = i;
+    std::string joined;
+    while (j < line.size() && line[j].weight == line[i].weight) {
+      joined += line[j].text;
+      j++;
+    }
+    size_t prefix = 0;
+    for (size_t k = i; k < j; k++) {
+      offsets[k] = stretch_x + (prefix == 0 ? 0.f : measure(joined.substr(0, prefix), line[i].weight));
+      prefix += line[k].text.size();
+    }
+    stretch_x += measure(joined, line[i].weight);
+    i = j;
+  }
+  total_width = stretch_x;
+  return offsets;
 }
 
 // Greedy word-wrap: split `text` into lines each no wider than `max_width`,

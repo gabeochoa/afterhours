@@ -99,6 +99,18 @@ inline void clear() {
   index().clear();
 }
 
+// Bumped on every invalidation. Caches that cannot key on the font itself
+// (the wrap memo) stamp their entries with it and treat a mismatch as a miss.
+inline std::uint64_t &generation() {
+  static std::uint64_t g = 0;
+  return g;
+}
+
+inline void invalidate() {
+  clear();
+  generation()++;
+}
+
 } // namespace measure_memo
 
 } // namespace afterhours

@@ -5,6 +5,9 @@
 #include <cstdint>
 #include <fontstash/fontstash.h>
 #include <functional>
+#include <map>
+#include <utility>
+#include <vector>
 // For sapp_dpi_scale/sapp_width/sapp_height used by the shim accessors below.
 // Declarations only (no SOKOL_IMPL); include-guard makes this safe to repeat.
 #include <sokol/sokol_app.h>
@@ -38,6 +41,11 @@ static constexpr int MAX_FONTS = 16;
 inline int g_font_ids[MAX_FONTS] = {};
 inline int g_font_count = 0;
 inline int g_active_font = FONS_INVALID;
+
+// Covered codepoint ranges per fontstash id, parsed from the file's cmap at
+// load (fontstash exposes no coverage query). No entry means unknown.
+inline std::map<int, std::vector<std::pair<uint32_t, uint32_t>>>
+    g_font_coverage;
 
 inline bool g_initialized = false;
 

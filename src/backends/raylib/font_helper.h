@@ -1,8 +1,10 @@
 
 #pragma once
 
+#include <map>
 #include <vector>
 
+#include "../../font_coverage.h"
 #include "../../measure_memo.h"
 
 #include <cstdlib>
@@ -79,6 +81,28 @@ inline void set_font_atlas_config(const FontAtlasConfig &config) {
   default_font_atlas_config() = config;
 }
 
+// True cmap coverage per loaded font, keyed the way measure_text keys a
+// font. Recorded at load: afterwards there is no way to tell a real glyph
+// from the placeholder raylib inserts for a requested-but-absent codepoint.
+inline std::map<uint64_t, font_coverage::Ranges> &coverage_registry() {
+  static std::map<uint64_t, font_coverage::Ranges> m;
+  return m;
+}
+
+inline uint64_t font_key(const raylib::Font font) {
+  return (static_cast<uint64_t>(font.texture.id) << 32) ^
+         (static_cast<uint64_t>(font.baseSize) << 16) ^
+         static_cast<uint64_t>(font.glyphCount);
+}
+
+inline void record_font_coverage(const raylib::Font font, const char *file) {
+  if (font.glyphCount <= 0)
+    return;
+  font_coverage::Ranges ranges;
+  if (font_coverage::parse_file(file, ranges))
+    coverage_registry()[font_key(font)] = std::move(ranges);
+}
+
 inline raylib::Font
 build_font_atlas(const char *file, int px, const int *codepoints, int count,
                  const FontAtlasConfig &atlas_config =
@@ -107,6 +131,7 @@ build_font_atlas(const char *file, int px, const int *codepoints, int count,
   font.texture = raylib::LoadTextureFromImage(atlas);
   raylib::UnloadImage(atlas);
   raylib::UnloadFileData(data);
+  record_font_coverage(font, file);
   return font;
 }
 
@@ -124,6 +149,7 @@ inline raylib::Font load_font_from_file(const char *file, int size = 0) {
   if (font.texture.id == 0)
     font = build_font_atlas(file, px, cps.data(), (int)cps.size());
   raylib::SetTextureFilter(font.texture, raylib::TEXTURE_FILTER_BILINEAR);
+  record_font_coverage(font, file);
   return font;
 }
 
@@ -131,7 +157,7 @@ inline raylib::Font load_font_from_file(const char *file, int size = 0) {
 // does not have to glyph 0, so asking is the only way to tell a real glyph
 // from a silent nothing.
 inline bool font_has_glyph(const raylib::Font font, int codepoint) {
-  if (font.glyphCount <= 0 || !font.glyphs)
+  if (codepoint < 0 || font.glyphCount <= 0 || !font.glyphs)
     return false;
   const int idx = raylib::GetGlyphIndex(font, codepoint);
   if (idx < 0 || idx >= font.glyphCount)
@@ -139,7 +165,16 @@ inline bool font_has_glyph(const raylib::Font font, int codepoint) {
   // GetGlyphIndex falls back to the index of '?', not to 0, so a nonzero index
   // says nothing on its own -- it is the answer for every codepoint the face
   // lacks. Only the entry actually holding this codepoint counts.
-  return font.glyphs[idx].value == codepoint;
+  if (font.glyphs[idx].value != codepoint)
+    return false;
+  // That entry is not proof either: LoadFontData inserts one for every
+  // requested codepoint, pointing absent ones at glyph 0's blank. When the
+  // face's cmap was recorded at load, it is the authority.
+  const auto it = coverage_registry().find(font_key(font));
+  if (it != coverage_registry().end())
+    return font_coverage::covers(it->second,
+                                 static_cast<uint32_t>(codepoint));
+  return true;
 }
 
 // A codepoint the font lacks draws nothing: no box, no warning, no log. Both
@@ -198,6 +233,7 @@ load_font_from_file_with_codepoints(const char *file, int *codepoints,
   if (font.texture.id == 0)
     font = build_font_atlas(file, size, codepoints, codepoint_count);
   raylib::SetTextureFilter(font.texture, raylib::TEXTURE_FILTER_BILINEAR);
+  record_font_coverage(font, file);
   return font;
 }
 
@@ -274,6 +310,7 @@ inline raylib::Font load_font_for_string(const std::string &content,
   raylib::Font font = raylib::LoadFontEx(
       font_filename.c_str(), size, codepointsNoDups, codepointNoDupsCounts);
   raylib::SetTextureFilter(font.texture, raylib::TEXTURE_FILTER_BILINEAR);
+  record_font_coverage(font, font_filename.c_str());
 
   // Free the deduplicated codepoints array
   free(codepointsNoDups);
@@ -313,10 +350,7 @@ inline raylib::Vector2 measure_text(const raylib::Font font,
   }
   // baseSize and glyphCount alongside the texture id, so a handle reused by a
   // differently built atlas is a different key rather than a stale hit.
-  const std::uint64_t font_id =
-      (static_cast<std::uint64_t>(font.texture.id) << 32) ^
-      (static_cast<std::uint64_t>(font.baseSize) << 16) ^
-      static_cast<std::uint64_t>(font.glyphCount);
+  const std::uint64_t font_id = font_key(font);
   const std::uint64_t key =
       measure_memo::hash(content ? content : "", size, spacing, font_id);
   Vector2Type cached{};

@@ -8,8 +8,10 @@
 #include <string>
 #include <vector>
 
+#include "../../core/text_cache.h"
 #include "../../ecs.h"
 #include "../../font_helper.h"
+#include "../../measure_memo.h"
 #include "../../logging.h"
 #include "../../warn_once.h"
 #include "../color.h"
@@ -355,12 +357,25 @@ struct FontManager final : BaseComponent {
   std::string active_font = UIComponent::DEFAULT_FONT;
   std::map<std::string, Font> fonts;
 
+  // Replacing a face under a name it already holds changes every measurement
+  // taken against it, so the caches in front of measurement are dropped.
+  // First loads keep them: startup registers many fonts in a row.
+  void invalidate_measurements_for(const std::string &font_name) {
+    if (!fonts.contains(font_name))
+      return;
+    measure_memo::invalidate();
+    if (auto *cache = EntityHelper::get_singleton_cmp<TextMeasureCache>())
+      cache->clear();
+  }
+
   auto &load_font(const std::string &font_name, Font font) {
+    invalidate_measurements_for(font_name);
     fonts[font_name] = font;
     return *this;
   }
 
   auto &load_font(const std::string &font_name, const char *font_file) {
+    invalidate_measurements_for(font_name);
     fonts[font_name] = load_font_from_file(font_file);
     return *this;
   }
@@ -385,6 +400,7 @@ struct FontManager final : BaseComponent {
       return *this;
     }
 
+    invalidate_measurements_for(font_name);
     fonts[font_name] = load_font_from_file_with_codepoints(
         font_file, codepoints, codepoint_count);
     return *this;
@@ -420,6 +436,60 @@ struct FontManager final : BaseComponent {
   Font get_active_font() const { return font_or_fallback(active_font); }
   Font get_font(const std::string &name) const {
     return font_or_fallback(name);
+  }
+
+  // The fallback chain above without the warning, for queries that may run
+  // per codepoint and would spam it.
+  Font find_font(const std::string &name) const {
+    if (auto it = fonts.find(name); it != fonts.end())
+      return it->second;
+    if (auto def = fonts.find(UIComponent::DEFAULT_FONT); def != fonts.end())
+      return def->second;
+    if (!fonts.empty())
+      return fonts.begin()->second;
+    return Font{};
+  }
+
+  // Whether the face behind `font_name` can actually draw `codepoint`. A
+  // codepoint it lacks draws nothing at all -- no box, no warning -- so this
+  // is the only way to catch an invisible label before it ships.
+  [[nodiscard]] bool has_glyph(const std::string &font_name,
+                               uint32_t codepoint) const {
+    return font_has_glyph(find_font(font_name),
+                          static_cast<int>(codepoint));
+  }
+
+  // The distinct codepoints in `text` that the face cannot draw, in order.
+  [[nodiscard]] std::vector<uint32_t>
+  missing_codepoints(const std::string &font_name,
+                     std::string_view text) const {
+    std::vector<uint32_t> missing;
+    for (size_t i = 0; i < text.size();) {
+      const auto lead = static_cast<unsigned char>(text[i]);
+      uint32_t cp = lead;
+      size_t len = 1;
+      if ((lead & 0xE0) == 0xC0) {
+        cp = lead & 0x1F;
+        len = 2;
+      } else if ((lead & 0xF0) == 0xE0) {
+        cp = lead & 0x0F;
+        len = 3;
+      } else if ((lead & 0xF8) == 0xF0) {
+        cp = lead & 0x07;
+        len = 4;
+      }
+      if (i + len > text.size())
+        len = 1;
+      else
+        for (size_t k = 1; k < len; k++)
+          cp = (cp << 6) |
+               (static_cast<unsigned char>(text[i + k]) & 0x3F);
+      i += len;
+      if (!has_glyph(font_name, cp) &&
+          std::find(missing.begin(), missing.end(), cp) == missing.end())
+        missing.push_back(cp);
+    }
+    return missing;
   }
 
   static std::string weight_suffix(colors::FontWeight w) {

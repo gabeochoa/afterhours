@@ -120,6 +120,7 @@ ALL_TESTS := \
 	headless_runconfig_test \
 	fit_content_test \
 	label_inset_test \
+	text_memo_test \
 	editing_capability_test \
 	autolayout_test \
 	dialog_test \

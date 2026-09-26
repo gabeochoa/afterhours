@@ -1106,7 +1106,8 @@ static inline void draw_runs_in_rect(
     return;
 
   // Memoised: this runs every frame, usually on text that hasn't changed.
-  const std::uint64_t wrap_key = detail::wrap_memo::key_for(runs, wrap_width);
+  const std::uint64_t wrap_key =
+      detail::wrap_memo::key_for(runs, wrap_width, font_size, spacing, base_font);
   const std::vector<detail::TextRunLine> *cached =
       detail::wrap_memo::lookup(wrap_key);
   const std::vector<detail::TextRunLine> &lines =
@@ -1133,12 +1134,9 @@ static inline void draw_runs_in_rect(
       y += line_h; // blank line from a "\n\n"
       continue;
     }
-    // Line width sums the runs at their own weights; a bold run is wider than
-    // the same characters in regular, so centring on a single-font measure
-    // would drift the whole line left.
     float line_w = 0.f;
-    for (const auto &run : line)
-      line_w += weighted_width(run.text, run.weight);
+    const std::vector<float> offsets =
+        detail::text_run_offsets(line, weighted_width, line_w);
 
     // Mirror position_text_ex's alignment maths so a label lands in the same
     // place whether it is drawn as plain text or as styled runs.
@@ -1149,9 +1147,10 @@ static inline void draw_runs_in_rect(
     else if (alignment == TextAlignment::Right)
       x = rect.x + rect.width - inset.x - line_w;
 
-    for (const auto &run : line) {
+    for (size_t ri = 0; ri < line.size(); ri++) {
+      const auto &run = line[ri];
       const float w = weighted_width(run.text, run.weight);
-      RectangleType run_rect{x, y, w, line_h};
+      RectangleType run_rect{x + offsets[ri], y, w, line_h};
       // draw_text_in_rect draws with the ACTIVE font, so the weight has to be
       // swapped in around the call and put back afterwards.
       const std::string want = fm.resolve_weighted(base_font, run.weight);
@@ -1167,7 +1166,6 @@ static inline void draw_runs_in_rect(
                         Vector2Type{0.f, 0.f}, register_text);
       if (swap)
         fm.set_active(base_font);
-      x += w;
     }
     y += line_h;
   }
@@ -2519,8 +2517,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                           : std::vector<TextSpan>{
                                 TextSpan{display_text, font_col}};
             // Memoised, same as the immediate path.
-            const std::uint64_t wrap_key =
-                detail::wrap_memo::key_for(runs, wrap_width);
+            const std::uint64_t wrap_key = detail::wrap_memo::key_for(
+                runs, wrap_width, font_size, spacing, cmp.font_name);
             const std::vector<detail::TextRunLine> *cached =
                 detail::wrap_memo::lookup(wrap_key);
             const std::vector<detail::TextRunLine> &lines =
@@ -2550,25 +2548,22 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                                   layer, entity.id, stroke, shadow, rotation,
                                   centerX, centerY, hasLabel.letter_spacing);
                 } else {
-                  // Sum the runs at their own weights: a bold run is wider
-                  // than the same characters regular, so measuring the joined
-                  // line with one face would drift the alignment.
                   float line_w = 0.f;
-                  for (const auto &run : line)
-                    line_w += weighted_width(run.text, run.weight);
+                  const std::vector<float> offsets =
+                      detail::text_run_offsets(line, weighted_width, line_w);
                   float x = label_rect.x;
                   if (hasLabel.alignment == TextAlignment::Center)
                     x += std::max(0.f, (label_rect.width - line_w) / 2.f);
                   else if (hasLabel.alignment == TextAlignment::Right)
                     x += std::max(0.f, label_rect.width - line_w);
-                  for (const auto &run : line) {
+                  for (size_t ri = 0; ri < line.size(); ri++) {
+                    const auto &run = line[ri];
                     const float w = weighted_width(run.text, run.weight);
-                    RectangleType sr{x, y, w, line_h};
+                    RectangleType sr{x + offsets[ri], y, w, line_h};
                     buffer.add_text(sr, run.text, name_for(run.weight),
                                     font_size, run.color, TextAlignment::Left,
                                     layer, entity.id, stroke, shadow, rotation,
                                     centerX, centerY, hasLabel.letter_spacing);
-                    x += w;
                   }
                 }
                 y += line_h;
