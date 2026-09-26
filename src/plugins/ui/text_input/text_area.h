@@ -17,10 +17,6 @@ namespace text_input {
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
-// The field's own top+bottom padding, below. Auto-grow has to add it back or
-// the last line sits under the bottom edge.
-inline constexpr float kVerticalPadding = 8.f;
-
 // Width of `str` in the font the field last rendered with.
 //
 // Reads the state rather than closing over the frame's locals. The click and
@@ -104,8 +100,22 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   using InputAction =
       typename std::remove_reference_t<decltype(ctx)>::value_type;
 
-  // Get line height from config or default (extract pixel value from Size)
-  float line_height = config.text_area_line_height.value_or(pixels(20.f)).value;
+  // Resolve the line height the way fonts are resolved: reading the raw
+  // .value of an h720()/percent Size under-measures at any other height.
+  float resolution_height = 720.f;
+  if (auto *pcr = EntityHelper::get_singleton_cmp<
+          window_manager::ProvidesCurrentResolution>())
+    resolution_height = static_cast<float>(pcr->current_resolution.height);
+  const ScalingMode scaling_mode =
+      ctx.scaling_mode.value_or(UIStylingDefaults::get().scaling_mode);
+  const float line_height = resolve_to_pixels(
+      config.text_area_line_height.value_or(pixels(20.f)), resolution_height,
+      scaling_mode, ctx.theme.ui_scale);
+  // The field's own top+bottom padding (h720(4) each side, below), resolved
+  // the same way: auto-grow adds it back or the last line sits under the
+  // bottom edge, increasingly so above 720p.
+  const float vertical_padding = resolve_to_pixels(
+      h720(8.f), resolution_height, scaling_mode, ctx.theme.ui_scale);
 
   // Initialize state
   auto &state = init_state<HasTextAreaState>(
@@ -140,7 +150,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                               ? std::min(rows, config.text_area_max_lines)
                               : rows;
     config.size.y_axis =
-        pixels(static_cast<float>(capped) * line_height + kVerticalPadding);
+        pixels(static_cast<float>(capped) * line_height + vertical_padding);
   }
 
   config.flex_direction = FlexDirection::Column;
@@ -151,22 +161,31 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       config.rounded_corners.value_or(ctx.theme.rounded_corners));
 
   // Create the text area container
-  auto field_result =
-      div(ctx, mk(entity, 0),
-          ComponentConfig::inherit_from(config, "text_area_field")
-              .with_size(config.size)
-              .with_scaling_mode(entity.template get<UIComponent>().resolved_scaling_mode)
-              .with_background(Theme::Usage::Secondary)
-              .with_rounded_corners(base_corners)
-              .with_alignment(TextAlignment::Left)
-              .with_padding(Padding{.top = h720(4),
-                                    .bottom = h720(4),
-                                    .left = w1280(6),
-                                    .right = w1280(6)})
-              // Lines past the bottom of a fixed-height field must not paint
-              // over whatever sits below it.
-              .with_overflow(Overflow::Hidden)
-              .with_render_layer(config.render_layer + 1));
+  auto field_config =
+      ComponentConfig::inherit_from(config, "text_area_field")
+          .with_size(config.size)
+          .with_scaling_mode(entity.template get<UIComponent>().resolved_scaling_mode)
+          .with_background(Theme::Usage::Secondary)
+          .with_rounded_corners(base_corners)
+          .with_alignment(TextAlignment::Left)
+          .with_padding(Padding{.top = h720(4),
+                                .bottom = h720(4),
+                                .left = w1280(6),
+                                .right = w1280(6)})
+          // Lines past the bottom of a fixed-height field must not paint
+          // over whatever sits below it.
+          .with_overflow(Overflow::Hidden)
+          .with_render_layer(config.render_layer + 1);
+  // A caller's background (with_custom_background / with_transparent_bg)
+  // replaces the default fill, as it does on text_input; the hardcoded
+  // Secondary used to win over both.
+  if (config.color_usage == Theme::Usage::Custom &&
+      config.custom_color.has_value())
+    field_config.with_custom_background(config.custom_color.value());
+  if (!field_config.has_border())
+    field_config.with_border(ctx.theme.control_border(ctx.theme.secondary),
+                             1.f);
+  auto field_result = div(ctx, mk(entity, 0), field_config);
 
   auto &field_entity = field_result.ent();
   auto &field_cmp = field_entity.template get<UIComponent>();
@@ -247,6 +266,14 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   const bool gained_focus = !state.is_focused && (field_has_focus || parent_has_focus);
   state.is_focused = field_has_focus || parent_has_focus;
 
+  // The focus ring text_input has always had: a 2px accent border while
+  // focused, over the 1px default border on the field config.
+  if (state.is_focused) {
+    field_entity.template addComponentIfMissing<HasBorder>();
+    field_entity.template get<HasBorder>().border =
+        Border::all(ctx.theme.accent, pixels(2.0f));
+  }
+
   if (gained_focus || state.last_scroll_cursor_position != state.cursor_position ||
       state.last_scroll_layout_version != state.last_layout_version) {
     state.ensure_cursor_visible_at_row(cursor_row, viewport_height, vlines.size());
@@ -286,14 +313,21 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       static_cast<size_t>(std::ceil(
           (viewport_height + std::fmod(state.scroll_offset_y, line_height)) / line_height));
 
+  // An empty field shows its placeholder in place of its single blank
+  // line, in the muted colour text_input uses.
+  const bool show_placeholder =
+      display_text.empty() && !config.placeholder.empty();
+
   // Render each visible line as a separate div with fixed height
   // This prevents auto-scaling which would make text fill the entire container
   for (size_t i = first_visible_line;
        i < vlines.size() && i < first_visible_line + visible_line_count; ++i) {
     size_t line_idx = i - first_visible_line;
     std::string row = state.layout_cache.line_text(display_text, i);
+    const bool placeholder_row = show_placeholder && i == 0;
     std::string line_text =
-        row.empty() ? " " : row; // Space prevents zero-height
+        placeholder_row ? config.placeholder
+                        : (row.empty() ? " " : row); // Space prevents zero-height
 
     div(ctx, mk(field_entity, static_cast<int>(line_idx)),
         ComponentConfig{}
@@ -305,13 +339,16 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                            ? UIComponent::DEFAULT_FONT
                            : config.font_name,
                        config.font_size)
-            .with_custom_text_color(
-                config.custom_text_color.value_or(ctx.theme.font))
+            .with_custom_text_color(placeholder_row
+                                        ? ctx.theme.font_muted
+                                        : config.custom_text_color.value_or(
+                                              ctx.theme.font))
             .with_alignment(TextAlignment::Left)
             .with_translate(0.f, -std::fmod(state.scroll_offset_y, line_height))
             .with_skip_tabbing(true)
             .with_render_layer(config.render_layer + 2)
-            .with_debug_name("text_area_line"));
+            .with_debug_name(placeholder_row ? "text_area_placeholder"
+                                             : "text_area_line"));
   }
 
   // Selection highlight: one band per visual row the range touches, so a
@@ -616,18 +653,26 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     if (ctx.pressed_or_repeat(InputAction::TextEnd))
       navigate([&] { move_to_visual_line_end(state); });
 
-    // Word-level movement (Alt/Ctrl+Arrow).
+    // Word-level movement (Alt/Ctrl+Arrow). Unshifted with a selection,
+    // they collapse to its near edge first, like Left/Right below and like
+    // text_input; only a second press moves a word.
     if constexpr (magic_enum::enum_contains<InputAction>("TextWordLeft")) {
       if (ctx.pressed_or_repeat(InputAction::TextWordLeft))
         navigate([&] {
-          move_cursor_word_left(state);
+          if (!shift_held && state.has_selection())
+            state.cursor_position = state.selection_start();
+          else
+            move_cursor_word_left(state);
           reset_preferred_column(state);
         });
     }
     if constexpr (magic_enum::enum_contains<InputAction>("TextWordRight")) {
       if (ctx.pressed_or_repeat(InputAction::TextWordRight))
         navigate([&] {
-          move_cursor_word_right(state);
+          if (!shift_held && state.has_selection())
+            state.cursor_position = state.selection_end();
+          else
+            move_cursor_word_right(state);
           reset_preferred_column(state);
         });
     }

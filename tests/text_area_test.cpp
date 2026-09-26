@@ -466,6 +466,176 @@ TEST(alt_right_moves_a_word_forward) {
     CHECK(s->cursor_position == 5); // end of "alpha"
 }
 
+// Word motion with a selection collapses to its near edge, like character
+// motion does -- it must not jump a word from the caret and drop the
+// selection (hanabi #260; text_input already behaved this way).
+TEST(word_motion_collapses_a_selection_to_its_near_edge) {
+  auto run = [](ImmTestHarness &h, ui_test::TestInputAction action) {
+    std::string text = "alpha beta gamma delta";
+    Entity *area = nullptr;
+    auto emit = [&] {
+      auto r = text_area(h.context(), mk(h.root(), 0), text,
+                         area_config(200.f, 200.f).with_word_wrap(true));
+      area = &r.ent();
+    };
+    h.begin_frame();
+    emit();
+    h.layout_only();
+    // h.find searches the global collection, which still holds the first
+    // run's field; scan this harness's own collection for its field.
+    for (const auto &e : h.coll.get_entities())
+      if (e && e->has<UIComponentDebug>() &&
+          e->get<UIComponentDebug>().name() == "text_area_field")
+        h.context().focus_id = e->id;
+    if (area && area->has<ti::HasTextAreaState>()) {
+      auto &s = area->get<ti::HasTextAreaState>();
+      s.selection_anchor = 6;   // start of "beta"
+      s.cursor_position = 16;   // end of "gamma"
+    }
+    h.context().last_action = action;
+    h.begin_frame();
+    emit();
+    h.layout_only();
+    return area && area->has<ti::HasTextAreaState>()
+               ? &area->get<ti::HasTextAreaState>()
+               : nullptr;
+  };
+  ImmTestHarness h_left;
+  auto *left = run(h_left, ui_test::TestInputAction::TextWordLeft);
+  ui_test::check(left != nullptr, "state exists", __FILE__, __LINE__);
+  if (left) {
+    CHECK(left->cursor_position == 6);
+    CHECK(!left->has_selection());
+  }
+  ImmTestHarness h_right;
+  auto *right = run(h_right, ui_test::TestInputAction::TextWordRight);
+  ui_test::check(right != nullptr, "state exists", __FILE__, __LINE__);
+  if (right) {
+    CHECK(right->cursor_position == 16);
+    CHECK(!right->has_selection());
+  }
+}
+
+TEST(placeholder_is_drawn_only_while_the_field_is_empty) {
+  auto count_placeholders = [] {
+    int n = 0;
+    for (const auto &e : UICollectionHolder::get().collection.get_entities())
+      if (e && e->has<UIComponentDebug>() &&
+          e->get<UIComponentDebug>().name() == "text_area_placeholder")
+        ++n;
+    return n;
+  };
+  ImmTestHarness h;
+  std::string text;
+  two_frames(h, [&] {
+    text_area(h.context(), mk(h.root(), 0), text,
+              area_config(200.f, 100.f).with_placeholder("Type here"));
+  });
+  // Each two_frames builds a fresh tree in this harness and the old one
+  // stays in the collection, so compare counts, not existence.
+  const int empty_count = count_placeholders();
+  CHECK(empty_count == 1);
+  for (const auto &e : UICollectionHolder::get().collection.get_entities())
+    if (e && e->has<UIComponentDebug>() &&
+        e->get<UIComponentDebug>().name() == "text_area_placeholder" &&
+        e->has<HasLabel>())
+      CHECK(e->get<HasLabel>().label == "Type here");
+
+  text = "x";
+  two_frames(h, [&] {
+    text_area(h.context(), mk(h.root(), 0), text,
+              area_config(200.f, 100.f).with_placeholder("Type here"));
+  });
+  CHECK(count_placeholders() == empty_count);
+}
+
+TEST(caller_background_replaces_the_default_field_fill) {
+  auto field_color = [](ComponentConfig cfg) {
+    ImmTestHarness h;
+    std::string text = "hi";
+    two_frames(h, [&] {
+      text_area(h.context(), mk(h.root(), 0), text, std::move(cfg));
+    });
+    UIComponent *f = h.find("text_area_field");
+    if (!f)
+      return Color{1, 2, 3, 4};
+    auto &e = UICollectionHolder::getEntityForID(f->id).asE();
+    return e.has<HasColor>() ? e.get<HasColor>().color() : Color{1, 2, 3, 4};
+  };
+  const Color custom{200, 40, 90, 255};
+  const Color got = field_color(
+      area_config(200.f, 100.f).with_custom_background(custom));
+  CHECK(got.r == custom.r && got.g == custom.g && got.b == custom.b &&
+        got.a == custom.a);
+  const Color transparent =
+      field_color(area_config(200.f, 100.f).with_transparent_bg());
+  CHECK(transparent.a == 0);
+}
+
+TEST(focused_field_gets_the_accent_border) {
+  ImmTestHarness h;
+  std::string text = "hi";
+  Entity *area = nullptr;
+  auto emit = [&] {
+    auto r = text_area(h.context(), mk(h.root(), 0), text,
+                       area_config(200.f, 100.f));
+    area = &r.ent();
+  };
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  Entity *field = nullptr;
+  for (const auto &e : UICollectionHolder::get().collection.get_entities())
+    if (e && e->has<UIComponentDebug>() &&
+        e->get<UIComponentDebug>().name() == "text_area_field")
+      field = e.get();
+  ui_test::check(field != nullptr, "the field exists", __FILE__, __LINE__);
+  if (!field)
+    return;
+  h.context().focus_id = field->id;
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  if (field->has<HasBorder>()) {
+    const auto &b = field->get<HasBorder>().border;
+    CHECK_APPROX(b.top.thickness.value, 2.f);
+    const Color accent = h.context().theme.accent;
+    CHECK(b.top.color.r == accent.r && b.top.color.g == accent.g &&
+          b.top.color.b == accent.b);
+  } else {
+    ui_test::check(false, "focused field has a border", __FILE__, __LINE__);
+  }
+  (void)area;
+}
+
+TEST(auto_grow_resolves_line_height_and_padding_at_1080p) {
+  auto *res = EntityHelper::get_singleton_cmp<
+      window_manager::ProvidesCurrentResolution>();
+  ui_test::check(res != nullptr, "resolution singleton exists", __FILE__,
+                 __LINE__);
+  if (!res)
+    return;
+  const auto saved = res->current_resolution;
+  res->current_resolution = {1920, 1080};
+  ImmTestHarness h;
+  std::string text = "a\nb";
+  UIComponent *field = nullptr;
+  two_frames(h, [&] {
+    text_area(h.context(), mk(h.root(), 0), text,
+              ComponentConfig{}
+                  .with_size(ComponentSize{pixels(200), pixels(40)})
+                  .with_font(UIComponent::DEFAULT_FONT, WIDGET_FONT)
+                  .with_line_height(h720(20))
+                  .with_auto_grow());
+    field = h.find("text_area_field");
+  });
+  res->current_resolution = saved;
+  ui_test::check(field != nullptr, "the field exists", __FILE__, __LINE__);
+  if (field)
+    // h720(20) resolves to 30 at 1080p; vertical padding h720(8) to 12.
+    CHECK_APPROX(field->rect().height, 72.f);
+}
+
 TEST(alt_backspace_deletes_the_word_behind) {
   ImmTestHarness h;
   std::string text = "alpha beta gamma";

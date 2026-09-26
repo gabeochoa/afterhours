@@ -750,22 +750,27 @@ struct HandleExpectInputTextCommand : System<PendingE2ECommand> {
         ui_query()
             .whereHasComponent<ui::UIComponent>()
             .whereHasComponent<ui::UIComponentDebug>()
-            .template whereHasComponent<text_input::HasTextInputState>()
             .whereLambda([&](const Entity &e) {
-              return e.get<ui::UIComponentDebug>().name() == name;
+              return e.get<ui::UIComponentDebug>().name() == name &&
+                     (e.has<text_input::HasTextInputState>() ||
+                      e.has<text_input::HasTextAreaState>());
             })
             .first();
 
     for (Entity &entity : query.gen()) {
-      auto &state =
-          entity.get<text_input::HasTextInputState>();
-      if (state.text() == expected) {
+      // A text_area carries HasTextAreaState, not the single-line state;
+      // asking only for the latter made multi-line fields unassertable.
+      const std::string actual =
+          entity.has<text_input::HasTextInputState>()
+              ? entity.get<text_input::HasTextInputState>().text()
+              : entity.get<text_input::HasTextAreaState>().text();
+      if (actual == expected) {
         cmd.consume();
         return;
       } else {
         cmd.fail(std::format(
             "Input '{}' text is \"{}\", expected \"{}\"", name,
-            state.text(), expected));
+            actual, expected));
         return;
       }
     }

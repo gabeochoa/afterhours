@@ -1,5 +1,6 @@
 #include "ui_test_harness.h"
 #include <afterhours/src/plugins/e2e_testing/runner.h>
+#include <afterhours/src/plugins/ui/text_input/text_area_state.h>
 
 #include <chrono>
 #include <fstream>
@@ -37,7 +38,13 @@ TEST(quoted_properties_and_custom_arguments) {
   check_args(R"e2e(custom "" text="" prefix"two words"suffix)e2e",
              {"", "text=", "prefixtwo wordssuffix"});
   check_args(R"e2e(custom "say \"hello\"" "C:\\Users\\test" "literal\n" C:\Users\test don't)e2e",
-             {"say \"hello\"", "C:\\Users\\test", "literal\\n", "C:\\Users\\test", "don't"});
+             {"say \"hello\"", "C:\\Users\\test", "literal\n", "C:\\Users\\test", "don't"});
+  // \n and \t are escapes inside quotes (hanabi #259: a multi-line
+  // expectation cannot be written without them); a literal backslash-n is
+  // written \\n, like the Windows path above.
+  check_args(R"e2e(expect_input_text composer "line one\nline two")e2e",
+             {"composer", "line one\nline two"});
+  check_args(R"e2e(custom "a\\nb" "a\tb")e2e", {"a\\nb", "a\tb"});
 }
 
 TEST(builtins_share_quoted_arguments) {
@@ -185,6 +192,23 @@ TEST(parse_hex_color_accepts_six_and_eight_digits) {
   CHECK(!ui_commands::parse_hex_color("-10203", c));
   CHECK(!ui_commands::parse_hex_color("+10203", c));
   CHECK(!ui_commands::parse_hex_color("0x1020", c));
+}
+
+TEST(expect_input_text_reads_a_text_area) {
+  ui_test::ImmTestHarness h;
+  h.begin_frame();
+  auto field = ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
+                            ui::imm::ComponentConfig{}
+                                .with_size({ui::pixels(200), ui::pixels(100)})
+                                .with_debug_name("composer"));
+  field.ent().addComponent<text_input::HasTextAreaState>("hello\nworld");
+  h.layout_only();
+  auto good = pending_for("expect_input_text", {"composer", "hello\nworld"});
+  ui_commands::HandleExpectInputTextCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), good, 0.f);
+  CHECK(good.is_consumed() && good.error_message.empty());
+  auto bad = pending_for("expect_input_text", {"composer", "hello"});
+  ui_commands::HandleExpectInputTextCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), bad, 0.f);
+  CHECK(bad.is_consumed() && !bad.error_message.empty());
 }
 
 TEST(expect_no_ui_waits_a_frame_then_judges_absence) {

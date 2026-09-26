@@ -58,9 +58,19 @@ struct ScriptArguments {
                 quoted = !quoted;
                 continue;
             }
-            if (quoted && ch == '\\' && (input.peek() == '"' || input.peek() == '\\')) {
-                result += static_cast<char>(input.get());
-                continue;
+            if (quoted && ch == '\\') {
+                const char peeked = static_cast<char>(input.peek());
+                if (peeked == '"' || peeked == '\\') {
+                    result += static_cast<char>(input.get());
+                    continue;
+                }
+                // \n and \t: without them a multi-line expectation (the
+                // text_area case) cannot be written in a line-based script.
+                if (peeked == 'n' || peeked == 't') {
+                    input.get();
+                    result += (peeked == 'n' ? '\n' : '\t');
+                    continue;
+                }
             }
             result += ch;
         }
