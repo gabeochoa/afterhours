@@ -91,6 +91,7 @@ ALL_TESTS := \
 	text_unit_motion_test \
 	sound_volume_test \
 	settings_save_test \
+	settings_path_test \
 	clipboard_test \
 	native_dialogs_test \
 	input_binding_codec_test \

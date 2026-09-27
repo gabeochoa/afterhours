@@ -100,6 +100,24 @@ struct settings : developer::Plugin {
     }
   };
 
+  // Root directory settings files resolve against. Code can override it
+  // (portable installs, tests, a user-chosen location); without an override
+  // it is the files plugin's save path, or the cwd when that plugin is absent.
+  inline static fs::path path_override_;
+  static void set_path_override(const fs::path &path) { path_override_ = path; }
+  static void clear_path_override() { path_override_.clear(); }
+  static fs::path root_path() {
+    if (!path_override_.empty()) return path_override_;
+    auto *files_provider =
+        EntityHelper::get_singleton_cmp<files::ProvidesResourcePaths>();
+    return files_provider ? files_provider->get_save_path()
+                          : fs::current_path();
+  }
+  template <typename SettingsData>
+  static fs::path resolve_path(const ProvidesSettings<SettingsData> *provider) {
+    return root_path() / fs::path(provider->settings_file);
+  }
+
   // Helper functions for loading/saving
 #if defined(AFTERHOURS_SETTINGS_OUTPUT_JSON) || \
     (!defined(AFTERHOURS_SETTINGS_OUTPUT_BITSERY) && \
@@ -246,17 +264,7 @@ struct settings : developer::Plugin {
         return;
       }
 
-      // Try to get save path from Files plugin if available
-      fs::path settings_path;
-      auto *files_provider =
-          EntityHelper::get_singleton_cmp<files::ProvidesResourcePaths>();
-      if (files_provider) {
-        settings_path =
-            files_provider->get_save_path() / fs::path(provider->settings_file);
-      } else {
-        // Fallback to current directory
-        settings_path = fs::current_path() / fs::path(provider->settings_file);
-      }
+      const fs::path settings_path = resolve_path<SettingsData>(provider);
 
       std::ifstream ifs(settings_path);
       if (!ifs.is_open()) {
@@ -401,17 +409,7 @@ struct settings : developer::Plugin {
       return false;
     }
 
-    // Try to get save path from Files plugin if available
-    fs::path settings_path;
-    auto *files_provider =
-        EntityHelper::get_singleton_cmp<files::ProvidesResourcePaths>();
-    if (files_provider) {
-      settings_path =
-          files_provider->get_save_path() / fs::path(provider->settings_file);
-    } else {
-      // Fallback to current directory
-      settings_path = fs::current_path() / fs::path(provider->settings_file);
-    }
+    const fs::path settings_path = resolve_path<SettingsData>(provider);
 
     std::ifstream ifs(settings_path);
     if (!ifs.is_open()) {
@@ -446,19 +444,9 @@ struct settings : developer::Plugin {
       return false;
     }
 
-    // Try to get save path from Files plugin if available
-    fs::path settings_path;
-    auto *files_provider =
-        EntityHelper::get_singleton_cmp<files::ProvidesResourcePaths>();
-    if (files_provider) {
-      settings_path =
-          files_provider->get_save_path() / fs::path(provider->settings_file);
-      // Ensure directory exists
-      files_provider->ensure_directory_exists(settings_path.parent_path());
-    } else {
-      // Fallback to current directory
-      settings_path = fs::current_path() / fs::path(provider->settings_file);
-    }
+    const fs::path settings_path = resolve_path<SettingsData>(provider);
+    std::error_code ec;
+    fs::create_directories(settings_path.parent_path(), ec);
 
 #if defined(AFTERHOURS_SETTINGS_OUTPUT_JSON)
     return save_to_json(provider, settings_path);
@@ -470,15 +458,7 @@ struct settings : developer::Plugin {
 #endif
   }
 
-  static fs::path get_save_path() {
-    auto *files_provider =
-        EntityHelper::get_singleton_cmp<files::ProvidesResourcePaths>();
-    if (files_provider) {
-      return files_provider->get_save_path();
-    }
-    log_warn("Files plugin not initialized, returning current directory");
-    return fs::current_path();
-  }
+  static fs::path get_save_path() { return root_path(); }
 };
 
 // Compile-time verification that settings satisfies the PluginCore concept
