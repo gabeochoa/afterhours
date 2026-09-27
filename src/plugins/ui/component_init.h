@@ -140,14 +140,15 @@ inline void overwrite_defaults(HasUIContext auto &ctx,
   // A control centres its own label; a Div is a text container and reads left.
   // Centring both made every unaligned list row and table cell centre itself,
   // so a column of eight had eight left edges. In the RtlWords pseudo-locale
-  // the unpinned default flips to the right, where an RTL run starts.
+  // only the Div default flips, to the right where an RTL run starts: a
+  // centred control label is centred in any direction, and flipping it
+  // pushed it against the right edge until it clipped.
   if (config.label_alignment == TextAlignment::None) {
-    if (rtl_mirroring(config))
-      config.with_alignment(TextAlignment::Right);
+    if (component_type == ComponentType::Div)
+      config.with_alignment(rtl_mirroring(config) ? TextAlignment::Right
+                                                  : TextAlignment::Left);
     else
-      config.with_alignment(component_type == ComponentType::Div
-                                ? TextAlignment::Left
-                                : TextAlignment::Center);
+      config.with_alignment(TextAlignment::Center);
   }
 
   if (!config.rounded_corners.has_value()) {

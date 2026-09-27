@@ -90,6 +90,15 @@ TEST(rtl_labels_default_to_right_alignment_unless_told) {
   CHECK(pinned.ent().get<HasLabel>().alignment == TextAlignment::Left);
 }
 
+TEST(rtl_button_labels_stay_centred) {
+  PseudoGuard guard(PseudoLocale::RtlWords);
+  ui_test::ImmTestHarness h;
+  auto btn = button(h.context(), mk(h.root(), 0),
+                    ComponentConfig{}.with_label("Confirm"));
+  h.layout_only();
+  CHECK(btn.ent().get<HasLabel>().alignment == TextAlignment::Center);
+}
+
 // In RTL the start side is the right: asymmetric horizontal padding and
 // margin swap, and a row lays its children out in reverse, so a label
 // that sat left of its button sits right of it.
