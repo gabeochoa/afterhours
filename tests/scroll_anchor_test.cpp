@@ -124,6 +124,109 @@ static void test_appending_does_not_move_the_view() {
         "appending below the fold leaves the offset alone");
 }
 
+// A frame where the screen is not built must not reset the position
+// (hanabi #163): children are cleared for every widget each frame, so
+// measuring an unbuilt view reads zero content and the clamp zeroes a
+// live offset.
+static void test_unbuilt_frame_keeps_the_offset() {
+  ImmTestHarness h;
+  build_and_measure(h, 0, 20, /*anchor=*/false);
+
+  auto &sv = view_of(h);
+  sv.scroll_offset.y = 100.f;
+  sv.scroll_target.y = 100.f;
+  sv.last_eased_offset = sv.scroll_offset;
+  build_and_measure(h, 0, 20, false);
+  check(near(view_of(h).scroll_offset.y, 100.f), "settled offset is 100");
+  check(near(view_of(h).content_size.y, 20 * ROW_H),
+        "content measured at full height");
+
+  Entity *view_ent = nullptr;
+  for (const auto &e : h.coll.get_entities())
+    if (e && e->has<HasScrollView>())
+      view_ent = e.get();
+  check(view_ent != nullptr, "found the view entity");
+  if (!view_ent) return;
+  view_ent->get<UIComponent>().children.clear();
+  MeasureScrollViews measure;
+  measure.for_each_with(*view_ent, view_ent->get<HasScrollView>(),
+                        view_ent->get<UIComponent>(), 0.f);
+  check(near(view_of(h).scroll_offset.y, 100.f),
+        "an unbuilt frame keeps the offset");
+  check(near(view_of(h).content_size.y, 20 * ROW_H),
+        "an unbuilt frame keeps the measured content size");
+}
+
+// scroll_to_bottom / scroll_to_top (hanabi #476): one call moves offset,
+// target and last_eased together, so the next ease does not drag the view
+// back toward the stale target.
+static void test_scroll_to_ends() {
+  HasScrollView sv;
+  sv.viewport_size = Vector2Type{200.f, 100.f};
+  sv.content_size = Vector2Type{200.f, 1000.f};
+  sv.scroll_to_bottom();
+  check(near(sv.scroll_offset.y, 900.f), "end: offset at max");
+  check(near(sv.scroll_target.y, 900.f), "end: target at max");
+  check(near(sv.last_eased_offset.y, 900.f), "end: last eased at max");
+  sv.ease_scroll(0.016f);
+  check(near(sv.scroll_offset.y, 900.f), "end: ease does not pull it back");
+  sv.scroll_to_top();
+  check(near(sv.scroll_offset.y, 0.f) && near(sv.scroll_target.y, 0.f) &&
+            near(sv.last_eased_offset.y, 0.f),
+        "start: all three at zero");
+
+  HasScrollView unmeasured;
+  unmeasured.scroll_to_bottom();
+  unmeasured.viewport_size = Vector2Type{200.f, 100.f};
+  unmeasured.content_size = Vector2Type{200.f, 1000.f};
+  unmeasured.clamp_scroll();
+  check(near(unmeasured.scroll_offset.y, 900.f),
+        "end before measuring clamps to max once measured");
+}
+
+// The horizontal pair, through the same public interface: measured max,
+// the unmeasured sentinel, and holding across several ease frames.
+static void test_scroll_to_ends_horizontal() {
+  HasScrollView sv;
+  sv.viewport_size = Vector2Type{200.f, 100.f};
+  sv.content_size = Vector2Type{1000.f, 100.f};
+  sv.scroll_to_right();
+  check(near(sv.scroll_offset.x, 800.f), "right: offset at max");
+  check(near(sv.scroll_target.x, 800.f), "right: target at max");
+  check(near(sv.last_eased_offset.x, 800.f), "right: last eased at max");
+  check(near(sv.scroll_offset.y, 0.f) && near(sv.scroll_target.y, 0.f),
+        "right: vertical axis untouched");
+  for (int frame = 0; frame < 5; frame++)
+    sv.ease_scroll(0.016f);
+  check(near(sv.scroll_offset.x, 800.f) && near(sv.scroll_target.x, 800.f) &&
+            near(sv.last_eased_offset.x, 800.f),
+        "right: holds across ease frames");
+  sv.scroll_to_left();
+  check(near(sv.scroll_offset.x, 0.f) && near(sv.scroll_target.x, 0.f) &&
+            near(sv.last_eased_offset.x, 0.f),
+        "left: all three at zero");
+  for (int frame = 0; frame < 5; frame++)
+    sv.ease_scroll(0.016f);
+  check(near(sv.scroll_offset.x, 0.f), "left: holds across ease frames");
+
+  HasScrollView unmeasured;
+  unmeasured.scroll_to_right();
+  check(near(unmeasured.scroll_offset.x, 1e9f) &&
+            near(unmeasured.scroll_target.x, 1e9f) &&
+            near(unmeasured.last_eased_offset.x, 1e9f),
+        "right before measuring: all three at the sentinel");
+  unmeasured.viewport_size = Vector2Type{200.f, 100.f};
+  unmeasured.content_size = Vector2Type{1000.f, 100.f};
+  unmeasured.clamp_scroll();
+  check(near(unmeasured.scroll_offset.x, 800.f) &&
+            near(unmeasured.scroll_target.x, 800.f),
+        "right before measuring clamps to max once measured");
+  for (int frame = 0; frame < 5; frame++)
+    unmeasured.ease_scroll(0.016f);
+  check(near(unmeasured.scroll_offset.x, 800.f),
+        "right: clamped end holds across ease frames");
+}
+
 int main() {
   printf("Running scroll anchor tests...\n\n");
   printf("  prepending_holds_the_view_still\n");
@@ -132,6 +235,12 @@ int main() {
   test_without_anchoring_the_view_jumps();
   printf("  appending_does_not_move_the_view\n");
   test_appending_does_not_move_the_view();
+  printf("  unbuilt_frame_keeps_the_offset\n");
+  test_unbuilt_frame_keeps_the_offset();
+  printf("  scroll_to_ends\n");
+  test_scroll_to_ends();
+  printf("  scroll_to_ends_horizontal\n");
+  test_scroll_to_ends_horizontal();
 
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {

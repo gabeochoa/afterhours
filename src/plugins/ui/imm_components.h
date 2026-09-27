@@ -147,6 +147,9 @@ namespace detail {
 struct RowMetrics {
   float uniform = 0.f;      // used when prefix is empty
   std::vector<float> prefix; // prefix[i] = height of rows [0, i)
+  // Set instead of prefix when the retained index owns the sums.
+  const std::vector<float> *borrowed = nullptr;
+  HasVirtualListIndex *index = nullptr;
   size_t count = 0;
   float scale = 1.f;
   float gap = 0.f;
@@ -158,25 +161,21 @@ struct RowMetrics {
     return m;
   }
 
-  template <typename HeightFn>
-  static RowMetrics measured_rows(size_t n, HeightFn &&height_of) {
-    RowMetrics m;
-    m.count = n;
-    m.prefix.resize(n + 1, 0.f);
-    for (size_t i = 0; i < n; i++) {
-      const float h = height_of(i);
-      m.prefix[i + 1] = m.prefix[i] + (h > 0.f ? h : 1.f);
-    }
-    return m;
+  [[nodiscard]] bool is_uniform() const {
+    return prefix.empty() && !borrowed;
   }
-
-  [[nodiscard]] bool is_uniform() const { return prefix.empty(); }
   [[nodiscard]] float height_of(size_t i) const {
-    return (is_uniform() ? uniform : prefix[i + 1] - prefix[i]) * scale;
+    if (is_uniform())
+      return uniform * scale;
+    const std::vector<float> &p = borrowed ? *borrowed : prefix;
+    return (p[i + 1] - p[i]) * scale;
   }
   [[nodiscard]] float offset_of(size_t i) const {
-    return (is_uniform() ? uniform * static_cast<float>(i) : prefix[i]) * scale +
-           static_cast<float>(i) * gap;
+    if (is_uniform())
+      return (uniform * static_cast<float>(i)) * scale +
+             static_cast<float>(i) * gap;
+    const std::vector<float> &p = borrowed ? *borrowed : prefix;
+    return p[i] * scale + static_cast<float>(i) * gap;
   }
   [[nodiscard]] float total() const { return count ? offset_of(count) - gap : 0.f; }
   // Largest index whose offset is <= y, clamped to the list.
@@ -204,6 +203,35 @@ struct RowMetrics {
     return m > 0.f ? m : 1.f;
   }
 };
+
+// Bring the retained index to `count` rows: height_of is asked only for the
+// dirty range, then the prefix is re-summed from the first stale entry.
+template <typename HeightFn>
+void refresh_virtual_index(HasVirtualListIndex &idx, size_t count,
+                           HeightFn &&height_of) {
+  const size_t old = idx.heights.size();
+  if (count != old) {
+    idx.heights.resize(count);
+    idx.prefix.resize(count + 1);
+    if (count > old)
+      idx.invalidate(old, count);
+  }
+  // The clamps at use are what bound the range: dirty_from may sit at the
+  // union identity, far past count, and clamping it in storage would
+  // destroy the identity the next invalidate relies on.
+  const size_t from = std::min(idx.dirty_from, count);
+  const size_t to = std::min(idx.dirty_to, count);
+  for (size_t i = from; i < to; i++) {
+    const float h = height_of(i);
+    idx.heights[i] = h > 0.f ? h : 1.f;
+  }
+  const size_t pfrom = std::min({idx.prefix_from, from, count});
+  for (size_t i = pfrom; i < count; i++)
+    idx.prefix[i + 1] = idx.prefix[i] + idx.heights[i];
+  idx.dirty_from = HasVirtualListIndex::kDirtyEmpty;
+  idx.dirty_to = 0;
+  idx.prefix_from = count;
+}
 } // namespace detail
 
 /// Windowed (virtualized) list. Builds only the rows that are on screen, while
@@ -246,6 +274,21 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
   const float screen_h = detail::measure_screen_dim(Axis::Y);
   rows.gap = config.flex_gap.value > 0.f
       ? resolve_to_pixels(config.flex_gap, screen_h, mode, ctx.theme.ui_scale) : 0.f;
+  if (rows.index) {
+    rows.index->last_scale = rows.scale;
+    rows.index->last_gap = rows.gap;
+    // Rows inserted above the fold since the last build are measured by
+    // now, so their height can move the scroll position in this same
+    // build: the row under the reader stays under the reader.
+    if (rows.index->pending_prepend > 0) {
+      const float delta =
+          rows.offset_of(std::min(rows.index->pending_prepend, count));
+      scroll.scroll_offset.y += delta;
+      scroll.scroll_target.y += delta;
+      scroll.last_eased_offset.y += delta;
+      rows.index->pending_prepend = 0;
+    }
+  }
   float parent_h = 0.f, parent_padding = 0.f;
   if (parent.template has<UIComponent>()) {
     const auto &parent_cmp = parent.template get<UIComponent>();
@@ -398,8 +441,10 @@ ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
                            std::forward<RenderRow>(render_row), config);
 }
 
-/// Rows of differing heights: `height_of(index)` is asked once per row per
-/// frame and the window is found by binary search over the running total.
+/// Rows of differing heights, retained: the prefix-height index lives on
+/// the list entity (`HasVirtualListIndex`), so `height_of(index)` is asked
+/// once per row until that row is invalidated or new. The window is found
+/// by binary search over the retained total.
 ///
 /// ```cpp
 /// virtual_list(ctx, mk(parent), msgs.size(),
@@ -413,10 +458,69 @@ ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
                            ComponentConfig config = ComponentConfig())
   requires std::invocable<HeightFn, size_t>
 {
-  return virtual_list_impl(
-      ctx, ep_pair,
-      detail::RowMetrics::measured_rows(count, std::forward<HeightFn>(height_of)),
-      std::forward<RenderRow>(render_row), config);
+  auto [entity, parent] = deref(ep_pair);
+  auto &index = entity.template addComponentIfMissing<HasVirtualListIndex>();
+  detail::refresh_virtual_index(index, count,
+                                std::forward<HeightFn>(height_of));
+  detail::RowMetrics rows;
+  rows.count = count;
+  rows.borrowed = &index.prefix;
+  rows.index = &index;
+  return virtual_list_impl(ctx, ep_pair, rows,
+                           std::forward<RenderRow>(render_row), config);
+}
+
+/// Mark rows [first, last) of a measured virtual_list as changed: the next
+/// build re-asks height_of for exactly those rows.
+inline void invalidate_virtual_rows(Entity &list, size_t first, size_t last) {
+  if (list.template has<HasVirtualListIndex>())
+    list.template get<HasVirtualListIndex>().invalidate(first, last);
+}
+
+/// Insert `count` new rows at the front of a measured virtual_list (load
+/// older, chat style). Call before the next build with the grown count:
+/// the build measures the new rows and adds their height to the scroll
+/// position in the same pass, so the row under the reader does not move.
+inline void prepend_virtual_rows(Entity &list, size_t count) {
+  if (count == 0 || !list.template has<HasVirtualListIndex>())
+    return;
+  auto &idx = list.template get<HasVirtualListIndex>();
+  idx.heights.insert(idx.heights.begin(), count, 0.f);
+  idx.prefix.insert(idx.prefix.begin(), count, 0.f);
+  // Shift the pending range by the insertion, saturating at the union
+  // identity so an empty range stays empty.
+  const size_t cap = HasVirtualListIndex::kDirtyEmpty - count;
+  idx.dirty_from = std::min(idx.dirty_from, cap) + count;
+  idx.dirty_to = std::min(idx.dirty_to, cap) + count;
+  idx.invalidate(0, count);
+  idx.prefix_from = 0;
+  idx.pending_prepend += count;
+}
+
+/// Where row `index` starts inside the content, in pixels, as of the last
+/// build of a measured virtual_list. 0 when the list has no retained index.
+[[nodiscard]] inline float virtual_row_offset(const Entity &list,
+                                              size_t index) {
+  if (!list.template has<HasVirtualListIndex>())
+    return 0.f;
+  const auto &idx = list.template get<HasVirtualListIndex>();
+  if (index >= idx.prefix.size())
+    return 0.f;
+  return idx.prefix[index] * idx.last_scale +
+         static_cast<float>(index) * idx.last_gap;
+}
+
+/// Total height of a measured virtual_list's rows, in pixels, as of its
+/// last build.
+[[nodiscard]] inline float virtual_rows_total(const Entity &list) {
+  if (!list.template has<HasVirtualListIndex>())
+    return 0.f;
+  const auto &idx = list.template get<HasVirtualListIndex>();
+  if (idx.prefix.empty())
+    return 0.f;
+  const size_t count = idx.prefix.size() - 1;
+  return idx.prefix[count] * idx.last_scale +
+         static_cast<float>(count ? count - 1 : 0) * idx.last_gap;
 }
 
 /// Horizontal stack — a div with FlexDirection::Row preset.

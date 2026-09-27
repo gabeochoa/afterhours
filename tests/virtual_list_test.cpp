@@ -223,4 +223,92 @@ TEST(reused_list_recomputes_metrics_when_zoom_or_mode_changes) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// The retained index (hanabi #420 remainder). Rebuilding the prefix meant
+// asking height_of for every row every frame, and height_of is the expensive
+// part (it wraps text). The library now keeps the heights on the list entity
+// and only re-asks for rows the caller invalidated, or that are new.
+// ---------------------------------------------------------------------------
+TEST(retained_index_only_remeasures_dirty_rows) {
+  ImmTestHarness h;
+  int asked = 0;
+  std::vector<size_t> asked_idx;
+  auto height_of = [&](size_t i) {
+    asked++;
+    asked_idx.push_back(i);
+    return alternating_height(i);
+  };
+  EntityID list_id = -1;
+  auto frame = [&](size_t count) {
+    h.begin_frame();
+    auto list = virtual_list(
+        h.context(), mk(h.root(), 0), count, height_of,
+        [&](size_t, Entity &) {},
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(300), pixels(200)})
+            .with_debug_name("vl_retained"));
+    list_id = list.id();
+    h.layout_only();
+  };
+
+  frame(100);
+  CHECK(asked == 100); // first build measures everything once
+
+  asked = 0;
+  asked_idx.clear();
+  frame(100);
+  CHECK(asked == 0); // and never again while nothing changed
+
+  invalidate_virtual_rows(AutoLayout::to_ent_static(list_id), 5, 8);
+  frame(100);
+  CHECK(asked == 3);
+  CHECK(asked_idx == std::vector<size_t>({5, 6, 7}));
+
+  asked = 0;
+  frame(120); // growth measures only the new rows
+  CHECK(asked == 20);
+
+  asked = 0;
+  frame(90); // shrink measures nothing
+  CHECK(asked == 0);
+}
+
+// Prepending above the fold (hanabi #30a for virtual lists): the new rows'
+// heights are added to the scroll position in the same build that measures
+// them, so the row under the reader does not move.
+TEST(prepend_virtual_rows_holds_the_viewport) {
+  ImmTestHarness h;
+  auto height_of = [](size_t i) { return (i % 2 == 0) ? 10.f : 40.f; };
+  EntityID list_id = -1;
+  auto frame = [&](size_t count) {
+    h.begin_frame();
+    auto list = virtual_list(
+        h.context(), mk(h.root(), 0), count, height_of,
+        [&](size_t, Entity &) {},
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(300), pixels(200)})
+            .with_debug_name("vl_prepend"));
+    list_id = list.id();
+    h.layout_only();
+  };
+
+  frame(100);
+  auto &scroll = AutoLayout::to_ent_static(list_id).get<HasScrollView>();
+  scroll.viewport_size = {300.f, 200.f};
+  // Row 20 starts at 10 * (10 + 40) = 500.
+  CHECK_APPROX(virtual_row_offset(AutoLayout::to_ent_static(list_id), 20),
+               500.f);
+  scroll.scroll_offset.y = scroll.scroll_target.y = 500.f;
+  scroll.last_eased_offset = scroll.scroll_offset;
+
+  prepend_virtual_rows(AutoLayout::to_ent_static(list_id), 4);
+  frame(104);
+  auto &after = AutoLayout::to_ent_static(list_id).get<HasScrollView>();
+  // Four new rows (10 + 40 + 10 + 40) now sit above the old row 20.
+  CHECK_APPROX(after.scroll_offset.y, 600.f);
+  CHECK_APPROX(after.scroll_target.y, 600.f);
+  CHECK_APPROX(virtual_row_offset(AutoLayout::to_ent_static(list_id), 24),
+               600.f);
+}
+
 int main() { return ui_test::run_registered_tests("virtual_list"); }

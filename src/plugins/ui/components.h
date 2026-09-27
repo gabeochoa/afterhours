@@ -585,6 +585,36 @@ struct HasScrollView : BaseComponent {
     return viewport_size.value_or(Vector2Type{0, 0});
   }
 
+  // Jump to an end in one call. Offset, target and last_eased move together:
+  // writing only the offset reads as a caller edit the next ease undoes by
+  // gliding back toward the stale target (hanabi #476). One function per
+  // direction, so no axis is ever selected at run time.
+  void scroll_to_top() {
+    scroll_offset.y = scroll_target.y = last_eased_offset.y = 0.f;
+  }
+  void scroll_to_bottom() {
+    scroll_offset.y = scroll_target.y = last_eased_offset.y = bottom_offset();
+  }
+  void scroll_to_left() {
+    scroll_offset.x = scroll_target.x = last_eased_offset.x = 0.f;
+  }
+  void scroll_to_right() {
+    scroll_offset.x = scroll_target.x = last_eased_offset.x = right_offset();
+  }
+
+  // Furthest valid offset per axis. Unmeasured: a sentinel the first clamp
+  // brings to the real max.
+  [[nodiscard]] float bottom_offset() const {
+    return viewport_size.has_value()
+               ? std::max(0.f, content_size.y - viewport_size->y)
+               : 1e9f;
+  }
+  [[nodiscard]] float right_offset() const {
+    return viewport_size.has_value()
+               ? std::max(0.f, content_size.x - viewport_size->x)
+               : 1e9f;
+  }
+
   // Clamp scroll offset AND target to valid bounds (0 to max scrollable).
   void clamp_scroll() {
     // An unmeasured view has no bounds to clamp against; clamping to a zero
@@ -652,6 +682,31 @@ struct HasScrollView : BaseComponent {
   Theme::Usage scrollbar_thumb_usage = Theme::Usage::FontMuted;
   std::optional<ColorType> scrollbar_track_color;
   std::optional<ColorType> scrollbar_thumb_color;
+};
+
+// Retained row geometry for a measured virtual_list (hanabi #420). The
+// prefix is summed once and kept on the list entity; height_of is re-asked
+// only for the dirty range, because asking is the expensive part (it wraps
+// text). Rows are in the caller's unscaled units.
+struct HasVirtualListIndex : BaseComponent {
+  std::vector<float> heights;
+  std::vector<float> prefix; // prefix[i] = height of rows [0, i)
+  // The pending re-measure range [dirty_from, dirty_to). Its empty value is
+  // the union identity [kDirtyEmpty, 0), so invalidate is an unconditional
+  // min/max with no empty case to branch on.
+  static constexpr size_t kDirtyEmpty = static_cast<size_t>(-1);
+  size_t dirty_from = kDirtyEmpty;
+  size_t dirty_to = 0;
+  size_t prefix_from = 0; // prefix entries before this are current
+  size_t pending_prepend = 0;
+  float last_scale = 1.f;
+  float last_gap = 0.f;
+
+  void invalidate(size_t first, size_t last) {
+    dirty_from = std::min(dirty_from, first);
+    dirty_to = std::max(dirty_to, last);
+    prefix_from = std::min(prefix_from, first);
+  }
 };
 
 // Where a scroll view's bar goes; empty when it needs none. Pure, so it is

@@ -502,6 +502,14 @@ inline Vector2Type measure_scroll_content(const UIComponent &cmp, const HasScrol
 struct MeasureScrollViews : System<HasScrollView, UIComponent> {
   virtual void for_each_with(Entity &, HasScrollView &scroll, UIComponent &cmp,
                              float) override {
+    // Not built this frame: children are cleared for every widget each
+    // frame, so measuring now would read zero content and the clamp would
+    // zero a live offset (hanabi #163). Keep last frame's measurement. A
+    // view emptied while visible keeps its offset until it has children
+    // again, when the clamp applies as usual.
+    if (cmp.children.empty() &&
+        (scroll.content_size.x > 0.f || scroll.content_size.y > 0.f))
+      return;
     RectangleType parent_rect = cmp.rect();
     scroll.viewport_size = {parent_rect.width, parent_rect.height};
 
