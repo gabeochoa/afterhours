@@ -83,6 +83,7 @@ ALL_TESTS := \
 	animation_test \
 	motion_config_test \
 	reduced_motion_test \
+	appearance_test \
 	animation_presets_test \
 	particles_test \
 	ui_modifiers_test \
@@ -314,6 +315,7 @@ $(OUT)/native_dialogs_macos_test: native_dialogs_macos_test.mm ../src/plugins/na
 
 ifeq ($(UNAME_S),Darwin)
 $(OUT)/reduced_motion_test: LDFLAGS_T += -framework AppKit
+$(OUT)/appearance_test: LDFLAGS_T += -framework AppKit
 endif
 
 # Sokol's implementation TU must be Objective-C++ for Metal; reuse the web
