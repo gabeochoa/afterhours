@@ -103,6 +103,20 @@ inline void record_font_coverage(const raylib::Font font, const char *file) {
     coverage_registry()[font_key(font)] = std::move(ranges);
 }
 
+// Fonts rasterize large (96px) and are usually drawn far smaller. With
+// plain bilinear filtering and no mipmaps, a 10x downscale samples four
+// texels per pixel and thin strokes fall between them: glyphs fragment
+// and fade at sub-1.0 UI scale. Mipmaps + trilinear average the atlas
+// properly at every size.
+inline void prepare_font_texture(raylib::Font &font) {
+  if (font.texture.id == 0)
+    return;
+  raylib::GenTextureMipmaps(&font.texture);
+  raylib::SetTextureFilter(font.texture, font.texture.mipmaps > 1
+                                             ? raylib::TEXTURE_FILTER_TRILINEAR
+                                             : raylib::TEXTURE_FILTER_BILINEAR);
+}
+
 inline raylib::Font
 build_font_atlas(const char *file, int px, const int *codepoints, int count,
                  const FontAtlasConfig &atlas_config =
@@ -148,7 +162,7 @@ inline raylib::Font load_font_from_file(const char *file, int size = 0) {
   // Glyphs but no texture is the headless case, and it draws nothing.
   if (font.texture.id == 0)
     font = build_font_atlas(file, px, cps.data(), (int)cps.size());
-  raylib::SetTextureFilter(font.texture, raylib::TEXTURE_FILTER_BILINEAR);
+  prepare_font_texture(font);
   record_font_coverage(font, file);
   return font;
 }
@@ -232,7 +246,7 @@ load_font_from_file_with_codepoints(const char *file, int *codepoints,
   // See load_font_from_file: no GL context means no texture.
   if (font.texture.id == 0)
     font = build_font_atlas(file, size, codepoints, codepoint_count);
-  raylib::SetTextureFilter(font.texture, raylib::TEXTURE_FILTER_BILINEAR);
+  prepare_font_texture(font);
   record_font_coverage(font, file);
   return font;
 }
@@ -309,7 +323,7 @@ inline raylib::Font load_font_for_string(const std::string &content,
 
   raylib::Font font = raylib::LoadFontEx(
       font_filename.c_str(), size, codepointsNoDups, codepointNoDupsCounts);
-  raylib::SetTextureFilter(font.texture, raylib::TEXTURE_FILTER_BILINEAR);
+  prepare_font_texture(font);
   record_font_coverage(font, font_filename.c_str());
 
   // Free the deduplicated codepoints array
