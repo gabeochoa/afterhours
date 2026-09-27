@@ -1500,7 +1500,14 @@ struct AutoLayout {
       col_h = fmax(cy, col_h);
     };
 
-    for (EntityID child_id : widget.children) {
+    // A reversed row places its flow children in reverse order; absolute
+    // and hidden children position themselves and are unaffected by the
+    // iteration order, and every size above was order-independent.
+    const bool reverse_row = is_row && widget.flex_row_reversed;
+    for (size_t ci = 0; ci < widget.children.size(); ci++) {
+      const EntityID child_id =
+          widget.children[reverse_row ? widget.children.size() - 1 - ci
+                                      : ci];
       UIComponent &child = cmp(child_id);
 
       // Dont worry about any children that are absolutely positioned

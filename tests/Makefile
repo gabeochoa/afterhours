@@ -121,6 +121,7 @@ ALL_TESTS := \
 	fit_content_test \
 	label_inset_test \
 	text_memo_test \
+	pseudo_locale_test \
 	editing_capability_test \
 	autolayout_test \
 	dialog_test \

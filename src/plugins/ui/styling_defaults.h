@@ -6,6 +6,7 @@
 #include <string>
 
 #include "../autolayout.h"
+#include "pseudo_locale.h"
 #include "theme.h"
 #include "validation_config.h"
 
@@ -107,6 +108,10 @@ struct UIStylingDefaults {
   Size default_font_size = pixels(16.f);
   bool enable_grid_snapping = false;
 
+  // Layout stress: every label is built in this pseudo-locale (see
+  // pseudo_locale.h). None is the shipping behaviour.
+  PseudoLocale pseudo_locale = PseudoLocale::None;
+
   // Sort draw commands by layer before flushing. Off: collectors already
   // emit in paint order, so a widget's `layer` is otherwise decorative.
   bool sort_draws_by_layer = false;
@@ -175,6 +180,11 @@ struct UIStylingDefaults {
 
   UIStylingDefaults &set_grid_snapping(bool enabled) {
     enable_grid_snapping = enabled;
+    return *this;
+  }
+
+  UIStylingDefaults &set_pseudo_locale(PseudoLocale mode) {
+    pseudo_locale = mode;
     return *this;
   }
 

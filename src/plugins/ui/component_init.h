@@ -87,6 +87,14 @@ UIStylingDefaults::merge_with_defaults(ComponentType component_type,
 
 namespace detail {
 
+// RTL mirroring (RtlWords pseudo-locale): the start side is the right.
+// Per-unit motion configs are exempt, like the text transform: their
+// spans and layout index into the original string and direction.
+inline bool rtl_mirroring(const ComponentConfig &config) {
+  return !config.unit_motion.has_value() &&
+         UIStylingDefaults::get().pseudo_locale == PseudoLocale::RtlWords;
+}
+
 inline void overwrite_defaults(HasUIContext auto &ctx,
                                ComponentConfig &config,
                                ComponentType component_type,
@@ -131,11 +139,15 @@ inline void overwrite_defaults(HasUIContext auto &ctx,
 
   // A control centres its own label; a Div is a text container and reads left.
   // Centring both made every unaligned list row and table cell centre itself,
-  // so a column of eight had eight left edges.
+  // so a column of eight had eight left edges. In the RtlWords pseudo-locale
+  // the unpinned default flips to the right, where an RTL run starts.
   if (config.label_alignment == TextAlignment::None) {
-    config.with_alignment(component_type == ComponentType::Div
-                              ? TextAlignment::Left
-                              : TextAlignment::Center);
+    if (rtl_mirroring(config))
+      config.with_alignment(TextAlignment::Right);
+    else
+      config.with_alignment(component_type == ComponentType::Div
+                                ? TextAlignment::Left
+                                : TextAlignment::Center);
   }
 
   if (!config.rounded_corners.has_value()) {
@@ -191,14 +203,25 @@ inline void apply_layout(Entity &entity, const ComponentConfig &config) {
       cmp.desired[Axis::Y].dim != config.size.y_axis.dim ||
       cmp.desired[Axis::Y].value != config.size.y_axis.value)
     cmp.size_dirty = true;
+  // Mirrored on copies: writing a swap back into the config would swap
+  // again for a caller who reuses one config across frames.
+  Padding padding = config.padding;
+  Margin margin = config.margin;
+  const bool mirrored = rtl_mirroring(config);
+  if (mirrored) {
+    std::swap(padding.left, padding.right);
+    std::swap(margin.left, margin.right);
+  }
+  cmp.flex_row_reversed =
+      mirrored && config.flex_direction == FlexDirection::Row;
   cmp.set_desired_width(config.size.x_axis)
       .set_desired_height(config.size.y_axis)
       .set_min_width(config.min_width)
       .set_max_width(config.max_width)
       .set_min_height(config.min_height)
       .set_max_height(config.max_height)
-      .set_desired_padding(config.padding)
-      .set_desired_margin(config.margin)
+      .set_desired_padding(padding)
+      .set_desired_margin(margin)
       .set_justify_content(config.justify_content)
       .set_align_items(config.align_items)
       .set_self_align(config.self_align)
@@ -232,23 +255,31 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
   // An empty label CLEARS an existing one rather than being ignored: the tree
   // is rebuilt every frame, so a widget whose text went away this frame must
   // not keep rendering last frame's. Only skips when there is nothing to clear.
+  // Pseudo-locale stress (UIStylingDefaults::pseudo_locale): the label is
+  // built from the transformed text, so measurement and wrapping stress
+  // with it. The config keeps the original, so the mode is reversible by
+  // flipping the setting. Per-unit motion labels are exempt: their spans
+  // index into the original string.
+  const PseudoLocale pseudo =
+      config.unit_motion.has_value() ? PseudoLocale::None
+                                     : UIStylingDefaults::get().pseudo_locale;
   if (!config.tooltip_text.empty())
     entity.addComponentIfMissing<ui::HasTooltip>(
-        config.tooltip_text, config.tooltip_delay,
+        pseudo_localize(config.tooltip_text, pseudo), config.tooltip_delay,
         ui::overlay::Placement::Below, config.tooltip_font_size,
         config.tooltip_padding, config.tooltip_gap);
 
   if (config.label.empty() && !entity.has<ui::HasLabel>())
     return;
-  auto &lbl =
-      entity.addComponentIfMissing<ui::HasLabel>(config.label, config.disabled);
-  lbl.set_label(config.label)
+  auto &lbl = entity.addComponentIfMissing<ui::HasLabel>(
+      pseudo_localize(config.label, pseudo), config.disabled);
+  lbl.set_label(pseudo_localize(config.label, pseudo))
       .set_disabled(config.disabled)
       .set_alignment(config.label_alignment)
       .set_text_overflow(config.text_overflow)
       .set_letter_spacing(config.letter_spacing)
       .set_text_inset(config.text_inset)
-      .set_spans(config.styled_label);
+      .set_spans(pseudo_localize_spans(config.styled_label, pseudo));
 
   // Set explicit text color if specified via with_text_color()
   if (config.text_color_usage == Theme::Usage::Custom &&
