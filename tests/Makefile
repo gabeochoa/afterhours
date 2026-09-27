@@ -79,6 +79,7 @@ ALL_TESTS := \
 	ui_update_lifecycle_test \
 	ui_update_lifecycle_single_test \
 	drag_preview_test \
+	label_clip_test \
 	animation_test \
 	motion_config_test \
 	reduced_motion_test \

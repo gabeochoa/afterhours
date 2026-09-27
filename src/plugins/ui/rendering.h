@@ -912,12 +912,16 @@ static inline void draw_text_in_rect(
       // Vertically center the block within the rect.
       float y = rect.y + std::max(0.f, (rect.height - total_h) * 0.5f);
       for (const auto &ln : lines) {
-        RectangleType line_rect{rect.x, y, rect.width, line_h};
-        draw_text_in_rect(fm, ln, line_rect, alignment, color,
-                          show_debug_indicator, stroke, shadow, rotation,
-                          rot_center_x, rot_center_y, TextOverflow::Clip,
-                          letter_spacing, font_size, /*report_overflow=*/false,
-                          inset, false);
+        // A line that does not fully fit is dropped, not drawn: the
+        // own-box clip would otherwise slice it mid-glyph.
+        if (y + line_h <= rect.y + rect.height + 0.5f) {
+          RectangleType line_rect{rect.x, y, rect.width, line_h};
+          draw_text_in_rect(fm, ln, line_rect, alignment, color,
+                            show_debug_indicator, stroke, shadow, rotation,
+                            rot_center_x, rot_center_y, TextOverflow::Clip,
+                            letter_spacing, font_size, /*report_overflow=*/false,
+                            inset, false);
+        }
         y += line_h;
       }
       return;
@@ -1132,6 +1136,12 @@ static inline void draw_runs_in_rect(
   for (const auto &line : lines) {
     if (line.empty()) {
       y += line_h; // blank line from a "\n\n"
+      continue;
+    }
+    // A line that does not fully fit is dropped, not drawn: the
+    // own-box clip would otherwise slice it mid-glyph.
+    if (y + line_h > rect.y + rect.height + 0.5f) {
+      y += line_h;
       continue;
     }
     float line_w = 0.f;
@@ -1830,6 +1840,27 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       label_rect.x += hasLabel.text_x_offset;
       label_rect.width -= hasLabel.text_x_offset;
       label_rect.y += hasLabel.text_y_offset;
+      // Same own-box clip as the batched path: a label is scissored to
+      // its box (intersected with any ancestor clip, restored after),
+      // so over-long text cannot spill over neighbours. Rotated labels
+      // are exempt: an axis-aligned scissor would cut their corners.
+      RectangleType label_clip = text_rect;
+      std::optional<RectangleType> ancestor_clip;
+      if (!entity.has<HasScrollView>()) {
+        auto [has_clip, clip_rect] =
+            detail::compute_intersected_clip_rect(entity);
+        if (has_clip) {
+          ancestor_clip = clip_rect;
+          label_clip = detail::intersect_rects(label_clip, clip_rect);
+        }
+      }
+      const bool clip_label = rotation == 0.f && label_clip.width > 0.f &&
+                              label_clip.height > 0.f;
+      if (clip_label)
+        begin_scissor_mode(static_cast<int>(label_clip.x),
+                           static_cast<int>(label_clip.y),
+                           static_cast<int>(label_clip.width),
+                           static_cast<int>(label_clip.height));
       // Without this branch with_styled_label is a no-op here, so the same
       // UI renders differently depending on `use_batched`.
       if (!hasLabel.spans.empty()) {
@@ -1845,6 +1876,15 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                           centerX, centerY, hasLabel.text_overflow,
                           hasLabel.letter_spacing, explicit_fs,
                           /*report_overflow=*/true, immediate_inset, false);
+      }
+      if (clip_label) {
+        if (ancestor_clip)
+          begin_scissor_mode(static_cast<int>(ancestor_clip->x),
+                             static_cast<int>(ancestor_clip->y),
+                             static_cast<int>(ancestor_clip->width),
+                             static_cast<int>(ancestor_clip->height));
+        else
+          end_scissor_mode();
       }
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
       detail::register_label_for_testing(entity, hasLabel.label, label_rect,
@@ -2421,8 +2461,34 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           // the overflow warning asks.
           !entity.template has<HasClipChildren>());
 
+      // Clip is the documented default ("text is clipped at container
+      // boundary"), but nothing scissored a label to its own box, so an
+      // over-long label (a doubled pseudo-locale string, say) spilled
+      // over its neighbours. The label's commands below are scissored to
+      // its box, intersected with any ancestor clip, and the ancestor
+      // clip is restored afterwards for the entity's remaining draws.
+      // Rotated labels keep the old behaviour: an axis-aligned scissor
+      // would cut their corners.
+      RectangleType label_clip = text_rect;
+      std::optional<RectangleType> ancestor_clip;
+      if (!entity.has<HasScrollView>()) {
+        auto [has_clip, clip_rect] =
+            detail::compute_intersected_clip_rect(entity);
+        if (has_clip) {
+          ancestor_clip = clip_rect;
+          label_clip = detail::intersect_rects(label_clip, clip_rect);
+        }
+      }
+      const bool clip_label = rotation == 0.f && label_clip.width > 0.f &&
+                              label_clip.height > 0.f;
+
       // See render_me: effectively zero, not the readability floor.
       if (result.rect.height >= 1.f) {
+        if (clip_label)
+          buffer.add_scissor_start(
+              static_cast<int>(label_clip.x), static_cast<int>(label_clip.y),
+              static_cast<int>(label_clip.width),
+              static_cast<int>(label_clip.height), layer, entity.id);
         // Handle text overflow ellipsis truncation for batched path
         std::string display_text = hasLabel.label;
         if (hasLabel.text_overflow == TextOverflow::Ellipsis &&
@@ -2539,6 +2605,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                   y += line_h; // blank line from a "\n\n"
                   continue;
                 }
+                // A line that does not fully fit is dropped, not drawn:
+                // the own-box clip would otherwise slice it mid-glyph.
+                if (y + line_h > label_rect.y + label_rect.height + 0.5f) {
+                  y += line_h;
+                  continue;
+                }
                 if (line.size() == 1) {
                   // Same call shape as before, so plain wrapped text does
                   // not shift.
@@ -2613,6 +2685,17 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
               result.rect.height, font_col, hasLabel.alignment, layer, entity.id,
               stroke, shadow, rotation, centerX, centerY,
               hasLabel.letter_spacing);
+        }
+
+        if (clip_label) {
+          if (ancestor_clip)
+            buffer.add_scissor_start(
+                static_cast<int>(ancestor_clip->x),
+                static_cast<int>(ancestor_clip->y),
+                static_cast<int>(ancestor_clip->width),
+                static_cast<int>(ancestor_clip->height), layer, entity.id);
+          else
+            buffer.add_scissor_end(layer, entity.id);
         }
 
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
