@@ -95,6 +95,9 @@ struct UIComponent : BaseComponent {
   FlexDirection flex_direction = FlexDirection::Column;
   // Row containers place flow children in reverse order (RTL mirroring).
   bool flex_row_reversed = false;
+  // This component participates in RTL mirroring: padding/margin swap,
+  // and an absolutely positioned element anchors from the other side.
+  bool rtl_mirrored = false;
   JustifyContent justify_content = JustifyContent::FlexStart;
   AlignItems align_items = AlignItems::FlexStart;
   SelfAlign self_align =

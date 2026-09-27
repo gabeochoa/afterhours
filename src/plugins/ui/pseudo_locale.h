@@ -18,12 +18,18 @@ namespace ui {
 //   DoubleWords  "Save changes" -> "Save changes Save changes"
 //   RtlWords     "the quick fox" -> "fox quick the", and labels whose
 //                alignment was never set align right instead of left.
+//                Layout mirrors with the text: row order reverses,
+//                start padding/margin swap, and an absolutely
+//                positioned element anchors from the other side of its
+//                parent, so whole columns swap places.
 //
 // The transform runs where labels are built (apply_label), on the config's
 // original text each frame, so measurement, wrapping and overflow all see
 // the stressed string, and turning the mode off restores the original text
 // exactly. Editable text (field values) is user data, not copy, and is not
-// transformed.
+// transformed; a label that displays user data after the fact (a posted
+// message, initials, a count badge) opts out per component with
+// with_pseudo_locale_exempt(), which also exempts it from RTL mirroring.
 enum class PseudoLocale {
   None,
   DoubleWords,

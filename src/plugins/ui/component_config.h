@@ -113,6 +113,9 @@ struct ComponentConfig {
   bool skip_when_tabbing = false;
   std::optional<float> focus_ring_offset;
   bool ignore_pointer_events = false; // invisible to hit-testing
+  // User data, not localizable copy: the pseudo-locale stress leaves this
+  // label (and this component's RTL mirroring) alone.
+  bool pseudo_locale_exempt = false;
   bool skip_grid_snap = false;
   bool disabled = false;
   bool hidden = false;
@@ -598,6 +601,10 @@ struct ComponentConfig {
   /// from with_skip_tabbing, which is keyboard focus order only.
   ComponentConfig &with_ignore_pointer_events(bool ignore = true) {
     ignore_pointer_events = ignore;
+    return *this;
+  }
+  ComponentConfig &with_pseudo_locale_exempt(bool exempt = true) {
+    pseudo_locale_exempt = exempt;
     return *this;
   }
   ComponentConfig &with_skip_grid_snap(bool skip = true) {
@@ -1108,6 +1115,8 @@ struct ComponentConfig {
     // opt-out every time it is overridden.
     if (overrides.ignore_pointer_events)
       merged.ignore_pointer_events = true;
+    if (overrides.pseudo_locale_exempt)
+      merged.pseudo_locale_exempt = true;
     if (overrides.selects_on_focus())
       merged.select_on_focus = overrides.select_on_focus;
     if (overrides.has_click_activation_override())

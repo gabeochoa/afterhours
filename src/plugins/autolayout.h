@@ -1516,6 +1516,13 @@ struct AutoLayout {
         // This is set during component init from with_absolute_position(x, y).
         child.computed_rel[Axis::X] = child.absolute_pos_x;
         child.computed_rel[Axis::Y] = child.absolute_pos_y;
+        // RTL mirroring swaps the layout order too: an absolute child
+        // anchors from the other side of the parent's content box, so a
+        // column pinned left in LTR stands on the right in RTL -- the
+        // page-level mirror real RTL interfaces perform.
+        if (child.rtl_mirrored)
+          child.computed_rel[Axis::X] = container_w - child.absolute_pos_x -
+                                        snapped_extent(child, Axis::X);
         compute_relative_positions(child);
         continue;
       }

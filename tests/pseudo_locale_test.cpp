@@ -90,6 +90,52 @@ TEST(rtl_labels_default_to_right_alignment_unless_told) {
   CHECK(pinned.ent().get<HasLabel>().alignment == TextAlignment::Left);
 }
 
+// Layout order swaps too, not just text: an absolutely positioned
+// child anchors from the other side of its parent in RTL, so a column
+// pinned left stands on the right -- the page-level mirror real RTL
+// interfaces (Facebook in Arabic, say) perform.
+TEST(rtl_mirroring_moves_absolute_children_to_the_other_side) {
+  auto child_x = [](PseudoLocale mode) {
+    PseudoGuard guard(mode);
+    ui_test::ImmTestHarness h;
+    auto parent = div(h.context(), mk(h.root(), 0),
+                      ComponentConfig{}
+                          .with_size({pixels(400), pixels(100)})
+                          .with_padding(Padding::all(pixels(0))));
+    auto child = div(h.context(), mk(parent.ent(), 0),
+                     ComponentConfig{}
+                         .with_size({pixels(100), pixels(50)})
+                         .with_absolute_position(10, 5));
+    h.layout_only();
+    return child.ent().get<UIComponent>().rect().x -
+           parent.ent().get<UIComponent>().rect().x;
+  };
+  CHECK_APPROX(child_x(PseudoLocale::None), 10.f);
+  CHECK_APPROX(child_x(PseudoLocale::RtlWords), 290.f);
+}
+
+TEST(exempt_labels_skip_the_transform_and_mirroring) {
+  {
+    PseudoGuard guard(PseudoLocale::DoubleWords);
+    ui_test::ImmTestHarness h;
+    auto result = button(h.context(), mk(h.root(), 0),
+                         ComponentConfig{}.with_label("3")
+                             .with_pseudo_locale_exempt());
+    h.layout_only();
+    CHECK(result.ent().get<HasLabel>().label == "3");
+  }
+  {
+    PseudoGuard guard(PseudoLocale::RtlWords);
+    ui_test::ImmTestHarness h;
+    auto result = div(h.context(), mk(h.root(), 0),
+                      ComponentConfig{}.with_label("the quick fox")
+                          .with_pseudo_locale_exempt());
+    h.layout_only();
+    CHECK(result.ent().get<HasLabel>().label == "the quick fox");
+    CHECK(result.ent().get<HasLabel>().alignment == TextAlignment::Left);
+  }
+}
+
 TEST(rtl_button_labels_stay_centred) {
   PseudoGuard guard(PseudoLocale::RtlWords);
   ui_test::ImmTestHarness h;

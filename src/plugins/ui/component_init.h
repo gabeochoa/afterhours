@@ -91,7 +91,7 @@ namespace detail {
 // Per-unit motion configs are exempt, like the text transform: their
 // spans and layout index into the original string and direction.
 inline bool rtl_mirroring(const ComponentConfig &config) {
-  return !config.unit_motion.has_value() &&
+  return !config.unit_motion.has_value() && !config.pseudo_locale_exempt &&
          UIStylingDefaults::get().pseudo_locale == PseudoLocale::RtlWords;
 }
 
@@ -215,6 +215,7 @@ inline void apply_layout(Entity &entity, const ComponentConfig &config) {
   }
   cmp.flex_row_reversed =
       mirrored && config.flex_direction == FlexDirection::Row;
+  cmp.rtl_mirrored = mirrored;
   cmp.set_desired_width(config.size.x_axis)
       .set_desired_height(config.size.y_axis)
       .set_min_width(config.min_width)
@@ -262,8 +263,9 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
   // flipping the setting. Per-unit motion labels are exempt: their spans
   // index into the original string.
   const PseudoLocale pseudo =
-      config.unit_motion.has_value() ? PseudoLocale::None
-                                     : UIStylingDefaults::get().pseudo_locale;
+      config.unit_motion.has_value() || config.pseudo_locale_exempt
+          ? PseudoLocale::None
+          : UIStylingDefaults::get().pseudo_locale;
   if (!config.tooltip_text.empty())
     entity.addComponentIfMissing<ui::HasTooltip>(
         pseudo_localize(config.tooltip_text, pseudo), config.tooltip_delay,
