@@ -250,6 +250,17 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
           config, fmt::format("checkbox indiv from {}", config.debug_name))
           .with_size(config.size);
   apply_color(toggle_config);
+  // The row's height is the caller's intent: a fixed size, or the
+  // preferred value of a children() height. The toggle is a button, so
+  // its own height comes from its label plus theme button padding,
+  // which exceeds that intent and overflows the row (kart's "Layout
+  // overflow" warning, child 76.7px in a 50px row). Pin it to the
+  // intent; a pure children() intent (no value) leaves it auto.
+  if ((config.size.y_axis.dim == Dim::Children ||
+       config.size.y_axis.dim == Dim::Pixels) &&
+      config.size.y_axis.value > 0.f)
+    toggle_config.with_size(
+        {toggle_config.size.x_axis, pixels(config.size.y_axis.value)});
   toggle_config.label_alignment = indicator_alignment;
   toggle_config.text_color_usage = config.text_color_usage;
   toggle_config.text_inset = config.text_inset;

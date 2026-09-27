@@ -378,3 +378,4 @@ profiling-render-benchmark: $(OUT)/profiling_render_benchmark_on $(OUT)/profilin
 	$(OUT)/profiling_render_benchmark_on panel 3000 "$(PROFILING_FONT)"
 
 $(OUT)/font_atlas_measure_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/headless_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"

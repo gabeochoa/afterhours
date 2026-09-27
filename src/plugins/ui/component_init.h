@@ -536,20 +536,26 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
     auto &mods = entity.addComponentIfMissing<HasUIModifiers>();
     // Apply scale (visual scaling after layout - smooth for animations)
     mods.scale = config.scale;
-    // Resolve Size to pixels using screen height (default 720p baseline)
+    // Resolve each axis against its own screen dimension (720p
+    // baseline without a resolution singleton). Both axes used the
+    // height, so a width-referenced x (w1280) was scaled by the
+    // height at any non-square resolution. The height is also passed
+    // as the explicit cross-reference for Height-tagged sizes.
+    float screen_width = 1280.f;
     float screen_height = 720.f;
     if (auto *pcr = EntityHelper::get_singleton_cmp<
             window_manager::ProvidesCurrentResolution>()) {
+      screen_width = static_cast<float>(pcr->current_resolution.width);
       screen_height = static_cast<float>(pcr->current_resolution.height);
     }
     // Use scaling-mode-aware overload so absolute positions scale with
     // ui_scale in Adaptive mode (web-like zoom).
     auto scaling = entity.get<UIComponent>().resolved_scaling_mode;
     float uis = ctx.theme.ui_scale;
-    float resolved_tx =
-        resolve_to_pixels(config.translate_x, screen_height, scaling, uis);
-    float resolved_ty =
-        resolve_to_pixels(config.translate_y, screen_height, scaling, uis);
+    float resolved_tx = resolve_to_pixels(config.translate_x, screen_width,
+                                          scaling, uis, screen_height);
+    float resolved_ty = resolve_to_pixels(config.translate_y, screen_height,
+                                          scaling, uis, screen_height);
 
     auto &uic = entity.get<UIComponent>();
     if (uic.absolute) {

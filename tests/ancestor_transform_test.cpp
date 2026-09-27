@@ -51,4 +51,19 @@ TEST(child_follows_scaled_and_translated_parent) {
   CHECK_APPROX(hit.width, 25.f);
 }
 
+// Kart: an absolute position given in screen-relative dims resolved
+// BOTH axes against the screen height, so at 800x600 (this harness) a
+// w1280 x-offset landed at 60 instead of 80. Each axis must resolve
+// against its own dimension.
+TEST(absolute_position_resolves_each_axis_against_its_own_dimension) {
+  ImmTestHarness h;
+  auto el = imm::div(h.context(), imm::mk(h.root(), 0),
+                     ComponentConfig{}.with_size({pixels(50), pixels(50)})
+                         .with_absolute_position(w1280(128), h720(72)));
+  h.layout_only();
+  const auto &uic = el.ent().get<UIComponent>();
+  CHECK_APPROX(uic.absolute_pos_x, 80.f); // 128/1280 of 800 wide
+  CHECK_APPROX(uic.absolute_pos_y, 60.f); // 72/720 of 600 high
+}
+
 int main() { return run_registered_tests("ancestor transform"); }

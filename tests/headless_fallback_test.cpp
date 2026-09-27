@@ -11,6 +11,7 @@
 // every text-sized widget does too. Both silently.
 
 #include <cstdio>
+#include <filesystem>
 #include <string>
 
 #include <afterhours/src/backends/raylib/font_helper.h>
@@ -105,6 +106,22 @@ int main() {
 
     const auto empty = afterhours::measure_text(none, "", 20.f, 1.f);
     check(empty.x == 0.f, "an empty string is still zero wide");
+  }
+
+  // --- loaders must not hand back an atlas-less font ---------------------
+  {
+    // load_font_from_file and its codepoint sibling fall back to a
+    // manually built atlas when LoadFontEx cannot make a texture
+    // (no window). load_font_for_string historically did not, so a
+    // successful load still returned an unusable font headless.
+    const auto path = std::filesystem::path(AFTERHOURS_TEST_FIXTURES) /
+                      "AtkinsonHyperlegible-Regular.ttf";
+    const raylib::Font loaded =
+        afterhours::load_font_for_string("hello", path.string());
+    check(loaded.glyphCount > 0 && loaded.recs != nullptr,
+          "load_font_for_string returns glyph data without a window");
+    check(!afterhours::font_is_usable(loaded),
+          "and no texture is claimed: there is no GL context to make one");
   }
 
   // --- ordered teardown ---------------------------------------------------

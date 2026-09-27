@@ -55,6 +55,27 @@ static void check_marks(bool batched) {
   }
 }
 
+// Kart hit a "Layout overflow" validation warning from inside a
+// default checkbox: a child of the internal row extended past the
+// row's bounds. Mirror the warning's own condition (child end beyond
+// parent end + 4px tolerance) on the laid-out rects.
+TEST(default_checkbox_children_stay_inside_the_row) {
+  ui_test::ImmTestHarness h;
+  bool value = false;
+  auto pair = mk(h.root(), 0);
+  auto &row = deref(pair).first;
+  checkbox(h.context(), pair, value,
+           ComponentConfig{}.with_label("Accept terms"));
+  h.layout_only();
+  const auto rr = row.get<UIComponent>().rect();
+  for (EntityID cid : row.get<UIComponent>().children) {
+    const auto cr =
+        UICollectionHolder::getEntityForID(cid).asE().get<UIComponent>().rect();
+    CHECK(cr.x + cr.width <= rr.x + rr.width + 4.f);
+    CHECK(cr.y + cr.height <= rr.y + rr.height + 4.f);
+  }
+}
+
 TEST(immediate_native_marks) { check_marks(false); }
 TEST(batched_native_marks) { check_marks(true); }
 

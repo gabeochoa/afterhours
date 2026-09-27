@@ -323,6 +323,14 @@ inline raylib::Font load_font_for_string(const std::string &content,
 
   raylib::Font font = raylib::LoadFontEx(
       font_filename.c_str(), size, codepointsNoDups, codepointNoDupsCounts);
+  // See load_font_from_file: no GL context means no texture, and an
+  // atlas-less font measures by estimate and draws nothing. The atlas
+  // rebuild uploads a texture, which needs a window: windowless it
+  // calls through a null GL function pointer and crashes, so there
+  // the LoadFontEx result (glyphs, no texture) stands.
+  if (font.texture.id == 0 && raylib::IsWindowReady())
+    font = build_font_atlas(font_filename.c_str(), size, codepointsNoDups,
+                            codepointNoDupsCounts);
   prepare_font_texture(font);
   record_font_coverage(font, font_filename.c_str());
 
