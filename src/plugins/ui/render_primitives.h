@@ -718,12 +718,12 @@ public:
 
       case RenderPrimitiveType::ShaderStart:
         if (cmd.data.shader.shader && cmd.data.shader.shader->id != 0)
-          begin_shader_mode(*cmd.data.shader.shader);
+          ::afterhours::begin_shader_mode(*cmd.data.shader.shader);
         i++;
         break;
 
       case RenderPrimitiveType::ShaderEnd:
-        end_shader_mode();
+        ::afterhours::end_shader_mode();
         i++;
         break;
 

@@ -687,12 +687,11 @@ inline RectangleType get_collision_rec(RectangleType a, RectangleType b) {
   return RectangleType{x1, y1, x2 - x1, y2 - y1};
 }
 
-inline void draw_circle(int centerX, int centerY, float radius, Color color) {
+inline void draw_circle_filled(float cx, float cy, float radius,
+                               Color color) {
   constexpr int SEGMENTS = 32;
   sgl_begin_triangle_strip();
   metal_draw_detail::set_color(color);
-  float cx = static_cast<float>(centerX);
-  float cy = static_cast<float>(centerY);
   for (int i = 0; i <= SEGMENTS; i++) {
     float angle = static_cast<float>(i) * 2.0f * 3.14159265f /
                   static_cast<float>(SEGMENTS);
@@ -702,10 +701,14 @@ inline void draw_circle(int centerX, int centerY, float radius, Color color) {
   sgl_end();
 }
 
+inline void draw_circle(int centerX, int centerY, float radius, Color color) {
+  draw_circle_filled(static_cast<float>(centerX),
+                     static_cast<float>(centerY), radius, color);
+}
+
 inline void draw_circle_v(Vector2Type center, float radius, Color color) {
   capture::record("circle", RectangleType{center.x - radius, center.y - radius, 2 * radius, 2 * radius}, color, "");
-  draw_circle(static_cast<int>(center.x), static_cast<int>(center.y), radius,
-              color);
+  draw_circle_filled(center.x, center.y, radius, color);
 }
 
 inline void draw_circle_lines(int centerX, int centerY, float radius,

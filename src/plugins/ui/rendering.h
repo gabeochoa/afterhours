@@ -1990,10 +1990,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       const bool shaded = entity.has<HasShader>() && entity.get<HasShader>().shader &&
                           entity.get<HasShader>().shader->id != 0;
       if (shaded)
-        begin_shader_mode(*entity.get<HasShader>().shader);
+        ::afterhours::begin_shader_mode(*entity.get<HasShader>().shader);
       render_me(context, font_manager, entity);
       if (shaded)
-        end_shader_mode();
+        ::afterhours::end_shader_mode();
     }
 
     if (needs_scissor) {

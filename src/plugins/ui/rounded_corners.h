@@ -8,12 +8,15 @@ namespace ui {
 
 namespace imm {
 
-// Corner positions in the bitset
+// Corner positions in the bitset. This layout is the one both backends
+// read (raylib's DrawRectangleCustom order, the sokol fan) and every UI
+// bitset reaches them unchanged, so the names must match it: bit 3 is
+// top-left, not bit 0.
 enum CornerPosition {
-  TOP_LEFT = 0,
-  TOP_RIGHT = 1,
-  BOTTOM_LEFT = 2,
-  BOTTOM_RIGHT = 3
+  TOP_LEFT = 3,
+  TOP_RIGHT = 2,
+  BOTTOM_LEFT = 1,
+  BOTTOM_RIGHT = 0
 };
 
 // Corner state
