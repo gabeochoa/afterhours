@@ -308,7 +308,8 @@ std::optional<FocusPaint> prepare_focus_paint(const UIContext<InputAction> &cont
   for (size_t i = context.render_cmds.size(); i > 0; --i) {
     const auto &cmd = context.render_cmds[i - 1];
     if (!descendants.contains(cmd.id)) continue;
-    const auto [has_clip, clip] = compute_intersected_clip_rect(entity);
+    const auto [has_clip, clip] =
+        compute_intersected_clip_rect(entity, /*include_self=*/false);
     return FocusPaint{*ring, entity.id, i - 1, cmd.layer,
                       entity.has<HasUIModifiers>() ? entity.get<HasUIModifiers>().rotation : 0.f,
                       has_clip && !entity.has<HasScrollView>() ? std::optional{clip} : std::nullopt};

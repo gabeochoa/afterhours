@@ -48,7 +48,7 @@ static inline RectangleType intersect_rects(const RectangleType &a,
 // clickable. Auto-overflow scroll views that don't need scrolling are excluded.
 // Returns {true, rect} if any clip ancestor was found, {false, {}} otherwise.
 static inline std::pair<bool, RectangleType>
-compute_intersected_clip_rect(const Entity &entity) {
+compute_intersected_clip_rect(const Entity &entity, bool include_self = true) {
   if (!entity.has<UIComponent>())
     return {false, {}};
 
@@ -61,7 +61,11 @@ compute_intersected_clip_rect(const Entity &entity) {
   // as a child, so without this a text_input's value paints straight out past
   // the end of the field. Scroll views are excluded: their rect IS the
   // viewport, and the renderer already treats them as defining their own.
-  if (entity.has<HasClipChildren>() && !entity.has<HasScrollView>()) {
+  // include_self=false is for the focus ring: it is painted around the
+  // element, outside its rect, so the element's own clip must not eat it
+  // (ancestor clips still apply).
+  if (include_self && entity.has<HasClipChildren>() &&
+      !entity.has<HasScrollView>()) {
     result = entity.get<UIComponent>().rect();
     if (entity.has<HasUIModifiers>())
       result = entity.get<HasUIModifiers>().apply_modifier(result);
