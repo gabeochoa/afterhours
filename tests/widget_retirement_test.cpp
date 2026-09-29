@@ -46,6 +46,7 @@ static void sweep_frames(int n) {
 
 static void reset_world() {
   imm::existing_ui_elements.clear();
+  imm::ui_element_children.clear();
   imm::ui_build_frame = 0;
   UICollectionHolder::get().collection.delete_all_entities_NO_REALLY_I_MEAN_ALL();
 }
@@ -135,10 +136,136 @@ static void test_keyed_slot_recycles_and_reports() {
   CHECK(!changed);
 }
 
+// One call site on purpose: mk(parent, index) is the documented way to build
+// siblings, and the index is part of the widget's identity.
+static EntityID build_child(Entity &parent, int index) {
+  return imm::mk(parent, index).first.get().id;
+}
+
+static bool record_exists_for(EntityID id) {
+  for (const auto &[hash, record] : imm::existing_ui_elements)
+    if (record.id == id)
+      return true;
+  return false;
+}
+
+static Entity &entity_for(EntityID id) {
+  return UICollectionHolder::getEntityForIDEnforce(id);
+}
+
+// A widget's children are linked to it when they are created, so when the
+// parent is retired its whole subtree goes in the same sweep -- even a child
+// that is still being rebuilt (its own grace window has not run out).
+static void test_retiring_a_parent_retires_its_subtree() {
+  reset_world();
+  imm::ui_retire_grace_frames = 10;
+  Entity &root = UICollectionHolder::get().collection.createEntity();
+  UICollectionHolder::get().collection.merge_entity_arrays();
+
+  const EntityID parent = build_child(root, 0);
+  const EntityID child = build_child(entity_for(parent), 0);
+  const EntityID grandchild = build_child(entity_for(child), 0);
+  // A second tree whose parent keeps being built: it must be untouched.
+  const EntityID live_parent = build_child(root, 1);
+  const EntityID live_child = build_child(entity_for(live_parent), 0);
+
+  // Rebuild everything except `parent` until the sweep takes it.
+  for (int i = 0; i < 40 && alive(parent); i++) {
+    build_child(root, 1);
+    build_child(entity_for(live_parent), 0);
+    build_child(entity_for(parent), 0);
+    build_child(entity_for(child), 0);
+    sweep_frames(1);
+  }
+
+  CHECK(!alive(parent));
+  // Same sweep, not one grace window later.
+  CHECK(!alive(child));
+  CHECK(!alive(grandchild));
+  CHECK(!record_exists_for(child));
+  CHECK(!record_exists_for(grandchild));
+  CHECK(alive(live_parent));
+  CHECK(alive(live_child));
+}
+
+// An entity created outside mk() has no record, so nothing would ever
+// retire it; linking it at creation gives it its parent's lifetime. Moving
+// the link to a living parent before the old one goes spares it.
+static void test_linked_raw_child_follows_its_parent() {
+  reset_world();
+  imm::ui_retire_grace_frames = 10;
+  Entity &root = UICollectionHolder::get().collection.createEntity();
+  UICollectionHolder::get().collection.merge_entity_arrays();
+
+  const EntityID dying_parent = build_child(root, 0);
+  const EntityID live_parent = build_child(root, 1);
+  Entity &raw = UICollectionHolder::get().collection.createEntity();
+  Entity &adopted = UICollectionHolder::get().collection.createEntity();
+  UICollectionHolder::get().collection.merge_entity_arrays();
+  imm::link_ui_child(dying_parent, raw.id);
+  imm::link_ui_child(dying_parent, adopted.id);
+  imm::unlink_ui_child(dying_parent, adopted.id);
+  imm::link_ui_child(live_parent, adopted.id);
+
+  for (int i = 0; i < 40 && alive(dying_parent); i++) {
+    build_child(root, 1);
+    sweep_frames(1);
+  }
+
+  CHECK(!alive(dying_parent));
+  CHECK(!alive(raw.id));
+  CHECK(alive(live_parent));
+  CHECK(alive(adopted.id));
+}
+
+// Clearing every element must reach linked raw children too, not just the
+// recorded ones.
+static void test_clear_reaches_linked_raw_children() {
+  reset_world();
+  imm::ui_retire_grace_frames = 90;
+  Entity &root = UICollectionHolder::get().collection.createEntity();
+  UICollectionHolder::get().collection.merge_entity_arrays();
+
+  const EntityID parent = build_child(root, 0);
+  Entity &raw = UICollectionHolder::get().collection.createEntity();
+  UICollectionHolder::get().collection.merge_entity_arrays();
+  imm::link_ui_child(parent, raw.id);
+
+  imm::clear_existing_ui_elements();
+  UICollectionHolder::get().collection.cleanup();
+
+  CHECK(!alive(parent));
+  CHECK(!alive(raw.id));
+  CHECK(imm::ui_element_children.empty());
+}
+
+// Grace 0 means the app does its own lifetime: no sweep, no cascade.
+static void test_grace_zero_disables_the_cascade_too() {
+  reset_world();
+  imm::ui_retire_grace_frames = 0;
+  Entity &root = UICollectionHolder::get().collection.createEntity();
+  UICollectionHolder::get().collection.merge_entity_arrays();
+
+  const EntityID parent = build_child(root, 0);
+  const EntityID child = build_child(entity_for(parent), 0);
+
+  sweep_frames(500);
+  CHECK(alive(parent));
+  CHECK(alive(child));
+}
+
 int main() {
   printf("Running widget retirement tests...\n\n");
   printf("  keyed_slot_recycles_and_reports\n");
   test_keyed_slot_recycles_and_reports();
+  printf("  retiring_a_parent_retires_its_subtree\n");
+  test_retiring_a_parent_retires_its_subtree();
+  printf("  linked_raw_child_follows_its_parent\n");
+  test_linked_raw_child_follows_its_parent();
+  printf("  clear_reaches_linked_raw_children\n");
+  test_clear_reaches_linked_raw_children();
+  printf("  grace_zero_disables_the_cascade_too\n");
+  test_grace_zero_disables_the_cascade_too();
   printf("  unbuilt_widget_is_retired_after_grace\n");
   test_unbuilt_widget_is_retired_after_grace();
   printf("  rebuilding_keeps_it_alive\n");

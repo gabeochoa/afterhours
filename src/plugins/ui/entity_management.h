@@ -1,8 +1,12 @@
 #pragma once
 
+#include <algorithm>
 #include <map>
 #include <source_location>
 #include <sstream>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 #include "../../ecs.h"
 #include "../../logging.h"
@@ -21,8 +25,42 @@ struct UIElementRecord {
   size_t last_built_frame;
   // Which item a recycled row is currently showing. 0 means not recycled.
   size_t key = 0;
+  // The parent the element was created under (the parent need not have a
+  // record itself -- a raw root entity is a fine parent). -1 when a record
+  // was made by hand, outside mk().
+  EntityID parent_id = -1;
 };
 inline std::map<UI_UUID, UIElementRecord> existing_ui_elements;
+
+// Parent -> children, linked once when a child is created and unlinked when
+// the child is retired. This is the persistent counterpart to
+// UIComponent::children, which is cleared and rebuilt every frame and so is
+// empty for exactly the widgets retirement needs it for: ones nothing has
+// built lately. Retiring a parent walks this map down, never the entity
+// array up.
+inline std::unordered_map<EntityID, std::vector<EntityID>> ui_element_children;
+
+inline void unlink_ui_child(EntityID parent_id, EntityID child_id) {
+  auto it = ui_element_children.find(parent_id);
+  if (it == ui_element_children.end())
+    return;
+  auto &kids = it->second;
+  kids.erase(std::remove(kids.begin(), kids.end(), child_id), kids.end());
+  if (kids.empty())
+    ui_element_children.erase(it);
+}
+
+// Record that child_id was created under parent_id, so retiring the parent
+// retires the child with it. An entity created outside mk() (a dropdown's
+// options, say) has no record to expire, so its creator calls this itself;
+// moving a child is unlink from the old parent, then link to the new one.
+inline void link_ui_child(EntityID parent_id, EntityID child_id) {
+  if (parent_id < 0 || child_id < 0 || parent_id == child_id)
+    return;
+  auto &kids = ui_element_children[parent_id];
+  if (std::find(kids.begin(), kids.end(), child_id) == kids.end())
+    kids.push_back(child_id);
+}
 
 // Bumped once per frame by retire_unbuilt_ui_elements().
 inline size_t ui_build_frame = 0;
@@ -125,7 +163,9 @@ inline EntityParent mk_impl(Entity &parent, EntityID otherID, size_t key,
   }
 
   Entity &entity = UICollectionHolder::get().collection.createEntity();
-  existing_ui_elements[hash] = {entity.id, ui_build_frame, has_key ? key : 0};
+  existing_ui_elements[hash] = {entity.id, ui_build_frame, has_key ? key : 0,
+                                parent.id};
+  link_ui_child(parent.id, entity.id);
   // A slot seen for the first time has not changed item; it has no history.
   log_trace("Creating element {} for {}", hash, entity.id);
   return {entity, parent};
@@ -152,18 +192,57 @@ inline void mark_ui_element_for_cleanup(EntityID id) {
     opt.asE().cleanup = true;
 }
 
-inline void clear_existing_ui_elements() {
+// Mark every creation-linked descendant of the ids in `dying` (which it
+// grows as it goes), erasing the record of any descendant that has one. A
+// descendant with no record -- a raw entity linked by its creator -- is
+// marked too: nothing else would ever retire it.
+inline void cascade_cleanup_to_linked_children(std::vector<EntityID> &dying) {
+  std::unordered_map<EntityID, UI_UUID> record_by_id;
   for (const auto &[hash, record] : existing_ui_elements)
+    record_by_id[record.id] = hash;
+  std::unordered_set<EntityID> seen(dying.begin(), dying.end());
+  for (size_t i = 0; i < dying.size(); i++) {
+    auto it = ui_element_children.find(dying[i]);
+    if (it == ui_element_children.end())
+      continue;
+    std::vector<EntityID> kids = std::move(it->second);
+    ui_element_children.erase(it);
+    for (EntityID kid : kids) {
+      if (!seen.insert(kid).second)
+        continue;
+      mark_ui_element_for_cleanup(kid);
+      if (auto rit = record_by_id.find(kid); rit != record_by_id.end()) {
+        existing_ui_elements.erase(rit->second);
+        record_by_id.erase(rit);
+      }
+      dying.push_back(kid);
+    }
+  }
+}
+
+inline void clear_existing_ui_elements() {
+  std::vector<EntityID> dying;
+  for (const auto &[hash, record] : existing_ui_elements) {
     mark_ui_element_for_cleanup(record.id);
+    dying.push_back(record.id);
+  }
+  cascade_cleanup_to_linked_children(dying);
   existing_ui_elements.clear();
+  ui_element_children.clear();
 }
 
 // Destroy widgets nothing has built for ui_retire_grace_frames. Retaining an
 // entity per call site with nothing to retire one is not a cache, it is a leak
 // with a bounded key space: every system then walks the union of every screen
 // the app has ever shown.
+//
+// A widget that expires takes its creation-linked subtree with it in the
+// same sweep: children stop being built because their parent stopped, not
+// on their own schedule, and a child still inside its own grace window is
+// an orphan, not a survivor.
 inline void retire_unbuilt_ui_elements() {
   if (ui_retire_grace_frames > 0) {
+    std::vector<EntityID> dying;
     for (auto it = existing_ui_elements.begin();
          it != existing_ui_elements.end();) {
       if (ui_build_frame - it->second.last_built_frame <=
@@ -171,9 +250,16 @@ inline void retire_unbuilt_ui_elements() {
         ++it;
         continue;
       }
+      // Unlink before the record goes: a stale link would let a later
+      // retirement of this parent cascade onto whatever entity reuses
+      // this id.
+      unlink_ui_child(it->second.parent_id, it->second.id);
       mark_ui_element_for_cleanup(it->second.id);
+      dying.push_back(it->second.id);
       it = existing_ui_elements.erase(it);
     }
+    if (!dying.empty())
+      cascade_cleanup_to_linked_children(dying);
   }
   ui_build_frame++;
 }

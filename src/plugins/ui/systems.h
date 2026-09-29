@@ -13,6 +13,7 @@
 #include "../window_manager.h"
 #include "components.h"
 #include "context.h"
+#include "entity_management.h"
 #include "fmt/format.h"
 #include "theme.h"
 #include "ui_collection.h"
@@ -1509,6 +1510,8 @@ struct UpdateDropdownOptions
           hds.on_option_changed(i);
       });
       hasChildren.add_child(child);
+      // No mk() record for an option, so nothing else retires it.
+      imm::link_ui_child(entity.id, child.id);
     }
   }
   // If we get here, we should have num_options children...
@@ -1633,6 +1636,7 @@ private
             hds.on_option_changed(i);
         });
         child_hasChildren.add_child(grandchild);
+        imm::link_ui_child(child.id, grandchild.id);
       }
     }
     // If we get here, we should have num_options children...
