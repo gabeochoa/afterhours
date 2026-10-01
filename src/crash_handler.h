@@ -14,7 +14,7 @@
 
 #include "logging.h"
 
-#if defined(__GNUC__) || defined(__clang__)
+#if (defined(__GNUC__) || defined(__clang__)) && !defined(_WIN32)
 #include <cxxabi.h>
 #include <execinfo.h>
 #endif
@@ -32,7 +32,7 @@ inline const char *&running_system() {
 }
 
 inline void write_backtrace() {
-#if defined(__GNUC__) || defined(__clang__)
+#if (defined(__GNUC__) || defined(__clang__)) && !defined(_WIN32)
   void *frames[64];
   const int count = backtrace(frames, 64);
   char **symbols = backtrace_symbols(frames, count);
@@ -64,9 +64,11 @@ inline void on_signal(int sig) {
   case SIGABRT:
     name = "SIGABRT (abort, usually a failed invariant)";
     break;
+#ifdef SIGBUS
   case SIGBUS:
     name = "SIGBUS (misaligned or unmapped access)";
     break;
+#endif
   case SIGILL:
     name = "SIGILL (illegal instruction)";
     break;
@@ -91,7 +93,11 @@ inline void on_terminate() {
 
 // Call once at startup. Fine before the log file exists; it buffers.
 inline void install_handler() {
-  for (int sig : {SIGSEGV, SIGABRT, SIGBUS, SIGILL, SIGFPE})
+  for (int sig : {SIGSEGV, SIGABRT,
+#ifdef SIGBUS
+                  SIGBUS,
+#endif
+                  SIGILL, SIGFPE})
     std::signal(sig, detail::on_signal);
   std::set_terminate(detail::on_terminate);
 }
