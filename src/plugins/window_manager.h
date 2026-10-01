@@ -91,21 +91,28 @@ struct window_manager : developer::Plugin {
     return Resolution{.width = width, .height = height};
   }
 
-  // Set by set_window_size below. raylib echoes the LOGICAL creation size
-  // until the first set (or OS-driven change), then reports PHYSICAL pixels;
-  // fetch_raw_window_size uses this to divide only real physical values.
+  // Set by set_window_size below. On Windows raylib echoes the LOGICAL
+  // creation size until the first set (or OS-driven change), then reports
+  // PHYSICAL pixels; fetch_raw_window_size uses this to divide only real
+  // physical values.
   inline static bool window_size_requested = false;
 
   static Resolution fetch_raw_window_size() {
     // Raw client size in LOGICAL (setting) units -- unlike
     // fetch_current_resolution this is not fitted to 16:9, so edge drags to
     // odd sizes round-trip instead of snapping back.
-    const auto scale = raylib::GetWindowScaleDPI();
-    const float sx = std::max(1.0f, scale.x);
-    const float sy = std::max(1.0f, scale.y);
     const int raw_w = raylib::GetScreenWidth();
     const int raw_h = raylib::GetScreenHeight();
     if (raw_w <= 0 || raw_h <= 0) return headless_resolution;
+#if !defined(_WIN32)
+    // Outside Windows raylib reports logical units already (points on
+    // macOS), before and after a set, so there is nothing to convert.
+    (void)window_size_requested;
+    return Resolution{.width = raw_w, .height = raw_h};
+#else
+    const auto scale = raylib::GetWindowScaleDPI();
+    const float sx = std::max(1.0f, scale.x);
+    const float sy = std::max(1.0f, scale.y);
     if (!window_size_requested && (raw_w != raylib::GetRenderWidth() ||
                                    raw_h != raylib::GetRenderHeight())) {
       // Creation echo (logical); the framebuffer is always physical, so a
@@ -116,6 +123,7 @@ struct window_manager : developer::Plugin {
         .width = static_cast<int>(std::round(raw_w / sx)),
         .height = static_cast<int>(std::round(raw_h / sy)),
     };
+#endif
   }
 
   static Resolution fetch_maximum_resolution() {
@@ -134,14 +142,20 @@ struct window_manager : developer::Plugin {
   }
 
   static void set_window_size(const int width, const int height) {
-    // Widths are LOGICAL (setting units); raylib takes physical pixels on a
-    // scaled Windows display, so scale up (1:1 at 100%). Without this the
-    // window lands at 1/scale size.
-    const auto scale = raylib::GetWindowScaleDPI();
+    // Widths are LOGICAL (setting units). raylib takes physical pixels on a
+    // scaled Windows display, so scale up there (1:1 at 100%); without this
+    // the window lands at 1/scale size. Outside Windows raylib takes
+    // logical units itself (points on macOS) -- scaling there produced a
+    // window double the requested size on a Retina display.
     window_size_requested = true;
+#if defined(_WIN32)
+    const auto scale = raylib::GetWindowScaleDPI();
     raylib::SetWindowSize(
         static_cast<int>(std::round(width * std::max(1.0f, scale.x))),
         static_cast<int>(std::round(height * std::max(1.0f, scale.y))));
+#else
+    raylib::SetWindowSize(width, height);
+#endif
   }
 #elif defined(AFTER_HOURS_USE_METAL)
   // Metal/Sokol backend — uses sapp_width()/sapp_height() for current
