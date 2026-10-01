@@ -52,6 +52,7 @@ static constexpr const char *REQUIRED_ACTIONS[] = {
     "MenuBack",      "TextBackspace",  "TextCopy",
     "TextCut",       "TextDelete",     "TextDeleteWordBack",
     "TextDeleteWordForward", "TextEnd", "TextHome",
+    "TextDeleteLineBack", "TextDeleteLineForward",
     "TextPaste",     "TextRedo",       "TextSelectAll",
     "TextSelectLeft", "TextSelectRight", "TextUndo",
     "TextWordLeft",  "TextWordRight",

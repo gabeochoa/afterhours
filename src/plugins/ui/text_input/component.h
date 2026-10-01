@@ -28,6 +28,7 @@ inline constexpr std::string_view optional_editing_actions[] = {
     "TextCut",       "TextPaste",      "TextWordLeft",
     "TextWordRight", "TextSelectLeft", "TextSelectRight",
     "TextDeleteWordBack", "TextDeleteWordForward",
+    "TextDeleteLineBack", "TextDeleteLineForward",
 };
 
 template <typename InputAction>
@@ -729,6 +730,28 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
             delete_selection(state);
           } else {
             delete_word_after_cursor(state);
+          }
+          reset_blink(state);
+        }
+      }
+      if constexpr (magic_enum::enum_contains<InputAction>("TextDeleteLineBack")) {
+        if (ctx.pressed_or_repeat(InputAction::TextDeleteLineBack)) {
+          state.push_undo_snapshot();
+          if (state.has_selection()) {
+            delete_selection(state);
+          } else {
+            delete_to_line_start(state);
+          }
+          reset_blink(state);
+        }
+      }
+      if constexpr (magic_enum::enum_contains<InputAction>("TextDeleteLineForward")) {
+        if (ctx.pressed_or_repeat(InputAction::TextDeleteLineForward)) {
+          state.push_undo_snapshot();
+          if (state.has_selection()) {
+            delete_selection(state);
+          } else {
+            delete_to_line_end(state);
           }
           reset_blink(state);
         }

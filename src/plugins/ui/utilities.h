@@ -123,6 +123,8 @@ static void warn_missing_text_actions() {
     AH_CHECK_TEXT_ACTION("TextWordRight");
     AH_CHECK_TEXT_ACTION("TextDeleteWordBack");
     AH_CHECK_TEXT_ACTION("TextDeleteWordForward");
+    AH_CHECK_TEXT_ACTION("TextDeleteLineBack");
+    AH_CHECK_TEXT_ACTION("TextDeleteLineForward");
 #undef AH_CHECK_TEXT_ACTION
 
     if (!missing.empty())
@@ -506,30 +508,63 @@ static input::ProvidesInputMapping::GameMapping default_keymap() {
 
     // Text editing. BACKSPACE is deliberately double-bound with WidgetBack
     // above: the text systems only consume it while a field has focus.
-    constexpr uint8_t CMD = KeyChord::MOD_SUPER;
-    constexpr uint8_t CTRL = KeyChord::MOD_CTRL;
+    //
+    // Chords follow the platform, not both at once: binding Cmd and Ctrl for
+    // everything made macOS word ops fire on Cmd (where Cmd+Left is line
+    // start, not word left) and gave Windows a Super key it does not have.
+    // macOS follows NSText: clipboard/undo/select-all on Cmd, word ops on
+    // Option, line motion on Cmd+arrows and Ctrl+A/E, delete-to-line-start
+    // on Cmd+Backspace, delete-to-line-end on Ctrl+K. Elsewhere the same
+    // surface is Ctrl-based, word ops included, with Ctrl+Shift+Backspace
+    // for delete-to-line-start; delete-to-line-end has no convention there
+    // and stays unbound (the action and EditCommand still work).
     constexpr uint8_t SHIFT = KeyChord::MOD_SHIFT;
-    // Every editing chord is bound for both macOS (cmd) and elsewhere (ctrl).
-    auto bind_chord = [&bind](std::string_view name, int key) {
-        bind(name, {KeyChord{key, CMD}, KeyChord{key, CTRL}});
+#if defined(__APPLE__)
+    constexpr uint8_t PRIMARY = KeyChord::MOD_SUPER;
+    constexpr uint8_t WORD = KeyChord::MOD_ALT;
+#else
+    constexpr uint8_t PRIMARY = KeyChord::MOD_CTRL;
+    constexpr uint8_t WORD = KeyChord::MOD_CTRL;
+#endif
+    auto bind_primary = [&bind](std::string_view name, int key) {
+        bind(name, {KeyChord{key, PRIMARY}});
+    };
+    auto bind_word = [&bind](std::string_view name, int key) {
+        bind(name, {KeyChord{key, WORD}});
     };
     bind("TextBackspace", {keys::BACKSPACE});
     bind("TextDelete", {keys::DELETE_KEY});
-    bind("TextHome", {keys::HOME});
-    bind("TextEnd", {keys::END});
-    bind_chord("TextCopy", keys::C);
-    bind_chord("TextCut", keys::X);
-    bind_chord("TextPaste", keys::V);
-    bind_chord("TextUndo", keys::Z);
-    bind_chord("TextSelectAll", keys::A);
-    bind_chord("TextDeleteWordBack", keys::BACKSPACE);
-    bind_chord("TextDeleteWordForward", keys::DELETE_KEY);
-    bind_chord("TextWordLeft", keys::LEFT);
-    bind_chord("TextWordRight", keys::RIGHT);
-    bind("TextRedo", {KeyChord{keys::Z, static_cast<uint8_t>(CMD | SHIFT)},
-                      KeyChord{keys::Z, static_cast<uint8_t>(CTRL | SHIFT)}});
+    bind_primary("TextCopy", keys::C);
+    bind_primary("TextCut", keys::X);
+    bind_primary("TextPaste", keys::V);
+    bind_primary("TextUndo", keys::Z);
+    bind_primary("TextSelectAll", keys::A);
+    bind_word("TextDeleteWordBack", keys::BACKSPACE);
+    bind_word("TextDeleteWordForward", keys::DELETE_KEY);
+    bind_word("TextWordLeft", keys::LEFT);
+    bind_word("TextWordRight", keys::RIGHT);
     bind("TextSelectLeft", {KeyChord{keys::LEFT, SHIFT}});
     bind("TextSelectRight", {KeyChord{keys::RIGHT, SHIFT}});
+#if defined(__APPLE__)
+    bind("TextHome", {keys::HOME,
+                      KeyChord{keys::LEFT, KeyChord::MOD_SUPER},
+                      KeyChord{keys::A, KeyChord::MOD_CTRL}});
+    bind("TextEnd", {keys::END,
+                     KeyChord{keys::RIGHT, KeyChord::MOD_SUPER},
+                     KeyChord{keys::E, KeyChord::MOD_CTRL}});
+    bind("TextDeleteLineBack",
+         {KeyChord{keys::BACKSPACE, KeyChord::MOD_SUPER}});
+    bind("TextDeleteLineForward", {KeyChord{keys::K, KeyChord::MOD_CTRL}});
+    bind("TextRedo", {KeyChord{keys::Z, static_cast<uint8_t>(PRIMARY | SHIFT)}});
+#else
+    bind("TextHome", {keys::HOME});
+    bind("TextEnd", {keys::END});
+    bind("TextDeleteLineBack",
+         {KeyChord{keys::BACKSPACE,
+                   static_cast<uint8_t>(KeyChord::MOD_CTRL | SHIFT)}});
+    bind("TextRedo", {KeyChord{keys::Z, static_cast<uint8_t>(PRIMARY | SHIFT)},
+                      KeyChord{keys::Y, PRIMARY}});
+#endif
 
     return mapping;
 }

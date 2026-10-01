@@ -37,6 +37,8 @@ enum struct FullActions {
   TextSelectRight,
   TextDeleteWordBack,
   TextDeleteWordForward,
+  TextDeleteLineBack,
+  TextDeleteLineForward,
 };
 
 // Wired the clipboard, never heard of the rest.

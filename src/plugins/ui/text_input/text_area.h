@@ -617,6 +617,28 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
         }
       }
     }
+    if constexpr (magic_enum::enum_contains<InputAction>(
+                      "TextDeleteLineBack")) {
+      if (ctx.pressed_or_repeat(InputAction::TextDeleteLineBack)) {
+        if (delete_to_line_start(state)) {
+          state.rebuild_line_index();
+          reset_preferred_column(state);
+          reset_blink(state);
+          text_changed = true;
+        }
+      }
+    }
+    if constexpr (magic_enum::enum_contains<InputAction>(
+                      "TextDeleteLineForward")) {
+      if (ctx.pressed_or_repeat(InputAction::TextDeleteLineForward)) {
+        if (delete_to_line_end(state)) {
+          state.rebuild_line_index();
+          reset_preferred_column(state);
+          reset_blink(state);
+          text_changed = true;
+        }
+      }
+    }
 
     // Backspace and Delete take the selection when there is one, rather than
     // one character next to the caret.

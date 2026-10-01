@@ -61,6 +61,8 @@ enum struct DefaultAction {
   TextDelete,
   TextDeleteWordBack,
   TextDeleteWordForward,
+  TextDeleteLineBack,
+  TextDeleteLineForward,
   TextEnd,
   TextHome,
   TextPaste,

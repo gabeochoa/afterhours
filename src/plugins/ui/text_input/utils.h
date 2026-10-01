@@ -6,6 +6,7 @@
 #include "concepts.h"
 #include "line_index.h"
 #include "state.h"
+#include "text_area_state.h"
 #include <cctype>
 #include <string>
 #include <string_view>
@@ -285,6 +286,48 @@ inline bool delete_word_after_cursor(AnyTextInputState auto &s) {
     return false;
   size_t we = find_word_end(s.text(), s.cursor_position);
   s.storage.erase(s.cursor_position, we - s.cursor_position);
+  s.changed_since = true;
+  return true;
+}
+
+/// Start of the source line containing pos: one past the previous newline.
+/// "Line" is the paragraph throughout this section, not the visual row --
+/// Cmd+Backspace in a wrapped area deletes more than the row on screen,
+/// which matches the editors that wrap without reflowing paragraphs. A
+/// single-line field is one line, so its line start is 0.
+inline size_t find_line_start(std::string_view text, size_t pos) {
+  pos = std::min(pos, text.size());
+  if (pos == 0)
+    return 0;
+  const size_t nl = text.rfind('\n', pos - 1);
+  return nl == std::string_view::npos ? 0 : nl + 1;
+}
+
+/// End of the source line containing pos: the next newline, or text end.
+inline size_t find_line_end(std::string_view text, size_t pos) {
+  pos = std::min(pos, text.size());
+  const size_t nl = text.find('\n', pos);
+  return nl == std::string_view::npos ? text.size() : nl;
+}
+
+// Delete from cursor to the start of its line (macOS Cmd+Backspace).
+inline bool delete_to_line_start(AnyTextInputState auto &s) {
+  const size_t start = find_line_start(s.text(), s.cursor_position);
+  if (start == s.cursor_position)
+    return false;
+  s.storage.erase(start, s.cursor_position - start);
+  s.cursor_position = start;
+  s.changed_since = true;
+  return true;
+}
+
+// Delete from cursor to the end of its line (macOS Ctrl+K). The newline
+// itself is not consumed, matching deleteToEndOfLine.
+inline bool delete_to_line_end(AnyTextInputState auto &s) {
+  const size_t end = find_line_end(s.text(), s.cursor_position);
+  if (end == s.cursor_position)
+    return false;
+  s.storage.erase(s.cursor_position, end - s.cursor_position);
   s.changed_since = true;
   return true;
 }
@@ -589,6 +632,128 @@ inline bool handle_clipboard_and_undo(Ctx &ctx, State &s, bool editable) {
     }
   }
   return changed;
+}
+
+/// An editing operation an app can send imperatively -- from a menu item, a
+/// toolbar button, or its own key handling -- instead of waiting for the
+/// widget to see a key. The responder counterpart to the bound actions: a
+/// command runs the same code path the key does, undo snapshot included.
+enum class EditCommand {
+  DeleteBack,
+  DeleteForward,
+  DeleteWordBack,
+  DeleteWordForward,
+  DeleteLineBack,
+  DeleteLineForward,
+  SelectAll,
+  Copy,
+  Cut,
+  Paste,
+  Undo,
+  Redo,
+};
+
+/// Run one EditCommand against a state. Deletions take the selection when
+/// there is one, like the keys do. Mutations are refused while readonly;
+/// Copy and SelectAll are not mutations. Returns true if the command did
+/// something (for Paste: the clipboard was non-empty; for Copy: there was
+/// a selection to copy).
+inline bool apply_edit_command(AnyTextInputState auto &s, EditCommand cmd) {
+  const bool mutation = cmd != EditCommand::Copy && cmd != EditCommand::SelectAll;
+  if (mutation && s.readonly)
+    return false;
+
+  switch (cmd) {
+  case EditCommand::SelectAll:
+    s.selection_anchor = 0;
+    s.cursor_position = s.text_size();
+    reset_blink(s);
+    return true;
+  case EditCommand::Copy:
+    if (!s.has_selection())
+      return false;
+    clipboard::set_text(s.selected_text());
+    return true;
+  case EditCommand::Cut: {
+    if (!s.has_selection())
+      return false;
+    s.push_undo_snapshot();
+    clipboard::set_text(s.selected_text());
+    const bool did = delete_selection(s);
+    reset_blink(s);
+    return did;
+  }
+  case EditCommand::Paste: {
+    const std::string clip = clipboard::get_text();
+    if (clip.empty())
+      return false;
+    s.push_undo_snapshot();
+    if (s.has_selection())
+      delete_selection(s);
+    for (size_t i = 0; i < clip.size();) {
+      const int cp = utf8_to_codepoint(clip, i);
+      if (cp == '\n')
+        insert_newline_if_multiline(s);
+      else
+        insert_char(s, cp);
+      const size_t len = utf8_char_length(clip, i);
+      i += len > 0 ? len : 1;
+    }
+    s.clear_selection();
+    reset_blink(s);
+    return true;
+  }
+  case EditCommand::Undo:
+    return s.undo();
+  case EditCommand::Redo:
+    return s.redo();
+  case EditCommand::DeleteBack:
+  case EditCommand::DeleteForward:
+  case EditCommand::DeleteWordBack:
+  case EditCommand::DeleteWordForward:
+  case EditCommand::DeleteLineBack:
+  case EditCommand::DeleteLineForward: {
+    s.push_undo_snapshot();
+    bool did = false;
+    if (s.has_selection()) {
+      did = delete_selection(s);
+    } else if (cmd == EditCommand::DeleteBack) {
+      did = delete_before_cursor(s);
+    } else if (cmd == EditCommand::DeleteForward) {
+      did = delete_at_cursor(s);
+    } else if (cmd == EditCommand::DeleteWordBack) {
+      did = delete_word_before_cursor(s);
+    } else if (cmd == EditCommand::DeleteWordForward) {
+      did = delete_word_after_cursor(s);
+    } else if (cmd == EditCommand::DeleteLineBack) {
+      did = delete_to_line_start(s);
+    } else {
+      did = delete_to_line_end(s);
+    }
+    if (did)
+      reset_blink(s);
+    return did;
+  }
+  }
+  return false;
+}
+
+/// Dispatch a command onto whichever text state an entity carries -- the
+/// single-line field's or the text area's. A text area's line index is
+/// rebuilt after a mutation, as its widget does. False when the entity has
+/// no text state, or the command did nothing. An app with a focused entity
+/// (ctx.focus_id) sends menu/toolbar edits through here.
+inline bool apply_edit_command_to_entity(Entity &entity, EditCommand cmd) {
+  if (entity.has<HasTextAreaState>()) {
+    auto &s = entity.get<HasTextAreaState>();
+    const bool did = apply_edit_command(s, cmd);
+    if (did)
+      s.rebuild_line_index();
+    return did;
+  }
+  if (entity.has<HasTextInputState>())
+    return apply_edit_command(entity.get<HasTextInputState>(), cmd);
+  return false;
 }
 
 

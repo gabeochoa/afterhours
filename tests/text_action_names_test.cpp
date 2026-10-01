@@ -26,7 +26,8 @@ const std::vector<std::string> &checked_names() {
       "TextCopy",      "TextCut",           "TextPaste",
       "TextUndo",      "TextRedo",          "TextSelectAll",
       "TextSelectLeft", "TextSelectRight",  "TextWordLeft",
-      "TextWordRight", "TextDeleteWordBack", "TextDeleteWordForward"};
+      "TextWordRight", "TextDeleteWordBack", "TextDeleteWordForward",
+      "TextDeleteLineBack", "TextDeleteLineForward"};
   return names;
 }
 

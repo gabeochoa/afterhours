@@ -78,16 +78,23 @@ TEST(focus_navigation_bindings) {
   CHECK(has_key(keys_for(m, DefaultAction::MenuBack), keys::ESCAPE));
 }
 
-TEST(editing_chords_cover_both_cmd_and_ctrl) {
+TEST(editing_chords_follow_the_platform) {
   auto m = ui::default_keymap<DefaultAction>();
   CHECK(mods_for(m, DefaultAction::TextCopy, keys::C) != -1);
-  // Two entries for one key: cmd (macOS) and ctrl (elsewhere).
+  // One entry for one key, with this platform's primary modifier: Cmd on
+  // macOS, Ctrl elsewhere. Binding both (the old behaviour) put macOS word
+  // ops on Cmd, where Cmd+Left already means line start.
+#if defined(__APPLE__)
+  constexpr int PRIMARY = KeyChord::MOD_SUPER;
+#else
+  constexpr int PRIMARY = KeyChord::MOD_CTRL;
+#endif
   auto copy = keys_for(m, DefaultAction::TextCopy);
-  CHECK(copy.size() == 2);
+  CHECK(copy.size() == 1);
   int mask = 0;
   for (const auto &any : m.at(static_cast<int>(DefaultAction::TextCopy)))
     mask |= std::get<KeyChord>(any).required_modifiers;
-  CHECK(mask == (KeyChord::MOD_SUPER | KeyChord::MOD_CTRL));
+  CHECK(mask == PRIMARY);
 
   // Plain backspace edits text; the same key is also WidgetBack, which the text
   // systems only shadow while a field holds focus.
@@ -95,9 +102,9 @@ TEST(editing_chords_cover_both_cmd_and_ctrl) {
   CHECK(has_key(keys_for(m, DefaultAction::WidgetBack), keys::BACKSPACE));
 
   // Redo is the shifted form of undo, so the two must not collide.
-  CHECK(mods_for(m, DefaultAction::TextUndo, keys::Z) == KeyChord::MOD_SUPER);
+  CHECK(mods_for(m, DefaultAction::TextUndo, keys::Z) == PRIMARY);
   CHECK(mods_for(m, DefaultAction::TextRedo, keys::Z) ==
-        (KeyChord::MOD_SUPER | KeyChord::MOD_SHIFT));
+        (PRIMARY | KeyChord::MOD_SHIFT));
 }
 
 // An app enum that shares only some names with DefaultAction, plus one of its
