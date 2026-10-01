@@ -91,6 +91,33 @@ struct window_manager : developer::Plugin {
     return Resolution{.width = width, .height = height};
   }
 
+  // Set by set_window_size below. raylib echoes the LOGICAL creation size
+  // until the first set (or OS-driven change), then reports PHYSICAL pixels;
+  // fetch_raw_window_size uses this to divide only real physical values.
+  inline static bool window_size_requested = false;
+
+  static Resolution fetch_raw_window_size() {
+    // Raw client size in LOGICAL (setting) units -- unlike
+    // fetch_current_resolution this is not fitted to 16:9, so edge drags to
+    // odd sizes round-trip instead of snapping back.
+    const auto scale = raylib::GetWindowScaleDPI();
+    const float sx = std::max(1.0f, scale.x);
+    const float sy = std::max(1.0f, scale.y);
+    const int raw_w = raylib::GetScreenWidth();
+    const int raw_h = raylib::GetScreenHeight();
+    if (raw_w <= 0 || raw_h <= 0) return headless_resolution;
+    if (!window_size_requested && (raw_w != raylib::GetRenderWidth() ||
+                                   raw_h != raylib::GetRenderHeight())) {
+      // Creation echo (logical); the framebuffer is always physical, so a
+      // mismatch before any set means this value was never scaled.
+      return Resolution{.width = raw_w, .height = raw_h};
+    }
+    return Resolution{
+        .width = static_cast<int>(std::round(raw_w / sx)),
+        .height = static_cast<int>(std::round(raw_h / sy)),
+    };
+  }
+
   static Resolution fetch_maximum_resolution() {
     const int monitor = raylib::GetCurrentMonitor();
     int width = raylib::GetMonitorWidth(monitor);
@@ -107,7 +134,14 @@ struct window_manager : developer::Plugin {
   }
 
   static void set_window_size(const int width, const int height) {
-    raylib::SetWindowSize(width, height);
+    // Widths are LOGICAL (setting units); raylib takes physical pixels on a
+    // scaled Windows display, so scale up (1:1 at 100%). Without this the
+    // window lands at 1/scale size.
+    const auto scale = raylib::GetWindowScaleDPI();
+    window_size_requested = true;
+    raylib::SetWindowSize(
+        static_cast<int>(std::round(width * std::max(1.0f, scale.x))),
+        static_cast<int>(std::round(height * std::max(1.0f, scale.y))));
   }
 #elif defined(AFTER_HOURS_USE_METAL)
   // Metal/Sokol backend — uses sapp_width()/sapp_height() for current
@@ -132,6 +166,18 @@ struct window_manager : developer::Plugin {
     };
   }
 
+  static Resolution fetch_raw_window_size() {
+    // Raw window size in logical units (no 16:9 fit); see above.
+    const float dpi = std::max(0.01f, graphics::metal_detail::dpi_scale());
+    const int w = graphics::metal_detail::screen_w();
+    const int h = graphics::metal_detail::screen_h();
+    if (w <= 0 || h <= 0) return headless_resolution;
+    return Resolution{
+        .width = static_cast<int>(std::round(w / dpi)),
+        .height = static_cast<int>(std::round(h / dpi)),
+    };
+  }
+
   static Resolution fetch_maximum_resolution() {
     // Conservative fallback; a proper implementation would query
     // NSScreen.mainScreen.frame, but this is sufficient for now.
@@ -152,6 +198,9 @@ struct window_manager : developer::Plugin {
     return Resolution{.width = 1280, .height = 720};
   }
   static Resolution fetch_current_resolution() {
+    return Resolution{.width = 1280, .height = 720};
+  }
+  static Resolution fetch_raw_window_size() {
     return Resolution{.width = 1280, .height = 720};
   }
   static void set_window_size(const int, const int) {}
