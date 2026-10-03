@@ -341,9 +341,16 @@ inline void sokol_init_cb() {
 }
 
 inline void sokol_frame_cb() {
+  g_frame_elapsed += sapp_frame_duration();
+  const bool granted =
+      g_on_demand ? frame_loop::consume_frame_request()
+                  : g_target_fps <= 0 || g_frame_elapsed >= 1.0 / g_target_fps;
+  frame_loop::note_frame(granted);
+  if (!granted)
+    return;
+  g_frame_elapsed = 0.0;
   if (g_frame_fn)
     g_frame_fn();
-  // Clear edge state after the frame callback has had a chance to read it.
   input_begin_frame();
 }
 
@@ -362,6 +369,24 @@ inline void sokol_cleanup_cb() {
 inline void sokol_event_cb(const sapp_event *ev) {
   auto &s = input_state();
   const int kc = static_cast<int>(ev->key_code);
+
+  if (g_on_demand) {
+    switch (ev->type) {
+    case SAPP_EVENTTYPE_KEY_DOWN:
+    case SAPP_EVENTTYPE_CHAR:
+    case SAPP_EVENTTYPE_MOUSE_DOWN:
+    case SAPP_EVENTTYPE_MOUSE_UP:
+    case SAPP_EVENTTYPE_MOUSE_MOVE:
+    case SAPP_EVENTTYPE_MOUSE_SCROLL:
+    case SAPP_EVENTTYPE_RESIZED:
+    case SAPP_EVENTTYPE_FOCUSED:
+    case SAPP_EVENTTYPE_RESTORED:
+      frame_loop::request_frame();
+      break;
+    default:
+      break;
+    }
+  }
 
   switch (ev->type) {
   case SAPP_EVENTTYPE_KEY_DOWN:
@@ -486,7 +511,7 @@ struct MetalPlatformAPI {
   // ── Config (legacy API -- prefer RunConfig fields) ──
   static void set_config_flags(unsigned int) { /* handled via RunConfig.flags */
   }
-  static void set_target_fps(int) { /* handled via RunConfig.target_fps */ }
+  static void set_target_fps(int fps) { metal_detail::g_target_fps = fps; }
   static void set_exit_key(int) { /* no-op: Metal/Sokol handles quit via sapp */
   }
   static void set_trace_log_level(int) { /* no-op: uses afterhours logging */ }
@@ -875,6 +900,12 @@ struct MetalPlatformAPI {
     metal_detail::g_init_fn = cfg.init;
     metal_detail::g_frame_fn = cfg.frame;
     metal_detail::g_cleanup_fn = cfg.cleanup;
+    metal_detail::g_target_fps = cfg.target_fps;
+    metal_detail::g_frame_elapsed = 1.0;
+    metal_detail::g_on_demand =
+        cfg.frame_mode == frame_loop::Mode::OnDemand;
+    frame_loop::set_mode(cfg.frame_mode);
+    frame_loop::request_frame();
 
     sapp_desc desc{};
     desc.init_cb = metal_detail::sokol_init_cb;

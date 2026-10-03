@@ -49,6 +49,20 @@ inline void raylib_shutdown() {
   storage() = std::monostate{};
 }
 
+inline bool host_input_activity() {
+  static raylib::Vector2 last_mouse{-1.f, -1.f};
+  const raylib::Vector2 mouse = raylib::GetMousePosition();
+  bool active = mouse.x != last_mouse.x || mouse.y != last_mouse.y ||
+                raylib::GetMouseWheelMove() != 0.f ||
+                raylib::IsWindowResized();
+  last_mouse = mouse;
+  for (int b = 0; b < 7 && !active; b++)
+    active = raylib::IsMouseButtonDown(b);
+  for (int k = 32; k < 512 && !active; k++)
+    active = raylib::IsKeyDown(k);
+  return active;
+}
+
 inline void raylib_begin_frame() {
   std::visit(
       [](auto &backend) {
@@ -309,12 +323,33 @@ struct RaylibPlatformAPI {
       if (cfg.target_fps > 0)
         set_target_fps(cfg.target_fps);
     }
+    frame_loop::set_mode(cfg.frame_mode);
+    frame_loop::request_frame();
     if (cfg.init)
       cfg.init();
-    // No window to ask whether it should close, so run until the app quits.
-    while ((headless || !window_should_close()) && !quit_flag()) {
+    auto run_frame = [&cfg] {
+      frame_loop::consume_frame_request();
+      frame_loop::note_frame(true);
       if (cfg.frame)
         cfg.frame();
+    };
+    if (!headless && cfg.frame_mode == frame_loop::Mode::OnDemand) {
+      while (!window_should_close() && !quit_flag()) {
+        while (!frame_loop::wait_for_frame_request(100)) {
+          if (window_should_close() || quit_flag())
+            break;
+          raylib::PollInputEvents();
+          if (raylib_backend::host_input_activity())
+            frame_loop::request_frame();
+        }
+        if (window_should_close() || quit_flag())
+          break;
+        run_frame();
+      }
+    } else {
+      // No window to ask whether it should close, so run until the app quits.
+      while ((headless || !window_should_close()) && !quit_flag())
+        run_frame();
     }
     if (cfg.cleanup)
       cfg.cleanup();

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "frame_loop.h"
 #include <concepts>
 #include <cstdint>
 #include <filesystem>
@@ -232,6 +233,8 @@ struct RunConfig {
   std::function<void()> init = nullptr;
   std::function<void()> frame = nullptr;
   std::function<void()> cleanup = nullptr;
+
+  frame_loop::Mode frame_mode = frame_loop::Mode::Continuous;
 };
 
 struct BackendInterface {
