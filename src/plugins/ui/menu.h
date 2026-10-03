@@ -17,15 +17,37 @@ namespace afterhours {
 namespace ui {
 namespace imm {
 
+enum class MenuMark { None, Check, Radio };
+
 struct MenuItem {
   std::string label;
   std::string shortcut;      // right-aligned hint, e.g. "Cmd+S"
   bool separator = false;    // a rule; not selectable, ignores label
   bool disabled = false;
+  MenuMark mark = MenuMark::None;
+  bool checked = false;
 
   static MenuItem sep() {
     MenuItem m;
     m.separator = true;
+    return m;
+  }
+  static MenuItem check(std::string label, bool checked,
+                        std::string shortcut = "") {
+    MenuItem m;
+    m.label = std::move(label);
+    m.shortcut = std::move(shortcut);
+    m.mark = MenuMark::Check;
+    m.checked = checked;
+    return m;
+  }
+  static MenuItem radio(std::string label, bool checked,
+                        std::string shortcut = "") {
+    MenuItem m;
+    m.label = std::move(label);
+    m.shortcut = std::move(shortcut);
+    m.mark = MenuMark::Radio;
+    m.checked = checked;
     return m;
   }
 };
@@ -107,10 +129,21 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
 
   float total_h = 0.f;
   size_t longest_shortcut = 0;
+  bool any_marks = false;
   for (const auto &it : items) {
     total_h += it.separator ? item_h * 0.25f : item_h;
     longest_shortcut = std::max(longest_shortcut, it.shortcut.size());
+    any_marks = any_marks || it.mark != MenuMark::None;
   }
+  const float mark_col = any_marks ? item_h : 0.f;
+
+  const float room = std::max(
+      overlay::detail::room_for(overlay::Placement::Below, anchor,
+                                ctx.screen_width, ctx.screen_height, 0.f),
+      overlay::detail::room_for(overlay::Placement::Above, anchor,
+                                ctx.screen_width, ctx.screen_height, 0.f));
+  const float bounded_h = std::min(total_h, std::max(item_h, room));
+  const bool bounded = bounded_h < total_h;
 
   // Gutter for the shortcuts. No font is reachable here, so a glyph is
   // approximated at half the row height -- over-wide is harmless since the
@@ -125,7 +158,7 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
                                        shortcut_pad * 2.f);
 
   const auto placed =
-      overlay::place(anchor, width, total_h, ctx.screen_width,
+      overlay::place(anchor, width, bounded_h, ctx.screen_width,
                      ctx.screen_height, preferred);
 
   // with_absolute_position is relative to the IMMEDIATE parent, which for the
@@ -146,20 +179,44 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
                        ? config.border_config->top.thickness.value
                        : 0.f;
 
-  auto list = tray(ctx, mk(entity),
-                   ComponentConfig::inherit_from(config, "menu_list")
-                       .with_background(Theme::Usage::Surface)
-                       .disable_rounded_corners()
-                       .with_padding(Padding::all(pixels(bw)))
-                       .with_size(ComponentSize{pixels(width), children(item_h)})
-                       .with_flex_direction(FlexDirection::Column)
-                       .with_no_wrap()
-                       .with_absolute_position(local_x, local_y)
-                       .with_render_layer(config.render_layer + 1));
+  auto list_config =
+      ComponentConfig::inherit_from(config, "menu_list")
+          .with_background(Theme::Usage::Surface)
+          .disable_rounded_corners()
+          .with_padding(Padding::all(pixels(bw)))
+          .with_size(ComponentSize{pixels(width),
+                                   bounded ? pixels(bounded_h)
+                                           : children(item_h)})
+          .with_flex_direction(FlexDirection::Column)
+          .with_no_wrap()
+          .with_absolute_position(local_x, local_y)
+          .with_render_layer(config.render_layer + 1);
+  if (bounded)
+    list_config.with_overflow(Overflow::Scroll, Axis::Y);
+  auto list = tray(ctx, mk(entity), list_config);
+  if (list.ent().template has<HasColor>())
+    list.ent().template get<HasColor>().skip_hover_override = true;
+
+  Size row_pad_left = spacing_to_size(Spacing::sm);
+  Size row_pad_top = spacing_to_size(Spacing::sm);
+  if (const auto *def = UIStylingDefaults::get().find_component_config(
+          ComponentType::Button)) {
+    if (def->padding.left.dim != Dim::None)
+      row_pad_left = def->padding.left;
+    if (def->padding.top.dim != Dim::None)
+      row_pad_top = def->padding.top;
+  }
+  const auto scaling =
+      ctx.scaling_mode.value_or(UIStylingDefaults::get().scaling_mode);
+  const float row_pad = resolve_to_pixels(row_pad_left, ctx.screen_height,
+                                          scaling, ctx.theme.ui_scale,
+                                          ctx.screen_height);
+  const float row_pad_y = resolve_to_pixels(row_pad_top, ctx.screen_height,
+                                            scaling, ctx.theme.ui_scale,
+                                            ctx.screen_height);
 
   int chosen = kNoMenuSelection;
   int index = 0;
-  float row_y = 0.f; // running offset of the current row inside the list
   for (const auto &item : items) {
     if (item.separator) {
       // Transparent band: the list's surface shows through it, which is the
@@ -172,7 +229,6 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
               .without_border()
               .with_transparent_bg()
               .with_skip_tabbing(true));
-      row_y += item_h * 0.25f;
       index++;
       continue;
     }
@@ -187,52 +243,82 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
                    .with_label(item.label)
                    .with_disabled(item.disabled);
     // Labels default to centred, which walks straight into the gutter.
-    if (gutter > 0.f)
+    if (gutter > 0.f || any_marks)
       row.with_alignment(TextAlignment::Left);
-
-    // A disabled row still has to read as a row. Its own background is muted
-    // to near-transparent, which left it 5/255 from the panel and looking
-    // like a wide separator, so the fill comes from an underlay instead and
-    // only the label dims.
+    if (any_marks)
+      row.with_text_inset(mark_col, 0.f);
     if (item.disabled) {
-      div(ctx, mk(list.ent(), 20000 + index),
-          ComponentConfig::inherit_from(config, "menu_row_fill")
-              .with_size(ComponentSize{pixels(width - bw * 2.f),
-                                       pixels(item_h)})
-              .with_absolute_position(0.f, row_y)
-              .disable_rounded_corners()
-              .without_border()
-              .with_custom_background(colors::lighten(
-                  ctx.theme.from_usage(Theme::Usage::Surface), 0.06f))
-              .with_skip_tabbing(true)
-              .with_render_layer(config.render_layer + 1));
-      row.with_custom_background(colors::transparent());
+      // The fill sits behind the label: a disabled row's own background is
+      // muted to near-transparent and reads as a wide separator without it.
+      const Color fill = colors::lighten(
+          ctx.theme.from_usage(Theme::Usage::Surface), 0.06f);
+      row.with_custom_background(colors::transparent())
+          .with_on_draw_bg([fill](RectangleType r) {
+            afterhours::draw_rectangle(r, fill);
+          });
     }
+
     auto item_el = button(ctx, mk(list.ent(), index), row);
     if (item_el && !item.disabled)
       chosen = index;
 
-    // Positioned against the LIST, not the item: inside the item it lands in
-    // the item's content box (after padding) and spills past the menu edge.
-    //
-    // Held off the right edge by the same pad the gutter reserves. Ending the
-    // box exactly at `width` put right-aligned text hard against the panel
-    // boundary and the last glyph was clipped in half -- there is no bearing
-    // left for it once the box runs out.
+    // Accessories are children of the row so they scroll with it. The scroll
+    // measurement sums the list's own children, so anything hung on the list
+    // at a row offset would double-count that row's height.
     if (!item.shortcut.empty()) {
-      div(ctx, mk(list.ent(), 10000 + index),
+      const bool highlighted =
+          !item.disabled &&
+          (ctx.mouse_was_in_subtree(item_el.ent().id) ||
+           ctx.visual_focus_id == item_el.ent().id);
+      div(ctx, mk(item_el.ent(), 1),
           ComponentConfig::inherit_from(config, "menu_shortcut")
               .with_size(ComponentSize{pixels(gutter - shortcut_pad),
                                        pixels(item_h)})
               .without_border()
-              .with_absolute_position(width - gutter, row_y)
+              .with_transparent_bg()
+              .with_absolute_position(width - gutter - bw - row_pad,
+                                      -row_pad_y)
               .with_label(item.shortcut)
               .with_alignment(TextAlignment::Right)
-              .with_disabled(true)
+              .with_custom_text_color(ctx.theme.from_usage(
+                  highlighted ? Theme::Usage::Font
+                              : Theme::Usage::FontMuted))
+              .with_ignore_pointer_events()
               .with_skip_tabbing(true)
               .with_render_layer(config.render_layer + 2));
     }
-    row_y += item_h;
+    if (item.checked && item.mark != MenuMark::None) {
+      const Color mark_color = ctx.theme.from_usage(
+          item.disabled ? Theme::Usage::FontMuted : Theme::Usage::Font);
+      const MenuMark mark = item.mark;
+      div(ctx, mk(item_el.ent(), 2),
+          ComponentConfig::inherit_from(config,
+                                        fmt::format("menu_mark_{}", index))
+              .with_size(ComponentSize{pixels(item_h), pixels(item_h)})
+              .with_absolute_position(-row_pad, -row_pad_y)
+              .without_border()
+              .with_transparent_bg()
+              .with_ignore_pointer_events()
+              .with_skip_tabbing(true)
+              .with_render_layer(config.render_layer + 2)
+              .with_on_draw_fg([mark, mark_color](RectangleType r) {
+                const float size = std::min(r.width, r.height) * 0.5f;
+                const float x = r.x + (r.width - size) * 0.5f;
+                const float y = r.y + (r.height - size) * 0.5f;
+                if (mark == MenuMark::Check) {
+                  afterhours::draw_line_ex({x + size * 0.20f, y + size * 0.50f},
+                                             {x + size * 0.43f, y + size * 0.73f},
+                                             size / 11.f, mark_color);
+                  afterhours::draw_line_ex({x + size * 0.43f, y + size * 0.73f},
+                                             {x + size * 0.82f, y + size * 0.25f},
+                                             size / 11.f, mark_color);
+                } else {
+                  afterhours::draw_circle_v(
+                      {r.x + r.width * 0.5f, r.y + r.height * 0.5f},
+                      size * 0.22f, mark_color);
+                }
+              }));
+    }
     index++;
   }
 
@@ -340,6 +426,8 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
                .with_absolute_position(placed.x - root_rect.x,
                                        placed.y - root_rect.y)
                .with_render_layer(config.render_layer + 1));
+  if (panel.ent().template has<HasColor>())
+    panel.ent().template get<HasColor>().skip_hover_override = true;
 
   state.panel = panel.ent().id;
   if (!state.was_open_last_frame) {

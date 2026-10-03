@@ -23,6 +23,23 @@ std::vector<MenuItem> sample() {
           MenuItem{"Quit", "", false, true}};
 }
 
+std::vector<MenuItem> marked_sample() {
+  return {MenuItem::check("Word wrap", true),
+          MenuItem::check("Line numbers", false),
+          MenuItem::sep(),
+          MenuItem::radio("Light", false),
+          MenuItem::radio("Dark", true),
+          MenuItem{"Reset view", "", false, false}};
+}
+
+std::vector<MenuItem> many_items(int n) {
+  std::vector<MenuItem> items;
+  for (int i = 0; i < n; i++)
+    items.push_back(MenuItem{"Recent file " + std::to_string(i + 1), "",
+                             false, false});
+  return items;
+}
+
 int count_named(const std::string &prefix) {
   int n = 0;
   for (const auto &e : UICollectionHolder::get().collection.get_entities()) {
@@ -333,6 +350,10 @@ TEST(menu_shortcut_is_held_off_the_panel_edge) {
   // side would be its own bug.
   ui_test::check(sc->rect().x > list->rect().x,
                  "the shortcut stays within the panel", __FILE__, __LINE__);
+  auto sc_entity = UICollectionHolder::getEntityForID(sc->id);
+  ui_test::check(sc_entity.valid() && !sc_entity->get<HasLabel>().is_disabled,
+                 "shortcut text is not rendered as disabled", __FILE__,
+                 __LINE__);
   if (shortcut_right >= panel_right)
     fprintf(stderr, "        shortcut_right=%.1f panel_right=%.1f\n",
             shortcut_right, panel_right);
@@ -658,6 +679,149 @@ TEST(menu_delivers_pending_selection_before_focus_loss_dismissal) {
   CHECK(emit() == 0);
   CHECK(!open);
   h.layout_only();
+}
+
+TEST(menu_marks_render_for_checked_items_only) {
+  ImmTestHarness h;
+  bool open = true;
+  h.begin_frame();
+  context_menu(h.context(), mk(h.root(), 0), marked_sample(),
+               Vector2Type{100, 100}, open,
+               ComponentConfig{}.with_size(
+                   ComponentSize{pixels(220), pixels(28)}));
+  h.layout_only();
+  ui_test::check(count_named("menu_item_") == 5, "five selectable items",
+                 __FILE__, __LINE__);
+  ui_test::check(count_named("menu_mark_") == 2,
+                 "one mark per checked item, none for unchecked or plain",
+                 __FILE__, __LINE__);
+
+  auto *row = h.find("menu_item_0");
+  auto *mark = h.find("menu_mark_0");
+  ui_test::check(row != nullptr && mark != nullptr, "row and mark exist",
+                 __FILE__, __LINE__);
+  if (row && mark) {
+    const auto rr = row->rect();
+    const auto mr = mark->rect();
+    const bool inside =
+        mr.x >= rr.x - 0.5f && mr.x + mr.width <= rr.x + rr.width + 0.5f;
+    const bool centred = std::abs((mr.y + mr.height * 0.5f) -
+                                  (rr.y + rr.height * 0.5f)) < 1.f;
+    ui_test::check(inside, "the mark sits inside its row", __FILE__, __LINE__);
+    ui_test::check(centred, "the mark is centred on its row", __FILE__,
+                   __LINE__);
+    if (!inside || !centred)
+      fprintf(stderr, "        mark x=%.1f y=%.1f w=%.1f h=%.1f row x=%.1f y=%.1f w=%.1f h=%.1f\n",
+              mr.x, mr.y, mr.width, mr.height, rr.x, rr.y, rr.width, rr.height);
+  }
+}
+
+TEST(menu_mark_column_insets_every_label) {
+  ImmTestHarness h;
+  bool open = true;
+  h.begin_frame();
+  context_menu(h.context(), mk(h.root(), 0), marked_sample(),
+               Vector2Type{100, 100}, open,
+               ComponentConfig{}.with_size(
+                   ComponentSize{pixels(220), pixels(28)}));
+  h.layout_only();
+  for (const char *name : {"menu_item_0", "menu_item_5"}) {
+    auto *row = h.find(name);
+    ui_test::check(row != nullptr, "the row exists", __FILE__, __LINE__);
+    if (!row)
+      continue;
+    auto entity = UICollectionHolder::getEntityForID(row->id);
+    const auto &inset = entity->get<HasLabel>().text_inset;
+    ui_test::check(inset.has_value() && inset->x >= 27.5f,
+                   "labels leave room for the mark column", __FILE__,
+                   __LINE__);
+  }
+}
+
+TEST(menu_without_marks_has_no_mark_column) {
+  ImmTestHarness h;
+  bool open = true;
+  h.begin_frame();
+  context_menu(h.context(), mk(h.root(), 0), sample(), Vector2Type{100, 100},
+               open, ComponentConfig{}.with_size(
+                         ComponentSize{pixels(180), pixels(28)}));
+  h.layout_only();
+  ui_test::check(count_named("menu_mark_") == 0, "no marks are built",
+                 __FILE__, __LINE__);
+  auto *row = h.find("menu_item_0");
+  ui_test::check(row != nullptr, "the row exists", __FILE__, __LINE__);
+  if (row) {
+    auto entity = UICollectionHolder::getEntityForID(row->id);
+    const auto &inset = entity->get<HasLabel>().text_inset;
+    ui_test::check(!inset.has_value() || inset->x < 27.5f,
+                   "labels keep the full row width", __FILE__, __LINE__);
+  }
+}
+
+TEST(long_menu_is_bounded_and_scrollable) {
+  ImmTestHarness h;
+  bool open = true;
+  auto emit = [&] {
+    return context_menu(h.context(), mk(h.root(), 0), many_items(40),
+                        Vector2Type{100, 100}, open,
+                        ComponentConfig{}.with_size(
+                            ComponentSize{pixels(220), pixels(28)}));
+  };
+  h.begin_frame(); emit(); h.layout_only();
+  h.begin_frame(); emit(); h.layout_only();
+
+  UIComponent *list = h.find("menu_list");
+  ui_test::check(list != nullptr, "the list exists", __FILE__, __LINE__);
+  if (!list)
+    return;
+  ui_test::check(list->rect().height < 40.f * 28.f,
+                 "the panel stops at the available room", __FILE__, __LINE__);
+  ui_test::check(list->rect().y >= 0.f &&
+                     list->rect().y + list->rect().height <= 601.f,
+                 "the bounded panel stays on screen", __FILE__, __LINE__);
+  ui_test::check(count_named("menu_item_") == 40, "every item is built",
+                 __FILE__, __LINE__);
+  auto entity = UICollectionHolder::getEntityForID(list->id);
+  ui_test::check(entity->has<HasScrollView>(),
+                 "the bounded list scrolls", __FILE__, __LINE__);
+}
+
+TEST(menu_panel_keeps_its_background_when_hot) {
+  ImmTestHarness h;
+  bool open = true;
+  h.begin_frame();
+  context_menu(h.context(), mk(h.root(), 0), sample(), Vector2Type{100, 100},
+               open, ComponentConfig{}.with_size(
+                         ComponentSize{pixels(180), pixels(28)}));
+  h.layout_only();
+  UIComponent *list = h.find("menu_list");
+  ui_test::check(list != nullptr, "the list exists", __FILE__, __LINE__);
+  if (!list)
+    return;
+  auto entity = UICollectionHolder::getEntityForID(list->id);
+  ui_test::check(entity->has<HasColor>() &&
+                     entity->get<HasColor>().skip_hover_override,
+                 "hot on the panel (over a separator) cannot repaint the "
+                 "panel behind the rows",
+                 __FILE__, __LINE__);
+}
+
+TEST(short_menu_needs_no_scroll_view) {
+  ImmTestHarness h;
+  bool open = true;
+  h.begin_frame();
+  context_menu(h.context(), mk(h.root(), 0), sample(), Vector2Type{100, 100},
+               open, ComponentConfig{}.with_size(
+                         ComponentSize{pixels(180), pixels(28)}));
+  h.layout_only();
+  UIComponent *list = h.find("menu_list");
+  ui_test::check(list != nullptr, "the list exists", __FILE__, __LINE__);
+  if (!list)
+    return;
+  auto entity = UICollectionHolder::getEntityForID(list->id);
+  ui_test::check(!entity->has<HasScrollView>(),
+                 "a menu that fits does not become a scroll view", __FILE__,
+                 __LINE__);
 }
 
 int main() { return ui_test::run_registered_tests("menu"); }
