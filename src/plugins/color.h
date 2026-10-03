@@ -3,6 +3,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
+#include <string>
+#include <string_view>
 
 #include "../core/base_component.h"
 #include "../developer.h"
@@ -177,102 +180,104 @@ static bool is_empty(const Color &c) {
   return c.r == 0 && c.g == 0 && c.b == 0 && c.a == 0;
 }
 
-// TODO we can probably just have a ifdef VECTOR_TYPE and then we can just use
-// that vector type then we dont strictly need raylib
-#ifdef AFTER_HOURS_USE_RAYLIB
-// HSL conversion functions (requires Vector3 from raylib)
-static raylib::Vector3 to_hsl(const Color color) {
-  const unsigned char cmax = comp_max(color);
-  const unsigned char cmin = comp_min(color);
-  const unsigned char delta = cmax - cmin;
+// ============================================================
+// HSV conversion and hex strings
+// ============================================================
 
-  constexpr float COLOR_EPSILON = 0.000001f;
-  raylib::Vector3 hsl = {0.f, 0.f, (cmax + cmin) / 2.f};
-
-  if (std::abs(static_cast<float>(delta)) <= COLOR_EPSILON) {
-    return hsl;
-  }
-
-  if (std::abs(static_cast<float>(cmax - color.r)) <= COLOR_EPSILON) {
-    hsl.x = static_cast<float>(
-        std::fmod(static_cast<float>(color.g - color.b) / delta, 6.f));
-  } else if (std::abs(static_cast<float>(cmax - color.g)) <= COLOR_EPSILON) {
-    hsl.x = (static_cast<float>(color.b - color.r) / delta) + 2.f;
-  } else {
-    hsl.x = (static_cast<float>(color.r - color.g) / delta) + 4.f;
-  }
-
-  hsl.y = static_cast<float>(delta / (1.f - std::abs(2.f * hsl.z - 1.f)));
-  hsl.x /= 6.f;
-  hsl.x = std::fmod(hsl.x + 1.f, 1.f);
-  return hsl;
-}
-
-static Color to_rgb(const raylib::Vector3 &hsl) {
-  const float k = hsl.x * 6.f;
-  const float c = (1.f - std::abs(2.f * hsl.z - 1.f)) * hsl.y;
-  const float x = c * (1.f - std::abs(std::fmod(k, 2.f) - 1.f));
-  const float m = hsl.z - c / 2.f;
-  const int d = static_cast<int>(std::floor(k));
-
-  raylib::Vector3 rgb;
-
-  switch (d) {
-  case 0:
-    rgb = {c, x, 0.f};
-    break;
-  case 1:
-    rgb = {x, c, 0.f};
-    break;
-  case 2:
-    rgb = {0.f, c, x};
-    break;
-  case 3:
-    rgb = {0.f, x, c};
-    break;
-  case 4:
-    rgb = {x, 0.f, c};
-    break;
-  default:
-    rgb = {c, 0.f, x};
-    break;
-  }
-
-  return Color{
-      static_cast<unsigned char>(255 * (rgb.x + m)),
-      static_cast<unsigned char>(255 * (rgb.y + m)),
-      static_cast<unsigned char>(255 * (rgb.z + m)),
-      static_cast<unsigned char>(255),
-  };
-}
-
-static Color get_highlighted(const Color &color) {
-  auto hsl = to_hsl(color);
-  hsl.z = (hsl.z + 0.01f);
-  return to_rgb(hsl);
-}
-#else
-// Non-raylib versions - would need Vector3Type defined
-// For now, these are stubs that return default values
-struct Vector3Type {
-  float x, y, z;
+struct HSV {
+  float h = 0.f; // degrees, 0..360
+  float s = 0.f; // 0..1
+  float v = 0.f; // 0..1
 };
 
-static Vector3Type to_hsl(const Color) {
-  log_warn("HSL conversion not supported without raylib");
-  return Vector3Type{0, 0, 0};
+static HSV to_hsv(const Color &color) {
+  const float r = color.r / 255.f;
+  const float g = color.g / 255.f;
+  const float b = color.b / 255.f;
+  const float cmax = std::max({r, g, b});
+  const float cmin = std::min({r, g, b});
+  const float delta = cmax - cmin;
+
+  HSV hsv{0.f, cmax == 0.f ? 0.f : delta / cmax, cmax};
+  if (delta == 0.f)
+    return hsv;
+  if (cmax == r)
+    hsv.h = 60.f * std::fmod((g - b) / delta, 6.f);
+  else if (cmax == g)
+    hsv.h = 60.f * ((b - r) / delta + 2.f);
+  else
+    hsv.h = 60.f * ((r - g) / delta + 4.f);
+  hsv.h = std::fmod(hsv.h + 360.f, 360.f);
+  return hsv;
 }
 
-static Color to_rgb(const Vector3Type &) {
-  log_warn("RGB conversion not supported without raylib");
-  return Color{0, 0, 0, 255};
+static Color from_hsv(const HSV &hsv, unsigned char alpha = 255) {
+  const float h = std::fmod(std::fmod(hsv.h, 360.f) + 360.f, 360.f);
+  const float s = std::clamp(hsv.s, 0.f, 1.f);
+  const float v = std::clamp(hsv.v, 0.f, 1.f);
+  const float c = v * s;
+  const float x = c * (1.f - std::abs(std::fmod(h / 60.f, 2.f) - 1.f));
+  const float m = v - c;
+
+  float r = 0.f, g = 0.f, b = 0.f;
+  if (h < 60.f) { r = c; g = x; }
+  else if (h < 120.f) { r = x; g = c; }
+  else if (h < 180.f) { g = c; b = x; }
+  else if (h < 240.f) { g = x; b = c; }
+  else if (h < 300.f) { r = x; b = c; }
+  else { r = c; b = x; }
+
+  return Color{static_cast<unsigned char>(std::round((r + m) * 255.f)),
+               static_cast<unsigned char>(std::round((g + m) * 255.f)),
+               static_cast<unsigned char>(std::round((b + m) * 255.f)), alpha};
 }
 
-static Color get_highlighted(const Color &color) {
-  log_warn("get_highlighted not supported without raylib");
-  return color;
+// "RRGGBB", or "RRGGBBAA" with include_alpha. No leading '#'.
+static std::string to_hex_string(const Color &color,
+                                 bool include_alpha = false) {
+  static constexpr char digits[] = "0123456789ABCDEF";
+  const unsigned char bytes[4] = {color.r, color.g, color.b, color.a};
+  std::string out;
+  const int count = include_alpha ? 4 : 3;
+  out.reserve(static_cast<size_t>(count * 2));
+  for (int i = 0; i < count; i++) {
+    out += digits[bytes[i] >> 4];
+    out += digits[bytes[i] & 0xF];
+  }
+  return out;
 }
-#endif
+
+// Accepts an optional '#', then 3 ("36C" -> 33 66 CC), 6, or 8 hex digits.
+static std::optional<Color> parse_hex(std::string_view text) {
+  if (!text.empty() && text.front() == '#')
+    text.remove_prefix(1);
+  if (text.size() != 3 && text.size() != 6 && text.size() != 8)
+    return std::nullopt;
+
+  auto digit = [](char ch) -> int {
+    if (ch >= '0' && ch <= '9') return ch - '0';
+    if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
+    if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
+    return -1;
+  };
+  unsigned char bytes[4] = {0, 0, 0, 255};
+  if (text.size() == 3) {
+    for (int i = 0; i < 3; i++) {
+      const int d = digit(text[static_cast<size_t>(i)]);
+      if (d < 0) return std::nullopt;
+      bytes[i] = static_cast<unsigned char>(d * 16 + d);
+    }
+  } else {
+    const int count = text.size() == 6 ? 3 : 4;
+    for (int i = 0; i < count; i++) {
+      const int hi = digit(text[static_cast<size_t>(i * 2)]);
+      const int lo = digit(text[static_cast<size_t>(i * 2 + 1)]);
+      if (hi < 0 || lo < 0) return std::nullopt;
+      bytes[i] = static_cast<unsigned char>(hi * 16 + lo);
+    }
+  }
+  return Color{bytes[0], bytes[1], bytes[2], bytes[3]};
+}
 
 // Accessibility and contrast utilities inspired by Aether's Garnish library
 // https://github.com/Aeastr/Garnish

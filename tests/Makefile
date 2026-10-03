@@ -85,6 +85,7 @@ ALL_TESTS := \
 	reduced_motion_test \
 	appearance_test \
 	frame_loop_test \
+	color_value_test \
 	animation_presets_test \
 	particles_test \
 	ui_modifiers_test \
