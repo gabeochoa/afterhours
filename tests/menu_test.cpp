@@ -522,6 +522,36 @@ TEST(popover_anchors_and_flips_like_a_menu) {
                    "flips above the anchor", __FILE__, __LINE__);
 }
 
+TEST(popover_nested_first_frame_anchors_to_screen) {
+  ImmTestHarness h;
+  bool open = false;
+  auto emit = [&] {
+    auto parent = div(h.context(), mk(h.root(), 0),
+                      ComponentConfig{}
+                          .with_size(ComponentSize{pixels(300), pixels(200)})
+                          .with_absolute_position(100.f, 100.f)
+                          .with_debug_name("nested_parent"));
+    popover(h.context(), mk(parent.ent(), 0), RectangleType{120, 120, 100, 30},
+            open, overlay::Placement::Below,
+            ComponentConfig{}.with_size(
+                ComponentSize{pixels(200), pixels(120)}));
+  };
+  // The running-screen case: the popover sits closed inside its offset
+  // parent for frames, then opens. Its holder must already have a laid
+  // out rect by then, or the panel lands a parent-offset away for one
+  // frame and snaps back on the next.
+  h.begin_frame(); emit(); h.layout_only();
+  open = true;
+  h.begin_frame(); emit(); h.layout_only();
+  UIComponent *panel = h.find("popover_panel");
+  ui_test::check(panel != nullptr, "the nested panel exists", __FILE__,
+                 __LINE__);
+  if (panel) {
+    CHECK_APPROX(panel->rect().x, 120.f);
+    CHECK_APPROX(panel->rect().y, 150.f);
+  }
+}
+
 TEST(popover_hosts_caller_drawn_content) {
   ImmTestHarness h;
   bool open = true;

@@ -2,16 +2,42 @@
 
 #include "../color.h"
 #include "imm_components.h"
+#include "menu.h"
 #include "text_input/text_input.h"
 
 #include <array>
+#include <optional>
+#include <span>
 #include <string>
 
 namespace afterhours::ui {
 struct HasColorSwatchState : BaseComponent {
   std::string hex_text;
   EntityID hex_id = -1;
+  bool press_began_while_open = false;
+  // The preset under the pointer while a preset panel is built. The
+  // anchor shows it instead of the saved value, and callers can read it
+  // to preview elsewhere. Preview only: the caller's value changes when
+  // a preset is clicked (published), never on hover.
+  std::optional<Color> hover_preview;
 };
+
+// The palette the preset grid ships with when the caller has no opinion.
+// Callers pass their own span to the widget; a brand colour is then one
+// more entry in the app's list, never a library edit.
+inline std::span<const Color> default_color_presets() {
+  static constexpr std::array<Color, 24> presets = {{
+      colors::hex(0x3C659C), colors::hex(0x2E7D6B), colors::hex(0x4C9141),
+      colors::hex(0xB8860B), colors::hex(0xC25E3A), colors::hex(0xB03A48),
+      colors::hex(0x9B4D8F), colors::hex(0x5E4FA3), colors::hex(0x2F5D8A),
+      colors::hex(0x256B5E), colors::hex(0x3E7031), colors::hex(0x8A6914),
+      colors::hex(0x96422A), colors::hex(0x8A2F3A), colors::hex(0x773A6D),
+      colors::hex(0x463A7D), colors::hex(0x6B7D94), colors::hex(0x5F7267),
+      colors::hex(0x767A4A), colors::hex(0x8A7A52), colors::hex(0x84635A),
+      colors::hex(0x7A5A64), colors::hex(0x655A78), colors::hex(0x4A4F5E),
+  }};
+  return presets;
+}
 } // namespace afterhours::ui
 
 namespace afterhours::ui::imm {
@@ -142,6 +168,112 @@ bool hex_field(HasUIContext auto &ctx, EntityParent row_pair,
   value = *parsed;
   return true;
 }
+
+inline bool same_color(Color a, Color b) {
+  return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+}
+
+// One source for the preset panel's numbers, so the popover can size
+// itself from the same layout the chips are built with.
+inline constexpr int kPresetColumns = 8;
+
+struct PresetLayout {
+  int columns, rows;
+  float chip_w, chip_h, gap, pad, width, height;
+};
+
+inline PresetLayout preset_layout(float item_h, size_t preset_count) {
+  PresetLayout l;
+  l.columns =
+      std::min<int>(kPresetColumns, std::max<int>(static_cast<int>(preset_count), 1));
+  l.rows = preset_count == 0
+               ? 0
+               : (static_cast<int>(preset_count) + l.columns - 1) / l.columns;
+  l.chip_w = item_h * 0.82f;
+  l.chip_h = item_h * 0.72f;
+  l.gap = std::max(2.f, item_h * 0.16f);
+  l.pad = std::max(4.f, item_h * 0.33f);
+  l.width = 2 * l.pad + l.columns * l.chip_w + (l.columns - 1) * l.gap;
+  l.height =
+      2 * l.pad + l.rows * l.chip_h + item_h + l.rows * l.gap;
+  return l;
+}
+
+inline bool preset_panel(HasUIContext auto &ctx, EntityParent body_pair,
+                         HasColorSwatchState &state, Color &value,
+                         std::span<const Color> presets,
+                         const PresetLayout &layout,
+                         const ComponentConfig &config, float item_h,
+                         bool full_width, bool &picked) {
+  picked = false;
+  // Recomputed from last frame's hot chip below. The anchor was already
+  // built from the previous value this frame, so a preview shows one
+  // frame after the pointer lands, the same lag was_hot has everywhere.
+  state.hover_preview.reset();
+  // The popover already sized its panel from this layout, so the body
+  // there fills it; a standalone grid takes the caller's axis instead.
+  auto body_config = ComponentConfig::inherit_from(config, "color_preset_panel")
+                         .with_padding(Padding::all(pixels(layout.pad)))
+                         .with_gap(pixels(layout.gap))
+                         .with_transparent_bg()
+                         .without_border();
+  body_config.with_size(full_width ? ComponentSize{percent(1.f), percent(1.f)}
+                                   : ComponentSize{config.size.x_axis,
+                                                   children(item_h)});
+  auto body = vstack(ctx, body_pair, body_config);
+
+  const Color focus_color = ctx.theme.from_usage(Theme::Usage::Focus);
+  bool changed = false;
+  for (int row_i = 0; row_i < layout.rows; row_i++) {
+    auto row = div(ctx, mk(body.ent(), row_i),
+                   ComponentConfig::inherit_from(config, "color_presets_row")
+                       .with_size(ComponentSize{percent(1.f),
+                                                pixels(layout.chip_h)})
+                       .with_flex_direction(FlexDirection::Row)
+                       .with_gap(pixels(layout.gap))
+                       .with_transparent_bg()
+                       .without_border()
+                       .with_skip_tabbing(true));
+    for (int col = 0; col < layout.columns; col++) {
+      const size_t idx = static_cast<size_t>(row_i * layout.columns + col);
+      if (idx >= presets.size())
+        break;
+      const Color preset = presets[idx];
+      auto chip = ComponentConfig::inherit_from(
+                      config, fmt::format("color_preset_{}", idx))
+                      .with_size(ComponentSize{pixels(layout.chip_w),
+                                               pixels(layout.chip_h)})
+                      .with_custom_background(preset)
+                      .with_custom_hover_bg(colors::lighten(preset, 0.3f))
+                      .with_corner_radius(4.f)
+                      .with_tooltip(
+                          "#" + colors::to_hex_string(preset, preset.a < 255));
+      if (same_color(preset, value))
+        chip.with_border(focus_color, std::max(1.f, item_h * 0.06f));
+      if (preset.a < 255) {
+        const Color dark = ctx.theme.from_usage(Theme::Usage::Background);
+        const Color light = ctx.theme.from_usage(Theme::Usage::Surface);
+        chip.with_on_draw_bg([dark, light](RectangleType r) {
+          draw_checker(r, dark, light);
+        });
+      }
+      auto chip_result = button(ctx, mk(row.ent(), col), chip);
+      if (ctx.was_hot(chip_result.id()))
+        state.hover_preview = preset;
+      if (chip_result) {
+        if (!same_color(preset, value))
+          changed = true;
+        value = preset;
+        picked = true;
+        state.hover_preview.reset();
+      }
+    }
+  }
+  changed = hex_field(ctx, mk(body.ent(), layout.rows), state, value, config,
+                      item_h) ||
+            changed;
+  return changed;
+}
 } // namespace color_swatch_detail
 
 ElementResult color_swatch_button(HasUIContext auto &ctx, EntityParent ep_pair,
@@ -261,6 +393,97 @@ ElementResult color_swatch_inline(HasUIContext auto &ctx,
   if (open)
     changed = static_cast<bool>(
         color_channel_rows(ctx, mk(container.ent(), 1), value, config));
+  return ElementResult{changed, entity};
+}
+
+ElementResult color_preset_grid(HasUIContext auto &ctx, EntityParent ep_pair,
+                                Color &value, std::span<const Color> presets,
+                                ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+  const float item_h = color_swatch_detail::row_height(ctx, config);
+  const auto layout =
+      color_swatch_detail::preset_layout(item_h, presets.size());
+
+  if (entity.is_missing<HasColorSwatchState>())
+    entity.addComponent<HasColorSwatchState>();
+  bool picked = false;
+  const bool changed = color_swatch_detail::preset_panel(
+      ctx, ep_pair, entity.template get<HasColorSwatchState>(), value, presets,
+      layout, config, item_h, false, picked);
+  return ElementResult{changed, entity};
+}
+
+// The preset shape: the swatch button opens an anchored panel of preset
+// chips with a custom hex field below. Hovering a chip previews it on
+// the anchor without touching the value; clicking publishes the pick,
+// writes through and closes the panel. Typing a hex writes through and
+// leaves the panel open, the same as the inline editor.
+ElementResult color_swatch_presets(HasUIContext auto &ctx,
+                                   EntityParent ep_pair, Color &value,
+                                   bool &open,
+                                   std::span<const Color> presets,
+                                   ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+  const float item_h = color_swatch_detail::row_height(ctx, config);
+
+  auto container =
+      div(ctx, ep_pair,
+          ComponentConfig::inherit_from(config, "color_swatch_presets")
+              .with_size(ComponentSize{config.size.x_axis, children(item_h)})
+              .with_flex_direction(FlexDirection::Column)
+              .with_transparent_bg()
+              .without_border());
+
+  auto &state = entity.template addComponentIfMissing<HasColorSwatchState>();
+  // A closed panel never rebuilds the preview, so drop any left over
+  // from the dismiss instead of leaving the anchor showing a colour
+  // that was never published.
+  if (!open)
+    state.hover_preview.reset();
+  const Color shown = state.hover_preview.value_or(value);
+  auto button_config = ComponentConfig(config).with_size(
+      ComponentSize{percent(1.f), pixels(item_h)});
+  auto btn =
+      color_swatch_button(ctx, mk(container.ent(), 0), shown, button_config);
+  const RectangleType anchor = btn.ent().template get<UIComponent>().rect();
+  // The press half of a closing click is the popover's outside-press
+  // dismissal. Without remembering which side of it we were on, the
+  // release half lands as a fresh toggle and the anchor can never close
+  // its own palette.
+  // Latch, never overwrite: a press edge can stay raised into the frame
+  // after dismissal already set open false, and re-recording then would
+  // clear the memory this guard exists to keep.
+  if (ctx.mouse.just_pressed && open && is_mouse_inside(ctx.mouse.pos, anchor))
+    state.press_began_while_open = true;
+  if (btn && !config.disabled && !state.press_began_while_open)
+    open = !open;
+  if (ctx.mouse.just_released)
+    state.press_began_while_open = false;
+
+  const auto layout =
+      color_swatch_detail::preset_layout(item_h, presets.size());
+  auto pop_config =
+      ComponentConfig::inherit_from(config, "color_preset_popover")
+          .with_size(
+              ComponentSize{pixels(layout.width), pixels(layout.height)})
+          .with_border(ctx.theme.from_usage(Theme::Usage::Secondary),
+                       std::max(1.f, item_h * 0.04f))
+          .with_corner_radius(std::max(2.f, item_h * 0.25f))
+          // popover() puts its panel one layer over this config; the swatch
+          // chip on each sibling button also sits one over, so claim one
+          // extra here or a neighbouring chip draws through the palette.
+          .with_render_layer(config.render_layer + 1);
+
+  bool changed = false;
+  if (auto pop = popover(ctx, mk(container.ent(), 1), anchor, open,
+                         overlay::Placement::Below, pop_config)) {
+    bool picked = false;
+    changed = color_swatch_detail::preset_panel(
+        ctx, mk(pop.ent(), 0), state, value, presets, layout, config, item_h,
+        true, picked);
+    if (picked)
+      open = false;
+  }
   return ElementResult{changed, entity};
 }
 

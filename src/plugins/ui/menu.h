@@ -104,15 +104,13 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
               ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
   auto &state = entity.template addComponentIfMissing<HasMenuState>();
-  if (!open || items.empty()) {
-    detail::dismiss_menu(ctx, state, false);
-    open = false;
-    state.was_open_last_frame = false;
-    return kNoMenuSelection;
-  }
 
   // The menu's own entity is a zero-size holder: the list hangs off it and is
   // absolutely positioned, but it still needs a UIComponent to be a parent.
+  // Built even while closed: the list's screen placement is converted
+  // through this holder's rect, so the holder needs a laid out rect
+  // before the first open or the list lands a parent offset away for
+  // one frame and snaps back on the next.
   ComponentConfig root_config =
       ComponentConfig::inherit_from(config, "menu_root")
           .with_size(ComponentSize{pixels(0.f), pixels(0.f)})
@@ -120,6 +118,13 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
           .with_skip_tabbing(true);
   init_component(ctx, ep_pair, root_config, ComponentType::Div, false,
                  "menu_root");
+
+  if (!open || items.empty()) {
+    detail::dismiss_menu(ctx, state, false);
+    open = false;
+    state.was_open_last_frame = false;
+    return kNoMenuSelection;
+  }
 
   const float item_h = config.size.y_axis.value > 0.f
                            ? config.size.y_axis.value
@@ -390,12 +395,10 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
         ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
   auto &state = entity.template addComponentIfMissing<HasMenuState>();
-  if (detail::dismiss_menu(ctx, state, open)) {
-    open = false;
-    state.was_open_last_frame = false;
-    return ElementResult{false, entity};
-  }
 
+  // Built even while closed, like menu_root: the panel's screen
+  // placement is converted through this holder's rect, so the holder
+  // needs a laid out rect before the first open.
   ComponentConfig root_config =
       ComponentConfig::inherit_from(config, "popover_root")
           .with_size(ComponentSize{pixels(0.f), pixels(0.f)})
@@ -403,6 +406,12 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
           .with_skip_tabbing(true);
   init_component(ctx, ep_pair, root_config, ComponentType::Div, false,
                  "popover_root");
+
+  if (detail::dismiss_menu(ctx, state, open)) {
+    open = false;
+    state.was_open_last_frame = false;
+    return ElementResult{false, entity};
+  }
 
   const float width =
       config.size.x_axis.value > 0.f ? config.size.x_axis.value : anchor.width;

@@ -118,4 +118,140 @@ TEST(channel_slider_handle_is_sized_and_inside_the_track) {
   }
 }
 
+namespace {
+constexpr std::array<Color, 4> test_presets{{
+    {60, 101, 156, 255},
+    {46, 125, 107, 255},
+    {176, 58, 72, 255},
+    {255, 213, 79, 255},
+}};
+} // namespace
+
+TEST(preset_popover_closed_builds_no_grid) {
+  ImmTestHarness h;
+  Color value{60, 101, 156, 255};
+  bool open = false;
+  h.begin_frame();
+  color_swatch_presets(h.context(), mk(h.root(), 0), value, open, test_presets,
+                       swatch_cfg("accent_presets"));
+  h.layout_only();
+  ui_test::check(count_named("color_preset_") == 0,
+                 "a closed preset swatch builds no chips", __FILE__, __LINE__);
+  ui_test::check(count_named("color_hex_field") == 0,
+                 "a closed preset swatch builds no hex field", __FILE__,
+                 __LINE__);
+}
+
+TEST(preset_popover_open_builds_grid_and_hex) {
+  ImmTestHarness h;
+  Color value{60, 101, 156, 255};
+  bool open = true;
+  auto emit = [&] {
+    return color_swatch_presets(h.context(), mk(h.root(), 0), value, open,
+                                test_presets, swatch_cfg("accent_presets"));
+  };
+  h.begin_frame(); emit(); h.layout_only();
+  h.begin_frame(); emit(); h.layout_only();
+
+  ui_test::check(open, "the popover stays open once it holds focus", __FILE__,
+                 __LINE__);
+  for (const char *name : {"color_preset_0", "color_preset_1",
+                           "color_preset_2", "color_preset_3"})
+    ui_test::check(h.find(name) != nullptr, "each preset chip is built",
+                   __FILE__, __LINE__);
+  ui_test::check(count_named("color_hex_field") == 1,
+                 "the custom hex field is built under the grid", __FILE__,
+                 __LINE__);
+  const UIComponent *panel = h.find("popover_panel");
+  const UIComponent *chip = h.find("color_preset_3");
+  ui_test::check(panel != nullptr && chip != nullptr,
+                 "the popover panel and last chip exist", __FILE__, __LINE__);
+  if (panel && chip) {
+    const RectangleType pr = panel->rect();
+    const RectangleType cr = chip->rect();
+    ui_test::check(cr.x >= pr.x - 1.f && cr.y >= pr.y - 1.f &&
+                       cr.x + cr.width <= pr.x + pr.width + 1.f &&
+                       cr.y + cr.height <= pr.y + pr.height + 1.f,
+                   "the grid fits inside the sized popover panel", __FILE__,
+                   __LINE__);
+  }
+  ui_test::check(value.r == 60 && value.g == 101 && value.b == 156 &&
+                     value.a == 255,
+                 "building does not change the value", __FILE__, __LINE__);
+}
+
+TEST(preset_hover_previews_on_the_anchor_without_publishing) {
+  ImmTestHarness h;
+  Color value{60, 101, 156, 255};
+  bool open = true;
+  auto emit = [&] {
+    return color_swatch_presets(h.context(), mk(h.root(), 0), value, open,
+                                test_presets, swatch_cfg("accent_presets"));
+  };
+  h.begin_frame(); emit(); h.layout_only();
+  h.begin_frame(); emit(); h.layout_only();
+
+  const UIComponent *chip = h.find("color_preset_1");
+  ui_test::check(chip != nullptr, "the preset chip to hover exists", __FILE__,
+                 __LINE__);
+  if (!chip)
+    return;
+  // The hover background must differ from the preset or hovering the
+  // palette changes nothing on screen.
+  auto chip_entity = UICollectionHolder::getEntityForID(chip->id);
+  ui_test::check(chip_entity->has<HasColor>(), "the chip carries a colour",
+                 __FILE__, __LINE__);
+  if (chip_entity->has<HasColor>()) {
+    const auto &hc = chip_entity->get<HasColor>();
+    ui_test::check(hc.hover_color.has_value() &&
+                       !color_swatch_detail::same_color(
+                           hc.hover_color.value(), test_presets[1]),
+                   "the chip hover background differs from the preset",
+                   __FILE__, __LINE__);
+  }
+
+  // Leave the chip hot the way the previous frame's hit test would, then
+  // build twice: one frame to record the preview, one to show it on the
+  // anchor that is built before the panel.
+  const EntityID chip_id = chip->id;
+  h.context().prev_hot_id = chip_id;
+  h.begin_frame(); auto result = emit(); h.layout_only();
+  h.begin_frame(); emit(); h.layout_only();
+
+  auto &state = result.ent().template get<HasColorSwatchState>();
+  ui_test::check(state.hover_preview.has_value() &&
+                     color_swatch_detail::same_color(
+                         state.hover_preview.value(), test_presets[1]),
+                 "hovering records the preset as a preview", __FILE__,
+                 __LINE__);
+  ui_test::check(color_swatch_detail::same_color(value, test_presets[0]),
+                 "hovering does not publish the preset", __FILE__, __LINE__);
+  const UIComponent *btn = h.find("accent_presets");
+  ui_test::check(btn != nullptr, "the anchor exists", __FILE__, __LINE__);
+  if (btn) {
+    auto btn_entity = UICollectionHolder::getEntityForID(btn->id);
+    ui_test::check(btn_entity->get<HasLabel>().label == "#2E7D6B",
+                   "the anchor shows the previewed hex", __FILE__, __LINE__);
+  }
+
+  // Move the pointer away: the preview clears and the anchor is back to
+  // the saved value, still unpublished.
+  h.context().prev_hot_id = h.root().id;
+  h.begin_frame(); emit(); h.layout_only();
+  h.begin_frame(); emit(); h.layout_only();
+  ui_test::check(!state.hover_preview.has_value(),
+                 "moving away clears the preview", __FILE__, __LINE__);
+  ui_test::check(color_swatch_detail::same_color(value, test_presets[0]),
+                 "the value is still the saved one", __FILE__, __LINE__);
+  const UIComponent *btn2 = h.find("accent_presets");
+  ui_test::check(btn2 != nullptr, "the anchor still exists", __FILE__,
+                 __LINE__);
+  if (btn2) {
+    auto btn_entity = UICollectionHolder::getEntityForID(btn2->id);
+    ui_test::check(btn_entity->get<HasLabel>().label == "#3C659C",
+                   "the anchor is back to the saved hex", __FILE__,
+                   __LINE__);
+  }
+}
+
 int main() { return ui_test::run_registered_tests("color_swatch"); }
