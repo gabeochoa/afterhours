@@ -20,6 +20,14 @@ struct HasColorSwatchState : BaseComponent {
   // to preview elsewhere. Preview only: the caller's value changes when
   // a preset is clicked (published), never on hover.
   std::optional<Color> hover_preview;
+  // The popover editor's working colour. Drag and key callbacks run
+  // after the build, so they land here and the next build publishes
+  // the edit to the caller's value, the same shape as slider state.
+  Color editor_value{0, 0, 0, 255};
+  Color editor_before{0, 0, 0, 255};
+  bool editor_changed = false;
+  bool editor_tracking = false;
+  EntityID editor_square_id = -1;
 };
 
 // The palette the preset grid ships with when the caller has no opinion.
@@ -173,6 +181,66 @@ inline bool same_color(Color a, Color b) {
   return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
 }
 
+// Whether this frame's anchor click should toggle a swatch popover.
+// The press half of a closing click is the popover's outside-press
+// dismissal. Without remembering which side of it we were on, the
+// release half lands as a fresh toggle and the anchor can never close
+// its own panel. Latch, never overwrite: a press edge can stay raised
+// into the frame after dismissal already set open false, and
+// re-recording then would clear the memory this guard exists to keep.
+inline bool popover_toggle(HasUIContext auto &ctx,
+                           HasColorSwatchState &state,
+                           const RectangleType &anchor, bool clicked,
+                           bool open, bool disabled) {
+  if (ctx.mouse.just_pressed && open && is_mouse_inside(ctx.mouse.pos, anchor))
+    state.press_began_while_open = true;
+  const bool toggle = clicked && !disabled && !state.press_began_while_open;
+  if (ctx.mouse.just_released)
+    state.press_began_while_open = false;
+  return toggle;
+}
+
+inline void draw_sv_square(RectangleType r, float hue) {
+  const Color pure = colors::from_hsv(colors::HSV{hue, 1.f, 1.f});
+  const Color white{255, 255, 255, 255};
+  // Saturation first, then value as a black overlay. One four-corner
+  // gradient triangulates the quad and leaves a diagonal seam.
+  afterhours::draw_rectangle_gradient_h(r, white, pure);
+  afterhours::draw_rectangle_gradient_v(r, Color{0, 0, 0, 0},
+                                        Color{0, 0, 0, 255});
+}
+
+inline void draw_hue_strip(RectangleType r) {
+  const float seg_w = r.width / 6.f;
+  for (int i = 0; i < 6; i++) {
+    const float x = r.x + seg_w * static_cast<float>(i);
+    const float w = std::min(seg_w + 1.f, r.x + r.width - x);
+    if (w <= 0.f)
+      break;
+    const Color left =
+        colors::from_hsv(colors::HSV{static_cast<float>(i * 60), 1.f, 1.f});
+    const Color right = colors::from_hsv(
+        colors::HSV{static_cast<float>((i + 1) * 60), 1.f, 1.f});
+    afterhours::draw_rectangle_gradient_h(RectangleType{x, r.y, w, r.height},
+                                          left, right);
+  }
+}
+
+inline void draw_alpha_strip(RectangleType r, Color base, Color dark,
+                             Color light) {
+  draw_checker(r, dark, light);
+  afterhours::draw_rectangle_gradient_h(
+      r, Color{base.r, base.g, base.b, 0},
+      Color{base.r, base.g, base.b, 255});
+}
+
+inline void draw_editor_handle(Vector2Type center, float radius, Color fill,
+                               Color light, Color dark) {
+  afterhours::draw_circle_v(center, radius, dark);
+  afterhours::draw_circle_v(center, std::max(1.f, radius - 1.f), light);
+  afterhours::draw_circle_v(center, std::max(1.f, radius - 3.f), fill);
+}
+
 // One source for the preset panel's numbers, so the popover can size
 // itself from the same layout the chips are built with.
 inline constexpr int kPresetColumns = 8;
@@ -272,6 +340,296 @@ inline bool preset_panel(HasUIContext auto &ctx, EntityParent body_pair,
   changed = hex_field(ctx, mk(body.ent(), layout.rows), state, value, config,
                       item_h) ||
             changed;
+  return changed;
+}
+struct EditorLayout {
+  float pad, gap, width, height, square_h, strip_h;
+};
+
+inline EditorLayout editor_layout(float item_h) {
+  EditorLayout l;
+  l.pad = std::max(4.f, item_h * 0.33f);
+  l.gap = std::max(2.f, item_h * 0.16f);
+  l.width = item_h * 8.33f;
+  l.square_h = (l.width - 2.f * l.pad) * 0.48f;
+  l.strip_h = std::max(8.f, item_h * 0.33f);
+  l.height = 2.f * l.pad + l.square_h + 2.f * l.strip_h + 2.f * item_h +
+             4.f * l.gap;
+  return l;
+}
+
+inline HasColorSwatchState *editor_state(EntityID id) {
+  auto ent = UICollectionHolder::getEntityForID(id);
+  if (!ent.valid() || !ent.asE().template has<HasColorSwatchState>())
+    return nullptr;
+  return &ent.asE().template get<HasColorSwatchState>();
+}
+
+inline void set_editor_pending(HasColorSwatchState &state, Color next) {
+  if (same_color(next, state.editor_value))
+    return;
+  state.editor_value = next;
+  state.editor_changed = true;
+}
+
+enum struct EditorSurface { SV, Hue, Alpha };
+
+inline void apply_editor_pos(HasColorSwatchState &state, EditorSurface kind,
+                             float nx, float ny) {
+  colors::HSV hsv = colors::to_hsv(state.editor_value);
+  const unsigned char alpha = state.editor_value.a;
+  switch (kind) {
+  case EditorSurface::SV:
+    hsv.s = std::clamp(nx, 0.f, 1.f);
+    hsv.v = 1.f - std::clamp(ny, 0.f, 1.f);
+    set_editor_pending(state, colors::from_hsv(hsv, alpha));
+    return;
+  case EditorSurface::Hue:
+    hsv.h = std::clamp(nx, 0.f, 1.f) * 360.f;
+    set_editor_pending(state, colors::from_hsv(hsv, alpha));
+    return;
+  case EditorSurface::Alpha: {
+    Color next = state.editor_value;
+    next.a = static_cast<unsigned char>(
+        std::round(std::clamp(nx, 0.f, 1.f) * 255.f));
+    set_editor_pending(state, next);
+    return;
+  }
+  }
+}
+
+inline void attach_editor_surface(Entity &ent, EntityID state_id,
+                                  EditorSurface kind) {
+  ent.addComponentIfMissing<HasDragListener>([](Entity &) {}).cb =
+      [state_id, kind](Entity &e) {
+        HasColorSwatchState *state = editor_state(state_id);
+        if (!state || !e.template has<UIComponent>())
+          return;
+        const RectangleType r = e.template get<UIComponent>().rect();
+        if (r.width <= 0.f || r.height <= 0.f)
+          return;
+        const auto mp = input::get_mouse_position();
+        apply_editor_pos(*state, kind, (mp.x - r.x) / r.width,
+                         (mp.y - r.y) / r.height);
+      };
+  ent.addComponentIfMissing<HasLeftRightListener>([](Entity &, int) {}).cb =
+      [state_id, kind](Entity &, int dir) {
+        HasColorSwatchState *state = editor_state(state_id);
+        if (!state)
+          return;
+        colors::HSV hsv = colors::to_hsv(state->editor_value);
+        const unsigned char alpha = state->editor_value.a;
+        switch (kind) {
+        case EditorSurface::SV:
+          hsv.s = std::clamp(hsv.s + static_cast<float>(dir) * 0.01f, 0.f,
+                             1.f);
+          set_editor_pending(*state, colors::from_hsv(hsv, alpha));
+          return;
+        case EditorSurface::Hue:
+          hsv.h += static_cast<float>(dir);
+          set_editor_pending(*state, colors::from_hsv(hsv, alpha));
+          return;
+        case EditorSurface::Alpha: {
+          Color next = state->editor_value;
+          const float a01 =
+              std::clamp(next.a / 255.f + static_cast<float>(dir) * 0.01f,
+                         0.f, 1.f);
+          next.a = static_cast<unsigned char>(std::round(a01 * 255.f));
+          set_editor_pending(*state, next);
+          return;
+        }
+        }
+      };
+}
+
+// Up and down have no listener twin to HasLeftRightListener, so the
+// square reads them during the build while it holds focus. Its config
+// consumes directional input, which keeps process_tabbing from taking
+// the same keys as focus movement.
+inline bool editor_vertical_keys(HasUIContext auto &ctx,
+                                 HasColorSwatchState &state) {
+  if (state.editor_square_id < 0 || !ctx.has_focus(state.editor_square_id))
+    return false;
+  using Action = typename std::remove_cvref_t<decltype(ctx)>::value_type;
+  float dv = 0.f;
+  if constexpr (magic_enum::enum_contains<Action>("WidgetUp")) {
+    if (ctx.pressed_or_repeat(Action::WidgetUp))
+      dv += 0.01f;
+  }
+  if constexpr (magic_enum::enum_contains<Action>("WidgetDown")) {
+    if (ctx.pressed_or_repeat(Action::WidgetDown))
+      dv -= 0.01f;
+  }
+  if (dv == 0.f)
+    return false;
+  colors::HSV hsv = colors::to_hsv(state.editor_value);
+  hsv.v = std::clamp(hsv.v + dv, 0.f, 1.f);
+  const Color next = colors::from_hsv(hsv, state.editor_value.a);
+  if (same_color(next, state.editor_value))
+    return false;
+  state.editor_value = next;
+  return true;
+}
+inline void editor_compare_row(HasUIContext auto &ctx,
+                               EntityParent row_pair, Color before,
+                               Color after, const ComponentConfig &config,
+                               float item_h) {
+  auto row = div(ctx, row_pair,
+                 ComponentConfig::inherit_from(config, "color_editor_compare")
+                     .with_size(ComponentSize{percent(1.f), pixels(item_h)})
+                     .with_flex_direction(FlexDirection::Row)
+                     .with_align_items(AlignItems::Center)
+                     .with_transparent_bg()
+                     .without_border()
+                     .with_skip_tabbing(true));
+  const Color edge = ctx.theme.from_usage(Theme::Usage::Secondary);
+  const auto chip = [&](int child, const std::string &name, Color c) {
+    auto cfg = ComponentConfig::inherit_from(config, name)
+                   .with_size(ComponentSize{percent(0.14f), pixels(item_h)})
+                   .with_custom_background(c)
+                   .with_border(edge, std::max(1.f, item_h * 0.04f))
+                   .with_corner_radius(4.f)
+                   .with_ignore_pointer_events()
+                   .with_skip_tabbing(true);
+    if (c.a < 255) {
+      const Color dark = ctx.theme.from_usage(Theme::Usage::Background);
+      const Color light = ctx.theme.from_usage(Theme::Usage::Surface);
+      cfg.with_on_draw_bg([dark, light](RectangleType r) {
+        draw_checker(r, dark, light);
+      });
+    }
+    div(ctx, mk(row.ent(), child), cfg);
+  };
+  chip(0, "color_editor_before", before);
+  chip(1, "color_editor_after", after);
+  div(ctx, mk(row.ent(), 2),
+      ComponentConfig::inherit_from(config, "color_editor_compare_label")
+          .with_size(ComponentSize{percent(0.44f), pixels(item_h)})
+          .with_label("Before/after")
+          .with_transparent_bg()
+          .without_border()
+          .with_skip_tabbing(true));
+  div(ctx, mk(row.ent(), 3),
+      ComponentConfig::inherit_from(config, "color_editor_alpha_value")
+          .with_size(ComponentSize{percent(0.28f), pixels(item_h)})
+          .with_label(fmt::format(
+              "A {}%",
+              static_cast<int>(std::round(after.a / 255.f * 100.f))))
+          .with_alignment(TextAlignment::Right)
+          .with_transparent_bg()
+          .without_border()
+          .with_skip_tabbing(true));
+}
+
+inline bool editor_panel(HasUIContext auto &ctx, EntityParent body_pair,
+                         EntityID state_id, HasColorSwatchState &state,
+                         Color &value, const EditorLayout &layout,
+                         const ComponentConfig &config, float item_h) {
+  bool changed = false;
+  if (!state.editor_tracking) {
+    state.editor_before = value;
+    state.editor_value = value;
+    state.editor_changed = false;
+    state.editor_tracking = true;
+  }
+  if (state.editor_changed) {
+    if (!same_color(state.editor_value, value)) {
+      value = state.editor_value;
+      changed = true;
+    }
+    state.editor_changed = false;
+  } else if (!same_color(state.editor_value, value)) {
+    state.editor_value = value;
+  }
+  if (editor_vertical_keys(ctx, state)) {
+    value = state.editor_value;
+    changed = true;
+  }
+
+  const Color shown = value;
+  const colors::HSV hsv = colors::to_hsv(shown);
+  const Color edge = ctx.theme.from_usage(Theme::Usage::Secondary);
+  const Color handle_light = ctx.theme.from_usage(Theme::Usage::Font);
+  const Color handle_dark = ctx.theme.from_usage(Theme::Usage::Background);
+  const float handle_r = std::max(5.f, item_h * 0.19f);
+
+  auto body = vstack(
+      ctx, body_pair,
+      ComponentConfig::inherit_from(config, "color_editor_panel")
+          .with_size(ComponentSize{percent(1.f), percent(1.f)})
+          .with_padding(Padding::all(pixels(layout.pad)))
+          .with_gap(pixels(layout.gap))
+          .with_transparent_bg()
+          .without_border());
+
+  const auto surface_cfg = [&](const std::string &name, float height) {
+    return ComponentConfig::inherit_from(config, name)
+        .with_size(ComponentSize{percent(1.f), pixels(height)})
+        .with_transparent_bg()
+        .with_border(edge, std::max(1.f, item_h * 0.04f))
+        .with_corner_radius(0.f);
+  };
+
+  auto square =
+      div(ctx, mk(body.ent(), 0),
+          surface_cfg("color_sv_square", layout.square_h)
+              .with_consumes_directional_input(true)
+              .with_on_draw_bg([hue = hsv.h](RectangleType r) {
+                draw_sv_square(r, hue);
+              })
+              .with_on_draw_fg([s = hsv.s, v = hsv.v, shown, handle_light,
+                                handle_dark, handle_r](RectangleType r) {
+                draw_editor_handle(
+                    Vector2Type{r.x + s * r.width,
+                                r.y + (1.f - v) * r.height},
+                    handle_r, shown, handle_light, handle_dark);
+              }));
+  state.editor_square_id = square.id();
+  if (!config.disabled)
+    attach_editor_surface(square.ent(), state_id, EditorSurface::SV);
+
+  auto hue_strip =
+      div(ctx, mk(body.ent(), 1),
+          surface_cfg("color_hue_strip", layout.strip_h)
+              .with_on_draw_bg(
+                  [](RectangleType r) { draw_hue_strip(r); })
+              .with_on_draw_fg([h01 = hsv.h / 360.f, hue = hsv.h,
+                                handle_light, handle_dark,
+                                handle_r](RectangleType r) {
+                draw_editor_handle(
+                    Vector2Type{r.x + h01 * r.width, r.y + r.height * 0.5f},
+                    handle_r,
+                    colors::from_hsv(colors::HSV{hue, 1.f, 1.f}),
+                    handle_light, handle_dark);
+              }));
+  if (!config.disabled)
+    attach_editor_surface(hue_strip.ent(), state_id, EditorSurface::Hue);
+
+  const Color checker_dark = ctx.theme.from_usage(Theme::Usage::Background);
+  const Color checker_light = ctx.theme.from_usage(Theme::Usage::Surface);
+  auto alpha_strip =
+      div(ctx, mk(body.ent(), 2),
+          surface_cfg("color_alpha_strip", layout.strip_h)
+              .with_on_draw_bg([shown, checker_dark,
+                                checker_light](RectangleType r) {
+                draw_alpha_strip(r, shown, checker_dark, checker_light);
+              })
+              .with_on_draw_fg([a01 = shown.a / 255.f, shown, handle_light,
+                                handle_dark, handle_r](RectangleType r) {
+                draw_editor_handle(
+                    Vector2Type{r.x + a01 * r.width, r.y + r.height * 0.5f},
+                    handle_r, Color{shown.r, shown.g, shown.b, 255},
+                    handle_light, handle_dark);
+              }));
+  if (!config.disabled)
+    attach_editor_surface(alpha_strip.ent(), state_id, EditorSurface::Alpha);
+
+  if (hex_field(ctx, mk(body.ent(), 3), state, value, config, item_h)) {
+    state.editor_value = value;
+    changed = true;
+  }
+  editor_compare_row(ctx, mk(body.ent(), 4), state.editor_before, value,
+                     config, item_h);
   return changed;
 }
 } // namespace color_swatch_detail
@@ -446,19 +804,10 @@ ElementResult color_swatch_presets(HasUIContext auto &ctx,
   auto btn =
       color_swatch_button(ctx, mk(container.ent(), 0), shown, button_config);
   const RectangleType anchor = btn.ent().template get<UIComponent>().rect();
-  // The press half of a closing click is the popover's outside-press
-  // dismissal. Without remembering which side of it we were on, the
-  // release half lands as a fresh toggle and the anchor can never close
-  // its own palette.
-  // Latch, never overwrite: a press edge can stay raised into the frame
-  // after dismissal already set open false, and re-recording then would
-  // clear the memory this guard exists to keep.
-  if (ctx.mouse.just_pressed && open && is_mouse_inside(ctx.mouse.pos, anchor))
-    state.press_began_while_open = true;
-  if (btn && !config.disabled && !state.press_began_while_open)
+  if (color_swatch_detail::popover_toggle(ctx, state, anchor,
+                                          static_cast<bool>(btn), open,
+                                          config.disabled))
     open = !open;
-  if (ctx.mouse.just_released)
-    state.press_began_while_open = false;
 
   const auto layout =
       color_swatch_detail::preset_layout(item_h, presets.size());
@@ -483,6 +832,62 @@ ElementResult color_swatch_presets(HasUIContext auto &ctx,
         true, picked);
     if (picked)
       open = false;
+  }
+  return ElementResult{changed, entity};
+}
+
+// The popover editor shape: the swatch button opens an anchored panel
+// with a saturation/value square, hue and alpha strips, a hex field,
+// and before/after chips. Drags, arrow keys and hex edits write
+// through; the panel stays open until the anchor, an outside press,
+// or MenuBack dismisses it.
+ElementResult color_swatch_editor(HasUIContext auto &ctx,
+                                  EntityParent ep_pair, Color &value,
+                                  bool &open,
+                                  ComponentConfig config = ComponentConfig()) {
+  auto [entity, parent] = deref(ep_pair);
+  const float item_h = color_swatch_detail::row_height(ctx, config);
+
+  auto container =
+      div(ctx, ep_pair,
+          ComponentConfig::inherit_from(config, "color_swatch_editor")
+              .with_size(ComponentSize{config.size.x_axis, children(item_h)})
+              .with_flex_direction(FlexDirection::Column)
+              .with_transparent_bg()
+              .without_border());
+
+  auto &state = entity.template addComponentIfMissing<HasColorSwatchState>();
+  if (!open) {
+    state.editor_tracking = false;
+    state.editor_changed = false;
+    state.editor_square_id = -1;
+  }
+  auto button_config = ComponentConfig(config).with_size(
+      ComponentSize{percent(1.f), pixels(item_h)});
+  auto btn =
+      color_swatch_button(ctx, mk(container.ent(), 0), value, button_config);
+  const RectangleType anchor = btn.ent().template get<UIComponent>().rect();
+  if (color_swatch_detail::popover_toggle(ctx, state, anchor,
+                                          static_cast<bool>(btn), open,
+                                          config.disabled))
+    open = !open;
+
+  const auto layout = color_swatch_detail::editor_layout(item_h);
+  auto pop_config =
+      ComponentConfig::inherit_from(config, "color_editor_popover")
+          .with_size(
+              ComponentSize{pixels(layout.width), pixels(layout.height)})
+          .with_border(ctx.theme.from_usage(Theme::Usage::Secondary),
+                       std::max(1.f, item_h * 0.04f))
+          .with_corner_radius(std::max(2.f, item_h * 0.25f))
+          .with_render_layer(config.render_layer + 1);
+
+  bool changed = false;
+  if (auto pop = popover(ctx, mk(container.ent(), 1), anchor, open,
+                         overlay::Placement::Below, pop_config)) {
+    changed = color_swatch_detail::editor_panel(
+        ctx, mk(pop.ent(), 0), entity.id, state, value, layout, config,
+        item_h);
   }
   return ElementResult{changed, entity};
 }

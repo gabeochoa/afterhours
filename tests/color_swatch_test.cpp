@@ -254,4 +254,121 @@ TEST(preset_hover_previews_on_the_anchor_without_publishing) {
   }
 }
 
+TEST(editor_popover_closed_builds_no_editor) {
+  ImmTestHarness h;
+  Color value{60, 101, 156, 255};
+  bool open = false;
+  h.begin_frame();
+  color_swatch_editor(h.context(), mk(h.root(), 0), value, open,
+                      swatch_cfg("accent_editor"));
+  h.layout_only();
+  ui_test::check(count_named("color_sv_square") == 0,
+                 "a closed editor builds no SV square", __FILE__, __LINE__);
+  ui_test::check(count_named("color_hue_strip") == 0,
+                 "a closed editor builds no hue strip", __FILE__, __LINE__);
+  ui_test::check(count_named("color_alpha_strip") == 0,
+                 "a closed editor builds no alpha strip", __FILE__, __LINE__);
+  ui_test::check(count_named("color_hex_field") == 0,
+                 "a closed editor builds no hex field", __FILE__, __LINE__);
+}
+
+TEST(editor_popover_open_builds_square_strips_hex_and_compare) {
+  ImmTestHarness h;
+  Color value{60, 101, 156, 255};
+  bool open = true;
+  auto emit = [&] {
+    return color_swatch_editor(h.context(), mk(h.root(), 0), value, open,
+                               swatch_cfg("accent_editor"));
+  };
+  h.begin_frame(); emit(); h.layout_only();
+  h.begin_frame(); emit(); h.layout_only();
+
+  ui_test::check(open, "the editor stays open once it holds focus", __FILE__,
+                 __LINE__);
+  for (const char *name : {"color_sv_square", "color_hue_strip",
+                           "color_alpha_strip", "color_editor_before",
+                           "color_editor_after"})
+    ui_test::check(h.find(name) != nullptr, "each editor part is built",
+                   __FILE__, __LINE__);
+  ui_test::check(count_named("color_hex_field") == 1,
+                 "the hex field is built under the strips", __FILE__,
+                 __LINE__);
+  const UIComponent *panel = h.find("popover_panel");
+  const UIComponent *square = h.find("color_sv_square");
+  const UIComponent *after = h.find("color_editor_after");
+  ui_test::check(panel != nullptr && square != nullptr && after != nullptr,
+                 "the panel, square and compare chip exist", __FILE__,
+                 __LINE__);
+  if (panel && square && after) {
+    const RectangleType pr = panel->rect();
+    const RectangleType sr = square->rect();
+    const RectangleType ar = after->rect();
+    ui_test::check(sr.width > 40.f && sr.height > 20.f,
+                   "the SV square has a drag surface", __FILE__, __LINE__);
+    ui_test::check(sr.x >= pr.x - 1.f && sr.y >= pr.y - 1.f &&
+                       ar.x + ar.width <= pr.x + pr.width + 1.f &&
+                       ar.y + ar.height <= pr.y + pr.height + 1.f,
+                   "the editor fits inside the sized popover panel",
+                   __FILE__, __LINE__);
+  }
+  ui_test::check(color_swatch_detail::same_color(value, test_presets[0]),
+                 "building does not change the value", __FILE__, __LINE__);
+}
+
+TEST(editor_pending_edits_publish_on_the_next_build) {
+  ImmTestHarness h;
+  Color value{60, 101, 156, 255};
+  bool open = true;
+  auto emit = [&] {
+    return color_swatch_editor(h.context(), mk(h.root(), 0), value, open,
+                               swatch_cfg("accent_editor"));
+  };
+  h.begin_frame(); emit(); h.layout_only();
+  h.begin_frame(); auto result = emit(); h.layout_only();
+
+  const UIComponent *hue_strip = h.find("color_hue_strip");
+  ui_test::check(hue_strip != nullptr, "the hue strip exists", __FILE__,
+                 __LINE__);
+  if (!hue_strip)
+    return;
+  auto strip_entity = UICollectionHolder::getEntityForID(hue_strip->id);
+  ui_test::check(strip_entity->has<HasLeftRightListener>(),
+                 "the hue strip takes arrow keys", __FILE__, __LINE__);
+  if (strip_entity->has<HasLeftRightListener>())
+    strip_entity->get<HasLeftRightListener>().cb(strip_entity.asE(), 1);
+
+  ui_test::check(color_swatch_detail::same_color(value, test_presets[0]),
+                 "a drag or key edit lands in state first", __FILE__,
+                 __LINE__);
+  h.begin_frame(); emit(); h.layout_only();
+  colors::HSV expected_hsv = colors::to_hsv(test_presets[0]);
+  expected_hsv.h += 1.f;
+  const Color expected = colors::from_hsv(expected_hsv, 255);
+  ui_test::check(color_swatch_detail::same_color(value, expected),
+                 "the next build publishes the hue edit", __FILE__,
+                 __LINE__);
+
+  auto &state = result.ent().template get<HasColorSwatchState>();
+  state.editor_value = Color{255, 0, 0, 128};
+  state.editor_changed = true;
+  h.begin_frame(); emit(); h.layout_only();
+  h.begin_frame(); emit(); h.layout_only();
+  ui_test::check(
+      color_swatch_detail::same_color(value, Color{255, 0, 0, 128}),
+      "a square drag publishes through the same pending state", __FILE__,
+      __LINE__);
+  const UIComponent *before = h.find("color_editor_before");
+  ui_test::check(before != nullptr, "the before chip exists", __FILE__,
+                 __LINE__);
+  if (before) {
+    auto before_entity = UICollectionHolder::getEntityForID(before->id);
+    ui_test::check(before_entity->has<HasColor>() &&
+                       color_swatch_detail::same_color(
+                           before_entity->get<HasColor>().color(),
+                           test_presets[0]),
+                   "the before chip still shows the opening colour",
+                   __FILE__, __LINE__);
+  }
+}
+
 int main() { return ui_test::run_registered_tests("color_swatch"); }
