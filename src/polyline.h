@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <numbers>
 #include <vector>
 
 #include "drawing_helpers.h"
@@ -31,6 +32,109 @@ inline float total_length(const std::vector<Vector2Type> &pts) {
   for (size_t i = 0; i + 1 < pts.size(); i++)
     len += distance(pts[i], pts[i + 1]);
   return len;
+}
+
+enum class ChevronDirection { Right, Down, Left, Up };
+
+struct ChevronPoints {
+  Vector2Type first;
+  Vector2Type tip;
+  Vector2Type second;
+};
+
+inline float chevron_direction_radians(ChevronDirection direction) {
+  constexpr float pi = std::numbers::pi_v<float>;
+  switch (direction) {
+  case ChevronDirection::Right:
+    return 0.f;
+  case ChevronDirection::Down:
+    return pi * 0.5f;
+  case ChevronDirection::Left:
+    return pi;
+  case ChevronDirection::Up:
+    return -pi * 0.5f;
+  }
+  return 0.f;
+}
+
+// Screen coordinates: y is down and positive angles turn clockwise. The tip
+// points along direction_radians; both arms trail behind it by half_open.
+inline ChevronPoints chevron_points(Vector2Type tip, float arm,
+                                    float direction_radians,
+                                    float half_open_radians) {
+  if (arm <= 0.f)
+    return ChevronPoints{tip, tip, tip};
+  const float back = direction_radians + std::numbers::pi_v<float>;
+  const auto endpoint = [&](float angle) {
+    return Vector2Type{tip.x + arm * std::cos(angle),
+                       tip.y + arm * std::sin(angle)};
+  };
+  return ChevronPoints{endpoint(back - half_open_radians), tip,
+                       endpoint(back + half_open_radians)};
+}
+
+inline ChevronPoints chevron_points(
+    Vector2Type tip, float arm, ChevronDirection direction,
+    float half_open_radians = std::numbers::pi_v<float> * 0.25f) {
+  return chevron_points(tip, arm, chevron_direction_radians(direction),
+                        half_open_radians);
+}
+
+inline ChevronPoints chevron_points_in_rect(RectangleType bounds,
+                                            ChevronDirection direction) {
+  const float left = bounds.x;
+  const float right = bounds.x + bounds.width;
+  const float top = bounds.y;
+  const float bottom = bounds.y + bounds.height;
+  const float cx = bounds.x + bounds.width * 0.5f;
+  const float cy = bounds.y + bounds.height * 0.5f;
+  switch (direction) {
+  case ChevronDirection::Right:
+    return ChevronPoints{Vector2Type{left, bottom}, Vector2Type{right, cy},
+                         Vector2Type{left, top}};
+  case ChevronDirection::Down:
+    return ChevronPoints{Vector2Type{left, top}, Vector2Type{cx, bottom},
+                         Vector2Type{right, top}};
+  case ChevronDirection::Left:
+    return ChevronPoints{Vector2Type{right, top}, Vector2Type{left, cy},
+                         Vector2Type{right, bottom}};
+  case ChevronDirection::Up:
+    return ChevronPoints{Vector2Type{left, bottom}, Vector2Type{cx, top},
+                         Vector2Type{right, bottom}};
+  }
+  return chevron_points_in_rect(bounds, ChevronDirection::Right);
+}
+
+inline void draw_chevron(const ChevronPoints &points, float thickness,
+                         const Color color) {
+  if (thickness <= 0.f)
+    return;
+  if (distance(points.first, points.tip) <= 0.f ||
+      distance(points.tip, points.second) <= 0.f)
+    return;
+  draw_line_ex(points.first, points.tip, thickness, color);
+  draw_line_ex(points.tip, points.second, thickness, color);
+}
+
+inline void draw_chevron(Vector2Type tip, float arm, float direction_radians,
+                         float half_open_radians, float thickness,
+                         const Color color) {
+  draw_chevron(chevron_points(tip, arm, direction_radians, half_open_radians),
+               thickness, color);
+}
+
+inline void draw_chevron(
+    Vector2Type tip, float arm, ChevronDirection direction, float thickness,
+    const Color color,
+    float half_open_radians = std::numbers::pi_v<float> * 0.25f) {
+  draw_chevron(chevron_points(tip, arm, direction, half_open_radians),
+               thickness, color);
+}
+
+inline void draw_chevron_in_rect(RectangleType bounds,
+                                 ChevronDirection direction, float thickness,
+                                 const Color color) {
+  draw_chevron(chevron_points_in_rect(bounds, direction), thickness, color);
 }
 
 // Evenly spaced points along the curve. A bezier sampler walks uniformly in t,

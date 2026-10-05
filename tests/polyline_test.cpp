@@ -177,6 +177,30 @@ int main() {
     CHECK(polyline::resample_by_arclength(one, 5.f).size() == 1);
   }
 
+  // Chevron geometry: the tip points in the requested screen direction and
+  // the arms trail behind it. Screen y is down, so Down is a v and Right is >.
+  {
+    const auto right = polyline::chevron_points(
+        Vector2Type{10.f, 10.f}, 10.f, polyline::ChevronDirection::Right);
+    CHECK(near(right.tip.x, 10.f) && near(right.tip.y, 10.f));
+    CHECK(near(right.first.x, 2.93f) && near(right.first.y, 17.07f));
+    CHECK(near(right.second.x, 2.93f) && near(right.second.y, 2.93f));
+
+    const auto down = polyline::chevron_points_in_rect(
+        RectangleType{0.f, 0.f, 20.f, 10.f}, polyline::ChevronDirection::Down);
+    CHECK(near(down.first.x, 0.f) && near(down.first.y, 0.f));
+    CHECK(near(down.tip.x, 10.f) && near(down.tip.y, 10.f));
+    CHECK(near(down.second.x, 20.f) && near(down.second.y, 0.f));
+
+    capture::clear();
+    polyline::draw_chevron(down, 2.f, Color{255, 255, 255, 255});
+    CHECK(capture::calls().size() == 2);
+    polyline::draw_chevron(Vector2Type{10.f, 10.f}, 0.f,
+                           polyline::ChevronDirection::Up, 2.f,
+                           Color{255, 255, 255, 255});
+    CHECK(capture::calls().size() == 2);
+  }
+
   capture::clear();
   std::printf("%d/%d checks passed\n", checks - failures, checks);
   if (failures == 0) std::printf("All checks passed!\n");
