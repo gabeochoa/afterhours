@@ -223,6 +223,29 @@ TEST(backdrop_release_belongs_to_the_modal_present_on_press) {
   }
 }
 
+TEST(default_modal_is_not_light_dismissed_by_backdrop) {
+  ImmTestHarness h;
+  ensure_modal_singleton();
+  modal::detail::get_modal_root().modal_stack.clear();
+  EntityHelper::registerSingleton<UIContext<ui_test::TestInputAction>>(h.context_entity());
+  modal::ModalCloseWatcherSystem<ui_test::TestInputAction> watcher;
+  bool open = true;
+  auto panel = afterhours::modal(h.context(), mk(h.root(), 0), open,
+      ModalConfig{}.with_size(pixels(320), pixels(160))
+          .with_show_close_button(false));
+  h.layout_only(); watcher.once(0);
+  CHECK(panel.ent().get<modal::Modal>().closed_by == ClosedBy::CloseRequest);
+  h.context().mouse.pos = {10, 10};
+  h.context().mouse.just_pressed = true;
+  watcher.once(0);
+  h.context().mouse.just_pressed = false;
+  h.context().mouse.just_released = true;
+  watcher.once(0);
+  CHECK(!panel.ent().get<modal::Modal>().pending_close);
+  EntityHelper::get_default_collection().singletonMap.erase(
+      components::get_type_id<UIContext<ui_test::TestInputAction>>());
+}
+
 TEST(opening_press_does_not_light_dismiss_its_new_modal) {
   ImmTestHarness h;
   ensure_modal_singleton();
