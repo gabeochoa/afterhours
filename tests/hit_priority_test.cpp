@@ -213,6 +213,7 @@ TEST(a_held_press_does_not_transfer_to_what_it_moves_over) {
   ImmTestHarness h;
 
   bool a_fired = false, b_fired = false;
+  EntityID a_id = -100, b_id = -100;
 
   auto emit = [&] {
     auto a = div(h.context(), mk(h.root(), 0),
@@ -222,6 +223,7 @@ TEST(a_held_press_does_not_transfer_to_what_it_moves_over) {
                      .with_debug_name("a"));
     a.ent().addComponentIfMissing<HasClickListener>(
         [&](Entity &) { a_fired = true; });
+    a_id = a.ent().id;
     auto b = div(h.context(), mk(h.root(), 1),
                  ComponentConfig{}
                      .with_size(ComponentSize{pixels(80), pixels(40)})
@@ -229,6 +231,7 @@ TEST(a_held_press_does_not_transfer_to_what_it_moves_over) {
                      .with_debug_name("b"));
     b.ent().addComponentIfMissing<HasClickListener>(
         [&](Entity &) { b_fired = true; });
+    b_id = b.ent().id;
   };
 
   h.begin_frame(); emit(); h.layout_only(); mark_rendered();
@@ -247,10 +250,104 @@ TEST(a_held_press_does_not_transfer_to_what_it_moves_over) {
 
   ui_test::check(!b_fired, "B does not fire under a press it never received",
                  __FILE__, __LINE__);
-  ui_test::check(h.context().is_active(h.context().ROOT) == false,
-                 "the gesture still owns active", __FILE__, __LINE__);
-  fprintf(stderr, "        a_fired=%d b_fired=%d active=%d\n", (int)a_fired,
-          (int)b_fired, (int)h.context().active_id);
+  ui_test::check(h.context().is_active(a_id),
+                 "active stays on the pressed element", __FILE__, __LINE__);
+  ui_test::check(h.context().is_hot(a_id),
+                 "hot stays locked to the pressed element while held",
+                 __FILE__, __LINE__);
+  ui_test::check(!h.context().is_hot(b_id),
+                 "the crossed element does not take hover during the drag",
+                 __FILE__, __LINE__);
+  UIComponent *a_cmp = h.find("a");
+  UIComponent *b_cmp = h.find("b");
+  ui_test::check(a_cmp != nullptr && b_cmp != nullptr,
+                 "both elements are findable for the legacy helper check",
+                 __FILE__, __LINE__);
+  if (a_cmp && b_cmp) {
+    h.context().set_hot(h.context().ROOT);
+    h.context().active_if_mouse_inside(b_id, b_cmp->rect());
+    ui_test::check(!h.context().is_hot(b_id),
+                   "legacy helper does not give hot to the crossed element",
+                   __FILE__, __LINE__);
+    h.context().active_if_mouse_inside(a_id, a_cmp->rect());
+    ui_test::check(h.context().is_hot(a_id),
+                   "legacy helper relocks hot to the active element",
+                   __FILE__, __LINE__);
+  }
+  fprintf(stderr, "        a_fired=%d b_fired=%d active=%d hot=%d\n",
+          (int)a_fired, (int)b_fired, (int)h.context().active_id,
+          (int)h.context().hot_id);
+}
+
+// Locking hot while held must not turn release-outside into a click. The
+// release frame is the end of the gesture: resolution sees the real pointer
+// position again, so releasing back inside still clicks and releasing over
+// another element cancels.
+TEST(release_position_decides_a_release_mode_click_after_hot_locks) {
+  auto release_after_drag = [](float release_x) {
+    ImmTestHarness h;
+    bool a_fired = false, b_fired = false;
+    EntityID a_id = -100, b_id = -100;
+
+    auto emit = [&] {
+      auto a = div(h.context(), mk(h.root(), 0),
+                   ComponentConfig{}
+                       .with_size(ComponentSize{pixels(80), pixels(40)})
+                       .with_absolute_position(0.f, 0.f)
+                       .with_click_activation(ClickActivationMode::Release)
+                       .with_debug_name("release_a"));
+      a.ent().addComponentIfMissing<HasClickListener>(
+          [&](Entity &) { a_fired = true; });
+      a_id = a.ent().id;
+      auto b = div(h.context(), mk(h.root(), 1),
+                   ComponentConfig{}
+                       .with_size(ComponentSize{pixels(80), pixels(40)})
+                       .with_absolute_position(200.f, 0.f)
+                       .with_click_activation(ClickActivationMode::Release)
+                       .with_debug_name("release_b"));
+      b.ent().addComponentIfMissing<HasClickListener>(
+          [&](Entity &) { b_fired = true; });
+      b_id = b.ent().id;
+    };
+
+    h.begin_frame(); emit(); h.layout_only(); mark_rendered();
+    press_at(h.context(), 40.f, 20.f); // inside A
+    run_clicks(h);
+    ui_test::check(!a_fired && !b_fired,
+                   "release-mode press does not fire before release",
+                   __FILE__, __LINE__);
+    ui_test::check(h.context().is_active(a_id) && h.context().is_hot(a_id),
+                   "press claims hot and active on A", __FILE__, __LINE__);
+
+    h.begin_frame(); emit(); h.layout_only(); mark_rendered();
+    h.context().mouse.pos = input::MousePosition{240.f, 20.f}; // over B
+    h.context().mouse.left_down = true;
+    h.context().mouse.just_pressed = false;
+    h.context().mouse.just_released = false;
+    h.context().mouse.press_moved = true;
+    run_clicks(h);
+    ui_test::check(h.context().is_hot(a_id),
+                   "held frame keeps hot locked to A", __FILE__, __LINE__);
+    ui_test::check(!h.context().is_hot(b_id),
+                   "held frame does not give hover to B", __FILE__, __LINE__);
+
+    h.begin_frame(); emit(); h.layout_only(); mark_rendered();
+    h.context().mouse.pos = input::MousePosition{release_x, 20.f};
+    h.context().mouse.left_down = false;
+    h.context().mouse.just_pressed = false;
+    h.context().mouse.just_released = true;
+    h.context().mouse.press_moved = false;
+    run_clicks(h);
+    ui_test::check(!b_fired, "B never fires for a gesture that began on A",
+                   __FILE__, __LINE__);
+    return a_fired;
+  };
+
+  ui_test::check(!release_after_drag(240.f),
+                 "releasing over B cancels A's click", __FILE__, __LINE__);
+  ui_test::check(release_after_drag(40.f),
+                 "releasing back over A completes A's click", __FILE__,
+                 __LINE__);
 }
 
 int main() { return ui_test::run_registered_tests("hit priority"); }

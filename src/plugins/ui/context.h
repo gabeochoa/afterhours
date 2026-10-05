@@ -384,6 +384,14 @@ template <typename InputAction> struct UIContext final : BaseComponent {
       return;
     }
 
+    const bool hot_locked =
+        mouse.left_down && active_id != ROOT && active_id != FAKE;
+    if (hot_locked) {
+      if (is_active(id))
+        set_hot(id);
+      return;
+    }
+
     if (is_mouse_inside(mouse.pos, rect)) {
       set_hot(id);
       if (is_active(ROOT) && mouse.left_down) {

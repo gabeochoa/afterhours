@@ -820,12 +820,18 @@ struct ResolveHitTarget : SystemWithUIContext<> {
       visit(*e, winner, best_layer);
     }
 
-    context->set_hot(winner);
+    const EntityID locked_active = context->active_id;
+    const bool hot_locked = context->mouse.left_down &&
+                            locked_active != context->ROOT &&
+                            locked_active != context->FAKE;
+    context->set_hot(hot_locked ? locked_active : winner);
     // The condition active_if_mouse_inside used: claim on press only, and
     // never steal from a press already in flight. active deliberately persists
     // across frames (BeginUIContextManager resets hot_id but not active_id),
     // which is what keeps press-and-hold and drags alive once the cursor
-    // leaves the element.
+    // leaves the element. While the button stays down, hot is locked to that
+    // active element; the release frame has left_down false, so click
+    // resolution sees the real element under the pointer again.
     if (winner != context->ROOT && context->mouse.left_down &&
         context->is_active(context->ROOT))
       context->set_active(winner);
