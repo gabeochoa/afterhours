@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "../core/base_component.h"
-#include "../core/entity_helper.h"
+#include "../ecs.h"
 #include "../core/entity_query.h"
 #include "../developer.h"
 #include "language.h" // translation::Language (kept here so existing users are unaffected)
