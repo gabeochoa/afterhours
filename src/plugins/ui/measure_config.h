@@ -78,6 +78,14 @@ inline MeasuredConfig measure_config(const ComponentConfig &config,
       resolve_to_pixels(config.font_size, screen_h,
                         config.scaling_mode.value_or(UIStylingDefaults::get().scaling_mode),
                         theme.ui_scale);
+  // A pinned line height replaces the measured one, matching the layout.
+  const float line_px =
+      config.text_area_line_height.has_value()
+          ? resolve_to_pixels(
+                *config.text_area_line_height, screen_h,
+                config.scaling_mode.value_or(UIStylingDefaults::get().scaling_mode),
+                theme.ui_scale)
+          : 0.f;
   // The renderer reserves this inside the box, and Dim::Text charges for it,
   // so a measurement that skipped it would be short by both sides.
   const Vector2Type inset = config.text_inset.value_or(theme.text_inset);
@@ -104,11 +112,17 @@ inline MeasuredConfig measure_config(const ComponentConfig &config,
         const float max_w = wraps ? available_w - inset_x : 1e9f;
         const auto m = ui::measure_text_wrapped(config.label, max_w,
                                             config.font_name, font_px);
-        return is_x ? m.width + inset_x : m.height;
+        if (is_x)
+          return m.width + inset_x;
+        return line_px > 0.f
+                   ? line_px * static_cast<float>(std::max(1, m.line_count))
+                   : m.height;
       }
       const Vector2Type one =
           ui::measure_text_line(config.label, config.font_name, font_px);
-      return is_x ? one.x + inset_x : one.y;
+      if (is_x)
+        return one.x + inset_x;
+      return line_px > 0.f ? line_px : one.y;
     }
     case Dim::Children:
     case Dim::Expand:

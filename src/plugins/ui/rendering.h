@@ -851,7 +851,9 @@ static inline void draw_text_in_rect(
     // block fits is the parent call's question, and it has already answered it.
     bool report_overflow = true,
     Vector2Type inset = default_text_inset(),
-    bool register_text = true) {
+    bool register_text = true,
+    // Pinned row height for the multiline split; 0 means the measured one.
+    float line_height_px = 0.0f) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
   // Register text for E2E testing assertions (only visible-in-viewport text)
   if (register_text && testing::test_input::detail::test_mode) {
@@ -901,8 +903,13 @@ static inline void draw_text_in_rect(
         detail::wrap_text_to_width(text, max_width, line_width);
 
     if (lines.size() > 1) {
-      float line_h = measure_text(font, "Ag", font_size, spacing).y;
-      if (explicit_font_size <= 0.f && rect.height > 0.f) {
+      float line_h = line_height_px > 0.f
+                         ? line_height_px
+                         : measure_text(font, "Ag", font_size, spacing).y;
+      // A pinned row height is the caller's row, so the font is not shrunk
+      // to fit it; lines past the bottom are dropped by the loop below.
+      if (line_height_px <= 0.f && explicit_font_size <= 0.f &&
+          rect.height > 0.f) {
         const float want = line_h * static_cast<float>(lines.size());
         if (want > rect.height) {
           font_size *= rect.height / want;
@@ -1075,7 +1082,9 @@ static inline void draw_runs_in_rect(
     TextOverflow text_overflow = TextOverflow::Clip, float letter_spacing = 0.0f,
     float explicit_font_size = 0.0f, const std::string &joined = "",
     Vector2Type inset = default_text_inset(),
-    bool register_text = true) {
+    bool register_text = true,
+    // Pinned row height; 0 means the measured one.
+    float line_height_px = 0.0f) {
   if (runs.empty() || rect.width <= 0.f)
     return;
 
@@ -1121,10 +1130,14 @@ static inline void draw_runs_in_rect(
                    wrap_key,
                    detail::wrap_runs_to_width(runs, wrap_width,
                                               weighted_width));
-  float line_h = measure_text(font, "Ag", font_size, spacing).y;
+  float line_h = line_height_px > 0.f
+                     ? line_height_px
+                     : measure_text(font, "Ag", font_size, spacing).y;
   // Auto-fit above sized the font against the joined text, i.e. for a single
-  // line. Hard breaks still split it, so shrink to fit every line.
-  if (explicit_font_size <= 0.f && lines.size() > 1 && rect.height > 0.f) {
+  // line. Hard breaks still split it, so shrink to fit every line. A pinned
+  // row height is not shrunk: lines past the bottom are dropped below.
+  if (line_height_px <= 0.f && explicit_font_size <= 0.f && lines.size() > 1 &&
+      rect.height > 0.f) {
     const float want = line_h * static_cast<float>(lines.size());
     if (want > rect.height) {
       font_size *= rect.height / want;
@@ -1833,6 +1846,12 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         explicit_fs = resolve_to_pixels(cmp.font_size, context.screen_height,
                                         cmp.resolved_scaling_mode, uis);
       }
+      const float label_line_h =
+          hasLabel.line_height.has_value()
+              ? resolve_to_pixels(*hasLabel.line_height, context.screen_height,
+                                  cmp.resolved_scaling_mode,
+                                  imm::ThemeDefaults::get().theme.ui_scale)
+              : 0.f;
 
       const Vector2Type immediate_inset =
           resolve_text_inset(context.theme, hasLabel.text_inset);
@@ -1869,14 +1888,16 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                           hasLabel.alignment, SHOW_TEXT_OVERFLOW_DEBUG, stroke,
                           shadow, rotation, centerX, centerY,
                           hasLabel.text_overflow, hasLabel.letter_spacing,
-                          explicit_fs, hasLabel.label, immediate_inset, false);
+                          explicit_fs, hasLabel.label, immediate_inset, false,
+                          label_line_h);
       } else {
         draw_text_in_rect(font_manager, hasLabel.label.c_str(), label_rect,
                           hasLabel.alignment, font_col,
                           SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation,
                           centerX, centerY, hasLabel.text_overflow,
                           hasLabel.letter_spacing, explicit_fs,
-                          /*report_overflow=*/true, immediate_inset, false);
+                          /*report_overflow=*/true, immediate_inset, false,
+                          label_line_h);
       }
       if (clip_label) {
         if (ancestor_clip)
@@ -2449,6 +2470,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         explicit_fs = resolve_to_pixels(cmp.font_size, context.screen_height,
                                         cmp.resolved_scaling_mode, uis);
       }
+      const float label_line_h =
+          hasLabel.line_height.has_value()
+              ? resolve_to_pixels(*hasLabel.line_height, context.screen_height,
+                                  cmp.resolved_scaling_mode,
+                                  imm::ThemeDefaults::get().theme.ui_scale)
+              : 0.f;
 
       const Vector2Type label_inset =
           resolve_text_inset(context.theme, hasLabel.text_inset);
@@ -2550,8 +2577,13 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         const bool has_spans = !hasLabel.spans.empty();
         const bool wants_wrap =
             hasLabel.text_overflow == TextOverflow::Wrap && explicit_fs > 0.f;
-        if ((wants_wrap || has_spans) && !display_text.empty() &&
-            label_rect.width > 0.f) {
+        // Hard breaks split here too, as in the immediate path: a single
+        // text command with '\n' embedded only renders as lines on backends
+        // whose draw honours it.
+        const bool has_hard_break =
+            display_text.find('\n') != std::string::npos;
+        if ((wants_wrap || has_spans || has_hard_break) &&
+            !display_text.empty() && label_rect.width > 0.f) {
           Font font = font_manager.get_active_font();
           const std::string resolved =
               font_manager.resolve_weighted(cmp.font_name, cmp.font_weight);
@@ -2597,7 +2629,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
             // A single colourless line is what the path below already draws.
             if (lines.size() > 1 || has_spans) {
               const float line_h =
-                  measure_text(font, "Ag", font_size, spacing).y;
+                  label_line_h > 0.f
+                      ? label_line_h
+                      : measure_text(font, "Ag", font_size, spacing).y;
               const float total_h = line_h * static_cast<float>(lines.size());
               float y = label_rect.y +
                         std::max(0.f, (label_rect.height - total_h) * 0.5f);

@@ -197,6 +197,64 @@ TEST(dim_text_height_matches_the_wrapped_line_count) {
                static_cast<float>(drawn_count) * LINE_H);
 }
 
+// with_line_height pins the row height a label's lines stack at, so a caller
+// that needs fixed rows (a reel, a table cell) is not at the mercy of the
+// face's natural leading. Layout, drawing and measure_config must all use
+// the same number or they disagree by the difference on every line.
+TEST(line_height_override_sizes_and_stacks_wrapped_lines) {
+  ImmTestHarness h;
+  auto para = div(h.context(), mk(h.root(), 0),
+                  ComponentConfig{}
+                      .with_size(ComponentSize{pixels(200),
+                                               Size{Dim::Text, 0.f, 1.f}})
+                      .with_label("the quick brown fox jumps over the lazy dog "
+                                  "again and again and again")
+                      .with_text_overflow(TextOverflow::Wrap)
+                      .with_font_size(FS)
+                      .with_line_height(pixels(30.f)));
+  h.render();
+
+  const auto calls = h.drawn("text");
+  CHECK(calls.size() > 1);
+  if (calls.size() < 2)
+    return;
+  CHECK_APPROX(line_gap(calls), 30.f);
+  CHECK_APPROX(rect_of(para).height, static_cast<float>(calls.size()) * 30.f);
+}
+
+TEST(line_height_override_stacks_hard_broken_lines) {
+  ImmTestHarness h;
+  div(h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(300), pixels(120)})
+          .with_label("aaa\nbbb\nccc")
+          .with_font_size(FS)
+          .with_line_height(pixels(30.f)));
+  h.render();
+
+  const auto calls = h.drawn("text");
+  CHECK(calls.size() == 3);
+  if (calls.size() != 3)
+    return;
+  // 3 rows * 30 = 90 in a 120 box, so the rows start 15 down; each 20px
+  // line of glyphs sits centred in its 30px row, 5 further down.
+  CHECK_APPROX(calls[0].rect.y, 20.f);
+  CHECK_APPROX(calls[1].rect.y, 50.f);
+  CHECK_APPROX(calls[2].rect.y, 80.f);
+}
+
+TEST(line_height_override_is_what_measure_config_reports) {
+  ImmTestHarness h;
+  h.render_font();
+  const auto cfg = ComponentConfig{}
+                       .with_size(ComponentSize{pixels(300),
+                                                Size{Dim::Text, 0.f, 1.f}})
+                       .with_label("aaa\nbbb")
+                       .with_font_size(FS)
+                       .with_line_height(pixels(30.f));
+  CHECK_APPROX(measure_config(cfg, 500.f).size.y, 60.f);
+}
+
 // Wrapping is only measured when the renderer would also wrap, which needs a
 // pinned font size. Under with_autofit() there is none, so neither side wraps
 // and the box stays one line -- consistent, if not what you wanted. The type
@@ -244,6 +302,24 @@ TEST(styled_label_hard_break_fits_the_box) {
   fprintf(stderr, "        line gap %.1f, block ends at %.1f (box 120)\n",
           line_gap(calls), bottom);
   CHECK(bottom <= 120.5f);
+}
+
+TEST(line_height_override_stacks_styled_lines) {
+  ImmTestHarness h;
+  div(h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(300), pixels(120)})
+          .with_styled_label({TextSpan{"red\n", Color{255, 0, 0, 255}},
+                              TextSpan{"green", Color{0, 255, 0, 255}}})
+          .with_font_size(FS)
+          .with_line_height(pixels(30.f)));
+  h.render();
+
+  const auto calls = h.drawn("text");
+  CHECK(calls.size() == 2);
+  if (calls.size() != 2)
+    return;
+  CHECK_APPROX(line_gap(calls), 30.f);
 }
 
 // Each run keeps its own colour across the break.
@@ -559,6 +635,27 @@ TEST(batched_styled_label_starts_where_a_plain_one_does) {
   fprintf(stderr, "        batched plain x=%.1f styled x=%.1f\n", plain_x,
           styled_x);
   CHECK_APPROX(styled_x, plain_x);
+}
+
+// The batched renderer is what the apps run, so the override has to hold
+// there too, not only in the immediate path above.
+TEST(batched_line_height_override_stacks_wrapped_lines) {
+  ImmTestHarness h;
+  div(h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(200), pixels(200)})
+          .with_label("the quick brown fox jumps over the lazy dog "
+                      "again and again and again")
+          .with_text_overflow(TextOverflow::Wrap)
+          .with_font_size(FS)
+          .with_line_height(pixels(30.f)));
+  h.render_batched();
+
+  const auto calls = h.drawn("text");
+  CHECK(calls.size() > 1);
+  if (calls.size() < 2)
+    return;
+  CHECK_APPROX(line_gap(calls), 30.f);
 }
 
 int main() { return ui_test::run_registered_tests("multiline text"); }

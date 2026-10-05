@@ -572,6 +572,9 @@ struct HasLabel : BaseComponent {
   float letter_spacing = 0.f; // Additional spacing between characters (pixels)
   // Per-side space between this label and its box; unset means Theme's value.
   std::optional<Vector2Type> text_inset;
+  // Row height the lines stack at, from with_line_height. Unset means the
+  // face's measured line height, which need not equal the font pixel size.
+  std::optional<Size> line_height;
 
   std::string label;
   // When non-empty, the label is drawn as a sequence of colored runs (each with
@@ -629,6 +632,11 @@ struct HasLabel : BaseComponent {
 
   auto &set_text_inset(const std::optional<Vector2Type> &inset) {
     text_inset = inset;
+    return *this;
+  }
+
+  auto &set_line_height(const std::optional<Size> &height) {
+    line_height = height;
     return *this;
   }
 

@@ -434,7 +434,10 @@ struct ComponentConfig {
     return *this;
   }
 
-  // Text area (multiline) configuration methods
+  // Multiline configuration methods. The line height is shared: it is the
+  // row height a text area's lines stack at and the row height a label's
+  // wrapped or hard-broken lines stack at (HasLabel::line_height). Unset, a
+  // label uses the face's measured line height.
   ComponentConfig &with_line_height(Size height) {
     text_area_line_height = height;
     return *this;

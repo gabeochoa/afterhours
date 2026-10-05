@@ -240,6 +240,7 @@ struct AutoLayout {
                     : fmt::format("entity_{}", widget.id));
     }
     Vector2Type result;
+    int line_count = 1;
     if (wraps || content.find('\n') != std::string::npos) {
       // max_width gets applied after this, so wrap against the capped width
       // or we count lines for a width the box never has.
@@ -250,6 +251,7 @@ struct AutoLayout {
         wrap_w = cap;
       const float max_w = wraps ? wrap_w - inset_both : 1e9f;
       const auto m = ui::detail::measure_wrapped(content, max_w, measure_one);
+      line_count = m.line_count;
       result = Vector2Type{m.width, m.height};
     } else {
       result = measure_one(content);
@@ -258,6 +260,14 @@ struct AutoLayout {
     // is sized to the bare glyphs and then drawn into with both sides taken
     // off, so the text it was measured from no longer fits.
     result.x += inset_both;
+    // A pinned line height replaces the measured one, so the box is the
+    // number of rows the renderer will stack at that height.
+    if (label.line_height.has_value()) {
+      const float lh = resolve_to_pixels(*label.line_height, screen_height,
+                                         widget.resolved_scaling_mode, ui_scale);
+      if (lh > 0.f)
+        result.y = lh * static_cast<float>(std::max(1, line_count));
+    }
 
     switch (axis) {
     case Axis::X:
