@@ -398,6 +398,34 @@ TEST(d6_ellipsis_with_children_sizing_terminates) {
                  __FILE__, __LINE__);
 }
 
+// A tab bar narrower than its labels together: tabs compress inside the
+// bar (their content floors are soft) and the labels ellipsize at full
+// font size, instead of the row spilling past the bar's edge. Batched
+// renderer, since that is what the apps run.
+TEST(narrow_tab_bar_ellipsizes_instead_of_overflowing) {
+  ImmTestHarness h;
+  std::vector<std::string> tabs = {"Notification badge", "Dropdown morphx",
+                                   "Avatar group hover"};
+  size_t active = 0;
+  tab_container(h.context(), mk(h.root(), 0), tabs, active,
+                ComponentConfig{}
+                    .with_size(ComponentSize{pixels(240), pixels(44)})
+                    .with_debug_name("tabs"));
+  h.render_batched();
+
+  auto texts = h.drawn("text");
+  ui_test::check(texts.size() == tabs.size(), "every tab label was drawn",
+                 __FILE__, __LINE__);
+  for (size_t i = 0; i < texts.size() && i < tabs.size(); ++i) {
+    const std::string &drawn = texts[i].text;
+    ui_test::check(drawn.size() < tabs[i].size(), "tab label was shortened",
+                   __FILE__, __LINE__);
+    ui_test::check(drawn.size() >= 3 &&
+                       drawn.compare(drawn.size() - 3, 3, "...") == 0,
+                   "tab label ends in an ellipsis", __FILE__, __LINE__);
+  }
+}
+
 // ===========================================================================
 // D14 -- with_disabled(true) must look disabled, not just act disabled
 //

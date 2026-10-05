@@ -880,13 +880,110 @@ struct AutoLayout {
     return -1.f;
   }
 
+  // A content floor (min_width(text())) on a label that ellipsizes is a
+  // preference, not a guarantee: the text itself declared it can truncate,
+  // so under pressure the box may go below the floor. Pixel floors are hard.
+  bool soft_text_floor(UIComponent &child, Axis axis) {
+    if (axis != Axis::X || child.min_size[axis].dim != Dim::Text)
+      return false;
+    const Entity &ent = to_ent(child.id);
+    return ent.has<HasLabel>() &&
+           ent.get<HasLabel>().text_overflow == TextOverflow::Ellipsis;
+  }
+
+  // Split `available` among Expand children honouring their min-size
+  // floors. Hard floors are paid first and always in full, even past the
+  // edge of the container (min beats expand). Soft floors freeze while
+  // they fit; when they cannot all fit they share what is left in
+  // proportion to the floors they wanted, landing below them -- that is
+  // where an ellipsizing label truncates instead of the row overflowing.
+  // Whatever is not frozen splits the remainder by expand weight.
+  void expand_targets_with_floors(
+      const SmallVector<UIComponent *, 16> &expanders,
+      const SmallVector<float, 16> &floors,
+      const SmallVector<char, 16> &soft_floor, Axis axis, float available,
+      SmallVector<float, 16> &targets) {
+    const size_t n = expanders.size();
+    const auto weight = [&](size_t i) {
+      return expanders[i]->desired[axis].value;
+    };
+    const auto share_of = [&](size_t i, float pool, float active_weight,
+                              size_t active_count) {
+      return active_weight > 0.f
+                 ? pool * (weight(i) / active_weight)
+                 : pool / static_cast<float>(active_count);
+    };
+
+    SmallVector<char, 16> frozen;
+    for (size_t i = 0; i < n; ++i)
+      frozen.push_back(0);
+    float remaining = available;
+    for (size_t i = 0; i < n; ++i) {
+      if (floors[i] > 0.f && !soft_floor[i]) {
+        targets[i] = floors[i];
+        frozen[i] = 1;
+        remaining -= floors[i];
+      }
+    }
+    if (remaining <= 0.f)
+      return;
+
+    float soft_total = 0.f;
+    for (size_t i = 0; i < n; ++i)
+      if (!frozen[i])
+        soft_total += floors[i];
+    if (soft_total > remaining) {
+      for (size_t i = 0; i < n; ++i)
+        if (!frozen[i])
+          targets[i] = remaining * (floors[i] / soft_total);
+      return;
+    }
+
+    while (true) {
+      float active_weight = 0.f;
+      size_t active_count = 0;
+      for (size_t i = 0; i < n; ++i)
+        if (!frozen[i]) {
+          active_weight += weight(i);
+          ++active_count;
+        }
+      if (active_count == 0)
+        return;
+      bool froze = false;
+      for (size_t i = 0; i < n; ++i) {
+        if (frozen[i] || floors[i] <= 0.f)
+          continue;
+        if (share_of(i, remaining, active_weight, active_count) <
+            floors[i] - 0.01f) {
+          targets[i] = floors[i];
+          remaining -= floors[i];
+          frozen[i] = 1;
+          froze = true;
+        }
+      }
+      if (froze)
+        continue;
+      for (size_t i = 0; i < n; ++i)
+        if (!frozen[i])
+          targets[i] = share_of(i, remaining, active_weight, active_count);
+      return;
+    }
+  }
+
   /// Apply min/max constraints to a widget's computed size.
   void apply_size_constraints(UIComponent &widget) {
     for (Axis axis : {Axis::X, Axis::Y}) {
       float min_val = resolve_constraint(widget, widget.min_size[axis], axis);
       float max_val = resolve_constraint(widget, widget.max_size[axis], axis);
 
-      if (min_val >= 0.f && widget.computed[axis] < min_val) {
+      // Soft text floors on expand children were settled by the split,
+      // possibly below the floor so the row fits; raising them again here
+      // would push the row back out of the container.
+      const bool floor_settled_by_split =
+          widget.desired[axis].dim == Dim::Expand &&
+          soft_text_floor(widget, axis);
+      if (!floor_settled_by_split && min_val >= 0.f &&
+          widget.computed[axis] < min_val) {
         widget.computed[axis] = min_val;
       }
       if (max_val >= 0.f && widget.computed[axis] > max_val) {
@@ -912,11 +1009,6 @@ struct AutoLayout {
     if (total_expand_weight > 0.f) {
       float available_space = std::abs(error);
 
-      // Each share is snapped down later, on its own, so a plain proportional
-      // split loses up to a grid unit per child. Eight cards in a row came to
-      // 47px short and the slack all piled up on the right. Hand out whole
-      // units and give the remainder to the largest fractions instead, which
-      // fills the row and leaves siblings at most one unit apart.
       SmallVector<UIComponent *, 16> expanders;
       bool all_snappable = enable_grid_snapping;
       for (UIComponent *child : layout_children) {
@@ -927,6 +1019,79 @@ struct AutoLayout {
           all_snappable = false;
       }
 
+      // Floors take part in the split: a child frozen at its floor is paid
+      // for by the others (see expand_targets_with_floors). Splitting first
+      // and raising to the floor afterwards always overshot the container
+      // by however much the longest tab needed.
+      const size_t n = expanders.size();
+      SmallVector<float, 16> floors;
+      SmallVector<char, 16> soft_floor;
+      float total_floor = 0.f;
+      for (UIComponent *child : expanders) {
+        const float m =
+            resolve_constraint(*child, child->min_size[axis], axis);
+        const float fv = m > 0.f ? m : 0.f;
+        floors.push_back(fv);
+        total_floor += fv;
+        soft_floor.push_back(soft_text_floor(*child, axis) ? 1 : 0);
+      }
+      if (total_floor > 0.f && n > 0) {
+        SmallVector<float, 16> targets;
+        for (size_t i = 0; i < n; ++i)
+          targets.push_back(0.f);
+        expand_targets_with_floors(expanders, floors, soft_floor, axis,
+                                   available_space, targets);
+        if (all_snappable) {
+          const float unit = grid_unit();
+          const int total_units =
+              static_cast<int>(std::floor(available_space / unit));
+          SmallVector<int, 16> units;
+          int used = 0;
+          for (size_t i = 0; i < n; ++i) {
+            // A target sitting on its floor rounds up, so snapping does not
+            // shrink a tab back under its own label.
+            const bool at_floor =
+                floors[i] > 0.f &&
+                std::abs(targets[i] - floors[i]) <= 0.01f;
+            units.push_back(at_floor
+                                ? static_cast<int>(std::ceil(floors[i] / unit))
+                                : static_cast<int>(
+                                      std::floor(targets[i] / unit)));
+            used += units[i];
+          }
+          if (used > total_units) {
+            // Rounding every floor up overshot the row; plain floors it
+            // is (a floor can lose one grid unit in that squeeze).
+            used = 0;
+            for (size_t i = 0; i < n; ++i) {
+              units[i] = static_cast<int>(std::floor(targets[i] / unit));
+              used += units[i];
+            }
+          }
+          SmallVector<size_t, 16> order;
+          for (size_t i = 0; i < n; ++i)
+            order.push_back(i);
+          std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+            return (targets[a] / unit - static_cast<float>(units[a])) >
+                   (targets[b] / unit - static_cast<float>(units[b]));
+          });
+          for (int k = 0; k < total_units - used; ++k)
+            units[order[static_cast<size_t>(k) % n]]++;
+          for (size_t i = 0; i < n; ++i)
+            expanders[i]->computed[axis] =
+                static_cast<float>(units[i]) * unit;
+        } else {
+          for (size_t i = 0; i < n; ++i)
+            expanders[i]->computed[axis] = targets[i];
+        }
+        return;
+      }
+
+      // Each share is snapped down later, on its own, so a plain proportional
+      // split loses up to a grid unit per child. Eight cards in a row came to
+      // 47px short and the slack all piled up on the right. Hand out whole
+      // units and give the remainder to the largest fractions instead, which
+      // fills the row and leaves siblings at most one unit apart.
       if (all_snappable && !expanders.empty()) {
         const float unit = grid_unit();
         const int total_units =

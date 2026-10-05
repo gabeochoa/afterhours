@@ -1564,6 +1564,29 @@ TEST(min_height_with_expand) {
 }
 
 // ---------------------------------------------------------------------------
+// A binding min on one expander is paid for by the other expanders (the
+// tab bar case: one long label among short ones). Freezing the long tab at
+// its floor and re-splitting what remains keeps the row inside the
+// container; raising it after an equal split always overshot by the excess.
+// ---------------------------------------------------------------------------
+TEST(expand_min_width_redistributes_instead_of_overflowing) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(50));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_flex_wrap(FlexWrap::NoWrap);
+
+  auto &a = t.make_ui(expand(), pixels(50));
+  auto &b = t.make_ui(expand(), pixels(50));
+  t.ui(a).set_min_width(pixels(250));
+  t.add_child(root, a);
+  t.add_child(root, b);
+  t.run(root);
+
+  CHECK_APPROX(t.ui(a).computed[Axis::X], 250.f);
+  CHECK_APPROX(t.ui(b).computed[Axis::X], 150.f);
+}
+
+// ---------------------------------------------------------------------------
 // Max height clamps tall content
 // ---------------------------------------------------------------------------
 TEST(max_height_clamps) {
