@@ -99,6 +99,10 @@ struct files : developer::Plugin {
 
   static fs::path get_config_path();
 
+  // Directory containing the running executable, or empty if unknown.
+  // Available before init(); empty on Emscripten.
+  static fs::path get_executable_dir();
+
   static void for_resources_in_group(
       const std::string &group,
       const std::function<void(std::string, std::string, std::string)> &cb);

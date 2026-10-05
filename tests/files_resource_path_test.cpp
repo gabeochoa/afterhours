@@ -58,6 +58,9 @@ int main(int argc, char **argv) {
   printf("=== files resource path tests ===\n\n");
 
   const fs::path here = exe_dir(argv[0]);
+  check(fs::weakly_canonical(afterhours::files::get_executable_dir(), ec) ==
+            fs::weakly_canonical(here, ec),
+        "get_executable_dir reports the running binary's directory");
 
   // Run from somewhere that is definitely NOT the executable's directory, so
   // a CWD-based resolver cannot accidentally pass.

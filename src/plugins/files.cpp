@@ -274,6 +274,14 @@ fs::path files::get_config_path() {
   return provider->get_config_path();
 }
 
+fs::path files::get_executable_dir() {
+#ifdef __EMSCRIPTEN__
+  return {};
+#else
+  return executable_dir();
+#endif
+}
+
 void files::for_resources_in_group(
     const std::string &group,
     const std::function<void(std::string, std::string, std::string)> &cb) {
