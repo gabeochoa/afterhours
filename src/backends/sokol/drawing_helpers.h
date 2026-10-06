@@ -1673,6 +1673,23 @@ inline TextureType load_texture_from_pixels(const unsigned char *rgba, int w,
 
 } // namespace metal_texture_detail
 
+// Uploads tightly packed RGBA8 pixels (straight alpha, rows top to bottom,
+// stride width * 4) to a new texture with the given filter. Call on the render
+// thread after graphics::init. The pixels are copied; the caller keeps
+// ownership either way. Returns std::nullopt on invalid input or upload
+// failure; the caller then has nothing to unload.
+// Every sokol backend shares this path; it fails when sokol is not set up.
+inline std::optional<TextureType>
+load_texture_from_rgba(const unsigned char *rgba, int width, int height,
+                       int filter = TEXTURE_FILTER_BILINEAR) {
+  if (rgba == nullptr || width <= 0 || height <= 0 || !sg_isvalid())
+    return std::nullopt;
+  TextureType texture =
+      metal_texture_detail::load_texture_from_pixels(rgba, width, height, filter);
+  if (texture.img_id == 0) return std::nullopt;
+  return texture;
+}
+
 inline TextureType load_texture(const char *path) {
   int w = 0, h = 0, comp = 0;
   // Force 4 channels (RGBA8) to match the fixed pixel format below.

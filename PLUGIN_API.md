@@ -62,8 +62,9 @@ and `SINGLETON_PARAM` remain available.
 Construct singleton state, register it, install EnforceSingleton checks, then register
 update/render systems in the application's intended order. State must outlive systems.
 See `src/plugins/input_system.h`, `animation.h` and `window_manager.h` for real examples.
-Compile implementation files required by selected plugins, such as `files.cpp` and
-platform dialog/watcher files; headers alone do not provide those symbols.
+Compile implementation files required by selected plugins, such as `files.cpp`,
+`image_decode.cpp` and platform dialog/watcher files; headers alone do not provide
+those symbols.
 
 [Optional APIs](docs/plugins.md), [UI](src/plugins/ui/README.md), and
 [profiling](docs/profiling.md) document their own contracts. Proposed extraction and

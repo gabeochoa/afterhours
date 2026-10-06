@@ -30,6 +30,10 @@ Started partway through the project's life, so it does not go all the way back.
 - **Menu shortcuts sit one pad in from the panel edge** — they were flush, clipping the last glyph in half.
 
 ### New APIs
+- **`jobs::Executor`** (`plugins/jobs.h`) runs owned-value work on bounded foreground/background queues with a reserved foreground worker. Handles report `Rejected`, `Pending`, `Cancelled`, `Completed` or `Failed`; shutdown cancels reads and drains must-complete jobs. `jobs::Generation` tickets let the main thread drop stale completions, and `jobs::BusyDelay` keeps fast work from flashing a spinner.
+- **`ByteBudgetCache`** (`plugins/byte_budget_cache.h`) is an LRU keyed by any type and bounded by a host cost function. It rejects oversize values and reports hits, misses, evictions, rejections and bytes.
+- **`image_decode::decode`** (`plugins/image_decode.h` + `.cpp`) decodes on any thread with encoded, dimension and decoded-byte limits, an optional shared `Budget`, cancellation and structured errors. **`load_texture_from_rgba`** uploads the pixels on every backend and returns `std::nullopt` on failure. Apps reaching into `metal_texture_detail::load_texture_from_pixels` can move to it.
+- **`file_watcher::Event::generation`** and `Watcher::generation()` mark which subscription produced an event, so events kept across a restart can be discarded.
 - **`polyline::draw_dashed(pts, thickness, color, dash, gap, phase)`** (`polyline.h`) draws a patterned run. `draw_line_ex` was solid-only, so a dashed cable, marquee or tick run had to be hand-rolled. Arc length accumulates across vertices, so a dash straddling a corner stays one dash, and `phase` is what animates it.
 - **`polyline::resample_by_arclength(pts, step)`** returns evenly spaced points. A bezier sampler walks uniformly in `t`, which is not uniform in screen distance, so anything spaced along the result bunches where the curve is tight.
 - **`draw_line_ex` is recorded by capture**, so a test can assert on a dashed pattern. The `none` backend used to log `@notimplemented` and draw nothing.

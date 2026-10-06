@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -12,6 +13,9 @@ namespace afterhours::file_watcher {
 struct Event {
     std::filesystem::path path;
     bool must_rescan = false;
+    // The subscription that produced this event; compare with
+    // Watcher::generation() to drop events kept across a restart.
+    std::uint64_t generation = 0;
 };
 
 struct Options {
@@ -34,6 +38,8 @@ class Watcher {
                       Options options = {});
     void stop();
     std::vector<Event> drain();
+    // Advances on every stop (and so on every start).
+    std::uint64_t generation() const;
 
  private:
     struct Impl;

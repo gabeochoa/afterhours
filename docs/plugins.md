@@ -69,7 +69,56 @@ Own a `Watcher`, call `start` with existing roots, and check the `Started`, `Uns
 
 The macOS backend uses FSEvents on a private serial dispatch queue. It never calls application code from that queue. The event buffer is bounded; overflow produces one event with an empty path and `must_rescan = true`, meaning rescan all watched roots. Native dropped-event and root-change flags also request rescans. Choose the limit and latency through `Options`.
 
-Call start, stop and destruction from the owning app thread. `stop` waits for in-flight native callbacks and clears pending events; destruction calls stop. No callbacks can retain the watcher after stop. Filtering, debounce, Git state and refresh policy remain application-owned.
+Call start, stop and destruction from the owning app thread. `stop` waits for in-flight native callbacks and clears pending events; destruction calls stop. No callbacks can retain the watcher after stop. Start is synchronous, so a stop or destruction immediately after start joins safely; the test churns files while starting and stopping repeatedly. Filtering, debounce, Git state and refresh policy remain application-owned.
+
+Each event carries the `generation` of the subscription that produced it. `generation()` advances on every stop, and therefore on every start. An app that keeps drained events, or hands them to a job, compares `event.generation == watcher.generation()` before acting so events from an old subscription are discarded.
+
+## Background jobs
+
+Include `src/plugins/jobs.h` (header-only). Own one `jobs::Executor` per app or subsystem, not per widget. `Options` sets `threads`, `queue_capacity` (total queued jobs) and `background_queue_capacity` (where background admission stops, keeping the rest for foreground work). With two or more threads, one worker only takes foreground jobs, so a background backlog cannot delay foreground work. Foreground jobs are dequeued before background ones.
+
+`submit(fn, {.priority, .must_complete, .ticket})` never blocks. `fn` takes a `std::stop_token` and returns an owned value; it runs on a worker and must not touch entities, components or UI state. The returned `Handle<T>` reports one `Status`:
+
+- `Rejected`: the queue was at its bound or the executor was shut down. `fn` never runs.
+- `Pending`: accepted and not finished. `accepted()` is true for every status except `Rejected`.
+- `Completed`: `take()` moves the value out once.
+- `Failed`: `fn` threw; `error()` returns the exception.
+- `Cancelled`: cancellation was requested before `fn` returned. No value is delivered, even if `fn` ignored its token. A queued job settles as `Cancelled` immediately and never runs; a running job should poll its token and return early.
+
+Poll with `status()`/`finished()` from the main thread; `wait_for` blocks and is meant for tests and shutdown paths. Destroying or reassigning a handle cancels its job. `must_complete` jobs ignore `cancel()` and keep an unstopped token.
+
+`shutdown()` (also run by the destructor) stops admission, cancels running and queued cancellable jobs, runs every queued must-complete job, then joins the workers. It is idempotent. Call it from the owning thread, never from a job. A cancelled queued job keeps its queue slot until a worker discards it.
+
+`jobs::Generation view(owner_id)` issues `Ticket{owner, generation}` values. Pass `.ticket = view.issue()` when submitting, and apply a completion only if `view.is_current(handle.ticket())`. A later `issue()` or `invalidate()` makes earlier tickets stale, so a result arriving after its view or scene was replaced is dropped. The host still owns the document or asset key.
+
+`jobs::BusyDelay` shows a busy indicator only after work has been pending for `delay` (150 ms by default), so fast operations never flash it. Call `start()` when work begins, `stop()` when it ends, and draw the indicator while `visible()`. A second `start()` while busy keeps the first start time.
+
+## Byte-budget cache
+
+Include `src/plugins/byte_budget_cache.h` (header-only). `ByteBudgetCache<Key, Value, Hash, KeyEqual>(budget, cost)` takes a cost function `size_t(const Key&, const Value&)` and keeps the sum of costs within the budget, evicting least recently used entries.
+
+- `get` returns a pointer valid until the next mutation, marks the entry most recently used, and counts a hit or miss.
+- `put` inserts or replaces. Replacement re-accounts the key and is not an eviction. A value costing more than the whole budget is rejected (`false`, counted in `rejections`), and any older value under that key is removed so a stale value never survives a failed replacement. An entry equal to the remaining budget fits.
+- `erase`, `clear` and `set_budget` (which evicts immediately when lowered) round out the API.
+- `stats()` reports `hits`, `misses`, `evictions`, `rejections`, `bytes`, `entries` and `budget`.
+
+Values are moved in and owned by the cache. To share them, store `std::shared_ptr<const T>`: an evicted value then lives on while referenced, and its bytes are no longer counted. Accounting is exactly the sum of cost results; list nodes, hash buckets and the cache's two copies of each key are excluded unless the cost function adds them. `bytes` is cache occupancy, not process or GPU memory. The cache is not thread-safe; wrap it in a mutex when shared.
+
+## Image decoding and texture upload
+
+Include `src/plugins/image_decode.h` and compile `image_decode.cpp`, which carries a private internal-linkage copy of the bundled stb_image. It needs `vendor` on the include path. `image_decode::decode(bytes, limits, stop, budget)` may run on any thread. Formats are those stb_image reads: PNG, JPEG, BMP, TGA, GIF (first frame), PSD, HDR, PIC and PNM.
+
+`Limits` caps encoded bytes, width, height and decoded bytes. Dimensions come from the header and are checked before any pixel allocation. The result is either a `DecodedImage` or an `Error` with an `ErrorCode` (`Cancelled`, `EncodedTooLarge`, `InvalidImage`, `DimensionsTooLarge`, `DecodedTooLarge`, `BudgetExhausted`, `DecodeFailed`) and a message. A `DecodedImage` owns RGBA8 pixels with straight alpha, rows top to bottom, stride `width * 4`. It is move-only and frees its pixels on destruction.
+
+An optional `image_decode::Budget` is shared by several decoders. Each image reserves `width * height * 4` bytes before decoding and returns them when destroyed. Decoder scratch memory and GPU textures are not counted, so keep GPU accounting separate. The budget must outlive its images. Cancellation is checked before and after the stb call; stb cannot be interrupted mid-decode. Every failure, including a late cancellation, frees the pixels and returns the reservation before `decode` returns.
+
+`load_texture_from_rgba(pixels, width, height, filter)` from `drawing_helpers.h` uploads such pixels as a texture. Call it on the render thread after `graphics::init`. It copies the pixels; the caller keeps ownership, so drop the `DecodedImage` after the call whether it succeeded or failed. It returns `std::nullopt` on invalid input or upload failure, and the caller then has nothing to unload. Otherwise release the texture with `unload_texture`.
+
+| Backend | Behavior |
+|---|---|
+| raylib | `LoadTextureFromImage`; `TEXTURE_FILTER_TRILINEAR` also generates mipmaps. Calling without a GL context is undefined. |
+| sokol (Metal tested; GL/D3D share the code) | Builds the mip chain and sampler. Returns `std::nullopt` when sokol is not set up, or the image, view or sampler pool is exhausted. |
+| none | Always `std::nullopt`. |
 
 ## Input binding persistence
 

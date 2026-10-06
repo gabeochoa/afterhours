@@ -303,6 +303,13 @@ inline TextureType load_texture(const char *) {
   return TextureType{};
 }
 
+// No graphics backend: always std::nullopt, so callers take their failure path.
+inline std::optional<TextureType> load_texture_from_rgba(const unsigned char *,
+                                                         int, int,
+                                                         int = TEXTURE_FILTER_BILINEAR) {
+  return std::nullopt;
+}
+
 inline void unload_texture(TextureType &) {
   log_error("@notimplemented unload_texture");
 }

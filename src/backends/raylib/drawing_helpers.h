@@ -682,6 +682,24 @@ inline TextureType load_texture(const char *path) {
   return raylib::LoadTexture(path);
 }
 
+// Uploads tightly packed RGBA8 pixels (straight alpha, rows top to bottom,
+// stride width * 4) to a new texture with the given filter. Call on the render
+// thread after graphics::init. The pixels are copied; the caller keeps
+// ownership either way. Returns std::nullopt on invalid input or upload
+// failure; the caller then has nothing to unload.
+inline std::optional<TextureType>
+load_texture_from_rgba(const unsigned char *rgba, int width, int height,
+                       int filter = TEXTURE_FILTER_BILINEAR) {
+  if (rgba == nullptr || width <= 0 || height <= 0) return std::nullopt;
+  raylib::Image image{const_cast<unsigned char *>(rgba), width, height, 1,
+                      raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8};
+  TextureType texture = raylib::LoadTextureFromImage(image);
+  if (texture.id == 0) return std::nullopt;
+  if (filter == TEXTURE_FILTER_TRILINEAR) raylib::GenTextureMipmaps(&texture);
+  raylib::SetTextureFilter(texture, filter);
+  return texture;
+}
+
 inline void unload_texture(TextureType &texture) {
   if (texture.id != 0) {
     raylib::UnloadTexture(texture);

@@ -15,6 +15,7 @@ struct Watcher::Impl {
     std::vector<Event> events;
     std::size_t limit = 4096;
     bool overflowed = false;
+    std::uint64_t generation = 0;
 #ifdef __APPLE__
     FSEventStreamRef stream = nullptr;
     dispatch_queue_t queue = nullptr;
@@ -29,14 +30,14 @@ struct Watcher::Impl {
         for (std::size_t i = 0; i < count; ++i) {
             if (self.events.size() >= self.limit) {
                 self.events.clear();
-                self.events.push_back({{}, true});
+                self.events.push_back({{}, true, self.generation});
                 self.overflowed = true;
                 return;
             }
             const auto rescan_flags = kFSEventStreamEventFlagMustScanSubDirs |
                 kFSEventStreamEventFlagUserDropped | kFSEventStreamEventFlagKernelDropped |
                 kFSEventStreamEventFlagRootChanged;
-            self.events.push_back({paths[i], (flags[i] & rescan_flags) != 0});
+            self.events.push_back({paths[i], (flags[i] & rescan_flags) != 0, self.generation});
         }
     }
 #endif
@@ -109,6 +110,12 @@ void Watcher::stop() {
     std::lock_guard lock(impl_->mutex);
     impl_->events.clear();
     impl_->overflowed = false;
+    ++impl_->generation;
+}
+
+std::uint64_t Watcher::generation() const {
+    std::lock_guard lock(impl_->mutex);
+    return impl_->generation;
 }
 
 std::vector<Event> Watcher::drain() {
