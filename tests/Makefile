@@ -180,6 +180,7 @@ ALL_TESTS := \
 	virtual_list_test \
 	scroll_item_anchor_test \
 	shortcut_routing_test \
+	focus_return_test \
 	text_action_names_test \
 	sizing_repro_test \
 	slider_test \
