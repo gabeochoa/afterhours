@@ -9,6 +9,7 @@
 #include "../../../vendor/magic_enum/magic_enum.hpp"
 #endif
 #include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <magic_enum/magic_enum.hpp>
 #include <optional>
@@ -701,12 +702,37 @@ struct HasVirtualListIndex : BaseComponent {
   size_t pending_prepend = 0;
   float last_scale = 1.f;
   float last_gap = 0.f;
+  float minimum = 1.f; // shortest row, kept current by each refresh
+  // The row at the top of the viewport after the last build, and how many
+  // pixels of it were scrolled past. Sampled every build.
+  size_t top_row = 0;
+  float top_within = 0.f;
+  // Set to put row pin_row's top pin_within above the viewport top on the
+  // next build, where the list's padding is known. kNoPin when unused.
+  static constexpr size_t kNoPin = static_cast<size_t>(-1);
+  size_t pin_row = kNoPin;
+  float pin_within = 0.f;
 
   void invalidate(size_t first, size_t last) {
     dirty_from = std::min(dirty_from, first);
     dirty_to = std::max(dirty_to, last);
     prefix_from = std::min(prefix_from, first);
   }
+};
+
+// keyed_virtual_list's memory of which item was where: the sequence of keys,
+// and the item that held focus with where in that row the focused entity
+// sat, so both follow the item when the sequence changes.
+struct HasVirtualListKeys : BaseComponent {
+  std::uint64_t revision = 0;
+  bool seen = false;
+  std::vector<std::string> keys; // last non-empty sequence
+  // Each built row's key and its subtree in preorder, from the last build.
+  // Read at the start of the next build, when children are already cleared.
+  std::vector<std::pair<std::string, std::vector<EntityID>>> shown;
+  std::string focus_key;
+  size_t focus_index = 0; // the focused entity's place in its row's preorder
+  EntityID focus_entity = -1;
 };
 
 // Where a scroll view's bar goes; empty when it needs none. Pure, so it is

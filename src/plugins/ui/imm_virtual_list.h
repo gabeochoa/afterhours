@@ -4,6 +4,8 @@
 #include <array>
 #include <bitset>
 #include <chrono>
+#include <cmath>
+#include <unordered_map>
 #include <fstream>
 #include <string>
 #include <utility>
@@ -42,11 +44,29 @@ struct RowMetrics {
   size_t count = 0;
   float scale = 1.f;
   float gap = 0.f;
+  // Cached, because scanning every row for it each frame is O(n) per build.
+  float minimum = 1.f;
+
+  static float sane(float h) { return std::isfinite(h) && h > 0.f ? h : 1.f; }
 
   static RowMetrics uniform_rows(size_t n, float h) {
     RowMetrics m;
-    m.uniform = h > 0.f ? h : 1.f;
+    m.uniform = m.minimum = sane(h);
     m.count = n;
+    return m;
+  }
+
+  // Precomputed heights, owned by the metrics rather than a list entity.
+  template <typename HeightFn>
+  static RowMetrics measured_rows(size_t n, HeightFn &&height_of) {
+    RowMetrics m;
+    m.count = n;
+    m.prefix.resize(n + 1, 0.f);
+    for (size_t i = 0; i < n; i++) {
+      const float h = sane(height_of(i));
+      m.minimum = i == 0 ? h : std::min(m.minimum, h);
+      m.prefix[i + 1] = m.prefix[i] + h;
+    }
     return m;
   }
 
@@ -83,14 +103,7 @@ struct RowMetrics {
     return static_cast<long>(lo ? lo - 1 : 0);
   }
   // Shortest row, for sizing the recycle pool against the worst case.
-  [[nodiscard]] float shortest() const {
-    if (is_uniform())
-      return uniform * scale;
-    float m = 0.f;
-    for (size_t i = 0; i < count; i++)
-      m = (i == 0) ? height_of(i) : std::min(m, height_of(i));
-    return m > 0.f ? m : 1.f;
-  }
+  [[nodiscard]] float shortest() const { return minimum * scale; }
 };
 
 // Bring the retained index to `count` rows: height_of is asked only for the
@@ -110,11 +123,15 @@ void refresh_virtual_index(HasVirtualListIndex &idx, size_t count,
   // destroy the identity the next invalidate relies on.
   const size_t from = std::min(idx.dirty_from, count);
   const size_t to = std::min(idx.dirty_to, count);
-  for (size_t i = from; i < to; i++) {
-    const float h = height_of(i);
-    idx.heights[i] = h > 0.f ? h : 1.f;
-  }
+  for (size_t i = from; i < to; i++)
+    idx.heights[i] = RowMetrics::sane(height_of(i));
   const size_t pfrom = std::min({idx.prefix_from, from, count});
+  // Only a change can move the shortest row, so the scan rides on the re-sum.
+  if (pfrom < count || count != old) {
+    idx.minimum = 1.f;
+    for (size_t i = 0; i < count; i++)
+      idx.minimum = i == 0 ? idx.heights[i] : std::min(idx.minimum, idx.heights[i]);
+  }
   for (size_t i = pfrom; i < count; i++)
     idx.prefix[i + 1] = idx.prefix[i] + idx.heights[i];
   idx.dirty_from = HasVirtualListIndex::kDirtyEmpty;
@@ -123,6 +140,57 @@ void refresh_virtual_index(HasVirtualListIndex &idx, size_t count,
 }
 } // namespace detail
 
+using VirtualListMetrics = detail::RowMetrics;
+
+/// How far past the viewport a virtual_list builds. Rows are the old fixed
+/// four; pixels add a zoom-proportional margin; maximum_viewports bounds how
+/// far toward a distant easing target (a scrollbar drag) the window reaches.
+struct VirtualListOptions {
+  size_t overscan_rows = 4;
+  float overscan_pixels = 0.f;
+  float maximum_viewports = 3.f;
+};
+
+/// Rows [first, last) to build, and [visible_first, visible_last) actually
+/// inside the viewport at `offset`.
+struct VirtualListWindow {
+  size_t first = 0, last = 0;
+  size_t visible_first = 0, visible_last = 0;
+};
+
+/// The window for a scroll position. Offsets are in the metrics' pixels,
+/// measured from the first row. The span reaches toward `target` but is
+/// bounded around `offset`, so a far target never evicts the rows on screen.
+inline VirtualListWindow virtual_list_window(const VirtualListMetrics &rows,
+                                             float offset, float target,
+                                             float viewport,
+                                             VirtualListOptions options = {}) {
+  if (rows.count == 0)
+    return {};
+  if (!std::isfinite(viewport) || viewport <= 0.f)
+    return {0, 1, 0, 1};
+  const float end = std::max(0.f, rows.total() - viewport);
+  offset = std::clamp(std::isfinite(offset) ? offset : 0.f, 0.f, end);
+  target = std::clamp(std::isfinite(target) ? target : offset, 0.f, end);
+  const float viewports = std::clamp(
+      std::isfinite(options.maximum_viewports) ? options.maximum_viewports : 3.f,
+      1.f, 8.f);
+  target = std::clamp(target, offset - viewport * (viewports - 1.f),
+                      offset + viewport * (viewports - 1.f));
+  const float buffer = std::clamp(
+      std::isfinite(options.overscan_pixels) ? options.overscan_pixels : 0.f,
+      0.f, viewport * 2.f);
+  const auto index = [&](float y) {
+    return std::min(rows.count, static_cast<size_t>(std::max(0L, rows.index_at(y))));
+  };
+  const size_t first = index(std::min(offset, target) - buffer);
+  const size_t last = std::min(
+      rows.count, index(std::max(offset, target) + viewport + buffer) + 1);
+  const size_t overscan = std::min(options.overscan_rows, size_t{256});
+  return {first > overscan ? first - overscan : 0,
+          last + std::min(overscan, rows.count - last), index(offset),
+          std::min(rows.count, index(offset + viewport) + 1)};
+}
 
 /// Windowed (virtualized) list. Builds only the rows that are on screen, while
 /// the scroll bar still spans the whole list.
@@ -141,7 +209,8 @@ template <typename RenderRow>
 ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
                                 detail::RowMetrics rows,
                                 RenderRow &&render_row,
-                                ComponentConfig config = ComponentConfig()) {
+                                ComponentConfig config = ComponentConfig(),
+                                VirtualListOptions options = {}) {
   auto [entity, parent] = deref(ep_pair);
   const size_t count = rows.count;
   if (config.size.is_default)
@@ -165,6 +234,7 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
   rows.gap = config.flex_gap.value > 0.f
       ? resolve_to_pixels(config.flex_gap, screen_h, mode, ctx.theme.ui_scale) : 0.f;
   if (rows.index) {
+    rows.minimum = rows.index->minimum;
     rows.index->last_scale = rows.scale;
     rows.index->last_gap = rows.gap;
     // Rows inserted above the fold since the last build are measured by
@@ -198,13 +268,9 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
   const float top_padding = resolve_padding(config.padding.top);
   const float bottom_padding = resolve_padding(config.padding.bottom);
 
-  const long n = static_cast<long>(count);
-  constexpr long OVERSCAN = 4;
-  float lo = 0.f, hi = 0.f;
-
+  float offset = 0.f, target = 0.f, view_h = 0.f;
   if (entity.template has<HasScrollView>()) {
     auto &sv = entity.template get<HasScrollView>();
-    float view_h = 0.f;
     if (config.size.y_axis.dim == Dim::Pixels) {
       view_h = resolve_to_pixels(config.size.y_axis, screen_h, mode, ctx.theme.ui_scale);
     } else if (sv.viewport_size.has_value()) {
@@ -217,51 +283,55 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
       // be permanent, and is still a frame of wasted work.
       view_h = measure_config(config, 0.f, std::max(0.f, parent_h - parent_padding)).size.y;
     }
-
-    // Cover where the view is AND where it is easing to. Windowing on the
-    // settled offset alone shows a strip of nothing for a frame on every
-    // fling, which is never seen in development and gets reported as
-    // "flickers when I scroll fast".
+    const bool pinned = rows.index && rows.index->pin_row < count;
+    if (pinned) {
+      sv.scroll_offset.y = sv.scroll_target.y = top_padding +
+          rows.offset_of(rows.index->pin_row) + rows.index->pin_within;
+      // The pinned row is the caller's anchor; a pinned child entity is not.
+      sv.anchor_child = -1;
+    }
     const float max_offset = std::max(0.f, rows.total() + top_padding + bottom_padding - view_h);
     sv.scroll_offset.y = std::clamp(sv.scroll_offset.y, 0.f, max_offset);
     sv.scroll_target.y = std::clamp(sv.scroll_target.y, 0.f, max_offset);
-    lo = std::min(sv.scroll_offset.y, sv.scroll_target.y) - top_padding;
-    hi = std::max(sv.scroll_offset.y, sv.scroll_target.y) + view_h - top_padding;
-    // Bounded, because dragging the scroll bar throws the target the length of
-    // the list, and building every row in between is the whole list, which is
-    // the cost this exists to avoid. Rows travelled past that fast cannot be
-    // read anyway, so favour the end being moved toward.
-    const float max_span = std::max(view_h * 3.f, 1.f);
-    if (hi - lo > max_span) {
-      if (sv.scroll_target.y >= sv.scroll_offset.y)
-        lo = hi - max_span;
-      else
-        hi = lo + max_span;
+    if (pinned)
+      sv.last_eased_offset.y = sv.scroll_offset.y;
+    if (rows.index) {
+      rows.index->pin_row = HasVirtualListIndex::kNoPin;
+      // Signed, so a view resting inside the top padding pins back there.
+      const float y = sv.scroll_offset.y - top_padding;
+      const size_t top = std::min(count - 1, static_cast<size_t>(rows.index_at(y)));
+      rows.index->top_row = top;
+      rows.index->top_within = y - rows.offset_of(top);
     }
+    // Cover where the view is AND where it is easing to, or a fling shows a
+    // strip of nothing for a frame. virtual_list_window bounds the reach
+    // toward the target around the actual viewport, so a scrollbar drag
+    // cannot ask for the whole list or drop the rows on screen.
+    offset = sv.scroll_offset.y - top_padding;
+    target = sv.scroll_target.y - top_padding;
   }
-
-  size_t first = 0, last = static_cast<size_t>(std::min<long>(n, 1));
-  if (hi > lo) {
-    long f = rows.index_at(lo) - OVERSCAN;
-    long l = rows.index_at(hi) + OVERSCAN + 1;
-    first = static_cast<size_t>(std::clamp<long>(f, 0, n));
-    last = static_cast<size_t>(std::clamp<long>(l, 0, n));
-  }
-  const size_t window = (last > first) ? (last - first) : 0;
+  const auto range = virtual_list_window(rows, offset, target, view_h, options);
+  const size_t first = range.first, last = range.last;
+  const size_t window = last - first;
+  const size_t OVERSCAN = std::min(options.overscan_rows, size_t{256});
+  const float viewports = std::clamp(
+      std::isfinite(options.maximum_viewports) ? options.maximum_viewports : 3.f,
+      1.f, 8.f);
 
   // How many row entities get recycled. Derived from the viewport rather than
   // from this frame's window, and rounded up to a block, because a modulus
   // that changes moves every recycled row onto a different item at once: a
   // press is stranded and the list cannot settle. Rounding keeps it still
   // while the window breathes by a row.
-  size_t capacity = window + 2 * (size_t)OVERSCAN + 8;
+  size_t capacity = window + 2 * OVERSCAN + 8;
   if (entity.template has<HasScrollView>()) {
     auto &sv = entity.template get<HasScrollView>();
     if (sv.viewport_size.has_value()) {
-      // Has to cover the widest window the span bound above can ask for, or
-      // two items would land on the same row entity.
-      const float widest = (3.f * sv.viewport_size->y) / rows.shortest();
-      capacity = std::max(capacity, static_cast<size_t>(widest) + 2 * (size_t)OVERSCAN + 8);
+      // Has to cover the widest window virtual_list_window can ask for --
+      // the bounded span plus up to two viewports of pixel overscan each
+      // side -- or two items would land on the same row entity.
+      const float widest = ((viewports + 4.f) * sv.viewport_size->y) / rows.shortest();
+      capacity = std::max(capacity, static_cast<size_t>(widest) + 2 * OVERSCAN + 8);
     }
     constexpr size_t BLOCK = 32;
     capacity = ((capacity + BLOCK - 1) / BLOCK) * BLOCK;
@@ -325,10 +395,24 @@ template <typename RenderRow>
 ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
                            size_t count, float row_height,
                            RenderRow &&render_row,
-                           ComponentConfig config = ComponentConfig()) {
+                           ComponentConfig config = ComponentConfig(),
+                           VirtualListOptions options = {}) {
   return virtual_list_impl(ctx, ep_pair,
                            detail::RowMetrics::uniform_rows(count, row_height),
-                           std::forward<RenderRow>(render_row), config);
+                           std::forward<RenderRow>(render_row), config, options);
+}
+
+/// Rows the caller has already measured (VirtualListMetrics::measured_rows),
+/// so one set of extents drives both the window and any other geometry the
+/// caller needs, instead of a second running total kept beside the list.
+template <typename RenderRow>
+ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
+                           const VirtualListMetrics &rows,
+                           RenderRow &&render_row,
+                           ComponentConfig config = ComponentConfig(),
+                           VirtualListOptions options = {}) {
+  return virtual_list_impl(ctx, ep_pair, rows,
+                           std::forward<RenderRow>(render_row), config, options);
 }
 
 /// Rows of differing heights, retained: the prefix-height index lives on
@@ -345,7 +429,8 @@ template <typename HeightFn, typename RenderRow>
 ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
                            size_t count, HeightFn &&height_of,
                            RenderRow &&render_row,
-                           ComponentConfig config = ComponentConfig())
+                           ComponentConfig config = ComponentConfig(),
+                           VirtualListOptions options = {})
   requires std::invocable<HeightFn, size_t>
 {
   auto [entity, parent] = deref(ep_pair);
@@ -357,7 +442,120 @@ ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
   rows.borrowed = &index.prefix;
   rows.index = &index;
   return virtual_list_impl(ctx, ep_pair, rows,
-                           std::forward<RenderRow>(render_row), config);
+                           std::forward<RenderRow>(render_row), config, options);
+}
+
+/// A measured virtual_list whose rows are items with stable keys. When the
+/// sequence changes (bump `revision`), the item at the top of the viewport
+/// stays there -- or, if it was removed, the nearest survivor in the old
+/// order takes its place -- and focus inside a row follows its item to
+/// whichever pooled entity now shows it. An empty sequence keeps the old
+/// anchor for the next non-empty one, so clearing a filter returns to where
+/// the reader was.
+///
+/// `key_of(index)` is asked for every row only when `revision` changes.
+/// ponytail: a change re-measures every row; remap heights by key if
+/// height_of is too slow to run over the whole list on each update.
+template <typename KeyFn, typename HeightFn, typename RenderRow>
+ElementResult keyed_virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
+                                 size_t count, std::uint64_t revision,
+                                 KeyFn &&key_of, HeightFn &&height_of,
+                                 RenderRow &&render_row,
+                                 ComponentConfig config = ComponentConfig(),
+                                 VirtualListOptions options = {}) {
+  auto [entity, parent] = deref(ep_pair);
+  auto &keyed = entity.template addComponentIfMissing<HasVirtualListKeys>();
+  auto &index = entity.template addComponentIfMissing<HasVirtualListIndex>();
+  // Focus moved since the last build (a click, Tab): find which item it
+  // landed in from what that build showed, before positions change.
+  const auto sample_focus = [&] {
+    if (ctx.focus_id == keyed.focus_entity)
+      return;
+    keyed.focus_entity = ctx.focus_id;
+    keyed.focus_key.clear();
+    for (const auto &[key, subtree] : keyed.shown) {
+      const auto at = std::find(subtree.begin(), subtree.end(), ctx.focus_id);
+      if (at == subtree.end())
+        continue;
+      keyed.focus_key = key;
+      keyed.focus_index = static_cast<size_t>(at - subtree.begin());
+    }
+  };
+  sample_focus();
+  if (!keyed.seen || keyed.revision != revision) {
+    std::vector<std::string> next;
+    next.reserve(count);
+    for (size_t i = 0; i < count; i++)
+      next.emplace_back(key_of(i));
+    if (keyed.seen && count > 0 && !keyed.keys.empty()) {
+      std::unordered_map<std::string_view, size_t> where;
+      where.reserve(count);
+      for (size_t i = 0; i < count; i++)
+        where.emplace(next[i], i);
+      const auto &old = keyed.keys;
+      const size_t top = std::min(index.top_row, old.size() - 1);
+      // Nearest survivor in the old order, the row below first: removing
+      // the top row should bring up the one that followed it.
+      for (size_t d = 0; d < old.size(); d++) {
+        auto hit = top + d < old.size() ? where.find(old[top + d]) : where.end();
+        if (hit == where.end() && d <= top)
+          hit = where.find(old[top - d]);
+        if (hit == where.end())
+          continue;
+        index.pin_row = hit->second;
+        index.pin_within = d == 0 ? index.top_within : 0.f;
+        break;
+      }
+    }
+    // Heights were stored by position, and positions just moved.
+    index.invalidate(0, count);
+    keyed.revision = revision;
+    keyed.seen = true;
+    if (count > 0)
+      keyed.keys = std::move(next);
+  }
+
+  std::vector<std::pair<size_t, EntityID>> built;
+  detail::refresh_virtual_index(index, count, std::forward<HeightFn>(height_of));
+  detail::RowMetrics rows;
+  rows.count = count;
+  rows.borrowed = &index.prefix;
+  rows.index = &index;
+  auto result = virtual_list_impl(
+      ctx, ep_pair, rows,
+      [&](size_t i, Entity &row) {
+        built.emplace_back(i, row.id);
+        render_row(i, row);
+      },
+      config, options);
+  keyed.shown.clear();
+  if (count == 0 || keyed.keys.size() != count)
+    return result;
+  for (const auto &[i, row] : built) {
+    std::vector<EntityID> subtree;
+    const std::function<void(EntityID)> walk = [&](EntityID id) {
+      subtree.push_back(id);
+      for (const EntityID child : UICollectionHolder::getEntityForIDEnforce(id)
+                                      .template get<UIComponent>().children)
+        walk(child);
+    };
+    walk(row);
+    keyed.shown.emplace_back(keyed.keys[i], std::move(subtree));
+  }
+  // The focused item is now drawn by a different pooled row: focus the entity
+  // in the same place in that row. Off screen, the item is remembered until
+  // it is built again.
+  if (!keyed.focus_key.empty() && ctx.focus_id == keyed.focus_entity) {
+    for (const auto &[key, subtree] : keyed.shown) {
+      if (key != keyed.focus_key || keyed.focus_index >= subtree.size())
+        continue;
+      if (subtree[keyed.focus_index] != ctx.focus_id)
+        ctx.set_focus(subtree[keyed.focus_index], ctx.focus_modality);
+      keyed.focus_entity = ctx.focus_id;
+    }
+  }
+  sample_focus();
+  return result;
 }
 
 /// Mark rows [first, last) of a measured virtual_list as changed: the next

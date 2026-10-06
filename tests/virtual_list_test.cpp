@@ -7,6 +7,7 @@
 // so that is what these assert: how many rows got built, not how they look.
 
 #include "ui_test_harness.h"
+#include <limits>
 
 using namespace afterhours;
 using namespace afterhours::ui;
@@ -309,6 +310,182 @@ TEST(prepend_virtual_rows_holds_the_viewport) {
   CHECK_APPROX(after.scroll_target.y, 600.f);
   CHECK_APPROX(virtual_row_offset(AutoLayout::to_ent_static(list_id), 24),
                600.f);
+}
+
+// ---------------------------------------------------------------------------
+// The window (CP-006): bounded around the actual viewport, configurable
+// overscan. The old range favoured a distant easing target and could drop the
+// rows on screen during a scrollbar drag.
+// ---------------------------------------------------------------------------
+TEST(distant_scroll_targets_never_evict_the_visible_rows) {
+  for (const float zoom : {1.f, 1.4f, 2.f}) {
+    auto metrics = VirtualListMetrics::measured_rows(
+        100000, [zoom](size_t row) { return zoom * (row % 7 == 0 ? 120.f : 18.f); });
+    for (const float pixels : {0.f, 24.f, 96.f}) {
+      size_t widest = 0;
+      bool covered = true;
+      for (size_t frame = 0; frame < 3000; ++frame) {
+        const float offset = static_cast<float>((frame * 7919) % 2000000);
+        const float target = frame % 2 ? 0.f : metrics.total();
+        const auto range = virtual_list_window(metrics, offset, target, 600.f * zoom,
+                                               VirtualListOptions{4, pixels * zoom, 3.f});
+        covered = covered && range.first <= range.visible_first &&
+                  range.last >= range.visible_last && range.last <= metrics.count &&
+                  static_cast<long>(range.visible_first) == std::min<long>(
+                      metrics.index_at(std::min(offset, metrics.total() - 600.f * zoom)),
+                      static_cast<long>(metrics.count));
+        widest = std::max(widest, range.last - range.first);
+      }
+      CHECK(covered);
+      CHECK(widest < 130);
+    }
+  }
+}
+
+TEST(window_handles_empty_unknown_and_nonfinite_geometry) {
+  CHECK(virtual_list_window(VirtualListMetrics::uniform_rows(0, 10.f), 0, 0, 100).last == 0);
+  auto metrics = VirtualListMetrics::uniform_rows(100, 10.f);
+  CHECK(virtual_list_window(metrics, 0, 0, 0).last == 1);
+  auto range = virtual_list_window(metrics, std::numeric_limits<float>::quiet_NaN(), 0, 100);
+  CHECK(range.first == 0);
+  CHECK(range.last < 20);
+  CHECK(VirtualListMetrics::measured_rows(3, [](size_t) {
+          return std::numeric_limits<float>::infinity(); }).total() == 3.f);
+}
+
+TEST(pixel_overscan_builds_past_the_viewport) {
+  const auto built_with = [](VirtualListOptions options) {
+    ImmTestHarness h;
+    int built = 0;
+    virtual_list(h.context(), mk(h.root(), 0), 2000, 20.f, [&](size_t, Entity &) { built++; },
+                 ComponentConfig{}.with_size({pixels(300), pixels(200)}), options);
+    return built;
+  };
+  const int base = built_with({});
+  CHECK(built_with({0, 0.f, 3.f}) == base - 4);
+  CHECK(built_with({4, 100.f, 3.f}) == base + 5);
+}
+
+// ---------------------------------------------------------------------------
+// keyed_virtual_list: the viewport and focus follow items, not positions.
+// ---------------------------------------------------------------------------
+namespace {
+struct KeyedFixture {
+  ImmTestHarness h;
+  std::vector<std::string> items;
+  std::uint64_t revision = 1;
+  EntityID list = -1;
+  std::vector<std::pair<std::string, EntityID>> buttons; // item -> its button
+  float zoom = 1.f;
+
+  void frame() {
+    h.context().theme.ui_scale = zoom;
+    h.begin_frame();
+    buttons.clear();
+    auto result = keyed_virtual_list(
+        h.context(), mk(h.root(), 0), items.size(), revision,
+        [&](size_t i) { return items[i]; },
+        [&](size_t i) { return items[i].size() % 2 ? 20.f : 30.f; },
+        [&](size_t i, Entity &row) {
+          div(h.context(), mk(row, 0), ComponentConfig{}.with_size({pixels(10), pixels(5)}));
+          auto button = div(h.context(), mk(row, 1),
+                            ComponentConfig{}.with_size({pixels(10), pixels(5)}));
+          buttons.emplace_back(items[i], button.ent().id);
+        },
+        ComponentConfig{}.with_size({pixels(300), pixels(200)})
+            .with_padding(Padding{.top = pixels(7)})
+            .with_scaling_mode(ScalingMode::Adaptive));
+    list = result.id();
+    layout_at_scale(h, zoom, false);
+    auto &scroll = scroll_view();
+    const auto &cmp = result.ent().get<UIComponent>();
+    scroll.viewport_size = {cmp.rect().width, cmp.rect().height};
+    scroll.content_size = measure_scroll_content(cmp, scroll);
+  }
+  HasScrollView &scroll_view() { return AutoLayout::to_ent_static(list).get<HasScrollView>(); }
+  void scroll_to(float y) {
+    auto &scroll = scroll_view();
+    scroll.scroll_offset.y = scroll.scroll_target.y = scroll.last_eased_offset.y = y;
+    frame();
+  }
+  // Distance from the viewport top to the top of `item`'s row, in pixels.
+  float screen_top(const std::string &item) {
+    const size_t i = static_cast<size_t>(std::find(items.begin(), items.end(), item) - items.begin());
+    return 7.f * zoom + virtual_row_offset(AutoLayout::to_ent_static(list), i) -
+           scroll_view().scroll_offset.y;
+  }
+  void update(std::vector<std::string> next) {
+    items = std::move(next);
+    revision++;
+    frame();
+  }
+  EntityID button_of(const std::string &item) {
+    for (auto &[key, id] : buttons)
+      if (key == item) return id;
+    return -1;
+  }
+};
+
+std::vector<std::string> numbered(size_t from, size_t to) {
+  std::vector<std::string> out;
+  for (size_t i = from; i < to; i++) out.push_back("item" + std::to_string(i));
+  return out;
+}
+} // namespace
+
+TEST(keyed_list_keeps_the_top_item_through_insert_remove_and_empty) {
+  for (const float zoom : {1.f, 1.4f, 2.f}) {
+    KeyedFixture f;
+    f.zoom = zoom;
+    f.items = numbered(0, 300);
+    f.frame();
+    f.frame();
+    f.scroll_to(f.screen_top("item50") + 11.f * zoom);
+    const float before = f.screen_top("item50");
+    CHECK_APPROX(before, -11.f * zoom);
+
+    auto inserted = numbered(1000, 1007);
+    inserted.insert(inserted.end(), f.items.begin(), f.items.end());
+    f.update(inserted);
+    CHECK_APPROX(f.screen_top("item50"), before);
+
+    // Removing the anchored row brings up the row that followed it.
+    auto removed = f.items;
+    removed.erase(std::find(removed.begin(), removed.end(), "item50"));
+    f.update(removed);
+    CHECK_APPROX(f.screen_top("item51"), 0.f);
+
+    // An empty filter keeps the anchor for the results that come back.
+    f.update({});
+    f.update(removed);
+    CHECK_APPROX(f.screen_top("item51"), 0.f);
+  }
+}
+
+TEST(keyed_list_focus_follows_its_item_to_a_recycled_row) {
+  KeyedFixture f;
+  f.items = numbered(0, 300);
+  f.frame();
+  f.frame();
+  f.scroll_to(f.screen_top("item40"));
+  const EntityID first = f.button_of("item42");
+  f.h.context().set_focus(first);
+  f.frame();
+
+  // Reverse the order: item42 is now drawn by some other pooled row.
+  auto reversed = f.items;
+  std::reverse(reversed.begin(), reversed.end());
+  f.update(reversed);
+  const EntityID now = f.button_of("item42");
+  CHECK(now >= 0);
+  CHECK(f.h.context().focus_id == now);
+  CHECK(now != first); // a different pooled entity, or this proves nothing
+
+  // Focus moved by someone else is not dragged back.
+  const EntityID other = f.button_of("item41");
+  f.h.context().set_focus(other);
+  f.update(numbered(0, 300));
+  CHECK(f.h.context().focus_id == f.button_of("item41"));
 }
 
 int main() { return ui_test::run_registered_tests("virtual_list"); }
