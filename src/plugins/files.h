@@ -1,5 +1,8 @@
 #pragma once
 
+#include <atomic>
+#include <cerrno>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -14,6 +17,15 @@
 #include "../core/system.h"
 #include "../developer.h"
 #include "../logging.h"
+
+#ifndef _WIN32
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#else
+#include <process.h>
+#endif
 
 // Compile-time check: ensure files.cpp is compiled in your project
 // If you see a linker error about ProvidesResourcePaths constructor,
@@ -130,17 +142,86 @@ struct files : developer::Plugin {
   // TODO: crash-safe but not power-loss-safe. Durability across power loss
   // needs open/write/fsync/close on a raw fd plus an fsync of the directory,
   // which is platform-specific. Fits behind this signature when needed.
+  // Each write gets its own temp, `<target>.afh-tmp.<pid>.<n>`: two writers
+  // to one path (two windows, a save racing a sync) never share a temp, so
+  // the last rename to complete wins and a reader sees the old file or a
+  // whole new one, never a mix.
+  static fs::path unique_temp_path(const fs::path &path) {
+    static std::atomic<unsigned long> counter{0};
+    fs::path tmp = path;
+    tmp += TEMP_SUFFIX;
+    tmp += "." + std::to_string(current_pid()) + "." + std::to_string(counter++);
+    return tmp;
+  }
+
+  // Durable replace: write a fresh temp, flush it to the device, rename it
+  // over the target, then flush the directory so the rename itself survives
+  // power loss. On macOS fsync stops at the drive's cache; F_FULLFSYNC does
+  // not, so it is used there (it costs milliseconds per write).
   static bool write_string_atomic(const fs::path &path,
                                   std::string_view content) {
     std::error_code ec;
     if (!path.parent_path().empty())
       fs::create_directories(path.parent_path(), ec);
-
-    // Sibling temp: rename is only atomic within one filesystem. The suffix is
-    // distinctive so sweep_temp_files can tell ours from a caller's .tmp.
-    fs::path tmp = path;
-    tmp += TEMP_SUFFIX;
-
+    // Older versions used one fixed temp name per target; a crash could
+    // leave it behind, and nothing else ever writes that exact name.
+    fs::remove(fs::path(path.string() + TEMP_SUFFIX), ec);
+    const fs::path tmp = unique_temp_path(path);
+#ifndef _WIN32
+    const int fd = ::open(tmp.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644);
+    if (fd < 0) {
+      log_warn("write_string_atomic: cannot create {}: {}", tmp.string(), strerror(errno));
+      return false;
+    }
+    auto fail = [&](const char *what) {
+      const int saved = errno;
+      ::close(fd);
+      fs::remove(tmp, ec);
+      log_warn("write_string_atomic: {} failed for {}: {}", what, path.string(), strerror(saved));
+      return false;
+    };
+    // Keep the target's permissions (a 0600 settings file stays 0600).
+    struct stat existing {};
+    if (::stat(path.c_str(), &existing) == 0 && ::fchmod(fd, existing.st_mode & 07777) != 0)
+      return fail("chmod");
+    const char *at = content.data();
+    size_t left = content.size();
+    while (left > 0) {
+      const ssize_t n = ::write(fd, at, left);
+      if (n < 0) {
+        if (errno == EINTR)
+          continue;
+        return fail("write");  // ENOSPC, EFBIG, EIO: the target is untouched
+      }
+      at += n;
+      left -= static_cast<size_t>(n);
+    }
+#ifdef __APPLE__
+    if (::fcntl(fd, F_FULLFSYNC) != 0 && ::fsync(fd) != 0)
+      return fail("fsync");
+#else
+    if (::fsync(fd) != 0)
+      return fail("fsync");
+#endif
+    if (::close(fd) != 0) {
+      fs::remove(tmp, ec);
+      log_warn("write_string_atomic: close failed for {}", path.string());
+      return false;
+    }
+    if (::rename(tmp.c_str(), path.c_str()) != 0) {
+      const int saved = errno;
+      fs::remove(tmp, ec);
+      log_warn("write_string_atomic: rename to {} failed: {}", path.string(), strerror(saved));
+      return false;
+    }
+    const fs::path dir = path.parent_path().empty() ? fs::path(".") : path.parent_path();
+    const int dfd = ::open(dir.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (dfd >= 0) {
+      ::fsync(dfd);  // best effort: some filesystems refuse directory fsync
+      ::close(dfd);
+    }
+    return true;
+#else
     {
       std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
       if (!out) {
@@ -156,7 +237,6 @@ struct files : developer::Plugin {
         return false;
       }
     }
-
     fs::rename(tmp, path, ec);
     if (ec) {
       fs::remove(tmp, ec);
@@ -164,6 +244,7 @@ struct files : developer::Plugin {
       return false;
     }
     return true;
+#endif
   }
 
   // Whole file, or nullopt if missing/unreadable.
@@ -178,6 +259,36 @@ struct files : developer::Plugin {
     return ss.str();
   }
 
+  // A temp whose writer can no longer finish it: the legacy fixed name, or a
+  // `.afh-tmp.<pid>.<n>` whose process has exited. A live writer's temp
+  // (another window mid-save) is left for its rename.
+  static bool is_orphaned_temp(const std::string &name) {
+    const size_t at = name.rfind(TEMP_SUFFIX);
+    if (at == std::string::npos || at == 0)
+      return false;
+    const std::string rest = name.substr(at + strlen(TEMP_SUFFIX));
+    if (rest.empty())
+      return true;
+    long pid = 0;
+    if (std::sscanf(rest.c_str(), ".%ld.", &pid) != 1 || pid <= 0)
+      return false;
+#ifndef _WIN32
+    if (pid == current_pid())
+      return false;
+    return ::kill(static_cast<pid_t>(pid), 0) != 0 && errno == ESRCH;
+#else
+    return true;
+#endif
+  }
+
+  static long current_pid() {
+#ifndef _WIN32
+    return static_cast<long>(::getpid());
+#else
+    return static_cast<long>(_getpid());
+#endif
+  }
+
   // Delete leftover temps under `dir`. init() runs it over the config and save
   // dirs. Never recovers data from them: a half-written and a complete temp are
   // indistinguishable, so promoting one could overwrite good data.
@@ -190,11 +301,7 @@ struct files : developer::Plugin {
          it.increment(ec)) {
       if (!it->is_regular_file(ec))
         continue;
-      const std::string name = it->path().filename().string();
-      if (name.size() <= strlen(TEMP_SUFFIX))
-        continue;
-      if (name.compare(name.size() - strlen(TEMP_SUFFIX),
-                       strlen(TEMP_SUFFIX), TEMP_SUFFIX) != 0)
+      if (!is_orphaned_temp(it->path().filename().string()))
         continue;
       std::error_code rm;
       if (fs::remove(it->path(), rm))

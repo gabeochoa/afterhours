@@ -5,10 +5,18 @@
 
 #include <afterhours/src/plugins/files.h>
 
+#include <atomic>
+#include <csignal>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <thread>
+#ifndef _WIN32
+#include <sys/resource.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 namespace fs = std::filesystem;
 using afterhours::files;
@@ -25,10 +33,12 @@ static void check(bool cond, const std::string &what) {
   }
 }
 
+// Our temps carry TEMP_SUFFIX inside the name (`x.json.afh-tmp.<pid>.<n>`);
+// matching on the extension never found them, so these checks always passed.
 static bool has_temp_siblings(const fs::path &dir) {
   std::error_code ec;
   for (const auto &e : fs::directory_iterator(dir, ec))
-    if (e.path().extension() == ".tmp")
+    if (e.path().filename().string().find(files::TEMP_SUFFIX) != std::string::npos)
       return true;
   return false;
 }
@@ -155,6 +165,96 @@ int main() {
     check(files::sweep_temp_files(root / "no_such_dir") == 0,
           "sweeping a missing dir is a no-op");
   }
+
+  // 10. Competing writers: each write has its own temp, so the file always
+  //     holds one writer's complete payload and no temp survives.
+  {
+    const fs::path p = root / "contended.json";
+    std::atomic<int> failures{0};
+    auto writer = [&](char fill) {
+      for (int i = 0; i < 100; i++)
+        if (!files::write_string_atomic(p, std::string(64 * 1024, fill)))
+          failures++;
+    };
+    std::thread a(writer, 'a'), b(writer, 'b');
+    a.join();
+    b.join();
+    auto got = files::read_string(p);
+    check(failures == 0, "every competing write succeeds");
+    check(got && got->size() == 64 * 1024 &&
+              (*got == std::string(64 * 1024, 'a') || *got == std::string(64 * 1024, 'b')),
+          "the file holds one writer's whole payload, never a mix");
+    check(!has_temp_siblings(root), "no temp survives competing writers");
+  }
+
+  // 11. Replacing a 0600 file keeps it 0600.
+  {
+    const fs::path p = root / "private.json";
+    check(files::write_string_atomic(p, "secret"), "seed private file");
+    fs::permissions(p, fs::perms::owner_read | fs::perms::owner_write, ec);
+    check(files::write_string_atomic(p, "secret2"), "rewrite private file");
+    check((fs::status(p, ec).permissions() & fs::perms::all) ==
+              (fs::perms::owner_read | fs::perms::owner_write),
+          "permissions survive the replace");
+  }
+
+#ifndef _WIN32
+  // 12. Disk full, simulated by a file-size limit: the write fails, the
+  //     original is intact and the partial temp is gone.
+  {
+    const fs::path p = root / "full.json";
+    check(files::write_string_atomic(p, "original"), "seed before disk full");
+    struct rlimit before {};
+    getrlimit(RLIMIT_FSIZE, &before);
+    signal(SIGXFSZ, SIG_IGN);
+    struct rlimit small = before;
+    small.rlim_cur = 1024;
+    setrlimit(RLIMIT_FSIZE, &small);
+    const bool wrote = files::write_string_atomic(p, std::string(64 * 1024, 'x'));
+    setrlimit(RLIMIT_FSIZE, &before);
+    check(!wrote, "a write past the size limit fails");
+    auto got = files::read_string(p);
+    check(got && *got == "original", "the original survives a full disk");
+    check(!has_temp_siblings(root), "the partial temp is removed");
+  }
+
+  // 13. Interruption: a writer killed mid-write leaves the old file or the
+  //     new one whole, and its temp is reclaimed by the sweep.
+  {
+    const fs::path dir = root / "killed";
+    fs::create_directories(dir, ec);
+    const fs::path p = dir / "state.json";
+    check(files::write_string_atomic(p, "old"), "seed before interruption");
+    const std::string big(64 * 1024 * 1024, 'n');
+    const pid_t child = fork();
+    if (child == 0) {
+      files::write_string_atomic(p, big);
+      _exit(0);
+    }
+    usleep(20 * 1000);
+    kill(child, SIGKILL);
+    int status = 0;
+    waitpid(child, &status, 0);
+    auto got = files::read_string(p);
+    check(got && (*got == "old" || *got == big), "an interrupted write leaves old or whole new contents");
+    files::sweep_temp_files(dir);
+    check(!has_temp_siblings(dir), "the killed writer's temp is swept");
+  }
+
+  // 14. The sweep spares a live writer's temp and takes a dead one's.
+  {
+    const fs::path dir = root / "sweep_live";
+    fs::create_directories(dir, ec);
+    const std::string live = "a.json" + std::string(files::TEMP_SUFFIX) + "." +
+                             std::to_string(getpid()) + ".0";
+    const std::string dead = "b.json" + std::string(files::TEMP_SUFFIX) + ".999999.0";
+    { std::ofstream(dir / live) << "writing"; }
+    { std::ofstream(dir / dead) << "orphan"; }
+    files::sweep_temp_files(dir);
+    check(fs::exists(dir / live, ec), "a live writer's temp is left alone");
+    check(!fs::exists(dir / dead, ec), "a dead writer's temp is swept");
+  }
+#endif
 
   fs::remove_all(root, ec);
 
