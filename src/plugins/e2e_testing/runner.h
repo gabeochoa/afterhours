@@ -221,7 +221,8 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
             }
             cmd.wait_seconds = 1 * frame;
         } else if (cmd.name == "expect_text" || cmd.name == "expect_text_i" ||
-                   cmd.name == "expect_no_text" || cmd.name == "expect_text_fully_visible") {
+                   cmd.name == "expect_no_text" || cmd.name == "expect_text_fully_visible" ||
+                   cmd.name == "set_clipboard" || cmd.name == "expect_clipboard") {
             cmd.args.push_back(args.rest());
             cmd.wait_seconds = 1 * frame;
         } else if (cmd.name == "expect_selected_text") {
@@ -435,6 +436,11 @@ class E2ERunner {
             return;
         }
 
+        // A blocking command (await_frame, native_resize, anything that called
+        // block_until) is a barrier: nothing after it is dispatched until it
+        // resolves. Plain retry() does not hold the script.
+        if (has_blocking_commands()) return;
+
         // Let the script's own commands resolve before closing it out,
         // otherwise their errors land in the next script's window.
         const auto &cmd = commands_[index_];
@@ -577,6 +583,7 @@ class E2ERunner {
             test_input::reset_all();
             key_release_detail::reset();
             VisibleTextRegistry::instance().clear();
+            test_clipboard().reset();
             current_script_idx_++;
             current_script_errors_ = 0;
             elapsed_time_ = 0.0f;
@@ -588,6 +595,16 @@ class E2ERunner {
             EntityQuery().whereHasComponent<PendingE2ECommand>().gen();
         for (const Entity &e : pending) {
             if (!e.get<PendingE2ECommand>().is_consumed()) return true;
+        }
+        return false;
+    }
+
+    bool has_blocking_commands() const {
+        auto pending =
+            EntityQuery().whereHasComponent<PendingE2ECommand>().gen();
+        for (const Entity &e : pending) {
+            const auto &cmd = e.get<PendingE2ECommand>();
+            if (cmd.blocking && !cmd.is_consumed()) return true;
         }
         return false;
     }

@@ -125,6 +125,34 @@ Quote arguments containing spaces: `assert_ui header "text=My Project" hidden=fa
 
 Text commands such as `type`, `expect_text` and the value in `expect_input_text` still accept the unquoted rest of the line verbatim. To use escapes there, quote the entire text. Custom handlers receive decoded arguments and should not tokenize them again.
 
+## E2E barriers and deadlines
+
+`await_frame [timeout_s]` blocks the script until two UI render passes have happened after it, so the next command sees a layout and a render that both ran after every earlier line. It fails at the deadline (default 5 seconds) with the number of renders seen. A host that never runs the UI render pass with `AFTER_HOURS_ENABLE_E2E_TESTING` always times out.
+
+A custom handler that waits on a worker, an asset or the network calls `cmd.block_until(seconds)` on every visit until it can consume or fail. That holds the runner and replaces the 30-tick timeout with a wall-clock deadline. `cmd.retry()` alone keeps the command pending but lets later lines run.
+
+## E2E coordinates
+
+Script coordinates and reported rectangles are logical pixels: screen pixels divided by `ui_scale` in Adaptive mode, screen pixels in Proportional mode. `N%` is a fraction of the window. Logical units apply to coordinate commands, `double_click_ui` offsets, `assert_ui` and `dump_ui`, `expect_drawn_at` and `dump_draws`, and `assert_no_overflow`. A widget built at `pixels(100)` asserts as `w=100` at 100%, 140% and 200%. C++ helpers such as `get_screen_rect` stay in screen pixels; use `testing::e2e_to_logical` and `testing::e2e_ui_scale` to convert.
+
+## E2E visibility
+
+`ui_commands::get_visible_rect(entity)` is the screen rectangle cut by every scroll or clip ancestor and by the window, using the same clip as rendering and hit testing. `is_visible` requires at least one whole pixel. Named and text clicks target the centre of the visible part, skip fully clipped matches and fail with "fully clipped" when nothing visible matches. `assert_ui name visible=false` and `vx`/`vy`/`vw`/`vh` assert it; `dump_ui` adds `visible` and `v*` attributes only to clipped nodes.
+
+## E2E text and clipboard
+
+`type` decodes UTF-8 and queues one Unicode code point per character, as the native backends deliver them. Invalid bytes become U+FFFD.
+
+`register_builtin_handlers` installs an in-memory clipboard for the process, `testing::test_clipboard()`. Scripts and widgets read and write it instead of the system clipboard, with or without a window. `set_clipboard "text"` and `expect_clipboard "text"` take the rest of the line; quote it to use `\n`. It is emptied by `reset_test_state` and between batch scripts. Call `testing::use_system_clipboard()` after registering to test the platform clipboard.
+
+## E2E isolated storage
+
+Set `AFTERHOURS_TEST_STORAGE_DIR=/some/dir` before `files::init`. Config, saves and temporaries then live in `/some/dir/config/<game>`, `/some/dir/save/<game>` and `/some/dir/tmp/<game>`, and the platform folders are neither read nor created. The settings plugin saves under the save path, so it follows. A host that parses its test directory after `files::init` calls `files::isolate_storage(dir)`, which redirects all three together.
+
+## E2E native resize
+
+`resize w h` changes the layout viewport. `native_resize w h [timeout_s]` resizes the actual window and blocks until `graphics::get_screen_width/height` report `w`x`h` logical points and a UI render has followed. It fails with "unsupported" in headless mode and without a graphics backend. The raylib path is covered by `make -C tests native-window-test`, which opens a hidden window and needs a window server. On sokol/Metal the resize goes through the app's `metal_set_window_size`. Afterhours does not yet provide that function.
+
 ## Image tint
 
 Use `ComponentConfig{}.with_image_tint({255, 120, 60, 200})` with `image`, `sprite`, `image_button`, or `with_texture`. RGB multiplies the source pixels; tint alpha multiplies the widget's opacity and ancestor opacity. Omitting the option restores white tint on a reused widget. Backgrounds and labels keep their own colors.

@@ -49,48 +49,103 @@ inline RectangleType get_screen_rect(Entity &entity) {
   return ui::detail::apply_ancestor_transform(entity, rect);
 }
 
-// Find a UI component by its debug name and return its center position
-template <typename InputAction>
-std::optional<Position> find_component_center(const std::string &name) {
-  auto query = ui_query()
-                   .whereHasComponent<ui::UIComponent>()
-                   .whereHasComponent<ui::UIComponentDebug>()
-                   .whereLambda([&](const Entity &e) {
-                     return e.get<ui::UIComponentDebug>().name() == name &&
-                            e.get<ui::UIComponent>().was_rendered_to_screen;
-                   })
-                   .first();
+// The part of an element that is actually on screen, in screen pixels: its
+// screen rect cut by every scroll/clip ancestor and by the window. Zero-sized
+// when fully clipped. The same clip render scissors with and hit-testing uses
+// (ui::detail::clip_hit_rect), so a click aimed inside it lands where the
+// element is drawn. was_rendered_to_screen alone cannot say this: a row
+// scrolled out of its viewport is still "rendered".
+inline RectangleType get_visible_rect(Entity &entity) {
+  const auto [sw, sh] = e2e_screen_size();
+  return ui::detail::intersect_rects(
+      ui::detail::clip_hit_rect(entity, get_screen_rect(entity)),
+      RectangleType{0.f, 0.f, sw, sh});
+}
 
-  for (Entity &entity : query.gen()) {
-    auto rect = get_screen_rect(entity);
-    float cx = rect.x + rect.width / 2;
-    float cy = rect.y + rect.height / 2;
-    return Position{cx, cy};
+// At least one whole pixel visible, the same bar text registration uses.
+inline bool is_visible(Entity &entity) {
+  const RectangleType r = get_visible_rect(entity);
+  return r.width >= 1.f && r.height >= 1.f;
+}
+
+// Centre of the visible portion, or nullopt when fully clipped.
+inline std::optional<Position> visible_center(Entity &entity) {
+  if (!is_visible(entity))
+    return std::nullopt;
+  const RectangleType r = get_visible_rect(entity);
+  return Position{r.x + r.width / 2, r.y + r.height / 2};
+}
+
+// Why a rendered target cannot be clicked, in the logical pixels scripts use.
+inline std::string clipped_message(Entity &entity, const std::string &what) {
+  const RectangleType r = e2e_to_logical(get_screen_rect(entity));
+  return std::format("{} is rendered but fully clipped (at {:.0f},{:.0f} "
+                     "size {:.0f}x{:.0f}, outside its scroll/clip ancestors "
+                     "or the window)",
+                     what, r.x, r.y, r.width, r.height);
+}
+
+// First visible match of `pred`; if every match is clipped, nullopt with the
+// reason in *why (left empty when nothing matched at all).
+template <typename Pred>
+std::optional<Position> find_visible_center(Pred pred, const std::string &what,
+                                            std::string *why) {
+  Entity *clipped = nullptr;
+  for (Entity &entity : ui_query()
+                            .whereHasComponent<ui::UIComponent>()
+                            .whereLambda([&](const Entity &e) {
+                              return e.get<ui::UIComponent>()
+                                         .was_rendered_to_screen &&
+                                     pred(e);
+                            })
+                            .gen()) {
+    if (auto pos = visible_center(entity))
+      return pos;
+    if (!clipped)
+      clipped = &entity;
   }
+  if (why)
+    *why = clipped ? clipped_message(*clipped, what) : std::string{};
   return std::nullopt;
 }
 
-// Find a UI component containing specific text
+// Find a UI component by its debug name and return the centre of its visible
+// portion. A match scrolled or clipped entirely out of view is skipped; when
+// that is all there is, *why says so.
 template <typename InputAction>
-std::optional<Position> find_component_with_text(const std::string &text) {
-  auto query = ui_query()
-                   .whereHasComponent<ui::UIComponent>()
-                   .whereHasComponent<ui::HasLabel>()
-                   .whereLambda([&](const Entity &e) {
-                     return e.get<ui::HasLabel>().label.find(text) !=
-                                std::string::npos &&
-                            e.get<ui::UIComponent>().was_rendered_to_screen;
-                   })
-                   .first();
+std::optional<Position> find_component_center(const std::string &name,
+                                              std::string *why = nullptr) {
+  return find_visible_center(
+      [&](const Entity &e) {
+        return e.has<ui::UIComponentDebug>() &&
+               e.get<ui::UIComponentDebug>().name() == name;
+      },
+      std::format("UI component '{}'", name), why);
+}
 
-  // TODO add a gen_lambda() to do this conversion
-  for (Entity &entity : query.gen()) {
-    auto rect = get_screen_rect(entity);
-    float cx = rect.x + rect.width / 2;
-    float cy = rect.y + rect.height / 2;
-    return Position{cx, cy};
+// Find a UI component containing specific text, as find_component_center.
+template <typename InputAction>
+std::optional<Position> find_component_with_text(const std::string &text,
+                                                 std::string *why = nullptr) {
+  return find_visible_center(
+      [&](const Entity &e) {
+        return e.has<ui::HasLabel>() &&
+               e.get<ui::HasLabel>().label.find(text) != std::string::npos;
+      },
+      std::format("UI with text '{}'", text), why);
+}
+
+// Click the visible centre of `entity`, or say why it cannot be clicked.
+template <typename ClickFn>
+bool click_visible(Entity &entity, PendingE2ECommand &cmd,
+                   const std::string &what, ClickFn click) {
+  if (auto pos = visible_center(entity)) {
+    click(pos->x, pos->y);
+    cmd.consume();
+    return true;
   }
-  return std::nullopt;
+  cmd.fail(clipped_message(entity, what));
+  return false;
 }
 
 // Handle 'click_ui name' - clicks UI component by debug name
@@ -104,12 +159,13 @@ struct HandleClickUICommand : System<PendingE2ECommand> {
       return;
     }
 
-    auto pos = find_component_center<InputAction>(cmd.arg(0));
+    std::string why;
+    auto pos = find_component_center<InputAction>(cmd.arg(0), &why);
     if (pos) {
       test_input::simulate_click(pos->x, pos->y);
       cmd.consume();
     } else {
-      cmd.fail(std::format("UI component not found: {}", cmd.arg(0)));
+      cmd.fail(why.empty() ? std::format("UI component not found: {}", cmd.arg(0)) : why);
     }
   }
 };
@@ -127,12 +183,13 @@ struct HandleRightClickUICommand : System<PendingE2ECommand> {
       return;
     }
 
-    auto pos = find_component_center<InputAction>(cmd.arg(0));
+    std::string why;
+    auto pos = find_component_center<InputAction>(cmd.arg(0), &why);
     if (pos) {
       test_input::simulate_right_click(pos->x, pos->y);
       cmd.consume();
     } else {
-      cmd.fail(std::format("UI component not found: {}", cmd.arg(0)));
+      cmd.fail(why.empty() ? std::format("UI component not found: {}", cmd.arg(0)) : why);
     }
   }
 };
@@ -148,12 +205,13 @@ struct HandleRightClickTextCommand : System<PendingE2ECommand> {
       return;
     }
 
-    auto pos = find_component_with_text<InputAction>(cmd.arg(0));
+    std::string why;
+    auto pos = find_component_with_text<InputAction>(cmd.arg(0), &why);
     if (pos) {
       test_input::simulate_right_click(pos->x, pos->y);
       cmd.consume();
     } else {
-      cmd.fail(std::format("No UI with text: {}", cmd.arg(0)));
+      cmd.fail(why.empty() ? std::format("No UI with text: {}", cmd.arg(0)) : why);
     }
   }
 };
@@ -169,12 +227,13 @@ struct HandleClickTextCommand : System<PendingE2ECommand> {
       return;
     }
 
-    auto pos = find_component_with_text<InputAction>(cmd.arg(0));
+    std::string why;
+    auto pos = find_component_with_text<InputAction>(cmd.arg(0), &why);
     if (pos) {
       test_input::simulate_click(pos->x, pos->y);
       cmd.consume();
     } else {
-      cmd.fail(std::format("No UI with text: {}", cmd.arg(0)));
+      cmd.fail(why.empty() ? std::format("No UI with text: {}", cmd.arg(0)) : why);
     }
   }
 };
@@ -405,11 +464,8 @@ struct HandleClickButtonCommand : System<PendingE2ECommand> {
             .first();
 
     for (Entity &entity : query.gen()) {
-      auto rect = get_screen_rect(entity);
-      float cx = rect.x + rect.width / 2;
-      float cy = rect.y + rect.height / 2;
-      test_input::simulate_click(cx, cy);
-      cmd.consume();
+      click_visible(entity, cmd, std::format("Button '{}'", text),
+                    test_input::simulate_click);
       return;
     }
     cmd.fail(std::format("Button not found: {}", cmd.arg(0)));
@@ -439,11 +495,8 @@ struct HandleToggleCheckboxCommand : System<PendingE2ECommand> {
                      .first();
 
     for (Entity &entity : query.gen()) {
-      auto rect = get_screen_rect(entity);
-      float cx = rect.x + rect.width / 2;
-      float cy = rect.y + rect.height / 2;
-      test_input::simulate_click(cx, cy);
-      cmd.consume();
+      click_visible(entity, cmd, std::format("Checkbox '{}'", name),
+                    test_input::simulate_click);
       return;
     }
     cmd.fail(std::format("Checkbox not found: {}", cmd.arg(0)));
@@ -507,8 +560,13 @@ struct HandleSetSliderCommand : System<PendingE2ECommand> {
       // Half a pixel in: a click on the boundary can miss the rect.
       const float x =
           std::min(rect.x + pct * rect.width, rect.x + rect.width - 0.5f);
-      float y = rect.y + rect.height / 2;
-      test_input::simulate_click(x, y);
+      const RectangleType vis = get_visible_rect(entity);
+      if (x < vis.x || x >= vis.x + vis.width || vis.height < 1.f) {
+        cmd.fail(std::format("Slider '{}': the point for {} is clipped out of "
+                             "view", name, *value));
+        return;
+      }
+      test_input::simulate_click(x, vis.y + vis.height / 2);
       cmd.consume();
       return;
     }
@@ -540,13 +598,10 @@ struct HandleSelectDropdownCommand : System<PendingE2ECommand> {
 
     for (Entity &entity : query.gen()) {
       // Click to open dropdown first
-      auto rect = get_screen_rect(entity);
-      float cx = rect.x + rect.width / 2;
-      float cy = rect.y + rect.height / 2;
-      test_input::simulate_click(cx, cy);
       // Note: Selecting the actual option requires another frame
       // TODO: Add wait + option click logic
-      cmd.consume();
+      click_visible(entity, cmd, std::format("Dropdown '{}'", name),
+                    test_input::simulate_click);
       return;
     }
     cmd.fail(std::format("Dropdown not found: {}", cmd.arg(0)));
@@ -886,14 +941,27 @@ struct HandleMultiClickUICommand : System<PendingE2ECommand> {
       bool found = false;
       for (Entity &entity : query.gen()) {
         const RectangleType r = get_screen_rect(entity);
+        // Offsets are logical pixels, like every other script coordinate.
         const auto off = [&](size_t i, float extent) {
           if (cmd.args.size() <= i || cmd.arg(i) == "center")
             return extent * 0.5f;
-          return static_cast<float>(std::atof(cmd.arg(i).c_str()));
+          return static_cast<float>(std::atof(cmd.arg(i).c_str())) *
+                 e2e_ui_scale();
         };
         x = r.x + off(1, r.width);
         y = r.y + off(2, r.height);
+        const RectangleType vis = get_visible_rect(entity);
+        if (x < vis.x || y < vis.y || x >= vis.x + vis.width ||
+            y >= vis.y + vis.height) {
+          cmd.fail(std::format("{}: the target point is clipped out of view; "
+                               "{}",
+                               name_for(),
+                               clipped_message(entity, std::format(
+                                   "UI component '{}'", cmd.arg(0)))));
+          return;
+        }
         found = true;
+        break;
       }
       if (!found) {
         cmd.fail(std::format("UI component not found: {}", cmd.arg(0)));
@@ -1012,7 +1080,8 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
   if (!cmp.was_rendered_to_screen) return;
 
   std::string indent(depth * 2, ' ');
-  RectangleType rect = get_screen_rect(entity);
+  const RectangleType screen = get_screen_rect(entity);
+  RectangleType rect = e2e_to_logical(screen);
 
   out += indent + "<ui";
 
@@ -1026,14 +1095,26 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
                      std::lroundf(rect.x), std::lroundf(rect.y),
                      std::lroundf(rect.width), std::lroundf(rect.height));
 
+  // Only where clipping cut something off, so unclipped dumps read as before.
+  const RectangleType vis = get_visible_rect(entity);
+  if (vis.x != screen.x || vis.y != screen.y || vis.width != screen.width ||
+      vis.height != screen.height) {
+    const RectangleType lv = e2e_to_logical(vis);
+    out += std::format(" visible=\"{}\" vx=\"{}\" vy=\"{}\" vw=\"{}\" vh=\"{}\"",
+                       is_visible(entity) ? "partial" : "false",
+                       std::lroundf(lv.x), std::lroundf(lv.y),
+                       std::lroundf(lv.width), std::lroundf(lv.height));
+  }
+
   if (entity.has<ui::HasLabel>())
     out += " text=\"" + xml_escape(truncate_text(entity.get<ui::HasLabel>().label)) + "\"";
 
   if (entity.has<ui::HasScrollView>()) {
     auto &sv = entity.get<ui::HasScrollView>();
+    const float scale = e2e_ui_scale();
     out += std::format(" scroll_x=\"{}\" scroll_y=\"{}\"",
-                       std::lroundf(sv.scroll_offset.x),
-                       std::lroundf(sv.scroll_offset.y));
+                       std::lroundf(sv.scroll_offset.x / scale),
+                       std::lroundf(sv.scroll_offset.y / scale));
   }
 
   if (cmp.should_hide)
@@ -1108,7 +1189,8 @@ inline bool parse_prop_assertion(const std::string &arg, std::string &prop,
 inline std::string check_ui_property(Entity &entity, const std::string &prop,
                                       const std::string &expected) {
   auto &cmp = entity.get<ui::UIComponent>();
-  RectangleType rect = get_screen_rect(entity);
+  const RectangleType rect = e2e_to_logical(get_screen_rect(entity));
+  const RectangleType vis = e2e_to_logical(get_visible_rect(entity));
 
   long actual_int = 0;
   bool is_int_prop = true;
@@ -1117,6 +1199,17 @@ inline std::string check_ui_property(Entity &entity, const std::string &prop,
   else if (prop == "y") actual_int = std::lroundf(rect.y);
   else if (prop == "w") actual_int = std::lroundf(rect.width);
   else if (prop == "h") actual_int = std::lroundf(rect.height);
+  else if (prop == "vx") actual_int = std::lroundf(vis.x);
+  else if (prop == "vy") actual_int = std::lroundf(vis.y);
+  else if (prop == "vw") actual_int = std::lroundf(vis.width);
+  else if (prop == "vh") actual_int = std::lroundf(vis.height);
+  else if (prop == "visible") {
+    // true = at least one pixel survives every clip and the window.
+    std::string actual_str = is_visible(entity) ? "true" : "false";
+    if (actual_str != expected)
+      return std::format("{}={} but got {}", prop, expected, actual_str);
+    return "";
+  }
   else if (prop == "hidden") {
     std::string actual_str = cmp.should_hide ? "true" : "false";
     if (actual_str != expected)

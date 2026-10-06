@@ -15,6 +15,7 @@
 
 #include "../../capture.h"
 #include "../../logging.h"
+#include "command_handlers.h"
 #include "pending_command.h"
 
 namespace afterhours {
@@ -178,9 +179,10 @@ inline std::string summarize(size_t limit = 12,
       continue;
     if (shown++ >= limit)
       break;
+    const RectangleType r = e2e_to_logical(c.rect);
     out += std::format("\n  | {} ({:.0f},{:.0f}) {:.0f}x{:.0f} "
                        "#{:02x}{:02x}{:02x}{:02x} eid={}",
-                       c.op, c.rect.x, c.rect.y, c.rect.width, c.rect.height,
+                       c.op, r.x, r.y, r.width, r.height,
                        c.color.r, c.color.g, c.color.b, c.color.a, c.entity_id);
     if (!c.text.empty())
       out += std::format(" '{}'", c.text);
@@ -274,8 +276,9 @@ struct HandleExpectDrawnAtCommand : System<PendingE2ECommand> {
       return;
     }
 
+    // x/y/w/h are logical pixels, like every script coordinate.
     for (const auto *c : candidates)
-      if (want.matches(c->rect)) {
+      if (want.matches(e2e_to_logical(c->rect))) {
         cmd.consume();
         return;
       }
@@ -283,10 +286,11 @@ struct HandleExpectDrawnAtCommand : System<PendingE2ECommand> {
     // It IS drawn, just not there. That is a real failure, and the useful
     // part is saying where it landed instead.
     std::string got;
-    for (size_t i = 0; i < candidates.size() && i < 6; i++)
-      got += std::format("\n  | at ({:.0f},{:.0f}) {:.0f}x{:.0f}",
-                         candidates[i]->rect.x, candidates[i]->rect.y,
-                         candidates[i]->rect.width, candidates[i]->rect.height);
+    for (size_t i = 0; i < candidates.size() && i < 6; i++) {
+      const RectangleType r = e2e_to_logical(candidates[i]->rect);
+      got += std::format("\n  | at ({:.0f},{:.0f}) {:.0f}x{:.0f}", r.x, r.y,
+                         r.width, r.height);
+    }
     cmd.fail(std::format("{} drawn, but not {}. {} found:{}", f.describe(),
                          want.describe(), candidates.size(), got));
   }

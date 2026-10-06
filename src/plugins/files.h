@@ -38,6 +38,9 @@ struct files : developer::Plugin {
     fs::path resource_folder_path;
     fs::path save_folder_path;
     fs::path config_folder_path;
+    // Scratch space for the game's own temporaries (exports, staging, caches
+    // safe to lose). Under the OS temp dir unless storage is isolated.
+    fs::path temp_folder_path;
 
     ProvidesResourcePaths() = default;
     // Constructor implementation in files.cpp to avoid including
@@ -55,6 +58,21 @@ struct files : developer::Plugin {
 
     [[nodiscard]] fs::path get_config_path() const {
       return config_folder_path;
+    }
+
+    [[nodiscard]] fs::path get_temp_path() const { return temp_folder_path; }
+
+    // Point config, saves and temp under `root` together, as
+    // root/{config,save,tmp}/<game_name>, creating them. Redirecting only one
+    // of them is how test fixtures end up in a user's real save folder.
+    void use_storage_root(const fs::path &root) {
+      config_folder_path = root / "config" / game_name;
+      save_folder_path = root / "save" / game_name;
+      temp_folder_path = root / "tmp" / game_name;
+      std::error_code ec;
+      for (const fs::path *p :
+           {&config_folder_path, &save_folder_path, &temp_folder_path})
+        fs::create_directories(*p, ec);
     }
 
     // Implementation in files.cpp
@@ -99,6 +117,13 @@ struct files : developer::Plugin {
 
   static fs::path get_config_path();
 
+  static fs::path get_temp_path();
+
+  // Redirect an already-initialised provider (use_storage_root). For hosts
+  // that only learn the test directory after files::init(). False if the
+  // plugin is not initialised.
+  static bool isolate_storage(const fs::path &root);
+
   static void for_resources_in_group(
       const std::string &group,
       const std::function<void(std::string, std::string, std::string)> &cb);
@@ -119,6 +144,12 @@ struct files : developer::Plugin {
   // Suffix for in-progress writes. Distinctive so the sweep never deletes a
   // caller's own .tmp file.
   static constexpr const char *TEMP_SUFFIX = ".afh-tmp";
+
+  // Set this to a directory and every ProvidesResourcePaths built afterwards
+  // uses use_storage_root(it) instead of the platform folders, which are then
+  // neither read nor created. For test runs: a test can never load or
+  // overwrite the user's real settings or saves.
+  static constexpr const char *TEST_STORAGE_ENV = "AFTERHOURS_TEST_STORAGE_DIR";
 
   // Defined here rather than in files.cpp: these are plain std::filesystem
   // helpers with no singleton or platform_folders dependency, and theme_io

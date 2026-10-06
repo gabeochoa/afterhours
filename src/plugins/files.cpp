@@ -6,6 +6,8 @@
 
 #include "files.h"
 
+#include <cstdlib>
+
 #if defined(_WIN32)
 #define AFTER_HOURS_USE_RAYLIB
 #endif
@@ -109,6 +111,18 @@ std::filesystem::path resolve_resource_root(const std::string &root_folder) {
 files::ProvidesResourcePaths::ProvidesResourcePaths(
     const std::string &game_name, const std::string &root_folder)
     : game_name(game_name), root_folder(root_folder) {
+  // Checked first so an isolated run never creates the real save folder.
+  if (const char *root = std::getenv(TEST_STORAGE_ENV); root && *root) {
+#ifdef __EMSCRIPTEN__
+    resource_folder_path = fs::path("/") / fs::path(root_folder);
+#else
+    resource_folder_path = resolve_resource_root(root_folder);
+#endif
+    use_storage_root(root);
+    log_info("{} set: config, saves and temp under {}", TEST_STORAGE_ENV,
+             root);
+    return;
+  }
 #ifdef __EMSCRIPTEN__
   // Emscripten virtual filesystem: files preloaded with --preload-file are
   // available at the mount point. Save/config use in-memory directories.
@@ -116,6 +130,7 @@ files::ProvidesResourcePaths::ProvidesResourcePaths(
   config_folder_path = fs::path("/config") / fs::path(game_name);
   resource_folder_path = fs::path("/") / fs::path(root_folder);
 
+  temp_folder_path = fs::path("/tmp") / fs::path(game_name);
   if (!fs::exists(save_folder_path)) {
     fs::create_directories(save_folder_path);
   }
@@ -128,6 +143,8 @@ files::ProvidesResourcePaths::ProvidesResourcePaths(
   save_folder_path = master_folder / fs::path(game_name);
   config_folder_path = sago::getConfigHome() / fs::path(game_name);
   resource_folder_path = resolve_resource_root(root_folder);
+  std::error_code ec;
+  temp_folder_path = fs::temp_directory_path(ec) / fs::path(game_name);
 
   if (!fs::exists(save_folder_path)) {
     bool was_created = fs::create_directories(save_folder_path);
@@ -272,6 +289,25 @@ fs::path files::get_config_path() {
     return fs::path();
   }
   return provider->get_config_path();
+}
+
+fs::path files::get_temp_path() {
+  auto *provider = get_provider();
+  if (!provider) {
+    log_error("Files plugin not initialized. Call files::init() first.");
+    return fs::path();
+  }
+  return provider->get_temp_path();
+}
+
+bool files::isolate_storage(const fs::path &root) {
+  auto *provider = get_provider();
+  if (!provider) {
+    log_error("isolate_storage: files plugin not initialized");
+    return false;
+  }
+  provider->use_storage_root(root);
+  return true;
 }
 
 void files::for_resources_in_group(

@@ -6,6 +6,7 @@
 
 #include "../../ecs.h"
 
+#include <chrono>
 #include <optional>
 #include <string>
 #include <vector>
@@ -59,6 +60,29 @@ struct PendingE2ECommand : BaseComponent {
   long long seen_render = -1;
   static constexpr int MAX_FRAMES = 30; // Commands timeout after 30 frames (~0.5s at 60fps)
   CommandState state = CommandState::Ready;
+  // Set by block_until(). A blocking command stops the runner dispatching the
+  // next line, and is timed by this wall-clock deadline instead of
+  // MAX_FRAMES: a headless host can burn 30 ticks in a millisecond, long
+  // before a render, a worker or a window resize lands.
+  bool blocking = false;
+  std::optional<std::chrono::steady_clock::time_point> deadline;
+
+  // Hold the script on this command until it is consumed or failed, failing
+  // after `seconds` of wall clock. Call on every visit that is still waiting;
+  // only the first call arms the deadline. Plain retry() keeps the command
+  // pending but lets the runner dispatch the lines after it.
+  void block_until(float seconds) {
+    blocking = true;
+    if (!deadline)
+      deadline = std::chrono::steady_clock::now() +
+                 std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                     std::chrono::duration<float>(seconds));
+    retry();
+  }
+
+  bool past_deadline() const {
+    return deadline && std::chrono::steady_clock::now() > *deadline;
+  }
 
   // Increment frame counter, returns true if timed out
   bool tick_frame() {

@@ -11,7 +11,11 @@
 #include "../../font_helper.h"
 #include "../../logging.h"
 #include "../animation.h"
+#include "../clipboard.h"
 #include "../ui/components.h"
+// component_config.h needs UIContext declared first.
+#include "../ui/context.h"
+#include "../ui/component_config.h"
 #include "../ui/ui_collection.h"
 #include "../ui/ui_core_components.h"
 #include "../window_manager.h"
@@ -32,6 +36,50 @@ inline std::pair<float, float> e2e_screen_size() {
     return {1280.f, 720.f};  // fallback
 }
 
+// E2E coordinates are logical pixels: the unit layout is written in, before
+// Adaptive scaling multiplies it by ui_scale. `click 100 40`, `assert_ui row
+// w=80` and dump_ui then mean the same element at 100%, 140% and 200% zoom.
+// Proportional mode ignores ui_scale, so there the two units coincide.
+// "N%" coordinates stay fractions of the window. get_screen_rect and the
+// injector keep screen pixels; only what a script reads or writes converts.
+inline float e2e_ui_scale() {
+    if (ui::imm::UIStylingDefaults::get().scaling_mode !=
+        ui::ScalingMode::Adaptive)
+        return 1.f;
+    const float s = ui::imm::ThemeDefaults::get().theme.ui_scale;
+    return s > 0.f ? s : 1.f;
+}
+
+// Script coordinate -> screen pixels.
+inline float e2e_coord(const PendingE2ECommand &cmd, size_t idx,
+                       float screen_dim) {
+    const std::string &s = cmd.arg(idx);
+    const float v = cmd.coord_arg(idx, screen_dim);
+    return (!s.empty() && s.back() == '%') ? v : v * e2e_ui_scale();
+}
+
+// Screen pixels -> the logical pixels a script reads.
+inline RectangleType e2e_to_logical(RectangleType r) {
+    const float s = e2e_ui_scale();
+    return {r.x / s, r.y / s, r.width / s, r.height / s};
+}
+
+// The clipboard E2E scripts use. register_builtin_handlers() installs it, so
+// copy/paste in a test never reads or overwrites the user's real clipboard,
+// with or without a window. Call use_system_clipboard() after registering to
+// exercise the platform clipboard deliberately.
+inline clipboard::MemoryProvider &test_clipboard() {
+    static clipboard::MemoryProvider provider;
+    return provider;
+}
+inline void isolate_clipboard() {
+    clipboard::detail::provider = &test_clipboard();
+}
+inline void use_system_clipboard() {
+    if (clipboard::detail::provider == &test_clipboard())
+        clipboard::detail::provider = nullptr;
+}
+
 // Handle 'type "text"' command - types characters
 struct HandleTypeCommand : System<PendingE2ECommand> {
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
@@ -42,11 +90,10 @@ struct HandleTypeCommand : System<PendingE2ECommand> {
             return;
         }
 
-        // Clear any leftover chars before pushing new ones
+        // Clear any leftover chars before pushing new ones. UTF-8 in, one
+        // code point per character out, as the native backends deliver them.
         test_input::clear_queue();
-        for (char c : cmd.arg(0)) {
-            test_input::push_char(c);
-        }
+        test_input::push_text(cmd.arg(0));
         cmd.consume();
     }
 };
@@ -142,7 +189,7 @@ struct HandleClickCommand : System<PendingE2ECommand> {
         }
 
         auto [sw, sh] = e2e_screen_size();
-        test_input::simulate_click(cmd.coord_arg(0, sw), cmd.coord_arg(1, sh));
+        test_input::simulate_click(e2e_coord(cmd, 0, sw), e2e_coord(cmd, 1, sh));
         cmd.consume();
     }
 };
@@ -158,8 +205,8 @@ struct HandleRightClickCommand : System<PendingE2ECommand> {
         }
 
         auto [sw, sh] = e2e_screen_size();
-        test_input::simulate_right_click(cmd.coord_arg(0, sw),
-                                         cmd.coord_arg(1, sh));
+        test_input::simulate_right_click(e2e_coord(cmd, 0, sw),
+                                         e2e_coord(cmd, 1, sh));
         cmd.consume();
     }
 };
@@ -175,8 +222,8 @@ struct HandleMiddleClickCommand : System<PendingE2ECommand> {
         }
 
         auto [sw, sh] = e2e_screen_size();
-        test_input::simulate_middle_click(cmd.coord_arg(0, sw),
-                                          cmd.coord_arg(1, sh));
+        test_input::simulate_middle_click(e2e_coord(cmd, 0, sw),
+                                          e2e_coord(cmd, 1, sh));
         cmd.consume();
     }
 };
@@ -193,8 +240,8 @@ struct HandleMiddleDownCommand : System<PendingE2ECommand> {
         }
 
         auto [sw, sh] = e2e_screen_size();
-        test_input::set_mouse_position(cmd.coord_arg(0, sw),
-                                       cmd.coord_arg(1, sh));
+        test_input::set_mouse_position(e2e_coord(cmd, 0, sw),
+                                       e2e_coord(cmd, 1, sh));
         auto &m = input_injector::detail::mouse;
         m.middle_down = true;
         m.middle_just_pressed = true;
@@ -246,8 +293,8 @@ struct HandleDoubleClickCommand : System<PendingE2ECommand> {
 
         using namespace double_click_detail;
         auto [sw, sh] = e2e_screen_size();
-        float x = cmd.coord_arg(0, sw);
-        float y = cmd.coord_arg(1, sh);
+        float x = e2e_coord(cmd, 0, sw);
+        float y = e2e_coord(cmd, 1, sh);
 
         if (phase == 0) {
             // Phase 0: inject first click
@@ -295,8 +342,8 @@ struct HandleTripleClickCommand : System<PendingE2ECommand> {
 
         using namespace triple_click_detail;
         auto [sw, sh] = e2e_screen_size();
-        float x = cmd.coord_arg(0, sw);
-        float y = cmd.coord_arg(1, sh);
+        float x = e2e_coord(cmd, 0, sw);
+        float y = e2e_coord(cmd, 1, sh);
 
         if (phase == 0) {
             stored_x = x;
@@ -330,9 +377,9 @@ struct HandleDragCommand : System<PendingE2ECommand> {
         }
 
         auto [sw, sh] = e2e_screen_size();
-        test_input::simulate_click(cmd.coord_arg(0, sw), cmd.coord_arg(1, sh));
-        input_injector::set_mouse_position(cmd.coord_arg(2, sw),
-                                           cmd.coord_arg(3, sh));
+        test_input::simulate_click(e2e_coord(cmd, 0, sw), e2e_coord(cmd, 1, sh));
+        input_injector::set_mouse_position(e2e_coord(cmd, 2, sw),
+                                           e2e_coord(cmd, 3, sh));
         cmd.consume();
     }
 };
@@ -348,8 +395,8 @@ struct HandleMouseMoveCommand : System<PendingE2ECommand> {
         }
 
         auto [sw, sh] = e2e_screen_size();
-        test_input::set_mouse_position(cmd.coord_arg(0, sw),
-                                       cmd.coord_arg(1, sh));
+        test_input::set_mouse_position(e2e_coord(cmd, 0, sw),
+                                       e2e_coord(cmd, 1, sh));
         cmd.consume();
     }
 };
@@ -365,8 +412,8 @@ struct HandleMouseDownCommand : System<PendingE2ECommand> {
         }
 
         auto [sw, sh] = e2e_screen_size();
-        float x = cmd.coord_arg(0, sw);
-        float y = cmd.coord_arg(1, sh);
+        float x = e2e_coord(cmd, 0, sw);
+        float y = e2e_coord(cmd, 1, sh);
         test_input::set_mouse_position(x, y);
         auto &m = input_injector::detail::mouse;
         m.left_down = true;
@@ -475,8 +522,8 @@ struct HandleDragToCommand : System<PendingE2ECommand> {
         switch (phase) {
             case 0: {
                 // Frame 0: press at start position
-                float x1 = cmd.coord_arg(0, sw);
-                float y1 = cmd.coord_arg(1, sh);
+                float x1 = e2e_coord(cmd, 0, sw);
+                float y1 = e2e_coord(cmd, 1, sh);
                 test_input::set_mouse_position(x1, y1);
                 auto &m = input_injector::detail::mouse;
                 m.left_down = true;
@@ -489,8 +536,8 @@ struct HandleDragToCommand : System<PendingE2ECommand> {
             }
             case 1: {
                 // Frame 1: move to end position (mouse still held)
-                float x2 = cmd.coord_arg(2, sw);
-                float y2 = cmd.coord_arg(3, sh);
+                float x2 = e2e_coord(cmd, 2, sw);
+                float y2 = e2e_coord(cmd, 3, sh);
                 test_input::set_mouse_position(x2, y2);
                 phase = 2;
                 cmd.retry();  // Mark as in-progress so unknown handler skips it
@@ -664,6 +711,7 @@ struct HandleResetTestStateCommand : System<PendingE2ECommand> {
         triple_click_detail::reset();
         shift_tab_detail::reset();
         VisibleTextRegistry::instance().clear();
+        test_clipboard().reset();
         cmd.consume();
     }
 
@@ -706,6 +754,132 @@ struct HandleResizeCommand : System<PendingE2ECommand> {
         window_manager::set_window_size(w, h);
 
         cmd.consume();
+    }
+};
+
+// 'await_frame [timeout_seconds=5]' - a barrier: holds the script until a
+// frame whose layout AND render both ran after this line was reached.
+//
+// Counted in renders (VisibleTextRegistry::generation, bumped once per UI
+// render pass), not ticks: a host may run many update ticks per render, and
+// commands like click_ui only see what was_rendered_to_screen. Two renders,
+// because the first may close a frame whose layout ran before this handler;
+// the second follows a full update, layout included, that began after it.
+// Fails with the render count when the deadline passes, which also catches a
+// host that never renders the UI in test mode.
+struct HandleAwaitFrameCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("await_frame")) return;
+        const float timeout = cmd.arg_as<float>(0, 5.f);
+        if (timeout <= 0.f) {
+            cmd.fail(std::format("await_frame: timeout must be positive, got "
+                                 "'{}'", cmd.arg(0)));
+            return;
+        }
+        const auto gen = static_cast<long long>(
+            VisibleTextRegistry::instance().generation());
+        if (cmd.seen_render < 0) cmd.seen_render = gen;
+        const long long renders = gen - cmd.seen_render;
+        if (renders >= 2) {
+            cmd.consume();
+            return;
+        }
+        if (cmd.past_deadline()) {
+            cmd.fail(std::format(
+                "await_frame timed out after {:.2f}s with {} of 2 UI render "
+                "passes; is the UI rendered in test mode "
+                "(AFTER_HOURS_ENABLE_E2E_TESTING)?",
+                timeout, renders));
+            return;
+        }
+        cmd.block_until(timeout);
+    }
+};
+
+// 'set_clipboard "text"' / 'expect_clipboard "text"' - seed or check the
+// clipboard (the isolated one unless the app opted out). \n is a newline
+// inside quotes, as in expect_text.
+struct HandleClipboardCommands : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed()) return;
+        if (cmd.is("set_clipboard")) {
+            clipboard::set_text(cmd.arg(0));
+            cmd.consume();
+        } else if (cmd.is("expect_clipboard")) {
+            const std::string actual = clipboard::get_text();
+            if (actual == cmd.arg(0))
+                cmd.consume();
+            else
+                cmd.fail(std::format(
+                    "expect_clipboard: expected \"{}\", clipboard holds "
+                    "\"{}\"", cmd.arg(0), actual));
+        }
+    }
+};
+
+// 'native_resize w h [timeout_seconds=5]' - resize the real window and hold
+// the script until the backend reports a w x h drawable (logical points,
+// independent of Retina scale) and one UI render has happened at that size.
+//
+// 'resize' only moves the layout viewport; this is for checking what AppKit
+// and Metal do when the actual window changes. Headless and backend-less
+// builds have no native window, so it fails at once with "unsupported" rather
+// than passing on a size nobody drew. On sokol/Metal the window change goes
+// through the app's metal_set_window_size (see window_manager.h).
+struct HandleNativeResizeCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("native_resize")) return;
+        const int w = cmd.arg_as<int>(0);
+        const int h = cmd.arg_as<int>(1);
+        if (w <= 0 || h <= 0) {
+            cmd.fail(std::format("native_resize: invalid dimensions {}x{}",
+                                 cmd.arg(0), cmd.arg(1)));
+            return;
+        }
+#if defined(AFTER_HOURS_USE_RAYLIB) || defined(AFTER_HOURS_USE_METAL)
+        if (graphics::is_headless()) {
+            cmd.fail("native_resize: unsupported in headless mode (no native "
+                     "window); use 'resize' to change the layout viewport");
+            return;
+        }
+        const float timeout = cmd.arg_as<float>(2, 5.f);
+        if (!cmd.deadline) {
+            window_manager::set_window_size(w, h);
+            cmd.block_until(timeout);
+            return;
+        }
+        const auto gen = static_cast<long long>(
+            VisibleTextRegistry::instance().generation());
+        const int got_w = graphics::get_screen_width();
+        const int got_h = graphics::get_screen_height();
+        if (got_w == w && got_h == h) {
+            // The first render at the new size proves a drawable of that
+            // size was presented, not just that the setter returned.
+            if (cmd.seen_render < 0) cmd.seen_render = gen;
+            if (gen > cmd.seen_render) {
+                cmd.consume();
+                return;
+            }
+        } else {
+            cmd.seen_render = -1;
+        }
+        if (cmd.past_deadline()) {
+            cmd.fail(std::format(
+                "native_resize: window is {}x{} after {:.2f}s, wanted {}x{}{}",
+                got_w, got_h, timeout, w, h,
+                got_w == w && got_h == h ? " (size matched, but no UI render "
+                                           "followed)"
+                                         : ""));
+            return;
+        }
+        cmd.block_until(timeout);
+#else
+        cmd.fail("native_resize: unsupported without a graphics backend (no "
+                 "native window); use 'resize' to change the layout viewport");
+#endif
     }
 };
 
@@ -835,10 +1009,12 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
                             rect.x + rect.width > r + PARENT_TOLERANCE ||
                             rect.y + rect.height > b + PARENT_TOLERANCE) {
                             parent_out = true;
+                            const RectangleType box =
+                                e2e_to_logical({l, t, r - l, b - t});
                             parent_detail = std::format(
                                 " (outside parent content box "
                                 "{:.0f},{:.0f} {:.0f}x{:.0f})",
-                                l, t, r - l, b - t);
+                                box.x, box.y, box.width, box.height);
                         }
                     }
                 }
@@ -915,9 +1091,10 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
 
             const char *reason =
                 rect_out ? "RECT" : (parent_out ? "PARENT" : "TEXT");
+            const RectangleType lr = e2e_to_logical(rect);
             violations.push_back(std::format(
                 "  [{}] {} at ({:.0f},{:.0f}) size {:.0f}x{:.0f}{}{}", reason,
-                name, rect.x, rect.y, rect.width, rect.height, parent_detail,
+                name, lr.x, lr.y, lr.width, lr.height, parent_detail,
                 text_detail));
         }
 
@@ -976,6 +1153,25 @@ struct E2ECommandCleanupSystem : System<PendingE2ECommand> {
                          cmd.line_number, cmd.error_message);
             }
             e.cleanup = true;
+            return;
+        }
+
+        // A blocking command is timed by its wall-clock deadline, not frames.
+        // Its handler usually fails it first with a specific reason; this is
+        // the fallback for a handler that only kept calling block_until().
+        if (cmd.deadline) {
+            if (cmd.past_deadline()) {
+                cmd.fail(std::format(
+                    "Command '{}'{} passed its wall-clock deadline", cmd.name,
+                    cmd.args.empty() ? std::string{}
+                                     : std::format(" ('{}')", cmd.args[0])));
+                detail::command_error_count()++;
+                log_warn("[TIMEOUT] {} (line {}): {}", cmd.name,
+                         cmd.line_number, cmd.error_message);
+                e.cleanup = true;
+                return;
+            }
+            cmd.reset_retry();
             return;
         }
 

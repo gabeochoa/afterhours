@@ -81,8 +81,14 @@ inline void register_builtin_handlers(SystemManager &sm) {
       std::make_unique<HandleExpectTextInsensitiveCommand>());
   sm.register_update_system(std::make_unique<HandleExpectNoTextCommand>());
   sm.register_update_system(std::make_unique<HandleResizeCommand>());
+  sm.register_update_system(std::make_unique<HandleNativeResizeCommand>());
+  sm.register_update_system(std::make_unique<HandleAwaitFrameCommand>());
+  sm.register_update_system(std::make_unique<HandleClipboardCommands>());
   sm.register_update_system(std::make_unique<HandleAssertNoOverflowCommand>());
   // Note: screenshot and reset_test_state need callbacks, registered separately
+
+  // Scripts get an in-memory clipboard; use_system_clipboard() opts out.
+  isolate_clipboard();
 }
 
 // Register a system to run AFTER built-in handlers (to extend or add custom)

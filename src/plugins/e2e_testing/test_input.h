@@ -5,6 +5,7 @@
 #include "input_injector.h"
 
 #include <queue>
+#include <string_view>
 
 namespace afterhours {
 namespace testing {
@@ -13,7 +14,9 @@ namespace test_input {
 struct KeyPress {
   int key = 0;
   bool is_char = false;
-  char char_value = 0;
+  // A Unicode code point, the same contract as the backends' GetCharPressed.
+  // It was a char, so `type "é"` delivered two negative bytes.
+  int char_value = 0;
 };
 
 namespace detail {
@@ -37,12 +40,36 @@ inline void push_key(int key) {
   input_injector::set_key_up(key);
 }
 
-// Queue a character
-inline void push_char(char c) {
+// Queue one Unicode code point.
+inline void push_char(int codepoint) {
   KeyPress kp;
   kp.is_char = true;
-  kp.char_value = c;
+  kp.char_value = codepoint;
   detail::key_queue.push(kp);
+}
+
+// Queue every code point of a UTF-8 string, in order. A malformed or
+// truncated sequence queues U+FFFD for its lead byte and resumes at the next
+// byte, so a bad fixture shows up as a replacement glyph, not a lost tail.
+inline void push_text(std::string_view utf8) {
+  for (size_t i = 0; i < utf8.size();) {
+    const auto b = static_cast<unsigned char>(utf8[i]);
+    const int len = b < 0x80 ? 1 : (b >> 5) == 6 ? 2 : (b >> 4) == 14 ? 3
+                  : (b >> 3) == 30 ? 4 : 0;
+    int cp = len == 1 ? b : len == 2 ? (b & 0x1F) : len == 3 ? (b & 0x0F)
+           : (b & 0x07);
+    bool ok = len > 0 && i + static_cast<size_t>(len) <= utf8.size();
+    for (int k = 1; ok && k < len; ++k) {
+      const auto c = static_cast<unsigned char>(utf8[i + static_cast<size_t>(k)]);
+      ok = (c >> 6) == 2;
+      cp = (cp << 6) | (c & 0x3F);
+    }
+    // Overlong forms, surrogates and values past U+10FFFF are not text.
+    static constexpr int kMin[] = {0, 0, 0x80, 0x800, 0x10000};
+    ok = ok && cp >= kMin[len] && cp <= 0x10FFFF && (cp < 0xD800 || cp > 0xDFFF);
+    push_char(ok ? cp : 0xFFFD);
+    i += ok ? static_cast<size_t>(len) : 1;
+  }
 }
 
 // Clear input queue
@@ -239,9 +266,9 @@ inline int get_char_pressed(BackendFn backend_fn) {
       return 0;
     }
     if (detail::key_queue.front().is_char) {
-      char c = detail::key_queue.front().char_value;
+      const int c = detail::key_queue.front().char_value;
       detail::key_queue.pop();
-      return static_cast<int>(c);
+      return c;
     }
     return 0;
   }
