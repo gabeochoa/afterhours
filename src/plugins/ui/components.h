@@ -569,6 +569,10 @@ struct HasScrollView : BaseComponent {
   bool horizontal_enabled = false;    // Allow horizontal scrolling
   bool invert_scroll = false;         // Invert scroll direction (non-natural)
   bool config_owned = false;
+  // Bumped whenever the user moves the view: a wheel notch or a scrollbar
+  // drag. Lets a pending programmatic scroll tell the user's input apart
+  // from its own writes and from clamping, which also move the target.
+  std::uint64_t user_scroll_serial = 0;
   bool auto_overflow =
       false; // Auto mode: only clip/scroll when content overflows
   // Non-zero: views sharing an id scroll together, on enabled axes only.
@@ -595,6 +599,11 @@ struct HasScrollView : BaseComponent {
   }
   void scroll_to_bottom() {
     scroll_offset.y = scroll_target.y = last_eased_offset.y = bottom_offset();
+  }
+  // Jump to an offset in one write, like scroll_to_top: no glide, and no
+  // stale target for the easing to pull back toward.
+  void jump_to_y(float y) {
+    scroll_offset.y = scroll_target.y = last_eased_offset.y = y;
   }
   void scroll_to_left() {
     scroll_offset.x = scroll_target.x = last_eased_offset.x = 0.f;

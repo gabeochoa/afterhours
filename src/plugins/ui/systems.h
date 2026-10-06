@@ -2063,6 +2063,7 @@ struct HandleScrollbarDrag : SystemWithUIContext<HasScrollView> {
         scroll.scroll_offset.x = value;
         scroll.scroll_target.x = value;
       }
+      scroll.user_scroll_serial++;
       scroll.clamp_scroll();
     };
 
@@ -2240,6 +2241,9 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
       scroll_state.scroll_target.x +=
           direction * wheel_v.x * scroll_state.scroll_speed;
     }
+    if ((scroll_state.vertical_enabled && wheel_v.y != 0.0f) ||
+        (scroll_state.horizontal_enabled && wheel_v.x != 0.0f))
+      scroll_state.user_scroll_serial++;
 
     scroll_state.clamp_scroll();
   }
