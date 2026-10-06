@@ -103,6 +103,20 @@ own only when you want UI actions fused with your game bindings.
 | `children()` | Shrink-wrap to content |
 | `expand(weight)` / `flex_grow(weight)` | Fill remaining space proportionally |
 
+## Focus, shortcuts, scrolling and selection
+
+Optional headers for screens that rebuild controls, virtualize content, or mix
+app shortcuts with text fields. Include them directly; `ui.h` does not.
+
+| API | Header | Contract |
+|-----|--------|----------|
+| `ShortcutRouter`, `ShortcutScope`, `RouteShortcuts` | `shortcut_routing.h` | A mapped action or raw chord goes to the focused control, then each containing `ShortcutScope`, then `router.app`. The first taker consumes it once per frame and clears it from `UIContext`. Focused text fields keep typing, caret keys and `Text*` actions. `ConsumesDirectionalInput` keeps Up/Down. An exclusive scope stops untaken input at its edge. A gated focus swallows input; app commands wait while a gate is installed unless `app_when_gated`. |
+| `FocusKey`, `FocusToken`, `FocusReturnStack` | `focus_return.h` | `opened` captures the focused control by scope and control id. After `closed`, `resolve` runs after layout. It restores focus only if the owner scope still exists and the control or its first focusable descendant can take focus. Otherwise it uses the explicit fallback. Overlays nest. A close caused by an outside click keeps the clicked control. |
+| `request_scroll_anchor`, `resolve_scroll_anchor` | `scroll_item_anchor.h` | Keeps an app-keyed item at a fraction of the viewport band minus occlusion insets. The request waits for the matching content generation and a measured viewport, then resolves once to `Applied`, `Unavailable` or `Cancelled`. Wheel and scrollbar input bump `HasScrollView::user_scroll_serial`, which cancels the request. |
+| `virtual_list(..., VirtualListOptions)`, `virtual_list_window`, `VirtualListMetrics` | `imm_virtual_list.h` | Row heights are logical pixels, scaled in Adaptive mode. The window reaches toward a distant easing target, bounded around the actual viewport, with row and pixel overscan. |
+| `keyed_virtual_list` | `imm_virtual_list.h` | When `revision` changes, the top item stays put; if it was removed, the nearest survivor takes its place. Focus inside a row follows its item to whichever pooled row now draws it. |
+| `source_text::Selection`, `move`, `hit`, `copy_text` | `source_selection.h` | Endpoints are source `(line, byte)` positions behind a `TextSource` concept. Tabs and soft wraps map through `DisplayLine`/`Fragment`. `copy_text` returns exact bytes, or `LimitExceeded`/`OutOfRange`; it never truncates. |
+
 ## Composition and lifetime
 
 `vsplit`/`hsplit` return regions from a list of Sizes; the cross axis fills the
