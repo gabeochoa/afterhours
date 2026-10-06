@@ -5,6 +5,7 @@
 #include <functional>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "../../developer.h"
 
@@ -69,5 +70,16 @@ inline Vector2Type measure_text_utf8(const Font f, const char *text,
 inline float get_first_glyph_bearing(const Font, const char *) { return 0.0f; }
 inline bool is_font_loaded(const Font &) { return false; }
 inline bool font_has_glyph(const Font, int) { return false; }
+inline Font load_font_face(const char *, int, int = 0,
+                           const std::vector<int> & = {}) {
+  return Font();
+}
+// No font data and no drawing here, so there is nothing to fall back to.
+inline bool set_font_fallbacks(const Font, const std::vector<Font> &) {
+  return false;
+}
+inline std::vector<Font> font_fallbacks(const Font) { return {}; }
+// No metrics without a face; a typical Latin ascender ratio.
+inline float font_baseline(const Font, const float size) { return size * 0.8f; }
 
 } // namespace afterhours

@@ -356,6 +356,8 @@ struct UIComponent : BaseComponent {
   }
 };
 
+struct TextSpan;
+
 // final so has_child_of can answer in one test instead of a dynamic_cast
 // per occupied slot. Nothing derives from it, and now nothing can.
 struct FontManager final : BaseComponent {
@@ -376,14 +378,66 @@ struct FontManager final : BaseComponent {
   auto &load_font(const std::string &font_name, Font font) {
     invalidate_measurements_for(font_name);
     fonts[font_name] = font;
+    apply_fallbacks();
     return *this;
   }
 
   auto &load_font(const std::string &font_name, const char *font_file) {
     invalidate_measurements_for(font_name);
     fonts[font_name] = load_font_from_file(font_file);
+    apply_fallbacks();
     return *this;
   }
+
+  // Fallback faces for `font_name`, by registered name, in lookup order: a
+  // glyph the face lacks is measured and drawn from the first that has it,
+  // in the backend, so every path that measures or draws with this face
+  // agrees. Replaces any earlier chain; reloading any face involved
+  // re-applies it. Names not yet loaded are skipped until they are.
+  std::map<std::string, std::vector<std::string>> fallbacks;
+
+  auto &set_fallbacks(const std::string &font_name,
+                      std::vector<std::string> chain) {
+    fallbacks[font_name] = std::move(chain);
+    apply_fallbacks();
+    measure_memo::invalidate();
+    if (auto *cache = EntityHelper::get_singleton_cmp<TextMeasureCache>())
+      cache->clear();
+    return *this;
+  }
+
+  void apply_fallbacks() {
+    for (const auto &[name, chain] : fallbacks) {
+      const auto it = fonts.find(name);
+      if (it == fonts.end())
+        continue;
+      std::vector<Font> faces;
+      for (const auto &fb : chain)
+        if (const auto f = fonts.find(fb); f != fonts.end())
+          faces.push_back(f->second);
+      set_font_fallbacks(it->second, faces);
+    }
+  }
+
+  // Which registered face draws `codepoint` for `font_name`: the face itself,
+  // else the first fallback that has it. Empty when none does -- the glyph
+  // then draws as a replacement (font_coverage::visible_text).
+  [[nodiscard]] std::string face_for(const std::string &font_name,
+                                     uint32_t codepoint) const {
+    if (has_glyph(font_name, codepoint))
+      return font_name;
+    if (const auto it = fallbacks.find(font_name); it != fallbacks.end())
+      for (const auto &fb : it->second)
+        if (fonts.contains(fb) && has_glyph(fb, codepoint))
+          return fb;
+    return {};
+  }
+
+  // The face a styled run measures and draws with: its own font or `base`,
+  // at its weight or `base_weight` when it asks for none.
+  [[nodiscard]] std::string span_face(const std::string &base,
+                                      colors::FontWeight base_weight,
+                                      const TextSpan &span) const;
 
   // Add codepoint-based font loading for CJK support
   auto &load_font_with_codepoints(const std::string &font_name,
@@ -464,7 +518,8 @@ struct FontManager final : BaseComponent {
                           static_cast<int>(codepoint));
   }
 
-  // The distinct codepoints in `text` that the face cannot draw, in order.
+  // The distinct codepoints in `text` that neither the face nor its
+  // fallbacks can draw, in order.
   [[nodiscard]] std::vector<uint32_t>
   missing_codepoints(const std::string &font_name,
                      std::string_view text) const {
@@ -490,7 +545,7 @@ struct FontManager final : BaseComponent {
           cp = (cp << 6) |
                (static_cast<unsigned char>(text[i + k]) & 0x3F);
       i += len;
-      if (!has_glyph(font_name, cp) &&
+      if (face_for(font_name, cp).empty() &&
           std::find(missing.begin(), missing.end(), cp) == missing.end())
         missing.push_back(cp);
     }
@@ -552,16 +607,39 @@ enum struct TextOverflow {
 // back to the base face when that variant was never loaded -- so a run asking
 // for Bold in an app that registered no bold font renders regular rather than
 // failing. Registering the variant is what turns it on.
+//
+// `font` names a registered face for this run (empty: the label's), and
+// `size_scale` multiplies the label's font size -- relative, so a run keeps
+// its proportion at every UI scale. Runs of different faces or sizes share a
+// baseline. Measuring, wrapping, ellipsis, selection and drawing all resolve
+// a run through FontManager::span_face and the label size times size_scale.
 struct TextSpan {
   std::string text;
   Color color;
   colors::FontWeight weight = colors::FontWeight::Regular;
+  std::string font;
+  float size_scale = 1.f;
 };
+
+// Same face, weight and size: what a measurement cannot cross.
+inline bool same_metrics(const TextSpan &a, const TextSpan &b) {
+  return a.weight == b.weight && a.font == b.font &&
+         a.size_scale == b.size_scale;
+}
+
+inline std::string FontManager::span_face(const std::string &base,
+                                          colors::FontWeight base_weight,
+                                          const TextSpan &span) const {
+  return resolve_weighted(span.font.empty() ? base : span.font,
+                          span.weight == colors::FontWeight::Regular
+                              ? base_weight
+                              : span.weight);
+}
 
 inline bool operator==(const TextSpan &a, const TextSpan &b) {
   return a.text == b.text && a.color.r == b.color.r &&
          a.color.g == b.color.g && a.color.b == b.color.b &&
-         a.color.a == b.color.a && a.weight == b.weight;
+         a.color.a == b.color.a && same_metrics(a, b);
 }
 
 struct HasCheckboxMark : BaseComponent {};

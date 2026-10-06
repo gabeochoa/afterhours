@@ -111,6 +111,9 @@ FONS_DEF int fonsAddFont(FONScontext* s, const char* name, const char* path);
 FONS_DEF int fonsAddFontMem(FONScontext* s, const char* name, unsigned char* data, int ndata, int freeData);
 FONS_DEF int fonsGetFontByName(FONScontext* s, const char* name);
 FONS_DEF int fonsAddFallbackFont(FONScontext* stash, int base, int fallback);
+// From upstream fontstash: drops base's fallbacks and the glyphs it cached
+// through them.
+FONS_DEF void fonsResetFallbackFont(FONScontext* stash, int base);
 
 // State handling
 FONS_DEF void fonsPushState(FONScontext* s);
@@ -788,6 +791,16 @@ int fonsAddFallbackFont(FONScontext* stash, int base, int fallback)
 		return 1;
 	}
 	return 0;
+}
+
+void fonsResetFallbackFont(FONScontext* stash, int base)
+{
+	int i;
+	FONSfont* baseFont = stash->fonts[base];
+	baseFont->nfallbacks = 0;
+	baseFont->nglyphs = 0;
+	for (i = 0; i < FONS_HASH_LUT_SIZE; i++)
+		baseFont->lut[i] = -1;
 }
 
 void fonsSetSize(FONScontext* stash, float size)

@@ -59,8 +59,11 @@ TEST(font_reload_invalidates_cached_measurements) {
 
 // Styled-run placement. Backend measurement charges per call (spacing and
 // kerning live between characters), so a run must start where the JOINED
-// line's measurement puts it, not at the sum of the runs before it. In a
-// monospace block the accumulated version visibly breaks the columns.
+// line puts it, not at the sum of the runs before it. In a monospace block
+// the accumulated version visibly breaks the columns. "Where the joined line
+// puts it" is the pen a single draw call would use for the run's first
+// glyph: measure(prefix + that glyph) - measure(that glyph), which includes
+// the spacing into it (detail::line_x_at).
 TEST(styled_runs_take_offsets_from_the_joined_line) {
   for (bool batched : {false, true}) {
     ui_test::ImmTestHarness h;
@@ -88,12 +91,12 @@ TEST(styled_runs_take_offsets_from_the_joined_line) {
     auto calls = h.drawn("text");
     CHECK(calls.size() == 3);
     if (calls.size() != 3) continue;
-    // Joined prefixes at 10px/char + 6 per call: "bb" starts at
-    // measure("aa") = 26, "cc" at measure("aabb") = 46 -- not the
-    // accumulated 26 + measure("bb") = 52.
+    // 10px/char + 6 per call: "bb" starts at measure("aab") - measure("b")
+    // = 36 - 16 = 20, "cc" at measure("aabbc") - measure("c") = 56 - 16 =
+    // 40 -- not the accumulated 26 + measure("bb") = 52.
     CHECK_APPROX(calls[0].rect.x, 40.f);
-    CHECK_APPROX(calls[1].rect.x, 66.f);
-    CHECK_APPROX(calls[2].rect.x, 86.f);
+    CHECK_APPROX(calls[1].rect.x, 60.f);
+    CHECK_APPROX(calls[2].rect.x, 80.f);
   }
 }
 

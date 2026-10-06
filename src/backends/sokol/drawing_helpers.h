@@ -44,6 +44,9 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
   fonsSetFont(ctx, fid);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
+  // Same replacement measure_text applied, so the drawn advance matches.
+  std::string scratch;
+  content = font_detail::visible(fid, content, scratch);
 
   // Rasterise glyphs at native DPI for crisp text on Retina displays.
   // We scale the fontstash size up by dpi_scale and draw in a coordinate
@@ -71,6 +74,9 @@ inline void draw_text(const char *content, const float x, const float y,
   fonsSetFont(ctx, graphics::metal_detail::g_active_font);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
+  std::string scratch;
+  content = font_detail::visible(graphics::metal_detail::g_active_font,
+                                 content, scratch);
 
   float dpi = graphics::metal_detail::dpi_scale();
   if (dpi > 1.01f) {

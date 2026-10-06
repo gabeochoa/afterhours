@@ -46,6 +46,9 @@ inline int g_active_font = FONS_INVALID;
 // load (fontstash exposes no coverage query). No entry means unknown.
 inline std::map<int, std::vector<std::pair<uint32_t, uint32_t>>>
     g_font_coverage;
+// Fallback chain per fontstash id, in lookup order, as last handed to
+// fonsAddFallbackFont (fontstash cannot list them back).
+inline std::map<int, std::vector<int>> g_font_fallbacks;
 
 inline bool g_initialized = false;
 

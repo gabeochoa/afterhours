@@ -20,9 +20,11 @@
 #include <algorithm>
 #include <cstddef>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "../../ecs.h"
+#include "../../font_coverage.h"
 #include "../../measure_memo.h"
 #include "ui_core_components.h"
 
@@ -55,16 +57,42 @@ using TextRunLine = std::vector<TextSpan>;
 // Greedy word-wrap over styled runs. Over-wide words get their own line;
 // '\n' is a hard break, so '\n\n' leaves a blank line.
 //
-// `measure(text, weight)` returns the pixel width of `text` in that weight.
-// It is called on the largest same-weight stretch of a candidate line rather
-// than per word -- measure_text spaces BETWEEN characters, so summing pieces
-// loses one spacing per join and drifts further off with every piece. A line
-// of uniform weight is therefore still measured in a single call, exactly as
-// before weights existed; only a genuine weight boundary costs a join.
+// `measure` (any form measure_run accepts) returns the pixel width of text
+// in a run's style. It is called on the largest same-style stretch of a
+// candidate line rather than per word -- measure_text spaces BETWEEN
+// characters, so summing pieces loses one spacing per join and drifts
+// further off with every piece. A line of uniform style is therefore still
+// measured in a single call; only a face, weight or size boundary costs a
+// join. Lines break at spaces and between ideographs (breaks_between).
 //
 // The single wrapping primitive: wrap_text_to_width is one colourless
 // regular-weight run through here, so plain and styled break identically by
 // construction.
+
+// A run's text in another run's style: font, weight, size and colour kept.
+inline TextSpan with_text(const TextSpan &style, std::string text) {
+  TextSpan out = style;
+  out.text = std::move(text);
+  return out;
+}
+
+// Calls a run measure with what it accepts: (text, span) for callers that
+// resolve face and size per run, (text, weight) for the older weight-only
+// ones, (text) for plain text. Every helper below measures through this, so
+// one callable serves wrap, offsets, ellipsis, selection and drawing alike.
+template <typename MeasureFn>
+inline float measure_run(MeasureFn &&measure, const std::string &text,
+                         const TextSpan &style) {
+  if constexpr (std::is_invocable_v<MeasureFn &, const std::string &,
+                                    const TextSpan &>)
+    return measure(text, style);
+  else if constexpr (std::is_invocable_v<MeasureFn &, const std::string &,
+                                         colors::FontWeight>)
+    return measure(text, style.weight);
+  else
+    return measure(text);
+}
+
 namespace wrap_memo {
 
 // LRU on content + width, same shape as measure_memo. The draw path otherwise
@@ -112,6 +140,10 @@ inline std::uint64_t key_for(const std::vector<TextSpan> &runs,
     mix(0xff); // run boundary, so ["ab"]["c"] and ["a"]["bc"] differ
     mix(static_cast<std::uint64_t>(r.weight));
     mix(r.color.r | (r.color.g << 8) | (r.color.b << 16) | (r.color.a << 24));
+    for (unsigned char c : r.font)
+      mix(c);
+    mix(0xfe);
+    mix(static_cast<std::uint64_t>(r.size_scale * 1024.f));
   }
   for (unsigned char c : font_name)
     mix(c);
@@ -163,6 +195,25 @@ inline void clear() {
 
 } // namespace wrap_memo
 
+// Ideographs and kana have no spaces to wrap at: a line may break between
+// any two of them, or between one and its neighbour. Closing punctuation and
+// the prolonged sound mark stay with what precedes them -- the basic kinsoku
+// rule, not full UAX #14. Hangul is spaced and wraps at spaces.
+inline bool breaks_around(uint32_t cp) {
+  return (cp >= 0x2E80 && cp <= 0x9FFF) || (cp >= 0xF900 && cp <= 0xFAFF) ||
+         (cp >= 0xFF00 && cp <= 0xFF60) || (cp >= 0x20000 && cp <= 0x3FFFF);
+}
+inline bool breaks_between(uint32_t before, uint32_t after) {
+  switch (after) {
+  case 0x3001: case 0x3002: case 0x3009: case 0x300B: case 0x300D:
+  case 0x300F: case 0x3011: case 0x30FC: case 0xFF01: case 0xFF09:
+  case 0xFF0C: case 0xFF0E: case 0xFF1A: case 0xFF1B: case 0xFF1F:
+    return false;
+  default:
+    return breaks_around(before) || breaks_around(after);
+  }
+}
+
 template <typename MeasureFn>
 static inline std::vector<TextRunLine>
 wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
@@ -176,8 +227,8 @@ wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
       const size_t nl = run.text.find('\n', start);
       const size_t end = nl == std::string::npos ? run.text.size() : nl;
       if (end > start)
-        source_lines.back().push_back(TextSpan{
-            run.text.substr(start, end - start), run.color, run.weight});
+        source_lines.back().push_back(
+            with_text(run, run.text.substr(start, end - start)));
       if (nl == std::string::npos)
         break;
       source_lines.push_back(TextRunLine{});
@@ -198,7 +249,7 @@ wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
   const auto same_style = [](const TextSpan &a, const TextSpan &b) {
     return a.color.r == b.color.r && a.color.g == b.color.g &&
            a.color.b == b.color.b && a.color.a == b.color.a &&
-           a.weight == b.weight;
+           same_metrics(a, b);
   };
 
   std::vector<TextRunLine> lines;
@@ -217,29 +268,26 @@ wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
   };
 
   // Width of a candidate line given as up to three part lists in order.
-  // Adjacent parts of equal weight are measured together, so a uniform line
-  // is a single measure call.
+  // Adjacent parts of equal face, weight and size are measured together, so
+  // a uniform line is a single measure call.
   const auto measure_candidate = [&](const TextRunLine &a,
                                      const TextRunLine &b,
                                      const TextRunLine &c) {
     float total = 0.f;
     std::string seg;
-    bool have = false;
-    colors::FontWeight seg_w = colors::FontWeight::Regular;
+    const TextSpan *seg_style = nullptr;
     const auto flush_seg = [&]() {
-      if (have && !seg.empty())
-        total += measure(seg, seg_w);
+      if (seg_style && !seg.empty())
+        total += measure_run(measure, seg, *seg_style);
       seg.clear();
-      have = false;
+      seg_style = nullptr;
     };
     for (const TextRunLine *list : {&a, &b, &c}) {
       for (const auto &part : *list) {
-        if (have && part.weight != seg_w)
+        if (seg_style && !same_metrics(part, *seg_style))
           flush_seg();
-        if (!have) {
-          seg_w = part.weight;
-          have = true;
-        }
+        if (!seg_style)
+          seg_style = &part;
         seg += part.text;
       }
     }
@@ -249,21 +297,40 @@ wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
 
   for (const auto &src : source_lines) {
     std::vector<Chunk> chunks;
+    uint32_t prev = 0; // last non-space codepoint; 0 after a space
     for (const auto &part : src) {
       size_t i = 0;
       while (i < part.text.size()) {
         const bool sp = part.text[i] == ' ';
         size_t j = i;
-        while (j < part.text.size() && (part.text[j] == ' ') == sp)
-          j++;
+        bool breaks_before = false;
+        if (sp) {
+          while (j < part.text.size() && part.text[j] == ' ')
+            j++;
+          prev = 0;
+        } else {
+          // Up to the next space or ideographic break opportunity.
+          while (j < part.text.size() && part.text[j] != ' ') {
+            size_t len = 0;
+            const uint32_t cp = font_coverage::decode_utf8(
+                reinterpret_cast<const unsigned char *>(part.text.c_str()) + j,
+                len);
+            if (prev && breaks_between(prev, cp)) {
+              if (j > i)
+                break;
+              breaks_before = true;
+            }
+            prev = cp;
+            j += len ? len : 1;
+          }
+        }
         const std::string frag = part.text.substr(i, j - i);
-        if (!chunks.empty() && chunks.back().is_space == sp) {
-          chunks.back().parts.push_back(
-              TextSpan{frag, part.color, part.weight});
+        if (!chunks.empty() && chunks.back().is_space == sp &&
+            !breaks_before) {
+          chunks.back().parts.push_back(with_text(part, frag));
           chunks.back().text += frag;
         } else {
-          chunks.push_back(Chunk{
-              TextRunLine{TextSpan{frag, part.color, part.weight}}, frag, sp});
+          chunks.push_back(Chunk{TextRunLine{with_text(part, frag)}, frag, sp});
         }
         i = j;
       }
@@ -314,37 +381,124 @@ wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
   return lines;
 }
 
-// Where each run of a laid-out line starts, and how wide the line is.
-// Measured on the JOINED text the way wrap_runs_to_width measures it --
-// maximal same-weight stretches, one call each -- because backend
-// measurement charges between characters: summing per-run widths loses a
-// spacing at every colour boundary and a monospace block's columns drift
-// further with every run. Within a stretch a run starts at the stretch's
-// own prefix measurement, so a run's offset is where its byte range sits
-// in the measurement of the whole line.
+// Where text is drawn along a laid-out line, and how wide it is: the one
+// geometry wrap, ellipsis, selection and drawing share.
+//
+// A line is maximal STRETCHES of runs with the same face, weight and size;
+// colour alone does not split one. A stretch is measured whole, never as a
+// sum of pieces -- measure_text charges spacing and kerning BETWEEN glyphs,
+// so summing pieces loses a join at every colour change and a monospace
+// block's columns drift. Stretches abut.
+//
+// Inside a stretch the glyph starting at byte k is drawn at
+//   measure(stretch[0, k + len_k)) - measure(glyph k)
+// which is exactly the pen position the backend uses when it draws the
+// stretch in one call: the advances before k, plus the spacing and kerning
+// into k. So a run drawn on its own at its start's pen lands its glyphs
+// where a single call would, and a selection edge at byte k sits on glyph
+// k's drawn origin. Fallback glyphs need nothing special: the backend
+// measures and draws them from the fallback face inside the same call.
+//
+// `at` is a byte offset into the line's joined text, on a codepoint
+// boundary; the end of the line gives its full width.
+template <typename MeasureFn>
+static inline float line_x_at(const TextRunLine &line, size_t at,
+                              MeasureFn &&measure) {
+  float stretch_x = 0.f;
+  size_t stretch_start = 0;
+  for (size_t i = 0; i < line.size();) {
+    size_t j = i;
+    std::string joined;
+    while (j < line.size() && same_metrics(line[j], line[i]))
+      joined += line[j++].text;
+    if (at < stretch_start + joined.size()) {
+      const size_t local = at > stretch_start ? at - stretch_start : 0;
+      if (local == 0)
+        return stretch_x;
+      const size_t len = std::max<size_t>(1, utf8_char_length(joined, local));
+      return stretch_x +
+             measure_run(measure, joined.substr(0, local + len), line[i]) -
+             measure_run(measure, joined.substr(local, len), line[i]);
+    }
+    stretch_x += measure_run(measure, joined, line[i]);
+    stretch_start += joined.size();
+    i = j;
+  }
+  return stretch_x;
+}
+
+// Width of a laid-out line: line_x_at its end.
+template <typename MeasureFn>
+static inline float line_width(const TextRunLine &line, MeasureFn &&measure) {
+  size_t bytes = 0;
+  for (const auto &run : line)
+    bytes += run.text.size();
+  return line_x_at(line, bytes, measure);
+}
+
+// Where each run of a line starts (line_x_at its first byte), and the line's
+// width.
 template <typename MeasureFn>
 static inline std::vector<float>
 text_run_offsets(const TextRunLine &line, MeasureFn &&measure,
                  float &total_width) {
   std::vector<float> offsets(line.size(), 0.f);
-  float stretch_x = 0.f;
-  for (size_t i = 0; i < line.size();) {
-    size_t j = i;
-    std::string joined;
-    while (j < line.size() && line[j].weight == line[i].weight) {
-      joined += line[j].text;
-      j++;
-    }
-    size_t prefix = 0;
-    for (size_t k = i; k < j; k++) {
-      offsets[k] = stretch_x + (prefix == 0 ? 0.f : measure(joined.substr(0, prefix), line[i].weight));
-      prefix += line[k].text.size();
-    }
-    stretch_x += measure(joined, line[i].weight);
-    i = j;
+  size_t at = 0;
+  for (size_t k = 0; k < line.size(); k++) {
+    offsets[k] = line_x_at(line, at, measure);
+    at += line[k].text.size();
   }
-  total_width = stretch_x;
+  total_width = line_x_at(line, at, measure);
   return offsets;
+}
+
+// `line` cut to the longest codepoint prefix that still fits `max_width`
+// with `ellipsis` appended in the style of the run it follows. Unchanged
+// when the whole line fits; just the ellipsis when nothing does. Widths come
+// from line_width, so the result is exactly as wide as it will draw.
+template <typename MeasureFn>
+static inline TextRunLine ellipsize_line(const TextRunLine &line,
+                                         float max_width, MeasureFn &&measure,
+                                         const std::string &ellipsis = "...") {
+  if (line.empty() || line_width(line, measure) <= max_width)
+    return line;
+  const auto cut = [&](size_t keep) {
+    TextRunLine out;
+    size_t at = 0;
+    for (const auto &run : line) {
+      if (at >= keep)
+        break;
+      out.push_back(with_text(run, run.text.substr(0, keep - at)));
+      at += run.text.size();
+    }
+    if (out.empty())
+      out.push_back(with_text(line.front(), ""));
+    out.back().text += ellipsis;
+    return out;
+  };
+  std::vector<size_t> bounds; // codepoint boundaries, ascending
+  {
+    std::string joined;
+    for (const auto &run : line)
+      joined += run.text;
+    for (size_t i = 0; i < joined.size();) {
+      bounds.push_back(i);
+      i += std::max<size_t>(1, utf8_char_length(joined, i));
+    }
+  }
+  if (bounds.empty())
+    return line;
+  // Keep bounds[k] bytes: the largest k that fits, or 0 for the ellipsis
+  // alone. Keeping every codepoint is the whole line, already too wide.
+  size_t lo = 0, hi = bounds.size() - 1;
+  while (lo < hi) {
+    const size_t mid = (lo + hi + 1) / 2;
+    if (line_width(cut(bounds[mid]), measure) <= max_width)
+      lo = mid;
+    else
+      hi = mid - 1;
+  }
+  return cut(bounds[lo]);
 }
 
 // Greedy word-wrap: split `text` into lines each no wider than `max_width`,
@@ -505,6 +659,11 @@ inline size_t offset_nearest_x(const std::string &text, float x,
 }
 } // namespace detail_sel
 
+// Geometry below comes from detail::line_x_at, the positions the runs are
+// drawn at, so `measure` may be any callable measure_run accepts: pass the
+// run-aware one the lines were wrapped with and selection follows each run's
+// face and size.
+
 // Which byte a point lands on. `local` is relative to the text block's top
 // left. Above the first line clamps to 0; below the last clamps to the end,
 // which is what a drag that runs off the bottom should do.
@@ -519,10 +678,20 @@ inline size_t byte_offset_at(const std::vector<detail::TextRunLine> &lines,
   int row = static_cast<int>(local.y / line_height);
   row = std::clamp(row, 0, static_cast<int>(lines.size()) - 1);
 
-  const std::string text = line_text(lines[static_cast<size_t>(row)]);
-  const size_t within =
-      detail_sel::offset_nearest_x(text, local.x, measure);
-  return starts[static_cast<size_t>(row)] + within;
+  // Nearest codepoint edge, at the positions the line is drawn at.
+  const auto &line = lines[static_cast<size_t>(row)];
+  const std::string text = line_text(line);
+  size_t best = 0;
+  float best_dist = std::abs(local.x);
+  for (size_t i = 0; i < text.size();) {
+    i += std::max<size_t>(1, utf8_char_length(text, i));
+    const float dist = std::abs(local.x - detail::line_x_at(line, i, measure));
+    if (dist < best_dist) {
+      best_dist = dist;
+      best = i;
+    }
+  }
+  return starts[static_cast<size_t>(row)] + best;
 }
 
 // One rect per line the range covers. A range inside a single line yields one
@@ -553,8 +722,8 @@ selection_rects(const std::vector<detail::TextRunLine> &lines, Range range,
     if (to <= from)
       continue;
 
-    const float x0 = measure(text.substr(0, from));
-    const float x1 = measure(text.substr(0, to));
+    const float x0 = detail::line_x_at(lines[row], from, measure);
+    const float x1 = detail::line_x_at(lines[row], to, measure);
     rects.push_back(RectangleType{origin.x + x0,
                                   origin.y + line_height *
                                                  static_cast<float>(row),

@@ -193,6 +193,7 @@ ALL_TESTS := \
 	text_input_test \
 	toast_test \
 	text_wrap_test \
+	styled_text_test \
 	theme_io_test
 
 # .app packaging is macOS-only, and the test shells out to plutil.
@@ -207,6 +208,9 @@ ALL_TESTS += sokol_blend_test
 ALL_TESTS += sokol_hidpi_test
 ALL_TESTS += sokol_resize_test
 ALL_TESTS += sokol_include_order_test
+# Real fonts plus a system CJK face; draws on a CPU-only fontstash context.
+ALL_TESTS += text_fallback_test
+ALL_TESTS += text_fallback_raylib_test
 endif
 
 RAYLIB_TESTS := \
@@ -331,6 +335,12 @@ $(OUT)/sokol_resize_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_include_order_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_include_order_test: CXXFLAGS_T += -DSOKOL_METAL -x objective-c++
 $(OUT)/sokol_include_order_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/text_fallback_test: ../examples/web/sokol_impl.cc
+$(OUT)/text_fallback_test: CXXFLAGS_T += -DSOKOL_METAL -x objective-c++ -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/text_fallback_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/text_fallback_raylib_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/text_fallback_raylib_test: INCLUDES_T = $(INCLUDES_RAYLIB)
+$(OUT)/text_fallback_raylib_test: LDFLAGS_T = $(LDFLAGS_RAYLIB)
 
 $(OUT)/render_capture_metal_test: render_capture_test.cpp ../examples/web/sokol_impl.cc
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DSOKOL_METAL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@

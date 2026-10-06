@@ -34,6 +34,7 @@ nice -n 10 make -C tests -B -j2 font_atlas_measure_test CXXFLAGS='-std=c++20 -Wa
 nice -n 10 ./output/font_atlas_measure_test --benchmark
 ```
 
-Rendering may still omit glyph images when full. Fallback drawing, automatic recovery
-and general measurement errors remain deferred; keep Hanabi's guard. Direct Fontstash
+Rendering may still omit glyph images when full. Automatic recovery and general
+measurement errors remain deferred; keep Hanabi's guard. Fallback faces are now a
+chain on the primary (`docs/text-fallback.md`). Direct Fontstash
 bounds/drawing APIs and the Sokol spacing argument retain their existing behavior.

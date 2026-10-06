@@ -3,6 +3,7 @@
 // Re-export layout types and core components for backwards compatibility
 #include "ui/components.h"
 #include "ui/layout_types.h"
+#include "ui/styled_text.h"
 #include "ui/text_selection.h"
 #include "ui/ui_collection.h"
 #include "ui/ui_core_components.h"
@@ -205,15 +206,20 @@ struct AutoLayout {
                                         widget.resolved_scaling_mode, ui_scale);
     float spacing = 1.f;
 
-    const auto measure_one = [&](const std::string &s) -> Vector2Type {
+    const auto measure_face = [&](const std::string &face,
+                                  const std::string &s,
+                                  float size) -> Vector2Type {
       if (external_measure_text)
-        return external_measure_text(font_name, s, font_size, spacing);
+        return external_measure_text(face, s, size, spacing);
       if (auto *text_cache =
               EntityHelper::get_singleton_cmp<ui::TextMeasureCache>())
-        return text_cache->measure(s, font_name, font_size, spacing);
+        return text_cache->measure(s, face, size, spacing);
       auto font_manager = EntityHelper::get_singleton_cmp<FontManager>();
-      auto font = font_manager->get_font(font_name);
-      return measure_text(font, s.c_str(), font_size, spacing);
+      auto font = font_manager->get_font(face);
+      return measure_text(font, s.c_str(), size, spacing);
+    };
+    const auto measure_one = [&](const std::string &s) {
+      return measure_face(font_name, s, font_size);
     };
 
     // A multi-line label is not the size of its joined string: it is as wide
@@ -240,7 +246,44 @@ struct AutoLayout {
                     : fmt::format("entity_{}", widget.id));
     }
     Vector2Type result;
-    if (wraps || content.find('\n') != std::string::npos) {
+    if (!label.spans.empty()) {
+      // Styled: the renderer draws layout_styled_text, so size the box from
+      // that same layout -- per-run faces, sizes and shared baselines.
+      const auto *fm = EntityHelper::get_singleton_cmp<FontManager>();
+      struct SpanMetrics {
+        std::function<Vector2Type(const std::string &, const std::string &,
+                                  float)>
+            measure;
+        std::function<std::string(const TextSpan &)> face;
+        const FontManager *fm;
+        float size;
+        float operator()(const std::string &t, const TextSpan &s) const {
+          return measure(face(s), t, size * s.size_scale).x;
+        }
+        float height(const TextSpan &s) const {
+          return measure(face(s), "Ag", size * s.size_scale).y;
+        }
+        float baseline(const TextSpan &s) const {
+          return fm ? font_baseline(fm->get_font(face(s)), size * s.size_scale)
+                    : height(s) * 0.8f;
+        }
+      };
+      const SpanMetrics metrics{
+          measure_face,
+          [&](const TextSpan &s) {
+            return fm ? fm->span_face(font_name, widget.font_weight, s)
+                      : font_name;
+          },
+          fm, font_size};
+      float wrap_w = widget.computed[Axis::X];
+      const float cap =
+          resolve_constraint(widget, widget.max_size[Axis::X], Axis::X);
+      if (cap >= 0.f && wrap_w > cap)
+        wrap_w = cap;
+      const auto layout = ui::layout_styled_text(
+          label.spans, metrics, wraps ? wrap_w - inset_both : 1e9f);
+      result = Vector2Type{layout.width, layout.height};
+    } else if (wraps || content.find('\n') != std::string::npos) {
       // max_width gets applied after this, so wrap against the capped width
       // or we count lines for a width the box never has.
       float wrap_w = widget.computed[Axis::X];

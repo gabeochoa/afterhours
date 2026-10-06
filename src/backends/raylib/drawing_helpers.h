@@ -181,6 +181,28 @@ inline void draw_text_ex(const raylib::Font font, const char *content,
     capture::record("text", {position.x, position.y, 0.f, font_size}, color,
                     content);
   warn_on_missing_glyphs(font, content);
+  // Same placement measure_text used once a fallback face or replacement is
+  // involved; DrawTextPro's transform, then each glyph at its pen.
+  std::vector<PlacedGlyph> glyphs;
+  Vector2Type extent{};
+  if (place_glyphs(font, content, font_size, spacing, glyphs, extent)) {
+    const bool rotated = std::abs(rotation) >= 0.001f;
+    Vector2Type origin = position;
+    if (rotated) {
+      raylib::rlPushMatrix();
+      raylib::rlTranslatef(centerX, centerY, 0.f);
+      raylib::rlRotatef(rotation, 0.f, 0.f, 1.f);
+      origin = {position.x - centerX, position.y - centerY};
+    }
+    for (const PlacedGlyph &g : glyphs)
+      if (g.codepoint != ' ' && g.codepoint != '\t')
+        raylib::DrawTextCodepoint(g.font, g.codepoint,
+                                  {origin.x + g.x, origin.y + g.y}, font_size,
+                                  color);
+    if (rotated)
+      raylib::rlPopMatrix();
+    return;
+  }
   if (std::abs(rotation) < 0.001f) {
     raylib::DrawTextEx(font, content, position, font_size, spacing, color);
     return;

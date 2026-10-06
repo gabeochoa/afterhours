@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <map>
 #include <vector>
 
@@ -95,12 +96,29 @@ inline uint64_t font_key(const raylib::Font font) {
          static_cast<uint64_t>(font.glyphCount);
 }
 
-inline void record_font_coverage(const raylib::Font font, const char *file) {
+// hhea baseline ratio per loaded font (font_coverage::baseline_ratio).
+inline std::map<uint64_t, float> &baseline_registry() {
+  static std::map<uint64_t, float> m;
+  return m;
+}
+
+inline void record_font_data(const raylib::Font font, const unsigned char *d,
+                             size_t n) {
   if (font.glyphCount <= 0)
     return;
   font_coverage::Ranges ranges;
-  if (font_coverage::parse_file(file, ranges))
+  if (font_coverage::parse_cmap(d, n, ranges))
     coverage_registry()[font_key(font)] = std::move(ranges);
+  if (const float r = font_coverage::baseline_ratio(d, n); r > 0.f)
+    baseline_registry()[font_key(font)] = r;
+}
+
+inline void record_font_coverage(const raylib::Font font, const char *file) {
+  if (font.glyphCount <= 0)
+    return;
+  std::vector<unsigned char> bytes;
+  if (font_coverage::read_file(file, bytes))
+    record_font_data(font, bytes.data(), bytes.size());
 }
 
 // Fonts rasterize large (96px) and are usually drawn far smaller. With
@@ -118,16 +136,11 @@ inline void prepare_font_texture(raylib::Font &font) {
 }
 
 inline raylib::Font
-build_font_atlas(const char *file, int px, const int *codepoints, int count,
-                 const FontAtlasConfig &atlas_config =
-                     default_font_atlas_config()) {
+build_font_atlas_from_memory(const unsigned char *data, int data_size, int px,
+                             const int *codepoints, int count,
+                             const FontAtlasConfig &atlas_config =
+                                 default_font_atlas_config()) {
   raylib::Font font{};
-  int data_size = 0;
-  unsigned char *data = raylib::LoadFileData(file, &data_size);
-  if (!data || data_size <= 0) {
-    log_error("build_font_atlas: could not read '{}'", file);
-    return font;
-  }
   font.baseSize = px;
   font.glyphCount = count;
   font.glyphPadding = atlas_config.padding;
@@ -135,8 +148,7 @@ build_font_atlas(const char *file, int px, const int *codepoints, int count,
                                      const_cast<int *>(codepoints), count,
                                      raylib::FONT_DEFAULT);
   if (!font.glyphs) {
-    log_error("build_font_atlas: no glyph data from '{}'", file);
-    raylib::UnloadFileData(data);
+    log_error("build_font_atlas: no glyph data");
     return raylib::Font{};
   }
   raylib::Image atlas = raylib::GenImageFontAtlas(
@@ -144,8 +156,24 @@ build_font_atlas(const char *file, int px, const int *codepoints, int count,
       static_cast<int>(atlas_config.packer));
   font.texture = raylib::LoadTextureFromImage(atlas);
   raylib::UnloadImage(atlas);
+  record_font_data(font, data, static_cast<size_t>(data_size));
+  return font;
+}
+
+inline raylib::Font
+build_font_atlas(const char *file, int px, const int *codepoints, int count,
+                 const FontAtlasConfig &atlas_config =
+                     default_font_atlas_config()) {
+  int data_size = 0;
+  unsigned char *data = raylib::LoadFileData(file, &data_size);
+  if (!data || data_size <= 0) {
+    log_error("build_font_atlas: could not read '{}'", file);
+    return raylib::Font{};
+  }
+  raylib::Font font = build_font_atlas_from_memory(data, data_size, px,
+                                                   codepoints, count,
+                                                   atlas_config);
   raylib::UnloadFileData(data);
-  record_font_coverage(font, file);
   return font;
 }
 
@@ -191,6 +219,170 @@ inline bool font_has_glyph(const raylib::Font font, int codepoint) {
   return true;
 }
 
+// One face of a font file, by index, so a collection (.ttc) loads: most
+// system CJK faces ship as collections and raylib reads only a plain font.
+// raylib bakes glyphs at load, so `codepoints` is what the face can ever
+// draw -- a CJK fallback needs the ideographs it is for (empty means
+// default_codepoints(), which has none).
+inline raylib::Font load_font_face(const char *file, int face_index,
+                                   int size = 0,
+                                   const std::vector<int> &codepoints = {}) {
+  std::vector<unsigned char> bytes;
+  if (!font_coverage::read_file(file, bytes)) {
+    log_warn("Failed to read font: {}", file ? file : "(null)");
+    return raylib::Font{};
+  }
+  std::vector<unsigned char> face =
+      font_coverage::extract_face(bytes, face_index);
+  bytes = {};
+  if (face.empty()) {
+    log_warn("No face {} in font: {}", face_index, file);
+    return raylib::Font{};
+  }
+  std::vector<int> cps = codepoints.empty() ? default_codepoints() : codepoints;
+  const int px = size > 0 ? size : 32;
+  raylib::Font font = raylib::LoadFontFromMemory(
+      ".ttf", face.data(), static_cast<int>(face.size()), px, cps.data(),
+      static_cast<int>(cps.size()));
+  if (font.texture.id == 0)
+    font = build_font_atlas_from_memory(face.data(),
+                                        static_cast<int>(face.size()), px,
+                                        cps.data(), static_cast<int>(cps.size()));
+  prepare_font_texture(font);
+  record_font_data(font, face.data(), face.size());
+  return font;
+}
+
+// Fallback chain per primary, keyed like measure_text keys a font.
+inline std::map<uint64_t, std::vector<raylib::Font>> &fallback_registry() {
+  static std::map<uint64_t, std::vector<raylib::Font>> m;
+  return m;
+}
+
+// Glyphs `primary` lacks are measured and drawn from the first face in
+// `chain` that has them; the chain replaces any earlier one. raylib has no
+// fallback of its own, so measure_text and draw_text_ex share place_glyphs
+// below whenever a string needs it.
+inline bool set_font_fallbacks(const raylib::Font primary,
+                               const std::vector<raylib::Font> &chain) {
+  if (primary.glyphCount <= 0)
+    return false;
+  std::vector<raylib::Font> kept;
+  bool ok = true;
+  for (const raylib::Font &f : chain) {
+    if (f.glyphCount <= 0 || font_key(f) == font_key(primary)) {
+      ok = false;
+      continue;
+    }
+    kept.push_back(f);
+  }
+  fallback_registry()[font_key(primary)] = std::move(kept);
+  measure_memo::invalidate();
+  return ok;
+}
+
+inline std::vector<raylib::Font> font_fallbacks(const raylib::Font primary) {
+  const auto it = fallback_registry().find(font_key(primary));
+  return it == fallback_registry().end() ? std::vector<raylib::Font>{}
+                                         : it->second;
+}
+
+inline float baseline_ratio_of(const raylib::Font font) {
+  const auto it = baseline_registry().find(font_key(font));
+  return it == baseline_registry().end() ? 0.8f : it->second;
+}
+
+// Distance from the top of a drawn line to its baseline, in pixels.
+inline float font_baseline(const raylib::Font font, const float size) {
+  return size * baseline_ratio_of(font);
+}
+
+// One codepoint as place_glyphs lays it out: which face, and where its pen
+// sits relative to the text's top left.
+struct PlacedGlyph {
+  raylib::Font font;
+  int codepoint = 0;
+  float x = 0.f;
+  float y = 0.f;
+};
+
+// The single per-codepoint layout measure_text and draw_text_ex share once a
+// string leaves the primary face: a codepoint goes to the first face in
+// [primary, chain...] that has it, anything none has becomes a replacement
+// (font_coverage::visible_text), and fallback glyphs are moved onto the
+// primary's baseline -- what fontstash does on the sokol backend. Advance
+// and spacing follow DrawTextEx exactly.
+//
+// Returns false, with `out` meaningless, when every codepoint is the
+// primary's own: then raylib's MeasureTextEx/DrawTextEx are already exact
+// and stay in charge, so text that never needed a fallback is unchanged.
+// '\n' moves down by size + 2, raylib's default line spacing.
+inline bool place_glyphs(const raylib::Font primary, const char *text,
+                         float size, float spacing,
+                         std::vector<PlacedGlyph> &out, Vector2Type &extent) {
+  out.clear();
+  if (!text || primary.glyphCount <= 0)
+    return false;
+  bool ascii = true;
+  for (int i = 0; text[i]; i++)
+    if (static_cast<unsigned char>(text[i]) >= 0x80) {
+      ascii = false;
+      break;
+    }
+  if (ascii)
+    return false;
+  const std::vector<raylib::Font> chain = font_fallbacks(primary);
+  const auto face_for = [&](int cp) -> const raylib::Font * {
+    if (font_has_glyph(primary, cp))
+      return &primary;
+    for (const raylib::Font &f : chain)
+      if (font_has_glyph(f, cp))
+        return &f;
+    return nullptr;
+  };
+  std::string visible;
+  bool needed = font_coverage::visible_text(
+      text, [&](uint32_t cp) { return face_for(static_cast<int>(cp)) != nullptr; },
+      visible);
+  const char *s = needed ? visible.c_str() : text;
+  const float primary_base = size * baseline_ratio_of(primary);
+  float x = 0.f, y = 0.f, width = 0.f;
+  bool line_has_glyph = false;
+  for (int i = 0; s[i];) {
+    int bytes = 0;
+    const int cp = raylib::GetCodepointNext(&s[i], &bytes);
+    i += bytes > 0 ? bytes : 1;
+    if (cp == '\n') {
+      if (line_has_glyph)
+        width = std::max(width, x - spacing);
+      x = 0.f;
+      y += size + 2.f;
+      line_has_glyph = false;
+      continue;
+    }
+    const raylib::Font *f = face_for(cp);
+    if (!f)
+      f = &primary; // e.g. '?' in a face without it: what raylib would do
+    if (f != &primary)
+      needed = true;
+    const int gi = raylib::GetGlyphIndex(*f, cp);
+    const float scale = size / static_cast<float>(f->baseSize);
+    const float advance = f->glyphs[gi].advanceX > 0
+                              ? static_cast<float>(f->glyphs[gi].advanceX)
+                              : f->recs[gi].width +
+                                    static_cast<float>(f->glyphs[gi].offsetX);
+    const float dy =
+        f == &primary ? 0.f : primary_base - size * baseline_ratio_of(*f);
+    out.push_back(PlacedGlyph{*f, cp, x, y + dy});
+    x += advance * scale + spacing;
+    line_has_glyph = true;
+  }
+  if (line_has_glyph)
+    width = std::max(width, x - spacing);
+  extent = Vector2Type{width, y + size};
+  return needed;
+}
+
 // A codepoint the font lacks draws nothing: no box, no warning, no log. Both
 // floatinghotel and hanabi shipped UI with invisible arrows and chevrons and
 // found out by looking. load_font_from_file asks raylib for the default set,
@@ -223,10 +415,15 @@ inline void warn_on_missing_glyphs(const raylib::Font font, const char *text) {
       continue; // the default set is the 95 ASCII glyphs
     if (font_has_glyph(font, cp))
       continue;
+    bool in_chain = false;
+    for (const raylib::Font &f : font_fallbacks(font))
+      in_chain = in_chain || font_has_glyph(f, cp);
+    if (in_chain || font_coverage::is_invisible_modifier(cp))
+      continue;
     warn_once(0x110000 + cp,
-              "font has no glyph for U+{:04X}, which draws nothing at all "
-              "rather than a missing-glyph box. Load the font with codepoints "
-              "for the ranges you use.",
+              "font has no glyph for U+{:04X}; it draws as a replacement "
+              "glyph. Load the font with codepoints for the ranges you use, "
+              "or give it a fallback face (set_font_fallbacks).",
               cp);
   }
 }
@@ -370,8 +567,12 @@ inline raylib::Vector2 measure_text(const raylib::Font font,
   Vector2Type cached{};
   if (measure_memo::lookup(key, cached))
     return cached;
+  std::vector<PlacedGlyph> glyphs;
+  Vector2Type extent{};
   const raylib::Vector2 measured =
-      raylib::MeasureTextEx(font, content, size, spacing);
+      place_glyphs(font, content, size, spacing, glyphs, extent)
+          ? raylib::Vector2{extent.x, extent.y}
+          : raylib::MeasureTextEx(font, content, size, spacing);
   measure_memo::store(key, measured);
   return measured;
 }
