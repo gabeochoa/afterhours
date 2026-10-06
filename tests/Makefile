@@ -181,6 +181,7 @@ ALL_TESTS := \
 	scroll_item_anchor_test \
 	shortcut_routing_test \
 	focus_return_test \
+	source_selection_test \
 	text_action_names_test \
 	sizing_repro_test \
 	slider_test \
