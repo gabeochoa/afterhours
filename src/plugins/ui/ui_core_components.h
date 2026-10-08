@@ -165,7 +165,7 @@ struct UIComponent : BaseComponent {
     // Flow layout: margins are external spacing (handled by
     // compute_relative_positions), not subtracted from element size.
     // computed[axis] already represents the element's own content size
-    // (set by compute_size_for_standalone_exp / parent_expectation / etc.),
+    // (set by standalone / parent / children expectation, etc.),
     // so subtracting margin would incorrectly shrink the visual element.
     return Rectangle{
         .x = computed_rel[Axis::X] + computed_margin[Axis::left],

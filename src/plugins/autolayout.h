@@ -285,31 +285,93 @@ struct AutoLayout {
     return 0.f;
   }
 
-  float compute_margin_for_exp(UIComponent &widget, Axis axis) {
-    float no_change = widget.computed_margin[axis];
+  float compute_size_for_standalone_expectation(UIComponent &widget,
+                                                Axis axis) {
+    const Size &exp = widget.desired[axis];
+    switch (exp.dim) {
+    case Dim::Pixels:
+      return resolve_pixels(exp.value, widget);
+    case Dim::ScreenPercent:
+      return resolve_to_pixels(exp, fetch_screen_value_(axis),
+                               fetch_screen_value_(Axis::Y));
+    case Dim::Text:
+      return get_text_size_for_axis(widget, axis);
+    case Dim::Percent:
+    case Dim::None:
+    case Dim::Children:
+    case Dim::Expand:
+      return widget.computed[axis];
+    }
+    return widget.computed[axis];
+  }
 
-    float screenValue = fetch_screen_value_(axis);
-    const auto compute_ = [&](Size exp) {
+  float compute_padding_for_standalone_expectation(UIComponent &widget,
+                                                   Axis axis) {
+    const float no_change = widget.computed_padd[axis];
+    const float screenValue = fetch_screen_value_(axis);
+
+    const auto compute_ = [&](const Size &exp) {
       switch (exp.dim) {
       case Dim::Pixels:
         return resolve_pixels(exp.value, widget);
-      case Dim::Text:
-        log_error("Margin by dimension text not supported");
       case Dim::ScreenPercent:
-        return resolve_to_pixels(exp, screenValue, fetch_screen_value_(Axis::Y));
+        return resolve_to_pixels(exp, screenValue,
+                                 fetch_screen_value_(Axis::Y));
+      case Dim::Text:
+        log_error("Padding by dimension text not supported");
+        return no_change;
       case Dim::Children:
-        log_error("Margin by dimension children not supported");
+        log_error("Padding by children not supported");
+        return no_change;
       case Dim::Percent:
       case Dim::None:
       case Dim::Expand:
-        // This is not a standalone widget,
-        // so just keep moving along
         return no_change;
       }
       return no_change;
     };
 
-    auto margin = widget.desired_margin;
+    const auto &padd = widget.desired_padding;
+    switch (axis) {
+    case Axis::X:
+      return compute_(padd[Axis::left]) + compute_(padd[Axis::right]);
+    case Axis::Y:
+      return compute_(padd[Axis::top]) + compute_(padd[Axis::bottom]);
+    case Axis::top:
+    case Axis::left:
+    case Axis::right:
+    case Axis::bottom:
+      return compute_(padd[axis]);
+    }
+    return no_change;
+  }
+
+  float compute_margin_for_standalone_expectation(UIComponent &widget,
+                                                  Axis axis) {
+    const float no_change = widget.computed_margin[axis];
+    const float screenValue = fetch_screen_value_(axis);
+
+    const auto compute_ = [&](const Size &exp) {
+      switch (exp.dim) {
+      case Dim::Pixels:
+        return resolve_pixels(exp.value, widget);
+      case Dim::Text:
+        // Text falls through to the raw-value resolution below.
+        log_error("Margin by dimension text not supported");
+      case Dim::ScreenPercent:
+        return resolve_to_pixels(exp, screenValue,
+                                 fetch_screen_value_(Axis::Y));
+      case Dim::Children:
+        log_error("Margin by dimension children not supported");
+      case Dim::Percent:
+      case Dim::None:
+      case Dim::Expand:
+        return no_change;
+      }
+      return no_change;
+    };
+
+    const auto &margin = widget.desired_margin;
     switch (axis) {
     case Axis::X:
       return compute_(margin[Axis::left]) + compute_(margin[Axis::right]);
@@ -320,6 +382,132 @@ struct AutoLayout {
     case Axis::right:
     case Axis::bottom:
       return compute_(margin[axis]);
+    }
+    return no_change;
+  }
+
+  // Percent sizes use the parent's content area, computed minus padding.
+  float compute_size_for_parent_expectation(UIComponent &widget, Axis axis) {
+    const Size &exp = widget.desired[axis];
+    const float no_change = widget.computed[axis];
+
+    // Expand resolves in tax_refund and must not keep the -1 sentinel.
+    if (exp.dim == Dim::Expand)
+      return 0.f;
+    if (widget.parent == -1) {
+      if (exp.dim == Dim::Percent)
+        log_error("Trying to compute percent expectation for {}, but never "
+                  "set parent",
+                  widget.id);
+      return no_change;
+    }
+    UIComponent &parent = cmp(widget.parent);
+    if (parent.computed[axis] == -1) {
+      if (is_dimension_percent_based(widget.desired_padding, axis))
+        log_error("Trying to compute expectation for {}, but parent {} size "
+                  "hasnt been calculated yet",
+                  widget.id, widget.parent);
+      return no_change;
+    }
+    return exp.dim == Dim::Percent
+               ? exp.value *
+                     (parent.computed[axis] - parent.computed_padd[axis])
+               : no_change;
+  }
+
+  float compute_padding_for_parent_expectation(UIComponent &widget, Axis axis) {
+    const float no_change = widget.computed_padd[axis];
+
+    if (widget.parent == -1) {
+      if (widget.desired_padding[axis].dim == Dim::Percent)
+        log_error("Trying to compute padding percent expectation for {}, "
+                  "but never set parent",
+                  widget.id);
+      return no_change;
+    }
+    UIComponent &parent = cmp(widget.parent);
+    if (parent.computed[axis] == -1) {
+      if (is_dimension_percent_based(widget.desired_padding, axis))
+        log_error("Trying to compute padding percent expectation for {}, "
+                  "but parent {} size not calculated yet",
+                  widget.id, widget.parent);
+      return no_change;
+    }
+
+    const auto compute_ = [&](const Size &exp, float parent_value) {
+      switch (exp.dim) {
+      // Unsupported kinds fall through into Percent.
+      case Dim::Children:
+        log_error("Padding by children not supported");
+      case Dim::Text:
+        log_error("Padding by dimension text not supported");
+      case Dim::Expand:
+        log_error("Padding by expand not supported");
+      case Dim::Percent:
+        return exp.value * parent_value;
+      case Dim::ScreenPercent:
+      case Dim::None:
+      case Dim::Pixels:
+        return no_change;
+      }
+      return no_change;
+    };
+
+    const auto &padd = widget.desired_padding;
+    switch (axis) {
+    case Axis::X:
+      return compute_(padd[Axis::left], parent.computed[Axis::X]) +
+             compute_(padd[Axis::right], parent.computed[Axis::X]);
+    case Axis::Y:
+      return compute_(padd[Axis::top], parent.computed[Axis::Y]) +
+             compute_(padd[Axis::bottom], parent.computed[Axis::Y]);
+    case Axis::left:
+    case Axis::right:
+      return compute_(padd[axis], parent.computed[Axis::X]);
+    case Axis::top:
+    case Axis::bottom:
+      return compute_(padd[axis], parent.computed[Axis::Y]);
+    }
+    return no_change;
+  }
+
+  float compute_margin_for_parent_expectation(UIComponent &widget, Axis axis) {
+    const float no_change = widget.computed_margin[axis];
+
+    if (widget.parent == -1) {
+      if (is_dimension_percent_based(widget.desired_padding, axis))
+        log_error("Trying to compute margin percent expectation for {}, "
+                  "but no parent",
+                  widget.id);
+      return no_change;
+    }
+    UIComponent &parent = cmp(widget.parent);
+    if (parent.computed[axis] == -1) {
+      if (is_dimension_percent_based(widget.desired_padding, axis))
+        log_error("Trying to compute margin percent expectation for {}, "
+                  "but parent {} size not calculated yet",
+                  widget.id, widget.parent);
+      return no_change;
+    }
+
+    const auto compute_ = [&](const Size &exp, float parent_value) {
+      return exp.dim == Dim::Percent ? exp.value * parent_value : no_change;
+    };
+
+    const auto &margin = widget.desired_margin;
+    switch (axis) {
+    case Axis::X:
+      return compute_(margin[Axis::left], parent.computed[Axis::X]) +
+             compute_(margin[Axis::right], parent.computed[Axis::X]);
+    case Axis::Y:
+      return compute_(margin[Axis::top], parent.computed[Axis::Y]) +
+             compute_(margin[Axis::bottom], parent.computed[Axis::Y]);
+    case Axis::left:
+    case Axis::right:
+      return compute_(margin[axis], parent.computed[Axis::X]);
+    case Axis::top:
+    case Axis::bottom:
+      return compute_(margin[axis], parent.computed[Axis::Y]);
     }
     return no_change;
   }
@@ -397,273 +585,31 @@ struct AutoLayout {
     return snapped;
   }
 
-  float compute_padding_for_standalone_exp(UIComponent &widget, Axis axis) {
-    float no_change = widget.computed_padd[axis];
-    float screenValue = fetch_screen_value_(axis);
-
-    const auto compute_ = [&](const Size &exp) {
-      switch (exp.dim) {
-      case Dim::Pixels:
-        return resolve_pixels(exp.value, widget);
-      case Dim::ScreenPercent:
-        return resolve_to_pixels(exp, screenValue, fetch_screen_value_(Axis::Y));
-        //
-      case Dim::Text:
-        log_error("Padding by dimension text not supported");
-        return no_change;
-      case Dim::Children:
-        log_error("Padding by children not supported");
-        return no_change;
-        // This is not a standalone widget,
-        // so just keep moving along
-      case Dim::Percent:
-      case Dim::None:
-      case Dim::Expand:
-        return no_change;
-      }
-      return no_change;
-    };
-
-    const auto &padd = widget.desired_padding;
-    switch (axis) {
-    case Axis::X:
-      return compute_(padd[Axis::left]) + compute_(padd[Axis::right]);
-    case Axis::Y:
-      return compute_(padd[Axis::top]) + compute_(padd[Axis::bottom]);
-    case Axis::top:
-    case Axis::left:
-    case Axis::right:
-    case Axis::bottom:
-      return compute_(padd[axis]);
-    }
-    return no_change;
-  }
-
-  float compute_size_for_standalone_exp(UIComponent &widget, Axis axis) {
-    float screenValue = fetch_screen_value_(axis);
-    const auto compute_ = [&](const Size &exp) {
-      switch (exp.dim) {
-      case Dim::Pixels:
-        return resolve_pixels(exp.value, widget);
-      case Dim::ScreenPercent:
-        return resolve_to_pixels(exp, screenValue, fetch_screen_value_(Axis::Y));
-      case Dim::Text:
-        return get_text_size_for_axis(widget, axis);
-      case Dim::Percent:
-      case Dim::None:
-      case Dim::Children:
-      case Dim::Expand:
-        // This is not a standalone widget,
-        // so just keep moving along
-        return widget.computed[axis];
-      }
-      return widget.computed[axis];
-    };
-    return compute_(widget.desired[axis]);
-  }
-
-  void calculate_standalone(UIComponent &widget) {
-    widget.computed[Axis::X] = compute_size_for_standalone_exp(widget, Axis::X);
-    widget.computed[Axis::Y] = compute_size_for_standalone_exp(widget, Axis::Y);
+  void calculate_standalone_values(UIComponent &widget) {
+    widget.computed[Axis::X] =
+        compute_size_for_standalone_expectation(widget, Axis::X);
+    widget.computed[Axis::Y] =
+        compute_size_for_standalone_expectation(widget, Axis::Y);
 
     write_each_spacing(widget, widget.computed_padd,
                        [&](UIComponent &w, Axis a) {
-                         return compute_padding_for_standalone_exp(w, a);
+                         return compute_padding_for_standalone_expectation(w,
+                                                                           a);
                        });
 
-    write_each_spacing(
-        widget, widget.computed_margin,
-        [&](UIComponent &w, Axis a) { return compute_margin_for_exp(w, a); });
+    write_each_spacing(widget, widget.computed_margin,
+                       [&](UIComponent &w, Axis a) {
+                         return compute_margin_for_standalone_expectation(w,
+                                                                          a);
+                       });
+  }
+
+  void calculate_standalone(UIComponent &widget) {
+    calculate_standalone_values(widget);
 
     for (EntityID child_id : widget.children) {
       calculate_standalone(cmp(child_id));
     }
-  }
-
-  float compute_size_for_parent_expectation(const UIComponent &widget,
-                                            Axis axis) {
-    const Size &exp = widget.desired[axis];
-
-    // Expand is resolved later in distribute_expand_space (tax_refund); in this
-    // pass its size is always 0, independent of the parent. Handle it before the
-    // parent-size guards below: when the parent is children()-sized it isn't
-    // computed yet here, so falling through would leave the expand child stuck
-    // at the -1 reset sentinel, which then poisons the parent's children-sum.
-    if (exp.dim == Dim::Expand)
-      return 0.f;
-
-    float no_change = widget.computed[axis];
-    if (widget.parent == -1) {
-      if (exp.dim == Dim::Percent) {
-        log_error("Trying to compute percent expectation for {}, but never "
-                  "set "
-                  "parent",
-                  widget.id);
-      }
-      // root component
-      return no_change;
-    }
-
-    UIComponent &parent = cmp(widget.parent);
-    if (parent.computed[axis] == -1) {
-      if (is_dimension_percent_based(widget.desired_padding, axis)) {
-        log_error("Trying to compute expectation for {}, but parent {} size "
-                  "hasnt "
-                  "been calculated yet",
-                  widget.id, widget.parent);
-      }
-      return no_change;
-    }
-
-    // Content-box model: percent sizing is relative to parent's content area
-    // (after subtracting padding). Margins are external spacing and are NOT
-    // included in computed[axis], so we only subtract padding here.
-    float parent_size = (parent.computed[axis] - parent.computed_padd[axis]);
-
-    switch (exp.dim) {
-    case Dim::Percent:
-      return exp.value * parent_size;
-    case Dim::Expand:
-      // Expand children are sized later in distribute_expand_space()
-      // after all other children have been sized
-      return 0.f;
-    case Dim::None:
-    case Dim::Text:
-    case Dim::ScreenPercent:
-    case Dim::Children:
-    case Dim::Pixels:
-      return no_change;
-    }
-    return no_change;
-  }
-
-  float compute_padding_for_parent_exp(UIComponent &widget, Axis axis) {
-    float no_change = widget.computed_padd[axis];
-
-    if (widget.parent == -1) {
-      if (widget.desired_padding[axis].dim == Dim::Percent) {
-        log_error("Trying to compute padding percent expectation for {}, but "
-                  "never set "
-                  "parent",
-                  widget.id);
-      }
-      // root component
-      return no_change;
-    }
-
-    UIComponent &parent = cmp(widget.parent);
-    if (parent.computed[axis] == -1) {
-      if (is_dimension_percent_based(widget.desired_padding, axis)) {
-        log_error("Trying to compute padding percent expectation for {}, but "
-                  "parent {} size not calculated yet",
-                  widget.id, widget.parent);
-      }
-      return no_change;
-    }
-
-    const auto parent_size = [&parent](Axis axis_in) -> float {
-      return parent.computed[axis_in];
-    };
-
-    const auto compute_ = [=](const Size &exp, float parent_value) {
-      switch (exp.dim) {
-      case Dim::Children:
-        log_error("Padding by children not supported");
-      case Dim::Text:
-        log_error("Padding by dimension text not supported");
-      case Dim::Expand:
-        log_error("Padding by expand not supported");
-      case Dim::Percent:
-        return exp.value * parent_value;
-      // already handled during standalone
-      case Dim::ScreenPercent:
-      case Dim::None:
-      case Dim::Pixels:
-        return no_change;
-      }
-      return no_change;
-    };
-
-    const auto &padd = widget.desired_padding;
-    switch (axis) {
-    case Axis::X:
-      return compute_(padd[Axis::left], parent_size(Axis::X)) +
-             compute_(padd[Axis::right], parent_size(Axis::X));
-    case Axis::Y:
-      return compute_(padd[Axis::top], parent_size(Axis::Y)) +
-             compute_(padd[Axis::bottom], parent_size(Axis::Y));
-    case Axis::left:
-    case Axis::right:
-      return compute_(padd[axis], parent_size(Axis::X));
-    case Axis::top:
-    case Axis::bottom:
-      return compute_(padd[axis], parent_size(Axis::Y));
-    }
-    return no_change;
-  }
-
-  float compute_margin_for_parent_exp(UIComponent &widget, Axis axis) {
-    const auto &margin = widget.desired_margin;
-    float no_change = widget.computed_margin[axis];
-    if (widget.parent == -1) {
-      if (is_dimension_percent_based(widget.desired_padding, axis)) {
-        log_error("Trying to compute margin percent expectation for {}, but "
-                  "no parent",
-                  widget.id);
-      }
-      return no_change;
-    }
-
-    UIComponent &parent = cmp(widget.parent);
-    if (parent.computed[axis] == -1) {
-      if (is_dimension_percent_based(widget.desired_padding, axis)) {
-        log_error("Trying to compute margin percent expectation for {}, but "
-                  "parent {} size not calculated yet",
-                  widget.id, widget.parent);
-      }
-      return no_change;
-    }
-
-    // Margin percent is relative to parent's computed size (margins are
-    // external and not included in computed, so no subtraction needed).
-    // Padding intentionally not subtracted here.
-    const auto parent_size = [&parent](Axis axis_in) -> float {
-      return parent.computed[axis_in];
-    };
-
-    const auto compute_ = [no_change](const Size &exp, float parent_size) {
-      switch (exp.dim) {
-      case Dim::Percent:
-        return exp.value * parent_size;
-        //
-      case Dim::Children:
-      case Dim::None:
-      case Dim::Text:
-      case Dim::ScreenPercent:
-      case Dim::Pixels:
-      case Dim::Expand:
-        return no_change;
-      }
-      return no_change;
-    };
-
-    switch (axis) {
-    case Axis::X:
-      return compute_(margin[Axis::left], parent_size(Axis::X)) +
-             compute_(margin[Axis::right], parent_size(Axis::X));
-    case Axis::Y:
-      return compute_(margin[Axis::top], parent_size(Axis::Y)) +
-             compute_(margin[Axis::bottom], parent_size(Axis::Y));
-    case Axis::left:
-    case Axis::right:
-      return compute_(margin[axis], parent_size(Axis::X));
-    case Axis::top:
-    case Axis::bottom:
-      return compute_(margin[axis], parent_size(Axis::Y));
-    }
-    log_error("computing margin for parent exp but got invalid axis {}",
-              static_cast<int>(axis));
-    return no_change;
   }
 
   void calculate_those_with_parents(UIComponent &widget) {
@@ -674,12 +620,12 @@ struct AutoLayout {
 
     write_each_spacing(widget, widget.computed_padd,
                        [&](UIComponent &w, Axis a) {
-                         return compute_padding_for_parent_exp(w, a);
+                         return compute_padding_for_parent_expectation(w, a);
                        });
 
     write_each_spacing(widget, widget.computed_margin,
                        [&](UIComponent &w, Axis a) {
-                         return compute_margin_for_parent_exp(w, a);
+                         return compute_margin_for_parent_expectation(w, a);
                        });
 
     for (EntityID child_id : widget.children) {
@@ -1986,17 +1932,7 @@ struct AutoLayout {
 
   void reset_and_calculate_standalone(UIComponent &widget) {
     widget.reset_computed_values();
-    widget.computed[Axis::X] = compute_size_for_standalone_exp(widget, Axis::X);
-    widget.computed[Axis::Y] = compute_size_for_standalone_exp(widget, Axis::Y);
-
-    write_each_spacing(widget, widget.computed_padd,
-                       [&](UIComponent &w, Axis a) {
-                         return compute_padding_for_standalone_exp(w, a);
-                       });
-
-    write_each_spacing(
-        widget, widget.computed_margin,
-        [&](UIComponent &w, Axis a) { return compute_margin_for_exp(w, a); });
+    calculate_standalone_values(widget);
 
     for (EntityID child_id : widget.children) {
       reset_and_calculate_standalone(cmp(child_id));
@@ -2043,7 +1979,8 @@ struct AutoLayout {
       for (Axis axis : {Axis::X, Axis::Y})
         if (widget.desired[axis].dim == Dim::Percent ||
             widget.desired[axis].dim == Dim::Expand)
-          widget.computed[axis] = al.compute_size_for_parent_expectation(widget, axis);
+          widget.computed[axis] =
+              al.compute_size_for_parent_expectation(widget, axis);
     }
     al.reset_and_calculate_standalone(widget);
     al.calculate_those_with_parents(widget);
