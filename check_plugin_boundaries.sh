@@ -4,9 +4,14 @@
 # Scans src/plugins/ for violations
 
 set -e
+cd "$(dirname "$0")"
 
 PLUGIN_DIR="src/plugins"
 VIOLATIONS=0
+if [ ! -d "$PLUGIN_DIR" ]; then echo "FAIL: $PLUGIN_DIR missing (cwd=$(pwd)); refusing vacuous pass - fix: run from repo root or fix PLUGIN_DIR" >&2; exit 2; fi
+SCANNED=$(find "$PLUGIN_DIR" -name "*.h" -type f | wc -l | tr -d " ")
+if [ "$SCANNED" -eq 0 ]; then echo "FAIL: scanned 0 plugin headers; refusing vacuous pass" >&2; exit 2; fi
+echo "Scanning $SCANNED plugin headers"
 
 # Colors for output
 RED='\033[0;31m'

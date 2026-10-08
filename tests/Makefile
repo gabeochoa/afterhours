@@ -355,7 +355,11 @@ $(OUT)/render_capture_metal_test: render_capture_test.cpp ../examples/web/sokol_
 
 # Runs every test even when one fails, then reports. The old loop dropped each
 # exit code, so only the last test's status escaped and a red suite read green.
-test: all
+check-boundaries:
+	bash ../check_plugin_boundaries.sh
+	sh ui_boundary_check.sh
+.PHONY: check-boundaries
+test: check-boundaries all
 	@fail=0; for t in $(ALL_TESTS); do \
 		echo "Running $$t"; \
 		$(OUT)/$$t || fail=1; \

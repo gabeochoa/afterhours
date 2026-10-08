@@ -17,7 +17,7 @@
 #endif
 
 #include "../core/base_component.h"
-#include "../core/entity_helper.h"
+#include "../ecs.h"
 #include "../core/system.h"
 #include "../developer.h"
 #include "../logging.h"
