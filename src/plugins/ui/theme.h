@@ -307,6 +307,9 @@ struct Theme {
 
   ClickActivationMode click_activation_mode = ClickActivationMode::Press;
 
+  float text_area_line_height_ratio = 0.f; // 0 = fixed 20px text-area row
+                                           // height; >0 = ratio x font size
+
   HighlightMode highlight_mode = HighlightMode::Split;
 
   // Disabled element styling.

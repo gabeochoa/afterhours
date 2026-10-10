@@ -108,9 +108,17 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     resolution_height = static_cast<float>(pcr->current_resolution.height);
   const ScalingMode scaling_mode =
       ctx.scaling_mode.value_or(UIStylingDefaults::get().scaling_mode);
-  const float line_height = resolve_to_pixels(
-      config.text_area_line_height.value_or(pixels(20.f)), resolution_height,
-      scaling_mode, ctx.theme.ui_scale);
+  const float line_height =
+      config.text_area_line_height.has_value()
+          ? resolve_to_pixels(*config.text_area_line_height,
+                              resolution_height, scaling_mode,
+                              ctx.theme.ui_scale)
+          : ctx.theme.text_area_line_height_ratio > 0.f
+                ? ctx.theme.text_area_line_height_ratio *
+                      resolve_to_pixels(config.font_size, resolution_height,
+                                        scaling_mode, ctx.theme.ui_scale)
+                : resolve_to_pixels(pixels(20.f), resolution_height,
+                                    scaling_mode, ctx.theme.ui_scale);
   // The field's own top+bottom padding (h720(4) each side, below), resolved
   // the same way: auto-grow adds it back or the last line sits under the
   // bottom edge, increasingly so above 720p.

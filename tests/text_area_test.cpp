@@ -636,6 +636,43 @@ TEST(auto_grow_resolves_line_height_and_padding_at_1080p) {
     CHECK_APPROX(field->rect().height, 72.f);
 }
 
+// An unset line height falls back to the theme ratio when one is set, and to
+// the fixed 20px when it is not. An explicit with_line_height beats both.
+TEST(unset_line_height_theme_ratio) {
+  auto *res = EntityHelper::get_singleton_cmp<
+      window_manager::ProvidesCurrentResolution>();
+  ui_test::check(res != nullptr, "resolution singleton exists", __FILE__,
+                 __LINE__);
+  if (!res)
+    return;
+  const auto saved = res->current_resolution;
+  res->current_resolution = {1280, 720};
+  auto grown_height = [](float ratio, bool explicit_height) {
+    ImmTestHarness h;
+    std::string text = "a\nb";
+    UIComponent *field = nullptr;
+    two_frames(h, [&] {
+      h.context().theme.text_area_line_height_ratio = ratio;
+      auto config = ComponentConfig{}
+                        .with_size(ComponentSize{pixels(200), pixels(40)})
+                        .with_font(UIComponent::DEFAULT_FONT, WIDGET_FONT)
+                        .with_auto_grow();
+      if (explicit_height)
+        config.with_line_height(pixels(20));
+      text_area(h.context(), mk(h.root(), 0), text, config);
+      field = h.find("text_area_field");
+    });
+    return field ? field->rect().height : -1.f;
+  };
+  // Legacy: 2 rows x 20px + 8px vertical padding.
+  CHECK_APPROX(grown_height(0.f, false), 48.f);
+  // Ratio: 2 rows x (1.45 x 20px font) + 8px.
+  CHECK_APPROX(grown_height(1.45f, false), 66.f);
+  // Explicit config wins over the theme ratio.
+  CHECK_APPROX(grown_height(1.45f, true), 48.f);
+  res->current_resolution = saved;
+}
+
 TEST(alt_backspace_deletes_the_word_behind) {
   ImmTestHarness h;
   std::string text = "alpha beta gamma";
