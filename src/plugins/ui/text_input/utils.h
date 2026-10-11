@@ -82,6 +82,36 @@ inline std::string codepoint_to_utf8(int cp) {
   return r;
 }
 
+// Convert between UTF-8 byte offsets (the state model) and codepoint
+// offsets (the masked display model). Invalid lengths count as one byte, and
+// both helpers clamp instead of walking past the end of the string.
+inline size_t byte_offset_for_codepoint(const std::string &text,
+                                        size_t codepoint_index) {
+  size_t offset = 0;
+  for (size_t cp = 0; cp < codepoint_index && offset < text.size(); ++cp) {
+    size_t len = utf8_char_length(text, offset);
+    if (len == 0)
+      len = 1;
+    offset = std::min(offset + len, text.size());
+  }
+  return offset;
+}
+
+inline size_t codepoint_index_for_byte_offset(const std::string &text,
+                                              size_t byte_offset) {
+  size_t offset = 0;
+  size_t codepoints = 0;
+  const size_t limit = std::min(byte_offset, text.size());
+  while (offset < limit) {
+    size_t len = utf8_char_length(text, offset);
+    if (len == 0)
+      len = 1;
+    offset = std::min(offset + len, text.size());
+    ++codepoints;
+  }
+  return codepoints;
+}
+
 // Delete the selected range and collapse cursor to selection start.
 inline bool delete_selection(AnyTextInputState auto &s) {
   if (!s.has_selection()) return false;
@@ -584,13 +614,13 @@ inline bool handle_clipboard_and_undo(Ctx &ctx, State &s, bool editable) {
   }
 
   if constexpr (magic_enum::enum_contains<InputAction>("TextCopy")) {
-    if (ctx.pressed(InputAction::TextCopy) && s.has_selection())
+    if (!s.copy_disabled && ctx.pressed(InputAction::TextCopy) && s.has_selection())
       clipboard::set_text(s.selected_text());
   }
 
   if (editable) {
     if constexpr (magic_enum::enum_contains<InputAction>("TextCut")) {
-      if (ctx.pressed(InputAction::TextCut) && s.has_selection()) {
+      if (!s.cut_disabled && ctx.pressed(InputAction::TextCut) && s.has_selection()) {
         s.push_undo_snapshot();
         clipboard::set_text(s.selected_text());
         delete_selection(s);
@@ -599,7 +629,7 @@ inline bool handle_clipboard_and_undo(Ctx &ctx, State &s, bool editable) {
       }
     }
     if constexpr (magic_enum::enum_contains<InputAction>("TextPaste")) {
-      if (ctx.pressed(InputAction::TextPaste)) {
+      if (!s.paste_disabled && ctx.pressed(InputAction::TextPaste)) {
         const std::string clip = clipboard::get_text();
         if (!clip.empty()) {
           s.push_undo_snapshot();
@@ -654,13 +684,19 @@ enum class EditCommand {
 };
 
 /// Run one EditCommand against a state. Deletions take the selection when
-/// there is one, like the keys do. Mutations are refused while readonly;
-/// Copy and SelectAll are not mutations. Returns true if the command did
+/// there is one, like the keys do. Mutations are refused while readonly, and
+/// Copy, Cut, and Paste are refused when the field disables them. Copy and
+/// SelectAll are not mutations.
+/// Returns true if the command did
 /// something (for Paste: the clipboard was non-empty; for Copy: there was
 /// a selection to copy).
 inline bool apply_edit_command(AnyTextInputState auto &s, EditCommand cmd) {
   const bool mutation = cmd != EditCommand::Copy && cmd != EditCommand::SelectAll;
   if (mutation && s.readonly)
+    return false;
+  if ((cmd == EditCommand::Copy && s.copy_disabled) ||
+      (cmd == EditCommand::Cut && s.cut_disabled) ||
+      (cmd == EditCommand::Paste && s.paste_disabled))
     return false;
 
   switch (cmd) {

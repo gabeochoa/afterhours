@@ -35,6 +35,8 @@ static void check(bool cond, const char *expr, const char *file, int line) {
 
 #define CHECK(expr) check((expr), #expr, __FILE__, __LINE__)
 
+static void reset_world();
+
 static HasTextInputState field(const std::string &text, size_t cursor) {
   HasTextInputState s;
   s.storage.insert(0, text);
@@ -125,6 +127,82 @@ static void test_command_word_and_char_delete() {
   CHECK(s.text() == "one  three");
   CHECK(apply_edit_command(s, EditCommand::DeleteForward));
   CHECK(s.text() == "one three");
+}
+
+static void test_command_clipboard_operations_are_opt_in_disabled() {
+  clipboard::MemoryProvider memory;
+  clipboard::ScopedProvider scope(memory);
+  clipboard::set_text("sentinel");
+  CHECK(memory.generation() == 1);
+
+  // Masking alone is display-only: it does not disable clipboard export.
+  auto masked = field("secret", 6);
+  masked.masked = true;
+  masked.selection_anchor = 0;
+  CHECK(apply_edit_command(masked, EditCommand::Copy));
+  CHECK(memory.generation() == 2);
+  CHECK(clipboard::get_text() == "secret");
+  CHECK(apply_edit_command(masked, EditCommand::Cut));
+  CHECK(memory.generation() == 3);
+  CHECK(clipboard::get_text() == "secret");
+  CHECK(masked.text().empty());
+
+  clipboard::set_text("sentinel");
+  CHECK(memory.generation() == 4);
+
+  auto s = field("secret", 6);
+  s.masked = true;
+  s.copy_disabled = true;
+  s.cut_disabled = true;
+  s.selection_anchor = 0;
+  CHECK(!apply_edit_command(s, EditCommand::Copy));
+  CHECK(memory.generation() == 4);
+  CHECK(clipboard::get_text() == "sentinel");
+  CHECK(!apply_edit_command(s, EditCommand::Cut));
+  CHECK(memory.generation() == 4);
+  CHECK(clipboard::get_text() == "sentinel");
+  CHECK(s.text() == "secret");
+
+  CHECK(apply_edit_command(s, EditCommand::Paste));
+  CHECK(s.text() == "sentinel");
+
+  clipboard::set_text("blocked");
+  CHECK(memory.generation() == 5);
+  s.paste_disabled = true;
+  s.selection_anchor = 0;
+  s.cursor_position = s.text_size();
+  CHECK(!apply_edit_command(s, EditCommand::Paste));
+  CHECK(s.text() == "sentinel");
+  CHECK(clipboard::get_text() == "blocked");
+}
+
+static void test_disabled_command_dispatch_refuses_copy_and_cut() {
+  clipboard::MemoryProvider memory;
+  clipboard::ScopedProvider scope(memory);
+  clipboard::set_text("sentinel");
+  CHECK(memory.generation() == 1);
+
+  reset_world();
+  Entity &e = ui::UICollectionHolder::get().collection.createEntity();
+  ui::UICollectionHolder::get().collection.merge_entity_arrays();
+  auto &s = e.addComponent<HasTextInputState>();
+  s.storage.insert(0, "secret");
+  s.cursor_position = 6;
+  s.selection_anchor = 0;
+  s.masked = true;
+  s.copy_disabled = true;
+  s.cut_disabled = true;
+
+  CHECK(!apply_edit_command_to_entity(e, EditCommand::Copy));
+  CHECK(!apply_edit_command_to_entity(e, EditCommand::Cut));
+  CHECK(memory.generation() == 1);
+  CHECK(clipboard::get_text() == "sentinel");
+  CHECK(s.text() == "secret");
+
+  // Still masked; clearing the opt-in disables is what re-enables Copy.
+  s.copy_disabled = false;
+  CHECK(apply_edit_command_to_entity(e, EditCommand::Copy));
+  CHECK(clipboard::get_text() == "secret");
 }
 
 static void test_command_respects_readonly() {
@@ -250,6 +328,10 @@ int main() {
   test_command_takes_selection_first();
   printf("  command_word_and_char_delete\n");
   test_command_word_and_char_delete();
+  printf("  command_clipboard_operations_are_opt_in_disabled\n");
+  test_command_clipboard_operations_are_opt_in_disabled();
+  printf("  disabled_command_dispatch_refuses_copy_and_cut\n");
+  test_disabled_command_dispatch_refuses_copy_and_cut();
   printf("  command_respects_readonly\n");
   test_command_respects_readonly();
   printf("  command_dispatches_to_area_entity_and_rebuilds_index\n");

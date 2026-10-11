@@ -497,4 +497,52 @@ TEST(input_selection_and_caret_stay_square_under_rounded_theme) {
   }
 }
 
+TEST(masked_click_at_end_uses_real_byte_offset) {
+  if (!EntityHelper::has_singleton<FontManager>()) {
+    auto &fonts = EntityHelper::createPermanentEntity();
+    auto &manager = fonts.addComponent<FontManager>();
+    static raylib::GlyphInfo glyph{};
+    glyph.value = '?';
+    glyph.advanceX = 10;
+    static raylib::Rectangle rectangle{0, 0, 10, 20};
+    Font font{};
+    font.baseSize = 20;
+    font.glyphCount = 1;
+    font.glyphs = &glyph;
+    font.recs = &rectangle;
+    font.texture.id = 1;
+    manager.load_font(UIComponent::DEFAULT_FONT, font);
+    EntityHelper::registerSingleton<FontManager>(fonts);
+  }
+
+  ImmTestHarness h;
+  std::string text = "contrase\xC3\xB1" "a";
+  auto emit = [&] {
+    imm::text_input(h.context(), mk(h.root(), 0), text,
+                    ComponentConfig{}
+                        .with_size({pixels(300), pixels(48)})
+                        .with_font(UIComponent::DEFAULT_FONT, pixels(20))
+                        .with_mask_char('*'));
+  };
+  two_frames(h, emit);
+
+  Entity *field = find_field_entity();
+  CHECK(field != nullptr);
+  if (!field || !field->has<HasClickListener>()) return;
+  auto *state =
+      text_input::state_for_field<text_input::HasTextInputState>(*field);
+  CHECK(state != nullptr);
+  if (!state) return;
+
+  state->cursor_position = 0;
+  const RectangleType fr = field->get<UIComponent>().rect();
+  h.context().mouse.pos =
+      Vector2Type{fr.x + fr.width - 1.f, fr.y + fr.height * 0.5f};
+  field->get<HasClickListener>().cb(*field);
+
+  CHECK(state->cursor_position == text.size());
+  CHECK(text_input::insert_char(*state, '!'));
+  CHECK(state->text() == std::string("contrase\xC3\xB1" "a!"));
+}
+
 int main() { return ui_test::run_registered_tests("text_input"); }

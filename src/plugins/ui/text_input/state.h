@@ -22,6 +22,10 @@ struct HasTextInputStateT : BaseComponent {
   bool was_focused = false; // Previous frame's focus state (for detecting transitions)
   bool readonly = false;  // Focus/select OK, mutations blocked
   bool disabled = false;  // Focus blocked, no interaction at all
+  bool masked = false;    // Display is masked; clicks map via codepoints
+  bool copy_disabled = false;  // Copy refused (opt-in; masking alone is not)
+  bool cut_disabled = false;
+  bool paste_disabled = false;
   size_t max_length = 256; // Maximum text length in bytes (0 = unlimited)
   float cursor_blink_timer = 0.f;  // Current timer value
   float cursor_blink_rate = 0.53f; // Seconds per half-cycle (configurable)

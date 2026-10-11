@@ -126,6 +126,10 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   // Apply readonly/disabled from config each frame
   state.readonly = config.text_readonly;
   state.disabled = config.disabled;
+  state.masked = config.mask_char.has_value();
+  state.copy_disabled = config.text_copy_disabled;
+  state.cut_disabled = config.text_cut_disabled;
+  state.paste_disabled = config.text_paste_disabled;
 
   // Disabled: skip focus entirely, render with reduced opacity
   if (state.disabled) {
@@ -187,17 +191,11 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   size_t display_cursor_pos = state.cursor_position;
 
   if (config.mask_char) {
-    // Count UTF-8 codepoints for mask and cursor position
-    size_t codepoint_count = 0;
-    size_t codepoints_before_cursor = 0;
-    for (size_t i = 0; i < display_text.size();) {
-      if (i < state.cursor_position)
-        codepoints_before_cursor++;
-      i += utf8_char_length(display_text, i);
-      codepoint_count++;
-    }
+    const size_t codepoint_count =
+        codepoint_index_for_byte_offset(display_text, display_text.size());
+    display_cursor_pos =
+        codepoint_index_for_byte_offset(display_text, state.cursor_position);
     display_text = std::string(codepoint_count, *config.mask_char);
-    display_cursor_pos = codepoints_before_cursor;
   }
 
   // Create input field container (clip overflow for horizontal scroll)
@@ -412,16 +410,10 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       size_t sel_end_byte = state.selection_end();
       if (config.mask_char) {
         // For masked text, convert byte positions to codepoint positions
-        size_t cp_start = 0, cp_end = 0, cp = 0;
-        for (size_t i = 0; i < state.text().size();) {
-          if (i == sel_start_byte) cp_start = cp;
-          if (i == sel_end_byte) cp_end = cp;
-          i += utf8_char_length(state.text(), i);
-          cp++;
-        }
-        if (sel_end_byte >= state.text().size()) cp_end = cp;
-        sel_start_byte = cp_start;
-        sel_end_byte = cp_end;
+        sel_start_byte =
+            codepoint_index_for_byte_offset(state.text(), sel_start_byte);
+        sel_end_byte =
+            codepoint_index_for_byte_offset(state.text(), sel_end_byte);
       }
 
       float sel_x1 = measure_x(sel_start_byte) - state.scroll_offset_x;
@@ -513,7 +505,11 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
             s.text().empty()
                 ? std::string()
                 : (ent.has<HasLabel>() ? ent.get<HasLabel>().label : s.text());
-        size_t click_pos = pixel_x_to_byte_offset(dt, local_x, font, afs);
+        const size_t display_pos =
+            pixel_x_to_byte_offset(dt, local_x, font, afs);
+        const size_t click_pos =
+            s.masked ? byte_offset_for_codepoint(s.text(), display_pos)
+                     : display_pos;
 
         // Multi-click detection (double = word, triple = select all)
         constexpr float MULTI_CLICK_TIME = 0.4f;
@@ -575,16 +571,17 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       }
     }
 
-    // Copy is always allowed (even readonly). Cut/Paste need editable.
+    // Copy is allowed while readonly unless the field disables it.
+    // Cut/Paste need editable and honour their own disable flags.
     if constexpr (magic_enum::enum_contains<InputAction>("TextCopy")) {
-      if (ctx.pressed(InputAction::TextCopy)) {
+      if (!state.copy_disabled && ctx.pressed(InputAction::TextCopy)) {
         if (state.has_selection())
           clipboard::set_text(state.selected_text());
       }
     }
     if (editable) {
       if constexpr (magic_enum::enum_contains<InputAction>("TextCut")) {
-        if (ctx.pressed(InputAction::TextCut)) {
+        if (!state.cut_disabled && ctx.pressed(InputAction::TextCut)) {
           if (state.has_selection()) {
             state.push_undo_snapshot();
             clipboard::set_text(state.selected_text());
@@ -594,7 +591,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
         }
       }
       if constexpr (magic_enum::enum_contains<InputAction>("TextPaste")) {
-        if (ctx.pressed(InputAction::TextPaste)) {
+        if (!state.paste_disabled && ctx.pressed(InputAction::TextPaste)) {
           state.push_undo_snapshot();
           if (state.has_selection()) delete_selection(state);
           std::string clip = clipboard::get_text();

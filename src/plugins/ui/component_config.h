@@ -178,6 +178,12 @@ struct ComponentConfig {
   // Text input: readonly mode (focusable, selectable, but not editable)
   bool text_readonly = false;
 
+  // Text input: clipboard operations this field refuses. All allowed by
+  // default; masking a field does not change them.
+  bool text_copy_disabled = false;
+  bool text_cut_disabled = false;
+  bool text_paste_disabled = false;
+
   // Text input: hint shown while the bound string is empty.
   std::string placeholder;
 
@@ -411,6 +417,18 @@ struct ComponentConfig {
   }
   ComponentConfig &with_readonly(bool ro = true) {
     text_readonly = ro;
+    return *this;
+  }
+  ComponentConfig &with_copy_disabled(bool disabled = true) {
+    text_copy_disabled = disabled;
+    return *this;
+  }
+  ComponentConfig &with_cut_disabled(bool disabled = true) {
+    text_cut_disabled = disabled;
+    return *this;
+  }
+  ComponentConfig &with_paste_disabled(bool disabled = true) {
+    text_paste_disabled = disabled;
     return *this;
   }
   ComponentConfig &with_toggle_indicators(const std::string &on,
@@ -1260,6 +1278,12 @@ struct ComponentConfig {
       merged.mask_char = overrides.mask_char;
     if (overrides.text_readonly)
       merged.text_readonly = true;
+    if (overrides.text_copy_disabled)
+      merged.text_copy_disabled = true;
+    if (overrides.text_cut_disabled)
+      merged.text_cut_disabled = true;
+    if (overrides.text_paste_disabled)
+      merged.text_paste_disabled = true;
     if (!overrides.placeholder.empty())
       merged.placeholder = overrides.placeholder;
     if (overrides.text_area_line_height.has_value())

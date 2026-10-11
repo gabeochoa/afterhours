@@ -144,6 +144,10 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       },
       text);
 
+  state.copy_disabled = config.text_copy_disabled;
+  state.cut_disabled = config.text_cut_disabled;
+  state.paste_disabled = config.text_paste_disabled;
+
   // Apply default size if not set
   if (config.size.is_default) {
     config.size = ComponentSize(pixels(200), pixels(100));
