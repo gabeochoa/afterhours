@@ -39,6 +39,8 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   if (options.empty())
     return {false, entity};
 
+  detail::clamp_selection_index(option_index, options.size(), "dropdown");
+
   HasDropdownState &dropdownState = init_state<HasDropdownState>(
       entity,
       [&](auto &hdds) {
@@ -252,9 +254,15 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
   if (options.empty())
     return {false, entity};
 
+  detail::clamp_selection_index(option_index, options.size(),
+                                "navigation_bar");
+
   HasNavigationBarState &navState = init_state<HasNavigationBarState>(
       entity,
       [&](auto &hnbs) {
+        // State keeps first-build options; sync count or growth 1->3 clamps 2 to 0.
+        if (hnbs.options.size() != options.size())
+          hnbs.options.assign(options.begin(), options.end());
         hnbs.set_current_index(option_index);
         hnbs.changed_since = false;
       },
@@ -369,6 +377,9 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
 
   if (tab_labels.empty())
     return {false, entity};
+
+  detail::clamp_selection_index(active_tab, tab_labels.size(),
+                                "tab_container");
 
   // Apply styling defaults if available
   if (config.size.is_default) {

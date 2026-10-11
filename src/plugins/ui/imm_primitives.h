@@ -36,6 +36,17 @@ inline size_t next_index(size_t current, size_t total) {
   return (current + 1) % total;
 }
 
+// Stale caller selection: error at the source, then clamp so no build reads OOB.
+inline void clamp_selection_index(size_t &index, size_t count,
+                                  const char *widget) {
+  if (count == 0 || index < count)
+    return;
+  log_error("{}: selection index {} out of range for {} options; "
+            "clamping to {}",
+            widget, index, count, count - 1);
+  index = count - 1;
+}
+
 } // namespace detail
 
 // ============================================================================

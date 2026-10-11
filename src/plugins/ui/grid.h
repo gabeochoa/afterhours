@@ -143,6 +143,15 @@ inline ComponentSize grid_track(ElementResult grid_elem, int col,
   if (!grid_entity.template has<HasGridRows>())
     return ComponentSize{percent(1.f), percent(1.f)};
   auto &state = grid_entity.template get<HasGridRows>();
+
+  // Stale or undeclared columns fall back to expand() instead of reading OOB.
+  if (col < 0 || col >= state.cols) {
+    log_error("grid_track: column {} out of range for {} columns; "
+              "falling back to expand()",
+              col, state.cols);
+    return ComponentSize{expand(), percent(1.f)};
+  }
+
   const int span = std::max(1, std::min(col_span, state.cols - col));
 
   // A spanning cell takes its own track plus the ones it covers, so the rest
@@ -151,8 +160,10 @@ inline ComponentSize grid_track(ElementResult grid_elem, int col,
   // every cell at nothing.
   if (state.col_widths.empty())
     return ComponentSize{expand(static_cast<float>(span)), percent(1.f)};
+  if (col + span > static_cast<int>(state.col_widths.size()))
+    return ComponentSize{expand(static_cast<float>(span)), percent(1.f)};
   float total = 0.f;
-  for (int i = col; i < col + span && i < (int)state.col_widths.size(); i++)
+  for (int i = col; i < col + span; i++)
     total += state.col_widths[(size_t)i].value;
   return ComponentSize{Size{state.col_widths[(size_t)col].dim, total, 1.f},
                        percent(1.f)};

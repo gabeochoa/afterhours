@@ -99,4 +99,21 @@ TEST(without_a_content_resolution_it_is_identity) {
   CHECK(near(mapped.y, p.y));
 }
 
+// A saved resolution index past this machine's list falls back to current.
+TEST(stale_resolution_index_falls_back_to_current) {
+  set_content_resolution(1280, 720);
+  window_manager::ProvidesAvailableWindowResolutions available(
+      std::vector<window_manager::Resolution>{{1280, 720}});
+  const auto chosen = available.on_data_changed(2);
+  CHECK(chosen.width == 1280);
+  CHECK(chosen.height == 720);
+
+  window_manager::ProvidesAvailableWindowResolutions empty(
+      std::vector<window_manager::Resolution>{});
+  CHECK(empty.current_index() == 0);
+  const auto unchanged = empty.on_data_changed(0);
+  CHECK(unchanged.width == 1280);
+  CHECK(unchanged.height == 720);
+}
+
 int main() { return ui_test::run_registered_tests("viewport"); }

@@ -153,4 +153,28 @@ TEST(tab_container_narrow_bar_compresses_inside) {
   }
 }
 
+// A stale active tab clamps at entry instead of reaching the caller's switch.
+TEST(tab_container_clamps_a_stale_active_tab_when_tabs_shrink) {
+  ImmTestHarness h;
+  std::vector<std::string> tabs = {"One", "Two", "Three"};
+  size_t active = 2;
+  auto emit = [&] {
+    return tab_container(h.context(), mk(h.root(), 0), tabs, active,
+                         ComponentConfig{}
+                             .with_size(ComponentSize{pixels(600), pixels(44)})
+                             .with_debug_name("tabs"));
+  };
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  CHECK(active == 2);
+
+  tabs = {"Only"};
+  h.begin_frame();
+  auto result = emit();
+  h.layout_only();
+  CHECK(active == 0);
+  CHECK(result.as<int>() == 0);
+}
+
 int main() { return ui_test::run_registered_tests("tab_container tests"); }

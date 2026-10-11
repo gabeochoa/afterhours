@@ -203,7 +203,15 @@ struct HasDropdownState : ui::HasCheckboxState {
                          opt_changed) {}
 
   size_t current_index() const { return last_option_clicked; }
-  void set_current_index(size_t index) { last_option_clicked = index; }
+  void set_current_index(size_t index) {
+    if (!options.empty() && index >= options.size()) {
+      log_error("dropdown: selection index {} out of range for {} "
+                "options; clamping to {}",
+                index, options.size(), options.size() - 1);
+      index = options.size() - 1;
+    }
+    last_option_clicked = index;
+  }
 };
 
 struct HasNavigationBarState : ui::HasDropdownState {
@@ -215,9 +223,6 @@ struct HasNavigationBarState : ui::HasDropdownState {
   HasNavigationBarState(const std::array<std::string_view, N> &opts,
                         const std::function<void(size_t)> opt_changed = nullptr)
       : HasNavigationBarState(Options(opts.begin(), opts.end()), opt_changed) {}
-
-  size_t current_index() const { return last_option_clicked; }
-  void set_current_index(size_t index) { last_option_clicked = index; }
 };
 
 struct HasRoundedCorners : BaseComponent {

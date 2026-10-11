@@ -691,6 +691,95 @@ TEST(dropdown_trigger_fills_resolved_percentage_width) {
   }
 }
 
+// Stale caller indices clamp at entry instead of reading past the shrunken set.
+TEST(dropdown_clamps_a_stale_selection_when_options_shrink) {
+  ImmTestHarness h;
+  std::vector<std::string> options{"First", "Second", "Third"};
+  size_t selected = 2;
+  auto emit = [&] {
+    return dropdown(h.context(), mk(h.root(), 0), options, selected,
+                    ComponentConfig{}.with_size({pixels(200), pixels(40)}));
+  };
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  CHECK(selected == 2);
+
+  options = {"Only"};
+  h.begin_frame();
+  auto result = emit();
+  h.layout_only();
+  CHECK(selected == 0);
+  CHECK(result.as<int>() == 0);
+}
+
+TEST(navigation_bar_clamps_a_stale_selection_when_options_shrink) {
+  ImmTestHarness h;
+  std::vector<std::string> options{"First", "Second", "Third"};
+  size_t selected = 2;
+  auto emit = [&] {
+    return navigation_bar(h.context(), mk(h.root(), 0), options, selected,
+                          ComponentConfig{}.with_size(
+                              ComponentSize{pixels(400), pixels(48)}));
+  };
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  CHECK(selected == 2);
+
+  options = {"Only"};
+  h.begin_frame();
+  auto result = emit();
+  h.layout_only();
+  CHECK(selected == 0);
+  CHECK(result.as<int>() == 0);
+}
+
+// Growth must unstick the clamp: retained options start at the first build's count.
+TEST(navigation_bar_accepts_a_selection_when_options_grow) {
+  ImmTestHarness h;
+  std::vector<std::string> options{"Only"};
+  size_t selected = 0;
+  auto emit = [&] {
+    return navigation_bar(h.context(), mk(h.root(), 0), options, selected,
+                          ComponentConfig{}.with_size(
+                              ComponentSize{pixels(400), pixels(48)}));
+  };
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  CHECK(selected == 0);
+
+  options = {"First", "Second", "Third"};
+  selected = 2;
+  h.begin_frame();
+  auto result = emit();
+  h.layout_only();
+  CHECK(selected == 2);
+  CHECK(result.as<int>() == 2);
+}
+
+TEST(radio_group_clamps_a_stale_selection_when_labels_shrink) {
+  ImmTestHarness h;
+  const std::array<std::string_view, 3> labels{"A", "B", "C"};
+  size_t selected = 2;
+  h.begin_frame();
+  radio_group(h.context(), mk(h.root(), 0), labels, selected,
+              ComponentConfig{}.with_size(
+                  ComponentSize{pixels(300), pixels(120)}));
+  h.layout_only();
+  CHECK(selected == 2);
+
+  const std::array<std::string_view, 1> one{"A"};
+  h.begin_frame();
+  auto result = radio_group(h.context(), mk(h.root(), 0), one, selected,
+                            ComponentConfig{}.with_size(
+                                ComponentSize{pixels(300), pixels(120)}));
+  h.layout_only();
+  CHECK(selected == 0);
+  CHECK(result.as<int>() == 0);
+}
+
 TEST(menu_delivers_pending_selection_before_focus_loss_dismissal) {
   ImmTestHarness h;
   bool open = true;

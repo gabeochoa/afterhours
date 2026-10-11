@@ -349,6 +349,8 @@ struct window_manager : developer::Plugin {
     }
 
     [[nodiscard]] size_t current_index() const {
+      if (available_resolutions.empty())
+        return 0;
       const auto &entity = EntityQuery({.force_merge = true})
                                .whereHasComponent<ProvidesCurrentResolution>()
                                .gen_first_enforce();
@@ -387,9 +389,21 @@ struct window_manager : developer::Plugin {
       return closest_index;
     }
 
-    Resolution on_data_changed(const size_t index) {
+    Resolution on_data_changed(size_t index) {
       ProvidesCurrentResolution &pcr =
           *(EntityHelper::get_singleton_cmp<ProvidesCurrentResolution>());
+      if (available_resolutions.empty()) {
+        log_warn("resolution: no available resolutions; keeping current {}",
+                 static_cast<std::string>(pcr.current_resolution));
+        return pcr.current_resolution;
+      }
+      // A saved index can come from a bigger monitor than this one.
+      if (index >= available_resolutions.size()) {
+        log_info("resolution: index {} out of range for {} available "
+                 "resolutions; falling back to the current resolution",
+                 index, available_resolutions.size());
+        index = current_index();
+      }
       pcr.current_resolution = available_resolutions[index];
       set_window_size(pcr.current_resolution.width,
                       pcr.current_resolution.height);

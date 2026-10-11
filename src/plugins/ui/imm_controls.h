@@ -360,6 +360,8 @@ ElementResult radio_group(HasUIContext auto &ctx, EntityParent ep_pair,
                           ComponentConfig config = ComponentConfig()) {
   bool changed = false;
 
+  detail::clamp_selection_index(selected_index, N, "radio_group");
+
   // Wrap in a tray for single-tab-stop, arrow-key navigation
   auto t =
       tray(ctx, ep_pair,

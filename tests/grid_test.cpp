@@ -236,4 +236,30 @@ TEST(a_grid_sized_to_children_keeps_its_row_height) {
         container->rect().y + container->rect().height + 0.5f);
 }
 
+// Columns past the declared tracks fall back to expand() instead of reading OOB.
+TEST(grid_track_falls_back_to_expand_when_tracks_run_out) {
+  ImmTestHarness h;
+  auto tbl = grid(h.context(), mk(h.root(), 0),
+                  GridConfig{}.with_rows(1).with_cols(3).with_col_widths(
+                      {pixels(60)}),
+                  ComponentConfig{}
+                      .with_size(ComponentSize{pixels(300), pixels(32)})
+                      .with_debug_name("short_tracks"));
+
+  const auto in_range = grid_track(tbl, 0);
+  CHECK(in_range.x_axis.dim == Dim::Pixels);
+  CHECK(std::abs(in_range.x_axis.value - 60.f) < 0.5f);
+  CHECK(grid_track(tbl, 2).x_axis.dim == Dim::Expand);
+  CHECK(grid_track(tbl, 99).x_axis.dim == Dim::Expand);
+  CHECK(grid_track(tbl, -1).x_axis.dim == Dim::Expand);
+
+  grid_cell(h.context(), tbl, 0, 2,
+            ComponentConfig{}.with_debug_name("cell_0_2"));
+  h.layout_only();
+  UIComponent *cell = cell_at(h, 0, 2);
+  CHECK(cell != nullptr);
+  if (cell)
+    CHECK(cell->rect().width > 0.f);
+}
+
 int main() { return ui_test::run_registered_tests("grid"); }
