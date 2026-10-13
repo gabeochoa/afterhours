@@ -66,6 +66,42 @@ int main() {
     check(d.size() == 5, "changing the text re-splits");
   }
 
+  // Truncated trailing sequences: spans must stay inside the string.
+  {
+    std::vector<UnitSpan> spans;
+    split_graphemes("\xC3", spans);
+    check(spans.size() == 1 && spans[0].begin == 0 && spans[0].end == 1,
+          "lone 2-byte lead is one span ending at the string end");
+  }
+  {
+    std::vector<UnitSpan> spans;
+    split_graphemes("a\xC3", spans);
+    check(spans.size() == 2 && spans[1].begin == 1 && spans[1].end == 2,
+          "truncated tail after ascii stays in bounds");
+  }
+  {
+    std::vector<UnitSpan> spans;
+    split_graphemes("\xF0\x9F", spans);
+    check(spans.size() == 1 && spans[0].end == 2,
+          "half emoji (2 of 4 bytes) is one in-bounds span");
+  }
+  {
+    const std::string s = "ok\xF0\x9F\x91";
+    std::vector<UnitSpan> spans;
+    split_graphemes(s, spans);
+    bool in_bounds = !spans.empty();
+    for (const auto &sp : spans)
+      in_bounds = in_bounds && sp.end <= s.size();
+    check(in_bounds && spans.back().end == s.size(),
+          "3-of-4-byte tail ends exactly at the string end");
+  }
+  {
+    std::vector<UnitSpan> words;
+    split_words("hi \xC3", words);
+    check(words.size() == 2 && words[1].end == 4,
+          "word splitting a truncated tail stays in bounds");
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -28,7 +29,7 @@ inline uint32_t decode(std::string_view s, size_t &i) {
   else if (c >= 0xC0) { cp = c & 0x1F; len = 2; }
   for (size_t k = 1; k < len && i + k < s.size(); ++k)
     cp = (cp << 6) | (static_cast<unsigned char>(s[i + k]) & 0x3F);
-  i += len;
+  i = std::min(i + len, s.size()); // truncated tail must not overrun
   return cp;
 }
 
