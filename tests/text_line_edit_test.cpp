@@ -329,6 +329,41 @@ static void test_command_paste_maps_breaks_for_single_line() {
   CHECK(a.text() == "x\ny\tz");
 }
 
+// External replacement (host normalization) clamps the caret, snaps it off a
+// codepoint middle, and clears selection and undo, in both state types.
+static void test_external_replace_keeps_caret_and_clears_history() {
+  auto f = field("xy", 1);
+  f.push_undo_snapshot();
+  CHECK(insert_char(f, 'a')); // "xay", caret 2
+  f.selection_anchor = 0;
+  replace_text_externally(f, "XAY");
+  CHECK(f.text() == "XAY");
+  CHECK(f.cursor_position == 2);
+  CHECK(!f.selection_anchor.has_value());
+  CHECK(!f.undo());
+  CHECK(f.text() == "XAY");
+
+  // A shorter replacement clamps the caret to the new end.
+  replace_text_externally(f, "Z");
+  CHECK(f.cursor_position == 1);
+
+  // A caret left mid-codepoint by different-length text snaps to its start.
+  auto u = field("ab", 0);
+  u.cursor_position = 3; // second byte of the second é below
+  replace_text_externally(u, "\xC3\xA9\xC3\xA9");
+  CHECK(u.cursor_position == 2);
+
+  auto a = area("one\ntwo", 5);
+  a.push_undo_snapshot();
+  a.selection_anchor = 0;
+  replace_text_externally(a, "ONE\nTWO\nTHREE");
+  CHECK(a.text() == "ONE\nTWO\nTHREE");
+  CHECK(a.cursor_position == 5);
+  CHECK(!a.selection_anchor.has_value());
+  CHECK(!a.undo());
+  CHECK(a.line_count() == 3);
+}
+
 int main() {
   printf("Running text line edit tests...\n\n");
   printf("  field_delete_to_line_start\n");
@@ -365,6 +400,8 @@ int main() {
   test_default_keymap_line_and_word_chords();
   printf("  command_paste_maps_breaks_for_single_line\n");
   test_command_paste_maps_breaks_for_single_line();
+  printf("  external_replace_keeps_caret_and_clears_history\n");
+  test_external_replace_keeps_caret_and_clears_history();
 
   printf("\n%d/%d tests passed.\n", tests_passed, tests_run);
   if (tests_passed != tests_run) {

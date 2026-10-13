@@ -114,11 +114,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   auto &state = init_state<HasTextInputState>(
       entity,
       [&](HasTextInputState &s) {
-        if (s.text() != text) {
-          s.storage.clear();
-          s.storage.insert(0, text);
-          s.cursor_position = text.size();
-        }
+        if (s.text() != text)
+          replace_text_externally(s, text);
         s.changed_since = false;
       },
       text);

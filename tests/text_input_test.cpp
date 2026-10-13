@@ -545,4 +545,39 @@ TEST(masked_click_at_end_uses_real_byte_offset) {
   CHECK(state->text() == std::string("contrase\xC3\xB1" "a!"));
 }
 
+// A host that normalizes the bound string every frame (uppercase here)
+// replaces the text under the caret: the caret must stay where typing left
+// it, and the pre-replacement selection and undo history must not survive.
+TEST(external_replace_keeps_caret_and_clears_selection_and_undo) {
+  ImmTestHarness h;
+  std::string text = "xay"; // as if 'a' was just typed into "xy" at 1
+  Entity *outer = nullptr;
+  auto emit = [&] {
+    h.begin_frame();
+    auto r = imm::text_input(h.context(), mk(h.root(), 0), text,
+                             ComponentConfig{}.with_size(
+                                 ComponentSize{pixels(220), pixels(40)}));
+    outer = &r.ent();
+    h.layout_only();
+  };
+  emit();
+  emit();
+  CHECK(outer != nullptr);
+  if (!outer)
+    return;
+  auto &s = outer->get<text_input::HasTextInputState>();
+  s.cursor_position = 2; // right after the typed 'a'
+  s.selection_anchor = 0;
+  s.push_undo_snapshot();
+
+  text = "XAY"; // host-side normalization
+  emit();
+
+  CHECK(s.text() == std::string("XAY"));
+  CHECK(s.cursor_position == 2);
+  CHECK(!s.selection_anchor.has_value());
+  CHECK(!s.undo());
+  CHECK(s.text() == std::string("XAY"));
+}
+
 int main() { return ui_test::run_registered_tests("text_input"); }

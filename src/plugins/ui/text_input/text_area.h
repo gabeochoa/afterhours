@@ -134,12 +134,8 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
         s.area_config.word_wrap = config.text_area_word_wrap;
         s.area_config.max_lines = config.text_area_max_lines;
 
-        if (s.text() != text) {
-          s.storage.clear();
-          s.storage.insert(0, text);
-          s.cursor_position = text.size();
-          s.rebuild_line_index();
-        }
+        if (s.text() != text)
+          replace_text_externally(s, text);
         s.changed_since = false;
       },
       text);

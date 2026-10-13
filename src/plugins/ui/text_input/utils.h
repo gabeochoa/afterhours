@@ -153,6 +153,28 @@ inline bool insert_char(AnyTextInputState auto &s, int codepoint) {
   return true;
 }
 
+/// The host replaced the bound text between frames (per-frame normalization
+/// like uppercase/digits-only, or a different string bound to the same
+/// field). Keep the caret where it was (clamped, snapped off a codepoint
+/// middle) instead of yanking it to the end, and drop the selection and undo
+/// history: both index text that no longer exists, and undo would resurrect
+/// the pre-replacement text.
+template <typename State>
+inline void replace_text_externally(State &s, const std::string &text) {
+  s.storage.clear();
+  s.storage.insert(0, text);
+  s.cursor_position = std::min(s.cursor_position, s.text_size());
+  const std::string stored = s.text();
+  if (s.cursor_position > 0 && s.cursor_position < stored.size() &&
+      (static_cast<unsigned char>(stored[s.cursor_position]) & 0xC0) == 0x80)
+    s.cursor_position = utf8_prev_char_start(stored, s.cursor_position);
+  s.clear_selection();
+  s.undo_stack.clear();
+  s.undo_index = 0;
+  if constexpr (AnyTextAreaState<State>)
+    s.rebuild_line_index();
+}
+
 // Delete char before cursor (backspace)
 inline bool delete_before_cursor(AnyTextInputState auto &s) {
   if (s.cursor_position == 0 || s.text_size() == 0)
