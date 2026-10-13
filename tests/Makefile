@@ -200,7 +200,8 @@ ALL_TESTS := \
 	text_input_test \
 	toast_test \
 	text_wrap_test \
-	theme_io_test
+	theme_io_test \
+	tree_view_test
 
 # .app packaging is macOS-only, and the test shells out to plutil.
 ifeq ($(UNAME_S),Darwin)
@@ -261,7 +262,8 @@ RAYLIB_TESTS := \
 	overlay_layer_test \
 	press_delay_test \
 	text_wrap_test \
-	theme_io_test
+	theme_io_test \
+	tree_view_test
 
 TEST_BINS := $(addprefix $(OUT)/,$(ALL_TESTS))
 

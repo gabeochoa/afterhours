@@ -1,10 +1,12 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <string>
 #include <unordered_set>
 #include <vector>
 
+#include "../../logging.h"
 #include "component_init.h"
 #include "element_result.h"
 #include "entity_management.h"
@@ -120,6 +122,15 @@ ElementResult tree_view(HasUIContext auto &ctx, EntityParent ep_pair,
                         const TreeViewConfig<T> &view_config,
                         ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
+
+  // Required callbacks; invoking empty ones throws bad_function_call.
+  if (!view_config.get_id || !view_config.get_label) {
+    static std::atomic_bool logged = false;
+    if (!logged.exchange(true))
+      log_error("tree_view: TreeViewConfig requires get_id and get_label; "
+                "rendering nothing");
+    return ElementResult{false, entity};
+  }
 
   // Default size: expand to fill parent
   if (config.size.is_default) {
