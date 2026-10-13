@@ -594,8 +594,11 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
                       size_t num_visible = 1) {
   auto [entity, parent] = deref(ep_pair);
 
-  if (options.empty())
+  if (options.empty()) {
+    if (entity.template has<HasStepperState>())
+      entity.template get<HasStepperState>().num_options = 0;
     return {false, entity};
+  }
 
   option_index = option_index % options.size();
 
@@ -623,6 +626,8 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
   entity.addComponentIfMissing<ui::HasLeftRightListener>(
       [](Entity &ent, int dir) {
         auto &state = ent.get<HasStepperState>();
+        if (state.num_options == 0)
+          return;
         if (dir < 0)
           state.index = detail::prev_index(state.index, state.num_options);
         else

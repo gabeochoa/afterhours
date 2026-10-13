@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <bitset>
 #include <chrono>
 #include <fstream>
@@ -29,10 +30,16 @@ namespace imm {
 namespace detail {
 
 inline size_t prev_index(size_t current, size_t total) {
+  assert(total > 0 && "prev_index requires at least one item");
+  if (total == 0)
+    return 0;
   return (current == 0) ? total - 1 : current - 1;
 }
 
 inline size_t next_index(size_t current, size_t total) {
+  assert(total > 0 && "next_index requires at least one item");
+  if (total == 0)
+    return 0;
   return (current + 1) % total;
 }
 

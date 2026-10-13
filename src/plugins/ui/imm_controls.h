@@ -111,6 +111,9 @@ ElementResult button_group(HasUIContext auto &ctx, EntityParent ep_pair,
                            ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
+  if (labels.empty())
+    return {false, entity, -1};
+
   const bool size_default = config.size.is_default;
   auto max_height = config.size.y_axis;
   auto max_width = config.size.x_axis;

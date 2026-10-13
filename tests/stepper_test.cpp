@@ -13,6 +13,13 @@
 
 #include "ui_test_harness.h"
 
+#if !defined(_WIN32) && !defined(NDEBUG)
+#include <csignal>
+#include <cstdio>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
+
 using namespace afterhours;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
@@ -229,5 +236,88 @@ TEST(slider_system_still_advances_on_every_held_frame) {
     CHECK(std::abs(control->get<HasSliderState>().value - (.51f + frame * .01f)) < .0001f);
   }
 }
+
+// Empty containers must not divide by zero (GAPS: empty containers).
+TEST(button_group_with_no_labels_is_a_noop) {
+  ImmTestHarness h;
+  const std::array<std::string_view, 0> empty{};
+  h.begin_frame();
+  auto result = button_group(h.context(), mk(h.root(), 0), empty,
+                             ComponentConfig{}
+                                 .with_size({pixels(300), pixels(40)})
+                                 .with_flex_direction(FlexDirection::Row));
+  h.layout_only();
+  CHECK(!result);
+  CHECK(result.as<int>() == -1);
+
+  const std::array<std::string_view, 2> labels{"a", "b"};
+  h.begin_frame();
+  auto filled = button_group(h.context(), mk(h.root(), 1), labels,
+                             ComponentConfig{}
+                                 .with_size({pixels(300), pixels(40)})
+                                 .with_flex_direction(FlexDirection::Row));
+  h.layout_only();
+  CHECK(!filled);
+  CHECK(filled.as<int>() == -1);
+  CHECK(filled.ent().get<UIComponent>().children.size() == 2);
+}
+
+TEST(stepper_with_no_options_is_inert) {
+  ImmTestHarness h;
+  std::vector<std::string> options{"Low", "Medium", "High"};
+  size_t index = 1;
+  const auto build = [&] {
+    h.begin_frame();
+    auto result = stepper(h.context(), mk(h.root(), 0), options, index,
+                          ComponentConfig{}
+                              .with_size({pixels(360), pixels(48)})
+                              .with_font(UIComponent::DEFAULT_FONT,
+                                         pixels(18)));
+    h.layout_only();
+    return result;
+  };
+  auto first = build();
+  auto &entity = first.ent();
+  auto &listener = entity.get<HasLeftRightListener>();
+
+  options.clear();
+  CHECK(!build());
+  CHECK(index == 1);
+  CHECK(entity.get<HasStepperState>().num_options == 0);
+  listener.cb(entity, 1);
+  CHECK(entity.get<HasStepperState>().index == 1);
+  CHECK(!entity.get<HasStepperState>().changed_since);
+
+  options = {"Only"};
+  CHECK(!build());
+  CHECK(index == 0);
+  CHECK(entity.get<HasStepperState>().num_options == 1);
+}
+
+TEST(stepper_index_helpers_wrap_around) {
+  CHECK(imm::detail::prev_index(0, 3) == 2);
+  CHECK(imm::detail::prev_index(2, 3) == 1);
+  CHECK(imm::detail::next_index(1, 3) == 2);
+  CHECK(imm::detail::next_index(2, 3) == 0);
+}
+
+#if !defined(_WIN32) && !defined(NDEBUG)
+TEST(stepper_index_helpers_assert_on_empty_total) {
+  std::fflush(nullptr);
+  const pid_t pid = fork();
+  CHECK(pid >= 0);
+  if (pid == 0) {
+    (void)imm::detail::next_index(0, 0);
+    _exit(0);
+  }
+  if (pid > 0) {
+    int status = 0;
+    CHECK(waitpid(pid, &status, 0) == pid);
+    CHECK(WIFSIGNALED(status));
+    if (WIFSIGNALED(status))
+      CHECK(WTERMSIG(status) == SIGABRT);
+  }
+}
+#endif
 
 int main() { return ui_test::run_registered_tests("stepper tests"); }
