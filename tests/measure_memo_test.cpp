@@ -11,7 +11,9 @@
 #include <afterhours/ah.h>
 #include <afterhours/src/measure_memo.h>
 
+#include <cmath>
 #include <cstdio>
+#include <limits>
 
 using namespace afterhours;
 
@@ -26,9 +28,9 @@ static void check(bool cond, const char *expr, int line) {
 }
 #define CHECK(expr) check((expr), #expr, __LINE__)
 
-static std::uint64_t k(const char *text, float size = 16.f,
-                       float spacing = 1.f, std::uint64_t font = 7) {
-  return measure_memo::hash(text, size, spacing, font);
+static measure_memo::Key k(const char *text, float size = 16.f,
+                           float spacing = 1.f, std::uint64_t font = 7) {
+  return measure_memo::key_for(text, size, spacing, font);
 }
 
 int main() {
@@ -56,6 +58,31 @@ int main() {
   // Nearly equal floats must not each get an entry, or the memo grows without
   // ever hitting.
   { CHECK(k("x", 16.0f) == k("x", 16.0f + 1e-6f)); }
+
+  // Bad scale math must not reach an unsigned float cast.
+  {
+    CHECK(k("x", std::numeric_limits<float>::quiet_NaN()) != k("x", 16.f));
+    CHECK(k("x", -1.f) != k("x", 16.f));
+    CHECK(k("x", std::numeric_limits<float>::infinity()) != k("x", 16.f));
+    CHECK(k("x", 16.f, -1.f) != k("x", 16.f, 1.f));
+  }
+
+  // One shared hash is not identity: a forged collision must miss.
+  {
+    measure_memo::clear();
+    Vector2Type out{};
+    const auto hello = k("hello");
+    auto forged = hello;
+    forged.check = k("world").check;
+    measure_memo::store(hello, Vector2Type{40.f, 16.f});
+    CHECK(!measure_memo::lookup(forged, out));
+    measure_memo::store(forged, Vector2Type{99.f, 9.f});
+    CHECK(measure_memo::lookup(forged, out));
+    CHECK(out.x == 99.f && out.y == 9.f);
+    CHECK(!measure_memo::lookup(hello, out));
+    CHECK(measure_memo::index().size() == 1);
+    CHECK(measure_memo::lru().size() == 1);
+  }
 
   // A font reloaded under the same handle would keep serving old metrics.
   {

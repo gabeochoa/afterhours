@@ -4,6 +4,7 @@
 #include "../../font_coverage.h"
 #include "../../measure_memo.h"
 
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -69,6 +70,8 @@ inline Font load_font_for_string(const std::string &,
 
 inline Vector2Type measure_text(const Font font, const char *text,
                                 const float size, const float /*spacing*/) {
+  if (!std::isfinite(size) || size <= 0.f)
+    return Vector2Type{0, 0};
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx)
     return Vector2Type{0, 0};
@@ -80,8 +83,8 @@ inline Vector2Type measure_text(const Font font, const char *text,
   const float dpi_now = graphics::metal_detail::dpi_scale();
   const std::uint64_t font_id = (static_cast<std::uint64_t>(fid) << 32) ^
                                 static_cast<std::uint64_t>(dpi_now * 1024.f);
-  const std::uint64_t key =
-      measure_memo::hash(text ? text : "", size, 1.f, font_id);
+  const auto key =
+      measure_memo::key_for(text ? text : "", size, 1.f, font_id);
   Vector2Type cached{};
   if (measure_memo::lookup(key, cached))
     return cached;

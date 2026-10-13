@@ -7,6 +7,7 @@
 #include "../../font_coverage.h"
 #include "../../measure_memo.h"
 
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -363,6 +364,8 @@ inline raylib::Vector2 estimate_text_size(const char *content,
 inline raylib::Vector2 measure_text(const raylib::Font font,
                                     const char *content, const float size,
                                     const float spacing) {
+  if (!std::isfinite(size) || size <= 0.f || !std::isfinite(spacing))
+    return raylib::Vector2{0, 0};
   if (!font_is_usable(font)) {
     warn_once(0, "no glyph atlas to measure against, so text is being "
                  "estimated at {}x its height per character. Expected "
@@ -373,8 +376,8 @@ inline raylib::Vector2 measure_text(const raylib::Font font,
   // baseSize and glyphCount alongside the texture id, so a handle reused by a
   // differently built atlas is a different key rather than a stale hit.
   const std::uint64_t font_id = font_key(font);
-  const std::uint64_t key =
-      measure_memo::hash(content ? content : "", size, spacing, font_id);
+  const auto key =
+      measure_memo::key_for(content ? content : "", size, spacing, font_id);
   Vector2Type cached{};
   if (measure_memo::lookup(key, cached))
     return cached;
@@ -393,7 +396,7 @@ inline raylib::Vector2 measure_text_utf8(const raylib::Font font,
     return raylib::Vector2{0, 0};
   }
 
-  if (size <= 0) {
+  if (!std::isfinite(size) || size <= 0) {
     log_warn("Invalid font size {} passed to measure_text_utf8", size);
     return raylib::Vector2{0, 0};
   }

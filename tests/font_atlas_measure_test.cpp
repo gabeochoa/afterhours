@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <limits>
 #include <string>
 #define FONTSTASH_IMPLEMENTATION
 #include <fontstash/fontstash.h>
@@ -185,6 +186,13 @@ int main(int argc, char **argv) {
   const auto hits = afterhours::measure_memo::hits();
   CHECK(afterhours::measure_text(afterhours::Font{0}, text.c_str(), 32, 1).x == expected);
   CHECK(afterhours::measure_memo::hits() == hits + 1);
+  const auto bad_nan = afterhours::measure_text(
+      afterhours::Font{0}, text.c_str(),
+      std::numeric_limits<float>::quiet_NaN(), 1);
+  CHECK(bad_nan.x == 0.f && bad_nan.y == 0.f);
+  const auto bad_negative =
+      afterhours::measure_text(afterhours::Font{0}, text.c_str(), -1.f, 1);
+  CHECK(bad_negative.x == 0.f && bad_negative.y == 0.f);
   afterhours::ui::TextMeasureCache cache([](std::string_view value, std::string_view, float size, float spacing) {
     return afterhours::measure_text(afterhours::Font{0}, std::string(value).c_str(), size, spacing);
   });
