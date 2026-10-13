@@ -12,6 +12,8 @@
 // Correct behavior: track fills the entity; fill fills the track height and is
 // `normalized` of the track width.
 
+#include <limits>
+
 #include "ui_test_harness.h"
 
 using namespace afterhours;
@@ -100,6 +102,109 @@ TEST(progress_bar_full_value_is_one_full_width_box) {
   CHECK(fill == nullptr); // no second box on top of an identical one
   if (track)
     CHECK_APPROX(track->rect().width, 400.f);
+}
+
+// Non-finite input draws empty and labels "—" (no NaN cast to int).
+TEST(progress_bar_nonfinite_draws_empty_with_dash) {
+  const float bad[] = {std::numeric_limits<float>::quiet_NaN(),
+                       std::numeric_limits<float>::infinity(),
+                       -std::numeric_limits<float>::infinity()};
+  for (float value : bad) {
+    ImmTestHarness h;
+    auto row = hstack(h.context(), mk(h.root(), 0),
+                      ComponentConfig{}
+                          .with_size(ComponentSize{pixels(400), pixels(40)})
+                          .with_debug_name("row"));
+    auto result = progress_bar(h.context(), mk(row.ent(), 0), value,
+                               ComponentConfig{}
+                                   .with_size(ComponentSize{pixels(300),
+                                                            pixels(28)})
+                                   .with_debug_name("pb"),
+                               ProgressBarLabelStyle::Percentage);
+    h.layout_only();
+
+    CHECK(result.as<float>() == 0.f);
+    CHECK(h.find("progress_track") != nullptr);
+    CHECK(h.find("progress_fill") == nullptr);
+    UIComponent *label = h.find("progress_label");
+    CHECK(label != nullptr);
+    if (label) {
+      auto ent = UICollectionHolder::getEntityForID(label->id);
+      CHECK(ent->get<HasLabel>().label == "—");
+    }
+  }
+}
+
+// The Fraction label casts the raw value and max; same non-finite guard.
+TEST(progress_bar_nonfinite_fraction_label_is_dash) {
+  ImmTestHarness h;
+  auto row = hstack(h.context(), mk(h.root(), 0),
+                    ComponentConfig{}
+                        .with_size(ComponentSize{pixels(400), pixels(40)})
+                        .with_debug_name("row"));
+  progress_bar(h.context(), mk(row.ent(), 0),
+               std::numeric_limits<float>::quiet_NaN(),
+               ComponentConfig{}
+                   .with_size(ComponentSize{pixels(300), pixels(28)})
+                   .with_debug_name("pb"),
+               ProgressBarLabelStyle::Fraction, 0.f, 10.f);
+  h.layout_only();
+
+  UIComponent *label = h.find("progress_label");
+  CHECK(label != nullptr);
+  if (label) {
+    auto ent = UICollectionHolder::getEntityForID(label->id);
+    CHECK(ent->get<HasLabel>().label == "—");
+  }
+}
+
+// Finite labels are unchanged by the non-finite guard.
+TEST(progress_bar_finite_labels_unchanged) {
+  ImmTestHarness h;
+  auto row = hstack(h.context(), mk(h.root(), 0),
+                    ComponentConfig{}
+                        .with_size(ComponentSize{pixels(400), pixels(40)})
+                        .with_debug_name("row"));
+  progress_bar(h.context(), mk(row.ent(), 0), 3.f,
+               ComponentConfig{}
+                   .with_size(ComponentSize{pixels(300), pixels(28)})
+                   .with_debug_name("pb"),
+               ProgressBarLabelStyle::Fraction, 0.f, 4.f);
+  h.layout_only();
+
+  UIComponent *label = h.find("progress_label");
+  CHECK(label != nullptr);
+  if (label) {
+    auto ent = UICollectionHolder::getEntityForID(label->id);
+    CHECK(ent->get<HasLabel>().label == "3/4");
+  }
+}
+
+// Circular progress stores 0 for non-finite input instead of NaN state.
+TEST(circular_progress_nonfinite_stores_zero) {
+  const float bad[] = {std::numeric_limits<float>::quiet_NaN(),
+                       std::numeric_limits<float>::infinity(),
+                       -std::numeric_limits<float>::infinity()};
+  for (float value : bad) {
+    ImmTestHarness h;
+    auto result = circular_progress(h.context(), mk(h.root(), 0), value,
+                                    ComponentConfig{}.with_debug_name("cp"));
+    h.layout_only();
+
+    CHECK(result.as<float>() == 0.f);
+    CHECK(result.ent().get<HasCircularProgressState>().value == 0.f);
+  }
+}
+
+// Finite circular values still clamp into state as before.
+TEST(circular_progress_finite_values_unchanged) {
+  ImmTestHarness h;
+  auto result = circular_progress(h.context(), mk(h.root(), 0), 1.5f,
+                                  ComponentConfig{}.with_debug_name("cp"));
+  h.layout_only();
+
+  CHECK(result.as<float>() == 1.f);
+  CHECK(result.ent().get<HasCircularProgressState>().value == 1.f);
 }
 
 int main() { return ui_test::run_registered_tests("progress_bar tests"); }

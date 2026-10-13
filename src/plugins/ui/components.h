@@ -507,7 +507,7 @@ struct HasCircularProgressState : BaseComponent {
       : value(val), thickness(thick) {}
 
   HasCircularProgressState &set_value(float v) {
-    value = std::clamp(v, 0.0f, 1.0f);
+    value = std::isfinite(v) ? std::clamp(v, 0.0f, 1.0f) : 0.0f;
     return *this;
   }
   HasCircularProgressState &set_thickness(float t) {

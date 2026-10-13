@@ -4,7 +4,9 @@
 #include <array>
 #include <bitset>
 #include <chrono>
+#include <cmath>
 #include <fstream>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -390,21 +392,41 @@ ElementResult progress_bar(
   init_component(ctx, ep_pair, config, ComponentType::Div, false,
                  "progress_bar");
 
+  // Non-finite input has no meaningful fraction; it draws empty below.
+  const bool non_finite = !std::isfinite(value) ||
+                          !std::isfinite(min_value) ||
+                          !std::isfinite(max_value);
+
   // Normalize value to 0-1 range
   float normalized =
       (max_value > min_value)
           ? std::clamp((value - min_value) / (max_value - min_value), 0.f, 1.f)
           : 0.f;
+  const bool invalid = non_finite || !std::isfinite(normalized);
+  if (invalid)
+    normalized = 0.f;
+
+  // Fraction labels cast raw floats; clamp in double so the cast is in range.
+  auto fraction_int = [](float f) {
+    return static_cast<int>(std::clamp(
+        static_cast<double>(f),
+        static_cast<double>(std::numeric_limits<int>::min()),
+        static_cast<double>(std::numeric_limits<int>::max())));
+  };
 
   // Generate label text
   std::string label_text;
   switch (label_style) {
   case ProgressBarLabelStyle::Percentage:
-    label_text = fmt::format("{}%", static_cast<int>(normalized * 100));
+    label_text = invalid
+                     ? "—"
+                     : fmt::format("{}%", static_cast<int>(normalized * 100));
     break;
   case ProgressBarLabelStyle::Fraction:
-    label_text = fmt::format("{}/{}", static_cast<int>(value),
-                             static_cast<int>(max_value));
+    label_text =
+        invalid ? "—"
+                : fmt::format("{}/{}", fraction_int(value),
+                              fraction_int(max_value));
     break;
   case ProgressBarLabelStyle::Custom:
     label_text = original_label;
@@ -516,8 +538,9 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
   init_component(ctx, ep_pair, config, ComponentType::CircularProgress, false,
                  "circular_progress");
 
-  // Clamp value
-  float normalized = std::clamp(value, 0.0f, 1.0f);
+  // Clamp value; non-finite input draws empty.
+  float normalized =
+      std::isfinite(value) ? std::clamp(value, 0.0f, 1.0f) : 0.0f;
 
   // Determine colors from config
   // Background color (from with_custom_background) = fill color
