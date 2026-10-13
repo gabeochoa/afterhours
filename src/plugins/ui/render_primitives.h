@@ -5,6 +5,7 @@
 #include "../../capture.h"
 
 #include <algorithm>
+#include <atomic>
 #include <bitset>
 #include <cstring>
 #include <functional>
@@ -376,6 +377,14 @@ private:
   ArenaVector<RenderPrimitive> commands_;
   Arena *arena_;
 
+  void log_arena_exhausted(const char *what, size_t bytes) {
+    static std::atomic<bool> logged{false};
+    if (!logged.exchange(true, std::memory_order_relaxed))
+      log_error("render arena exhausted allocating {} ({} bytes); skipping "
+                "text command",
+                what, bytes);
+  }
+
 public:
   explicit RenderCommandBuffer(Arena &arena, size_t initial_capacity = 512)
       : commands_(arena, initial_capacity), arena_(&arena) {}
@@ -438,17 +447,21 @@ public:
                 float rot_center_y = 0.0f, float letter_spacing = 0.0f) {
     // Copy strings to arena for stable pointers
     char *text_copy = arena_->create_array_uninitialized<char>(text.size() + 1);
-    if (text_copy) {
-      std::copy(text.begin(), text.end(), text_copy);
-      text_copy[text.size()] = '\0';
+    if (!text_copy) {
+      log_arena_exhausted("text", text.size() + 1);
+      return;
     }
+    std::copy(text.begin(), text.end(), text_copy);
+    text_copy[text.size()] = '\0';
 
     char *font_copy =
         arena_->create_array_uninitialized<char>(font_name.size() + 1);
-    if (font_copy) {
-      std::copy(font_name.begin(), font_name.end(), font_copy);
-      font_copy[font_name.size()] = '\0';
+    if (!font_copy) {
+      log_arena_exhausted("font name", font_name.size() + 1);
+      return;
     }
+    std::copy(font_name.begin(), font_name.end(), font_copy);
+    font_copy[font_name.size()] = '\0';
 
     auto &cmd = commands_.emplace_back();
     cmd.type = RenderPrimitiveType::Text;
@@ -488,13 +501,19 @@ public:
                       float rotation = 0.0f, float rot_center_x = 0.0f,
                       float rot_center_y = 0.0f, float letter_spacing = 0.0f) {
     TextUnitInstance *copy = arena_->create_array_uninitialized<TextUnitInstance>(count);
+    if (count > 0 && !copy) {
+      log_arena_exhausted("text units", count * sizeof(TextUnitInstance));
+      return;
+    }
     if (copy)
       std::copy(units, units + count, copy);
     char *font_copy = arena_->create_array_uninitialized<char>(font_name.size() + 1);
-    if (font_copy) {
-      std::copy(font_name.begin(), font_name.end(), font_copy);
-      font_copy[font_name.size()] = '\0';
+    if (!font_copy) {
+      log_arena_exhausted("font name", font_name.size() + 1);
+      return;
     }
+    std::copy(font_name.begin(), font_name.end(), font_copy);
+    font_copy[font_name.size()] = '\0';
     auto &cmd = commands_.emplace_back();
     cmd.type = RenderPrimitiveType::TextUnits;
     cmd.layer = layer;

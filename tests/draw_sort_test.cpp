@@ -4,6 +4,7 @@
 
 #include <cstdio>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "ui_test_harness.h"
@@ -105,6 +106,63 @@ int main() {
                         RenderPrimitiveType::Rectangle, RenderPrimitiveType::Text,
                         RenderPrimitiveType::ShaderEnd, RenderPrimitiveType::Rectangle}),
           "shader start and end still bracket the entity's commands");
+  }
+
+  // A failed arena copy must skip the command, not emit null pointers.
+  {
+    static std::string errors;
+    errors.clear();
+    const auto previous_sink = log_sink_fn;
+    log_sink_fn = [](const char *level, const char *message) {
+      if (level && message &&
+          std::string_view(level).find("ERROR") != std::string_view::npos) {
+        errors += message;
+        errors += '\n';
+      }
+    };
+    const std::string huge(50 * 1024, 'x');
+
+    {
+      Arena arena(4096);
+      RenderCommandBuffer buf(arena, 1);
+      buf.add_text(r, huge, "font", 10.f, c, TextAlignment::Left, 0, 1);
+      buf.add_text(r, huge, "font", 10.f, c, TextAlignment::Left, 0, 1);
+      check(buf.commands().empty(),
+            "text allocation failure emits no command");
+    }
+    {
+      Arena arena(4096);
+      RenderCommandBuffer buf(arena, 1);
+      buf.add_text(r, "x", huge, 10.f, c, TextAlignment::Left, 0, 2);
+      check(buf.commands().empty(),
+            "font allocation failure emits no command");
+    }
+    {
+      Arena arena(4096);
+      RenderCommandBuffer buf(arena, 1);
+      const std::vector<TextUnitInstance> units(
+          1024, {"x", 0.f, 0.f, 20.f, c});
+      buf.add_text_units(r, units.data(), units.size(), "font", 0, 3);
+      check(buf.commands().empty(),
+            "text-unit allocation failure emits no command");
+    }
+
+    size_t error_count = 0;
+    for (size_t pos = errors.find("render arena exhausted"); pos != std::string::npos;
+         pos = errors.find("render arena exhausted", pos + 1))
+      error_count++;
+    check(error_count == 1, "arena exhaustion logs one error");
+    log_sink_fn = previous_sink;
+
+    Arena arena(Arena::DEFAULT_CAPACITY);
+    RenderCommandBuffer buf(arena, 1);
+    buf.add_text(r, "ok", "font", 10.f, c, TextAlignment::Left, 0, 4);
+    const auto &cmds = buf.commands();
+    check(cmds.size() == 1 && cmds[0].data.text.text &&
+              cmds[0].data.text.font_name &&
+              std::string(cmds[0].data.text.text) == "ok" &&
+              std::string(cmds[0].data.text.font_name) == "font",
+          "successful text copy still emits one intact command");
   }
 
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
