@@ -18,9 +18,12 @@
 // color-iteration loop this exists for, and FontSizing overloads its sign to
 // mean "user-set vs interpolated", which does not survive a naive round trip.
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -38,12 +41,20 @@ namespace theme_io {
 // ---------------------------------------------------------------------------
 // Field tables. Add a member here and it is read, written, and round-tripped.
 // ---------------------------------------------------------------------------
-inline constexpr std::pair<std::string_view, float Theme::*> float_fields[] = {
+// Bounds mirror the Theme::Builder clamps; fields the Builder leaves alone
+// get the full float range (parse_float has already rejected non-finite).
+struct FloatField {
+  std::string_view name;
+  float Theme::*member;
+  float lo = std::numeric_limits<float>::lowest();
+  float hi = std::numeric_limits<float>::max();
+};
+inline constexpr FloatField float_fields[] = {
     {"roundness", &Theme::roundness},
     {"focus_ring_thickness", &Theme::focus_ring_thickness},
     {"focus_ring_offset", &Theme::focus_ring_offset},
-    {"disabled_opacity", &Theme::disabled_opacity},
-    {"ui_scale", &Theme::ui_scale},
+    {"disabled_opacity", &Theme::disabled_opacity, 0.f, 1.f},
+    {"ui_scale", &Theme::ui_scale, 0.5f, 3.f},
 };
 
 // ---------------------------------------------------------------------------
@@ -128,13 +139,14 @@ inline std::string format_color(const Color &c) {
   return std::string(buf);
 }
 
-/// Rejects trailing garbage ("1.0abc"), which strtof would silently accept.
+/// Rejects trailing garbage ("1.0abc"), which strtof would silently accept,
+/// and the non-finite spellings ("nan", "inf") strtof also accepts.
 inline std::optional<float> parse_float(std::string_view text) {
   const std::string owned(text);
   try {
     size_t consumed = 0;
     const float value = std::stof(owned, &consumed);
-    if (consumed != owned.size())
+    if (consumed != owned.size() || !std::isfinite(value))
       return std::nullopt;
     return value;
   } catch (...) {
@@ -234,12 +246,16 @@ inline ApplyResult read_into(std::string_view text, Theme &theme) {
     }
 
     bool matched = false;
-    for (const auto &[name, member] : float_fields) {
+    for (const auto &[name, member, lo, hi] : float_fields) {
       if (key_norm != normalize(name))
         continue;
       matched = true;
       if (auto number = parse_float(value)) {
-        theme.*member = *number;
+        const float clamped = std::clamp(*number, lo, hi);
+        if (clamped != *number)
+          log_warn("theme line {}: '{}' = {} clamped to {}", line_number,
+                   std::string(key), *number, clamped);
+        theme.*member = clamped;
         result.applied++;
       } else {
         fail("bad number");
@@ -291,8 +307,11 @@ inline std::string to_string(const Theme &theme) {
   }
 
   out << "\n";
-  for (const auto &[name, member] : float_fields)
+  for (const auto &[name, member, lo, hi] : float_fields) {
+    (void)lo;
+    (void)hi;
     out << name << " = " << (theme.*member) << "\n";
+  }
 
   out << "\nclick_activation_mode = "
       << magic_enum::enum_name(theme.click_activation_mode) << "\n";

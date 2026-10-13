@@ -209,4 +209,45 @@ TEST(save_and_load_via_disk) {
   CHECK(!tio::load(path).has_value());
 }
 
+// stof accepts "nan"/"inf" spellings; a theme must never carry them.
+TEST(number_parsing_rejects_non_finite) {
+  CHECK(!tio::parse_float("nan").has_value());
+  CHECK(!tio::parse_float("NaN").has_value());
+  CHECK(!tio::parse_float("inf").has_value());
+  CHECK(!tio::parse_float("-inf").has_value());
+  CHECK(!tio::parse_float("1e999").has_value());
+}
+
+// File values get the same clamps the Builder applies in code, and a
+// non-finite value costs that one property (counted, previous value kept).
+TEST(load_applies_builder_clamps_and_rejects_non_finite) {
+  Theme theme;
+  theme.roundness = 0.25f;
+  auto result = tio::read_into(
+      "ui_scale = 0\n"
+      "disabled_opacity = 5\n"
+      "roundness = nan\n",
+      theme);
+  CHECK(theme.ui_scale == 0.5f);
+  CHECK(theme.disabled_opacity == 1.0f);
+  CHECK(theme.roundness == 0.25f);
+  CHECK(result.applied == 2);
+  CHECK(result.errors == 1);
+}
+
+// Fields the Builder does not clamp keep their full range from a file,
+// including a negative focus ring offset (an outset ring).
+TEST(load_keeps_unclamped_field_ranges) {
+  Theme theme;
+  auto result = tio::read_into(
+      "focus_ring_offset = -3\n"
+      "focus_ring_thickness = 0\n"
+      "roundness = 0.5\n",
+      theme);
+  CHECK(result.errors == 0);
+  CHECK(theme.focus_ring_offset == -3.f);
+  CHECK(theme.focus_ring_thickness == 0.f);
+  CHECK(theme.roundness == 0.5f);
+}
+
 int main() { return ui_test::run_registered_tests("theme_io tests"); }
