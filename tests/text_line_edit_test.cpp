@@ -308,6 +308,27 @@ static void test_default_keymap_line_and_word_chords() {
 #endif
 }
 
+// Imperative paste shares the widget mapping: single-line breaks and tabs
+// become spaces, multiline keeps them.
+static void test_command_paste_maps_breaks_for_single_line() {
+  clipboard::MemoryProvider memory;
+  clipboard::ScopedProvider scope(memory);
+
+  auto f = field("", 0);
+  clipboard::set_text("Line one\nLine two");
+  CHECK(apply_edit_command(f, EditCommand::Paste));
+  CHECK(f.text() == "Line one Line two");
+
+  clipboard::set_text("a\r\nb\tc");
+  CHECK(apply_edit_command(f, EditCommand::Paste));
+  CHECK(f.text() == "Line one Line twoa b c");
+
+  auto a = area("", 0);
+  clipboard::set_text("x\r\ny\tz");
+  CHECK(apply_edit_command(a, EditCommand::Paste));
+  CHECK(a.text() == "x\ny\tz");
+}
+
 int main() {
   printf("Running text line edit tests...\n\n");
   printf("  field_delete_to_line_start\n");
@@ -342,6 +363,8 @@ int main() {
   test_command_on_entity_without_state_is_false();
   printf("  default_keymap_line_and_word_chords\n");
   test_default_keymap_line_and_word_chords();
+  printf("  command_paste_maps_breaks_for_single_line\n");
+  test_command_paste_maps_breaks_for_single_line();
 
   printf("\n%d/%d tests passed.\n", tests_passed, tests_run);
   if (tests_passed != tests_run) {

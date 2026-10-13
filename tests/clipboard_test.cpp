@@ -214,4 +214,75 @@ TEST(multiline_clipboard_operations_can_be_disabled) {
     CHECK(value == "new\nlines");
 }
 
+// Single-line paste maps line breaks and tabs to spaces instead of dropping
+// them, which joined the surrounding words.
+TEST(single_line_paste_maps_breaks_and_tabs_to_spaces) {
+    clipboard::MemoryProvider memory;
+    clipboard::ScopedProvider scope(memory);
+    ui_test::ImmTestHarness h;
+    std::string value;
+    auto emit = [&]() -> Entity & {
+        h.begin_frame();
+        auto result = imm::text_input(
+            h.context(), mk(h.root(), 0), value,
+            ComponentConfig{}.with_size({pixels(300), pixels(100)}));
+        h.layout_only();
+        return result.ent();
+    };
+    auto &entity = emit();
+    h.context().set_focus(entity.id);
+    emit();
+
+    auto paste = [&](const char *clip) {
+        value.clear();
+        emit();
+        clipboard::set_text(clip);
+        h.context().last_action = ui_test::TestInputAction::TextPaste;
+        emit();
+    };
+
+    paste("Line one\nLine two");
+    CHECK(value == "Line one Line two");
+    paste("a\r\nb");
+    CHECK(value == "a b");
+    paste("a\tb");
+    CHECK(value == "a b");
+    paste("/some/path\n/next");
+    CHECK(value == "/some/path /next");
+}
+
+// Multiline paste keeps line breaks (CRLF counts once) and tabs.
+TEST(multiline_paste_keeps_breaks_and_tabs) {
+    clipboard::MemoryProvider memory;
+    clipboard::ScopedProvider scope(memory);
+    ui_test::ImmTestHarness h;
+    std::string value;
+    auto emit = [&]() -> Entity & {
+        h.begin_frame();
+        auto result = imm::text_area(
+            h.context(), mk(h.root(), 0), value,
+            ComponentConfig{}.with_size({pixels(300), pixels(100)}));
+        h.layout_only();
+        return result.ent();
+    };
+    auto &entity = emit();
+    h.context().set_focus(entity.id);
+    emit();
+
+    auto paste = [&](const char *clip) {
+        value.clear();
+        emit();
+        clipboard::set_text(clip);
+        h.context().last_action = ui_test::TestInputAction::TextPaste;
+        emit();
+    };
+
+    paste("Line one\nLine two");
+    CHECK(value == "Line one\nLine two");
+    paste("a\r\nb");
+    CHECK(value == "a\nb");
+    paste("a\tb");
+    CHECK(value == "a\tb");
+}
+
 int main() { return ui_test::run_registered_tests("clipboard"); }

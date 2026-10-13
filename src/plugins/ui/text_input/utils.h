@@ -584,6 +584,36 @@ template <typename State> inline void insert_newline_if_multiline(State &s) {
     insert_newline(s);
 }
 
+/// The one paste loop, shared by the widgets and EditCommand::Paste.
+/// Multiline fields keep line breaks and tabs; single-line fields map each
+/// break (CRLF counts once) and each tab to one space, so pasting two lines
+/// cannot join the words around the break. Other controls stay dropped via
+/// insert_char.
+template <typename State>
+inline void insert_pasted_text(State &s, const std::string &clip) {
+  for (size_t i = 0; i < clip.size();) {
+    const int cp = utf8_to_codepoint(clip, i);
+    const size_t len = utf8_char_length(clip, i);
+    i += len > 0 ? len : 1;
+    if (cp == '\r') {
+      if (i < clip.size() && clip[i] == '\n')
+        continue; // CRLF: the \n below is the one break
+    }
+    const bool is_break = cp == '\n' || cp == '\r';
+    if constexpr (AnyTextAreaState<State>) {
+      if (is_break)
+        insert_newline(s);
+      else
+        insert_char(s, cp);
+    } else {
+      if (is_break || cp == '\t')
+        insert_char(s, ' ');
+      else
+        insert_char(s, cp);
+    }
+  }
+}
+
 /// Undo/redo, clipboard and select-all -- the part of editing that is the same
 /// whether the field is one line or many. Returns true if the text changed.
 ///
@@ -635,17 +665,7 @@ inline bool handle_clipboard_and_undo(Ctx &ctx, State &s, bool editable) {
           s.push_undo_snapshot();
           if (s.has_selection())
             delete_selection(s);
-          // Newlines survive a paste into a multiline field and are dropped by
-          // insert_char in a single-line one, which is the right split.
-          for (size_t i = 0; i < clip.size();) {
-            const int cp = utf8_to_codepoint(clip, i);
-            if (cp == '\n')
-              insert_newline_if_multiline(s);
-            else
-              insert_char(s, cp);
-            const size_t len = utf8_char_length(clip, i);
-            i += len > 0 ? len : 1;
-          }
+          insert_pasted_text(s, clip);
           s.clear_selection();
           reset_blink(s);
           changed = true;
@@ -726,15 +746,7 @@ inline bool apply_edit_command(AnyTextInputState auto &s, EditCommand cmd) {
     s.push_undo_snapshot();
     if (s.has_selection())
       delete_selection(s);
-    for (size_t i = 0; i < clip.size();) {
-      const int cp = utf8_to_codepoint(clip, i);
-      if (cp == '\n')
-        insert_newline_if_multiline(s);
-      else
-        insert_char(s, cp);
-      const size_t len = utf8_char_length(clip, i);
-      i += len > 0 ? len : 1;
-    }
+    insert_pasted_text(s, clip);
     s.clear_selection();
     reset_blink(s);
     return true;

@@ -596,12 +596,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
           if (state.has_selection()) delete_selection(state);
           std::string clip = clipboard::get_text();
           if (!clip.empty()) {
-            for (size_t i = 0; i < clip.size();) {
-              int cp = utf8_to_codepoint(clip, i);
-              if (cp >= 32) insert_char(state, cp);
-              size_t clen = utf8_char_length(clip, i);
-              i += clen > 0 ? clen : 1;
-            }
+            insert_pasted_text(state, clip);
             state.clear_selection();
             reset_blink(state);
           }
