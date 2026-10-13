@@ -201,7 +201,8 @@ ALL_TESTS := \
 	toast_test \
 	text_wrap_test \
 	theme_io_test \
-	tree_view_test
+	tree_view_test \
+	translation_test
 
 # .app packaging is macOS-only, and the test shells out to plutil.
 ifeq ($(UNAME_S),Darwin)

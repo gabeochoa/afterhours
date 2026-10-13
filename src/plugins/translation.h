@@ -3,7 +3,9 @@
 #include <fmt/args.h>
 #include <fmt/format.h>
 
+#include <atomic>
 #include <cstddef>
+#include <exception>
 #include <functional>
 #include <magic_enum/magic_enum.hpp>
 #include <map>
@@ -91,13 +93,28 @@ public:
     return store;
   }
 
+  // Named entry point; the conversion operator below delegates here.
+  template <typename ParamNameMap>
+  std::string format(const ParamNameMap &param_map) const {
+    if (skip_translate() || !is_formatted())
+      return underlying_TL_ONLY();
+    try {
+      return fmt::vformat(underlying_TL_ONLY(), get_params(param_map));
+    } catch (const std::exception &e) {
+      // Translator typos must render the raw string, not throw mid-frame.
+      log_error("translation format failed for \"{}\": {}",
+                underlying_TL_ONLY(), e.what());
+      return underlying_TL_ONLY();
+    }
+  }
+
   template <typename ParamNameMap> operator std::string() const {
     if (skip_translate())
       return underlying_TL_ONLY();
     if (is_formatted() && param_name_map) {
       const ParamNameMap *map_ptr =
           reinterpret_cast<const ParamNameMap *>(param_name_map);
-      return fmt::vformat(underlying_TL_ONLY(), get_params(*map_ptr));
+      return format(*map_ptr);
     }
     return underlying_TL_ONLY();
   }
@@ -134,7 +151,17 @@ struct translation_plugin : developer::Plugin {
       if (it != translations.end()) {
         return it->second;
       }
-      return translations.at(Language::English);
+      auto english = translations.find(Language::English);
+      if (english != translations.end()) {
+        return english->second;
+      }
+      // No English fallback either; empty beats .at() throwing mid-frame.
+      static std::atomic_bool logged = false;
+      if (!logged.exchange(true))
+        log_error("translations have no English fallback; lookups for "
+                  "missing languages return MISSING_TRANSLATION");
+      static const TranslationMap empty;
+      return empty;
     }
 
     std::string get_string(StringKeyEnum key) const {
