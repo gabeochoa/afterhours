@@ -34,6 +34,11 @@ namespace imm {
 
 namespace detail {
 
+// NaN/inf become 0; finite values clamp to [0,1] (clamp passes NaN).
+static float sanitize_fraction(float v) {
+  return std::isfinite(v) ? std::clamp(v, 0.f, 1.f) : 0.f;
+}
+
 // Helper function to generate label text based on position and value
 static std::string
 generate_label_text(const std::string &original_label, float value,
@@ -44,10 +49,10 @@ generate_label_text(const std::string &original_label, float value,
     return original_label;
   case SliderHandleValueLabelPosition::WithLabel:
     return original_label + ": " +
-           std::to_string(static_cast<int>(value * 100)) + "%";
+           std::to_string(std::lround(value * 100)) + "%";
   case SliderHandleValueLabelPosition::WithLabelNewLine:
     return original_label + "\n" +
-           std::to_string(static_cast<int>(value * 100)) + "%";
+           std::to_string(std::lround(value * 100)) + "%";
   }
   return original_label;
 }
@@ -66,7 +71,7 @@ static void update_handle_label(Entity &handle_entity, float value) {
     Entity &child_entity = UICollectionHolder::getEntityForIDEnforce(child_id);
     if (child_entity.has<ui::HasLabel>()) {
       update_label_entity(child_entity,
-                          std::to_string(static_cast<int>(value * 100)));
+                          std::to_string(std::lround(value * 100)));
       break;
     }
   }
@@ -120,7 +125,8 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   // Create main label (only when label is provided)
   if (!compact) {
     std::string main_label_text = detail::generate_label_text(
-        original_label, owned_value, handle_label_position);
+        original_label, detail::sanitize_fraction(owned_value),
+        handle_label_position);
     auto label_corners = RoundedCorners(config.rounded_corners.value())
                              .sharp(TOP_RIGHT)
                              .sharp(BOTTOM_RIGHT);
@@ -167,6 +173,8 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   // Create value update function
   auto apply_slider_value = [&sliderState, original_label, handle_label_position](
                                 Entity &target, float new_value_pct) {
+    if (!std::isfinite(new_value_pct))
+      return; // degenerate maths (e.g. 0-width track) keeps the old value
     float clamped = std::clamp(new_value_pct, 0.f, 1.f);
     if (clamped == sliderState.value)
       return;
@@ -196,12 +204,26 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Add drag listener
   slider_bg.addComponentIfMissing<ui::HasDragListener>(
-      [apply_slider_value](Entity &draggable) {
+      [apply_slider_value, &sliderState, &ctx](Entity &draggable) {
         UIComponent &cmp = draggable.get<UIComponent>();
         Rectangle rect = cmp.rect();
-        auto mouse_position = input::get_mouse_position();
-        float v = (mouse_position.x - rect.x) / rect.width;
-        apply_slider_value(draggable, v);
+        // Map over handle travel (track minus the 25% handle), not width.
+        const float handle_w = rect.width * 0.25f;
+        const float travel = rect.width - handle_w;
+        if (travel <= 0.f)
+          return;
+        const float mouse_x = ctx.mouse.pos.x;
+        if (ctx.mouse.just_pressed) {
+          // On-handle grabs keep the grab point; track clicks centre it.
+          const float handle_left = rect.x + sliderState.value * travel;
+          const bool on_handle = mouse_x >= handle_left &&
+                                 mouse_x <= handle_left + handle_w;
+          sliderState.grab_offset =
+              on_handle ? mouse_x - handle_left : handle_w * 0.5f;
+        }
+        apply_slider_value(draggable,
+                           (mouse_x - rect.x - sliderState.grab_offset) /
+                               travel);
       });
 
   // Create handle - use bg_size (not original config) so handle stays within track
@@ -219,7 +241,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   const Size handle_width_size = percent(0.25f);
-  const Size handle_left_size = percent(owned_value * 0.75f);
+  const Size handle_left_size = percent(sliderState.value * 0.75f);
 
   // TODO: Support custom handle height via a dedicated config field
   // (e.g. with_slider_handle_height) to allow oversized knob-style handles.
@@ -242,7 +264,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   // Add handle label if needed
   if (handle_label_position == SliderHandleValueLabelPosition::OnHandle) {
     std::string handle_label_text =
-        std::to_string(static_cast<int>(sliderState.value * 100));
+        std::to_string(std::lround(sliderState.value * 100));
     auto handle_label_config =
         ComponentConfig::inherit_from(config, "slider_handle_label")
             .with_label(handle_label_text)

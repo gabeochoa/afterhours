@@ -121,7 +121,9 @@ struct HasCheckboxState : BaseComponent {
 struct HasSliderState : BaseComponent {
   bool changed_since = false;
   float value;
-  HasSliderState(float val) : value(val) {}
+  float grab_offset = 0.f; // px from handle left to grab point, set on press
+  HasSliderState(float val)
+      : value(std::isfinite(val) ? std::clamp(val, 0.f, 1.f) : 0.f) {}
 };
 
 // TODO: Consider unifying HasStepperState and HasDropdownState — a stepper is

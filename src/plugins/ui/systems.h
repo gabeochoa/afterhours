@@ -1240,13 +1240,7 @@ struct HandleDrags : SystemWithUIContext<ui::HasDragListener> {
     // anyone polling it got false forever.
     hasDragListener.down = false;
 
-    if (context->has_focus(entity.id) &&
-        context->pressed(InputAction::WidgetPress)) {
-      context->set_focus(entity.id);
-      hasDragListener.down = true;
-      hasDragListener.cb(entity);
-    }
-
+    // No WidgetPress branch: drag callbacks read the mouse. Arrows own keys.
     if (context->is_active(entity.id)) {
       context->set_focus(entity.id, FocusSource::Pointer);
       hasDragListener.down = true;

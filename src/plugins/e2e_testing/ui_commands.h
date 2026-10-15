@@ -468,9 +468,14 @@ inline OptEntity find_state_under(Entity &named) {
   return {};
 }
 
-// Handle 'set_slider name value' - sets slider value by debug name
+// set_slider: press the handle centre, move to the target, release.
 template <typename InputAction>
 struct HandleSetSliderCommand : System<PendingE2ECommand> {
+  int phase = 0; // 0=press, 1=move, 2=release
+  int owner_line = -1;
+  float target_x = 0.f;
+  float target_y = 0.f;
+
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("set_slider"))
       return;
@@ -482,6 +487,25 @@ struct HandleSetSliderCommand : System<PendingE2ECommand> {
     auto value = cmd.maybe_arg_as<float>(1);
     if (!value) {
       cmd.fail(std::format("Invalid slider value: {}", cmd.arg(1)));
+      return;
+    }
+
+    // Phase is keyed on the line; reset_retry() clears Retry every frame.
+    if (owner_line != cmd.line_number) {
+      owner_line = cmd.line_number;
+      phase = 0;
+    }
+
+    if (phase == 1) {
+      test_input::set_mouse_position(target_x, target_y);
+      phase = 2;
+      cmd.retry();
+      return;
+    }
+    if (phase == 2) {
+      test_input::simulate_mouse_release();
+      phase = 0;
+      cmd.consume();
       return;
     }
 
@@ -500,16 +524,26 @@ struct HandleSetSliderCommand : System<PendingE2ECommand> {
       if (!target.valid())
         continue;
       Entity &entity = target.asE();
-      // The drag handler reads pct = (x - rect.x) / rect.width, so invert it.
-      // Used to be `(void)value;` and a click on the centre.
+      // Press the handle's current centre, then move to the target centre.
       auto rect = get_screen_rect(entity);
       const float pct = std::clamp(*value, 0.f, 1.f);
-      // Half a pixel in: a click on the boundary can miss the rect.
-      const float x =
-          std::min(rect.x + pct * rect.width, rect.x + rect.width - 0.5f);
-      float y = rect.y + rect.height / 2;
-      test_input::simulate_click(x, y);
-      cmd.consume();
+      const float current =
+          std::clamp(entity.get<ui::HasSliderState>().value, 0.f, 1.f);
+      const float handle_w = rect.width * 0.25f;
+      const float travel = rect.width - handle_w;
+      const float grab_x = rect.x + handle_w * 0.5f + current * travel;
+      // Half a pixel in: a press on the boundary can miss the rect.
+      target_x = std::min(rect.x + handle_w * 0.5f + pct * travel,
+                          rect.x + rect.width - 0.5f);
+      target_y = rect.y + rect.height / 2;
+      test_input::set_mouse_position(grab_x, target_y);
+      auto &m = input_injector::detail::mouse;
+      m.left_down = true;
+      m.just_pressed = true;
+      m.press_frames = 0; // no auto-release; phase 2 releases
+      m.active = true;
+      phase = 1;
+      cmd.retry();
       return;
     }
     cmd.fail(std::format("Slider not found: {}", cmd.arg(0)));
