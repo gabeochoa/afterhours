@@ -2,7 +2,7 @@
 
 #include "../../drawing_helpers.h"
 #include "../color.h"
-#include "../input.h"
+#include "../input_system.h"
 #include "rendering.h"
 #include "systems.h"
 #include "ui_core_components.h"
@@ -25,7 +25,7 @@ constexpr Color NOWRAP_BORDER = {255, 165, 0, 180};    // Orange for NoWrap
 /// - Orange border for NoWrap components
 /// - Red highlights for overflow situations
 template <typename InputAction>
-struct LayoutDebugOverlay : SystemWithUIContext<UIComponent> {
+struct LayoutDebugOverlay : SystemWithUIContext<> {
   InputAction toggle_action;
   bool enabled = false;
   float enableCooldown = 0.f;
@@ -60,8 +60,8 @@ struct LayoutDebugOverlay : SystemWithUIContext<UIComponent> {
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
 
     // Draw legend at top-right
-    float legend_x = this->context->screen_bounds.x -
-                     this->context->screen_bounds.width * 0.15f;
+    float legend_x = this->context->screen_width -
+                     this->context->screen_width * 0.15f;
     float legend_y = 10.f;
     float font_size = 14.f;
 

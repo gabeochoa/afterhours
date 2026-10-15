@@ -3,7 +3,7 @@
 #include "../../drawing_helpers.h"
 #include "../../ecs.h"
 #include "../color.h"
-#include "../input.h"
+#include "../input_system.h"
 #include "components.h"
 #include "fmt/format.h"
 #include "systems.h"
@@ -24,7 +24,7 @@ namespace ui {
 /// - Parent chain
 /// - Children list with overflow status
 template <typename InputAction>
-struct LayoutInspector : SystemWithUIContext<UIComponent> {
+struct LayoutInspector : SystemWithUIContext<> {
   InputAction toggle_action;
   bool enabled = false;
   float enableCooldown = 0.f;
@@ -66,8 +66,8 @@ struct LayoutInspector : SystemWithUIContext<UIComponent> {
   }
 
   std::string get_component_name(EntityID id) const {
-    auto opt = EntityQuery().whereID(id).gen_first();
-    if (!opt)
+    auto opt = UICollectionHolder::getEntityForID(id);
+    if (!opt.has_value())
       return fmt::format("entity_{}", id);
     Entity &ent = opt.asE();
     if (ent.has<UIComponentDebug>()) {
@@ -91,7 +91,7 @@ struct LayoutInspector : SystemWithUIContext<UIComponent> {
 
   void draw_panel_line(float &y, const std::string &label,
                        const std::string &value, Color value_color) const {
-    float panel_x = context->screen_bounds.x - PANEL_WIDTH - 10.f;
+    float panel_x = context->screen_width - PANEL_WIDTH - 10.f;
     draw_text(label.c_str(), panel_x + PANEL_PADDING, y, FONT_SIZE,
               colors::opacity_pct(context->theme.font, 0.7f));
     draw_text(value.c_str(), panel_x + PANEL_PADDING + 100.f, y, FONT_SIZE,
@@ -100,7 +100,7 @@ struct LayoutInspector : SystemWithUIContext<UIComponent> {
   }
 
   void draw_panel_header(float &y, const std::string &text) const {
-    float panel_x = context->screen_bounds.x - PANEL_WIDTH - 10.f;
+    float panel_x = context->screen_width - PANEL_WIDTH - 10.f;
     y += 4.f;
     draw_text(text.c_str(), panel_x + PANEL_PADDING, y, FONT_SIZE,
               context->theme.primary);
@@ -113,9 +113,9 @@ struct LayoutInspector : SystemWithUIContext<UIComponent> {
     panel_hovered = false;
 
     // Draw panel background
-    float panel_x = context->screen_bounds.x - PANEL_WIDTH - 10.f;
+    float panel_x = context->screen_width - PANEL_WIDTH - 10.f;
     float panel_y = 10.f;
-    float panel_height = context->screen_bounds.height * 0.8f;
+    float panel_height = context->screen_height * 0.8f;
 
     Rectangle panel_rect = {panel_x, panel_y, PANEL_WIDTH, panel_height};
     panel_hovered = is_mouse_inside(context->mouse.pos, panel_rect);
@@ -144,8 +144,8 @@ struct LayoutInspector : SystemWithUIContext<UIComponent> {
     }
 
     // Get selected component
-    auto opt = EntityQuery().whereID(selected_id).gen_first();
-    if (!opt) {
+    auto opt = UICollectionHolder::getEntityForID(selected_id);
+    if (!opt.has_value()) {
       draw_text("Component not found", panel_x + PANEL_PADDING, y, FONT_SIZE,
                 context->theme.from_usage(Theme::Usage::Error));
       selected_id = -1;
@@ -231,8 +231,8 @@ struct LayoutInspector : SystemWithUIContext<UIComponent> {
     bool has_overflow = false;
     Rectangle rect = cmp.rect();
     for (EntityID child_id : cmp.children) {
-      auto child_opt = EntityQuery().whereID(child_id).gen_first();
-      if (!child_opt)
+      auto child_opt = UICollectionHolder::getEntityForID(child_id);
+      if (!child_opt.has_value())
         continue;
       Entity &child_ent = child_opt.asE();
       if (!child_ent.has<UIComponent>())
