@@ -342,4 +342,34 @@ TEST(modal_chrome_inherits_or_overrides_adaptive_scaling) {
   defaults.scaling_mode = saved_mode;
 }
 
+// The backdrop div is the only backdrop; no render system redraws it.
+TEST(modal_registers_no_backdrop_render_system) {
+  SystemManager sm;
+  modal::register_render_systems<ui_test::TestInputAction>(sm);
+  CHECK(sm.render_systems_.empty());
+}
+
+// Two stacked modals build exactly one backdrop div each.
+TEST(stacked_modals_have_one_backdrop_each) {
+  ImmTestHarness h;
+  ensure_modal_singleton();
+  modal::detail::get_modal_root().modal_stack.clear();
+  bool open_a = true;
+  bool open_b = true;
+  modal::confirm(h.context(), mk(h.root(), 0), open_a, "First?", "msg", "OK",
+                 "Cancel");
+  modal::confirm(h.context(), mk(h.root(), 1), open_b, "Second?", "msg",
+                 "OK", "Cancel");
+  h.layout_only();
+
+  int backdrops = 0;
+  for (const auto &e : UICollectionHolder::get().collection.get_entities()) {
+    if (e && e->has<UIComponentDebug>() &&
+        e->get<UIComponentDebug>().name() == "modal_backdrop" &&
+        !e->has<ShouldHide>())
+      backdrops++;
+  }
+  CHECK(backdrops == 2);
+}
+
 int main() { return ui_test::run_registered_tests("dialog tests"); }

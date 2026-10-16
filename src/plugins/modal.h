@@ -965,40 +965,6 @@ struct modal : developer::Plugin {
         }
     };
 
-    // System to render backdrop for modals
-    template<InputActionLike InputAction>
-    struct ModalBackdropRenderSystem : System<> {
-        bool should_iterate() const override { return false; }
-        virtual void once(float) override {
-            auto &root = detail::get_modal_root();
-            if (root.modal_stack.empty()) return;
-
-            auto *res = EntityHelper::get_singleton_cmp<
-                window_manager::ProvidesCurrentResolution>();
-            if (!res) return;
-
-            int screen_w = res->current_resolution.width;
-            int screen_h = res->current_resolution.height;
-
-            // Draw backdrop for each modal in stack
-            for (EntityID modal_id : root.modal_stack) {
-                OptEntity opt =
-                    ui::UICollectionHolder::getEntityForID(modal_id);
-                if (!opt.has_value()) continue;
-
-                Entity &entity = opt.asE();
-                if (!entity.has<Modal>()) continue;
-
-                Modal &m = entity.get<Modal>();
-
-                // Draw full-screen backdrop
-                draw_rectangle({0, 0, static_cast<float>(screen_w),
-                                static_cast<float>(screen_h)},
-                               m.backdrop_color);
-            }
-        }
-    };
-
     // System to trap focus within the topmost modal
     template<InputActionLike InputAction>
     struct ModalFocusTrapSystem : ui::SystemWithUIContext<> {
@@ -1060,11 +1026,9 @@ struct modal : developer::Plugin {
             std::make_unique<ModalFocusTrapSystem<InputAction>>());
     }
 
+    // No render systems: the backdrop div draws the dim (presence-faded).
     template<InputActionLike InputAction>
-    static void register_render_systems(SystemManager &sm) {
-        sm.register_render_system(
-            std::make_unique<ModalBackdropRenderSystem<InputAction>>());
-    }
+    static void register_render_systems(SystemManager &) {}
 
     // ============================================================
     // Convenience Helpers (Public)
