@@ -66,6 +66,8 @@ static void preview_matches_source(bool batched, bool faded_parent) {
   DragGroupState state;
   state.dragged_width = 220;
   state.dragged_height = 96;
+  state.grab_offset_x = 110;
+  state.grab_offset_y = 48;
   create_or_update_drag_overlay(state, 530, 378);
   h.coll.merge_entity_arrays();
   auto preview = find_drag_tagged(DragTag::Overlay);
@@ -272,6 +274,97 @@ TEST(changing_overflow_releases_and_restores_scroll_view) {
   parent.addComponent<HasScrollView>();
   frame(Overflow::Visible);
   CHECK(parent.has<HasScrollView>());
+}
+
+namespace {
+DragGroupState &ensure_drag_state(ImmTestHarness &h) {
+  // The drag systems fetch both singletons through EntityHelper.
+  EntityHelper::registerSingleton<UIContext<TestInputAction>>(
+      h.context_entity());
+  if (!EntityHelper::has_singleton<DragGroupState>()) {
+    Entity &e = EntityHelper::createPermanentEntity();
+    e.addComponent<DragGroupState>();
+    EntityHelper::registerSingleton<DragGroupState>(e);
+  }
+  auto &s = *EntityHelper::get_singleton_cmp<DragGroupState>();
+  cleanup_drag_tagged(DragTag::Spacer);
+  cleanup_drag_tagged(DragTag::Overlay);
+  untag_all(DragTag::DraggedItem);
+  untag_all(DragTag::SourceGroup);
+  untag_all(DragTag::HoverGroup);
+  s.events.clear();
+  s.reset_drag();
+  return s;
+}
+
+void build_drag_group(ImmTestHarness &h, std::vector<EntityID> &cards) {
+  auto group = div(h.context(), mk(h.root(), 0),
+                   ComponentConfig{}
+                       .with_size({pixels(400), pixels(80)})
+                       .with_flex_direction(FlexDirection::Row)
+                       .with_draggable_children()
+                       .with_debug_name("drag_group"));
+  for (int i = 0; i < 3; i++) {
+    auto card = div(h.context(), mk(group.ent(), i),
+                    ComponentConfig{}
+                        .with_size({pixels(100), pixels(60)})
+                        .with_debug_name("drag_card_" + std::to_string(i)));
+    cards.push_back(card.id());
+  }
+  h.layout_only();
+}
+
+void drag_frame(ImmTestHarness &h,
+                HandleDragGroupsPostLayout<TestInputAction> &sys, float mx,
+                float my, bool down, bool just, bool moved) {
+  h.context().mouse.pos = {mx, my};
+  h.context().mouse.left_down = down;
+  h.context().mouse.just_pressed = just;
+  h.context().mouse.press_moved = moved;
+  sys.once(0.f);
+}
+} // namespace
+
+// One harness for both phases: registerSingleton keeps the first context.
+TEST(drag_arms_on_press_and_starts_on_move) {
+  ImmTestHarness h;
+  auto &state = ensure_drag_state(h);
+  std::vector<EntityID> cards;
+  build_drag_group(h, cards);
+  const Rectangle r = AutoLayout::to_cmp_static(cards[0]).rect();
+  HandleDragGroupsPostLayout<TestInputAction> sys;
+  auto &card_cmp = AutoLayout::to_cmp_static(cards[0]);
+
+  // Plain click: press and release without moving never hides or drags.
+  drag_frame(h, sys, r.x + 4, r.y + 4, true, true, false);
+  CHECK(!state.dragging);
+  CHECK(!card_cmp.should_hide);
+  CHECK(!find_drag_tagged(DragTag::Overlay).valid());
+  drag_frame(h, sys, r.x + 4, r.y + 4, false, false, false);
+  CHECK(!state.dragging);
+  CHECK(!card_cmp.should_hide);
+  CHECK(state.events.empty());
+
+  // Press, then move: drag starts that frame, corner stays under cursor.
+  drag_frame(h, sys, r.x + 4, r.y + 6, true, true, false);
+  CHECK(!state.dragging);
+  CHECK(!card_cmp.should_hide);
+
+  drag_frame(h, sys, r.x + 84, r.y + 26, true, false, true);
+  CHECK(state.dragging);
+  CHECK(card_cmp.should_hide);
+  h.coll.merge_entity_arrays();
+  auto overlay = find_drag_tagged(DragTag::Overlay);
+  CHECK(overlay.valid());
+  if (overlay.valid()) {
+    const auto &ocmp = overlay.asE().get<UIComponent>();
+    CHECK(std::abs(ocmp.computed_rel[Axis::X] - (r.x + 80)) < 0.01f);
+    CHECK(std::abs(ocmp.computed_rel[Axis::Y] - (r.y + 20)) < 0.01f);
+  }
+
+  drag_frame(h, sys, r.x + 84, r.y + 26, false, false, false);
+  CHECK(!state.dragging);
+  CHECK(!card_cmp.should_hide);
 }
 
 int main() { return ui_test::run_registered_tests("drag preview and exact layout tests"); }

@@ -1699,8 +1699,8 @@ inline void create_or_update_drag_overlay(DragGroupState &state, float mouse_x,
   if (existing && existing.asE().has<UIComponent>()) {
     auto &cmp = existing.asE().get<UIComponent>();
     cmp.was_rendered_to_screen = true;
-    cmp.computed_rel[Axis::X] = mouse_x - state.dragged_width / 2.0f;
-    cmp.computed_rel[Axis::Y] = mouse_y - state.dragged_height / 2.0f;
+    cmp.computed_rel[Axis::X] = mouse_x - state.grab_offset_x;
+    cmp.computed_rel[Axis::Y] = mouse_y - state.grab_offset_y;
     return;
   }
 
@@ -1722,8 +1722,8 @@ inline void create_or_update_drag_overlay(DragGroupState &state, float mouse_x,
     // Position directly (layout already ran).
     overlay_cmp.computed[Axis::X] = state.dragged_width;
     overlay_cmp.computed[Axis::Y] = state.dragged_height;
-    overlay_cmp.computed_rel[Axis::X] = mouse_x - state.dragged_width / 2.0f;
-    overlay_cmp.computed_rel[Axis::Y] = mouse_y - state.dragged_height / 2.0f;
+    overlay_cmp.computed_rel[Axis::X] = mouse_x - state.grab_offset_x;
+    overlay_cmp.computed_rel[Axis::Y] = mouse_y - state.grab_offset_y;
   }
 
   overlay.addComponent<HasDragPreview>(dragged_opt.asE().id);
@@ -1857,48 +1857,70 @@ template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
                       .whereHasComponent<UIComponent>()
                       .gen();
 
-    // ---- Not dragging: check for drag start ---------------------------------
+    // ---- Not dragging: arm on press, start on movement -------------------
     if (!state->dragging) {
-      if (!ctx->mouse.just_pressed)
-        return;
-
-      for (Entity &group : groups) {
-        auto &group_cmp = group.get<UIComponent>();
-        for (int i = 0; i < static_cast<int>(group_cmp.children.size()); i++) {
-          auto child_opt = EntityQuery(ui_coll, {.ignore_temp_warning = true})
-                               .whereID(group_cmp.children[i])
-                               .whereHasComponent<UIComponent>()
-                               .whereLambda([](const Entity &e) {
-                                 return !e.get<UIComponent>().should_hide;
-                               })
-                               .gen_first();
-          if (!child_opt)
-            continue;
-
-          Entity &child = child_opt.asE();
-          auto &child_cmp = child.get<UIComponent>();
-
-          if (is_mouse_inside(ctx->mouse.pos, child_cmp.rect())) {
-            state->dragging = true;
-            state->drag_source_index = i;
-            state->hover_index = i;
-            state->dragged_width = child_cmp.rect().width;
-            state->dragged_height = child_cmp.rect().height;
-
-            // Tag the participants
-            child.enableTag(DragTag::DraggedItem);
-            group.enableTag(DragTag::SourceGroup);
-            group.enableTag(DragTag::HoverGroup);
-
-            // Hide immediately so this frame's render skips it.
-            child_cmp.should_hide = true;
-            break;
-          }
+      if (state->armed) {
+        if (!ctx->mouse.left_down) {
+          state->reset_drag(); // released without moving: it was a click
+          return;
         }
-        if (state->dragging)
-          break;
+        if (!ctx->mouse.press_moved)
+          return;
+        auto child_opt = ui::UICollectionHolder::getEntityForID(
+            state->armed_item);
+        auto group_opt = ui::UICollectionHolder::getEntityForID(
+            state->armed_group);
+        if (!child_opt.has_value() || !group_opt.has_value() ||
+            !child_opt.asE().has<UIComponent>()) {
+          state->reset_drag();
+          return;
+        }
+        // Start now and fall through so the overlay appears this frame.
+        state->dragging = true;
+        state->armed = false;
+        child_opt.asE().enableTag(DragTag::DraggedItem);
+        group_opt.asE().enableTag(DragTag::SourceGroup);
+        group_opt.asE().enableTag(DragTag::HoverGroup);
+        child_opt.asE().get<UIComponent>().should_hide = true;
+      } else {
+        if (!ctx->mouse.just_pressed)
+          return;
+
+        for (Entity &group : groups) {
+          auto &group_cmp = group.get<UIComponent>();
+          for (int i = 0; i < static_cast<int>(group_cmp.children.size());
+               i++) {
+            auto child_opt = EntityQuery(ui_coll, {.ignore_temp_warning = true})
+                                 .whereID(group_cmp.children[i])
+                                 .whereHasComponent<UIComponent>()
+                                 .whereLambda([](const Entity &e) {
+                                   return !e.get<UIComponent>().should_hide;
+                                 })
+                                 .gen_first();
+            if (!child_opt)
+              continue;
+
+            Entity &child = child_opt.asE();
+            auto &child_cmp = child.get<UIComponent>();
+
+            if (is_mouse_inside(ctx->mouse.pos, child_cmp.rect())) {
+              state->armed = true;
+              state->armed_item = child.id;
+              state->armed_group = group.id;
+              state->drag_source_index = i;
+              state->hover_index = i;
+              state->dragged_width = child_cmp.rect().width;
+              state->dragged_height = child_cmp.rect().height;
+              state->grab_offset_x = ctx->mouse.pos.x - child_cmp.rect().x;
+              state->grab_offset_y = ctx->mouse.pos.y - child_cmp.rect().y;
+              break;
+            }
+          }
+          if (state->armed)
+            break;
+        }
+        return;
       }
-      return; // overlay will appear next frame
     }
 
     // ---- Mouse released: emit event and clean up ----------------------------

@@ -832,9 +832,18 @@ struct DragGroupState : BaseComponent {
   int drag_source_index = -1;
   int hover_index = -1;
 
+  // Pressed but not yet moved past the drag threshold.
+  bool armed = false;
+  EntityID armed_item = -1;
+  EntityID armed_group = -1;
+
   // Original size of dragged item (for spacer + overlay)
   float dragged_width = 0;
   float dragged_height = 0;
+
+  // Press point relative to the item's top-left; overlay follows it.
+  float grab_offset_x = 0;
+  float grab_offset_y = 0;
 
   // Completed events for the screen to consume
   std::vector<Event> events;
@@ -843,8 +852,13 @@ struct DragGroupState : BaseComponent {
     dragging = false;
     drag_source_index = -1;
     hover_index = -1;
+    armed = false;
+    armed_item = -1;
+    armed_group = -1;
     dragged_width = 0;
     dragged_height = 0;
+    grab_offset_x = 0;
+    grab_offset_y = 0;
   }
 };
 
