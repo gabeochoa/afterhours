@@ -92,7 +92,7 @@ $(OUT)/headless_validation: headless_validation.cpp
 # Backend-free: it drives insert_char directly, so it needs no window and no
 # raylib, and runs anywhere.
 $(OUT)/text_input_placeholder: text_input_placeholder.cpp
-	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -isystem $(INCLUDE_ROOT) -isystem $(BREW_PREFIX)/include $(filter %.cpp,$^) -o $@
+	$(CXX) $(CXXFLAGS) -DAFTER_HOURS_USE_NONE $(DEPFLAGS) -isystem $(INCLUDE_ROOT) -isystem $(BREW_PREFIX)/include $(filter %.cpp,$^) -o $@
 	@echo "Built: text_input_placeholder"
 
 # imm visual regression - renders imm UI to a hidden window, captures a PNG
@@ -107,7 +107,7 @@ $(OUT)/on_draw_example: on_draw_example.cpp
 
 # Performance stress tests - no raylib dependency
 $(OUT)/perf_stress_test: perf_stress_test.cpp
-	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) $(filter %.cpp,$^) -o $@
+	$(CXX) $(CXXFLAGS) -DAFTER_HOURS_USE_NONE $(DEPFLAGS) $(INCLUDES) $(filter %.cpp,$^) -o $@
 	@echo "Built: perf_stress_test"
 
 # Calendar layout stress test - full rendering pipeline
@@ -126,7 +126,7 @@ test:
 
 # Optimized profiling builds
 $(OUT)/perf_stress_test_opt: perf_stress_test.cpp
-	$(CXX) $(CXXFLAGS_OPT) $(DEPFLAGS) $(INCLUDES) $(filter %.cpp,$^) -o $@
+	$(CXX) $(CXXFLAGS_OPT) -DAFTER_HOURS_USE_NONE $(DEPFLAGS) $(INCLUDES) $(filter %.cpp,$^) -o $@
 	@echo "Built: perf_stress_test_opt (O2)"
 
 $(OUT)/calendar_stress_test_opt: calendar_stress_test.cpp
@@ -134,7 +134,7 @@ $(OUT)/calendar_stress_test_opt: calendar_stress_test.cpp
 	@echo "Built: calendar_stress_test_opt (O2)"
 
 $(OUT)/profile_harness: profile_harness.cpp
-	$(CXX) $(CXXFLAGS_OPT) $(DEPFLAGS) $(INCLUDES) $(filter %.cpp,$^) -o $@
+	$(CXX) $(CXXFLAGS_OPT) -DAFTER_HOURS_USE_NONE $(DEPFLAGS) $(INCLUDES) $(filter %.cpp,$^) -o $@
 	@echo "Built: profile_harness (O2)"
 
 profile-layout: perf_stress_test_opt

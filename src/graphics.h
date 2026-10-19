@@ -1,10 +1,11 @@
 #pragma once
 
+#include "config.h"
 #include "graphics_common.h"
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 #include "backends/raylib/backend.h"
-#elif defined(AFTER_HOURS_USE_METAL)
+#elif defined(AFTER_HOURS_SOKOL)
 #include "backends/sokol/backend.h"
 #endif
 
@@ -12,11 +13,11 @@ namespace afterhours::graphics {
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 using PlatformAPI = RaylibPlatformAPI;
-#elif defined(AFTER_HOURS_USE_METAL)
+#elif defined(AFTER_HOURS_SOKOL)
 using PlatformAPI = MetalPlatformAPI;
 #else
 #error                                                                         \
-    "No graphics backend defined. Define AFTER_HOURS_USE_RAYLIB or AFTER_HOURS_USE_METAL."
+    "No graphics backend defined. Define AFTER_HOURS_USE_RAYLIB, AFTER_HOURS_USE_SOKOL, AFTER_HOURS_USE_METAL, or AFTER_HOURS_USE_VULKAN (AFTER_HOURS_USE_NONE has no graphics API)."
 #endif
 
 inline constexpr unsigned int FLAG_WINDOW_RESIZABLE =

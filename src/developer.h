@@ -54,10 +54,10 @@ constexpr float RAD2DEG = 57.29577951308232f; // 180 / PI
 } // namespace afterhours
 
 #ifndef TextureType
-#ifdef AFTER_HOURS_USE_METAL
-// sokol/Metal backend: the texture carries GPU handles (sg_image / sg_view /
+#ifdef AFTER_HOURS_SOKOL
+// sokol backend: the texture carries GPU handles (sg_image / sg_view /
 // sg_sampler ids) so load_texture / draw_texture_* can bind it. Mirrors
-// graphics::RenderTextureType's handle layout. Scoped to the Metal backend so
+// graphics::RenderTextureType's handle layout. Scoped to the sokol backend so
 // other backends (e.g. "none") don't pay for fields they never use.
 struct MyTexture {
   float width = 0;

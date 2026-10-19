@@ -1,5 +1,6 @@
 #pragma once
 
+#include "config.h"
 #include "frame_loop.h"
 #include <concepts>
 #include <cstdint>
@@ -39,7 +40,7 @@ using RenderTextureType = raylib::RenderTexture2D;
 using ShaderType = raylib::Shader;
 } // namespace afterhours::graphics
 
-#elif defined(AFTER_HOURS_USE_METAL)
+#elif defined(AFTER_HOURS_SOKOL)
 
 namespace afterhours::graphics {
 struct RenderTextureType {
@@ -71,7 +72,7 @@ struct ShaderType {
 };
 } // namespace afterhours::graphics
 
-#endif // AFTER_HOURS_USE_RAYLIB / AFTER_HOURS_USE_METAL
+#endif // AFTER_HOURS_USE_RAYLIB / AFTER_HOURS_SOKOL
 
 namespace afterhours::graphics {
 // Device-pixel scale when the render texture is supersampled (Config.hidpi).

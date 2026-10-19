@@ -1,5 +1,7 @@
 #define FMT_HEADER_ONLY
-#define AFTER_HOURS_USE_METAL
+#if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_VULKAN) && !defined(AFTER_HOURS_USE_SOKOL)
+#define AFTER_HOURS_USE_SOKOL
+#endif
 #include <fmt/format.h>
 #include <cmath>
 #include <chrono>

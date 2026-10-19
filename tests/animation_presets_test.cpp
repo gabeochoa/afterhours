@@ -1,3 +1,5 @@
+#define AFTER_HOURS_USE_NONE
+
 #include <afterhours/src/plugins/animation_presets.h>
 
 #include <cmath>

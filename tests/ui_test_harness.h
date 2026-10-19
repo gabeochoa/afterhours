@@ -13,6 +13,14 @@
 // main() that returns run_registered_tests("<suite name>").
 #pragma once
 
+// The harness needs the none backend (it asserts on recorded draw calls).
+// Default to it when the TU picked no backend; keep above the includes.
+#if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_SOKOL) &&    \
+    !defined(AFTER_HOURS_USE_METAL) && !defined(AFTER_HOURS_USE_VULKAN) &&     \
+    !defined(AFTER_HOURS_USE_NONE)
+#define AFTER_HOURS_USE_NONE 1
+#endif
+
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 

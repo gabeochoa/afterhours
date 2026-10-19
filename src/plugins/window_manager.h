@@ -13,18 +13,20 @@
 // Only the backend branches below use graphics:: (metal_detail / is_headless /
 // set_window_size). graphics.h #errors without a backend, so guard the include
 // to keep backend-agnostic consumers (e.g. the layout tests) building.
-#if defined(AFTER_HOURS_USE_RAYLIB) || defined(AFTER_HOURS_USE_METAL)
+#if defined(AFTER_HOURS_USE_RAYLIB) || defined(AFTER_HOURS_SOKOL)
 #include "../graphics.h"
 #endif
 #include "../logging.h"
 #include "../warn_once.h"
 
-// Forward declarations for Metal/Sokol backend (defined in sokol_app.h and
-// the app's .mm translation unit respectively).
-#ifdef AFTER_HOURS_USE_METAL
+// Forward declarations: sapp_* from sokol_app.h, and the Cocoa resize
+// helper defined in the app's .mm translation unit (Metal only).
+#ifdef AFTER_HOURS_SOKOL
 extern "C" int sapp_width(void);
 extern "C" int sapp_height(void);
 extern "C" float sapp_dpi_scale(void);
+#endif
+#ifdef AFTER_HOURS_USE_METAL
 extern "C" void metal_set_window_size(int width, int height);
 #endif
 
@@ -157,9 +159,9 @@ struct window_manager : developer::Plugin {
     raylib::SetWindowSize(width, height);
 #endif
   }
-#elif defined(AFTER_HOURS_USE_METAL)
-  // Metal/Sokol backend — uses sapp_width()/sapp_height() for current
-  // resolution and an extern Obj-C function for resizing.
+#elif defined(AFTER_HOURS_SOKOL)
+  // Sokol backend — uses sapp_width()/sapp_height() for current
+  // resolution. Windowed resizing is Cocoa-only (see set_window_size).
   static Resolution fetch_current_resolution() {
     // Return logical (CSS) pixel dimensions so the UI works consistently
     // regardless of DPI scale. The metal_detail accessors return the headless
@@ -198,14 +200,18 @@ struct window_manager : developer::Plugin {
     return Resolution{.width = 3840, .height = 2160};
   }
 
-  // Windowed: Cocoa NSWindow resize (sokol_impl.mm). Headless: no window, so
-  // resize the offscreen render target instead (MetalPlatformAPI::set_window_size).
+  // Windowed resize is Cocoa-only (sokol_impl.mm) on Metal. Headless
+  // resizes the offscreen render target (MetalPlatformAPI::set_window_size).
   static void set_window_size(const int width, const int height) {
     if (graphics::is_headless()) {
       graphics::set_window_size(width, height);
       return;
     }
+#ifdef AFTER_HOURS_USE_METAL
     ::metal_set_window_size(width, height);
+#else
+    log_error("@notimplemented window_manager::set_window_size on this backend");
+#endif
   }
 #else
   static Resolution fetch_maximum_resolution() {

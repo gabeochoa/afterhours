@@ -3,6 +3,7 @@
 # Usage:
 #   make        - Build all tests
 #   make test   - Build and run all tests
+#   make win-vulkan - Cross-build sokol tests for Windows/Vulkan -> output/win/*.exe
 #   make clean  - Remove test binaries
 
 CXX := clang++
@@ -336,27 +337,56 @@ endif
 SOKOL_FRAMEWORKS := -framework Metal -framework MetalKit -framework Cocoa \
                     -framework QuartzCore -framework AudioToolbox -framework Foundation
 $(OUT)/sokol_blend_test: ../examples/web/sokol_impl.cc
-$(OUT)/sokol_blend_test: CXXFLAGS_T += -DSOKOL_METAL -x objective-c++
+$(OUT)/sokol_blend_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_blend_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_geometry_test: ../examples/web/sokol_impl.cc
-$(OUT)/sokol_geometry_test: CXXFLAGS_T += -DSOKOL_METAL -x objective-c++
+$(OUT)/sokol_geometry_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_geometry_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 # The multi-TU sokol rules emit a .d covering only sokol_impl.cc, so header
 # edits rebuild nothing without an explicit prerequisite (stale-binary trap).
 $(OUT)/sokol_blend_test: ../src/backends/sokol/drawing_helpers.h
 $(OUT)/sokol_geometry_test: ../src/backends/sokol/drawing_helpers.h
 $(OUT)/sokol_hidpi_test: ../examples/web/sokol_impl.cc
-$(OUT)/sokol_hidpi_test: CXXFLAGS_T += -DSOKOL_METAL -x objective-c++
+$(OUT)/sokol_hidpi_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_hidpi_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_resize_test: ../examples/web/sokol_impl.cc
-$(OUT)/sokol_resize_test: CXXFLAGS_T += -DSOKOL_METAL -x objective-c++
+$(OUT)/sokol_resize_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_resize_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_include_order_test: ../examples/web/sokol_impl.cc
-$(OUT)/sokol_include_order_test: CXXFLAGS_T += -DSOKOL_METAL -x objective-c++
+$(OUT)/sokol_include_order_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_include_order_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 
 $(OUT)/render_capture_metal_test: render_capture_test.cpp ../examples/web/sokol_impl.cc
-	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DSOKOL_METAL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
+
+# Windows/Vulkan cross-build (from macOS, via zig). The .exes link on the Mac
+# and run on the Windows box. They render headless and read pixels back, so
+# they can't run until the headless device + capture land (Phases 3-4);
+# in this phase linking is the check. Not part of `all`.
+# Header edits don't rebuild the .exes (no .d tracking here, same trap as
+# the Metal rules); delete output/win/ to force a rebuild.
+WIN_VULKAN_OUT := $(OUT)/win
+WIN_VULKAN_TESTS := sokol_blend_test sokol_geometry_test sokol_hidpi_test \
+	sokol_resize_test sokol_include_order_test
+WIN_VULKAN_BINS := $(addprefix $(WIN_VULKAN_OUT)/,$(addsuffix .exe,$(WIN_VULKAN_TESTS))) \
+	$(WIN_VULKAN_OUT)/render_capture_vulkan_test.exe
+WIN_VULKAN_CXXFLAGS := -std=c++20 -Wall -Wextra -g -target x86_64-windows-gnu \
+	-DAFTER_HOURS_USE_VULKAN
+WIN_VULKAN_INCLUDES := $(INCLUDES) -isystem $(AFTERHOURS_ROOT)/vendor/vulkan/include
+WIN_VULKAN_LDFLAGS := -lvulkan-1 -lkernel32 -luser32 -lshell32 -lgdi32
+
+$(WIN_VULKAN_OUT)/libvulkan-1.a: $(AFTERHOURS_ROOT)/vendor/vulkan/vulkan-1.def
+	@mkdir -p $(WIN_VULKAN_OUT)
+	zig dlltool -d $< -l $@ -m i386:x86-64
+
+$(WIN_VULKAN_OUT)/%.exe: %.cpp ../examples/web/sokol_impl.cc $(WIN_VULKAN_OUT)/libvulkan-1.a
+	zig c++ $(WIN_VULKAN_CXXFLAGS) $(WIN_VULKAN_INCLUDES) $(filter %.cpp %.cc,$^) -L$(WIN_VULKAN_OUT) $(WIN_VULKAN_LDFLAGS) -o $@
+
+$(WIN_VULKAN_OUT)/render_capture_vulkan_test.exe: render_capture_test.cpp ../examples/web/sokol_impl.cc $(WIN_VULKAN_OUT)/libvulkan-1.a
+	zig c++ $(WIN_VULKAN_CXXFLAGS) $(WIN_VULKAN_INCLUDES) $(filter %.cpp %.cc,$^) -L$(WIN_VULKAN_OUT) $(WIN_VULKAN_LDFLAGS) -o $@
+
+win-vulkan: $(WIN_VULKAN_BINS)
+.PHONY: win-vulkan
 
 # Runs every test even when one fails, then reports. The old loop dropped each
 # exit code, so only the last test's status escaped and a red suite read green.
@@ -375,6 +405,7 @@ clean:
 	rm -rf $(TEST_BINS) $(addsuffix .d,$(TEST_BINS)) $(addsuffix .dSYM,$(TEST_BINS))
 	rm -f input_system_mouse_delta_backend_smoke.o smoke_raylib.o smoke_sokol.o
 	rm -rf $(INCLUDE_ROOT)
+	rm -rf $(WIN_VULKAN_OUT)
 
 -include $(wildcard $(OUT)/*.d)
 

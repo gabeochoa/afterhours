@@ -1,3 +1,5 @@
+#define AFTER_HOURS_USE_NONE
+
 #include <afterhours/src/plugins/ui/components.h>
 
 #include <cmath>

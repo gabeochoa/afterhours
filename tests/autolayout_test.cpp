@@ -81,6 +81,7 @@
 
 // fmt is used by autolayout.h for warning messages; enable header-only mode
 #define FMT_HEADER_ONLY
+#define AFTER_HOURS_USE_NONE
 #include <fmt/format.h>
 
 // Capture layout warnings instead of printing them.

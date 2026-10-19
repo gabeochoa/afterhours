@@ -9,6 +9,10 @@
 // references sapp_*/sglue_* symbols. SOKOL_NO_ENTRY means sokol does not define
 // main() -- the harness provides its own. We simply never call sapp_run().
 
+// config.h first: it derives the sokol API from the backend macro +
+// platform, so no -DSOKOL_* build flag is needed.
+#include <afterhours/src/config.h>
+
 #define SOKOL_IMPL
 #define SOKOL_NO_ENTRY
 
@@ -28,5 +32,7 @@
 // The Metal texture readback + PNG export (metal_capture_render_texture) that
 // capture_render_texture() calls. Guarded on AFTER_HOURS_USE_METAL, and needs
 // sokol_gfx (with SOKOL_IMPL) already included above.
+#ifndef AFTER_HOURS_USE_METAL
 #define AFTER_HOURS_USE_METAL
+#endif
 #include <afterhours/src/backends/sokol/capture_impl.h>

@@ -1,12 +1,15 @@
 // vendor/afterhours/src/graphics/metal_backend.h
-// Metal/Sokol backend -- satisfies PlatformBackend concept.
+// Sokol backend -- satisfies PlatformBackend concept.
 //
-// To use: #define AFTER_HOURS_USE_METAL (instead of AFTER_HOURS_USE_RAYLIB)
+// To use: #define AFTER_HOURS_USE_METAL or AFTER_HOURS_USE_VULKAN
+// (instead of AFTER_HOURS_USE_RAYLIB)
 // Requires: sokol headers vendored in vendor/sokol/
 
 #pragma once
 
-#ifdef AFTER_HOURS_USE_METAL
+#include "../../config.h"
+
+#ifdef AFTER_HOURS_SOKOL
 
 #include "../../graphics_common.h"
 #include "../../logging.h"
@@ -942,6 +945,10 @@ namespace metal_backend {
 
 inline bool metal_init(const Config &cfg) {
   if (cfg.display == DisplayMode::Headless) {
+#ifdef AFTER_HOURS_USE_VULKAN
+    log_error("headless init is not implemented for the Vulkan backend");
+    return false;
+#endif
     // A second init after shutdown hands back a render target that silently
     // never receives a draw: sokol reports it valid and identical to a working
     // one, and readback is uniform magenta. Refuse instead, until someone
@@ -1004,7 +1011,7 @@ inline bool metal_init(const Config &cfg) {
   }
   // Sokol owns the app lifecycle via sapp_run() in MetalPlatformAPI::run().
   // Keep the windowed graphics::init() path unsupported (use graphics::run).
-  log_error("@notimplemented graphics::init on metal backend; use graphics::run");
+  log_error("@notimplemented graphics::init on sokol backend; use graphics::run");
   return false;
 }
 
@@ -1028,6 +1035,11 @@ inline void metal_begin_frame() { MetalPlatformAPI::begin_drawing(); }
 inline void metal_end_frame() { MetalPlatformAPI::end_drawing(); }
 
 inline bool metal_capture_frame(const std::filesystem::path &path) {
+#ifdef AFTER_HOURS_USE_VULKAN
+  (void)path;
+  log_error("capture_frame is not implemented for the Vulkan backend");
+  return false;
+#else
   if (!metal_detail::g_headless)
     return false;
   auto &rt = metal_detail::g_headless_rt;
@@ -1035,6 +1047,7 @@ inline bool metal_capture_frame(const std::filesystem::path &path) {
     return false;
   return metal_capture_render_texture(rt.color_img_id, rt.width, rt.height,
                                       path.string().c_str());
+#endif
 }
 
 inline float metal_get_delta_time() {
@@ -1085,4 +1098,4 @@ afterhours::graphics::MetalPlatformAPI::take_screenshot(const char *filename) {
   metal_take_screenshot(filename);
 }
 
-#endif // AFTER_HOURS_USE_METAL
+#endif // AFTER_HOURS_SOKOL

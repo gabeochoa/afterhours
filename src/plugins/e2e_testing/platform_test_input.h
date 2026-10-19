@@ -7,7 +7,7 @@
 // This replaces the need for per-project backend-specific wrappers.
 // Just include this header and use afterhours::testing::platform_input::.
 //
-// Requires: AFTER_HOURS_USE_RAYLIB or AFTER_HOURS_USE_METAL to be defined,
+// Requires: AFTER_HOURS_USE_RAYLIB or AFTER_HOURS_SOKOL to be defined,
 //           and the corresponding graphics.h to be included before this header
 //           (or it will be included automatically).
 

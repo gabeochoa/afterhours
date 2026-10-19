@@ -12,13 +12,14 @@
 #   mkdir -p /tmp/ah-inc && ln -sf <repo-root> /tmp/ah-inc/afterhours
 #   make AH_INC=/tmp/ah-inc
 #
-# Defaults assume the repo root is two levels up and its dir is named
-# "afterhours"; override AH_INC for a differently-named worktree.
+# AH_INC defaults to three levels up: the repo root is two levels up and
+# its dir is named "afterhours". Override AH_INC for a differently-named
+# worktree.
 
-AH_INC    ?= ../..
+AH_INC    ?= ../../..
 VENDOR    ?= ../../vendor
 INCLUDES  := -isystem $(AH_INC) -isystem $(VENDOR)
-CXXFLAGS  := -std=c++20 -DSOKOL_METAL
+CXXFLAGS  := -std=c++20 -DAFTER_HOURS_USE_SOKOL
 FRAMEWORKS := -framework Metal -framework MetalKit -framework Cocoa \
     -framework Foundation -framework QuartzCore -framework CoreGraphics \
     -framework ImageIO -framework CoreServices -framework AudioToolbox

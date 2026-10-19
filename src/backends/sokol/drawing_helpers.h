@@ -1487,14 +1487,24 @@ inline bool capture_render_texture(const graphics::RenderTextureType &rt,
                                    const std::filesystem::path &path) {
   if (rt.color_img_id == 0)
     return false;
+#ifdef AFTER_HOURS_USE_VULKAN
+  (void)path;
+  log_error("capture_render_texture is not implemented for the Vulkan backend");
+  return false;
+#else
   return metal_capture_render_texture(rt.color_img_id, rt.width, rt.height,
                                       path.c_str());
+#endif
 }
 
 inline std::optional<RgbaCapture>
 capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   if (rt.color_img_id == 0)
     return {};
+#ifdef AFTER_HOURS_USE_VULKAN
+  log_error("capture_render_texture_rgba is not implemented for the Vulkan backend");
+  return {};
+#else
   uint8_t *data = nullptr;
   int size = 0;
   if (!metal_capture_render_texture_to_memory(rt.color_img_id, rt.width,
@@ -1509,11 +1519,16 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   RgbaCapture result{rt.width, rt.height, {data, data + size}};
   free(data);
   return result;
+#endif
 }
 
 inline std::optional<PngCapture>
 capture_render_texture_png(const graphics::RenderTextureType &rt) {
   if (rt.color_img_id == 0) return std::nullopt;
+#ifdef AFTER_HOURS_USE_VULKAN
+  log_error("capture_render_texture_png is not implemented for the Vulkan backend");
+  return std::nullopt;
+#else
   uint8_t *data = nullptr;
   int size = 0;
   if (!metal_capture_render_texture_png_to_memory(rt.color_img_id, rt.width,
@@ -1526,6 +1541,7 @@ capture_render_texture_png(const graphics::RenderTextureType &rt) {
   PngCapture result{{data, data + size}};
   free(data);
   return result;
+#endif
 }
 
 inline std::vector<uint8_t>

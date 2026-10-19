@@ -17,6 +17,7 @@
 //   ./entity_mapping_test
 
 #define FMT_HEADER_ONLY
+#define AFTER_HOURS_USE_NONE
 #include <fmt/format.h>
 
 #include <afterhours/ah.h>

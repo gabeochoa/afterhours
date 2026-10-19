@@ -15,7 +15,7 @@
 #include "../gestures_macos.h"
 #include "window_manager.h"
 
-#ifdef AFTER_HOURS_USE_METAL
+#ifdef AFTER_HOURS_SOKOL
 #include "../backends/sokol/backend.h"
 #endif
 
@@ -509,8 +509,8 @@ struct input : developer::Plugin {
         return "";
     }
 
-#elif defined(AFTER_HOURS_USE_METAL)
-    // ── Metal/Sokol backend — delegates to MetalPlatformAPI input state ──
+#elif defined(AFTER_HOURS_SOKOL)
+    // ── Sokol backend — delegates to MetalPlatformAPI input state ──
     using MousePosition = MyVec2;
     using KeyCode = int;
     using GamepadID = int;

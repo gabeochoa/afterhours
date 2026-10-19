@@ -21,8 +21,8 @@ using Rectangle = RectangleType;
 using Texture = TextureType;
 using Color = ColorType;
 
-#if defined(AFTER_HOURS_USE_METAL)
-// Forward declaration of the sokol/Metal backend draw_texture_pro (defined in
+#if defined(AFTER_HOURS_SOKOL)
+// Forward declaration of the sokol backend draw_texture_pro (defined in
 // backends/sokol/drawing_helpers.h, included after this header). Routing the
 // wrapper here lets sprite/animation rendering (RenderSprites / RenderAnimation
 // below) light up on the sokol backend. The call resolves at the sprite

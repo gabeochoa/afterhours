@@ -10,7 +10,9 @@
 // So this test is mostly its own include list. The checks below are there to
 // give it something to assert; the compile is the point.
 
-#define AFTER_HOURS_USE_METAL
+#if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_VULKAN) && !defined(AFTER_HOURS_USE_SOKOL)
+#define AFTER_HOURS_USE_SOKOL
+#endif
 
 // window_manager.h first and on its own: that ordering is what broke.
 #include <afterhours/src/plugins/window_manager.h>

@@ -1,6 +1,6 @@
 #define FMT_HEADER_ONLY
-#ifndef AFTER_HOURS_USE_RAYLIB
-#define AFTER_HOURS_USE_METAL
+#if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_VULKAN) && !defined(AFTER_HOURS_USE_SOKOL)
+#define AFTER_HOURS_USE_SOKOL
 #endif
 #include <afterhours/src/graphics.h>
 #include <afterhours/src/drawing_helpers.h>
@@ -15,7 +15,7 @@ int main() {
     config.height = 32;
     assert(graphics::init(config));
     auto &rt = graphics::get_render_texture();
-#ifdef AFTER_HOURS_USE_METAL
+#ifdef AFTER_HOURS_SOKOL
     sg_pass clear{};
     clear.attachments.colors[0] = {rt.color_view_id};
     clear.attachments.depth_stencil = {rt.depth_view_id};

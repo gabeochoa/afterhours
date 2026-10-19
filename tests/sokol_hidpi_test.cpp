@@ -13,7 +13,9 @@
 //
 // macOS/Metal only -- registered in tests/Makefile behind UNAME_S == Darwin.
 
-#define AFTER_HOURS_USE_METAL
+#if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_VULKAN) && !defined(AFTER_HOURS_USE_SOKOL)
+#define AFTER_HOURS_USE_SOKOL
+#endif
 
 #include <afterhours/src/graphics.h>
 #include <afterhours/src/backends/sokol/drawing_helpers.h>

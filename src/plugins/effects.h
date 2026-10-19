@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "../config.h"
 #include "../drawing_helpers.h"
 #include "../graphics.h"
 #include "files.h"
@@ -13,7 +14,7 @@ namespace afterhours {
 namespace effects {
 
 inline TextureType texture_of(graphics::RenderTextureType &rt) {
-#ifdef AFTER_HOURS_USE_METAL
+#ifdef AFTER_HOURS_SOKOL
   return TextureType{static_cast<float>(rt.width), static_cast<float>(rt.height),
                      rt.color_img_id, rt.tex_view_id, rt.sampler_id};
 #else
@@ -22,7 +23,7 @@ inline TextureType texture_of(graphics::RenderTextureType &rt) {
 }
 
 inline float texture_width(graphics::RenderTextureType &rt) {
-#ifdef AFTER_HOURS_USE_METAL
+#ifdef AFTER_HOURS_SOKOL
   return static_cast<float>(rt.width);
 #else
   return static_cast<float>(rt.texture.width);
@@ -30,7 +31,7 @@ inline float texture_width(graphics::RenderTextureType &rt) {
 }
 
 inline float texture_height(graphics::RenderTextureType &rt) {
-#ifdef AFTER_HOURS_USE_METAL
+#ifdef AFTER_HOURS_SOKOL
   return static_cast<float>(rt.height);
 #else
   return static_cast<float>(rt.texture.height);
@@ -179,7 +180,7 @@ struct BlurPass {
   void blur_a(float radius) {
     const RectangleType half{0.f, 0.f, static_cast<float>(w), static_cast<float>(h)};
     const ColorType white{255, 255, 255, 255};
-#ifdef AFTER_HOURS_USE_METAL
+#ifdef AFTER_HOURS_SOKOL
     begin_texture_mode(b);
     blur_render_texture(a, b, radius / 6.46f / static_cast<float>(w), 0.f);
     end_texture_mode();
@@ -219,7 +220,7 @@ struct BlurPass {
     const ColorType white{255, 255, 255, 255};
 
     begin_texture_mode(a);
-#ifdef AFTER_HOURS_USE_METAL
+#ifdef AFTER_HOURS_SOKOL
     {
       const TexturedQuadParams quad{{0.f, 0.f},
                                     {0.f, 0.f},
@@ -237,7 +238,7 @@ struct BlurPass {
     blur_a(radius);
 
     begin_texture_mode(frame);
-#ifdef AFTER_HOURS_USE_METAL
+#ifdef AFTER_HOURS_SOKOL
     {
       const TexturedQuadParams quad{{0.f, 0.f},
                                     {rect.x, rect.y},

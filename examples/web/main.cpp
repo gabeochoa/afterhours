@@ -15,7 +15,9 @@
 #define AFTER_HOURS_ENTITY_QUERY
 #define AFTER_HOURS_SYSTEM
 #define AFTERHOURS_SINGLE_RENDER_PASS // render systems run once per frame
-#define AFTER_HOURS_USE_METAL         // selects the sokol backend
+#if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_VULKAN) && !defined(AFTER_HOURS_USE_SOKOL)
+#define AFTER_HOURS_USE_SOKOL // selects the sokol backend
+#endif
 
 #include <afterhours/ah.h>
 #include <afterhours/src/drawing_helpers.h>

@@ -9,6 +9,10 @@
 //
 // SOKOL_NO_ENTRY: afterhours calls sapp_run() itself from graphics::run().
 
+// config.h first: it derives the sokol API (SOKOL_VULKAN / SOKOL_METAL /
+// SOKOL_GLES3) from the backend macro + platform, so no -DSOKOL_* flag is needed.
+#include <afterhours/src/config.h>
+
 #define SOKOL_IMPL
 #define SOKOL_NO_ENTRY
 
@@ -39,6 +43,12 @@
 // for itself -- this TU has to say so too. Only on the native Metal build:
 // the emscripten/WebGL2 build has no Metal.
 #if defined(SOKOL_METAL)
+#ifndef AFTER_HOURS_USE_METAL
 #define AFTER_HOURS_USE_METAL
+#endif
 #include <afterhours/src/backends/sokol/capture_impl.h>
+#elif defined(SOKOL_VULKAN)
+#ifndef AFTER_HOURS_USE_VULKAN
+#define AFTER_HOURS_USE_VULKAN
+#endif
 #endif

@@ -227,7 +227,7 @@ inline raylib::Font outline_font(raylib::Font source, const std::string &text,
   entries.push_back(std::move(entry));
   return entries.back()->font;
 }
-#elif defined(AFTER_HOURS_USE_METAL)
+#elif defined(AFTER_HOURS_SOKOL)
 struct OutlineText {
   TextureType texture{};
   FONScontext *context = nullptr;
@@ -369,7 +369,7 @@ inline void draw(Font font, const std::string &text, Vector2Type position,
   if (outline.texture.id == 0) return;
   draw_text_ex(outline, text.c_str(), position, size, spacing, color,
                rotation, center_x, center_y);
-#elif defined(AFTER_HOURS_USE_METAL)
+#elif defined(AFTER_HOURS_SOKOL)
   (void)spacing;
   (void)rotation;
   (void)center_x;

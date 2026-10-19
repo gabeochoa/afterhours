@@ -25,6 +25,8 @@ output/
 # until they are used in the project, hiding the kennynl folder
 art_storage/*
 *.exe
+*.pdb
+examples/windows/libvulkan-1.a
 
 # Example outputs. Binaries all build into output/ (ignored above); what is
 # left here is artifacts the examples write next to themselves at run time.

@@ -1,4 +1,5 @@
 #define FMT_HEADER_ONLY
+#define AFTER_HOURS_USE_NONE
 #include <afterhours/src/plugins/input_binding_codec.h>
 #include <cassert>
 

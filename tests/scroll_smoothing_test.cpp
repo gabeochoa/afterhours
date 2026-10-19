@@ -5,6 +5,8 @@
 // The cases that matter are the compatibility ones: existing code writes
 // scroll_offset directly to jump to the top, and that has to keep working.
 
+#define AFTER_HOURS_USE_NONE
+
 #include <afterhours/src/plugins/ui/components.h>
 
 #include <cmath>

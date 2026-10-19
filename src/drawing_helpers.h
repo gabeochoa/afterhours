@@ -1,12 +1,14 @@
 
 #pragma once
 
+#include "config.h"
+
 // Rect geometry lives beside the draw calls that consume it.
 #include "rect.h"
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 #include "backends/raylib/drawing_helpers.h"
-#elif defined(AFTER_HOURS_USE_METAL)
+#elif defined(AFTER_HOURS_SOKOL)
 #include "backends/sokol/drawing_helpers.h"
 #else
 // The `none` backend records draw calls rather than issuing them (see its

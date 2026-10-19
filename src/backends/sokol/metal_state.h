@@ -1,6 +1,8 @@
 #pragma once
 
-#ifdef AFTER_HOURS_USE_METAL
+#include "../../config.h"
+
+#ifdef AFTER_HOURS_SOKOL
 
 #include <cstdint>
 #include <fontstash/fontstash.h>
@@ -73,4 +75,4 @@ inline BlurPipelineState g_blur_pipeline;
 
 } // namespace afterhours::graphics::metal_detail
 
-#endif // AFTER_HOURS_USE_METAL
+#endif // AFTER_HOURS_SOKOL

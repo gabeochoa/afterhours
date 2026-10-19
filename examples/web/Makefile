@@ -19,13 +19,13 @@ FRAMEWORKS := -framework Metal -framework MetalKit -framework Cocoa \
     -framework QuartzCore -framework AudioToolbox -framework Foundation
 
 demo: main.cpp sokol_impl.cc
-	clang++ $(CXXFLAGS) -DSOKOL_METAL $(INCLUDES) -x objective-c++ -c sokol_impl.cc -o sokol_impl.o
-	clang++ $(CXXFLAGS) -DSOKOL_METAL $(INCLUDES) -c main.cpp -o main.o
+	clang++ $(CXXFLAGS) -DAFTER_HOURS_USE_SOKOL $(INCLUDES) -x objective-c++ -c sokol_impl.cc -o sokol_impl.o
+	clang++ $(CXXFLAGS) -DAFTER_HOURS_USE_SOKOL $(INCLUDES) -c main.cpp -o main.o
 	clang++ main.o sokol_impl.o $(FRAMEWORKS) -o demo
 
 # ---- Web build (Emscripten, WebGL2) -----------------------------------------
 web: main.cpp sokol_impl.cc
-	emcc $(CXXFLAGS) -DSOKOL_GLES3 $(INCLUDES) main.cpp sokol_impl.cc \
+	emcc $(CXXFLAGS) -DAFTER_HOURS_USE_SOKOL $(INCLUDES) main.cpp sokol_impl.cc \
 	    -sUSE_WEBGL2=1 -sFULL_ES3=1 -sALLOW_MEMORY_GROWTH=1 -o index.html
 
 serve: web

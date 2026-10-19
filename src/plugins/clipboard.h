@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../config.h"
+
 #include <string>
 #include <string_view>
 #include <cstdint>
@@ -57,7 +59,7 @@ inline bool has_text() {
   return text != nullptr && text[0] != '\0';
 }
 
-#elif defined(AFTER_HOURS_USE_METAL)
+#elif defined(AFTER_HOURS_SOKOL)
 
 // Sokol backend — uses sapp clipboard functions.
 // Requires desc.enable_clipboard = true in sapp_desc setup.
