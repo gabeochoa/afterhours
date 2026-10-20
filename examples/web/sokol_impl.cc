@@ -52,4 +52,5 @@
 #define AFTER_HOURS_USE_VULKAN
 #endif
 #include <afterhours/src/backends/sokol/vulkan_device.h>
+#include <afterhours/src/backends/sokol/capture_vulkan.h>
 #endif

@@ -1488,14 +1488,25 @@ extern "C" int metal_capture_render_texture_png_to_memory(
     uint32_t color_img_id, int width, int height,
     uint8_t **out_data, int *out_size);
 
+#ifdef AFTER_HOURS_USE_VULKAN
+extern "C" bool vulkan_capture_render_texture(uint32_t color_img_id,
+                                              int width, int height,
+                                              const char *path);
+extern "C" int vulkan_capture_render_texture_to_memory(
+    uint32_t color_img_id, int width, int height,
+    uint8_t **out_data, int *out_size);
+extern "C" int vulkan_capture_render_texture_png_to_memory(
+    uint32_t color_img_id, int width, int height,
+    uint8_t **out_data, int *out_size);
+#endif
+
 inline bool capture_render_texture(const graphics::RenderTextureType &rt,
                                    const std::filesystem::path &path) {
   if (rt.color_img_id == 0)
     return false;
 #ifdef AFTER_HOURS_USE_VULKAN
-  (void)path;
-  log_error("capture_render_texture is not implemented for the Vulkan backend");
-  return false;
+  return vulkan_capture_render_texture(rt.color_img_id, rt.width, rt.height,
+                                       path.string().c_str());
 #else
   return metal_capture_render_texture(rt.color_img_id, rt.width, rt.height,
                                       path.c_str());
@@ -1507,8 +1518,20 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   if (rt.color_img_id == 0)
     return {};
 #ifdef AFTER_HOURS_USE_VULKAN
-  log_error("capture_render_texture_rgba is not implemented for the Vulkan backend");
-  return {};
+  uint8_t *data = nullptr;
+  int size = 0;
+  if (!vulkan_capture_render_texture_to_memory(rt.color_img_id, rt.width,
+                                               rt.height, &data, &size)) {
+    return {};
+  }
+  const auto expected = static_cast<size_t>(rt.width) * static_cast<size_t>(rt.height) * 4;
+  if (!data || size < 0 || static_cast<size_t>(size) != expected) {
+    free(data);
+    return std::nullopt;
+  }
+  RgbaCapture result{rt.width, rt.height, {data, data + size}};
+  free(data);
+  return result;
 #else
   uint8_t *data = nullptr;
   int size = 0;
@@ -1531,8 +1554,18 @@ inline std::optional<PngCapture>
 capture_render_texture_png(const graphics::RenderTextureType &rt) {
   if (rt.color_img_id == 0) return std::nullopt;
 #ifdef AFTER_HOURS_USE_VULKAN
-  log_error("capture_render_texture_png is not implemented for the Vulkan backend");
-  return std::nullopt;
+  uint8_t *data = nullptr;
+  int size = 0;
+  if (!vulkan_capture_render_texture_png_to_memory(rt.color_img_id, rt.width,
+                                                   rt.height, &data, &size))
+    return std::nullopt;
+  if (!data || size <= 0) {
+    free(data);
+    return std::nullopt;
+  }
+  PngCapture result{{data, data + size}};
+  free(data);
+  return result;
 #else
   uint8_t *data = nullptr;
   int size = 0;

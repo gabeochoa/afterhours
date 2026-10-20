@@ -73,6 +73,12 @@ extern "C" bool vulkan_create_headless_environment(sg_vulkan_environment *out);
 extern "C" void vulkan_destroy_headless_environment();
 #endif
 
+// Implemented in capture_vulkan.h (the SOKOL_IMPL TU).
+#ifdef AFTER_HOURS_USE_VULKAN
+extern "C" bool vulkan_capture_render_texture(uint32_t color_img_id, int width,
+                                              int height, const char *path);
+#endif
+
 // One R8 atlas, allocated once at init and never grown. 2048 is 4 MB and fits
 // four faces at fourteen sizes over ASCII with room to spare; CJK or a
 // font-size slider will want more.
@@ -1054,16 +1060,15 @@ inline void metal_begin_frame() { MetalPlatformAPI::begin_drawing(); }
 inline void metal_end_frame() { MetalPlatformAPI::end_drawing(); }
 
 inline bool metal_capture_frame(const std::filesystem::path &path) {
-#ifdef AFTER_HOURS_USE_VULKAN
-  (void)path;
-  log_error("capture_frame is not implemented for the Vulkan backend");
-  return false;
-#else
   if (!metal_detail::g_headless)
     return false;
   auto &rt = metal_detail::g_headless_rt;
   if (rt.color_img_id == 0)
     return false;
+#ifdef AFTER_HOURS_USE_VULKAN
+  return vulkan_capture_render_texture(rt.color_img_id, rt.width, rt.height,
+                                       path.string().c_str());
+#else
   return metal_capture_render_texture(rt.color_img_id, rt.width, rt.height,
                                       path.string().c_str());
 #endif
