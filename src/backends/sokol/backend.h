@@ -67,6 +67,12 @@ extern "C" const void *metal_create_system_device(void);
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id, int width,
                                              int height, const char *path);
 
+// Implemented in vulkan_device.h (the SOKOL_IMPL TU), headless device only.
+#ifdef AFTER_HOURS_USE_VULKAN
+extern "C" bool vulkan_create_headless_environment(sg_vulkan_environment *out);
+extern "C" void vulkan_destroy_headless_environment();
+#endif
+
 // One R8 atlas, allocated once at init and never grown. 2048 is 4 MB and fits
 // four faces at fourteen sizes over ASCII with room to spare; CJK or a
 // font-size slider will want more.
@@ -945,10 +951,6 @@ namespace metal_backend {
 
 inline bool metal_init(const Config &cfg) {
   if (cfg.display == DisplayMode::Headless) {
-#ifdef AFTER_HOURS_USE_VULKAN
-    log_error("headless init is not implemented for the Vulkan backend");
-    return false;
-#endif
     // A second init after shutdown hands back a render target that silently
     // never receives a draw: sokol reports it valid and identical to a working
     // one, and readback is uniform magenta. Refuse instead, until someone
@@ -961,23 +963,32 @@ inline bool metal_init(const Config &cfg) {
     }
     ever_initialised = true;
 
-    // Windowless offscreen rendering: create our own Metal device (no
-    // sokol_app / WindowServer), set up sokol_gfx against it with no swapchain,
-    // and render into an offscreen texture we can read back to PNG.
+    // Windowless offscreen rendering: create our own device (no sokol_app),
+    // set up sokol_gfx against it with no swapchain, and render into an
+    // offscreen texture we can read back to PNG.
     metal_detail::g_pending_headless_size.reset();
     metal_detail::g_headless = true;
     metal_detail::g_headless_w = cfg.width;
     metal_detail::g_headless_h = cfg.height;
 
+    sg_desc desc{};
+#ifdef AFTER_HOURS_USE_VULKAN
+    sg_vulkan_environment vk_env{};
+    if (!vulkan_create_headless_environment(&vk_env)) {
+      log_error("vulkan headless: device creation failed");
+      metal_detail::g_headless = false;
+      return false;
+    }
+    desc.environment.vulkan = vk_env;
+#else
     const void *device = metal_create_system_device();
     if (!device) {
       log_error("metal headless: MTLCreateSystemDefaultDevice failed (no GPU?)");
       metal_detail::g_headless = false;
       return false;
     }
-
-    sg_desc desc{};
     desc.environment.metal.device = device;
+#endif
     // No swapchain to query, so give load_render_texture sane defaults.
     desc.environment.defaults.color_format = SG_PIXELFORMAT_BGRA8;
     desc.environment.defaults.depth_format = SG_PIXELFORMAT_DEPTH_STENCIL;
@@ -986,7 +997,12 @@ inline bool metal_init(const Config &cfg) {
     metal_detail::apply_pool_sizes(desc);
     sg_setup(&desc);
     if (!sg_isvalid()) {
+#ifdef AFTER_HOURS_USE_VULKAN
+      log_error("vulkan headless: sg_setup failed");
+      vulkan_destroy_headless_environment();
+#else
       log_error("metal headless: sg_setup failed");
+#endif
       metal_detail::g_headless = false;
       return false;
     }
@@ -1026,6 +1042,9 @@ inline void metal_shutdown() {
   }
   sgl_shutdown();
   sg_shutdown();
+#ifdef AFTER_HOURS_USE_VULKAN
+  vulkan_destroy_headless_environment();
+#endif
   metal_detail::g_initialized = false;
   metal_detail::g_headless = false;
 }

@@ -51,4 +51,5 @@
 #ifndef AFTER_HOURS_USE_VULKAN
 #define AFTER_HOURS_USE_VULKAN
 #endif
+#include <afterhours/src/backends/sokol/vulkan_device.h>
 #endif
