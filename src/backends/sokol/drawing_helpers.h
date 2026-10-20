@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <stdexcept>
 #include <vector>
 
 #include "../../developer.h"
@@ -1266,6 +1267,10 @@ inline bool textured_quad_render_texture(const graphics::RenderTextureType &src,
   auto &state = graphics::metal_detail::g_blur_pipeline;
   if (state.failed)
     return false;
+#ifdef AFTER_HOURS_USE_VULKAN
+  log_error("@notimplemented textured_quad_render_texture on the Vulkan backend");
+  throw std::runtime_error("textured_quad_render_texture is not implemented on the Vulkan backend");
+#endif
   if (!state.ready) {
     static constexpr const char *VS_SOURCE = R"MSL(
 #include <metal_stdlib>
