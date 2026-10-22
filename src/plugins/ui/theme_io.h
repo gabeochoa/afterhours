@@ -51,6 +51,7 @@ struct FloatField {
 };
 inline constexpr FloatField float_fields[] = {
     {"roundness", &Theme::roundness},
+    {"panel_corner_radius", &Theme::panel_corner_radius},
     {"focus_ring_thickness", &Theme::focus_ring_thickness},
     {"focus_ring_offset", &Theme::focus_ring_offset},
     {"disabled_opacity", &Theme::disabled_opacity, 0.f, 1.f},

@@ -61,6 +61,7 @@ TEST(full_round_trip_preserves_every_field) {
     tick = static_cast<unsigned char>(tick + 10);
   }
   original.roundness = 0.25f;
+  original.panel_corner_radius = 18.f;
   original.focus_ring_thickness = 5.f;
   original.focus_ring_offset = 1.5f;
   original.disabled_opacity = 0.75f;
@@ -75,6 +76,7 @@ TEST(full_round_trip_preserves_every_field) {
     if (Theme::is_valid(usage))
       restored.set_color(usage, Color{0, 0, 0, 0});
   restored.roundness = 99.f;
+  restored.panel_corner_radius = 99.f;
   restored.ui_scale = 99.f;
 
   auto result = tio::read_into(tio::to_string(original), restored);
@@ -91,6 +93,7 @@ TEST(full_round_trip_preserves_every_field) {
     CHECK(match);
   }
   CHECK(restored.roundness == 0.25f);
+  CHECK(restored.panel_corner_radius == 18.f);
   CHECK(restored.focus_ring_thickness == 5.f);
   CHECK(restored.focus_ring_offset == 1.5f);
   CHECK(restored.disabled_opacity == 0.75f);
