@@ -48,6 +48,7 @@
 #include <unordered_map>
 
 // Shared state (also used by font_helper.h)
+#include "font_helper.h"
 #include "metal_state.h"
 
 // Offscreen render-texture helpers are defined later in
@@ -202,17 +203,20 @@ inline void setup_sokol_gl_and_fonts() {
     return;
   }
 
-  // Fontstash drops glyph images that cannot fit. Measurement reads font
-  // advances separately, so exhaustion affects drawing without shortening layout.
+  // Fontstash drops glyph images that cannot fit, then retries the
+  // failed glyph after the error callback. Expanding here makes the
+  // retry succeed and the glyph draw; only a full-at-cap atlas still
+  // omits glyphs. Measurement reads font advances separately, so
+  // exhaustion never shortened layout even before this recovery.
   fonsSetErrorCallback(
       g_fons_ctx,
       [](void *, int error, int) {
         if (error == FONS_ATLAS_FULL) {
-          warn_once(0,
-                    "font atlas is full at {}x{}. Glyphs past this point are "
-                    "not drawn. Text measurement remains available. Raise "
-                    "AFTERHOURS_FONT_ATLAS_SIZE.",
-                    AFTERHOURS_FONT_ATLAS_SIZE, AFTERHOURS_FONT_ATLAS_SIZE);
+          if (!expand_font_atlas(graphics::metal_detail::g_fons_ctx)) {
+            warn_once(0,
+                      "font atlas is full and cannot grow; glyphs past this "
+                      "point are not drawn.");
+          }
         } else {
           warn_once(1, "fontstash error {}", error);
         }

@@ -153,9 +153,82 @@ static void coverage() {
   CHECK(!afterhours::font_has_glyph(loaded, 'A'));
 }
 
+static void fallback_mesh() {
+  namespace md = afterhours::graphics::metal_detail;
+  auto *ctx = context(2048);
+  md::g_fons_ctx = ctx;
+  const auto atkinson = std::filesystem::path(AFTERHOURS_TEST_FIXTURES) /
+                        "AtkinsonHyperlegible-Regular.ttf";
+  const auto archivo = std::filesystem::path(AFTERHOURS_TEST_FIXTURES) /
+                       "ArchivoNarrow-Regular.ttf";
+  const afterhours::Font base =
+      afterhours::load_font_from_file(atkinson.c_str());
+  const afterhours::Font extra =
+      afterhours::load_font_from_file(archivo.c_str());
+  CHECK(base.id != FONS_INVALID);
+  CHECK(extra.id != FONS_INVALID);
+  // A codepoint Archivo covers but Atkinson lacks.
+  int codepoint = 0;
+  for (int c = 128; c < 2048; ++c) {
+    if (fons__tt_getGlyphIndex(&ctx->fonts[base.id]->font, c) == 0 &&
+        fons__tt_getGlyphIndex(&ctx->fonts[extra.id]->font, c) != 0) {
+      codepoint = c;
+      break;
+    }
+  }
+  CHECK(codepoint != 0);
+  // The glyph resolves through the mesh: a real glyph, not .notdef.
+  FONSglyph *glyph =
+      fons__getGlyph(ctx, ctx->fonts[base.id], codepoint, 320, 0);
+  CHECK(glyph != nullptr);
+  CHECK(glyph && glyph->index != 0);
+  // Iteration yields a quad for it, so it draws.
+  const char text[]{static_cast<char>(0xc0 | (codepoint >> 6)),
+                    static_cast<char>(0x80 | (codepoint & 63)), 0};
+  fonsSetFont(ctx, base.id);
+  fonsSetSize(ctx, 32);
+  FONStextIter iter;
+  FONSquad quad{};
+  CHECK(fonsTextIterInit(ctx, &iter, 0, 0, text, nullptr));
+  CHECK(fonsTextIterNext(ctx, &iter, &quad));
+  CHECK(quad.x1 > quad.x0);
+  fonsDeleteInternal(ctx);
+  md::g_fons_ctx = nullptr;
+}
+
+static void atlas_expands_automatically() {
+  auto *ctx = context(64);
+  fonsSetErrorCallback(
+      ctx,
+      [](void *uptr, int error, int) {
+        if (error == FONS_ATLAS_FULL)
+          afterhours::expand_font_atlas(static_cast<FONScontext *>(uptr));
+      },
+      ctx);
+  fonsSetFont(ctx, 0);
+  fonsSetSize(ctx, 32);
+  fonsDrawText(ctx, 0, 0,
+               "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
+               nullptr);
+  int w = 0, h = 0;
+  fonsGetAtlasSize(ctx, &w, &h);
+  CHECK(w > 64 && h > 64);
+  CHECK(ctx->fonts[0]->nglyphs >= 62);
+  fonsDeleteInternal(ctx);
+  // At the cap, expansion refuses instead of looping.
+  CHECK(!afterhours::expand_font_atlas(nullptr));
+  auto *big = context(4096);
+  CHECK(!afterhours::expand_font_atlas(big));
+  fonsGetAtlasSize(big, &w, &h);
+  CHECK(w == 4096 && h == 4096);
+  fonsDeleteInternal(big);
+}
+
 int main(int argc, char **argv) {
   if (argc == 2 && std::strcmp(argv[1], "--benchmark") == 0) return benchmark();
   coverage();
+  fallback_mesh();
+  atlas_expands_automatically();
   namespace md = afterhours::graphics::metal_detail;
   const std::string text = "AVATAR wide words 0123456789 caf\xc3\xa9";
   auto *large = context(2048);

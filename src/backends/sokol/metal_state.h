@@ -8,6 +8,7 @@
 #include <fontstash/fontstash.h>
 #include <functional>
 #include <map>
+#include <set>
 #include <utility>
 #include <vector>
 // For sapp_dpi_scale/sapp_width/sapp_height used by the shim accessors below.
@@ -46,6 +47,10 @@ static constexpr int MAX_FONTS = 16;
 inline int g_font_ids[MAX_FONTS] = {};
 inline int g_font_count = 0;
 inline int g_active_font = FONS_INVALID;
+// Context the font tracking belongs to, and the fallback pairs already
+// registered in it. See mesh_font_fallbacks in font_helper.h.
+inline FONScontext *g_font_fallback_ctx = nullptr;
+inline std::set<std::pair<int, int>> g_font_fallback_pairs;
 
 // Covered codepoint ranges per fontstash id, parsed from the file's cmap at
 // load (fontstash exposes no coverage query). No entry means unknown.

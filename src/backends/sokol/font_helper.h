@@ -4,6 +4,7 @@
 #include "../../font_coverage.h"
 #include "../../measure_memo.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -25,6 +26,8 @@ inline void record_coverage(int font_id, const char *file) {
     graphics::metal_detail::g_font_coverage[font_id] = std::move(ranges);
 }
 
+inline void mesh_font_fallbacks(FONScontext *ctx, int new_id);
+
 inline Font load_font_from_file(const char *file, int = 0) {
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx) {
@@ -36,6 +39,15 @@ inline Font load_font_from_file(const char *file, int = 0) {
     log_warn("Failed to load font: {}", file);
   } else {
     record_coverage(id, file);
+    // Font ids belong to one fontstash context; a new context resets
+    // tracking, since ids from a dead context are meaningless in a new
+    // one. Production never recreates the context; tests do.
+    if (ctx != graphics::metal_detail::g_font_fallback_ctx) {
+      graphics::metal_detail::g_font_fallback_ctx = ctx;
+      graphics::metal_detail::g_font_fallback_pairs.clear();
+      graphics::metal_detail::g_font_count = 0;
+      graphics::metal_detail::g_active_font = FONS_INVALID;
+    }
     // Track loaded fonts and set the first one as active default
     auto &md = graphics::metal_detail::g_font_ids;
     if (graphics::metal_detail::g_font_count <
@@ -45,8 +57,60 @@ inline Font load_font_from_file(const char *file, int = 0) {
     if (graphics::metal_detail::g_active_font == FONS_INVALID) {
       graphics::metal_detail::g_active_font = id;
     }
+    mesh_font_fallbacks(ctx, id);
   }
   return Font{id};
+}
+
+// Fallback chain: every loaded face falls back to every other loaded
+// face, in load order, so a glyph missing from one face draws from the
+// first loaded face that has it instead of vanishing. Load order is the
+// priority: to prefer a symbols face as the fallback, load it first.
+// Measurement follows the drawn glyph: fonsTextAdvance resolves through
+// the same chain, so drawn and measured widths agree.
+// Pairs are registered once via the pair set: fontstash appends without
+// dedupe, so a reload would otherwise eat the 20-slot list with repeats.
+// This must not read fontstash structs: FONScontext is an incomplete
+// type in translation units without FONTSTASH_IMPLEMENTATION.
+inline void mesh_font_fallbacks(FONScontext *ctx, int new_id) {
+  if (!ctx)
+    return;
+  auto &pairs = graphics::metal_detail::g_font_fallback_pairs;
+  const auto &md = graphics::metal_detail::g_font_ids;
+  const int count = graphics::metal_detail::g_font_count;
+  for (int i = 0; i < count; i++) {
+    const int other = md[i];
+    if (other == new_id)
+      continue;
+    if (pairs.insert({new_id, other}).second)
+      fonsAddFallbackFont(ctx, new_id, other);
+    if (pairs.insert({other, new_id}).second)
+      fonsAddFallbackFont(ctx, other, new_id);
+  }
+}
+
+// Grow the atlas when fontstash reports it full. fontstash retries the
+// failed glyph after the error callback, so a successful expansion
+// makes the glyph draw instead of vanishing. Doubling caps at 4096: a
+// 4096x4096 R8 atlas is 16 MB, and a glyph that still cannot fit is
+// fragmentation, not capacity (resetting would drop every cached glyph
+// and corrupt in-flight quads, so it is not the recovery).
+inline constexpr int kFontAtlasMaxSize = 4096;
+
+inline bool expand_font_atlas(FONScontext *ctx) {
+  if (!ctx)
+    return false;
+  int w = 0, h = 0;
+  fonsGetAtlasSize(ctx, &w, &h);
+  if (w <= 0 || h <= 0 || (w >= kFontAtlasMaxSize && h >= kFontAtlasMaxSize))
+    return false;
+  const int nw = std::min(w * 2, kFontAtlasMaxSize);
+  const int nh = std::min(h * 2, kFontAtlasMaxSize);
+  if (!fonsExpandAtlas(ctx, nw, nh))
+    return false;
+  log_info("font atlas expanded to {}x{}; glyphs that did not fit now draw",
+           nw, nh);
+  return true;
 }
 
 inline Font load_font_from_file_with_codepoints(const char *file, int *, int) {

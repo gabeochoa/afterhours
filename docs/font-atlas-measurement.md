@@ -34,6 +34,16 @@ nice -n 10 make -C tests -B -j2 font_atlas_measure_test CXXFLAGS='-std=c++20 -Wa
 nice -n 10 ./output/font_atlas_measure_test --benchmark
 ```
 
-Rendering may still omit glyph images when full. Fallback drawing, automatic recovery
-and general measurement errors remain deferred; keep Hanabi's guard. Direct Fontstash
-bounds/drawing APIs and the Sokol spacing argument retain their existing behavior.
+Fallback drawing and automatic recovery are implemented for the sokol backend:
+every loaded face falls back to every other loaded face in load order (see
+`mesh_font_fallbacks` in `src/backends/sokol/font_helper.h`), so a glyph missing
+from one face draws from the first loaded face that has it; and the
+`FONS_ATLAS_FULL` error callback expands the atlas (doubling, cap 4096) so
+fontstash's retry draws the glyph instead of omitting it. A codepoint no loaded
+face covers still draws nothing (fontstash caches the face's .notdef);
+`FontManager::has_glyph` / `missing_codepoints` report those. Hanabi's guard
+(`src/util/atlas_guard.h`) is removable once Hanabi bumps to this version. Not
+implemented: the raylib backend, whose whole-string `DrawTextEx` path needs
+per-codepoint run splitting for fallback, and which has no dynamic atlas to
+recover. Direct Fontstash bounds/drawing APIs and the Sokol spacing argument
+retain their existing behavior.
