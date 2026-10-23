@@ -172,9 +172,23 @@ TEST(assert_ui_colour_properties) {
   auto good = pending_for("assert_ui", {"swatch", "bg=#c81e1e", "fg=#1ec81e"});
   ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), good, 0.f);
   CHECK(good.is_consumed() && good.error_message.empty());
+  // A wrong value retries instead of failing on first evaluation, then
+  // fails at the timeout carrying the last mismatch.
   auto bad = pending_for("assert_ui", {"swatch", "bg=#000000"});
   ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), bad, 0.f);
+  CHECK(bad.is_retry());
+  Entity &holder = h.coll.createEntity();
+  h.coll.merge_entity_arrays();
+  testing::E2ECommandCleanupSystem cleanup;
+  for (int i = 0; i <= PendingE2ECommand::MAX_FRAMES && !bad.is_consumed(); i++) {
+    cleanup.for_each_with(holder, bad, 0.f);
+    if (!bad.is_consumed())
+      ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), bad, 0.f);
+  }
   CHECK(bad.is_consumed() && !bad.error_message.empty());
+  CHECK(bad.error_message.find("bg=#000000") != std::string::npos);
+  CHECK(bad.error_message.find("timed out after 30 frames") !=
+        std::string::npos);
 }
 
 TEST(parse_hex_color_accepts_six_and_eight_digits) {
@@ -261,7 +275,19 @@ TEST(assert_ui_text_scoped_to_parent) {
   CHECK(scoped.is_consumed() && scoped.error_message.empty());
   auto wrong_scope = pending_for("assert_ui_text", {"Same", "in=scope_a", "w=220"});
   ui_commands::HandleAssertUITextCommand{}.for_each_with(h.root(), wrong_scope, 0.f);
+  CHECK(wrong_scope.is_retry());
+  Entity &holder2 = h.coll.createEntity();
+  h.coll.merge_entity_arrays();
+  testing::E2ECommandCleanupSystem cleanup2;
+  for (int i = 0; i <= PendingE2ECommand::MAX_FRAMES && !wrong_scope.is_consumed(); i++) {
+    cleanup2.for_each_with(holder2, wrong_scope, 0.f);
+    if (!wrong_scope.is_consumed())
+      ui_commands::HandleAssertUITextCommand{}.for_each_with(h.root(), wrong_scope, 0.f);
+  }
   CHECK(wrong_scope.is_consumed() && !wrong_scope.error_message.empty());
+  CHECK(wrong_scope.error_message.find("w=220") != std::string::npos);
+  CHECK(wrong_scope.error_message.find("timed out after 30 frames") !=
+        std::string::npos);
 }
 
 int main() { return ui_test::run_registered_tests("E2E arguments"); }

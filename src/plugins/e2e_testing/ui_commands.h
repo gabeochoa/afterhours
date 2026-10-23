@@ -1234,7 +1234,7 @@ struct HandleAssertUICommand : System<PendingE2ECommand> {
       }
       std::string err = check_ui_property(entity, prop, expected);
       if (!err.empty()) {
-        cmd.fail(std::format("assert_ui '{}': {}", name, err));
+        cmd.retry_with(std::format("assert_ui '{}': {}", name, err));
         return;
       }
     }
@@ -1269,7 +1269,7 @@ struct HandleAssertUITextCommand : System<PendingE2ECommand> {
             })
             .gen_first();
         if (!scope_opt.has_value()) {
-          cmd.fail(std::format("assert_ui_text: scope '{}' not found", expected));
+          cmd.retry_with(std::format("assert_ui_text: scope '{}' not found", expected));
           return;
         }
         scope = scope_opt.asE().id;
@@ -1299,7 +1299,7 @@ struct HandleAssertUITextCommand : System<PendingE2ECommand> {
       parse_prop_assertion(cmd.args[i], prop, expected);
       std::string err = check_ui_property(entity, prop, expected);
       if (!err.empty()) {
-        cmd.fail(std::format("assert_ui_text \"{}\": {}", text, err));
+        cmd.retry_with(std::format("assert_ui_text \"{}\": {}", text, err));
         return;
       }
     }

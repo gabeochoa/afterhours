@@ -53,6 +53,9 @@ struct PendingE2ECommand : BaseComponent {
   std::vector<std::string> args;
   int line_number = 0;
   std::string error_message;
+  // Latest mismatch from retry_with(); reported if the command times out.
+  // reset_retry() keeps it: it is the most recent evaluation, not a frame's.
+  std::string last_mismatch;
   int frames_alive = 0; // How many frames this command has existed
   // VisibleTextRegistry generation this command first looked at, for the
   // assertions that need a render to have happened since. -1 = not yet looked.
@@ -79,6 +82,17 @@ struct PendingE2ECommand : BaseComponent {
 
   // Mark command to retry next frame (recognized but waiting for condition)
   void retry() { state = CommandState::Retry; }
+
+  // Retry with the mismatch to report if the command still hasn't passed
+  // when the cleanup timeout fires. This is the retrying-assert helper:
+  // a handler checks its condition each frame and calls this instead of
+  // fail() when the value is wrong, so a state that lands one frame after
+  // the assertion runs passes instead of failing on first evaluation.
+  // Malformed assertions still fail() immediately; they can never pass.
+  void retry_with(const std::string &mismatch) {
+    state = CommandState::Retry;
+    last_mismatch = mismatch;
+  }
 
   // Check if already handled by a previous system
   bool is_consumed() const { return state == CommandState::Consumed; }

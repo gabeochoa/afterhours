@@ -996,6 +996,13 @@ struct E2ECommandCleanupSystem : System<PendingE2ECommand> {
                 error_msg = std::format(
                     "Text not found: '{}'. Visible ({}):{}", cmd.args[0],
                     texts.size(), texts.empty() ? " (empty)" : visible);
+            } else if (!cmd.last_mismatch.empty()) {
+                // A retry_with() assertion: the last mismatch says more than
+                // the generic timeout, and it is the evaluation closest to
+                // the failure.
+                error_msg = std::format("{} (timed out after {} frames)",
+                                        cmd.last_mismatch,
+                                        PendingE2ECommand::MAX_FRAMES);
             } else {
                 // Name what the command was about. Without this, four
                 // assertions against one missing element produce four

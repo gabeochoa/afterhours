@@ -121,6 +121,7 @@ ALL_TESTS := \
 	e2e_key_command_test \
 	overlay_layer_test \
 	unhandled_command_test \
+	e2e_retry_test \
 	mouse_axis_action_test \
 	card_and_type_scale_test \
 	fixed_timestep_test \
