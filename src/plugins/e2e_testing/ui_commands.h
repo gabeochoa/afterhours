@@ -1253,9 +1253,15 @@ struct HandleAssertUITextCommand : System<PendingE2ECommand> {
     std::string text = cmd.args[0];
 
     // in=<debug_name> restricts the match to that element's subtree.
+    // A bare `absent` asserts no element carries the exact label (in scope).
     EntityID scope = -1;
+    bool absent = false;
     std::vector<size_t> prop_args;
     for (size_t i = 1; i < cmd.args.size(); i++) {
+      if (cmd.args[i] == "absent") {
+        absent = true;
+        continue;
+      }
       std::string prop, expected;
       if (!parse_prop_assertion(cmd.args[i], prop, expected)) {
         cmd.fail(std::format("assert_ui_text: malformed '{}'", cmd.args[i]));
@@ -1277,23 +1283,50 @@ struct HandleAssertUITextCommand : System<PendingE2ECommand> {
         prop_args.push_back(i);
       }
     }
+    if (absent && !prop_args.empty()) {
+      cmd.fail("assert_ui_text: 'absent' cannot combine with property checks");
+      return;
+    }
 
-    auto opt = ui_query()
+    // Collect every match. Checking the first one made the assertion depend
+    // on iteration order: a passing element elsewhere could not save it,
+    // and a passing one could not say which element it asserted.
+    std::vector<Entity *> matches;
+    auto query = ui_query()
         .whereHasComponent<ui::UIComponent>()
         .whereHasComponent<ui::HasLabel>()
         .whereLambda([&](const Entity &e) {
           return e.get<ui::HasLabel>().label == text &&
                  e.get<ui::UIComponent>().was_rendered_to_screen &&
                  (scope == -1 || is_within_scope(const_cast<Entity &>(e), scope));
-        })
-        .gen_first();
+        });
+    for (Entity &e : query.gen()) matches.push_back(&e);
 
-    if (!opt.has_value()) {
-      cmd.retry();
+    if (absent) {
+      if (cmd.frames_alive == 0) {
+        cmd.retry();  // Let a frame render; absence before that proves nothing.
+        return;
+      }
+      if (matches.empty()) {
+        cmd.consume();
+        return;
+      }
+      cmd.retry_with(std::format("assert_ui_text \"{}\": {} matching element(s) still present",
+                                 text, matches.size()));
       return;
     }
 
-    Entity &entity = opt.asE();
+    if (matches.empty()) {
+      cmd.retry();
+      return;
+    }
+    if (matches.size() > 1) {
+      cmd.fail(std::format("assert_ui_text \"{}\": {} elements match; add in=<scope> to name one",
+                          text, matches.size()));
+      return;
+    }
+
+    Entity &entity = *matches[0];
     for (size_t i : prop_args) {
       std::string prop, expected;
       parse_prop_assertion(cmd.args[i], prop, expected);

@@ -290,4 +290,77 @@ TEST(assert_ui_text_scoped_to_parent) {
         std::string::npos);
 }
 
+TEST(assert_ui_text_ambiguous_and_absent) {
+  ui_test::ImmTestHarness h;
+  h.begin_frame();
+  auto scope_a = ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
+                              ui::imm::ComponentConfig{}
+                                  .with_size({ui::pixels(300), ui::pixels(100)})
+                                  .with_debug_name("scope_a"));
+  ui::imm::div(h.context(), ui::imm::mk(scope_a.ent(), 0),
+               ui::imm::ComponentConfig{}
+                   .with_size({ui::pixels(100), ui::pixels(40)})
+                   .with_label("Same")
+                   .with_debug_name("child_a"));
+  auto scope_b = ui::imm::div(h.context(), ui::imm::mk(h.root(), 1),
+                              ui::imm::ComponentConfig{}
+                                  .with_size({ui::pixels(300), ui::pixels(100)})
+                                  .with_absolute_position(0, 120)
+                                  .with_debug_name("scope_b"));
+  ui::imm::div(h.context(), ui::imm::mk(scope_b.ent(), 0),
+               ui::imm::ComponentConfig{}
+                   .with_size({ui::pixels(220), ui::pixels(40)})
+                   .with_label("Same")
+                   .with_debug_name("child_b"));
+  ui::imm::div(h.context(), ui::imm::mk(scope_b.ent(), 1),
+               ui::imm::ComponentConfig{}
+                   .with_size({ui::pixels(100), ui::pixels(40)})
+                   .with_label("OnlyB")
+                   .with_debug_name("child_only"));
+  h.layout_only();
+
+  // Two "Same" labels, no scope: ambiguous, not a silent first-match check.
+  auto ambiguous = pending_for("assert_ui_text", {"Same", "w=220"});
+  ui_commands::HandleAssertUITextCommand{}.for_each_with(h.root(), ambiguous, 0.f);
+  CHECK(ambiguous.is_consumed() && !ambiguous.error_message.empty());
+  CHECK(ambiguous.error_message.find("2 elements match") != std::string::npos);
+  CHECK(ambiguous.error_message.find("in=<scope>") != std::string::npos);
+
+  // Absence waits a frame, then passes when nothing carries the label.
+  auto missing = pending_for("assert_ui_text", {"Missing", "absent"});
+  ui_commands::HandleAssertUITextCommand{}.for_each_with(h.root(), missing, 0.f);
+  CHECK(missing.is_retry());
+  missing.frames_alive = 1;
+  ui_commands::HandleAssertUITextCommand{}.for_each_with(h.root(), missing, 0.f);
+  CHECK(missing.is_consumed() && missing.error_message.empty());
+
+  // Absence is scoped: "OnlyB" is absent from scope_a, present in scope_b.
+  auto scoped_absent = pending_for("assert_ui_text", {"OnlyB", "in=scope_a", "absent"});
+  scoped_absent.frames_alive = 1;
+  ui_commands::HandleAssertUITextCommand{}.for_each_with(h.root(), scoped_absent, 0.f);
+  CHECK(scoped_absent.is_consumed() && scoped_absent.error_message.empty());
+
+  // Present labels fail absence at the timeout, carrying the last mismatch.
+  auto present = pending_for("assert_ui_text", {"Same", "absent"});
+  present.frames_alive = 1;
+  ui_commands::HandleAssertUITextCommand{}.for_each_with(h.root(), present, 0.f);
+  CHECK(present.is_retry());
+  Entity &holder = h.coll.createEntity();
+  h.coll.merge_entity_arrays();
+  testing::E2ECommandCleanupSystem cleanup;
+  for (int i = 0; i <= PendingE2ECommand::MAX_FRAMES && !present.is_consumed(); i++) {
+    cleanup.for_each_with(holder, present, 0.f);
+    if (!present.is_consumed())
+      ui_commands::HandleAssertUITextCommand{}.for_each_with(h.root(), present, 0.f);
+  }
+  CHECK(present.is_consumed() && !present.error_message.empty());
+  CHECK(present.error_message.find("still present") != std::string::npos);
+
+  // `absent` cannot combine with property checks.
+  auto combined = pending_for("assert_ui_text", {"Same", "absent", "w=220"});
+  ui_commands::HandleAssertUITextCommand{}.for_each_with(h.root(), combined, 0.f);
+  CHECK(combined.is_consumed() && !combined.error_message.empty());
+  CHECK(combined.error_message.find("cannot combine") != std::string::npos);
+}
+
 int main() { return ui_test::run_registered_tests("E2E arguments"); }
