@@ -214,6 +214,7 @@ ALL_TESTS += native_dialogs_macos_test
 ALL_TESTS += render_capture_metal_test
 # Sokol is Metal here, so macOS-only; renders headless, no window.
 ALL_TESTS += sokol_blend_test
+ALL_TESTS += sokol_capture_test
 ALL_TESTS += sokol_geometry_test
 # Own process: the Metal backend cannot be re-initialised, so this cannot be a
 # section of sokol_blend_test.
@@ -340,12 +341,17 @@ SOKOL_FRAMEWORKS := -framework Metal -framework MetalKit -framework Cocoa \
 $(OUT)/sokol_blend_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_blend_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_blend_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_capture_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_capture_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_capture_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/sokol_capture_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_geometry_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_geometry_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_geometry_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 # The multi-TU sokol rules emit a .d covering only sokol_impl.cc, so header
 # edits rebuild nothing without an explicit prerequisite (stale-binary trap).
 $(OUT)/sokol_blend_test: ../src/backends/sokol/drawing_helpers.h
+$(OUT)/sokol_capture_test: ../src/backends/sokol/drawing_helpers.h
 $(OUT)/sokol_geometry_test: ../src/backends/sokol/drawing_helpers.h
 $(OUT)/sokol_hidpi_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_hidpi_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++

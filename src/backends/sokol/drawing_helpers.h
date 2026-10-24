@@ -42,6 +42,8 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
                                       : graphics::metal_detail::g_active_font;
   if (fid == FONS_INVALID)
     return;
+  capture::record("text", RectangleType{position.x, position.y, 0.f, font_size},
+                  color, content ? content : "");
   fonsSetFont(ctx, fid);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
@@ -69,6 +71,8 @@ inline void draw_text(const char *content, const float x, const float y,
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx || graphics::metal_detail::g_active_font == FONS_INVALID)
     return;
+  capture::record("text", RectangleType{x, y, 0.f, font_size}, color,
+                  content ? content : "");
   fonsSetFont(ctx, graphics::metal_detail::g_active_font);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
@@ -88,6 +92,7 @@ inline void draw_text(const char *content, const float x, const float y,
 }
 
 inline void draw_rectangle(const RectangleType rect, const Color color) {
+  capture::record("rectangle", rect, color);
   sgl_begin_quads();
   metal_draw_detail::set_color(color);
   sgl_v2f(rect.x, rect.y);
@@ -100,6 +105,7 @@ inline void draw_rectangle(const RectangleType rect, const Color color) {
 inline void draw_rectangle_outline(const RectangleType rect, const Color color,
                                    const float thickness) {
   // Draw 4 thin rects to form an outline
+  capture::record("rectangle_outline", rect, color);
   float x = rect.x, y = rect.y, w = rect.width, h = rect.height, t = thickness;
   draw_rectangle(RectangleType{x, y, w, t}, color);             // top
   draw_rectangle(RectangleType{x, y + h - t, w, t}, color);     // bottom
@@ -116,6 +122,7 @@ inline void draw_rectangle_rounded(
     const RectangleType rect, const float roundness, const int segments,
     const Color color,
     const std::bitset<4> corners = std::bitset<4>().reset()) {
+  capture::record("rectangle_rounded", rect, color);
   if (corners.none() || roundness <= 0.0f) {
     draw_rectangle(rect, color);
     return;
@@ -236,6 +243,7 @@ inline void draw_rectangle_rounded_lines(
     const RectangleType rect, const float roundness, const int segments,
     const Color color,
     const std::bitset<4> corners = std::bitset<4>().reset()) {
+  capture::record("rectangle_rounded_lines", rect, color);
   if (corners.none() || roundness <= 0.0f) {
     draw_rectangle_outline(rect, color);
     return;
@@ -597,6 +605,7 @@ inline void draw_line(int x1, int y1, int x2, int y2, Color color) {
 
 inline void draw_line_ex(Vector2Type start, Vector2Type end, float thickness,
                          Color color) {
+  capture::record("line", RectangleType{start.x, start.y, end.x - start.x, end.y - start.y}, color, "");
   const float dx = end.x - start.x;
   const float dy = end.y - start.y;
   const float len = std::sqrt(dx * dx + dy * dy);
@@ -857,11 +866,13 @@ inline void draw_texture_pro(TextureType tex, RectangleType src, RectangleType d
 inline void draw_quad(const Vector2Type (&p)[4], Color color) {
   const float min_x = std::min({p[0].x, p[1].x, p[2].x, p[3].x}), max_x = std::max({p[0].x, p[1].x, p[2].x, p[3].x});
   const float min_y = std::min({p[0].y, p[1].y, p[2].y, p[3].y}), max_y = std::max({p[0].y, p[1].y, p[2].y, p[3].y});
+  capture::record("quad", RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, color, "");
   draw_rectangle(RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, color);
 }
 inline void draw_texture_quad(TextureType tex, const Vector2Type (&p)[4], Color tint) {
   const float min_x = std::min({p[0].x, p[1].x, p[2].x, p[3].x}), max_x = std::max({p[0].x, p[1].x, p[2].x, p[3].x});
   const float min_y = std::min({p[0].y, p[1].y, p[2].y, p[3].y}), max_y = std::max({p[0].y, p[1].y, p[2].y, p[3].y});
+  capture::record("texture_quad", RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, tint, "");
   draw_texture_pro(tex, RectangleType{0.f, 0.f, float(tex.width), float(tex.height)},
                    RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, Vector2Type{0.f, 0.f}, 0.f, tint);
 }
