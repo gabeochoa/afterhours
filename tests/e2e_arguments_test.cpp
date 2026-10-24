@@ -152,6 +152,14 @@ TEST(malformed_script_does_not_fail_the_next_batch_script) {
   CHECK(captured.find("[PASS] next") != std::string::npos);
 }
 
+// registerSingleton emplaces: a second registration is a no-op that keeps
+// pointing at the first harness's (destroyed) entity, so get_singleton_cmp
+// returns null even though has_singleton is true. Erase before re-registering.
+static void reset_ui_context_singleton() {
+  EntityHelper::get_default_collection().singletonMap.erase(
+      components::get_type_id<ui::UIContext<ui_test::TestInputAction>>());
+}
+
 static PendingE2ECommand pending_for(std::string name, std::vector<std::string> args) {
   PendingE2ECommand pending;
   pending.name = std::move(name);
@@ -484,6 +492,109 @@ TEST(expect_state_assertions_retry_on_mismatch) {
     ui_commands::HandleExpectClipboardCommand{}.for_each_with(h.root(), clip_bad, 0.f);
     CHECK(clip_bad.is_retry());
   }
+}
+
+TEST(expect_no_focus_and_hovered) {
+  ui_test::ImmTestHarness h;
+  EntityHelper::registerSingleton<ui::UIContext<ui_test::TestInputAction>>(h.context_entity());
+  h.begin_frame();
+  auto box = ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
+                          ui::imm::ComponentConfig{}
+                              .with_size({ui::pixels(200), ui::pixels(40)})
+                              .with_label("box")
+                              .with_debug_name("box"));
+  h.layout_only();
+
+  auto none = pending_for("expect_no_focus", {});
+  ui_commands::HandleExpectNoFocusCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), none, 0.f);
+  CHECK(none.is_consumed() && none.error_message.empty());
+  h.context().focus_id = box.ent().id;
+  auto held = pending_for("expect_no_focus", {});
+  ui_commands::HandleExpectNoFocusCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), held, 0.f);
+  CHECK(held.is_retry());
+  CHECK(held.last_mismatch.find("'box'") != std::string::npos);
+
+  auto not_hot = pending_for("expect_hovered", {"box"});
+  ui_commands::HandleExpectHoveredCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), not_hot, 0.f);
+  CHECK(not_hot.is_retry());
+  h.context().set_hot(box.ent().id);
+  auto hot = pending_for("expect_hovered", {"box"});
+  ui_commands::HandleExpectHoveredCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), hot, 0.f);
+  CHECK(hot.is_consumed() && hot.error_message.empty());
+  auto missing = pending_for("expect_hovered", {"nope"});
+  ui_commands::HandleExpectHoveredCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), missing, 0.f);
+  CHECK(missing.is_retry());
+  reset_ui_context_singleton();
+}
+
+TEST(click_label_hit_test) {
+  // Covered: retry, naming the cover.
+  {
+    ui_test::ImmTestHarness h;
+    reset_ui_context_singleton();
+    EntityHelper::registerSingleton<ui::UIContext<ui_test::TestInputAction>>(h.context_entity());
+    h.begin_frame();
+    auto target = ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
+                               ui::imm::ComponentConfig{}
+                                   .with_absolute_position(100, 100)
+                                   .with_size({ui::pixels(100), ui::pixels(40)})
+                                   .with_label("Target")
+                                   .with_debug_name("target"));
+    target.ent().addComponent<ui::HasClickListener>([](Entity &) {});
+    auto cover = ui::imm::div(h.context(), ui::imm::mk(h.root(), 1),
+                              ui::imm::ComponentConfig{}
+                                  .with_absolute_position(120, 100)
+                                  .with_size({ui::pixels(100), ui::pixels(40)})
+                                  .with_label("Cover")
+                                  .with_debug_name("cover"));
+    cover.ent().addComponent<ui::HasClickListener>([](Entity &) {});
+    h.layout_only();
+    auto covered = pending_for("click_label", {"Target"});
+    ui_commands::HandleClickLabelCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), covered, 0.f);
+    CHECK(covered.is_retry());
+    CHECK(covered.last_mismatch.find("covered by 'cover'") != std::string::npos);
+  }
+  // Uncovered: consume.
+  {
+    ui_test::ImmTestHarness h;
+    reset_ui_context_singleton();
+    EntityHelper::registerSingleton<ui::UIContext<ui_test::TestInputAction>>(h.context_entity());
+    h.begin_frame();
+    auto target = ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
+                               ui::imm::ComponentConfig{}
+                                   .with_absolute_position(100, 100)
+                                   .with_size({ui::pixels(100), ui::pixels(40)})
+                                   .with_label("Target")
+                                   .with_debug_name("target"));
+    target.ent().addComponent<ui::HasClickListener>([](Entity &) {});
+    h.layout_only();
+    auto go = pending_for("click_label", {"Target"});
+    ui_commands::HandleClickLabelCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), go, 0.f);
+    CHECK(go.is_consumed() && go.error_message.empty());
+  }
+  // Ambiguous: fail, like assert_ui_text.
+  {
+    ui_test::ImmTestHarness h;
+    reset_ui_context_singleton();
+    EntityHelper::registerSingleton<ui::UIContext<ui_test::TestInputAction>>(h.context_entity());
+    h.begin_frame();
+    ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
+                 ui::imm::ComponentConfig{}
+                     .with_absolute_position(100, 100)
+                     .with_size({ui::pixels(100), ui::pixels(40)})
+                     .with_label("Dupe"));
+    ui::imm::div(h.context(), ui::imm::mk(h.root(), 1),
+                 ui::imm::ComponentConfig{}
+                     .with_absolute_position(300, 100)
+                     .with_size({ui::pixels(100), ui::pixels(40)})
+                     .with_label("Dupe"));
+    h.layout_only();
+    auto amb = pending_for("click_label", {"Dupe"});
+    ui_commands::HandleClickLabelCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), amb, 0.f);
+    CHECK(amb.is_consumed() && !amb.error_message.empty());
+    CHECK(amb.error_message.find("2 elements match") != std::string::npos);
+  }
+  reset_ui_context_singleton();
 }
 
 int main() { return ui_test::run_registered_tests("E2E arguments"); }

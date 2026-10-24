@@ -381,6 +381,165 @@ struct HandleExpectFocusedCommand : System<PendingE2ECommand> {
   }
 };
 
+// Forward declaration: defined with the other scope helpers below.
+inline bool is_within_scope(Entity &entity, EntityID scope);
+
+// Handle 'expect_no_focus' - asserts nothing holds keyboard focus.
+template <typename InputAction>
+struct HandleExpectNoFocusCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("expect_no_focus"))
+      return;
+    auto *ctx = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    if (!ctx) {
+      cmd.fail("UIContext not found");
+      return;
+    }
+    if (ctx->focus_id == ctx->ROOT) {
+      cmd.consume();
+      return;
+    }
+    std::string holder = std::format("entity {}", ctx->focus_id);
+    auto opt = ui::UICollectionHolder::getEntityForID(ctx->focus_id);
+    if (opt.valid() && opt.asE().template has<ui::UIComponentDebug>())
+      holder = opt.asE().template get<ui::UIComponentDebug>().name();
+    cmd.retry_with(std::format("'{}' is focused, expected none", holder));
+  }
+};
+
+// Handle 'expect_hovered name' - asserts the named element is hovered.
+template <typename InputAction>
+struct HandleExpectHoveredCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("expect_hovered"))
+      return;
+    if (!cmd.has_args(1)) {
+      cmd.fail("expect_hovered requires component name");
+      return;
+    }
+    auto *ctx = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    if (!ctx) {
+      cmd.fail("UIContext not found");
+      return;
+    }
+    const auto &name = cmd.arg(0);
+    auto query = ui_query()
+                     .whereHasComponent<ui::UIComponent>()
+                     .whereHasComponent<ui::UIComponentDebug>()
+                     .whereLambda([&](const Entity &e) {
+                       return e.get<ui::UIComponentDebug>().name() == name;
+                     })
+                     .first();
+    for (Entity &entity : query.gen()) {
+      if (ctx->is_hot(entity.id)) {
+        cmd.consume();
+      } else {
+        cmd.retry_with(std::format("'{}' is not hovered", name));
+      }
+      return;
+    }
+    cmd.retry_with(std::format("UI component not found: {}", name));
+  }
+};
+
+// Handle 'click_label "text" [in=<scope>]' - clicks the element with the
+// exact label, but only if the click would land on it. click_text clicks the
+// first substring match at its centre without checking what is on top, so a
+// click that hit a modal or a covering element still passed. This one
+// resolves the hit target the way a real click would (same ResolveHitTarget
+// walk, including modal gates) and retries while a different element covers
+// the centre.
+template <typename InputAction>
+struct HandleClickLabelCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("click_label"))
+      return;
+    if (!cmd.has_args(1)) {
+      cmd.fail("click_label requires text");
+      return;
+    }
+    const std::string &text = cmd.arg(0);
+    EntityID scope = -1;
+    for (size_t i = 1; i < cmd.args.size(); i++) {
+      const std::string &a = cmd.args[i];
+      if (a.starts_with("in=")) {
+        const std::string scope_name = a.substr(3);
+        auto scope_opt = ui_query()
+                             .whereHasComponent<ui::UIComponentDebug>()
+                             .whereLambda([&](const Entity &e) {
+                               return e.get<ui::UIComponentDebug>().name_value == scope_name;
+                             })
+                             .gen_first();
+        if (!scope_opt.has_value()) {
+          cmd.retry_with(std::format("click_label: scope '{}' not found", scope_name));
+          return;
+        }
+        scope = scope_opt.asE().id;
+      } else {
+        cmd.fail(std::format("click_label: unexpected argument '{}'", a));
+        return;
+      }
+    }
+
+    std::vector<Entity *> matches;
+    auto query = ui_query()
+                     .whereHasComponent<ui::UIComponent>()
+                     .whereHasComponent<ui::HasLabel>()
+                     .whereLambda([&](const Entity &e) {
+                       return e.get<ui::HasLabel>().label == text &&
+                              e.get<ui::UIComponent>().was_rendered_to_screen &&
+                              (scope == -1 || is_within_scope(const_cast<Entity &>(e), scope));
+                     });
+    for (Entity &e : query.gen()) matches.push_back(&e);
+    if (matches.empty()) {
+      cmd.retry_with(std::format("No UI with text: {}", text));
+      return;
+    }
+    if (matches.size() > 1) {
+      cmd.fail(std::format("click_label \"{}\": {} elements match; add in=<scope> to name one",
+                          text, matches.size()));
+      return;
+    }
+
+    Entity &target = *matches[0];
+    if (target.is_missing<ui::HasClickListener>() &&
+        target.is_missing<ui::HasDragListener>()) {
+      cmd.fail(std::format("click_label \"{}\": element has no click listener", text));
+      return;
+    }
+    auto *ctx = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    if (!ctx) {
+      cmd.fail("UIContext not found");
+      return;
+    }
+    const auto rect = get_screen_rect(target);
+    const Vector2Type centre{rect.x + rect.width / 2, rect.y + rect.height / 2};
+    const auto saved_pos = ctx->mouse.pos;
+    const EntityID saved_hot = ctx->hot_id;
+    ctx->mouse.pos = centre;
+    ui::ResolveHitTarget<InputAction> resolver;
+    resolver.context = ctx;
+    resolver.resolve();
+    const EntityID winner = ctx->hot_id;
+    ctx->mouse.pos = saved_pos;
+    ctx->hot_id = saved_hot;
+    if (winner == target.id) {
+      test_input::simulate_click(centre.x, centre.y);
+      cmd.consume();
+      return;
+    }
+    if (winner == ctx->ROOT) {
+      cmd.retry_with(std::format("click_label \"{}\": nothing hit-testable at its centre", text));
+      return;
+    }
+    std::string cover = std::format("entity {}", winner);
+    auto cover_opt = ui::UICollectionHolder::getEntityForID(winner);
+    if (cover_opt.valid() && cover_opt.asE().template has<ui::UIComponentDebug>())
+      cover = cover_opt.asE().template get<ui::UIComponentDebug>().name();
+    cmd.retry_with(std::format("click_label \"{}\": centre is covered by '{}'", text, cover));
+  }
+};
+
 // Handle 'click_button "text"' - clicks button by its label text
 template <typename InputAction>
 struct HandleClickButtonCommand : System<PendingE2ECommand> {
@@ -1547,6 +1706,12 @@ void register_ui_commands(SystemManager &sm,
       std::make_unique<HandleExpectSelectedTextCommand<InputAction>>());
   sm.register_update_system(
       std::make_unique<HandleExpectClipboardCommand>());
+  sm.register_update_system(
+      std::make_unique<HandleExpectNoFocusCommand<InputAction>>());
+  sm.register_update_system(
+      std::make_unique<HandleExpectHoveredCommand<InputAction>>());
+  sm.register_update_system(
+      std::make_unique<HandleClickLabelCommand<InputAction>>());
   sm.register_update_system(
       std::make_unique<HandleMultiClickUICommand<InputAction, 2>>());
   sm.register_update_system(
