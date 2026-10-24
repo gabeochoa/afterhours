@@ -1181,6 +1181,12 @@ inline std::string check_ui_property(Entity &entity, const std::string &prop,
       actual = ui::detail::resolve_label_color(
           entity.get<ui::HasLabel>(), ui::imm::ThemeDefaults::get().get_theme());
     }
+    // Match what rendering draws: the colour above is the pre-opacity value,
+    // and the fill / label paths scale alpha by the effective opacity (own
+    // HasOpacity times ancestors'). Hover is not applied: it needs the live
+    // pointer state and context theme, which this check cannot see.
+    const float opacity = ui::detail::compute_effective_opacity(entity);
+    if (opacity < 1.0f) actual = colors::opacity_pct(actual, opacity);
     if (actual.r != want.r || actual.g != want.g || actual.b != want.b ||
         actual.a != want.a)
       return std::format("{}={} but got {}", prop, format_hex_color(want),

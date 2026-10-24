@@ -191,6 +191,46 @@ TEST(assert_ui_colour_properties) {
         std::string::npos);
 }
 
+TEST(assert_ui_colour_applies_effective_opacity) {
+  ui_test::ImmTestHarness h;
+  h.begin_frame();
+  // Own opacity: 255 * 0.5 -> 127 (0x7f).
+  ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
+               ui::imm::ComponentConfig{}
+                   .with_size({ui::pixels(200), ui::pixels(40)})
+                   .with_label("faded")
+                   .with_custom_background(Color{200, 30, 30, 255})
+                   .with_custom_text_color(Color{30, 200, 30, 255})
+                   .with_opacity(0.5f)
+                   .with_debug_name("faded"));
+  // Ancestor opacity: parent 0.5, child opaque -> child effective 0.5.
+  auto parent = ui::imm::div(h.context(), ui::imm::mk(h.root(), 1),
+                             ui::imm::ComponentConfig{}
+                                 .with_size({ui::pixels(200), ui::pixels(40)})
+                                 .with_opacity(0.5f)
+                                 .with_debug_name("faded_parent"));
+  ui::imm::div(h.context(), ui::imm::mk(parent.ent(), 0),
+               ui::imm::ComponentConfig{}
+                   .with_size({ui::pixels(100), ui::pixels(20)})
+                   .with_custom_background(Color{200, 30, 30, 255})
+                   .with_debug_name("nested"));
+  h.layout_only();
+
+  auto faded_bg = pending_for("assert_ui", {"faded", "bg=#c81e1e7f"});
+  ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), faded_bg, 0.f);
+  CHECK(faded_bg.is_consumed() && faded_bg.error_message.empty());
+  auto faded_fg = pending_for("assert_ui", {"faded", "fg=#1ec81e7f"});
+  ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), faded_fg, 0.f);
+  CHECK(faded_fg.is_consumed() && faded_fg.error_message.empty());
+  // The unfaded colour no longer passes: it retries instead of matching.
+  auto unfaded = pending_for("assert_ui", {"faded", "bg=#c81e1e"});
+  ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), unfaded, 0.f);
+  CHECK(unfaded.is_retry());
+  auto nested = pending_for("assert_ui", {"nested", "bg=#c81e1e7f"});
+  ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), nested, 0.f);
+  CHECK(nested.is_consumed() && nested.error_message.empty());
+}
+
 TEST(parse_hex_color_accepts_six_and_eight_digits) {
   Color c{};
   CHECK(ui_commands::parse_hex_color("#102030", c));
