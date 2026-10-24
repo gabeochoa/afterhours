@@ -1,4 +1,5 @@
 #include "ui_test_harness.h"
+#include <afterhours/src/plugins/clipboard.h>
 #include <afterhours/src/plugins/e2e_testing/runner.h>
 #include <afterhours/src/plugins/ui/text_input/text_area_state.h>
 
@@ -262,7 +263,18 @@ TEST(expect_input_text_reads_a_text_area) {
   CHECK(good.is_consumed() && good.error_message.empty());
   auto bad = pending_for("expect_input_text", {"composer", "hello"});
   ui_commands::HandleExpectInputTextCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), bad, 0.f);
+  CHECK(bad.is_retry());
+  Entity &holder = h.coll.createEntity();
+  h.coll.merge_entity_arrays();
+  testing::E2ECommandCleanupSystem cleanup;
+  for (int i = 0; i <= PendingE2ECommand::MAX_FRAMES && !bad.is_consumed(); i++) {
+    cleanup.for_each_with(holder, bad, 0.f);
+    if (!bad.is_consumed())
+      ui_commands::HandleExpectInputTextCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), bad, 0.f);
+  }
   CHECK(bad.is_consumed() && !bad.error_message.empty());
+  CHECK(bad.error_message.find("expected \"hello\"") != std::string::npos);
+  CHECK(bad.error_message.find("timed out after 30 frames") != std::string::npos);
 }
 
 TEST(expect_no_ui_waits_a_frame_then_judges_absence) {
@@ -401,6 +413,77 @@ TEST(assert_ui_text_ambiguous_and_absent) {
   ui_commands::HandleAssertUITextCommand{}.for_each_with(h.root(), combined, 0.f);
   CHECK(combined.is_consumed() && !combined.error_message.empty());
   CHECK(combined.error_message.find("cannot combine") != std::string::npos);
+}
+
+TEST(expect_state_assertions_retry_on_mismatch) {
+  ui_test::ImmTestHarness h;
+  h.begin_frame();
+  auto box = ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
+                          ui::imm::ComponentConfig{}
+                              .with_size({ui::pixels(200), ui::pixels(40)})
+                              .with_label("box")
+                              .with_debug_name("box"));
+  box.ent().addComponent<ui::HasCheckboxState>(true);
+  box.ent().addComponent<ui::HasSliderState>(0.5f);
+  box.ent().addComponent<ui::HasScrollView>();
+  box.ent().get<ui::HasScrollView>().scroll_offset = {0.f, 42.f};
+  auto field = ui::imm::div(h.context(), ui::imm::mk(h.root(), 1),
+                            ui::imm::ComponentConfig{}
+                                .with_size({ui::pixels(200), ui::pixels(100)})
+                                .with_debug_name("composer"));
+  field.ent().addComponent<text_input::HasTextAreaState>("hello world");
+  h.layout_only();
+
+  // Match directions still consume.
+  auto cb_good = pending_for("expect_checkbox", {"box", "true"});
+  ui_commands::HandleExpectCheckboxCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), cb_good, 0.f);
+  CHECK(cb_good.is_consumed() && cb_good.error_message.empty());
+  auto sl_good = pending_for("expect_slider", {"box", "0.5"});
+  ui_commands::HandleExpectSliderCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), sl_good, 0.f);
+  CHECK(sl_good.is_consumed() && sl_good.error_message.empty());
+  // Cursor starts at end of text: selection is (11, 11) with no anchor.
+  auto sel_good = pending_for("expect_input_selection", {"composer", "11", "11"});
+  ui_commands::HandleExpectInputSelectionCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), sel_good, 0.f);
+  CHECK(sel_good.is_consumed() && sel_good.error_message.empty());
+  auto st_good = pending_for("expect_selected_text", {"composer", ""});
+  ui_commands::HandleExpectSelectedTextCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), st_good, 0.f);
+  CHECK(st_good.is_consumed() && st_good.error_message.empty());
+  auto scroll_good = pending_for("assert_ui", {"box", "scroll_y=42"});
+  ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), scroll_good, 0.f);
+  CHECK(scroll_good.is_consumed() && scroll_good.error_message.empty());
+
+  // Mismatch directions retry instead of failing on first evaluation.
+  auto cb_bad = pending_for("expect_checkbox", {"box", "false"});
+  ui_commands::HandleExpectCheckboxCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), cb_bad, 0.f);
+  CHECK(cb_bad.is_retry());
+  auto sl_bad = pending_for("expect_slider", {"box", "0.8"});
+  ui_commands::HandleExpectSliderCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), sl_bad, 0.f);
+  CHECK(sl_bad.is_retry());
+  auto sel_bad = pending_for("expect_input_selection", {"composer", "1", "3"});
+  ui_commands::HandleExpectInputSelectionCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), sel_bad, 0.f);
+  CHECK(sel_bad.is_retry());
+  auto st_bad = pending_for("expect_selected_text", {"composer", "hello"});
+  ui_commands::HandleExpectSelectedTextCommand<ui_test::TestInputAction>{}.for_each_with(h.root(), st_bad, 0.f);
+  CHECK(st_bad.is_retry());
+  auto scroll_bad = pending_for("assert_ui", {"box", "scroll_y=10"});
+  ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), scroll_bad, 0.f);
+  CHECK(scroll_bad.is_retry());
+  auto scroll_missing = pending_for("assert_ui", {"composer", "scroll_y=0"});
+  ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), scroll_missing, 0.f);
+  CHECK(scroll_missing.is_retry());
+
+  // Clipboard reads the installed provider.
+  clipboard::MemoryProvider provider;
+  provider.set_text("hello");
+  {
+    clipboard::ScopedProvider scope(provider);
+    auto clip_good = pending_for("expect_clipboard", {"hello"});
+    ui_commands::HandleExpectClipboardCommand{}.for_each_with(h.root(), clip_good, 0.f);
+    CHECK(clip_good.is_consumed() && clip_good.error_message.empty());
+    auto clip_bad = pending_for("expect_clipboard", {"other"});
+    ui_commands::HandleExpectClipboardCommand{}.for_each_with(h.root(), clip_bad, 0.f);
+    CHECK(clip_bad.is_retry());
+  }
 }
 
 int main() { return ui_test::run_registered_tests("E2E arguments"); }

@@ -14,6 +14,7 @@
 #include "test_input.h"
 
 #include "../autolayout.h"
+#include "../clipboard.h"
 #include "../ui/components.h"
 #include "../ui/context.h"
 #include "../ui.h"
@@ -372,11 +373,11 @@ struct HandleExpectFocusedCommand : System<PendingE2ECommand> {
                      ? opt.asE().template get<ui::UIComponentDebug>().name()
                      : std::format("entity {}", ctx->focus_id);
       }
-      cmd.fail(std::format("'{}' is not focused, '{}' is. Focus set by {}",
-                           name, holder, ctx->focus_origin()));
+      cmd.retry_with(std::format("'{}' is not focused, '{}' is. Focus set by {}",
+                                     name, holder, ctx->focus_origin()));
       return;
     }
-    cmd.fail(std::format("UI component not found: {}", cmd.arg(0)));
+    cmd.retry_with(std::format("UI component not found: {}", cmd.arg(0)));
   }
 };
 
@@ -617,13 +618,13 @@ struct HandleExpectCheckboxCommand : System<PendingE2ECommand> {
         cmd.consume();
         return;
       } else {
-        cmd.fail(std::format("Checkbox '{}' is {}, expected {}", name,
-                             checkbox.on ? "checked" : "unchecked",
-                             cmd.arg(1)));
+        cmd.retry_with(std::format("Checkbox '{}' is {}, expected {}", name,
+                                   checkbox.on ? "checked" : "unchecked",
+                                   cmd.arg(1)));
         return;
       }
     }
-    cmd.fail(std::format("Checkbox not found: {}", cmd.arg(0)));
+    cmd.retry_with(std::format("Checkbox not found: {}", cmd.arg(0)));
   }
 };
 
@@ -664,12 +665,12 @@ struct HandleExpectSliderCommand : System<PendingE2ECommand> {
         cmd.consume();
         return;
       } else {
-        cmd.fail(std::format("Slider '{}' is {}, expected {}", name,
-                             slider.value, *expected));
+        cmd.retry_with(std::format("Slider '{}' is {}, expected {}", name,
+                                   slider.value, *expected));
         return;
       }
     }
-    cmd.fail(std::format("Slider not found: {}", cmd.arg(0)));
+    cmd.retry_with(std::format("Slider not found: {}", cmd.arg(0)));
   }
 };
 
@@ -802,13 +803,13 @@ struct HandleExpectInputTextCommand : System<PendingE2ECommand> {
         cmd.consume();
         return;
       } else {
-        cmd.fail(std::format(
+        cmd.retry_with(std::format(
             "Input '{}' text is \"{}\", expected \"{}\"", name,
             actual, expected));
         return;
       }
     }
-    cmd.fail(std::format("Text input not found: {}", name));
+    cmd.retry_with(std::format("Text input not found: {}", name));
   }
 };
 
@@ -846,12 +847,32 @@ struct HandleExpectSelectedTextCommand : System<PendingE2ECommand> {
       if (got == want) {
         cmd.consume();
       } else {
-        cmd.fail(std::format("'{}' has \"{}\" selected, expected \"{}\"", name,
-                             got, want));
+        cmd.retry_with(std::format("'{}' has \"{}\" selected, expected \"{}\"", name,
+                                   got, want));
       }
       return;
     }
-    cmd.fail(std::format("Text field not found: {}", name));
+    cmd.retry_with(std::format("Text field not found: {}", name));
+  }
+};
+
+// Handle 'expect_clipboard "expected"' - asserts the clipboard contents.
+// Reads whatever clipboard::get_text() returns (test provider when one is
+// installed, otherwise the backend clipboard), so Copy paths are assertable
+// without leaving the runner.
+struct HandleExpectClipboardCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("expect_clipboard")) return;
+    if (!cmd.has_args(1)) {
+      cmd.fail("expect_clipboard requires expected text");
+      return;
+    }
+    const std::string actual = clipboard::get_text();
+    if (actual == cmd.arg(0)) {
+      cmd.consume();
+      return;
+    }
+    cmd.retry_with(std::format("clipboard is \"{}\", expected \"{}\"", actual, cmd.arg(0)));
   }
 };
 
@@ -1005,13 +1026,13 @@ struct HandleExpectInputSelectionCommand : System<PendingE2ECommand> {
         cmd.consume();
         return;
       } else {
-        cmd.fail(std::format(
+        cmd.retry_with(std::format(
             "Input '{}' selection is [{}, {}), expected [{}, {})", name,
             actual_start, actual_end, *expected_start, *expected_end));
         return;
       }
     }
-    cmd.fail(std::format("Text input not found: {}", name));
+    cmd.retry_with(std::format("Text input not found: {}", name));
   }
 };
 
@@ -1165,6 +1186,13 @@ inline std::string check_ui_property(Entity &entity, const std::string &prop,
     if (label != expected)
       return std::format("text=\"{}\" but got \"{}\"", expected, label);
     return "";
+  }
+  else if (prop == "scroll_x" || prop == "scroll_y") {
+    if (!entity.has<ui::HasScrollView>())
+      return std::format("{}={} but element has no scroll view", prop, expected);
+    actual_int = std::lroundf(prop == "scroll_x"
+                                  ? entity.get<ui::HasScrollView>().scroll_offset.x
+                                  : entity.get<ui::HasScrollView>().scroll_offset.y);
   }
   else if (prop == "bg" || prop == "fg") {
     Color want;
@@ -1517,6 +1545,8 @@ void register_ui_commands(SystemManager &sm,
       std::make_unique<HandleExpectInputSelectionCommand<InputAction>>());
   sm.register_update_system(
       std::make_unique<HandleExpectSelectedTextCommand<InputAction>>());
+  sm.register_update_system(
+      std::make_unique<HandleExpectClipboardCommand>());
   sm.register_update_system(
       std::make_unique<HandleMultiClickUICommand<InputAction, 2>>());
   sm.register_update_system(
