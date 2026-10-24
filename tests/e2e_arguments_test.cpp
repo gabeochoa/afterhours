@@ -288,11 +288,11 @@ TEST(expect_input_text_reads_a_text_area) {
 TEST(expect_no_ui_waits_a_frame_then_judges_absence) {
   ui_test::ImmTestHarness h;
   h.begin_frame();
-  ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
-               ui::imm::ComponentConfig{}
-                   .with_size({ui::pixels(100), ui::pixels(40)})
-                   .with_label("here")
-                   .with_debug_name("present_label"));
+  auto present_div = ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
+                                  ui::imm::ComponentConfig{}
+                                      .with_size({ui::pixels(100), ui::pixels(40)})
+                                      .with_label("here")
+                                      .with_debug_name("present_label"));
   h.layout_only();
   auto absent = pending_for("expect_no_ui", {"missing_label"});
   ui_commands::HandleExpectNoUICommand{}.for_each_with(h.root(), absent, 0.f);
@@ -304,7 +304,29 @@ TEST(expect_no_ui_waits_a_frame_then_judges_absence) {
   auto present = pending_for("expect_no_ui", {"present_label"});
   present.frames_alive = 1;
   ui_commands::HandleExpectNoUICommand{}.for_each_with(h.root(), present, 0.f);
-  CHECK(present.is_consumed() && !present.error_message.empty());
+  CHECK(present.is_retry());
+  CHECK(present.last_mismatch.find("still present") != std::string::npos);
+  // Removal: flipping the rendered flag simulates the widget leaving the tree.
+  present_div.ent().get<ui::UIComponent>().was_rendered_to_screen = false;
+  present.reset_retry();
+  ui_commands::HandleExpectNoUICommand{}.for_each_with(h.root(), present, 0.f);
+  CHECK(present.is_consumed() && present.error_message.empty());
+  // Never removed: fails at the timeout carrying the last mismatch.
+  present_div.ent().get<ui::UIComponent>().was_rendered_to_screen = true;
+  auto stuck = pending_for("expect_no_ui", {"present_label"});
+  stuck.frames_alive = 1;
+  ui_commands::HandleExpectNoUICommand{}.for_each_with(h.root(), stuck, 0.f);
+  CHECK(stuck.is_retry());
+  Entity &holder = h.coll.createEntity();
+  h.coll.merge_entity_arrays();
+  testing::E2ECommandCleanupSystem cleanup;
+  for (int i = 0; i <= PendingE2ECommand::MAX_FRAMES && !stuck.is_consumed(); i++) {
+    cleanup.for_each_with(holder, stuck, 0.f);
+    if (!stuck.is_consumed())
+      ui_commands::HandleExpectNoUICommand{}.for_each_with(h.root(), stuck, 0.f);
+  }
+  CHECK(stuck.is_consumed() && !stuck.error_message.empty());
+  CHECK(stuck.error_message.find("still present") != std::string::npos);
 }
 
 TEST(assert_ui_text_scoped_to_parent) {
@@ -595,6 +617,83 @@ TEST(click_label_hit_test) {
     CHECK(amb.error_message.find("2 elements match") != std::string::npos);
   }
   reset_ui_context_singleton();
+}
+
+TEST(expect_no_text_retries_until_absent) {
+  ui_test::ImmTestHarness h;
+  auto &registry = testing::VisibleTextRegistry::instance();
+  registry.clear();
+  registry.register_text("hello");
+  auto present = pending_for("expect_no_text", {"hello"});
+  // First call records the generation; second waits for a fresh render.
+  HandleExpectNoTextCommand{}.for_each_with(h.root(), present, 0.f);
+  CHECK(present.is_retry());
+  HandleExpectNoTextCommand{}.for_each_with(h.root(), present, 0.f);
+  CHECK(present.is_retry());
+  // A render ticks the generation; still visible, so it retries with the hit.
+  registry.clear();
+  HandleExpectNoTextCommand{}.for_each_with(h.root(), present, 0.f);
+  CHECK(present.is_retry());
+  registry.register_text("hello");
+  HandleExpectNoTextCommand{}.for_each_with(h.root(), present, 0.f);
+  CHECK(present.is_retry());
+  CHECK(present.last_mismatch.find("still visible") != std::string::npos);
+  // Disappearance passes once fresh data arrives: one render to advance the
+  // generation past the empty snapshot, one more to judge it.
+  registry.clear();
+  HandleExpectNoTextCommand{}.for_each_with(h.root(), present, 0.f);
+  CHECK(present.is_retry());
+  registry.register_text("other");
+  HandleExpectNoTextCommand{}.for_each_with(h.root(), present, 0.f);
+  CHECK(present.is_consumed() && present.error_message.empty());
+  registry.clear();
+}
+
+TEST(assert_ui_text_quoted_value_with_spaces) {
+  ScriptFile file("assert_ui_text \"Hello world\" text=\"Hello world\"");
+  auto commands = parse_script(file.path.string());
+  CHECK(commands.size() == 1);
+  const std::vector<std::string> expected_args{"Hello world", "text=Hello world"};
+  CHECK(commands[0].args == expected_args);
+  ui_test::ImmTestHarness h;
+  h.begin_frame();
+  ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
+               ui::imm::ComponentConfig{}
+                   .with_size({ui::pixels(200), ui::pixels(40)})
+                   .with_label("Hello world"));
+  h.layout_only();
+  PendingE2ECommand cmd;
+  cmd.name = commands[0].name;
+  cmd.args = commands[0].args;
+  ui_commands::HandleAssertUITextCommand{}.for_each_with(h.root(), cmd, 0.f);
+  CHECK(cmd.is_consumed() && cmd.error_message.empty());
+}
+
+TEST(assert_ui_text_skips_clipped_but_assert_ui_sees_it) {
+  ui_test::ImmTestHarness h;
+  h.begin_frame();
+  auto clip_parent = ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
+                                  ui::imm::ComponentConfig{}
+                                      .with_size({ui::pixels(100), ui::pixels(40)})
+                                      .with_absolute_position(0, 0)
+                                      .with_overflow(ui::Overflow::Hidden)
+                                      .with_debug_name("clip_parent"));
+  ui::imm::div(h.context(), ui::imm::mk(clip_parent.ent(), 0),
+               ui::imm::ComponentConfig{}
+                   .with_size({ui::pixels(100), ui::pixels(40)})
+                   .with_absolute_position(0, 100)
+                   .with_label("Clipped")
+                   .with_debug_name("clipped_label"));
+  h.layout_only();
+  // Geometry by debug name sees the clipped element: clip behaviour itself
+  // is asserted this way (242_scroll_clip_design).
+  auto by_name = pending_for("assert_ui", {"clipped_label", "y=100"});
+  ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), by_name, 0.f);
+  CHECK(by_name.is_consumed() && by_name.error_message.empty());
+  // Text matching does not: the label is clipped out of view.
+  auto by_text = pending_for("assert_ui_text", {"Clipped", "y=100"});
+  ui_commands::HandleAssertUITextCommand{}.for_each_with(h.root(), by_text, 0.f);
+  CHECK(by_text.is_retry());
 }
 
 int main() { return ui_test::run_registered_tests("E2E arguments"); }

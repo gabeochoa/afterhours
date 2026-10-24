@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -22,8 +23,7 @@ public:
 
   void clear() {
     std::lock_guard<std::mutex> lock(mutex_);
-    texts_.clear();
-    fully_visible_texts_.clear();
+    entries_.clear();
     generation_++;
   }
 
@@ -40,8 +40,7 @@ public:
     if (text.empty())
       return;
     std::lock_guard<std::mutex> lock(mutex_);
-    texts_.push_back(text);
-    fully_visible_texts_.push_back(text);
+    entries_.push_back(TextEntry{text});
   }
 
   /// Register text only if its bounding rect is at least partially visible
@@ -64,52 +63,51 @@ public:
     const float bottom = std::min(y + h, clip_y + clip_h);
     if (right - left < 1.f || bottom - top < 1.f) return;
     std::lock_guard<std::mutex> lock(mutex_);
-    texts_.push_back(text);
-    if (left == x && top == y && right == x + w && bottom == y + h)
-      fully_visible_texts_.push_back(text);
+    const bool fully = (left == x && top == y && right == x + w && bottom == y + h);
+    entries_.push_back(TextEntry{text, x, y, w, h, fully});
   }
 
   bool contains_fully_visible(const std::string &needle) const {
     std::lock_guard<std::mutex> lock(mutex_);
-    for (const auto &text : fully_visible_texts_) {
-      if (text.find(needle) != std::string::npos) return true;
+    for (const auto &e : entries_) {
+      if (e.fully_visible && e.text.find(needle) != std::string::npos) return true;
     }
-    return false;
+    return contains_joined(needle, /*fully_only=*/true,
+                           [](const std::string &s, const std::string &n) {
+                             return s.find(n) != std::string::npos;
+                           });
   }
 
   bool contains(const std::string &needle) const {
     std::lock_guard<std::mutex> lock(mutex_);
-    for (const auto &t : texts_) {
-      if (t.find(needle) != std::string::npos)
-        return true;
+    for (const auto &e : entries_) {
+      if (e.text.find(needle) != std::string::npos) return true;
     }
-    return false;
+    return contains_joined(needle, /*fully_only=*/false,
+                           [](const std::string &s, const std::string &n) {
+                             return s.find(n) != std::string::npos;
+                           });
   }
 
   // Case-insensitive substring. Game text is routinely styled to a different
   // case than the string in the source, so a test asserting the source spelling
   // fails for a reason that has nothing to do with what it is testing.
   bool contains_ignoring_case(const std::string &needle) const {
-    const auto fold = [](std::string v) {
-      for (char &c : v)
-        c = static_cast<char>(
-            std::tolower(static_cast<unsigned char>(c)));
-      return v;
-    };
     const std::string want = fold(needle);
     std::lock_guard<std::mutex> lock(mutex_);
-    for (const auto &t : texts_) {
-      if (fold(t).find(want) != std::string::npos)
-        return true;
+    for (const auto &e : entries_) {
+      if (fold(e.text).find(want) != std::string::npos) return true;
     }
-    return false;
+    return contains_joined(want, /*fully_only=*/false,
+                           [](const std::string &s, const std::string &n) {
+                             return fold(s).find(n) != std::string::npos;
+                           });
   }
 
   bool has_exact(const std::string &needle) const {
     std::lock_guard<std::mutex> lock(mutex_);
-    for (const auto &t : texts_) {
-      if (t == needle)
-        return true;
+    for (const auto &e : entries_) {
+      if (e.text == needle) return true;
     }
     return false;
   }
@@ -117,24 +115,67 @@ public:
   std::string get_all() const {
     std::lock_guard<std::mutex> lock(mutex_);
     std::string result;
-    for (const auto &t : texts_) {
+    for (const auto &e : entries_) {
       if (!result.empty())
         result += " | ";
-      result += t;
+      result += e.text;
     }
     return result;
   }
 
   std::vector<std::string> get_texts() const {
     std::lock_guard<std::mutex> lock(mutex_);
-    return texts_;
+    std::vector<std::string> out;
+    out.reserve(entries_.size());
+    for (const auto &e : entries_) out.push_back(e.text);
+    return out;
   }
 
 private:
+  struct TextEntry {
+    std::string text;
+    float x = 0.f, y = 0.f, w = 0.f, h = 0.f;  // 0x0 = position unknown
+    bool fully_visible = true;
+  };
+
+  static std::string fold(std::string v) {
+    for (char &c : v)
+      c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return v;
+  }
+
+  // Two consecutive entries join when they sit on the same line and the
+  // second starts where the first ends (within one layout gap): the
+  // filename + path case, two labels on one row. Entries without a rect
+  // (typed text, position unknown) never join, and entries on different
+  // lines or far apart stay separate, so unrelated labels cannot fuse
+  // into a false match.
+  static bool joins_with(const TextEntry &a, const TextEntry &b,
+                         std::string &joined) {
+    if (a.w <= 0.f || a.h <= 0.f || b.w <= 0.f || b.h <= 0.f) return false;
+    if (std::abs(a.y - b.y) > 2.f) return false;
+    const float gap = b.x - (a.x + a.w);
+    if (gap < -2.f || gap > 32.f) return false;
+    joined = a.text + (gap > 0.5f ? " " : "") + b.text;
+    return true;
+  }
+
+  template <typename Match>
+  bool contains_joined(const std::string &needle, bool fully_only,
+                       Match match) const {
+    for (size_t i = 0; i + 1 < entries_.size(); i++) {
+      const auto &a = entries_[i];
+      const auto &b = entries_[i + 1];
+      if (fully_only && (!a.fully_visible || !b.fully_visible)) continue;
+      std::string joined;
+      if (joins_with(a, b, joined) && match(joined, needle)) return true;
+    }
+    return false;
+  }
+
   VisibleTextRegistry() = default;
   mutable std::mutex mutex_;
-  std::vector<std::string> texts_;
-  std::vector<std::string> fully_visible_texts_;
+  std::vector<TextEntry> entries_;
   size_t generation_ = 0;
 };
 

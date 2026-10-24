@@ -612,8 +612,8 @@ struct HandleExpectNoTextCommand : System<PendingE2ECommand> {
                     break;
                 }
             }
-            cmd.fail(std::format(
-                "expect_no_text failed: '{}' IS visible but should not be "
+            cmd.retry_with(std::format(
+                "expect_no_text: '{}' still visible but should not be "
                 "(matched label '{}')",
                 cmd.args[0], matched));
             return;

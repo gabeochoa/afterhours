@@ -381,8 +381,9 @@ struct HandleExpectFocusedCommand : System<PendingE2ECommand> {
   }
 };
 
-// Forward declaration: defined with the other scope helpers below.
+// Forward declarations: defined with the other scope helpers below.
 inline bool is_within_scope(Entity &entity, EntityID scope);
+inline bool is_partially_visible(const Entity &entity);
 
 // Handle 'expect_no_focus' - asserts nothing holds keyboard focus.
 template <typename InputAction>
@@ -1307,6 +1308,32 @@ inline bool is_within_scope(Entity &entity, EntityID scope) {
   return false;
 }
 
+// True when the element's rect is at least partially visible: inside the
+// screen viewport and inside every clipping ancestor's rect. The rendered
+// flag is not enough: visibility marking only checks dimensions, so a row
+// scrolled out of its viewport still counts as rendered. Same 1px threshold
+// as the visible-text registry.
+inline bool is_partially_visible(const Entity &entity) {
+  if (!entity.has<ui::UIComponent>()) return false;
+  const RectangleType rect = entity.get<ui::UIComponent>().rect();
+  if (rect.width <= 0.f || rect.height <= 0.f) return false;
+  auto *pcr = EntityHelper::get_singleton_cmp<window_manager::ProvidesCurrentResolution>();
+  const float vw = pcr ? static_cast<float>(pcr->width()) : 1280.f;
+  const float vh = pcr ? static_cast<float>(pcr->height()) : 720.f;
+  const float left = std::max(rect.x, 0.f);
+  const float top = std::max(rect.y, 0.f);
+  const float right = std::min(rect.x + rect.width, vw);
+  const float bottom = std::min(rect.y + rect.height, vh);
+  if (right - left < 1.f || bottom - top < 1.f) return false;
+  const auto [has_clip, clip] = ui::detail::compute_intersected_clip_rect(entity);
+  if (!has_clip) return true;
+  const float cleft = std::max(rect.x, clip.x);
+  const float ctop = std::max(rect.y, clip.y);
+  const float cright = std::min(rect.x + rect.width, clip.x + clip.width);
+  const float cbottom = std::min(rect.y + rect.height, clip.y + clip.height);
+  return cright - cleft >= 1.f && cbottom - ctop >= 1.f;
+}
+
 // Parse "w=399" into {"w", "399"}, returns false if malformed
 inline bool parse_prop_assertion(const std::string &arg, std::string &prop,
                                   std::string &expected) {
@@ -1402,7 +1429,10 @@ struct HandleAssertUICommand : System<PendingE2ECommand> {
 
     std::string name = cmd.args[0];
 
-    // Find entity by debug name
+    // Find entity by debug name. No visibility filter here: geometry
+    // assertions are how a script verifies clip behaviour itself (a
+    // scroll-clip test asserts a clipped row's position), so existence in
+    // the rendered tree is the right bar. Text matching filters instead.
     auto opt = ui_query()
         .whereHasComponent<ui::UIComponent>()
         .whereHasComponent<ui::UIComponentDebug>()
@@ -1491,6 +1521,7 @@ struct HandleAssertUITextCommand : System<PendingE2ECommand> {
         .whereLambda([&](const Entity &e) {
           return e.get<ui::HasLabel>().label == text &&
                  e.get<ui::UIComponent>().was_rendered_to_screen &&
+                 is_partially_visible(e) &&
                  (scope == -1 || is_within_scope(const_cast<Entity &>(e), scope));
         });
     for (Entity &e : query.gen()) matches.push_back(&e);
@@ -1555,7 +1586,7 @@ struct HandleExpectNoUICommand : System<PendingE2ECommand> {
         })
         .gen_first();
     if (opt.has_value()) {
-      cmd.fail(std::format("expect_no_ui failed: '{}' IS rendered but should not be", name));
+      cmd.retry_with(std::format("expect_no_ui: '{}' still present (expected it to be gone)", name));
       return;
     }
     cmd.consume();

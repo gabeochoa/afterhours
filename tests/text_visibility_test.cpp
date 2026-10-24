@@ -158,6 +158,32 @@ TEST(registry_and_commands_distinguish_partial_full_and_absent) {
   CHECK(registry.contains_fully_visible("custom draw"));
 }
 
+TEST(registry_joins_adjacent_same_line_labels) {
+  auto &registry = VisibleTextRegistry::instance();
+  registry.clear();
+  registry.register_text_in_clip("report", 100, 50, 60, 20, 0, 0, 800, 600);
+  registry.register_text_in_clip(".pdf", 168, 50, 30, 20, 0, 0, 800, 600);
+  CHECK(registry.contains("report .pdf"));
+  CHECK(!registry.contains("report.pdf"));
+  CHECK(registry.contains_fully_visible("report .pdf"));
+  // Different lines stay separate.
+  registry.clear();
+  registry.register_text_in_clip("Home", 0, 0, 40, 20, 0, 0, 800, 600);
+  registry.register_text_in_clip("Settings", 0, 100, 70, 20, 0, 0, 800, 600);
+  CHECK(!registry.contains("Home Settings"));
+  // Far apart on one line stays separate.
+  registry.clear();
+  registry.register_text_in_clip("Back", 0, 0, 40, 20, 0, 0, 800, 600);
+  registry.register_text_in_clip("Save", 500, 0, 40, 20, 0, 0, 800, 600);
+  CHECK(!registry.contains("Back Save"));
+  // Positionless entries never join.
+  registry.clear();
+  registry.register_text("Hello");
+  registry.register_text("world");
+  CHECK(!registry.contains("Hello world"));
+  registry.clear();
+}
+
 int main() {
   graphics::Config config;
   config.display = graphics::DisplayMode::Headless;
