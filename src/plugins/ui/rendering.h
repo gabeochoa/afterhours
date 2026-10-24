@@ -235,7 +235,8 @@ focus_ring_for(const UIContext<InputAction> &context, const Entity &entity,
   // emitted: the contrast edges are not gated on it, so an app that set 0 to
   // opt out still got lines painted into its widgets.
   FocusRing ring;
-  ring.thickness = context.theme.focus_ring_thickness;
+  ring.thickness =
+      cmp.focus_ring_thickness.value_or(context.theme.focus_ring_thickness);
   if (ring.thickness <= 0.f)
     return {};
 

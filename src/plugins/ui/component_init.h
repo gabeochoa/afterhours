@@ -173,6 +173,7 @@ inline void overwrite_defaults(HasUIContext auto &ctx,
 inline void apply_flags(Entity &entity, const ComponentConfig &config) {
   entity.get<UIComponent>().skip_when_tabbing = config.skip_when_tabbing;
   entity.get<UIComponent>().focus_ring_offset = config.focus_ring_offset;
+  entity.get<UIComponent>().focus_ring_thickness = config.focus_ring_thickness;
   if (config.consumes_directional_input)
     entity.addComponentIfMissing<ConsumesDirectionalInput>();
   if (config.ignore_pointer_events)

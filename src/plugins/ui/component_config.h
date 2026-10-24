@@ -112,6 +112,9 @@ struct ComponentConfig {
   std::optional<CursorType> cursor_type; // Cursor to show on hover
   bool skip_when_tabbing = false;
   std::optional<float> focus_ring_offset;
+  // Per-component ring thickness, overriding Theme::focus_ring_thickness.
+  // Unset means the theme's value; 0 opts this component out of the ring.
+  std::optional<float> focus_ring_thickness;
   bool ignore_pointer_events = false; // invisible to hit-testing
   // User data, not localizable copy: the pseudo-locale stress leaves this
   // label (and this component's RTL mirroring) alone.
@@ -610,6 +613,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_focus_ring_offset(float offset) {
     focus_ring_offset = offset;
+    return *this;
+  }
+  ComponentConfig &with_focus_ring_thickness(float thickness) {
+    focus_ring_thickness = thickness;
     return *this;
   }
   /// While focused, WidgetUp/WidgetDown belong to this widget (a value to
@@ -1132,6 +1139,8 @@ struct ComponentConfig {
       merged.skip_when_tabbing = overrides.skip_when_tabbing;
     if (overrides.focus_ring_offset.has_value())
       merged.focus_ring_offset = overrides.focus_ring_offset;
+    if (overrides.focus_ring_thickness.has_value())
+      merged.focus_ring_thickness = overrides.focus_ring_thickness;
     // Only when asked for: an unconditional copy would clear a base config's
     // opt-out every time it is overridden.
     if (overrides.ignore_pointer_events)

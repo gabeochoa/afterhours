@@ -1384,6 +1384,58 @@ TEST(focus_ring_offset_can_be_overridden_per_widget) {
   }
 }
 
+TEST(focus_ring_thickness_config_reaches_the_component) {
+  ImmTestHarness h;
+  h.begin_frame();
+  auto custom = button(h.context(), mk(h.root(), 0),
+                       ComponentConfig{}
+                           .with_size({pixels(100), pixels(40)})
+                           .with_focus_ring_thickness(5.f));
+  CHECK(custom.cmp().focus_ring_thickness.has_value());
+  if (custom.cmp().focus_ring_thickness.has_value())
+    CHECK_APPROX(*custom.cmp().focus_ring_thickness, 5.f);
+  auto plain = button(h.context(), mk(h.root(), 1),
+                      ComponentConfig{}.with_size({pixels(100), pixels(40)}));
+  CHECK(!plain.cmp().focus_ring_thickness.has_value());
+}
+
+TEST(focus_ring_thickness_can_be_overridden_per_widget) {
+  ImmTestHarness h;
+  auto target = focused_button(h, 3.f);
+  h.layout_only();
+  auto ring = afterhours::ui::focus_ring_for(h.context(), target.ent(),
+                                             target.cmp());
+  CHECK(ring.has_value());
+  if (ring.has_value())
+    CHECK_APPROX(ring->thickness, 3.f);
+  target.cmp().focus_ring_thickness = 0.f;
+  ring = afterhours::ui::focus_ring_for(h.context(), target.ent(),
+                                        target.cmp());
+  CHECK(!ring.has_value());
+  target.cmp().focus_ring_thickness = 5.f;
+  ring = afterhours::ui::focus_ring_for(h.context(), target.ent(),
+                                        target.cmp());
+  CHECK(ring.has_value());
+  if (ring.has_value())
+    CHECK_APPROX(ring->thickness, 5.f);
+  target.cmp().focus_ring_thickness.reset();
+  ring = afterhours::ui::focus_ring_for(h.context(), target.ent(),
+                                        target.cmp());
+  CHECK(ring.has_value());
+  if (ring.has_value())
+    CHECK_APPROX(ring->thickness, 3.f);
+}
+
+TEST(per_component_zero_thickness_disables_the_ring_batched) {
+  ImmTestHarness h;
+  auto b = focused_button(h, 3.f);
+  b.cmp().focus_ring_thickness = 0.f;
+  const auto &calls = h.render_batched();
+  ui_test::check(count_ring_draws(calls) == 0,
+                 "per-component focus_ring_thickness = 0 draws no ring (batched)",
+                 __FILE__, __LINE__);
+}
+
 TEST(keyboard_focus_reveals_scrolled_controls_in_both_directions) {
   ImmTestHarness h;
   auto viewport = div(h.context(), mk(h.root(), 0), ComponentConfig{}
