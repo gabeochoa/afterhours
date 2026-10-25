@@ -10,6 +10,7 @@
 #include <string>
 
 #include "../../drawing_helpers.h"
+#include "../../random_engine.h"
 #include "e2e_testing.h"
 #include "harness.h"
 #include "platform_test_input.h"
@@ -68,6 +69,13 @@ struct E2EApp {
       return nullptr;
     }
     return app;
+  }
+
+  // Opt in to repeatable runs: seeds RandomEngine now and at the start of
+  // every script. Unset, RandomEngine stays randomly seeded.
+  void set_seed(std::uint32_t seed) {
+    RandomEngine::get().set_seed(seed);
+    runner.set_reset_callback([seed] { RandomEngine::get().set_seed(seed); });
   }
 
   // Call before gameplay: dispatches the next command and runs the handlers,

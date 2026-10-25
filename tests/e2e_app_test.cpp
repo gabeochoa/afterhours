@@ -58,6 +58,7 @@ int main() {
     std::string path = script.string();
     char a0[] = "game", a1[] = "--test-script";
     char *argv[] = {a0, a1, path.data()};
+    const std::uint32_t before = RandomEngine::get().get_seed();
     auto app = E2EApp::create(
         3, argv,
         [](SystemManager &sm) {
@@ -67,6 +68,11 @@ int main() {
     check(app != nullptr, "a script makes an app");
     check(app && app->default_screenshot_dir == "shots",
           "default screenshot dir is kept");
+    check(app && RandomEngine::get().get_seed() == before,
+          "create() leaves RandomEngine random");
+    if (app)
+      app->set_seed(42);
+    check(RandomEngine::get().get_seed() == 42u, "set_seed() seeds it");
     bool queued = false;
     for (int i = 0; app && i < 20 && !app->finished(); i++) {
       app->tick(1.f / 60.f);
