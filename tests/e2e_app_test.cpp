@@ -90,6 +90,33 @@ int main() {
     check(app && app->finished(), "runner finishes");
     check(app && app->finish() == 0, "a passing run exits 0");
   }
+  {
+    char a0[] = "game";
+    char *argv[] = {a0};
+    graphics::RunConfig cfg;
+    bool ran = false;
+    cfg.frame = [&] { ran = true; };
+    check(E2EApp::attach(cfg, 1, argv) == nullptr && cfg.fixed_dt == 0.f,
+          "attach without --e2e leaves cfg alone");
+    cfg.frame();
+    check(ran, "and keeps the game's frame");
+  }
+  {
+    std::ofstream(script) << "wait_frames 2\n";
+    std::string path = script.string();
+    char a0[] = "game", a1[] = "--test-script";
+    char *argv[] = {a0, a1, path.data()};
+    graphics::RunConfig cfg;
+    int game_frames = 0;
+    cfg.frame = [&] { game_frames++; };
+    auto app = E2EApp::attach(cfg, 3, argv);
+    check(app != nullptr && cfg.fixed_dt > 0.f, "attach wraps an e2e run");
+    for (int i = 0; app && i < 20 && !app->finished(); i++)
+      cfg.frame();
+    cfg.cleanup();
+    check(game_frames > 0 && app && app->finished() && app->exit_code == 0,
+          "wrapped frames run the game and the script to a passing exit");
+  }
   std::filesystem::remove(script);
   EntityHelper::set_default_collection(nullptr);
 

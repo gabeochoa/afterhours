@@ -27,6 +27,8 @@ struct E2EApp {
   // Where screenshots go when --screenshot-dir is not given.
   std::string default_screenshot_dir;
   std::string pending_screenshot;
+  // Set by finish() when attach()ed; 1 if the run could not start.
+  int exit_code = 0;
 
   // nullptr without --e2e or with no scripts. register_custom adds the
   // game's handlers between the builtins and the unknown-command handler.
@@ -68,6 +70,49 @@ struct E2EApp {
                 app->args.script_dir, app->args.script_path);
       return nullptr;
     }
+    return app;
+  }
+
+  // For graphics::run: wraps cfg with the e2e loop when argv asks for one,
+  // else returns nullptr and leaves cfg alone. Screenshots read canvas().
+  static std::shared_ptr<E2EApp>
+  attach(graphics::RunConfig &cfg, int argc, char *argv[],
+         const std::function<void(SystemManager &)> &register_custom = {},
+         const std::string &default_screenshot_dir = "") {
+    if (!should_run_e2e(argc, argv))
+      return nullptr;
+    std::shared_ptr<E2EApp> app =
+        create(argc, argv, register_custom, default_screenshot_dir);
+    if (!app) { // no scripts: init, then quit with a failure
+      app = std::make_shared<E2EApp>();
+      app->exit_code = 1;
+      cfg.init = [init = cfg.init] {
+        if (init)
+          init();
+        graphics::request_quit();
+      };
+      return app;
+    }
+    cfg.display = app->args.display_mode();
+    // Scripts count frames, so a frame must be the same game time every run.
+    if (cfg.fixed_dt <= 0.f)
+      cfg.fixed_dt = 1.f / 60.f;
+    cfg.frame = [app, frame = cfg.frame, dt = cfg.fixed_dt] {
+      if (const auto *rt = graphics::canvas()) // still holds last frame
+        app->post_render(*rt);
+      if (app->finished()) {
+        graphics::request_quit();
+        return;
+      }
+      app->tick(dt);
+      if (frame)
+        frame();
+    };
+    cfg.cleanup = [app, cleanup = cfg.cleanup] {
+      if (cleanup)
+        cleanup();
+      app->exit_code = app->finish();
+    };
     return app;
   }
 
