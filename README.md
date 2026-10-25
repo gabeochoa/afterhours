@@ -171,6 +171,7 @@ use `tools/web.mk` for raylib games.
 - [Plugin authoring](PLUGIN_API.md) and [UI](src/plugins/ui/README.md)
 - [Optional APIs](docs/plugins.md) and [profiling](docs/profiling.md)
 - [Measurements](docs/profiling-measurements.md) and [text measurement](docs/font-atlas-measurement.md)
+- [Resizing, scaling, pillarbox / letterbox](docs/letterboxing.md)
 - [Backlog](todo.md), [research](docs/roadmap.md), and [changelog](CHANGELOG.md)
 
 ## License
