@@ -865,6 +865,35 @@ struct input : developer::Plugin {
         int dir = -1;
     };
 
+    // Backend-neutral bindings for mappings (raylib's numbering), typed so a
+    // button is not mistaken for a key code in ValidInputs.
+    struct gamepad {
+        static inline const GamepadAxis AXIS_LEFT_X =
+            static_cast<GamepadAxis>(0);
+        static inline const GamepadAxis AXIS_LEFT_Y =
+            static_cast<GamepadAxis>(1);
+        static inline const GamepadAxis AXIS_RIGHT_X =
+            static_cast<GamepadAxis>(2);
+        static inline const GamepadAxis AXIS_RIGHT_Y =
+            static_cast<GamepadAxis>(3);
+        static inline const GamepadButton LEFT_FACE_UP =
+            static_cast<GamepadButton>(1);
+        static inline const GamepadButton LEFT_FACE_RIGHT =
+            static_cast<GamepadButton>(2);
+        static inline const GamepadButton LEFT_FACE_DOWN =
+            static_cast<GamepadButton>(3);
+        static inline const GamepadButton LEFT_FACE_LEFT =
+            static_cast<GamepadButton>(4);
+        static inline const GamepadButton RIGHT_FACE_UP =
+            static_cast<GamepadButton>(5);
+        static inline const GamepadButton RIGHT_FACE_RIGHT =
+            static_cast<GamepadButton>(6);
+        static inline const GamepadButton RIGHT_FACE_DOWN =
+            static_cast<GamepadButton>(7);
+        static inline const GamepadButton RIGHT_FACE_LEFT =
+            static_cast<GamepadButton>(8);
+    };
+
     enum struct MouseAxis { X, Y };
 
     struct MouseAxisWithDir {

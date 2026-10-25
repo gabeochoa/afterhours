@@ -64,6 +64,10 @@ int main() {
   testing::input_injector::set_key_up(keys::W);
   check(!input::is_key_down(keys::W), "and release");
 
+  const input::ValidInputs bindings = {keys::W, input::gamepad::LEFT_FACE_UP};
+  check(std::holds_alternative<input::GamepadButton>(bindings[1]),
+        "a gamepad constant binds as a button, not a key code");
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);
