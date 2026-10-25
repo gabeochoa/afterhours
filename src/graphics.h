@@ -143,7 +143,7 @@ inline void end_mode_2d() { PlatformAPI::end_mode_2d(); }
 
 inline void request_quit() { PlatformAPI::request_quit(); }
 
-inline void run(const RunConfig &cfg) { PlatformAPI::run(cfg); }
+inline bool run(const RunConfig &cfg) { return PlatformAPI::run(cfg); }
 
 } // namespace afterhours::graphics
 

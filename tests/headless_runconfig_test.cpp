@@ -4,7 +4,7 @@
 
 #define AFTER_HOURS_USE_RAYLIB
 
-#include <afterhours/src/graphics_common.h>
+#include <afterhours/src/graphics.h>
 #include <afterhours/src/plugins/e2e_testing/harness.h>
 
 #include <cstdio>
@@ -64,6 +64,16 @@ int main() {
     check(parsed.headless, "the parser still sets the flag");
     check(parsed.display_mode() == DisplayMode::Headless,
           "and it now reaches a display mode");
+  }
+
+  // Headless is a hidden window, not a separate code path.
+  {
+    using afterhours::graphics::RaylibPlatformAPI;
+    check(RaylibPlatformAPI::display_flags(DisplayMode::Headless) ==
+              raylib::FLAG_WINDOW_HIDDEN,
+          "headless asks raylib for a hidden window");
+    check(RaylibPlatformAPI::display_flags(DisplayMode::Windowed) == 0u,
+          "windowed adds no flags");
   }
 
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);

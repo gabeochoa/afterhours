@@ -313,16 +313,23 @@ struct RaylibPlatformAPI {
   static void request_quit() { quit_flag() = true; }
 
   // ── Unified run loop ──
-  static void run(const RunConfig &cfg) {
+  // Headless is a hidden window: real GL, clock and sizes, nothing to branch on.
+  static unsigned int display_flags(DisplayMode mode) {
+    return mode == DisplayMode::Headless ? raylib::FLAG_WINDOW_HIDDEN : 0u;
+  }
+
+  // False, without calling init/frame/cleanup, when the window cannot be made.
+  static bool run(const RunConfig &cfg) {
     quit_flag() = false;
-    const bool headless = cfg.display == DisplayMode::Headless;
-    if (!headless) {
-      if (cfg.flags)
-        set_config_flags(cfg.flags);
-      init_window(cfg.width, cfg.height, cfg.title);
-      if (cfg.target_fps > 0)
-        set_target_fps(cfg.target_fps);
+    if (const unsigned int flags = cfg.flags | display_flags(cfg.display))
+      set_config_flags(flags);
+    init_window(cfg.width, cfg.height, cfg.title);
+    if (!is_window_ready()) {
+      log_error("run: failed to create a window");
+      return false;
     }
+    if (cfg.target_fps > 0)
+      set_target_fps(cfg.target_fps);
     frame_loop::set_mode(cfg.frame_mode);
     frame_loop::request_frame();
     if (cfg.init)
@@ -333,7 +340,7 @@ struct RaylibPlatformAPI {
       if (cfg.frame)
         cfg.frame();
     };
-    if (!headless && cfg.frame_mode == frame_loop::Mode::OnDemand) {
+    if (cfg.frame_mode == frame_loop::Mode::OnDemand) {
       while (!window_should_close() && !quit_flag()) {
         while (!frame_loop::wait_for_frame_request(100)) {
           if (window_should_close() || quit_flag())
@@ -347,14 +354,13 @@ struct RaylibPlatformAPI {
         run_frame();
       }
     } else {
-      // No window to ask whether it should close, so run until the app quits.
-      while ((headless || !window_should_close()) && !quit_flag())
+      while (!window_should_close() && !quit_flag())
         run_frame();
     }
     if (cfg.cleanup)
       cfg.cleanup();
-    if (!headless)
-      close_window();
+    close_window();
+    return true;
   }
 };
 

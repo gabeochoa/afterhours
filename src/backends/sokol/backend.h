@@ -905,7 +905,7 @@ struct MetalPlatformAPI {
   static void request_quit() { sapp_request_quit(); }
 
   // ── Unified run loop ──
-  static void run(const RunConfig &cfg) {
+  static bool run(const RunConfig &cfg) {
     // Force a link-time reference to the impl-TU sentinel. If the project
     // forgot to add the one SOKOL_IMPL Objective-C++ TU, the linker fails here
     // on a symbol whose name spells out the fix (see image_decode.h). Two twins
@@ -951,6 +951,7 @@ struct MetalPlatformAPI {
 
     // sapp_run blocks until the application quits
     sapp_run(&desc);
+    return true;
   }
 };
 
