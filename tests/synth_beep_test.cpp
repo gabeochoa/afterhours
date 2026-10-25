@@ -1,6 +1,5 @@
-// synth::beep under the none backend: the stub logs
-// "@notimplemented synth::beep" and returns an empty sound. The raylib
-// path is covered by pong's build + e2e run, which initialises audio.
+// synth::beep under the none backend returns an empty sound, silently. The
+// raylib path is covered by pong's build + e2e run, which initialises audio.
 
 #define FMT_HEADER_ONLY
 #define AFTER_HOURS_USE_NONE

@@ -125,8 +125,7 @@ inline SoundType beep(float freq, float seconds) {
 #else
   (void)freq;
   (void)seconds;
-  log_error("@notimplemented synth::beep");
-  return SoundType{};
+  return SoundType{}; // no audio here; playing it is already a no-op
 #endif
 }
 

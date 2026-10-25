@@ -7,12 +7,14 @@
 #include <string>
 
 #include "../../developer.h"
+#include "../../warn_once.h"
 
 namespace afterhours {
 
 using Font = FontType;
 
 inline Font load_font_from_file(const char *, int = 0) { return Font(); }
+inline bool font_is_usable(const Font &) { return false; } // no atlas here
 inline Font load_font_from_file_with_codepoints(const char *, int *, int) {
   log_warn("Codepoint-based font loading not supported without a backend");
   return Font();
@@ -56,9 +58,9 @@ inline Vector2Type measure_text(const Font, const char *text, const float size,
                                 const float spacing) {
   if (measure_text_fn())
     return measure_text_fn()(text ? text : "", size, spacing);
-  log_warn("Text size measuring not supported. Either use "
-           "AFTER_HOURS_USE_RAYLIB or provide your own through "
-           "set_measure_text_fn()");
+  warn_once(0, "Text size measuring not supported. Either use "
+               "AFTER_HOURS_USE_RAYLIB or provide your own through "
+               "set_measure_text_fn()");
   return Vector2Type{0, 0};
 }
 inline Vector2Type measure_text_utf8(const Font f, const char *text,
