@@ -93,7 +93,9 @@ ALL_TESTS := \
 	ancestor_transform_test \
 	text_units_test \
 	text_unit_motion_test \
+	text_alignment_test \
 	sound_volume_test \
+	synth_beep_test \
 	settings_save_test \
 	settings_path_test \
 	clipboard_test \
