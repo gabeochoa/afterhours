@@ -59,6 +59,7 @@ inline void register_builtin_handlers(SystemManager &sm) {
                                                    // before new presses
   sm.register_update_system(std::make_unique<HandleTypeCommand>());
   sm.register_update_system(std::make_unique<HandleKeyCommand>());
+  sm.register_update_system(std::make_unique<HandleHoldKeyCommand>());
   sm.register_update_system(std::make_unique<HandleClickCommand>());
   sm.register_update_system(std::make_unique<HandleRightClickCommand>());
   sm.register_update_system(std::make_unique<HandleMiddleClickCommand>());

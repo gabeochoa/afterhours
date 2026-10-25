@@ -144,4 +144,25 @@ TEST(timeout_clears_pending_chords) {
   f.released();
 }
 
+
+TEST(hold_key_stays_down_until_release_key) {
+  KeyFixture f;
+  auto run = [&](const char *name, const char *key) {
+    PendingE2ECommand command;
+    command.name = name;
+    command.args = {key};
+    HandleHoldKeyCommand{}.for_each_with(f.entity, command, 0.f);
+    return command;
+  };
+  CHECK(run("hold_key", "W").succeeded());
+  for (int i = 0; i < 5; i++)
+    f.frame();
+  CHECK(inj::is_key_down(keys::W));
+  CHECK(run("release_key", "W").succeeded());
+  CHECK(!inj::is_key_down(keys::W));
+
+  const auto bad = run("hold_key", "NOT_A_KEY");
+  CHECK(bad.is_consumed() && !bad.succeeded());
+}
+
 int main() { return ui_test::run_registered_tests("E2E key chords"); }
