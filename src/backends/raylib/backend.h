@@ -175,6 +175,8 @@ struct RaylibPlatformAPI {
   static constexpr unsigned int FLAG_WINDOW_RESIZABLE =
       raylib::FLAG_WINDOW_RESIZABLE;
   static constexpr unsigned int FLAG_VSYNC_HINT = raylib::FLAG_VSYNC_HINT;
+  static constexpr unsigned int FLAG_WINDOW_HIGHDPI =
+      raylib::FLAG_WINDOW_HIGHDPI;
   static constexpr int LOG_ERROR = raylib::LOG_ERROR;
   static constexpr int TEXTURE_FILTER_BILINEAR =
       raylib::TEXTURE_FILTER_BILINEAR;

@@ -27,6 +27,8 @@ using PlatformAPI = NonePlatformAPI;
 inline constexpr unsigned int FLAG_WINDOW_RESIZABLE =
     PlatformAPI::FLAG_WINDOW_RESIZABLE;
 inline constexpr unsigned int FLAG_VSYNC_HINT = PlatformAPI::FLAG_VSYNC_HINT;
+inline constexpr unsigned int FLAG_WINDOW_HIGHDPI =
+    PlatformAPI::FLAG_WINDOW_HIGHDPI;
 inline constexpr int LOG_ERROR = PlatformAPI::LOG_ERROR;
 inline constexpr int TEXTURE_FILTER_BILINEAR =
     PlatformAPI::TEXTURE_FILTER_BILINEAR;

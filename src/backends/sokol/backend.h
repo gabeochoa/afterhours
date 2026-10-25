@@ -477,6 +477,7 @@ struct MetalPlatformAPI {
   // ── Constants ──
   static constexpr unsigned int FLAG_WINDOW_RESIZABLE = 0x00000004;
   static constexpr unsigned int FLAG_VSYNC_HINT = 0x00000040;
+  static constexpr unsigned int FLAG_WINDOW_HIGHDPI = 0x00002000; // always on
   static constexpr int LOG_ERROR = 5;
   static constexpr int TEXTURE_FILTER_BILINEAR = 1;
   static constexpr int TEXTURE_FILTER_POINT = 0;
