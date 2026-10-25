@@ -238,36 +238,21 @@ inline void set_mouse_cursor(int) {}
 inline afterhours::Font get_default_font() { return afterhours::Font(); }
 inline afterhours::Font get_unset_font() { return afterhours::Font(); }
 
-inline graphics::RenderTextureType load_render_texture(int, int) {
-  log_error("@notimplemented load_render_texture");
-  return {};
-}
-
-inline void unload_render_texture(graphics::RenderTextureType &) {
-  log_error("@notimplemented unload_render_texture");
-}
-
-inline void begin_texture_mode(graphics::RenderTextureType &) {
-  log_error("@notimplemented begin_texture_mode");
-}
-
-inline void end_texture_mode() {
-  log_error("@notimplemented end_texture_mode");
-}
+// Render textures are an ordinary game path (render, then present), so these
+// are silent no-ops here rather than @notimplemented noise every frame.
+inline graphics::RenderTextureType load_render_texture(int, int) { return {}; }
+inline void unload_render_texture(graphics::RenderTextureType &) {}
+inline void begin_texture_mode(graphics::RenderTextureType &) {}
+inline void end_texture_mode() {}
 
 inline void copy_screen_to_render_texture(graphics::RenderTextureType &, RectangleType) {
   log_error("@notimplemented copy_screen_to_render_texture");
 }
 
 inline void draw_render_texture(const graphics::RenderTextureType &, float,
-                                float, Color) {
-  log_error("@notimplemented draw_render_texture");
-}
-
+                                float, Color) {}
 inline void draw_render_texture(const graphics::RenderTextureType &,
-                                RectangleType, Color) {
-  log_error("@notimplemented draw_render_texture");
-}
+                                RectangleType, Color) {}
 
 inline void draw_texture_rec(TextureType, RectangleType, Vector2Type, Color) {
   log_error("@notimplemented draw_texture_rec");
