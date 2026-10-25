@@ -62,3 +62,51 @@ inline void draw_text_with_shadow(const Font font, const char *text,
 }
 
 } // namespace afterhours
+
+// graphics::run() with canvas_width/height set: draw into the canvas, then
+// present it letterboxed. Here because it needs the texture helpers above.
+#if defined(AFTER_HOURS_USE_RAYLIB) || defined(AFTER_HOURS_SOKOL) ||           \
+    defined(AFTER_HOURS_USE_NONE)
+#include <algorithm>
+#include <cmath>
+#include <memory>
+
+#include "graphics.h"
+
+namespace afterhours::graphics::detail {
+inline bool run_with_canvas(RunConfig cfg) {
+  const int w = cfg.canvas_width, h = cfg.canvas_height;
+  auto rt = std::make_shared<RenderTextureType>();
+  cfg.init = [rt, w, h, init = cfg.init] {
+    *rt = load_render_texture(w, h);
+    canvas() = rt.get();
+    if (init)
+      init();
+  };
+  cfg.frame = [rt, w, h, frame = cfg.frame] {
+    begin_texture_mode(*rt);
+    if (frame)
+      frame();
+    end_texture_mode();
+    begin_drawing();
+    clear_background(ColorType{0, 0, 0, 255}); // the letterbox bars
+    const float sw = static_cast<float>(get_screen_width());
+    const float sh = static_cast<float>(get_screen_height());
+    const float s = std::min(sw / static_cast<float>(w),
+                             sh / static_cast<float>(h));
+    const RectangleType dest = rect::align_center(
+        RectangleType{0, 0, sw, sh}, std::round(static_cast<float>(w) * s),
+        std::round(static_cast<float>(h) * s));
+    draw_render_texture(*rt, dest, ColorType{255, 255, 255, 255});
+    end_drawing();
+  };
+  cfg.cleanup = [rt, cleanup = cfg.cleanup] {
+    if (cleanup)
+      cleanup();
+    canvas() = nullptr;
+    unload_render_texture(*rt);
+  };
+  return PlatformAPI::run(cfg);
+}
+} // namespace afterhours::graphics::detail
+#endif

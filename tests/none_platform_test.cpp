@@ -59,6 +59,21 @@ int main() {
   check(fps > 0.f && frame_time > 0.f && time > 0.0, "the clock ticks");
   check(!graphics::is_window_ready(), "the window closes after run()");
 
+  {
+    bool saw_canvas = false, canvas_inited = false;
+    graphics::RunConfig c;
+    c.width = c.canvas_width = 64;
+    c.height = c.canvas_height = 32;
+    c.init = [&] { canvas_inited = graphics::canvas() != nullptr; };
+    c.frame = [&] {
+      saw_canvas = graphics::canvas() != nullptr;
+      graphics::request_quit();
+    };
+    check(graphics::run(c) && canvas_inited && saw_canvas,
+          "a canvas run exposes canvas() in init and frame");
+    check(graphics::canvas() == nullptr, "and clears it after cleanup");
+  }
+
   testing::input_injector::set_key_down(keys::W);
   check(input::is_key_down(keys::W), "injected keys reach input::is_key_down");
   testing::input_injector::set_key_up(keys::W);

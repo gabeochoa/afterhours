@@ -149,7 +149,22 @@ inline void end_mode_2d() { PlatformAPI::end_mode_2d(); }
 
 inline void request_quit() { PlatformAPI::request_quit(); }
 
-inline bool run(const RunConfig &cfg) { return PlatformAPI::run(cfg); }
+// The canvas texture while run() owns one, else nullptr. Holds the last
+// presented frame between frames, so it can be captured for screenshots.
+inline RenderTextureType *&canvas() {
+  static RenderTextureType *rt = nullptr;
+  return rt;
+}
+
+namespace detail {
+inline bool run_with_canvas(RunConfig cfg); // defined in drawing_helpers.h
+} // namespace detail
+
+inline bool run(const RunConfig &cfg) {
+  if (cfg.canvas_width > 0 && cfg.canvas_height > 0)
+    return detail::run_with_canvas(cfg);
+  return PlatformAPI::run(cfg);
+}
 
 } // namespace afterhours::graphics
 

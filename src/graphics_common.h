@@ -231,6 +231,11 @@ struct RunConfig {
     return fixed_dt > 0.f && sim_steps > 0 ? sim_steps : 1;
   }
 
+  // Set both to draw each frame into a fixed-size texture that run() presents
+  // letterboxed into the window (see graphics::canvas()).
+  int canvas_width = 0;
+  int canvas_height = 0;
+
   std::function<void()> init = nullptr;
   std::function<void()> frame = nullptr;
   std::function<void()> cleanup = nullptr;
