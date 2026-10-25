@@ -127,6 +127,7 @@ ALL_TESTS := \
 	card_and_type_scale_test \
 	fixed_timestep_test \
 	headless_runconfig_test \
+	none_platform_test \
 	fit_content_test \
 	label_inset_test \
 	text_memo_test \
@@ -294,6 +295,7 @@ LDFLAGS_T  =
 $(RAYLIB_BINS): CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(RAYLIB_BINS): INCLUDES_T = $(INCLUDES_RAYLIB)
 $(RAYLIB_BINS): LDFLAGS_T  = $(LDFLAGS_RAYLIB)
+$(OUT)/none_platform_test: CXXFLAGS_T += -DAFTER_HOURS_USE_NONE
 
 # Shift+Enter is a raw is_key_down check, and the key injector is only wired in
 # behind this macro. Without it the backend is asked directly and answers false

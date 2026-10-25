@@ -7,6 +7,8 @@
 #include "backends/raylib/backend.h"
 #elif defined(AFTER_HOURS_SOKOL)
 #include "backends/sokol/backend.h"
+#elif defined(AFTER_HOURS_USE_NONE)
+#include "backends/none/backend.h"
 #endif
 
 namespace afterhours::graphics {
@@ -15,9 +17,11 @@ namespace afterhours::graphics {
 using PlatformAPI = RaylibPlatformAPI;
 #elif defined(AFTER_HOURS_SOKOL)
 using PlatformAPI = MetalPlatformAPI;
+#elif defined(AFTER_HOURS_USE_NONE)
+using PlatformAPI = NonePlatformAPI;
 #else
 #error                                                                         \
-    "No graphics backend defined. Define AFTER_HOURS_USE_RAYLIB, AFTER_HOURS_USE_SOKOL, AFTER_HOURS_USE_METAL, or AFTER_HOURS_USE_VULKAN (AFTER_HOURS_USE_NONE has no graphics API)."
+    "No graphics backend defined. Define AFTER_HOURS_USE_RAYLIB, AFTER_HOURS_USE_SOKOL, AFTER_HOURS_USE_METAL, or AFTER_HOURS_USE_VULKAN, or AFTER_HOURS_USE_NONE."
 #endif
 
 inline constexpr unsigned int FLAG_WINDOW_RESIZABLE =
