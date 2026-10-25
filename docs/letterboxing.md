@@ -35,19 +35,19 @@ taller. `scale` is content pixels per window pixel.
 ```cpp
 graphics::begin_drawing();
 graphics::clear_background(raylib::BLACK); // clears the bars
-const auto vp = window_manager::content_viewport(
-    graphics::get_screen_width(), graphics::get_screen_height());
-draw_texture_pro(target.texture,
-                 raylib::Rectangle{0.f, 0.f, (float)GAME_W,
-                                   -(float)GAME_H}, // flipped: raylib
-                 vp.dest, vec2{0, 0}, 0.f, raylib::WHITE);
+draw_render_texture(target,
+                    window_manager::content_viewport(
+                        graphics::get_screen_width(),
+                        graphics::get_screen_height())
+                        .dest,
+                    raylib::WHITE);
 graphics::end_drawing();
 ```
 
-The negative source height is the raylib flip: a render texture is
-stored upside down. On sokol the source rect is unflipped (it samples
-with the same 0..1 UVs as `draw_render_texture`). The caller owns
-`begin/end_drawing` and clearing the bars.
+The `dest` overload of `draw_render_texture` handles each backend's flip
+(raylib stores render textures upside down; sokol does not), so the same
+call works on both. The caller owns `begin/end_drawing` and clearing the
+bars.
 
 ## Mapping points
 

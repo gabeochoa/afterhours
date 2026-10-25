@@ -1383,12 +1383,15 @@ inline bool blur_render_texture(const graphics::RenderTextureType &src,
   return textured_quad_render_texture(src, dst, params);
 }
 
-inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
-                                float y, Color tint) {
+// Stretched into `dest`, e.g. window_manager::content_viewport(...).dest to
+// letterbox a fixed-size game into the window.
+inline void draw_render_texture(const graphics::RenderTextureType &rt,
+                                RectangleType dest, Color tint) {
   sg_view tv = {rt.tex_view_id};
   sg_sampler smp = {rt.sampler_id};
-  float w = static_cast<float>(rt.width);
-  float h = static_cast<float>(rt.height);
+  const float x = dest.x, y = dest.y;
+  float w = dest.width;
+  float h = dest.height;
 
   sgl_enable_texture();
   sgl_texture(tv, smp);
@@ -1402,13 +1405,13 @@ inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
   sgl_disable_texture();
 
   if (graphics::metal_detail::g_shader_runtime.ps1_enabled) {
-    const float scan_h = static_cast<float>(rt.height);
-    const float scan_w = static_cast<float>(rt.width);
+    const float scan_h = h;
+    const float scan_w = w;
 
     // Approximate CRT scanlines from the ps1 post-process shader.
     sgl_begin_lines();
     sgl_c4b(0, 0, 0, 24);
-    for (int yy = 1; yy < rt.height; yy += 2) {
+    for (int yy = 1; yy < static_cast<int>(h); yy += 2) {
       const float py = y + static_cast<float>(yy);
       sgl_v2f(x, py);
       sgl_v2f(x + scan_w, py);
@@ -1441,6 +1444,14 @@ inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
     sgl_v2f(x + scan_w - band, y + scan_h - band);
     sgl_end();
   }
+}
+
+inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
+                                float y, Color tint) {
+  draw_render_texture(rt,
+                      RectangleType{x, y, static_cast<float>(rt.width),
+                                    static_cast<float>(rt.height)},
+                      tint);
 }
 
 inline void draw_texture_pro(TextureType tex, RectangleType src,

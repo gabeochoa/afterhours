@@ -591,6 +591,17 @@ inline void draw_render_texture(const graphics::RenderTextureType &rt, float x,
       {x, y}, tint);
 }
 
+// Stretched into `dest`, e.g. window_manager::content_viewport(...).dest to
+// letterbox a fixed-size game into the window. Handles the raylib flip.
+inline void draw_render_texture(const graphics::RenderTextureType &rt,
+                                RectangleType dest, Color tint) {
+  raylib::DrawTexturePro(
+      rt.texture,
+      {0, 0, static_cast<float>(rt.texture.width),
+       -static_cast<float>(rt.texture.height)},
+      dest, {0, 0}, 0.f, tint);
+}
+
 inline void draw_texture_rec(TextureType tex, RectangleType src,
                              Vector2Type pos, Color tint) {
   raylib::DrawTextureRec(tex, src, pos, tint);

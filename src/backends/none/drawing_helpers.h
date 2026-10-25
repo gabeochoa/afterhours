@@ -264,6 +264,11 @@ inline void draw_render_texture(const graphics::RenderTextureType &, float,
   log_error("@notimplemented draw_render_texture");
 }
 
+inline void draw_render_texture(const graphics::RenderTextureType &,
+                                RectangleType, Color) {
+  log_error("@notimplemented draw_render_texture");
+}
+
 inline void draw_texture_rec(TextureType, RectangleType, Vector2Type, Color) {
   log_error("@notimplemented draw_texture_rec");
 }
