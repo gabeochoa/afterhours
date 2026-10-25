@@ -1,7 +1,10 @@
-// NonePlatformAPI: run() drives init/frame/cleanup with no window or GPU,
-// and the clock, screen size and request_quit behave like a real backend.
+// NonePlatformAPI: run() drives init/frame/cleanup with no window or GPU, and
+// injected e2e input reaches the input plugin, so headless builds play scripts.
+#define AFTER_HOURS_ENABLE_E2E_TESTING
 #include <afterhours/src/graphics.h>
 #include <afterhours/src/drawing_helpers.h>
+#include <afterhours/src/plugins/input_system.h>
+#include <afterhours/src/plugins/e2e_testing/input_injector.h>
 
 #include <cstdio>
 #include <string>
@@ -55,6 +58,11 @@ int main() {
   check(w == 64 && h == 32, "screen size is the configured size");
   check(fps > 0.f && frame_time > 0.f && time > 0.0, "the clock ticks");
   check(!graphics::is_window_ready(), "the window closes after run()");
+
+  testing::input_injector::set_key_down(keys::W);
+  check(input::is_key_down(keys::W), "injected keys reach input::is_key_down");
+  testing::input_injector::set_key_up(keys::W);
+  check(!input::is_key_down(keys::W), "and release");
 
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {

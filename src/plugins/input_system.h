@@ -697,93 +697,66 @@ struct input : developer::Plugin {
         explicit GamepadButton(int v) : value(v) {}
     };
 
-    // TODO good luck ;)
-    static MousePosition get_mouse_position() {
-        log_error("@notimplemented get_mouse_position");
-        return {0, 0};
+    // No devices: keys and mouse are whatever the e2e injector supplies, so a
+    // headless build plays scripts; otherwise everything reads idle.
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    static constexpr auto idle = [](auto...) { return false; };
+    static bool is_key_pressed(const KeyCode k) {
+        return testing::test_input::is_key_pressed(k, idle);
     }
-    static MousePosition get_mouse_delta() {
-        log_error("@notimplemented get_mouse_delta");
-        return {0, 0};
-    }
-    static bool is_mouse_button_up(const MouseButton) {
-        log_error("@notimplemented is_mouse_button_up");
-        return false;
-    }
-    static bool is_mouse_button_down(const MouseButton) {
-        log_error("@notimplemented is_mouse_button_down");
-        return false;
-    }
-    static bool is_mouse_button_pressed(const MouseButton) {
-        log_error("@notimplemented is_mouse_button_pressed");
-        return false;
-    }
-    static bool is_mouse_button_released(const MouseButton) {
-        log_error("@notimplemented is_mouse_button_released");
-        return false;
-    }
-    static float get_mouse_wheel_move() {
-        log_error("@notimplemented get_mouse_wheel_move");
-        return 0.f;
-    }
-    static MousePosition get_mouse_wheel_move_v() {
-        log_error("@notimplemented get_mouse_wheel_move_v");
-        return {0, 0};
+    static bool is_key_down(const KeyCode k) {
+        return testing::test_input::is_key_down(k, idle);
     }
     static int get_char_pressed() {
-        log_error("@notimplemented get_char_pressed");
-        return 0;
+        return testing::test_input::get_char_pressed([] { return 0; });
     }
-    static bool is_key_pressed(const KeyCode) {
-        log_error("@notimplemented is_key_pressed");
-        return false;
+    static bool is_mouse_button_pressed(const MouseButton b) {
+        return testing::test_input::is_mouse_button_pressed(b, idle);
     }
-    static bool is_key_pressed_repeat(const KeyCode) {
-        return false;
+    static bool is_mouse_button_down(const MouseButton b) {
+        return testing::test_input::is_mouse_button_down(b, idle);
     }
-    static bool is_key_down(const KeyCode) {
-        log_error("@notimplemented is_key_down");
-        return false;
+    static bool is_mouse_button_released(const MouseButton b) {
+        return testing::test_input::is_mouse_button_released(b, idle);
     }
-    static bool is_gamepad_available(const GamepadID) {
-        log_error("@notimplemented is_gamepad_available");
-        return false;
+#else
+    static bool is_key_pressed(const KeyCode) { return false; }
+    static bool is_key_down(const KeyCode) { return false; }
+    static int get_char_pressed() { return 0; }
+    static bool is_mouse_button_pressed(const MouseButton) { return false; }
+    static bool is_mouse_button_down(const MouseButton) { return false; }
+    static bool is_mouse_button_released(const MouseButton) { return false; }
+#endif
+    static bool is_key_pressed_repeat(const KeyCode) { return false; }
+    static bool is_mouse_button_up(const MouseButton b) {
+        return !is_mouse_button_down(b);
     }
+    static MousePosition get_mouse_position() { return {0, 0}; }
+    static MousePosition get_mouse_delta() { return {0, 0}; }
+    static float get_mouse_wheel_move() { return 0.f; }
+    static MousePosition get_mouse_wheel_move_v() { return {0, 0}; }
+    static bool is_gamepad_available(const GamepadID) { return false; }
     static float get_gamepad_axis_mvt(const GamepadID, const GamepadAxis) {
-        log_error("@notimplemented get_gamepad_axis_mvt");
         return 0.f;
     }
     static bool is_gamepad_button_pressed(const GamepadID,
                                           const GamepadButton) {
-        log_error("@notimplemented is_gamepad_button_pressed");
         return false;
     }
     static bool is_gamepad_button_down(const GamepadID, const GamepadButton) {
-        log_error("@notimplemented is_gamepad_button_down");
         return false;
     }
     static void draw_text(const std::string &, const int, const int,
-                          const int) {
-        log_error("@notimplemented draw_text");
-    }
-    static void set_gamepad_mappings(const std::string &) {
-        log_error("@notimplemented set_gamepad_mappings");
-    }
-    static void try_load_gamepad_mappings() {
-        log_warn("try_load_gamepad_mappings: gamepad mappings not supported on Metal backend");
-    }
+                          const int) {}
+    static void set_gamepad_mappings(const std::string &) {}
+    static void try_load_gamepad_mappings() {}
     static std::string name_for_button(const GamepadButton) {
-        log_error("@notimplemented name_for_button");
         return "unknown";
     }
     static std::string icon_for_button(const GamepadButton) {
-        log_error("@notimplemented icon_for_button");
         return "unknown";
     }
-    static std::string icon_for_key(const int) {
-        log_error("@notimplemented icon_for_key");
-        return "unknown";
-    }
+    static std::string icon_for_key(const int) { return "unknown"; }
 #endif
 
     // ── Trackpad pinch ─────────────────────────────────────────────────────
