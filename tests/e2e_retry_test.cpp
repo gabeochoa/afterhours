@@ -123,6 +123,20 @@ int main() {
           "a plain-retry timeout keeps the generic message");
   }
 
+  // expect(): pass consumes, mismatch retries and stashes the mismatch.
+  {
+    EntityCollection coll;
+    Entity &e = coll.createEntity();
+    auto &cmd = e.addComponent<PendingE2ECommand>();
+    cmd.name = "assert_score";
+    cmd.expect(false, "score is 0:1");
+    check(cmd.is_retry() && cmd.last_mismatch == "score is 0:1",
+          "expect(false) retries with the mismatch");
+    cmd.reset_retry();
+    cmd.expect(true, "unused");
+    check(cmd.is_consumed() && cmd.succeeded(), "expect(true) consumes");
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);

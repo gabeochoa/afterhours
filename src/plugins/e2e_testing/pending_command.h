@@ -94,6 +94,15 @@ struct PendingE2ECommand : BaseComponent {
     last_mismatch = mismatch;
   }
 
+  // The whole of a state assertion: consume if `ok`, else retry_with
+  // `mismatch`. Malformed input should still fail() before calling this.
+  void expect(bool ok, const std::string &mismatch) {
+    if (ok)
+      consume();
+    else
+      retry_with(mismatch);
+  }
+
   // Check if already handled by a previous system
   bool is_consumed() const { return state == CommandState::Consumed; }
 
