@@ -122,6 +122,7 @@ ALL_TESTS := \
 	overlay_layer_test \
 	unhandled_command_test \
 	e2e_retry_test \
+	e2e_app_test \
 	mouse_axis_action_test \
 	card_and_type_scale_test \
 	fixed_timestep_test \
@@ -224,6 +225,7 @@ ALL_TESTS += sokol_include_order_test
 endif
 
 RAYLIB_TESTS := \
+	e2e_app_test \
 	border_width_test \
 	text_visibility_test \
 	image_tint_test \
