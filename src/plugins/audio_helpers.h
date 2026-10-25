@@ -1,6 +1,11 @@
 #pragma once
 
+#include <algorithm>
+#include <cmath>
 #include <cstdlib>
+#include <vector>
+
+#include "../logging.h"
 
 namespace afterhours {
 
@@ -86,5 +91,45 @@ inline void SetMusicVolume(MusicStub, float) {}
 inline void UnloadMusicStream(MusicStub) {}
 inline MusicStub LoadMusicStream(const char *) { return MusicStub{}; }
 #endif
+
+namespace synth {
+
+// Synthesized beep: a sine at freq Hz for seconds, with a short attack and
+// release envelope so it clicks less. Returns a SoundType the caller owns
+// (UnloadSound when done); the audio device must already be initialised.
+// Non-positive inputs return an empty sound without touching audio.
+inline SoundType beep(float freq, float seconds) {
+#ifdef AFTER_HOURS_USE_RAYLIB
+  if (!(freq > 0.f) || !(seconds > 0.f))
+    return SoundType{};
+  constexpr int sample_rate = 44100;
+  const int frames = static_cast<int>(sample_rate * seconds);
+  std::vector<short> samples(static_cast<size_t>(frames));
+  const int attack = sample_rate / 200;
+  const int release = sample_rate / 80;
+  for (int i = 0; i < frames; i++) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    const float env =
+        std::min(1.f, static_cast<float>(i) / static_cast<float>(attack)) *
+        std::min(1.f, static_cast<float>(frames - i) /
+                           static_cast<float>(release));
+    samples[static_cast<size_t>(i)] = static_cast<short>(
+        sinf(2.f * 3.14159265f * freq * t) * env * 8000.f);
+  }
+  WaveType wave{.frameCount = static_cast<unsigned>(frames),
+                .sampleRate = static_cast<unsigned>(sample_rate),
+                .sampleSize = 16,
+                .channels = 1,
+                .data = samples.data()};
+  return ::afterhours::LoadSoundFromWave(wave);
+#else
+  (void)freq;
+  (void)seconds;
+  log_error("@notimplemented synth::beep");
+  return SoundType{};
+#endif
+}
+
+} // namespace synth
 
 } // namespace afterhours
