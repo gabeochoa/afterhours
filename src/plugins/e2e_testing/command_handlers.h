@@ -644,6 +644,25 @@ struct HandleExpectNoTextCommand : System<PendingE2ECommand> {
     }
 };
 
+// A command as a lambda: `fn` sees only unconsumed commands named `name`, and
+// consumes, retries (cmd.expect) or fails them like any handler system.
+struct HandleNamedCommand : System<PendingE2ECommand> {
+    using Fn = std::function<void(PendingE2ECommand &)>;
+    std::string name;
+    Fn fn;
+    HandleNamedCommand(std::string n, Fn f)
+        : name(std::move(n)), fn(std::move(f)) {}
+    void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+        if (!cmd.is_consumed() && cmd.is(name)) fn(cmd);
+    }
+};
+
+inline void register_command(SystemManager &sm, std::string name,
+                             HandleNamedCommand::Fn fn) {
+    sm.register_update_system(
+        std::make_unique<HandleNamedCommand>(std::move(name), std::move(fn)));
+}
+
 // Handle 'screenshot name' command - takes screenshot
 struct HandleScreenshotCommand : System<PendingE2ECommand> {
     using ScreenshotFn = std::function<void(const std::string &)>;

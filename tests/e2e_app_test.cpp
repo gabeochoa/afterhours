@@ -23,6 +23,8 @@ static void check(bool cond, const std::string &what) {
     fprintf(stderr, "  FAIL: %s\n", what.c_str());
 }
 
+static int lambda_arg = 0;
+
 struct MyCommand : System<PendingE2ECommand> {
   inline static int seen = 0;
   void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -54,7 +56,7 @@ int main() {
   const auto script =
       std::filesystem::temp_directory_path() / "e2e_app_test.e2e";
   {
-    std::ofstream(script) << "my_cmd\nscreenshot shot_a\n";
+    std::ofstream(script) << "my_cmd\nlambda_cmd 7\nscreenshot shot_a\n";
     std::string path = script.string();
     char a0[] = "game", a1[] = "--test-script";
     char *argv[] = {a0, a1, path.data()};
@@ -63,6 +65,10 @@ int main() {
         3, argv,
         [](SystemManager &sm) {
           sm.register_update_system(std::make_unique<MyCommand>());
+          register_command(sm, "lambda_cmd", [](PendingE2ECommand &cmd) {
+            lambda_arg = cmd.maybe_arg_as<int>(0).value_or(0);
+            cmd.consume();
+          });
         },
         "shots");
     check(app != nullptr, "a script makes an app");
@@ -79,6 +85,7 @@ int main() {
       queued = queued || app->pending_screenshot == "shot_a";
     }
     check(MyCommand::seen == 1, "custom handler consumed its command");
+    check(lambda_arg == 7, "register_command lambda ran with its args");
     check(queued, "screenshot queues its name for post_render");
     check(app && app->finished(), "runner finishes");
     check(app && app->finish() == 0, "a passing run exits 0");
