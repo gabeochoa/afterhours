@@ -136,5 +136,14 @@ inline bool overlaps(RectangleType a, RectangleType b) {
          a.y < b.y + b.height && b.y < a.y + a.height;
 }
 
+// Smallest rect containing both: e.g. the area swept by a moving box between
+// its previous and current position.
+inline RectangleType bounds(RectangleType a, RectangleType b) {
+  const float x = std::min(a.x, b.x);
+  const float y = std::min(a.y, b.y);
+  return RectangleType{x, y, std::max(a.x + a.width, b.x + b.width) - x,
+                       std::max(a.y + a.height, b.y + b.height) - y};
+}
+
 } // namespace rect
 } // namespace afterhours

@@ -119,4 +119,11 @@ TEST(the_repro_from_the_report) {
   CHECK(same(box, RectangleType{118, 93, 64, 36}));
 }
 
+TEST(bounds_contains_both) {
+  CHECK(same(bounds(RectangleType{10, 20, 30, 30}, RectangleType{0, 25, 30, 30}),
+             RectangleType{0, 20, 40, 35}));
+  const RectangleType r{5, 5, 10, 10};
+  CHECK(same(bounds(r, r), r));
+}
+
 int main() { return ui_test::run_registered_tests("rect"); }
