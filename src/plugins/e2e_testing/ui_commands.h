@@ -50,6 +50,14 @@ inline RectangleType get_screen_rect(Entity &entity) {
   return ui::detail::apply_ancestor_transform(entity, rect);
 }
 
+// Centre of an element's visible (clipped) rect; nullopt when fully
+// clipped, so clicks land on a point the user could actually hit.
+inline std::optional<Position> visible_center(Entity &entity) {
+  auto rect = ui::detail::hit_rect(entity, entity.get<ui::UIComponent>());
+  if (rect.width <= 0.f || rect.height <= 0.f) return std::nullopt;
+  return Position{rect.x + rect.width / 2, rect.y + rect.height / 2};
+}
+
 // Find a UI component by its debug name and return its center position
 template <typename InputAction>
 std::optional<Position> find_component_center(const std::string &name) {
@@ -63,10 +71,7 @@ std::optional<Position> find_component_center(const std::string &name) {
                    .first();
 
   for (Entity &entity : query.gen()) {
-    auto rect = get_screen_rect(entity);
-    float cx = rect.x + rect.width / 2;
-    float cy = rect.y + rect.height / 2;
-    return Position{cx, cy};
+    if (auto pos = visible_center(entity)) return pos;
   }
   return std::nullopt;
 }
@@ -86,10 +91,7 @@ std::optional<Position> find_component_with_text(const std::string &text) {
 
   // TODO add a gen_lambda() to do this conversion
   for (Entity &entity : query.gen()) {
-    auto rect = get_screen_rect(entity);
-    float cx = rect.x + rect.width / 2;
-    float cy = rect.y + rect.height / 2;
-    return Position{cx, cy};
+    if (auto pos = visible_center(entity)) return pos;
   }
   return std::nullopt;
 }

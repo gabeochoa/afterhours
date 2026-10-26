@@ -443,6 +443,11 @@ class E2ERunner {
             return;
         }
 
+        // Hold dispatch while a command pends, or assertions sample later
+        // steps (320 vs 462); merge first, EntityQuery asserts on temp ents.
+        EntityHelper::get_default_collection().merge_entity_arrays();
+        if (has_pending_commands()) return;
+
         dispatch_command(cmd);
         wait_time_ = cmd.wait_seconds;
         wait_ticks_ = cmd.wait_ticks;

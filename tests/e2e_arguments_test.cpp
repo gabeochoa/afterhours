@@ -133,11 +133,14 @@ TEST(malformed_script_does_not_fail_the_next_batch_script) {
   ui_test::ImmTestHarness h;
   E2ERunner runner;
   runner.load_scripts_from_directory(file.directory.string());
+  // Runner commands land in the default collection, not the harness's UI
+  // collection: merge and iterate that one, or the loop below is vacuous.
+  auto &coll = EntityHelper::get_default_collection();
   E2ECommandCleanupSystem cleanup;
   for (int frame = 0; frame < 80 && !runner.is_finished(); ++frame) {
     runner.tick(0.1f);
-    h.coll.merge_entity_arrays();
-    for (auto &e : h.coll.get_entities()) {
+    coll.merge_entity_arrays();
+    for (auto &e : coll.get_entities()) {
       if (!e || !e->has<PendingE2ECommand>()) continue;
       auto &command = e->get<PendingE2ECommand>();
       if (command.name == "wait_frames") command.consume();
@@ -150,6 +153,61 @@ TEST(malformed_script_does_not_fail_the_next_batch_script) {
   log_sink_fn = previous_sink;
   CHECK(captured.find("[FAIL] arguments") != std::string::npos);
   CHECK(captured.find("[PASS] next") != std::string::npos);
+}
+
+TEST(serial_dispatch_waits_for_pending_command) {
+  // The runner must not dispatch the next command while one is pending,
+  // or an assertion samples later script steps (overview 320 vs tab 462).
+  ScriptFile file("custom_first_xyz\ncustom_second_xyz\n");
+  ui_test::ImmTestHarness h;
+  E2ERunner runner;
+  runner.load_script(file.path.string());
+  E2ECommandCleanupSystem cleanup;
+  // Runner commands land in the default collection, not the harness's UI
+  // collection: merge and iterate that one, or the loop below is vacuous.
+  auto &coll = EntityHelper::get_default_collection();
+  // Sweep leftovers: an unconsumed pending command would block dispatch,
+  // and this test must not fail (or pollute) its neighbours.
+  auto sweep_pending = [&coll]() {
+    coll.merge_entity_arrays();
+    for (auto &e : coll.get_entities()) {
+      if (!e || !e->has<PendingE2ECommand>()) continue;
+      e->get<PendingE2ECommand>().consume();
+    }
+  };
+  sweep_pending();
+  // Tick several frames, running cleanup but never consuming the first
+  // command: the second command must never be dispatched while it pends.
+  for (int frame = 0; frame < 5; ++frame) {
+    runner.tick(0.1f);
+    coll.merge_entity_arrays();
+    bool saw_first = false;
+    for (auto &e : coll.get_entities()) {
+      if (!e || !e->has<PendingE2ECommand>()) continue;
+      auto &command = e->get<PendingE2ECommand>();
+      if (command.name == "custom_first_xyz") {
+        saw_first = true;
+        cleanup.for_each_with(*e, command, 0.f);
+      }
+      CHECK(command.name != "custom_second_xyz");
+    }
+    CHECK(saw_first);
+  }
+  // Consume the first command: the runner may now dispatch the second.
+  for (auto &e : coll.get_entities()) {
+    if (!e || !e->has<PendingE2ECommand>()) continue;
+    e->get<PendingE2ECommand>().consume();
+  }
+  runner.tick(0.1f);
+  coll.merge_entity_arrays();
+  bool saw_second = false;
+  for (auto &e : coll.get_entities()) {
+    if (!e || !e->has<PendingE2ECommand>()) continue;
+    if (e->get<PendingE2ECommand>().name == "custom_second_xyz")
+      saw_second = true;
+  }
+  CHECK(saw_second);
+  sweep_pending();
 }
 
 // registerSingleton emplaces: a second registration is a no-op that keeps
@@ -694,6 +752,43 @@ TEST(assert_ui_text_skips_clipped_but_assert_ui_sees_it) {
   auto by_text = pending_for("assert_ui_text", {"Clipped", "y=100"});
   ui_commands::HandleAssertUITextCommand{}.for_each_with(h.root(), by_text, 0.f);
   CHECK(by_text.is_retry());
+}
+
+TEST(click_ui_clicks_the_visible_centre_of_a_clipped_element) {
+  ui_test::ImmTestHarness h;
+  h.begin_frame();
+  auto clip_parent = ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
+                                  ui::imm::ComponentConfig{}
+                                      .with_size({ui::pixels(100), ui::pixels(40)})
+                                      .with_absolute_position(0, 0)
+                                      .with_overflow(ui::Overflow::Hidden)
+                                      .with_debug_name("clip_parent"));
+  ui::imm::div(h.context(), ui::imm::mk(clip_parent.ent(), 0),
+               ui::imm::ComponentConfig{}
+                   .with_size({ui::pixels(100), ui::pixels(40)})
+                   .with_absolute_position(0, 30)
+                   .with_label("PartlyClipped")
+                   .with_debug_name("partly_clipped"));
+  ui::imm::div(h.context(), ui::imm::mk(clip_parent.ent(), 1),
+               ui::imm::ComponentConfig{}
+                   .with_size({ui::pixels(100), ui::pixels(40)})
+                   .with_absolute_position(0, 100)
+                   .with_label("FullyClipped")
+                   .with_debug_name("fully_clipped"));
+  h.layout_only();
+  // Partly clipped: full-rect centre (50, 50) is outside the parent clip
+  // (0-40); the visible strip is 30-40, so the click lands at (50, 35).
+  auto partly = ui_commands::find_component_center<ui_test::TestInputAction>(
+      "partly_clipped");
+  CHECK(partly.has_value());
+  if (partly.has_value()) {
+    CHECK(partly->x == 50.f);
+    CHECK(partly->y == 35.f);
+  }
+  // Fully clipped: no visible point, so no click target.
+  auto fully = ui_commands::find_component_center<ui_test::TestInputAction>(
+      "fully_clipped");
+  CHECK(!fully.has_value());
 }
 
 int main() { return ui_test::run_registered_tests("E2E arguments"); }
