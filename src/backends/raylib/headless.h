@@ -13,6 +13,13 @@ extern "C" void glFlush(void);
 extern "C" void glFinish(void);
 #endif
 
+// capture_frame() calls glFlush()/glFinish() directly. On macOS these come in
+// transitively via headless_gl_macos.h's <OpenGL/gl3.h>; on Linux nothing in
+// the include chain declares them, so pull the system GL header explicitly.
+#if defined(__linux__)
+#include <GL/gl.h>
+#endif
+
 #include "../../graphics/platform/headless_gl.h"
 #include "../../graphics_common.h"
 #include "../../logging.h"
