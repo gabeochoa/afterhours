@@ -1,7 +1,7 @@
 #pragma once
 
 // 3D models: load by name, draw with a position / yaw / scale, draw many
-// copies in one call per mesh, swap shaders.
+// copies in one call per mesh (or batch them by model), swap shaders.
 //
 //   ModelLibrary::get().load("resources/tree.glb", "tree");
 //   draw_model(ModelLibrary::get().get("tree"), pos, yaw_deg, {1, 1, 1});
@@ -9,7 +9,9 @@
 // raylib only. The none and sokol backends get a stub whose loads always
 // fail, so ModelLibrary::load returns false there instead of drawing nothing.
 
+#include <cmath>
 #include <string>
+#include <vector>
 
 #include "../developer.h"
 #include "../library.h"
@@ -104,6 +106,81 @@ inline void draw_model_instanced(const ModelType &model, raylib::Shader shader,
     raylib::rlDisableVertexArray();
   }
 }
+
+// The matrix draw_model builds for one copy: scale, rotate about Y, then move
+// to pos. For filling draw_model_instanced or InstanceBatcher without raymath.
+inline raylib::Matrix model_transform(Vector3Type pos, float yaw_deg,
+                                      Vector3Type scale) {
+  float a = yaw_deg * 3.14159265358979f / 180.f;
+  float c = std::cos(a), s = std::sin(a);
+  raylib::Matrix m{};
+  m.m0 = c * scale.x, m.m4 = 0.f, m.m8 = s * scale.z, m.m12 = pos.x;
+  m.m1 = 0.f, m.m5 = scale.y, m.m9 = 0.f, m.m13 = pos.y;
+  m.m2 = -s * scale.x, m.m6 = 0.f, m.m10 = c * scale.z, m.m14 = pos.z;
+  m.m15 = 1.f;
+  return m;
+}
+
+// Collects one transform per copy, grouped by model, and draws each group
+// with one draw_model_instanced. Call add() while walking the entities, then
+// flush() once a frame. flush() empties the groups but keeps their storage,
+// so a steady scene stops allocating after its first frame.
+//
+// Groups are keyed by the model's address; ModelLibrary models keep theirs
+// while loaded. Copies that need a different shader or uniforms go in a
+// second batcher.
+struct InstanceBatcher {
+  void add(const ModelType &model, const raylib::Matrix &transform) {
+    group_for(model).transforms.push_back(transform);
+  }
+  void add(const ModelType &model, Vector3Type pos, float yaw_deg,
+           Vector3Type scale) {
+    add(model, model_transform(pos, yaw_deg, scale));
+  }
+
+  // `shader` must read the instanceTransform attribute, as
+  // load_instancing_shader's does.
+  void flush(raylib::Shader shader) {
+    for (Group &g : groups) {
+      draw_model_instanced(*g.model, shader, g.transforms.data(),
+                           static_cast<int>(g.transforms.size()));
+      g.transforms.clear();
+    }
+  }
+
+  void clear() {
+    for (Group &g : groups) g.transforms.clear();
+  }
+
+  [[nodiscard]] size_t copies() const {
+    size_t n = 0;
+    for (const Group &g : groups) n += g.transforms.size();
+    return n;
+  }
+  // Groups with at least one copy waiting: the draw calls flush() will make
+  // per mesh.
+  [[nodiscard]] size_t group_count() const {
+    size_t n = 0;
+    for (const Group &g : groups) n += g.transforms.empty() ? 0 : 1;
+    return n;
+  }
+
+private:
+  struct Group {
+    const ModelType *model;
+    std::vector<raylib::Matrix> transforms;
+  };
+  // A scene has few distinct models, so a linear find beats hashing, and
+  // groups draw in the order they were first seen.
+  std::vector<Group> groups;
+
+  Group &group_for(const ModelType &model) {
+    for (Group &g : groups)
+      if (g.model == &model) return g;
+    groups.push_back({&model, {}});
+    return groups.back();
+  }
+};
 #else
 struct ModelStub {
   int meshCount = 0;
@@ -120,6 +197,14 @@ template <typename S> inline void set_model_shader(ModelType &, S) {}
 inline ShaderStub load_instancing_shader() { return {}; }
 template <typename S, typename M>
 inline void draw_model_instanced(const ModelType &, S, const M *, int) {}
+struct InstanceBatcher {
+  template <typename M> void add(const ModelType &, const M &) {}
+  template <typename V> void add(const ModelType &, V, float, V) {}
+  template <typename S> void flush(S) {}
+  void clear() {}
+  [[nodiscard]] size_t copies() const { return 0; }
+  [[nodiscard]] size_t group_count() const { return 0; }
+};
 #endif
 
 // raylib logs a warning and returns a model with no meshes rather than

@@ -198,6 +198,7 @@ ALL_TESTS := \
 	models_test \
 	house_of_cards_test \
 	frustum_test \
+	instance_batcher_test \
 	lod_test \
 	stepper_test \
 	styling_test \
@@ -245,6 +246,7 @@ RAYLIB_TESTS := \
 	models_test \
 	house_of_cards_test \
 	frustum_test \
+	instance_batcher_test \
 	dialog_test \
 	dump_ui_test \
 	scroll_anchor_test \
@@ -456,3 +458,4 @@ $(OUT)/headless_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURD
 # Shares the examples' Kenney tree rather than checking in a second copy.
 $(OUT)/models_test: CXXFLAGS_T += -DAFTERHOURS_MODEL_FIXTURE=\"$(realpath ../examples/catalog/3d/tree-large.glb)\"
 $(OUT)/house_of_cards_test: CXXFLAGS_T += -DAFTERHOURS_MODELS_DIR=\"$(realpath ../examples/catalog/3d)\"
+$(OUT)/instance_batcher_test: CXXFLAGS_T += -DAFTERHOURS_MODELS_DIR=\"$(realpath ../examples/catalog/3d)\"
