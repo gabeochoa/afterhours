@@ -11,7 +11,7 @@
 //   --count N   start with N trees (default 4096)
 //   --per-draw  start in per-draw mode
 //   --bench     no interaction: double the count until a frame takes longer
-//               than 16.7ms, print a table, exit
+//               than 100ms (10fps), print a table, exit
 
 #include <algorithm>
 #include <cmath>
@@ -190,7 +190,7 @@ int main(int argc, char **argv) {
             printf("%10d %12d %10.2f %8.0f\n", count, count * tris_per_tree,
                    ms, 1000.0 / ms);
             fflush(stdout);
-            if (ms > 1000.0 / 60.0 || count >= (1 << 20)) break;
+            if (ms > 1000.0 / 10.0 || count >= (1 << 20)) break;
             spawn(count, count * 2);
             count *= 2;
         }
