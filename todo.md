@@ -225,10 +225,14 @@ they are not a claim that every listed API is still missing.
 
 ## 3D models and house_of_cards
 
-- Examples should use afterhours, not raylib directly. `examples/catalog/3d/*`
-  (model_loading, model_stress, house_of_cards) call raylib for the window, frame
-  loop, render targets, text, orbit cameras and model bounds. Add the missing
-  afterhours APIs first, then port the examples.
+- Examples should use afterhours, not raylib directly. The 3D examples are done.
+  Still calling raylib: `headless_validation.cpp` (236 calls), `calendar_stress_test`
+  (29), `drawing_3d_example` (22, partly on purpose: it checks Camera3D matches
+  raylib's), `imm_visual_check` (8), `catalog/layered_input` (8), `on_draw_example`
+  and `catalog/ui/split_layout` (2 each).
+- `plugins/color.h` defines its helpers `static` in a header, so every file that
+  includes it warns about the ones it does not use (about 20 warnings per
+  example). Make them `inline`.
 - Once examples are backend-neutral, build most of them on every backend as a test
   sweep, so a library change that breaks one backend shows up without a game.
 - Make every plugin backend agnostic. Plugins still include raylib headers inside

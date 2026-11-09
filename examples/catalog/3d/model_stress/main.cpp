@@ -22,19 +22,19 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <format>
+#include <numbers>
 #include <random>
 #include <vector>
-
-namespace raylib {
-#include <raylib.h>
-#include <raymath.h>
-}  // namespace raylib
 
 #define AFTER_HOURS_ENTITY_HELPER
 #define AFTER_HOURS_ENTITY_QUERY
 #define AFTER_HOURS_SYSTEM
 #include "../../../../ah.h"
+#include "../../../../src/core/key_codes.h"
+#include "../../../../src/drawing_helpers.h"
 #include "../../../../src/drawing_helpers_3d.h"
+#include "../../../../src/graphics.h"
 #include "../../../../src/plugins/house_of_cards.h"
 #include "../../../../src/plugins/models.h"
 
@@ -48,11 +48,11 @@ enum class Mode { PerDraw, Instanced, Cards };
 constexpr const char *MODE_NAMES[] = {"per-draw", "instanced", "cards"};
 
 struct Tree : BaseComponent {
-    raylib::Vector3 pos;
+    Vector3Type pos;
     float yaw;
     float spin;
     float scale;
-    Tree(raylib::Vector3 p, float y, float s, float sc)
+    Tree(Vector3Type p, float y, float s, float sc)
         : pos(p), yaw(y), spin(s), scale(sc) {}
 };
 
@@ -65,15 +65,15 @@ struct Spin : System<Tree> {
 struct DrawTrees : System<Tree> {
     // ModelLibrary is a std::map, so the reference survives later loads.
     const ModelType &model;
-    raylib::Shader shader;
+    ShaderType shader;
     house_of_cards::Cards &cards;
-    raylib::Shader card_shader;
+    ShaderType card_shader;
     const Camera3D &cam;
     const Mode &mode;
-    mutable std::vector<raylib::Matrix> transforms;
+    mutable std::vector<MatrixType> transforms;
 
-    DrawTrees(const ModelType &m, raylib::Shader s, house_of_cards::Cards &c,
-              raylib::Shader cs, const Camera3D &camera, const Mode &md)
+    DrawTrees(const ModelType &m, ShaderType s, house_of_cards::Cards &c,
+              ShaderType cs, const Camera3D &camera, const Mode &md)
         : model(m), shader(s), cards(c), card_shader(cs), cam(camera),
           mode(md) {}
 
@@ -86,12 +86,8 @@ struct DrawTrees : System<Tree> {
             draw_model(model, t.pos, t.yaw, {t.scale, t.scale, t.scale});
             return;
         }
-        // Same order DrawModelEx uses: scale, then rotate, then translate.
-        transforms.push_back(raylib::MatrixMultiply(
-            raylib::MatrixMultiply(
-                raylib::MatrixScale(t.scale, t.scale, t.scale),
-                raylib::MatrixRotateY(t.yaw * DEG2RAD)),
-            raylib::MatrixTranslate(t.pos.x, t.pos.y, t.pos.z)));
+        transforms.push_back(
+            model_transform(t.pos, t.yaw, {t.scale, t.scale, t.scale}));
     }
 
     void after(float) const override {
@@ -115,9 +111,9 @@ static void spawn(int n, int total_after) {
     float r_max = field_radius(total_after);
     for (int i = 0; i < n; i++) {
         float r = r_max * std::sqrt(unit(rng));
-        float a = unit(rng) * 2.f * PI;
+        float a = unit(rng) * 2.f * std::numbers::pi_v<float>;
         EntityHelper::createEntity().addComponent<Tree>(
-            raylib::Vector3{r * std::cos(a), 0.f, r * std::sin(a)},
+            Vector3Type{r * std::cos(a), 0.f, r * std::sin(a)},
             unit(rng) * 360.f, 20.f + unit(rng) * 60.f, 0.8f + unit(rng) * 0.4f);
     }
 }
@@ -133,26 +129,28 @@ static void despawn_half() {
 static void frame(SystemManager &systems, Camera3D &cam, int count,
                   int tris_per_tree, Mode mode) {
     float r = field_radius(count) + spacing * 2.f;
-    float a = static_cast<float>(raylib::GetTime()) * 0.2f;
+    float a = static_cast<float>(graphics::get_time()) * 0.2f;
     cam.position = {r * std::cos(a), r * 0.6f, r * std::sin(a)};
 
-    raylib::BeginDrawing();
-    raylib::ClearBackground({135, 190, 230, 255});
+    graphics::begin_drawing();
+    graphics::clear_background(Color{135, 190, 230, 255});
     begin_3d(cam);
-    draw_plane({0.f, 0.f, 0.f}, {r * 2.f, r * 2.f}, {110, 160, 90, 255});
-    systems.run(raylib::GetFrameTime());
+    draw_plane({0.f, 0.f, 0.f}, {r * 2.f, r * 2.f}, Color{110, 160, 90, 255});
+    systems.run(graphics::get_frame_time());
     end_3d();
-    raylib::DrawRectangle(0, 0, 520, 70, {0, 0, 0, 140});
+    draw_rectangle(RectangleType{0, 0, 520, 70}, Color{0, 0, 0, 140});
     if (mode == Mode::Cards) tris_per_tree = 2;
-    raylib::DrawText(raylib::TextFormat("trees: %d   tris: %d", count,
-                                        count * tris_per_tree),
-                     10, 10, 20, raylib::WHITE);
-    raylib::DrawText(raylib::TextFormat("%d fps  %.2f ms  %s  [UP/DOWN/M]",
-                                        raylib::GetFPS(),
-                                        raylib::GetFrameTime() * 1000.f,
-                                        MODE_NAMES[static_cast<int>(mode)]),
-                     10, 40, 20, raylib::WHITE);
-    raylib::EndDrawing();
+    const Color white{255, 255, 255, 255};
+    draw_text(std::format("trees: {}   tris: {}", count, count * tris_per_tree)
+                  .c_str(),
+              10, 10, 20, white);
+    draw_text(std::format("{:.0f} fps  {:.2f} ms  {}  [UP/DOWN/M]",
+                          graphics::get_fps(),
+                          graphics::get_frame_time() * 1000.f,
+                          MODE_NAMES[static_cast<int>(mode)])
+                  .c_str(),
+              10, 40, 20, white);
+    graphics::end_drawing();
 }
 
 int main(int argc, char **argv) {
@@ -170,28 +168,25 @@ int main(int argc, char **argv) {
             count = std::max(1, atoi(argv[++i]));
     }
 
-    raylib::SetConfigFlags(raylib::FLAG_WINDOW_RESIZABLE);
-    raylib::InitWindow(1280, 720, "model_stress");
-    raylib::SetTargetFPS(0);
+    graphics::set_config_flags(graphics::FLAG_WINDOW_RESIZABLE);
+    graphics::init_window(1280, 720, "model_stress");
+    graphics::set_target_fps(0);
 
     auto &models = ModelLibrary::get();
     if (!models.load(MODEL_PATH, "tree")) {
-        raylib::CloseWindow();
+        graphics::close_window();
         return 1;
     }
     const ModelType &model = models.get("tree");
-    int tris_per_tree = 0;
-    for (int i = 0; i < model.meshCount; i++)
-        tris_per_tree += model.meshes[i].triangleCount;
-    raylib::BoundingBox box = raylib::GetModelBoundingBox(model);
-    spacing = 0.85f * raylib::Vector3Distance(box.min, box.max);
+    int tris_per_tree = model_triangle_count(model);
+    spacing = 1.7f * model_bounds(model).radius();
 
-    raylib::Shader shader = load_instancing_shader();
+    ShaderType shader = load_instancing_shader();
 
     house_of_cards::Baked baked = house_of_cards::bake(model);
     house_of_cards::Cards cards = house_of_cards::upload(baked);
     house_of_cards::unload(baked);
-    raylib::Shader card_shader = house_of_cards::load_shader();
+    ShaderType card_shader = house_of_cards::load_shader();
 
     Camera3D cam{};
     cam.target = {0.f, 0.f, 0.f};
@@ -210,13 +205,13 @@ int main(int argc, char **argv) {
         constexpr int WARMUP = 30, FRAMES = 120;
         printf("%s\n", MODE_NAMES[static_cast<int>(mode)]);
         printf("%10s %12s %10s %8s\n", "trees", "tris", "avg_ms", "fps");
-        while (!raylib::WindowShouldClose()) {
+        while (!graphics::window_should_close()) {
             for (int i = 0; i < WARMUP; i++)
                 frame(systems, cam, count, tris_per_tree, mode);
-            double start = raylib::GetTime();
+            double start = graphics::get_time();
             for (int i = 0; i < FRAMES; i++)
                 frame(systems, cam, count, tris_per_tree, mode);
-            double ms = (raylib::GetTime() - start) * 1000.0 / FRAMES;
+            double ms = (graphics::get_time() - start) * 1000.0 / FRAMES;
             printf("%10d %12d %10.2f %8.0f\n", count,
                    count * (mode == Mode::Cards ? 2 : tris_per_tree), ms,
                    1000.0 / ms);
@@ -226,14 +221,14 @@ int main(int argc, char **argv) {
             count *= 2;
         }
     } else {
-        while (!raylib::WindowShouldClose()) {
-            if (raylib::IsKeyPressed(raylib::KEY_UP)) {
+        while (!graphics::window_should_close()) {
+            if (graphics::is_key_pressed(keys::UP)) {
                 spawn(count, count * 2);
                 count *= 2;
             }
-            if (raylib::IsKeyPressed(raylib::KEY_M))
+            if (graphics::is_key_pressed(keys::M))
                 mode = static_cast<Mode>((static_cast<int>(mode) + 1) % 3);
-            if (raylib::IsKeyPressed(raylib::KEY_DOWN) && count > 1) {
+            if (graphics::is_key_pressed(keys::DOWN) && count > 1) {
                 despawn_half();
                 count -= count / 2;
             }
@@ -241,10 +236,10 @@ int main(int argc, char **argv) {
         }
     }
 
-    raylib::UnloadShader(card_shader);
+    graphics::unload_shader(card_shader);
     house_of_cards::unload(cards);
-    raylib::UnloadShader(shader);
+    graphics::unload_shader(shader);
     models.unload_all();
-    raylib::CloseWindow();
+    graphics::close_window();
     return 0;
 }

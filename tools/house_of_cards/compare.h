@@ -18,7 +18,7 @@
 #include <cstdlib>
 #include <vector>
 
-#include "../../src/plugins/house_of_cards.h"
+#include <afterhours/src/plugins/house_of_cards.h>
 
 namespace afterhours::house_of_cards {
 
@@ -42,11 +42,11 @@ struct Orbit {
 };
 
 namespace detail {
-inline raylib::Camera3D orbit_camera(const Meta &m, float yaw_deg,
+inline Camera3D orbit_camera(const Meta &m, float yaw_deg,
                                      const Orbit &orbit) {
   float yaw = yaw_deg * DEG2RAD, el = orbit.elevation_deg * DEG2RAD;
   float dist = m.radius * orbit.distance;
-  raylib::Camera3D cam{};
+  Camera3D cam{};
   cam.position = add(m.center, {dist * std::cos(el) * std::cos(yaw),
                                 dist * std::sin(el),
                                 dist * std::cos(el) * std::sin(yaw)});
@@ -136,20 +136,20 @@ inline raylib::Image diff_image(const raylib::Image &a, const raylib::Image &b,
 
 // One score per angle. If `model_shots` / `card_shots` are given, the renders
 // are appended for the caller to inspect and unload.
-inline std::vector<Score> compare(const raylib::Model &model, Cards &cards,
-                                  raylib::Shader shader, const Orbit &orbit,
+inline std::vector<Score> compare(const ModelType &model, Cards &cards,
+                                  ShaderType shader, const Orbit &orbit,
                                   std::vector<raylib::Image> *model_shots =
                                       nullptr,
                                   std::vector<raylib::Image> *card_shots =
                                       nullptr) {
   raylib::RenderTexture2D rt =
       raylib::LoadRenderTexture(orbit.size, orbit.size);
-  const raylib::Matrix identity = {1, 0, 0, 0, 0, 1, 0, 0,
+  const MatrixType identity = {1, 0, 0, 0, 0, 1, 0, 0,
                                    0, 0, 1, 0, 0, 0, 0, 1};
   std::vector<Score> scores;
   for (int i = 0; i < orbit.angles; i++) {
     float yaw = 360.f * static_cast<float>(i) / static_cast<float>(orbit.angles);
-    raylib::Camera3D cam =
+    Camera3D cam =
         detail::orbit_camera(cards.meta, yaw, orbit);
 
     raylib::BeginTextureMode(rt);

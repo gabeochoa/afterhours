@@ -10,30 +10,35 @@
 //   SPACE         pause the rotation
 //   P             depth parallax on / off
 
+#include <algorithm>
 #include <cmath>
-
-namespace raylib {
-#include <raylib.h>
-}  // namespace raylib
+#include <format>
+#include <string>
 
 #include "../../../../ah.h"
+#include "../../../../src/core/key_codes.h"
+#include "../../../../src/drawing_helpers.h"
+#include "../../../../src/drawing_helpers_3d.h"
+#include "../../../../src/graphics.h"
 #include "../../../../src/plugins/house_of_cards.h"
+#include "../../../../src/plugins/models.h"
 
 using namespace afterhours;
 namespace hoc = afterhours::house_of_cards;
 
 struct Entry {
     const char *file;
-    raylib::Model model{};
     hoc::Cards cards{};
     bool ready = false;
 };
 
+// Loads the model into ModelLibrary under its file name and bakes its cards.
 static bool prepare(Entry &e) {
     if (e.ready) return true;
-    e.model = raylib::LoadModel((std::string(MODELS_DIR) + "/" + e.file).c_str());
-    if (e.model.meshCount == 0) return false;
-    hoc::Baked baked = hoc::bake(e.model);
+    auto &models = ModelLibrary::get();
+    if (!models.load((std::string(MODELS_DIR) + "/" + e.file).c_str(), e.file))
+        return false;
+    hoc::Baked baked = hoc::bake(models.get(e.file));
     e.cards = hoc::upload(baked);
     hoc::unload(baked);
     e.ready = true;
@@ -41,9 +46,9 @@ static bool prepare(Entry &e) {
 }
 
 int main(int, char **) {
-    raylib::SetConfigFlags(raylib::FLAG_WINDOW_RESIZABLE);
-    raylib::InitWindow(1200, 640, "house_of_cards");
-    raylib::SetTargetFPS(60);
+    graphics::set_config_flags(graphics::FLAG_WINDOW_RESIZABLE);
+    graphics::init_window(1200, 640, "house_of_cards");
+    graphics::set_target_fps(60);
 
     Entry entries[] = {{"tree-large.glb"},
                        {"kaykit/Tree_3_C_Color1.gltf"},
@@ -53,99 +58,99 @@ int main(int, char **) {
     constexpr int N = sizeof(entries) / sizeof(entries[0]);
     int current = 0;
     if (!prepare(entries[current])) {
-        raylib::CloseWindow();
+        graphics::close_window();
         return 1;
     }
 
-    raylib::Shader shader = hoc::load_shader();
-    const raylib::Matrix identity = {1, 0, 0, 0, 0, 1, 0, 0,
-                                     0, 0, 1, 0, 0, 0, 0, 1};
+    ShaderType shader = hoc::load_shader();
+    const MatrixType identity = {1, 0, 0, 0, 0, 1, 0, 0,
+                                 0, 0, 1, 0, 0, 0, 0, 1};
+    const Color sky{135, 190, 230, 255}, backdrop{30, 30, 30, 255};
     const char *labels[2] = {"real model", "cards"};
-    raylib::RenderTexture2D panes[2] = {};
+    graphics::RenderTextureType panes[2] = {};
     int pane_w = 0, pane_h = 0;
     float yaw = 0.f, distance = 3.f;
     bool paused = false, parallax = true;
 
-    while (!raylib::WindowShouldClose()) {
-        if (raylib::IsKeyPressed(raylib::KEY_RIGHT) ||
-            raylib::IsKeyPressed(raylib::KEY_LEFT)) {
-            int step = raylib::IsKeyPressed(raylib::KEY_RIGHT) ? 1 : N - 1;
-            int next = (current + step) % N;
-            if (prepare(entries[next])) current = next;
+    while (!graphics::window_should_close()) {
+        float dt = graphics::get_frame_time();
+        bool next = graphics::is_key_pressed(keys::RIGHT);
+        if (next || graphics::is_key_pressed(keys::LEFT)) {
+            int i = (current + (next ? 1 : N - 1)) % N;
+            if (prepare(entries[i])) current = i;
         }
-        if (raylib::IsKeyDown(raylib::KEY_UP)) distance -= 2.f * raylib::GetFrameTime();
-        if (raylib::IsKeyDown(raylib::KEY_DOWN)) distance += 2.f * raylib::GetFrameTime();
-        distance = distance < 1.5f ? 1.5f : (distance > 24.f ? 24.f : distance);
-        if (raylib::IsKeyPressed(raylib::KEY_SPACE)) paused = !paused;
-        if (raylib::IsKeyPressed(raylib::KEY_P)) parallax = !parallax;
-        if (!paused) yaw += 30.f * raylib::GetFrameTime();
+        if (graphics::is_key_down(keys::UP)) distance -= 2.f * dt;
+        if (graphics::is_key_down(keys::DOWN)) distance += 2.f * dt;
+        distance = std::clamp(distance, 1.5f, 24.f);
+        if (graphics::is_key_pressed(keys::SPACE)) paused = !paused;
+        if (graphics::is_key_pressed(keys::P)) parallax = !parallax;
+        if (!paused) yaw += 30.f * dt;
 
         // Panes follow the window size.
-        int w = raylib::GetScreenWidth() / 2, h = raylib::GetScreenHeight() - 40;
+        int w = graphics::get_screen_width() / 2;
+        int h = graphics::get_screen_height() - 40;
         if (w != pane_w || h != pane_h) {
             for (auto &p : panes) {
-                if (p.id) raylib::UnloadRenderTexture(p);
-                p = raylib::LoadRenderTexture(w, h);
+                if (pane_w > 0) unload_render_texture(p);
+                p = load_render_texture(w, h);
             }
             pane_w = w, pane_h = h;
         }
 
         Entry &e = entries[current];
+        const ModelType &model = ModelLibrary::get().get(e.file);
         const hoc::Meta &m = e.cards.meta;
         float el = 20.f * DEG2RAD, yr = yaw * DEG2RAD;
         float dist = m.radius * distance;
-        raylib::Camera3D cam{};
+        Camera3D cam{};
         cam.position = {m.center.x + dist * std::cos(el) * std::cos(yr),
                         m.center.y + dist * std::sin(el),
                         m.center.z + dist * std::cos(el) * std::sin(yr)};
         cam.target = m.center;
         cam.up = {0.f, 1.f, 0.f};
         cam.fovy = 45.f;
-        cam.projection = raylib::CAMERA_PERSPECTIVE;
+        cam.projection = camera::PERSPECTIVE;
         int steps = parallax ? 2 : 0;
 
         for (int i = 0; i < 2; i++) {
-            raylib::BeginTextureMode(panes[i]);
-            raylib::ClearBackground({135, 190, 230, 255});
-            raylib::BeginMode3D(cam);
-            if (i == 0) raylib::DrawModel(e.model, {0, 0, 0}, 1.f, raylib::WHITE);
+            begin_texture_mode(panes[i]);
+            graphics::clear_background(sky);
+            begin_3d(cam);
+            if (i == 0) draw_model(model, {0, 0, 0}, 0.f, {1, 1, 1});
             else hoc::draw_instanced(e.cards, shader, &identity, 1, cam, steps);
-            raylib::EndMode3D();
-            raylib::EndTextureMode();
+            end_3d();
+            end_texture_mode();
         }
 
-        raylib::BeginDrawing();
-        raylib::ClearBackground({30, 30, 30, 255});
+        graphics::begin_drawing();
+        graphics::clear_background(backdrop);
         for (int i = 0; i < 2; i++) {
             float x = static_cast<float>(i * pane_w);
             // Negative source height: render textures are bottom-up.
-            raylib::DrawTextureRec(panes[i].texture,
-                                   {0, 0, static_cast<float>(pane_w),
-                                    -static_cast<float>(pane_h)},
-                                   {x, 0}, raylib::WHITE);
-            raylib::DrawText(labels[i], static_cast<int>(x) + 12, 10, 24,
-                             raylib::BLACK);
+            draw_texture_rec(panes[i].texture,
+                             RectangleType{0, 0, static_cast<float>(pane_w),
+                                           -static_cast<float>(pane_h)},
+                             Vector2Type{x, 0}, Color{255, 255, 255, 255});
+            draw_text(labels[i], x + 12, 10, 24, Color{0, 0, 0, 255});
             if (i > 0)
-                raylib::DrawLine(static_cast<int>(x), 0, static_cast<int>(x),
-                                 pane_h, {30, 30, 30, 255});
+                draw_line(static_cast<int>(x), 0, static_cast<int>(x), pane_h,
+                          backdrop);
         }
-        raylib::DrawText(
-            raylib::TextFormat("%s   distance %.1f radii   parallax %s   "
-                               "[LEFT/RIGHT model  UP/DOWN zoom  SPACE pause  "
-                               "P parallax]",
-                               e.file, static_cast<double>(distance),
-                               parallax ? "on" : "off"),
-            12, pane_h + 10, 20, raylib::RAYWHITE);
-        raylib::EndDrawing();
+        draw_text(std::format("{}   distance {:.1f} radii   parallax {}   "
+                              "[LEFT/RIGHT model  UP/DOWN zoom  SPACE pause  "
+                              "P parallax]",
+                              e.file, distance, parallax ? "on" : "off")
+                      .c_str(),
+                  12, static_cast<float>(pane_h + 10), 20,
+                  Color{245, 245, 245, 255});
+        graphics::end_drawing();
     }
 
-    for (auto &p : panes) raylib::UnloadRenderTexture(p);
-    for (Entry &e : entries) {
-        if (!e.ready) continue;
-        hoc::unload(e.cards);
-        raylib::UnloadModel(e.model);
-    }
-    raylib::UnloadShader(shader);
-    raylib::CloseWindow();
+    for (auto &p : panes) unload_render_texture(p);
+    for (Entry &e : entries)
+        if (e.ready) hoc::unload(e.cards);
+    ModelLibrary::get().unload_all();
+    graphics::unload_shader(shader);
+    graphics::close_window();
     return 0;
 }

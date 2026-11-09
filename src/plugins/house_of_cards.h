@@ -23,7 +23,7 @@
 // Bake offline with tools/house_of_cards (or bake() at load time), then:
 //   house_of_cards::Cards cards;
 //   house_of_cards::load("tree", cards);  // tree.cards, .png, _depth.png
-//   raylib::Shader shader = house_of_cards::load_shader();
+//   ShaderType shader = house_of_cards::load_shader();
 //   house_of_cards::draw_instanced(cards, shader, transforms, n, camera);
 //
 // Unlit, like raylib's default shader: nothing is baked for normals, so cards
@@ -40,7 +40,9 @@
 #include <vector>
 
 #include "../developer.h"
+#include "../drawing_helpers_3d.h"
 #include "../logging.h"
+#include "models.h"
 
 namespace afterhours::house_of_cards {
 
@@ -307,7 +309,7 @@ void main() {
 // 16x16 views of 64px (a 1024px atlas), beat 8x8 views of 128px (same memory)
 // on silhouette overlap for the example models, since fewer views ghost more
 // between them. tools/house_of_cards compare measures it.
-inline Baked bake(const raylib::Model &model, int grid = 16, int tile = 64) {
+inline Baked bake(const ModelType &model, int grid = 16, int tile = 64) {
   using namespace detail;
   Baked out;
   out.meta.grid = grid < 2 ? 2 : grid;
@@ -468,8 +470,8 @@ inline void unload(Cards &cards) {
 }
 
 // Shared by every Cards; the caller unloads it with raylib::UnloadShader.
-inline raylib::Shader load_shader() {
-  raylib::Shader shader =
+inline ShaderType load_shader() {
+  ShaderType shader =
       raylib::LoadShaderFromMemory(detail::CARD_VS, detail::CARD_FS);
   // raylib 5.5 looks the instance attribute up under MATRIX_MODEL; 5.6 moves
   // it to SHADER_LOC_VERTEX_INSTANCE_TX.
@@ -487,9 +489,9 @@ inline raylib::Shader load_shader() {
 // One instanced draw for every copy. `transforms` place the model as they
 // would for draw_model_instanced. parallax_steps is how many times each view
 // refines the hit with its depth; 0 treats the views as flat cards.
-inline void draw_instanced(Cards &cards, raylib::Shader shader,
-                           const raylib::Matrix *transforms, int count,
-                           const raylib::Camera3D &camera,
+inline void draw_instanced(Cards &cards, ShaderType shader,
+                           const MatrixType *transforms, int count,
+                           const Camera3D &camera,
                            int parallax_steps = 2) {
   if (count <= 0) return;
   const Meta &m = cards.meta;

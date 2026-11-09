@@ -9,11 +9,17 @@ RAYLIB_PREFIX := $(shell brew --prefix raylib 2>/dev/null)
 BREW_PREFIX   := $(shell brew --prefix 2>/dev/null)
 ROOT := $(realpath ../..)
 OUT  := $(ROOT)/output
+# <afterhours/...> through a symlink to this checkout, included as a system
+# header (as examples/Makefile and tests/Makefile do), so library headers'
+# own warnings stay out of the tools' build.
+INCLUDE_ROOT := $(CURDIR)/.afh-include
+$(shell mkdir -p $(INCLUDE_ROOT) && ln -sfn $(ROOT) $(INCLUDE_ROOT)/afterhours)
 CARDS := $(OUT)/house_of_cards
 
 FLAGS := -std=c++20 -Wall -Wextra -Wconversion -O2 -g -DAFTER_HOURS_USE_RAYLIB \
          -DFMT_HEADER_ONLY -isystem $(RAYLIB_PREFIX)/include \
-         -isystem $(BREW_PREFIX)/include -isystem $(ROOT)/vendor -MD -MP
+         -isystem $(BREW_PREFIX)/include -isystem $(ROOT)/vendor \
+         -isystem $(INCLUDE_ROOT) -MD -MP
 LDFLAGS := $(RAYLIB_PREFIX)/lib/libraylib.a -framework OpenGL \
            -framework CoreFoundation -framework Cocoa -framework IOKit \
            -framework CoreGraphics -framework CoreVideo -lobjc
@@ -41,6 +47,6 @@ check: all
 	done
 
 clean:
-	rm -rf $(OUT)/hoc_bake $(OUT)/hoc_compare $(OUT)/hoc_*.d $(OUT)/hoc_*.dSYM $(CARDS)
+	rm -rf $(OUT)/hoc_bake $(OUT)/hoc_compare $(OUT)/hoc_*.d $(OUT)/hoc_*.dSYM $(CARDS) $(INCLUDE_ROOT)
 
 -include $(OUT)/hoc_bake.d $(OUT)/hoc_compare.d

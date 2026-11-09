@@ -14,25 +14,36 @@
 #include <vector>
 
 #include "../developer.h"
+#include "../graphics_common.h"
 #include "../library.h"
 #include "../logging.h"
 #include "../singleton.h"
 #include "color.h"
 
-#ifdef AFTER_HOURS_USE_RAYLIB
-// TODO(backend-agnostic): plugins should not reach into raylib. Move the
-// instanced-draw cleanup behind a backend call and drop this include.
-// For tidying vertex state after instanced draws; same convention as
-// graphics_common.h.
-namespace raylib {
-#include <rlgl.h>
-} // namespace raylib
-#endif
-
 namespace afterhours {
+
+// A model's axis-aligned bounds, e.g. to frame a camera, space copies apart,
+// or test against a Frustum.
+struct Bounds {
+  Vector3Type min{}, max{};
+  [[nodiscard]] Vector3Type center() const {
+    return {(min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f,
+            (min.z + max.z) * 0.5f};
+  }
+  [[nodiscard]] Vector3Type size() const {
+    return {max.x - min.x, max.y - min.y, max.z - min.z};
+  }
+  // Radius of the sphere around center() that holds the box.
+  [[nodiscard]] float radius() const {
+    Vector3Type d = size();
+    return 0.5f * std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+  }
+};
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 using ModelType = raylib::Model;
+using MatrixType = raylib::Matrix;
+using graphics::ShaderType;
 
 inline ModelType load_model(const char *filename) {
   return raylib::LoadModel(filename);
@@ -47,9 +58,21 @@ inline void draw_model(const ModelType &model, Vector3Type pos, float yaw_deg,
   raylib::DrawModelEx(model, pos, {0.f, 1.f, 0.f}, yaw_deg, scale, tint);
 }
 
+// Axis-aligned bounds in the model's own space.
+inline Bounds model_bounds(const ModelType &model) {
+  raylib::BoundingBox b = raylib::GetModelBoundingBox(model);
+  return {b.min, b.max};
+}
+
+inline int model_triangle_count(const ModelType &model) {
+  int n = 0;
+  for (int i = 0; i < model.meshCount; i++) n += model.meshes[i].triangleCount;
+  return n;
+}
+
 // Sets every material's shader. The caller still owns the shader: unloading
 // the model does not unload it.
-inline void set_model_shader(ModelType &model, raylib::Shader shader) {
+inline void set_model_shader(ModelType &model, ShaderType shader) {
   for (int i = 0; i < model.materialCount; i++)
     model.materials[i].shader = shader;
 }
@@ -59,7 +82,7 @@ inline void set_model_shader(ModelType &model, raylib::Shader shader) {
 // instanceTransform attribute). Unlit, diffuse texture times colour, the same
 // as the default. GLSL 330: desktop GL only. The caller unloads it with
 // raylib::UnloadShader.
-inline raylib::Shader load_instancing_shader() {
+inline ShaderType load_instancing_shader() {
   const char *vs = R"(#version 330
 in vec3 vertexPosition;
 in vec2 vertexTexCoord;
@@ -76,7 +99,7 @@ uniform sampler2D texture0;
 uniform vec4 colDiffuse;
 out vec4 finalColor;
 void main() { finalColor = texture(texture0, fragTexCoord) * colDiffuse; })";
-  raylib::Shader shader = raylib::LoadShaderFromMemory(vs, fs);
+  ShaderType shader = raylib::LoadShaderFromMemory(vs, fs);
   // raylib 5.5 looks the instance attribute up under MATRIX_MODEL; 5.6 moves
   // it to SHADER_LOC_VERTEX_INSTANCE_TX.
   shader.locs[raylib::SHADER_LOC_MATRIX_MODEL] =
@@ -88,8 +111,8 @@ void main() { finalColor = texture(texture0, fragTexCoord) * colDiffuse; })";
 // model's materials are used with their shader swapped for `shader`, without
 // modifying the model. model.transform is not applied; raylib bakes glTF node
 // transforms into the meshes, so it is identity for loaded files.
-inline void draw_model_instanced(const ModelType &model, raylib::Shader shader,
-                                 const raylib::Matrix *transforms, int count) {
+inline void draw_model_instanced(const ModelType &model, ShaderType shader,
+                                 const MatrixType *transforms, int count) {
   if (count <= 0) return;
   int loc = shader.locs[raylib::SHADER_LOC_MATRIX_MODEL];
   for (int i = 0; i < model.meshCount; i++) {
@@ -99,6 +122,8 @@ inline void draw_model_instanced(const ModelType &model, raylib::Shader shader,
     // DrawMeshInstanced leaves the four instance-matrix attributes enabled on
     // the mesh's VAO, pointing at the buffer it just deleted. Until they are
     // off again, draw_model of this model draws nothing.
+    // TODO(backend-agnostic): plugins should not call rlgl. Move this cleanup
+    // behind a backend call.
     if (loc < 0 || !raylib::rlEnableVertexArray(model.meshes[i].vaoId))
       continue;
     for (int c = 0; c < 4; c++) {
@@ -111,11 +136,11 @@ inline void draw_model_instanced(const ModelType &model, raylib::Shader shader,
 
 // The matrix draw_model builds for one copy: scale, rotate about Y, then move
 // to pos. For filling draw_model_instanced or InstanceBatcher without raymath.
-inline raylib::Matrix model_transform(Vector3Type pos, float yaw_deg,
+inline MatrixType model_transform(Vector3Type pos, float yaw_deg,
                                       Vector3Type scale) {
   float a = yaw_deg * DEG2RAD;
   float c = std::cos(a), s = std::sin(a);
-  raylib::Matrix m{};
+  MatrixType m{};
   m.m0 = c * scale.x, m.m4 = 0.f, m.m8 = s * scale.z, m.m12 = pos.x;
   m.m1 = 0.f, m.m5 = scale.y, m.m9 = 0.f, m.m13 = pos.y;
   m.m2 = -s * scale.x, m.m6 = 0.f, m.m10 = c * scale.z, m.m14 = pos.z;
@@ -132,7 +157,7 @@ inline raylib::Matrix model_transform(Vector3Type pos, float yaw_deg,
 // while loaded. Copies that need a different shader or uniforms go in a
 // second batcher.
 struct InstanceBatcher {
-  void add(const ModelType &model, const raylib::Matrix &transform) {
+  void add(const ModelType &model, const MatrixType &transform) {
     group_for(model).transforms.push_back(transform);
   }
   void add(const ModelType &model, Vector3Type pos, float yaw_deg,
@@ -142,7 +167,7 @@ struct InstanceBatcher {
 
   // `shader` must read the instanceTransform attribute, as
   // load_instancing_shader's does.
-  void flush(raylib::Shader shader) {
+  void flush(ShaderType shader) {
     for (Group &g : groups) {
       draw_model_instanced(*g.model, shader, g.transforms.data(),
                            static_cast<int>(g.transforms.size()));
@@ -170,7 +195,7 @@ struct InstanceBatcher {
 private:
   struct Group {
     const ModelType *model;
-    std::vector<raylib::Matrix> transforms;
+    std::vector<MatrixType> transforms;
   };
   // A scene has few distinct models, so a linear find beats hashing, and
   // groups draw in the order they were first seen.
@@ -191,7 +216,14 @@ struct ModelStub {
   int meshCount = 0;
 };
 struct ShaderStub {};
+struct MatrixStub {
+  float m[16] = {};
+};
 using ModelType = ModelStub;
+using MatrixType = MatrixStub;
+
+inline Bounds model_bounds(const ModelType &) { return {}; }
+inline int model_triangle_count(const ModelType &) { return 0; }
 
 inline ModelType load_model(const char *) { return {}; }
 inline void unload_model(ModelType) {}

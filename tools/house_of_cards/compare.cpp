@@ -23,7 +23,7 @@ namespace raylib {
 #include <raylib.h>
 } // namespace raylib
 
-#include "../../ah.h"
+#include <afterhours/ah.h>
 #include "compare.h"
 
 using namespace afterhours;

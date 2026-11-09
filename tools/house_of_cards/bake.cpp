@@ -13,8 +13,8 @@ namespace raylib {
 #include <raylib.h>
 } // namespace raylib
 
-#include "../../ah.h"
-#include "../../src/plugins/house_of_cards.h"
+#include <afterhours/ah.h>
+#include <afterhours/src/plugins/house_of_cards.h>
 
 using namespace afterhours;
 
