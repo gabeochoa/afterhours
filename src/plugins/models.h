@@ -20,6 +20,8 @@
 #include "color.h"
 
 #ifdef AFTER_HOURS_USE_RAYLIB
+// TODO(backend-agnostic): plugins should not reach into raylib. Move the
+// instanced-draw cleanup behind a backend call and drop this include.
 // For tidying vertex state after instanced draws; same convention as
 // graphics_common.h.
 namespace raylib {
@@ -111,7 +113,7 @@ inline void draw_model_instanced(const ModelType &model, raylib::Shader shader,
 // to pos. For filling draw_model_instanced or InstanceBatcher without raymath.
 inline raylib::Matrix model_transform(Vector3Type pos, float yaw_deg,
                                       Vector3Type scale) {
-  float a = yaw_deg * 3.14159265358979f / 180.f;
+  float a = yaw_deg * DEG2RAD;
   float c = std::cos(a), s = std::sin(a);
   raylib::Matrix m{};
   m.m0 = c * scale.x, m.m4 = 0.f, m.m8 = s * scale.z, m.m12 = pos.x;
@@ -172,6 +174,9 @@ private:
   };
   // A scene has few distinct models, so a linear find beats hashing, and
   // groups draw in the order they were first seen.
+  // TODO: not true for every game. A scene with hundreds of distinct models
+  // makes each add() a long scan; measure, and consider a map from model to
+  // group index (keeping first-seen draw order) or remembering the last group.
   std::vector<Group> groups;
 
   Group &group_for(const ModelType &model) {

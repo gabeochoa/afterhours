@@ -92,7 +92,7 @@ inline Frustum make_frustum(const Camera3D &cam, float aspect,
   } else {
     // Each side plane passes through the camera and holds one screen edge.
     // tan * f -/+ r and friends are its inward normals.
-    float tv = std::tan(cam.fovy * 0.5f * 3.14159265358979f / 180.f);
+    float tv = std::tan(cam.fovy * 0.5f * DEG2RAD);
     float th = tv * aspect;
     out.planes[0] = plane(normalize(add(mul(f, th), r)), pos);
     out.planes[1] = plane(normalize(sub(mul(f, th), r)), pos);

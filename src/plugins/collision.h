@@ -10,6 +10,8 @@
 #include "../ecs.h"
 
 #ifdef AFTER_HOURS_USE_RAYLIB
+// TODO(backend-agnostic): plugins should not name raylib types. Use the
+// backend's Vector2Type instead of forward-declaring raylib's.
 namespace raylib {
 struct Vector2;
 }

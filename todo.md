@@ -222,3 +222,56 @@ they are not a claim that every listed API is still missing.
 - Line 338: Feature; Thick Lines; Implement thick lines via quads
 
 ---
+
+## 3D models and house_of_cards
+
+- Examples should use afterhours, not raylib directly. `examples/catalog/3d/*`
+  (model_loading, model_stress, house_of_cards) call raylib for the window, frame
+  loop, render targets, text, orbit cameras and model bounds. Add the missing
+  afterhours APIs first, then port the examples.
+- Once examples are backend-neutral, build most of them on every backend as a test
+  sweep, so a library change that breaks one backend shows up without a game.
+- Make every plugin backend agnostic. Plugins still include raylib headers inside
+  `namespace raylib`, name raylib types, or are raylib-only; the worst spots are
+  marked `TODO(backend-agnostic)` (`grep -rn "TODO(backend-agnostic)" src`). The rest
+  show up as `#ifdef AFTER_HOURS_USE_RAYLIB` branches under `src/plugins/`.
+- Shaders as files: keep `.glsl` sources in the repo and generate a committed header
+  from them (games still ship nothing at runtime; a test checks the header is
+  current). Do it with the multi-backend move: sokol needs `sokol-shdc`, which takes
+  `.glsl` files and generates per-backend headers. Today's GLSL 330 strings in
+  `models.h` and `house_of_cards.h` are raylib, desktop GL only.
+- Lit, fogged cards: bake normals and let the game supply lighting and fog (or use a
+  default). Unlit cards stand out in cartographer's lit, fogged scenes.
+- Real model near, cards far: route each copy by `Lod` to `InstanceBatcher` or to
+  cards; use `hoc_compare` to pick the swap distance.
+- LOD chains the game author defines: any number of levels, each with its own
+  representation (full model, a low-detail model, cards, or nothing) and its own
+  switch rule. `Lod` already takes any number of thresholds but only returns a
+  level number, with one shared margin; the author still maps levels to models by
+  hand. Add per-threshold margins, how a swap happens (instant, cross-fade or
+  dither), and something that takes the chain and draws each copy at its level.
+- `ModelLibrary` lazy and streamed loads (register now, load within a per-frame time
+  budget) with a low-detail fallback; replaces about 150 lines in cartographer.
+- Low-detail model generation in `tools/`, moved from cartographer's
+  `mesh_decimate.h` and its tool.
+- `raycast_model(ray, model, transform)`: nearest hit across every mesh.
+- Cards: alpha-to-coverage edges under MSAA, and cheaper card pixels (they lose to
+  real models below a few thousand copies).
+- cartographer (note only, not fixed): `shadow_pass::draw_instances` puts an empty,
+  never-written buffer in `mesh.vboId[4]`, which is the tangent slot, and deletes an
+  existing tangent buffer there. The buffer reuse it was meant for does nothing.
+- `InstanceBatcher` finds a model's group with a linear scan, assuming few
+  distinct models. With hundreds, every `add()` scans far. Marked `TODO` in
+  `models.h`; measure, then consider a model-to-index map (keeping first-seen
+  draw order) or caching the last group hit.
+- `model_transform` costs one sin, one cos and six multiplies per copy; it cannot
+  be `constexpr` (std::sin/cos are not constexpr before C++26). The real saving is
+  not recomputing it: static props should keep their matrix in their component and
+  use `add(model, matrix)`. Say so in the docs, and maybe add an overload taking a
+  precomputed cos/sin for things that spin.
+- Pi literals: `audio_helpers.h`, `animation/spring.h` and
+  `animation_presets/effect_presets.h` hard-code `3.14159265...`. Use
+  `std::numbers::pi_v<float>` (as `polyline.h` does) or `DEG2RAD`.
+- `config_size_test` fails: `sizeof(ComponentConfig)` is 1544, expected 1536. Already
+  failing at `4c86b3a`, so a field was added without merging it in `apply_overrides`
+  and updating `kExpectedSize`. Every other test in `make -C tests test` passes.

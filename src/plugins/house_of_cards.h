@@ -29,6 +29,8 @@
 // Unlit, like raylib's default shader: nothing is baked for normals, so cards
 // do not respond to scene lighting. raylib only, desktop GL (GLSL 330).
 
+// TODO(backend-agnostic): the whole plugin is raylib calls and GLSL 330.
+// Route baking and drawing through backend APIs so sokol/Metal get cards too.
 #ifdef AFTER_HOURS_USE_RAYLIB
 
 #include <cmath>
