@@ -17,6 +17,14 @@
 #include "../singleton.h"
 #include "color.h"
 
+#ifdef AFTER_HOURS_USE_RAYLIB
+// For tidying vertex state after instanced draws; same convention as
+// graphics_common.h.
+namespace raylib {
+#include <rlgl.h>
+} // namespace raylib
+#endif
+
 namespace afterhours {
 
 #ifdef AFTER_HOURS_USE_RAYLIB
@@ -79,10 +87,21 @@ void main() { finalColor = texture(texture0, fragTexCoord) * colDiffuse; })";
 inline void draw_model_instanced(const ModelType &model, raylib::Shader shader,
                                  const raylib::Matrix *transforms, int count) {
   if (count <= 0) return;
+  int loc = shader.locs[raylib::SHADER_LOC_MATRIX_MODEL];
   for (int i = 0; i < model.meshCount; i++) {
     raylib::Material material = model.materials[model.meshMaterial[i]];
     material.shader = shader;
     raylib::DrawMeshInstanced(model.meshes[i], material, transforms, count);
+    // DrawMeshInstanced leaves the four instance-matrix attributes enabled on
+    // the mesh's VAO, pointing at the buffer it just deleted. Until they are
+    // off again, draw_model of this model draws nothing.
+    if (loc < 0 || !raylib::rlEnableVertexArray(model.meshes[i].vaoId))
+      continue;
+    for (int c = 0; c < 4; c++) {
+      raylib::rlDisableVertexAttribute(static_cast<unsigned int>(loc + c));
+      raylib::rlSetVertexAttributeDivisor(static_cast<unsigned int>(loc + c), 0);
+    }
+    raylib::rlDisableVertexArray();
   }
 }
 #else
