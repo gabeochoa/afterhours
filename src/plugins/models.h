@@ -40,6 +40,41 @@ struct Bounds {
   }
 };
 
+// Lighting is a GLSL function the game supplies, so real models and
+// house_of_cards impostors can be lit by the same code:
+//
+//   vec3 lighting(vec3 albedo, vec3 world_pos, vec3 world_normal);
+//
+// It may declare its own uniforms; `camPos` (the camera, in world space) is
+// always declared for it. DEFAULT_LIGHTING is one directional light, ambient,
+// and linear distance fog, driven by a Lighting through apply_lighting().
+inline const char *DEFAULT_LIGHTING = R"(
+uniform vec3 lightDir;     // direction the light travels, world space
+uniform vec3 lightColor;
+uniform vec3 ambientColor;
+uniform vec3 fogColor;
+uniform float fogNear;     // fog starts here...
+uniform float fogFar;      // ...and is solid here; fogFar <= fogNear is off
+vec3 lighting(vec3 albedo, vec3 world_pos, vec3 world_normal) {
+  float diffuse = max(dot(world_normal, -normalize(lightDir)), 0.0);
+  vec3 lit = albedo * (ambientColor + lightColor * diffuse);
+  if (fogFar <= fogNear) return lit;
+  float fog = clamp((distance(world_pos, camPos) - fogNear) / (fogFar - fogNear),
+                    0.0, 1.0);
+  return mix(lit, fogColor, fog);
+}
+)";
+
+// Values for DEFAULT_LIGHTING's uniforms.
+struct Lighting {
+  Vector3Type direction{-0.4f, -1.f, -0.3f}; // where the light travels
+  Color light{255, 245, 230, 255};
+  Color ambient{110, 120, 140, 255};
+  Color fog{135, 190, 230, 255};
+  float fog_near = 0.f;
+  float fog_far = 0.f; // <= fog_near: no fog
+};
+
 #ifdef AFTER_HOURS_USE_RAYLIB
 using ModelType = raylib::Model;
 using MatrixType = raylib::Matrix;
@@ -105,6 +140,77 @@ void main() { finalColor = texture(texture0, fragTexCoord) * colDiffuse; })";
   shader.locs[raylib::SHADER_LOC_MATRIX_MODEL] =
       raylib::GetShaderLocationAttrib(shader, "instanceTransform");
   return shader;
+}
+
+// A shader for draw_model that lights each pixel with `lighting` (see
+// DEFAULT_LIGHTING). Put it on a model with set_model_shader; call
+// apply_lighting (or set your own uniforms) before drawing.
+inline ShaderType load_lit_shader(const char *lighting = DEFAULT_LIGHTING) {
+  const char *vs = R"(#version 330
+in vec3 vertexPosition;
+in vec2 vertexTexCoord;
+in vec3 vertexNormal;
+in vec4 vertexColor;
+uniform mat4 mvp;
+uniform mat4 matModel;
+uniform mat4 matNormal;
+out vec3 fragPos;
+out vec3 fragNormal;
+out vec2 fragTexCoord;
+out vec4 fragColor;
+void main() {
+  fragPos = (matModel * vec4(vertexPosition, 1.0)).xyz;
+  fragNormal = normalize(mat3(matNormal) * vertexNormal);
+  fragTexCoord = vertexTexCoord;
+  fragColor = vertexColor;
+  gl_Position = mvp * vec4(vertexPosition, 1.0);
+})";
+  std::string fs = std::string(R"(#version 330
+in vec3 fragPos;
+in vec3 fragNormal;
+in vec2 fragTexCoord;
+in vec4 fragColor;
+uniform sampler2D texture0;
+uniform vec4 colDiffuse;
+uniform vec3 camPos;
+out vec4 finalColor;
+)") + lighting + R"(
+void main() {
+  vec4 albedo = texture(texture0, fragTexCoord) * colDiffuse * fragColor;
+  finalColor = vec4(lighting(albedo.rgb, fragPos, normalize(fragNormal)), albedo.a);
+})";
+  ShaderType shader = raylib::LoadShaderFromMemory(vs, fs.c_str());
+  if (raylib::GetShaderLocation(shader, "camPos") == -1)
+    log_error("load_lit_shader: shader failed to compile");
+  return shader;
+}
+
+namespace detail_models {
+inline raylib::Vector3 rgb(Color c) {
+  return {c.r / 255.f, c.g / 255.f, c.b / 255.f};
+}
+inline void set_uniform(ShaderType shader, const char *name, const void *v,
+                        int type) {
+  int loc = raylib::GetShaderLocation(shader, name);
+  if (loc != -1) raylib::SetShaderValue(shader, loc, v, type);
+}
+} // namespace detail_models
+
+// Sets DEFAULT_LIGHTING's uniforms, plus camPos, on any shader built with it
+// (load_lit_shader, house_of_cards::load_shader).
+inline void apply_lighting(ShaderType shader, const Lighting &l,
+                           Vector3Type camera_pos) {
+  using namespace detail_models;
+  raylib::Vector3 ld{l.direction.x, l.direction.y, l.direction.z};
+  raylib::Vector3 cp{camera_pos.x, camera_pos.y, camera_pos.z};
+  raylib::Vector3 lc = rgb(l.light), ac = rgb(l.ambient), fc = rgb(l.fog);
+  set_uniform(shader, "lightDir", &ld, raylib::SHADER_UNIFORM_VEC3);
+  set_uniform(shader, "lightColor", &lc, raylib::SHADER_UNIFORM_VEC3);
+  set_uniform(shader, "ambientColor", &ac, raylib::SHADER_UNIFORM_VEC3);
+  set_uniform(shader, "fogColor", &fc, raylib::SHADER_UNIFORM_VEC3);
+  set_uniform(shader, "fogNear", &l.fog_near, raylib::SHADER_UNIFORM_FLOAT);
+  set_uniform(shader, "fogFar", &l.fog_far, raylib::SHADER_UNIFORM_FLOAT);
+  set_uniform(shader, "camPos", &cp, raylib::SHADER_UNIFORM_VEC3);
 }
 
 // One DrawMeshInstanced per mesh instead of one DrawModelEx per copy. The
@@ -232,6 +338,9 @@ inline void draw_model(const ModelType &, V, float, V,
                        Color = {255, 255, 255, 255}) {}
 template <typename S> inline void set_model_shader(ModelType &, S) {}
 inline ShaderStub load_instancing_shader() { return {}; }
+inline ShaderStub load_lit_shader(const char * = DEFAULT_LIGHTING) { return {}; }
+template <typename S, typename V>
+inline void apply_lighting(S, const Lighting &, V) {}
 template <typename S, typename M>
 inline void draw_model_instanced(const ModelType &, S, const M *, int) {}
 struct InstanceBatcher {

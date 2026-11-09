@@ -9,6 +9,8 @@
 //   UP / DOWN     camera closer / further
 //   SPACE         pause the rotation
 //   P             depth parallax on / off
+//   L             lighting on / off (both panes share one light)
+//   F             fog on / off (with lighting)
 
 #include <algorithm>
 #include <cmath>
@@ -29,6 +31,7 @@ namespace hoc = afterhours::house_of_cards;
 struct Entry {
     const char *file;
     hoc::Cards cards{};
+    ShaderType unlit{}; // the shader the model loaded with
     bool ready = false;
 };
 
@@ -38,6 +41,7 @@ static bool prepare(Entry &e) {
     auto &models = ModelLibrary::get();
     if (!models.load((std::string(MODELS_DIR) + "/" + e.file).c_str(), e.file))
         return false;
+    e.unlit = models.get(e.file).materials[0].shader;
     hoc::Baked baked = hoc::bake(models.get(e.file));
     e.cards = hoc::upload(baked);
     hoc::unload(baked);
@@ -63,6 +67,9 @@ int main(int, char **) {
     }
 
     ShaderType shader = hoc::load_shader();
+    // Lit: the real model and the cards light with the same function.
+    ShaderType lit_cards = hoc::load_shader(DEFAULT_LIGHTING);
+    ShaderType lit_model = load_lit_shader();
     const MatrixType identity = {1, 0, 0, 0, 0, 1, 0, 0,
                                  0, 0, 1, 0, 0, 0, 0, 1};
     const Color sky{135, 190, 230, 255}, backdrop{30, 30, 30, 255};
@@ -70,7 +77,9 @@ int main(int, char **) {
     graphics::RenderTextureType panes[2] = {};
     int pane_w = 0, pane_h = 0;
     float yaw = 0.f, distance = 3.f;
-    bool paused = false, parallax = true;
+    bool paused = false, parallax = true, lit = true, fog = false;
+    Lighting light;
+    light.fog = sky;
 
     while (!graphics::window_should_close()) {
         float dt = graphics::get_frame_time();
@@ -84,6 +93,8 @@ int main(int, char **) {
         distance = std::clamp(distance, 1.5f, 24.f);
         if (graphics::is_key_pressed(keys::SPACE)) paused = !paused;
         if (graphics::is_key_pressed(keys::P)) parallax = !parallax;
+        if (graphics::is_key_pressed(keys::L)) lit = !lit;
+        if (graphics::is_key_pressed(keys::F)) fog = !fog;
         if (!paused) yaw += 30.f * dt;
 
         // Panes follow the window size.
@@ -98,7 +109,7 @@ int main(int, char **) {
         }
 
         Entry &e = entries[current];
-        const ModelType &model = ModelLibrary::get().get(e.file);
+        ModelType &model = ModelLibrary::get().get(e.file);
         const hoc::Meta &m = e.cards.meta;
         float el = 20.f * DEG2RAD, yr = yaw * DEG2RAD;
         float dist = m.radius * distance;
@@ -111,13 +122,25 @@ int main(int, char **) {
         cam.fovy = 45.f;
         cam.projection = camera::PERSPECTIVE;
         int steps = parallax ? 2 : 0;
+        // Fog from one radius in front of the model to one radius behind,
+        // so zooming out fades it into the sky.
+        light.fog_near = fog ? dist - m.radius : 0.f;
+        light.fog_far = fog ? dist + 4.f * m.radius : 0.f;
+        ShaderType card_shader = lit ? lit_cards : shader;
+        if (lit) {
+            apply_lighting(lit_model, light, cam.position);
+            apply_lighting(lit_cards, light, cam.position);
+        }
+        set_model_shader(model, lit ? lit_model : e.unlit);
 
         for (int i = 0; i < 2; i++) {
             begin_texture_mode(panes[i]);
             graphics::clear_background(sky);
             begin_3d(cam);
             if (i == 0) draw_model(model, {0, 0, 0}, 0.f, {1, 1, 1});
-            else hoc::draw_instanced(e.cards, shader, &identity, 1, cam, steps);
+            else
+                hoc::draw_instanced(e.cards, card_shader, &identity, 1, cam,
+                                    steps);
             end_3d();
             end_texture_mode();
         }
@@ -137,9 +160,10 @@ int main(int, char **) {
                           backdrop);
         }
         draw_text(std::format("{}   distance {:.1f} radii   parallax {}   "
-                              "[LEFT/RIGHT model  UP/DOWN zoom  SPACE pause  "
-                              "P parallax]",
-                              e.file, distance, parallax ? "on" : "off")
+                              "lit {}   fog {}   [LEFT/RIGHT model  UP/DOWN "
+                              "zoom  SPACE pause  P parallax  L light  F fog]",
+                              e.file, distance, parallax ? "on" : "off",
+                              lit ? "on" : "off", fog ? "on" : "off")
                       .c_str(),
                   12, static_cast<float>(pane_h + 10), 20,
                   Color{245, 245, 245, 255});
@@ -147,10 +171,15 @@ int main(int, char **) {
     }
 
     for (auto &p : panes) unload_render_texture(p);
-    for (Entry &e : entries)
-        if (e.ready) hoc::unload(e.cards);
+    for (Entry &e : entries) {
+        if (!e.ready) continue;
+        set_model_shader(ModelLibrary::get().get(e.file), e.unlit);
+        hoc::unload(e.cards);
+    }
     ModelLibrary::get().unload_all();
     graphics::unload_shader(shader);
+    graphics::unload_shader(lit_cards);
+    graphics::unload_shader(lit_model);
     graphics::close_window();
     return 0;
 }

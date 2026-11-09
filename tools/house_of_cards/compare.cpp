@@ -3,7 +3,7 @@
 //   compare <model> <prefix> [<prefix> ...] [--angles N] [--size px]
 //           [--elevation deg] [--distance radii] [--steps N]
 //           [--tolerance 0-255] [--strip out.png] [--diff out.png]
-//           [--min-iou x]
+//           [--min-iou x] [--lit]
 //
 // Prints, per bake: silhouette IoU (mean and worst angle), colour error, and
 // the strict pixel test from compare.h (bad pixels per frame, how many of
@@ -11,7 +11,8 @@
 // largest channel difference). --strip writes one row of
 // renders per input (the model first, then each bake), one column per angle;
 // --diff writes the matching heatmaps, red where a pixel fails. --min-iou
-// makes the exit code fail if any bake's mean IoU is below it.
+// makes the exit code fail if any bake's mean IoU is below it. --lit lights
+// model and cards with DEFAULT_LIGHTING.
 
 #include <cstdio>
 #include <cstdlib>
@@ -33,7 +34,8 @@ int main(int argc, char **argv) {
     std::fprintf(stderr, "usage: compare <model> <prefix> [<prefix> ...] "
                          "[--angles N] [--size px] [--elevation deg] "
                          "[--distance radii] [--steps N] [--tolerance n] "
-                         "[--strip out.png] [--diff out.png] [--min-iou x]\n");
+                         "[--strip out.png] [--diff out.png] [--min-iou x] "
+                         "[--lit]\n");
     return 2;
   }
   house_of_cards::Orbit orbit;
@@ -41,6 +43,7 @@ int main(int argc, char **argv) {
   const char *strip_path = nullptr;
   const char *diff_path = nullptr;
   float min_iou = 0.f;
+  bool lit = false;
   for (int i = 2; i < argc; i++) {
     auto next = [&] { return i + 1 < argc ? argv[++i] : argv[i]; };
     if (!std::strcmp(argv[i], "--angles")) orbit.angles = std::atoi(next());
@@ -54,6 +57,7 @@ int main(int argc, char **argv) {
     else if (!std::strcmp(argv[i], "--tolerance"))
       orbit.tolerance = std::atoi(next());
     else if (!std::strcmp(argv[i], "--diff")) diff_path = next();
+    else if (!std::strcmp(argv[i], "--lit")) lit = true;
     else if (!std::strcmp(argv[i], "--strip")) strip_path = next();
     else if (!std::strcmp(argv[i], "--min-iou"))
       min_iou = static_cast<float>(std::atof(next()));
@@ -70,7 +74,13 @@ int main(int argc, char **argv) {
     raylib::CloseWindow();
     return 1;
   }
-  raylib::Shader shader = house_of_cards::load_shader();
+  Lighting lighting;
+  ShaderType shader =
+      house_of_cards::load_shader(lit ? DEFAULT_LIGHTING : nullptr);
+  if (lit) {
+    orbit.lighting = &lighting;
+    orbit.model_shader = load_lit_shader();
+  }
 
   int rows = 1 + static_cast<int>(prefixes.size());
   raylib::Image strip = raylib::GenImageColor(orbit.angles * orbit.size,
@@ -135,6 +145,7 @@ int main(int argc, char **argv) {
   raylib::UnloadImage(strip);
   raylib::UnloadImage(diffs);
   raylib::UnloadShader(shader);
+  if (lit) raylib::UnloadShader(orbit.model_shader);
   raylib::UnloadModel(model);
   raylib::CloseWindow();
   return ok ? 0 : 1;

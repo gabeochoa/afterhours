@@ -36,6 +36,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -62,12 +63,16 @@ struct Baked {
   // Grayscale: height of the nearest surface along each view. 0.5 is the
   // plane through the centre, 0 and 1 the bounding sphere.
   raylib::Image depth{};
+  // RGB: the surface normal in the model's own space, as n * 0.5 + 0.5. Only
+  // read by a lit shader.
+  raylib::Image normal{};
 };
 
 struct Cards {
   Meta meta;
   raylib::Texture2D color{};
   raylib::Texture2D depth{};
+  raylib::Texture2D normal{};
   raylib::Mesh quad{};
   raylib::Material material{};
 };
@@ -106,47 +111,58 @@ inline V3 up_for(V3 d) {
 }
 
 // Bilinear filtering pulls in the colour of transparent texels at the
-// silhouette, which is black after the clear. Spread edge colour (and depth)
-// outward so those texels hold something plausible; alpha stays 0.
-inline void dilate(raylib::Image &color, raylib::Image &depth, int passes) {
+// silhouette, which is black after the clear. Spread edge colour (and the
+// matching depth and normal) outward so those texels hold something
+// plausible; alpha stays 0. Texels out of reach get each extra's fallback.
+struct Extra {
+  raylib::Image *image;
+  raylib::Color fallback;
+};
+inline void dilate(raylib::Image &color, std::initializer_list<Extra> extras,
+                   int passes) {
   int w = color.width, h = color.height;
   auto *c = static_cast<raylib::Color *>(color.data);
-  auto *d = static_cast<raylib::Color *>(depth.data);
   std::vector<unsigned char> filled(static_cast<size_t>(w * h));
   for (int i = 0; i < w * h; i++) {
     filled[static_cast<size_t>(i)] = c[i].a > 127;
     c[i].a = filled[static_cast<size_t>(i)] ? 255 : 0;
   }
+  // Average the filled 8-neighbours of texel i into it, in `img`.
+  auto spread = [&](raylib::Color *img, int x, int y, bool keep_alpha) {
+    int r = 0, g = 0, b = 0, n = 0;
+    for (int dy = -1; dy <= 1; dy++)
+      for (int dx = -1; dx <= 1; dx++) {
+        int nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        int j = ny * w + nx;
+        if (!filled[static_cast<size_t>(j)]) continue;
+        r += img[j].r, g += img[j].g, b += img[j].b, n++;
+      }
+    if (n == 0) return false;
+    raylib::Color &t = img[y * w + x];
+    t.r = static_cast<unsigned char>(r / n);
+    t.g = static_cast<unsigned char>(g / n);
+    t.b = static_cast<unsigned char>(b / n);
+    if (!keep_alpha) t.a = 255;
+    return true;
+  };
   for (int pass = 0; pass < passes; pass++) {
     std::vector<unsigned char> next = filled;
-    for (int y = 0; y < h; y++) {
+    for (int y = 0; y < h; y++)
       for (int x = 0; x < w; x++) {
         int i = y * w + x;
-        if (filled[static_cast<size_t>(i)]) continue;
-        int r = 0, g = 0, b = 0, z = 0, n = 0;
-        for (int dy = -1; dy <= 1; dy++) {
-          for (int dx = -1; dx <= 1; dx++) {
-            int nx = x + dx, ny = y + dy;
-            if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-            int j = ny * w + nx;
-            if (!filled[static_cast<size_t>(j)]) continue;
-            r += c[j].r, g += c[j].g, b += c[j].b, z += d[j].r, n++;
-          }
-        }
-        if (n == 0) continue;
-        c[i].r = static_cast<unsigned char>(r / n);
-        c[i].g = static_cast<unsigned char>(g / n);
-        c[i].b = static_cast<unsigned char>(b / n);
-        unsigned char zz = static_cast<unsigned char>(z / n);
-        d[i] = {zz, zz, zz, 255};
+        if (filled[static_cast<size_t>(i)] || !spread(c, x, y, true)) continue;
+        for (const Extra &e : extras)
+          spread(static_cast<raylib::Color *>(e.image->data), x, y, false);
         next[static_cast<size_t>(i)] = 1;
       }
-    }
     filled.swap(next);
   }
-  // Out of reach of the spread: park depth on the centre plane.
-  for (int i = 0; i < w * h; i++)
-    if (!filled[static_cast<size_t>(i)]) d[i] = {128, 128, 128, 255};
+  for (const Extra &e : extras) {
+    auto *px = static_cast<raylib::Color *>(e.image->data);
+    for (int i = 0; i < w * h; i++)
+      if (!filled[static_cast<size_t>(i)]) px[i] = e.fallback;
+  }
 }
 
 inline void blit(raylib::Image &dst, const raylib::Image &src, int ox,
@@ -186,6 +202,22 @@ void main() {
   finalColor = vec4(h, h, h, 1.0);
 })";
 
+inline const char *NORMAL_VS = R"(#version 330
+in vec3 vertexPosition;
+in vec3 vertexNormal;
+uniform mat4 mvp;
+uniform mat4 matNormal;
+out vec3 normal;
+void main() {
+  normal = mat3(matNormal) * vertexNormal;
+  gl_Position = mvp * vec4(vertexPosition, 1.0);
+})";
+
+inline const char *NORMAL_FS = R"(#version 330
+in vec3 normal;
+out vec4 finalColor;
+void main() { finalColor = vec4(normalize(normal) * 0.5 + 0.5, 1.0); })";
+
 inline const char *CARD_VS = R"(#version 330
 in vec3 vertexPosition;
 in mat4 instanceTransform;
@@ -195,10 +227,14 @@ uniform vec3 center;
 uniform float radius;
 out vec3 fragPos;
 flat out vec3 fragCam;
+flat out mat4 fragModel;    // for lighting: model space to world
+flat out mat3 fragNormalMat;
 
 vec3 up_for(vec3 d) { return abs(d.y) > 0.999 ? vec3(0, 0, 1) : vec3(0, 1, 0); }
 
 void main() {
+  fragModel = instanceTransform;
+  fragNormalMat = transpose(inverse(mat3(instanceTransform)));
   // Everything below is in the model's own space, where the bake happened.
   vec3 cam = (inverse(instanceTransform) * vec4(camPos, 1.0)).xyz;
   vec3 to = cam - center;
@@ -217,11 +253,17 @@ void main() {
   gl_Position = mvp * instanceTransform * vec4(p, 1.0);
 })";
 
-inline const char *CARD_FS = R"(#version 330
+// load_shader assembles: "#version 330", "#define LIT" when lit, CARD_FS_HEAD,
+// the game's lighting function when lit, then CARD_FS_BODY.
+inline const char *CARD_FS_HEAD = R"(
 in vec3 fragPos;
 flat in vec3 fragCam;
+flat in mat4 fragModel;
+flat in mat3 fragNormalMat;
 uniform sampler2D texture0; // colour atlas
 uniform sampler2D depthTex;
+uniform sampler2D normalTex;
+uniform vec3 camPos;
 uniform vec4 colDiffuse;
 uniform vec3 center;
 uniform float radius;
@@ -229,7 +271,9 @@ uniform int grid;
 uniform int tile;
 uniform int steps;
 out vec4 finalColor;
+)";
 
+inline const char *CARD_FS_BODY = R"(
 vec3 up_for(vec3 d) { return abs(d.y) > 0.999 ? vec3(0, 0, 1) : vec3(0, 1, 0); }
 vec2 sgn(vec2 v) { return vec2(v.x >= 0.0 ? 1.0 : -1.0, v.y >= 0.0 ? 1.0 : -1.0); }
 
@@ -251,11 +295,14 @@ vec3 view_dir(int k) {
   return octa_decode(vec2(k % grid, k / grid) / float(grid - 1));
 }
 
-// Premultiplied colour of the eye ray as baked view k saw it. The nearest
-// views are close to the camera direction, so a few fixed-point steps
-// converge: intersect the ray with the plane at height h along dk, move h to
-// the baked depth there, and go again.
-vec4 sample_view(int k, vec3 O, vec3 D) {
+// Premultiplied colour of the eye ray as baked view k saw it, and where it
+// hit (model space) and the normal there. The nearest views are close to the
+// camera direction, so a few fixed-point steps converge: intersect the ray
+// with the plane at height h along dk, move h to the baked depth there, and
+// go again.
+vec4 sample_view(int k, vec3 O, vec3 D, out vec3 hit, out vec3 n) {
+  hit = vec3(0.0);
+  n = vec3(0.0);
   vec3 dk = view_dir(k);
   vec3 rk = normalize(cross(up_for(dk), dk));
   vec3 uk = cross(dk, rk);
@@ -265,16 +312,22 @@ vec4 sample_view(int k, vec3 O, vec3 D) {
   if (abs(denom) < 1e-4) return vec4(0.0);
   float h = 0.0;
   vec2 uv = vec2(0.0);
+  vec3 X = vec3(0.0);
   for (int s = 0; s <= steps; s++) {
     float t = (h - dot(O - center, dk)) / denom;
-    vec3 X = O + t * D - center;
+    X = O + t * D - center;
     uv = vec2(0.5 + dot(X, rk) / (2.0 * radius), 0.5 - dot(X, uk) / (2.0 * radius));
     if (s == steps) break;
     vec2 a = (origin + clamp(uv, ht, 1.0 - ht)) / float(grid);
     h = (texture(depthTex, a).r - 0.5) * 2.0 * radius;
   }
   if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return vec4(0.0);
-  vec4 c = texture(texture0, (origin + clamp(uv, ht, 1.0 - ht)) / float(grid));
+  vec2 a = (origin + clamp(uv, ht, 1.0 - ht)) / float(grid);
+  vec4 c = texture(texture0, a);
+#ifdef LIT
+  hit = center + X;
+  n = texture(normalTex, a).rgb * 2.0 - 1.0;
+#endif
   return vec4(c.rgb * c.a, c.a);
 }
 
@@ -297,10 +350,23 @@ void main() {
     k0 = (j + 1) * grid + i + 1; k1 = (j + 1) * grid + i; k2 = j * grid + i + 1;
     w = vec3(f.x + f.y - 1.0, 1.0 - f.x, 1.0 - f.y);
   }
-  vec4 c = w.x * sample_view(k0, O, D) + w.y * sample_view(k1, O, D) +
-           w.z * sample_view(k2, O, D);
+  vec3 h0, h1, h2, n0, n1, n2;
+  vec4 c0 = sample_view(k0, O, D, h0, n0);
+  vec4 c1 = sample_view(k1, O, D, h1, n1);
+  vec4 c2 = sample_view(k2, O, D, h2, n2);
+  vec4 c = w.x * c0 + w.y * c1 + w.z * c2;
   if (c.a < 0.5) discard;
-  finalColor = vec4(c.rgb / c.a, 1.0) * colDiffuse;
+  vec3 albedo = (c.rgb / c.a) * colDiffuse.rgb;
+#ifdef LIT
+  // Blend hit points and normals the way the colours were, then light.
+  vec3 hit = (w.x * c0.a * h0 + w.y * c1.a * h1 + w.z * c2.a * h2) / c.a;
+  vec3 n = w.x * c0.a * n0 + w.y * c1.a * n1 + w.z * c2.a * n2;
+  vec3 world_pos = (fragModel * vec4(hit, 1.0)).xyz;
+  vec3 world_normal = normalize(fragNormalMat * n);
+  finalColor = vec4(lighting(albedo, world_pos, world_normal), 1.0);
+#else
+  finalColor = vec4(albedo, 1.0);
+#endif
 })";
 } // namespace detail
 
@@ -324,10 +390,14 @@ inline Baked bake(const ModelType &model, int grid = 16, int tile = 64) {
                                     {0, 0, 0, 0});
   out.depth = raylib::GenImageColor(m.grid * tile, m.grid * tile,
                                     {128, 128, 128, 255});
+  out.normal = raylib::GenImageColor(m.grid * tile, m.grid * tile,
+                                     {128, 255, 128, 255});
 
   raylib::RenderTexture2D rt = raylib::LoadRenderTexture(tile, tile);
   raylib::Shader depth_shader =
       raylib::LoadShaderFromMemory(DEPTH_VS, DEPTH_FS);
+  raylib::Shader normal_shader =
+      raylib::LoadShaderFromMemory(NORMAL_VS, NORMAL_FS);
   int loc_center = raylib::GetShaderLocation(depth_shader, "center");
   int loc_dir = raylib::GetShaderLocation(depth_shader, "viewDir");
   int loc_radius = raylib::GetShaderLocation(depth_shader, "radius");
@@ -346,54 +416,65 @@ inline Baked bake(const ModelType &model, int grid = 16, int tile = 64) {
     cam.fovy = m.radius * 2.f; // orthographic: height of the view in units
     cam.projection = raylib::CAMERA_ORTHOGRAPHIC;
 
-    raylib::BeginTextureMode(rt);
-    raylib::ClearBackground({0, 0, 0, 0});
-    raylib::BeginMode3D(cam);
-    raylib::DrawModel(model, {0, 0, 0}, 1.f, raylib::WHITE);
-    raylib::EndMode3D();
-    raylib::EndTextureMode();
-    raylib::Image color = read_target(rt);
-
+    // One pass: the model drawn with `shader` (or its own materials) into
+    // rt, read back upright.
+    auto pass = [&](const raylib::Shader *shader) {
+      if (shader)
+        for (int i = 0; i < model.materialCount; i++) {
+          saved[static_cast<size_t>(i)] = model.materials[i].shader;
+          model.materials[i].shader = *shader;
+        }
+      raylib::BeginTextureMode(rt);
+      raylib::ClearBackground({0, 0, 0, 0});
+      raylib::BeginMode3D(cam);
+      raylib::DrawModel(model, {0, 0, 0}, 1.f, raylib::WHITE);
+      raylib::EndMode3D();
+      raylib::EndTextureMode();
+      if (shader)
+        for (int i = 0; i < model.materialCount; i++)
+          model.materials[i].shader = saved[static_cast<size_t>(i)];
+      return read_target(rt);
+    };
+    raylib::Image color = pass(nullptr);
     raylib::SetShaderValue(depth_shader, loc_dir, &d,
                            raylib::SHADER_UNIFORM_VEC3);
-    for (int i = 0; i < model.materialCount; i++) {
-      saved[static_cast<size_t>(i)] = model.materials[i].shader;
-      model.materials[i].shader = depth_shader;
-    }
-    raylib::BeginTextureMode(rt);
-    raylib::ClearBackground({0, 0, 0, 0});
-    raylib::BeginMode3D(cam);
-    raylib::DrawModel(model, {0, 0, 0}, 1.f, raylib::WHITE);
-    raylib::EndMode3D();
-    raylib::EndTextureMode();
-    for (int i = 0; i < model.materialCount; i++)
-      model.materials[i].shader = saved[static_cast<size_t>(i)];
-    raylib::Image depth = read_target(rt);
+    raylib::Image depth = pass(&depth_shader);
+    raylib::Image normal = pass(&normal_shader);
 
-    dilate(color, depth, tile / 8);
-    blit(out.color, color, (k % m.grid) * tile, (k / m.grid) * tile);
-    blit(out.depth, depth, (k % m.grid) * tile, (k / m.grid) * tile);
+    dilate(color,
+           {{&depth, {128, 128, 128, 255}}, {&normal, {128, 255, 128, 255}}},
+           tile / 8);
+    int ox = (k % m.grid) * tile, oy = (k / m.grid) * tile;
+    blit(out.color, color, ox, oy);
+    blit(out.depth, depth, ox, oy);
+    blit(out.normal, normal, ox, oy);
     raylib::UnloadImage(color);
     raylib::UnloadImage(depth);
+    raylib::UnloadImage(normal);
   }
 
   raylib::UnloadShader(depth_shader);
+  raylib::UnloadShader(normal_shader);
   raylib::UnloadRenderTexture(rt);
   raylib::ImageFormat(&out.depth, raylib::PIXELFORMAT_UNCOMPRESSED_GRAYSCALE);
+  raylib::ImageFormat(&out.normal, raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8);
   return out;
 }
 
 inline void unload(Baked &baked) {
   raylib::UnloadImage(baked.color);
   raylib::UnloadImage(baked.depth);
+  raylib::UnloadImage(baked.normal);
   baked = {};
 }
 
-// Writes <prefix>.png, <prefix>_depth.png and <prefix>.cards.
+// Writes <prefix>.png, <prefix>_depth.png, <prefix>_normal.png and
+// <prefix>.cards.
 inline bool save(const Baked &baked, const std::string &prefix) {
   const Meta &m = baked.meta;
   if (!raylib::ExportImage(baked.color, (prefix + ".png").c_str()) ||
-      !raylib::ExportImage(baked.depth, (prefix + "_depth.png").c_str()))
+      !raylib::ExportImage(baked.depth, (prefix + "_depth.png").c_str()) ||
+      !raylib::ExportImage(baked.normal, (prefix + "_normal.png").c_str()))
     return false;
   FILE *f = std::fopen((prefix + ".cards").c_str(), "w");
   if (!f) return false;
@@ -408,14 +489,15 @@ inline bool save(const Baked &baked, const std::string &prefix) {
 
 namespace detail {
 inline void finish(Cards &cards) {
-  for (raylib::Texture2D *t : {&cards.color, &cards.depth}) {
+  for (raylib::Texture2D *t : {&cards.color, &cards.depth, &cards.normal}) {
     raylib::SetTextureFilter(*t, raylib::TEXTURE_FILTER_BILINEAR);
     raylib::SetTextureWrap(*t, raylib::TEXTURE_WRAP_CLAMP);
   }
   cards.quad = raylib::GenMeshPlane(2.f, 2.f, 1, 1);
   cards.material = raylib::LoadMaterialDefault();
   cards.material.maps[raylib::MATERIAL_MAP_DIFFUSE].texture = cards.color;
-  cards.material.maps[raylib::MATERIAL_MAP_NORMAL].texture = cards.depth;
+  cards.material.maps[raylib::MATERIAL_MAP_HEIGHT].texture = cards.depth;
+  cards.material.maps[raylib::MATERIAL_MAP_NORMAL].texture = cards.normal;
 }
 } // namespace detail
 
@@ -424,6 +506,7 @@ inline Cards upload(const Baked &baked) {
   cards.meta = baked.meta;
   cards.color = raylib::LoadTextureFromImage(baked.color);
   cards.depth = raylib::LoadTextureFromImage(baked.depth);
+  cards.normal = raylib::LoadTextureFromImage(baked.normal);
   detail::finish(cards);
   return cards;
 }
@@ -448,11 +531,13 @@ inline bool load(const std::string &prefix, Cards &out) {
   }
   cards.color = raylib::LoadTexture((prefix + ".png").c_str());
   cards.depth = raylib::LoadTexture((prefix + "_depth.png").c_str());
-  if (cards.color.id == 0 || cards.depth.id == 0) {
-    log_error("house_of_cards: missing {}.png or {}_depth.png", prefix,
+  cards.normal = raylib::LoadTexture((prefix + "_normal.png").c_str());
+  if (cards.color.id == 0 || cards.depth.id == 0 || cards.normal.id == 0) {
+    log_error("house_of_cards: missing {}.png, _depth.png or _normal.png",
               prefix);
     raylib::UnloadTexture(cards.color);
     raylib::UnloadTexture(cards.depth);
+    raylib::UnloadTexture(cards.normal);
     return false;
   }
   detail::finish(cards);
@@ -463,6 +548,7 @@ inline bool load(const std::string &prefix, Cards &out) {
 inline void unload(Cards &cards) {
   raylib::UnloadTexture(cards.color);
   raylib::UnloadTexture(cards.depth);
+  raylib::UnloadTexture(cards.normal);
   raylib::UnloadMesh(cards.quad);
   // UnloadMaterial would unload the atlas textures a second time.
   raylib::MemFree(cards.material.maps);
@@ -470,18 +556,26 @@ inline void unload(Cards &cards) {
 }
 
 // Shared by every Cards; the caller unloads it with raylib::UnloadShader.
-inline ShaderType load_shader() {
-  ShaderType shader =
-      raylib::LoadShaderFromMemory(detail::CARD_VS, detail::CARD_FS);
+// With `lighting` (a GLSL lighting function, see DEFAULT_LIGHTING in
+// models.h) cards are lit like real models drawn with load_lit_shader; call
+// apply_lighting, or set the function's own uniforms, before drawing.
+// Without it they are unlit, like raylib's default shader.
+inline ShaderType load_shader(const char *lighting = nullptr) {
+  std::string fs = std::string("#version 330\n") +
+                   (lighting ? "#define LIT\n" : "") + detail::CARD_FS_HEAD +
+                   (lighting ? lighting : "") + detail::CARD_FS_BODY;
+  ShaderType shader = raylib::LoadShaderFromMemory(detail::CARD_VS, fs.c_str());
   // raylib 5.5 looks the instance attribute up under MATRIX_MODEL; 5.6 moves
   // it to SHADER_LOC_VERTEX_INSTANCE_TX.
   shader.locs[raylib::SHADER_LOC_MATRIX_MODEL] =
       raylib::GetShaderLocationAttrib(shader, "instanceTransform");
-  shader.locs[raylib::SHADER_LOC_MAP_NORMAL] =
+  shader.locs[raylib::SHADER_LOC_MAP_HEIGHT] =
       raylib::GetShaderLocation(shader, "depthTex");
+  shader.locs[raylib::SHADER_LOC_MAP_NORMAL] =
+      raylib::GetShaderLocation(shader, "normalTex");
   // A failed compile falls back to raylib's default shader, which has no
   // depthTex, and every card would draw as a flat square.
-  if (shader.locs[raylib::SHADER_LOC_MAP_NORMAL] == -1)
+  if (shader.locs[raylib::SHADER_LOC_MAP_HEIGHT] == -1)
     log_error("house_of_cards: card shader failed to compile");
   return shader;
 }

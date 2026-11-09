@@ -244,8 +244,9 @@ they are not a claim that every listed API is still missing.
   current). Do it with the multi-backend move: sokol needs `sokol-shdc`, which takes
   `.glsl` files and generates per-backend headers. Today's GLSL 330 strings in
   `models.h` and `house_of_cards.h` are raylib, desktop GL only.
-- Lit, fogged cards: bake normals and let the game supply lighting and fog (or use a
-  default). Unlit cards stand out in cartographer's lit, fogged scenes.
+- Lit cards: shadows. Cards neither cast nor receive them; cartographer's shadow
+  pass would need a card depth pass. Blending normals between views softens
+  flat-shaded faces (arch_gate: 4.5% lit colour error against 1.6% unlit).
 - Real model near, cards far: route each copy by `Lod` to `InstanceBatcher` or to
   cards; use `hoc_compare` to pick the swap distance.
 - LOD chains the game author defines: any number of levels, each with its own

@@ -39,6 +39,11 @@ struct Orbit {
   float distance = 3.f; // camera distance, in bounding radii
   int parallax_steps = 2;
   int tolerance = 8;    // per channel, out of 255
+  // Lit comparison: the model is drawn with model_shader (load_lit_shader)
+  // and the cards' shader must be lit with the same function. Both get
+  // apply_lighting(lighting) every angle. Unset: both unlit.
+  const Lighting *lighting = nullptr;
+  ShaderType model_shader{};
 };
 
 namespace detail {
@@ -152,12 +157,23 @@ inline std::vector<Score> compare(const ModelType &model, Cards &cards,
     Camera3D cam =
         detail::orbit_camera(cards.meta, yaw, orbit);
 
+    std::vector<raylib::Shader> saved;
+    if (orbit.lighting) {
+      apply_lighting(orbit.model_shader, *orbit.lighting, cam.position);
+      apply_lighting(shader, *orbit.lighting, cam.position);
+      for (int m = 0; m < model.materialCount; m++) {
+        saved.push_back(model.materials[m].shader);
+        model.materials[m].shader = orbit.model_shader;
+      }
+    }
     raylib::BeginTextureMode(rt);
     raylib::ClearBackground({0, 0, 0, 0});
     raylib::BeginMode3D(cam);
     raylib::DrawModel(model, {0, 0, 0}, 1.f, raylib::WHITE);
     raylib::EndMode3D();
     raylib::EndTextureMode();
+    for (size_t m = 0; m < saved.size(); m++)
+      model.materials[m].shader = saved[m];
     raylib::Image a = detail::read_target(rt);
 
     raylib::BeginTextureMode(rt);
