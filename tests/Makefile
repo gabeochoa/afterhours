@@ -197,6 +197,7 @@ ALL_TESTS := \
 	headless_fallback_test \
 	models_test \
 	house_of_cards_test \
+	frustum_test \
 	stepper_test \
 	styling_test \
 	system_tags_test \
@@ -242,6 +243,7 @@ RAYLIB_TESTS := \
 	headless_fallback_test \
 	models_test \
 	house_of_cards_test \
+	frustum_test \
 	dialog_test \
 	dump_ui_test \
 	scroll_anchor_test \
