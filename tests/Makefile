@@ -198,6 +198,7 @@ ALL_TESTS := \
 	models_test \
 	house_of_cards_test \
 	frustum_test \
+	lod_test \
 	stepper_test \
 	styling_test \
 	system_tags_test \
