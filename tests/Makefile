@@ -196,6 +196,7 @@ ALL_TESTS := \
 	downstream_gaps_test \
 	headless_fallback_test \
 	models_test \
+	house_of_cards_test \
 	stepper_test \
 	styling_test \
 	system_tags_test \
@@ -240,6 +241,7 @@ RAYLIB_TESTS := \
 	mk_cost_test \
 	headless_fallback_test \
 	models_test \
+	house_of_cards_test \
 	dialog_test \
 	dump_ui_test \
 	scroll_anchor_test \
@@ -450,3 +452,4 @@ $(OUT)/font_atlas_measure_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CUR
 $(OUT)/headless_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 # Shares the examples' Kenney tree rather than checking in a second copy.
 $(OUT)/models_test: CXXFLAGS_T += -DAFTERHOURS_MODEL_FIXTURE=\"$(realpath ../examples/catalog/3d/tree-large.glb)\"
+$(OUT)/house_of_cards_test: CXXFLAGS_T += -DAFTERHOURS_MODELS_DIR=\"$(realpath ../examples/catalog/3d)\"
