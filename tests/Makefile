@@ -195,6 +195,7 @@ ALL_TESTS := \
 	split_test \
 	downstream_gaps_test \
 	headless_fallback_test \
+	models_test \
 	stepper_test \
 	styling_test \
 	system_tags_test \
@@ -238,6 +239,7 @@ RAYLIB_TESTS := \
 	clipboard_test \
 	mk_cost_test \
 	headless_fallback_test \
+	models_test \
 	dialog_test \
 	dump_ui_test \
 	scroll_anchor_test \
@@ -446,3 +448,5 @@ profiling-render-benchmark: $(OUT)/profiling_render_benchmark_on $(OUT)/profilin
 
 $(OUT)/font_atlas_measure_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/headless_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+# Shares the examples' Kenney tree rather than checking in a second copy.
+$(OUT)/models_test: CXXFLAGS_T += -DAFTERHOURS_MODEL_FIXTURE=\"$(realpath ../examples/catalog/3d/tree-large.glb)\"

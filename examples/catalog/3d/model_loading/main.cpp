@@ -1,10 +1,8 @@
 // model_loading — load a glTF model and look at it.
 //
-// afterhours has no model type of its own, so loading and drawing go straight
-// to raylib; the camera, 3D mode and ground plane are afterhours helpers.
+// ModelLibrary owns the model; draw_model, the camera, 3D mode and the ground
+// plane are afterhours helpers. Bounds still come straight from raylib.
 // The tree is from Kenney's Survival Kit (CC0, see ../KENNEY_LICENSE.txt).
-
-#include <cstdio>
 
 namespace raylib {
 #include <raylib.h>
@@ -12,6 +10,7 @@ namespace raylib {
 
 #include "../../../../ah.h"
 #include "../../../../src/drawing_helpers_3d.h"
+#include "../../../../src/plugins/models.h"
 
 using namespace afterhours;
 
@@ -21,13 +20,12 @@ int main(int, char **) {
     raylib::InitWindow(1280, 720, "model_loading");
     raylib::SetTargetFPS(60);
 
-    raylib::Model model = raylib::LoadModel(MODEL_PATH);
-    // raylib logs a warning and hands back an empty model rather than failing.
-    if (model.meshCount == 0) {
-        fprintf(stderr, "failed to load %s\n", MODEL_PATH);
+    auto &models = ModelLibrary::get();
+    if (!models.load(MODEL_PATH, "tree")) {
         raylib::CloseWindow();
         return 1;
     }
+    const ModelType &model = models.get("tree");
 
     // Frame the model from its bounds instead of hardcoding its size.
     raylib::BoundingBox box = raylib::GetModelBoundingBox(model);
@@ -51,7 +49,7 @@ int main(int, char **) {
         begin_3d(cam);
         draw_plane({0.f, box.min.y, 0.f}, {height * 3.f, height * 3.f},
                    {110, 160, 90, 255});
-        raylib::DrawModel(model, {0.f, 0.f, 0.f}, 1.f, raylib::WHITE);
+        draw_model(model, {0.f, 0.f, 0.f}, 0.f, {1.f, 1.f, 1.f});
         draw_cube_wires(center, box.max.x - box.min.x, height,
                         box.max.z - box.min.z, {255, 255, 255, 80});
         end_3d();
@@ -63,7 +61,7 @@ int main(int, char **) {
         raylib::EndDrawing();
     }
 
-    raylib::UnloadModel(model);
+    models.unload_all();
     raylib::CloseWindow();
     return 0;
 }

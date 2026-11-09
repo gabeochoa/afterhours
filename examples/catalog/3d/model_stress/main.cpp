@@ -1,16 +1,17 @@
 // model_stress — how many copies of one model can we draw?
 //
 // Every tree is an entity with a Tree component. An update system spins them
-// and a render system draws them, so this measures the ECS walk plus one
-// DrawModelEx per entity. Frame rate is uncapped so the number means something.
+// and a render system draws them. Instanced (the default), the render system
+// collects one matrix per tree and draws them all with draw_model_instanced;
+// per-draw, it calls draw_model once per tree. Frame rate is uncapped so the
+// number means something.
 //
 //   UP / DOWN   double / halve the tree count
-//   --count N   start with N trees (default 256)
+//   I           toggle instanced / per-draw
+//   --count N   start with N trees (default 4096)
+//   --per-draw  start in per-draw mode
 //   --bench     no interaction: double the count until a frame takes longer
 //               than 16.7ms, print a table, exit
-//
-// ponytail: one draw call per tree. Instancing (DrawMeshInstanced + an
-// instancing shader) is the next step once draw calls are the ceiling.
 
 #include <algorithm>
 #include <cmath>
@@ -18,9 +19,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <random>
+#include <vector>
 
 namespace raylib {
 #include <raylib.h>
+#include <raymath.h>
 }  // namespace raylib
 
 #define AFTER_HOURS_ENTITY_HELPER
@@ -28,6 +31,7 @@ namespace raylib {
 #define AFTER_HOURS_SYSTEM
 #include "../../../../ah.h"
 #include "../../../../src/drawing_helpers_3d.h"
+#include "../../../../src/plugins/models.h"
 
 using namespace afterhours;
 
@@ -49,13 +53,36 @@ struct Spin : System<Tree> {
 };
 
 struct DrawTrees : System<Tree> {
-    raylib::Model model;
-    explicit DrawTrees(raylib::Model m) : model(m) {}
-    // Render systems get both the mutable and the const pass; drawing only in
+    // ModelLibrary is a std::map, so the reference survives later loads.
+    const ModelType &model;
+    raylib::Shader shader;
+    const bool &instanced;
+    mutable std::vector<raylib::Matrix> transforms;
+
+    DrawTrees(const ModelType &m, raylib::Shader s, const bool &inst)
+        : model(m), shader(s), instanced(inst) {}
+
+    // Render systems get both the mutable and the const pass; working only in
     // the const one keeps it to one draw per tree.
+    void once(float) const override { transforms.clear(); }
+
     void for_each_with(const Entity &, const Tree &t, float) const override {
-        raylib::DrawModelEx(model, t.pos, {0.f, 1.f, 0.f}, t.yaw,
-                            {t.scale, t.scale, t.scale}, raylib::WHITE);
+        if (!instanced) {
+            draw_model(model, t.pos, t.yaw, {t.scale, t.scale, t.scale});
+            return;
+        }
+        // Same order DrawModelEx uses: scale, then rotate, then translate.
+        transforms.push_back(raylib::MatrixMultiply(
+            raylib::MatrixMultiply(
+                raylib::MatrixScale(t.scale, t.scale, t.scale),
+                raylib::MatrixRotateY(t.yaw * DEG2RAD)),
+            raylib::MatrixTranslate(t.pos.x, t.pos.y, t.pos.z)));
+    }
+
+    void after(float) const override {
+        if (instanced)
+            draw_model_instanced(model, shader, transforms.data(),
+                                 static_cast<int>(transforms.size()));
     }
 };
 
@@ -86,7 +113,7 @@ static void despawn_half() {
 }
 
 static void frame(SystemManager &systems, Camera3D &cam, int count,
-                  int tris_per_tree) {
+                  int tris_per_tree, bool instanced) {
     float r = field_radius(count) + 4.f;
     float a = static_cast<float>(raylib::GetTime()) * 0.2f;
     cam.position = {r * std::cos(a), r * 0.6f, r * std::sin(a)};
@@ -97,22 +124,25 @@ static void frame(SystemManager &systems, Camera3D &cam, int count,
     draw_plane({0.f, 0.f, 0.f}, {r * 2.f, r * 2.f}, {110, 160, 90, 255});
     systems.run(raylib::GetFrameTime());
     end_3d();
-    raylib::DrawRectangle(0, 0, 420, 70, {0, 0, 0, 140});
+    raylib::DrawRectangle(0, 0, 520, 70, {0, 0, 0, 140});
     raylib::DrawText(raylib::TextFormat("trees: %d   tris: %d", count,
                                         count * tris_per_tree),
                      10, 10, 20, raylib::WHITE);
-    raylib::DrawText(raylib::TextFormat("%d fps  %.2f ms   [UP/DOWN]",
+    raylib::DrawText(raylib::TextFormat("%d fps  %.2f ms  %s  [UP/DOWN/I]",
                                         raylib::GetFPS(),
-                                        raylib::GetFrameTime() * 1000.f),
+                                        raylib::GetFrameTime() * 1000.f,
+                                        instanced ? "instanced" : "per-draw"),
                      10, 40, 20, raylib::WHITE);
     raylib::EndDrawing();
 }
 
 int main(int argc, char **argv) {
-    int count = 256;
+    int count = 4096;
     bool bench = false;
+    bool instanced = true;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--bench")) bench = true;
+        else if (!strcmp(argv[i], "--per-draw")) instanced = false;
         else if (!strcmp(argv[i], "--count") && i + 1 < argc)
             count = std::max(1, atoi(argv[++i]));
     }
@@ -121,20 +151,22 @@ int main(int argc, char **argv) {
     raylib::InitWindow(1280, 720, "model_stress");
     raylib::SetTargetFPS(0);
 
-    raylib::Model model = raylib::LoadModel(MODEL_PATH);
-    // raylib logs a warning and hands back an empty model rather than failing.
-    if (model.meshCount == 0) {
-        fprintf(stderr, "failed to load %s\n", MODEL_PATH);
+    auto &models = ModelLibrary::get();
+    if (!models.load(MODEL_PATH, "tree")) {
         raylib::CloseWindow();
         return 1;
     }
+    const ModelType &model = models.get("tree");
     int tris_per_tree = 0;
     for (int i = 0; i < model.meshCount; i++)
         tris_per_tree += model.meshes[i].triangleCount;
 
+    raylib::Shader shader = load_instancing_shader();
+
     SystemManager systems;
     systems.register_update_system(std::make_unique<Spin>());
-    systems.register_render_system(std::make_unique<DrawTrees>(model));
+    systems.register_render_system(
+        std::make_unique<DrawTrees>(model, shader, instanced));
 
     Camera3D cam{};
     cam.target = {0.f, 0.f, 0.f};
@@ -146,13 +178,14 @@ int main(int argc, char **argv) {
 
     if (bench) {
         constexpr int WARMUP = 30, FRAMES = 120;
+        printf("%s\n", instanced ? "instanced" : "per-draw");
         printf("%10s %12s %10s %8s\n", "trees", "tris", "avg_ms", "fps");
         while (!raylib::WindowShouldClose()) {
             for (int i = 0; i < WARMUP; i++)
-                frame(systems, cam, count, tris_per_tree);
+                frame(systems, cam, count, tris_per_tree, instanced);
             double start = raylib::GetTime();
             for (int i = 0; i < FRAMES; i++)
-                frame(systems, cam, count, tris_per_tree);
+                frame(systems, cam, count, tris_per_tree, instanced);
             double ms = (raylib::GetTime() - start) * 1000.0 / FRAMES;
             printf("%10d %12d %10.2f %8.0f\n", count, count * tris_per_tree,
                    ms, 1000.0 / ms);
@@ -167,15 +200,17 @@ int main(int argc, char **argv) {
                 spawn(count, count * 2);
                 count *= 2;
             }
+            if (raylib::IsKeyPressed(raylib::KEY_I)) instanced = !instanced;
             if (raylib::IsKeyPressed(raylib::KEY_DOWN) && count > 1) {
                 despawn_half();
                 count -= count / 2;
             }
-            frame(systems, cam, count, tris_per_tree);
+            frame(systems, cam, count, tris_per_tree, instanced);
         }
     }
 
-    raylib::UnloadModel(model);
+    raylib::UnloadShader(shader);
+    models.unload_all();
     raylib::CloseWindow();
     return 0;
 }
