@@ -62,6 +62,13 @@ struct PendingE2ECommand : BaseComponent {
   long long seen_render = -1;
   static constexpr int MAX_FRAMES = 30; // Commands timeout after 30 frames (~0.5s at 60fps)
   CommandState state = CommandState::Ready;
+  // `wait_until SECONDS cmd ...`: a failure or stall is rearmed and retried
+  // until this many seconds run out. 0 = an ordinary command.
+  float wait_until_seconds = 0.f;
+  float retry_budget = 0.f;
+  // Some handler called retry() or retry_with(), so the command is known
+  // here. A timeout without it means nothing on this SystemManager handled it.
+  bool recognised = false;
 
   // Increment frame counter, returns true if timed out
   bool tick_frame() {
@@ -81,7 +88,10 @@ struct PendingE2ECommand : BaseComponent {
   void consume() { state = CommandState::Consumed; }
 
   // Mark command to retry next frame (recognized but waiting for condition)
-  void retry() { state = CommandState::Retry; }
+  void retry() {
+    state = CommandState::Retry;
+    recognised = true;
+  }
 
   // Retry with the mismatch to report if the command still hasn't passed
   // when the cleanup timeout fires. This is the retrying-assert helper:
@@ -91,7 +101,18 @@ struct PendingE2ECommand : BaseComponent {
   // Malformed assertions still fail() immediately; they can never pass.
   void retry_with(const std::string &mismatch) {
     state = CommandState::Retry;
+    recognised = true;
     last_mismatch = mismatch;
+  }
+
+  // Undo a failure so handlers evaluate the command again next frame. Used
+  // by wait_until; only safe for checks, not commands with side effects.
+  void rearm() {
+    if (!success) last_mismatch = error_message;
+    state = CommandState::Ready;
+    success = true;
+    error_message.clear();
+    frames_alive = 0;
   }
 
   // Check if already handled by a previous system

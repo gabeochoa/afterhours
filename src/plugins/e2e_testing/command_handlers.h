@@ -199,7 +199,7 @@ struct HandleMiddleDownCommand : System<PendingE2ECommand> {
         m.middle_down = true;
         m.middle_just_pressed = true;
         m.middle_press_read = false;
-        m.press_frames = 0;
+        m.press_frames = 1;
         // Held until middle_up, so the same sticky-auto_release trap that
         // mouse_down documents applies here.
         m.auto_release = false;
@@ -371,7 +371,10 @@ struct HandleMouseDownCommand : System<PendingE2ECommand> {
         auto &m = input_injector::detail::mouse;
         m.left_down = true;
         m.just_pressed = true;
-        m.press_frames = 0;
+        m.press_read = false;
+        // One-frame window, like click: a system that runs before this
+        // handler still sees the press edge next frame if nothing read it.
+        m.press_frames = 1;
         // mouse_down means HELD until mouse_up. auto_release is sticky global
         // state -- any earlier click() leaves it set, and reset_frame would
         // then let go of the button on the very next frame, so nothing could
@@ -967,7 +970,8 @@ inline void reset_command_error_count() { detail::command_error_count() = 0; }
 // Cleanup system - removes processed command entities (runs last)
 struct E2ECommandCleanupSystem : System<PendingE2ECommand> {
     virtual void for_each_with(Entity &e, PendingE2ECommand &cmd,
-                               float) override {
+                               float dt) override {
+        if (cmd.wait_until_seconds > 0.f && !retry_wait_until(cmd, dt)) return;
         if (cmd.is_consumed()) {
             // Track failures before cleanup
             if (!cmd.succeeded()) {
@@ -1012,6 +1016,11 @@ struct E2ECommandCleanupSystem : System<PendingE2ECommand> {
                     cmd.args.empty() ? std::string{}
                                      : std::format(" ('{}')", cmd.args[0]),
                     PendingE2ECommand::MAX_FRAMES);
+                // No handler ever retried it: most likely its handler is
+                // registered on another SystemManager, or not at all.
+                if (!cmd.recognised)
+                    error_msg += "; nothing consumed or retried it, is its "
+                                 "handler registered on this SystemManager?";
             }
             cmd.fail(error_msg);
             detail::command_error_count()++;
@@ -1023,6 +1032,35 @@ struct E2ECommandCleanupSystem : System<PendingE2ECommand> {
 
         // Reset retry state so command can be re-evaluated next frame
         cmd.reset_retry();
+    }
+
+   private:
+    // wait_until: spend the budget, and while any is left treat a failure or
+    // a stall as "not yet". Returns false when the command was rearmed and
+    // must not be cleaned up or timed out this frame.
+    static bool retry_wait_until(PendingE2ECommand &cmd, float dt) {
+        if (cmd.is_consumed() && cmd.succeeded()) return true;
+        cmd.retry_budget -= dt;
+        if (cmd.retry_budget <= 0.f) {
+            std::string last = cmd.is_consumed() ? cmd.error_message
+                                                 : cmd.last_mismatch;
+            if (last.empty())
+                last = std::format(
+                    "'{}' never passed{}", cmd.name,
+                    cmd.recognised ? ""
+                                   : "; nothing consumed or retried it, is its "
+                                     "handler registered on this SystemManager?");
+            cmd.fail(std::format("wait_until {}s: {}", cmd.wait_until_seconds,
+                                 last));
+            return true;
+        }
+        if (cmd.is_consumed()) {
+            cmd.rearm();
+        } else {
+            cmd.frames_alive = 0;
+            cmd.reset_retry();
+        }
+        return false;
     }
 };
 

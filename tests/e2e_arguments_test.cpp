@@ -210,6 +210,32 @@ TEST(serial_dispatch_waits_for_pending_command) {
   sweep_pending();
 }
 
+TEST(wait_until_dispatch_carries_the_retry_budget) {
+  // A dispatched `wait_until` command arrives as the inner command with its
+  // budget set, so the cleanup system rearms it instead of failing it.
+  ScriptFile file("wait_until 2 custom_check_xyz a\n");
+  ui_test::ImmTestHarness h;
+  E2ERunner runner;
+  runner.load_script(file.path.string());
+  auto &coll = EntityHelper::get_default_collection();
+  coll.merge_entity_arrays();
+  for (auto &e : coll.get_entities())
+    if (e && e->has<PendingE2ECommand>()) e->get<PendingE2ECommand>().consume();
+  runner.tick(0.1f);
+  coll.merge_entity_arrays();
+  bool saw = false;
+  for (auto &e : coll.get_entities()) {
+    if (!e || !e->has<PendingE2ECommand>()) continue;
+    auto &command = e->get<PendingE2ECommand>();
+    if (command.name != "custom_check_xyz") continue;
+    saw = true;
+    CHECK(command.wait_until_seconds == 2.f);
+    CHECK(command.retry_budget == 2.f);
+    command.consume();
+  }
+  CHECK(saw);
+}
+
 // registerSingleton emplaces: a second registration is a no-op that keeps
 // pointing at the first harness's (destroyed) entity, so get_singleton_cmp
 // returns null even though has_singleton is true. Erase before re-registering.

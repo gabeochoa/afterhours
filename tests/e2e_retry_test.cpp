@@ -123,6 +123,126 @@ int main() {
           "a plain-retry timeout keeps the generic message");
   }
 
+  // A timeout nothing retried says the handler is probably not registered.
+  {
+    EntityCollection coll;
+    Entity &e = coll.createEntity();
+    auto &cmd = e.addComponent<PendingE2ECommand>();
+    cmd.name = "expect_autosave";
+    testing::E2ECommandCleanupSystem cleanup;
+    for (int i = 0; i <= PendingE2ECommand::MAX_FRAMES; i++)
+      cleanup.for_each_with(e, cmd, 0.f);
+    check(cmd.error_message.find("is its handler registered") !=
+              std::string::npos,
+          "an untouched timeout asks whether the handler is registered");
+  }
+
+  // wait_until: a failing check is rearmed until it passes.
+  {
+    EntityCollection coll;
+    Entity &e = coll.createEntity();
+    auto &cmd = e.addComponent<PendingE2ECommand>();
+    cmd.name = "expect_rope_state";
+    cmd.wait_until_seconds = cmd.retry_budget = 1.f;
+    testing::reset_command_error_count();
+    testing::E2ECommandCleanupSystem cleanup;
+    for (int i = 0; i < 40; i++) {
+      cmd.fail("rope is Holding, expected Measuring");
+      cleanup.for_each_with(e, cmd, 1.f / 60.f);
+    }
+    check(!cmd.is_consumed() && !e.cleanup,
+          "a failing wait_until check is rearmed, not cleaned up");
+    check(cmd.last_mismatch == "rope is Holding, expected Measuring",
+          "the rearmed failure is kept as the last mismatch");
+    check(testing::get_command_error_count() == 0,
+          "rearmed failures are not counted");
+    cmd.consume();
+    cleanup.for_each_with(e, cmd, 1.f / 60.f);
+    check(cmd.succeeded() && e.cleanup, "a late pass consumes the wait_until");
+    check(testing::get_command_error_count() == 0,
+          "a wait_until that passes counts no error");
+  }
+
+  // wait_until: a stalled (never consumed) check holds past the frame timeout.
+  {
+    EntityCollection coll;
+    Entity &e = coll.createEntity();
+    auto &cmd = e.addComponent<PendingE2ECommand>();
+    cmd.name = "expect_thing";
+    cmd.wait_until_seconds = cmd.retry_budget = 2.f;
+    testing::E2ECommandCleanupSystem cleanup;
+    for (int i = 0; i < PendingE2ECommand::MAX_FRAMES * 3; i++) {
+      cmd.retry_with("thing is 1, expected 2");
+      cleanup.for_each_with(e, cmd, 1.f / 60.f);
+    }
+    check(!cmd.is_consumed(), "a stalled wait_until outlives the frame timeout");
+  }
+
+  // wait_until: the budget runs out with the last failure as the error.
+  {
+    EntityCollection coll;
+    Entity &e = coll.createEntity();
+    auto &cmd = e.addComponent<PendingE2ECommand>();
+    cmd.name = "expect_rope_state";
+    cmd.wait_until_seconds = cmd.retry_budget = 0.5f;
+    testing::reset_command_error_count();
+    testing::E2ECommandCleanupSystem cleanup;
+    for (int i = 0; i < 60 && !e.cleanup; i++) {
+      cmd.fail("rope is Holding, expected Measuring");
+      cleanup.for_each_with(e, cmd, 1.f / 60.f);
+    }
+    check(e.cleanup && !cmd.succeeded(), "an expired wait_until fails");
+    check(cmd.error_message ==
+              "wait_until 0.5s: rope is Holding, expected Measuring",
+          "the expired error names the wait and the last failure");
+    check(testing::get_command_error_count() == 1,
+          "an expired wait_until counts one error");
+  }
+
+  // mouse_down keeps its press edge one frame for systems that ran before
+  // the handler, and the button stays held after that.
+  {
+    EntityCollection coll;
+    Entity &e = coll.createEntity();
+    auto &cmd = e.addComponent<PendingE2ECommand>();
+    cmd.name = "mouse_down";
+    cmd.args = {"10", "20"};
+    testing::test_input::reset_all();
+    testing::HandleMouseDownCommand handler;
+    handler.for_each_with(e, cmd, 0.f);
+    auto &m = testing::input_injector::detail::mouse;
+    testing::test_input::reset_frame();
+    check(m.just_pressed && m.left_down,
+          "an unread mouse_down press survives one frame reset");
+    testing::test_input::reset_frame();
+    check(!m.just_pressed && m.left_down,
+          "mouse_down stays held without re-raising the edge");
+    testing::test_input::reset_all();
+  }
+
+  // parse_script peels wait_until off and parses the rest by its own rules.
+  {
+    const char *path = "/tmp/afterhours_wait_until_test.e2e";
+    FILE *f = fopen(path, "w");
+    fputs("wait_until 2.5 expect_text Hello world\n"
+          "wait_until 1 my_check a b\n"
+          "wait_until nope my_check\n"
+          "wait_until 3\n",
+          f);
+    fclose(f);
+    auto cmds = testing::parse_script(path);
+    check(cmds.size() == 4, "every wait_until line parses to a command");
+    check(cmds[0].name == "expect_text" && cmds[0].wait_until_seconds == 2.5f &&
+              cmds[0].args.size() == 1 && cmds[0].args[0] == "Hello world",
+          "the inner command keeps its own rest-of-line parse");
+    check(cmds[1].name == "my_check" && cmds[1].wait_until_seconds == 1.f &&
+              cmds[1].args.size() == 2,
+          "an unknown inner command splits its args");
+    check(!cmds[2].parse_error.empty(), "a bad timeout is a parse error");
+    check(!cmds[3].parse_error.empty(), "a missing command is a parse error");
+    remove(path);
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);

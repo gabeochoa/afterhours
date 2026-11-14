@@ -32,6 +32,8 @@ struct ParsedCommand {
     float wait_seconds = 0.0f;  // Time to wait after this command
     // Ticks to wait, counted rather than timed. `wait_frames` means frames.
     int wait_ticks = 0;
+    // `wait_until SECONDS cmd ...`: retry cmd until it passes or this runs out.
+    float wait_until_seconds = 0.0f;
     std::string parse_error;
 };
 
@@ -151,6 +153,21 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
         cmd.line_number = line_num;
         std::istringstream iss(line);
         iss >> cmd.name;
+
+        // `wait_until SECONDS cmd args...` is cmd parsed by its own rules,
+        // retried until it passes for up to SECONDS.
+        std::string wait_until_error;
+        if (cmd.name == "wait_until") {
+            std::string seconds;
+            iss >> seconds >> cmd.name;
+            try {
+                cmd.wait_until_seconds = std::stof(seconds);
+            } catch (...) {
+            }
+            if (cmd.wait_until_seconds <= 0.f || cmd.name == "wait_until" ||
+                cmd.name.empty())
+                wait_until_error = "wait_until needs SECONDS > 0 then a command";
+        }
 
         detail::ScriptArguments args{iss, {}};
 
@@ -272,7 +289,8 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
             while (!args.empty()) cmd.args.push_back(args.next());
             cmd.wait_seconds = 2 * frame;
         }
-        cmd.parse_error = args.error;
+        cmd.parse_error =
+            wait_until_error.empty() ? args.error : wait_until_error;
         if (!cmd.parse_error.empty()) cmd.args.clear();
 
         cmds.push_back(cmd);
@@ -549,6 +567,8 @@ class E2ERunner {
         pending.name = cmd.name;
         pending.args = cmd.args;
         pending.line_number = cmd.line_number;
+        pending.wait_until_seconds = cmd.wait_until_seconds;
+        pending.retry_budget = cmd.wait_until_seconds;
 
         // Handle validate specially since it needs property_getter
         if (cmd.name == "validate" && property_getter_ &&
