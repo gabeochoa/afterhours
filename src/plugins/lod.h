@@ -4,6 +4,7 @@
 //
 //   Lod lod;  // one per copy, e.g. a member of its component
 //   int level = lod.update(distance, {25.f, 60.f});  // 0 near, 1, then 2
+//   int level = lod.update_sq(distance_sq, {25.f, 60.f});  // same, squared in
 //
 // Each threshold is where the next level starts. A copy only moves out a
 // level once it is `margin` past the threshold, and only moves back in once
@@ -34,6 +35,27 @@ struct Lod {
     return update(distance,
                   std::span<const float>(thresholds.begin(), thresholds.size()),
                   margin);
+  }
+
+  // Same as update, for a loop that already has squared distance: the
+  // thresholds stay linear and are squared here, so no sqrt per copy.
+  int update_sq(float distance_sq, std::span<const float> thresholds,
+                float margin = 0.15f) {
+    int n = static_cast<int>(thresholds.size());
+    if (level > n) level = n;
+    auto sq = [](float v) { return v * v; };
+    auto at = [&](int i) { return thresholds[static_cast<size_t>(i)]; };
+    while (level < n && distance_sq > sq(at(level) * (1.f + margin))) level++;
+    while (level > 0 && distance_sq < sq(at(level - 1) * (1.f - margin)))
+      level--;
+    return level;
+  }
+
+  int update_sq(float distance_sq, std::initializer_list<float> thresholds,
+                float margin = 0.15f) {
+    return update_sq(
+        distance_sq,
+        std::span<const float>(thresholds.begin(), thresholds.size()), margin);
   }
 };
 

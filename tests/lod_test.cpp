@@ -66,6 +66,23 @@ int main() {
     check(lod.update(500.f, {10.f}) == 1, "fewer thresholds clamp the level");
   }
 
+  // update_sq agrees with update on squared input, margins included.
+  {
+    Lod a, b;
+    const float dists[] = {30.f, 34.f, 36.f, 30.f, 26.f, 24.f, 500.f, 70.f, 1.f};
+    bool same = true;
+    for (float d : dists) {
+      if (a.update(d, {10.f, 30.f, 100.f}, 1.f / 6.f) !=
+          b.update_sq(d * d, {10.f, 30.f, 100.f}, 1.f / 6.f))
+        same = false;
+    }
+    check(same, "update_sq matches update on squared distances");
+    Lod c;
+    check(c.update_sq(36.f * 36.f, {30.f}, 1.f / 6.f) == 1, "update_sq goes far past the margin");
+    check(c.update_sq(26.f * 26.f, {30.f}, 1.f / 6.f) == 1, "update_sq holds inside the margin");
+    check(c.update_sq(24.f * 24.f, {30.f}, 1.f / 6.f) == 0, "update_sq comes back past the margin");
+  }
+
   std::printf("lod_test: %d/%d checks passed\n", checks - failures, checks);
   return failures > 0 ? 1 : 0;
 }
