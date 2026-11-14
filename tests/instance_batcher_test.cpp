@@ -97,6 +97,30 @@ int main() {
   check(batcher.copies() == 5, "every copy is collected");
   check(batcher.group_count() == 2, "copies group by model");
 
+  // Keys split one model's copies; on_group sees each group once, in
+  // first-seen order, before it draws.
+  {
+    InstanceBatcher keyed;
+    keyed.add(tree, {0, 0, 0}, 0.f, {1, 1, 1}, 0);
+    keyed.add(tree, {1, 0, 0}, 0.f, {1, 1, 1}, 1);
+    keyed.add(lantern, {2, 0, 0}, 0.f, {1, 1, 1}, 1);
+    keyed.add(tree, {3, 0, 0}, 0.f, {1, 1, 1}, 1);
+    check(keyed.group_count() == 3, "a key splits one model into two groups");
+    std::string seen;
+    raylib::RenderTexture2D scratch = raylib::LoadRenderTexture(8, 8);
+    raylib::BeginTextureMode(scratch);
+    keyed.flush(shader, [&](const ModelType &m, uint32_t key,
+                            std::span<const MatrixType> ts) {
+      seen += std::string(&m == &tree ? "tree" : "lantern") + ":" +
+              std::to_string(key) + "x" + std::to_string(ts.size()) + " ";
+    });
+    raylib::EndTextureMode();
+    raylib::UnloadRenderTexture(scratch);
+    check(seen == "tree:0x1 tree:1x2 lantern:1x1 ",
+          "on_group runs per group with its key and transforms: " + seen);
+    check(keyed.copies() == 0, "a flush with on_group empties the groups");
+  }
+
   // Same frame two ways: batched, and one draw_model per copy.
   raylib::Camera3D cam{};
   cam.position = {0, 6, 10};

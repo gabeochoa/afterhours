@@ -1,4 +1,8 @@
 #pragma once
+#include <functional>
+#include <cstdint>
+#include <unordered_map>
+#include <span>
 
 // 3D models: load by name, draw with a position / yaw / scale, draw many
 // copies in one call per mesh (or batch them by model), swap shaders.
@@ -263,18 +267,32 @@ inline MatrixType model_transform(Vector3Type pos, float yaw_deg,
 // while loaded. Copies that need a different shader or uniforms go in a
 // second batcher.
 struct InstanceBatcher {
-  void add(const ModelType &model, const MatrixType &transform) {
-    group_for(model).transforms.push_back(transform);
+  // `key` splits copies of one model into separate groups, e.g. by the
+  // uniforms they need (in fog or not, wind sway on or off). 0 by default.
+  void add(const ModelType &model, const MatrixType &transform,
+           uint32_t key = 0) {
+    group_for(model, key).transforms.push_back(transform);
   }
   void add(const ModelType &model, Vector3Type pos, float yaw_deg,
-           Vector3Type scale) {
-    add(model, model_transform(pos, yaw_deg, scale));
+           Vector3Type scale, uint32_t key = 0) {
+    add(model, model_transform(pos, yaw_deg, scale), key);
   }
 
   // `shader` must read the instanceTransform attribute, as
   // load_instancing_shader's does.
   void flush(ShaderType shader) {
+    flush(shader, [](const ModelType &, uint32_t,
+                     std::span<const MatrixType>) {});
+  }
+
+  // on_group(model, key, transforms) runs before each group draws: set the
+  // group's uniforms, or draw a shadow pass from the same transforms.
+  template <typename OnGroup> void flush(ShaderType shader, OnGroup &&on_group) {
     for (Group &g : groups) {
+      if (g.transforms.empty()) continue;
+      on_group(*g.model, g.key,
+               std::span<const MatrixType>(g.transforms.data(),
+                                           g.transforms.size()));
       draw_model_instanced(*g.model, shader, g.transforms.data(),
                            static_cast<int>(g.transforms.size()));
       g.transforms.clear();
@@ -301,20 +319,29 @@ struct InstanceBatcher {
 private:
   struct Group {
     const ModelType *model;
+    uint32_t key;
     std::vector<MatrixType> transforms;
   };
-  // A scene has few distinct models, so a linear find beats hashing, and
-  // groups draw in the order they were first seen.
-  // TODO: not true for every game. A scene with hundreds of distinct models
-  // makes each add() a long scan; measure, and consider a map from model to
-  // group index (keeping first-seen draw order) or remembering the last group.
+  struct GroupId {
+    const ModelType *model;
+    uint32_t key;
+    bool operator==(const GroupId &) const = default;
+  };
+  struct GroupIdHash {
+    size_t operator()(const GroupId &id) const {
+      return std::hash<const void *>{}(id.model) ^
+             (std::hash<uint32_t>{}(id.key) * 0x9e3779b97f4a7c15ull);
+    }
+  };
+  // Groups draw in the order they were first seen; the map finds a group in
+  // O(1) for scenes with hundreds of distinct models.
   std::vector<Group> groups;
+  std::unordered_map<GroupId, size_t, GroupIdHash> index;
 
-  Group &group_for(const ModelType &model) {
-    for (Group &g : groups)
-      if (g.model == &model) return g;
-    groups.push_back({&model, {}});
-    return groups.back();
+  Group &group_for(const ModelType &model, uint32_t key) {
+    auto [it, inserted] = index.try_emplace(GroupId{&model, key}, groups.size());
+    if (inserted) groups.push_back({&model, key, {}});
+    return groups[it->second];
   }
 };
 #else
@@ -344,9 +371,10 @@ inline void apply_lighting(S, const Lighting &, V) {}
 template <typename S, typename M>
 inline void draw_model_instanced(const ModelType &, S, const M *, int) {}
 struct InstanceBatcher {
-  template <typename M> void add(const ModelType &, const M &) {}
-  template <typename V> void add(const ModelType &, V, float, V) {}
+  template <typename M> void add(const ModelType &, const M &, uint32_t = 0) {}
+  template <typename V> void add(const ModelType &, V, float, V, uint32_t = 0) {}
   template <typename S> void flush(S) {}
+  template <typename S, typename F> void flush(S, F &&) {}
   void clear() {}
   [[nodiscard]] size_t copies() const { return 0; }
   [[nodiscard]] size_t group_count() const { return 0; }
