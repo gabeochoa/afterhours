@@ -205,6 +205,7 @@ ALL_TESTS := \
 	system_tags_test \
 	should_run_overload_test \
 	library_duplicate_test \
+	shared_handlers_test \
 	tab_container_test \
 	small_components_test \
 	text_area_test \

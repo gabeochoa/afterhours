@@ -108,6 +108,20 @@ inline void register_all_handlers(SystemManager &sm) {
   register_cleanup(sm);
 }
 
+// A command pack shared by several SystemManagers (menu, gameplay, pause...).
+// Fill `pack` once with the usual register_* calls, then call this on each
+// state's manager: that manager runs the pack's handlers, in order, as one of
+// its update systems. Only the manager that ticks runs them, so each handler
+// runs once a frame whichever state is active, and a command handled in every
+// state is registered in one place. Because one pack sees every command,
+// register_unknown_handler and register_cleanup can go at its end.
+// `pack` must outlive the managers that run it.
+inline void register_shared_handlers(SystemManager &sm, SystemManager &pack) {
+  sm.register_update_system([&pack](float dt) {
+    pack.tick(EntityHelper::get_entities_for_mod(), dt);
+  });
+}
+
 //=============================================================================
 // REGISTRATION ORDER
 //=============================================================================
@@ -119,6 +133,9 @@ inline void register_all_handlers(SystemManager &sm) {
 // 5. register_cleanup(sm)              - Cleanup (must be last)
 //
 // Or just: register_all_handlers(sm)   - If you don't need custom commands
+//
+// Several SystemManagers: fill one pack with the steps above and call
+// register_shared_handlers(state_sm, pack) on each.
 //
 //=============================================================================
 // UI PLUGIN INTEGRATION (optional)
