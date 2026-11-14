@@ -83,6 +83,13 @@ template <typename T> struct Library {
 
   virtual void load(const char *filename, const char *name) {
     log_trace("Loading {}: {} from {}", type_name<T>(), name, filename);
+    // Check before converting: a duplicate used to be parsed, then dropped by
+    // add() without unload, leaking it.
+    if (contains(name)) {
+      log_warn("{} '{}' is already loaded, skipping {}", type_name<T>(), name,
+               filename);
+      return;
+    }
     this->add(name, convert_filename_to_object(name, filename));
   }
 
