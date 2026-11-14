@@ -6,7 +6,7 @@
 //   if (!view.intersects_box(bounds.min, bounds.max)) continue;
 //
 // Built from the camera directly, so it works on every backend and needs no
-// matrices. Perspective and orthographic both follow raylib's BeginMode3D:
+// matrices; make_frustum(view_projection) builds it from a matrix instead. Perspective and orthographic both follow raylib's BeginMode3D:
 // fovy is the vertical angle in degrees, or the view height in world units
 // for orthographic. near / far default to raylib's cull distances.
 //
@@ -101,6 +101,34 @@ inline Frustum make_frustum(const Camera3D &cam, float aspect,
   }
   out.planes[4] = plane(f, add(pos, mul(f, near_dist)));
   out.planes[5] = plane(mul(f, -1.f), add(pos, mul(f, far_dist)));
+  return out;
+}
+
+// From a combined view * projection matrix, e.g. raylib's
+// MatrixMultiply(rlGetMatrixModelview(), rlGetMatrixProjection()) inside the
+// pass being culled, so a shadow pass or a picture-in-picture with its own
+// projection and clip planes needs no camera. Any type with raylib's m0..m15
+// fields works.
+template <typename M>
+  requires requires(const M &m) { m.m0 + m.m15; }
+inline Frustum make_frustum(const M &vp) {
+  Frustum out;
+  auto set = [&](int i, float x, float y, float z, float d) {
+    float len = std::sqrt(x * x + y * y + z * z);
+    if (len > 0.f) {
+      x /= len;
+      y /= len;
+      z /= len;
+      d /= len;
+    }
+    out.planes[i] = {x, y, z, d};
+  };
+  set(0, vp.m3 + vp.m0, vp.m7 + vp.m4, vp.m11 + vp.m8, vp.m15 + vp.m12);
+  set(1, vp.m3 - vp.m0, vp.m7 - vp.m4, vp.m11 - vp.m8, vp.m15 - vp.m12);
+  set(2, vp.m3 + vp.m1, vp.m7 + vp.m5, vp.m11 + vp.m9, vp.m15 + vp.m13);
+  set(3, vp.m3 - vp.m1, vp.m7 - vp.m5, vp.m11 - vp.m9, vp.m15 - vp.m13);
+  set(4, vp.m3 + vp.m2, vp.m7 + vp.m6, vp.m11 + vp.m10, vp.m15 + vp.m14);
+  set(5, vp.m3 - vp.m2, vp.m7 - vp.m6, vp.m11 - vp.m10, vp.m15 - vp.m14);
   return out;
 }
 

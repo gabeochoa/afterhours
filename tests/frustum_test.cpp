@@ -87,7 +87,7 @@ int main() {
   }
 
   // Random cameras, both projections, against raylib's matrices.
-  int point_mismatch = 0, sphere_miss = 0, box_miss = 0;
+  int point_mismatch = 0, sphere_miss = 0, box_miss = 0, matrix_mismatch = 0;
   for (int c = 0; c < 200; c++) {
     Camera3D cam{};
     cam.position = rand_v(20.f);
@@ -100,6 +100,7 @@ int main() {
     float near_dist = 0.01f, far_dist = 60.f;
     Frustum f = make_frustum(cam, aspect, near_dist, far_dist);
     raylib::Matrix vp = view_projection(cam, aspect, near_dist, far_dist);
+    Frustum fm = make_frustum(vp);
 
     for (int i = 0; i < 300; i++) {
       raylib::Vector3 p = raylib::Vector3Add(cam.position, rand_v(50.f));
@@ -113,6 +114,12 @@ int main() {
         for (const Frustum::Plane &pl : f.planes)
           nearest = std::fmin(nearest, std::fabs(pl.distance(p.x, p.y, p.z)));
         if (nearest > 1e-3f * far_dist) point_mismatch++;
+      }
+      if (fm.contains_point(p) != on_screen(vp, p)) {
+        float nearest = 1e9f;
+        for (const Frustum::Plane &pl : fm.planes)
+          nearest = std::fmin(nearest, std::fabs(pl.distance(p.x, p.y, p.z)));
+        if (nearest > 1e-3f * far_dist) matrix_mismatch++;
       }
 
       float r = 0.5f + 3.f * (unit(rng) + 1.f);
@@ -140,6 +147,8 @@ int main() {
   }
   printf("  points disagreeing with raylib: %d of 60000\n", point_mismatch);
   check(point_mismatch == 0, "contains_point matches raylib's projection");
+  printf("  matrix-built points disagreeing: %d of 60000\n", matrix_mismatch);
+  check(matrix_mismatch == 0, "make_frustum(view_projection) matches raylib's projection");
   check(sphere_miss == 0, "no on-screen sphere reported hidden");
   check(box_miss == 0, "no on-screen box reported hidden");
 
