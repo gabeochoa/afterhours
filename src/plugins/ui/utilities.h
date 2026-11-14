@@ -127,11 +127,18 @@ static void warn_missing_text_actions() {
     AH_CHECK_TEXT_ACTION("TextDeleteLineForward");
 #undef AH_CHECK_TEXT_ACTION
 
+    // An app with no imm text input (a hand-drawn field can use
+    // text_input::edit_command_from_keys) defines AFTERHOURS_NO_IMM_TEXT_INPUT.
+#ifndef AFTERHOURS_NO_IMM_TEXT_INPUT
     if (!missing.empty())
         log_warn("InputAction is missing {}. Those text-editing features are "
                  "compiled out, so the keys will do nothing. Add the names to "
-                 "your enum, or ignore this if the app has no text input.",
+                 "your enum, or define AFTERHOURS_NO_IMM_TEXT_INPUT if the app "
+                 "has no imm text input.",
                  missing);
+#else
+    (void) missing;
+#endif
 }
 
 // Initialize the UI plugin. Creates the root UI entity and all singletons

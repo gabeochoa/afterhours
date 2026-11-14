@@ -207,6 +207,7 @@ ALL_TESTS := \
 	library_duplicate_test \
 	shared_handlers_test \
 	default_font_test \
+	edit_keys_test \
 	tab_container_test \
 	small_components_test \
 	text_area_test \
@@ -235,6 +236,7 @@ ALL_TESTS += sokol_include_order_test
 endif
 
 RAYLIB_TESTS := \
+	edit_keys_test \
 	default_font_test \
 	border_width_test \
 	text_visibility_test \
@@ -314,7 +316,7 @@ $(RAYLIB_BINS): LDFLAGS_T  = $(LDFLAGS_RAYLIB)
 # with no window, so the modifier half of a chord cannot be tested at all.
 $(OUT)/input_device_activity_test: LDFLAGS_T = $(subst $(RAYLIB_LIB)/libraylib.a,-L$(RAYLIB_LIB) -lraylib,$(LDFLAGS_RAYLIB))
 
-$(OUT)/text_area_test $(OUT)/scroll_input_gate_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
+$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 
 # Filter to sources: the .d files list every header as a prerequisite, and a
 # bare $^ would hand them all to clang. .cc is the sokol implementation TU.
