@@ -203,6 +203,7 @@ ALL_TESTS := \
 	stepper_test \
 	styling_test \
 	system_tags_test \
+	should_run_overload_test \
 	tab_container_test \
 	small_components_test \
 	text_area_test \

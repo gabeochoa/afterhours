@@ -127,7 +127,11 @@ class SystemBase {
         return cached_name_;
     }
 
-    virtual bool should_run(const float) { return true; }
+    // The manager calls the non-const overload. It forwards to the const one
+    // so a system can override either and its gate is honoured.
+    virtual bool should_run(const float dt) {
+        return static_cast<const SystemBase &>(*this).should_run(dt);
+    }
     virtual bool should_run(const float) const { return true; }
     virtual void once(const float) {}
     virtual void once(const float) const {}
