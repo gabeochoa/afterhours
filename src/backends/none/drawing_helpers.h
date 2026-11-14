@@ -235,8 +235,21 @@ inline void draw_poly_lines_ex(Vector2Type, int, float, float, float, Color) {
 }
 inline void set_mouse_cursor(int) {}
 
-inline afterhours::Font get_default_font() { return afterhours::Font(); }
-inline afterhours::Font get_unset_font() { return afterhours::Font(); }
+namespace detail {
+inline afterhours::Font &default_font_override() {
+  static afterhours::Font font{};
+  return font;
+}
+} // namespace detail
+
+inline void set_default_font(afterhours::Font font) {
+  detail::default_font_override() = font;
+}
+inline void clear_default_font() { detail::default_font_override() = {}; }
+inline afterhours::Font get_default_font() {
+  return detail::default_font_override();
+}
+inline afterhours::Font get_unset_font() { return get_default_font(); }
 
 inline graphics::RenderTextureType load_render_texture(int, int) {
   log_error("@notimplemented load_render_texture");

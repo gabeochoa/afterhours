@@ -206,6 +206,7 @@ ALL_TESTS := \
 	should_run_overload_test \
 	library_duplicate_test \
 	shared_handlers_test \
+	default_font_test \
 	tab_container_test \
 	small_components_test \
 	text_area_test \
@@ -234,6 +235,7 @@ ALL_TESTS += sokol_include_order_test
 endif
 
 RAYLIB_TESTS := \
+	default_font_test \
 	border_width_test \
 	text_visibility_test \
 	image_tint_test \

@@ -988,8 +988,21 @@ inline void set_mouse_cursor(int cursor_id) {
   sapp_set_mouse_cursor(static_cast<sapp_mouse_cursor>(cursor_id));
 }
 
-inline afterhours::Font get_default_font() { return afterhours::Font(); }
-inline afterhours::Font get_unset_font() { return afterhours::Font(); }
+namespace detail {
+inline afterhours::Font &default_font_override() {
+  static afterhours::Font font{};
+  return font;
+}
+} // namespace detail
+
+inline void set_default_font(afterhours::Font font) {
+  detail::default_font_override() = font;
+}
+inline void clear_default_font() { detail::default_font_override() = {}; }
+inline afterhours::Font get_default_font() {
+  return detail::default_font_override();
+}
+inline afterhours::Font get_unset_font() { return get_default_font(); }
 
 // Reused across render textures. Not destroyed on unload: sokol_gl's pipeline
 // pool is not reachable from here, so destroying a context strands its
