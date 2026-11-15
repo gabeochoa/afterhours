@@ -63,9 +63,21 @@ struct input : developer::Plugin {
         // presented render texture and a hit test cannot drift apart. This
         // arithmetic used to live here and nowhere else, and consumers kept a
         // copy in step by comment.
+        // GetScreenWidth/Height return device (framebuffer) pixels on scaled
+        // Windows (GetRenderWidth magnitude) while GetMousePosition reports
+        // logical units, so mapping with the framebuffer size over-divides
+        // and floats the hit point toward the top-left. Use the logical
+        // render size divided by the DPI scale, matching the content
+        // resolution; a no-op at 1x, where the two agree.
+        const auto dpi = raylib::GetWindowScaleDPI();
+        const int win_w = static_cast<int>(static_cast<float>(
+                               raylib::GetRenderWidth()) /
+                           std::max(1.0f, dpi.x));
+        const int win_h = static_cast<int>(static_cast<float>(
+                               raylib::GetRenderHeight()) /
+                           std::max(1.0f, dpi.y));
         const Vector2Type mapped = window_manager::window_to_content(
-            Vector2Type{raw.x, raw.y}, raylib::GetScreenWidth(),
-            raylib::GetScreenHeight());
+            Vector2Type{raw.x, raw.y}, win_w, win_h);
         return {mapped.x, mapped.y};
     }
     static MousePosition get_mouse_delta() {
