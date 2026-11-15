@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <functional>
 #include <string>
+#include <utility>
 
 namespace afterhours::graphics {
 enum class DisplayMode { Windowed, Headless };
