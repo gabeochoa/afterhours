@@ -496,6 +496,15 @@ class E2ERunner {
         return failed_ || get_command_error_count() > 0;
     }
     bool has_timed_out() const { return timed_out_; }
+    /// True when the next tick will still sit inside a plain `wait` with no
+    /// command pending, so nothing reads this frame's render. Hosts can skip
+    /// rendering those frames; the last frame of each wait reports false.
+    bool is_idle_waiting() const {
+        if (index_ == 0 || index_ > commands_.size()) return false;
+        if (commands_[index_ - 1].name != "wait") return false;
+        if (wait_time_ <= 0) return false;
+        return !has_pending_commands();
+    }
     bool has_commands() const { return !commands_.empty(); }
     float elapsed_time() const { return elapsed_time_; }
 
