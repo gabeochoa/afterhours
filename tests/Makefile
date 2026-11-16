@@ -73,6 +73,7 @@ ALL_TESTS := \
 	scroll_input_gate_test \
 	middle_click_test \
 	wheel_input_test \
+	click_count_test \
 	command_picker_test \
 	command_picker_ui_test \
 	terminal_test \
@@ -291,6 +292,7 @@ endif
 RAYLIB_TESTS := \
 	value_types_test \
 	wrappers_test \
+	click_count_test \
 	edit_keys_test \
 	default_font_test \
 	load_font_size_test \
