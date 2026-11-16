@@ -293,6 +293,10 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   void set_focus(EntityID id, FocusSource src = FocusSource::Explicit,
                  const std::source_location loc =
                      std::source_location::current()) {
+    if (id >= 0)
+      if (OptEntity e = UICollectionHolder::getEntityForID(id);
+          e.has_value() && e.asE().has<FocusProxy>())
+        id = e.asE().get<FocusProxy>().target;
     // Only a change is news. try_to_grab re-asserts focus every frame, so
     // recording every write would report the grab and bury whatever actually
     // moved focus, which is the question worth answering.
