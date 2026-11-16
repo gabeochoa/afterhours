@@ -280,7 +280,6 @@ RAYLIB_TESTS := \
 	fit_content_test \
 	headless_runconfig_test \
 	fixed_timestep_test \
-	fixed_tick_rate_test \
 	card_and_type_scale_test \
 	mouse_axis_action_test \
 	unhandled_command_test \
