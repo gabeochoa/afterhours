@@ -196,6 +196,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   auto field_result = div(ctx, mk(entity, 0), field_config);
 
   auto &field_entity = field_result.ent();
+  field_entity.template addComponentIfMissing<ConsumesDirectionalInput>();
   auto &field_cmp = field_entity.template get<UIComponent>();
 
   // Calculate viewport dimensions
