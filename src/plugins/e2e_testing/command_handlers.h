@@ -529,6 +529,21 @@ struct HandleWaitFramesCommand : System<PendingE2ECommand> {
     }
 };
 
+struct HandleWaitWallCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("wait_wall")) return;
+        if (!cmd.wall_deadline) {
+            cmd.fail("wait_wall dispatched without a wall deadline");
+            return;
+        }
+        if (std::chrono::steady_clock::now() < *cmd.wall_deadline)
+            cmd.retry();
+        else
+            cmd.consume();
+    }
+};
+
 // Handle 'expect_text "text"' command - checks visible text
 // This command retries across frames until text is found or timeout occurs
 struct HandleExpectTextCommand : System<PendingE2ECommand> {
@@ -1040,8 +1055,11 @@ struct E2ECommandCleanupSystem : System<PendingE2ECommand> {
     // must not be cleaned up or timed out this frame.
     static bool retry_wait_until(PendingE2ECommand &cmd, float dt) {
         if (cmd.is_consumed() && cmd.succeeded()) return true;
-        cmd.retry_budget -= dt;
-        if (cmd.retry_budget <= 0.f) {
+        const bool expired =
+            cmd.wall_deadline
+                ? std::chrono::steady_clock::now() >= *cmd.wall_deadline
+                : (cmd.retry_budget -= dt) <= 0.f;
+        if (expired) {
             std::string last = cmd.is_consumed() ? cmd.error_message
                                                  : cmd.last_mismatch;
             if (last.empty())
@@ -1050,8 +1068,10 @@ struct E2ECommandCleanupSystem : System<PendingE2ECommand> {
                     cmd.recognised ? ""
                                    : "; nothing consumed or retried it, is its "
                                      "handler registered on this SystemManager?");
-            cmd.fail(std::format("wait_until {}s: {}", cmd.wait_until_seconds,
-                                 last));
+            cmd.fail(std::format("{} {}s: {}",
+                                 cmd.wall_deadline ? "wait_until_wall"
+                                                   : "wait_until",
+                                 cmd.wait_until_seconds, last));
             return true;
         }
         if (cmd.is_consumed()) {

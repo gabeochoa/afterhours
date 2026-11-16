@@ -236,6 +236,117 @@ TEST(wait_until_dispatch_carries_the_retry_budget) {
   CHECK(saw);
 }
 
+template <typename OnPending>
+static void pump(E2ERunner &runner, float dt, int max_frames,
+                 OnPending on_pending) {
+  auto &coll = EntityHelper::get_default_collection();
+  E2ECommandCleanupSystem cleanup;
+  HandleWaitCommand wait;
+  HandleWaitWallCommand wait_wall;
+  for (int frame = 0; frame < max_frames && !runner.is_finished(); ++frame) {
+    runner.tick(dt);
+    coll.merge_entity_arrays();
+    for (auto &e : coll.get_entities()) {
+      if (!e || !e->has<PendingE2ECommand>()) continue;
+      auto &command = e->get<PendingE2ECommand>();
+      if (command.is_consumed()) continue;
+      wait.for_each_with(*e, command, dt);
+      wait_wall.for_each_with(*e, command, dt);
+      on_pending(command);
+      cleanup.for_each_with(*e, command, dt);
+    }
+  }
+}
+
+TEST(wait_wall_counts_real_seconds_whatever_the_dt) {
+  for (float dt : {0.25f, 1e-4f}) {
+    ScriptFile file("wait_wall 0.2\ncustom_after_wall_xyz\n");
+    ui_test::ImmTestHarness h;
+    reset_command_error_count();
+    E2ERunner runner;
+    runner.set_timeout(1.f);
+    runner.load_script(file.path.string());
+    const auto start = std::chrono::steady_clock::now();
+    std::chrono::duration<float> waited{};
+    bool idle_during_wall = false;
+    pump(runner, dt, 1000000, [&](PendingE2ECommand &command) {
+      if (command.name == "wait_wall")
+        idle_during_wall = idle_during_wall || runner.is_idle_waiting();
+      if (command.name == "custom_after_wall_xyz") {
+        waited = std::chrono::steady_clock::now() - start;
+        command.consume();
+      }
+    });
+    CHECK(runner.is_finished());
+    CHECK(!runner.has_timed_out());
+    CHECK(!runner.has_failed());
+    CHECK(waited.count() >= 0.2f);
+    CHECK(waited.count() < 2.f);
+    CHECK(!idle_during_wall);
+  }
+}
+
+TEST(wait_still_counts_scaled_dt) {
+  ScriptFile file("wait 1\ncustom_after_wait_xyz\n");
+  ui_test::ImmTestHarness h;
+  E2ERunner runner;
+  runner.load_script(file.path.string());
+  auto &coll = EntityHelper::get_default_collection();
+  int dispatched_at = -1;
+  bool idle_during_wait = false;
+  for (int frame = 0; frame < 8 && dispatched_at < 0; ++frame) {
+    runner.tick(0.25f);
+    idle_during_wait = idle_during_wait || runner.is_idle_waiting();
+    coll.merge_entity_arrays();
+    for (auto &e : coll.get_entities()) {
+      if (!e || !e->has<PendingE2ECommand>()) continue;
+      auto &command = e->get<PendingE2ECommand>();
+      if (command.name == "custom_after_wait_xyz") dispatched_at = frame;
+      command.consume();
+    }
+  }
+  CHECK(idle_during_wait);
+  CHECK(dispatched_at == 5);
+}
+
+TEST(wait_until_wall_holds_the_script_timeout_until_its_deadline) {
+  ScriptFile file("wait_until_wall 0.2 custom_cond_xyz\n");
+  ui_test::ImmTestHarness h;
+  reset_command_error_count();
+  E2ERunner runner;
+  runner.set_timeout(0.5f);
+  runner.load_script(file.path.string());
+  const auto start = std::chrono::steady_clock::now();
+  pump(runner, 0.25f, 1000000, [&](PendingE2ECommand &command) {
+    if (command.name != "custom_cond_xyz") return;
+    if (std::chrono::steady_clock::now() - start >
+        std::chrono::milliseconds(100))
+      command.consume();
+    else
+      command.retry_with("worker still busy");
+  });
+  CHECK(runner.is_finished());
+  CHECK(!runner.has_timed_out());
+  CHECK(!runner.has_failed());
+}
+
+TEST(wait_until_wall_fails_the_script_when_its_deadline_passes) {
+  ScriptFile file("wait_until_wall 0.1 custom_cond_xyz\n");
+  ui_test::ImmTestHarness h;
+  reset_command_error_count();
+  E2ERunner runner;
+  runner.set_timeout(0.5f);
+  runner.load_script(file.path.string());
+  pump(runner, 0.25f, 1000000, [](PendingE2ECommand &command) {
+    if (command.name == "custom_cond_xyz")
+      command.retry_with("worker still busy");
+  });
+  CHECK(runner.is_finished());
+  CHECK(!runner.has_timed_out());
+  CHECK(runner.has_failed());
+  reset_command_error_count();
+}
+
 // registerSingleton emplaces: a second registration is a no-op that keeps
 // pointing at the first harness's (destroyed) entity, so get_singleton_cmp
 // returns null even though has_singleton is true. Erase before re-registering.
