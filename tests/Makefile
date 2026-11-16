@@ -103,6 +103,7 @@ ALL_TESTS := \
 	input_binding_codec_test \
 	input_prompts_test \
 	input_device_activity_test \
+	input_chord_specificity_test \
 	file_watcher_test \
 	render_capture_test \
 	charts_test \

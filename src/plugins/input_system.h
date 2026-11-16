@@ -1070,20 +1070,23 @@ struct input : developer::Plugin {
     // TextSelectLeft (exclusive), don't also fire WidgetLeft (permissive LEFT).
     static void suppress_permissive_duplicates(std::vector<ActionDone> &actions) {
         // Collect keys claimed by exclusive chord matches
-        std::vector<KeyCode> claimed_keys;
+        std::vector<std::pair<KeyCode, uint8_t>> claimed;
         for (const auto &ad : actions) {
             if (ad.medium == DeviceMedium::Keyboard &&
                 ad.has_explicit_modifiers && ad.matched_key != 0) {
-                claimed_keys.push_back(ad.matched_key);
+                claimed.emplace_back(ad.matched_key, ad.required_modifiers);
             }
         }
-        if (claimed_keys.empty()) return;
+        if (claimed.empty()) return;
 
         std::erase_if(actions, [&](const ActionDone &ad) {
-            if (ad.medium != DeviceMedium::Keyboard || ad.has_explicit_modifiers)
-                return false;
-            for (KeyCode k : claimed_keys) {
-                if (ad.matched_key == k) return true;
+            if (ad.medium != DeviceMedium::Keyboard) return false;
+            for (const auto &[key, mods] : claimed) {
+                if (ad.matched_key != key) continue;
+                if (!ad.has_explicit_modifiers) return true;
+                if (mods != ad.required_modifiers &&
+                    (mods & ad.required_modifiers) == ad.required_modifiers)
+                    return true;
             }
             return false;
         });
