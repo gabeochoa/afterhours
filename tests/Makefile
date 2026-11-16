@@ -128,6 +128,7 @@ ALL_TESTS := \
 	card_and_type_scale_test \
 	fixed_timestep_test \
 	headless_runconfig_test \
+	harness_spellings_test \
 	fit_content_test \
 	label_inset_test \
 	text_memo_test \
@@ -278,6 +279,7 @@ RAYLIB_TESTS := \
 	label_inset_test \
 	fit_content_test \
 	headless_runconfig_test \
+	harness_spellings_test \
 	fixed_timestep_test \
 	card_and_type_scale_test \
 	mouse_axis_action_test \
