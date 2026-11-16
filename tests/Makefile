@@ -127,6 +127,7 @@ ALL_TESTS := \
 	mouse_axis_action_test \
 	card_and_type_scale_test \
 	fixed_timestep_test \
+	graphics_concepts_pedantic_test \
 	headless_runconfig_test \
 	fit_content_test \
 	label_inset_test \
@@ -334,6 +335,8 @@ $(OUT)/touch_target_single_test: touch_target_single_test.cpp
 $(OUT)/entity_mapping_test: ../examples/entity_mapping_test_helper.cpp
 $(OUT)/entity_mapping_test: INCLUDES_T += -I../examples
 $(OUT)/random_engine_test:  CXXFLAGS_T += -DAFTER_HOURS_ENABLE_RANDOM
+$(OUT)/graphics_concepts_pedantic_test: CXXFLAGS_T += -Wpedantic -Werror
+$(OUT)/graphics_concepts_pedantic_test: INCLUDES_T = -I$(INCLUDE_ROOT) -isystem $(AFTERHOURS_ROOT)/vendor -isystem $(BREW_PREFIX)/include
 $(OUT)/sound_volume_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/sound_volume_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
