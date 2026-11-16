@@ -44,8 +44,9 @@ struct HandleTypeCommand : System<PendingE2ECommand> {
 
         // Clear any leftover chars before pushing new ones
         test_input::clear_queue();
-        for (char c : cmd.arg(0)) {
-            test_input::push_char(c);
+        if (!test_input::push_text(cmd.arg(0))) {
+            cmd.fail("type text is not valid UTF-8");
+            return;
         }
         cmd.consume();
     }

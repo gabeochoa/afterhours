@@ -121,6 +121,7 @@ ALL_TESTS := \
 	singleton_iteration_test \
 	press_delay_test \
 	e2e_key_command_test \
+	e2e_type_command_test \
 	overlay_layer_test \
 	unhandled_command_test \
 	e2e_retry_test \
