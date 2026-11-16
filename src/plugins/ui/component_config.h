@@ -84,6 +84,7 @@ struct ComponentConfig {
   Theme::Usage color_usage = Theme::Usage::Default;
   std::optional<Color> custom_color;
   std::optional<Color> hover_color; // Per-component hover background override
+  std::optional<bool> skip_hover_override;
   // Text color settings (explicit override)
   Theme::Usage text_color_usage = Theme::Usage::Default;
   std::optional<Color> custom_text_color;
@@ -119,6 +120,7 @@ struct ComponentConfig {
   bool ignore_pointer_events = false; // invisible to hit-testing
   bool inert = false;
   bool takes_focus = true;
+  bool hoverable = false;
   // User data, not localizable copy: the pseudo-locale stress leaves this
   // label (and this component's RTL mirroring) alone.
   bool pseudo_locale_exempt = false;
@@ -395,6 +397,10 @@ struct ComponentConfig {
     hover_color = color;
     return *this;
   }
+  ComponentConfig &with_skip_hover_override(bool skip = true) {
+    skip_hover_override = skip;
+    return *this;
+  }
 
   // Backwards-compatible aliases kept intentionally while call sites migrate.
   ComponentConfig &with_color_usage(Theme::Usage usage) {
@@ -645,6 +651,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_takes_focus(bool takes = true) {
     takes_focus = takes;
+    return *this;
+  }
+  ComponentConfig &with_hoverable(bool on = true) {
+    hoverable = on;
     return *this;
   }
   ComponentConfig &with_pseudo_locale_exempt(bool exempt = true) {
@@ -1165,6 +1175,8 @@ struct ComponentConfig {
       merged.inert = true;
     if (!overrides.takes_focus)
       merged.takes_focus = false;
+    if (overrides.hoverable)
+      merged.hoverable = true;
     if (overrides.pseudo_locale_exempt)
       merged.pseudo_locale_exempt = true;
     if (overrides.selects_on_focus())
@@ -1270,6 +1282,8 @@ struct ComponentConfig {
     // Colour and corner detail
     if (overrides.hover_color.has_value())
       merged.hover_color = overrides.hover_color;
+    if (overrides.skip_hover_override.has_value())
+      merged.skip_hover_override = overrides.skip_hover_override;
     // Defaults true, so only a caller turning it off can be detected.
     if (!overrides.auto_text_color)
       merged.auto_text_color = false;

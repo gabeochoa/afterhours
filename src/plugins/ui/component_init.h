@@ -188,6 +188,10 @@ inline void apply_flags(Entity &entity, const ComponentConfig &config) {
     entity.removeComponentIfExists<DoesNotTakeFocus>();
   else
     entity.addComponentIfMissing<DoesNotTakeFocus>();
+  if (config.hoverable)
+    entity.addComponentIfMissing<Hoverable>();
+  else
+    entity.removeComponentIfExists<Hoverable>();
   if (config.skip_grid_snap)
     entity.get<UIComponent>().skip_grid_snap = true;
   if (config.select_on_focus)
@@ -518,6 +522,8 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   if (config.hover_color.has_value() && entity.has<HasColor>()) {
     entity.get<HasColor>().hover_color = config.hover_color;
   }
+  if (config.skip_hover_override.has_value() && entity.has<HasColor>())
+    entity.get<HasColor>().skip_hover_override = *config.skip_hover_override;
   if (config.image_tint.has_value()) {
     entity.addComponentIfMissing<HasImageTint>(*config.image_tint).color =
         *config.image_tint;

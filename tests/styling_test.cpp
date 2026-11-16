@@ -139,6 +139,20 @@ TEST(hover_color_applies) {
   }
 }
 
+TEST(skip_hover_override_applies_and_can_be_turned_back_off) {
+  ImmTestHarness h;
+  auto skips = [&](bool skip) {
+    Entity &e = div(h.context(), mk(h.root(), 0),
+                    ComponentConfig{}
+                        .with_custom_background(Color{40, 40, 40, 255})
+                        .with_skip_hover_override(skip))
+                    .ent();
+    return e.has<HasColor>() && e.get<HasColor>().skip_hover_override;
+  };
+  CHECK(skips(true));
+  CHECK(!skips(false));
+}
+
 TEST(opacity_applies_when_set) {
   ImmTestHarness h;
   auto d = div(h.context(), mk(h.root(), 0),

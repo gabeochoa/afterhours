@@ -858,7 +858,8 @@ private:
   // Every guard HandleClicks applies before it would fire, so resolution and
   // firing agree on who is eligible.
   bool is_candidate(const Entity &e, const UIComponent &cmp) const {
-    if (e.is_missing<HasClickListener>() && e.is_missing<HasDragListener>())
+    if (e.is_missing<HasClickListener>() && e.is_missing<HasDragListener>() &&
+        e.is_missing<Hoverable>())
       return false;
     // Opted out of hit-testing entirely: the element behind it wins instead.
     if (e.has<IgnorePointerEvents>() || detail::in_inert_subtree(e))
