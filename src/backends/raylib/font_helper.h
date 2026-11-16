@@ -161,7 +161,7 @@ inline raylib::Font load_font_from_file(const char *file, int size = 0) {
                       : raylib::LoadFont(file);
   }
   // Glyphs but no texture is the headless case, and it draws nothing.
-  if (font.texture.id == 0)
+  if (font.texture.id == 0 && raylib::IsWindowReady())
     font = build_font_atlas(file, px, cps.data(), (int)cps.size());
   prepare_font_texture(font);
   record_font_coverage(font, file);
@@ -245,7 +245,7 @@ load_font_from_file_with_codepoints(const char *file, int *codepoints,
   }
   raylib::Font font = raylib::LoadFontEx(file, size, codepoints, codepoint_count);
   // See load_font_from_file: no GL context means no texture.
-  if (font.texture.id == 0)
+  if (font.texture.id == 0 && raylib::IsWindowReady())
     font = build_font_atlas(file, size, codepoints, codepoint_count);
   prepare_font_texture(font);
   record_font_coverage(font, file);
