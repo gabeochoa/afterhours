@@ -283,6 +283,33 @@ inline int key_from_name(const std::string &name) {
   return 0;
 }
 
+inline int gamepad_button_from_name(const std::string &name) {
+  static constexpr std::array<std::string_view, 18> names = {
+      "UNKNOWN",         "LEFT_FACE_UP",     "LEFT_FACE_RIGHT",
+      "LEFT_FACE_DOWN",  "LEFT_FACE_LEFT",   "RIGHT_FACE_UP",
+      "RIGHT_FACE_RIGHT", "RIGHT_FACE_DOWN", "RIGHT_FACE_LEFT",
+      "LEFT_TRIGGER_1",  "LEFT_TRIGGER_2",   "RIGHT_TRIGGER_1",
+      "RIGHT_TRIGGER_2", "MIDDLE_LEFT",      "MIDDLE",
+      "MIDDLE_RIGHT",    "LEFT_THUMB",       "RIGHT_THUMB"};
+  const std::string upper = detail::to_upper(name);
+  for (size_t i = 1; i < names.size(); ++i) {
+    if (names[i] == upper)
+      return static_cast<int>(i);
+  }
+  return -1;
+}
+
+inline int gamepad_axis_from_name(const std::string &name) {
+  static constexpr std::array<std::string_view, 6> names = {
+      "LEFT_X", "LEFT_Y", "RIGHT_X", "RIGHT_Y", "LEFT_TRIGGER", "RIGHT_TRIGGER"};
+  const std::string upper = detail::to_upper(name);
+  for (size_t i = 0; i < names.size(); ++i) {
+    if (names[i] == upper)
+      return static_cast<int>(i);
+  }
+  return -1;
+}
+
 // Key combo with modifiers
 struct KeyCombo {
   bool ctrl = false;
