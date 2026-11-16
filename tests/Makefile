@@ -233,6 +233,7 @@ ALL_TESTS += sokol_geometry_test
 ALL_TESTS += sokol_hidpi_test
 ALL_TESTS += sokol_resize_test
 ALL_TESTS += sokol_include_order_test
+ALL_TESTS += staging_texture_leak_test
 endif
 
 RAYLIB_TESTS := \
@@ -380,6 +381,11 @@ $(OUT)/sokol_resize_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_include_order_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_include_order_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_include_order_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+
+$(OUT)/staging_texture_leak_test: ../examples/web/sokol_impl.cc
+$(OUT)/staging_texture_leak_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/staging_texture_leak_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/staging_texture_leak_test: ../src/backends/sokol/capture_impl.h
 
 $(OUT)/render_capture_metal_test: render_capture_test.cpp ../examples/web/sokol_impl.cc
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@

@@ -149,8 +149,12 @@ static uint8_t *metal_read_image_pixels(sg_image img_id, int width,
   size_t row_bytes = static_cast<size_t>(width) * bpp;
   auto *bgra = static_cast<uint8_t *>(
       malloc(row_bytes * static_cast<size_t>(height)));
-  if (!bgra)
+  if (!bgra) {
+#if !__has_feature(objc_arc)
+    [staged release];
+#endif
     return nullptr;
+  }
 
   MTLRegion region = MTLRegionMake2D(0, 0,
                                      static_cast<NSUInteger>(width),
@@ -159,6 +163,9 @@ static uint8_t *metal_read_image_pixels(sg_image img_id, int width,
          bytesPerRow:row_bytes
           fromRegion:region
          mipmapLevel:0];
+#if !__has_feature(objc_arc)
+  [staged release];
+#endif
 
   // BGRA -> RGBA in-place
   size_t total = static_cast<size_t>(width) * static_cast<size_t>(height);
