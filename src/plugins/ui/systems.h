@@ -275,6 +275,15 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
       context.mouse.middle_just_released =
           prev_middle_down && !context.mouse.middle_down;
 
+      context.mouse.clock_s += dt;
+      if (context.mouse.just_released) {
+        if (context.mouse.press_moved) {
+          context.mouse.reset_click_count();
+        } else {
+          context.mouse.note_click(context.mouse.clock_s, context.hot_id);
+        }
+      }
+
       if (context.mouse.just_pressed) {
         context.mouse.press_pos = context.mouse.pos;
         context.mouse.press_moved = false;

@@ -125,10 +125,36 @@ struct MousePointerState {
   bool middle_down = false;
   bool middle_just_pressed = false;
   bool middle_just_released = false;
+  int click_count = 0;
+  float clock_s = 0.f;
+  float last_click_time = -1.f;
+  input::MousePosition last_click_pos{};
+  EntityID last_click_target = -1;
+  static constexpr float multi_click_time_s = 0.4f;
+  [[nodiscard]] int note_click(float now, EntityID target) {
+    const float dx = pos.x - last_click_pos.x;
+    const float dy = pos.y - last_click_pos.y;
+    const bool within = last_click_time >= 0.f &&
+                        (now - last_click_time) < multi_click_time_s &&
+                        (dx * dx + dy * dy) <=
+                            multi_click_dist_px * multi_click_dist_px &&
+                        target == last_click_target;
+    click_count = within ? (click_count >= 3 ? 1 : click_count + 1) : 1;
+    last_click_time = now;
+    last_click_pos = pos;
+    last_click_target = target;
+    return click_count;
+  }
+  void reset_click_count() {
+    click_count = 0;
+    last_click_time = -1.f;
+    last_click_target = -1;
+  }
   input::MousePosition press_pos{};
   bool press_moved = false;
   bool moved_this_frame = false; // pos changed since last frame (any button)
   static constexpr float press_drag_threshold_px = 6.0f;
+  static constexpr float multi_click_dist_px = press_drag_threshold_px;
   // Below this, the cursor is parked. An exact compare made sub-pixel jitter
   // (a hi-DPI position rescaled to render space flickers in the last mantissa
   // bit) read as intent, which is enough to yank focus away from the keyboard.
@@ -464,6 +490,22 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     if (contains_in_subtree(id, prev_hot_id))
       return true;
     warn_if_not_hit_testable(id, "is_middle_click");
+    return false;
+  }
+  [[nodiscard]] bool is_double_click(EntityID id) const {
+    if (!mouse.just_released || mouse.click_count != 2)
+      return false;
+    if (contains_in_subtree(id, prev_hot_id))
+      return true;
+    warn_if_not_hit_testable(id, "is_double_click");
+    return false;
+  }
+  [[nodiscard]] bool is_triple_click(EntityID id) const {
+    if (!mouse.just_released || mouse.click_count != 3)
+      return false;
+    if (contains_in_subtree(id, prev_hot_id))
+      return true;
+    warn_if_not_hit_testable(id, "is_triple_click");
     return false;
   }
   /// Previous frame's answer. Use this while building a screen: hot_id is not
