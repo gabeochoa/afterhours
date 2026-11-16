@@ -312,12 +312,14 @@ class E2ERunner {
         commands_ = parse_script(path);
         script_path_ = path;
         reset();
+        test_input::detail::e2e_running = true;
     }
 
     void load_scripts_from_directory(const std::string &dir) {
         commands_.clear();
         script_results_.clear();
         reset();
+        test_input::detail::e2e_running = true;
 
         std::vector<std::string> scripts;
         for (const auto &entry : std::filesystem::directory_iterator(dir)) {

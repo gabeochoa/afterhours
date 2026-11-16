@@ -17,6 +17,7 @@ struct KeyPress {
 };
 
 namespace detail {
+inline bool e2e_running = false;
 inline std::queue<KeyPress> key_queue;
 inline bool test_mode = false;
 inline bool key_consumed = false;
@@ -307,5 +308,7 @@ inline bool is_mouse_button_released(int button, BackendFn backend_fn) {
 }
 
 } // namespace test_input
+
+inline bool is_e2e_running() { return test_input::detail::e2e_running; }
 } // namespace testing
 } // namespace afterhours
