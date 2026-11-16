@@ -13,6 +13,10 @@ namespace afterhours {
 using Font = FontType;
 
 inline Font load_font_from_file(const char *, int = 0) { return Font(); }
+inline Font load_font_from_memory(const unsigned char *, int, const char *,
+                                  int = 0) {
+  return Font();
+}
 inline Font load_font_from_file_with_codepoints(const char *, int *, int) {
   log_warn("Codepoint-based font loading not supported without a backend");
   return Font();
