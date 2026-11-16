@@ -144,6 +144,7 @@ ALL_TESTS := \
 	entity_mapping_test \
 	files_atomic_write_test \
 	files_resource_path_test \
+	files_cache_path_test \
 	capture_test \
 	polyline_test \
 	measure_memo_test \
@@ -338,6 +339,7 @@ $(OUT)/sound_volume_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/sound_volume_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
+$(OUT)/files_cache_path_test: ../src/plugins/files.cpp
 $(OUT)/bundle_test: ../src/plugins/files.cpp
 $(OUT)/file_watcher_test: ../src/plugins/file_watcher.cpp
 ifeq ($(UNAME_S),Darwin)
