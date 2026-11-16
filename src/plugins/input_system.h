@@ -29,6 +29,9 @@ struct input : developer::Plugin {
     static constexpr float DEADZONE = 0.25f;
     static constexpr float MOUSE_DELTA_SCALE = 40.f;
     static constexpr int MAX_GAMEPAD_ID = 8;
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    static_assert(testing::input_injector::GAMEPAD_COUNT == MAX_GAMEPAD_ID);
+#endif
 
     struct ProvidesInputConfig : BaseComponent {
         float gamepad_deadzone = DEADZONE;
@@ -125,7 +128,12 @@ struct input : developer::Plugin {
 #endif
     }
     static bool is_gamepad_available(const GamepadID id) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_gamepad_available(
+            id, raylib::IsGamepadAvailable);
+#else
         return raylib::IsGamepadAvailable(id);
+#endif
     }
     static bool is_key_pressed(const KeyCode keycode) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
@@ -178,15 +186,30 @@ struct input : developer::Plugin {
     }
     static float get_gamepad_axis_mvt(const GamepadID gamepad_id,
                                       const GamepadAxis axis) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::get_gamepad_axis(
+            gamepad_id, axis, raylib::GetGamepadAxisMovement);
+#else
         return raylib::GetGamepadAxisMovement(gamepad_id, axis);
+#endif
     }
     static bool is_gamepad_button_pressed(const GamepadID gamepad_id,
                                           const GamepadButton button) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_gamepad_button_pressed(
+            gamepad_id, button, raylib::IsGamepadButtonPressed);
+#else
         return raylib::IsGamepadButtonPressed(gamepad_id, button);
+#endif
     }
     static bool is_gamepad_button_down(const GamepadID gamepad_id,
                                        const GamepadButton button) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_gamepad_button_down(
+            gamepad_id, button, raylib::IsGamepadButtonDown);
+#else
         return raylib::IsGamepadButtonDown(gamepad_id, button);
+#endif
     }
 
     static void draw_text(const std::string &text, const int x, const int y,
@@ -646,6 +669,27 @@ struct input : developer::Plugin {
 
     // Gamepad not yet supported on Metal — return safe defaults silently
     // since the input system polls these every frame.
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    static bool is_gamepad_available(const GamepadID id) {
+        return testing::test_input::is_gamepad_available(
+            id, [](int) { return false; });
+    }
+    static float get_gamepad_axis_mvt(const GamepadID id,
+                                      const GamepadAxis axis) {
+        return testing::test_input::get_gamepad_axis(
+            id, axis, [](int, int) { return 0.f; });
+    }
+    static bool is_gamepad_button_pressed(const GamepadID id,
+                                          const GamepadButton button) {
+        return testing::test_input::is_gamepad_button_pressed(
+            id, button.value, [](int, int) { return false; });
+    }
+    static bool is_gamepad_button_down(const GamepadID id,
+                                       const GamepadButton button) {
+        return testing::test_input::is_gamepad_button_down(
+            id, button.value, [](int, int) { return false; });
+    }
+#else
     static bool is_gamepad_available(const GamepadID) { return false; }
     static float get_gamepad_axis_mvt(const GamepadID, const GamepadAxis) {
         return 0.f;
@@ -657,6 +701,7 @@ struct input : developer::Plugin {
     static bool is_gamepad_button_down(const GamepadID, const GamepadButton) {
         return false;
     }
+#endif
 
     static void draw_text(const std::string &, const int, const int,
                           const int) {

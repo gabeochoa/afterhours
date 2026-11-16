@@ -121,6 +121,7 @@ ALL_TESTS := \
 	singleton_iteration_test \
 	press_delay_test \
 	graphics_key_injection_test \
+	e2e_gamepad_test \
 	e2e_key_command_test \
 	overlay_layer_test \
 	unhandled_command_test \
@@ -286,6 +287,7 @@ RAYLIB_TESTS := \
 	overlay_layer_test \
 	press_delay_test \
 	graphics_key_injection_test \
+	e2e_gamepad_test \
 	text_wrap_test \
 	theme_io_test \
 	tree_view_test \
@@ -318,7 +320,7 @@ $(RAYLIB_BINS): LDFLAGS_T  = $(LDFLAGS_RAYLIB)
 # with no window, so the modifier half of a chord cannot be tested at all.
 $(OUT)/input_device_activity_test: LDFLAGS_T = $(subst $(RAYLIB_LIB)/libraylib.a,-L$(RAYLIB_LIB) -lraylib,$(LDFLAGS_RAYLIB))
 
-$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
+$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/e2e_gamepad_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 
 # Filter to sources: the .d files list every header as a prerequisite, and a
 # bare $^ would hand them all to clang. .cc is the sokol implementation TU.
