@@ -7,6 +7,7 @@
 #include <string>
 
 #include "../../developer.h"
+#include "../../warn_once.h"
 
 namespace afterhours {
 
@@ -31,13 +32,6 @@ inline Font load_font_for_string(const std::string &, const std::string &,
 }
 // Text measurement seam.
 //
-// The warnings below have always told callers to "provide your own through
-// set_measure_text_fn()", but no such setter existed for this backend -- so
-// measure_text returned {0,0} and anything that branches on measured width
-// silently took the "it fits" path. That is why the renderer's ellipsis
-// truncation could never be tested: text_size.x of 0 is <= any max_width, so
-// the truncation code returned early every time.
-//
 // AutoLayout has its own hook (set_measure_text_fn on the layout object) but
 // the renderer calls this free function directly, so it needs its own.
 using MeasureTextFn =
@@ -56,10 +50,11 @@ inline Vector2Type measure_text(const Font, const char *text, const float size,
                                 const float spacing) {
   if (measure_text_fn())
     return measure_text_fn()(text ? text : "", size, spacing);
-  log_warn("Text size measuring not supported. Either use "
-           "AFTER_HOURS_USE_RAYLIB or provide your own through "
-           "set_measure_text_fn()");
-  return Vector2Type{0, 0};
+  warn_once(0, "no backend to measure text, so it is estimated at 0.5x its "
+               "height per byte, the same estimate raylib uses headless. "
+               "Install set_measure_text_fn() for real widths.");
+  const size_t len = text ? std::strlen(text) : 0;
+  return Vector2Type{static_cast<float>(len) * size * 0.5f, size};
 }
 inline Vector2Type measure_text_utf8(const Font f, const char *text,
                                      const float size, const float spacing) {
