@@ -191,6 +191,11 @@ inline void apply_flags(Entity &entity, const ComponentConfig &config) {
     entity.removeComponentIfExists<HasClickActivationMode>();
   }
 
+  if (config.disabled)
+    entity.addComponentIfMissing<IsDisabled>();
+  else
+    entity.removeComponentIfExists<IsDisabled>();
+
   if (config.hidden) {
     entity.addComponentIfMissing<ShouldHide>();
   } else {

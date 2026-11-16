@@ -854,7 +854,7 @@ private:
       return false;
     if (cmp.should_hide || e.has<ShouldHide>())
       return false;
-    if (e.has<HasLabel>() && e.get<HasLabel>().is_disabled)
+    if (is_disabled(e))
       return false;
     return context->is_input_allowed(e.id);
   }
@@ -900,7 +900,7 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
     if (component.should_hide || entity.has<ShouldHide>())
       return;
 
-    if (entity.has<HasLabel>() && entity.get<HasLabel>().is_disabled)
+    if (is_disabled(entity))
       return;
 
     // No hit test here: ResolveHitTarget has already picked the single
@@ -1132,7 +1132,7 @@ struct HandleTrayNavigation : SystemWithUIContext<ui::HasTray> {
       // Only navigable if it has a click listener and is rendered
       if (child.has<HasClickListener>() && child.has<UIComponent>() &&
           child.get<UIComponent>().was_rendered_to_screen &&
-          !(child.has<HasLabel>() && child.get<HasLabel>().is_disabled)) {
+          !is_disabled(child)) {
         tray.navigable_children.push_back(child_id);
       }
     }
