@@ -232,6 +232,7 @@ ALL_TESTS += sokol_geometry_test
 # section of sokol_blend_test.
 ALL_TESTS += sokol_hidpi_test
 ALL_TESTS += sokol_resize_test
+ALL_TESTS += sokol_headless_run_test
 ALL_TESTS += sokol_include_order_test
 endif
 
@@ -377,6 +378,9 @@ $(OUT)/sokol_hidpi_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_resize_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_resize_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_resize_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_headless_run_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_headless_run_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_headless_run_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_include_order_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_include_order_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_include_order_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
