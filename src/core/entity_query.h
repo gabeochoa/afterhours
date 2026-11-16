@@ -72,6 +72,18 @@ struct EntityQuery {
         return static_cast<TReturn &>(*this);
     }
 
+    // An id names at most one entity and the collection can already answer
+    // that in O(1), so a scan comparing every id is the slowest spelling of
+    // the most obvious question. Seeds the candidate set instead, leaving the
+    // filter in place so ordering and every other mod behave unchanged.
+    void seed_from_id(const int id) {
+        if (!source || !source_temp_empty || seed.has_value()) return;
+        seed.emplace();
+        const OptEntity found = source->getEntityForID(id);
+        if (found)
+            seed->push_back(source->getEntityAsSharedPtr(found.asE()));
+    }
+
     // -----------------------------------------------------------------------
     // Built-in Modification subclasses (backward-compatible, virtual path).
     // Define SKIP_ENTITY_QUERY_MODIFICATIONS to remove these and use the
@@ -101,18 +113,6 @@ struct EntityQuery {
     };
     TReturn &take(const int amount) { return add_mod(new Limit(amount)); }
     TReturn &first() { return take(1); }
-
-    // An id names at most one entity and the collection can already answer
-    // that in O(1), so a scan comparing every id is the slowest spelling of
-    // the most obvious question. Seeds the candidate set instead, leaving the
-    // filter in place so ordering and every other mod behave unchanged.
-    void seed_from_id(const int id) {
-        if (!source || !source_temp_empty || seed.has_value()) return;
-        seed.emplace();
-        const OptEntity found = source->getEntityForID(id);
-        if (found)
-            seed->push_back(source->getEntityAsSharedPtr(found.asE()));
-    }
 
     // The entities registered under `key` in an index built by
     // EntityCollection::add_index. The filter is always added and is on its
