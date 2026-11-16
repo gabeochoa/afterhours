@@ -72,8 +72,9 @@ template <size_t Capacity = 512> struct Emitter {
       }
       p.vel.x += gravity.x * dt;
       p.vel.y += gravity.y * dt;
-      p.vel.x -= p.vel.x * drag * dt;
-      p.vel.y -= p.vel.y * drag * dt;
+      const float drag_factor = std::exp(-drag * dt);
+      p.vel.x *= drag_factor;
+      p.vel.y *= drag_factor;
       p.pos.x += p.vel.x * dt;
       p.pos.y += p.vel.y * dt;
       p.rotation += p.spin * dt;
