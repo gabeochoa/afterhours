@@ -43,7 +43,10 @@ struct Image {
       std::abort();
     }
     const std::uint8_t *p =
-        rgba.data() + (static_cast<std::size_t>(y) * width + x) * 4;
+        rgba.data() + (static_cast<std::size_t>(y) *
+                           static_cast<std::size_t>(width) +
+                       static_cast<std::size_t>(x)) *
+                          4;
     return Color{p[0], p[1], p[2], p[3]};
   }
 };
@@ -66,7 +69,8 @@ inline std::optional<Image> decode_image(std::span<const std::uint8_t> encoded,
   if (!size)
     return std::nullopt;
   const std::size_t bytes =
-      static_cast<std::size_t>(size->width) * size->height * 4;
+      static_cast<std::size_t>(size->width) *
+      static_cast<std::size_t>(size->height) * 4;
   if (size->width > limits.max_dimension ||
       size->height > limits.max_dimension || bytes > limits.max_bytes) {
     log_warn("decode_image: {}x{} exceeds limits ({} px, {} bytes)",
@@ -84,7 +88,8 @@ inline std::optional<Image> decode_image(std::span<const std::uint8_t> encoded,
   }
   Image image{w, h,
               std::vector<std::uint8_t>(
-                  pixels, pixels + static_cast<std::size_t>(w) * h * 4)};
+                  pixels, pixels + static_cast<std::size_t>(w) *
+                                   static_cast<std::size_t>(h) * 4)};
   stbi_image_free(pixels);
   return image;
 }
