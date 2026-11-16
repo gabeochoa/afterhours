@@ -124,6 +124,20 @@ int main() {
           "and no texture is claimed: there is no GL context to make one");
   }
 
+  {
+    const auto path = std::filesystem::path(AFTERHOURS_TEST_FIXTURES) /
+                      "AtkinsonHyperlegible-Regular.ttf";
+    const raylib::Font font = afterhours::load_font_for_string(
+        "ab\xE2\x98\x83\xC3\xA9", path.string());
+    std::string storage;
+    check(afterhours::drawable_text(font, "a\xE2\x98\x83" "b", storage) ==
+              std::string("a?b"),
+          "an uncovered codepoint draws as a visible replacement");
+    check(afterhours::drawable_text(font, "b\xC3\xA9", storage) ==
+              std::string("b\xC3\xA9"),
+          "covered text is drawn as given");
+  }
+
   // --- ordered teardown ---------------------------------------------------
   {
     afterhours::shutdown();

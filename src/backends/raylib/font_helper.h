@@ -36,6 +36,7 @@ inline std::vector<int> default_codepoints() {
       {0x2500, 0x257F}, // box drawing
       {0x25A0, 0x25FF}, // geometric shapes
       {0x2713, 0x2717}, // check and cross
+      {0xFFFD, 0xFFFD},
   };
   std::vector<int> cps;
   for (const auto &r : kRanges)
@@ -192,6 +193,15 @@ inline bool font_has_glyph(const raylib::Font font, int codepoint) {
   return true;
 }
 
+inline const char *drawable_text(const raylib::Font font, const char *text,
+                                 std::string &storage) {
+  const auto covered = [&](uint32_t cp) {
+    return font_has_glyph(font, static_cast<int>(cp));
+  };
+  return font_coverage::visible_text(text, covered, storage) ? storage.c_str()
+                                                             : text;
+}
+
 // A codepoint the font lacks draws nothing: no box, no warning, no log. Both
 // floatinghotel and hanabi shipped UI with invisible arrows and chevrons and
 // found out by looking. load_font_from_file asks raylib for the default set,
@@ -225,9 +235,8 @@ inline void warn_on_missing_glyphs(const raylib::Font font, const char *text) {
     if (font_has_glyph(font, cp))
       continue;
     warn_once(0x110000 + cp,
-              "font has no glyph for U+{:04X}, which draws nothing at all "
-              "rather than a missing-glyph box. Load the font with codepoints "
-              "for the ranges you use.",
+              "font has no glyph for U+{:04X}, which draws as a replacement "
+              "glyph. Load the font with codepoints for the ranges you use.",
               cp);
   }
 }
@@ -381,8 +390,9 @@ inline raylib::Vector2 measure_text(const raylib::Font font,
   Vector2Type cached{};
   if (measure_memo::lookup(key, cached))
     return cached;
-  const raylib::Vector2 measured =
-      raylib::MeasureTextEx(font, content, size, spacing);
+  std::string shown;
+  const raylib::Vector2 measured = raylib::MeasureTextEx(
+      font, drawable_text(font, content, shown), size, spacing);
   measure_memo::store(key, measured);
   return measured;
 }

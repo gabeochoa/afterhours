@@ -26,6 +26,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ### Visual — re-baseline
 
+- **A codepoint no loaded face covers draws a visible replacement.** It used to draw nothing on raylib (a blank glyph) and the face's `.notdef` on sokol. Now it draws U+FFFD when a face has it, otherwise `?`, and `measure_text` measures that same replacement. A ZWJ emoji sequence or a flag becomes one replacement, and uncovered variation selectors and skin-tone modifiers vanish. U+FFFD joins `default_codepoints()` so raylib loads it when the face has it. Labels with uncovered symbols change pixels and width; load a face that covers them. `drawable_text(font, text, storage)` returns what will be drawn, and `font_coverage::visible_text` is the rule. Covered by `glyph_placeholder_test` and `headless_fallback_test`.
 - **A child overflowing the cross axis is aligned, not dumped at the start.** `AlignItems::Center`/`FlexEnd` used to silently fall back to `FlexStart`; centring now overflows both edges evenly, per CSS. Moved 10 of 98 screens in wm.
 - **Scroll-view children are laid out by autolayout** instead of repositioned afterwards by two drifted copies that double-counted margins. Margined direct children move by one margin, into the right place, and keep the `justify`/`align`/`gap` the old pass discarded.
 - **Cross-axis `expand()` stretches** instead of collapsing to 0, so separators and fills that were invisible now have a size.
