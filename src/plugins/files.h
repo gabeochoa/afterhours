@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <charconv>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -29,6 +30,8 @@ extern "C" __declspec(dllimport) int __stdcall MoveFileExW(const wchar_t *,
                                                            unsigned long);
 extern "C" __declspec(dllimport) unsigned long __stdcall GetLastError();
 #else
+#include <signal.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -71,6 +74,7 @@ inline std::string replace_file(const fs::path &from, const fs::path &to) {
   return "Win32 error " + std::to_string(GetLastError());
 }
 inline std::string sync_dir(const fs::path &) { return {}; }
+inline std::string copy_mode(const fs::path &, int) { return {}; }
 #else
 inline long process_id() { return static_cast<long>(::getpid()); }
 inline int open_new(const fs::path &p) {
@@ -99,6 +103,21 @@ inline std::string sync_dir(const fs::path &dir) {
   std::string err = sync_fd(fd) ? "" : std::strerror(errno);
   ::close(fd);
   return err;
+}
+inline std::string copy_mode(const fs::path &from, int fd) {
+  struct stat existing {};
+  if (::stat(from.c_str(), &existing) != 0)
+    return {};
+  if (::fchmod(fd, existing.st_mode & 07777) != 0)
+    return std::strerror(errno);
+  return {};
+}
+#endif
+#if defined(_WIN32) || defined(__EMSCRIPTEN__)
+inline bool process_alive(long) { return false; }
+#else
+inline bool process_alive(long pid) {
+  return ::kill(static_cast<pid_t>(pid), 0) == 0 || errno != ESRCH;
 }
 #endif
 }
@@ -234,6 +253,9 @@ struct files : developer::Plugin {
       return false;
     };
 
+    if (std::string why = sys::copy_mode(path, fd); !why.empty())
+      return fail("chmod", why);
+
     size_t done = 0;
     while (done < content.size()) {
       const long n =
@@ -273,6 +295,28 @@ struct files : developer::Plugin {
     return ss.str();
   }
 
+  static long temp_writer_pid(std::string_view stem) {
+    const size_t n_dot = stem.rfind('.');
+    if (n_dot == std::string_view::npos || n_dot == 0)
+      return 0;
+    const size_t pid_dot = stem.rfind('.', n_dot - 1);
+    if (pid_dot == std::string_view::npos)
+      return 0;
+    const std::string_view n_part = stem.substr(n_dot + 1);
+    const std::string_view pid_part =
+        stem.substr(pid_dot + 1, n_dot - pid_dot - 1);
+    unsigned long n = 0;
+    long pid = 0;
+    const auto n_end = n_part.data() + n_part.size();
+    const auto pid_end = pid_part.data() + pid_part.size();
+    if (n_part.empty() || std::from_chars(n_part.data(), n_end, n).ptr != n_end)
+      return 0;
+    if (pid_part.empty() ||
+        std::from_chars(pid_part.data(), pid_end, pid).ptr != pid_end)
+      return 0;
+    return pid;
+  }
+
   // Delete leftover temps under `dir`. init() runs it over the config and save
   // dirs. Never recovers data from them: a half-written and a complete temp are
   // indistinguishable, so promoting one could overwrite good data.
@@ -290,6 +334,10 @@ struct files : developer::Plugin {
         continue;
       if (name.compare(name.size() - strlen(TEMP_SUFFIX),
                        strlen(TEMP_SUFFIX), TEMP_SUFFIX) != 0)
+        continue;
+      const long pid =
+          temp_writer_pid(name.substr(0, name.size() - strlen(TEMP_SUFFIX)));
+      if (pid > 0 && files_plugin_internal::process_alive(pid))
         continue;
       std::error_code rm;
       if (fs::remove(it->path(), rm))

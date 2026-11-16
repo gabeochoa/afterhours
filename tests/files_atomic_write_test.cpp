@@ -6,6 +6,7 @@
 #include <afterhours/src/plugins/files.h>
 
 #include <sys/resource.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <atomic>
@@ -227,6 +228,39 @@ int main() {
     check(got.has_value() && *got == "original",
           "the original survives a failed write");
     check(!has_temp_siblings(dir), "the failed write removes its temp");
+  }
+
+  {
+    const fs::path p = root / "private.json";
+    check(files::write_string_atomic(p, "secret"), "seed private file");
+    fs::permissions(p, fs::perms::owner_read | fs::perms::owner_write, ec);
+    check(files::write_string_atomic(p, "secret2"), "rewrite private file");
+    check((fs::status(p, ec).permissions() & fs::perms::all) ==
+              (fs::perms::owner_read | fs::perms::owner_write),
+          "a 0600 file stays 0600 after a replace");
+  }
+
+  {
+    const fs::path dir = root / "sweep_live";
+    fs::create_directories(dir, ec);
+    const pid_t child = fork();
+    if (child == 0)
+      _exit(0);
+    waitpid(child, nullptr, 0);
+    const std::string suffix = files::TEMP_SUFFIX;
+    const fs::path live =
+        dir / ("a.json." + std::to_string(getpid()) + ".0" + suffix);
+    const fs::path dead =
+        dir / ("b.json." + std::to_string(child) + ".0" + suffix);
+    const fs::path legacy = dir / ("c.json" + suffix);
+    for (const auto &f : {live, dead, legacy})
+      std::ofstream(f) << "temp";
+
+    check(files::sweep_temp_files(dir) == 2,
+          "sweep removes the dead writer's and the legacy temp");
+    check(fs::exists(live, ec), "a live writer's temp is left alone");
+    check(!fs::exists(dead, ec), "a dead writer's temp is swept");
+    check(!fs::exists(legacy, ec), "the legacy fixed-name temp is swept");
   }
 
   fs::remove_all(root, ec);
