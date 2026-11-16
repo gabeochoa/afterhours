@@ -98,6 +98,7 @@ ALL_TESTS := \
 	synth_beep_test \
 	settings_save_test \
 	settings_path_test \
+	files_test_roots_test \
 	clipboard_test \
 	native_dialogs_test \
 	input_binding_codec_test \
@@ -338,6 +339,7 @@ $(OUT)/sound_volume_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/sound_volume_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
+$(OUT)/files_test_roots_test: ../src/plugins/files.cpp
 $(OUT)/bundle_test: ../src/plugins/files.cpp
 $(OUT)/file_watcher_test: ../src/plugins/file_watcher.cpp
 ifeq ($(UNAME_S),Darwin)
