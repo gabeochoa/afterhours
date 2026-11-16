@@ -310,6 +310,9 @@ inline std::vector<uint8_t> capture_screen_to_memory() {
 
 inline constexpr int TEXTURE_FILTER_BILINEAR = 1;
 inline constexpr int TEXTURE_FILTER_TRILINEAR = 2;
+inline constexpr int TEXTURE_WRAP_REPEAT = 0;
+inline constexpr int TEXTURE_WRAP_CLAMP = 1;
+inline constexpr int TEXTURE_WRAP_MIRROR_REPEAT = 2;
 
 inline TextureType load_texture(const char *) {
   log_error("@notimplemented load_texture");
@@ -327,6 +330,10 @@ inline void gen_texture_mipmaps(TextureType &) {
 inline void set_texture_filter(TextureType &, int) {
   log_error("@notimplemented set_texture_filter");
 }
+
+inline void set_texture_wrap(TextureType &, int) {}
+
+inline void draw_fps(int, int) {}
 
 inline TextureType load_texture_with_color_key(const char *, const Color,
                                                const Color, int) {

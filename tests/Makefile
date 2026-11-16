@@ -87,6 +87,7 @@ ALL_TESTS := \
 	appearance_test \
 	frame_loop_test \
 	color_value_test \
+	wrappers_test \
 	animation_presets_test \
 	particles_test \
 	ui_modifiers_test \
@@ -233,9 +234,11 @@ ALL_TESTS += sokol_geometry_test
 ALL_TESTS += sokol_hidpi_test
 ALL_TESTS += sokol_resize_test
 ALL_TESTS += sokol_include_order_test
+ALL_TESTS += sokol_wrappers_test
 endif
 
 RAYLIB_TESTS := \
+	wrappers_test \
 	edit_keys_test \
 	default_font_test \
 	border_width_test \
@@ -380,6 +383,11 @@ $(OUT)/sokol_resize_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_include_order_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_include_order_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_include_order_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_wrappers_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_wrappers_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_wrappers_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/sokol_wrappers_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_wrappers_test: ../src/backends/sokol/drawing_helpers.h ../src/backends/sokol/backend.h
 
 $(OUT)/render_capture_metal_test: render_capture_test.cpp ../examples/web/sokol_impl.cc
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
