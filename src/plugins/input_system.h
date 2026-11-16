@@ -89,6 +89,10 @@ struct input : developer::Plugin {
             testing::input_injector::detail::mouse.active) {
             return testing::input_injector::detail::mouse.right_down;
         }
+        if (button == 2 && testing::test_input::detail::test_mode &&
+            testing::input_injector::detail::mouse.active) {
+            return testing::input_injector::detail::mouse.middle_down;
+        }
 #endif
         return raylib::IsMouseButtonDown(button);
     }
