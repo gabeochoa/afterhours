@@ -10,9 +10,10 @@
 #include <type_traits>
 #include <typeinfo>
 
-#if defined(__GNUC__) || defined(__clang__)
-#include <cxxabi.h>
 #include <cstdlib>
+#if __has_include(<cxxabi.h>)
+#include <cxxabi.h>
+#define AFTER_HOURS_HAS_CXXABI 1
 #endif
 
 #include "../crash_handler.h"
@@ -101,7 +102,7 @@ struct filter_components<T, Rest...> {
 namespace detail {
 // typeid hands back a mangled name. Called once per system, off the frame path.
 inline std::string demangle_type(const char *mangled) {
-#if defined(__GNUC__) || defined(__clang__)
+#ifdef AFTER_HOURS_HAS_CXXABI
     int status = 0;
     char *out = abi::__cxa_demangle(mangled, nullptr, nullptr, &status);
     if (status == 0 && out) {
