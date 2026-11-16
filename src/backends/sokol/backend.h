@@ -916,6 +916,9 @@ struct MetalPlatformAPI {
         AFTERHOURS_MISSING_sokol_impl_TU__add_one_TU_that_defines_SOKOL_IMPL_and_includes_afterhours_src_backends_sokol_image_decode_h();
     (void)_ah_sokol_impl_present;
 
+    if (cfg.audio)
+      log_warn("RunConfig::audio is ignored: the sokol backend has no audio "
+               "device");
     metal_detail::g_init_fn = cfg.init;
     metal_detail::g_frame_fn = cfg.frame;
     metal_detail::g_cleanup_fn = cfg.cleanup;
@@ -960,6 +963,8 @@ static_assert(PlatformBackend<MetalPlatformAPI>,
 namespace metal_backend {
 
 inline bool metal_init(const Config &cfg) {
+  if (cfg.audio)
+    log_warn("Config::audio is ignored: the sokol backend has no audio device");
   if (cfg.display == DisplayMode::Headless) {
     // A second init after shutdown hands back a render target that silently
     // never receives a draw: sokol reports it valid and identical to a working
