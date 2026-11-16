@@ -87,6 +87,8 @@ ALL_TESTS := \
 	appearance_test \
 	frame_loop_test \
 	color_value_test \
+	value_types_test \
+	value_types_none_test \
 	animation_presets_test \
 	particles_test \
 	ui_modifiers_test \
@@ -236,6 +238,7 @@ ALL_TESTS += sokol_include_order_test
 endif
 
 RAYLIB_TESTS := \
+	value_types_test \
 	edit_keys_test \
 	default_font_test \
 	border_width_test \
