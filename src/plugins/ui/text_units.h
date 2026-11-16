@@ -76,6 +76,35 @@ inline void split_graphemes(std::string_view text, std::vector<UnitSpan> &out) {
   }
 }
 
+template <typename Width>
+size_t fit_text_prefix(std::string_view text, float max_width, Width &&width) {
+  std::vector<UnitSpan> graphemes;
+  split_graphemes(text, graphemes);
+  size_t lo = 0;
+  size_t hi = graphemes.size();
+  while (lo < hi) {
+    const size_t mid = lo + (hi - lo + 1) / 2;
+    if (width(std::string(text.substr(0, graphemes[mid - 1].end))) <= max_width)
+      lo = mid;
+    else
+      hi = mid - 1;
+  }
+  return lo == 0 ? 0 : graphemes[lo - 1].end;
+}
+
+template <typename Width>
+std::string ellipsize_text(std::string_view text, float max_width,
+                           Width &&width, std::string_view ellipsis = "...") {
+  std::string full(text);
+  if (width(full) <= max_width)
+    return full;
+  const std::string tail(ellipsis);
+  const float room = max_width - width(tail);
+  if (room <= 0.f)
+    return tail;
+  return std::string(text.substr(0, fit_text_prefix(text, room, width))) + tail;
+}
+
 inline void split_words(std::string_view text, std::vector<UnitSpan> &out) {
   using namespace text_units_detail;
   out.clear();
