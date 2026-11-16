@@ -1246,6 +1246,17 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
   if (entity.has<ui::HasLabel>())
     out += " text=\"" + xml_escape(truncate_text(entity.get<ui::HasLabel>().label)) + "\"";
 
+  const auto sides = [&](const char *attr, const auto &v) {
+    const float t = v[ui::Axis::top], r = v[ui::Axis::right],
+                b = v[ui::Axis::bottom], l = v[ui::Axis::left];
+    if (t != 0.f || r != 0.f || b != 0.f || l != 0.f)
+      out += std::format(" {}=\"{} {} {} {}\"", attr, t, r, b, l);
+  };
+  sides("padding", cmp.computed_padd);
+  sides("margin", cmp.computed_margin);
+  if (cmp.gap != 0.f)
+    out += std::format(" gap=\"{}\"", cmp.gap);
+
   if (entity.has<ui::HasScrollView>()) {
     auto &sv = entity.get<ui::HasScrollView>();
     out += std::format(" scroll_x=\"{}\" scroll_y=\"{}\"",

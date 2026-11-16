@@ -121,6 +121,7 @@ Started partway through the project's life, so it does not go all the way back.
 - **Font textures carry mipmaps with trilinear filtering.** A label rasterised large and drawn small shimmered and broke up, because the atlas texture was minified with plain bilinear and no mip chain. Atlases generate mipmaps on load now.
 
 ### e2e
+- **`dump_ui` shows resolved spacing**: `padding="t r b l"`, `margin="t r b l"` and `gap="n"` in pixels, written only when non-zero, so existing dumps of unspaced nodes are unchanged. A spacing audit can now tell a nested inset from a layout error without an app-side JSON sidecar (floatinghotel). Covered in `dump_ui_test`.
 - **`register_shared_handlers(state_sm, pack)`** runs one pack of e2e handlers from several SystemManagers. Fill a `SystemManager pack` with the usual `register_*` calls (custom handlers, then `register_unknown_handler`, then `register_cleanup`) and call this on each state's manager; whichever manager ticks runs the pack once. A command handled in every state is registered once, and `register_unknown_handler` works again with several managers, because the one pack sees every command. Covered by `shared_handlers_test`.
 - **`wait_until SECONDS cmd args...`** retries `cmd` every frame until it passes, failing only when SECONDS run out, with the last failure as the error (`wait_until 2s: rope is Holding, expected Measuring`). The inner command is parsed by its own rules, so `wait_until 3 expect_text Saved game` keeps its rest-of-line argument. A failure (`fail()`) or a stall past the 30-frame timeout is rearmed (`PendingE2ECommand::rearm()`) instead of reported, so a game handler that fails on the first wrong frame works unchanged. Check-only: a command with side effects (`press_key`, `teleport_player`) runs again on every retry. It counts against the per-script timeout. Covered in `e2e_retry_test` and `e2e_arguments_test`.
 - **A timeout that nothing touched says so.** If no handler ever called `retry()` / `retry_with()` on a command, its timeout adds "nothing consumed or retried it, is its handler registered on this SystemManager?". Serial dispatch made this the usual symptom of a handler registered on only one of several managers.
@@ -147,7 +148,7 @@ Same behaviour, they just say so; expect a burst on first run. `with_font_weight
 
 ### Already works, despite the gap docs
 
-Don't rebuild: styled spans wrap (hanabi #22), `\n` is a hard break (#24), ellipsis + `expand()` doesn't hang, `with_styled_label` gives multi-colour text, `with_font_tier` is deprecated for `with_font_size(FontSize::Small)`.
+The resolved layout tree is walkable (hanabi #74): `UIComponent::children` is emptied only at the start of the UI update, so a system registered after `register_after_ui_updates` (or after `ui::setup`), or any render system, sees this frame's full tree with laid-out rects. It is the app's UI-building systems, between the two, that see a tree still being rebuilt. Pinned in `setup_test`. Don't rebuild: styled spans wrap (hanabi #22), `\n` is a hard break (#24), ellipsis + `expand()` doesn't hang, `with_styled_label` gives multi-colour text, `with_font_tier` is deprecated for `with_font_size(FontSize::Small)`.
 
 ### Docs
 
