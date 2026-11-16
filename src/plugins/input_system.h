@@ -1,9 +1,9 @@
 
 #pragma once
+#include <algorithm>
 #include <array>
 
 #include <cmath>
-#include <algorithm>
 #include <map>
 #include <variant>
 #include "../../vendor/magic_enum/magic_enum.hpp"
