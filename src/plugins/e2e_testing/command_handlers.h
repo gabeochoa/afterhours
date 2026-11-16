@@ -3,10 +3,14 @@
 #pragma once
 
 #include <algorithm>
+#include <concepts>
 #include <atomic>
 #include <format>
 #include <functional>
+#include <optional>
 #include <sstream>
+#include <tuple>
+#include <utility>
 
 #include "../../font_helper.h"
 #include "../../logging.h"
@@ -624,6 +628,50 @@ struct HandleExpectNoTextCommand : System<PendingE2ECommand> {
         cmd.consume();
     }
 };
+
+struct HandleNamedCommand : System<PendingE2ECommand> {
+    using Fn = std::function<void(PendingE2ECommand &)>;
+    std::string name;
+    Fn fn;
+    HandleNamedCommand(std::string n, Fn f)
+        : name(std::move(n)), fn(std::move(f)) {}
+    void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+        if (!cmd.is_consumed() && cmd.is(name)) fn(cmd);
+    }
+};
+
+inline void register_command(SystemManager &sm, std::string name,
+                             HandleNamedCommand::Fn fn) {
+    sm.register_update_system(
+        std::make_unique<HandleNamedCommand>(std::move(name), std::move(fn)));
+}
+
+template <typename... Args, typename Fn>
+    requires(sizeof...(Args) > 0 &&
+             std::invocable<Fn &, PendingE2ECommand &, Args...>)
+inline void register_command(SystemManager &sm, std::string name, Fn fn) {
+    register_command(sm, name, [name, fn = std::move(fn)](
+                                   PendingE2ECommand &cmd) mutable {
+        constexpr size_t arity = sizeof...(Args);
+        if (cmd.args.size() != arity) {
+            cmd.fail(std::format("{} takes {} argument{}, got {}", name, arity,
+                                 arity == 1 ? "" : "s", cmd.args.size()));
+            return;
+        }
+        [&]<size_t... I>(std::index_sequence<I...>) {
+            std::tuple<std::optional<Args>...> parsed{
+                cmd.template maybe_arg_as<Args>(I)...};
+            size_t bad = arity;
+            ((bad = (bad == arity && !std::get<I>(parsed)) ? I : bad), ...);
+            if (bad != arity) {
+                cmd.fail(std::format("{}: cannot parse argument {} '{}'", name,
+                                     bad + 1, cmd.arg(bad)));
+                return;
+            }
+            fn(cmd, std::move(*std::get<I>(parsed))...);
+        }(std::index_sequence_for<Args...>{});
+    });
+}
 
 // Handle 'screenshot name' command - takes screenshot
 struct HandleScreenshotCommand : System<PendingE2ECommand> {
