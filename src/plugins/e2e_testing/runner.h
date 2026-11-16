@@ -6,6 +6,7 @@
 #include <array>
 #include <cctype>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <sstream>
 #include <string_view>
@@ -23,6 +24,7 @@ struct ScriptResult {
     bool passed = true;
     int error_count = 0;
     int validation_failures = 0;
+    bool timed_out = false;
 };
 
 struct ParsedCommand {
@@ -312,6 +314,11 @@ class E2ERunner {
         commands_ = parse_script(path);
         script_path_ = path;
         reset();
+        if (commands_.empty()) {
+            log_error("[E2E] {} has no commands or cannot be read", path);
+            failed_ = true;
+            finished_ = true;
+        }
     }
 
     void load_scripts_from_directory(const std::string &dir) {
@@ -320,12 +327,19 @@ class E2ERunner {
         reset();
 
         std::vector<std::string> scripts;
-        for (const auto &entry : std::filesystem::directory_iterator(dir)) {
+        std::error_code ec;
+        for (const auto &entry : std::filesystem::directory_iterator(dir, ec)) {
             if (entry.path().extension() == ".e2e") {
                 scripts.push_back(entry.path().string());
             }
         }
         std::sort(scripts.begin(), scripts.end());
+        if (scripts.empty()) {
+            log_error("[E2E] no .e2e scripts found in {}", dir);
+            failed_ = true;
+            finished_ = true;
+            return;
+        }
 
         for (const auto &script_path : scripts) {
             std::string script_name =
@@ -382,6 +396,7 @@ class E2ERunner {
         screenshot_fn_ = fn;
     }
     void set_reset_callback(std::function<void()> fn) { clear_fn_ = fn; }
+    void set_results_path(std::string path) { results_path_ = std::move(path); }
     void set_property_getter(
         std::function<std::string(const std::string &)> fn) {
         property_getter_ = fn;
@@ -421,6 +436,10 @@ class E2ERunner {
                          "it stalls until this timeout.",
                          stuck);
             }
+
+            if (is_batch_mode() &&
+                current_script_idx_ < script_results_.size())
+                script_results_[current_script_idx_].timed_out = true;
 
             // In batch mode, skip to the next script instead of aborting
             if (is_batch_mode()) {
@@ -508,7 +527,71 @@ class E2ERunner {
     bool has_commands() const { return !commands_.empty(); }
     float elapsed_time() const { return elapsed_time_; }
 
+    std::vector<ScriptResult> results() const {
+        if (is_batch_mode()) return script_results_;
+        if (script_path_.empty()) return {};
+        ScriptResult single;
+        single.path = script_path_;
+        single.name = std::filesystem::path(script_path_).stem().string();
+        single.passed = !has_failed();
+        single.error_count = current_script_errors_ + get_command_error_count();
+        single.timed_out = timed_out_;
+        return {single};
+    }
+
+    bool write_results_json(const std::string &path) const {
+        const auto quote = [](const std::string &text) {
+            std::string out = "\"";
+            for (char c : text) {
+                if (c == '"' || c == '\\') {
+                    out += '\\';
+                    out += c;
+                } else if (static_cast<unsigned char>(c) < 0x20) {
+                    out += std::format("\\u{:04x}", static_cast<int>(c));
+                } else {
+                    out += c;
+                }
+            }
+            return out + "\"";
+        };
+        const auto records = results();
+        int passed = 0;
+        std::string scripts;
+        for (const auto &r : records) {
+            passed += r.passed ? 1 : 0;
+            scripts += std::format(
+                "{}\n    {{\"name\": {}, \"path\": {}, \"passed\": {}, "
+                "\"expected_to_pass\": {}, \"errors\": {}, \"timed_out\": {}}}",
+                scripts.empty() ? "" : ",", quote(r.name), quote(r.path),
+                r.passed, r.expected_to_pass, r.error_count, r.timed_out);
+        }
+        const std::string json = std::format(
+            "{{\n  \"scripts\": [{}\n  ],\n  \"run\": {},\n  \"passed\": {},\n"
+            "  \"failed\": {},\n  \"success\": {},\n  \"complete\": true\n}}\n",
+            scripts, records.size(), passed,
+            static_cast<int>(records.size()) - passed, !has_failed());
+
+        const std::string tmp = path + ".tmp";
+        {
+            std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+            out << json;
+            if (!out.flush()) {
+                log_error("[E2E] cannot write results to {}", tmp);
+                return false;
+            }
+        }
+        std::error_code ec;
+        std::filesystem::rename(tmp, path, ec);
+        if (ec) {
+            log_error("[E2E] cannot move results into {}: {}", path,
+                      ec.message());
+            return false;
+        }
+        return true;
+    }
+
     void print_results() const {
+        if (!results_path_.empty()) write_results_json(results_path_);
         if (!script_results_.empty()) {
             log_info("============================================");
             log_info("          E2E Batch Test Summary            ");
@@ -543,6 +626,13 @@ class E2ERunner {
 
         if (timed_out_)
             log_warn("[TIMEOUT] after {:.2f} seconds", elapsed_time_);
+        for (const auto &r : results()) {
+            if (r.passed)
+                log_info("[PASS] {}", r.name);
+            else
+                log_warn("[FAIL] {} ({} error{})", r.name, r.error_count,
+                         r.error_count == 1 ? "" : "s");
+        }
         log_info("E2E finished in {:.2f} seconds", elapsed_time_);
     }
 
@@ -726,6 +816,7 @@ class E2ERunner {
     std::size_t current_script_idx_ = 0;
     int current_script_errors_ = 0;
 
+    std::string results_path_;
     std::function<void(const std::string &)> screenshot_fn_;
     std::function<void()> clear_fn_;
     std::function<std::string(const std::string &)> property_getter_;
