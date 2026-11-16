@@ -6,6 +6,7 @@
 #include <atomic>
 #include <format>
 #include <functional>
+#include <set>
 #include <sstream>
 
 #include "../../font_helper.h"
@@ -938,10 +939,21 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
 
 // Fail on unhandled commands (runs after all other handlers)
 struct HandleUnknownCommand : System<PendingE2ECommand> {
+    std::set<std::string> handled_elsewhere;
+
+    HandleUnknownCommand() = default;
+    explicit HandleUnknownCommand(std::set<std::string> elsewhere)
+        : handled_elsewhere(std::move(elsewhere)) {}
+
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
                                float) override {
         if (cmd.is_consumed() || cmd.is_retry())
             return;  // Skip consumed or retry-pending commands
+        if (handled_elsewhere.contains(cmd.name)) {
+            cmd.retry_with(std::format(
+                "'{}' waited for a state that handles it", cmd.name));
+            return;
+        }
 
         // State the observation, then the likely causes. Asserting "typo or
         // registration order" as the only two sends the reader to audit their
