@@ -46,6 +46,11 @@ int main() {
   check(colors::MAGENTA, 255, 0, 255, 255, "MAGENTA");
   check(colors::RAYWHITE, 245, 245, 245, 255, "RAYWHITE");
 
+  check(colors::UI_BLACK, 0, 0, 0, 255, "UI_BLACK");
+  check(colors::UI_RED, 230, 41, 55, 255, "UI_RED");
+  check(colors::UI_GREEN, 0, 228, 48, 255, "UI_GREEN");
+  check(colors::UI_BLUE, 0, 121, 241, 255, "UI_BLUE");
+
   printf("%d/%d checks passed\n", checks_passed, checks_run);
   return checks_passed == checks_run ? 0 : 1;
 }

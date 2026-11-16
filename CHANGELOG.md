@@ -26,6 +26,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ### Visual — re-baseline
 
+- **`colors::UI_RED`, `UI_GREEN`, `UI_BLUE` are raylib's red, green and blue on every backend.** They were raylib's values on raylib but pure 255 primaries on sokol and none, so the same name drew two colors. raylib builds are unchanged. On sokol (wordproc, floatinghotel), anything drawn with them shifts to raylib's shade. Want the pure primary? Use `colors::rgb(255, 0, 0)`. `UI_WHITE` and `UI_PINK` still differ per backend.
 - **A child overflowing the cross axis is aligned, not dumped at the start.** `AlignItems::Center`/`FlexEnd` used to silently fall back to `FlexStart`; centring now overflows both edges evenly, per CSS. Moved 10 of 98 screens in wm.
 - **Scroll-view children are laid out by autolayout** instead of repositioned afterwards by two drifted copies that double-counted margins. Margined direct children move by one margin, into the right place, and keep the `justify`/`align`/`gap` the old pass discarded.
 - **Cross-axis `expand()` stretches** instead of collapsing to 0, so separators and fills that were invisible now have a size.
