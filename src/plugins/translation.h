@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdlib>
+
 #include <fmt/args.h>
 #include <fmt/format.h>
 
