@@ -99,6 +99,8 @@ struct HasClickActivationMode : BaseComponent {
 // Not with_skip_tabbing, which is keyboard focus order only.
 struct IgnorePointerEvents : BaseComponent {};
 
+struct DoesNotTakeFocus : BaseComponent {};
+
 struct HasDragListener : BaseComponent {
   bool down = false;
   std::function<void(Entity &)> cb;

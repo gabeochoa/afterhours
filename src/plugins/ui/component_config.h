@@ -116,6 +116,7 @@ struct ComponentConfig {
   // Unset means the theme's value; 0 opts this component out of the ring.
   std::optional<float> focus_ring_thickness;
   bool ignore_pointer_events = false; // invisible to hit-testing
+  bool takes_focus = true;
   // User data, not localizable copy: the pseudo-locale stress leaves this
   // label (and this component's RTL mirroring) alone.
   bool pseudo_locale_exempt = false;
@@ -629,6 +630,10 @@ struct ComponentConfig {
   /// from with_skip_tabbing, which is keyboard focus order only.
   ComponentConfig &with_ignore_pointer_events(bool ignore = true) {
     ignore_pointer_events = ignore;
+    return *this;
+  }
+  ComponentConfig &with_takes_focus(bool takes = true) {
+    takes_focus = takes;
     return *this;
   }
   ComponentConfig &with_pseudo_locale_exempt(bool exempt = true) {
@@ -1145,6 +1150,8 @@ struct ComponentConfig {
     // opt-out every time it is overridden.
     if (overrides.ignore_pointer_events)
       merged.ignore_pointer_events = true;
+    if (!overrides.takes_focus)
+      merged.takes_focus = false;
     if (overrides.pseudo_locale_exempt)
       merged.pseudo_locale_exempt = true;
     if (overrides.selects_on_focus())

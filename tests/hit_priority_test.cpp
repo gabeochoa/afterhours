@@ -350,4 +350,31 @@ TEST(release_position_decides_a_release_mode_click_after_hot_locks) {
                  __LINE__);
 }
 
+TEST(a_click_on_a_button_that_does_not_take_focus_leaves_focus_alone) {
+  ImmTestHarness h;
+  int fired = 0;
+  auto build = [&](bool takes_focus) {
+    h.begin_frame();
+    auto toggle = button(h.context(), mk(h.root(), 0),
+                         ComponentConfig{}
+                             .with_size(ComponentSize{pixels(100), pixels(30)})
+                             .with_absolute_position(0.f, 0.f)
+                             .with_label("Summary")
+                             .with_takes_focus(takes_focus));
+    toggle.ent().get<HasClickListener>().cb = [&](Entity &) { ++fired; };
+    h.layout_only();
+    mark_rendered();
+    h.context().set_focus(42);
+    press_at(h.context(), 50.f, 15.f);
+    run_clicks(h);
+    return toggle.ent().id;
+  };
+  build(false);
+  CHECK(fired == 1);
+  CHECK(h.context().has_focus(42));
+  const EntityID toggle_id = build(true);
+  CHECK(fired == 2);
+  CHECK(h.context().has_focus(toggle_id));
+}
+
 int main() { return ui_test::run_registered_tests("hit priority"); }
