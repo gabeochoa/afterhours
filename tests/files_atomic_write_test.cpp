@@ -5,10 +5,17 @@
 
 #include <afterhours/src/plugins/files.h>
 
+#include <sys/resource.h>
+#include <unistd.h>
+
+#include <atomic>
+#include <csignal>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <thread>
+#include <vector>
 
 namespace fs = std::filesystem;
 using afterhours::files;
@@ -26,10 +33,14 @@ static void check(bool cond, const std::string &what) {
 }
 
 static bool has_temp_siblings(const fs::path &dir) {
+  const std::string suffix = files::TEMP_SUFFIX;
   std::error_code ec;
-  for (const auto &e : fs::directory_iterator(dir, ec))
-    if (e.path().extension() == ".tmp")
+  for (const auto &e : fs::directory_iterator(dir, ec)) {
+    const std::string name = e.path().filename().string();
+    if (name.size() > suffix.size() &&
+        name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0)
       return true;
+  }
   return false;
 }
 
@@ -37,7 +48,8 @@ int main() {
   printf("=== files atomic write tests ===\n\n");
 
   std::error_code ec;
-  const fs::path root = fs::temp_directory_path(ec) / "afh_atomic_write_test";
+  const fs::path root = fs::temp_directory_path(ec) /
+                       ("afh_atomic_write_test_" + std::to_string(getpid()));
   fs::remove_all(root, ec);
   fs::create_directories(root, ec);
 
@@ -108,25 +120,19 @@ int main() {
           "an unrelated file is untouched by the failed write");
   }
 
-  // 8. A temp left by an earlier crash is consumed by the next write to the
-  //    same path.
   {
     const fs::path p = root / "recover.json";
     check(files::write_string_atomic(p, "good"), "seed write succeeds");
+    const std::string stale = p.string() + files::TEMP_SUFFIX;
     {
-      std::ofstream stale(p.string() + files::TEMP_SUFFIX, std::ios::binary);
-      stale << "half-written gar";
+      std::ofstream out(stale, std::ios::binary);
+      out << "half-written gar";
     }
-    check(fs::exists(p.string() + files::TEMP_SUFFIX, ec), "a stale temp exists");
-    auto before = files::read_string(p);
-    check(before.has_value() && *before == "good",
-          "the stale temp does not affect the real file");
-
     check(files::write_string_atomic(p, "newer"), "next write succeeds");
-    check(!fs::exists(p.string() + files::TEMP_SUFFIX, ec),
-          "the next write consumes the stale temp");
     auto after = files::read_string(p);
     check(after.has_value() && *after == "newer", "the new contents landed");
+    check(fs::exists(stale, ec), "the stale temp is not someone else's write");
+    check(files::sweep_temp_files(root) == 1, "sweep reclaims the stale temp");
   }
 
   // 9. Write-once paths never get a second write, so their temps would sit
@@ -154,6 +160,73 @@ int main() {
     check(kept.has_value() && *kept == "one", "sweep leaves real files alone");
     check(files::sweep_temp_files(root / "no_such_dir") == 0,
           "sweeping a missing dir is a no-op");
+  }
+
+  {
+    const fs::path dir = root / "race";
+    const fs::path p = dir / "shared.json";
+    constexpr int writers = 8;
+    constexpr int rounds = 4;
+    std::vector<std::string> payloads;
+    for (int i = 0; i < writers; i++)
+      payloads.emplace_back(256 * 1024, static_cast<char>('a' + i));
+    auto is_payload = [&](const std::string &s) {
+      for (const auto &want : payloads)
+        if (s == want)
+          return true;
+      return false;
+    };
+
+    std::atomic<int> failed_writes{0};
+    std::atomic<int> torn_reads{0};
+    std::atomic<bool> writing{true};
+    std::thread reader([&] {
+      while (writing) {
+        auto got = files::read_string(p);
+        if (got.has_value() && !is_payload(*got))
+          torn_reads++;
+      }
+    });
+    std::vector<std::thread> threads;
+    for (int i = 0; i < writers; i++)
+      threads.emplace_back([&, i] {
+        for (int r = 0; r < rounds; r++)
+          if (!files::write_string_atomic(p, payloads[i]))
+            failed_writes++;
+      });
+    for (auto &t : threads)
+      t.join();
+    writing = false;
+    reader.join();
+
+    check(failed_writes == 0, "every competing write succeeds");
+    check(torn_reads == 0, "a reader never sees a mixed or partial file");
+    auto got = files::read_string(p);
+    check(got.has_value() && is_payload(*got),
+          "the target holds exactly one writer's payload");
+    check(!has_temp_siblings(dir), "competing writers leave no temps");
+  }
+
+  {
+    const fs::path dir = root / "full";
+    const fs::path p = dir / "save.json";
+    check(files::write_string_atomic(p, "original"), "seed write succeeds");
+
+    rlimit old{};
+    getrlimit(RLIMIT_FSIZE, &old);
+    rlimit small = old;
+    small.rlim_cur = 4096;
+    std::signal(SIGXFSZ, SIG_IGN);
+    setrlimit(RLIMIT_FSIZE, &small);
+    const bool ok = files::write_string_atomic(p, std::string(64 * 1024, 'x'));
+    setrlimit(RLIMIT_FSIZE, &old);
+    std::signal(SIGXFSZ, SIG_DFL);
+
+    check(!ok, "a write that runs out of space reports failure");
+    auto got = files::read_string(p);
+    check(got.has_value() && *got == "original",
+          "the original survives a failed write");
+    check(!has_temp_siblings(dir), "the failed write removes its temp");
   }
 
   fs::remove_all(root, ec);
