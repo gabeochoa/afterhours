@@ -238,7 +238,9 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
             }
             cmd.wait_seconds = 1 * frame;
         } else if (cmd.name == "expect_text" || cmd.name == "expect_text_i" ||
-                   cmd.name == "expect_no_text" || cmd.name == "expect_text_fully_visible") {
+                   cmd.name == "expect_no_text" || cmd.name == "expect_text_fully_visible" ||
+                   cmd.name == "expect_terminal_input" ||
+                   cmd.name == "expect_terminal_output_contains") {
             cmd.args.push_back(args.rest());
             cmd.wait_seconds = 1 * frame;
         } else if (cmd.name == "expect_selected_text") {
