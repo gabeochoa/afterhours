@@ -12,6 +12,7 @@
 #include "../core/key_codes.h"
 #include "../core/system.h"
 #include "../developer.h"
+#include "../drawing_helpers.h"
 #include "../gestures_macos.h"
 #include "window_manager.h"
 
@@ -191,7 +192,9 @@ struct input : developer::Plugin {
 
     static void draw_text(const std::string &text, const int x, const int y,
                           const int fontSize) {
-        raylib::DrawText(text.c_str(), x, y, fontSize, raylib::RED);
+        ::afterhours::draw_text(text.c_str(), static_cast<float>(x),
+                                static_cast<float>(y),
+                                static_cast<float>(fontSize), raylib::RED);
     }
 
     static void set_gamepad_mappings(const std::string &data) {
