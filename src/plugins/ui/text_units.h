@@ -48,31 +48,46 @@ inline bool is_space(uint32_t cp) {
 
 } // namespace text_units_detail
 
-inline void split_graphemes(std::string_view text, std::vector<UnitSpan> &out) {
+inline size_t next_grapheme_end(std::string_view text, size_t i) {
   using namespace text_units_detail;
-  out.clear();
-  size_t i = 0;
+  if (i >= text.size())
+    return text.size();
+  uint32_t cp = decode(text, i);
+  bool prev_zwj = false;
+  int regional = is_regional(cp) ? 1 : 0;
   while (i < text.size()) {
-    const size_t begin = i;
-    uint32_t cp = decode(text, i);
-    bool prev_zwj = false;
-    int regional = is_regional(cp) ? 1 : 0;
-    while (i < text.size()) {
-      size_t peek = i;
-      const uint32_t next = decode(text, peek);
-      if (regional == 1 && is_regional(next)) {
-        regional = 2;
-        i = peek;
-        continue;
-      }
-      if (is_extend(next) || prev_zwj) {
-        prev_zwj = next == 0x200D;
-        i = peek;
-        continue;
-      }
-      break;
+    size_t peek = i;
+    const uint32_t next = decode(text, peek);
+    if (regional == 1 && is_regional(next)) {
+      regional = 2;
+      i = peek;
+      continue;
     }
-    out.push_back({begin, i});
+    if (is_extend(next) || prev_zwj) {
+      prev_zwj = next == 0x200D;
+      i = peek;
+      continue;
+    }
+    break;
+  }
+  return i;
+}
+
+inline size_t prev_grapheme_start(std::string_view text, size_t pos) {
+  size_t start = 0;
+  for (size_t i = 0; i < pos && i < text.size();) {
+    start = i;
+    i = next_grapheme_end(text, i);
+  }
+  return start;
+}
+
+inline void split_graphemes(std::string_view text, std::vector<UnitSpan> &out) {
+  out.clear();
+  for (size_t i = 0; i < text.size();) {
+    const size_t end = next_grapheme_end(text, i);
+    out.push_back({i, end});
+    i = end;
   }
 }
 
