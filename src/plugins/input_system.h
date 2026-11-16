@@ -3,6 +3,7 @@
 #include <array>
 
 #include <cmath>
+#include <algorithm>
 #include <map>
 #include <variant>
 #include "../../vendor/magic_enum/magic_enum.hpp"
@@ -1155,6 +1156,26 @@ struct input : developer::Plugin {
         return *ic;
     }
 
+    template <typename Action>
+        requires std::is_enum_v<Action>
+    static bool is_held(Action action) {
+        auto collector = get_input_collector();
+        return collector.has_value() &&
+               std::ranges::any_of(collector.inputs(), [&](const ActionDone &done) {
+                   return done.action == static_cast<int>(action);
+               });
+    }
+
+    template <typename Action>
+        requires std::is_enum_v<Action>
+    static bool is_pressed(Action action) {
+        auto collector = get_input_collector();
+        return collector.has_value() &&
+               std::ranges::any_of(collector.inputs_pressed(), [&](const ActionDone &done) {
+                   return done.action == static_cast<int>(action);
+               });
+    }
+
     // TODO i would like to move this out of input namespace
     // at some point
     struct InputSystem
@@ -1252,6 +1273,15 @@ struct input : developer::Plugin {
     }
 
     // Default overload for PluginCore concept compatibility
+    template <typename Action>
+        requires std::is_enum_v<Action>
+    static void add_singleton_components(
+        Entity &entity, const std::map<Action, ValidInputs> &mapping) {
+        ProvidesInputMapping::GameMapping by_int;
+        for (const auto &[action, inputs] : mapping)
+            by_int[static_cast<int>(action)] = inputs;
+        add_singleton_components(entity, by_int);
+    }
     static void add_singleton_components(Entity &entity) {
         // Note: This creates an empty input mapping. For actual usage, use the
         // overload that takes a GameMapping parameter.
