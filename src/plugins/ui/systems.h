@@ -126,6 +126,22 @@ static inline RectangleType clip_hit_rect(const Entity &entity,
 // The rect a hit test must use: translation, then scroll, then the scroll
 // viewport clip. One helper so that whoever decides which element was hit and
 // whoever fires its callback can never disagree about where it is.
+static inline bool in_inert_subtree(const Entity &entity) {
+  const Entity *current = &entity;
+  for (int depth = 0; depth < 64; ++depth) {
+    if (current->has<Inert>())
+      return true;
+    if (!current->has<UIComponent>())
+      return false;
+    OptEntity parent =
+        UICollectionHolder::getEntityForID(current->get<UIComponent>().parent);
+    if (!parent.valid())
+      return false;
+    current = &parent.asE();
+  }
+  return false;
+}
+
 static inline RectangleType hit_rect(const Entity &entity,
                                      const UIComponent &component) {
   RectangleType rect = component.rect();
@@ -848,7 +864,7 @@ private:
     if (e.is_missing<HasClickListener>() && e.is_missing<HasDragListener>())
       return false;
     // Opted out of hit-testing entirely: the element behind it wins instead.
-    if (e.has<IgnorePointerEvents>())
+    if (e.has<IgnorePointerEvents>() || detail::in_inert_subtree(e))
       return false;
     if (!cmp.was_rendered_to_screen)
       return false;
@@ -1075,7 +1091,7 @@ bool can_be_focused(UIContext<InputAction> &ctx, const Entity &e) {
     return false;
   if (e.template has<SkipWhenTabbing>())
     return false;
-  if (e.template has<ShouldHide>())
+  if (e.template has<ShouldHide>() || detail::in_inert_subtree(e))
     return false;
   if (e.template is_missing<UIComponent>() ||
       e.template get<UIComponent>().skip_when_tabbing ||
