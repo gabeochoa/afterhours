@@ -165,4 +165,24 @@ TEST(hold_key_stays_down_until_release_key) {
   CHECK(bad.is_consumed() && !bad.succeeded());
 }
 
+TEST(held_modifier_survives_taps_of_other_keys) {
+  KeyFixture f;
+  PendingE2ECommand hold;
+  hold.name = "hold_key";
+  hold.args = {"CTRL"};
+  HandleHoldKeyCommand{}.for_each_with(f.entity, hold, 0.f);
+  CHECK(hold.succeeded());
+  for (int tab = 0; tab < 3; ++tab) {
+    f.key("TAB");
+    for (int i = 0; i < 4; i++)
+      f.frame();
+    CHECK(inj::is_key_down(keys::LEFT_CONTROL));
+  }
+  PendingE2ECommand release;
+  release.name = "release_key";
+  release.args = {"CTRL"};
+  HandleHoldKeyCommand{}.for_each_with(f.entity, release, 0.f);
+  CHECK(!inj::is_key_down(keys::LEFT_CONTROL));
+}
+
 int main() { return ui_test::run_registered_tests("E2E key chords"); }
