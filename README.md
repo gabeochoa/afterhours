@@ -81,6 +81,25 @@ AFTERHOURS_ENFORCE_MIN_FONT_SIZE
 - logs a warning when font sizes are below TypographyScale::MIN_ACCESSIBLE_SIZE_720P (18.67px)
 - automatically clamps font sizes to the minimum to ensure accessibility
 
+### Host type macros
+
+afterhours names six value types through macros, so a game can hand it its own:
+
+| Macro | raylib default | other backends | fields afterhours reads |
+|---|---|---|---|
+| `Vector2Type` | `raylib::Vector2` | `MyVec2` | `x, y` |
+| `Vector3Type` | `raylib::Vector3` | `MyVec3` | `x, y, z` |
+| `RectangleType` | `raylib::Rectangle` | `MyRectangle` | `x, y, width, height` |
+| `ColorType` | `raylib::Color` | `MyColor` | `r, g, b, a` (`unsigned char`) |
+| `FontType` | `raylib::Font` | `MyFont` (empty) | none |
+| `TextureType` | `raylib::Texture2D` | `MyTexture` | `width, height` (sokol adds GPU ids) |
+
+All six are optional. To use your own type, `#define` the macro (or pass `-D`) before the first afterhours include. Any afterhours header can be the first, because they all pull in `developer.h`, which reads the macros once. Define one any later and afterhours and your code end up using different types.
+
+On raylib, if `RAYLIB_H` is not already defined, afterhours includes `<raylib.h>` inside `namespace raylib`. It then turns the macros into real aliases (`afterhours::Vector2Type`, re-exported globally), so after the include they are types, not macros. `afterhours::Color` (the colors plugin) is always `raylib::Color` on raylib, whatever `ColorType` says.
+
+`examples/catalog/utility/host_types` swaps in all six types on the none backend.
+
 ## Packaging a desktop app (macOS)
 
 `tools/mk_bundle.sh` packages a built executable as a `.app`. Nothing in the
