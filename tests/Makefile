@@ -87,6 +87,8 @@ ALL_TESTS := \
 	appearance_test \
 	frame_loop_test \
 	color_value_test \
+	color_palette_test \
+	color_palette_none_test \
 	animation_presets_test \
 	particles_test \
 	ui_modifiers_test \
