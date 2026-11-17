@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 #include <afterhours/src/backends/raylib/font_helper.h>
 #include <afterhours/src/plugins/window_manager.h>
@@ -122,6 +123,14 @@ int main() {
           "load_font_for_string returns glyph data without a window");
     check(!afterhours::font_is_usable(loaded),
           "and no texture is claimed: there is no GL context to make one");
+
+    std::vector<unsigned char> bytes;
+    check(afterhours::font_coverage::read_file(path.string().c_str(), bytes),
+          "fixture font reads");
+    const raylib::Font embedded = afterhours::load_font_from_memory(
+        bytes.data(), static_cast<int>(bytes.size()), "embedded");
+    check(embedded.glyphCount > 0 && afterhours::font_has_glyph(embedded, 'A'),
+          "load_font_from_memory returns glyphs and coverage without a window");
   }
 
   // --- ordered teardown ---------------------------------------------------

@@ -168,6 +168,22 @@ inline raylib::Font load_font_from_file(const char *file, int size = 0) {
   return font;
 }
 
+inline raylib::Font load_font_from_memory(const unsigned char *data, int size,
+                                          const char *name, int px = 32) {
+  std::vector<int> cps = default_codepoints();
+  raylib::Font font = raylib::LoadFontFromMemory(
+      ".ttf", data, size, px, cps.data(), static_cast<int>(cps.size()));
+  if (font.glyphCount <= 0) {
+    log_warn("Failed to load font from memory: {}", name ? name : "");
+    return font;
+  }
+  prepare_font_texture(font);
+  font_coverage::Ranges ranges;
+  if (font_coverage::parse_cmap(data, static_cast<size_t>(size), ranges))
+    coverage_registry()[font_key(font)] = std::move(ranges);
+  return font;
+}
+
 // Whether the loaded face actually covers a codepoint. raylib maps anything it
 // does not have to glyph 0, so asking is the only way to tell a real glyph
 // from a silent nothing.
