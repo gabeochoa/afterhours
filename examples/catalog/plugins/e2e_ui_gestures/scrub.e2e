@@ -1,0 +1,8 @@
+mouse_down_ui rail 20 center
+mouse_move_ui rail 150 center
+expect_scrub 150 true
+mouse_up
+wait_frames 2
+expect_scrub 150 false
+scroll_wheel_ui rail 0 -2
+expect_wheel -2

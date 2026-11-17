@@ -23,6 +23,7 @@ namespace afterhours::graphics::metal_detail {
 // metal_init). The accessors below feed logical-pixel size/scale to the text
 // and drawing code that would otherwise ask sokol_app.
 inline bool g_headless = false;
+inline bool g_headless_quit = false;
 inline int g_headless_w = 0;
 inline int g_headless_h = 0;
 
@@ -38,6 +39,8 @@ inline std::function<void()> g_frame_fn;
 inline std::function<void()> g_cleanup_fn;
 inline int g_target_fps = 0;
 inline double g_frame_elapsed = 0.0;
+inline uint64_t g_last_frame_tick = 0;
+inline double g_frame_dt = 0.0;
 inline bool g_on_demand = false;
 
 inline uint64_t g_start_time = 0;
