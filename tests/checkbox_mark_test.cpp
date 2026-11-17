@@ -130,6 +130,26 @@ TEST(external_changes_precede_input_and_do_not_report_clicks) {
   }
 }
 
+TEST(toggle_switch_follows_the_callers_value) {
+  ui_test::ImmTestHarness h;
+  Entity *track = nullptr;
+  for (int phase = 0; phase < 4; ++phase) {
+    h.begin_frame();
+    bool value = phase == 1 || phase == 2;
+    const bool click = phase == 2;
+    if (track)
+      track->get<HasClickListener>().down = click;
+    auto result = toggle_switch(h.context(), mk(h.root(), 0), value,
+                                ComponentConfig{});
+    const bool expected = phase == 1;
+    CHECK(value == expected);
+    CHECK(static_cast<bool>(result) == click);
+    CHECK(result.ent().get<HasToggleSwitchState>().on == expected);
+    track = &UICollectionHolder::getEntityForID(result.cmp().children[0]).asE();
+    h.layout_only();
+  }
+}
+
 TEST(group_reset_updates_marks_and_selection_limits) {
   ui_test::ImmTestHarness h;
   std::bitset<3> values;

@@ -1393,6 +1393,11 @@ TEST(down_arrow_stays_in_a_focused_text_area) {
   std::string text = "line one\nline two";
   two_frames(h, [&] {
     text_area(h.context(), mk(h.root(), 0), text, area_config(200.f, 200.f));
+TEST(focusing_the_returned_entity_focuses_the_field) {
+  std::string text = "notes";
+  EntityID wrapper = -1;
+    wrapper = text_area(h.context(), mk(h.root(), 0), text,
+                        area_config(200.f, 200.f)).id();
   });
   UIComponent *field = h.find("text_area_field");
   CHECK(field != nullptr);
@@ -1402,6 +1407,8 @@ TEST(down_arrow_stays_in_a_focused_text_area) {
   h.context().last_action = ui_test::TestInputAction::WidgetDown;
   h.context().process_tabbing(field->id);
   CHECK(h.context().has_focus(field->id));
+  h.context().set_focus(wrapper);
+  CHECK(h.context().focus_id == field->id);
 }
 
 int main() { return ui_test::run_registered_tests("text_area"); }

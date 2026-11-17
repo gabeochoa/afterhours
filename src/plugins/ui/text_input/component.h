@@ -66,8 +66,7 @@ inline size_t pixel_x_to_byte_offset(const std::string &text, float local_x,
   size_t result = 0;
   float best_dist = std::abs(local_x);
   for (size_t i = 0; i < text.size();) {
-    size_t clen = utf8_char_length(text, i);
-    size_t next = i + clen;
+    size_t next = ui::next_grapheme_end(text, i);
     std::string sub = text.substr(0, next);
     Vector2Type sz = measure_text(font, sub.c_str(), font_size, 1.f);
     float dist = std::abs(local_x - sz.x);
@@ -221,6 +220,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
 
   auto &field_entity = field_result.ent();
   field_entity.template addComponentIfMissing<ConsumesDirectionalInput>();
+  entity.template addComponentIfMissing<FocusProxy>().target = field_entity.id;
 
   // Ensure HasLabel exists and set display text
   auto &field_label = field_entity.template addComponentIfMissing<HasLabel>();

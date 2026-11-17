@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <optional>
 #include <filesystem>
 #include <vector>
@@ -182,8 +183,20 @@ inline void draw_text_ex(const raylib::Font font, const char *content,
     capture::record("text", {position.x, position.y, 0.f, font_size}, color,
                     content);
   warn_on_missing_glyphs(font, content);
+  std::string shown;
+  content = drawable_text(font, content, shown);
   if (std::abs(rotation) < 0.001f) {
-    raylib::DrawTextEx(font, content, position, font_size, spacing, color);
+    const std::vector<FaceRun> runs = fallback_runs(font, content);
+    if (runs.empty())
+      raylib::DrawTextEx(font, content, position, font_size, spacing, color);
+    float x = position.x;
+    for (const FaceRun &run : runs) {
+      raylib::DrawTextEx(run.face, run.text.c_str(), {x, position.y},
+                         font_size, spacing, color);
+      x += raylib::MeasureTextEx(run.face, run.text.c_str(), font_size,
+                                 spacing).x +
+           spacing;
+    }
     return;
   }
   // Use DrawTextPro for rotated text
@@ -193,13 +206,6 @@ inline void draw_text_ex(const raylib::Font font, const char *content,
   raylib::DrawTextPro(font, content, drawPos, origin, rotation, font_size,
                       spacing, color);
 }
-
-namespace detail {
-inline std::optional<raylib::Font> &default_font_override() {
-  static std::optional<raylib::Font> font;
-  return font;
-}
-} // namespace detail
 
 inline void draw_text(const char *content, const float x, const float y,
                       const float font_size, const Color color) {
@@ -569,20 +575,6 @@ inline void set_mouse_cursor(int cursor_id) {
   raylib::SetMouseCursor(cursor_id);
 }
 
-// The face for text drawn without one: get_default_font(), get_unset_font(),
-// draw_text and the library's debug overlays. Unset, it is raylib's built-in
-// pixel font. Set it before the UI plugin loads its fonts so imm's default
-// and unset fonts pick it up too. The caller keeps the font loaded.
-inline void set_default_font(raylib::Font font) {
-  detail::default_font_override() = font;
-}
-inline void clear_default_font() { detail::default_font_override().reset(); }
-
-inline raylib::Font get_default_font() {
-  return detail::default_font_override().value_or(raylib::GetFontDefault());
-}
-inline raylib::Font get_unset_font() { return get_default_font(); }
-
 inline graphics::RenderTextureType load_render_texture(int w, int h) {
   return raylib::LoadRenderTexture(w, h);
 }
@@ -702,9 +694,31 @@ inline std::vector<uint8_t> capture_screen_to_memory() {
 inline constexpr int TEXTURE_FILTER_BILINEAR = raylib::TEXTURE_FILTER_BILINEAR;
 inline constexpr int TEXTURE_FILTER_TRILINEAR =
     raylib::TEXTURE_FILTER_TRILINEAR;
+inline constexpr int TEXTURE_WRAP_REPEAT = raylib::TEXTURE_WRAP_REPEAT;
+inline constexpr int TEXTURE_WRAP_CLAMP = raylib::TEXTURE_WRAP_CLAMP;
+inline constexpr int TEXTURE_WRAP_MIRROR_REPEAT =
+    raylib::TEXTURE_WRAP_MIRROR_REPEAT;
 
 inline TextureType load_texture(const char *path) {
   return raylib::LoadTexture(path);
+}
+
+inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
+                                          int h,
+                                          int filter = TEXTURE_FILTER_BILINEAR) {
+  if (rgba == nullptr || w <= 0 || h <= 0) {
+    log_error("load_texture_from_rgba: invalid pixel data ({}x{})", w, h);
+    std::abort();
+  }
+  raylib::Image image{const_cast<std::uint8_t *>(rgba), w, h, 1,
+                      raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8};
+  TextureType texture = raylib::LoadTextureFromImage(image);
+  if (texture.id == 0) {
+    log_error("load_texture_from_rgba: upload failed ({}x{})", w, h);
+    return texture;
+  }
+  raylib::SetTextureFilter(texture, filter);
+  return texture;
 }
 
 inline void unload_texture(TextureType &texture) {
@@ -725,6 +739,14 @@ inline void set_texture_filter(TextureType &texture, int filter) {
     raylib::SetTextureFilter(texture, filter);
   }
 }
+
+inline void set_texture_wrap(TextureType &texture, int wrap) {
+  if (texture.id != 0) {
+    raylib::SetTextureWrap(texture, wrap);
+  }
+}
+
+inline void draw_fps(int x, int y) { raylib::DrawFPS(x, y); }
 
 inline TextureType
 load_texture_with_color_key(const char *path, const Color key,
