@@ -14,6 +14,7 @@
 #include <afterhours/src/plugins/ui/text_measure.h>
 
 using afterhours::ui::detail::measure_wrapped;
+using afterhours::ui::detail::wrap_lines;
 using afterhours::ui::detail::wrap_text_to_width;
 
 // Fixed-width measure: every character is 10px wide.
@@ -256,6 +257,103 @@ TEST(font_weight_without_a_variant_falls_back_to_the_base) {
                      "Inter",
                  "falls back rather than returning a missing name", __FILE__,
                  __LINE__);
+}
+
+TEST(wrap_lines_ranges_reconstruct_the_wrapped_lines) {
+  const std::string cases[] = {
+      "aaa bbb ccc",  "one two three",   "  indented words here",
+      "a    b    c",  "trailing   ",     "aaa bbb ccc\nddd eee",
+      "a\n\nb",       "\n",              "x  \n  y z w",
+  };
+  for (const std::string &text : cases) {
+    const auto want = wrap_text_to_width(text, 50.f, measure10);
+    const auto got = wrap_lines(text, 50.f, measure10);
+    CHECK(got.size() == want.size());
+    if (got.size() != want.size())
+      continue;
+    for (size_t i = 0; i < got.size(); i++) {
+      CHECK(text.substr(got[i].begin, got[i].end - got[i].begin) == want[i]);
+      CHECK(got[i].width == measure10(want[i]));
+    }
+  }
+}
+
+TEST(wrap_lines_soft_break_skips_the_consumed_spaces) {
+  const auto lines = wrap_lines("aaa   bbb", 50.f, measure10);
+  CHECK(lines.size() == 2);
+  CHECK(lines[0].begin == 0 && lines[0].end == 3);
+  CHECK(lines[1].begin == 6 && lines[1].end == 9);
+  CHECK(lines[0].width == 30.f && lines[1].width == 30.f);
+}
+
+TEST(wrap_lines_utf8_offsets_are_byte_offsets) {
+  const std::string text = "\xC3\xA9t\xC3\xA9 \xE6\x97\xA5\xE6\x9C\xAC "
+                           "\xF0\x9F\x98\x80";
+  const auto lines = wrap_lines(text, 60.f, measure10);
+  CHECK(lines.size() == 3);
+  CHECK(text.substr(lines[0].begin, lines[0].end - lines[0].begin) ==
+        "\xC3\xA9t\xC3\xA9");
+  CHECK(lines[1].begin == 6 && lines[1].end == 12);
+  CHECK(lines[2].begin == 13 && lines[2].end == text.size());
+}
+
+TEST(wrap_lines_long_word_keeps_its_own_line) {
+  const auto lines = wrap_lines("ab supercalifragilistic cd", 50.f, measure10);
+  CHECK(lines.size() == 3);
+  CHECK(lines[1].begin == 3 && lines[1].end == 23);
+  CHECK(lines[1].width == 200.f);
+}
+
+TEST(wrap_lines_empty_text_is_one_empty_line) {
+  const auto lines = wrap_lines("", 100.f, measure10);
+  CHECK(lines.size() == 1);
+  CHECK(lines[0].begin == 0 && lines[0].end == 0 && lines[0].width == 0.f);
+}
+
+TEST(wrap_lines_hard_newlines_split_and_are_not_in_any_range) {
+  const std::string text = "alpha\n\nbeta";
+  const auto lines = wrap_lines(text, 1000.f, measure10);
+  CHECK(lines.size() == 3);
+  CHECK(lines[0].begin == 0 && lines[0].end == 5);
+  CHECK(lines[1].begin == 6 && lines[1].end == 6);
+  CHECK(lines[2].begin == 7 && lines[2].end == 11);
+}
+
+TEST(wrap_lines_non_positive_width_is_one_line) {
+  const auto lines = wrap_lines("a b\nc", 0.f, measure10);
+  CHECK(lines.size() == 1);
+  CHECK(lines[0].begin == 0 && lines[0].end == 5);
+}
+
+TEST(wrap_runs_empty_run_does_not_split_a_weight_stretch) {
+  using afterhours::colors::FontWeight;
+  const std::vector<afterhours::ui::TextSpan> runs{
+      {"bb", afterhours::Color{}, FontWeight::Bold},
+      {"", afterhours::Color{}, FontWeight::Regular},
+      {"a qq", afterhours::Color{}, FontWeight::Bold}};
+  int calls = 0;
+  int regular_calls = 0;
+  const auto lines = afterhours::ui::detail::wrap_runs_to_width(
+      runs, 1000.f, [&](const std::string &s, FontWeight w) {
+        calls++;
+        if (w == FontWeight::Regular)
+          regular_calls++;
+        return static_cast<float>(s.size()) * 10.f;
+      });
+  CHECK(lines.size() == 1);
+  CHECK(calls == 1);
+  CHECK(regular_calls == 0);
+}
+
+TEST(public_wrap_text_lines_matches_the_detail_helper) {
+  ui_test::ImmTestHarness h;
+  const std::string text = "the quick brown fox jumps";
+  const auto want = wrap_lines(text, 100.f, measure10);
+  const auto got = afterhours::ui::wrap_text_lines(text, 100.f, "__default", 20.f);
+  CHECK(got.size() == want.size());
+  for (size_t i = 0; i < std::min(got.size(), want.size()); i++)
+    CHECK(got[i].begin == want[i].begin && got[i].end == want[i].end &&
+          got[i].width == want[i].width);
 }
 
 int main() { return ui_test::run_registered_tests("text wrap tests"); }

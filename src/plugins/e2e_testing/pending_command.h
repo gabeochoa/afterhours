@@ -6,6 +6,7 @@
 
 #include "../../ecs.h"
 
+#include <chrono>
 #include <optional>
 #include <string>
 #include <vector>
@@ -31,6 +32,12 @@ template <typename T> T parse_string(const std::string &s) {
     return s == "true" || s == "1" || s == "yes" || s == "on";
   else
     static_assert(sizeof(T) == 0, "No built-in parser for T");
+}
+
+inline std::chrono::steady_clock::time_point wall_deadline_after(float seconds) {
+  return std::chrono::steady_clock::now() +
+         std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+             std::chrono::duration<float>(seconds));
 }
 
 } // namespace detail
@@ -66,6 +73,7 @@ struct PendingE2ECommand : BaseComponent {
   // until this many seconds run out. 0 = an ordinary command.
   float wait_until_seconds = 0.f;
   float retry_budget = 0.f;
+  std::optional<std::chrono::steady_clock::time_point> wall_deadline;
   // Some handler called retry() or retry_with(), so the command is known
   // here. A timeout without it means nothing on this SystemManager handled it.
   bool recognised = false;
@@ -78,7 +86,7 @@ struct PendingE2ECommand : BaseComponent {
 
   // Check if this is a wait command (exempt from timeout)
   bool is_wait_command() const {
-    return name == "wait" || name == "wait_frames";
+    return name == "wait" || name == "wait_frames" || name == "wait_wall";
   }
 
   // Check if this is a specific command
@@ -113,6 +121,13 @@ struct PendingE2ECommand : BaseComponent {
     success = true;
     error_message.clear();
     frames_alive = 0;
+  }
+
+  void expect(bool ok, const std::string &mismatch) {
+    if (ok)
+      consume();
+    else
+      retry_with(mismatch);
   }
 
   // Check if already handled by a previous system

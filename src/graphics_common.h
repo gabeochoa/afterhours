@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <functional>
 #include <string>
+#include <utility>
 
 namespace afterhours::graphics {
 enum class DisplayMode { Windowed, Headless };
@@ -132,7 +133,7 @@ concept GraphicsBackend =
 template <typename T>
 concept PlatformBackend = requires {
   // ── Window lifecycle ──
-  { T::init_window(int{}, int{}, (const char *){}) } -> std::same_as<void>;
+  { T::init_window(int{}, int{}, std::declval<const char *>()) } -> std::same_as<void>;
   { T::close_window() } -> std::same_as<void>;
   { T::window_should_close() } -> std::same_as<bool>;
   { T::is_window_ready() } -> std::same_as<bool>;
@@ -166,19 +167,19 @@ concept PlatformBackend = requires {
   { T::get_time() } -> std::same_as<double>;
 
   // ── Text measurement ──
-  { T::measure_text((const char *){}, int{}) } -> std::same_as<int>;
+  { T::measure_text(std::declval<const char *>(), int{}) } -> std::same_as<int>;
 
   // ── Screenshots ──
-  { T::take_screenshot((const char *){}) } -> std::same_as<void>;
+  { T::take_screenshot(std::declval<const char *>()) } -> std::same_as<void>;
   { T::set_render_texture_filter(std::declval<RenderTextureType &>(), int{}) } -> std::same_as<void>;
 
   // ── Shaders ──
-  { T::load_shader((const char *){}, (const char *){}) } -> std::same_as<ShaderType>;
+  { T::load_shader(std::declval<const char *>(), std::declval<const char *>()) } -> std::same_as<ShaderType>;
   { T::unload_shader(std::declval<ShaderType &>()) } -> std::same_as<void>;
-  { T::get_shader_location(std::declval<ShaderType &>(), (const char *){}) } -> std::same_as<int>;
+  { T::get_shader_location(std::declval<ShaderType &>(), std::declval<const char *>()) } -> std::same_as<int>;
   {
     T::set_shader_value(std::declval<ShaderType &>(), int{},
-                        (const void *){}, int{})
+                        std::declval<const void *>(), int{})
   } -> std::same_as<void>;
   { T::begin_shader_mode(std::declval<ShaderType &>()) } -> std::same_as<void>;
   { T::end_shader_mode() } -> std::same_as<void>;

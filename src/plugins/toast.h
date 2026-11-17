@@ -192,6 +192,7 @@ struct toast : developer::Plugin {
         }
 
         entity.addComponent<HasColor>(bg_color);
+        entity.addComponent<ui::HasOpacity>(1.0f);
         entity.addComponent<ui::HasRoundedCorners>()
             .set(ctx.theme.rounded_corners)
             .set_roundness(ctx.theme.roundness)

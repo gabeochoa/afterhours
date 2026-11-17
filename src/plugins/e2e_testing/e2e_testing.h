@@ -59,6 +59,7 @@ inline void register_builtin_handlers(SystemManager &sm) {
                                                    // before new presses
   sm.register_update_system(std::make_unique<HandleTypeCommand>());
   sm.register_update_system(std::make_unique<HandleKeyCommand>());
+  sm.register_update_system(std::make_unique<HandleHoldKeyCommand>());
   sm.register_update_system(std::make_unique<HandleClickCommand>());
   sm.register_update_system(std::make_unique<HandleRightClickCommand>());
   sm.register_update_system(std::make_unique<HandleMiddleClickCommand>());
@@ -76,6 +77,7 @@ inline void register_builtin_handlers(SystemManager &sm) {
   sm.register_update_system(std::make_unique<HandleDragToCommand>());
   sm.register_update_system(std::make_unique<HandleWaitCommand>());
   sm.register_update_system(std::make_unique<HandleWaitFramesCommand>());
+  sm.register_update_system(std::make_unique<HandleWaitWallCommand>());
   sm.register_update_system(std::make_unique<HandleExpectTextCommand>());
   sm.register_update_system(
       std::make_unique<HandleExpectTextInsensitiveCommand>());
@@ -94,6 +96,12 @@ void register_after_builtins(SystemManager &sm, std::unique_ptr<S> sys) {
 // Register unknown command warning (call after all your custom handlers)
 inline void register_unknown_handler(SystemManager &sm) {
   sm.register_update_system(std::make_unique<HandleUnknownCommand>());
+}
+
+inline void register_unknown_handler(SystemManager &sm,
+                                     std::set<std::string> handled_elsewhere) {
+  sm.register_update_system(
+      std::make_unique<HandleUnknownCommand>(std::move(handled_elsewhere)));
 }
 
 // Register cleanup system (call last - removes processed commands)

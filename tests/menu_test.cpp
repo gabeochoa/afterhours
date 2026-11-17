@@ -280,6 +280,9 @@ TEST(menu_label_starts_at_the_left_edge) {
                  __LINE__);
   ui_test::check(label_x < shortcut_x, "the label starts before the shortcut",
                  __FILE__, __LINE__);
+  ui_test::check(label_x > item->rect().x + 1.f,
+                 "the label is not flush against the row edge", __FILE__,
+                 __LINE__);
   if (label_x >= left_limit)
     fprintf(stderr, "        label x=%.1f limit=%.1f shortcut x=%.1f\n",
             label_x, left_limit, shortcut_x);
@@ -380,6 +383,46 @@ bool has_rounding(const std::string &name) {
 // Nothing inside a menu should round. with_roundness(0) is NOT enough: it is
 // only read when rounded_corners is also set, so the theme's corners survive
 // and the element stays rounded.
+TEST(menu_rows_take_padding_colour_and_hover_from_the_config) {
+  ImmTestHarness h;
+  bool open = true;
+  const Color hover{10, 200, 30, 255};
+  std::vector<MenuItem> items{MenuItem{"Open", "Cmd+O", false, false}};
+  h.begin_frame();
+  context_menu(h.context(), mk(h.root(), 0), items, Vector2Type{40, 40}, open,
+               ComponentConfig{}
+                   .with_size(ComponentSize{pixels(200), pixels(28)})
+                   .with_padding(Padding::all(pixels(10)))
+                   .with_background(Theme::Usage::Secondary)
+                   .with_custom_hover_bg(hover));
+  h.render();
+
+  UIComponent *item = h.find("menu_item_0");
+  UIComponent *sc = h.find("menu_shortcut");
+  ui_test::check(item && sc, "row and shortcut exist", __FILE__, __LINE__);
+  if (!item || !sc)
+    return;
+  auto row = UICollectionHolder::getEntityForID(item->id);
+  const Color want = h.context().theme.from_usage(Theme::Usage::Secondary);
+  const Color got = row->get<HasColor>().color();
+  ui_test::check(got.r == want.r && got.g == want.g && got.b == want.b,
+                 "the row takes the menu's theme usage", __FILE__, __LINE__);
+  const Color got_hover = row->get<HasColor>().hover_bg();
+  ui_test::check(got_hover.g == hover.g && got_hover.r == hover.r,
+                 "the row takes the menu's hover colour", __FILE__, __LINE__);
+
+  float label_x = -1.f;
+  for (const auto &c : h.drawn("text"))
+    if (c.text == "Open")
+      label_x = c.rect.x;
+  ui_test::check(std::fabs(label_x - item->rect().x - 10.f) < 1.f,
+                 "the label sits one row pad in from the edge", __FILE__,
+                 __LINE__);
+  ui_test::check(std::fabs(sc->rect().y - item->rect().y) < 1.f,
+                 "the shortcut still lines up with a padded row", __FILE__,
+                 __LINE__);
+}
+
 TEST(menu_parts_have_no_rounded_corners) {
   ImmTestHarness h;
   bool open = true;
