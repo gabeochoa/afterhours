@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "../../logging.h"
+#include "../../warn_once.h"
 #include "../profiling.h"
 #include "pending_command.h"
 
@@ -39,7 +40,11 @@ inline PerfProvider &provider() {
     return p;
 }
 
-inline void set_provider(PerfProvider p) { provider() = std::move(p); }
+inline void set_provider(PerfProvider p) {
+    if (provider().get_fps || provider().get_p99_ms || provider().top_entries)
+        warn_once(0, "perf_commands::set_provider: overwriting an existing perf provider, the previous provider will be discarded");
+    provider() = std::move(p);
+}
 
 // A profile the library fills in itself, so dump_profile works without the
 // consumer writing one.
@@ -48,7 +53,8 @@ namespace builtin_profile {
 inline void reset() { profiling::default_collector().reset(); }
 
 inline void enable() {
-    profiling::default_collector().start();
+    if (!profiling::default_collector().start())
+        warn_once(0, "builtin_profile::enable: profiling is unavailable (AFTERHOURS_ENABLE_PROFILING=0), so the builtin profile will report no data; rebuild with AFTERHOURS_ENABLE_PROFILING=1 to collect it");
     PerfProvider p = provider();
     p.get_fps = []() -> std::optional<float> {
         const auto snapshot = profiling::default_collector().snapshot();

@@ -74,6 +74,29 @@ struct BuildUI : System<DefaultUIContext> {
   }
 };
 
+static size_t g_split_children_after_layout = 0;
+static float g_split_children_width = 0.f;
+
+struct WalkLaidOutTree : System<> {
+  void once(float) override {
+    if (g_button_id == -1)
+      return;
+    auto &button = UICollectionHolder::getEntityForIDEnforce(g_button_id);
+    auto &left = UICollectionHolder::getEntityForIDEnforce(
+        button.get<UIComponent>().parent);
+    auto &split = UICollectionHolder::getEntityForIDEnforce(
+        left.get<UIComponent>().parent);
+    const auto &children = split.get<UIComponent>().children;
+    g_split_children_after_layout = children.size();
+    g_split_children_width = 0.f;
+    for (EntityID id : children)
+      g_split_children_width += UICollectionHolder::getEntityForIDEnforce(id)
+                                    .get<UIComponent>()
+                                    .rect()
+                                    .width;
+  }
+};
+
 static Rectangle rect_of(EntityID id) {
   return UICollectionHolder::getEntityForIDEnforce(id)
       .get<UIComponent>()
@@ -103,6 +126,8 @@ int main() {
   CHECK(
       EntityHelper::has_singleton<window_manager::ProvidesCurrentResolution>());
 
+  systems.register_update_system(std::make_unique<WalkLaidOutTree>());
+
   systems.run(1.f);
 
   CHECK(g_build_calls == 1);
@@ -122,6 +147,9 @@ int main() {
     CHECK_APPROX(panel.width, 600.f); // 800 - 200 sidebar
     CHECK_APPROX(panel.height, 600.f);
   }
+
+  CHECK(g_split_children_after_layout == 2);
+  CHECK_APPROX(g_split_children_width, 800.f);
 
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
