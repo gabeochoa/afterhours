@@ -252,6 +252,13 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
       context.mouse.right_just_released =
           prev_right_down && !context.mouse.right_down;
 
+      const bool prev_middle_down = context.mouse.middle_down;
+      context.mouse.middle_down = input::is_mouse_button_down(2);
+      context.mouse.middle_just_pressed =
+          !prev_middle_down && context.mouse.middle_down;
+      context.mouse.middle_just_released =
+          prev_middle_down && !context.mouse.middle_down;
+
       if (context.mouse.just_pressed) {
         context.mouse.press_pos = context.mouse.pos;
         context.mouse.press_moved = false;
@@ -854,7 +861,7 @@ private:
       return false;
     if (cmp.should_hide || e.has<ShouldHide>())
       return false;
-    if (e.has<HasLabel>() && e.get<HasLabel>().is_disabled)
+    if (is_disabled(e))
       return false;
     return context->is_input_allowed(e.id);
   }
@@ -900,7 +907,7 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
     if (component.should_hide || entity.has<ShouldHide>())
       return;
 
-    if (entity.has<HasLabel>() && entity.get<HasLabel>().is_disabled)
+    if (is_disabled(entity))
       return;
 
     // No hit test here: ResolveHitTarget has already picked the single
@@ -1132,7 +1139,7 @@ struct HandleTrayNavigation : SystemWithUIContext<ui::HasTray> {
       // Only navigable if it has a click listener and is rendered
       if (child.has<HasClickListener>() && child.has<UIComponent>() &&
           child.get<UIComponent>().was_rendered_to_screen &&
-          !(child.has<HasLabel>() && child.get<HasLabel>().is_disabled)) {
+          !is_disabled(child)) {
         tray.navigable_children.push_back(child_id);
       }
     }
@@ -2249,10 +2256,13 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
 
     if (!context || !context->is_input_allowed(entity.id)) return;
 
-    if (!is_mouse_inside(context->mouse.pos, rect))
+    if (!is_mouse_inside(context->mouse.pos, detail::hit_rect(entity, cmp)))
       return;
 
     Vector2Type wheel_v = input::get_mouse_wheel_move_v();
+    if (wheel_v.x == 0.f &&
+        (input::get_current_modifiers() & input::KeyChord::MOD_SHIFT))
+      wheel_v = {wheel_v.y, 0.f};
 
     // TODO add support for customizing this for "natural" scroll
     // Direction multiplier: natural scrolling (default) vs inverted

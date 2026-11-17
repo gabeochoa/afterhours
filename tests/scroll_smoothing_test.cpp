@@ -176,6 +176,28 @@ int main() {
   }
 
 
+  {
+    afterhours::motion::set_instant(true);
+    HasScrollView sv = make_view(0.25f);
+    sv.scroll_target.y = 400.f;
+    sv.scroll_target.x = 120.f;
+    sv.horizontal_enabled = true;
+    sv.ease_scroll(FRAME60);
+    check(sv.scroll_offset.y == 400.f,
+          "instant motion snaps vertical scroll to target in one frame");
+    check(sv.scroll_offset.x == 120.f,
+          "instant motion snaps horizontal scroll to target in one frame");
+    check(sv.last_eased_offset.y == 400.f &&
+              sv.last_eased_offset.x == 120.f,
+          "instant snap updates last_eased_offset");
+    afterhours::motion::set_instant(false);
+    HasScrollView glide = make_view(0.25f);
+    glide.scroll_target.y = 400.f;
+    glide.ease_scroll(FRAME60);
+    check(glide.scroll_offset.y > 0.f && glide.scroll_offset.y < 400.f,
+          "glide resumes once instant motion is off");
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);
