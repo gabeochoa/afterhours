@@ -501,6 +501,7 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
 
   HasToggleSwitchState &state =
       init_state<HasToggleSwitchState>(entity, [&](auto &) {}, value);
+  state.on = value;
 
   // Animate (smooth lerp toward target)
   float target = state.on ? 1.0f : 0.0f;

@@ -169,6 +169,8 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
     slider_bg.addComponent<ui::HasSliderState>(owned_value);
 
   HasSliderState &sliderState = slider_bg.get<ui::HasSliderState>();
+  if (!sliderState.changed_since)
+    sliderState.value = detail::sanitize_fraction(owned_value);
 
   // Create value update function
   auto apply_slider_value = [&sliderState, original_label, handle_label_position](
