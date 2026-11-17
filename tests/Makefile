@@ -71,6 +71,7 @@ ALL_TESTS := \
 	e2e_arguments_test \
 	scrollbar_render_test \
 	scroll_input_gate_test \
+	wheel_input_test \
 	command_picker_test \
 	command_picker_ui_test \
 	terminal_test \
@@ -257,6 +258,7 @@ RAYLIB_TESTS := \
 	text_visibility_test \
 	image_tint_test \
 	scroll_input_gate_test \
+	wheel_input_test \
 	command_picker_ui_test \
 	terminal_ui_test \
 	text_stroke_render_test \
@@ -334,6 +336,7 @@ $(RAYLIB_BINS): LDFLAGS_T  = $(LDFLAGS_RAYLIB)
 # with no window, so the modifier half of a chord cannot be tested at all.
 $(OUT)/input_device_activity_test: LDFLAGS_T = $(subst $(RAYLIB_LIB)/libraylib.a,-L$(RAYLIB_LIB) -lraylib,$(LDFLAGS_RAYLIB))
 
+$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 
 # Filter to sources: the .d files list every header as a prerequisite, and a
