@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <optional>
 #include <filesystem>
 #include <vector>
@@ -705,6 +706,24 @@ inline constexpr int TEXTURE_FILTER_TRILINEAR =
 
 inline TextureType load_texture(const char *path) {
   return raylib::LoadTexture(path);
+}
+
+inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
+                                          int h,
+                                          int filter = TEXTURE_FILTER_BILINEAR) {
+  if (rgba == nullptr || w <= 0 || h <= 0) {
+    log_error("load_texture_from_rgba: invalid pixel data ({}x{})", w, h);
+    std::abort();
+  }
+  raylib::Image image{const_cast<std::uint8_t *>(rgba), w, h, 1,
+                      raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8};
+  TextureType texture = raylib::LoadTextureFromImage(image);
+  if (texture.id == 0) {
+    log_error("load_texture_from_rgba: upload failed ({}x{})", w, h);
+    return texture;
+  }
+  raylib::SetTextureFilter(texture, filter);
+  return texture;
 }
 
 inline void unload_texture(TextureType &texture) {
