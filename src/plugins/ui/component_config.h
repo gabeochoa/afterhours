@@ -106,7 +106,7 @@ struct ComponentConfig {
   // inheritable options
   TextAlignment label_alignment = TextAlignment::None;
   TextOverflow text_overflow = TextOverflow::Clip;
-  float letter_spacing = 0.f; // Additional spacing between characters (pixels)
+  std::optional<float> letter_spacing;
   // Per-side space between this label and its own box, overriding
   // Theme::text_inset. Unset means the theme's value.
   std::optional<Vector2Type> text_inset;
@@ -1269,7 +1269,7 @@ struct ComponentConfig {
     // Text detail
     if (overrides.text_overflow != TextOverflow::Clip)
       merged.text_overflow = overrides.text_overflow;
-    if (overrides.letter_spacing != 0.f)
+    if (overrides.letter_spacing.has_value())
       merged.letter_spacing = overrides.letter_spacing;
     if (overrides.text_inset.has_value())
       merged.text_inset = overrides.text_inset;
