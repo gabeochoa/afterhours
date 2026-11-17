@@ -846,7 +846,6 @@ class E2ERunner {
 
     ScreenshotFn screenshot_fn_;
     std::string results_path_;
-    std::function<void(const std::string &)> screenshot_fn_;
     std::function<void()> clear_fn_;
     std::function<std::string(const std::string &)> property_getter_;
 };
