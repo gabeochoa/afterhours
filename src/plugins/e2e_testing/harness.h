@@ -33,6 +33,7 @@ struct E2EArgs {
   // counts ticks; it changes `wait <seconds>`.
   float time_scale = 1.0f;
   int capture_interval = 0;
+  std::string results_json;
 
   // For RunConfig::display, so a consumer need not map the bool themselves.
   graphics::DisplayMode display_mode() const {
@@ -91,6 +92,12 @@ inline E2EArgs parse_e2e_args(int argc, char *argv[]) {
       args.quiet = true;
       // --e2e-speed is kart's spelling of the same knob. Both accepted rather
       // than making one project rename its scripts.
+    } else if (arg == "--time-scale" || arg == "--e2e-speed") {
+      args.time_scale = std::stof(next(i));
+    } else if (arg == "--capture-interval") {
+      args.capture_interval = std::stoi(next(i));
+    } else if (arg == "--results-json") {
+      args.results_json = next(i);
     } else if (key == "--time-scale" || key == "--e2e-speed") {
       args.time_scale = std::stof(value());
     } else if (key == "--capture-interval") {
@@ -125,6 +132,8 @@ inline void configure_runner(E2ERunner &runner, const E2EArgs &args) {
   runner.set_timeout(args.timeout_seconds);
   if (args.slow_mode)
     runner.set_slow_mode(true, args.slow_delay);
+  if (!args.results_json.empty())
+    runner.set_results_path(args.results_json);
 }
 
 } // namespace testing
