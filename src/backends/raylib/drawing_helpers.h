@@ -195,13 +195,6 @@ inline void draw_text_ex(const raylib::Font font, const char *content,
                       spacing, color);
 }
 
-namespace detail {
-inline std::optional<raylib::Font> &default_font_override() {
-  static std::optional<raylib::Font> font;
-  return font;
-}
-} // namespace detail
-
 inline void draw_text(const char *content, const float x, const float y,
                       const float font_size, const Color color) {
   if (!content) return;
@@ -569,20 +562,6 @@ inline void draw_poly_lines_ex(Vector2Type center, int sides, float radius,
 inline void set_mouse_cursor(int cursor_id) {
   raylib::SetMouseCursor(cursor_id);
 }
-
-// The face for text drawn without one: get_default_font(), get_unset_font(),
-// draw_text and the library's debug overlays. Unset, it is raylib's built-in
-// pixel font. Set it before the UI plugin loads its fonts so imm's default
-// and unset fonts pick it up too. The caller keeps the font loaded.
-inline void set_default_font(raylib::Font font) {
-  detail::default_font_override() = font;
-}
-inline void clear_default_font() { detail::default_font_override().reset(); }
-
-inline raylib::Font get_default_font() {
-  return detail::default_font_override().value_or(raylib::GetFontDefault());
-}
-inline raylib::Font get_unset_font() { return get_default_font(); }
 
 inline graphics::RenderTextureType load_render_texture(int w, int h) {
   return raylib::LoadRenderTexture(w, h);
