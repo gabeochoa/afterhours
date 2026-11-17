@@ -123,6 +123,13 @@ struct PendingE2ECommand : BaseComponent {
     frames_alive = 0;
   }
 
+  void expect(bool ok, const std::string &mismatch) {
+    if (ok)
+      consume();
+    else
+      retry_with(mismatch);
+  }
+
   // Check if already handled by a previous system
   bool is_consumed() const { return state == CommandState::Consumed; }
 
