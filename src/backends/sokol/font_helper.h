@@ -173,6 +173,24 @@ inline Vector2Type measure_text_utf8(const Font font, const char *text,
   return measure_text(font, text, size, spacing);
 }
 
+inline float monospace_cell_advance(const Font font, const float size) {
+  if (!std::isfinite(size) || size <= 0.f)
+    return 0.f;
+  auto *ctx = graphics::metal_detail::g_fons_ctx;
+  if (!ctx)
+    return 0.f;
+  const int fid = (font.id != FONS_INVALID)
+                      ? font.id
+                      : graphics::metal_detail::g_active_font;
+  if (fid == FONS_INVALID)
+    return 0.f;
+  fonsSetFont(ctx, fid);
+  const float dpi = graphics::metal_detail::dpi_scale();
+  fonsSetSize(ctx, size * dpi);
+  fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
+  return fonsTextAdvance(ctx, "0", nullptr) / dpi;
+}
+
 inline float get_first_glyph_bearing(const Font, const char *) { return 0.0f; }
 
 inline bool is_font_loaded(const Font &font) { return font.id != FONS_INVALID; }
