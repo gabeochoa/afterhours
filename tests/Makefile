@@ -184,6 +184,7 @@ ALL_TESTS := \
 	color_swatch_test \
 	overlay_placement_test \
 	progress_bar_test \
+	pagination_test \
 	random_engine_test \
 	render_order_test \
 	scroll_smoothing_test \
