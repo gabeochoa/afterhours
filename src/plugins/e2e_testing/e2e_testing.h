@@ -76,6 +76,7 @@ inline void register_builtin_handlers(SystemManager &sm) {
   sm.register_update_system(std::make_unique<HandleDragToCommand>());
   sm.register_update_system(std::make_unique<HandleWaitCommand>());
   sm.register_update_system(std::make_unique<HandleWaitFramesCommand>());
+  sm.register_update_system(std::make_unique<HandleWaitWallCommand>());
   sm.register_update_system(std::make_unique<HandleExpectTextCommand>());
   sm.register_update_system(
       std::make_unique<HandleExpectTextInsensitiveCommand>());
