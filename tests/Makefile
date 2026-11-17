@@ -128,6 +128,7 @@ ALL_TESTS := \
 	mouse_axis_action_test \
 	card_and_type_scale_test \
 	fixed_timestep_test \
+	sound_playback_test \
 	headless_runconfig_test \
 	fit_content_test \
 	label_inset_test \
@@ -281,6 +282,7 @@ RAYLIB_TESTS := \
 	fit_content_test \
 	headless_runconfig_test \
 	fixed_timestep_test \
+	sound_playback_test \
 	card_and_type_scale_test \
 	mouse_axis_action_test \
 	unhandled_command_test \
