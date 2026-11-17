@@ -130,6 +130,28 @@ struct HandleKeyCommand : System<PendingE2ECommand> {
     }
 };
 
+// 'hold_key KEY' / 'release_key KEY': `key` only taps, so held movement
+// needs these. The key stays down until released or the test state resets.
+struct HandleHoldKeyCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() ||
+            (!cmd.is("hold_key") && !cmd.is("release_key")))
+            return;
+        const int code = cmd.args.empty() ? 0 : key_from_name(cmd.args[0]);
+        if (code == 0) {
+            cmd.fail(cmd.name + ": unknown key '" +
+                     (cmd.args.empty() ? "" : cmd.args[0]) + "'");
+            return;
+        }
+        if (cmd.is("hold_key"))
+            input_injector::set_key_down(code);
+        else
+            input_injector::set_key_up(code);
+        cmd.consume();
+    }
+};
+
 // Handle 'click x y' command - clicks at coordinates
 // Coordinates support '%' suffix for screen-relative positioning.
 struct HandleClickCommand : System<PendingE2ECommand> {
@@ -354,6 +376,23 @@ struct HandleMouseMoveCommand : System<PendingE2ECommand> {
     }
 };
 
+inline void press_mouse_at(float x, float y) {
+    test_input::set_mouse_position(x, y);
+    auto &m = input_injector::detail::mouse;
+    m.left_down = true;
+    m.just_pressed = true;
+    m.press_read = false;
+    // One-frame window, like click: a system that runs before this
+    // handler still sees the press edge next frame if nothing read it.
+    m.press_frames = 1;
+    // mouse_down means HELD until mouse_up. auto_release is sticky global
+    // state -- any earlier click() leaves it set, and reset_frame would
+    // then let go of the button on the very next frame, so nothing could
+    // be dragged.
+    m.auto_release = false;
+    m.active = true;
+}
+
 // Handle 'mouse_down x y' command - press mouse at position (no release).
 struct HandleMouseDownCommand : System<PendingE2ECommand> {
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
@@ -365,22 +404,7 @@ struct HandleMouseDownCommand : System<PendingE2ECommand> {
         }
 
         auto [sw, sh] = e2e_screen_size();
-        float x = cmd.coord_arg(0, sw);
-        float y = cmd.coord_arg(1, sh);
-        test_input::set_mouse_position(x, y);
-        auto &m = input_injector::detail::mouse;
-        m.left_down = true;
-        m.just_pressed = true;
-        m.press_read = false;
-        // One-frame window, like click: a system that runs before this
-        // handler still sees the press edge next frame if nothing read it.
-        m.press_frames = 1;
-        // mouse_down means HELD until mouse_up. auto_release is sticky global
-        // state -- any earlier click() leaves it set, and reset_frame would
-        // then let go of the button on the very next frame, so nothing could
-        // be dragged.
-        m.auto_release = false;
-        m.active = true;
+        press_mouse_at(cmd.coord_arg(0, sw), cmd.coord_arg(1, sh));
         cmd.consume();
     }
 };
@@ -526,6 +550,21 @@ struct HandleWaitFramesCommand : System<PendingE2ECommand> {
                                float) override {
         if (cmd.is_consumed() || !cmd.is("wait_frames")) return;
         cmd.consume();  // Wait timing is handled by E2ERunner
+    }
+};
+
+struct HandleWaitWallCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("wait_wall")) return;
+        if (!cmd.wall_deadline) {
+            cmd.fail("wait_wall dispatched without a wall deadline");
+            return;
+        }
+        if (std::chrono::steady_clock::now() < *cmd.wall_deadline)
+            cmd.retry();
+        else
+            cmd.consume();
     }
 };
 
@@ -1040,8 +1079,11 @@ struct E2ECommandCleanupSystem : System<PendingE2ECommand> {
     // must not be cleaned up or timed out this frame.
     static bool retry_wait_until(PendingE2ECommand &cmd, float dt) {
         if (cmd.is_consumed() && cmd.succeeded()) return true;
-        cmd.retry_budget -= dt;
-        if (cmd.retry_budget <= 0.f) {
+        const bool expired =
+            cmd.wall_deadline
+                ? std::chrono::steady_clock::now() >= *cmd.wall_deadline
+                : (cmd.retry_budget -= dt) <= 0.f;
+        if (expired) {
             std::string last = cmd.is_consumed() ? cmd.error_message
                                                  : cmd.last_mismatch;
             if (last.empty())
@@ -1050,8 +1092,10 @@ struct E2ECommandCleanupSystem : System<PendingE2ECommand> {
                     cmd.recognised ? ""
                                    : "; nothing consumed or retried it, is its "
                                      "handler registered on this SystemManager?");
-            cmd.fail(std::format("wait_until {}s: {}", cmd.wait_until_seconds,
-                                 last));
+            cmd.fail(std::format("{} {}s: {}",
+                                 cmd.wall_deadline ? "wait_until_wall"
+                                                   : "wait_until",
+                                 cmd.wait_until_seconds, last));
             return true;
         }
         if (cmd.is_consumed()) {

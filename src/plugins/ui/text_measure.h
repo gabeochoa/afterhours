@@ -44,6 +44,15 @@ inline std::vector<std::string> wrap_text(const std::string &text,
       });
 }
 
+inline std::vector<detail::WrappedLine>
+wrap_text_lines(const std::string &text, float max_width,
+                const std::string &font_name, float font_size,
+                float spacing = 1.f) {
+  return detail::wrap_lines(text, max_width, [&](const std::string &s) {
+    return measure_text_line(s, font_name, font_size, spacing).x;
+  });
+}
+
 /// Width, height and line count of `text` laid out at `max_width` -- the
 /// answer to "how tall is this paragraph".
 inline detail::WrappedTextMetrics
