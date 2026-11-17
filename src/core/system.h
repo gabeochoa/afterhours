@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include <concepts>
 #include <functional>
@@ -10,12 +11,14 @@
 #include <type_traits>
 #include <typeinfo>
 
-#if defined(__GNUC__) || defined(__clang__)
-#include <cxxabi.h>
 #include <cstdlib>
+#if __has_include(<cxxabi.h>)
+#include <cxxabi.h>
+#define AFTER_HOURS_HAS_CXXABI 1
 #endif
 
 #include "../crash_handler.h"
+#include "../logging.h"
 #include "base_component.h"
 #include "entity.h"
 #include "entity_helper.h"
@@ -101,7 +104,7 @@ struct filter_components<T, Rest...> {
 namespace detail {
 // typeid hands back a mangled name. Called once per system, off the frame path.
 inline std::string demangle_type(const char *mangled) {
-#if defined(__GNUC__) || defined(__clang__)
+#ifdef AFTER_HOURS_HAS_CXXABI
     int status = 0;
     char *out = abi::__cxa_demangle(mangled, nullptr, nullptr, &status);
     if (status == 0 && out) {
@@ -602,6 +605,8 @@ struct SystemManager {
 
    public:
     constexpr static float FIXED_TICK_RATE = 1.f / 120.f;
+    float fixed_tick_rate = FIXED_TICK_RATE;
+    int max_fixed_ticks = 0;
     float accumulator = 0.f;
 
     std::vector<std::unique_ptr<SystemBase>> update_systems_;
@@ -676,12 +681,14 @@ struct SystemManager {
     void tick_all(Entities &entities, const float dt) { tick(entities, dt); }
 
     void fixed_tick_all(Entities &entities, const float dt) {
+        VALIDATE(fixed_tick_rate > 0.f, "fixed_tick_rate must be positive");
         accumulator += dt;
-        int num_ticks = (int) std::floor(accumulator / FIXED_TICK_RATE);
-        accumulator -= (float) num_ticks * FIXED_TICK_RATE;
+        int num_ticks = (int) std::floor(accumulator / fixed_tick_rate);
+        accumulator -= (float) num_ticks * fixed_tick_rate;
+        if (max_fixed_ticks > 0) num_ticks = std::min(num_ticks, max_fixed_ticks);
 
         while (num_ticks > 0) {
-            fixed_tick(entities, FIXED_TICK_RATE);
+            fixed_tick(entities, fixed_tick_rate);
             num_ticks--;
         }
     }
