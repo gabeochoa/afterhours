@@ -133,6 +133,8 @@ files::ProvidesResourcePaths::ProvidesResourcePaths(
   // available at the mount point. Save/config use in-memory directories.
   std::tie(save_folder_path, config_folder_path) = default_roots(game_name);
   resource_folder_path = fs::path("/") / fs::path(root_folder);
+  cache_folder_path = fs::path("/cache") / fs::path(game_name);
+  fs::create_directories(cache_folder_path);
 
   if (!fs::exists(save_folder_path)) {
     fs::create_directories(save_folder_path);
@@ -144,6 +146,7 @@ files::ProvidesResourcePaths::ProvidesResourcePaths(
   // Native: use platform-specific directories
   std::tie(save_folder_path, config_folder_path) = default_roots(game_name);
   resource_folder_path = resolve_resource_root(root_folder);
+  cache_folder_path = fs::path(sago::getCacheDir()) / fs::path(game_name);
 
   if (!fs::exists(save_folder_path)) {
     bool was_created = fs::create_directories(save_folder_path);
@@ -334,6 +337,15 @@ fs::path files::get_config_path() {
     return fs::path();
   }
   return provider->get_config_path();
+}
+
+fs::path files::get_cache_path() {
+  auto *provider = get_provider();
+  if (!provider) {
+    log_error("Files plugin not initialized. Call files::init() first.");
+    return fs::path();
+  }
+  return provider->get_cache_path();
 }
 
 fs::path files::get_executable_dir() {

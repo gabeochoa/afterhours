@@ -1,4 +1,4 @@
-EXTRA_FLAGS = -I../../../..
+EXTRA_FLAGS = -I../../../.. -DAFTER_HOURS_USE_NONE
 LOG         = telemetry_requests.log
 
 include ../../common.mk

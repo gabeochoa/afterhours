@@ -180,7 +180,8 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                  .with_flex_direction(FlexDirection::Column)
                  .with_no_wrap()
                  .with_absolute_position()
-                 .with_translate(pixels(0), pixels(placed.y - anchor.y))
+                 .with_translate(pixels(placed.x - anchor.x),
+                                 pixels(placed.y - anchor.y))
                  .with_render_layer(config.render_layer + 1));
 
     // Set tray selection to current option only when first opened

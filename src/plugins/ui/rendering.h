@@ -13,6 +13,7 @@
 #include "../../logging.h"
 #include "text_selection.h"
 #include "text_stroke.h"
+#include "text_units.h"
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
 #include "../e2e_testing/test_input.h"
 #include "../e2e_testing/visible_text.h"
@@ -1000,41 +1001,10 @@ static inline void draw_text_in_rect(
     if (max_width <= 0.f)
       return text;
 
-    Vector2Type text_size =
-        measure_text(font, text.c_str(), font_size, spacing);
-    if (text_size.x <= max_width) {
-      return text;
-    }
-
-    // Text overflows — find longest prefix that fits with "..."
-    const std::string ellipsis = "...";
-    Vector2Type ellipsis_size =
-        measure_text(font, ellipsis.c_str(), font_size, spacing);
-    float available = max_width - ellipsis_size.x;
-    if (available <= 0.f) {
-      truncated_text = ellipsis;
-      return truncated_text;
-    }
-
-    // Binary search for the longest prefix that fits
-    size_t low = 0;
-    size_t high = text.size();
-    size_t best = 0;
-    while (low <= high && high <= text.size()) {
-      size_t mid = (low + high) / 2;
-      std::string prefix = text.substr(0, mid);
-      Vector2Type ps = measure_text(font, prefix.c_str(), font_size, spacing);
-      if (ps.x <= available) {
-        best = mid;
-        low = mid + 1;
-      } else {
-        if (mid == 0)
-          break;
-        high = mid - 1;
-      }
-    }
-
-    truncated_text = text.substr(0, best) + ellipsis;
+    truncated_text =
+        ellipsize_text(text, max_width, [&](const std::string &s) {
+          return measure_text(font, s.c_str(), font_size, spacing).x;
+        });
     return truncated_text;
   }();
 
@@ -2526,36 +2496,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           float font_size = result.rect.height;
           float spacing = 1.f + hasLabel.letter_spacing;
           float max_width = text_rect.width - 2.f * label_inset.x;
-          if (max_width > 0.f) {
-            Vector2Type ts =
-                measure_text(font, hasLabel.label.c_str(), font_size, spacing);
-            if (ts.x > max_width) {
-              const std::string ellipsis = "...";
-              Vector2Type es =
-                  measure_text(font, ellipsis.c_str(), font_size, spacing);
-              float available = max_width - es.x;
-              if (available <= 0.f) {
-                display_text = ellipsis;
-              } else {
-                size_t low = 0, high = hasLabel.label.size(), best = 0;
-                while (low <= high && high <= hasLabel.label.size()) {
-                  size_t mid = (low + high) / 2;
-                  std::string prefix = hasLabel.label.substr(0, mid);
-                  Vector2Type ps =
-                      measure_text(font, prefix.c_str(), font_size, spacing);
-                  if (ps.x <= available) {
-                    best = mid;
-                    low = mid + 1;
-                  } else {
-                    if (mid == 0)
-                      break;
-                    high = mid - 1;
-                  }
-                }
-                display_text = hasLabel.label.substr(0, best) + ellipsis;
-              }
-            }
-          }
+          if (max_width > 0.f)
+            display_text = ellipsize_text(
+                hasLabel.label, max_width, [&](const std::string &s) {
+                  return measure_text(font, s.c_str(), font_size, spacing).x;
+                });
         }
 
         // Pass the container rect (text_rect) not the position rect

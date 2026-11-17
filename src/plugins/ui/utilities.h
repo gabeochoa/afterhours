@@ -89,7 +89,7 @@ constexpr static InputValidationMode validation_mode =
                          "'. Input used to " reason);                       \
             }                                                               \
         }                                                                   \
-    } while (0);
+    } while (0)
 
 // Every text-editing action the UI plugin looks up by name. Each site is an
 // `if constexpr (enum_contains<InputAction>("..."))`, so an enum that does not
