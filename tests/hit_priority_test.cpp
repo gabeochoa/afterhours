@@ -350,4 +350,29 @@ TEST(release_position_decides_a_release_mode_click_after_hot_locks) {
                  __LINE__);
 }
 
+TEST(a_disabled_control_with_only_child_labels_is_not_clickable) {
+  ImmTestHarness h;
+  int fired = 0;
+  auto build = [&](bool disabled) {
+    h.begin_frame();
+    auto card = div(h.context(), mk(h.root(), 0),
+                    ComponentConfig{}
+                        .with_size(ComponentSize{pixels(200), pixels(60)})
+                        .with_absolute_position(0.f, 0.f)
+                        .with_disabled(disabled));
+    card.ent().addComponentIfMissing<HasClickListener>([&](Entity &) { ++fired; });
+    div(h.context(), mk(card.ent(), 0),
+        ComponentConfig{}.with_size(ComponentSize{pixels(120), pixels(20)}).with_label("Export"));
+    h.layout_only();
+    mark_rendered();
+    CHECK(card.ent().is_missing<HasLabel>());
+    press_at(h.context(), 180.f, 50.f);
+    run_clicks(h);
+  };
+  build(true);
+  CHECK(fired == 0);
+  build(false);
+  CHECK(fired == 1);
+}
+
 int main() { return ui_test::run_registered_tests("hit priority"); }

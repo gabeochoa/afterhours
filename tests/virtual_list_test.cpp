@@ -311,4 +311,56 @@ TEST(prepend_virtual_rows_holds_the_viewport) {
                600.f);
 }
 
+static int count_uniform_built(bool use_default, size_t overscan) {
+  ImmTestHarness h;
+  int built = 0;
+  auto config = ComponentConfig{}
+                    .with_size(ComponentSize{pixels(300), pixels(200)})
+                    .with_debug_name("vl_overscan");
+  if (!use_default)
+    config.with_virtual_list_overscan(overscan);
+  virtual_list(h.context(), mk(h.root(), 0), 2000, 20.f,
+               [&](size_t, Entity &) { built++; }, config);
+  h.layout_only();
+  return built;
+}
+
+static int count_measured_built(size_t overscan) {
+  ImmTestHarness h;
+  int built = 0;
+  virtual_list(h.context(), mk(h.root(), 0), 2000, alternating_height,
+               [&](size_t, Entity &) { built++; },
+               ComponentConfig{}
+                   .with_size(ComponentSize{pixels(300), pixels(200)})
+                   .with_virtual_list_overscan(overscan)
+                   .with_debug_name("vl_overscan_measured"));
+  h.layout_only();
+  return built;
+}
+
+TEST(virtual_list_overscan_defaults_to_four) {
+  CHECK(ComponentConfig{}.virtual_list_overscan == 4);
+  CHECK(count_uniform_built(true, 0) == 15);
+  CHECK(count_uniform_built(false, 4) == 15);
+}
+
+TEST(virtual_list_overscan_controls_the_window) {
+  CHECK(count_uniform_built(false, 0) == 11);
+  CHECK(count_uniform_built(false, 1) == 12);
+  CHECK(count_uniform_built(false, 10) == 21);
+  CHECK(count_measured_built(0) < count_measured_built(4));
+  CHECK(count_measured_built(4) < count_measured_built(20));
+}
+
+TEST(virtual_list_overscan_survives_apply_overrides) {
+  CHECK(ComponentConfig{}
+            .apply_overrides(
+                ComponentConfig{}.with_virtual_list_overscan(9))
+            .virtual_list_overscan == 9);
+  CHECK(ComponentConfig{}
+            .apply_overrides(
+                ComponentConfig{}.with_virtual_list_overscan(0))
+            .virtual_list_overscan == 0);
+}
+
 int main() { return ui_test::run_registered_tests("virtual_list"); }

@@ -18,7 +18,6 @@
 #include "logging.h"
 
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(_WIN32)
-#include <cxxabi.h>
 #include <execinfo.h>
 #endif
 
