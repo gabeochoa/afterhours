@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <stdexcept>
 #include <vector>
@@ -1766,6 +1767,16 @@ inline TextureType load_texture(const char *path) {
   TextureType tex = metal_texture_detail::load_texture_from_pixels(pixels, w, h);
   stbi_image_free(pixels);
   return tex;
+}
+
+inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
+                                          int h,
+                                          int filter = TEXTURE_FILTER_BILINEAR) {
+  if (rgba == nullptr || w <= 0 || h <= 0) {
+    log_error("load_texture_from_rgba: invalid pixel data ({}x{})", w, h);
+    std::abort();
+  }
+  return metal_texture_detail::load_texture_from_pixels(rgba, w, h, filter);
 }
 
 inline void unload_texture(TextureType &texture) {
