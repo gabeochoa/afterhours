@@ -62,6 +62,52 @@ int main() {
     check(em.count() == 0, "a particle dies when its age passes its life");
   }
 
+  {
+    auto velocity_after = [](float dt, int steps) {
+      Emitter<4> em;
+      em.drag = 10.f;
+      auto &p = em.spawn();
+      p.vel = {100.f, -50.f};
+      p.life = 10.f;
+      for (int i = 0; i < steps; ++i)
+        em.update(dt);
+      return p.vel;
+    };
+    const auto low = velocity_after(0.05f, 10);
+    const auto normal = velocity_after(1.f / 60.f, 30);
+    const auto high = velocity_after(0.005f, 100);
+    const float expected = 100.f * std::exp(-10.f * 0.5f);
+    check(std::fabs(low.x - expected) < 0.01f && std::fabs(normal.x - expected) < 0.01f &&
+              std::fabs(high.x - expected) < 0.01f,
+          "drag decay after 0.5s matches exp(-drag*t) at 20, 60 and 200 fps");
+    check(std::fabs(low.x - normal.x) < 0.01f && std::fabs(normal.x - high.x) < 0.01f &&
+              std::fabs(low.y - normal.y) < 0.01f && std::fabs(normal.y - high.y) < 0.01f,
+          "drag decay is independent of step size");
+  }
+
+  {
+    Emitter<4> em;
+    em.drag = 25.f;
+    auto &p = em.spawn();
+    p.vel = {100.f, -50.f};
+    p.life = 10.f;
+    bool kept_sign = true;
+    bool decayed = true;
+    float prev_x = p.vel.x;
+    float prev_y = p.vel.y;
+    for (int i = 0; i < 20; ++i) {
+      em.update(0.1f);
+      if (!(p.vel.x > 0.f) || !(p.vel.y < 0.f))
+        kept_sign = false;
+      if (!(std::fabs(p.vel.x) < std::fabs(prev_x)) || !(std::fabs(p.vel.y) < std::fabs(prev_y)))
+        decayed = false;
+      prev_x = p.vel.x;
+      prev_y = p.vel.y;
+    }
+    check(kept_sign, "drag never flips velocity sign at clamped low-fps steps");
+    check(decayed, "drag keeps decaying velocity at clamped low-fps steps");
+  }
+
   check(hash01(1) != hash01(2) && hash01(7) >= 0.f && hash01(7) <= 1.f, "hash01 is in range and varies");
 
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
