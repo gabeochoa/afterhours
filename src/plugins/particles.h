@@ -60,6 +60,7 @@ template <size_t Capacity = 512> struct Emitter {
 
   void update(float dt) {
     dt = std::clamp(dt, 0.f, 0.1f);
+    const float drag_factor = std::exp(-drag * dt);
     for (size_t i = 0; i < Capacity; ++i) {
       if (!alive[i])
         continue;
@@ -72,7 +73,6 @@ template <size_t Capacity = 512> struct Emitter {
       }
       p.vel.x += gravity.x * dt;
       p.vel.y += gravity.y * dt;
-      const float drag_factor = std::exp(-drag * dt);
       p.vel.x *= drag_factor;
       p.vel.y *= drag_factor;
       p.pos.x += p.vel.x * dt;
