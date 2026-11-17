@@ -2,6 +2,7 @@
 
 #include "../../clipboard.h"
 #include "../text_selection.h"
+#include "../text_units.h"
 #include "../ui_collection.h"
 #include "concepts.h"
 #include "line_index.h"
@@ -180,7 +181,7 @@ inline bool delete_before_cursor(AnyTextInputState auto &s) {
   if (s.cursor_position == 0 || s.text_size() == 0)
     return false;
   std::string txt = s.text();
-  size_t prev = utf8_prev_char_start(txt, s.cursor_position);
+  size_t prev = ui::prev_grapheme_start(txt, s.cursor_position);
   s.storage.erase(prev, s.cursor_position - prev);
   s.cursor_position = prev;
   s.changed_since = true;
@@ -192,7 +193,9 @@ inline bool delete_at_cursor(AnyTextInputState auto &s) {
   if (s.cursor_position >= s.text_size())
     return false;
   std::string txt = s.text();
-  s.storage.erase(s.cursor_position, utf8_char_length(txt, s.cursor_position));
+  s.storage.erase(s.cursor_position,
+                  ui::next_grapheme_end(txt, s.cursor_position) -
+                      s.cursor_position);
   s.changed_since = true;
   return true;
 }
@@ -200,13 +203,13 @@ inline bool delete_at_cursor(AnyTextInputState auto &s) {
 // Move cursor left by one UTF-8 char
 inline void move_cursor_left(AnyTextInputState auto &s) {
   if (s.cursor_position > 0)
-    s.cursor_position = utf8_prev_char_start(s.text(), s.cursor_position);
+    s.cursor_position = ui::prev_grapheme_start(s.text(), s.cursor_position);
 }
 
 // Move cursor right by one UTF-8 char
 inline void move_cursor_right(AnyTextInputState auto &s) {
   if (s.cursor_position < s.text_size())
-    s.cursor_position += utf8_char_length(s.text(), s.cursor_position);
+    s.cursor_position = ui::next_grapheme_end(s.text(), s.cursor_position);
 }
 
 // Update blink timer, returns true if cursor visible
@@ -540,7 +543,7 @@ inline bool delete_before_cursor_multiline(AnyTextAreaState auto &s) {
     return false;
 
   std::string txt = s.text();
-  size_t prev = utf8_prev_char_start(txt, s.cursor_position);
+  size_t prev = ui::prev_grapheme_start(txt, s.cursor_position);
 
   // Check if we're deleting a newline
   bool deleting_newline = (txt[prev] == '\n');
@@ -569,7 +572,9 @@ inline bool delete_at_cursor_multiline(AnyTextAreaState auto &s) {
   // Check if we're deleting a newline
   bool deleting_newline = (txt[s.cursor_position] == '\n');
 
-  s.storage.erase(s.cursor_position, utf8_char_length(txt, s.cursor_position));
+  s.storage.erase(s.cursor_position,
+                  ui::next_grapheme_end(txt, s.cursor_position) -
+                      s.cursor_position);
   s.changed_since = true;
 
   // Rebuild line index if we deleted a newline

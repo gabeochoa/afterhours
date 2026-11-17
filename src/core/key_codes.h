@@ -13,6 +13,7 @@ namespace afterhours {
 // These match both raylib's KEY_* and GLFW's GLFW_KEY_* constants
 namespace keys {
 
+constexpr int NULL_KEY = 0;
 constexpr int APOSTROPHE = 39;
 constexpr int COMMA = 44;
 constexpr int MINUS = 45;
