@@ -147,6 +147,7 @@ ALL_TESTS := \
 	mouse_axis_action_test \
 	card_and_type_scale_test \
 	fixed_timestep_test \
+	frame_rate_stats_test \
 	graphics_concepts_pedantic_test \
 	fixed_tick_rate_test \
 	sound_playback_test \
