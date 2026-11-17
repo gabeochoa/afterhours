@@ -1,5 +1,6 @@
 
 #pragma once
+#include <algorithm>
 #include <array>
 
 #include <cmath>
@@ -13,6 +14,7 @@
 #include "../core/key_codes.h"
 #include "../core/system.h"
 #include "../developer.h"
+#include "../drawing_helpers.h"
 #include "../gestures_macos.h"
 #include "window_manager.h"
 
@@ -89,6 +91,10 @@ struct input : developer::Plugin {
         if (button == 1 && testing::test_input::detail::test_mode &&
             testing::input_injector::detail::mouse.active) {
             return testing::input_injector::detail::mouse.right_down;
+        }
+        if (button == 2 && testing::test_input::detail::test_mode &&
+            testing::input_injector::detail::mouse.active) {
+            return testing::input_injector::detail::mouse.middle_down;
         }
 #endif
         return raylib::IsMouseButtonDown(button);
@@ -192,7 +198,9 @@ struct input : developer::Plugin {
 
     static void draw_text(const std::string &text, const int x, const int y,
                           const int fontSize) {
-        raylib::DrawText(text.c_str(), x, y, fontSize, raylib::RED);
+        ::afterhours::draw_text(text.c_str(), static_cast<float>(x),
+                                static_cast<float>(y),
+                                static_cast<float>(fontSize), raylib::RED);
     }
 
     static void set_gamepad_mappings(const std::string &data) {
@@ -524,6 +532,7 @@ struct input : developer::Plugin {
         int value = 0;
         GamepadButton() = default;
         explicit GamepadButton(int v) : value(v) {}
+        bool operator==(const GamepadButton &) const = default;
     };
 
     // The backend hands back window space; the letterbox is applied here
@@ -696,6 +705,7 @@ struct input : developer::Plugin {
         int value = 0;
         GamepadButton() = default;
         explicit GamepadButton(int v) : value(v) {}
+        bool operator==(const GamepadButton &) const = default;
     };
 
     // TODO good luck ;)
@@ -873,6 +883,7 @@ struct input : developer::Plugin {
             : key(k), required_modifiers(0), has_explicit_modifiers(false) {}
         KeyChord(KeyCode k, uint8_t mods)
             : key(k), required_modifiers(mods), has_explicit_modifiers(true) {}
+        bool operator==(const KeyChord &) const = default;
     };
 
     static uint8_t get_current_modifiers() {
@@ -891,6 +902,7 @@ struct input : developer::Plugin {
     struct GamepadAxisWithDir {
         GamepadAxis axis;
         int dir = -1;
+        bool operator==(const GamepadAxisWithDir &) const = default;
     };
 
     enum struct MouseAxis { X, Y };
@@ -898,6 +910,7 @@ struct input : developer::Plugin {
     struct MouseAxisWithDir {
         MouseAxis axis;
         int dir = -1;
+        bool operator==(const MouseAxisWithDir &) const = default;
     };
 
     using AnyInput =
@@ -1090,6 +1103,31 @@ struct input : developer::Plugin {
         });
     }
 
+    struct Repeat {
+        float delay = 0.25f;
+        float rate = 0.05f;
+        float until_next = -1.f;
+
+        int tick(bool held, float dt) {
+            VALIDATE(rate > 0.f, "input::Repeat needs a positive rate");
+            if (!held) {
+                until_next = -1.f;
+                return 0;
+            }
+            if (until_next < 0.f) {
+                until_next = delay;
+                return 1;
+            }
+            until_next -= dt;
+            int fires = 0;
+            while (until_next <= 0.f) {
+                until_next += rate;
+                ++fires;
+            }
+            return fires;
+        }
+    };
+
     struct InputCollector : public BaseComponent {
         DeviceActivity device_activity;
         std::vector<input::ActionDone> inputs;
@@ -1099,6 +1137,15 @@ struct input : developer::Plugin {
     };
 
     using InputCollectorInputAction = InputCollector;
+
+    static std::vector<int> actions_using(
+        const std::map<int, ValidInputs> &mapping, const AnyInput &binding) {
+        std::vector<int> actions;
+        for (const auto &[action, inputs] : mapping)
+            if (std::ranges::find(inputs, binding) != inputs.end())
+                actions.push_back(action);
+        return actions;
+    }
 
     struct ProvidesMaxGamepadID : public BaseComponent {
         int max_gamepad_available = 0;
@@ -1110,6 +1157,14 @@ struct input : developer::Plugin {
         GameMapping mapping;
         ProvidesInputMapping(const GameMapping start_mapping)
             : mapping(start_mapping) {}
+
+        void set_binding(int action, const input::ValidInputs &inputs) {
+            mapping[action] = inputs;
+        }
+        void clear_binding(int action) { mapping.erase(action); }
+        std::vector<int> actions_using(const input::AnyInput &binding) const {
+            return input::actions_using(mapping, binding);
+        }
     };
 
     struct RenderConnectedGamepads : System<input::ProvidesMaxGamepadID> {
@@ -1350,6 +1405,13 @@ struct ProvidesLayeredInputMapping : public BaseComponent {
         if (layer_it != layers.end()) {
             layer_it->second.erase(action);
         }
+    }
+
+    std::vector<int> actions_using(LayerEnum layer,
+                                   const input::AnyInput &binding) const {
+        auto layer_it = layers.find(layer);
+        if (layer_it == layers.end()) return {};
+        return input::actions_using(layer_it->second, binding);
     }
 };
 
