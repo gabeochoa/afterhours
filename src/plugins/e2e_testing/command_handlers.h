@@ -354,6 +354,23 @@ struct HandleMouseMoveCommand : System<PendingE2ECommand> {
     }
 };
 
+inline void press_mouse_at(float x, float y) {
+    test_input::set_mouse_position(x, y);
+    auto &m = input_injector::detail::mouse;
+    m.left_down = true;
+    m.just_pressed = true;
+    m.press_read = false;
+    // One-frame window, like click: a system that runs before this
+    // handler still sees the press edge next frame if nothing read it.
+    m.press_frames = 1;
+    // mouse_down means HELD until mouse_up. auto_release is sticky global
+    // state -- any earlier click() leaves it set, and reset_frame would
+    // then let go of the button on the very next frame, so nothing could
+    // be dragged.
+    m.auto_release = false;
+    m.active = true;
+}
+
 // Handle 'mouse_down x y' command - press mouse at position (no release).
 struct HandleMouseDownCommand : System<PendingE2ECommand> {
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
@@ -365,22 +382,7 @@ struct HandleMouseDownCommand : System<PendingE2ECommand> {
         }
 
         auto [sw, sh] = e2e_screen_size();
-        float x = cmd.coord_arg(0, sw);
-        float y = cmd.coord_arg(1, sh);
-        test_input::set_mouse_position(x, y);
-        auto &m = input_injector::detail::mouse;
-        m.left_down = true;
-        m.just_pressed = true;
-        m.press_read = false;
-        // One-frame window, like click: a system that runs before this
-        // handler still sees the press edge next frame if nothing read it.
-        m.press_frames = 1;
-        // mouse_down means HELD until mouse_up. auto_release is sticky global
-        // state -- any earlier click() leaves it set, and reset_frame would
-        // then let go of the button on the very next frame, so nothing could
-        // be dragged.
-        m.auto_release = false;
-        m.active = true;
+        press_mouse_at(cmd.coord_arg(0, sw), cmd.coord_arg(1, sh));
         cmd.consume();
     }
 };
