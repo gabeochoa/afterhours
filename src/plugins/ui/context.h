@@ -290,13 +290,19 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   // order breaks has to find the last writer, and nothing reported it: the
   // search was guess-and-rebuild. File and line rather than a built string,
   // so this stays free enough to leave on.
+  EntityID resolve_focus_target(EntityID id) const {
+    if (id < 0)
+      return id;
+    OptEntity e = UICollectionHolder::getEntityForID(id);
+    if (e.has_value() && e.asE().has<FocusProxy>())
+      return e.asE().get<FocusProxy>().target;
+    return id;
+  }
+
   void set_focus(EntityID id, FocusSource src = FocusSource::Explicit,
                  const std::source_location loc =
                      std::source_location::current()) {
-    if (id >= 0)
-      if (OptEntity e = UICollectionHolder::getEntityForID(id);
-          e.has_value() && e.asE().has<FocusProxy>())
-        id = e.asE().get<FocusProxy>().target;
+    id = resolve_focus_target(id);
     // Only a change is news. try_to_grab re-asserts focus every frame, so
     // recording every write would report the grab and bury whatever actually
     // moved focus, which is the question worth answering.
