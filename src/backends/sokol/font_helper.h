@@ -113,7 +113,8 @@ inline bool expand_font_atlas(FONScontext *ctx) {
   return true;
 }
 
-inline Font load_font_from_file_with_codepoints(const char *file, int *, int) {
+inline Font load_font_from_file_with_codepoints(const char *file, int *, int,
+                                                int = 32) {
   // fontstash loads full TTF; codepoint filtering not needed
   return load_font_from_file(file);
 }
