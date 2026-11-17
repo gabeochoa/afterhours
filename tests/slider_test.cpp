@@ -340,4 +340,31 @@ TEST(slider_track_click_centres_handle) {
   CHECK(std::fabs(bg.get<HasSliderState>().value - 0.25f) < 0.01f);
 }
 
+TEST(slider_follows_an_outside_write) {
+  ImmTestHarness h;
+  float value = 0.2f;
+  build_slider(h, value);
+  h.begin_frame();
+  value = 0.7f;
+  Entity &bg = build_slider(h, value);
+  CHECK(std::fabs(bg.get<HasSliderState>().value - 0.7f) < 1e-6f);
+  CHECK(std::fabs(value - 0.7f) < 1e-6f);
+  UIComponent *track = h.find("slider_background");
+  UIComponent *handle = h.find("slider_handle");
+  CHECK(track != nullptr && handle != nullptr);
+  if (track && handle)
+    CHECK(std::fabs(handle->rect().x - track->rect().x -
+                    0.7f * 0.75f * track->rect().width) < 0.05f);
+}
+
+TEST(slider_pending_drag_beats_the_callers_value) {
+  ImmTestHarness h;
+  float value = 0.2f;
+  Entity &bg = build_slider(h, value);
+  bg.get<HasLeftRightListener>().cb(bg, 1);
+  h.begin_frame();
+  build_slider(h, value);
+  CHECK(std::fabs(value - 0.21f) < 1e-4f);
+}
+
 int main() { return ui_test::run_registered_tests("slider tests"); }

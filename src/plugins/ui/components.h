@@ -2,6 +2,7 @@
 
 #include <cmath>
 
+#include "../animation/instant.h"
 #include "../texture_manager.h"
 #if __has_include(<magic_enum/magic_enum.hpp>)
 #include <magic_enum/magic_enum.hpp>
@@ -148,6 +149,10 @@ struct SelectOnFocus : BaseComponent {};
 
 struct FocusClusterRoot : BaseComponent {};
 struct InFocusCluster : BaseComponent {};
+
+struct FocusProxy : BaseComponent {
+  EntityID target = -1;
+};
 
 struct HasTray : BaseComponent {
   int selection_index = 0;
@@ -648,7 +653,8 @@ struct HasScrollView : BaseComponent {
         scroll_offset.y != last_eased_offset.y)
       scroll_target = scroll_offset;
 
-    if (scroll_smoothing >= 1.0f || scroll_smoothing <= 0.0f) {
+    if (motion::is_instant() || scroll_smoothing >= 1.0f ||
+        scroll_smoothing <= 0.0f) {
       scroll_offset = scroll_target;
       last_eased_offset = scroll_offset;
       return;

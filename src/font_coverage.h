@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -86,21 +88,27 @@ inline bool parse_subtable(const unsigned char *d, size_t n, size_t off,
   return false;
 }
 
-inline bool parse_cmap(const unsigned char *d, size_t n, Ranges &out) {
+inline const unsigned char *find_table(const unsigned char *d, size_t n,
+                                       const char *tag, size_t len) {
   if (!d || n < 12)
-    return false;
+    return nullptr;
   const uint16_t tables = u16(d + 4);
-  size_t cmap_off = 0;
   for (uint16_t i = 0;
        i < tables && 12 + static_cast<size_t>(i) * 16 + 16 <= n; i++) {
     const unsigned char *rec = d + 12 + static_cast<size_t>(i) * 16;
-    if (std::memcmp(rec, "cmap", 4) == 0) {
-      cmap_off = u32(rec + 8);
-      break;
-    }
+    if (std::memcmp(rec, tag, 4) != 0)
+      continue;
+    const size_t off = u32(rec + 8);
+    return off + len <= n ? d + off : nullptr;
   }
-  if (cmap_off == 0 || cmap_off + 4 > n)
+  return nullptr;
+}
+
+inline bool parse_cmap(const unsigned char *d, size_t n, Ranges &out) {
+  const unsigned char *cmap = find_table(d, n, "cmap", 4);
+  if (!cmap)
     return false;
+  const size_t cmap_off = static_cast<size_t>(cmap - d);
   const uint16_t subtables = u16(d + cmap_off + 2);
   bool parsed = false;
   for (uint16_t i = 0;
@@ -127,7 +135,7 @@ inline bool parse_cmap(const unsigned char *d, size_t n, Ranges &out) {
   return true;
 }
 
-inline bool parse_file(const char *file, Ranges &out) {
+inline bool read_file(const char *file, std::vector<unsigned char> &bytes) {
   if (!file)
     return false;
   std::ifstream in(file, std::ios::binary | std::ios::ate);
@@ -136,11 +144,36 @@ inline bool parse_file(const char *file, Ranges &out) {
   const std::streamsize size = in.tellg();
   if (size <= 0)
     return false;
-  std::vector<unsigned char> bytes(static_cast<size_t>(size));
+  bytes.resize(static_cast<size_t>(size));
   in.seekg(0);
-  if (!in.read(reinterpret_cast<char *>(bytes.data()), size))
-    return false;
-  return parse_cmap(bytes.data(), bytes.size(), out);
+  return static_cast<bool>(
+      in.read(reinterpret_cast<char *>(bytes.data()), size));
+}
+
+inline bool parse_file(const char *file, Ranges &out) {
+  std::vector<unsigned char> bytes;
+  return read_file(file, bytes) && parse_cmap(bytes.data(), bytes.size(), out);
+}
+
+inline std::optional<float> font_size_per_point(const unsigned char *d,
+                                                size_t n) {
+  const unsigned char *head = find_table(d, n, "head", 20);
+  const unsigned char *hhea = find_table(d, n, "hhea", 8);
+  if (!head || !hhea)
+    return std::nullopt;
+  const float units_per_em = u16(head + 18);
+  const float ascent = static_cast<int16_t>(u16(hhea + 4));
+  const float descent = static_cast<int16_t>(u16(hhea + 6));
+  if (units_per_em <= 0.f || ascent - descent <= 0.f)
+    return std::nullopt;
+  return (ascent - descent) / units_per_em;
+}
+
+inline std::optional<float> font_size_per_point(const char *file) {
+  std::vector<unsigned char> bytes;
+  if (!read_file(file, bytes))
+    return std::nullopt;
+  return font_size_per_point(bytes.data(), bytes.size());
 }
 
 inline bool covers(const Ranges &ranges, uint32_t cp) {
@@ -155,6 +188,95 @@ inline bool covers(const Ranges &ranges, uint32_t cp) {
       return true;
   }
   return false;
+}
+
+inline bool is_invisible_modifier(uint32_t cp) {
+  return (cp >= 0x200B && cp <= 0x200F) || (cp >= 0x2060 && cp <= 0x2064) ||
+         (cp >= 0xFE00 && cp <= 0xFE0F) || cp == 0xFEFF || cp == 0x20E3 ||
+         (cp >= 0x1F3FB && cp <= 0x1F3FF) || (cp >= 0xE0000 && cp <= 0xE0FFF);
+}
+
+inline uint32_t decode_utf8(const unsigned char *s, size_t &len) {
+  len = 0;
+  uint32_t cp = s[0];
+  size_t need = 0;
+  if (cp < 0x80)
+    need = 1;
+  else if ((cp & 0xE0) == 0xC0)
+    cp &= 0x1F, need = 2;
+  else if ((cp & 0xF0) == 0xE0)
+    cp &= 0x0F, need = 3;
+  else if ((cp & 0xF8) == 0xF0)
+    cp &= 0x07, need = 4;
+  else
+    return 0;
+  for (size_t k = 1; k < need; k++) {
+    if ((s[k] & 0xC0) != 0x80)
+      return 0;
+    cp = (cp << 6) | (s[k] & 0x3F);
+  }
+  len = need;
+  return cp;
+}
+
+template <typename Covered>
+inline bool visible_text(const char *text, Covered &&covered,
+                         std::string &out) {
+  if (!text)
+    return false;
+  size_t i = 0;
+  while (text[i] && static_cast<unsigned char>(text[i]) < 0x80)
+    i++;
+  if (!text[i])
+    return false;
+  const auto *s = reinterpret_cast<const unsigned char *>(text);
+  std::string res(text, i);
+  const char *replacement = covered(0xFFFDu) ? "\xEF\xBF\xBD" : "?";
+  bool changed = false, joining = false, half_flag = false;
+  while (s[i]) {
+    size_t len = 0;
+    const uint32_t cp = decode_utf8(s + i, len);
+    if (len == 0) {
+      res += text[i++];
+      joining = false;
+      continue;
+    }
+    const char *start = text + i;
+    i += len;
+    const bool have = cp < 0x80 || covered(cp);
+    if (cp == 0x200D) {
+      joining = true;
+      if (have)
+        res.append(start, len);
+      else
+        changed = true;
+      continue;
+    }
+    if (have) {
+      res.append(start, len);
+      joining = half_flag = false;
+      continue;
+    }
+    changed = true;
+    if (is_invisible_modifier(cp))
+      continue;
+    if (joining) {
+      joining = false;
+      continue;
+    }
+    if (cp >= 0x1F1E6 && cp <= 0x1F1FF) {
+      half_flag = !half_flag;
+      if (!half_flag)
+        continue;
+    } else {
+      half_flag = false;
+    }
+    res += replacement;
+  }
+  if (!changed)
+    return false;
+  out = std::move(res);
+  return true;
 }
 
 } // namespace afterhours::font_coverage

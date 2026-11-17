@@ -1488,4 +1488,19 @@ TEST(text_area_wrap_measurement_matches_its_line_labels) {
   ThemeDefaults::get().theme.ui_scale = old_scale;
 }
 
+TEST(focusing_the_returned_entity_focuses_the_field) {
+  ImmTestHarness h;
+  std::string text = "notes";
+  EntityID wrapper = -1;
+  two_frames(h, [&] {
+    wrapper = text_area(h.context(), mk(h.root(), 0), text,
+                        area_config(200.f, 200.f)).id();
+  });
+  UIComponent *field = h.find("text_area_field");
+  CHECK(field != nullptr);
+  if (!field) return;
+  h.context().set_focus(wrapper);
+  CHECK(h.context().focus_id == field->id);
+}
+
 int main() { return ui_test::run_registered_tests("text_area"); }
