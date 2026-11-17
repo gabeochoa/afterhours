@@ -130,6 +130,28 @@ struct HandleKeyCommand : System<PendingE2ECommand> {
     }
 };
 
+// 'hold_key KEY' / 'release_key KEY': `key` only taps, so held movement
+// needs these. The key stays down until released or the test state resets.
+struct HandleHoldKeyCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() ||
+            (!cmd.is("hold_key") && !cmd.is("release_key")))
+            return;
+        const int code = cmd.args.empty() ? 0 : key_from_name(cmd.args[0]);
+        if (code == 0) {
+            cmd.fail(cmd.name + ": unknown key '" +
+                     (cmd.args.empty() ? "" : cmd.args[0]) + "'");
+            return;
+        }
+        if (cmd.is("hold_key"))
+            input_injector::set_key_down(code);
+        else
+            input_injector::set_key_up(code);
+        cmd.consume();
+    }
+};
+
 // Handle 'click x y' command - clicks at coordinates
 // Coordinates support '%' suffix for screen-relative positioning.
 struct HandleClickCommand : System<PendingE2ECommand> {
