@@ -136,6 +136,7 @@ ALL_TESTS := \
 	mouse_axis_action_test \
 	card_and_type_scale_test \
 	fixed_timestep_test \
+	fixed_tick_rate_test \
 	sound_playback_test \
 	headless_runconfig_test \
 	harness_spellings_test \
