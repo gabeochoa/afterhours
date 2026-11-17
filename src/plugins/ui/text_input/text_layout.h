@@ -25,7 +25,7 @@ struct VisualLine {
 /// Caches word-wrapped layout for efficient rendering.
 /// Rebuild when text changes, wrap width changes, or font changes.
 ///
-/// Wrapping itself is ui::detail::wrap_text_to_width -- the same primitive both
+/// Wrapping itself is ui::detail::wrap_lines -- the same primitive both
 /// renderers use -- so an edited line breaks exactly where a drawn one does.
 /// What this adds is the mapping the renderer does not need and an editor
 /// cannot work without: which source byte each visual line starts at.
@@ -48,25 +48,16 @@ struct TextLayoutCache {
 
     const std::string source(text);
     // No-wrap still has to honour hard breaks, and a width nothing reaches is
-    // how wrap_text_to_width expresses that (max_width <= 0 means "one line").
+    // how wrap_lines expresses that (max_width <= 0 means "one line").
     const float width = wrap_width > 0.f ? wrap_width : 1e9f;
-    const std::vector<std::string> wrapped = ui::detail::wrap_text_to_width(
-        source, width,
-        [&](const std::string &s) { return measure_fn(std::string_view(s)); });
-
-    // Soft wrapping consumes the space it broke at, so a wrapped line's text is
-    // not at a position arithmetic can predict -- but it IS the next verbatim
-    // occurrence, because everything except break whitespace is preserved.
-    size_t pos = 0;
     float y = 0.f;
-    for (const std::string &line : wrapped) {
-      const size_t at = source.find(line, pos);
-      const size_t start = at == std::string::npos ? pos : at;
-      const float w = line.empty() ? 0.f : measure_fn(std::string_view(line));
-      lines_.push_back({start, line.size(), y, w});
-      max_width_ = std::max(max_width_, w);
+    for (const ui::detail::WrappedLine &line : ui::detail::wrap_lines(
+             source, width, [&](const std::string &s) {
+               return measure_fn(std::string_view(s));
+             })) {
+      lines_.push_back({line.begin, line.end - line.begin, y, line.width});
+      max_width_ = std::max(max_width_, line.width);
       y += line_height;
-      pos = start + line.size();
     }
 
     // Ensure at least one line

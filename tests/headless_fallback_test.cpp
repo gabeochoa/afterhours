@@ -108,6 +108,33 @@ int main() {
     check(empty.x == 0.f, "an empty string is still zero wide");
   }
 
+  {
+    raylib::GlyphInfo glyph{};
+    glyph.value = '0';
+    glyph.advanceX = 12;
+    raylib::Rectangle rec{};
+    rec.width = 9;
+    raylib::Font fake{};
+    fake.texture.id = 1;
+    fake.baseSize = 32;
+    fake.glyphCount = 1;
+    fake.glyphs = &glyph;
+    fake.recs = &rec;
+    check(afterhours::monospace_cell_advance(fake, 32.f) == 12.f,
+          "cell advance is the digit glyph advance at base size");
+    check(afterhours::monospace_cell_advance(fake, 16.f) == 6.f,
+          "cell advance scales with the requested size");
+    glyph.advanceX = 0;
+    check(afterhours::monospace_cell_advance(fake, 32.f) == 9.f,
+          "cell advance falls back to the glyph rect when advance is zero");
+    glyph.advanceX = 12;
+    check(afterhours::monospace_cell_advance(fake, 0.f) == 0.f,
+          "cell advance rejects a zero size");
+    const raylib::Font none = raylib::GetFontDefault();
+    check(afterhours::monospace_cell_advance(none, 20.f) == 10.f,
+          "cell advance estimates like measure_text without an atlas");
+  }
+
   // --- loaders must not hand back an atlas-less font ---------------------
   {
     // load_font_from_file and its codepoint sibling fall back to a
