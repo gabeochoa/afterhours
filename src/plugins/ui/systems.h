@@ -1909,17 +1909,20 @@ template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
 
             Entity &child = child_opt.asE();
             auto &child_cmp = child.get<UIComponent>();
+            const RectangleType drawn =
+                detail::apply_ancestor_transform(child, child_cmp.rect());
 
-            if (is_mouse_inside(ctx->mouse.pos, child_cmp.rect())) {
+            if (is_mouse_inside(ctx->mouse.pos,
+                                detail::clip_hit_rect(child, drawn))) {
               state->armed = true;
               state->armed_item = child.id;
               state->armed_group = group.id;
               state->drag_source_index = i;
               state->hover_index = i;
-              state->dragged_width = child_cmp.rect().width;
-              state->dragged_height = child_cmp.rect().height;
-              state->grab_offset_x = ctx->mouse.pos.x - child_cmp.rect().x;
-              state->grab_offset_y = ctx->mouse.pos.y - child_cmp.rect().y;
+              state->dragged_width = drawn.width;
+              state->dragged_height = drawn.height;
+              state->grab_offset_x = ctx->mouse.pos.x - drawn.x;
+              state->grab_offset_y = ctx->mouse.pos.y - drawn.y;
               break;
             }
           }
@@ -1978,9 +1981,7 @@ template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
 
     for (Entity &group : groups) {
       auto &group_cmp = group.get<UIComponent>();
-      RectangleType group_rect = group_cmp.rect();
-
-      if (!is_mouse_inside(ctx->mouse.pos, group_rect))
+      if (!is_mouse_inside(ctx->mouse.pos, detail::hit_rect(group, group_cmp)))
         continue;
 
       // Move hover tag to this group
@@ -2008,7 +2009,7 @@ template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
         if (!child_opt)
           continue;
         auto &child_cmp = child_opt.asE().template get<UIComponent>();
-        auto r = child_cmp.rect();
+        auto r = detail::apply_ancestor_transform(child_opt.asE(), child_cmp.rect());
         float child_mid =
             horizontal ? (r.x + r.width / 2.0f) : (r.y + r.height / 2.0f);
         float mouse_pos = horizontal ? ctx->mouse.pos.x : ctx->mouse.pos.y;
