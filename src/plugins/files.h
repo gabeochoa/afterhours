@@ -12,6 +12,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "../core/base_component.h"
 #include "../ecs.h"
@@ -163,6 +164,23 @@ struct files : developer::Plugin {
 
     bool ensure_directory_exists(const fs::path &path);
   };
+
+  struct TestRoots {
+    fs::path root;
+    fs::path save;
+    fs::path config;
+    fs::path temp;
+
+    TestRoots();
+    ~TestRoots();
+    TestRoots(const TestRoots &) = delete;
+    TestRoots &operator=(const TestRoots &) = delete;
+
+  private:
+    TestRoots *previous = nullptr;
+    std::optional<std::pair<fs::path, fs::path>> provider_paths;
+  };
+  inline static TestRoots *active_test_roots = nullptr;
 
   // Non-templated version for PluginCore concept compatibility
   // Note: For actual files functionality, use the overload with game_name.
