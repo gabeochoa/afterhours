@@ -295,6 +295,13 @@ inline int *remove_duplicate_codepoints(int *codepoints, int codepointCount,
 }
 
 // Convenience function to load a font with codepoints extracted from a string
+inline void unload_font(raylib::Font &font) {
+  coverage_registry().erase(font_key(font));
+  measure_memo::invalidate();
+  raylib::UnloadFont(font);
+  font = raylib::Font{};
+}
+
 inline raylib::Font load_font_for_string(const std::string &content,
                                          const std::string &font_filename,
                                          int size = 96) {
@@ -402,6 +409,29 @@ inline raylib::Vector2 measure_text_utf8(const raylib::Font font,
   }
 
   return measure_text(font, content, size, spacing);
+}
+
+inline float monospace_cell_advance(const raylib::Font font,
+                                    const float size) {
+  if (!std::isfinite(size) || size <= 0.f)
+    return 0.f;
+  if (!font_is_usable(font)) {
+    warn_once(0, "no glyph atlas to measure against, so text is being "
+                 "estimated at {}x its height per character. Expected "
+                 "headless -- load a font to measure for real.",
+              kUnmeasurableGlyphAspect);
+    return size * kUnmeasurableGlyphAspect;
+  }
+  if (font.baseSize <= 0 || !font.glyphs || !font.recs)
+    return 0.f;
+  const int idx = raylib::GetGlyphIndex(font, '0');
+  if (idx < 0 || idx >= font.glyphCount || font.glyphs[idx].value != '0')
+    return 0.f;
+  const float advance =
+      font.glyphs[idx].advanceX == 0
+          ? static_cast<float>(font.recs[idx].width)
+          : static_cast<float>(font.glyphs[idx].advanceX);
+  return advance * size / static_cast<float>(font.baseSize);
 }
 
 // Get the left-side bearing (offsetX) for the first glyph in a string.
