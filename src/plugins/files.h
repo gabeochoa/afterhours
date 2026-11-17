@@ -129,6 +129,7 @@ struct files : developer::Plugin {
     fs::path resource_folder_path;
     fs::path save_folder_path;
     fs::path config_folder_path;
+    fs::path cache_folder_path;
 
     ProvidesResourcePaths() = default;
     // Constructor implementation in files.cpp to avoid including
@@ -147,6 +148,8 @@ struct files : developer::Plugin {
     [[nodiscard]] fs::path get_config_path() const {
       return config_folder_path;
     }
+
+    [[nodiscard]] fs::path get_cache_path() const { return cache_folder_path; }
 
     // Implementation in files.cpp
     void for_resources_in_group(
@@ -189,6 +192,8 @@ struct files : developer::Plugin {
   static fs::path get_save_path();
 
   static fs::path get_config_path();
+
+  static fs::path get_cache_path();
 
   // Directory containing the running executable, or empty if unknown.
   // Available before init(); empty on Emscripten.
