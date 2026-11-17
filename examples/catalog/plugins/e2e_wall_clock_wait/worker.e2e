@@ -1,0 +1,5 @@
+start_work
+wait_until_wall 2 expect_work_done 42
+start_work
+wait_wall 0.6
+expect_work_done 42
