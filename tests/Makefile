@@ -208,6 +208,8 @@ ALL_TESTS := \
 	frustum_test \
 	instance_batcher_test \
 	lod_test \
+	image_test \
+	image_raylib_test \
 	stepper_test \
 	styling_test \
 	system_tags_test \
@@ -232,6 +234,7 @@ ifeq ($(UNAME_S),Darwin)
 ALL_TESTS += bundle_test
 ALL_TESTS += native_dialogs_macos_test
 ALL_TESTS += render_capture_metal_test
+ALL_TESTS += image_metal_test
 # Sokol is Metal here, so macOS-only; renders headless, no window.
 ALL_TESTS += sokol_blend_test
 ALL_TESTS += sokol_capture_test
@@ -403,6 +406,12 @@ $(OUT)/staging_texture_leak_test: ../src/backends/sokol/capture_impl.h
 
 $(OUT)/render_capture_metal_test: render_capture_test.cpp ../examples/web/sokol_impl.cc
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
+
+$(OUT)/image_metal_test: image_test.cpp ../examples/web/sokol_impl.cc
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
+
+$(OUT)/image_raylib_test: image_test.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $< $(LDFLAGS_RAYLIB) -o $@
 
 # Windows/Vulkan cross-build (from macOS, via zig). The .exes link on the Mac
 # and run on the Windows box. They render headless and read pixels back, so
