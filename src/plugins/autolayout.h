@@ -637,7 +637,16 @@ struct AutoLayout {
   }
 
   float _sum_children_axis_for_child_exp(UIComponent &widget, Axis axis) {
-    float total_child_size = 0.f;
+    const bool is_main_axis =
+        (widget.flex_direction == FlexDirection::Row && axis == Axis::X) ||
+        (widget.flex_direction == FlexDirection::Column && axis == Axis::Y);
+    const float gap = is_main_axis && widget.desired_gap.value > 0.f
+                          ? resolve_gap(widget.desired_gap, widget, axis)
+                          : 0.f;
+    const bool snaps = is_main_axis && enable_grid_snapping &&
+                       !widget.skip_grid_snap;
+    float offset = 0.f;
+    float end = 0.f;
     for (EntityID entityID : widget.children) {
       const UIComponent &child = cmp(entityID);
       // Dont worry about any children that are absolutely positioned
@@ -669,29 +678,12 @@ struct AutoLayout {
                   "parent {}",
                   entityID, widget.id);
       }
-      total_child_size += cs;
+      end = offset + cs;
+      offset = end + gap;
+      if (snaps && !child.skip_grid_snap)
+        offset = snap_to_8pt_grid(offset, axis);
     }
-
-    // Include flex_gap on the main axis so a Dim::Children parent grows to fit
-    // the inter-child gaps (otherwise the parent is too narrow and gapped
-    // children overflow/overlap it).
-    if (widget.desired_gap.value > 0.f) {
-      bool is_main_axis = (widget.flex_direction == FlexDirection::Row &&
-                           axis == Axis::X) ||
-                          (widget.flex_direction == FlexDirection::Column &&
-                           axis == Axis::Y);
-      int visible_children = 0;
-      for (EntityID cid : widget.children) {
-        const UIComponent &c = cmp(cid);
-        if (!c.absolute && !c.should_hide)
-          ++visible_children;
-      }
-      if (is_main_axis && visible_children > 1) {
-        total_child_size += resolve_gap(widget.desired_gap, widget, axis) *
-                            static_cast<float>(visible_children - 1);
-      }
-    }
-    return total_child_size;
+    return end;
   }
   float _max_child_size(UIComponent &widget, Axis axis) {
     float max_child_size = 0.f;

@@ -460,16 +460,15 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
 
 inline Vector2Type measure_scroll_content(const UIComponent &cmp, const HasScrollView &scroll) {
   // How children stack, not how we scroll: a scrolling column is a column.
-  bool is_row_layout =
-      static_cast<bool>(cmp.flex_direction & FlexDirection::Row);
+  const Axis main = static_cast<bool>(cmp.flex_direction & FlexDirection::Row)
+                        ? Axis::X
+                        : Axis::Y;
+  const Axis cross = main == Axis::X ? Axis::Y : Axis::X;
 
-  // Compute content size from children
-  float total_width = 0.0f;
-  float total_height = 0.0f;
-  float max_width = 0.0f;
-  float max_height = 0.0f;
-  int laid_out = 0;
-
+  float first = std::numeric_limits<float>::max();
+  float last = std::numeric_limits<float>::lowest();
+  float out_of_flow = 0.f;
+  float span = 0.f;
   for (EntityID child_id : cmp.children) {
     OptEntity child_opt = UICollectionHolder::getEntityForID(child_id);
     if (!child_opt.valid())
@@ -477,30 +476,20 @@ inline Vector2Type measure_scroll_content(const UIComponent &cmp, const HasScrol
     Entity &child = child_opt.asE();
     if (!child.has<UIComponent>())
       continue;
-    const UIComponent &child_cmp = child.get<UIComponent>();
-    float cw = child_cmp.computed[Axis::X];
-    float ch = child_cmp.computed[Axis::Y];
-    float ml = child_cmp.computed_margin[Axis::left];
-    float mr = child_cmp.computed_margin[Axis::right];
-    float mt = child_cmp.computed_margin[Axis::top];
-    float mb = child_cmp.computed_margin[Axis::bottom];
-    if (is_row_layout) {
-      total_width += cw + ml + mr;
-      max_height = std::max(max_height, ch + mt + mb);
-    } else {
-      total_height += ch + mt + mb;
-      max_width = std::max(max_width, cw + ml + mr);
+    const UIComponent &c = child.get<UIComponent>();
+    span = std::max(span, c.computed[cross] + c.computed_margin[cross]);
+    if (c.absolute || c.should_hide) {
+      out_of_flow += c.computed[main] + c.computed_margin[main];
+      continue;
     }
-    laid_out++;
+    first = std::min(first, c.computed_rel[main]);
+    last = std::max(last, c.computed_rel[main] + c.computed[main] +
+                              c.computed_margin[main]);
   }
+  const float extent = (last > first ? last - first : 0.f) + out_of_flow;
 
-  // The flex gap sits between children but isn't part of any child's box, so
-  // fold it into the content size along the layout axis — otherwise a gapped
-  // list reports content ~= viewport and never registers as overflowing.
-  const float gaps = cmp.gap * (float)std::max(0, laid_out - 1);
-  Vector2Type content = is_row_layout
-                            ? Vector2Type{total_width + gaps, max_height}
-                            : Vector2Type{max_width, total_height + gaps};
+  Vector2Type content = main == Axis::X ? Vector2Type{extent, span}
+                                        : Vector2Type{span, extent};
   // A virtualized list did not build every row, but the scroll range is
   // still the whole list's.
   content.x += scroll.unbuilt_content_size.x + cmp.computed_padd[Axis::X];
