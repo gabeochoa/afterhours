@@ -1183,6 +1183,8 @@ struct ComponentConfig {
       merged.flex_direction = overrides.flex_direction;
     if (overrides.render_layer != 0)
       merged.render_layer = overrides.render_layer;
+    if (overrides.render_layer_offset != 0)
+      merged.render_layer_offset = overrides.render_layer_offset;
     if (!overrides.tooltip_text.empty()) {
       merged.tooltip_text = overrides.tooltip_text;
       merged.tooltip_delay = overrides.tooltip_delay;
