@@ -423,7 +423,8 @@ template <typename InputAction> struct UIContext final : BaseComponent {
       return;
     if (grab_initial_focus) {
       // Grab, not Explicit: this runs every frame for whichever widget happens
-      // to be first, so counting it as intent would disable hover-follow.
+      // to be first, and Grab never sets the modality, so the automatic grab
+      // does not light the focus ring or count as interaction.
       set_focus(id, FocusSource::Grab);
       return;
     }
