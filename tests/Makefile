@@ -221,6 +221,7 @@ ALL_TESTS := \
 	library_duplicate_test \
 	shared_handlers_test \
 	default_font_test \
+	load_font_size_test \
 	edit_keys_test \
 	tab_container_test \
 	small_components_test \
@@ -257,6 +258,7 @@ endif
 RAYLIB_TESTS := \
 	edit_keys_test \
 	default_font_test \
+	load_font_size_test \
 	border_width_test \
 	text_visibility_test \
 	image_tint_test \
@@ -505,6 +507,7 @@ profiling-render-benchmark: $(OUT)/profiling_render_benchmark_on $(OUT)/profilin
 	$(OUT)/profiling_render_benchmark_on panel 3000 "$(PROFILING_FONT)"
 
 $(OUT)/font_atlas_measure_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/load_font_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/headless_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 # Shares the examples' Kenney tree rather than checking in a second copy.
 $(OUT)/models_test: CXXFLAGS_T += -DAFTERHOURS_MODEL_FIXTURE=\"$(realpath ../examples/catalog/3d/tree-large.glb)\"
