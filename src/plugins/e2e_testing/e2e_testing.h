@@ -98,6 +98,12 @@ inline void register_unknown_handler(SystemManager &sm) {
   sm.register_update_system(std::make_unique<HandleUnknownCommand>());
 }
 
+inline void register_unknown_handler(SystemManager &sm,
+                                     std::set<std::string> handled_elsewhere) {
+  sm.register_update_system(
+      std::make_unique<HandleUnknownCommand>(std::move(handled_elsewhere)));
+}
+
 // Register cleanup system (call last - removes processed commands)
 inline void register_cleanup(SystemManager &sm) {
   sm.register_update_system(std::make_unique<E2ECommandCleanupSystem>());

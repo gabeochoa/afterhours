@@ -507,6 +507,7 @@ class E2ERunner {
         if (has_pending_commands()) return;
 
         dispatch_command(cmd);
+        EntityHelper::get_default_collection().merge_entity_arrays();
         wait_time_ = cmd.wait_seconds;
         wait_ticks_ = cmd.wait_ticks;
         if (slow_mode_) {

@@ -133,6 +133,7 @@ ALL_TESTS := \
 	overlay_layer_test \
 	unhandled_command_test \
 	e2e_retry_test \
+	e2e_defer_unknown_test \
 	e2e_results_test \
 	point_in_element_test \
 	e2e_ui_gestures_test \
