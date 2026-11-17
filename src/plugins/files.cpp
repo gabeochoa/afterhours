@@ -6,6 +6,11 @@
 
 #include "files.h"
 
+#include <cstdlib>
+#include <format>
+#include <random>
+#include <tuple>
+
 #if defined(_WIN32)
 #define AFTER_HOURS_USE_RAYLIB
 #endif
@@ -104,6 +109,20 @@ std::filesystem::path resolve_resource_root(const std::string &root_folder) {
 } // namespace
 #endif // !__EMSCRIPTEN__
 
+namespace {
+std::pair<std::filesystem::path, std::filesystem::path>
+default_roots(const std::string &game_name) {
+  if (files::active_test_roots)
+    return {files::active_test_roots->save, files::active_test_roots->config};
+#ifdef __EMSCRIPTEN__
+  return {fs::path("/save") / game_name, fs::path("/config") / game_name};
+#else
+  return {fs::path(sago::getSaveGamesFolder1()) / game_name,
+          sago::getConfigHome() / fs::path(game_name)};
+#endif
+}
+} // namespace
+
 // Implementation of ProvidesResourcePaths constructor that uses
 // platform_folders on native, and Emscripten virtual filesystem paths on web.
 files::ProvidesResourcePaths::ProvidesResourcePaths(
@@ -112,9 +131,10 @@ files::ProvidesResourcePaths::ProvidesResourcePaths(
 #ifdef __EMSCRIPTEN__
   // Emscripten virtual filesystem: files preloaded with --preload-file are
   // available at the mount point. Save/config use in-memory directories.
-  save_folder_path = fs::path("/save") / fs::path(game_name);
-  config_folder_path = fs::path("/config") / fs::path(game_name);
+  std::tie(save_folder_path, config_folder_path) = default_roots(game_name);
   resource_folder_path = fs::path("/") / fs::path(root_folder);
+  cache_folder_path = fs::path("/cache") / fs::path(game_name);
+  fs::create_directories(cache_folder_path);
 
   if (!fs::exists(save_folder_path)) {
     fs::create_directories(save_folder_path);
@@ -124,10 +144,9 @@ files::ProvidesResourcePaths::ProvidesResourcePaths(
   }
 #else
   // Native: use platform-specific directories
-  const fs::path master_folder(sago::getSaveGamesFolder1());
-  save_folder_path = master_folder / fs::path(game_name);
-  config_folder_path = sago::getConfigHome() / fs::path(game_name);
+  std::tie(save_folder_path, config_folder_path) = default_roots(game_name);
   resource_folder_path = resolve_resource_root(root_folder);
+  cache_folder_path = fs::path(sago::getCacheDir()) / fs::path(game_name);
 
   if (!fs::exists(save_folder_path)) {
     bool was_created = fs::create_directories(save_folder_path);
@@ -227,6 +246,52 @@ void files::init(const std::string &game_name, const std::string &root_folder) {
   sweep_temp_files(get_save_path());
 }
 
+files::TestRoots::TestRoots() {
+  std::error_code ec;
+  const fs::path base = fs::temp_directory_path(ec);
+  std::random_device rd;
+  for (int attempt = 0; attempt < 100 && root.empty(); ++attempt) {
+    fs::path candidate =
+        base / std::format("afterhours-test-{:08x}{:08x}", rd(), rd());
+    if (fs::create_directory(candidate, ec))
+      root = candidate;
+  }
+  if (root.empty()) {
+    log_error("TestRoots: cannot create a directory under {}", base.string());
+    std::abort();
+  }
+  save = root / "save";
+  config = root / "config";
+  temp = root / "temp";
+  for (const fs::path &dir : {save, config, temp})
+    fs::create_directory(dir);
+
+  previous = active_test_roots;
+  active_test_roots = this;
+  if (auto *provider = get_provider()) {
+    provider_paths = {provider->save_folder_path, provider->config_folder_path};
+    provider->save_folder_path = save;
+    provider->config_folder_path = config;
+  }
+}
+
+files::TestRoots::~TestRoots() {
+  if (active_test_roots != this) {
+    log_error("TestRoots destroyed out of order: {}", root.string());
+    std::abort();
+  }
+  active_test_roots = previous;
+  auto *provider = get_provider();
+  if (provider && provider->save_folder_path == save) {
+    std::tie(provider->save_folder_path, provider->config_folder_path) =
+        provider_paths ? *provider_paths : default_roots(provider->game_name);
+  }
+  std::error_code ec;
+  fs::remove_all(root, ec);
+  if (ec)
+    log_warn("TestRoots: could not delete {}: {}", root.string(), ec.message());
+}
+
 void files::chdir_to_resource_root(const std::string &root_folder) {
   namespace fs = std::filesystem;
   std::error_code ec;
@@ -272,6 +337,15 @@ fs::path files::get_config_path() {
     return fs::path();
   }
   return provider->get_config_path();
+}
+
+fs::path files::get_cache_path() {
+  auto *provider = get_provider();
+  if (!provider) {
+    log_error("Files plugin not initialized. Call files::init() first.");
+    return fs::path();
+  }
+  return provider->get_cache_path();
 }
 
 fs::path files::get_executable_dir() {

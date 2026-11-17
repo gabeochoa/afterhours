@@ -11,6 +11,8 @@
 #include <sstream>
 #include <tuple>
 #include <utility>
+#include <set>
+#include <type_traits>
 
 #include "../../font_helper.h"
 #include "../../logging.h"
@@ -48,8 +50,9 @@ struct HandleTypeCommand : System<PendingE2ECommand> {
 
         // Clear any leftover chars before pushing new ones
         test_input::clear_queue();
-        for (char c : cmd.arg(0)) {
-            test_input::push_char(c);
+        if (!test_input::push_text(cmd.arg(0))) {
+            cmd.fail("type text is not valid UTF-8");
+            return;
         }
         cmd.consume();
     }
@@ -130,6 +133,28 @@ struct HandleKeyCommand : System<PendingE2ECommand> {
         pending_key = combo.key;
         release_countdown = 2;
 
+        cmd.consume();
+    }
+};
+
+// 'hold_key KEY' / 'release_key KEY': `key` only taps, so held movement
+// needs these. The key stays down until released or the test state resets.
+struct HandleHoldKeyCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() ||
+            (!cmd.is("hold_key") && !cmd.is("release_key")))
+            return;
+        const int code = cmd.args.empty() ? 0 : key_from_name(cmd.args[0]);
+        if (code == 0) {
+            cmd.fail(cmd.name + ": unknown key '" +
+                     (cmd.args.empty() ? "" : cmd.args[0]) + "'");
+            return;
+        }
+        if (cmd.is("hold_key"))
+            input_injector::set_key_down(code);
+        else
+            input_injector::set_key_up(code);
         cmd.consume();
     }
 };
@@ -358,6 +383,23 @@ struct HandleMouseMoveCommand : System<PendingE2ECommand> {
     }
 };
 
+inline void press_mouse_at(float x, float y) {
+    test_input::set_mouse_position(x, y);
+    auto &m = input_injector::detail::mouse;
+    m.left_down = true;
+    m.just_pressed = true;
+    m.press_read = false;
+    // One-frame window, like click: a system that runs before this
+    // handler still sees the press edge next frame if nothing read it.
+    m.press_frames = 1;
+    // mouse_down means HELD until mouse_up. auto_release is sticky global
+    // state -- any earlier click() leaves it set, and reset_frame would
+    // then let go of the button on the very next frame, so nothing could
+    // be dragged.
+    m.auto_release = false;
+    m.active = true;
+}
+
 // Handle 'mouse_down x y' command - press mouse at position (no release).
 struct HandleMouseDownCommand : System<PendingE2ECommand> {
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
@@ -369,22 +411,7 @@ struct HandleMouseDownCommand : System<PendingE2ECommand> {
         }
 
         auto [sw, sh] = e2e_screen_size();
-        float x = cmd.coord_arg(0, sw);
-        float y = cmd.coord_arg(1, sh);
-        test_input::set_mouse_position(x, y);
-        auto &m = input_injector::detail::mouse;
-        m.left_down = true;
-        m.just_pressed = true;
-        m.press_read = false;
-        // One-frame window, like click: a system that runs before this
-        // handler still sees the press edge next frame if nothing read it.
-        m.press_frames = 1;
-        // mouse_down means HELD until mouse_up. auto_release is sticky global
-        // state -- any earlier click() leaves it set, and reset_frame would
-        // then let go of the button on the very next frame, so nothing could
-        // be dragged.
-        m.auto_release = false;
-        m.active = true;
+        press_mouse_at(cmd.coord_arg(0, sw), cmd.coord_arg(1, sh));
         cmd.consume();
     }
 };
@@ -533,6 +560,21 @@ struct HandleWaitFramesCommand : System<PendingE2ECommand> {
     }
 };
 
+struct HandleWaitWallCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("wait_wall")) return;
+        if (!cmd.wall_deadline) {
+            cmd.fail("wait_wall dispatched without a wall deadline");
+            return;
+        }
+        if (std::chrono::steady_clock::now() < *cmd.wall_deadline)
+            cmd.retry();
+        else
+            cmd.consume();
+    }
+};
+
 // Handle 'expect_text "text"' command - checks visible text
 // This command retries across frames until text is found or timeout occurs
 struct HandleExpectTextCommand : System<PendingE2ECommand> {
@@ -674,20 +716,38 @@ inline void register_command(SystemManager &sm, std::string name, Fn fn) {
 }
 
 // Handle 'screenshot name' command - takes screenshot
-struct HandleScreenshotCommand : System<PendingE2ECommand> {
-    using ScreenshotFn = std::function<void(const std::string &)>;
+using ScreenshotFn = std::function<bool(const std::string &)>;
 
-    explicit HandleScreenshotCommand(ScreenshotFn fn)
-        : screenshot_fn_(std::move(fn)) {}
+template <typename F> ScreenshotFn as_screenshot_fn(F fn) {
+    if constexpr (requires { static_cast<bool>(fn); }) {
+        if (!static_cast<bool>(fn)) return {};
+    }
+    if constexpr (std::is_void_v<std::invoke_result_t<F &, const std::string &>>)
+        return [fn = std::move(fn)](const std::string &name) mutable {
+            fn(name);
+            return true;
+        };
+    else
+        return ScreenshotFn(std::move(fn));
+}
+
+inline void take_screenshot(const ScreenshotFn &fn, PendingE2ECommand &cmd) {
+    if (fn && !cmd.args.empty() && !fn(cmd.args[0])) {
+        cmd.fail(std::format("screenshot '{}' failed to capture", cmd.args[0]));
+        return;
+    }
+    cmd.consume();
+}
+
+struct HandleScreenshotCommand : System<PendingE2ECommand> {
+    template <typename F>
+    explicit HandleScreenshotCommand(F fn)
+        : screenshot_fn_(as_screenshot_fn(std::move(fn))) {}
 
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
                                float) override {
         if (cmd.is_consumed() || !cmd.is("screenshot")) return;
-
-        if (screenshot_fn_ && !cmd.args.empty()) {
-            screenshot_fn_(cmd.args[0]);
-        }
-        cmd.consume();
+        take_screenshot(screenshot_fn_, cmd);
     }
 
    private:
@@ -986,10 +1046,21 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
 
 // Fail on unhandled commands (runs after all other handlers)
 struct HandleUnknownCommand : System<PendingE2ECommand> {
+    std::set<std::string> handled_elsewhere;
+
+    HandleUnknownCommand() = default;
+    explicit HandleUnknownCommand(std::set<std::string> elsewhere)
+        : handled_elsewhere(std::move(elsewhere)) {}
+
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
                                float) override {
         if (cmd.is_consumed() || cmd.is_retry())
             return;  // Skip consumed or retry-pending commands
+        if (handled_elsewhere.contains(cmd.name)) {
+            cmd.retry_with(std::format(
+                "'{}' waited for a state that handles it", cmd.name));
+            return;
+        }
 
         // State the observation, then the likely causes. Asserting "typo or
         // registration order" as the only two sends the reader to audit their
@@ -1088,8 +1159,11 @@ struct E2ECommandCleanupSystem : System<PendingE2ECommand> {
     // must not be cleaned up or timed out this frame.
     static bool retry_wait_until(PendingE2ECommand &cmd, float dt) {
         if (cmd.is_consumed() && cmd.succeeded()) return true;
-        cmd.retry_budget -= dt;
-        if (cmd.retry_budget <= 0.f) {
+        const bool expired =
+            cmd.wall_deadline
+                ? std::chrono::steady_clock::now() >= *cmd.wall_deadline
+                : (cmd.retry_budget -= dt) <= 0.f;
+        if (expired) {
             std::string last = cmd.is_consumed() ? cmd.error_message
                                                  : cmd.last_mismatch;
             if (last.empty())
@@ -1098,8 +1172,10 @@ struct E2ECommandCleanupSystem : System<PendingE2ECommand> {
                     cmd.recognised ? ""
                                    : "; nothing consumed or retried it, is its "
                                      "handler registered on this SystemManager?");
-            cmd.fail(std::format("wait_until {}s: {}", cmd.wait_until_seconds,
-                                 last));
+            cmd.fail(std::format("{} {}s: {}",
+                                 cmd.wall_deadline ? "wait_until_wall"
+                                                   : "wait_until",
+                                 cmd.wait_until_seconds, last));
             return true;
         }
         if (cmd.is_consumed()) {

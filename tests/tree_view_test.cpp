@@ -80,4 +80,58 @@ TEST(tree_view_valid_config_renders_rows) {
   }
 }
 
+TEST(tree_view_render_row_builds_each_visible_row) {
+  ImmTestHarness h;
+  const std::vector<TreeNode<std::string>> roots = {
+      {"src", {{"main.cpp", {}, true}, {"util.h", {}, true}}, false},
+      {"README", {}, true}};
+  TreeViewConfig<std::string> cfg;
+  cfg.get_id = [](const std::string &s) { return s; };
+  cfg.get_label = [](const std::string &s) { return s; };
+
+  std::vector<std::pair<std::string, TreeRowInfo>> seen;
+  cfg.render_row = [&](Entity &row, const std::string &name,
+                       const TreeRowInfo &info) {
+    seen.emplace_back(name, info);
+    div(h.context(), mk(row, 0),
+        ComponentConfig{}
+            .with_size(ComponentSize{expand(), percent(1.f)})
+            .with_label(name + (info.expandable ? "/" : ""))
+            .with_debug_name("custom_" + name));
+  };
+
+  const auto build = [&] {
+    return tree_view(h.context(), mk(h.root(), 0), roots, cfg);
+  };
+  auto &state = build().ent().get<HasTreeViewState>();
+  state.expanded_nodes.insert("src");
+  state.selected_node_id = "util.h";
+  h.layout_only();
+  h.begin_frame();
+  seen.clear();
+  build();
+  h.layout_only();
+
+  CHECK(seen.size() == 4);
+  if (seen.size() == 4) {
+    CHECK(seen[0].first == "src" && seen[0].second.depth == 0 &&
+          seen[0].second.expandable && seen[0].second.expanded);
+    CHECK(seen[1].first == "main.cpp" && seen[1].second.depth == 1 &&
+          !seen[1].second.expandable && !seen[1].second.selected);
+    CHECK(seen[2].first == "util.h" && seen[2].second.selected);
+    CHECK(seen[3].first == "README" && seen[3].second.depth == 0);
+  }
+  CHECK(h.find("tree_row_label") == nullptr);
+
+  UIComponent *custom = h.find("custom_main.cpp");
+  UIComponent *custom_root = h.find("custom_src");
+  CHECK(custom != nullptr && custom_root != nullptr);
+  if (custom && custom_root) {
+    CHECK(UICollectionHolder::getEntityForID(custom->parent)
+              ->get<UIComponentDebug>()
+              .name() == "tree_row");
+    CHECK_APPROX(custom->rect().x - custom_root->rect().x, cfg.indent_width);
+  }
+}
+
 int main() { return ui_test::run_registered_tests("tree_view tests"); }

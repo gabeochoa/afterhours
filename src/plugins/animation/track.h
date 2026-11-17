@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "../../developer.h"
+#include "instant.h"
 #include "spring.h"
 #include "timeline.h"
 
@@ -83,13 +84,6 @@ template <> struct Components<ColorType> {
     return ColorType{ch(rgb[0]), ch(rgb[1]), ch(rgb[2]), alpha};
   }
 };
-
-inline bool &instant_flag() {
-  static bool v = false;
-  return v;
-}
-inline void set_instant(bool on) { instant_flag() = on; }
-inline bool is_instant() { return instant_flag(); }
 
 using Mode = std::variant<Spring, Timeline>;
 
