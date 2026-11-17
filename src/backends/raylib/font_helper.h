@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <map>
 #include <optional>
 #include <vector>
@@ -119,12 +120,23 @@ inline uint64_t font_key(const raylib::Font font) {
          static_cast<uint64_t>(font.glyphCount);
 }
 
+inline std::vector<raylib::Font> &fallback_faces() {
+  static std::vector<raylib::Font> faces;
+  return faces;
+}
+
 inline void record_font_coverage(const raylib::Font font, const char *file) {
   if (font.glyphCount <= 0)
     return;
   font_coverage::Ranges ranges;
-  if (font_coverage::parse_file(file, ranges))
-    coverage_registry()[font_key(font)] = std::move(ranges);
+  if (!font_coverage::parse_file(file, ranges))
+    return;
+  coverage_registry()[font_key(font)] = std::move(ranges);
+  auto &faces = fallback_faces();
+  if (std::none_of(faces.begin(), faces.end(), [&](const raylib::Font &f) {
+        return f.glyphs == font.glyphs;
+      }))
+    faces.push_back(font);
 }
 
 // Fonts rasterize large (96px) and are usually drawn far smaller. With
@@ -215,13 +227,50 @@ inline bool font_has_glyph(const raylib::Font font, int codepoint) {
   return true;
 }
 
+inline raylib::Font face_for(const raylib::Font font, int codepoint) {
+  if (codepoint < 0x80 || font_has_glyph(font, codepoint))
+    return font;
+  for (const raylib::Font &face : fallback_faces())
+    if (font_has_glyph(face, codepoint))
+      return face;
+  return font;
+}
+
 inline const char *drawable_text(const raylib::Font font, const char *text,
                                  std::string &storage) {
   const auto covered = [&](uint32_t cp) {
-    return font_has_glyph(font, static_cast<int>(cp));
+    const int c = static_cast<int>(cp);
+    return font_has_glyph(face_for(font, c), c);
   };
   return font_coverage::visible_text(text, covered, storage) ? storage.c_str()
                                                              : text;
+}
+
+struct FaceRun {
+  raylib::Font face;
+  std::string text;
+};
+
+inline std::vector<FaceRun> fallback_runs(const raylib::Font font,
+                                          const char *text) {
+  std::vector<FaceRun> runs;
+  if (!text || std::strchr(text, '\n'))
+    return runs;
+  bool fallback = false;
+  for (size_t i = 0; text[i];) {
+    int advance = 0;
+    const int cp = raylib::GetCodepointNext(text + i, &advance);
+    const size_t len = advance > 0 ? static_cast<size_t>(advance) : 1;
+    const raylib::Font face = face_for(font, cp);
+    fallback = fallback || face.glyphs != font.glyphs;
+    if (runs.empty() || runs.back().face.glyphs != face.glyphs)
+      runs.push_back({face, {}});
+    runs.back().text.append(text + i, len);
+    i += len;
+  }
+  if (!fallback)
+    runs.clear();
+  return runs;
 }
 
 // A codepoint the font lacks draws nothing: no box, no warning, no log. Both
@@ -420,8 +469,17 @@ inline raylib::Vector2 measure_text(const raylib::Font font,
   if (measure_memo::lookup(key, cached))
     return cached;
   std::string shown;
-  const raylib::Vector2 measured = raylib::MeasureTextEx(
-      font, drawable_text(font, content, shown), size, spacing);
+  const char *visible = drawable_text(font, content, shown);
+  const std::vector<FaceRun> runs = fallback_runs(font, visible);
+  raylib::Vector2 measured{0.f, 0.f};
+  if (runs.empty())
+    measured = raylib::MeasureTextEx(font, visible, size, spacing);
+  for (size_t i = 0; i < runs.size(); i++) {
+    const raylib::Vector2 run = raylib::MeasureTextEx(
+        runs[i].face, runs[i].text.c_str(), size, spacing);
+    measured.x += run.x + (i > 0 ? spacing : 0.f);
+    measured.y = std::max(measured.y, run.y);
+  }
   measure_memo::store(key, measured);
   return measured;
 }
