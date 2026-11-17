@@ -16,8 +16,23 @@ using WaveType = raylib::Wave;
 
 inline void InitAudioDevice() { raylib::InitAudioDevice(); }
 inline void CloseAudioDevice() { raylib::CloseAudioDevice(); }
+inline bool IsAudioDeviceReady() { return raylib::IsAudioDeviceReady(); }
+inline void SetMasterVolume(float volume) { raylib::SetMasterVolume(volume); }
+inline float GetMasterVolume() { return raylib::GetMasterVolume(); }
+inline void SetAudioStreamBufferSizeDefault(int size) {
+  raylib::SetAudioStreamBufferSizeDefault(size);
+}
 
 inline void PlaySound(raylib::Sound sound) { raylib::PlaySound(sound); }
+inline void StopSound(raylib::Sound sound) { raylib::StopSound(sound); }
+inline void PauseSound(raylib::Sound sound) { raylib::PauseSound(sound); }
+inline void ResumeSound(raylib::Sound sound) { raylib::ResumeSound(sound); }
+inline void SetSoundPitch(raylib::Sound sound, float pitch) {
+  raylib::SetSoundPitch(sound, pitch);
+}
+inline void SetSoundPan(raylib::Sound sound, float pan) {
+  raylib::SetSoundPan(sound, pan);
+}
 inline bool IsSoundPlaying(raylib::Sound sound) {
   return raylib::IsSoundPlaying(sound);
 }
@@ -42,6 +57,9 @@ inline void PlayMusicStream(raylib::Music music) {
 }
 inline void StopMusicStream(raylib::Music music) {
   raylib::StopMusicStream(music);
+}
+inline bool IsMusicStreamPlaying(raylib::Music music) {
+  return raylib::IsMusicStreamPlaying(music);
 }
 inline void UpdateMusicStream(raylib::Music music) {
   raylib::UpdateMusicStream(music);
@@ -73,8 +91,17 @@ using WaveType = WaveStub;
 
 inline void InitAudioDevice() {}
 inline void CloseAudioDevice() {}
+inline bool IsAudioDeviceReady() { return false; }
+inline void SetMasterVolume(float) {}
+inline float GetMasterVolume() { return 0.f; }
+inline void SetAudioStreamBufferSizeDefault(int) {}
 
 inline void PlaySound(SoundStub) {}
+inline void StopSound(SoundStub) {}
+inline void PauseSound(SoundStub) {}
+inline void ResumeSound(SoundStub) {}
+inline void SetSoundPitch(SoundStub, float) {}
+inline void SetSoundPan(SoundStub, float) {}
 inline bool IsSoundPlaying(SoundStub) { return false; }
 inline void SetSoundVolume(SoundStub, float) {}
 inline void UnloadSound(SoundStub) {}
@@ -86,6 +113,7 @@ inline bool ExportWave(WaveStub, const char *) { return false; }
 
 inline void PlayMusicStream(MusicStub) {}
 inline void StopMusicStream(MusicStub) {}
+inline bool IsMusicStreamPlaying(MusicStub) { return false; }
 inline void UpdateMusicStream(MusicStub) {}
 inline void SetMusicVolume(MusicStub, float) {}
 inline void UnloadMusicStream(MusicStub) {}

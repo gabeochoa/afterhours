@@ -127,6 +127,10 @@ Quote arguments containing spaces: `assert_ui header "text=My Project" hidden=fa
 
 Text commands such as `type`, `expect_text` and the value in `expect_input_text` still accept the unquoted rest of the line verbatim. To use escapes there, quote the entire text. Custom handlers receive decoded arguments and should not tokenize them again.
 
+## E2E wall-clock waits
+
+`wait SECONDS` and `wait_until SECONDS cmd ...` count the host's `dt`, so `--time-scale 4` makes them four times faster in real time and a slow headless tick makes them slower. That is right for anything the frame loop drives. A thread, subprocess or socket keeps real time instead, so use `wait_wall SECONDS` to pause the script for that long on `steady_clock`, or `wait_until_wall SECONDS cmd ...` to retry a check until a real-time deadline. Frames keep running during both. The per-script timeout pauses until the deadline, and `is_idle_waiting()` stays false, so the host renders every frame. An expired `wait_until_wall` fails the script with the last mismatch, e.g. `wait_until_wall 2s: worker still busy`. A custom handler that calls `retry()` inside one is not timed out after 30 frames.
+
 ## Image tint
 
 Use `ComponentConfig{}.with_image_tint({255, 120, 60, 200})` with `image`, `sprite`, `image_button`, or `with_texture`. RGB multiplies the source pixels; tint alpha multiplies the widget's opacity and ancestor opacity. Omitting the option restores white tint on a reused widget. Backgrounds and labels keep their own colors.
