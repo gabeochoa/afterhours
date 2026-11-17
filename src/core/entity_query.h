@@ -72,10 +72,7 @@ struct EntityQuery {
         return static_cast<TReturn &>(*this);
     }
 
-    // An id names at most one entity and the collection can already answer
-    // that in O(1), so a scan comparing every id is the slowest spelling of
-    // the most obvious question. Seeds the candidate set instead, leaving the
-    // filter in place so ordering and every other mod behave unchanged.
+    // Seeds the candidate set from the O(1) id lookup instead of scanning every id.
     void seed_from_id(const int id) {
         if (!source || !source_temp_empty || seed.has_value()) return;
         seed.emplace();
