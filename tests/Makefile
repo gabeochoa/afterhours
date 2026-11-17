@@ -127,6 +127,7 @@ ALL_TESTS := \
 	overlay_layer_test \
 	unhandled_command_test \
 	e2e_retry_test \
+	point_in_element_test \
 	e2e_ui_gestures_test \
 	mouse_axis_action_test \
 	card_and_type_scale_test \

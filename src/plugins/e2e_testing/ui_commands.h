@@ -1500,6 +1500,50 @@ struct HandleAssertUICommand : System<PendingE2ECommand> {
   }
 };
 
+struct HandleExpectPointInCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("expect_point_in")) return;
+    if (!cmd.has_args(3)) {
+      cmd.fail("expect_point_in requires: <name> <x> <y>");
+      return;
+    }
+    float x = 0.f;
+    float y = 0.f;
+    try {
+      auto [sw, sh] = e2e_screen_size();
+      x = cmd.coord_arg(1, sw);
+      y = cmd.coord_arg(2, sh);
+    } catch (...) {
+      cmd.fail(std::format("expect_point_in: invalid coordinate '{}' '{}'",
+                           cmd.arg(1), cmd.arg(2)));
+      return;
+    }
+    const std::string name = cmd.arg(0);
+    auto opt = ui_query()
+        .whereHasComponent<ui::UIComponent>()
+        .whereHasComponent<ui::UIComponentDebug>()
+        .whereLambda([&](const Entity &e) {
+          return e.get<ui::UIComponentDebug>().name_value == name &&
+                 e.get<ui::UIComponent>().was_rendered_to_screen;
+        })
+        .gen_first();
+    if (!opt.has_value()) {
+      cmd.retry();
+      return;
+    }
+    Entity &entity = opt.asE();
+    RectangleType rect = get_screen_rect(entity);
+    if (ui::is_mouse_inside(input::MousePosition{x, y}, rect)) {
+      cmd.consume();
+      return;
+    }
+    cmd.retry_with(std::format(
+        "expect_point_in '{}': point ({:g},{:g}) is outside rect "
+        "({:g},{:g} {:g}x{:g})",
+        name, x, y, rect.x, rect.y, rect.width, rect.height));
+  }
+};
+
 struct HandleAssertUITextCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("assert_ui_text")) return;
@@ -1787,6 +1831,7 @@ void register_ui_commands(SystemManager &sm,
   // UI property assertions
   sm.register_update_system(std::make_unique<HandleAssertUICommand>());
   sm.register_update_system(std::make_unique<HandleAssertUITextCommand>());
+  sm.register_update_system(std::make_unique<HandleExpectPointInCommand>());
   sm.register_update_system(std::make_unique<HandleExpectNoUICommand>());
 
   // Diagnostics
