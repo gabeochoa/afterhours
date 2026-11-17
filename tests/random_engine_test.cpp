@@ -130,6 +130,46 @@ void test_gen_random_reproducible() {
   CHECK(!none.has_value());
 }
 
+void test_stream_save_restores_mid_sequence() {
+  RngStream live(std::uint32_t{2024});
+  for (int i = 0; i < 37; i++) (void)live.get_int(0, 1000);
+  const std::string saved = live.save();
+  std::vector<int> expected;
+  for (int i = 0; i < 20; i++) expected.push_back(live.get_int(0, 1000000));
+
+  auto restored = RngStream::load(saved);
+  CHECK(restored.has_value());
+  if (!restored) return;
+  CHECK(restored->get_seed() == 2024u);
+  std::vector<int> got;
+  for (int i = 0; i < 20; i++) got.push_back(restored->get_int(0, 1000000));
+  CHECK(got == expected);
+  CHECK(!RngStream::load("not a stream").has_value());
+}
+
+void test_streams_are_independent() {
+  RngStream shop(std::uint32_t{7}), battle(std::uint32_t{7});
+  RngStream battle_alone(std::uint32_t{7});
+  for (int i = 0; i < 50; i++) (void)shop.get_int(0, 100);
+  bool same = true;
+  for (int i = 0; i < 20; i++)
+    same = same && battle.get_int(0, 1000) == battle_alone.get_int(0, 1000);
+  CHECK(same);
+}
+
+void test_gen_random_takes_a_stream() {
+  EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+  struct Pick : BaseComponent {};
+  for (int i = 0; i < 10; i++)
+    EntityHelper::createEntity().addComponent<Pick>();
+  EntityHelper::merge_entity_arrays();
+  RngStream a(std::uint32_t{99}), b(std::uint32_t{99});
+  auto first = EntityQuery().whereHasComponent<Pick>().gen_random(a);
+  auto second = EntityQuery().whereHasComponent<Pick>().gen_random(b);
+  CHECK(first.has_value() && second.has_value() && first->id == second->id);
+  EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+}
+
 int main() {
   printf("=== RandomEngine tests ===\n\n");
   struct T { const char *n; void (*f)(); };
@@ -141,6 +181,9 @@ int main() {
     {"float_range_bounds", test_float_range_bounds},
     {"get_index", test_get_index},
     {"gen_random_reproducible", test_gen_random_reproducible},
+    {"stream_save_restores_mid_sequence", test_stream_save_restores_mid_sequence},
+    {"streams_are_independent", test_streams_are_independent},
+    {"gen_random_takes_a_stream", test_gen_random_takes_a_stream},
   };
   for (auto &t : tests) { printf("  Running: %s\n", t.n); t.f(); }
   printf("\n%d/%d checks passed\n", tests_passed, tests_run);

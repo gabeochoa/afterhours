@@ -389,7 +389,7 @@ struct FontManager final : BaseComponent {
   // Add codepoint-based font loading for CJK support
   auto &load_font_with_codepoints(const std::string &font_name,
                                   const char *font_file, int *codepoints,
-                                  int codepoint_count) {
+                                  int codepoint_count, int size = 32) {
     if (font_name.empty()) {
       log_error("Cannot load font with empty name");
       return *this;
@@ -408,7 +408,7 @@ struct FontManager final : BaseComponent {
 
     invalidate_measurements_for(font_name);
     fonts[font_name] = load_font_from_file_with_codepoints(
-        font_file, codepoints, codepoint_count);
+        font_file, codepoints, codepoint_count, size);
     return *this;
   }
 
@@ -715,6 +715,12 @@ struct HasLabel : BaseComponent {
     return text_shadow.has_value() && text_shadow->has_shadow();
   }
 };
+
+struct IsDisabled : BaseComponent {};
+
+inline bool is_disabled(const Entity &e) {
+  return e.has<IsDisabled>() || (e.has<HasLabel>() && e.get<HasLabel>().is_disabled);
+}
 
 inline bool
 is_dimension_percent_based(const UIComponent::AxisArray<Size, 6> &desire,

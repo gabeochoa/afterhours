@@ -35,6 +35,10 @@ int main() {
   set_default_font(mono);
   check(get_default_font().baseSize == 42, "set_default_font replaces the default");
   check(get_unset_font().baseSize == 42, "the unset font follows it");
+  check(load_font_for_string("", "missing.ttf").baseSize == 42,
+        "a failed load_font_for_string hands back the set default");
+  check(load_font_from_file_with_codepoints(nullptr, nullptr, 0).baseSize == 42,
+        "a failed codepoint load hands back the set default");
 
   clear_default_font();
   check(get_default_font().baseSize == builtin.baseSize,

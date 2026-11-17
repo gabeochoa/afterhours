@@ -266,6 +266,7 @@ struct RaylibPlatformAPI {
     return raylib::IsKeyPressedRepeat(key);
   }
   static int get_char_pressed() { return raylib::GetCharPressed(); }
+  static int get_key_pressed() { return raylib::GetKeyPressed(); }
 
   // ── Input: mouse ──
   static bool is_mouse_button_pressed(int btn) {

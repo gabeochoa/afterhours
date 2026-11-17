@@ -5,6 +5,7 @@
 #include <cstring>
 #include <fstream>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -187,6 +188,95 @@ inline bool covers(const Ranges &ranges, uint32_t cp) {
       return true;
   }
   return false;
+}
+
+inline bool is_invisible_modifier(uint32_t cp) {
+  return (cp >= 0x200B && cp <= 0x200F) || (cp >= 0x2060 && cp <= 0x2064) ||
+         (cp >= 0xFE00 && cp <= 0xFE0F) || cp == 0xFEFF || cp == 0x20E3 ||
+         (cp >= 0x1F3FB && cp <= 0x1F3FF) || (cp >= 0xE0000 && cp <= 0xE0FFF);
+}
+
+inline uint32_t decode_utf8(const unsigned char *s, size_t &len) {
+  len = 0;
+  uint32_t cp = s[0];
+  size_t need = 0;
+  if (cp < 0x80)
+    need = 1;
+  else if ((cp & 0xE0) == 0xC0)
+    cp &= 0x1F, need = 2;
+  else if ((cp & 0xF0) == 0xE0)
+    cp &= 0x0F, need = 3;
+  else if ((cp & 0xF8) == 0xF0)
+    cp &= 0x07, need = 4;
+  else
+    return 0;
+  for (size_t k = 1; k < need; k++) {
+    if ((s[k] & 0xC0) != 0x80)
+      return 0;
+    cp = (cp << 6) | (s[k] & 0x3F);
+  }
+  len = need;
+  return cp;
+}
+
+template <typename Covered>
+inline bool visible_text(const char *text, Covered &&covered,
+                         std::string &out) {
+  if (!text)
+    return false;
+  size_t i = 0;
+  while (text[i] && static_cast<unsigned char>(text[i]) < 0x80)
+    i++;
+  if (!text[i])
+    return false;
+  const auto *s = reinterpret_cast<const unsigned char *>(text);
+  std::string res(text, i);
+  const char *replacement = covered(0xFFFDu) ? "\xEF\xBF\xBD" : "?";
+  bool changed = false, joining = false, half_flag = false;
+  while (s[i]) {
+    size_t len = 0;
+    const uint32_t cp = decode_utf8(s + i, len);
+    if (len == 0) {
+      res += text[i++];
+      joining = false;
+      continue;
+    }
+    const char *start = text + i;
+    i += len;
+    const bool have = cp < 0x80 || covered(cp);
+    if (cp == 0x200D) {
+      joining = true;
+      if (have)
+        res.append(start, len);
+      else
+        changed = true;
+      continue;
+    }
+    if (have) {
+      res.append(start, len);
+      joining = half_flag = false;
+      continue;
+    }
+    changed = true;
+    if (is_invisible_modifier(cp))
+      continue;
+    if (joining) {
+      joining = false;
+      continue;
+    }
+    if (cp >= 0x1F1E6 && cp <= 0x1F1FF) {
+      half_flag = !half_flag;
+      if (!half_flag)
+        continue;
+    } else {
+      half_flag = false;
+    }
+    res += replacement;
+  }
+  if (!changed)
+    return false;
+  out = std::move(res);
+  return true;
 }
 
 } // namespace afterhours::font_coverage

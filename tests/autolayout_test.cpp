@@ -3770,6 +3770,45 @@ TEST(wrap_with_explicit_font_size_is_quiet) {
   // No EXPECT_WARN: the runner fails the test if anything warned.
 }
 
+TEST(text_is_measured_with_the_drawn_weight_and_letter_spacing) {
+  auto &fonts_entity = EntityHelper::createPermanentEntity();
+  auto &fonts = fonts_entity.addComponent<FontManager>();
+  fonts.fonts["ui"] = Font{};
+  fonts.fonts["ui@bold"] = Font{};
+  EntityHelper::registerSingleton<FontManager>(fonts_entity);
+
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(300));
+  auto &label = t.make_ui(Size{.dim = Dim::Text, .value = 0.f},
+                          Size{.dim = Dim::Text, .value = 0.f});
+  TestLayout::ui(label).font_name = "ui";
+  TestLayout::ui(label).font_weight = colors::FontWeight::Bold;
+  auto &lbl = label.addComponent<HasLabel>();
+  lbl.label = "bold";
+  lbl.letter_spacing = 2.f;
+  t.add_child(root, label);
+
+  std::vector<Entity *> mapping(static_cast<size_t>(label.id) + 1, nullptr);
+  mapping[root.id] = &root;
+  mapping[label.id] = &label;
+  std::string measured_font;
+  float measured_spacing = 0.f;
+  AutoLayout al({1280, 720}, mapping);
+  al.set_measure_text_fn([&](const std::string &font, const std::string &s,
+                             float, float spacing) -> Vector2Type {
+    measured_font = font;
+    measured_spacing = spacing;
+    return {static_cast<float>(s.size()) * 10.f, 20.f};
+  });
+  al.build_cmp_cache();
+  al.reset_and_calculate_standalone(root.get<UIComponent>());
+
+  CHECK(measured_font == "ui@bold");
+  CHECK_APPROX(measured_spacing, 3.f);
+  fonts_entity.removeComponent<FontManager>();
+  EntityHelper::cleanup();
+}
+
 // ============================================================================
 // Main
 // ============================================================================
