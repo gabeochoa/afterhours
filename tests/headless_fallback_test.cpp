@@ -137,10 +137,6 @@ int main() {
 
   // --- loaders must not hand back an atlas-less font ---------------------
   {
-    // load_font_from_file and its codepoint sibling fall back to a
-    // manually built atlas when LoadFontEx cannot make a texture
-    // (no window). load_font_for_string historically did not, so a
-    // successful load still returned an unusable font headless.
     const auto path = std::filesystem::path(AFTERHOURS_TEST_FIXTURES) /
                       "AtkinsonHyperlegible-Regular.ttf";
     const raylib::Font loaded =
@@ -149,6 +145,16 @@ int main() {
           "load_font_for_string returns glyph data without a window");
     check(!afterhours::font_is_usable(loaded),
           "and no texture is claimed: there is no GL context to make one");
+
+    const raylib::Font from_file =
+        afterhours::load_font_from_file(path.string().c_str());
+    check(from_file.glyphCount > 0 && !afterhours::font_is_usable(from_file),
+          "load_font_from_file returns glyphs without a window, no crash");
+    int cps[] = {'a', 'b'};
+    const raylib::Font with_cps = afterhours::load_font_from_file_with_codepoints(
+        path.string().c_str(), cps, 2);
+    check(with_cps.glyphCount == 2 && !afterhours::font_is_usable(with_cps),
+          "load_font_from_file_with_codepoints too");
   }
 
   // --- ordered teardown ---------------------------------------------------
