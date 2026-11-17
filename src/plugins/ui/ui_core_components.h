@@ -716,6 +716,12 @@ struct HasLabel : BaseComponent {
   }
 };
 
+struct IsDisabled : BaseComponent {};
+
+inline bool is_disabled(const Entity &e) {
+  return e.has<IsDisabled>() || (e.has<HasLabel>() && e.get<HasLabel>().is_disabled);
+}
+
 inline bool
 is_dimension_percent_based(const UIComponent::AxisArray<Size, 6> &desire,
                            Axis axis) {
