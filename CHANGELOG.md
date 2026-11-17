@@ -26,6 +26,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 ### Visual — re-baseline
 
+- **A word wider than the wrap width breaks between grapheme clusters.** It used to sit on its own line and overflow, so long paths, URLs and hashes were clipped at the label edge. `wrap_ranges`, and with it `wrap_lines`, `wrap_text_to_width`, styled wrap and `text_area`, now break such a word at the longest grapheme prefix that fits. A single glyph wider than the width still gets a line of its own. Paragraphs that fit whole are now measured once. Wrap still needs an explicit font size, which is deliberate and already warned. Covered by `text_wrap_test` and `multiline_text_test`.
 - **A child overflowing the cross axis is aligned, not dumped at the start.** `AlignItems::Center`/`FlexEnd` used to silently fall back to `FlexStart`; centring now overflows both edges evenly, per CSS. Moved 10 of 98 screens in wm.
 - **Scroll-view children are laid out by autolayout** instead of repositioned afterwards by two drifted copies that double-counted margins. Margined direct children move by one margin, into the right place, and keep the `justify`/`align`/`gap` the old pass discarded.
 - **Cross-axis `expand()` stretches** instead of collapsing to 0, so separators and fills that were invisible now have a size.

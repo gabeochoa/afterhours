@@ -32,7 +32,7 @@ inline Vector2Type measure_text_line(const std::string &text,
 }
 
 /// Lines `text` would occupy at `max_width`. Honors hard '\n'. A word wider
-/// than max_width gets its own line rather than being split.
+/// than max_width is broken between grapheme clusters.
 inline std::vector<std::string> wrap_text(const std::string &text,
                                           float max_width,
                                           const std::string &font_name,
