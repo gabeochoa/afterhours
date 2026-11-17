@@ -44,6 +44,7 @@ enum struct ButtonVariant { Filled, Outline, Ghost };
 enum struct IconPosition { Left, Right };
 
 struct ComponentConfig {
+  static constexpr size_t VIRTUAL_LIST_OVERSCAN_DEFAULT = 4;
   ComponentSize size = ComponentSize(pixels(default_component_size.x),
                                      pixels(default_component_size.y), true);
 
@@ -211,7 +212,7 @@ struct ComponentConfig {
   size_t text_area_max_lines = 0;            // Max lines (0 = unlimited)
   bool text_area_auto_grow = false;          // Height follows the content
   bool text_area_submit_on_enter = false;    // Enter submits, Shift+Enter breaks
-  size_t virtual_list_overscan = 4;
+  size_t virtual_list_overscan = VIRTUAL_LIST_OVERSCAN_DEFAULT;
 
   // Button variant configuration
   ButtonVariant button_variant = ButtonVariant::Filled;
@@ -1311,7 +1312,7 @@ struct ComponentConfig {
       merged.text_area_auto_grow = true;
     if (overrides.text_area_submit_on_enter)
       merged.text_area_submit_on_enter = true;
-    if (overrides.virtual_list_overscan != 4)
+    if (overrides.virtual_list_overscan != VIRTUAL_LIST_OVERSCAN_DEFAULT)
       merged.virtual_list_overscan = overrides.virtual_list_overscan;
 
     // Indicator glyphs
