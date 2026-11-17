@@ -91,6 +91,8 @@ ALL_TESTS := \
 	appearance_test \
 	frame_loop_test \
 	color_value_test \
+	value_types_test \
+	value_types_none_test \
 	color_palette_test \
 	color_palette_none_test \
 	wrappers_test \
@@ -273,6 +275,7 @@ ALL_TESTS += staging_texture_leak_test
 endif
 
 RAYLIB_TESTS := \
+	value_types_test \
 	wrappers_test \
 	edit_keys_test \
 	default_font_test \
