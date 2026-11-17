@@ -6,9 +6,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <string>
+#include <vector>
 
 #include "../../developer.h"
 #include "metal_state.h"
@@ -20,15 +23,75 @@ struct Font {
   int id = FONS_INVALID;
 };
 
-inline void record_coverage(int font_id, const char *file) {
-  font_coverage::Ranges ranges;
-  if (font_coverage::parse_file(file, ranges))
-    graphics::metal_detail::g_font_coverage[font_id] = std::move(ranges);
+inline void mesh_font_fallbacks(FONScontext *ctx, int new_id);
+
+inline std::string fontstash_name(const char *name) {
+  char key[24];
+  std::snprintf(key, sizeof(key), "ah:%016zx",
+                std::hash<std::string>{}(name));
+  return key;
 }
 
 inline void mesh_font_fallbacks(FONScontext *ctx, int new_id);
 inline const char *drawable_text(int font_id, const char *text,
                                  std::string &storage);
+inline Font register_loaded_font(FONScontext *ctx, int id,
+                                 font_coverage::Ranges *ranges) {
+  if (ranges)
+    graphics::metal_detail::g_font_coverage[id] = std::move(*ranges);
+  // Font ids belong to one fontstash context; a new context resets
+  // tracking, since ids from a dead context are meaningless in a new
+  // one. Production never recreates the context; tests do.
+  if (ctx != graphics::metal_detail::g_font_fallback_ctx) {
+    graphics::metal_detail::g_font_fallback_ctx = ctx;
+    graphics::metal_detail::g_font_fallback_pairs.clear();
+    graphics::metal_detail::g_font_count = 0;
+    graphics::metal_detail::g_active_font = FONS_INVALID;
+  }
+  // Track loaded fonts and set the first one as active default
+  auto &md = graphics::metal_detail::g_font_ids;
+  if (graphics::metal_detail::g_font_count <
+      graphics::metal_detail::MAX_FONTS) {
+    md[graphics::metal_detail::g_font_count++] = id;
+  }
+  if (graphics::metal_detail::g_active_font == FONS_INVALID) {
+    graphics::metal_detail::g_active_font = id;
+  }
+  mesh_font_fallbacks(ctx, id);
+  return Font{id};
+}
+
+inline Font load_font_from_memory(const unsigned char *data, int size,
+                                  const char *name, int = 0) {
+  auto *ctx = graphics::metal_detail::g_fons_ctx;
+  if (!ctx) {
+    log_warn("fontstash context not ready yet (load_font_from_memory)");
+    return Font{FONS_INVALID};
+  }
+  if (!data || size <= 0 || !name) {
+    log_error("load_font_from_memory: no data for '{}'", name ? name : "");
+    return Font{FONS_INVALID};
+  }
+  const std::string key = fontstash_name(name);
+  const int existing = fonsGetFontByName(ctx, key.c_str());
+  if (existing != FONS_INVALID)
+    return Font{existing};
+  font_coverage::Ranges ranges;
+  const bool has_cmap =
+      font_coverage::parse_cmap(data, static_cast<size_t>(size), ranges);
+  auto *copy = static_cast<unsigned char *>(std::malloc(static_cast<size_t>(size)));
+  if (!copy) {
+    log_error("load_font_from_memory: out of memory for '{}'", name);
+    return Font{FONS_INVALID};
+  }
+  std::memcpy(copy, data, static_cast<size_t>(size));
+  const int id = fonsAddFontMem(ctx, key.c_str(), copy, size, 1);
+  if (id == FONS_INVALID) {
+    log_warn("Failed to load font from memory: {}", name);
+    return Font{FONS_INVALID};
+  }
+  return register_loaded_font(ctx, id, has_cmap ? &ranges : nullptr);
+}
 
 inline Font load_font_from_file(const char *file, int = 0) {
   auto *ctx = graphics::metal_detail::g_fons_ctx;
@@ -36,32 +99,20 @@ inline Font load_font_from_file(const char *file, int = 0) {
     log_warn("fontstash context not ready yet (load_font_from_file)");
     return Font{FONS_INVALID};
   }
-  int id = fonsAddFont(ctx, file, file);
-  if (id == FONS_INVALID) {
-    log_warn("Failed to load font: {}", file);
-  } else {
-    record_coverage(id, file);
-    // Font ids belong to one fontstash context; a new context resets
-    // tracking, since ids from a dead context are meaningless in a new
-    // one. Production never recreates the context; tests do.
-    if (ctx != graphics::metal_detail::g_font_fallback_ctx) {
-      graphics::metal_detail::g_font_fallback_ctx = ctx;
-      graphics::metal_detail::g_font_fallback_pairs.clear();
-      graphics::metal_detail::g_font_count = 0;
-      graphics::metal_detail::g_active_font = FONS_INVALID;
-    }
-    // Track loaded fonts and set the first one as active default
-    auto &md = graphics::metal_detail::g_font_ids;
-    if (graphics::metal_detail::g_font_count <
-        graphics::metal_detail::MAX_FONTS) {
-      md[graphics::metal_detail::g_font_count++] = id;
-    }
-    if (graphics::metal_detail::g_active_font == FONS_INVALID) {
-      graphics::metal_detail::g_active_font = id;
-    }
-    mesh_font_fallbacks(ctx, id);
+  if (!file) {
+    log_warn("Failed to load font: no path");
+    return Font{FONS_INVALID};
   }
-  return Font{id};
+  const int existing = fonsGetFontByName(ctx, fontstash_name(file).c_str());
+  if (existing != FONS_INVALID)
+    return Font{existing};
+  std::vector<unsigned char> bytes;
+  if (!font_coverage::read_file(file, bytes)) {
+    log_warn("Failed to load font: {}", file);
+    return Font{FONS_INVALID};
+  }
+  return load_font_from_memory(bytes.data(), static_cast<int>(bytes.size()),
+                               file);
 }
 
 // Fallback chain: every loaded face falls back to every other loaded
