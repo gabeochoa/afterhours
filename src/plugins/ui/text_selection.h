@@ -3,6 +3,8 @@
 #include <list>
 #include <unordered_map>
 
+#include "text_units.h"
+
 // Text selection geometry, with no graphics backend.
 //
 // Everything here works off `measure`, a callable from string to pixel width,
@@ -62,9 +64,9 @@ using TextRunLine = std::vector<TextSpan>;
 // of uniform weight is therefore still measured in a single call, exactly as
 // before weights existed; only a genuine weight boundary costs a join.
 //
-// The single wrapping primitive: wrap_text_to_width is one colourless
-// regular-weight run through here, so plain and styled break identically by
-// construction.
+// The single wrapping primitive is wrap_ranges, over source byte offsets;
+// this and wrap_text_to_width both slice its ranges, so plain and styled break
+// identically by construction.
 namespace wrap_memo {
 
 // LRU on content + width, same shape as measure_memo. The draw path otherwise
@@ -163,36 +165,76 @@ inline void clear() {
 
 } // namespace wrap_memo
 
+struct WrappedLine {
+  size_t begin = 0;
+  size_t end = 0;
+  float width = 0.f;
+};
+
+template <typename MeasureRangeFn>
+static inline std::vector<WrappedLine>
+wrap_ranges(const std::string &text, float max_width,
+            MeasureRangeFn &&measure_range) {
+  std::vector<WrappedLine> lines;
+  size_t source_begin = 0;
+  while (true) {
+    const size_t nl = text.find('\n', source_begin);
+    const size_t source_end = nl == std::string::npos ? text.size() : nl;
+    size_t begin = source_begin;
+    size_t end = source_begin;
+    size_t i = source_begin;
+    while (i < source_end) {
+      size_t word = i;
+      while (word < source_end && text[word] == ' ')
+        word++;
+      if (word == source_end)
+        break;
+      size_t word_end = word;
+      while (word_end < source_end && text[word_end] != ' ')
+        word_end++;
+      if (end > begin && measure_range(begin, word_end) > max_width) {
+        lines.push_back({begin, end});
+        begin = word;
+      }
+      end = word_end;
+      i = word_end;
+    }
+    lines.push_back({begin, source_end});
+    if (nl == std::string::npos)
+      return lines;
+    source_begin = nl + 1;
+  }
+}
+
 template <typename MeasureFn>
 static inline std::vector<TextRunLine>
 wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
                    MeasureFn &&measure) {
-  // Hard breaks are split off first so soft wrapping only ever sees one source
-  // line, and whitespace decisions stay local to it.
-  std::vector<TextRunLine> source_lines{TextRunLine{}};
+  std::string text;
+  std::vector<size_t> run_ends;
   for (const auto &run : runs) {
-    size_t start = 0;
-    while (true) {
-      const size_t nl = run.text.find('\n', start);
-      const size_t end = nl == std::string::npos ? run.text.size() : nl;
-      if (end > start)
-        source_lines.back().push_back(TextSpan{
-            run.text.substr(start, end - start), run.color, run.weight});
-      if (nl == std::string::npos)
-        break;
-      source_lines.push_back(TextRunLine{});
-      start = nl + 1;
-    }
+    text += run.text;
+    run_ends.push_back(text.size());
   }
+  const auto run_at = [&](size_t pos) {
+    return static_cast<size_t>(
+        std::upper_bound(run_ends.begin(), run_ends.end(), pos) -
+        run_ends.begin());
+  };
 
-  // A chunk is a maximal run of either spaces or non-spaces, and may cross
-  // colour boundaries: {"foo", red}, {"(bar)", blue} is ONE word in two
-  // colours. Tokenising per-run instead inserted a space at every colour
-  // change, so syntax-highlighted "foo(bar)" rendered as "foo (bar)".
-  struct Chunk {
-    TextRunLine parts;
-    std::string text;
-    bool is_space = false;
+  const auto measure_range = [&](size_t begin, size_t end) {
+    float total = 0.f;
+    size_t seg = begin;
+    for (size_t r = run_at(begin); seg < end; r++) {
+      const size_t stop = std::min(end, run_ends[r]);
+      const colors::FontWeight weight = runs[run_at(seg)].weight;
+      if (stop > seg &&
+          (stop == end || runs[run_at(stop)].weight != weight)) {
+        total += measure(text.substr(seg, stop - seg), weight);
+        seg = stop;
+      }
+    }
+    return total;
   };
 
   const auto same_style = [](const TextSpan &a, const TextSpan &b) {
@@ -202,115 +244,23 @@ wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
   };
 
   std::vector<TextRunLine> lines;
-  TextRunLine current;
-  std::string current_text;
-
-  const auto push_parts = [&](const TextRunLine &parts) {
-    for (const auto &part : parts) {
-      // Merge only when colour AND weight match: coalescing across a weight
-      // boundary would silently render the bold half regular.
-      if (!current.empty() && same_style(current.back(), part))
-        current.back().text += part.text;
-      else
-        current.push_back(part);
-    }
-  };
-
-  // Width of a candidate line given as up to three part lists in order.
-  // Adjacent parts of equal weight are measured together, so a uniform line
-  // is a single measure call.
-  const auto measure_candidate = [&](const TextRunLine &a,
-                                     const TextRunLine &b,
-                                     const TextRunLine &c) {
-    float total = 0.f;
-    std::string seg;
-    bool have = false;
-    colors::FontWeight seg_w = colors::FontWeight::Regular;
-    const auto flush_seg = [&]() {
-      if (have && !seg.empty())
-        total += measure(seg, seg_w);
-      seg.clear();
-      have = false;
-    };
-    for (const TextRunLine *list : {&a, &b, &c}) {
-      for (const auto &part : *list) {
-        if (have && part.weight != seg_w)
-          flush_seg();
-        if (!have) {
-          seg_w = part.weight;
-          have = true;
-        }
-        seg += part.text;
-      }
-    }
-    flush_seg();
-    return total;
-  };
-
-  for (const auto &src : source_lines) {
-    std::vector<Chunk> chunks;
-    for (const auto &part : src) {
-      size_t i = 0;
-      while (i < part.text.size()) {
-        const bool sp = part.text[i] == ' ';
-        size_t j = i;
-        while (j < part.text.size() && (part.text[j] == ' ') == sp)
-          j++;
-        const std::string frag = part.text.substr(i, j - i);
-        if (!chunks.empty() && chunks.back().is_space == sp) {
-          chunks.back().parts.push_back(
-              TextSpan{frag, part.color, part.weight});
-          chunks.back().text += frag;
-        } else {
-          chunks.push_back(Chunk{
-              TextRunLine{TextSpan{frag, part.color, part.weight}}, frag, sp});
-        }
-        i = j;
-      }
-    }
-
-    current.clear();
-    current_text.clear();
-    // Whitespace is held until we know whether the next word fits: if it does
-    // the spacing is kept verbatim (so indentation and column alignment
-    // survive), and if it does not the break consumes it.
-    Chunk pending_ws;
-
-    for (const auto &chunk : chunks) {
-      if (chunk.is_space) {
-        pending_ws.parts.insert(pending_ws.parts.end(), chunk.parts.begin(),
-                                chunk.parts.end());
-        pending_ws.text += chunk.text;
+  for (const WrappedLine &range : wrap_ranges(text, max_width, measure_range)) {
+    TextRunLine line;
+    for (size_t pos = range.begin, r = run_at(range.begin); pos < range.end;
+         r++) {
+      const size_t stop = std::min(range.end, run_ends[r]);
+      if (stop == pos)
         continue;
-      }
-      const std::string candidate =
-          current_text + pending_ws.text + chunk.text;
-      if (!current_text.empty() &&
-          measure_candidate(current, pending_ws.parts, chunk.parts) >
-              max_width) {
-        lines.push_back(current);
-        current.clear();
-        push_parts(chunk.parts);
-        current_text = chunk.text;
-      } else {
-        // An empty line here means the start of the source line, not a wrap,
-        // so its leading whitespace is indentation and is kept.
-        push_parts(pending_ws.parts);
-        push_parts(chunk.parts);
-        current_text = candidate;
-      }
-      pending_ws = Chunk{};
+      const TextSpan part{text.substr(pos, stop - pos), runs[r].color,
+                          runs[r].weight};
+      if (!line.empty() && same_style(line.back(), part))
+        line.back().text += part.text;
+      else
+        line.push_back(part);
+      pos = stop;
     }
-    // Trailing spaces are kept too, so hard-broken text round-trips byte for
-    // byte through joined_text().
-    if (!pending_ws.text.empty()) {
-      push_parts(pending_ws.parts);
-      current_text += pending_ws.text;
-    }
-    lines.push_back(current);
+    lines.push_back(std::move(line));
   }
-
-  current.clear();
   return lines;
 }
 
@@ -358,20 +308,26 @@ wrap_text_to_width(const std::string &text, float max_width,
   if (text.empty() || max_width <= 0.f)
     return {text};
   std::vector<std::string> lines;
-  // One regular-weight run, so the weight argument is never anything else and
-  // callers here keep the plain measure(text) signature.
-  const auto measure_span = [&](const std::string &s, colors::FontWeight) {
-    return measure(s);
-  };
-  for (const auto &line : wrap_runs_to_width({TextSpan{text, Color{}}},
-                                             max_width, measure_span)) {
-    std::string joined;
-    for (const auto &run : line)
-      joined += run.text;
-    lines.push_back(std::move(joined));
-  }
-  if (lines.empty())
-    lines.push_back(text);
+  for (const WrappedLine &line :
+       wrap_ranges(text, max_width, [&](size_t begin, size_t end) {
+         return measure(text.substr(begin, end - begin));
+       }))
+    lines.push_back(text.substr(line.begin, line.end - line.begin));
+  return lines;
+}
+
+template <typename MeasureFn>
+static inline std::vector<WrappedLine>
+wrap_lines(const std::string &text, float max_width, MeasureFn &&measure) {
+  std::vector<WrappedLine> lines =
+      max_width <= 0.f
+          ? std::vector<WrappedLine>{{0, text.size()}}
+          : wrap_ranges(text, max_width, [&](size_t begin, size_t end) {
+              return measure(text.substr(begin, end - begin));
+            });
+  for (WrappedLine &line : lines)
+    if (line.end > line.begin)
+      line.width = measure(text.substr(line.begin, line.end - line.begin));
   return lines;
 }
 
@@ -491,8 +447,7 @@ inline size_t offset_nearest_x(const std::string &text, float x,
   size_t best = 0;
   float best_dist = std::abs(x);
   for (size_t i = 0; i < text.size();) {
-    const size_t len = utf8_char_length(text, i);
-    const size_t next = i + (len > 0 ? len : 1);
+    const size_t next = next_grapheme_end(text, i);
     const float w = measure(text.substr(0, next));
     const float dist = std::abs(x - w);
     if (dist < best_dist) {

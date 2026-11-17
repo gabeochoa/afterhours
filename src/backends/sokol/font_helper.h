@@ -6,9 +6,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <string>
+#include <vector>
 
 #include "../../developer.h"
 #include "metal_state.h"
@@ -20,13 +23,75 @@ struct Font {
   int id = FONS_INVALID;
 };
 
-inline void record_coverage(int font_id, const char *file) {
-  font_coverage::Ranges ranges;
-  if (font_coverage::parse_file(file, ranges))
-    graphics::metal_detail::g_font_coverage[font_id] = std::move(ranges);
+inline void mesh_font_fallbacks(FONScontext *ctx, int new_id);
+
+inline std::string fontstash_name(const char *name) {
+  char key[24];
+  std::snprintf(key, sizeof(key), "ah:%016zx",
+                std::hash<std::string>{}(name));
+  return key;
 }
 
 inline void mesh_font_fallbacks(FONScontext *ctx, int new_id);
+inline const char *drawable_text(int font_id, const char *text,
+                                 std::string &storage);
+inline Font register_loaded_font(FONScontext *ctx, int id,
+                                 font_coverage::Ranges *ranges) {
+  if (ranges)
+    graphics::metal_detail::g_font_coverage[id] = std::move(*ranges);
+  // Font ids belong to one fontstash context; a new context resets
+  // tracking, since ids from a dead context are meaningless in a new
+  // one. Production never recreates the context; tests do.
+  if (ctx != graphics::metal_detail::g_font_fallback_ctx) {
+    graphics::metal_detail::g_font_fallback_ctx = ctx;
+    graphics::metal_detail::g_font_fallback_pairs.clear();
+    graphics::metal_detail::g_font_count = 0;
+    graphics::metal_detail::g_active_font = FONS_INVALID;
+  }
+  // Track loaded fonts and set the first one as active default
+  auto &md = graphics::metal_detail::g_font_ids;
+  if (graphics::metal_detail::g_font_count <
+      graphics::metal_detail::MAX_FONTS) {
+    md[graphics::metal_detail::g_font_count++] = id;
+  }
+  if (graphics::metal_detail::g_active_font == FONS_INVALID) {
+    graphics::metal_detail::g_active_font = id;
+  }
+  mesh_font_fallbacks(ctx, id);
+  return Font{id};
+}
+
+inline Font load_font_from_memory(const unsigned char *data, int size,
+                                  const char *name, int = 0) {
+  auto *ctx = graphics::metal_detail::g_fons_ctx;
+  if (!ctx) {
+    log_warn("fontstash context not ready yet (load_font_from_memory)");
+    return Font{FONS_INVALID};
+  }
+  if (!data || size <= 0 || !name) {
+    log_error("load_font_from_memory: no data for '{}'", name ? name : "");
+    return Font{FONS_INVALID};
+  }
+  const std::string key = fontstash_name(name);
+  const int existing = fonsGetFontByName(ctx, key.c_str());
+  if (existing != FONS_INVALID)
+    return Font{existing};
+  font_coverage::Ranges ranges;
+  const bool has_cmap =
+      font_coverage::parse_cmap(data, static_cast<size_t>(size), ranges);
+  auto *copy = static_cast<unsigned char *>(std::malloc(static_cast<size_t>(size)));
+  if (!copy) {
+    log_error("load_font_from_memory: out of memory for '{}'", name);
+    return Font{FONS_INVALID};
+  }
+  std::memcpy(copy, data, static_cast<size_t>(size));
+  const int id = fonsAddFontMem(ctx, key.c_str(), copy, size, 1);
+  if (id == FONS_INVALID) {
+    log_warn("Failed to load font from memory: {}", name);
+    return Font{FONS_INVALID};
+  }
+  return register_loaded_font(ctx, id, has_cmap ? &ranges : nullptr);
+}
 
 inline Font load_font_from_file(const char *file, int = 0) {
   auto *ctx = graphics::metal_detail::g_fons_ctx;
@@ -34,32 +99,20 @@ inline Font load_font_from_file(const char *file, int = 0) {
     log_warn("fontstash context not ready yet (load_font_from_file)");
     return Font{FONS_INVALID};
   }
-  int id = fonsAddFont(ctx, file, file);
-  if (id == FONS_INVALID) {
-    log_warn("Failed to load font: {}", file);
-  } else {
-    record_coverage(id, file);
-    // Font ids belong to one fontstash context; a new context resets
-    // tracking, since ids from a dead context are meaningless in a new
-    // one. Production never recreates the context; tests do.
-    if (ctx != graphics::metal_detail::g_font_fallback_ctx) {
-      graphics::metal_detail::g_font_fallback_ctx = ctx;
-      graphics::metal_detail::g_font_fallback_pairs.clear();
-      graphics::metal_detail::g_font_count = 0;
-      graphics::metal_detail::g_active_font = FONS_INVALID;
-    }
-    // Track loaded fonts and set the first one as active default
-    auto &md = graphics::metal_detail::g_font_ids;
-    if (graphics::metal_detail::g_font_count <
-        graphics::metal_detail::MAX_FONTS) {
-      md[graphics::metal_detail::g_font_count++] = id;
-    }
-    if (graphics::metal_detail::g_active_font == FONS_INVALID) {
-      graphics::metal_detail::g_active_font = id;
-    }
-    mesh_font_fallbacks(ctx, id);
+  if (!file) {
+    log_warn("Failed to load font: no path");
+    return Font{FONS_INVALID};
   }
-  return Font{id};
+  const int existing = fonsGetFontByName(ctx, fontstash_name(file).c_str());
+  if (existing != FONS_INVALID)
+    return Font{existing};
+  std::vector<unsigned char> bytes;
+  if (!font_coverage::read_file(file, bytes)) {
+    log_warn("Failed to load font: {}", file);
+    return Font{FONS_INVALID};
+  }
+  return load_font_from_memory(bytes.data(), static_cast<int>(bytes.size()),
+                               file);
 }
 
 // Fallback chain: every loaded face falls back to every other loaded
@@ -113,7 +166,8 @@ inline bool expand_font_atlas(FONScontext *ctx) {
   return true;
 }
 
-inline Font load_font_from_file_with_codepoints(const char *file, int *, int) {
+inline Font load_font_from_file_with_codepoints(const char *file, int *, int,
+                                                int = 32) {
   // fontstash loads full TTF; codepoint filtering not needed
   return load_font_from_file(file);
 }
@@ -124,6 +178,8 @@ inline int *remove_duplicate_codepoints(int *, int,
     *codepointsResultCount = 0;
   return nullptr;
 }
+
+inline void unload_font(Font &font) { font = Font{}; }
 
 inline Font load_font_for_string(const std::string &,
                                  const std::string &font_file, int = 96) {
@@ -159,7 +215,8 @@ inline Vector2Type measure_text(const Font font, const char *text,
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   // Advance, not the ink box: ink drops the side bearings, so text sized from
   // it comes up short and clips.
-  float w = fonsTextAdvance(ctx, text, nullptr) / dpi;
+  std::string shown;
+  float w = fonsTextAdvance(ctx, drawable_text(fid, text, shown), nullptr) / dpi;
   float ascender, descender, lineh;
   fonsVertMetrics(ctx, &ascender, &descender, &lineh);
   const Vector2Type measured{w, lineh / dpi};
@@ -170,6 +227,24 @@ inline Vector2Type measure_text(const Font font, const char *text,
 inline Vector2Type measure_text_utf8(const Font font, const char *text,
                                      const float size, const float spacing) {
   return measure_text(font, text, size, spacing);
+}
+
+inline float monospace_cell_advance(const Font font, const float size) {
+  if (!std::isfinite(size) || size <= 0.f)
+    return 0.f;
+  auto *ctx = graphics::metal_detail::g_fons_ctx;
+  if (!ctx)
+    return 0.f;
+  const int fid = (font.id != FONS_INVALID)
+                      ? font.id
+                      : graphics::metal_detail::g_active_font;
+  if (fid == FONS_INVALID)
+    return 0.f;
+  fonsSetFont(ctx, fid);
+  const float dpi = graphics::metal_detail::dpi_scale();
+  fonsSetSize(ctx, size * dpi);
+  fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
+  return fonsTextAdvance(ctx, "0", nullptr) / dpi;
 }
 
 inline float get_first_glyph_bearing(const Font, const char *) { return 0.0f; }
@@ -195,6 +270,21 @@ inline bool font_has_glyph(const Font font, int codepoint) {
     return true;
   return font_coverage::covers(it->second,
                                static_cast<uint32_t>(codepoint));
+}
+
+inline const char *drawable_text(int font_id, const char *text,
+                                 std::string &storage) {
+  const auto covered = [&](uint32_t cp) {
+    const int c = static_cast<int>(cp);
+    if (font_has_glyph(Font{font_id}, c))
+      return true;
+    for (int i = 0; i < graphics::metal_detail::g_font_count; i++)
+      if (font_has_glyph(Font{graphics::metal_detail::g_font_ids[i]}, c))
+        return true;
+    return false;
+  };
+  return font_coverage::visible_text(text, covered, storage) ? storage.c_str()
+                                                             : text;
 }
 
 } // namespace afterhours
