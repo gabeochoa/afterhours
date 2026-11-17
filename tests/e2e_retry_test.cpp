@@ -3,6 +3,7 @@
 #include <afterhours/src/plugins/e2e_testing/pending_command.h>
 #include <afterhours/src/plugins/e2e_testing/runner.h>
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -199,6 +200,57 @@ int main() {
           "an expired wait_until counts one error");
   }
 
+  {
+    EntityCollection coll;
+    Entity &e = coll.createEntity();
+    auto &cmd = e.addComponent<PendingE2ECommand>();
+    cmd.name = "expect_worker_done";
+    cmd.wait_until_seconds = cmd.retry_budget = 0.5f;
+    cmd.wall_deadline = testing::detail::wall_deadline_after(30.f);
+    testing::reset_command_error_count();
+    testing::E2ECommandCleanupSystem cleanup;
+    for (int i = 0; i < 10; i++) {
+      cmd.fail("worker still busy");
+      cleanup.for_each_with(e, cmd, 100.f);
+    }
+    check(!cmd.is_consumed() && !e.cleanup,
+          "a wait_until_wall ignores dt while its deadline is ahead");
+    cmd.wall_deadline = std::chrono::steady_clock::now();
+    cmd.fail("worker still busy");
+    cleanup.for_each_with(e, cmd, 0.f);
+    check(e.cleanup && !cmd.succeeded(),
+          "a wait_until_wall fails once its deadline passes, even at dt 0");
+    check(cmd.error_message == "wait_until_wall 0.5s: worker still busy",
+          "the expired error names wait_until_wall and the last failure");
+    check(testing::get_command_error_count() == 1,
+          "an expired wait_until_wall counts one error");
+  }
+
+  {
+    EntityCollection coll;
+    Entity &e = coll.createEntity();
+    auto &cmd = e.addComponent<PendingE2ECommand>();
+    cmd.name = "wait_wall";
+    testing::HandleWaitWallCommand handler;
+    testing::E2ECommandCleanupSystem cleanup;
+    cmd.wall_deadline = testing::detail::wall_deadline_after(30.f);
+    for (int i = 0; i <= PendingE2ECommand::MAX_FRAMES * 2; i++) {
+      handler.for_each_with(e, cmd, 100.f);
+      cleanup.for_each_with(e, cmd, 100.f);
+    }
+    check(!cmd.is_consumed(),
+          "wait_wall holds past the frame timeout while its deadline is ahead");
+    cmd.wall_deadline = std::chrono::steady_clock::now();
+    handler.for_each_with(e, cmd, 0.f);
+    check(cmd.is_consumed() && cmd.succeeded(),
+          "wait_wall ends once its deadline passes");
+    PendingE2ECommand bare;
+    bare.name = "wait_wall";
+    handler.for_each_with(e, bare, 0.f);
+    check(bare.is_consumed() && !bare.succeeded(),
+          "wait_wall without a deadline fails");
+  }
+
   // mouse_down keeps its press edge one frame for systems that ran before
   // the handler, and the button stays held after that.
   {
@@ -240,6 +292,35 @@ int main() {
           "an unknown inner command splits its args");
     check(!cmds[2].parse_error.empty(), "a bad timeout is a parse error");
     check(!cmds[3].parse_error.empty(), "a missing command is a parse error");
+    remove(path);
+  }
+
+  {
+    const char *path = "/tmp/afterhours_wait_wall_test.e2e";
+    FILE *f = fopen(path, "w");
+    fputs("wait_wall 0.25\n"
+          "wait_wall 0\n"
+          "wait_wall nope\n"
+          "wait_until_wall 1.5 expect_text Hello world\n"
+          "wait_until_wall 2 wait_until_wall\n"
+          "wait 2\n",
+          f);
+    fclose(f);
+    auto cmds = testing::parse_script(path);
+    check(cmds.size() == 6, "every wall line parses to a command");
+    check(cmds[0].name == "wait_wall" && cmds[0].wall_seconds == 0.25f &&
+              cmds[0].wait_seconds == 0.f && cmds[0].parse_error.empty(),
+          "wait_wall stores real seconds, not dt seconds");
+    check(!cmds[1].parse_error.empty() && !cmds[2].parse_error.empty(),
+          "wait_wall without SECONDS > 0 is a parse error");
+    check(cmds[3].name == "expect_text" && cmds[3].wait_until_seconds == 1.5f &&
+              cmds[3].wall_seconds == 1.5f && cmds[3].args.size() == 1 &&
+              cmds[3].args[0] == "Hello world",
+          "wait_until_wall keeps the inner parse and marks a wall budget");
+    check(cmds[4].parse_error == "wait_until_wall needs SECONDS > 0 then a command",
+          "wait_until_wall cannot nest");
+    check(cmds[5].wait_seconds == 2.f && cmds[5].wall_seconds == 0.f,
+          "wait is still dt seconds");
     remove(path);
   }
 
