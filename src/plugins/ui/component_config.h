@@ -44,6 +44,7 @@ enum struct ButtonVariant { Filled, Outline, Ghost };
 enum struct IconPosition { Left, Right };
 
 struct ComponentConfig {
+  static constexpr size_t VIRTUAL_LIST_OVERSCAN_DEFAULT = 4;
   ComponentSize size = ComponentSize(pixels(default_component_size.x),
                                      pixels(default_component_size.y), true);
 
@@ -105,7 +106,7 @@ struct ComponentConfig {
   // inheritable options
   TextAlignment label_alignment = TextAlignment::None;
   TextOverflow text_overflow = TextOverflow::Clip;
-  float letter_spacing = 0.f; // Additional spacing between characters (pixels)
+  std::optional<float> letter_spacing;
   // Per-side space between this label and its own box, overriding
   // Theme::text_inset. Unset means the theme's value.
   std::optional<Vector2Type> text_inset;
@@ -211,6 +212,7 @@ struct ComponentConfig {
   size_t text_area_max_lines = 0;            // Max lines (0 = unlimited)
   bool text_area_auto_grow = false;          // Height follows the content
   bool text_area_submit_on_enter = false;    // Enter submits, Shift+Enter breaks
+  size_t virtual_list_overscan = VIRTUAL_LIST_OVERSCAN_DEFAULT;
 
   // Button variant configuration
   ButtonVariant button_variant = ButtonVariant::Filled;
@@ -481,6 +483,10 @@ struct ComponentConfig {
   // default, so a text_area keeps Enter meaning newline.
   ComponentConfig &with_submit_on_enter(bool enabled = true) {
     text_area_submit_on_enter = enabled;
+    return *this;
+  }
+  ComponentConfig &with_virtual_list_overscan(size_t overscan) {
+    virtual_list_overscan = overscan;
     return *this;
   }
   ComponentConfig &with_alignment(TextAlignment align) {
@@ -1265,7 +1271,7 @@ struct ComponentConfig {
     // Text detail
     if (overrides.text_overflow != TextOverflow::Clip)
       merged.text_overflow = overrides.text_overflow;
-    if (overrides.letter_spacing != 0.f)
+    if (overrides.letter_spacing.has_value())
       merged.letter_spacing = overrides.letter_spacing;
     if (overrides.text_inset.has_value())
       merged.text_inset = overrides.text_inset;
@@ -1308,6 +1314,8 @@ struct ComponentConfig {
       merged.text_area_auto_grow = true;
     if (overrides.text_area_submit_on_enter)
       merged.text_area_submit_on_enter = true;
+    if (overrides.virtual_list_overscan != VIRTUAL_LIST_OVERSCAN_DEFAULT)
+      merged.virtual_list_overscan = overrides.virtual_list_overscan;
 
     // Indicator glyphs
     if (overrides.checkbox_checked_indicator.has_value())

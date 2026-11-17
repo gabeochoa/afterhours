@@ -31,6 +31,15 @@ inline Vector2Type measure_text_line(const std::string &text,
                       spacing);
 }
 
+inline float monospace_cell_advance(const std::string &font_name,
+                                    float font_size) {
+  auto *fonts = EntityHelper::get_singleton_cmp<FontManager>();
+  if (!fonts)
+    return 0.f;
+  return afterhours::monospace_cell_advance(fonts->get_font(font_name),
+                                            font_size);
+}
+
 /// Lines `text` would occupy at `max_width`. Honors hard '\n'. A word wider
 /// than max_width gets its own line rather than being split.
 inline std::vector<std::string> wrap_text(const std::string &text,
@@ -42,6 +51,15 @@ inline std::vector<std::string> wrap_text(const std::string &text,
       text, max_width, [&](const std::string &s) {
         return measure_text_line(s, font_name, font_size, spacing).x;
       });
+}
+
+inline std::vector<detail::WrappedLine>
+wrap_text_lines(const std::string &text, float max_width,
+                const std::string &font_name, float font_size,
+                float spacing = 1.f) {
+  return detail::wrap_lines(text, max_width, [&](const std::string &s) {
+    return measure_text_line(s, font_name, font_size, spacing).x;
+  });
 }
 
 /// Width, height and line count of `text` laid out at `max_width` -- the

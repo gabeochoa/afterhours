@@ -5,17 +5,19 @@
 // The library is where the aborts come from -- a missing singleton, an empty
 // gen_first_enforce, every VALIDATE -- so the handler belongs here too.
 //
-// Reports through log_error, so log_file.h picks it up. Without that it only
-// helps someone already at a terminal.
+// Reports to stderr and log_sink_fn, so log_file.h picks it up. Not through
+// log_error: a host that replaced logging with one that aborts would re-enter
+// the handler from inside the report.
 
 #include <csignal>
+#include <cstdio>
 #include <cstdlib>
 #include <exception>
+#include <string>
 
 #include "logging.h"
 
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(_WIN32)
-#include <cxxabi.h>
 #include <execinfo.h>
 #endif
 
@@ -31,6 +33,17 @@ inline const char *&running_system() {
   return name;
 }
 
+inline void report_line(const std::string &message) {
+  std::fprintf(stderr, "[ERROR] %s\n", message.c_str());
+  if (log_sink_fn)
+    log_sink_fn("[ERROR]", message.c_str());
+}
+
+inline volatile std::sig_atomic_t &reporting() {
+  static volatile std::sig_atomic_t active = 0;
+  return active;
+}
+
 inline void write_backtrace() {
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(_WIN32)
   void *frames[64];
@@ -39,18 +52,24 @@ inline void write_backtrace() {
   if (symbols == nullptr)
     return;
   // Skip the handler's own frames.
-  for (int i = 2; i < count; i++)
-    log_error("  #{:<2} {}", i - 2, symbols[i]);
+  for (int i = 2; i < count; i++) {
+    char index[16];
+    std::snprintf(index, sizeof(index), "  #%-2d ", i - 2);
+    report_line(std::string(index) + symbols[i]);
+  }
   std::free(symbols);
 #endif
 }
 
 inline void report(const char *what) {
-  log_error("---- afterhours crash: {} ----", what);
+  if (reporting())
+    return;
+  reporting() = 1;
+  report_line(std::string("---- afterhours crash: ") + what + " ----");
   if (running_system() != nullptr)
-    log_error("while running system: {}", running_system());
+    report_line(std::string("while running system: ") + running_system());
   else
-    log_error("not inside a system");
+    report_line("not inside a system");
   // No flush needed, the sink writes a line at a time.
   write_backtrace();
 }

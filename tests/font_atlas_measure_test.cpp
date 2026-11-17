@@ -130,6 +130,35 @@ static int benchmark() {
   return 0;
 }
 
+static void cell_advance() {
+  namespace md = afterhours::graphics::metal_detail;
+  auto *ctx = context(2048);
+  md::g_fons_ctx = ctx;
+  md::g_active_font = 0;
+  test_dpi = 1;
+  afterhours::measure_memo::clear();
+  fonsSetFont(ctx, 0);
+  fonsSetSize(ctx, 32);
+  const float expected = fonsTextAdvance(ctx, "0", nullptr);
+  CHECK(expected > 0.f);
+  CHECK(afterhours::monospace_cell_advance(afterhours::Font{0}, 32.f) ==
+        expected);
+  CHECK(afterhours::monospace_cell_advance(afterhours::Font{0}, 32.f) ==
+        afterhours::measure_text(afterhours::Font{0}, "0", 32, 1).x);
+  const float half =
+      afterhours::monospace_cell_advance(afterhours::Font{0}, 16.f);
+  CHECK(half > 0.f && half < expected);
+  CHECK(afterhours::monospace_cell_advance(afterhours::Font{0}, 0.f) == 0.f);
+  CHECK(afterhours::monospace_cell_advance(afterhours::Font{0}, -1.f) == 0.f);
+  CHECK(afterhours::monospace_cell_advance(
+            afterhours::Font{0},
+            std::numeric_limits<float>::quiet_NaN()) == 0.f);
+  fonsDeleteInternal(ctx);
+  md::g_fons_ctx = nullptr;
+  CHECK(afterhours::monospace_cell_advance(afterhours::Font{0}, 32.f) == 0.f);
+  afterhours::measure_memo::clear();
+}
+
 static void coverage() {
   namespace md = afterhours::graphics::metal_detail;
   auto *ctx = context(2048);
@@ -226,6 +255,7 @@ static void atlas_expands_automatically() {
 
 int main(int argc, char **argv) {
   if (argc == 2 && std::strcmp(argv[1], "--benchmark") == 0) return benchmark();
+  cell_advance();
   coverage();
   fallback_mesh();
   atlas_expands_automatically();
