@@ -282,6 +282,49 @@ inline int key_from_name(const std::string &name) {
   return 0;
 }
 
+inline int gamepad_button_from_name(const std::string &name) {
+  static constexpr std::array<std::pair<std::string_view, int>, 17> names = {{
+      {"LEFT_FACE_UP", gamepad_buttons::LEFT_FACE_UP},
+      {"LEFT_FACE_RIGHT", gamepad_buttons::LEFT_FACE_RIGHT},
+      {"LEFT_FACE_DOWN", gamepad_buttons::LEFT_FACE_DOWN},
+      {"LEFT_FACE_LEFT", gamepad_buttons::LEFT_FACE_LEFT},
+      {"RIGHT_FACE_UP", gamepad_buttons::RIGHT_FACE_UP},
+      {"RIGHT_FACE_RIGHT", gamepad_buttons::RIGHT_FACE_RIGHT},
+      {"RIGHT_FACE_DOWN", gamepad_buttons::RIGHT_FACE_DOWN},
+      {"RIGHT_FACE_LEFT", gamepad_buttons::RIGHT_FACE_LEFT},
+      {"LEFT_TRIGGER_1", gamepad_buttons::LEFT_TRIGGER_1},
+      {"LEFT_TRIGGER_2", gamepad_buttons::LEFT_TRIGGER_2},
+      {"RIGHT_TRIGGER_1", gamepad_buttons::RIGHT_TRIGGER_1},
+      {"RIGHT_TRIGGER_2", gamepad_buttons::RIGHT_TRIGGER_2},
+      {"MIDDLE_LEFT", gamepad_buttons::MIDDLE_LEFT},
+      {"MIDDLE", gamepad_buttons::MIDDLE},
+      {"MIDDLE_RIGHT", gamepad_buttons::MIDDLE_RIGHT},
+      {"LEFT_THUMB", gamepad_buttons::LEFT_THUMB},
+      {"RIGHT_THUMB", gamepad_buttons::RIGHT_THUMB}}};
+  const std::string upper = detail::to_upper(name);
+  for (const auto &[button_name, code] : names) {
+    if (button_name == upper)
+      return code;
+  }
+  return -1;
+}
+
+inline int gamepad_axis_from_name(const std::string &name) {
+  static constexpr std::array<std::pair<std::string_view, int>, 6> names = {{
+      {"LEFT_X", gamepad_axes::LEFT_X},
+      {"LEFT_Y", gamepad_axes::LEFT_Y},
+      {"RIGHT_X", gamepad_axes::RIGHT_X},
+      {"RIGHT_Y", gamepad_axes::RIGHT_Y},
+      {"LEFT_TRIGGER", gamepad_axes::LEFT_TRIGGER},
+      {"RIGHT_TRIGGER", gamepad_axes::RIGHT_TRIGGER}}};
+  const std::string upper = detail::to_upper(name);
+  for (const auto &[axis_name, code] : names) {
+    if (axis_name == upper)
+      return code;
+  }
+  return -1;
+}
+
 // Key combo with modifiers
 struct KeyCombo {
   bool ctrl = false;
