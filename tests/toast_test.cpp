@@ -52,4 +52,37 @@ TEST(toast_text_contrasts_with_its_background_after_theme_changes) {
   }
 }
 
+TEST(scheduled_toast_fades_over_its_lifetime) {
+  ui_test::ImmTestHarness h;
+  EntityHelper::registerSingleton<UIContext<ui_test::TestInputAction>>(
+      h.context_entity());
+  auto notice =
+      toast::schedule(h.context(), toast::Level::Info, 2.0f);
+  EntityHelper::merge_entity_arrays();
+  CHECK(notice.ent().has<HasOpacity>());
+  if (notice.ent().has<HasOpacity>()) {
+    CHECK(std::fabs(notice.ent().get<HasOpacity>().value - 1.0f) < 0.001f);
+    toast::ToastLayoutSystem<ui_test::TestInputAction> layout;
+    toast::ToastUpdateSystem update;
+    layout.once(0.f);
+    CHECK(std::fabs(notice.ent().get<HasOpacity>().value - 1.0f) < 0.001f);
+    update.for_each_with(notice.ent(), notice.ent().get<toast::Toast>(),
+                         1.0f);
+    layout.once(0.f);
+    CHECK(std::fabs(notice.ent().get<HasOpacity>().value - 0.96875f) <
+          0.001f);
+    update.for_each_with(notice.ent(), notice.ent().get<toast::Toast>(),
+                         0.9f);
+    layout.once(0.f);
+    CHECK(std::fabs(notice.ent().get<HasOpacity>().value -
+                    (1.0f - std::pow(2.0f, -0.5f))) < 0.001f);
+    update.for_each_with(notice.ent(), notice.ent().get<toast::Toast>(),
+                         0.1f);
+    layout.once(0.f);
+    CHECK(std::fabs(notice.ent().get<HasOpacity>().value) < 0.001f);
+  }
+  EntityHelper::get_default_collection().singletonMap.erase(
+      components::get_type_id<UIContext<ui_test::TestInputAction>>());
+}
+
 int main() { return ui_test::run_registered_tests("toast"); }
