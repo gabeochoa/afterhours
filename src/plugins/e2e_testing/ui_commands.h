@@ -1067,6 +1067,27 @@ inline void reset_multi_click(const std::string &name) {
 // Clicking a named element at an offset rather than at raw screen coordinates:
 // a layout change then retargets the click instead of silently landing on
 // empty space. dx/dy are from the element's top left; omitted means centre.
+inline std::optional<Position> element_point(const PendingE2ECommand &cmd,
+                                             bool use_offset = true) {
+  auto query = ui_query()
+                   .whereHasComponent<ui::UIComponent>()
+                   .whereHasComponent<ui::UIComponentDebug>()
+                   .whereLambda([&](const Entity &e) {
+                     return e.get<ui::UIComponentDebug>().name() == cmd.arg(0);
+                   })
+                   .first();
+  for (Entity &entity : query.gen()) {
+    const RectangleType r = get_screen_rect(entity);
+    const auto off = [&](size_t i, float extent) {
+      if (!use_offset || cmd.args.size() <= i || cmd.arg(i) == "center")
+        return extent * 0.5f;
+      return static_cast<float>(std::atof(cmd.arg(i).c_str()));
+    };
+    return Position{r.x + off(1, r.width), r.y + off(2, r.height)};
+  }
+  return std::nullopt;
+}
+
 namespace multi_click_ui_detail {
 inline int phase = 0;
 inline float x = 0.f, y = 0.f;
@@ -1092,30 +1113,13 @@ struct HandleMultiClickUICommand : System<PendingE2ECommand> {
     using namespace multi_click_ui_detail;
 
     if (phase == 0) {
-      auto query = ui_query()
-                       .whereHasComponent<ui::UIComponent>()
-                       .whereHasComponent<ui::UIComponentDebug>()
-                       .whereLambda([&](const Entity &e) {
-                         return e.get<ui::UIComponentDebug>().name() ==
-                                cmd.arg(0);
-                       })
-                       .first();
-      bool found = false;
-      for (Entity &entity : query.gen()) {
-        const RectangleType r = get_screen_rect(entity);
-        const auto off = [&](size_t i, float extent) {
-          if (cmd.args.size() <= i || cmd.arg(i) == "center")
-            return extent * 0.5f;
-          return static_cast<float>(std::atof(cmd.arg(i).c_str()));
-        };
-        x = r.x + off(1, r.width);
-        y = r.y + off(2, r.height);
-        found = true;
-      }
-      if (!found) {
+      const auto point = element_point(cmd);
+      if (!point) {
         cmd.fail(std::format("UI component not found: {}", cmd.arg(0)));
         return;
       }
+      x = point->x;
+      y = point->y;
       // Start a FRESH gesture. Multi-click counts clicks inside a time window,
       // and get_time() is frozen at 0 headless -- so without this the previous
       // command's clicks never expire and chain into this one: a double click
@@ -1135,6 +1139,35 @@ struct HandleMultiClickUICommand : System<PendingE2ECommand> {
     } else {
       cmd.retry();
     }
+  }
+};
+
+struct HandlePointerUICommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() ||
+        (!cmd.is("mouse_down_ui") && !cmd.is("mouse_move_ui") &&
+         !cmd.is("scroll_wheel_ui")))
+      return;
+    const bool wheel = cmd.is("scroll_wheel_ui");
+    if (!cmd.has_args(wheel ? 3 : 1)) {
+      cmd.fail(wheel ? "scroll_wheel_ui requires a name and dx dy"
+                     : std::format("{} requires a component name", cmd.name));
+      return;
+    }
+    const auto point = element_point(cmd, !wheel);
+    if (!point) {
+      cmd.fail(std::format("UI component not found: {}", cmd.arg(0)));
+      return;
+    }
+    if (cmd.is("mouse_down_ui")) {
+      press_mouse_at(point->x, point->y);
+    } else {
+      test_input::set_mouse_position(point->x, point->y);
+      if (wheel)
+        input_injector::set_mouse_wheel(cmd.arg_as<float>(1),
+                                        cmd.arg_as<float>(2));
+    }
+    cmd.consume();
   }
 };
 
@@ -1245,6 +1278,17 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
 
   if (entity.has<ui::HasLabel>())
     out += " text=\"" + xml_escape(truncate_text(entity.get<ui::HasLabel>().label)) + "\"";
+
+  const auto sides = [&](const char *attr, const auto &v) {
+    const float t = v[ui::Axis::top], r = v[ui::Axis::right],
+                b = v[ui::Axis::bottom], l = v[ui::Axis::left];
+    if (t != 0.f || r != 0.f || b != 0.f || l != 0.f)
+      out += std::format(" {}=\"{} {} {} {}\"", attr, t, r, b, l);
+  };
+  sides("padding", cmp.computed_padd);
+  sides("margin", cmp.computed_margin);
+  if (cmp.gap != 0.f)
+    out += std::format(" gap=\"{}\"", cmp.gap);
 
   if (entity.has<ui::HasScrollView>()) {
     auto &sv = entity.get<ui::HasScrollView>();
@@ -1464,6 +1508,50 @@ struct HandleAssertUICommand : System<PendingE2ECommand> {
       }
     }
     cmd.consume();
+  }
+};
+
+struct HandleExpectPointInCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("expect_point_in")) return;
+    if (!cmd.has_args(3)) {
+      cmd.fail("expect_point_in requires: <name> <x> <y>");
+      return;
+    }
+    float x = 0.f;
+    float y = 0.f;
+    try {
+      auto [sw, sh] = e2e_screen_size();
+      x = cmd.coord_arg(1, sw);
+      y = cmd.coord_arg(2, sh);
+    } catch (...) {
+      cmd.fail(std::format("expect_point_in: invalid coordinate '{}' '{}'",
+                           cmd.arg(1), cmd.arg(2)));
+      return;
+    }
+    const std::string name = cmd.arg(0);
+    auto opt = ui_query()
+        .whereHasComponent<ui::UIComponent>()
+        .whereHasComponent<ui::UIComponentDebug>()
+        .whereLambda([&](const Entity &e) {
+          return e.get<ui::UIComponentDebug>().name_value == name &&
+                 e.get<ui::UIComponent>().was_rendered_to_screen;
+        })
+        .gen_first();
+    if (!opt.has_value()) {
+      cmd.retry();
+      return;
+    }
+    Entity &entity = opt.asE();
+    RectangleType rect = get_screen_rect(entity);
+    if (ui::is_mouse_inside(input::MousePosition{x, y}, rect)) {
+      cmd.consume();
+      return;
+    }
+    cmd.retry_with(std::format(
+        "expect_point_in '{}': point ({:g},{:g}) is outside rect "
+        "({:g},{:g} {:g}x{:g})",
+        name, x, y, rect.x, rect.y, rect.width, rect.height));
   }
 };
 
@@ -1749,10 +1837,12 @@ void register_ui_commands(SystemManager &sm,
       std::make_unique<HandleMultiClickUICommand<InputAction, 2>>());
   sm.register_update_system(
       std::make_unique<HandleMultiClickUICommand<InputAction, 3>>());
+  sm.register_update_system(std::make_unique<HandlePointerUICommand>());
 
   // UI property assertions
   sm.register_update_system(std::make_unique<HandleAssertUICommand>());
   sm.register_update_system(std::make_unique<HandleAssertUITextCommand>());
+  sm.register_update_system(std::make_unique<HandleExpectPointInCommand>());
   sm.register_update_system(std::make_unique<HandleExpectNoUICommand>());
 
   // Diagnostics

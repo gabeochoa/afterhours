@@ -120,6 +120,9 @@ struct MousePointerState {
   bool right_down = false;
   bool right_just_pressed = false;
   bool right_just_released = false;
+  bool middle_down = false;
+  bool middle_just_pressed = false;
+  bool middle_just_released = false;
   input::MousePosition press_pos{};
   bool press_moved = false;
   bool moved_this_frame = false; // pos changed since last frame (any button)
@@ -367,7 +370,15 @@ template <typename InputAction> struct UIContext final : BaseComponent {
       return false;
     if (contains_in_subtree(id, prev_hot_id))
       return true;
-    warn_if_not_hit_testable(id);
+    warn_if_not_hit_testable(id, "is_right_click");
+    return false;
+  }
+  [[nodiscard]] bool is_middle_click(EntityID id) const {
+    if (!mouse.middle_just_released)
+      return false;
+    if (contains_in_subtree(id, prev_hot_id))
+      return true;
+    warn_if_not_hit_testable(id, "is_middle_click");
     return false;
   }
   /// Previous frame's answer. Use this while building a screen: hot_id is not
@@ -445,7 +456,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   }
 
   /// Once per element; otherwise a right-click there is a silent no-op.
-  void warn_if_not_hit_testable(EntityID id) const {
+  void warn_if_not_hit_testable(EntityID id, const char *query) const {
     OptEntity opt = UICollectionHolder::getEntityForID(id);
     if (!opt.has_value())
       return;
@@ -453,10 +464,10 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     if (e.has<HasClickListener>() || e.has<HasDragListener>())
       return; // hot could have landed here; the click was simply elsewhere
     warn_once(id,
-              "is_right_click({}) will never fire: this element has no click "
+              "{}({}) will never fire: this element has no click "
               "or drag listener, so hit-testing never selects it. Put the "
               "check on the button/row the user actually clicks.",
-              id);
+              query, id);
   }
 
   [[nodiscard]] bool is_mouse_press(EntityID id) const {

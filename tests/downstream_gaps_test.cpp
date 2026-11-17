@@ -955,14 +955,14 @@ TEST(d4_wrap_override_survives_apply_overrides) {
 // D13: an open dropdown always opened downward, so one near the bottom edge
 // ran off screen. The tray now goes through overlay::place().
 namespace {
-UIComponent *open_dropdown_tray(ImmTestHarness &h, float y) {
+UIComponent *open_dropdown_tray(ImmTestHarness &h, float x, float y) {
   std::vector<std::string> opts = {"One", "Two", "Three", "Four"};
   size_t idx = 0;
   auto emit = [&] {
     dropdown(h.context(), mk(h.root(), 0), opts, idx,
              ComponentConfig{}
                  .with_size(ComponentSize{pixels(160), pixels(30)})
-                 .with_absolute_position(40.f, y));
+                 .with_absolute_position(x, y));
   };
   h.begin_frame();
   emit();
@@ -979,16 +979,19 @@ UIComponent *open_dropdown_tray(ImmTestHarness &h, float y) {
 
 TEST(d13_dropdown_opens_downward_with_room) {
   ImmTestHarness h;
-  UIComponent *t = open_dropdown_tray(h, 50.f);
+  UIComponent *t = open_dropdown_tray(h, 40.f, 50.f);
   ui_test::check(t != nullptr, "tray exists", __FILE__, __LINE__);
-  if (t)
+  if (t) {
     ui_test::check(t->rect().y > 50.f, "tray sits below the trigger",
                    __FILE__, __LINE__);
+    ui_test::check(t->rect().x == 40.f, "tray left edge aligns with trigger",
+                   __FILE__, __LINE__);
+  }
 }
 
 TEST(d13_dropdown_flips_up_near_the_bottom) {
   ImmTestHarness h;
-  UIComponent *t = open_dropdown_tray(h, 560.f);
+  UIComponent *t = open_dropdown_tray(h, 40.f, 560.f);
   ui_test::check(t != nullptr, "tray exists", __FILE__, __LINE__);
   if (t) {
     const float y = t->rect().y;
@@ -998,6 +1001,21 @@ TEST(d13_dropdown_flips_up_near_the_bottom) {
                    "tray stays on screen", __FILE__, __LINE__);
     if (y >= 560.f)
       fprintf(stderr, "        tray y=%.1f h=%.1f\n", y, t->rect().height);
+  }
+}
+
+TEST(d13_dropdown_tray_clamps_at_right_edge) {
+  ImmTestHarness h;
+  UIComponent *t = open_dropdown_tray(h, 700.f, 50.f);
+  ui_test::check(t != nullptr, "tray exists", __FILE__, __LINE__);
+  if (t) {
+    const float x = t->rect().x;
+    ui_test::check(x + t->rect().width <= 800.f,
+                   "tray stays on screen horizontally", __FILE__, __LINE__);
+    ui_test::check(x == 640.f, "tray right edge lands on the screen edge",
+                   __FILE__, __LINE__);
+    if (x + t->rect().width > 800.f)
+      fprintf(stderr, "        tray x=%.1f w=%.1f\n", x, t->rect().width);
   }
 }
 

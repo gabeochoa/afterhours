@@ -199,7 +199,7 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
   const float bottom_padding = resolve_padding(config.padding.bottom);
 
   const long n = static_cast<long>(count);
-  constexpr long OVERSCAN = 4;
+  const long overscan = static_cast<long>(config.virtual_list_overscan);
   float lo = 0.f, hi = 0.f;
 
   if (entity.template has<HasScrollView>()) {
@@ -242,8 +242,8 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
 
   size_t first = 0, last = static_cast<size_t>(std::min<long>(n, 1));
   if (hi > lo) {
-    long f = rows.index_at(lo) - OVERSCAN;
-    long l = rows.index_at(hi) + OVERSCAN + 1;
+    long f = rows.index_at(lo) - overscan;
+    long l = rows.index_at(hi) + overscan + 1;
     first = static_cast<size_t>(std::clamp<long>(f, 0, n));
     last = static_cast<size_t>(std::clamp<long>(l, 0, n));
   }
@@ -254,14 +254,14 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
   // that changes moves every recycled row onto a different item at once: a
   // press is stranded and the list cannot settle. Rounding keeps it still
   // while the window breathes by a row.
-  size_t capacity = window + 2 * (size_t)OVERSCAN + 8;
+  size_t capacity = window + 4 * static_cast<size_t>(overscan);
   if (entity.template has<HasScrollView>()) {
     auto &sv = entity.template get<HasScrollView>();
     if (sv.viewport_size.has_value()) {
       // Has to cover the widest window the span bound above can ask for, or
       // two items would land on the same row entity.
       const float widest = (3.f * sv.viewport_size->y) / rows.shortest();
-      capacity = std::max(capacity, static_cast<size_t>(widest) + 2 * (size_t)OVERSCAN + 8);
+      capacity = std::max(capacity, static_cast<size_t>(widest) + 4 * static_cast<size_t>(overscan));
     }
     constexpr size_t BLOCK = 32;
     capacity = ((capacity + BLOCK - 1) / BLOCK) * BLOCK;

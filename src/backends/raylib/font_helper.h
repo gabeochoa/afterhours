@@ -2,6 +2,7 @@
 #pragma once
 
 #include <map>
+#include <optional>
 #include <vector>
 
 #include "../../font_coverage.h"
@@ -19,6 +20,27 @@ namespace afterhours {
 
 using Font = raylib::Font;
 using vec2 = raylib::Vector2;
+
+namespace detail {
+inline std::optional<raylib::Font> &default_font_override() {
+  static std::optional<raylib::Font> font;
+  return font;
+}
+} // namespace detail
+
+// The face for text drawn without one: get_default_font(), get_unset_font(),
+// draw_text and the library's debug overlays. Unset, it is raylib's built-in
+// pixel font. Set it before the UI plugin loads its fonts so imm's default
+// and unset fonts pick it up too. The caller keeps the font loaded.
+inline void set_default_font(raylib::Font font) {
+  detail::default_font_override() = font;
+}
+inline void clear_default_font() { detail::default_font_override().reset(); }
+
+inline raylib::Font get_default_font() {
+  return detail::default_font_override().value_or(raylib::GetFontDefault());
+}
+inline raylib::Font get_unset_font() { return get_default_font(); }
 
 // Passing nullptr asks raylib for its default set, which is 95 ASCII glyphs.
 // So an arrow, a chevron, a checkmark or an ellipsis drew nothing at all, and
@@ -161,7 +183,7 @@ inline raylib::Font load_font_from_file(const char *file, int size = 0) {
                       : raylib::LoadFont(file);
   }
   // Glyphs but no texture is the headless case, and it draws nothing.
-  if (font.texture.id == 0)
+  if (font.texture.id == 0 && raylib::IsWindowReady())
     font = build_font_atlas(file, px, cps.data(), (int)cps.size());
   prepare_font_texture(font);
   record_font_coverage(font, file);
@@ -241,11 +263,11 @@ load_font_from_file_with_codepoints(const char *file, int *codepoints,
               "count={}",
               file ? file : "null", codepoints ? "valid" : "null",
               codepoint_count);
-    return raylib::GetFontDefault();
+    return get_default_font();
   }
   raylib::Font font = raylib::LoadFontEx(file, size, codepoints, codepoint_count);
   // See load_font_from_file: no GL context means no texture.
-  if (font.texture.id == 0)
+  if (font.texture.id == 0 && raylib::IsWindowReady())
     font = build_font_atlas(file, size, codepoints, codepoint_count);
   prepare_font_texture(font);
   record_font_coverage(font, file);
@@ -295,12 +317,19 @@ inline int *remove_duplicate_codepoints(int *codepoints, int codepointCount,
 }
 
 // Convenience function to load a font with codepoints extracted from a string
+inline void unload_font(raylib::Font &font) {
+  coverage_registry().erase(font_key(font));
+  measure_memo::invalidate();
+  raylib::UnloadFont(font);
+  font = raylib::Font{};
+}
+
 inline raylib::Font load_font_for_string(const std::string &content,
                                          const std::string &font_filename,
                                          int size = 96) {
   if (content.empty() || font_filename.empty()) {
     log_warn("Empty content or font filename passed to load_font_for_string");
-    return raylib::GetFontDefault();
+    return get_default_font();
   }
 
   int codepointCount = 0;
@@ -308,7 +337,7 @@ inline raylib::Font load_font_for_string(const std::string &content,
 
   if (!codepoints || codepointCount <= 0) {
     log_warn("Failed to extract codepoints from string");
-    return raylib::GetFontDefault();
+    return get_default_font();
   }
 
   int codepointNoDupsCounts = 0;
@@ -319,7 +348,7 @@ inline raylib::Font load_font_for_string(const std::string &content,
 
   if (!codepointsNoDups || codepointNoDupsCounts <= 0) {
     log_warn("Failed to process codepoints for font loading");
-    return raylib::GetFontDefault();
+    return get_default_font();
   }
 
   raylib::Font font = raylib::LoadFontEx(
@@ -402,6 +431,29 @@ inline raylib::Vector2 measure_text_utf8(const raylib::Font font,
   }
 
   return measure_text(font, content, size, spacing);
+}
+
+inline float monospace_cell_advance(const raylib::Font font,
+                                    const float size) {
+  if (!std::isfinite(size) || size <= 0.f)
+    return 0.f;
+  if (!font_is_usable(font)) {
+    warn_once(0, "no glyph atlas to measure against, so text is being "
+                 "estimated at {}x its height per character. Expected "
+                 "headless -- load a font to measure for real.",
+              kUnmeasurableGlyphAspect);
+    return size * kUnmeasurableGlyphAspect;
+  }
+  if (font.baseSize <= 0 || !font.glyphs || !font.recs)
+    return 0.f;
+  const int idx = raylib::GetGlyphIndex(font, '0');
+  if (idx < 0 || idx >= font.glyphCount || font.glyphs[idx].value != '0')
+    return 0.f;
+  const float advance =
+      font.glyphs[idx].advanceX == 0
+          ? static_cast<float>(font.recs[idx].width)
+          : static_cast<float>(font.glyphs[idx].advanceX);
+  return advance * size / static_cast<float>(font.baseSize);
 }
 
 // Get the left-side bearing (offsetX) for the first glyph in a string.
