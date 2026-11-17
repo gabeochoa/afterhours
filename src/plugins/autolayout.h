@@ -188,7 +188,10 @@ struct AutoLayout {
   }
 
   float get_text_size_for_axis(UIComponent &widget, Axis axis) {
-    const std::string &font_name = widget.font_name;
+    std::string font_name = widget.font_name;
+    if (font_name != UIComponent::UNSET_FONT)
+      if (auto *fm = EntityHelper::get_singleton_cmp<FontManager>())
+        font_name = fm->resolve_weighted(font_name, widget.font_weight);
 
     const Entity &ent = to_ent(widget.id);
 
@@ -203,7 +206,7 @@ struct AutoLayout {
     float screen_height = fetch_screen_value_(Axis::Y);
     float font_size = resolve_to_pixels(widget.font_size, screen_height,
                                         widget.resolved_scaling_mode, ui_scale);
-    float spacing = 1.f;
+    float spacing = 1.f + label.letter_spacing;
 
     const auto measure_one = [&](const std::string &s) -> Vector2Type {
       if (external_measure_text)
