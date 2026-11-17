@@ -253,6 +253,11 @@ struct InputState {
   uint32_t char_queue[CHAR_QUEUE_SIZE]{};
   int char_queue_head = 0;
   int char_queue_tail = 0;
+
+  static constexpr int KEY_QUEUE_SIZE = 16;
+  int key_queue[KEY_QUEUE_SIZE]{};
+  int key_queue_len = 0;
+  int key_queue_read = 0;
 };
 
 inline InputState &input_state() {
@@ -276,6 +281,8 @@ inline void input_begin_frame() {
   s.mouse_dy = 0.f;
   s.scroll_x = 0.f;
   s.scroll_y = 0.f;
+  s.key_queue_len = 0;
+  s.key_queue_read = 0;
 }
 
 // C0, DEL, and C1 -- control codes, not text. Kept here rather than shared with
@@ -414,6 +421,8 @@ inline void sokol_event_cb(const sapp_event *ev) {
     if (kc > 0 && kc < MAX_KEYS) {
       if (!s.key_down[kc]) {
         s.key_pressed[kc] = true;
+        if (s.key_queue_len < InputState::KEY_QUEUE_SIZE)
+          s.key_queue[s.key_queue_len++] = kc;
       }
       s.key_down[kc] = true;
       if (ev->key_repeat) {
@@ -797,6 +806,12 @@ struct MetalPlatformAPI {
 
   static int get_char_pressed() {
     return static_cast<int>(metal_detail::pop_char());
+  }
+
+  static int get_key_pressed() {
+    auto &s = metal_detail::input_state();
+    return s.key_queue_read < s.key_queue_len ? s.key_queue[s.key_queue_read++]
+                                              : 0;
   }
 
   static bool is_mouse_button_pressed(int btn) {

@@ -126,6 +126,8 @@ inline int *remove_duplicate_codepoints(int *, int,
   return nullptr;
 }
 
+inline void unload_font(Font &font) { font = Font{}; }
+
 inline Font load_font_for_string(const std::string &,
                                  const std::string &font_file, int = 96) {
   return load_font_from_file(font_file.c_str());

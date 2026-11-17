@@ -1622,13 +1622,17 @@ inline std::vector<uint8_t> capture_screen_to_memory() {
 
 inline constexpr int TEXTURE_FILTER_BILINEAR = 1;
 inline constexpr int TEXTURE_FILTER_TRILINEAR = 2;
+inline constexpr int TEXTURE_WRAP_REPEAT = 0;
+inline constexpr int TEXTURE_WRAP_CLAMP = 1;
+inline constexpr int TEXTURE_WRAP_MIRROR_REPEAT = 2;
 
 namespace metal_texture_detail {
 
 // Map the afterhours filter constant to a sokol sampler filter. Both BILINEAR
 // and TRILINEAR use linear min/mag; TRILINEAR additionally uses a linear mipmap
 // filter (only meaningful when the image has mip levels).
-inline sg_sampler make_sampler_for_filter(int filter) {
+inline sg_sampler make_sampler_for_filter(int filter,
+                                          sg_wrap wrap = SG_WRAP_CLAMP_TO_EDGE) {
   sg_sampler_desc sd{};
   sd.min_filter = SG_FILTER_LINEAR;
   sd.mag_filter = SG_FILTER_LINEAR;
@@ -1636,8 +1640,8 @@ inline sg_sampler make_sampler_for_filter(int filter) {
   // TRILINEAR blends between two.
   sd.mipmap_filter =
       (filter == TEXTURE_FILTER_TRILINEAR) ? SG_FILTER_LINEAR : SG_FILTER_NEAREST;
-  sd.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
-  sd.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
+  sd.wrap_u = wrap;
+  sd.wrap_v = wrap;
   sd.label = "tex-sampler";
   return sg_make_sampler(&sd);
 }
@@ -1799,10 +1803,35 @@ inline void set_texture_filter(TextureType &texture, int filter) {
     return;
   // Recreate the sampler with the requested filter. The old sampler is
   // destroyed to avoid leaking a GPU sampler object.
-  if (texture.sampler_id)
+  sg_wrap wrap = SG_WRAP_CLAMP_TO_EDGE;
+  if (texture.sampler_id) {
+    wrap = sg_query_sampler_desc({texture.sampler_id}).wrap_u;
     sg_destroy_sampler({texture.sampler_id});
-  sg_sampler smp = metal_texture_detail::make_sampler_for_filter(filter);
+  }
+  sg_sampler smp = metal_texture_detail::make_sampler_for_filter(filter, wrap);
   texture.sampler_id = smp.id;
+}
+
+inline void set_texture_wrap(TextureType &texture, int wrap) {
+  if (texture.img_id == 0 || texture.sampler_id == 0)
+    return;
+  sg_sampler_desc sd = sg_query_sampler_desc({texture.sampler_id});
+  sd.wrap_u = sd.wrap_v = wrap == TEXTURE_WRAP_REPEAT ? SG_WRAP_REPEAT
+                          : wrap == TEXTURE_WRAP_MIRROR_REPEAT
+                              ? SG_WRAP_MIRRORED_REPEAT
+                              : SG_WRAP_CLAMP_TO_EDGE;
+  sg_destroy_sampler({texture.sampler_id});
+  texture.sampler_id = sg_make_sampler(&sd).id;
+}
+
+inline void draw_fps(int x, int y) {
+  const int fps = static_cast<int>(std::lround(graphics::get_fps()));
+  const Color color = fps >= 30   ? Color{0, 158, 47, 255}
+                      : fps >= 15 ? Color{255, 161, 0, 255}
+                                  : Color{230, 41, 55, 255};
+  char text[16];
+  std::snprintf(text, sizeof(text), "%2i FPS", fps);
+  draw_text(text, static_cast<float>(x), static_cast<float>(y), 20.f, color);
 }
 
 inline TextureType

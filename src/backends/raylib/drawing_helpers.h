@@ -703,6 +703,10 @@ inline std::vector<uint8_t> capture_screen_to_memory() {
 inline constexpr int TEXTURE_FILTER_BILINEAR = raylib::TEXTURE_FILTER_BILINEAR;
 inline constexpr int TEXTURE_FILTER_TRILINEAR =
     raylib::TEXTURE_FILTER_TRILINEAR;
+inline constexpr int TEXTURE_WRAP_REPEAT = raylib::TEXTURE_WRAP_REPEAT;
+inline constexpr int TEXTURE_WRAP_CLAMP = raylib::TEXTURE_WRAP_CLAMP;
+inline constexpr int TEXTURE_WRAP_MIRROR_REPEAT =
+    raylib::TEXTURE_WRAP_MIRROR_REPEAT;
 
 inline TextureType load_texture(const char *path) {
   return raylib::LoadTexture(path);
@@ -744,6 +748,14 @@ inline void set_texture_filter(TextureType &texture, int filter) {
     raylib::SetTextureFilter(texture, filter);
   }
 }
+
+inline void set_texture_wrap(TextureType &texture, int wrap) {
+  if (texture.id != 0) {
+    raylib::SetTextureWrap(texture, wrap);
+  }
+}
+
+inline void draw_fps(int x, int y) { raylib::DrawFPS(x, y); }
 
 inline TextureType
 load_texture_with_color_key(const char *path, const Color key,

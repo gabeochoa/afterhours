@@ -134,6 +134,7 @@ inline bool is_key_pressed_repeat(int key) {
 }
 #endif
 inline int get_char_pressed() { return PlatformAPI::get_char_pressed(); }
+inline int get_key_pressed() { return PlatformAPI::get_key_pressed(); }
 
 inline bool is_mouse_button_pressed(int btn) {
   return PlatformAPI::is_mouse_button_pressed(btn);

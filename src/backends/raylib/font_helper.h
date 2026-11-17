@@ -295,6 +295,13 @@ inline int *remove_duplicate_codepoints(int *codepoints, int codepointCount,
 }
 
 // Convenience function to load a font with codepoints extracted from a string
+inline void unload_font(raylib::Font &font) {
+  coverage_registry().erase(font_key(font));
+  measure_memo::invalidate();
+  raylib::UnloadFont(font);
+  font = raylib::Font{};
+}
+
 inline raylib::Font load_font_for_string(const std::string &content,
                                          const std::string &font_filename,
                                          int size = 96) {
