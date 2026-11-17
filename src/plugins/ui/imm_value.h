@@ -323,7 +323,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
     ds.on = !ds.on;
     ds.changed_since = true;
 
-    EntityID id = dd.get<UIComponent>().children[i];
+    EntityID id = dd.get<UIComponent>().children[index + 1];
     ctx.set_focus(id);
   };
 
@@ -347,8 +347,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
               .with_font(UIComponent::SYMBOL_FONT, 16.f)
               .with_no_wrap()
               .with_render_layer(config.render_layer))) {
-    on_option_click(entity,
-                    detail::prev_index(option_index - 1, options.size()));
+    on_option_click(entity, detail::prev_index(option_index, options.size()));
   }
 
   for (size_t i = 0; i < options.size(); i++) {
@@ -362,7 +361,7 @@ ElementResult pagination(HasUIContext auto &ctx, EntityParent ep_pair,
                    .with_no_wrap()
                    .with_padding(Spacing::md)
                    .with_render_layer(config.render_layer + 1))) {
-      on_option_click(entity, i + 1);
+      on_option_click(entity, i);
     }
   }
 
