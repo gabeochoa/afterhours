@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdlib>
+
 #include <fmt/args.h>
 #include <fmt/format.h>
 
@@ -19,6 +21,7 @@
 #include "../developer.h"
 #include "language.h" // translation::Language (kept here so existing users are unaffected)
 #include "../logging.h"
+#include "ui/text_units.h"
 
 namespace afterhours {
 namespace translation {
@@ -305,30 +308,27 @@ struct translation_plugin : developer::Plugin {
         all_chars += value.get_text();
       }
 
+      std::string_view chars(all_chars);
       size_t pos = 0;
-      while (pos < all_chars.length()) {
-        const unsigned char *bytes =
-            reinterpret_cast<const unsigned char *>(all_chars.c_str() + pos);
-        int codepoint = 0;
-        int bytes_consumed = 0;
-
-        if (bytes[0] < 0x80) {
-          codepoint = bytes[0];
-          bytes_consumed = 1;
-        } else if ((bytes[0] & 0xE0) == 0xC0 && pos + 1 < all_chars.length()) {
-          codepoint = ((bytes[0] & 0x1F) << 6) | (bytes[1] & 0x3F);
-          bytes_consumed = 2;
-        } else if ((bytes[0] & 0xF0) == 0xE0 && pos + 2 < all_chars.length()) {
-          codepoint = ((bytes[0] & 0x0F) << 12) | ((bytes[1] & 0x3F) << 6) |
-                      (bytes[2] & 0x3F);
-          bytes_consumed = 3;
+      while (pos < chars.size()) {
+        const auto lead = static_cast<unsigned char>(chars[pos]);
+        size_t expected = 0;
+        if (lead < 0x80) {
+          expected = 1;
+        } else if ((lead & 0xE0) == 0xC0) {
+          expected = 2;
+        } else if ((lead & 0xF0) == 0xE0) {
+          expected = 3;
+        } else if (lead >= 0xF0) {
+          expected = 4;
         }
-
-        if (bytes_consumed > 0 && codepoint > 0) {
-          all_codepoints.insert(codepoint);
-          pos += bytes_consumed;
-        } else {
+        if (expected == 0 || pos + expected > chars.size()) {
           pos++;
+          continue;
+        }
+        const uint32_t codepoint = ui::text_units_detail::decode(chars, pos);
+        if (codepoint > 0) {
+          all_codepoints.insert(static_cast<int>(codepoint));
         }
       }
     }
