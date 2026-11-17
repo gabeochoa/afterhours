@@ -30,14 +30,19 @@ SRCS ?= main.cpp
 # was doing in about half the leaves).
 EXE := $(OUT)/$(NAME).exe
 
+BREW_PREFIX ?= $(shell brew --prefix 2>/dev/null)
+ifeq ($(BREW_PREFIX),)
+    BREW_PREFIX := /opt/homebrew
+endif
+
 # -MF is not optional here. Left to itself, -MD names the dep file after the
 # output with its extension replaced, so `-o foo.exe` writes foo.d -- not
 # foo.exe.d, which is what the -include below looks for. The result compiles
 # and looks healthy while tracking nothing: editing a header rebuilds nothing
 # and you test a stale binary.
 FLAGS = -std=c++23 -Wall -Wextra -Wpedantic -Wuninitialized -Wshadow \
-        -Wconversion -g -isystem $(ROOT)/vendor -isystem $(ROOT)/.. \
-        -DFMT_HEADER_ONLY -MD -MP -MF $(EXE).d $(EXTRA_FLAGS)
+        -Wconversion -g -isystem $(ROOT)/vendor -isystem $(BREW_PREFIX)/include \
+        -isystem $(ROOT)/.. -DFMT_HEADER_ONLY -MD -MP -MF $(EXE).d $(EXTRA_FLAGS)
 
 .PHONY: all build run clean
 
