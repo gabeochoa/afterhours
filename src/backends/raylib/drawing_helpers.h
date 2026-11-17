@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <optional>
 #include <filesystem>
 #include <vector>
@@ -681,9 +682,31 @@ inline std::vector<uint8_t> capture_screen_to_memory() {
 inline constexpr int TEXTURE_FILTER_BILINEAR = raylib::TEXTURE_FILTER_BILINEAR;
 inline constexpr int TEXTURE_FILTER_TRILINEAR =
     raylib::TEXTURE_FILTER_TRILINEAR;
+inline constexpr int TEXTURE_WRAP_REPEAT = raylib::TEXTURE_WRAP_REPEAT;
+inline constexpr int TEXTURE_WRAP_CLAMP = raylib::TEXTURE_WRAP_CLAMP;
+inline constexpr int TEXTURE_WRAP_MIRROR_REPEAT =
+    raylib::TEXTURE_WRAP_MIRROR_REPEAT;
 
 inline TextureType load_texture(const char *path) {
   return raylib::LoadTexture(path);
+}
+
+inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
+                                          int h,
+                                          int filter = TEXTURE_FILTER_BILINEAR) {
+  if (rgba == nullptr || w <= 0 || h <= 0) {
+    log_error("load_texture_from_rgba: invalid pixel data ({}x{})", w, h);
+    std::abort();
+  }
+  raylib::Image image{const_cast<std::uint8_t *>(rgba), w, h, 1,
+                      raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8};
+  TextureType texture = raylib::LoadTextureFromImage(image);
+  if (texture.id == 0) {
+    log_error("load_texture_from_rgba: upload failed ({}x{})", w, h);
+    return texture;
+  }
+  raylib::SetTextureFilter(texture, filter);
+  return texture;
 }
 
 inline void unload_texture(TextureType &texture) {
@@ -704,6 +727,14 @@ inline void set_texture_filter(TextureType &texture, int filter) {
     raylib::SetTextureFilter(texture, filter);
   }
 }
+
+inline void set_texture_wrap(TextureType &texture, int wrap) {
+  if (texture.id != 0) {
+    raylib::SetTextureWrap(texture, wrap);
+  }
+}
+
+inline void draw_fps(int x, int y) { raylib::DrawFPS(x, y); }
 
 inline TextureType
 load_texture_with_color_key(const char *path, const Color key,

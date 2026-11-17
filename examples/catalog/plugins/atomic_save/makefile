@@ -1,0 +1,4 @@
+SRCS        = main.cpp ../../../../src/plugins/files.cpp
+EXTRA_FLAGS = -I../../../.. -DAFTER_HOURS_USE_NONE
+
+include ../../common.mk
