@@ -520,6 +520,34 @@ TEST(imm_leaf_self_closing) {
 // Main
 // ============================================================================
 
+TEST(imm_spacing_attributes) {
+  ImmTestHarness h;
+
+  auto col = imm::vstack(
+      h.context(), imm::mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(300), pixels(200)})
+          .with_padding(Padding{.top = pixels(4), .left = pixels(8),
+                                .bottom = pixels(12), .right = pixels(16)})
+          .with_margin(Margin{.top = pixels(2), .left = pixels(1),
+                              .bottom = pixels(2), .right = pixels(1)})
+          .with_gap(pixels(6))
+          .with_debug_name("spaced"));
+  imm::div(h.context(), imm::mk(col.ent(), 0),
+           ComponentConfig{}
+               .with_size(ComponentSize{pixels(50), pixels(20)})
+               .with_debug_name("plain"));
+
+  h.layout_only();
+  std::string xml = h.dump();
+
+  CHECK(xml.find("padding=\"4 16 12 8\"") != std::string::npos);
+  CHECK(xml.find("margin=\"2 1 2 1\"") != std::string::npos);
+  CHECK(xml.find("gap=\"6\"") != std::string::npos);
+  CHECK(count_occurrences(xml, "padding=") == 1);
+  CHECK(count_occurrences(xml, "gap=") == 1);
+}
+
 int main() {
   for (auto &entry : test_registry()) {
     printf("Running %s...\n", entry.name);
