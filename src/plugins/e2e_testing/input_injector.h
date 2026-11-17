@@ -20,6 +20,8 @@ inline std::array<int, 512> synthetic_press_count{};
 // that presses and asserts in the same step sees nothing -- put a `wait`
 // between them.
 inline std::array<int, 512> synthetic_press_delay{};
+inline std::array<int, 512> synthetic_release_count{};
+inline std::array<int, 512> synthetic_release_delay{};
 
 struct MouseState {
   Position pos{}; // Uses Position from concepts.h (satisfies HasPosition)
@@ -112,6 +114,11 @@ inline void set_key_held(int key) {
 /// Release a synthetically held key
 inline void set_key_up(int key) {
   if (key >= 0 && key < 512) {
+    if (detail::synthetic_keys[key]) {
+      detail::synthetic_release_count[key]++;
+      detail::synthetic_release_delay[key] =
+          detail::synthetic_press_delay[key] + 1;
+    }
     detail::synthetic_keys[key] = false;
   }
 }
@@ -130,6 +137,13 @@ inline bool consume_press(int key) {
     return false;
   return detail::synthetic_press_count[key] > 0 &&
          detail::synthetic_press_delay[key] == 0;
+}
+
+inline bool consume_release(int key) {
+  if (key < 0 || key >= 512)
+    return false;
+  return detail::synthetic_release_count[key] > 0 &&
+         detail::synthetic_release_delay[key] == 0;
 }
 
 /// Hold a key for specified duration (seconds)
@@ -313,6 +327,11 @@ inline void reset_frame() {
     } else if (detail::synthetic_press_count[i] > 0) {
       detail::synthetic_press_count[i]--;
     }
+    if (detail::synthetic_release_delay[i] > 0) {
+      detail::synthetic_release_delay[i]--;
+    } else if (detail::synthetic_release_count[i] > 0) {
+      detail::synthetic_release_count[i]--;
+    }
   }
 }
 
@@ -321,6 +340,8 @@ inline void reset_all() {
   detail::synthetic_keys.fill(false);
   detail::synthetic_press_count.fill(0);
   detail::synthetic_press_delay.fill(0);
+  detail::synthetic_release_count.fill(0);
+  detail::synthetic_release_delay.fill(0);
   detail::mouse = {};
   detail::pending_click = {};
   detail::key_hold = {};
