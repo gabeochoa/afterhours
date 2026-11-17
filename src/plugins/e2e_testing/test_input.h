@@ -5,6 +5,8 @@
 #include "input_injector.h"
 
 #include <queue>
+#include <string_view>
+#include <vector>
 
 namespace afterhours {
 namespace testing {
@@ -13,7 +15,7 @@ namespace test_input {
 struct KeyPress {
   int key = 0;
   bool is_char = false;
-  char char_value = 0;
+  int char_value = 0;
 };
 
 namespace detail {
@@ -38,12 +40,42 @@ inline void push_key(int key) {
   input_injector::set_key_up(key);
 }
 
-// Queue a character
-inline void push_char(char c) {
+// Queue a Unicode codepoint
+inline void push_char(int codepoint) {
   KeyPress kp;
   kp.is_char = true;
-  kp.char_value = c;
+  kp.char_value = codepoint;
   detail::key_queue.push(kp);
+}
+
+inline bool push_text(std::string_view text) {
+  std::vector<int> codepoints;
+  for (size_t i = 0; i < text.size();) {
+    const auto lead = static_cast<unsigned char>(text[i]);
+    const int len = lead < 0x80 ? 1
+                    : (lead & 0xE0) == 0xC0 ? 2
+                    : (lead & 0xF0) == 0xE0 ? 3
+                    : (lead & 0xF8) == 0xF0 ? 4
+                                            : 0;
+    if (len == 0 || i + len > text.size())
+      return false;
+    int cp = len == 1 ? lead : lead & (0x7F >> len);
+    for (int k = 1; k < len; ++k) {
+      const auto b = static_cast<unsigned char>(text[i + k]);
+      if ((b & 0xC0) != 0x80)
+        return false;
+      cp = (cp << 6) | (b & 0x3F);
+    }
+    constexpr int min_for_len[] = {0, 0, 0x80, 0x800, 0x10000};
+    if (cp < min_for_len[len] || cp > 0x10FFFF ||
+        (cp >= 0xD800 && cp <= 0xDFFF))
+      return false;
+    codepoints.push_back(cp);
+    i += len;
+  }
+  for (int cp : codepoints)
+    push_char(cp);
+  return true;
 }
 
 // Clear input queue
@@ -249,9 +281,9 @@ inline int get_char_pressed(BackendFn backend_fn) {
       return 0;
     }
     if (detail::key_queue.front().is_char) {
-      char c = detail::key_queue.front().char_value;
+      const int cp = detail::key_queue.front().char_value;
       detail::key_queue.pop();
-      return static_cast<int>(c);
+      return cp;
     }
     return 0;
   }

@@ -139,6 +139,7 @@ ALL_TESTS := \
 	press_delay_test \
 	graphics_key_injection_test \
 	e2e_key_command_test \
+	e2e_type_command_test \
 	overlay_layer_test \
 	unhandled_command_test \
 	e2e_retry_test \
