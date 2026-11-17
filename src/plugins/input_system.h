@@ -1099,6 +1099,31 @@ struct input : developer::Plugin {
         });
     }
 
+    struct Repeat {
+        float delay = 0.25f;
+        float rate = 0.05f;
+        float until_next = -1.f;
+
+        int tick(bool held, float dt) {
+            VALIDATE(rate > 0.f, "input::Repeat needs a positive rate");
+            if (!held) {
+                until_next = -1.f;
+                return 0;
+            }
+            if (until_next < 0.f) {
+                until_next = delay;
+                return 1;
+            }
+            until_next -= dt;
+            int fires = 0;
+            while (until_next <= 0.f) {
+                until_next += rate;
+                ++fires;
+            }
+            return fires;
+        }
+    };
+
     struct InputCollector : public BaseComponent {
         DeviceActivity device_activity;
         std::vector<input::ActionDone> inputs;
