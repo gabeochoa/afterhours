@@ -319,6 +319,12 @@ inline TextureType load_texture(const char *) {
   return TextureType{};
 }
 
+inline TextureType load_texture_from_rgba(const std::uint8_t *, int, int,
+                                          int = TEXTURE_FILTER_BILINEAR) {
+  log_error("@notimplemented load_texture_from_rgba");
+  return TextureType{};
+}
+
 inline void unload_texture(TextureType &) {
   log_error("@notimplemented unload_texture");
 }

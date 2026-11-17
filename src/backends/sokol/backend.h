@@ -375,6 +375,8 @@ inline void sokol_frame_cb() {
   if (!granted)
     return;
   g_frame_elapsed = 0.0;
+  const double lap = stm_sec(stm_laptime(&g_last_frame_tick));
+  g_frame_dt = lap > 0.0 ? lap : sapp_frame_duration();
   if (g_frame_fn)
     g_frame_fn();
   input_begin_frame();
@@ -476,6 +478,11 @@ inline void sokol_event_cb(const sapp_event *ev) {
   }
 }
 } // namespace metal_detail
+
+namespace metal_backend {
+inline bool metal_init(const Config &cfg);
+inline void metal_shutdown();
+} // namespace metal_backend
 
 struct MetalPlatformAPI {
   // Lightweight color struct — satisfies ColorLike without pulling in color.h
@@ -650,7 +657,7 @@ struct MetalPlatformAPI {
     // sim at a fixed step so frame-driven logic still progresses.
     if (metal_detail::g_headless)
       return 1.0f / 60.0f;
-    return static_cast<float>(sapp_frame_duration());
+    return static_cast<float>(metal_detail::g_frame_dt);
   }
   static float get_fps() {
     float dt = get_frame_time();
@@ -917,7 +924,12 @@ struct MetalPlatformAPI {
   }
 
   // ── Application control ──
-  static void request_quit() { sapp_request_quit(); }
+  static void request_quit() {
+    if (metal_detail::g_headless)
+      metal_detail::g_headless_quit = true;
+    else
+      sapp_request_quit();
+  }
 
   // ── Unified run loop ──
   static void run(const RunConfig &cfg) {
@@ -936,10 +948,16 @@ struct MetalPlatformAPI {
     metal_detail::g_cleanup_fn = cfg.cleanup;
     metal_detail::g_target_fps = cfg.target_fps;
     metal_detail::g_frame_elapsed = 1.0;
+    metal_detail::g_last_frame_tick = 0;
     metal_detail::g_on_demand =
         cfg.frame_mode == frame_loop::Mode::OnDemand;
     frame_loop::set_mode(cfg.frame_mode);
     frame_loop::request_frame();
+
+    if (cfg.display == DisplayMode::Headless) {
+      run_headless(cfg);
+      return;
+    }
 
     sapp_desc desc{};
     desc.init_cb = metal_detail::sokol_init_cb;
@@ -966,6 +984,30 @@ struct MetalPlatformAPI {
 
     // sapp_run blocks until the application quits
     sapp_run(&desc);
+  }
+
+  static void run_headless(const RunConfig &cfg) {
+    Config headless;
+    headless.display = DisplayMode::Headless;
+    headless.width = cfg.width;
+    headless.height = cfg.height;
+    if (!metal_backend::metal_init(headless)) {
+      log_error("sokol run: headless initialisation failed");
+      return;
+    }
+    metal_detail::g_headless_quit = false;
+    if (cfg.init)
+      cfg.init();
+    while (!metal_detail::g_headless_quit) {
+      frame_loop::consume_frame_request();
+      frame_loop::note_frame(true);
+      if (cfg.frame)
+        cfg.frame();
+      metal_detail::input_begin_frame();
+    }
+    if (cfg.cleanup)
+      cfg.cleanup();
+    metal_backend::metal_shutdown();
   }
 };
 
