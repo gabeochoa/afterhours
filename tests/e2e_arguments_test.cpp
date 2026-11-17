@@ -53,6 +53,8 @@ TEST(builtins_share_quoted_arguments) {
              {"say \"hello\"", "x=10", "text=say \"hello\""});
   check_args(R"e2e(select_dropdown "menu name" "item name")e2e", {"menu name", "item name"});
   check_args(R"e2e(double_click_ui "field name" 10 20)e2e", {"field name", "10", "20"});
+  check_args(R"e2e(mouse_down_ui "minimap rail" 4 30)e2e", {"minimap rail", "4", "30"});
+  check_args(R"e2e(mouse_move_ui rail)e2e", {"rail", "center", "center"});
   check_args(R"e2e(expect_input_selection "field name" 0 5)e2e", {"field name", "0", "5"});
   check_args(R"e2e(expect_input_text "field name" "a \"quote\" and \\ path")e2e",
              {"field name", "a \"quote\" and \\ path"});
