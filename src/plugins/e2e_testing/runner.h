@@ -249,15 +249,18 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
             cmd.args.push_back(args.rest());
             cmd.wait_seconds = 1 * frame;
         } else if (cmd.name == "double_click_ui" ||
-                   cmd.name == "triple_click_ui") {
+                   cmd.name == "triple_click_ui" ||
+                   cmd.name == "mouse_down_ui" || cmd.name == "mouse_move_ui") {
             // name plus an optional dx dy offset from the element's top left;
             // no offset means its centre.
             std::string name = args.next(), dx = args.next(), dy = args.next();
             cmd.args.push_back(name);
             cmd.args.push_back(dx.empty() ? "center" : dx);
             cmd.args.push_back(dy.empty() ? "center" : dy);
-            cmd.wait_seconds =
-                (cmd.name == "triple_click_ui" ? 12 : 8) * frame;
+            cmd.wait_seconds = (cmd.name == "triple_click_ui"   ? 12
+                                : cmd.name == "double_click_ui" ? 8
+                                                                : 2) *
+                               frame;
         } else if (cmd.name == "expect_input_text") {
             std::string name = args.next();
             cmd.args.push_back(name);
