@@ -6,9 +6,11 @@
 #define FMT_HEADER_ONLY
 #include <afterhours/src/plugins/translation.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <map>
 #include <string>
+#include <vector>
 
 using namespace afterhours;
 using namespace afterhours::translation;
@@ -34,6 +36,19 @@ struct FontNameGetter {
 using Plugin = translation_plugin<Key, Param, FontID, FontNameGetter>;
 using ParamMap = std::map<Param, std::string>;
 using TS = Plugin::TranslatableStringType;
+
+struct MockFontManager {
+  std::vector<int> captured;
+  int calls = 0;
+  void load_font_with_codepoints(const std::string &, const char *,
+                                 const int *codepoints, int count) {
+    calls++;
+    captured.assign(codepoints, codepoints + count);
+  }
+  bool contains(int cp) const {
+    return std::find(captured.begin(), captured.end(), cp) != captured.end();
+  }
+};
 
 std::string captured_errors;
 void capture_error(const char *level, const char *message) {
@@ -134,6 +149,32 @@ int main() {
     }
     CHECK(!threw);
     CHECK(out == "Hello");
+  }
+
+  {
+    Plugin::LanguageMap translations;
+    const std::string korean_text =
+        std::string("A") + "\xC3\xA9" + "\xE4\xB8\xAD" +
+        "\xF0\x9F\x98\x80" + "\xF0\xA0\x80\x80" + "\x80";
+    const std::string japanese_text = std::string("\xF0\x9F\x8E\x89");
+    translations[Language::Korean][Key::Hello] = TS(korean_text);
+    translations[Language::Japanese][Key::Hello] = TS(japanese_text);
+    Entity &entity = EntityHelper::createEntity();
+    Plugin::add_singleton_components(entity, translations, Language::English,
+                                     param_map);
+    MockFontManager fonts;
+    Plugin::load_cjk_fonts(
+        fonts, std::string("font.ttf"), FontNameGetter{},
+        [](Language) { return FontID::Default; });
+    CHECK(fonts.calls == 2);
+    CHECK(fonts.contains(0x41));
+    CHECK(fonts.contains(0xE9));
+    CHECK(fonts.contains(0x4E2D));
+    CHECK(fonts.contains(0x1F600));
+    CHECK(fonts.contains(0x20000));
+    CHECK(fonts.contains(0x1F389));
+    CHECK(!fonts.contains(0x80));
+    EntityHelper::cleanup();
   }
 
   std::printf("%d/%d checks passed\n", checks - failures, checks);

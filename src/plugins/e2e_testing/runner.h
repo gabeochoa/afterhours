@@ -5,7 +5,9 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <chrono>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <sstream>
 #include <string_view>
@@ -23,6 +25,7 @@ struct ScriptResult {
     bool passed = true;
     int error_count = 0;
     int validation_failures = 0;
+    bool timed_out = false;
 };
 
 struct ParsedCommand {
@@ -34,6 +37,7 @@ struct ParsedCommand {
     int wait_ticks = 0;
     // `wait_until SECONDS cmd ...`: retry cmd until it passes or this runs out.
     float wait_until_seconds = 0.0f;
+    float wall_seconds = 0.0f;
     std::string parse_error;
 };
 
@@ -157,16 +161,19 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
         // `wait_until SECONDS cmd args...` is cmd parsed by its own rules,
         // retried until it passes for up to SECONDS.
         std::string wait_until_error;
-        if (cmd.name == "wait_until") {
+        if (cmd.name == "wait_until" || cmd.name == "wait_until_wall") {
+            const std::string outer = cmd.name;
             std::string seconds;
             iss >> seconds >> cmd.name;
             try {
                 cmd.wait_until_seconds = std::stof(seconds);
             } catch (...) {
             }
+            if (outer == "wait_until_wall")
+                cmd.wall_seconds = cmd.wait_until_seconds;
             if (cmd.wait_until_seconds <= 0.f || cmd.name == "wait_until" ||
-                cmd.name.empty())
-                wait_until_error = "wait_until needs SECONDS > 0 then a command";
+                cmd.name == "wait_until_wall" || cmd.name.empty())
+                wait_until_error = outer + " needs SECONDS > 0 then a command";
         }
 
         detail::ScriptArguments args{iss, {}};
@@ -213,6 +220,15 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
             if (seconds <= 0) seconds = 1.0f;
             cmd.args.push_back(std::to_string(seconds));
             cmd.wait_seconds = seconds;
+        } else if (cmd.name == "wait_wall") {
+            const std::string seconds = args.next();
+            try {
+                cmd.wall_seconds = std::stof(seconds);
+            } catch (...) {
+            }
+            if (cmd.wall_seconds <= 0.f)
+                args.error = "wait_wall needs SECONDS > 0";
+            cmd.args.push_back(seconds);
         } else if (cmd.name == "wait_frames") {
             int frames = 1;
             std::istringstream(args.next()) >> frames;
@@ -238,7 +254,9 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
             }
             cmd.wait_seconds = 1 * frame;
         } else if (cmd.name == "expect_text" || cmd.name == "expect_text_i" ||
-                   cmd.name == "expect_no_text" || cmd.name == "expect_text_fully_visible") {
+                   cmd.name == "expect_no_text" || cmd.name == "expect_text_fully_visible" ||
+                   cmd.name == "expect_terminal_input" ||
+                   cmd.name == "expect_terminal_output_contains") {
             cmd.args.push_back(args.rest());
             cmd.wait_seconds = 1 * frame;
         } else if (cmd.name == "expect_selected_text") {
@@ -247,15 +265,18 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
             cmd.args.push_back(args.rest());
             cmd.wait_seconds = 1 * frame;
         } else if (cmd.name == "double_click_ui" ||
-                   cmd.name == "triple_click_ui") {
+                   cmd.name == "triple_click_ui" ||
+                   cmd.name == "mouse_down_ui" || cmd.name == "mouse_move_ui") {
             // name plus an optional dx dy offset from the element's top left;
             // no offset means its centre.
             std::string name = args.next(), dx = args.next(), dy = args.next();
             cmd.args.push_back(name);
             cmd.args.push_back(dx.empty() ? "center" : dx);
             cmd.args.push_back(dy.empty() ? "center" : dy);
-            cmd.wait_seconds =
-                (cmd.name == "triple_click_ui" ? 12 : 8) * frame;
+            cmd.wait_seconds = (cmd.name == "triple_click_ui"   ? 12
+                                : cmd.name == "double_click_ui" ? 8
+                                                                : 2) *
+                               frame;
         } else if (cmd.name == "expect_input_text") {
             std::string name = args.next();
             cmd.args.push_back(name);
@@ -312,6 +333,11 @@ class E2ERunner {
         commands_ = parse_script(path);
         script_path_ = path;
         reset();
+        if (commands_.empty()) {
+            log_error("[E2E] {} has no commands or cannot be read", path);
+            failed_ = true;
+            finished_ = true;
+        }
     }
 
     void load_scripts_from_directory(const std::string &dir) {
@@ -320,12 +346,19 @@ class E2ERunner {
         reset();
 
         std::vector<std::string> scripts;
-        for (const auto &entry : std::filesystem::directory_iterator(dir)) {
+        std::error_code ec;
+        for (const auto &entry : std::filesystem::directory_iterator(dir, ec)) {
             if (entry.path().extension() == ".e2e") {
                 scripts.push_back(entry.path().string());
             }
         }
         std::sort(scripts.begin(), scripts.end());
+        if (scripts.empty()) {
+            log_error("[E2E] no .e2e scripts found in {}", dir);
+            failed_ = true;
+            finished_ = true;
+            return;
+        }
 
         for (const auto &script_path : scripts) {
             std::string script_name =
@@ -363,6 +396,7 @@ class E2ERunner {
         index_ = 0;
         wait_time_ = 0.0f;
         wait_ticks_ = 0;
+        wall_deadline.reset();
         elapsed_time_ = 0.0f;
         finished_ = false;
         failed_ = false;
@@ -382,6 +416,7 @@ class E2ERunner {
         screenshot_fn_ = fn;
     }
     void set_reset_callback(std::function<void()> fn) { clear_fn_ = fn; }
+    void set_results_path(std::string path) { results_path_ = std::move(path); }
     void set_property_getter(
         std::function<std::string(const std::string &)> fn) {
         property_getter_ = fn;
@@ -403,7 +438,8 @@ class E2ERunner {
             return;
         }
 
-        elapsed_time_ += dt;
+        if (!wall_deadline || std::chrono::steady_clock::now() >= *wall_deadline)
+            elapsed_time_ += dt;
 
         // Timeout check (only active time, not wait time)
         if (timeout_seconds_ > 0 && elapsed_time_ > timeout_seconds_) {
@@ -421,6 +457,10 @@ class E2ERunner {
                          "it stalls until this timeout.",
                          stuck);
             }
+
+            if (is_batch_mode() &&
+                current_script_idx_ < script_results_.size())
+                script_results_[current_script_idx_].timed_out = true;
 
             // In batch mode, skip to the next script instead of aborting
             if (is_batch_mode()) {
@@ -509,7 +549,71 @@ class E2ERunner {
     bool has_commands() const { return !commands_.empty(); }
     float elapsed_time() const { return elapsed_time_; }
 
+    std::vector<ScriptResult> results() const {
+        if (is_batch_mode()) return script_results_;
+        if (script_path_.empty()) return {};
+        ScriptResult single;
+        single.path = script_path_;
+        single.name = std::filesystem::path(script_path_).stem().string();
+        single.passed = !has_failed();
+        single.error_count = current_script_errors_ + get_command_error_count();
+        single.timed_out = timed_out_;
+        return {single};
+    }
+
+    bool write_results_json(const std::string &path) const {
+        const auto quote = [](const std::string &text) {
+            std::string out = "\"";
+            for (char c : text) {
+                if (c == '"' || c == '\\') {
+                    out += '\\';
+                    out += c;
+                } else if (static_cast<unsigned char>(c) < 0x20) {
+                    out += std::format("\\u{:04x}", static_cast<int>(c));
+                } else {
+                    out += c;
+                }
+            }
+            return out + "\"";
+        };
+        const auto records = results();
+        int passed = 0;
+        std::string scripts;
+        for (const auto &r : records) {
+            passed += r.passed ? 1 : 0;
+            scripts += std::format(
+                "{}\n    {{\"name\": {}, \"path\": {}, \"passed\": {}, "
+                "\"expected_to_pass\": {}, \"errors\": {}, \"timed_out\": {}}}",
+                scripts.empty() ? "" : ",", quote(r.name), quote(r.path),
+                r.passed, r.expected_to_pass, r.error_count, r.timed_out);
+        }
+        const std::string json = std::format(
+            "{{\n  \"scripts\": [{}\n  ],\n  \"run\": {},\n  \"passed\": {},\n"
+            "  \"failed\": {},\n  \"success\": {},\n  \"complete\": true\n}}\n",
+            scripts, records.size(), passed,
+            static_cast<int>(records.size()) - passed, !has_failed());
+
+        const std::string tmp = path + ".tmp";
+        {
+            std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+            out << json;
+            if (!out.flush()) {
+                log_error("[E2E] cannot write results to {}", tmp);
+                return false;
+            }
+        }
+        std::error_code ec;
+        std::filesystem::rename(tmp, path, ec);
+        if (ec) {
+            log_error("[E2E] cannot move results into {}: {}", path,
+                      ec.message());
+            return false;
+        }
+        return true;
+    }
+
     void print_results() const {
+        if (!results_path_.empty()) write_results_json(results_path_);
         if (!script_results_.empty()) {
             log_info("============================================");
             log_info("          E2E Batch Test Summary            ");
@@ -544,6 +648,13 @@ class E2ERunner {
 
         if (timed_out_)
             log_warn("[TIMEOUT] after {:.2f} seconds", elapsed_time_);
+        for (const auto &r : results()) {
+            if (r.passed)
+                log_info("[PASS] {}", r.name);
+            else
+                log_warn("[FAIL] {} ({} error{})", r.name, r.error_count,
+                         r.error_count == 1 ? "" : "s");
+        }
         log_info("E2E finished in {:.2f} seconds", elapsed_time_);
     }
 
@@ -554,6 +665,7 @@ class E2ERunner {
         finalize_current_script();
         wait_time_ = 0.f;
         wait_ticks_ = 0;
+        wall_deadline.reset();
         skip_to_next_script();
     }
 
@@ -565,6 +677,7 @@ class E2ERunner {
 
    private:
     void dispatch_command(const ParsedCommand &cmd) {
+        wall_deadline.reset();
         if (!cmd.parse_error.empty()) {
             log_warn("[E2E ERROR] {}:{}: {}: {}", current_script_name(),
                      cmd.line_number, cmd.name, cmd.parse_error);
@@ -572,6 +685,8 @@ class E2ERunner {
             current_script_errors_++;
             return;
         }
+        if (cmd.wall_seconds > 0.f)
+            wall_deadline = detail::wall_deadline_after(cmd.wall_seconds);
         auto &entity = EntityHelper::createEntity();
         auto &pending = entity.addComponent<PendingE2ECommand>();
         pending.name = cmd.name;
@@ -579,6 +694,7 @@ class E2ERunner {
         pending.line_number = cmd.line_number;
         pending.wait_until_seconds = cmd.wait_until_seconds;
         pending.retry_budget = cmd.wait_until_seconds;
+        pending.wall_deadline = wall_deadline;
 
         // Handle validate specially since it needs property_getter
         if (cmd.name == "validate" && property_getter_ &&
@@ -713,6 +829,7 @@ class E2ERunner {
     std::size_t index_ = 0;
     float wait_time_ = 0.0f;         // Seconds remaining before next command
     int wait_ticks_ = 0;             // Ticks remaining, for wait_frames
+    std::optional<std::chrono::steady_clock::time_point> wall_deadline;
     float elapsed_time_ = 0.0f;      // Total elapsed time
     float timeout_seconds_ = 10.0f;  // Default 10 second timeout
     bool slow_mode_ = false;   // Add delay between commands for visibility
@@ -727,6 +844,7 @@ class E2ERunner {
     std::size_t current_script_idx_ = 0;
     int current_script_errors_ = 0;
 
+    std::string results_path_;
     std::function<void(const std::string &)> screenshot_fn_;
     std::function<void()> clear_fn_;
     std::function<std::string(const std::string &)> property_getter_;
