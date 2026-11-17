@@ -153,6 +153,7 @@ Same behaviour, they just say so; expect a burst on first run. `with_font_weight
 Don't rebuild: styled spans wrap (hanabi #22), `\n` is a hard break (#24), ellipsis + `expand()` doesn't hang, `with_styled_label` gives multi-colour text, `with_font_tier` is deprecated for `with_font_size(FontSize::Small)`.
 
 ### Docs
+- **Minimal consumer builds** (`examples/catalog/builds/`): `pure_ecs` (none backend, no display), `logic_only_ui` (input, UI and layout against a supplied resolution, no display) and `offscreen_render` (raylib headless GL context, writes a PNG), each the smallest makefile that works. The README there says which one a test suite wants, what each needs installed, and when to merge new entities before the first frame. MyNameChef had to assemble these combinations itself.
 
 `FlexWrap`'s comment claimed `Wrap` was the default. It is not — `UIComponent` and `ComponentConfig` both start at `NoWrap`, as do 3860 of 3863 nodes in a downstream sweep.
 
