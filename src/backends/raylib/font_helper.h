@@ -13,6 +13,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#if defined(__APPLE__) || defined(__linux__)
+#include <dlfcn.h>
+#endif
 
 #include "../../developer.h"
 #include "../../warn_once.h"
@@ -185,6 +188,18 @@ build_font_atlas(const char *file, int px, const int *codepoints, int count,
   return font;
 }
 
+inline bool font_gl_ready() {
+  if (raylib::IsWindowReady())
+    return true;
+#if defined(__APPLE__) || defined(__linux__)
+  const auto *gpu_ready =
+      static_cast<const bool *>(dlsym(RTLD_DEFAULT, "isGpuReady"));
+  return gpu_ready && *gpu_ready;
+#else
+  return false;
+#endif
+}
+
 inline raylib::Font load_font_from_file(const char *file, int size = 0) {
   std::vector<int> cps = default_codepoints();
   const int px = size > 0 ? size : 32;
@@ -196,7 +211,7 @@ inline raylib::Font load_font_from_file(const char *file, int size = 0) {
                       : raylib::LoadFont(file);
   }
   // Glyphs but no texture is the headless case, and it draws nothing.
-  if (font.texture.id == 0 && raylib::IsWindowReady())
+  if (font.texture.id == 0 && font_gl_ready())
     font = build_font_atlas(file, px, cps.data(), (int)cps.size());
   prepare_font_texture(font);
   record_font_coverage(font, file);
@@ -341,7 +356,7 @@ load_font_from_file_with_codepoints(const char *file, int *codepoints,
   }
   raylib::Font font = raylib::LoadFontEx(file, size, codepoints, codepoint_count);
   // See load_font_from_file: no GL context means no texture.
-  if (font.texture.id == 0 && raylib::IsWindowReady())
+  if (font.texture.id == 0 && font_gl_ready())
     font = build_font_atlas(file, size, codepoints, codepoint_count);
   prepare_font_texture(font);
   record_font_coverage(font, file);
@@ -432,7 +447,7 @@ inline raylib::Font load_font_for_string(const std::string &content,
   // rebuild uploads a texture, which needs a window: windowless it
   // calls through a null GL function pointer and crashes, so there
   // the LoadFontEx result (glyphs, no texture) stands.
-  if (font.texture.id == 0 && raylib::IsWindowReady())
+  if (font.texture.id == 0 && font_gl_ready())
     font = build_font_atlas(font_filename.c_str(), size, codepointsNoDups,
                             codepointNoDupsCounts);
   prepare_font_texture(font);
