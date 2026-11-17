@@ -333,6 +333,7 @@ class E2ERunner {
         commands_ = parse_script(path);
         script_path_ = path;
         reset();
+        test_input::detail::e2e_running = true;
         if (commands_.empty()) {
             log_error("[E2E] {} has no commands or cannot be read", path);
             failed_ = true;
@@ -344,6 +345,7 @@ class E2ERunner {
         commands_.clear();
         script_results_.clear();
         reset();
+        test_input::detail::e2e_running = true;
 
         std::vector<std::string> scripts;
         std::error_code ec;
