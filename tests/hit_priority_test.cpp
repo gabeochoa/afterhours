@@ -364,6 +364,7 @@ TEST(a_click_on_a_button_that_does_not_take_focus_leaves_focus_alone) {
     toggle.ent().get<HasClickListener>().cb = [&](Entity &) { ++fired; };
     h.layout_only();
     mark_rendered();
+    CHECK(can_be_focused(h.context(), toggle.ent()) == takes_focus);
     h.context().set_focus(42);
     press_at(h.context(), 50.f, 15.f);
     run_clicks(h);
