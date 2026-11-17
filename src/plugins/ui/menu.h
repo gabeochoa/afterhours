@@ -211,6 +211,12 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
     if (def->padding.top.dim != Dim::None)
       row_pad_top = def->padding.top;
   }
+  if (!config.padding_is_default) {
+    if (config.padding.left.dim != Dim::None)
+      row_pad_left = config.padding.left;
+    if (config.padding.top.dim != Dim::None)
+      row_pad_top = config.padding.top;
+  }
   const auto scaling =
       ctx.scaling_mode.value_or(UIStylingDefaults::get().scaling_mode);
   const float row_pad = resolve_to_pixels(row_pad_left, ctx.screen_height,
@@ -247,11 +253,20 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
                    .without_border()
                    .with_label(item.label)
                    .with_disabled(item.disabled);
+    if (!config.padding_is_default)
+      row.with_padding(config.padding);
+    if (config.color_usage != Theme::Usage::Default &&
+        config.color_usage != Theme::Usage::Custom)
+      row.with_background(config.color_usage);
+    if (config.hover_color.has_value())
+      row.with_custom_hover_bg(*config.hover_color);
     // Labels default to centred, which walks straight into the gutter.
     if (gutter > 0.f || any_marks)
       row.with_alignment(TextAlignment::Left);
     if (any_marks)
       row.with_text_inset(mark_col, 0.f);
+    else if (row.label_alignment == TextAlignment::Left)
+      row.with_text_inset(row_pad / ctx.theme.ui_scale, 0.f);
     if (item.disabled) {
       // The fill sits behind the label: a disabled row's own background is
       // muted to near-transparent and reads as a wide separator without it.

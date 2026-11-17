@@ -114,6 +114,13 @@ int main() {
       check(d->render_layer == r->render_layer + 5, "levels_above is honoured");
   }
 
+  {
+    ComponentConfig merged =
+        ComponentConfig{}.apply_overrides(ComponentConfig{}.with_overlay(3));
+    check(merged.render_layer_offset == 3,
+          "apply_overrides keeps an override's overlay level");
+  }
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);

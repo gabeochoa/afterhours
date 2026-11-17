@@ -1,8 +1,10 @@
 
 #pragma once
+#include <algorithm>
 #include <array>
 
 #include <cmath>
+#include <algorithm>
 #include <map>
 #include <variant>
 #include "../../vendor/magic_enum/magic_enum.hpp"
@@ -12,6 +14,7 @@
 #include "../core/key_codes.h"
 #include "../core/system.h"
 #include "../developer.h"
+#include "../drawing_helpers.h"
 #include "../gestures_macos.h"
 #include "window_manager.h"
 
@@ -60,9 +63,21 @@ struct input : developer::Plugin {
         // presented render texture and a hit test cannot drift apart. This
         // arithmetic used to live here and nowhere else, and consumers kept a
         // copy in step by comment.
+        // GetScreenWidth/Height return device (framebuffer) pixels on scaled
+        // Windows (GetRenderWidth magnitude) while GetMousePosition reports
+        // logical units, so mapping with the framebuffer size over-divides
+        // and floats the hit point toward the top-left. Use the logical
+        // render size divided by the DPI scale, matching the content
+        // resolution; a no-op at 1x, where the two agree.
+        const auto dpi = raylib::GetWindowScaleDPI();
+        const int win_w = static_cast<int>(static_cast<float>(
+                               raylib::GetRenderWidth()) /
+                           std::max(1.0f, dpi.x));
+        const int win_h = static_cast<int>(static_cast<float>(
+                               raylib::GetRenderHeight()) /
+                           std::max(1.0f, dpi.y));
         const Vector2Type mapped = window_manager::window_to_content(
-            Vector2Type{raw.x, raw.y}, raylib::GetScreenWidth(),
-            raylib::GetScreenHeight());
+            Vector2Type{raw.x, raw.y}, win_w, win_h);
         return {mapped.x, mapped.y};
     }
     static MousePosition get_mouse_delta() {
@@ -88,6 +103,10 @@ struct input : developer::Plugin {
         if (button == 1 && testing::test_input::detail::test_mode &&
             testing::input_injector::detail::mouse.active) {
             return testing::input_injector::detail::mouse.right_down;
+        }
+        if (button == 2 && testing::test_input::detail::test_mode &&
+            testing::input_injector::detail::mouse.active) {
+            return testing::input_injector::detail::mouse.middle_down;
         }
 #endif
         return raylib::IsMouseButtonDown(button);
@@ -191,7 +210,9 @@ struct input : developer::Plugin {
 
     static void draw_text(const std::string &text, const int x, const int y,
                           const int fontSize) {
-        raylib::DrawText(text.c_str(), x, y, fontSize, raylib::RED);
+        ::afterhours::draw_text(text.c_str(), static_cast<float>(x),
+                                static_cast<float>(y),
+                                static_cast<float>(fontSize), raylib::RED);
     }
 
     static void set_gamepad_mappings(const std::string &data) {
@@ -523,6 +544,7 @@ struct input : developer::Plugin {
         int value = 0;
         GamepadButton() = default;
         explicit GamepadButton(int v) : value(v) {}
+        bool operator==(const GamepadButton &) const = default;
     };
 
     // The backend hands back window space; the letterbox is applied here
@@ -695,6 +717,7 @@ struct input : developer::Plugin {
         int value = 0;
         GamepadButton() = default;
         explicit GamepadButton(int v) : value(v) {}
+        bool operator==(const GamepadButton &) const = default;
     };
 
     // TODO good luck ;)
@@ -872,6 +895,7 @@ struct input : developer::Plugin {
             : key(k), required_modifiers(0), has_explicit_modifiers(false) {}
         KeyChord(KeyCode k, uint8_t mods)
             : key(k), required_modifiers(mods), has_explicit_modifiers(true) {}
+        bool operator==(const KeyChord &) const = default;
     };
 
     static uint8_t get_current_modifiers() {
@@ -890,6 +914,7 @@ struct input : developer::Plugin {
     struct GamepadAxisWithDir {
         GamepadAxis axis;
         int dir = -1;
+        bool operator==(const GamepadAxisWithDir &) const = default;
     };
 
     enum struct MouseAxis { X, Y };
@@ -897,6 +922,7 @@ struct input : developer::Plugin {
     struct MouseAxisWithDir {
         MouseAxis axis;
         int dir = -1;
+        bool operator==(const MouseAxisWithDir &) const = default;
     };
 
     using AnyInput =
@@ -1070,24 +1096,52 @@ struct input : developer::Plugin {
     // TextSelectLeft (exclusive), don't also fire WidgetLeft (permissive LEFT).
     static void suppress_permissive_duplicates(std::vector<ActionDone> &actions) {
         // Collect keys claimed by exclusive chord matches
-        std::vector<KeyCode> claimed_keys;
+        std::vector<std::pair<KeyCode, uint8_t>> claimed;
         for (const auto &ad : actions) {
             if (ad.medium == DeviceMedium::Keyboard &&
                 ad.has_explicit_modifiers && ad.matched_key != 0) {
-                claimed_keys.push_back(ad.matched_key);
+                claimed.emplace_back(ad.matched_key, ad.required_modifiers);
             }
         }
-        if (claimed_keys.empty()) return;
+        if (claimed.empty()) return;
 
         std::erase_if(actions, [&](const ActionDone &ad) {
-            if (ad.medium != DeviceMedium::Keyboard || ad.has_explicit_modifiers)
-                return false;
-            for (KeyCode k : claimed_keys) {
-                if (ad.matched_key == k) return true;
+            if (ad.medium != DeviceMedium::Keyboard) return false;
+            for (const auto &[key, mods] : claimed) {
+                if (ad.matched_key != key) continue;
+                if (!ad.has_explicit_modifiers) return true;
+                if (mods != ad.required_modifiers &&
+                    (mods & ad.required_modifiers) == ad.required_modifiers)
+                    return true;
             }
             return false;
         });
     }
+
+    struct Repeat {
+        float delay = 0.25f;
+        float rate = 0.05f;
+        float until_next = -1.f;
+
+        int tick(bool held, float dt) {
+            VALIDATE(rate > 0.f, "input::Repeat needs a positive rate");
+            if (!held) {
+                until_next = -1.f;
+                return 0;
+            }
+            if (until_next < 0.f) {
+                until_next = delay;
+                return 1;
+            }
+            until_next -= dt;
+            int fires = 0;
+            while (until_next <= 0.f) {
+                until_next += rate;
+                ++fires;
+            }
+            return fires;
+        }
+    };
 
     struct InputCollector : public BaseComponent {
         DeviceActivity device_activity;
@@ -1099,6 +1153,15 @@ struct input : developer::Plugin {
 
     using InputCollectorInputAction = InputCollector;
 
+    static std::vector<int> actions_using(
+        const std::map<int, ValidInputs> &mapping, const AnyInput &binding) {
+        std::vector<int> actions;
+        for (const auto &[action, inputs] : mapping)
+            if (std::ranges::find(inputs, binding) != inputs.end())
+                actions.push_back(action);
+        return actions;
+    }
+
     struct ProvidesMaxGamepadID : public BaseComponent {
         int max_gamepad_available = 0;
         size_t count() const { return (size_t) max_gamepad_available + 1; }
@@ -1109,6 +1172,14 @@ struct input : developer::Plugin {
         GameMapping mapping;
         ProvidesInputMapping(const GameMapping start_mapping)
             : mapping(start_mapping) {}
+
+        void set_binding(int action, const input::ValidInputs &inputs) {
+            mapping[action] = inputs;
+        }
+        void clear_binding(int action) { mapping.erase(action); }
+        std::vector<int> actions_using(const input::AnyInput &binding) const {
+            return input::actions_using(mapping, binding);
+        }
     };
 
     struct RenderConnectedGamepads : System<input::ProvidesMaxGamepadID> {
@@ -1153,6 +1224,26 @@ struct input : developer::Plugin {
         InputCollector *ic = EntityHelper::get_singleton_cmp<InputCollector>();
         if (ic == nullptr) return {};
         return *ic;
+    }
+
+    template <typename Action>
+        requires std::is_enum_v<Action>
+    static bool is_held(Action action) {
+        auto collector = get_input_collector();
+        return collector.has_value() &&
+               std::ranges::any_of(collector.inputs(), [&](const ActionDone &done) {
+                   return done.action == static_cast<int>(action);
+               });
+    }
+
+    template <typename Action>
+        requires std::is_enum_v<Action>
+    static bool is_pressed(Action action) {
+        auto collector = get_input_collector();
+        return collector.has_value() &&
+               std::ranges::any_of(collector.inputs_pressed(), [&](const ActionDone &done) {
+                   return done.action == static_cast<int>(action);
+               });
     }
 
     // TODO i would like to move this out of input namespace
@@ -1252,6 +1343,15 @@ struct input : developer::Plugin {
     }
 
     // Default overload for PluginCore concept compatibility
+    template <typename Action>
+        requires std::is_enum_v<Action>
+    static void add_singleton_components(
+        Entity &entity, const std::map<Action, ValidInputs> &mapping) {
+        ProvidesInputMapping::GameMapping by_int;
+        for (const auto &[action, inputs] : mapping)
+            by_int[static_cast<int>(action)] = inputs;
+        add_singleton_components(entity, by_int);
+    }
     static void add_singleton_components(Entity &entity) {
         // Note: This creates an empty input mapping. For actual usage, use the
         // overload that takes a GameMapping parameter.
@@ -1320,6 +1420,13 @@ struct ProvidesLayeredInputMapping : public BaseComponent {
         if (layer_it != layers.end()) {
             layer_it->second.erase(action);
         }
+    }
+
+    std::vector<int> actions_using(LayerEnum layer,
+                                   const input::AnyInput &binding) const {
+        auto layer_it = layers.find(layer);
+        if (layer_it == layers.end()) return {};
+        return input::actions_using(layer_it->second, binding);
     }
 };
 

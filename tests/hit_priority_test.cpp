@@ -376,6 +376,21 @@ TEST(a_click_on_a_button_that_does_not_take_focus_leaves_focus_alone) {
   const EntityID toggle_id = build(true);
   CHECK(fired == 2);
   CHECK(h.context().has_focus(toggle_id));
+TEST(a_disabled_control_with_only_child_labels_is_not_clickable) {
+  auto build = [&](bool disabled) {
+    auto card = div(h.context(), mk(h.root(), 0),
+                    ComponentConfig{}
+                        .with_size(ComponentSize{pixels(200), pixels(60)})
+                        .with_absolute_position(0.f, 0.f)
+                        .with_disabled(disabled));
+    card.ent().addComponentIfMissing<HasClickListener>([&](Entity &) { ++fired; });
+    div(h.context(), mk(card.ent(), 0),
+        ComponentConfig{}.with_size(ComponentSize{pixels(120), pixels(20)}).with_label("Export"));
+    CHECK(card.ent().is_missing<HasLabel>());
+    press_at(h.context(), 180.f, 50.f);
+  };
+  build(true);
+  CHECK(fired == 0);
 }
 
 int main() { return ui_test::run_registered_tests("hit priority"); }

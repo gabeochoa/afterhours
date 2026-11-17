@@ -195,6 +195,11 @@ inline void apply_flags(Entity &entity, const ComponentConfig &config) {
     entity.removeComponentIfExists<HasClickActivationMode>();
   }
 
+  if (config.disabled)
+    entity.addComponentIfMissing<IsDisabled>();
+  else
+    entity.removeComponentIfExists<IsDisabled>();
+
   if (config.hidden) {
     entity.addComponentIfMissing<ShouldHide>();
   } else {
@@ -285,7 +290,7 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
       .set_disabled(config.disabled)
       .set_alignment(config.label_alignment)
       .set_text_overflow(config.text_overflow)
-      .set_letter_spacing(config.letter_spacing)
+      .set_letter_spacing(config.letter_spacing.value_or(0.f))
       .set_text_inset(config.text_inset)
       .set_line_height(config.text_area_line_height)
       .set_spans(pseudo_localize_spans(config.styled_label, pseudo));

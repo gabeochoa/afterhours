@@ -81,7 +81,6 @@ struct Lighting {
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 using ModelType = raylib::Model;
-using MatrixType = raylib::Matrix;
 using graphics::ShaderType;
 
 inline ModelType load_model(const char *filename) {
@@ -349,11 +348,8 @@ struct ModelStub {
   int meshCount = 0;
 };
 struct ShaderStub {};
-struct MatrixStub {
-  float m[16] = {};
-};
 using ModelType = ModelStub;
-using MatrixType = MatrixStub;
+using MatrixType = ::MatrixType;
 
 inline Bounds model_bounds(const ModelType &) { return {}; }
 inline int model_triangle_count(const ModelType &) { return 0; }

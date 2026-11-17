@@ -9,6 +9,10 @@
 #include "backends/sokol/backend.h"
 #endif
 
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+#include "plugins/e2e_testing/test_input.h"
+#endif
+
 namespace afterhours::graphics {
 
 #ifdef AFTER_HOURS_USE_RAYLIB
@@ -19,6 +23,8 @@ using PlatformAPI = MetalPlatformAPI;
 #error                                                                         \
     "No graphics backend defined. Define AFTER_HOURS_USE_RAYLIB, AFTER_HOURS_USE_SOKOL, AFTER_HOURS_USE_METAL, or AFTER_HOURS_USE_VULKAN (AFTER_HOURS_USE_NONE has no graphics API)."
 #endif
+
+using Camera2D = PlatformAPI::Camera2D;
 
 inline constexpr unsigned int FLAG_WINDOW_RESIZABLE =
     PlatformAPI::FLAG_WINDOW_RESIZABLE;
@@ -102,6 +108,24 @@ inline void begin_shader_mode(ShaderType &shader) {
 }
 inline void end_shader_mode() { PlatformAPI::end_shader_mode(); }
 
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+inline bool is_key_pressed(int key) {
+  return testing::test_input::is_key_pressed(
+      key, [](int k) { return PlatformAPI::is_key_pressed(k); });
+}
+inline bool is_key_down(int key) {
+  return testing::test_input::is_key_down(
+      key, [](int k) { return PlatformAPI::is_key_down(k); });
+}
+inline bool is_key_released(int key) {
+  return testing::test_input::is_key_released(
+      key, [](int k) { return PlatformAPI::is_key_released(k); });
+}
+inline bool is_key_pressed_repeat(int key) {
+  return testing::test_input::is_key_pressed(
+      key, [](int k) { return PlatformAPI::is_key_pressed_repeat(k); });
+}
+#else
 inline bool is_key_pressed(int key) { return PlatformAPI::is_key_pressed(key); }
 inline bool is_key_down(int key) { return PlatformAPI::is_key_down(key); }
 inline bool is_key_released(int key) {
@@ -110,7 +134,9 @@ inline bool is_key_released(int key) {
 inline bool is_key_pressed_repeat(int key) {
   return PlatformAPI::is_key_pressed_repeat(key);
 }
+#endif
 inline int get_char_pressed() { return PlatformAPI::get_char_pressed(); }
+inline int get_key_pressed() { return PlatformAPI::get_key_pressed(); }
 
 inline bool is_mouse_button_pressed(int btn) {
   return PlatformAPI::is_mouse_button_pressed(btn);
