@@ -33,6 +33,7 @@ struct E2EArgs {
   // counts ticks; it changes `wait <seconds>`.
   float time_scale = 1.0f;
   int capture_interval = 0;
+  std::string results_json;
 
   // For RunConfig::display, so a consumer need not map the bool themselves.
   graphics::DisplayMode display_mode() const {
@@ -44,8 +45,9 @@ struct E2EArgs {
 inline bool should_run_e2e(int argc, char *argv[]) {
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
-    if (arg == "--e2e" || arg == "--test-mode" || arg == "--test-script" ||
-        arg == "--test-script-dir")
+    const std::string key = arg.substr(0, arg.find('='));
+    if (key == "--e2e" || key == "--test-mode" || key == "--test-script" ||
+        key == "--test-script-dir")
       return true;
   }
   return false;
@@ -59,28 +61,34 @@ inline E2EArgs parse_e2e_args(int argc, char *argv[]) {
 
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
-    if (arg == "--e2e" || arg == "--test-mode") {
+    const auto eq = arg.find('=');
+    const std::string key =
+        eq == std::string::npos ? arg : arg.substr(0, eq);
+    const auto value = [&]() -> std::string {
+      return eq == std::string::npos ? next(i) : arg.substr(eq + 1);
+    };
+    if (key == "--e2e" || key == "--test-mode") {
       args.enabled = true;
-    } else if (arg == "--test-script") {
-      args.script_path = next(i);
+    } else if (key == "--test-script") {
+      args.script_path = value();
       args.enabled = true;
-    } else if (arg == "--test-script-dir") {
-      args.script_dir = next(i);
+    } else if (key == "--test-script-dir") {
+      args.script_dir = value();
       args.enabled = true;
-    } else if (arg == "--screenshot-dir") {
-      args.screenshot_dir = next(i);
-    } else if (arg == "--timeout") {
-      args.timeout_seconds = std::stof(next(i));
-    } else if (arg == "--slow") {
+    } else if (key == "--screenshot-dir") {
+      args.screenshot_dir = value();
+    } else if (key == "--timeout" || key == "--e2e-timeout") {
+      args.timeout_seconds = std::stof(value());
+    } else if (key == "--slow") {
       args.slow_mode = true;
-    } else if (arg == "--slow-delay") {
-      args.slow_delay = std::stof(next(i));
+    } else if (key == "--slow-delay") {
+      args.slow_delay = std::stof(value());
       args.slow_mode = true;
-    } else if (arg == "--update-baselines") {
+    } else if (key == "--update-baselines") {
       args.update_baselines = true;
-    } else if (arg == "--headless") {
+    } else if (key == "--headless") {
       args.headless = true;
-    } else if (arg == "--quiet") {
+    } else if (key == "--quiet") {
       args.quiet = true;
       // --e2e-speed is kart's spelling of the same knob. Both accepted rather
       // than making one project rename its scripts.
@@ -88,6 +96,12 @@ inline E2EArgs parse_e2e_args(int argc, char *argv[]) {
       args.time_scale = std::stof(next(i));
     } else if (arg == "--capture-interval") {
       args.capture_interval = std::stoi(next(i));
+    } else if (arg == "--results-json") {
+      args.results_json = next(i);
+    } else if (key == "--time-scale" || key == "--e2e-speed") {
+      args.time_scale = std::stof(value());
+    } else if (key == "--capture-interval") {
+      args.capture_interval = std::stoi(value());
     }
   }
   return args;
@@ -118,6 +132,8 @@ inline void configure_runner(E2ERunner &runner, const E2EArgs &args) {
   runner.set_timeout(args.timeout_seconds);
   if (args.slow_mode)
     runner.set_slow_mode(true, args.slow_delay);
+  if (!args.results_json.empty())
+    runner.set_results_path(args.results_json);
 }
 
 } // namespace testing

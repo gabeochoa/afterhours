@@ -1,7 +1,9 @@
 
 #pragma once
 
+#include <algorithm>
 #include <map>
+#include <optional>
 #include <vector>
 
 #include "../../font_coverage.h"
@@ -20,6 +22,27 @@ namespace afterhours {
 using Font = raylib::Font;
 using vec2 = raylib::Vector2;
 
+namespace detail {
+inline std::optional<raylib::Font> &default_font_override() {
+  static std::optional<raylib::Font> font;
+  return font;
+}
+} // namespace detail
+
+// The face for text drawn without one: get_default_font(), get_unset_font(),
+// draw_text and the library's debug overlays. Unset, it is raylib's built-in
+// pixel font. Set it before the UI plugin loads its fonts so imm's default
+// and unset fonts pick it up too. The caller keeps the font loaded.
+inline void set_default_font(raylib::Font font) {
+  detail::default_font_override() = font;
+}
+inline void clear_default_font() { detail::default_font_override().reset(); }
+
+inline raylib::Font get_default_font() {
+  return detail::default_font_override().value_or(raylib::GetFontDefault());
+}
+inline raylib::Font get_unset_font() { return get_default_font(); }
+
 // Passing nullptr asks raylib for its default set, which is 95 ASCII glyphs.
 // So an arrow, a chevron, a checkmark or an ellipsis drew nothing at all, and
 // both floatinghotel and hanabi shipped invisible UI furniture before noticing.
@@ -36,6 +59,7 @@ inline std::vector<int> default_codepoints() {
       {0x2500, 0x257F}, // box drawing
       {0x25A0, 0x25FF}, // geometric shapes
       {0x2713, 0x2717}, // check and cross
+      {0xFFFD, 0xFFFD},
   };
   std::vector<int> cps;
   for (const auto &r : kRanges)
@@ -96,12 +120,23 @@ inline uint64_t font_key(const raylib::Font font) {
          static_cast<uint64_t>(font.glyphCount);
 }
 
+inline std::vector<raylib::Font> &fallback_faces() {
+  static std::vector<raylib::Font> faces;
+  return faces;
+}
+
 inline void record_font_coverage(const raylib::Font font, const char *file) {
   if (font.glyphCount <= 0)
     return;
   font_coverage::Ranges ranges;
-  if (font_coverage::parse_file(file, ranges))
-    coverage_registry()[font_key(font)] = std::move(ranges);
+  if (!font_coverage::parse_file(file, ranges))
+    return;
+  coverage_registry()[font_key(font)] = std::move(ranges);
+  auto &faces = fallback_faces();
+  if (std::none_of(faces.begin(), faces.end(), [&](const raylib::Font &f) {
+        return f.glyphs == font.glyphs;
+      }))
+    faces.push_back(font);
 }
 
 // Fonts rasterize large (96px) and are usually drawn far smaller. With
@@ -161,10 +196,26 @@ inline raylib::Font load_font_from_file(const char *file, int size = 0) {
                       : raylib::LoadFont(file);
   }
   // Glyphs but no texture is the headless case, and it draws nothing.
-  if (font.texture.id == 0)
+  if (font.texture.id == 0 && raylib::IsWindowReady())
     font = build_font_atlas(file, px, cps.data(), (int)cps.size());
   prepare_font_texture(font);
   record_font_coverage(font, file);
+  return font;
+}
+
+inline raylib::Font load_font_from_memory(const unsigned char *data, int size,
+                                          const char *name, int px = 32) {
+  std::vector<int> cps = default_codepoints();
+  raylib::Font font = raylib::LoadFontFromMemory(
+      ".ttf", data, size, px, cps.data(), static_cast<int>(cps.size()));
+  if (font.glyphCount <= 0) {
+    log_warn("Failed to load font from memory: {}", name ? name : "");
+    return font;
+  }
+  prepare_font_texture(font);
+  font_coverage::Ranges ranges;
+  if (font_coverage::parse_cmap(data, static_cast<size_t>(size), ranges))
+    coverage_registry()[font_key(font)] = std::move(ranges);
   return font;
 }
 
@@ -190,6 +241,52 @@ inline bool font_has_glyph(const raylib::Font font, int codepoint) {
     return font_coverage::covers(it->second,
                                  static_cast<uint32_t>(codepoint));
   return true;
+}
+
+inline raylib::Font face_for(const raylib::Font font, int codepoint) {
+  if (codepoint < 0x80 || font_has_glyph(font, codepoint))
+    return font;
+  for (const raylib::Font &face : fallback_faces())
+    if (font_has_glyph(face, codepoint))
+      return face;
+  return font;
+}
+
+inline const char *drawable_text(const raylib::Font font, const char *text,
+                                 std::string &storage) {
+  const auto covered = [&](uint32_t cp) {
+    const int c = static_cast<int>(cp);
+    return font_has_glyph(face_for(font, c), c);
+  };
+  return font_coverage::visible_text(text, covered, storage) ? storage.c_str()
+                                                             : text;
+}
+
+struct FaceRun {
+  raylib::Font face;
+  std::string text;
+};
+
+inline std::vector<FaceRun> fallback_runs(const raylib::Font font,
+                                          const char *text) {
+  std::vector<FaceRun> runs;
+  if (!text || std::strchr(text, '\n'))
+    return runs;
+  bool fallback = false;
+  for (size_t i = 0; text[i];) {
+    int advance = 0;
+    const int cp = raylib::GetCodepointNext(text + i, &advance);
+    const size_t len = advance > 0 ? static_cast<size_t>(advance) : 1;
+    const raylib::Font face = face_for(font, cp);
+    fallback = fallback || face.glyphs != font.glyphs;
+    if (runs.empty() || runs.back().face.glyphs != face.glyphs)
+      runs.push_back({face, {}});
+    runs.back().text.append(text + i, len);
+    i += len;
+  }
+  if (!fallback)
+    runs.clear();
+  return runs;
 }
 
 // A codepoint the font lacks draws nothing: no box, no warning, no log. Both
@@ -225,9 +322,8 @@ inline void warn_on_missing_glyphs(const raylib::Font font, const char *text) {
     if (font_has_glyph(font, cp))
       continue;
     warn_once(0x110000 + cp,
-              "font has no glyph for U+{:04X}, which draws nothing at all "
-              "rather than a missing-glyph box. Load the font with codepoints "
-              "for the ranges you use.",
+              "font has no glyph for U+{:04X}, which draws as a replacement "
+              "glyph. Load the font with codepoints for the ranges you use.",
               cp);
   }
 }
@@ -241,11 +337,11 @@ load_font_from_file_with_codepoints(const char *file, int *codepoints,
               "count={}",
               file ? file : "null", codepoints ? "valid" : "null",
               codepoint_count);
-    return raylib::GetFontDefault();
+    return get_default_font();
   }
   raylib::Font font = raylib::LoadFontEx(file, size, codepoints, codepoint_count);
   // See load_font_from_file: no GL context means no texture.
-  if (font.texture.id == 0)
+  if (font.texture.id == 0 && raylib::IsWindowReady())
     font = build_font_atlas(file, size, codepoints, codepoint_count);
   prepare_font_texture(font);
   record_font_coverage(font, file);
@@ -295,12 +391,19 @@ inline int *remove_duplicate_codepoints(int *codepoints, int codepointCount,
 }
 
 // Convenience function to load a font with codepoints extracted from a string
+inline void unload_font(raylib::Font &font) {
+  coverage_registry().erase(font_key(font));
+  measure_memo::invalidate();
+  raylib::UnloadFont(font);
+  font = raylib::Font{};
+}
+
 inline raylib::Font load_font_for_string(const std::string &content,
                                          const std::string &font_filename,
                                          int size = 96) {
   if (content.empty() || font_filename.empty()) {
     log_warn("Empty content or font filename passed to load_font_for_string");
-    return raylib::GetFontDefault();
+    return get_default_font();
   }
 
   int codepointCount = 0;
@@ -308,7 +411,7 @@ inline raylib::Font load_font_for_string(const std::string &content,
 
   if (!codepoints || codepointCount <= 0) {
     log_warn("Failed to extract codepoints from string");
-    return raylib::GetFontDefault();
+    return get_default_font();
   }
 
   int codepointNoDupsCounts = 0;
@@ -319,7 +422,7 @@ inline raylib::Font load_font_for_string(const std::string &content,
 
   if (!codepointsNoDups || codepointNoDupsCounts <= 0) {
     log_warn("Failed to process codepoints for font loading");
-    return raylib::GetFontDefault();
+    return get_default_font();
   }
 
   raylib::Font font = raylib::LoadFontEx(
@@ -381,8 +484,18 @@ inline raylib::Vector2 measure_text(const raylib::Font font,
   Vector2Type cached{};
   if (measure_memo::lookup(key, cached))
     return cached;
-  const raylib::Vector2 measured =
-      raylib::MeasureTextEx(font, content, size, spacing);
+  std::string shown;
+  const char *visible = drawable_text(font, content, shown);
+  const std::vector<FaceRun> runs = fallback_runs(font, visible);
+  raylib::Vector2 measured{0.f, 0.f};
+  if (runs.empty())
+    measured = raylib::MeasureTextEx(font, visible, size, spacing);
+  for (size_t i = 0; i < runs.size(); i++) {
+    const raylib::Vector2 run = raylib::MeasureTextEx(
+        runs[i].face, runs[i].text.c_str(), size, spacing);
+    measured.x += run.x + (i > 0 ? spacing : 0.f);
+    measured.y = std::max(measured.y, run.y);
+  }
   measure_memo::store(key, measured);
   return measured;
 }
@@ -402,6 +515,29 @@ inline raylib::Vector2 measure_text_utf8(const raylib::Font font,
   }
 
   return measure_text(font, content, size, spacing);
+}
+
+inline float monospace_cell_advance(const raylib::Font font,
+                                    const float size) {
+  if (!std::isfinite(size) || size <= 0.f)
+    return 0.f;
+  if (!font_is_usable(font)) {
+    warn_once(0, "no glyph atlas to measure against, so text is being "
+                 "estimated at {}x its height per character. Expected "
+                 "headless -- load a font to measure for real.",
+              kUnmeasurableGlyphAspect);
+    return size * kUnmeasurableGlyphAspect;
+  }
+  if (font.baseSize <= 0 || !font.glyphs || !font.recs)
+    return 0.f;
+  const int idx = raylib::GetGlyphIndex(font, '0');
+  if (idx < 0 || idx >= font.glyphCount || font.glyphs[idx].value != '0')
+    return 0.f;
+  const float advance =
+      font.glyphs[idx].advanceX == 0
+          ? static_cast<float>(font.recs[idx].width)
+          : static_cast<float>(font.glyphs[idx].advanceX);
+  return advance * size / static_cast<float>(font.baseSize);
 }
 
 // Get the left-side bearing (offsetX) for the first glyph in a string.
