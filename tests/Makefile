@@ -109,6 +109,7 @@ ALL_TESTS := \
 	input_binding_codec_test \
 	input_prompts_test \
 	input_device_activity_test \
+	input_chord_specificity_test \
 	input_enum_actions_test \
 	input_repeat_test \
 	input_remap_test \
