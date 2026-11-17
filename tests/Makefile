@@ -76,6 +76,7 @@ ALL_TESTS := \
 	terminal_test \
 	terminal_ui_test \
 	font_atlas_measure_test \
+	monospace_cell_test \
 	ui_texture_lifecycle_test \
 	ui_update_lifecycle_test \
 	ui_update_lifecycle_single_test \

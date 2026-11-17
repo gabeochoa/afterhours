@@ -66,6 +66,12 @@ inline Vector2Type measure_text_utf8(const Font f, const char *text,
   return measure_text(f, text, size, spacing);
 }
 
+inline float monospace_cell_advance(const Font font, const float size) {
+  if (!std::isfinite(size) || size <= 0.f)
+    return 0.f;
+  return measure_text(font, "0", size, 1.f).x;
+}
+
 inline float get_first_glyph_bearing(const Font, const char *) { return 0.0f; }
 inline bool is_font_loaded(const Font &) { return false; }
 inline bool font_has_glyph(const Font, int) { return false; }
