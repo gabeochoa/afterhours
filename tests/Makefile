@@ -74,6 +74,7 @@ ALL_TESTS := \
 	command_picker_test \
 	command_picker_ui_test \
 	terminal_test \
+	terminal_commands_test \
 	terminal_ui_test \
 	font_atlas_measure_test \
 	ui_texture_lifecycle_test \
@@ -103,12 +104,14 @@ ALL_TESTS := \
 	input_binding_codec_test \
 	input_prompts_test \
 	input_device_activity_test \
+	input_remap_test \
 	file_watcher_test \
 	render_capture_test \
 	charts_test \
 	system_profile_test \
 	profiling_test \
 	profiling_disabled_test \
+	perf_provider_warn_test \
 	blend_mode_test \
 	rect_test \
 	rounded_corners_test \
@@ -120,14 +123,19 @@ ALL_TESTS := \
 	setting_row_style_test \
 	singleton_iteration_test \
 	press_delay_test \
+	graphics_key_injection_test \
 	e2e_key_command_test \
 	overlay_layer_test \
 	unhandled_command_test \
 	e2e_retry_test \
+	point_in_element_test \
+	e2e_ui_gestures_test \
 	mouse_axis_action_test \
 	card_and_type_scale_test \
 	fixed_timestep_test \
+	sound_playback_test \
 	headless_runconfig_test \
+	harness_spellings_test \
 	fit_content_test \
 	label_inset_test \
 	text_memo_test \
@@ -177,6 +185,7 @@ ALL_TESTS := \
 	color_swatch_test \
 	overlay_placement_test \
 	progress_bar_test \
+	pagination_test \
 	random_engine_test \
 	render_order_test \
 	scroll_smoothing_test \
@@ -200,6 +209,8 @@ ALL_TESTS := \
 	frustum_test \
 	instance_batcher_test \
 	lod_test \
+	image_test \
+	image_raylib_test \
 	stepper_test \
 	styling_test \
 	system_tags_test \
@@ -224,6 +235,7 @@ ifeq ($(UNAME_S),Darwin)
 ALL_TESTS += bundle_test
 ALL_TESTS += native_dialogs_macos_test
 ALL_TESTS += render_capture_metal_test
+ALL_TESTS += image_metal_test
 # Sokol is Metal here, so macOS-only; renders headless, no window.
 ALL_TESTS += sokol_blend_test
 ALL_TESTS += sokol_capture_test
@@ -232,7 +244,10 @@ ALL_TESTS += sokol_geometry_test
 # section of sokol_blend_test.
 ALL_TESTS += sokol_hidpi_test
 ALL_TESTS += sokol_resize_test
+ALL_TESTS += sokol_headless_run_test
 ALL_TESTS += sokol_include_order_test
+ALL_TESTS += sokol_frame_dt_test
+ALL_TESTS += staging_texture_leak_test
 endif
 
 RAYLIB_TESTS := \
@@ -278,12 +293,15 @@ RAYLIB_TESTS := \
 	label_inset_test \
 	fit_content_test \
 	headless_runconfig_test \
+	harness_spellings_test \
 	fixed_timestep_test \
+	sound_playback_test \
 	card_and_type_scale_test \
 	mouse_axis_action_test \
 	unhandled_command_test \
 	overlay_layer_test \
 	press_delay_test \
+	graphics_key_injection_test \
 	text_wrap_test \
 	theme_io_test \
 	tree_view_test \
@@ -316,7 +334,7 @@ $(RAYLIB_BINS): LDFLAGS_T  = $(LDFLAGS_RAYLIB)
 # with no window, so the modifier half of a chord cannot be tested at all.
 $(OUT)/input_device_activity_test: LDFLAGS_T = $(subst $(RAYLIB_LIB)/libraylib.a,-L$(RAYLIB_LIB) -lraylib,$(LDFLAGS_RAYLIB))
 
-$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
+$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 
 # Filter to sources: the .d files list every header as a prerequisite, and a
 # bare $^ would hand them all to clang. .cc is the sokol implementation TU.
@@ -377,12 +395,30 @@ $(OUT)/sokol_hidpi_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_resize_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_resize_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_resize_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_headless_run_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_headless_run_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_headless_run_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_include_order_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_include_order_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_include_order_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_frame_dt_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_frame_dt_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_frame_dt_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_frame_dt_test: ../src/backends/sokol/backend.h
+
+$(OUT)/staging_texture_leak_test: ../examples/web/sokol_impl.cc
+$(OUT)/staging_texture_leak_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/staging_texture_leak_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/staging_texture_leak_test: ../src/backends/sokol/capture_impl.h
 
 $(OUT)/render_capture_metal_test: render_capture_test.cpp ../examples/web/sokol_impl.cc
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
+
+$(OUT)/image_metal_test: image_test.cpp ../examples/web/sokol_impl.cc
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
+
+$(OUT)/image_raylib_test: image_test.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $< $(LDFLAGS_RAYLIB) -o $@
 
 # Windows/Vulkan cross-build (from macOS, via zig). The .exes link on the Mac
 # and run on the Windows box. They render headless and read pixels back, so
