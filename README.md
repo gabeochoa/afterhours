@@ -55,10 +55,34 @@ AFTER_HOURS_INCLUDE_DERIVED_CHILDREN
 - Allows access to for_each_with_derived which will return all entities which match a component or a components children (TODO add an example) 
 
 AFTER_HOURS_REPLACE_LOGGING
-- if you want the library to log, implement the four functions and define this
+- afterhours then defines no logging; the host must declare all five of these before including any afterhours header:
+  `log_trace`, `log_info`, `log_warn`, `log_error` as `(fmt, args...)`, and `log_once_per(duration, level, fmt, args...)`
+- `fmt` uses `{}` placeholders (std::format style); `duration` is a `std::chrono` duration and `level` is a `VENDOR_LOG_*` value
+- functions or macros both work, but a macro must expand to one statement (`do { ... } while (0)`): the library calls these from brace-less `if`/`else`
+- `log_file.h` only sees what reaches `log_sink_fn`; forward your logs to it yourself if you want them in the file
+- `crash::report()` logs through `log_error`, so a `log_error` that aborts recurses under `crash::install_handler()`
+
+```cpp
+// my_log.h -- include before any afterhours header
+#define AFTER_HOURS_REPLACE_LOGGING
+#include <cstdio>
+#include <format>
+
+#define MY_LOG(level, ...)                                                     \
+  do {                                                                         \
+    std::fprintf(stderr, "[%s] %s\n", level,                                   \
+                 std::format(__VA_ARGS__).c_str());                            \
+  } while (0)
+
+#define log_trace(...) do {} while (0)
+#define log_info(...) MY_LOG("INFO", __VA_ARGS__)
+#define log_warn(...) MY_LOG("WARN", __VA_ARGS__)
+#define log_error(...) MY_LOG("ERROR", __VA_ARGS__)
+#define log_once_per(duration, level, ...) do {} while (0)
+```
 
 AFTER_HOURS_REPLACE_VALIDATE
-- same as logging but assert + log_error
+- the host defines `VALIDATE(condition, message)`; same one-statement rule
 
 AFTER_HOURS_DEBUG
 - enables some debug logging
@@ -80,6 +104,25 @@ AFTERHOURS_ENFORCE_MIN_FONT_SIZE
 - enables minimum accessible font size enforcement in the UI plugin
 - logs a warning when font sizes are below TypographyScale::MIN_ACCESSIBLE_SIZE_720P (18.67px)
 - automatically clamps font sizes to the minimum to ensure accessibility
+
+### Host type macros
+
+afterhours names six value types through macros, so a game can hand it its own:
+
+| Macro | raylib default | other backends | fields afterhours reads |
+|---|---|---|---|
+| `Vector2Type` | `raylib::Vector2` | `MyVec2` | `x, y` |
+| `Vector3Type` | `raylib::Vector3` | `MyVec3` | `x, y, z` |
+| `RectangleType` | `raylib::Rectangle` | `MyRectangle` | `x, y, width, height` |
+| `ColorType` | `raylib::Color` | `MyColor` | `r, g, b, a` (`unsigned char`) |
+| `FontType` | `raylib::Font` | `MyFont` (empty) | none |
+| `TextureType` | `raylib::Texture2D` | `MyTexture` | `width, height` (sokol adds GPU ids) |
+
+All six are optional. To use your own type, `#define` the macro (or pass `-D`) before the first afterhours include. Any afterhours header can be the first, because they all pull in `developer.h`, which reads the macros once. Define one any later and afterhours and your code end up using different types.
+
+On raylib, if `RAYLIB_H` is not already defined, afterhours includes `<raylib.h>` inside `namespace raylib`. It then turns the macros into real aliases (`afterhours::Vector2Type`, re-exported globally), so after the include they are types, not macros. `afterhours::Color` (the colors plugin) is always `raylib::Color` on raylib, whatever `ColorType` says.
+
+`examples/catalog/utility/host_types` swaps in all six types on the none backend.
 
 ## Packaging a desktop app (macOS)
 
