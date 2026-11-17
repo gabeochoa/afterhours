@@ -252,6 +252,13 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
       context.mouse.right_just_released =
           prev_right_down && !context.mouse.right_down;
 
+      const bool prev_middle_down = context.mouse.middle_down;
+      context.mouse.middle_down = input::is_mouse_button_down(2);
+      context.mouse.middle_just_pressed =
+          !prev_middle_down && context.mouse.middle_down;
+      context.mouse.middle_just_released =
+          prev_middle_down && !context.mouse.middle_down;
+
       if (context.mouse.just_pressed) {
         context.mouse.press_pos = context.mouse.pos;
         context.mouse.press_moved = false;
@@ -2249,10 +2256,13 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
 
     if (!context || !context->is_input_allowed(entity.id)) return;
 
-    if (!is_mouse_inside(context->mouse.pos, rect))
+    if (!is_mouse_inside(context->mouse.pos, detail::hit_rect(entity, cmp)))
       return;
 
     Vector2Type wheel_v = input::get_mouse_wheel_move_v();
+    if (wheel_v.x == 0.f &&
+        (input::get_current_modifiers() & input::KeyChord::MOD_SHIFT))
+      wheel_v = {wheel_v.y, 0.f};
 
     // TODO add support for customizing this for "natural" scroll
     // Direction multiplier: natural scrolling (default) vs inverted
