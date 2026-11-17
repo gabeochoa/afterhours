@@ -53,8 +53,10 @@ inline Font register_loaded_font(FONScontext *ctx, int id,
   if (graphics::metal_detail::g_font_count <
       graphics::metal_detail::MAX_FONTS) {
     md[graphics::metal_detail::g_font_count++] = id;
+  }
   if (graphics::metal_detail::g_active_font == FONS_INVALID) {
     graphics::metal_detail::g_active_font = id;
+  }
   mesh_font_fallbacks(ctx, id);
   return Font{id};
 }
@@ -65,8 +67,11 @@ inline Font load_font_from_memory(const unsigned char *data, int size,
   if (!ctx) {
     log_warn("fontstash context not ready yet (load_font_from_memory)");
     return Font{FONS_INVALID};
+  }
   if (!data || size <= 0 || !name) {
     log_error("load_font_from_memory: no data for '{}'", name ? name : "");
+    return Font{FONS_INVALID};
+  }
   const std::string key = fontstash_name(name);
   const int existing = fonsGetFontByName(ctx, key.c_str());
   if (existing != FONS_INVALID)
@@ -77,11 +82,16 @@ inline Font load_font_from_memory(const unsigned char *data, int size,
   auto *copy = static_cast<unsigned char *>(std::malloc(static_cast<size_t>(size)));
   if (!copy) {
     log_error("load_font_from_memory: out of memory for '{}'", name);
+    return Font{FONS_INVALID};
+  }
   std::memcpy(copy, data, static_cast<size_t>(size));
   const int id = fonsAddFontMem(ctx, key.c_str(), copy, size, 1);
   if (id == FONS_INVALID) {
     log_warn("Failed to load font from memory: {}", name);
+    return Font{FONS_INVALID};
+  }
   return register_loaded_font(ctx, id, has_cmap ? &ranges : nullptr);
+}
 
 inline Font load_font_from_file(const char *file, int = 0) {
   auto *ctx = graphics::metal_detail::g_fons_ctx;
