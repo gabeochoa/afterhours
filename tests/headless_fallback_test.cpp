@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 #include <afterhours/src/backends/raylib/font_helper.h>
 #include <afterhours/src/plugins/window_manager.h>
@@ -108,12 +109,35 @@ int main() {
     check(empty.x == 0.f, "an empty string is still zero wide");
   }
 
+  {
+    raylib::GlyphInfo glyph{};
+    glyph.value = '0';
+    glyph.advanceX = 12;
+    raylib::Rectangle rec{};
+    rec.width = 9;
+    raylib::Font fake{};
+    fake.texture.id = 1;
+    fake.baseSize = 32;
+    fake.glyphCount = 1;
+    fake.glyphs = &glyph;
+    fake.recs = &rec;
+    check(afterhours::monospace_cell_advance(fake, 32.f) == 12.f,
+          "cell advance is the digit glyph advance at base size");
+    check(afterhours::monospace_cell_advance(fake, 16.f) == 6.f,
+          "cell advance scales with the requested size");
+    glyph.advanceX = 0;
+    check(afterhours::monospace_cell_advance(fake, 32.f) == 9.f,
+          "cell advance falls back to the glyph rect when advance is zero");
+    glyph.advanceX = 12;
+    check(afterhours::monospace_cell_advance(fake, 0.f) == 0.f,
+          "cell advance rejects a zero size");
+    const raylib::Font none = raylib::GetFontDefault();
+    check(afterhours::monospace_cell_advance(none, 20.f) == 10.f,
+          "cell advance estimates like measure_text without an atlas");
+  }
+
   // --- loaders must not hand back an atlas-less font ---------------------
   {
-    // load_font_from_file and its codepoint sibling fall back to a
-    // manually built atlas when LoadFontEx cannot make a texture
-    // (no window). load_font_for_string historically did not, so a
-    // successful load still returned an unusable font headless.
     const auto path = std::filesystem::path(AFTERHOURS_TEST_FIXTURES) /
                       "AtkinsonHyperlegible-Regular.ttf";
     const raylib::Font loaded =
@@ -122,6 +146,37 @@ int main() {
           "load_font_for_string returns glyph data without a window");
     check(!afterhours::font_is_usable(loaded),
           "and no texture is claimed: there is no GL context to make one");
+
+    const raylib::Font from_file =
+        afterhours::load_font_from_file(path.string().c_str());
+    check(from_file.glyphCount > 0 && !afterhours::font_is_usable(from_file),
+          "load_font_from_file returns glyphs without a window, no crash");
+    int cps[] = {'a', 'b'};
+    const raylib::Font with_cps = afterhours::load_font_from_file_with_codepoints(
+        path.string().c_str(), cps, 2);
+    check(with_cps.glyphCount == 2 && !afterhours::font_is_usable(with_cps),
+          "load_font_from_file_with_codepoints too");
+  }
+
+  {
+    const auto path = std::filesystem::path(AFTERHOURS_TEST_FIXTURES) /
+                      "AtkinsonHyperlegible-Regular.ttf";
+    const raylib::Font font = afterhours::load_font_for_string(
+        "ab\xE2\x98\x83\xC3\xA9", path.string());
+    std::string storage;
+    check(afterhours::drawable_text(font, "a\xE2\x98\x83" "b", storage) ==
+              std::string("a?b"),
+          "an uncovered codepoint draws as a visible replacement");
+    check(afterhours::drawable_text(font, "b\xC3\xA9", storage) ==
+              std::string("b\xC3\xA9"),
+          "covered text is drawn as given");
+    std::vector<unsigned char> bytes;
+    check(afterhours::font_coverage::read_file(path.string().c_str(), bytes),
+          "fixture font reads");
+    const raylib::Font embedded = afterhours::load_font_from_memory(
+        bytes.data(), static_cast<int>(bytes.size()), "embedded");
+    check(embedded.glyphCount > 0 && afterhours::font_has_glyph(embedded, 'A'),
+          "load_font_from_memory returns glyphs and coverage without a window");
   }
 
   // --- ordered teardown ---------------------------------------------------

@@ -200,4 +200,26 @@ TEST(manual_skip_tabbing_is_independent_of_config) {
   }
 }
 
+TEST(an_automatic_regrab_keeps_the_last_modality) {
+  ImmTestHarness h;
+  h.context().set_focus(3, FocusSource::Pointer);
+  h.context().set_focus(h.context().ROOT, FocusSource::Grab);
+  h.context().try_to_grab(7);
+  CHECK(h.context().has_focus(7));
+  CHECK(!h.context().focus_visible());
+}
+
+TEST(without_initial_focus_nothing_is_focused_until_tab) {
+  ImmTestHarness h;
+  h.context().grab_initial_focus = false;
+  h.context().try_to_grab(7);
+  CHECK(h.context().has_focus(h.context().ROOT));
+
+  h.context().last_action = ui_test::TestInputAction::WidgetNext;
+  h.context().try_to_grab(7);
+  CHECK(h.context().has_focus(7));
+  CHECK(h.context().has_interacted);
+  CHECK(!h.context().pressed(ui_test::TestInputAction::WidgetNext));
+}
+
 int main() { return ui_test::run_registered_tests("focus origin tests"); }

@@ -120,6 +120,9 @@ struct MousePointerState {
   bool right_down = false;
   bool right_just_pressed = false;
   bool right_just_released = false;
+  bool middle_down = false;
+  bool middle_just_pressed = false;
+  bool middle_just_released = false;
   input::MousePosition press_pos{};
   bool press_moved = false;
   bool moved_this_frame = false; // pos changed since last frame (any button)
@@ -192,6 +195,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   // re-grabs focus every frame for whichever widget is first, so without this
   // an app opens with a ring around a row nobody touched.
   bool has_interacted = false;
+  bool grab_initial_focus = true;
   const char *focus_set_file = nullptr;
   int focus_set_line = 0;
 
@@ -308,7 +312,8 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     // moved focus, which is the question worth answering.
     if (focus_id != id) {
       focus_source = src;
-      focus_modality = src;
+      if (src != FocusSource::Grab)
+        focus_modality = src;
       if (src != FocusSource::Grab)
         has_interacted = true;
       focus_set_file = loc.file_name();
@@ -375,7 +380,15 @@ template <typename InputAction> struct UIContext final : BaseComponent {
       return false;
     if (contains_in_subtree(id, prev_hot_id))
       return true;
-    warn_if_not_hit_testable(id);
+    warn_if_not_hit_testable(id, "is_right_click");
+    return false;
+  }
+  [[nodiscard]] bool is_middle_click(EntityID id) const {
+    if (!mouse.middle_just_released)
+      return false;
+    if (contains_in_subtree(id, prev_hot_id))
+      return true;
+    warn_if_not_hit_testable(id, "is_middle_click");
     return false;
   }
   /// Previous frame's answer. Use this while building a screen: hot_id is not
@@ -427,15 +440,33 @@ template <typename InputAction> struct UIContext final : BaseComponent {
 
   void try_to_grab(EntityID id) {
     focused_ids.insert(id);
-    if (has_focus(ROOT)) {
+    if (!has_focus(ROOT))
+      return;
+    if (grab_initial_focus) {
       // Grab, not Explicit: this runs every frame for whichever widget happens
-      // to be first, so counting it as intent would disable hover-follow.
+      // to be first, and Grab never sets the modality, so the automatic grab
+      // does not light the focus ring or count as interaction.
       set_focus(id, FocusSource::Grab);
+      return;
     }
+    if (pressed_forward_navigation())
+      set_focus(id, FocusSource::Explicit);
+  }
+
+  bool pressed_forward_navigation() {
+    if constexpr (magic_enum::enum_contains<InputAction>("WidgetNext")) {
+      if (pressed(InputAction::WidgetNext))
+        return true;
+    }
+    if constexpr (magic_enum::enum_contains<InputAction>("WidgetDown")) {
+      if (theme.arrows_tab && pressed(InputAction::WidgetDown))
+        return true;
+    }
+    return false;
   }
 
   /// Once per element; otherwise a right-click there is a silent no-op.
-  void warn_if_not_hit_testable(EntityID id) const {
+  void warn_if_not_hit_testable(EntityID id, const char *query) const {
     OptEntity opt = UICollectionHolder::getEntityForID(id);
     if (!opt.has_value())
       return;
@@ -443,10 +474,10 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     if (e.has<HasClickListener>() || e.has<HasDragListener>())
       return; // hot could have landed here; the click was simply elsewhere
     warn_once(id,
-              "is_right_click({}) will never fire: this element has no click "
+              "{}({}) will never fire: this element has no click "
               "or drag listener, so hit-testing never selects it. Put the "
               "check on the button/row the user actually clicks.",
-              id);
+              query, id);
   }
 
   [[nodiscard]] bool is_mouse_press(EntityID id) const {

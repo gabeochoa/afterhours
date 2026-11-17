@@ -119,11 +119,17 @@ Backend tests capture the same nonsquare target with a translucent red top and o
 
 The action key emits one delayed press; modifiers are held without press events. The handler releases the chord after two frames. Reset, skip and timeout clear injected input.
 
+With `AFTER_HOURS_ENABLE_E2E_TESTING` defined, `graphics::is_key_pressed`, `is_key_pressed_repeat`, `is_key_down` and `is_key_released` read injected keys on every backend, the same as the input plugin. A released injected key reports `is_key_released` one frame after its press.
+
 ## E2E arguments
 
 Quote arguments containing spaces: `assert_ui header "text=My Project" hidden=false` or `assert_ui header text="My Project"`. Inside double quotes, `\"` means a literal quote and `\\` means a backslash. Other backslash sequences stay literal; `""` is an empty argument. Unclosed quotes fail the script with its line number.
 
 Text commands such as `type`, `expect_text` and the value in `expect_input_text` still accept the unquoted rest of the line verbatim. To use escapes there, quote the entire text. Custom handlers receive decoded arguments and should not tokenize them again.
+
+## E2E wall-clock waits
+
+`wait SECONDS` and `wait_until SECONDS cmd ...` count the host's `dt`, so `--time-scale 4` makes them four times faster in real time and a slow headless tick makes them slower. That is right for anything the frame loop drives. A thread, subprocess or socket keeps real time instead, so use `wait_wall SECONDS` to pause the script for that long on `steady_clock`, or `wait_until_wall SECONDS cmd ...` to retry a check until a real-time deadline. Frames keep running during both. The per-script timeout pauses until the deadline, and `is_idle_waiting()` stays false, so the host renders every frame. An expired `wait_until_wall` fails the script with the last mismatch, e.g. `wait_until_wall 2s: worker still busy`. A custom handler that calls `retry()` inside one is not timed out after 30 frames.
 
 ## Image tint
 
