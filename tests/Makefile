@@ -111,6 +111,7 @@ ALL_TESTS := \
 	system_profile_test \
 	profiling_test \
 	profiling_disabled_test \
+	perf_provider_warn_test \
 	blend_mode_test \
 	rect_test \
 	rounded_corners_test \

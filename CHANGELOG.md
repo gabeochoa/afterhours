@@ -150,6 +150,7 @@ Started partway through the project's life, so it does not go all the way back.
 ### Two silent fallbacks now warn
 
 Same behaviour, they just say so; expect a burst on first run. `with_font_weight` needs a `"<font>@bold"` variant and falls back to the base font without one (this is why it gets filed as "no font weight support"), and `TextOverflow::Wrap` does nothing unless a font size is pinned.
+- **Profiling that cannot collect, and a perf provider being replaced, warn once.** `builtin_profile::enable()` ignored `Collector::start()` returning false when built without `AFTERHOURS_ENABLE_PROFILING`, so `dump_profile` reported an empty profile with no reason; it warns once now and still installs the provider. `perf_commands::set_provider` replacing a provider that already has callbacks warns once; the new provider still takes effect. Covered by `perf_provider_warn_test`.
 
 ### Already works, despite the gap docs
 
