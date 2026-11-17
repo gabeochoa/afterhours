@@ -183,8 +183,20 @@ inline void draw_text_ex(const raylib::Font font, const char *content,
     capture::record("text", {position.x, position.y, 0.f, font_size}, color,
                     content);
   warn_on_missing_glyphs(font, content);
+  std::string shown;
+  content = drawable_text(font, content, shown);
   if (std::abs(rotation) < 0.001f) {
-    raylib::DrawTextEx(font, content, position, font_size, spacing, color);
+    const std::vector<FaceRun> runs = fallback_runs(font, content);
+    if (runs.empty())
+      raylib::DrawTextEx(font, content, position, font_size, spacing, color);
+    float x = position.x;
+    for (const FaceRun &run : runs) {
+      raylib::DrawTextEx(run.face, run.text.c_str(), {x, position.y},
+                         font_size, spacing, color);
+      x += raylib::MeasureTextEx(run.face, run.text.c_str(), font_size,
+                                 spacing).x +
+           spacing;
+    }
     return;
   }
   // Use DrawTextPro for rotated text

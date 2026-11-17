@@ -79,6 +79,7 @@ ALL_TESTS := \
 	terminal_commands_test \
 	terminal_ui_test \
 	font_atlas_measure_test \
+	glyph_placeholder_test \
 	monospace_cell_test \
 	ui_texture_lifecycle_test \
 	ui_update_lifecycle_test \
@@ -231,6 +232,7 @@ ALL_TESTS := \
 	split_test \
 	downstream_gaps_test \
 	headless_fallback_test \
+	raylib_fallback_test \
 	models_test \
 	house_of_cards_test \
 	frustum_test \
@@ -301,6 +303,7 @@ RAYLIB_TESTS := \
 	clipboard_test \
 	mk_cost_test \
 	headless_fallback_test \
+	raylib_fallback_test \
 	models_test \
 	house_of_cards_test \
 	frustum_test \
@@ -545,8 +548,10 @@ profiling-render-benchmark: $(OUT)/profiling_render_benchmark_on $(OUT)/profilin
 	$(OUT)/profiling_render_benchmark_on panel 3000 "$(PROFILING_FONT)"
 
 $(OUT)/font_atlas_measure_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/glyph_placeholder_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/load_font_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/headless_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/raylib_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 # Shares the examples' Kenney tree rather than checking in a second copy.
 $(OUT)/models_test: CXXFLAGS_T += -DAFTERHOURS_MODEL_FIXTURE=\"$(realpath ../examples/catalog/3d/tree-large.glb)\"
 $(OUT)/house_of_cards_test: CXXFLAGS_T += -DAFTERHOURS_MODELS_DIR=\"$(realpath ../examples/catalog/3d)\"
