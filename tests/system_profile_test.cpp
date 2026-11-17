@@ -76,6 +76,7 @@ TEST(a_system_reports_its_own_type_name) {
   printf("  default name: %s\n", n.c_str());
   // Demangled, not the mangled spelling typeid hands back.
   CHECK(n.find("UnnamedUpdateSystem") != std::string::npos);
+  CHECK(n.ends_with("UnnamedUpdateSystem"));
 }
 
 TEST(a_system_can_override_its_name) {

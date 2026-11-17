@@ -1,0 +1,8 @@
+expect_text saves: 0
+key S
+wait_frames 3
+expect_no_text saves: 1
+key CMD+S
+expect_text saves: 1
+key CMD+S
+expect_text saves: 2
