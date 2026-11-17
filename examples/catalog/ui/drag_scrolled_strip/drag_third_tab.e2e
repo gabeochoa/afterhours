@@ -1,0 +1,6 @@
+mouse_down 150 30
+wait_frames 2
+mouse_move 30 30
+wait_frames 2
+mouse_up
+wait_frames 2

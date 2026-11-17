@@ -1,0 +1,4 @@
+type café 🙂
+expect_typed "café 🙂"
+type naïve
+expect_typed "café 🙂naïve"
