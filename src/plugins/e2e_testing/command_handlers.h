@@ -677,8 +677,20 @@ struct HandleNamedCommand : System<PendingE2ECommand> {
     Fn fn;
     HandleNamedCommand(std::string n, Fn f)
         : name(std::move(n)), fn(std::move(f)) {}
+    bool warned_shadowed = false;
     void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
-        if (!cmd.is_consumed() && cmd.is(name)) fn(cmd);
+        if (!cmd.is(name)) return;
+        if (!cmd.is_consumed()) {
+            fn(cmd);
+            return;
+        }
+        if (warned_shadowed) return;
+        warned_shadowed = true;
+        log_warn("[E2E] '{}' was consumed by a handler that runs before the "
+                 "register_command for it, so yours never ran. A built-in may "
+                 "now own this name; call register_command before "
+                 "register_builtin_handlers to keep it.",
+                 name);
     }
 };
 

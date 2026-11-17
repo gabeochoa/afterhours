@@ -2,8 +2,20 @@
 #include "ui_test_harness.h"
 #include <afterhours/src/plugins/e2e_testing/runner.h>
 
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+
 using namespace afterhours;
 using namespace afterhours::testing;
+
+static size_t count_of(const std::string &haystack, const std::string &needle) {
+  size_t count = 0;
+  for (size_t pos = haystack.find(needle); pos != std::string::npos;
+       pos = haystack.find(needle, pos + 1))
+    ++count;
+  return count;
+}
 
 struct CommandFixture {
   EntityCollection collection;
@@ -92,6 +104,62 @@ TEST(expect_consumes_or_retries) {
   score = 2;
   auto &hit = f.run("expect_score", {"2"});
   CHECK(hit.is_consumed() && hit.succeeded());
+}
+
+TEST(a_builtin_taking_the_name_warns_once) {
+  static std::string captured;
+  captured.clear();
+  const auto previous = log_sink_fn;
+  log_sink_fn = [](const char *, const char *message) { captured += message; };
+  CommandFixture f;
+  bool ours_ran = false;
+  register_builtin_handlers(f.systems);
+  register_command(f.systems, "disable_animations",
+                   [&](PendingE2ECommand &cmd) {
+                     ours_ran = true;
+                     cmd.consume();
+                   });
+  CHECK(f.run("disable_animations", {}).is_consumed());
+  f.run("disable_animations", {});
+  CHECK(!ours_ran);
+  CHECK(count_of(captured, "'disable_animations' was consumed") == 1);
+
+  CommandFixture first;
+  captured.clear();
+  register_command(first.systems, "disable_animations",
+                   [&](PendingE2ECommand &cmd) {
+                     ours_ran = true;
+                     cmd.consume();
+                   });
+  register_builtin_handlers(first.systems);
+  first.run("disable_animations", {});
+  CHECK(ours_ran);
+  CHECK(captured.find("was consumed") == std::string::npos);
+  log_sink_fn = previous;
+  animation::set_instant(false);
+}
+
+TEST(first_registered_handler_sees_a_command_on_its_dispatch_frame) {
+  const auto path = std::filesystem::temp_directory_path() /
+      ("afterhours-first-" + std::to_string(
+          std::chrono::steady_clock::now().time_since_epoch().count()) + ".e2e");
+  std::ofstream(path) << "disable_animations\n";
+  CommandFixture f;
+  bool ours_ran = false;
+  register_command(f.systems, "disable_animations",
+                   [&](PendingE2ECommand &cmd) {
+                     ours_ran = true;
+                     cmd.consume();
+                   });
+  register_builtin_handlers(f.systems);
+  register_cleanup(f.systems);
+  E2ERunner runner;
+  runner.load_script(path.string());
+  runner.tick(1.f / 60.f);
+  f.systems.run(1.f / 60.f);
+  CHECK(ours_ran);
+  CHECK(!animation::is_instant());
+  std::filesystem::remove(path);
 }
 
 int main() { return ui_test::run_registered_tests("E2E register_command"); }
