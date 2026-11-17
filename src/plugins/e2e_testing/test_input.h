@@ -224,6 +224,15 @@ inline bool is_key_down(int key, BackendFn backend_fn) {
   return backend_fn(key);
 }
 
+template <typename BackendFn>
+inline bool is_key_released(int key, BackendFn backend_fn) {
+  if (input_injector::consume_release(key))
+    return true;
+  if (detail::test_mode)
+    return false;
+  return backend_fn(key);
+}
+
 // Get next character (wraps backend call)
 // Note: The queue approach naturally prevents re-reading (chars are popped)
 // so we don't use char_consumed flag here - that's for non-queue scenarios
