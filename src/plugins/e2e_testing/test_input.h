@@ -17,6 +17,7 @@ struct KeyPress {
 };
 
 namespace detail {
+inline bool e2e_running = false;
 inline std::queue<KeyPress> key_queue;
 inline bool test_mode = false;
 inline bool key_consumed = false;
@@ -224,6 +225,15 @@ inline bool is_key_down(int key, BackendFn backend_fn) {
   return backend_fn(key);
 }
 
+template <typename BackendFn>
+inline bool is_key_released(int key, BackendFn backend_fn) {
+  if (input_injector::consume_release(key))
+    return true;
+  if (detail::test_mode)
+    return false;
+  return backend_fn(key);
+}
+
 // Get next character (wraps backend call)
 // Note: The queue approach naturally prevents re-reading (chars are popped)
 // so we don't use char_consumed flag here - that's for non-queue scenarios
@@ -307,5 +317,7 @@ inline bool is_mouse_button_released(int button, BackendFn backend_fn) {
 }
 
 } // namespace test_input
+
+inline bool is_e2e_running() { return test_input::detail::e2e_running; }
 } // namespace testing
 } // namespace afterhours
