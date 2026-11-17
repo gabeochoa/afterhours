@@ -96,6 +96,7 @@ ALL_TESTS := \
 	ui_modifiers_test \
 	ancestor_transform_test \
 	text_units_test \
+	none_measure_test \
 	text_unit_motion_test \
 	text_alignment_test \
 	sound_volume_test \
