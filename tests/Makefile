@@ -132,6 +132,7 @@ ALL_TESTS := \
 	bitset_test \
 	log_file_test \
 	crash_handler_test \
+	crash_handler_reentry_test \
 	setting_row_style_test \
 	singleton_iteration_test \
 	press_delay_test \
