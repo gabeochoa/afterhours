@@ -150,6 +150,10 @@ struct SelectOnFocus : BaseComponent {};
 struct FocusClusterRoot : BaseComponent {};
 struct InFocusCluster : BaseComponent {};
 
+struct FocusProxy : BaseComponent {
+  EntityID target = -1;
+};
+
 struct HasTray : BaseComponent {
   int selection_index = 0;
   std::vector<EntityID> navigable_children; // rebuilt each frame
