@@ -7,15 +7,13 @@
 #include <vector>
 
 #include "../../font_coverage.h"
+#include "../../graphics_common.h"
 #include "../../measure_memo.h"
 
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <string>
-#if defined(__APPLE__) || defined(__linux__)
-#include <dlfcn.h>
-#endif
 
 #include "../../developer.h"
 #include "../../warn_once.h"
@@ -189,15 +187,7 @@ build_font_atlas(const char *file, int px, const int *codepoints, int count,
 }
 
 inline bool font_gl_ready() {
-  if (raylib::IsWindowReady())
-    return true;
-#if defined(__APPLE__) || defined(__linux__)
-  const auto *gpu_ready =
-      static_cast<const bool *>(dlsym(RTLD_DEFAULT, "isGpuReady"));
-  return gpu_ready && *gpu_ready;
-#else
-  return false;
-#endif
+  return raylib::IsWindowReady() || graphics::is_headless();
 }
 
 inline raylib::Font load_font_from_file(const char *file, int size = 0) {
