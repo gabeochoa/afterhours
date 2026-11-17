@@ -42,12 +42,21 @@ struct HasTreeViewState : BaseComponent {
   }
 };
 
+struct TreeRowInfo {
+  int depth = 0;
+  bool expandable = false;
+  bool expanded = false;
+  bool selected = false;
+};
+
 template <typename T> struct TreeViewConfig {
   float indent_width = 20.0f;
   float row_height = 28.0f;
   std::function<std::string(const T &)> get_label = nullptr;
   std::function<std::string(const T &)> get_id = nullptr;
   std::function<bool(const T &)> is_expandable = nullptr;
+  std::function<void(Entity &row, const T &, const TreeRowInfo &)> render_row =
+      nullptr;
 };
 
 namespace detail {
@@ -95,14 +104,19 @@ void render_tree_node(HasUIContext auto &ctx, Entity &scroll_entity,
     state.changed_since = true;
   }
 
-  // A child, not the button's own label: padding offsets children only.
-  div(ctx, mk(row.ent(), 0),
-      ComponentConfig::inherit_from(base_config, "tree_row_label")
-          .with_size(ComponentSize{expand(), percent(1.0f)})
-          .with_label(row_label)
-          .with_alignment(TextAlignment::Left)
-          .with_color_usage(Theme::Usage::None)
-          .with_skip_tabbing(true));
+  if (view_config.render_row) {
+    view_config.render_row(
+        row.ent(), node.data,
+        TreeRowInfo{depth, expandable, expanded, is_selected});
+  } else {
+    div(ctx, mk(row.ent(), 0),
+        ComponentConfig::inherit_from(base_config, "tree_row_label")
+            .with_size(ComponentSize{expand(), percent(1.0f)})
+            .with_label(row_label)
+            .with_alignment(TextAlignment::Left)
+            .with_color_usage(Theme::Usage::None)
+            .with_skip_tabbing(true));
+  }
   child_index++;
 
   // Render children if expanded

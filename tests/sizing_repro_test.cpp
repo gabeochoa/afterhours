@@ -205,6 +205,60 @@ TEST(snapped_children_is_shorter_than_its_child) {
   }
 }
 
+TEST(snapped_children_column_holds_its_snapped_rows) {
+  ImmTestHarness h;
+  auto col = div(h.context(), mk(h.root(), 0),
+                 ComponentConfig{}
+                     .with_size(ComponentSize{pixels(200), children()})
+                     .with_flex_direction(FlexDirection::Column)
+                     .with_gap(pixels(6))
+                     .with_debug_name("rows"));
+  for (int i = 0; i < 6; ++i)
+    div(h.context(), mk(col.ent(), i),
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(180), pixels(28)})
+            .with_debug_name("row_" + std::to_string(i)));
+  h.layout_only(/*grid_snap=*/true, window_manager::Resolution{1920, 1080});
+
+  UIComponent *c = h.find("rows");
+  UIComponent *last = h.find("row_5");
+  CHECK(c != nullptr && last != nullptr);
+  if (c && last) {
+    const float bottom = c->rect().y + c->rect().height;
+    const float last_bottom = last->rect().y + last->rect().height;
+    printf("  column bottom %.1f, last row bottom %.1f\n", bottom, last_bottom);
+    CHECK(last_bottom <= bottom + 0.01f);
+  }
+}
+
+TEST(snapped_scroll_extent_reaches_the_last_row) {
+  ImmTestHarness h;
+  auto view = div(h.context(), mk(h.root(), 0),
+                  ComponentConfig{}
+                      .with_size(ComponentSize{pixels(300), pixels(200)})
+                      .with_flex_direction(FlexDirection::Column)
+                      .with_overflow(Overflow::Scroll, Axis::Y)
+                      .with_debug_name("view"));
+  for (int i = 0; i < 40; ++i)
+    div(h.context(), mk(view.ent(), i),
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(280), pixels(22.5f)})
+            .with_debug_name("line_" + std::to_string(i)));
+  h.layout_only(/*grid_snap=*/true, window_manager::Resolution{1440, 900});
+
+  UIComponent *v = h.find("view");
+  UIComponent *last = h.find("line_39");
+  CHECK(v != nullptr && last != nullptr);
+  if (!v || !last)
+    return;
+  auto &scroll = view.ent().get<HasScrollView>();
+  scroll.content_size = measure_scroll_content(*v, scroll);
+  const float last_end = last->rect().y + last->rect().height - v->rect().y;
+  printf("  scroll content %.1f, last line ends at %.1f\n",
+         scroll.content_size.y, last_end);
+  CHECK(scroll.content_size.y >= last_end - 0.01f);
+}
+
 // floatinghotel: in a Row, expand() is reported to take the full parent width
 // instead of what fixed siblings leave. The Column cases above pass, so if this
 // is real the two axes disagree.
@@ -432,10 +486,6 @@ TEST(equal_weight_expanders_stay_equal) {
 // hold. It summed their pre-snap sizes while they drew at their snapped ones,
 // so a strip of ten segments measured 120 around content that drew 156.
 //
-// It cannot come out exact here: a 2px margin has no representation on a 4px
-// grid, so the snapped positions still run a couple of pixels past the sum.
-// What this pins is that the parent is sized from the same numbers the
-// children are drawn at.
 TEST(a_children_sized_row_includes_child_margins) {
   ImmTestHarness h;
   auto row = hstack(h.context(), mk(h.root(), 0),
@@ -454,10 +504,11 @@ TEST(a_children_sized_row_includes_child_margins) {
   UIComponent *last = h.find("seg_4");
   CHECK(r != nullptr && last != nullptr);
   if (r && last) {
-    // Five segments that snap to 12 wide, with four 2px margins.
-    printf("  children row = %.0f (want 68), content spans %.0f\n",
-           r->rect().width, last->rect().x + last->rect().width - r->rect().x);
-    CHECK(r->rect().width == 68.f);
+    const float span = last->rect().x + last->rect().width - r->rect().x;
+    printf("  children row = %.0f, content spans %.0f\n", r->rect().width,
+           span);
+    CHECK(r->rect().width >= span);
+    CHECK(r->rect().width < span + 4.f);
   }
 }
 
