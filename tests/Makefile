@@ -161,6 +161,7 @@ ALL_TESTS := \
 	entity_index_test \
 	index_scaling_test \
 	query_seed_test \
+	query_skip_mods_test \
 	capture_attribution_test \
 	draw_commands_test \
 	color_contrast_test \
