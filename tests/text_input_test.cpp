@@ -580,4 +580,37 @@ TEST(external_replace_keeps_caret_and_clears_selection_and_undo) {
   CHECK(s.text() == std::string("XAY"));
 }
 
+TEST(focusing_the_returned_entity_focuses_the_field) {
+  ImmTestHarness h;
+  std::string text = "Draft";
+  EntityID wrapper = -1;
+  auto emit = [&] {
+    wrapper = imm::text_input(h.context(), mk(h.root(), 0), text,
+                              ComponentConfig{}.with_size({pixels(220), pixels(40)}))
+                  .id();
+  };
+  two_frames(h, emit);
+  auto *field = find_field_entity();
+  CHECK(field != nullptr);
+  if (!field) return;
+  h.context().set_focus(wrapper);
+  CHECK(h.context().focus_id == field->id);
+  h.context().focused_ids = {field->id};
+  EndUIContextManager<ui_test::TestInputAction>{}.for_each_with(
+      h.context_entity(), h.context(), 0.f);
+  CHECK(h.context().has_focus(field->id));
+}
+
+TEST(a_text_input_built_this_frame_can_be_focused) {
+  ImmTestHarness h;
+  std::string text;
+  h.begin_frame();
+  const EntityID wrapper =
+      imm::text_input(h.context(), mk(h.root(), 0), text, ComponentConfig{}).id();
+  h.context().set_focus(wrapper);
+  h.coll.merge_entity_arrays();
+  auto *field = find_field_entity();
+  CHECK(field != nullptr && h.context().focus_id == field->id);
+}
+
 int main() { return ui_test::run_registered_tests("text_input"); }

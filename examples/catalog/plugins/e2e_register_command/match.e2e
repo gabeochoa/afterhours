@@ -1,0 +1,6 @@
+set_score 3 4
+expect_score 3 4
+teleport_ball 0.5 0.25
+expect_ball 0.5 0.25
+start_match "two player"
+expect_score 0 0

@@ -41,6 +41,16 @@ int main() {
     auto check = [&](bool ok, const char *what) {
         if (!ok) { ++failures; std::fprintf(stderr, "FAIL: %s\n", what); }
     };
+    auto has_temp = [&] {
+        const std::string suffix = files::TEMP_SUFFIX;
+        for (const auto &e : std::filesystem::directory_iterator(dir)) {
+            const std::string name = e.path().filename().string();
+            if (name.size() > suffix.size() &&
+                name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0)
+                return true;
+        }
+        return false;
+    };
     settings::ProvidesSettings<Data> provider;
     for (auto save : {&settings::save_to_json<Data>,
                       &settings::save_to_raw_string<Data>}) {
@@ -50,16 +60,18 @@ int main() {
         check(!save(&provider, path), "throwing serializer returns failure");
         check(files::read_string(path) == "last good", "serialization preserves file");
         provider.data.fail = false;
-        auto temp = std::filesystem::path(path.string() + files::TEMP_SUFFIX);
-        std::filesystem::create_directory(temp);
-        check(!save(&provider, path), "blocked temporary file returns failure");
+        using std::filesystem::perms;
+        std::filesystem::permissions(dir, perms::owner_read | perms::owner_exec);
+        const bool saved_read_only = save(&provider, path);
+        std::filesystem::permissions(dir, perms::owner_all);
+        check(!saved_read_only, "read-only directory returns failure");
         check(files::read_string(path) == "last good", "failed open preserves file");
-        std::filesystem::remove(temp);
+        check(!has_temp(), "failed open leaves no temporary file");
         auto blocked = dir / "directory";
         std::filesystem::create_directory(blocked);
         check(!save(&provider, blocked), "rename over directory returns failure");
         check(std::filesystem::is_directory(blocked), "directory survives");
-        check(!std::filesystem::exists(blocked.string() + files::TEMP_SUFFIX), "failed rename removes temporary file");
+        check(!has_temp(), "failed rename removes temporary file");
         check(save(&provider, path), "save succeeds");
         const auto expected = save == &settings::save_to_json<Data>
             ? provider.data.to_json().dump(2) : provider.data.to_string();

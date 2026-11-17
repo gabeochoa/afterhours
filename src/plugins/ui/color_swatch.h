@@ -109,28 +109,10 @@ bool channel_row(HasUIContext auto &ctx, EntityParent row_pair,
   // Percent widths across the row, not expand() for the slider: a slider
   // handle is a percent of its track, and a percent under an expand()-sized
   // ancestor is left at zero, which would take the handle with it.
-  const float desired = channel01;
-  auto result =
+  const bool changed = static_cast<bool>(
       slider(ctx, mk(row.ent(), 1), channel01,
              ComponentConfig::inherit_from(config, name)
-                 .with_size(ComponentSize{percent(0.78f), pixels(item_h)}));
-  const bool changed = static_cast<bool>(result);
-  if (!changed) {
-    // Nothing interacted since the last build, so an outside edit (the hex
-    // field below) is newer than the slider's held state. Restore the
-    // caller's value and move the held state to match, or the next drag
-    // would step from the stale position.
-    channel01 = desired;
-    if (result.ent().template has<UIComponent>()) {
-      for (const EntityID child_id :
-           result.ent().template get<UIComponent>().children) {
-        Entity &child = UICollectionHolder::getEntityForIDEnforce(child_id);
-        if (child.template has<HasSliderState>())
-          child.template get<HasSliderState>().value =
-              std::clamp(desired, 0.f, 1.f);
-      }
-    }
-  }
+                 .with_size(ComponentSize{percent(0.78f), pixels(item_h)})));
   div(ctx, mk(row.ent(), 2),
       ComponentConfig::inherit_from(config, "color_channel_value")
           .with_size(ComponentSize{percent(0.15f), pixels(item_h)})
