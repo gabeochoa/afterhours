@@ -136,6 +136,7 @@ ALL_TESTS := \
 	overlay_layer_test \
 	unhandled_command_test \
 	e2e_retry_test \
+	e2e_screenshot_test \
 	e2e_is_running_test \
 	e2e_defer_unknown_test \
 	e2e_results_test \

@@ -8,6 +8,7 @@
 #include <functional>
 #include <set>
 #include <sstream>
+#include <type_traits>
 
 #include "../../font_helper.h"
 #include "../../logging.h"
@@ -666,20 +667,38 @@ struct HandleExpectNoTextCommand : System<PendingE2ECommand> {
 };
 
 // Handle 'screenshot name' command - takes screenshot
-struct HandleScreenshotCommand : System<PendingE2ECommand> {
-    using ScreenshotFn = std::function<void(const std::string &)>;
+using ScreenshotFn = std::function<bool(const std::string &)>;
 
-    explicit HandleScreenshotCommand(ScreenshotFn fn)
-        : screenshot_fn_(std::move(fn)) {}
+template <typename F> ScreenshotFn as_screenshot_fn(F fn) {
+    if constexpr (requires { static_cast<bool>(fn); }) {
+        if (!static_cast<bool>(fn)) return {};
+    }
+    if constexpr (std::is_void_v<std::invoke_result_t<F &, const std::string &>>)
+        return [fn = std::move(fn)](const std::string &name) mutable {
+            fn(name);
+            return true;
+        };
+    else
+        return ScreenshotFn(std::move(fn));
+}
+
+inline void take_screenshot(const ScreenshotFn &fn, PendingE2ECommand &cmd) {
+    if (fn && !cmd.args.empty() && !fn(cmd.args[0])) {
+        cmd.fail(std::format("screenshot '{}' failed to capture", cmd.args[0]));
+        return;
+    }
+    cmd.consume();
+}
+
+struct HandleScreenshotCommand : System<PendingE2ECommand> {
+    template <typename F>
+    explicit HandleScreenshotCommand(F fn)
+        : screenshot_fn_(as_screenshot_fn(std::move(fn))) {}
 
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
                                float) override {
         if (cmd.is_consumed() || !cmd.is("screenshot")) return;
-
-        if (screenshot_fn_ && !cmd.args.empty()) {
-            screenshot_fn_(cmd.args[0]);
-        }
-        cmd.consume();
+        take_screenshot(screenshot_fn_, cmd);
     }
 
    private:

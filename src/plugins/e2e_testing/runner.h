@@ -414,8 +414,8 @@ class E2ERunner {
         slow_mode_ = enabled;
         slow_delay_ = delay_seconds;
     }
-    void set_screenshot_callback(std::function<void(const std::string &)> fn) {
-        screenshot_fn_ = fn;
+    template <typename F> void set_screenshot_callback(F fn) {
+        screenshot_fn_ = as_screenshot_fn(std::move(fn));
     }
     void set_reset_callback(std::function<void()> fn) { clear_fn_ = fn; }
     void set_results_path(std::string path) { results_path_ = std::move(path); }
@@ -717,10 +717,8 @@ class E2ERunner {
         }
 
         // Handle screenshot if callback set
-        if (cmd.name == "screenshot" && screenshot_fn_ && !cmd.args.empty()) {
-            screenshot_fn_(cmd.args[0]);
-            pending.consume();
-        }
+        if (cmd.name == "screenshot" && screenshot_fn_ && !cmd.args.empty())
+            take_screenshot(screenshot_fn_, pending);
 
         // End of a script in a batch run.
         if (cmd.name == kScriptBoundary) {
@@ -846,6 +844,7 @@ class E2ERunner {
     std::size_t current_script_idx_ = 0;
     int current_script_errors_ = 0;
 
+    ScreenshotFn screenshot_fn_;
     std::string results_path_;
     std::function<void(const std::string &)> screenshot_fn_;
     std::function<void()> clear_fn_;
