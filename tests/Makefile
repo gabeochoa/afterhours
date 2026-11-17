@@ -172,6 +172,7 @@ ALL_TESTS := \
 	scroll_anchor_test \
 	widget_retirement_test \
 	text_line_edit_test \
+	grapheme_edit_test \
 	entity_mapping_test \
 	files_atomic_write_test \
 	files_resource_path_test \
@@ -310,6 +311,7 @@ RAYLIB_TESTS := \
 	scroll_anchor_test \
 	widget_retirement_test \
 	text_line_edit_test \
+	grapheme_edit_test \
 	progress_bar_test \
 	render_order_test \
 	setup_test \

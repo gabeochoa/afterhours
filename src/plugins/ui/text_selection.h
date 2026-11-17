@@ -3,6 +3,8 @@
 #include <list>
 #include <unordered_map>
 
+#include "text_units.h"
+
 // Text selection geometry, with no graphics backend.
 //
 // Everything here works off `measure`, a callable from string to pixel width,
@@ -445,8 +447,7 @@ inline size_t offset_nearest_x(const std::string &text, float x,
   size_t best = 0;
   float best_dist = std::abs(x);
   for (size_t i = 0; i < text.size();) {
-    const size_t len = utf8_char_length(text, i);
-    const size_t next = i + (len > 0 ? len : 1);
+    const size_t next = next_grapheme_end(text, i);
     const float w = measure(text.substr(0, next));
     const float dist = std::abs(x - w);
     if (dist < best_dist) {
