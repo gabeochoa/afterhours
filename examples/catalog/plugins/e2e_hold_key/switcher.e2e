@@ -1,0 +1,6 @@
+hold_key CTRL
+key TAB
+key TAB
+expect_switcher open 2
+release_key CTRL
+expect_switcher closed 2
