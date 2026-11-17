@@ -30,6 +30,12 @@ namespace raylib {
 #ifndef Vector3Type
 #define Vector3Type raylib::Vector3
 #endif
+#ifndef Vector4Type
+#define Vector4Type raylib::Vector4
+#endif
+#ifndef MatrixType
+#define MatrixType raylib::Matrix
+#endif
 #ifndef RectangleType
 #define RectangleType raylib::Rectangle
 #endif
@@ -148,6 +154,26 @@ struct MyVec3 {
 using Vector3Type = MyVec3;
 #endif
 
+#ifndef Vector4Type
+struct MyVec4 {
+  float x;
+  float y;
+  float z;
+  float w;
+};
+using Vector4Type = MyVec4;
+#endif
+
+#ifndef MatrixType
+struct MyMatrix {
+  float m0, m4, m8, m12;
+  float m1, m5, m9, m13;
+  float m2, m6, m10, m14;
+  float m3, m7, m11, m15;
+};
+using MatrixType = MyMatrix;
+#endif
+
 // The raylib backend defines the type names as macros (RectangleType ->
 // raylib::Rectangle, ...), so `afterhours::RectangleType` would wrongly expand
 // to `afterhours::raylib::Rectangle` and fail to compile. Capture the macro
@@ -160,6 +186,8 @@ using Vector3Type = MyVec3;
 namespace afterhours::detail_rl_types {
 using v2 = Vector2Type;
 using v3 = Vector3Type;
+using v4 = Vector4Type;
+using mat = MatrixType;
 using rect = RectangleType;
 using tex = TextureType;
 using col = ColorType;
@@ -167,6 +195,8 @@ using font = FontType;
 } // namespace afterhours::detail_rl_types
 #undef Vector2Type
 #undef Vector3Type
+#undef Vector4Type
+#undef MatrixType
 #undef RectangleType
 #undef TextureType
 #undef ColorType
@@ -174,6 +204,8 @@ using font = FontType;
 namespace afterhours {
 using Vector2Type = detail_rl_types::v2;
 using Vector3Type = detail_rl_types::v3;
+using Vector4Type = detail_rl_types::v4;
+using MatrixType = detail_rl_types::mat;
 using RectangleType = detail_rl_types::rect;
 using TextureType = detail_rl_types::tex;
 using ColorType = detail_rl_types::col;
@@ -185,6 +217,8 @@ using afterhours::RectangleType;
 using afterhours::TextureType;
 using afterhours::Vector2Type;
 using afterhours::Vector3Type;
+using afterhours::Vector4Type;
+using afterhours::MatrixType;
 #endif // AFTER_HOURS_USE_RAYLIB
 
 namespace afterhours {

@@ -96,8 +96,7 @@ private:
   static bool excluded(const Entity &entity) {
     const Entity *current = &entity;
     for (int depth = 0; current && depth < 64; ++depth) {
-      if (current->has<ShouldHide>() ||
-          (current->has<HasLabel>() && current->get<HasLabel>().is_disabled))
+      if (current->has<ShouldHide>() || is_disabled(*current))
         return true;
       if (!current->has<UIComponent>())
         return false;
