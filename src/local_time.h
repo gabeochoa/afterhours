@@ -8,7 +8,7 @@
 
 namespace afterhours {
 
-struct LocalDateTime {
+struct SerializableLocalDateTime {
   int year = 0;
   int month = 1;
   int day = 1;
@@ -30,7 +30,7 @@ struct LocalDateTime {
   }
 };
 
-[[nodiscard]] inline std::optional<LocalDateTime>
+[[nodiscard]] inline std::optional<SerializableLocalDateTime>
 to_local_time(std::chrono::system_clock::time_point when) {
   const std::time_t t = std::chrono::system_clock::to_time_t(when);
   std::tm tm{};
@@ -41,12 +41,12 @@ to_local_time(std::chrono::system_clock::time_point when) {
   if (localtime_r(&t, &tm) == nullptr)
     return std::nullopt;
 #endif
-  return LocalDateTime{tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+  return SerializableLocalDateTime{tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                        tm.tm_wday,        tm.tm_hour,    tm.tm_min,
                        tm.tm_sec};
 }
 
-[[nodiscard]] inline std::optional<LocalDateTime> local_time_now() {
+[[nodiscard]] inline std::optional<SerializableLocalDateTime> local_time_now() {
   return to_local_time(std::chrono::system_clock::now());
 }
 
