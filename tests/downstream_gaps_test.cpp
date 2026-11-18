@@ -1351,6 +1351,26 @@ TEST(focus_ring_survives_opaque_children_in_both_renderers) {
   }
 }
 
+TEST(focus_ring_contrast_off_draws_only_the_ring) {
+  for (bool batched : {false, true}) {
+    ImmTestHarness h;
+    focused_button(h, 1.f);
+    h.context().theme.focus_ring_contrast = false;
+    const auto &calls = batched ? h.render_batched() : h.render();
+    int ring = 0, other = 0;
+    for (const auto &c : calls) {
+      if (c.op != "rectangle_rounded_lines")
+        continue;
+      if (c.color.r == 255 && c.color.g == 0 && c.color.b == 255)
+        ring++;
+      else
+        other++;
+    }
+    CHECK(ring == 1);
+    CHECK(other == 0);
+  }
+}
+
 TEST(focus_ring_insets_preserve_corner_centers_and_thin_targets) {
   ImmTestHarness h;
   auto target = focused_button(h, 3.f);

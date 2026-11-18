@@ -27,17 +27,41 @@ inline Backend &storage() {
   return backend;
 }
 
+inline bool &audio_opened() {
+  static bool opened = false;
+  return opened;
+}
+
+inline void open_audio() {
+  raylib::InitAudioDevice();
+  audio_opened() = raylib::IsAudioDeviceReady();
+  if (!audio_opened())
+    log_warn("audio requested but no audio device could be opened");
+}
+
+inline void close_audio() {
+  if (!audio_opened())
+    return;
+  raylib::CloseAudioDevice();
+  audio_opened() = false;
+}
+
 inline bool raylib_init(const Config &cfg) {
+  bool ok = false;
   if (cfg.display == DisplayMode::Headless) {
     storage() = RaylibHeadless{};
-    return std::get<RaylibHeadless>(storage()).init(cfg);
+    ok = std::get<RaylibHeadless>(storage()).init(cfg);
   } else {
     storage() = RaylibWindowed{};
-    return std::get<RaylibWindowed>(storage()).init(cfg);
+    ok = std::get<RaylibWindowed>(storage()).init(cfg);
   }
+  if (ok && cfg.audio)
+    open_audio();
+  return ok;
 }
 
 inline void raylib_shutdown() {
+  close_audio();
   std::visit(
       [](auto &backend) {
         using T = std::decay_t<decltype(backend)>;
@@ -324,6 +348,8 @@ struct RaylibPlatformAPI {
       if (cfg.target_fps > 0)
         set_target_fps(cfg.target_fps);
     }
+    if (cfg.audio)
+      raylib_backend::open_audio();
     frame_loop::set_mode(cfg.frame_mode);
     frame_loop::request_frame();
     if (cfg.init)
@@ -354,6 +380,7 @@ struct RaylibPlatformAPI {
     }
     if (cfg.cleanup)
       cfg.cleanup();
+    raylib_backend::close_audio();
     if (!headless)
       close_window();
   }

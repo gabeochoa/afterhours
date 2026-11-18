@@ -401,6 +401,26 @@ TEST(a_click_on_a_button_that_does_not_take_focus_leaves_focus_alone) {
   const EntityID toggle_id = build(true);
   CHECK(fired == 2);
   CHECK(h.context().has_focus(toggle_id));
+TEST(a_disabled_control_blocks_the_click_for_what_is_under_it) {
+  int under_fired = 0;
+  h.begin_frame();
+  auto under = button(h.context(), mk(h.root(), 0),
+                      ComponentConfig{}
+                          .with_size(ComponentSize{pixels(200), pixels(60)})
+                          .with_absolute_position(0.f, 0.f)
+                          .with_label("Under"));
+  under.ent().get<HasClickListener>().cb = [&](Entity &) { ++under_fired; };
+  auto over = div(h.context(), mk(h.root(), 1),
+                  ComponentConfig{}
+                      .with_size(ComponentSize{pixels(200), pixels(60)})
+                      .with_absolute_position(0.f, 0.f)
+                      .with_disabled(true));
+  over.ent().addComponentIfMissing<HasClickListener>([](Entity &) {});
+  h.layout_only();
+  mark_rendered();
+  press_at(h.context(), 100.f, 30.f);
+  run_clicks(h);
+  CHECK(under_fired == 0);
 }
 
 int main() { return ui_test::run_registered_tests("hit priority"); }

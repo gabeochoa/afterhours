@@ -118,6 +118,7 @@ struct ComponentConfig {
   std::optional<float> focus_ring_thickness;
   bool ignore_pointer_events = false; // invisible to hit-testing
   bool takes_focus = true;
+  bool inert = false;
   // User data, not localizable copy: the pseudo-locale stress leaves this
   // label (and this component's RTL mirroring) alone.
   bool pseudo_locale_exempt = false;
@@ -640,6 +641,8 @@ struct ComponentConfig {
   }
   ComponentConfig &with_takes_focus(bool takes = true) {
     takes_focus = takes;
+  ComponentConfig &with_inert(bool on = true) {
+    inert = on;
     return *this;
   }
   ComponentConfig &with_pseudo_locale_exempt(bool exempt = true) {
@@ -1158,6 +1161,8 @@ struct ComponentConfig {
       merged.ignore_pointer_events = true;
     if (!overrides.takes_focus)
       merged.takes_focus = false;
+    if (overrides.inert)
+      merged.inert = true;
     if (overrides.pseudo_locale_exempt)
       merged.pseudo_locale_exempt = true;
     if (overrides.selects_on_focus())

@@ -193,6 +193,7 @@ struct FocusRing {
   float roundness = 0.f;
   int segments = 8;
   std::bitset<4> corners;
+  bool contrast_edges = true;
 
   // Outward expansion `t` of the main ring.
   // TODO: downstream apps keep re-implementing this (puzzle has
@@ -268,6 +269,7 @@ focus_ring_for(const UIContext<InputAction> &context, const Entity &entity,
   ring.segments =
       custom ? entity.get<HasRoundedCorners>().segments : context.theme.segments;
 
+  ring.contrast_edges = context.theme.focus_ring_contrast;
   ring.color = context.theme.from_usage(Theme::Usage::Focus);
   const float lum = colors::luminance(ring.color);
   ring.contrast = lum > 0.5f ? Color{0, 0, 0, 180} : Color{255, 255, 255, 180};
@@ -329,9 +331,10 @@ inline void draw_focus_paint(const FocusPaint &paint) {
   capture::Scope attribute(paint.entity_id, paint.layer);
   push_rotation(ring.rect.x + ring.rect.width * .5f,
                 ring.rect.y + ring.rect.height * .5f, paint.rotation);
-  draw_rectangle_rounded_lines(ring.outer_contrast(), ring.roundness_at(ring.thickness),
-                               ring.segments, ring.contrast, ring.corners);
-  if (ring.rect.width > 2.f && ring.rect.height > 2.f)
+  if (ring.contrast_edges)
+    draw_rectangle_rounded_lines(ring.outer_contrast(), ring.roundness_at(ring.thickness),
+                                 ring.segments, ring.contrast, ring.corners);
+  if (ring.contrast_edges && ring.rect.width > 2.f && ring.rect.height > 2.f)
     draw_rectangle_rounded_lines(ring.inner_contrast(), ring.roundness_at(-1.f),
                                  ring.segments, ring.contrast, ring.corners);
   for (float t = 0; t < ring.thickness; t += 1.f)
@@ -349,10 +352,11 @@ inline void collect_focus_paint(RenderCommandBuffer &buffer, const FocusPaint &p
                               static_cast<int>(r.width), static_cast<int>(r.height),
                               paint.layer, paint.entity_id);
   }
-  buffer.add_rounded_rectangle_outline(ring.outer_contrast(), ring.contrast,
-      ring.roundness_at(ring.thickness), ring.segments, ring.corners,
-      paint.layer, paint.entity_id, 0.f, paint.rotation);
-  if (ring.rect.width > 2.f && ring.rect.height > 2.f)
+  if (ring.contrast_edges)
+    buffer.add_rounded_rectangle_outline(ring.outer_contrast(), ring.contrast,
+        ring.roundness_at(ring.thickness), ring.segments, ring.corners,
+        paint.layer, paint.entity_id, 0.f, paint.rotation);
+  if (ring.contrast_edges && ring.rect.width > 2.f && ring.rect.height > 2.f)
     buffer.add_rounded_rectangle_outline(ring.inner_contrast(), ring.contrast,
         ring.roundness_at(-1.f), ring.segments, ring.corners,
         paint.layer, paint.entity_id, 0.f, paint.rotation);

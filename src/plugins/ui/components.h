@@ -101,6 +101,7 @@ struct HasClickActivationMode : BaseComponent {
 struct IgnorePointerEvents : BaseComponent {};
 
 struct DoesNotTakeFocus : BaseComponent {};
+struct Inert : BaseComponent {};
 
 struct HasDragListener : BaseComponent {
   bool down = false;
