@@ -850,8 +850,6 @@ private:
       return false;
     if (cmp.should_hide || e.has<ShouldHide>())
       return false;
-    if (is_disabled(e))
-      return false;
     return context->is_input_allowed(e.id);
   }
 
