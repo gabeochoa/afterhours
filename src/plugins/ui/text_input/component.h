@@ -129,7 +129,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Disabled: skip focus entirely, render with reduced opacity
   if (state.disabled) {
-    config.opacity = std::min(config.opacity, 0.5f);
+    config.opacity = std::min(config.opacity, ctx.theme.disabled_opacity);
   }
 
   // Extract label before clearing config

@@ -147,7 +147,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   state.paste_disabled = config.text_paste_disabled;
 
   if (state.disabled) {
-    config.opacity = std::min(config.opacity, 0.5f);
+    config.opacity = std::min(config.opacity, ctx.theme.disabled_opacity);
   }
 
   // Apply default size if not set
@@ -610,52 +610,36 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     }
 
     if (editable) {
+      auto after_delete = [&](bool did) {
+        if (!did)
+          return;
+        state.rebuild_line_index();
+        reset_preferred_column(state);
+        reset_blink(state);
+        text_changed = true;
+      };
       // Word-level delete (Alt/Ctrl+Backspace, Alt/Ctrl+Delete). Guarded on the
       // action existing so an app with a smaller enum still compiles, the same
       // way text_input does it.
       if constexpr (magic_enum::enum_contains<InputAction>(
                         "TextDeleteWordBack")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteWordBack)) {
-          if (delete_word_before_cursor(state)) {
-            state.rebuild_line_index();
-            reset_preferred_column(state);
-            reset_blink(state);
-            text_changed = true;
-          }
-        }
+        if (ctx.pressed_or_repeat(InputAction::TextDeleteWordBack))
+          after_delete(delete_word_before_cursor(state));
       }
       if constexpr (magic_enum::enum_contains<InputAction>(
                         "TextDeleteWordForward")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteWordForward)) {
-          if (delete_word_after_cursor(state)) {
-            state.rebuild_line_index();
-            reset_preferred_column(state);
-            reset_blink(state);
-            text_changed = true;
-          }
-        }
+        if (ctx.pressed_or_repeat(InputAction::TextDeleteWordForward))
+          after_delete(delete_word_after_cursor(state));
       }
       if constexpr (magic_enum::enum_contains<InputAction>(
                         "TextDeleteLineBack")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteLineBack)) {
-          if (delete_to_line_start(state)) {
-            state.rebuild_line_index();
-            reset_preferred_column(state);
-            reset_blink(state);
-            text_changed = true;
-          }
-        }
+        if (ctx.pressed_or_repeat(InputAction::TextDeleteLineBack))
+          after_delete(delete_to_line_start(state));
       }
       if constexpr (magic_enum::enum_contains<InputAction>(
                         "TextDeleteLineForward")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteLineForward)) {
-          if (delete_to_line_end(state)) {
-            state.rebuild_line_index();
-            reset_preferred_column(state);
-            reset_blink(state);
-            text_changed = true;
-          }
-        }
+        if (ctx.pressed_or_repeat(InputAction::TextDeleteLineForward))
+          after_delete(delete_to_line_end(state));
       }
 
       // Backspace and Delete take the selection when there is one, rather than
