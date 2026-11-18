@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 
+#include <afterhours/src/backends/raylib/drawing_helpers.h>
 #include <afterhours/src/backends/raylib/font_helper.h>
 #include <afterhours/src/plugins/window_manager.h>
 #include <afterhours/src/shutdown.h>
@@ -156,6 +157,9 @@ int main() {
         path.string().c_str(), cps, 2);
     check(with_cps.glyphCount == 2 && !afterhours::font_is_usable(with_cps),
           "load_font_from_file_with_codepoints too");
+    afterhours::draw_text_ex(from_file, "hello", Vector2Type{0.f, 0.f}, 16.f,
+                             0.f, ColorType{255, 255, 255, 255});
+    check(true, "draw_text_ex on a textureless font draws nothing, no crash");
   }
 
   {
