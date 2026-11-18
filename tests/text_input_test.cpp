@@ -613,4 +613,21 @@ TEST(a_text_input_built_this_frame_can_be_focused) {
   CHECK(field != nullptr && h.context().focus_id == field->id);
 }
 
+TEST(down_arrow_stays_in_a_focused_text_input) {
+  ImmTestHarness h;
+  std::string text = "filter";
+  two_frames(h, [&] {
+    imm::text_input(h.context(), mk(h.root(), 0), text,
+                    ComponentConfig{}.with_size({pixels(220), pixels(40)}));
+  });
+  Entity *field = find_field_entity();
+  CHECK(field != nullptr);
+  if (!field) return;
+  h.context().theme.arrows_tab = true;
+  h.context().set_focus(field->id);
+  h.context().last_action = ui_test::TestInputAction::WidgetDown;
+  h.context().process_tabbing(field->id);
+  CHECK(h.context().has_focus(field->id));
+}
+
 int main() { return ui_test::run_registered_tests("text_input"); }

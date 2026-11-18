@@ -1403,4 +1403,20 @@ TEST(focusing_the_returned_entity_focuses_the_field) {
   CHECK(h.context().focus_id == field->id);
 }
 
+TEST(down_arrow_stays_in_a_focused_text_area) {
+  ImmTestHarness h;
+  std::string text = "line one\nline two";
+  two_frames(h, [&] {
+    text_area(h.context(), mk(h.root(), 0), text, area_config(200.f, 200.f));
+  });
+  UIComponent *field = h.find("text_area_field");
+  CHECK(field != nullptr);
+  if (!field) return;
+  h.context().theme.arrows_tab = true;
+  h.context().set_focus(field->id);
+  h.context().last_action = ui_test::TestInputAction::WidgetDown;
+  h.context().process_tabbing(field->id);
+  CHECK(h.context().has_focus(field->id));
+}
+
 int main() { return ui_test::run_registered_tests("text_area"); }
