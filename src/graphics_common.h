@@ -108,6 +108,7 @@ struct Config {
   int target_fps = 60;
   unsigned int config_flags = 0;
   bool enable_msaa = true;
+  bool audio = false;
   // Supersample the render texture at design*dpi (crisp on Retina); game keeps
   // logical coords. Honoured by raylib windowed and sokol headless capture.
   bool hidpi = false;
@@ -221,6 +222,8 @@ struct RunConfig {
   // Headless skips the window. run() used to open one unconditionally, so
   // --headless was parsed and did nothing.
   DisplayMode display = DisplayMode::Windowed;
+
+  bool audio = false;
 
   float fixed_dt = 0.f;
   int sim_steps = 1;

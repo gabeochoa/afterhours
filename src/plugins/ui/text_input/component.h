@@ -219,6 +219,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   auto field_result = div(ctx, mk(entity, has_label ? 1 : 0), field_config);
 
   auto &field_entity = field_result.ent();
+  field_entity.template addComponentIfMissing<ConsumesDirectionalInput>();
   entity.template addComponentIfMissing<FocusProxy>().target = field_entity.id;
 
   // Ensure HasLabel exists and set display text
