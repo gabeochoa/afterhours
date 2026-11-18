@@ -401,7 +401,10 @@ TEST(a_click_on_a_button_that_does_not_take_focus_leaves_focus_alone) {
   const EntityID toggle_id = build(true);
   CHECK(fired == 2);
   CHECK(h.context().has_focus(toggle_id));
+}
+
 TEST(a_disabled_control_blocks_the_click_for_what_is_under_it) {
+  ImmTestHarness h;
   int under_fired = 0;
   h.begin_frame();
   auto under = button(h.context(), mk(h.root(), 0),
