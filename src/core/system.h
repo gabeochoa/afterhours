@@ -136,6 +136,26 @@ class SystemBase {
         return static_cast<const SystemBase &>(*this).should_run(dt);
     }
     virtual bool should_run(const float) const { return true; }
+    virtual void on_activate(const float dt) {
+        static_cast<const SystemBase &>(*this).on_activate(dt);
+    }
+    virtual void on_activate(const float) const {}
+    virtual void on_deactivate(const float dt) {
+        static_cast<const SystemBase &>(*this).on_deactivate(dt);
+    }
+    virtual void on_deactivate(const float) const {}
+    bool is_active() const { return active; }
+    bool advance_lifecycle(const float dt) {
+        const bool running = should_run(dt);
+        if (running != active) {
+            active = running;
+            if (running)
+                on_activate(dt);
+            else
+                on_deactivate(dt);
+        }
+        return running;
+    }
     virtual void once(const float) {}
     virtual void once(const float) const {}
     virtual void on_iteration_begin(const float) {}
@@ -163,6 +183,7 @@ class SystemBase {
 
    private:
     mutable std::string cached_name_;
+    bool active = false;
 };
 
 template<typename S>
@@ -639,7 +660,7 @@ struct SystemManager {
 
     void tick(Entities &entities, const float dt) {
         for (auto &system : update_systems_) {
-            if (!system->should_run(dt)) continue;
+            if (!system->advance_lifecycle(dt)) continue;
             ProfileScope profile_scope(system.get(), SystemPhase::Update);
             system->once(dt);
             run_system_over(*system, entities, dt,
@@ -651,7 +672,7 @@ struct SystemManager {
 
     void fixed_tick(Entities &entities, const float dt) {
         for (auto &system : fixed_update_systems_) {
-            if (!system->should_run(dt)) continue;
+            if (!system->advance_lifecycle(dt)) continue;
             ProfileScope profile_scope(system.get(), SystemPhase::FixedUpdate);
             system->once(dt);
             run_system_over(*system, entities, dt,
@@ -662,7 +683,7 @@ struct SystemManager {
 
     void render(Entities &entities, const float dt) {
         for (auto &system : render_systems_) {
-            if (!system->should_run(dt)) continue;
+            if (!system->advance_lifecycle(dt)) continue;
             ProfileScope profile_scope(system.get(), SystemPhase::Render);
             system->once(dt);
             run_system_over(*system, entities, dt,
