@@ -100,6 +100,7 @@ struct HasClickActivationMode : BaseComponent {
 // Not with_skip_tabbing, which is keyboard focus order only.
 struct IgnorePointerEvents : BaseComponent {};
 
+struct DoesNotTakeFocus : BaseComponent {};
 struct Inert : BaseComponent {};
 
 struct HasDragListener : BaseComponent {

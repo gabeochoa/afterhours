@@ -689,7 +689,8 @@ template <typename InputAction> struct ComputeVisualFocusId : System<> {
         ctx->focus_source != FocusSource::Explicit &&
         ctx->mouse.moved_this_frame && ctx->hot_id != ctx->ROOT) {
       const OptEntity hot = UICollectionHolder::getEntityForID(ctx->hot_id);
-      if (hot.has_value() && can_be_focused(*ctx, hot.asE()))
+      if (hot.has_value() && can_be_focused(*ctx, hot.asE()) &&
+          hot.asE().is_missing<DoesNotTakeFocus>())
         ctx->set_focus(ctx->hot_id, FocusSource::Pointer);
     }
     ctx->visual_focus_id = ctx->ROOT;
@@ -925,7 +926,8 @@ struct HandleClicks : SystemWithUIContext<ui::HasClickListener> {
     }
 
     if (context->mouse_activates(entity.id)) {
-      context->set_focus(entity.id, FocusSource::Pointer);
+      if (entity.is_missing<DoesNotTakeFocus>())
+        context->set_focus(entity.id, FocusSource::Pointer);
       hasClickListener.cb(entity);
       hasClickListener.down = true;
     }
@@ -1085,6 +1087,9 @@ bool can_be_focused(UIContext<InputAction> &ctx, const Entity &e) {
     return false;
   if (e.template has<SkipWhenTabbing>())
     return false;
+  if (e.template has<DoesNotTakeFocus>())
+    return false;
+  if (e.template has<ShouldHide>())
   if (e.template has<ShouldHide>() || detail::in_inert_subtree(e))
     return false;
   if (e.template is_missing<UIComponent>() ||
@@ -1252,7 +1257,8 @@ struct HandleDrags : SystemWithUIContext<ui::HasDragListener> {
 
     // No WidgetPress branch: drag callbacks read the mouse. Arrows own keys.
     if (context->is_active(entity.id)) {
-      context->set_focus(entity.id, FocusSource::Pointer);
+      if (entity.is_missing<DoesNotTakeFocus>())
+        context->set_focus(entity.id, FocusSource::Pointer);
       hasDragListener.down = true;
       hasDragListener.cb(entity);
     }

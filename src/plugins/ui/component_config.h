@@ -117,6 +117,7 @@ struct ComponentConfig {
   // Unset means the theme's value; 0 opts this component out of the ring.
   std::optional<float> focus_ring_thickness;
   bool ignore_pointer_events = false; // invisible to hit-testing
+  bool takes_focus = true;
   bool inert = false;
   // User data, not localizable copy: the pseudo-locale stress leaves this
   // label (and this component's RTL mirroring) alone.
@@ -638,6 +639,8 @@ struct ComponentConfig {
     ignore_pointer_events = ignore;
     return *this;
   }
+  ComponentConfig &with_takes_focus(bool takes = true) {
+    takes_focus = takes;
   ComponentConfig &with_inert(bool on = true) {
     inert = on;
     return *this;
@@ -1156,6 +1159,8 @@ struct ComponentConfig {
     // opt-out every time it is overridden.
     if (overrides.ignore_pointer_events)
       merged.ignore_pointer_events = true;
+    if (!overrides.takes_focus)
+      merged.takes_focus = false;
     if (overrides.inert)
       merged.inert = true;
     if (overrides.pseudo_locale_exempt)
