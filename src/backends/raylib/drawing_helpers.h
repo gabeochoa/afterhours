@@ -182,6 +182,10 @@ inline void draw_text_ex(const raylib::Font font, const char *content,
   if (capture::enabled())
     capture::record("text", {position.x, position.y, 0.f, font_size}, color,
                     content);
+  if (!font.glyphs || !font.recs || font.glyphCount <= 0)
+    return;
+  if (font.texture.id == 0 && !font_gl_ready())
+    return;
   warn_on_missing_glyphs(font, content);
   std::string shown;
   content = drawable_text(font, content, shown);
@@ -191,6 +195,11 @@ inline void draw_text_ex(const raylib::Font font, const char *content,
       raylib::DrawTextEx(font, content, position, font_size, spacing, color);
     float x = position.x;
     for (const FaceRun &run : runs) {
+      if (!run.face.glyphs || !run.face.recs || run.face.glyphCount <= 0 ||
+          (run.face.texture.id == 0 && !font_gl_ready())) {
+        x += estimate_text_size(run.text.c_str(), font_size).x + spacing;
+        continue;
+      }
       raylib::DrawTextEx(run.face, run.text.c_str(), {x, position.y},
                          font_size, spacing, color);
       x += raylib::MeasureTextEx(run.face, run.text.c_str(), font_size,
