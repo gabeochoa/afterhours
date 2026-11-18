@@ -140,9 +140,15 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       },
       text);
 
+  state.readonly = config.text_readonly;
+  state.disabled = config.disabled;
   state.copy_disabled = config.text_copy_disabled;
   state.cut_disabled = config.text_cut_disabled;
   state.paste_disabled = config.text_paste_disabled;
+
+  if (state.disabled) {
+    config.opacity = std::min(config.opacity, ctx.theme.disabled_opacity);
+  }
 
   // Apply default size if not set
   if (config.size.is_default) {
@@ -270,11 +276,13 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       state.layout_cache.column_at_offset(state.cursor_position);
 
   // Update focus state
-  field_entity.template addComponentIfMissing<InFocusCluster>();
+  if (!state.disabled) {
+    field_entity.template addComponentIfMissing<InFocusCluster>();
+  }
   bool field_has_focus = ctx.has_focus(field_entity.id);
   bool parent_has_focus = ctx.has_focus(entity.id);
   const bool gained_focus = !state.is_focused && (field_has_focus || parent_has_focus);
-  state.is_focused = field_has_focus || parent_has_focus;
+  state.is_focused = !state.disabled && (field_has_focus || parent_has_focus);
 
   // The focus ring text_input has always had: a 2px accent border while
   // focused, over the 1px default border on the field config.
@@ -307,7 +315,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                          ctx.mouse.pos.x <= fr.x + fr.width &&
                          ctx.mouse.pos.y >= fr.y &&
                          ctx.mouse.pos.y <= fr.y + fr.height;
-    if (max_scroll > 0.f && hovered && ctx.is_input_allowed(field_entity.id)) {
+    if (max_scroll > 0.f && hovered && !state.disabled && ctx.is_input_allowed(field_entity.id)) {
       const float wheel = input::get_mouse_wheel_move_v().y;
       if (wheel != 0.f) {
         state.scroll_offset_y = std::clamp(
@@ -448,13 +456,13 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   // there was no way to put the cursor anywhere but where typing left it.
   field_entity.template addComponentIfMissing<HasClickListener>(
       [&ctx](Entity &ent) {
-        ctx.set_focus(ent.id);
         HasTextAreaState *sp = state_for_field<HasTextAreaState>(ent);
         if (!sp)
           return;
         auto &s = *sp;
         if (s.disabled)
           return;
+        ctx.set_focus(ent.id);
         auto &cmp = ent.get<UIComponent>();
         const auto measure = [&s](std::string_view t) {
           return measure_in_field(s, t);
@@ -591,7 +599,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       const bool wants_newline =
           !config.text_area_submit_on_enter || shift;
       if (wants_newline) {
-        if (insert_newline(state)) {
+        if (editable && insert_newline(state)) {
           reset_blink(state);
           text_changed = true;
         }
@@ -602,78 +610,64 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       }
     }
 
-    // Word-level delete (Alt/Ctrl+Backspace, Alt/Ctrl+Delete). Guarded on the
-    // action existing so an app with a smaller enum still compiles, the same
-    // way text_input does it.
-    if constexpr (magic_enum::enum_contains<InputAction>(
-                      "TextDeleteWordBack")) {
-      if (ctx.pressed_or_repeat(InputAction::TextDeleteWordBack)) {
-        if (delete_word_before_cursor(state)) {
-          state.rebuild_line_index();
-          reset_preferred_column(state);
-          reset_blink(state);
-          text_changed = true;
-        }
+    if (editable) {
+      auto after_delete = [&](bool did) {
+        if (!did)
+          return;
+        state.rebuild_line_index();
+        reset_preferred_column(state);
+        reset_blink(state);
+        text_changed = true;
+      };
+      // Word-level delete (Alt/Ctrl+Backspace, Alt/Ctrl+Delete). Guarded on the
+      // action existing so an app with a smaller enum still compiles, the same
+      // way text_input does it.
+      if constexpr (magic_enum::enum_contains<InputAction>(
+                        "TextDeleteWordBack")) {
+        if (ctx.pressed_or_repeat(InputAction::TextDeleteWordBack))
+          after_delete(delete_word_before_cursor(state));
       }
-    }
-    if constexpr (magic_enum::enum_contains<InputAction>(
-                      "TextDeleteWordForward")) {
-      if (ctx.pressed_or_repeat(InputAction::TextDeleteWordForward)) {
-        if (delete_word_after_cursor(state)) {
-          state.rebuild_line_index();
-          reset_preferred_column(state);
-          reset_blink(state);
-          text_changed = true;
-        }
+      if constexpr (magic_enum::enum_contains<InputAction>(
+                        "TextDeleteWordForward")) {
+        if (ctx.pressed_or_repeat(InputAction::TextDeleteWordForward))
+          after_delete(delete_word_after_cursor(state));
       }
-    }
-    if constexpr (magic_enum::enum_contains<InputAction>(
-                      "TextDeleteLineBack")) {
-      if (ctx.pressed_or_repeat(InputAction::TextDeleteLineBack)) {
-        if (delete_to_line_start(state)) {
-          state.rebuild_line_index();
-          reset_preferred_column(state);
-          reset_blink(state);
-          text_changed = true;
-        }
+      if constexpr (magic_enum::enum_contains<InputAction>(
+                        "TextDeleteLineBack")) {
+        if (ctx.pressed_or_repeat(InputAction::TextDeleteLineBack))
+          after_delete(delete_to_line_start(state));
       }
-    }
-    if constexpr (magic_enum::enum_contains<InputAction>(
-                      "TextDeleteLineForward")) {
-      if (ctx.pressed_or_repeat(InputAction::TextDeleteLineForward)) {
-        if (delete_to_line_end(state)) {
-          state.rebuild_line_index();
-          reset_preferred_column(state);
-          reset_blink(state);
-          text_changed = true;
-        }
+      if constexpr (magic_enum::enum_contains<InputAction>(
+                        "TextDeleteLineForward")) {
+        if (ctx.pressed_or_repeat(InputAction::TextDeleteLineForward))
+          after_delete(delete_to_line_end(state));
       }
-    }
 
-    // Backspace and Delete take the selection when there is one, rather than
-    // one character next to the caret.
-    if (ctx.pressed_or_repeat(InputAction::TextBackspace)) {
-      state.push_undo_snapshot();
-      const bool did = state.has_selection()
-                           ? delete_selection(state)
-                           : delete_before_cursor_multiline(state);
-      if (did) {
-        state.rebuild_line_index();
-        reset_preferred_column(state);
-        reset_blink(state);
-        text_changed = true;
+      // Backspace and Delete take the selection when there is one, rather than
+      // one character next to the caret.
+      if (ctx.pressed_or_repeat(InputAction::TextBackspace)) {
+        state.push_undo_snapshot();
+        const bool did = state.has_selection()
+                             ? delete_selection(state)
+                             : delete_before_cursor_multiline(state);
+        if (did) {
+          state.rebuild_line_index();
+          reset_preferred_column(state);
+          reset_blink(state);
+          text_changed = true;
+        }
       }
-    }
-    if (ctx.pressed_or_repeat(InputAction::TextDelete)) {
-      state.push_undo_snapshot();
-      const bool did = state.has_selection()
-                           ? delete_selection(state)
-                           : delete_at_cursor_multiline(state);
-      if (did) {
-        state.rebuild_line_index();
-        reset_preferred_column(state);
-        reset_blink(state);
-        text_changed = true;
+      if (ctx.pressed_or_repeat(InputAction::TextDelete)) {
+        state.push_undo_snapshot();
+        const bool did = state.has_selection()
+                             ? delete_selection(state)
+                             : delete_at_cursor_multiline(state);
+        if (did) {
+          state.rebuild_line_index();
+          reset_preferred_column(state);
+          reset_blink(state);
+          text_changed = true;
+        }
       }
     }
 

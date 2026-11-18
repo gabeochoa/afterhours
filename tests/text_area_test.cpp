@@ -448,6 +448,32 @@ ti::HasTextAreaState *press(ImmTestHarness &h, std::string &text,
 }
 } // namespace
 
+namespace {
+ti::HasTextAreaState *press_cfg(ImmTestHarness &h, std::string &text,
+                                ui_test::TestInputAction action,
+                                size_t cursor_at, ComponentConfig cfg) {
+  Entity *area = nullptr;
+  auto emit = [&] {
+    auto r = text_area(h.context(), mk(h.root(), 0), text, cfg);
+    area = &r.ent();
+  };
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  if (UIComponent *f = h.find("text_area_field"))
+    h.context().focus_id = f->id;
+  if (area && area->has<ti::HasTextAreaState>())
+    area->get<ti::HasTextAreaState>().cursor_position = cursor_at;
+  h.context().last_action = action;
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  return area && area->has<ti::HasTextAreaState>()
+             ? &area->get<ti::HasTextAreaState>()
+             : nullptr;
+}
+} // namespace
+
 TEST(alt_left_moves_a_word_back) {
   ImmTestHarness h;
   std::string text = "alpha beta gamma";
@@ -1003,6 +1029,80 @@ TEST(select_all_selects_the_whole_text) {
 
 // Typing over a selection replaces it -- without this, select-all then type
 // appends instead of overwriting.
+TEST(readonly_text_area_rejects_backspace_and_word_delete) {
+  {
+    ImmTestHarness h;
+    std::string text = "alpha beta gamma";
+    auto *s = press_cfg(h, text, ui_test::TestInputAction::TextBackspace, 5,
+                        area_config(200.f, 200.f).with_readonly());
+    CHECK(text == "alpha beta gamma");
+    ui_test::check(s != nullptr, "state exists", __FILE__, __LINE__);
+    if (s) {
+      CHECK(s->readonly);
+      CHECK(!s->disabled);
+      CHECK(s->is_focused);
+    }
+  }
+  {
+    ImmTestHarness h;
+    std::string text = "alpha beta gamma";
+    press_cfg(h, text, ui_test::TestInputAction::TextDeleteWordBack, 16,
+              area_config(200.f, 200.f).with_readonly());
+    CHECK(text == "alpha beta gamma");
+  }
+  {
+    ImmTestHarness h;
+    std::string text = "alpha beta gamma";
+    press_cfg(h, text, ui_test::TestInputAction::TextDelete, 5,
+              area_config(200.f, 200.f).with_readonly());
+    CHECK(text == "alpha beta gamma");
+  }
+}
+
+TEST(readonly_text_area_rejects_enter_newline) {
+  ImmTestHarness h;
+  std::string text = "alpha beta";
+  press_cfg(h, text, ui_test::TestInputAction::WidgetPress, 5,
+            area_config(200.f, 200.f).with_readonly());
+  CHECK(text == "alpha beta");
+}
+
+TEST(readonly_text_area_still_selects_all) {
+  ImmTestHarness h;
+  std::string text = "alpha beta";
+  auto *s = press_cfg(h, text, ui_test::TestInputAction::TextSelectAll, 0,
+                      area_config(200.f, 200.f).with_readonly());
+  ui_test::check(s != nullptr, "state exists", __FILE__, __LINE__);
+  if (s) {
+    CHECK(s->has_selection());
+    CHECK(s->selection_start() == 0);
+    CHECK(s->selection_end() == text.size());
+    CHECK(s->selected_text() == "alpha beta");
+    CHECK(count_line_divs() >= 1);
+  }
+}
+
+TEST(disabled_text_area_rejects_edits_and_does_not_focus) {
+  ImmTestHarness h;
+  std::string text = "alpha beta gamma";
+  auto *s = press_cfg(h, text, ui_test::TestInputAction::TextBackspace, 5,
+                      area_config(200.f, 200.f).with_disabled(true));
+  CHECK(text == "alpha beta gamma");
+  ui_test::check(s != nullptr, "state exists", __FILE__, __LINE__);
+  if (s) {
+    CHECK(s->disabled);
+    CHECK(!s->is_focused);
+  }
+}
+
+TEST(editable_text_area_still_edits) {
+  ImmTestHarness h;
+  std::string text = "alpha beta gamma";
+  press_cfg(h, text, ui_test::TestInputAction::TextBackspace, 5,
+            area_config(200.f, 200.f));
+  CHECK(text == "alph beta gamma");
+}
+
 TEST(typing_replaces_the_selection) {
   ImmTestHarness h;
   std::string text = "alpha beta";
