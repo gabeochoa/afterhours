@@ -180,13 +180,14 @@ inline void apply_flags(Entity &entity, const ComponentConfig &config) {
     entity.addComponentIfMissing<IgnorePointerEvents>();
   else
     entity.removeComponentIfExists<IgnorePointerEvents>();
+  if (config.inert)
+    entity.addComponentIfMissing<Inert>();
+  else
+    entity.removeComponentIfExists<Inert>();
   if (config.takes_focus)
     entity.removeComponentIfExists<DoesNotTakeFocus>();
   else
     entity.addComponentIfMissing<DoesNotTakeFocus>();
-  if (config.inert)
-    entity.addComponentIfMissing<Inert>();
-    entity.removeComponentIfExists<Inert>();
   if (config.skip_grid_snap)
     entity.get<UIComponent>().skip_grid_snap = true;
   if (config.select_on_focus)
