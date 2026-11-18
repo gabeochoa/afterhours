@@ -1087,6 +1087,8 @@ bool can_be_focused(UIContext<InputAction> &ctx, const Entity &e) {
     return false;
   if (e.template has<SkipWhenTabbing>())
     return false;
+  if (e.template has<DoesNotTakeFocus>())
+    return false;
   if (e.template has<ShouldHide>() || detail::in_inert_subtree(e))
     return false;
   if (e.template is_missing<UIComponent>() ||
