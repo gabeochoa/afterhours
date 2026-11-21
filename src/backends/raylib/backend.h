@@ -10,6 +10,7 @@
 #ifdef AFTER_HOURS_USE_RAYLIB
 
 #include "../../graphics_common.h"
+#include "../../window_events.h"
 #include "headless.h"
 #include "windowed.h"
 
@@ -87,7 +88,35 @@ inline bool host_input_activity() {
   return active;
 }
 
+// Raylib has no lifecycle callback, so transitions are edge-detected here.
+// Occlusion honestly means hidden/minimized only — raylib cannot report
+// covered-by-another-window.
+inline void poll_window_events() {
+  using namespace window_events;
+  static float last_dpi = 0.f;
+  static bool was_occluded = false;
+  if (!raylib::IsWindowReady())
+    return;
+  const auto dpi = raylib::GetWindowScaleDPI();
+  const float scale = dpi.x;
+  const bool occ = raylib::IsWindowHidden() || raylib::IsWindowMinimized();
+  if (occ != was_occluded) {
+    push({occ ? Type::Occluded : Type::Revealed, raylib::GetScreenWidth(),
+          raylib::GetScreenHeight(), scale});
+    was_occluded = occ;
+  }
+  if (raylib::IsWindowResized())
+    push({Type::Resized, raylib::GetScreenWidth(), raylib::GetScreenHeight(),
+          scale});
+  if (last_dpi > 0.f && scale > 0.f && scale != last_dpi)
+    push({Type::ScaleChanged, raylib::GetScreenWidth(),
+          raylib::GetScreenHeight(), scale});
+  if (scale > 0.f)
+    last_dpi = scale;
+}
+
 inline void raylib_begin_frame() {
+  poll_window_events();
   std::visit(
       [](auto &backend) {
         using T = std::decay_t<decltype(backend)>;

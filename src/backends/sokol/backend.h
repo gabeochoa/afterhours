@@ -14,6 +14,7 @@
 #include "../../graphics_common.h"
 #include "../../logging.h"
 #include "../../warn_once.h"
+#include "../../window_events.h"
 
 // The implementation must be compiled in exactly one .cpp/.mm file
 // with SOKOL_IMPL defined before including these headers.
@@ -407,9 +408,44 @@ inline void sokol_event_cb(const sapp_event *ev) {
     case SAPP_EVENTTYPE_MOUSE_MOVE:
     case SAPP_EVENTTYPE_MOUSE_SCROLL:
     case SAPP_EVENTTYPE_RESIZED:
+    case SAPP_EVENTTYPE_ICONIFIED:
     case SAPP_EVENTTYPE_FOCUSED:
     case SAPP_EVENTTYPE_RESTORED:
+    case SAPP_EVENTTYPE_SUSPENDED:
+    case SAPP_EVENTTYPE_RESUMED:
       frame_loop::request_frame();
+      break;
+    default:
+      break;
+    }
+  }
+
+  // Surface window lifecycle the input switch below would otherwise absorb.
+  {
+    using namespace window_events;
+    const float scale = ev->window_width > 0
+                            ? static_cast<float>(ev->framebuffer_width) /
+                                  static_cast<float>(ev->window_width)
+                            : 0.f;
+    switch (ev->type) {
+    case SAPP_EVENTTYPE_RESIZED: {
+      const float prev = last_scale();
+      push({Type::Resized, ev->window_width, ev->window_height, scale});
+      if (prev > 0.f && scale > 0.f && scale != prev)
+        push({Type::ScaleChanged, ev->window_width, ev->window_height, scale});
+      break;
+    }
+    case SAPP_EVENTTYPE_ICONIFIED:
+      push({Type::Occluded, ev->window_width, ev->window_height, scale});
+      break;
+    case SAPP_EVENTTYPE_RESTORED:
+      push({Type::Revealed, ev->window_width, ev->window_height, scale});
+      break;
+    case SAPP_EVENTTYPE_SUSPENDED:
+      push({Type::Suspended, ev->window_width, ev->window_height, scale});
+      break;
+    case SAPP_EVENTTYPE_RESUMED:
+      push({Type::Resumed, ev->window_width, ev->window_height, scale});
       break;
     default:
       break;
