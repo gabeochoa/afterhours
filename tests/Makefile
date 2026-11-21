@@ -200,6 +200,7 @@ ALL_TESTS := \
 	focus_origin_test \
 	cleanup_order_test \
 	entity_pool_test \
+	level_scope_test \
 	entity_query_test \
 	get_or_default_test \
 	query_extreme_by_test \
