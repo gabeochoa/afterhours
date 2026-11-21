@@ -126,6 +126,7 @@ ALL_TESTS := \
 	file_watcher_test \
 	render_capture_test \
 	charts_test \
+	chart_options_test \
 	system_profile_test \
 	profiling_test \
 	profiling_disabled_test \
