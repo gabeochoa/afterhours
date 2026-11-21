@@ -549,9 +549,6 @@ TEST(imm_spacing_attributes) {
 }
 
 
-// Subpixel geometry is exposed unrounded: the floatinghotel EOF row sat at
-// y=848.40625 h=25.6 (bottom 874.00625, 0.00625 past a viewport ending at
-// 874) and rounded dump values (848 + 26 = 874) hid that excess entirely.
 TEST(imm_subpixel_coords_exposed) {
   ImmTestHarness h;
 
@@ -569,7 +566,6 @@ TEST(imm_subpixel_coords_exposed) {
   std::string xml = h.dump();
   printf("%s", xml.c_str());
 
-  // Fractional values print unrounded; integral ones stay integer-formatted.
   CHECK(xml.find("name=\"subpixel_row\"") != std::string::npos);
   CHECK(xml.find("x=\"10.40625\"") != std::string::npos);
   CHECK(xml.find("y=\"574.40625\"") != std::string::npos);

@@ -1255,9 +1255,6 @@ inline std::string truncate_text(const std::string &s, size_t max_len = 80) {
   return s.substr(0, max_len) + "...";
 }
 
-// Geometry prints unrounded when it is fractional (5dp, trimmed), so a
-// subpixel excess over a viewport edge stays visible in dumps; integral
-// values keep the historical integer spelling.
 inline std::string format_dim(float v) {
   if (std::fabs(v - std::round(v)) < 1e-4f)
     return std::format("{}", std::lroundf(v));
@@ -1472,8 +1469,6 @@ inline std::string check_ui_property(Entity &entity, const std::string &prop,
   }
 
   if (is_int_prop) {
-    // A fractional expectation pins the subpixel layout value (tolerance
-    // 0.01px); an integer one keeps the legacy rounded comparison.
     if (expected.find_first_of(".eE") != std::string::npos) {
       const float expected_float = std::stof(expected);
       if (std::fabs(actual_float - expected_float) > 0.01f)
