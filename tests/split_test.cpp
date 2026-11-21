@@ -198,6 +198,99 @@ TEST(divider_y_axis_is_a_horizontal_bar) {
   CHECK(hbar.ent().get<HasCursor>().cursor == CursorType::ResizeV);
 }
 
+// The hit band is wider than the drawn line: a 4px bar grabs across the
+// theme's 12px minimum, padded evenly on both sides, across the drag axis
+// only. The drawn rect is untouched.
+TEST(divider_hit_band_exceeds_drawn_thickness) {
+  ImmTestHarness h;
+  auto bar = divider(h.context(), mk(h.root(), 0), Axis::X);
+  h.layout_only();
+
+  const Rectangle drawn = rect_of(bar);
+  CHECK_APPROX(drawn.width, 4.f);
+  const Rectangle hit =
+      afterhours::ui::detail::hit_rect(bar.ent(), bar.ent().get<UIComponent>());
+  CHECK_APPROX(hit.width, 12.f);
+  CHECK_APPROX(hit.x, drawn.x - 4.f);
+  CHECK_APPROX(hit.height, drawn.height);
+  CHECK_APPROX(hit.y, drawn.y);
+}
+
+// Same band for a horizontal bar, across its (vertical) drag axis.
+TEST(divider_hit_band_horizontal_bar) {
+  ImmTestHarness h;
+  auto bar = divider(h.context(), mk(h.root(), 0), Axis::Y);
+  h.layout_only();
+
+  const Rectangle drawn = rect_of(bar);
+  CHECK_APPROX(drawn.height, 4.f);
+  const Rectangle hit =
+      afterhours::ui::detail::hit_rect(bar.ent(), bar.ent().get<UIComponent>());
+  CHECK_APPROX(hit.height, 12.f);
+  CHECK_APPROX(hit.y, drawn.y - 4.f);
+  CHECK_APPROX(hit.width, drawn.width);
+}
+
+// A caller thickness at or above the minimum gets no padding.
+TEST(divider_hit_band_respects_larger_caller_thickness) {
+  ImmTestHarness h;
+  auto bar = divider(h.context(), mk(h.root(), 0), Axis::X,
+                     ComponentConfig{}.with_size(
+                         ComponentSize{pixels(16.f), percent(1.f)}));
+  h.layout_only();
+
+  const Rectangle hit =
+      afterhours::ui::detail::hit_rect(bar.ent(), bar.ent().get<UIComponent>());
+  CHECK_APPROX(rect_of(bar).width, 16.f);
+  CHECK_APPROX(hit.width, 16.f);
+  CHECK_APPROX(hit.x, rect_of(bar).x);
+}
+
+// A zero theme minimum disables the floor: hit equals drawn.
+TEST(divider_hit_band_disabled_by_zero_theme) {
+  ImmTestHarness h;
+  h.context().theme.divider_min_hit_thickness = 0.f;
+  auto bar = divider(h.context(), mk(h.root(), 0), Axis::X);
+  h.layout_only();
+
+  const Rectangle hit =
+      afterhours::ui::detail::hit_rect(bar.ent(), bar.ent().get<UIComponent>());
+  CHECK_APPROX(hit.width, rect_of(bar).width);
+}
+
+// A press inside the band but outside the drawn line resolves to the
+// divider; a press just outside the band does not.
+TEST(divider_hit_band_wins_press_between_band_and_line) {
+  ImmTestHarness h;
+  auto bar =
+      divider(h.context(), mk(h.root(), 0), Axis::X,
+              ComponentConfig{}.with_size(
+                  ComponentSize{pixels(4.f), percent(1.f)}));
+  h.layout_only();
+  for (const auto &e : UICollectionHolder::get().collection.get_entities()) {
+    if (e && e->has<UIComponent>())
+      e->get<UIComponent>().was_rendered_to_screen = true;
+  }
+
+  ResolveHitTarget<ui_test::TestInputAction> resolver;
+  resolver.context = &h.context();
+  auto resolve_at = [&](float x, float y) {
+    h.context().mouse.pos = input::MousePosition{x, y};
+    h.context().mouse.left_down = true;
+    h.context().set_hot(h.context().ROOT);
+    h.context().set_active(h.context().ROOT);
+    resolver.resolve();
+  };
+
+  const float line_x = rect_of(bar).x; // drawn bar spans [line_x, line_x+4)
+  resolve_at(line_x - 2.f, 100.f);     // inside the band, outside the line
+  CHECK(h.context().is_hot(bar.id()));
+  CHECK(h.context().is_active(bar.id()));
+
+  resolve_at(line_x - 6.f, 100.f); // just outside the 12px band
+  CHECK(!h.context().is_hot(bar.id()));
+}
+
 // Not being dragged means no movement, however far the pointer travelled.
 TEST(divider_reports_nothing_when_not_dragged) {
   ImmTestHarness h;
