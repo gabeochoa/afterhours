@@ -254,6 +254,10 @@ struct RunConfig {
 
   bool audio = false;
 
+  // macOS/sokol only: deliver Cmd+key chords as key events instead of only
+  // offering them as menu equivalents. Off by default so menu shortcuts win.
+  bool macos_forward_cmd_chords = false;
+
   float fixed_dt = 0.f;
   int sim_steps = 1;
 
