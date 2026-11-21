@@ -316,6 +316,7 @@ ALL_TESTS := \
 	lod_test \
 	blob_shadow_test \
 	world_label_test \
+	render_view_test \
 	image_test \
 	image_raylib_test \
 	stepper_test \
