@@ -1,7 +1,3 @@
-// terrain_steering_test.cpp
-// Ground-aligned movement over a height sampler: flat projection is exact,
-// a slope projects onto its plane, steep slopes are rejected, and ground
-// following snaps y within max_step.
 
 #define FMT_HEADER_ONLY
 #define AFTER_HOURS_USE_NONE
@@ -33,9 +29,8 @@ static bool near(float a, float b, float tol = 1e-4f) {
 
 int main() {
   HeightSampler flat = [](float, float) { return 0.f; };
-  HeightSampler slope = [](float x, float) { return 0.5f * x; }; // 26.57 deg
+  HeightSampler slope = [](float x, float) { return 0.5f * x; };
 
-  // Flat ground: normal is straight up, projection is exact.
   {
     Vec3 n = ground_normal(flat, 0.f, 0.f);
     check(near(n.x, 0.f) && near(n.y, 1.f) && near(n.z, 0.f),
@@ -47,7 +42,6 @@ int main() {
     check(can_climb(n, 0.f), "flat climbable at limit 0");
   }
 
-  // Slope (0.5 per unit x): normal and projected velocity sit in the plane.
   {
     Vec3 n = ground_normal(slope, 2.f, 0.f);
     check(near(n.x, -0.4472136f, 1e-5f) && near(n.y, 0.8944272f, 1e-5f),
@@ -61,17 +55,14 @@ int main() {
     check(!can_climb(n, 20.f), "26 deg rejected under a 20 deg limit");
     check(!can_climb(n, 0.f), "slope rejected at limit 0");
 
-    // Walking the projected velocity up the ramp: next position tracks the
-    // ground, so ground following holds without sinking or floating.
     Vec3 start = vec(2.f, 1.f, 0.f);
     Vec3 next = move_and_snap(start, v, 1.f, slope, 1.f);
     check(near(next.x, 2.8f) && near(next.z, 0.f), "move follows desired x/z");
     check(near(next.y, 1.4f), "move snaps y onto the slope");
   }
 
-  // Snap behavior: within max_step follows the ground, beyond is clamped.
   {
-    Vec3 p = vec(4.f, 1.5f, 0.f); // ground 2.0 at x=4
+    Vec3 p = vec(4.f, 1.5f, 0.f);
     Vec3 snapped = snap_to_ground(p, slope, 1.f);
     check(near(snapped.y, 2.f), "snap lands on the ground within max_step");
     Vec3 clamped = snap_to_ground(p, slope, 0.25f);
