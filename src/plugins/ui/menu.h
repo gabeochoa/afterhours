@@ -409,7 +409,6 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
         overlay::Placement preferred = overlay::Placement::Below,
         ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
-  auto &state = entity.template addComponentIfMissing<HasMenuState>();
 
   // Built even while closed, like menu_root: the panel's screen
   // placement is converted through this holder's rect, so the holder
@@ -422,10 +421,25 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
   init_component(ctx, ep_pair, root_config, ComponentType::Div, false,
                  "popover_root");
 
+  // A never-opened popover needs no menu state; creating it on every
+  // closed call is the only work a closed popover would otherwise do.
+  if (!open && !entity.template has<HasMenuState>())
+    return ElementResult{false, entity};
+  auto &state = entity.template addComponentIfMissing<HasMenuState>();
+  if (!open && !state.was_open_last_frame)
+    return ElementResult{false, entity};
+
+  const bool was_open = state.was_open_last_frame;
+  const bool caller_open = open;
   if (detail::dismiss_menu(ctx, state, open)) {
     open = false;
     state.was_open_last_frame = false;
-    return ElementResult{false, entity};
+    // A library dismissal (focus left, outside press, MenuBack) still
+    // owes the body one frame: a button inside records its click on the
+    // press frame and the caller reads it on this one. A caller closing
+    // (open already false) owes nothing.
+    if (!(caller_open && was_open))
+      return ElementResult{false, entity};
   }
 
   const float width =
@@ -443,7 +457,9 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
 
   auto panel =
       tray(ctx, mk(entity),
-           ComponentConfig::inherit_from(config, "popover_panel")
+           ComponentConfig::inherit_from(
+               config, config.debug_name.empty() ? "popover_panel"
+                                                 : config.debug_name)
                .with_background(Theme::Usage::Surface)
                .with_size(ComponentSize{pixels(width), pixels(height)})
                .with_flex_direction(FlexDirection::Column)
@@ -454,11 +470,11 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
     panel.ent().template get<HasColor>().skip_hover_override = true;
 
   state.panel = panel.ent().id;
-  if (!state.was_open_last_frame) {
+  if (!was_open) {
     state.restore_focus = ctx.focus_id;
     ctx.set_focus(state.panel);
   }
-  state.was_open_last_frame = true;
+  state.was_open_last_frame = open;
 
   return ElementResult{true, panel.ent()};
 }
