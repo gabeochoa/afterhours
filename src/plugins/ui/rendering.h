@@ -37,9 +37,6 @@ namespace ui {
 
 namespace detail {
 
-// Snap a rect's origin to the device-pixel grid (1/effective-scale logical
-// px): a fractional origin rasterizes a shape a row/column short. Size is
-// untouched, and layout math upstream of the draw never sees the snap.
 static inline RectangleType snap_origin(RectangleType rect,
                                         ScalingMode mode, float ui_scale) {
   const float scale = mode == ScalingMode::Adaptive ? ui_scale : 1.0f;

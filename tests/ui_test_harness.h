@@ -282,9 +282,6 @@ struct ImmTestHarness {
     return &font_entity->get<FontManager>();
   }
 
-  // ui_scale the next render()/render_batched() lays out at. layout_only()
-  // takes the scale as an argument; the render helpers call it internally,
-  // so they read it from here (default 1.0, the old behaviour).
   float layout_scale = 1.0f;
 
   template <typename Renderer> const std::vector<DrawCall> &render_with() {

@@ -1,9 +1,3 @@
-// origin_rounding_test.cpp
-// Widget origins must rasterize on device pixels: the rect the renderer
-// paints (recorded by the none backend) must have an origin whose
-// effective-scale multiple is integral, at ui_scale 1 / 1.5 / 2 and under
-// fractional parents. Sizes must be untouched. Layout rects stay fractional
-// on purpose -- only the paint snaps.
 #include "ui_test_harness.h"
 
 #include <cmath>
@@ -27,8 +21,6 @@ static ComponentConfig box(float w, float h) {
       .with_corner_radius(0);
 }
 
-// Every painted background rect of this frame must start on the grid;
-// returns the rects so a case can also pin sizes.
 static std::vector<RectangleType> painted_boxes(ImmTestHarness &h,
                                                 float scale) {
   h.render();
@@ -45,7 +37,6 @@ static std::vector<RectangleType> painted_boxes(ImmTestHarness &h,
   return out;
 }
 
-// Centred child in an odd-size parent: (401-100)/2 = 150.5 layout origin.
 static void centered_case(float scale, bool adaptive) {
   ImmTestHarness h;
   h.layout_scale = scale;
@@ -68,7 +59,6 @@ static void centered_case(float scale, bool adaptive) {
   printf("centered scale %.1f adaptive=%d\n", scale, (int)adaptive);
   const auto boxes = painted_boxes(h, eff);
   CHECK(boxes.size() >= 2);
-  // Layout stays fractional; only the paint snapped.
   const auto layout = parent.ent().get<UIComponent>().rect();
   (void)layout;
   for (const auto &r : boxes) {
@@ -83,7 +73,6 @@ int main() {
   centered_case(1.5f, true);
   centered_case(2.0f, true);
 
-  // Absolute half-pixel origin (hanabi #110's 6x6 light at 932.5).
   {
     ImmTestHarness h;
     auto dot = div(h.context(), mk(h.root(), 0),
@@ -99,8 +88,6 @@ int main() {
       }
   }
 
-  // Fractional parent: parent centred in the 800-wide root starts at
-  // (800-401)/2 = 199.5, so its child inherits a fractional origin.
   {
     ImmTestHarness h;
     h.root().get<UIComponent>().set_align_items(AlignItems::Center);
@@ -113,7 +100,6 @@ int main() {
     printf("child of fractional parent\n");
     const auto boxes = painted_boxes(h, 1.0f);
     CHECK(boxes.size() >= 2);
-    // Parent layout origin is 199.5; both paints must still be integral.
     for (const auto &r : boxes)
       if (std::fabs(r.width - 100.f) < 1e-3f)
         CHECK(std::fabs(r.x - 350.f) < 1e-3f);
