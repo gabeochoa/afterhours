@@ -411,9 +411,6 @@ $(OUT)/files_test_roots_test: ../src/plugins/files.cpp
 $(OUT)/files_cache_path_test: ../src/plugins/files.cpp
 $(OUT)/bundle_test: ../src/plugins/files.cpp
 $(OUT)/file_watcher_test: ../src/plugins/file_watcher.cpp
-ifeq ($(UNAME_S),Darwin)
-$(OUT)/file_watcher_test: LDFLAGS_T += -framework CoreServices
-endif
 
 $(OUT)/native_dialogs_macos_test: native_dialogs_macos_test.mm ../src/plugins/native_dialogs_macos.mm
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) $(filter %.mm,$^) -framework Cocoa -o $@
