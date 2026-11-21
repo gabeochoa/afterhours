@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <functional>
 #include <map>
@@ -67,6 +68,38 @@ struct sound_system : developer::Plugin {
             out.pan = std::clamp(0.5f + 0.5f * side, 0.f, 1.f);
         }
         return out;
+    }
+
+    // Library-tracked playback position in seconds. raylib exposes no
+    // position query for one-shot Sound, so play/pause/resume/stop keep a
+    // clock-based tracker whose rate follows pitch. Tests inject a clock
+    // via set_playback_clock; production defaults to a monotonic clock.
+    struct PlaybackTrack {
+        double base = 0.0;
+        double segment_start = 0.0;
+        float rate = 1.f;
+        bool playing = false;
+    };
+
+    static double default_playback_now() {
+        return std::chrono::duration<double>(
+                   std::chrono::steady_clock::now().time_since_epoch())
+            .count();
+    }
+
+    inline static std::function<double()> play_clock = default_playback_now;
+
+    static void set_playback_clock(std::function<double()> clock) {
+        play_clock = std::move(clock);
+    }
+
+    static double playback_now() {
+        return play_clock ? play_clock() : 0.0;
+    }
+
+    static double track_position(const PlaybackTrack &t) {
+        if (!t.playing) return t.base;
+        return t.base + (playback_now() - t.segment_start) * t.rate;
     }
 
     SINGLETON_CLASS_FWD(SoundLibrary)
@@ -193,26 +226,55 @@ struct sound_system : developer::Plugin {
                 ::afterhours::SetSoundPitch(sound, pitch);
             }
             ::afterhours::PlaySound(sound);
+            start_track(name, positional ? pitch : 1.f);
+        }
+
+        [[nodiscard]] double playback_position(
+            const std::string &name) const {
+            auto it = tracks.find(name);
+            return it == tracks.end() ? 0.0 : track_position(it->second);
         }
 
         void stop(const std::string &name) {
-            if (contains(name)) ::afterhours::StopSound(get(name));
+            if (contains(name)) {
+                ::afterhours::StopSound(get(name));
+                stop_track(name);
+            }
         }
         void pause(const std::string &name) {
-            if (contains(name)) ::afterhours::PauseSound(get(name));
+            if (contains(name)) {
+                ::afterhours::PauseSound(get(name));
+                pause_track(name);
+            }
         }
         void resume(const std::string &name) {
-            if (contains(name)) ::afterhours::ResumeSound(get(name));
+            if (contains(name)) {
+                ::afterhours::ResumeSound(get(name));
+                resume_track(name);
+            }
         }
         [[nodiscard]] bool is_playing(const std::string &name) {
             return contains(name) && ::afterhours::IsSoundPlaying(get(name));
         }
 
         void play_random_match(const std::string &prefix) {
-            auto match = impl.get_random_match(prefix);
-            if (match.has_value()) {
-                ::afterhours::PlaySound(match.value());
+            auto matches = impl.lookup(prefix);
+            const size_t num_matches =
+                static_cast<size_t>(std::distance(matches.first,
+                                                  matches.second));
+            if (num_matches == 0) return;
+            size_t idx = 0;
+#if AFTER_HOURS_RANDOM_ENABLED
+            if (num_matches > 1) {
+                idx = static_cast<size_t>(afterhours::RandomEngine::get()
+                                              .get_int(0, static_cast<int>(
+                                                              num_matches) -
+                                                          1));
             }
+#endif
+            auto it = matches.first;
+            std::advance(it, idx);
+            play_loaded(it->first);
         }
 
         void play_if_none_playing(const std::string &prefix) {
@@ -226,7 +288,7 @@ struct sound_system : developer::Plugin {
                     return;
                 }
             }
-            ::afterhours::PlaySound(matches.first->second);
+            play_loaded(matches.first->first);
         }
 
         void play_first_available_match(const std::string &prefix) {
@@ -237,11 +299,11 @@ struct sound_system : developer::Plugin {
             }
             for (auto it = matches.first; it != matches.second; ++it) {
                 if (!::afterhours::IsSoundPlaying(it->second)) {
-                    ::afterhours::PlaySound(it->second);
+                    play_loaded(it->first);
                     return;
                 }
             }
-            ::afterhours::PlaySound(matches.first->second);
+            play_loaded(matches.first->first);
         }
 
         void update_volume(const float new_v) {
@@ -253,15 +315,45 @@ struct sound_system : developer::Plugin {
             impl.unload_all();
             bus_by_name.clear();
             range_by_name.clear();
+            tracks.clear();
         }
 
         [[nodiscard]] float get_volume() const { return current_volume; }
 
        private:
+        void start_track(const std::string &name, float pitch) {
+            auto &t = tracks[name];
+            t.base = 0.0;
+            t.segment_start = playback_now();
+            t.rate = pitch > 0.f ? pitch : 1.f;
+            t.playing = true;
+        }
+        void pause_track(const std::string &name) {
+            auto it = tracks.find(name);
+            if (it != tracks.end() && it->second.playing) {
+                it->second.base = track_position(it->second);
+                it->second.playing = false;
+            }
+        }
+        void resume_track(const std::string &name) {
+            auto it = tracks.find(name);
+            if (it != tracks.end() && !it->second.playing) {
+                it->second.segment_start = playback_now();
+                it->second.playing = true;
+            }
+        }
+        void stop_track(const std::string &name) {
+            auto it = tracks.find(name);
+            if (it != tracks.end()) {
+                it->second.base = 0.0;
+                it->second.playing = false;
+            }
+        }
         float current_volume = 1.f;
         std::map<std::string, std::string> bus_by_name;
         std::map<std::string, float> bus_volumes;
         std::map<std::string, float> range_by_name;
+        std::map<std::string, PlaybackTrack> tracks;
 
         struct SoundLibraryImpl : Library<SoundType> {
             virtual SoundType convert_filename_to_object(
@@ -338,9 +430,26 @@ struct sound_system : developer::Plugin {
             }
             auto &music = get(name);
             ::afterhours::PlayMusicStream(music);
+            auto &t = tracks[name];
+            t.base = 0.0;
+            t.segment_start = playback_now();
+            t.rate = 1.f;
+            t.playing = true;
         }
         void stop(const std::string &name) {
-            if (contains(name)) ::afterhours::StopMusicStream(get(name));
+            if (contains(name)) {
+                ::afterhours::StopMusicStream(get(name));
+                auto it = tracks.find(name);
+                if (it != tracks.end()) {
+                    it->second.base = 0.0;
+                    it->second.playing = false;
+                }
+            }
+        }
+        [[nodiscard]] double playback_position(
+            const std::string &name) const {
+            auto it = tracks.find(name);
+            return it == tracks.end() ? 0.0 : track_position(it->second);
         }
 
         void update_volume(const float new_v) {
@@ -351,6 +460,7 @@ struct sound_system : developer::Plugin {
         void unload_all() {
             impl.unload_all();
             bus_by_name.clear();
+            tracks.clear();
         }
 
         [[nodiscard]] float get_volume() const { return current_volume; }
@@ -365,6 +475,7 @@ struct sound_system : developer::Plugin {
         float current_volume = 1.f;
         std::map<std::string, std::string> bus_by_name;
         std::map<std::string, float> bus_volumes;
+        std::map<std::string, PlaybackTrack> tracks;
 
         struct MusicLibraryImpl : Library<MusicType> {
             virtual MusicType convert_filename_to_object(
