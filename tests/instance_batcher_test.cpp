@@ -123,8 +123,6 @@ int main() {
     check(keyed.copies() == 0, "a flush with on_group empties the groups");
   }
 
-  // drain hands over exactly what flush would draw, without drawing, and
-  // leaves the batcher reusable.
   {
     auto fill = [&](InstanceBatcher &b) {
       for (const Copy &c : scene)
