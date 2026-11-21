@@ -118,7 +118,6 @@ struct pathfinding : developer::Plugin {
     std::function<bool(Vec2)> walkability_checker;
     std::function<float(Vec2, Vec2)> distance_fn;
     std::function<std::vector<Vec2>(Vec2)> get_neighbors_fn;
-    // Step cost for A* only (BFS has no cost); defaults to Euclidean distance.
     std::function<float(Vec2, Vec2)> step_cost_fn;
     AtomicQueue<PathRequest> request_queue;
     AtomicQueue<PathResponse> response_queue;
@@ -147,7 +146,6 @@ struct pathfinding : developer::Plugin {
         return neighbors;
       };
 
-      // Default step cost equals distance, so default paths are unchanged.
       step_cost_fn = distance_fn;
     }
   };
@@ -220,7 +218,6 @@ struct pathfinding : developer::Plugin {
                   const std::function<std::vector<Vec2>(Vec2)> &get_neighbors,
                   const std::function<float(Vec2, Vec2)> &distance,
                   const std::function<float(Vec2, Vec2)> &step_cost = nullptr) {
-    // A null step cost falls back to the distance heuristic.
     const auto &step = step_cost ? step_cost : distance;
     struct ScoreValue {
       float value;

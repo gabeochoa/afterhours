@@ -1,13 +1,4 @@
-// pathfinding_provider_test.cpp
-// The pathfinding plugin's neighbour/cost callbacks are the pluggable grid
-// provider: a consumer can supply its own neighbour topology (e.g. 4-way)
-// and step cost (e.g. mud) without forking the plugin. This pins three
-// things: the defaults reproduce today's grid paths exactly (parity), a
-// custom step cost changes the chosen path, and a custom neighbour set is
-// honoured. find_path_* are static, so no ECS init is needed.
 
-// NONE backend: raylib's Vector2 has no operator==, which the unordered_map
-// keys in pathfinding need.
 #ifndef AFTER_HOURS_USE_NONE
 #define AFTER_HOURS_USE_NONE 1
 #endif
@@ -80,7 +71,6 @@ static bool same_path(const std::deque<Vec2> &a, const std::deque<Vec2> &b) {
 int main() {
   const Vec2 start{0, 0}, end{4, 3};
 
-  // The shipped defaults: 8-way ±1 neighbours, Euclidean step cost.
   pathfinding::ProvidesPathfinding defaults;
   CHECK(defaults.step_cost_fn(start, Vec2{3, 4}) == 5.0f);
 
@@ -89,20 +79,16 @@ int main() {
       defaults.distance_fn, defaults.step_cost_fn);
   CHECK(!default_path.empty());
   CHECK(default_path.back().x == end.x && default_path.back().y == end.y);
-  // Default grid path uses diagonals: 3 diagonal + 1 straight moves.
   CHECK(has_diagonal_step(start, default_path));
 
-  // Parity: a custom provider replicating the defaults gets the same path.
   auto replica_path = pathfinding::find_path_astar(
       start, end, always_walkable, eight_way, euclidean, euclidean);
   CHECK(same_path(default_path, replica_path));
 
-  // A null step cost falls back to the distance heuristic (same path).
   auto fallback_path = pathfinding::find_path_astar(
       start, end, always_walkable, eight_way, euclidean);
   CHECK(same_path(default_path, fallback_path));
 
-  // Custom step cost: diagonals cost 10x, so A* walks orthogonally instead.
   auto steep_diagonals = [](Vec2 a, Vec2 b) {
     float base = euclidean(a, b);
     bool diagonal = std::abs(a.x - b.x) > 0.5f && std::abs(a.y - b.y) > 0.5f;
@@ -114,14 +100,12 @@ int main() {
   CHECK(!has_diagonal_step(start, costly_path));
   CHECK(costly_path.size() > default_path.size());
 
-  // Custom neighbours: 4-way only, so no step may be diagonal.
   auto four_way_path = pathfinding::find_path_astar(
       start, end, always_walkable, four_way, euclidean, euclidean);
   CHECK(!four_way_path.empty());
   CHECK(four_way_path.back().x == end.x && four_way_path.back().y == end.y);
   CHECK(!has_diagonal_step(start, four_way_path));
 
-  // BFS honours a custom neighbour set too (BFS ignores step cost).
   auto bfs_path = pathfinding::find_path_bfs(start, end, always_walkable,
                                              four_way, euclidean);
   CHECK(!bfs_path.empty());
