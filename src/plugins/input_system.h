@@ -13,6 +13,7 @@
 #include "../core/base_component.h"
 #include "../core/entity_query.h"
 #include "../core/key_codes.h"
+#include "../core/wheel_delta.h"
 #include "../core/system.h"
 #include "../developer.h"
 #include "../drawing_helpers.h"
@@ -203,6 +204,14 @@ struct input : developer::Plugin {
 #endif
         raylib::Vector2 v = raylib::GetMouseWheelMoveV();
         return {v.x, v.y};
+    }
+    static WheelDeltaKind get_mouse_wheel_kind() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        if (testing::test_input::detail::test_mode)
+            return testing::input_injector::consume_wheel_kind();
+#endif
+        // raylib exposes no precise/notched flag; its wheel is one honest kind.
+        return WheelDeltaKind::Notched;
     }
     static float get_gamepad_axis_mvt(const GamepadID gamepad_id,
                                       const GamepadAxis axis) {
@@ -654,6 +663,15 @@ struct input : developer::Plugin {
         auto v = graphics::MetalPlatformAPI::get_mouse_wheel_move_v();
         return {v.x, v.y};
     }
+    static WheelDeltaKind get_mouse_wheel_kind() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        if (testing::test_input::detail::test_mode)
+            return testing::input_injector::consume_wheel_kind();
+#endif
+        return graphics::MetalPlatformAPI::get_mouse_wheel_precise()
+                   ? WheelDeltaKind::Precise
+                   : WheelDeltaKind::Notched;
+    }
     static int get_char_pressed() {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
         return testing::test_input::get_char_pressed(
@@ -798,6 +816,9 @@ struct input : developer::Plugin {
     static MousePosition get_mouse_wheel_move_v() {
         log_error("@notimplemented get_mouse_wheel_move_v");
         return {0, 0};
+    }
+    static WheelDeltaKind get_mouse_wheel_kind() {
+        return WheelDeltaKind::Notched;
     }
     static int get_char_pressed() {
         log_error("@notimplemented get_char_pressed");

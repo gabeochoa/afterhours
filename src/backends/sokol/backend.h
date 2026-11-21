@@ -267,6 +267,7 @@ struct InputState {
   float mouse_dy = 0.f;
   float scroll_x = 0.f;
   float scroll_y = 0.f;
+  bool scroll_precise = false;
 
   // Character input queue (UTF-32 codepoints from CHAR events)
   static constexpr int CHAR_QUEUE_SIZE = 32;
@@ -301,6 +302,7 @@ inline void input_begin_frame() {
   s.mouse_dy = 0.f;
   s.scroll_x = 0.f;
   s.scroll_y = 0.f;
+  s.scroll_precise = false;
   s.key_queue_len = 0;
   s.key_queue_read = 0;
 }
@@ -493,6 +495,7 @@ inline void sokol_event_cb(const sapp_event *ev) {
   case SAPP_EVENTTYPE_MOUSE_SCROLL:
     s.scroll_x += ev->scroll_x;
     s.scroll_y += ev->scroll_y;
+    s.scroll_precise = ev->scroll_precise;
     break;
   case SAPP_EVENTTYPE_FOCUSED:
     g_window_focused = true;
@@ -972,6 +975,10 @@ struct MetalPlatformAPI {
   static Vec2 get_mouse_wheel_move_v() {
     auto &s = metal_detail::input_state();
     return {s.scroll_x, s.scroll_y};
+  }
+
+  static bool get_mouse_wheel_precise() {
+    return metal_detail::input_state().scroll_precise;
   }
 
   // ── Application control ──
