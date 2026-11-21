@@ -59,10 +59,6 @@ struct RenderPrimitive {
   // it so RenderPrimitive stays trivially destructible for the arena.
   using CustomDrawFn = std::function<void(RectangleType)>;
 
-  // What a custom-draw callback receives: the widget's final on-screen rect
-  // (already scaled) plus the scale that produced it, so literals inside the
-  // callback can be converted with rect-space math. scale is the resolved
-  // ui_scale for Adaptive widgets, 1 for Proportional ones.
   struct DrawContext {
     RectangleType rect;
     float scale = 1.f;
@@ -191,9 +187,6 @@ struct RenderPrimitive {
 
     struct {
       RectangleType rect;
-      // Stored as pointers so RenderPrimitive stays trivially destructible
-      // for the arena. Exactly one is set: fn_ctx (preferred, carries scale)
-      // or fn (legacy rect-only).
       const CustomDrawContextFn *fn_ctx;
       const CustomDrawFn *fn;
       float scale;

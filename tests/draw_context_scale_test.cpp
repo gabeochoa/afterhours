@@ -24,7 +24,6 @@ TEST(context_callback_receives_scale_two_and_maps_a_point) {
   CHECK(seen.size() == 1);
   if (seen.empty()) return;
   CHECK_APPROX(seen[0].scale, 2.f);
-  // A 4px logical inset lands 8px into the scaled rect.
   CHECK_APPROX(seen[0].rect.x + 4.f * seen[0].scale, 18.f);
   CHECK_APPROX(seen[0].rect.y + 4.f * seen[0].scale, 28.f);
 }
