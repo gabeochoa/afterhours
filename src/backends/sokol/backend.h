@@ -994,6 +994,8 @@ struct MetalPlatformAPI {
     headless.display = DisplayMode::Headless;
     headless.width = cfg.width;
     headless.height = cfg.height;
+    headless.hidpi = cfg.capture_scale > 1;
+    headless.hidpi_scale = cfg.capture_scale;
     if (!metal_backend::metal_init(headless)) {
       log_error("sokol run: headless initialisation failed");
       return;

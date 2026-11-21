@@ -116,6 +116,26 @@ int main() {
   }
 
   {
+    const E2EArgs a = parse({"--capture-scale", "2"});
+    check(a.capture_scale == 2, "--capture-scale <factor> parses");
+    afterhours::graphics::Config cfg;
+    a.apply_to(cfg);
+    check(cfg.hidpi && cfg.hidpi_scale == 2,
+          "capture scale reaches a graphics Config as hidpi density");
+    afterhours::graphics::RunConfig run;
+    a.apply_to(run);
+    check(run.capture_scale == 2, "and reaches a RunConfig");
+  }
+  {
+    const E2EArgs a = parse({"--capture-scale=3"});
+    check(a.capture_scale == 3, "--capture-scale=<factor> parses");
+  }
+  {
+    const E2EArgs a = parse({"--capture-scale=0"});
+    check(a.capture_scale == 1, "--capture-scale below 1 clamps to 1x");
+  }
+
+  {
     const E2EArgs a = parse({"--timeout=5", "--headless"});
     check(near(a.timeout_seconds, 5.0f) && a.headless,
           "an = value does not swallow the next argument");
