@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 #include "../../warn_once.h"
 #include "../autolayout.h"
@@ -144,6 +145,11 @@ struct ComponentConfig {
 
   // Custom-draw callbacks (see HasOnDraw): bg draws behind the widget's fill,
   // fg on top of all its primitives, both receiving the widget's final rect.
+  // Focus-scoped shortcuts (see ui::HasShortcuts): handlers that fire when
+  // this element or a descendant holds focus and the bound action is
+  // pressed. Copied onto the entity by apply_flags each frame.
+  std::vector<ShortcutBinding> shortcuts;
+
   std::string tooltip_text;
   float tooltip_delay = 0.5f;
   std::optional<Size> tooltip_font_size;
@@ -646,6 +652,23 @@ struct ComponentConfig {
   ComponentConfig &with_takes_focus(bool takes = true) {
     takes_focus = takes;
     return *this;
+  }
+  /// Bind a focus-scoped shortcut: while this element or anything inside
+  /// it holds focus, `action` is offered to this handler before any
+  /// enclosing scope. Return true from the handler to consume the press
+  /// (routing stops, the action is cleared); return false to let it
+  /// bubble outward and, if nobody consumes it, reach the app as before.
+  /// Chainable: each call adds one binding, in dispatch order.
+  ComponentConfig &with_shortcut(int action,
+                                 std::function<bool(Entity &)> handler) {
+    shortcuts.push_back(ShortcutBinding{action, std::move(handler)});
+    return *this;
+  }
+  template <typename Action>
+    requires std::is_enum_v<Action>
+  ComponentConfig &with_shortcut(Action action,
+                                 std::function<bool(Entity &)> handler) {
+    return with_shortcut(static_cast<int>(action), std::move(handler));
   }
   ComponentConfig &with_pseudo_locale_exempt(bool exempt = true) {
     pseudo_locale_exempt = exempt;
@@ -1169,6 +1192,8 @@ struct ComponentConfig {
       merged.pseudo_locale_exempt = true;
     if (overrides.selects_on_focus())
       merged.select_on_focus = overrides.select_on_focus;
+    if (!overrides.shortcuts.empty())
+      merged.shortcuts = overrides.shortcuts;
     if (overrides.has_click_activation_override())
       merged.click_activation = overrides.click_activation;
 

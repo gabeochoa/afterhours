@@ -96,6 +96,49 @@ struct HasClickActivationMode : BaseComponent {
   explicit HasClickActivationMode(ClickActivationMode mode_) : mode(mode_) {}
 };
 
+// One focus-scoped shortcut binding. `action` is the caller's InputAction
+// as an int (ComponentConfig is not templated on that enum). The handler
+// returns true when it consumed the action: routing stops there and the
+// action is cleared so no later system or app-level pressed() sees it.
+// Returning false lets the action bubble to the enclosing scope.
+struct ShortcutBinding {
+  int action = -1;
+  std::function<bool(Entity &)> handler;
+};
+
+// Handlers stored on the element that declares them (see
+// ComponentConfig::with_shortcut). Dispatched from the focused control
+// outward through its ancestors; see UIContext::dispatch_focused_shortcut.
+struct HasShortcuts : BaseComponent {
+  std::vector<ShortcutBinding> bindings;
+
+  HasShortcuts() = default;
+  explicit HasShortcuts(std::vector<ShortcutBinding> b)
+      : bindings(std::move(b)) {}
+
+  void add(int action, std::function<bool(Entity &)> handler) {
+    bindings.push_back(ShortcutBinding{action, std::move(handler)});
+  }
+
+  // First consuming handler for `action` wins, in registration order.
+  bool dispatch(int action, Entity &self) {
+    for (auto &b : bindings) {
+      if (b.action != action || !b.handler)
+        continue;
+      if (b.handler(self))
+        return true;
+    }
+    return false;
+  }
+
+  bool handles(int action) const {
+    for (const auto &b : bindings)
+      if (b.action == action && b.handler)
+        return true;
+    return false;
+  }
+};
+
 // Invisible to hit-testing: never hot or active, the element behind is picked.
 // Not with_skip_tabbing, which is keyboard focus order only.
 struct IgnorePointerEvents : BaseComponent {};
