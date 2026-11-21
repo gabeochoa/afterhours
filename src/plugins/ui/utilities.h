@@ -313,6 +313,7 @@ struct UIPluginPostUpdateBridge : System<> {
             std::make_unique<ui::PublishContextTheme<InputAction>>());
         systems.push_back(std::make_unique<ui::RunAutoLayout>());
         systems.push_back(std::make_unique<ui::MeasureScrollViews>());
+        systems.push_back(std::make_unique<ui::ApplyStickyChildren>());
         systems.push_back(std::make_unique<
                           ui::TrackIfComponentWillBeRendered<InputAction>>());
         systems.push_back(std::make_unique<ui::HandleTabbing<InputAction>>());
