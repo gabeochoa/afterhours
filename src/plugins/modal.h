@@ -418,15 +418,23 @@ struct modal : developer::Plugin {
             // (Left/Right) and bottom/top sheets & banners.
             float sw = static_cast<float>(screen_w);
             float sh = static_cast<float>(screen_h);
-            float cx = (sw - width_px) / 2.0f;
-            float cy = (sh - height_px) / 2.0f;
+            // with_absolute_position's translate is multiplied by ui_scale in
+            // Adaptive mode, but the panel size above is not scaled, so divide
+            // it back out to land the origin in screen space at any zoom.
+            const bool adaptive =
+                ctx.scaling_mode.value_or(UIStylingDefaults::get().scaling_mode) ==
+                ScalingMode::Adaptive;
+            const float pos_scale =
+                adaptive && ctx.theme.ui_scale > 0.f ? ctx.theme.ui_scale : 1.f;
+            float cx = (sw - width_px) / 2.0f / pos_scale;
+            float cy = (sh - height_px) / 2.0f / pos_scale;
             float x_pos = cx, y_pos = cy;
             switch (config.anchor) {
             case ModalAnchor::Center: break;
             case ModalAnchor::Top: y_pos = 0.f; break;
-            case ModalAnchor::Bottom: y_pos = sh - height_px; break;
+            case ModalAnchor::Bottom: y_pos = (sh - height_px) / pos_scale; break;
             case ModalAnchor::Left: x_pos = 0.f; break;
-            case ModalAnchor::Right: x_pos = sw - width_px; break;
+            case ModalAnchor::Right: x_pos = (sw - width_px) / pos_scale; break;
             }
 
             // Create the full-screen backdrop at the layout root. Its layer

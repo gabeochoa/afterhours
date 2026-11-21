@@ -173,6 +173,7 @@ ALL_TESTS := \
 	editing_capability_test \
 	autolayout_test \
 	dialog_test \
+	modal_centering_test \
 	dump_ui_test \
 	scroll_anchor_test \
 	measure_config_test \
@@ -315,6 +316,7 @@ RAYLIB_TESTS := \
 	frustum_test \
 	instance_batcher_test \
 	dialog_test \
+	modal_centering_test \
 	dump_ui_test \
 	scroll_anchor_test \
 	measure_config_test \
