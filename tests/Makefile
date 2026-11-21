@@ -279,6 +279,7 @@ ALL_TESTS := \
 	label_word_wrap_test \
 	theme_io_test \
 	tree_view_test \
+	window_helpers_test \
 	translation_test \
 	layout_inspector_test \
 	letter_spacing_zero_test

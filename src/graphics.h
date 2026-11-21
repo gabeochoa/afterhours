@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "graphics_common.h"
+#include "window_helpers.h"
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 #include "backends/raylib/backend.h"
