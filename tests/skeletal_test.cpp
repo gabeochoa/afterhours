@@ -19,7 +19,6 @@ int main() {
   using namespace afterhours::skeletal;
   const float half_pi = 1.57079632679f;
 
-  // FK chain: three joints, each +1 x locally -> world x = 1, 2, 3 exactly.
   {
     Skeleton sk; sk.parent = {-1, 0, 1};
     Pose pose = bind_pose(3);
@@ -31,7 +30,6 @@ int main() {
     check(near3(translation_of(world[2]), {3, 0, 0}), "grandchild world pos");
     check(near3(transform_point(world[2], {0, 0, 0}), {3, 0, 0}), "origin maps");
   }
-  // FK rotation: root rotated 90deg about Z sends child offset to +y.
   {
     Skeleton sk; sk.parent = {-1, 0};
     Pose pose = bind_pose(2);
@@ -41,15 +39,13 @@ int main() {
     check(near3(translation_of(world[1]), {0, 1, 0}), "rotated child world pos");
     check(near3(rotate(pose.local[0].rot, {1, 0, 0}), {0, 1, 0}), "quat rotate");
   }
-  // Slerp midpoint: identity -> 180deg about Z, half way is 90deg.
   {
     Quat mid = slerp(Quat::identity(), Quat::axis_angle({0, 0, 1}, half_pi),
                      0.5f);
-    const float d = 0.70710678118f;  // 45deg: half of the 90deg endpoint
+    const float d = 0.70710678118f;
     check(near3(rotate(mid, {1, 0, 0}), {d, d, 0}), "slerp midpoint");
     check(near3(rotate(slerp(Quat::identity(), Quat::axis_angle({0, 0, 1}, half_pi), 0.f), {1, 0, 0}), {1, 0, 0}), "slerp t=0");
   }
-  // Skinning: world T(2,0,0) * inverse-bind T(-1,0,0) = T(1,0,0).
   {
     Skeleton sk; sk.parent = {-1};
     TRS bind; bind.pos = {1, 0, 0};
@@ -60,7 +56,6 @@ int main() {
     check(near3(transform_point(skin[0], {1, 2, 3}), {2, 2, 3}), "skin = world*invbind");
     check(near3(translation_of(skin[0]), {1, 0, 0}), "skin translation");
   }
-  // Clip sampling: pos lerps, rot slerps, untracked joints keep base, clamp ends.
   {
     Clip clip; clip.duration = 1.f; clip.joints.resize(2);
     clip.joints[0].pos = {{0.f, 1.f}, {{0, 0, 0}, {2, 0, 0}}};

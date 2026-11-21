@@ -1,7 +1,5 @@
 #pragma once
 
-// Skeletal animation sampling math only: local TRS pose -> world matrices ->
-// skinning matrices (world * inverse-bind). No renderer, no skin import.
 
 #include <algorithm>
 #include <cmath>
@@ -40,7 +38,7 @@ inline Quat normalize(Quat q) {
   float inv = 1.f / len;
   return {q.x * inv, q.y * inv, q.z * inv, q.w * inv};
 }
-inline Quat operator*(Quat a, Quat b) {  // apply b, then a
+inline Quat operator*(Quat a, Quat b) {
   return normalize({a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
                     a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
                     a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
@@ -49,14 +47,13 @@ inline Quat operator*(Quat a, Quat b) {  // apply b, then a
 inline Vec3 rotate(Quat q, Vec3 v) {
   q = normalize(q);
   Vec3 u{q.x, q.y, q.z};
-  // v + 2*cross(u, cross(u,v) + w*v)
   return v + cross(u, cross(u, v) + v * q.w) * 2.f;
 }
 inline Quat slerp(Quat a, Quat b, float t) {
   a = normalize(a); b = normalize(b);
   float d = dot(a, b);
-  if (d < 0.f) { b = {-b.x, -b.y, -b.z, -b.w}; d = -d; }  // shortest path
-  if (d > 0.9995f)  // nearly parallel: nlerp avoids the sin(0) divide
+  if (d < 0.f) { b = {-b.x, -b.y, -b.z, -b.w}; d = -d; }
+  if (d > 0.9995f)
     return normalize({a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t,
                       a.z + (b.z - a.z) * t, a.w + (b.w - a.w) * t});
   float theta = std::acos(std::clamp(d, -1.f, 1.f));
@@ -66,7 +63,6 @@ inline Quat slerp(Quat a, Quat b, float t) {
           a.w * wa + b.w * wb};
 }
 
-// Column-major: m[col*4 + row], so m[12..14] is translation (OpenGL/raylib style).
 struct Mat4 {
   float m[16] = {};
   static Mat4 identity() {
@@ -74,7 +70,7 @@ struct Mat4 {
   }
   float at(int row, int col) const { return m[col * 4 + row]; }
 };
-inline Mat4 operator*(const Mat4 &a, const Mat4 &b) {  // apply b, then a
+inline Mat4 operator*(const Mat4 &a, const Mat4 &b) {
   Mat4 r;
   for (int c = 0; c < 4; c++)
     for (int row = 0; row < 4; row++) {
@@ -100,7 +96,6 @@ inline Mat4 to_mat4(const TRS &t) {
   Quat q = normalize(t.rot);
   float x = q.x, y = q.y, z = q.z, w = q.w;
   Mat4 r = Mat4::identity();
-  // Rotation columns, each scaled by the matching scale component.
   r.m[0] = (1.f - 2.f*(y*y + z*z)) * t.scale.x;
   r.m[1] = 2.f*(x*y + z*w) * t.scale.x;
   r.m[2] = 2.f*(x*z - y*w) * t.scale.x;
@@ -115,8 +110,8 @@ inline Mat4 to_mat4(const TRS &t) {
 }
 
 struct Skeleton {
-  std::vector<int> parent;        // -1 = root; parents must precede children
-  std::vector<Mat4> inverse_bind; // empty = identity per joint
+  std::vector<int> parent;
+  std::vector<Mat4> inverse_bind;
 };
 struct Pose { std::vector<TRS> local; };
 
@@ -124,7 +119,6 @@ inline Pose bind_pose(std::size_t joints) {
   Pose p; p.local.assign(joints, TRS{}); return p;
 }
 
-// World matrices down the tree; `out` is resized to the joint count.
 inline void compute_world(const Skeleton &sk, const Pose &pose,
                           std::vector<Mat4> &out) {
   out.assign(sk.parent.size(), Mat4::identity());
@@ -135,7 +129,6 @@ inline void compute_world(const Skeleton &sk, const Pose &pose,
   }
 }
 
-// Skinning matrix per joint: world * inverse-bind (identity bind if absent).
 inline void compute_skinning(const Skeleton &sk,
                              const std::vector<Mat4> &world,
                              std::vector<Mat4> &out) {
@@ -149,12 +142,11 @@ struct Vec3Track { std::vector<float> times; std::vector<Vec3> values; };
 struct QuatTrack { std::vector<float> times; std::vector<Quat> values; };
 struct JointTracks { Vec3Track pos; QuatTrack rot; Vec3Track scale; };
 struct Clip {
-  float duration = 0.f;  // informational; sampling clamps to the key range
-  std::vector<JointTracks> joints;  // per joint; missing/empty = bind value
+  float duration = 0.f;
+  std::vector<JointTracks> joints;
 };
 
 namespace detail {
-// Segment [i, i+1] and blend factor for t; clamps outside the key range.
 inline void segment(const std::vector<float> &times, float t, std::size_t &i,
                     float &f) {
   i = 0; f = 0.f;
@@ -164,7 +156,7 @@ inline void segment(const std::vector<float> &times, float t, std::size_t &i,
   float span = times[i + 1] - times[i];
   f = span > 0.f ? (t - times[i]) / span : 0.f;
 }
-}  // namespace detail
+}
 
 inline Vec3 sample(const Vec3Track &tr, float t, Vec3 fallback) {
   if (tr.values.empty()) return fallback;
@@ -181,7 +173,6 @@ inline Quat sample(const QuatTrack &tr, float t, Quat fallback) {
   return slerp(tr.values[i], tr.values[i + 1], f);
 }
 
-// Sample every joint at t into `out` (started from `base`, usually bind pose).
 inline void sample(const Clip &clip, float t, Pose &out) {
   for (std::size_t i = 0; i < clip.joints.size() && i < out.local.size(); i++) {
     const JointTracks &j = clip.joints[i];
@@ -191,5 +182,5 @@ inline void sample(const Clip &clip, float t, Pose &out) {
   }
 }
 
-}  // namespace skeletal
-}  // namespace afterhours
+}
+}
