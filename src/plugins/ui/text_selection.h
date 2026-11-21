@@ -299,6 +299,67 @@ wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
   return lines;
 }
 
+// Truncate styled runs to `max_width` with the same "..." tail plain labels
+// get from ellipsize_text, preserving colour/weight across the cut. The cut
+// lands on a grapheme boundary inside whichever run crosses the limit; the
+// ellipsis is appended in that run's style. `measure(text, weight)` matches
+// the callable wrap_runs_to_width takes.
+template <typename MeasureFn>
+static inline std::vector<TextSpan>
+ellipsize_runs(const std::vector<TextSpan> &runs, float max_width,
+               MeasureFn &&measure) {
+  if (runs.empty() || max_width <= 0.f)
+    return runs;
+  std::string text;
+  std::vector<size_t> run_ends;
+  for (const auto &run : runs) {
+    text += run.text;
+    run_ends.push_back(text.size());
+  }
+  const auto run_at = [&](size_t pos) {
+    return static_cast<size_t>(
+        std::upper_bound(run_ends.begin(), run_ends.end(), pos) - run_ends.begin());
+  };
+  const auto measure_range = [&](size_t begin, size_t end) {
+    float total = 0.f;
+    size_t seg = begin;
+    for (size_t r = run_at(begin); seg < end; r++) {
+      const size_t stop = std::min(end, run_ends[r]);
+      const colors::FontWeight weight = runs[run_at(seg)].weight;
+      if (stop > seg &&
+          (stop == end || runs[run_at(stop)].weight != weight)) {
+        total += measure(text.substr(seg, stop - seg), weight);
+        seg = stop;
+      }
+    }
+    return total;
+  };
+  if (measure_range(0, text.size()) <= max_width)
+    return runs;
+  // The ellipsis is charged in the weight of the run the cut lands in, so
+  // the ellipsis price moves with the prefix instead of being fixed upfront.
+  const auto weight_at = [&](size_t pos) {
+    return runs[std::min(run_at(pos), runs.size() - 1)].weight;
+  };
+  const size_t keep = fit_text_prefix(
+      text, max_width, [&](const std::string &s) {
+        return measure_range(0, s.size()) + measure("...", weight_at(s.size()));
+      });
+  if (keep == 0)
+    return {TextSpan{"...", runs.front().color, runs.front().weight}};
+  std::vector<TextSpan> out;
+  for (size_t pos = 0, r = run_at(0); pos < keep; r++) {
+    const size_t stop = std::min(keep, run_ends[r]);
+    if (stop == pos)
+      continue;
+    out.push_back(TextSpan{text.substr(pos, stop - pos), runs[r].color,
+                           runs[r].weight});
+    pos = stop;
+  }
+  out.back().text += "...";
+  return out;
+}
+
 // Where each run of a laid-out line starts, and how wide the line is.
 // Measured on the JOINED text the way wrap_runs_to_width measures it --
 // maximal same-weight stretches, one call each -- because backend
