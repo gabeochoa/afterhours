@@ -725,8 +725,6 @@ struct EntityCollection {
     }
   }
 
-  // Exchange all world state with `other`. Entity objects are heap-held via
-  // shared_ptr, so singleton pointers and component storage stay valid.
   void swap_contents(EntityCollection &other) {
     using std::swap;
     swap(entities_DO_NOT_USE, other.entities_DO_NOT_USE);
@@ -742,7 +740,7 @@ struct EntityCollection {
     swap(version, other.version);
     swap(indexes, other.indexes);
     swap(indexed_version, other.indexed_version);
-    ++version; // commit boundary: caches keyed on the old world must rebuild
+    ++version;
     invalidate_indexes();
   }
 

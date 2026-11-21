@@ -1,6 +1,3 @@
-// Staged world restore: build into a non-live collection, validate whole,
-// then swap into the live collection. Live reads old state until the swap;
-// a rejected or throwing restore leaves it untouched.
 
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
@@ -54,7 +51,6 @@ int main() {
   EntityHandle old_handle = live.handle_for(*live.get_entities()[0]);
   CHECK(old_handle.valid());
 
-  // Live keeps running on old state while the candidate is staged.
   StagedRestore restore;
   build(restore.staging(), {.wallet = 99, .hps = {1, 2, 3}});
   CHECK(live.get_singleton_cmp<Wallet>()->coins == 10);
@@ -62,9 +58,8 @@ int main() {
   CHECK(restore.commit_if(live, valid));
   CHECK(live.get_singleton_cmp<Wallet>()->coins == 99);
   CHECK(hps(live) == std::vector<int>({1, 2, 3}));
-  CHECK(!restore.commit(live)); // one commit only
+  CHECK(!restore.commit(live));
 
-  // Invalid final entry: live untouched (validation sees the whole world).
   bool ok = staged_restore(live, [](EntityCollection &c) {
     build(c, {.wallet = 50, .hps = {3, -1}});
   }, valid);
@@ -72,7 +67,6 @@ int main() {
   CHECK(live.get_singleton_cmp<Wallet>()->coins == 99);
   CHECK(hps(live) == std::vector<int>({1, 2, 3}));
 
-  // Throwing build after earlier entries succeeded: live untouched.
   ok = staged_restore(live, [](EntityCollection &c) {
     build(c, {.wallet = 1, .hps = {9}});
     throw std::runtime_error("decode failed");
@@ -81,7 +75,6 @@ int main() {
   CHECK(live.get_singleton_cmp<Wallet>()->coins == 99);
   CHECK(hps(live) == std::vector<int>({1, 2, 3}));
 
-  // Discarded candidate never reaches live.
   {
     StagedRestore r;
     build(r.staging(), {.wallet = 123, .hps = {42}});
