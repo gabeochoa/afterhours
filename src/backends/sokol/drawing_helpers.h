@@ -551,6 +551,7 @@ inline void draw_ring(float centerX, float centerY, float innerRadius,
 // sokol has no rlSetBlendMode, so each mode is its own pipeline. Skipped when
 // already active: a pipeline swap breaks the batch.
 inline void set_blend_mode(blend::Mode mode) {
+  graphics::metal_detail::ensure_sokol_gl_and_fonts();
   if (mode == blend::detail::current_mode())
     return;
   blend::detail::current_mode() = mode;
@@ -1204,25 +1205,8 @@ inline graphics::RenderTextureType load_render_texture_with_samples(int w,
     return rt;
   }
 
-  // An sgl context depends on the pixel formats and sample count, never on the
-  // size, so a resize does not need a new one. It used to get one anyway, and
-  // sgl_destroy_context does not release the five render pipelines the context
-  // made, so every resize leaked them: 4.8 MB per 1000 frames of a resize
-  // loop. Keyed and reused instead, so a resize makes none.
-  sgl_context sgl_ctx = sgl_context_for(color_fmt, depth_fmt, sc);
-  if (sgl_ctx.id == SG_INVALID_ID) {
-    log_error("load_render_texture: sgl context creation failed");
-    sg_destroy_sampler(smp);
-    sg_destroy_view(tex_view);
-    if (resolve_view.id) sg_destroy_view(resolve_view);
-    if (resolve.id) sg_destroy_image(resolve);
-    sg_destroy_view(depth_view);
-    sg_destroy_view(color_view);
-    sg_destroy_image(depth);
-    sg_destroy_image(color);
-    return rt;
-  }
-
+  // The sgl context is created on the first begin_texture_mode, not here, so
+  // loading a texture never pays sokol_gl setup (see ensure_sokol_gl_and_fonts).
   rt.color_img_id = color.id;
   rt.depth_img_id = depth.id;
   rt.color_view_id = color_view.id;
@@ -1231,7 +1215,6 @@ inline graphics::RenderTextureType load_render_texture_with_samples(int w,
   rt.resolve_img_id = resolve.id;
   rt.resolve_view_id = resolve_view.id;
   rt.sampler_id = smp.id;
-  rt.sgl_ctx_id = sgl_ctx.id;
   return rt;
 }
 
@@ -1265,6 +1248,20 @@ inline void unload_render_texture(graphics::RenderTextureType &rt) {
 }
 
 inline void begin_texture_mode(graphics::RenderTextureType &rt) {
+  graphics::metal_detail::ensure_sokol_gl_and_fonts();
+  if (rt.sgl_ctx_id == 0) {
+    // Deferred from load_render_texture: keyed on the images' formats, which
+    // the image descriptors carry, so no format needs storing on the texture.
+    const auto cdesc = sg_query_image_desc({rt.color_img_id});
+    const auto ddesc = sg_query_image_desc({rt.depth_img_id});
+    const sgl_context ctx =
+        sgl_context_for(cdesc.pixel_format, ddesc.pixel_format, cdesc.sample_count);
+    if (ctx.id == SG_INVALID_ID) {
+      log_error("begin_texture_mode: sgl context creation failed");
+      return;
+    }
+    rt.sgl_ctx_id = ctx.id;
+  }
   auto unwind_camera_stack = []() {
     if (graphics::metal_detail::g_camera_mode_depth <= 0)
       return;
@@ -1375,7 +1372,8 @@ inline void end_texture_mode() {
   // Restore the default sgl context (swapchain format).
   // The caller is responsible for starting the next pass
   // (via begin_drawing or another begin_texture_mode).
-  sgl_set_context(sgl_default_context());
+  if (graphics::metal_detail::g_sgl_ready)
+    sgl_set_context(sgl_default_context());
   graphics::metal_detail::g_in_texture_mode = false;
 }
 

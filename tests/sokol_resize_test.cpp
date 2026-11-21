@@ -75,9 +75,11 @@ int main(int argc, char **argv) {
     std::fprintf(stderr, "FAIL: Metal headless initialization failed\n");
     return 1;
   }
-  const auto initial = g::get_render_texture();
   g::begin_frame();
   paint();
+  // sokol_gl context is created on the first draw, so capture the baseline
+  // after that first frame rather than right after init.
+  const auto initial = g::get_render_texture();
   g::set_window_size(120, 90);
   check(g::get_render_texture().color_img_id == initial.color_img_id,
         "request inside active pass preserves target");
