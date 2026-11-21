@@ -146,6 +146,16 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                                       pixels(default_component_size.y));
   }
 
+  // The padding belongs to the field, not this wrapper row: capture it now
+  // and clear it so the wrapper does not apply the same inset a second time.
+  const Padding requested_padding = config.padding;
+  const bool caller_set_padding = requested_padding.top.dim != Dim::None ||
+                                  requested_padding.left.dim != Dim::None ||
+                                  requested_padding.bottom.dim != Dim::None ||
+                                  requested_padding.right.dim != Dim::None;
+  if (caller_set_padding)
+    config.padding = Padding{};
+
   config.flex_direction = FlexDirection::Row;
   init_component(ctx, ep_pair, config, ComponentType::TextInput, false,
                  "text_input");
@@ -259,12 +269,22 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                           : pixels(field_h * 0.5f);
       field_cmp.enable_font(fn, fs, true);
 
-      float pad_h = field_h * 0.125f;
-      float pad_w = field_h * 0.35f;
-      field_cmp.set_desired_padding(Padding{.top = pixels(pad_h),
-                                            .bottom = pixels(pad_h),
-                                            .left = pixels(pad_w),
-                                            .right = pixels(pad_w)});
+      // Height-derived only as a fallback, like the font size above: an
+      // explicit with_padding wins and stays put at any field height.
+      float pad_w;
+      if (caller_set_padding) {
+        field_cmp.set_desired_padding(requested_padding);
+        // Layout resolved the caller's dims last frame; read it back so the
+        // text origin matches the box the renderer drew.
+        pad_w = field_cmp.computed_padd[Axis::left];
+      } else {
+        float pad_h = field_h * 0.125f;
+        pad_w = field_h * 0.35f;
+        field_cmp.set_desired_padding(Padding{.top = pixels(pad_h),
+                                              .bottom = pixels(pad_h),
+                                              .left = pixels(pad_w),
+                                              .right = pixels(pad_w)});
+      }
       field_cmp.padding_is_default = true;
 
       // draw_text_in_rect adds DRAW_TEXT_MARGIN internally; subtract it so

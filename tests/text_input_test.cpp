@@ -441,6 +441,52 @@ TEST(text_field_padding_does_not_hide_a_real_leaf_padding_warning) {
   log_sink_fn = previous_sink;
 }
 
+// R-029: with_padding was overwritten by height-derived padding. An explicit
+// padding must be honoured at any height; unset keeps the derived default.
+TEST(d29_custom_padding_honoured_at_two_heights) {
+  for (float height : {45.f, 80.f}) {
+    ImmTestHarness h;
+    std::string text = "hello";
+    // One extra frame: the text origin reads last frame's resolved padding.
+    for (int i = 0; i < 3; i++) {
+      h.begin_frame();
+      imm::text_input(h.context(), mk(h.root(), 0), text,
+                      ComponentConfig{}
+                          .with_size(ComponentSize{pixels(220), pixels(height)})
+                          .with_padding(Padding{.top = pixels(4),
+                                                .left = pixels(10),
+                                                .bottom = pixels(4),
+                                                .right = pixels(10)}));
+      h.layout_only();
+    }
+    auto *field = find_field_entity();
+    CHECK(field != nullptr);
+    if (field) {
+      auto &cmp = field->get<UIComponent>();
+      CHECK_APPROX(cmp.computed_padd[Axis::left], 10.f);
+      CHECK_APPROX(cmp.computed_padd[Axis::top], 4.f);
+      CHECK_APPROX(field->get<HasLabel>().text_x_offset + kTextInset, 10.f);
+    }
+  }
+}
+
+TEST(d29_default_padding_unchanged_without_with_padding) {
+  ImmTestHarness h;
+  std::string text = "hello";
+  two_frames(h, [&] {
+    imm::text_input(h.context(), mk(h.root(), 0), text,
+                    ComponentConfig{}.with_size(
+                        ComponentSize{pixels(220), pixels(40)}));
+  });
+  auto *field = find_field_entity();
+  CHECK(field != nullptr);
+  if (field) {
+    auto &cmp = field->get<UIComponent>();
+    CHECK_APPROX(cmp.computed_padd[Axis::left], 14.f);
+    CHECK_APPROX(cmp.computed_padd[Axis::top], 5.f);
+  }
+}
+
 TEST(input_selection_and_caret_stay_square_under_rounded_theme) {
   ImmTestHarness h;
   h.context().theme.corner_radius = 12;
