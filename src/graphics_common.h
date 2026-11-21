@@ -142,8 +142,10 @@ concept PlatformBackend = requires {
   { T::minimize_window() } -> std::same_as<void>;
   { T::set_window_size(int{}, int{}) } -> std::same_as<void>;
   { T::set_window_min_size(int{}, int{}) } -> std::same_as<void>;
+  { T::window_resize_pending() } -> std::same_as<bool>;
   { T::set_window_state(unsigned{}) } -> std::same_as<void>;
   { T::clear_window_state(unsigned{}) } -> std::same_as<void>;
+  { T::window_state() } -> std::same_as<unsigned>;
 
   // ── Config ──
   { T::set_config_flags(unsigned{}) } -> std::same_as<void>;

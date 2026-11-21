@@ -63,6 +63,13 @@ void begin_texture_mode(graphics::RenderTextureType &rt);
 void end_texture_mode();
 } // namespace afterhours
 
+#ifdef AFTER_HOURS_USE_METAL
+extern "C" void metal_set_window_size(int width, int height);
+extern "C" void metal_set_window_min_size(int width, int height);
+extern "C" bool metal_window_resize_pending(void);
+extern "C" void metal_install_live_resize_draw(void);
+#endif
+
 // Implemented in capture_impl.h (the SOKOL_IMPL Objective-C++ TU).
 extern "C" const void *metal_create_system_device(void);
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id, int width,
@@ -107,10 +114,15 @@ inline uint32_t g_active_shader_id = 0;
 // Offscreen render target for headless (windowless) mode, created in metal_init.
 inline RenderTextureType g_headless_rt{};
 inline std::optional<std::pair<int, int>> g_pending_headless_size;
+inline std::optional<std::pair<int, int>> g_headless_min_size;
 
 inline bool request_headless_resize(int width, int height) {
   if (!g_headless || !g_initialized || width <= 0 || height <= 0)
     return false;
+  if (g_headless_min_size) {
+    width = std::max(width, g_headless_min_size->first);
+    height = std::max(height, g_headless_min_size->second);
+  }
   const int scale = std::max(1, g_headless_rt.scale);
   const int limit = sg_query_limits().max_image_size_2d / scale;
   if (width > limit || height > limit)
@@ -516,10 +528,6 @@ struct MetalPlatformAPI {
   static bool is_window_ready() { return metal_detail::g_initialized; }
   static bool is_window_fullscreen() { return sapp_is_fullscreen(); }
   static void toggle_fullscreen() { sapp_toggle_fullscreen(); }
-  // Runtime window sizing controls are intentionally unsupported in the
-  // sokol_app layer. Sokol exposes startup size via sapp_desc, but does not
-  // provide a portable runtime API for set_window_size / set_window_min_size.
-  // Keep these loud so callers know this is a backend limitation, not a bug.
   static void minimize_window() {
     log_error("@notimplemented minimize_window");
   }
@@ -528,10 +536,32 @@ struct MetalPlatformAPI {
       metal_detail::request_headless_resize(w, h);
       return;
     }
+#ifdef AFTER_HOURS_USE_METAL
+    ::metal_set_window_size(w, h);
+#else
     log_error("@notimplemented set_window_size");
+#endif
   }
-  static void set_window_min_size(int, int) {
+  static void set_window_min_size(int w, int h) {
+    if (metal_detail::g_headless) {
+      if (w > 0 && h > 0)
+        metal_detail::g_headless_min_size = std::pair{w, h};
+      return;
+    }
+#ifdef AFTER_HOURS_USE_METAL
+    ::metal_set_window_min_size(w, h);
+#else
     log_error("@notimplemented set_window_min_size");
+#endif
+  }
+  static bool window_resize_pending() {
+    if (metal_detail::g_headless)
+      return metal_detail::g_pending_headless_size.has_value();
+#ifdef AFTER_HOURS_USE_METAL
+    return ::metal_window_resize_pending();
+#else
+    return false;
+#endif
   }
   static void set_window_state(unsigned int flags) {
     // afterhours keeps raylib-style window-state flags in a backend-neutral
@@ -541,6 +571,9 @@ struct MetalPlatformAPI {
   }
   static void clear_window_state(unsigned int flags) {
     metal_detail::g_window_state_flags &= ~flags;
+  }
+  static unsigned int window_state() {
+    return metal_detail::g_window_state_flags;
   }
 
   // ── Config (legacy API -- prefer RunConfig fields) ──
@@ -962,6 +995,10 @@ struct MetalPlatformAPI {
       return;
     }
 
+#ifdef AFTER_HOURS_USE_METAL
+    ::metal_install_live_resize_draw();
+#endif
+
     sapp_desc desc{};
     desc.init_cb = metal_detail::sokol_init_cb;
     desc.frame_cb = metal_detail::sokol_frame_cb;
@@ -1039,6 +1076,7 @@ inline bool metal_init(const Config &cfg) {
     // set up sokol_gfx against it with no swapchain, and render into an
     // offscreen texture we can read back to PNG.
     metal_detail::g_pending_headless_size.reset();
+    metal_detail::g_headless_min_size.reset();
     metal_detail::g_headless = true;
     metal_detail::g_headless_w = cfg.width;
     metal_detail::g_headless_h = cfg.height;
@@ -1107,6 +1145,7 @@ inline void metal_shutdown() {
   if (!metal_detail::g_headless)
     return;
   metal_detail::g_pending_headless_size.reset();
+  metal_detail::g_headless_min_size.reset();
   unload_render_texture(metal_detail::g_headless_rt);
   if (metal_detail::g_fons_ctx) {
     sfons_destroy(metal_detail::g_fons_ctx);
