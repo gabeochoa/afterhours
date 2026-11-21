@@ -1,9 +1,3 @@
-// text_area_wrap_cache_test.cpp
-// R-027: text_area rebuilt its TextLayoutCache every frame. The cache now
-// skips the wrap when text, wrap width, line height and the measure key are
-// all unchanged, so N standing-still frames pay for exactly one wrap.
-// Counting measure_fn calls is the counted proof: a skipped rebuild never
-// measures anything.
 
 #include "ui_test_harness.h"
 
@@ -28,7 +22,7 @@ float measure5(std::string_view s) {
 }
 constexpr float LINE_H = 20.f;
 const std::string SRC = "hello world again and again";
-} // namespace
+}
 
 TEST(unchanged_frames_wrap_exactly_once) {
   ti::TextLayoutCache c;
@@ -89,8 +83,6 @@ TEST(line_height_change_rewraps) {
   CHECK_APPROX(c.total_height(), 30.f * static_cast<float>(c.line_count()));
 }
 
-// A new font at the same name/size is a new measure key: stale breaks from
-// the old face must not be served.
 TEST(measure_key_change_rewraps) {
   ti::TextLayoutCache c;
   c.rebuild(SRC, 110.f, LINE_H, measure10, 1);
