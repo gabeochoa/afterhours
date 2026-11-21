@@ -6,6 +6,10 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+### Added
+
+- **Build-frame geometry.** `ElementResult::rect_now()` / `point_in(pos)` and `UIContext::rect_now(id)` / `point_in(id, pos)` lay out on demand and answer in window space during build, instead of last frame's rect (0x0 on the first frame). Absolute widgets with laid-out ancestors re-lay only their subtree; anything else lays out the root as built so far, so ask once per decision, not per widget. `with_absolute_position` now says its coordinates are in the parent's frame. Covered by `build_geometry_test`.
+
 ### Breaking
 
 **The animation plugin is rewritten around `afterhours::motion`.** `animation::anim<Key>(k).to(v, dur, EasingType)`, `AnimationManager`, `AnimHandle`, `sequence`, `loop_sequence`, `one_shot`, `clamp_value`, `get_value`, `register_update_systems<Key>()` and the declarative `with_animation(Anim::on_hover()...)` / `HasAnimationState` are gone. Every old call is a compile error.
