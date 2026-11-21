@@ -268,9 +268,6 @@ struct window_manager : developer::Plugin {
     if (pcr == nullptr || window_w <= 0 || window_h <= 0)
       return vp;
 
-    // An auto resolution (should_refetch) tracks the window, so read the
-    // live size instead of the cache: the cache goes stale on a native
-    // resize when CollectCurrentResolution was never registered.
     const Resolution effective = pcr->should_refetch
                                      ? fetch_current_resolution()
                                      : pcr->current_resolution;
@@ -330,9 +327,6 @@ struct window_manager : developer::Plugin {
   struct CollectCurrentResolution : System<ProvidesCurrentResolution> {
     virtual void for_each_with(Entity &, ProvidesCurrentResolution &pCR,
                                const float) override {
-      // Only an auto resolution tracks the window; a fixed one (explicit
-      // Resolution ctor, e2e resize) must not be overwritten, and an auto
-      // one stays auto so content_viewport keeps reading the live size.
       if (pCR.should_refetch) {
         pCR.current_resolution = fetch_current_resolution();
       }

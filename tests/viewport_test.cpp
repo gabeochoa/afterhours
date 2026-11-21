@@ -99,10 +99,6 @@ TEST(without_a_content_resolution_it_is_identity) {
   CHECK(near(mapped.y, p.y));
 }
 
-// R-104: an auto-tracked resolution (should_refetch) cached at launch must
-// not letterbox the pointer after a native resize the app never drove
-// through the library. Live size is 1100x820 (headless_resolution stands in
-// for the backend's live fetch); the cache still says 1100x760.
 TEST(auto_resolution_stale_after_resize_maps_unletterboxed) {
   auto *pcr = EntityHelper::get_singleton_cmp<
       window_manager::ProvidesCurrentResolution>();
@@ -120,7 +116,6 @@ TEST(auto_resolution_stale_after_resize_maps_unletterboxed) {
   set_content_resolution(1280, 720);
 }
 
-// Collect must refresh an auto resolution and leave a fixed one alone.
 TEST(collect_refreshes_auto_but_not_fixed_resolution) {
   Entity &e = EntityHelper::createPermanentEntity();
   const auto saved_headless = window_manager::headless_resolution;
