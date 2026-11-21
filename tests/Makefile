@@ -251,6 +251,7 @@ ALL_TESTS := \
 	focus_origin_test \
 	tab_order_test \
 	reset_focus_test \
+	focus_select_on_focus_test \
 	cleanup_order_test \
 	attachment_test \
 	canonical_snapshot_test \
@@ -425,6 +426,7 @@ RAYLIB_TESTS := \
 	small_components_test \
 	text_area_test \
 	text_input_test \
+	focus_select_on_focus_test \
 	color_swatch_test \
 	editing_capability_test \
 	label_inset_test \
