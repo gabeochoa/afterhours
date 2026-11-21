@@ -1951,14 +1951,12 @@ template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
 
   virtual ~HandleDragGroupsPostLayout() {}
 
-  /// Escape (the app's MenuBack action) cancels an armed or active drag.
   bool cancel_requested(UIContext<InputAction> &ctx) {
     if constexpr (magic_enum::enum_contains<InputAction>("MenuBack"))
       return ctx.pressed(InputAction::MenuBack);
     return false;
   }
 
-  /// End a drag without emitting an event, so the caller's order is kept.
   void cancel_drag(DragGroupState *state) {
     auto dragged_opt = find_drag_tagged(DragTag::DraggedItem);
     if (dragged_opt && dragged_opt.asE().has<UIComponent>())
@@ -1966,8 +1964,6 @@ template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
     clear_all_drag_tags(state);
   }
 
-  /// While dragging, scroll the nearest scroll-view ancestor of the hover
-  /// group when the pointer hovers near its edge along the drag axis.
   void update_edge_scroll(UIContext<InputAction> &ctx, float dt) {
     if (dt <= 0.f)
       return;
@@ -2006,7 +2002,6 @@ template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
     const float extent = horizontal ? rect.width : rect.height;
     if (extent <= 0.f)
       return;
-    // Speed ramps from zero at the margin to full at the edge itself.
     const float margin = DragGroupState::edge_scroll_margin_px;
     float delta = 0.f;
     if (pos < near_edge + margin)
@@ -2017,7 +2012,6 @@ template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
               (1.f - std::max(0.f, near_edge + extent - pos) / margin);
     if (delta == 0.f)
       return;
-    // Both fields, as a scrollbar drag writes: easing must not pull it back.
     if (horizontal) {
       scroll.scroll_offset.x += delta;
       scroll.scroll_target.x += delta;
@@ -2047,7 +2041,6 @@ template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
     if (!ctx)
       return;
 
-    // Escape cancels an armed or active drag; no event, order untouched.
     if ((state->dragging || state->armed) && cancel_requested(*ctx)) {
       if (state->dragging)
         cancel_drag(state);

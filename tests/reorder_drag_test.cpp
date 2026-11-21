@@ -8,10 +8,6 @@ using ui_test::TestInputAction;
 
 namespace {
 
-// One harness for the whole file: the harness destructor cleans up every
-// entity in the collection, singletons included, and singleton registration
-// never replaces, so per-test harnesses would leave later tests driving a
-// dead context. Scenarios instead tear their UI down and rebuild.
 struct Env {
   ImmTestHarness h;
   UIContext<TestInputAction> *ctx = nullptr;
@@ -94,7 +90,6 @@ struct Env {
     frame(x, y, true, false, true);
   }
 
-  // The caller-side half of the recipe: apply a drop event to the model.
   void consume_events() {
     for (const auto &event : state->events) {
       const std::string moved = model[static_cast<size_t>(event.source_index)];
@@ -115,17 +110,17 @@ Env &env() {
   return e;
 }
 
-} // namespace
+}
 
 TEST(no_drag_below_threshold) {
   Env &f = env();
   f.begin(false);
-  f.frame(100, 25, true, true, false);  // press on row A
+  f.frame(100, 25, true, true, false);
   CHECK(f.state->armed);
-  f.frame(100, 28, true, false, false); // moved, but under the threshold
+  f.frame(100, 28, true, false, false);
   CHECK(f.state->armed);
   CHECK(!f.state->dragging);
-  f.frame(100, 28, false, false, false); // release: a click, not a drag
+  f.frame(100, 28, false, false, false);
   CHECK(!f.state->armed);
   CHECK(f.state->events.empty());
 }
@@ -134,11 +129,11 @@ TEST(drag_first_row_to_third_reorders_model_on_drop) {
   Env &f = env();
   f.begin(false);
   f.frame(100, 25, true, true, false);
-  f.frame(100, 140, true, false, true); // past row C's midpoint (125)
+  f.frame(100, 140, true, false, true);
   CHECK(f.state->dragging);
   CHECK(f.state->hover_index == 2);
   CHECK(f.row_hidden(f.rows[0]));
-  f.frame(100, 140, false, false, false); // drop
+  f.frame(100, 140, false, false, false);
   CHECK(!f.state->dragging);
   CHECK(f.state->events.size() == 1);
   if (f.state->events.size() == 1) {
@@ -163,7 +158,6 @@ TEST(escape_cancels_drag_and_restores) {
   CHECK(!f.row_hidden(f.rows[0]));
   f.consume_events();
   CHECK(f.model == std::vector<std::string>({"A", "B", "C", "D"}));
-  // The cancelled press does not start a new drag as the mouse keeps moving.
   f.frame(100, 160, true, false, true);
   CHECK(!f.state->dragging);
 }
@@ -182,7 +176,6 @@ TEST(escape_disarms_before_threshold) {
 TEST(edge_scroll_moves_viewport_while_dragging) {
   Env &f = env();
   f.begin(true);
-  // The scroll view is the strip's parent; walk up from a row to reach it.
   auto row_opt = ui::UICollectionHolder::getEntityForID(f.rows[0]);
   EntityID strip_id = row_opt.asE().get<UIComponent>().parent;
   auto strip_opt = ui::UICollectionHolder::getEntityForID(strip_id);
@@ -194,14 +187,14 @@ TEST(edge_scroll_moves_viewport_while_dragging) {
   auto &scroll = view_opt.asE().get<HasScrollView>();
   CHECK_APPROX(scroll.scroll_offset.y, 0.f);
 
-  f.frame(100, 40, true, true, false);       // press row A
-  f.frame(100, 75, true, false, true, 0.1f); // drag, near the bottom edge
+  f.frame(100, 40, true, true, false);
+  f.frame(100, 75, true, false, true, 0.1f);
   CHECK(f.state->dragging);
   CHECK(scroll.scroll_offset.y > 0.f);
   CHECK_APPROX(scroll.scroll_offset.y, scroll.scroll_target.y);
 
   const float scrolled = scroll.scroll_offset.y;
-  f.frame(100, 5, true, false, true, 0.1f); // near the top edge: scroll back
+  f.frame(100, 5, true, false, true, 0.1f);
   CHECK(scroll.scroll_offset.y < scrolled);
   CHECK(scroll.scroll_offset.y >= 0.f);
 }
