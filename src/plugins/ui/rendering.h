@@ -301,6 +301,7 @@ struct FocusPaint {
   size_t after_command;
   int layer;
   float rotation;
+  Vector2Type rotation_pivot{0.f, 0.f};
   std::optional<RectangleType> clip;
 };
 
@@ -328,8 +329,20 @@ std::optional<FocusPaint> prepare_focus_paint(const UIContext<InputAction> &cont
     if (!descendants.contains(cmd.id)) continue;
     const auto [has_clip, clip] =
         compute_intersected_clip_rect(entity, /*include_self=*/false);
+    // Ring rotates about the widget's pivot, not the (expanded) ring rect's.
+    RectangleType widget = cmp.rect();
+    Vector2Type pivot;
+    if (entity.has<HasUIModifiers>()) {
+      const auto &mods = entity.get<HasUIModifiers>();
+      widget = detail::apply_ancestor_transform(entity, mods.apply_modifier(widget));
+      pivot = mods.rotation_pivot(widget);
+    } else {
+      widget = detail::apply_ancestor_transform(entity, widget);
+      pivot = {widget.x + widget.width * .5f, widget.y + widget.height * .5f};
+    }
     return FocusPaint{*ring, entity.id, i - 1, cmd.layer,
                       entity.has<HasUIModifiers>() ? entity.get<HasUIModifiers>().rotation : 0.f,
+                      pivot,
                       has_clip && !entity.has<HasScrollView>() ? std::optional{clip} : std::nullopt};
   }
   return {};
@@ -343,8 +356,7 @@ inline void draw_focus_paint(const FocusPaint &paint) {
                        static_cast<int>(r.width), static_cast<int>(r.height));
   }
   capture::Scope attribute(paint.entity_id, paint.layer);
-  push_rotation(ring.rect.x + ring.rect.width * .5f,
-                ring.rect.y + ring.rect.height * .5f, paint.rotation);
+  push_rotation(paint.rotation_pivot.x, paint.rotation_pivot.y, paint.rotation);
   if (ring.contrast_edges)
     draw_rectangle_rounded_lines(ring.outer_contrast(), ring.roundness_at(ring.thickness),
                                  ring.segments, ring.contrast, ring.corners);
@@ -369,13 +381,16 @@ inline void collect_focus_paint(RenderCommandBuffer &buffer, const FocusPaint &p
   if (ring.contrast_edges)
     buffer.add_rounded_rectangle_outline(ring.outer_contrast(), ring.contrast,
         ring.roundness_at(ring.thickness), ring.segments, ring.corners,
-        paint.layer, paint.entity_id, 0.f, paint.rotation);
+        paint.layer, paint.entity_id, 0.f, paint.rotation,
+        paint.rotation_pivot.x, paint.rotation_pivot.y);
   if (ring.contrast_edges && ring.rect.width > 2.f && ring.rect.height > 2.f)
     buffer.add_rounded_rectangle_outline(ring.inner_contrast(), ring.contrast,
         ring.roundness_at(-1.f), ring.segments, ring.corners,
-        paint.layer, paint.entity_id, 0.f, paint.rotation);
+        paint.layer, paint.entity_id, 0.f, paint.rotation,
+        paint.rotation_pivot.x, paint.rotation_pivot.y);
   buffer.add_rounded_rectangle_outline(ring.rect, ring.color, ring.roundness,
-      ring.segments, ring.corners, paint.layer, paint.entity_id, ring.thickness, paint.rotation);
+      ring.segments, ring.corners, paint.layer, paint.entity_id, ring.thickness, paint.rotation,
+      paint.rotation_pivot.x, paint.rotation_pivot.y);
   if (paint.clip) buffer.add_scissor_end(paint.layer, paint.entity_id);
 }
 

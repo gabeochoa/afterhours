@@ -144,6 +144,7 @@ struct ComponentConfig {
   // ui modifiers
   float opacity = 1.0f;
   float scale = 1.0f; // Visual scale applied after layout (smooth animations)
+  float rotation = 0.0f; // Degrees, clockwise, about with_origin (default centre)
   Size translate_x = pixels(0.0f);
   Size translate_y = pixels(0.0f);
   // Trailing: (x,y) insets from far edges; explicit size grows inward.
@@ -747,6 +748,12 @@ struct ComponentConfig {
     scale = s;
     return *this;
   }
+  /// Rotate the drawn widget (degrees, clockwise) about with_origin;
+  /// hit testing and the focus ring follow the same rotation.
+  ComponentConfig &with_rotation(float deg) {
+    rotation = deg;
+    return *this;
+  }
   ComponentConfig &with_shader(graphics::ShaderType &s) {
     shader = &s;
     return *this;
@@ -1311,6 +1318,8 @@ struct ComponentConfig {
       merged.opacity = overrides.opacity;
     if (overrides.scale != 1.0f)
       merged.scale = overrides.scale;
+    if (overrides.rotation != 0.0f)
+      merged.rotation = overrides.rotation;
     if (overrides.translate_x.value != 0.0f)
       merged.translate_x = overrides.translate_x;
     if (overrides.translate_y.value != 0.0f)

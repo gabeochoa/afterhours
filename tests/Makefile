@@ -113,6 +113,7 @@ ALL_TESTS := \
 	particles_test \
 	trigger_volume_test \
 	ui_modifiers_test \
+	rotation_hit_test \
 	ancestor_transform_test \
 	text_units_test \
 	text_fit_test \
