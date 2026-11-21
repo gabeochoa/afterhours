@@ -420,9 +420,6 @@ struct FontManager final : BaseComponent {
     return *this;
   }
 
-  // Contract: do not draw with a Font copied out before this call (raylib
-  // frees its GPU texture here); lookups through this manager fall back.
-  // A face another registered name still aliases is kept loaded.
   bool unload_font(const std::string &font_name) {
     auto it = fonts.find(font_name);
     if (it == fonts.end())

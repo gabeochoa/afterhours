@@ -36,7 +36,6 @@ int main() {
   std::vector<unsigned char> bytes;
   CHECK(afterhours::font_coverage::read_file(path.c_str(), bytes));
 
-  // 20 synthetic faces (same TTF, distinct names): the old cap tracked 16.
   std::vector<afterhours::Font> fonts;
   for (int i = 0; i < 20; i++) {
     auto f = afterhours::load_font_from_memory(
@@ -53,14 +52,12 @@ int main() {
   CHECK(md::g_font_ids.size() == 19);
   CHECK(md::g_font_coverage.count(victim_id) == 0);
 
-  // Reload-after-unload re-registers and measures.
   auto reloaded = afterhours::load_font_from_memory(
       bytes.data(), static_cast<int>(bytes.size()), "face3");
   CHECK(reloaded.id == victim_id);
   CHECK(md::g_font_ids.size() == 20);
   CHECK(afterhours::measure_text(reloaded, "Hello", 24.f, 1.f).x > 0.f);
 
-  // Unloading the active font moves active to a live one.
   md::g_active_font = fonts[0].id;
   afterhours::unload_font(fonts[0]);
   CHECK(md::g_active_font != FONS_INVALID);

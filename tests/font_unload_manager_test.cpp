@@ -45,7 +45,6 @@ int main() {
   check(fm.fonts.size() == 17 && fm.get_font("face3").glyphCount > 0,
         "reload after unload works");
 
-  // An alias keeps the shared face alive when one name goes away.
   fm.load_font("alias3", fm.get_font("face3"));
   check(fm.unload_font("face3"), "unload one alias");
   check(fm.get_font("alias3").glyphCount > 0, "aliased face stays loaded");

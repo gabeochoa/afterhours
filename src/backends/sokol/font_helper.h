@@ -74,7 +74,6 @@ inline Font load_font_from_memory(const unsigned char *data, int size,
   const std::string key = fontstash_name(name);
   const int existing = fonsGetFontByName(ctx, key.c_str());
   if (existing != FONS_INVALID) {
-    // Re-register: an unload may have untracked this still-loaded face.
     font_coverage::Ranges ranges;
     const bool has_cmap =
         font_coverage::parse_cmap(data, static_cast<size_t>(size), ranges);
@@ -229,8 +228,6 @@ inline int *remove_duplicate_codepoints(int *, int,
 
 inline bool font_same_face(const Font a, const Font b) { return a.id == b.id; }
 
-// fontstash has no per-font delete, so its slot and atlas glyphs stay until
-// the context dies; this frees the tracking slot, coverage and fallbacks.
 inline void unload_font(Font &font) {
   const int id = font.id;
   font = Font{};
