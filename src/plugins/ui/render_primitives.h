@@ -387,6 +387,8 @@ static_assert(std::is_trivially_destructible_v<RenderPrimitive>,
 struct HasOnDraw : BaseComponent {
   RenderPrimitive::CustomDrawFn bg;
   RenderPrimitive::CustomDrawFn fg;
+  // Drawn after the widget's whole subtree, unlike fg (own primitives only).
+  RenderPrimitive::CustomDrawFn over;
 };
 
 // Render command buffer using arena allocation for zero-allocation rendering
