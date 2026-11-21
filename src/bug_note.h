@@ -1,14 +1,5 @@
 #pragma once
 
-// Standalone playtest bug-note helper: capture(text, screenshot, build id,
-// context) to a directory, no UI of its own. The caller binds a key and owns
-// the text entry; this just writes the note and the screenshot next to it.
-//
-// On the raylib/sokol graphics backends the screenshot is
-// graphics::capture_frame (works windowed and headless, false when no frame
-// was rendered). On the none backend there is no frame to capture, so
-// screenshot_captured is false and the note says so — honestly unavailable,
-// never a fake file.
 
 #include <filesystem>
 #include <fstream>
@@ -49,7 +40,7 @@ inline std::string stamp_human(const SerializableLocalDateTime &t) {
          pad(t.hour) + ":" + pad(t.minute) + ":" + pad(t.second) + " local";
 }
 
-} // namespace detail
+}
 
 inline Result capture(const std::filesystem::path &dir,
                       std::string_view text, std::string_view build_id = {},
@@ -75,8 +66,6 @@ inline Result capture(const std::filesystem::path &dir,
   result.screenshot_path = png_path.string();
 
 #if !defined(AFTER_HOURS_USE_NONE)
-  // Before the note is written, so the note can say truthfully whether the
-  // screenshot landed (capture_frame is false with no frame rendered).
   result.screenshot_captured = graphics::capture_frame(png_path);
 #endif
 
@@ -108,4 +97,4 @@ inline Result capture(const std::filesystem::path &dir,
   return result;
 }
 
-} // namespace afterhours::bug_note
+}

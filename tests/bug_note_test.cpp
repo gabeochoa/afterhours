@@ -1,6 +1,3 @@
-// bug_note(dir, text, context...) helper: note file contents, timestamped
-// name, dir auto-create, screenshot created headless via capture_frame.
-// Compiled as a raylib test; skips when headless init fails (no GPU).
 
 #define FMT_HEADER_ONLY
 #include <afterhours/src/bug_note.h>
@@ -51,7 +48,7 @@ int main() {
       ("afterhours-bugnote-" +
        std::to_string(
            std::chrono::steady_clock::now().time_since_epoch().count()));
-  const auto dir = base / "nested" / "notes"; // not created: capture must make it
+  const auto dir = base / "nested" / "notes";
   CHECK(!std::filesystem::exists(dir));
 
   const auto r = bug_note::capture(
@@ -74,7 +71,6 @@ int main() {
   CHECK(note.find("screenshot:") != std::string::npos);
   CHECK(note.find("bug-") != std::string::npos);
 
-  // Same second, second note: a distinct timestamped file, not an overwrite.
   const auto r2 = bug_note::capture(dir, "second note", "cartographer 1.2.3 (abc123)");
   CHECK(r2.note_path != r.note_path);
   CHECK(std::filesystem::exists(r2.note_path));
