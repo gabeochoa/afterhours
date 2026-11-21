@@ -79,11 +79,8 @@ inline EntityParent
 mk(Entity &parent, EntityID otherID = -1,
    const std::source_location location = std::source_location::current());
 
-// Active instance keys, outermost first; mixed into every mk hash below.
 inline std::vector<EntityID> imm_instance_stack;
 
-// Salts every mk() inside its scope, so one subtree function built N times
-// under the same parent gets N distinct entity sets.
 struct ImmScope {
   explicit ImmScope(EntityID instance_key) {
     imm_instance_stack.push_back(instance_key);
@@ -93,8 +90,6 @@ struct ImmScope {
   ImmScope &operator=(const ImmScope &) = delete;
 };
 
-// THE way to root a repeated subtree: distinct instance_key per instance;
-// descendants hang off the returned root, so they need no change.
 inline EntityParent
 mk_instance(Entity &parent, EntityID instance_key,
             const std::source_location location =

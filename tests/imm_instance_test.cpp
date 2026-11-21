@@ -41,7 +41,7 @@ TEST(mk_instance_gives_each_instance_its_own_entities) {
     CHECK(a2.first != b2.first);
     CHECK(a2.second != b2.second);
     if (frame == 0) { a = a2; b = b2; }
-    else { CHECK(a2 == a); CHECK(b2 == b); } // stable across frames
+    else { CHECK(a2 == a); CHECK(b2 == b); }
     h.layout_only();
   }
 }
