@@ -58,6 +58,26 @@ int main() {
     afterhours::set_font_atlas_config({});
     // 1px bleeds between glyphs when an app downscales the atlas.
     check(atlas_defaults.padding >= 4, "atlas padding survives downscaling");
+
+    check(atlas_defaults.filter == afterhours::FontAtlasFilter::Auto,
+          "atlas filter defaults to auto");
+    check(afterhours::resolve_font_filter(atlas_defaults, 4) ==
+              raylib::TEXTURE_FILTER_TRILINEAR,
+          "auto filter is trilinear once mipmaps exist, as before");
+    check(afterhours::resolve_font_filter(atlas_defaults, 1) ==
+              raylib::TEXTURE_FILTER_BILINEAR,
+          "and bilinear without");
+    afterhours::set_font_atlas_config(
+        {.filter = afterhours::FontAtlasFilter::Point});
+    check(afterhours::default_font_atlas_config().filter ==
+              afterhours::FontAtlasFilter::Point,
+          "set_font_atlas_config takes the filter");
+    check(afterhours::default_font_atlas_config().padding == 4,
+          "and an unnamed field keeps its default");
+    check(afterhours::resolve_font_filter(afterhours::default_font_atlas_config(),
+                                          4) == raylib::TEXTURE_FILTER_POINT,
+          "an explicit filter overrides the auto choice");
+    afterhours::set_font_atlas_config({});
   }
 
   printf("Running headless fallback tests...\n\n");

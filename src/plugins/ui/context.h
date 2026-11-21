@@ -464,6 +464,9 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     hot_id = ROOT;
     active_id = ROOT;
     clear_text_selection();
+    // Pristine: reset interaction and focus modality too.
+    has_interacted = false;
+    focus_modality = FocusSource::Grab;
     focused_ids.clear();
     render_cmds.clear();
     input_gates.clear();

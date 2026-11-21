@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "graphics_common.h"
+#include "window_helpers.h"
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 #include "backends/raylib/backend.h"
@@ -58,6 +59,7 @@ inline void set_window_state(unsigned int flags) {
 inline void clear_window_state(unsigned int flags) {
   PlatformAPI::clear_window_state(flags);
 }
+inline unsigned int window_state() { return PlatformAPI::window_state(); }
 
 inline void set_config_flags(unsigned int flags) {
   PlatformAPI::set_config_flags(flags);
@@ -125,6 +127,10 @@ inline bool is_key_pressed_repeat(int key) {
   return testing::test_input::is_key_pressed(
       key, [](int k) { return PlatformAPI::is_key_pressed_repeat(k); });
 }
+inline int get_key_pressed() {
+  return testing::test_input::get_key_pressed(
+      [] { return PlatformAPI::get_key_pressed(); });
+}
 #else
 inline bool is_key_pressed(int key) { return PlatformAPI::is_key_pressed(key); }
 inline bool is_key_down(int key) { return PlatformAPI::is_key_down(key); }
@@ -136,7 +142,9 @@ inline bool is_key_pressed_repeat(int key) {
 }
 #endif
 inline int get_char_pressed() { return PlatformAPI::get_char_pressed(); }
+#ifndef AFTER_HOURS_ENABLE_E2E_TESTING
 inline int get_key_pressed() { return PlatformAPI::get_key_pressed(); }
+#endif
 
 inline bool is_mouse_button_pressed(int btn) {
   return PlatformAPI::is_mouse_button_pressed(btn);
