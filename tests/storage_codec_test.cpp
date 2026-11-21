@@ -1,5 +1,4 @@
-// Versioned storage codecs: round-trip, migrations, and the typed
-// Corrupt / TooNew split (docs gap #11; Pharmasea G-P18 envelope names).
+// storage_codec_test.cpp — G-P18 envelope names.
 #include <afterhours/src/plugins/storage_codec.h>
 
 #include <charconv>
@@ -22,11 +21,10 @@ void check(bool ok, const char *what) {
 
 struct Prefs {
   int volume = 0;
-  int brightness = 0; // added in v2; v1 files have no such field
+  int brightness = 0; // v2 only; absent in v1
   bool operator==(const Prefs &) const = default;
 };
 
-// v2 payload grammar: "volume=<n>;brightness=<n>"
 std::optional<Prefs> decode_prefs(std::string_view text) {
   Prefs out;
   bool have_volume = false, have_brightness = false;
@@ -65,7 +63,7 @@ Codec<Prefs> prefs_codec() {
                ";brightness=" + std::to_string(p.brightness);
       },
       decode_prefs,
-      {// v1 -> v2: brightness did not exist; default it.
+      {// v1->v2: default the new field.
        [](std::string_view v1) -> std::optional<std::string> {
          if (v1.rfind("volume=", 0) != 0) return std::nullopt;
          return std::string(v1) + ";brightness=100";
@@ -77,7 +75,6 @@ Codec<Prefs> prefs_codec() {
 int main() {
   const auto codec = prefs_codec();
 
-  // Round-trip at the current version.
   const Prefs want{7, 42};
   const auto encoded = codec.encode(want);
   check(afterhours::storage::peek_version(encoded) == 2, "peek_version");
@@ -88,21 +85,17 @@ int main() {
   check(round.found_version == 2 && round.current_version == 2,
         "round-trip versions");
 
-  // v1 -> v2 migration: the exact file a pre-brightness build wrote.
   const std::string v1 = "afterhours-storage-codec/1\n1\nvolume=5";
   const auto migrated = codec.decode(v1);
   check(migrated.status == DecodeStatus::Migrated, "v1 status Migrated");
   check(migrated.value && *migrated.value == Prefs{5, 100},
         "v1 migrated value gets the v2 default");
   check(migrated.found_version == 1, "v1 found_version");
-  // Re-saving a migrated value advances the file to the current version.
   check(migrated.value &&
             codec.decode(codec.encode(*migrated.value)).status ==
                 DecodeStatus::Ok,
         "migrated value re-encodes as current");
 
-  // Corrupt: not an envelope, bad version, and payload the decoder
-  // rejects must all be Corrupt (and carry no value).
   for (const std::string bad :
        {"", "volume=5", "afterhours-storage-codec/1\nx\nvolume=5",
         "afterhours-storage-codec/1\n0\nvolume=5",
@@ -113,21 +106,18 @@ int main() {
           "corrupt input is Corrupt with no value");
   }
 
-  // TooNew: a newer build's file must not reach the decoder at all.
   const auto too_new =
       codec.decode("afterhours-storage-codec/1\n3\nvolume=9;brightness=9");
   check(too_new.status == DecodeStatus::TooNew, "v3 status TooNew");
   check(!too_new.ok() && !too_new.value, "TooNew carries no value");
   check(too_new.found_version == 3, "TooNew found_version");
 
-  // Missing migration step is Corrupt, never a silent skip.
   const Codec<Prefs> no_migration(
       2, [](const Prefs &p) { return std::to_string(p.volume); },
       decode_prefs);
   check(no_migration.decode(v1).status == DecodeStatus::Corrupt,
         "missing migration is Corrupt");
 
-  // Ordered multi-step chain (v1 -> v2 -> v3) via the string codec.
   auto strings = afterhours::storage::make_string_codec(
       3, {[](std::string_view s) -> std::optional<std::string> {
             return std::string(s) + "|v2";
@@ -140,7 +130,6 @@ int main() {
   check(chained.status == DecodeStatus::Migrated &&
             chained.value == "base|v2|v3",
         "migration chain runs in order");
-  // A failing migration mid-chain is Corrupt.
   auto broken = afterhours::storage::make_string_codec(
       2, {[](std::string_view) -> std::optional<std::string> {
         return std::nullopt;
@@ -149,8 +138,7 @@ int main() {
             DecodeStatus::Corrupt,
         "failing migration is Corrupt");
 
-  // Binary payloads (bitsery-style) survive: only the first two
-  // newlines are envelope, the rest is verbatim.
+  // Only first two newlines are envelope; rest verbatim.
   const std::string binary("a\nb\0c", 5);
   const auto bin_codec = afterhours::storage::make_string_codec(1);
   const auto bin = bin_codec.decode(bin_codec.encode(binary));
