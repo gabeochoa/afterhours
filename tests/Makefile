@@ -263,6 +263,7 @@ ALL_TESTS := \
 	text_wrap_test \
 	theme_io_test \
 	tree_view_test \
+	disclosure_test \
 	translation_test \
 	layout_inspector_test \
 	letter_spacing_zero_test
@@ -352,6 +353,7 @@ RAYLIB_TESTS := \
 	text_wrap_test \
 	theme_io_test \
 	tree_view_test \
+	disclosure_test \
 	layout_inspector_test
 
 TEST_BINS := $(addprefix $(OUT)/,$(ALL_TESTS))
