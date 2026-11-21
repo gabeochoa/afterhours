@@ -1,18 +1,5 @@
 #pragma once
 
-// Time of day: sun position and light values from a clock hour, as plain
-// numbers a caller assigns to its own lights (SceneLights, a sky shader).
-// No renderer, no sky, no shadows — stacking on this is the caller's job.
-//
-//   TimeOfDay tod;                 // hour 10:00, built-in day cycle
-//   tod.advance(dt, 1.0f);         // 1 game-hour per real second
-//   Lighting l = tod.evaluate();   // sun color/intensity, ambient, fog
-//   // feed l.sun_direction into a directional light; done.
-//
-// Hours wrap at 24, so 23:30 + 1h is 0:30. Keyframes are caller-settable
-// (sorted by hour); interpolation wraps across midnight from the last key
-// back to the first.
-
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -24,7 +11,7 @@ struct Rgb {
 };
 
 struct Keyframe {
-  float hour = 0.f; // in [0, 24)
+  float hour = 0.f;
   Rgb sun_color{};
   float sun_intensity = 0.f;
   Rgb ambient_color{0.2f, 0.25f, 0.4f};
@@ -33,15 +20,14 @@ struct Keyframe {
   float fog_density = 0.02f;
 };
 
-// Everything a scene light needs for one instant, as bare values.
 struct Lighting {
   Rgb sun_color{};
   float sun_intensity = 0.f;
   struct Dir {
-    float x = 0.f, y = 1.f, z = 0.f; // unit vector toward the sun
+    float x = 0.f, y = 1.f, z = 0.f;
   };
   Dir sun_direction{};
-  float sun_elevation_deg = -90.f; // negative below the horizon
+  float sun_elevation_deg = -90.f;
   Rgb ambient_color{};
   float ambient_intensity = 0.f;
   Rgb fog_color{};
@@ -60,11 +46,11 @@ inline std::vector<Keyframe> default_day_cycle() {
 }
 
 struct TimeOfDay {
-  float hour = 10.f; // in [0, 24)
+  float hour = 10.f;
   float sunrise_hour = 6.f;
   float sunset_hour = 18.f;
   float max_elevation_deg = 65.f;
-  float tilt = 0.35f; // southward lean of the sun path, 0 = due east/west
+  float tilt = 0.35f;
   std::vector<Keyframe> keys = default_day_cycle();
 
   void advance(float dt_seconds, float hours_per_second = 1.f) {
@@ -93,14 +79,12 @@ struct TimeOfDay {
   [[nodiscard]] Keyframe sample(float h) const {
     h = wrap(h);
     if (keys.empty()) return {};
-    // Adjacent pair straddling h, sorted by hour; the last pair wraps to
-    // the first key at hour + 24.
     size_t i = 0;
     while (i + 1 < keys.size() && keys[i + 1].hour <= h) ++i;
     const Keyframe &a = keys[i];
     const Keyframe &b = keys[(i + 1) % keys.size()];
     float span = b.hour - a.hour;
-    if (span <= 0.f) span += 24.f; // wrap pair, or duplicate hours
+    if (span <= 0.f) span += 24.f;
     float f = (h - a.hour) / span;
     if (f < 0.f) f = 0.f;
     if (f > 1.f) f = 1.f;
@@ -120,11 +104,9 @@ struct TimeOfDay {
   void sun_position(Lighting &out) const {
     constexpr float kPi = 3.14159265f;
     const float day_len = sunset_hour - sunrise_hour;
-    // Day fraction in [0,1] between sunrise and sunset; outside that range
-    // the sun keeps travelling under the horizon (no moon here yet).
     float f = (hour - sunrise_hour) / day_len;
     const float elev = max_elevation_deg * std::sin(kPi * f);
-    const float az = kPi * f; // 0 at sunrise (east), pi at sunset (west)
+    const float az = kPi * f;
     const float el = elev * kPi / 180.f;
     float x = std::cos(az) * std::cos(el);
     float y = std::sin(el);
@@ -137,4 +119,4 @@ struct TimeOfDay {
   }
 };
 
-} // namespace afterhours::time_of_day
+}

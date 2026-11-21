@@ -1,7 +1,3 @@
-// time_of_day_test.cpp
-// Pure math only: no window, no renderer.
-// Sun elevation/direction at known times, keyframe interpolation midpoints,
-// wrap at midnight, advance speed.
 
 #include <cmath>
 #include <cstdio>
@@ -26,7 +22,6 @@ static bool near(float a, float b, float eps = 0.02f) {
 }
 
 int main() {
-  // Noon: sun near max elevation, roughly overhead, full intensity.
   {
     TimeOfDay tod;
     tod.hour = 12.f;
@@ -39,7 +34,6 @@ int main() {
                           l.sun_direction.z * l.sun_direction.z);
     CHECK(near(len, 1.f, 1e-4f));
   }
-  // Sunrise 6:00 / sunset 18:00: elevation ~0, sun in the east / west.
   {
     TimeOfDay tod;
     tod.hour = 6.f;
@@ -51,7 +45,6 @@ int main() {
     CHECK(near(l.sun_elevation_deg, 0.f, 1.f));
     CHECK(l.sun_direction.x < -0.9f);
   }
-  // Midnight: sun below the horizon, no sun light.
   {
     TimeOfDay tod;
     tod.hour = 0.f;
@@ -60,20 +53,16 @@ int main() {
     CHECK(near(l.sun_intensity, 0.f, 1e-4f));
     CHECK(l.ambient_intensity < 0.2f);
   }
-  // Keyframe midpoint: halfway between 6.5 and 12 is 9.25; sun intensity
-  // there must sit between the two keys' values (linear lerp).
   {
     TimeOfDay tod;
     tod.hour = 9.25f;
     Lighting l = tod.evaluate();
     CHECK(l.sun_intensity > 0.35f && l.sun_intensity < 1.f);
-    // At a key hour exactly, values equal the key.
     tod.hour = 12.f;
     l = tod.evaluate();
     CHECK(near(l.sun_intensity, 1.f, 1e-4f));
     CHECK(near(l.fog_density, 0.008f, 1e-4f));
   }
-  // Wrap across midnight: 22:00 is between the 19:00 and 0:00 keys.
   {
     TimeOfDay tod;
     tod.hour = 22.f;
@@ -81,31 +70,28 @@ int main() {
     CHECK(l.sun_intensity < 0.05f);
     CHECK(l.ambient_intensity > 0.12f && l.ambient_intensity < 0.2f);
   }
-  // Caller-supplied keyframes replace the built-in cycle.
   {
     TimeOfDay tod;
     tod.keys = {{0.f, {1.f, 0.f, 0.f}, 2.f, {0.f, 0.f, 0.f}, 0.f, {0.f, 0.f, 0.f}, 0.f},
                 {12.f, {0.f, 0.f, 1.f}, 4.f, {1.f, 1.f, 1.f}, 1.f, {1.f, 1.f, 1.f}, 1.f}};
-    tod.hour = 6.f; // exact midpoint
+    tod.hour = 6.f;
     Lighting l = tod.evaluate();
-    CHECK(near(l.sun_intensity, 3.f, 1e-4f)); // (2 + 4) / 2
+    CHECK(near(l.sun_intensity, 3.f, 1e-4f));
     CHECK(near(l.sun_color.r, 0.5f, 1e-4f));
     CHECK(near(l.sun_color.b, 0.5f, 1e-4f));
     CHECK(near(l.ambient_intensity, 0.5f, 1e-4f));
     CHECK(near(l.fog_density, 0.5f, 1e-4f));
   }
-  // advance: dt * speed hours, wrapping at midnight, both directions.
   {
     TimeOfDay tod;
     tod.hour = 23.5f;
-    tod.advance(0.5f, 2.f); // +1 game-hour
+    tod.advance(0.5f, 2.f);
     CHECK(near(tod.hour, 0.5f, 1e-4f));
-    tod.advance(1.f, -1.f); // backwards across midnight
+    tod.advance(1.f, -1.f);
     CHECK(near(tod.hour, 23.5f, 1e-4f));
-    tod.advance(24.f, 1.f); // full day: same hour
+    tod.advance(24.f, 1.f);
     CHECK(near(tod.hour, 23.5f, 1e-4f));
   }
-  // Empty keyframes: evaluate still yields a usable (dark) result.
   {
     TimeOfDay tod;
     tod.keys.clear();
