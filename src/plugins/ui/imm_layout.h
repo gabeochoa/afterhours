@@ -559,7 +559,6 @@ ElementResult icon_row(HasUIContext auto &ctx, EntityParent ep_pair,
           .with_skip_grid_snap(config.skip_grid_snap)
           .with_debug_name(config.debug_name.empty() ? "icon_row"
                                                      : config.debug_name);
-  // Direct field set: with_absolute_position() warns on margins.
   row_config.is_absolute = config.is_absolute;
   auto row = hstack(ctx, ep_pair, row_config);
 

@@ -1,8 +1,3 @@
-// icon_row must forward the caller's container config (gap, alignment,
-// padding, absolute placement, grid flag) to its row instead of dropping
-// it. Regression test for "icon_row inherits config and loses absolute
-// placement, gap and grid flags" (AFTERHOURS_GAPS, Tier-4 b23).
-
 #include "ui_test_harness.h"
 
 using namespace afterhours;
@@ -19,8 +14,6 @@ const std::array<texture_manager::Rectangle, 4> kFrames{
 
 texture_manager::Texture sheet() { return texture_manager::Texture{}; }
 
-// Lays out one icon_row with the given config; returns the row and its
-// four item components' rects via the harness.
 void layout_row(ImmTestHarness &h, ComponentConfig config) {
   icon_row(h.context(), mk(h.root(), 0), sheet(), kFrames, 1.f,
            std::move(config));
@@ -28,7 +21,6 @@ void layout_row(ImmTestHarness &h, ComponentConfig config) {
 }
 } // namespace
 
-// With no config the icons sit back to back: each step is one icon wide.
 TEST(defaults_unchanged) {
   { // The inherit_from chain itself must carry the fields.
     ComponentConfig caller{};
@@ -58,7 +50,6 @@ TEST(defaults_unchanged) {
   CHECK(!first->skip_grid_snap);
 }
 
-// with_gap(pixels(10)) must space the icons 10px apart: step = 20 + 10.
 TEST(gap_forwarded) {
   ImmTestHarness h;
   layout_row(h, ComponentConfig{}
@@ -74,7 +65,6 @@ TEST(gap_forwarded) {
   CHECK_APPROX(second->rect().x - first->rect().x, 30.f);
 }
 
-// Padding insets the first icon from the row's edge.
 TEST(padding_forwarded) {
   ImmTestHarness h;
   layout_row(h, ComponentConfig{}
@@ -88,8 +78,6 @@ TEST(padding_forwarded) {
   CHECK_APPROX(first->rect().x - row->rect().x, 8.f);
 }
 
-// align_items(Center) centres the 20px icons in the 60px row: with 4px
-// padding the first icon sits 4 + (60 - 8 - 20) / 2 = 20px below the row.
 TEST(align_items_forwarded) {
   ImmTestHarness h;
   layout_row(h, ComponentConfig{}
@@ -105,8 +93,6 @@ TEST(align_items_forwarded) {
   CHECK_APPROX(first->rect().y - row->rect().y, 20.f);
 }
 
-// justify_content(FlexEnd) pushes the 80px of icons to the row's far edge:
-// with 4px padding the first icon sits 4 + (200 - 8 - 80) = 116px in.
 TEST(justify_content_forwarded) {
   ImmTestHarness h;
   layout_row(h, ComponentConfig{}
@@ -122,7 +108,6 @@ TEST(justify_content_forwarded) {
   CHECK_APPROX(first->rect().x - row->rect().x, 116.f);
 }
 
-// Absolute placement moves the whole row (and its icons) off the origin.
 TEST(absolute_placement_forwarded) {
   ImmTestHarness h;
   layout_row(h, ComponentConfig{}
@@ -138,7 +123,6 @@ TEST(absolute_placement_forwarded) {
   CHECK(first->rect().x >= row->rect().x);
 }
 
-// The grid flag reaches the row and its items (WM set it per item by hand).
 TEST(skip_grid_snap_forwarded) {
   ImmTestHarness h;
   layout_row(h, ComponentConfig{}
