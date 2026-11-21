@@ -449,6 +449,19 @@ struct InstanceBatcher {
     }
   }
 
+  // Hands each non-empty group to on_group(model, key, transforms) without
+  // drawing anything, then empties the batcher. The span is valid only
+  // during the call: copy or move out what you need.
+  template <typename OnGroup> void drain(OnGroup &&on_group) {
+    for (Group &g : groups) {
+      if (g.transforms.empty()) continue;
+      on_group(*g.model, g.key,
+               std::span<const MatrixType>(g.transforms.data(),
+                                           g.transforms.size()));
+      g.transforms.clear();
+    }
+  }
+
   void clear() {
     for (Group &g : groups) g.transforms.clear();
   }
@@ -613,6 +626,7 @@ struct InstanceBatcher {
     warn_once(0, "@notimplemented InstanceBatcher::flush on this backend "
                  "(models are raylib-only); nothing is drawn");
   }
+  template <typename F> void drain(F &&) {}
   void clear() {}
   [[nodiscard]] size_t copies() const { return 0; }
   [[nodiscard]] size_t group_count() const { return 0; }
