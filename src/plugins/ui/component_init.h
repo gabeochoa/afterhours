@@ -199,6 +199,11 @@ inline void apply_flags(Entity &entity, const ComponentConfig &config) {
     entity.removeComponentIfExists<HasClickActivationMode>();
   }
 
+  if (!config.shortcuts.empty())
+    entity.addComponentIfMissing<HasShortcuts>(config.shortcuts).bindings =
+        config.shortcuts;
+  else
+    entity.removeComponentIfExists<HasShortcuts>();
   if (config.disabled)
     entity.addComponentIfMissing<IsDisabled>();
   else
