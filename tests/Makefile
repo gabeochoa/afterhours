@@ -165,6 +165,7 @@ ALL_TESTS := \
 	fixed_tick_rate_test \
 	sound_playback_test \
 	headless_runconfig_test \
+	window_hidden_test \
 	harness_spellings_test \
 	fit_content_test \
 	label_inset_test \
@@ -282,6 +283,7 @@ ALL_TESTS += sokol_geometry_test
 ALL_TESTS += sokol_hidpi_test
 ALL_TESTS += sokol_resize_test
 ALL_TESTS += sokol_headless_run_test
+ALL_TESTS += sokol_hidden_window_test
 ALL_TESTS += sokol_include_order_test
 ALL_TESTS += sokol_wrappers_test
 ALL_TESTS += sokol_frame_dt_test
@@ -451,6 +453,9 @@ $(OUT)/sokol_resize_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_headless_run_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_headless_run_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_headless_run_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_hidden_window_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_hidden_window_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_hidden_window_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_include_order_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_include_order_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_include_order_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)

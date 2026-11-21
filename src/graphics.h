@@ -48,6 +48,8 @@ inline bool is_window_fullscreen() {
 }
 inline void toggle_fullscreen() { PlatformAPI::toggle_fullscreen(); }
 inline void minimize_window() { PlatformAPI::minimize_window(); }
+inline void show_window() { PlatformAPI::show_window(); }
+inline void hide_window() { PlatformAPI::hide_window(); }
 inline void set_window_size(int w, int h) { PlatformAPI::set_window_size(w, h); }
 inline void set_window_min_size(int w, int h) {
   PlatformAPI::set_window_min_size(w, h);

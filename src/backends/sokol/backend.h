@@ -65,6 +65,12 @@ void end_texture_mode();
 
 // Implemented in capture_impl.h (the SOKOL_IMPL Objective-C++ TU).
 extern "C" const void *metal_create_system_device(void);
+#if defined(__APPLE__)
+// Implemented in window_visibility_macos.h (via capture_impl.h).
+extern "C" void ah_sokol_install_hidden_start(void);
+extern "C" void ah_sokol_show_window(void);
+extern "C" void ah_sokol_hide_window(void);
+#endif
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id, int width,
                                              int height, const char *path);
 
@@ -341,6 +347,10 @@ inline void apply_pool_sizes(sg_desc &desc) {
 // ── Sokol callbacks ──
 
 inline void sokol_init_cb() {
+#if defined(__APPLE__)
+  if (g_start_hidden)
+    ah_sokol_hide_window();
+#endif
   sg_desc desc{};
   desc.environment = sglue_environment();
   desc.logger.func = slog_func;
@@ -522,6 +532,26 @@ struct MetalPlatformAPI {
   // Keep these loud so callers know this is a backend limitation, not a bug.
   static void minimize_window() {
     log_error("@notimplemented minimize_window");
+  }
+  static void show_window() {
+    note_window_hidden(false);
+    if (metal_detail::g_headless)
+      return;
+#if defined(__APPLE__)
+    ah_sokol_show_window();
+#else
+    log_error("@notimplemented show_window on this sokol platform");
+#endif
+  }
+  static void hide_window() {
+    note_window_hidden(true);
+    if (metal_detail::g_headless)
+      return;
+#if defined(__APPLE__)
+    ah_sokol_hide_window();
+#else
+    log_error("@notimplemented hide_window on this sokol platform");
+#endif
   }
   static void set_window_size(int w, int h) {
     if (metal_detail::g_headless) {
@@ -954,6 +984,13 @@ struct MetalPlatformAPI {
     metal_detail::g_last_frame_tick = 0;
     metal_detail::g_on_demand =
         cfg.frame_mode == frame_loop::Mode::OnDemand;
+    metal_detail::g_start_hidden = cfg.start_hidden;
+    note_window_hidden(cfg.start_hidden &&
+                       cfg.display != DisplayMode::Headless);
+#if defined(__APPLE__)
+    if (cfg.start_hidden && cfg.display != DisplayMode::Headless)
+      ah_sokol_install_hidden_start();
+#endif
     frame_loop::set_mode(cfg.frame_mode);
     frame_loop::request_frame();
 
