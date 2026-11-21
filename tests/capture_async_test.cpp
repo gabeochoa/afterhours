@@ -1,6 +1,3 @@
-// capture_async: readback stays on the render thread (existing
-// capture_render_texture_rgba), encode + write move to a worker. These tests
-// feed synthetic CPU pixels, so no GPU/backend is involved.
 
 #define AFTERHOURS_STB_IMAGE_WRITE_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
@@ -56,7 +53,6 @@ int main() {
   const auto dir = std::filesystem::temp_directory_path() / "ah_capture_async";
   std::filesystem::create_directories(dir);
 
-  // Sync encode: valid PNG bytes that decode back to the same pixels.
   {
     auto capture = make_capture(16, 8);
     auto png = capture_async::encode_png(capture);
@@ -75,7 +71,6 @@ int main() {
     stbi_image_free(decoded);
   }
 
-  // Async save completes with bytes identical to the sync encode.
   {
     auto capture = make_capture(32, 24);
     auto expected = capture_async::encode_png(capture);
@@ -87,8 +82,6 @@ int main() {
           "async save writes correct PNG bytes");
   }
 
-  // Main thread is not blocked on encode: a large incompressible capture
-  // cannot finish encoding before the launching thread's next statement.
   {
     auto job = capture_async::save_async(make_capture(1024, 1024, true),
                                          dir / "big.png");
@@ -96,7 +89,6 @@ int main() {
     check(job.wait(), "big async save completes");
   }
 
-  // Async encode hands bytes back through the future.
   {
     auto capture = make_capture(8, 8);
     auto fut = capture_async::encode_async(capture);
@@ -105,7 +97,6 @@ int main() {
           "encode_async matches sync encode");
   }
 
-  // Error paths: bad capture and unwritable path report false, write nothing.
   {
     RgbaCapture bad;
     bad.width = 4;
