@@ -33,7 +33,6 @@ int main() {
   int codepoints[] = {'A', 'B', 'C'};
   const int count = 3;
 
-  // dpi 1: defaults rasterize at the nominal size, as before.
   graphics::render_scale() = 1;
   check(font_display_scale() == 1.f, "scale 1 at dpi 1");
   check(load_font_from_file(path.c_str()).baseSize == 32,
@@ -44,7 +43,6 @@ int main() {
   const auto measured_1x = measure_text(at_1x, "ABC", 20.f, 1.f);
   check(measured_1x.x > 0.f, "dpi 1 font measures");
 
-  // dpi 2: defaults rasterize at 2x nominal; explicit sizes unchanged.
   graphics::render_scale() = 2;
   check(font_display_scale() == 2.f, "scale 2 at dpi 2");
   check(display_scaled_size(32) == 64, "display_scaled_size(32) == 64");
@@ -60,7 +58,6 @@ int main() {
   check(load_font_for_string("ABC", path.string()).baseSize == 192,
         "load_font_for_string default at dpi 2 is 192px");
 
-  // Logical metrics must not move: same text, same logical size.
   const raylib::Font at_2x = load_font_from_file(path.c_str());
   const auto measured_2x = measure_text(at_2x, "ABC", 20.f, 1.f);
   check(std::fabs(measured_2x.x - measured_1x.x) < 1.f &&
