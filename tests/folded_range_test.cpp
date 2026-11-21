@@ -1,8 +1,3 @@
-// folded_range_test.cpp
-// A folded range used to be re-derived by every virtualized reader: skip the
-// hidden rows, keep one placeholder, and hope selection/scroll indices agree.
-// FoldedRows owns that arithmetic; these check the mapping, not the pixels.
-
 #include "ui_test_harness.h"
 
 #include <afterhours/src/plugins/ui/folded_range.h>
@@ -57,7 +52,7 @@ TEST(fold_at_first_and_last_rows) {
   CHECK(last.visible_count() == 7);
   CHECK(last.is_fold_row(6));
   CHECK(last.model_index(6) == 6);
-  CHECK(last.visible_index(9) == 6); // hidden tail lands on the placeholder
+  CHECK(last.visible_index(9) == 6);
   check_roundtrip(last);
 
   FoldedRows whole(10, {{0, 10}});
@@ -90,7 +85,7 @@ TEST(fold_unfold_and_invalid_ranges) {
   FoldedRows rows(20);
   CHECK(!rows.fold({5, 5}));
   CHECK(!rows.fold({20, 25}));
-  CHECK(rows.fold({5, 25})); // end clamps to the model
+  CHECK(rows.fold({5, 25}));
   CHECK(rows.folds()[0] == FoldRange({5, 20}));
   CHECK(!rows.unfold_model(0));
   CHECK(rows.unfold_visible(rows.visible_index(7)));
@@ -113,16 +108,13 @@ TEST(model_shrink_clamps_folds) {
   check_roundtrip(rows);
 }
 
-// With uniform rows the visible offset is visible_index * row_height, so an
-// anchor above a fold must not move, one below shifts by exactly the rows the
-// placeholder saved, and unfolding restores the original offset.
 TEST(scroll_anchor_offsets) {
   const float h = 20.f;
   FoldedRows rows(100);
   const size_t above = 5, inside = 30, below = 60;
   const float below_before = static_cast<float>(rows.visible_index(below)) * h;
 
-  rows.fold({20, 40}); // 20 hidden rows behind 1 placeholder: saves 19 rows
+  rows.fold({20, 40});
   CHECK(static_cast<float>(rows.visible_index(above)) * h == 100.f);
   CHECK(static_cast<float>(rows.visible_index(inside)) * h == 400.f);
   CHECK(static_cast<float>(rows.visible_index(below)) * h ==

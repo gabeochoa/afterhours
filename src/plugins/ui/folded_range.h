@@ -91,8 +91,7 @@ public:
     return is_fold_row(visible) ? folds_[folds_before(visible)] : FoldRange{};
   }
 
-  // Visible -> model. A fold row maps to its range's begin; out of range
-  // clamps to the last model row (0 when the model is empty).
+  // Visible -> model: a fold row maps to its range's begin.
   size_t model_index(size_t visible) const {
     if (model_count_ == 0)
       return 0;
@@ -103,8 +102,7 @@ public:
     return visible - k + hidden_prefix_[k];
   }
 
-  // Model -> visible. A hidden model row maps to its fold's placeholder row,
-  // so scrolling to it lands on the fold instead of past it.
+  // Model -> visible: hidden rows map to the fold placeholder row.
   size_t visible_index(size_t model) const {
     if (model_count_ == 0)
       return 0;
