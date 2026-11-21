@@ -175,6 +175,60 @@ inline void overwrite_defaults(HasUIContext auto &ctx,
   }
 }
 
+inline AccessibleRole default_accessible_role(ComponentType type) {
+  switch (type) {
+  case ComponentType::Button: return AccessibleRole::Button;
+  case ComponentType::Slider: return AccessibleRole::Slider;
+  case ComponentType::Checkbox:
+  case ComponentType::CheckboxNoLabel: return AccessibleRole::Checkbox;
+  case ComponentType::ToggleSwitch: return AccessibleRole::Switch;
+  case ComponentType::Dropdown: return AccessibleRole::Dropdown;
+  case ComponentType::Stepper: return AccessibleRole::Stepper;
+  case ComponentType::TextInput: return AccessibleRole::TextInput;
+  case ComponentType::CircularProgress: return AccessibleRole::ProgressBar;
+  case ComponentType::Image: return AccessibleRole::Image;
+  default: return AccessibleRole::None;
+  }
+}
+
+// Stamp the resolved semantics onto the entity. `label_for_name` is the
+// widget's visible label (composites clear config.label before building
+// their row, so they pass the saved copy); `value` is the widget-computed
+// value (a slider's percent, a checkbox's on/off) used only when the
+// caller set no explicit accessible value. Nothing resolved -> no
+// component, so plain layout elements cost nothing.
+inline void apply_accessibility(Entity &entity, const ComponentConfig &config,
+                                AccessibleRole fallback_role,
+                                const std::string &label_for_name = "",
+                                const std::string &value = "") {
+  HasAccessibility resolved;
+  resolved.role = config.accessible.role != AccessibleRole::None
+                      ? config.accessible.role
+                      : fallback_role;
+  resolved.name = resolve_accessible_name(
+      config.accessible.name,
+      label_for_name.empty() && !config.label.empty() ? config.label
+                                                       : label_for_name,
+      config.tooltip_text);
+  resolved.value =
+      !config.accessible.value.empty() ? config.accessible.value : value;
+  resolved.description = config.accessible.description;
+  if (resolved.description.empty() &&
+      !accessible_is_blank(config.accessible.name) &&
+      !accessible_is_blank(config.tooltip_text) &&
+      config.tooltip_text != resolved.name)
+    resolved.description = config.tooltip_text;
+  if (resolved.empty()) {
+    entity.removeComponentIfExists<HasAccessibility>();
+    return;
+  }
+  auto &ha = entity.addComponentIfMissing<HasAccessibility>();
+  ha.role = resolved.role;
+  ha.name = resolved.name;
+  ha.value = resolved.value;
+  ha.description = resolved.description;
+}
+
 inline void apply_flags(Entity &entity, const ComponentConfig &config) {
   entity.get<UIComponent>().skip_when_tabbing = config.skip_when_tabbing;
   entity.get<UIComponent>().focus_ring_offset = config.focus_ring_offset;
@@ -608,8 +662,10 @@ inline void apply_restyle(HasUIContext auto &ctx, Entity &entity,
 }
 
 inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
-                                   Entity &parent, const ComponentConfig &config,
-                                   const std::string &debug_name = "") {
+Entity &parent, const ComponentConfig &config,
+                                   const std::string &debug_name = "",
+                                   ComponentType component_type =
+                                       ComponentType::Div) {
   (void)debug_name;
   bool created = false;
 
@@ -650,6 +706,8 @@ inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
     mods.origin_y = config.origin_y;
   }
   apply_label(ctx, entity, config);
+  apply_accessibility(entity, config,
+                      default_accessible_role(component_type));
   apply_texture(entity, config);
   apply_shadow(entity, config);
   apply_border(entity, config);
@@ -724,7 +782,7 @@ inline bool init_component(HasUIContext auto &ctx, EntityParent ep_pair,
   detail::overwrite_defaults(ctx, config, component_type, enable_color);
   detail::validate_config(config, debug_name);
   return detail::add_missing_components(ctx, entity, parent, config,
-                                        debug_name);
+                                        debug_name, component_type);
 }
 
 template <typename Component, typename... CArgs>
