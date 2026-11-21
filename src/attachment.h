@@ -59,7 +59,7 @@ inline bool attach(Entity &child, Entity &parent, Pose2D local = {},
   if (filter && !filter(child, parent)) return false;
   if (parent.has<AttachedTo>() && parent.get<AttachedTo>().parent == child.id)
     return false;
-  auto &rel = child.addComponentIfMissing<AttachedTo>();
+  auto &rel = *child.toggleComponent<AttachedTo>(true);
   rel.parent = parent.id;
   rel.socket = std::move(socket);
   rel.local = local;
@@ -80,7 +80,7 @@ inline bool attach(EntityCollection &ec, Entity &child, Entity &parent,
   return attach(child, parent, local, std::move(socket));
 }
 
-inline void detach(Entity &child) { child.removeComponentIfExists<AttachedTo>(); }
+inline void detach(Entity &child) { child.toggleComponent<AttachedTo>(false); }
 inline bool is_attached(const Entity &e) {
   return e.has<AttachedTo>() && e.get<AttachedTo>().attached();
 }
