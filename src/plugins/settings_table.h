@@ -1,33 +1,5 @@
 #pragma once
 
-// One field table for a settings struct: JSON (de)serialization plus the
-// generic `set_setting` / `expect_setting` E2E commands, from one list.
-//
-//   struct GameSettings {
-//     bool fullscreen = false;
-//     int width = 1280;
-//     float volume = 0.5f;
-//     std::string player_name = "player";
-//   };
-//   static const auto kGameSettingsFields =
-//       afterhours::settings_fields<GameSettings>(
-//           afterhours::setting_field("fullscreen",
-//           &GameSettings::fullscreen),
-//           afterhours::setting_field("width", &GameSettings::width),
-//           afterhours::setting_field("volume", &GameSettings::volume),
-//           afterhours::setting_field("player_name",
-//           &GameSettings::player_name));
-//
-//   json j = afterhours::settings_to_json(settings, kGameSettingsFields);
-//   std::string err;
-//   if (!afterhours::settings_from_json(settings, kGameSettingsFields, j,
-//   &err))
-//     log_warn("settings: {}", err);
-//
-// Supported member types: bool, int, long, float, double, std::string.
-// Nested structs, containers and enums-by-name are not in this table; keep
-// hand-writing to_json/from_json for those (nlohmann ADL already covers it).
-
 #include <format>
 #include <functional>
 #include <string>
@@ -50,7 +22,6 @@ template <typename T> struct SettingField {
   std::string name;
   SettingKind kind;
   std::function<json(const T &)> to_json;
-  // Each setter validates before assigning, so a bad value leaves obj alone.
   std::function<bool(const json &, std::string &)> check_json;
   std::function<void(T &, const json &)> set_json;
   std::function<bool(T &, std::string_view, std::string &)> set_string;
@@ -175,9 +146,6 @@ json settings_to_json(const T &obj,
   return j;
 }
 
-// Missing fields keep their current value and unknown fields are ignored,
-// matching the settings plugin's hand-written from_json functions. A type
-// mismatch fails the whole load before anything is assigned.
 template <typename T>
 bool settings_from_json(T &obj, const std::vector<SettingField<T>> &fields,
                         const json &j, std::string *error = nullptr) {
@@ -199,10 +167,6 @@ bool settings_from_json(T &obj, const std::vector<SettingField<T>> &fields,
 }
 
 #if defined(AFTER_HOURS_ENABLE_E2E_TESTING)
-// Registers two commands over obj, which must outlive the SystemManager:
-//   set_setting <name> <value>      fail on unknown field / bad value
-//   expect_setting <name> <value>   retrying expect, like other expect_*
-// String values may span several script words; they are joined with spaces.
 template <typename T>
 void register_setting_commands(SystemManager &sm,
                                const std::vector<SettingField<T>> &fields,
@@ -245,7 +209,6 @@ void register_setting_commands(SystemManager &sm,
                                cmd.arg(0)));
           return;
         }
-        // Compare canonical spellings so 0.50 and 0.5 expect the same float.
         T probe = obj;
         std::string err;
         if (!field->set_string(probe, join_value(cmd), err)) {
