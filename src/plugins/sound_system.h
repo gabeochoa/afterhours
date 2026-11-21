@@ -4,6 +4,7 @@
 #include <cmath>
 #include <functional>
 #include <map>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -19,15 +20,13 @@
 namespace afterhours {
 
 struct sound_system : developer::Plugin {
-    // Logged even on stub backends, where PlaySound itself is a no-op.
     struct PlayRecord {
         std::string name;
         std::string bus;
         float volume = 1.f;
         float pan = 0.5f;
         float pitch = 1.f;
-        bool positional = false;
-        Vector3Type position{0.f, 0.f, 0.f};
+        std::optional<Vector3Type> position;
     };
 
     struct Listener {
@@ -200,7 +199,9 @@ struct sound_system : developer::Plugin {
             ::afterhours::PlaySound(sound);
             record_play(PlayRecord{name, bus_of(name),
                                    effective_volume(name) * volume_scale, pan,
-                                   pitch, positional, position});
+                                   pitch,
+                                   positional ? std::optional<Vector3Type>(position)
+                                              : std::nullopt});
         }
 
         void stop(const std::string &name) {
@@ -347,7 +348,7 @@ struct sound_system : developer::Plugin {
             auto &music = get(name);
             ::afterhours::PlayMusicStream(music);
             record_play(PlayRecord{name, bus_of(name), effective_volume(name),
-                                   0.5f, 1.f, false, Vector3Type{0.f, 0.f, 0.f}});
+                                   0.5f, 1.f, std::nullopt});
         }
         void stop(const std::string &name) {
             if (contains(name)) ::afterhours::StopMusicStream(get(name));
