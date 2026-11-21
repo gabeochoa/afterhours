@@ -467,7 +467,8 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
                  // that are only measuring. The overflow warning means "your
                  // text is being cut off and you may not have noticed"; for
                  // those callers it is neither news nor actionable.
-                 bool report_overflow = true) {
+                 bool report_overflow = true,
+                 VerticalAlignment vertical = VerticalAlignment::Middle) {
   // Early return for empty text - prevents infinite loop in font size
   // calculation
   if (text.empty()) {
@@ -654,11 +655,7 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
     [[fallthrough]];
   case TextAlignment::None: // None defaults to Left alignment
   case TextAlignment::Left:
-    position = Vector2Type{
-        .x = container.x + margin_px.x + bearing,
-        .y = container.y + margin_px.y +
-             (container.height - 2 * margin_px.y - text_size.y) / 2,
-    };
+    position.x = container.x + margin_px.x + bearing;
     break;
   case TextAlignment::Center: {
     // Calculate centered position, but clamp to prevent starting before
@@ -667,20 +664,25 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
         (container.width - 2 * margin_px.x - text_size.x) / 2;
     float text_x = container.x + margin_px.x + centered_offset;
     // Clamp so text never starts before container left edge
-    text_x = std::max(container.x + margin_px.x, text_x);
-    position = Vector2Type{
-        .x = text_x,
-        .y = container.y + margin_px.y +
-             (container.height - 2 * margin_px.y - text_size.y) / 2,
-    };
+    position.x = std::max(container.x + margin_px.x, text_x);
     break;
   }
   case TextAlignment::Right:
-    position = Vector2Type{
-        .x = container.x + container.width - margin_px.x - text_size.x,
-        .y = container.y + margin_px.y +
-             (container.height - 2 * margin_px.y - text_size.y) / 2,
-    };
+    position.x = container.x + container.width - margin_px.x - text_size.x;
+    break;
+  }
+  switch (vertical) {
+  default:
+  case VerticalAlignment::Middle:
+    position.y = container.y + margin_px.y +
+                 (container.height - 2 * margin_px.y - text_size.y) / 2;
+    break;
+  case VerticalAlignment::Top:
+    position.y = container.y + margin_px.y;
+    break;
+  case VerticalAlignment::Bottom:
+    position.y =
+        container.y + container.height - margin_px.y - text_size.y;
     break;
   }
 
@@ -859,7 +861,8 @@ static inline void draw_text_in_rect(
     Vector2Type inset = default_text_inset(),
     bool register_text = true,
     // Pinned row height for the multiline split; 0 means the measured one.
-    float line_height_px = 0.0f) {
+    float line_height_px = 0.0f,
+    VerticalAlignment vertical = VerticalAlignment::Middle) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
   // Register text for E2E testing assertions (only visible-in-viewport text)
   if (register_text && testing::test_input::detail::test_mode) {
@@ -894,7 +897,8 @@ static inline void draw_text_in_rect(
     if (font_size <= 0.f)
       font_size = position_text_ex(fm, text, rect, alignment,
                                    inset, explicit_font_size,
-                                   letter_spacing, text_overflow)
+                                   letter_spacing, text_overflow,
+                                   /*report_overflow=*/true, vertical)
                       .rect.height;
     // Only soft-wrap when asked; otherwise break on '\n' alone.
     float max_width = soft_wraps ? rect.width - 2.f * inset.x : 1e9f;
@@ -923,8 +927,13 @@ static inline void draw_text_in_rect(
         }
       }
       float total_h = line_h * static_cast<float>(lines.size());
-      // Vertically center the block within the rect.
-      float y = rect.y + std::max(0.f, (rect.height - total_h) * 0.5f);
+      // Stack the block per its vertical placement within the rect. The
+      // Middle case reduces to plain centring: inset.y cancels out.
+      float y = rect.y + inset.y;
+      if (vertical == VerticalAlignment::Middle)
+        y += std::max(0.f, (rect.height - 2.f * inset.y - total_h) * 0.5f);
+      else if (vertical == VerticalAlignment::Bottom)
+        y += std::max(0.f, rect.height - 2.f * inset.y - total_h);
       for (const auto &ln : lines) {
         // A line that does not fully fit is dropped, not drawn: the
         // own-box clip would otherwise slice it mid-glyph.
@@ -945,7 +954,8 @@ static inline void draw_text_in_rect(
 
   TextPositionResult result = [&]() {
     return position_text_ex(fm, text, rect, alignment, inset,
-                            explicit_font_size, letter_spacing, text_overflow);
+                            explicit_font_size, letter_spacing, text_overflow,
+                            /*report_overflow=*/true, vertical);
   }();
 
   // Draw visual debug indicator if text doesn't fit and debug is enabled
@@ -1059,7 +1069,8 @@ static inline void draw_runs_in_rect(
     Vector2Type inset = default_text_inset(),
     bool register_text = true,
     // Pinned row height; 0 means the measured one.
-    float line_height_px = 0.0f) {
+    float line_height_px = 0.0f,
+    VerticalAlignment vertical = VerticalAlignment::Middle) {
   if (runs.empty() || rect.width <= 0.f)
     return;
 
@@ -1120,7 +1131,11 @@ static inline void draw_runs_in_rect(
     }
   }
   const float total_h = line_h * static_cast<float>(lines.size());
-  float y = rect.y + std::max(0.f, (rect.height - total_h) * 0.5f);
+  float y = rect.y + inset.y;
+  if (vertical == VerticalAlignment::Middle)
+    y += std::max(0.f, (rect.height - 2.f * inset.y - total_h) * 0.5f);
+  else if (vertical == VerticalAlignment::Bottom)
+    y += std::max(0.f, rect.height - 2.f * inset.y - total_h);
 
   for (const auto &line : lines) {
     if (line.empty()) {
@@ -1864,7 +1879,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                           shadow, rotation, centerX, centerY,
                           hasLabel.text_overflow, hasLabel.letter_spacing,
                           explicit_fs, hasLabel.label, immediate_inset, false,
-                          label_line_h);
+                          label_line_h, hasLabel.vertical);
       } else {
         draw_text_in_rect(font_manager, hasLabel.label.c_str(), label_rect,
                           hasLabel.alignment, font_col,
@@ -1872,7 +1887,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                           centerX, centerY, hasLabel.text_overflow,
                           hasLabel.letter_spacing, explicit_fs,
                           /*report_overflow=*/true, immediate_inset, false,
-                          label_line_h);
+                          label_line_h, hasLabel.vertical);
       }
       if (clip_label) {
         if (ancestor_clip)
@@ -2583,8 +2598,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                       ? label_line_h
                       : measure_text(font, "Ag", font_size, spacing).y;
               const float total_h = line_h * static_cast<float>(lines.size());
-              float y = label_rect.y +
-                        std::max(0.f, (label_rect.height - total_h) * 0.5f);
+              float y = label_rect.y;
+              if (hasLabel.vertical == VerticalAlignment::Middle)
+                y += std::max(0.f, (label_rect.height - total_h) * 0.5f);
+              else if (hasLabel.vertical == VerticalAlignment::Bottom)
+                y += std::max(0.f, label_rect.height - total_h);
               for (const auto &line : lines) {
                 if (line.empty()) {
                   y += line_h; // blank line from a "\n\n"
@@ -2603,7 +2621,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                   buffer.add_text(lr, line[0].text, name_for(line[0].weight),
                                   font_size, line[0].color, hasLabel.alignment,
                                   layer, entity.id, stroke, shadow, rotation,
-                                  centerX, centerY, hasLabel.letter_spacing);
+                                  centerX, centerY, hasLabel.letter_spacing,
+                                  hasLabel.vertical);
                 } else {
                   float line_w = 0.f;
                   const std::vector<float> offsets =
@@ -2620,7 +2639,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                     buffer.add_text(sr, run.text, name_for(run.weight),
                                     font_size, run.color, TextAlignment::Left,
                                     layer, entity.id, stroke, shadow, rotation,
-                                    centerX, centerY, hasLabel.letter_spacing);
+                                    centerX, centerY, hasLabel.letter_spacing,
+                                    hasLabel.vertical);
                   }
                 }
                 y += line_h;
@@ -2669,7 +2689,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
               font_manager.resolve_weighted(cmp.font_name, cmp.font_weight),
               result.rect.height, font_col, hasLabel.alignment, layer, entity.id,
               stroke, shadow, rotation, centerX, centerY,
-              hasLabel.letter_spacing);
+              hasLabel.letter_spacing, hasLabel.vertical);
         }
 
         if (clip_label) {

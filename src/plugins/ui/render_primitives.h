@@ -94,6 +94,7 @@ struct RenderPrimitive {
       float font_size;
       Color color;
       TextAlignment alignment;
+      VerticalAlignment vertical = VerticalAlignment::Middle;
       // Rotation data (for rotating text with its parent component)
       float rotation;     // Rotation angle in degrees
       float rot_center_x; // Rotation center X (component center)
@@ -444,7 +445,8 @@ public:
                 const std::optional<TextStroke> &stroke = std::nullopt,
                 const std::optional<TextShadow> &shadow = std::nullopt,
                 float rotation = 0.0f, float rot_center_x = 0.0f,
-                float rot_center_y = 0.0f, float letter_spacing = 0.0f) {
+                float rot_center_y = 0.0f, float letter_spacing = 0.0f,
+                VerticalAlignment vertical = VerticalAlignment::Middle) {
     // Copy strings to arena for stable pointers
     char *text_copy = arena_->create_array_uninitialized<char>(text.size() + 1);
     if (!text_copy) {
@@ -473,6 +475,7 @@ public:
     cmd.data.text.font_size = font_size;
     cmd.data.text.color = color;
     cmd.data.text.alignment = alignment;
+    cmd.data.text.vertical = vertical;
     cmd.data.text.rotation = rotation;
     cmd.data.text.rot_center_x = rot_center_x;
     cmd.data.text.rot_center_y = rot_center_y;
@@ -885,12 +888,18 @@ private:
 
     Vector2Type startPos = {cmd.data.text.rect.x, cmd.data.text.rect.y};
 
-    // Vertically center text for all alignments
+    // Place text vertically per its vertical alignment.
     {
       Vector2Type textSize =
           measure_text_utf8(font, cmd.data.text.text, fontSize, spacing);
-      startPos.y = cmd.data.text.rect.y +
-                   (cmd.data.text.rect.height - textSize.y) / 2.0f;
+      if (cmd.data.text.vertical == VerticalAlignment::Top)
+        startPos.y = cmd.data.text.rect.y;
+      else if (cmd.data.text.vertical == VerticalAlignment::Bottom)
+        startPos.y =
+            cmd.data.text.rect.y + cmd.data.text.rect.height - textSize.y;
+      else
+        startPos.y = cmd.data.text.rect.y +
+                     (cmd.data.text.rect.height - textSize.y) / 2.0f;
 
       if (cmd.data.text.alignment == TextAlignment::Center) {
         float centered_x =
