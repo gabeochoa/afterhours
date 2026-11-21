@@ -22,6 +22,9 @@
 // OPT-IN. Define AFTER_HOURS_ENABLE_MACOS_GESTURES and build with
 // `-fblocks -framework AppKit`. Without it every accessor reads zero, which is
 // the correct answer on a machine with no trackpad anyway.
+//
+// Query gesture_availability() before claiming pinch support in UI: a zero
+// delta means "idle" or "unsupported" and those gate different UI.
 
 #include <atomic>
 
@@ -43,6 +46,12 @@ inline bool is_pinching() {
   return pinch_active.load(std::memory_order_relaxed);
 }
 
+/// Whether a pinch can be delivered at all, as opposed to reading zero
+/// forever. Available means a live source (the monitor below, post-install),
+/// not that a trackpad was seen -- presence is only known at the first
+/// event. Unavailable is a definite no from this build, not a guess.
+enum class Availability { Available, Unavailable, Unknown };
+
 #if defined(__APPLE__) && defined(AFTER_HOURS_ENABLE_MACOS_GESTURES)
 
 } // namespace gestures
@@ -60,6 +69,7 @@ namespace detail {
 // included, to keep AppKit headers out of a C++ TU.
 inline constexpr unsigned long long kEventMaskMagnify = 1ULL << 30;
 inline bool monitor_installed = false;
+inline bool monitor_attempted = false;
 } // namespace detail
 
 /// Call once after the window exists. Idempotent.
@@ -70,6 +80,7 @@ inline bool monitor_installed = false;
 inline void install_pinch_monitor() {
   if (detail::monitor_installed)
     return;
+  detail::monitor_attempted = true;
 
   Class ns_event = objc_getClass("NSEvent");
   if (!ns_event) {
@@ -117,6 +128,16 @@ inline void install_pinch_monitor() {
   detail::monitor_installed = true;
 }
 
+/// Unknown until install_pinch_monitor() has run: compiled support is not
+/// device capability. After a failed install this is Unavailable, not Unknown.
+inline Availability gesture_availability() {
+  if (detail::monitor_installed)
+    return Availability::Available;
+  if (detail::monitor_attempted)
+    return Availability::Unavailable;
+  return Availability::Unknown;
+}
+
 #else
 
 /// No-op off macOS, or when the opt-in macro is not set.
@@ -125,6 +146,11 @@ inline void install_pinch_monitor() {
 /// unconditionally at startup is the right thing to do, and a mouse-only
 /// machine should not be nagged for it.
 inline void install_pinch_monitor() {}
+
+/// This build has no gesture path at all, so the answer is definite.
+inline Availability gesture_availability() {
+  return Availability::Unavailable;
+}
 
 #endif
 
