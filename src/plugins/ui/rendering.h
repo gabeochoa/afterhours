@@ -137,7 +137,7 @@ static inline OptEntity find_clip_ancestor(const Entity &entity) {
     }
     Entity &parent = opt_parent.asE();
 
-    if (parent.has<HasScrollView>() || parent.has<HasClipChildren>()) {
+    if (parent.has_any<HasScrollView, HasClipChildren>()) {
       return opt_parent;
     }
     if (!parent.has<UIComponent>())
@@ -1635,8 +1635,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         entity.get<HasCircularProgressState>();
 
     // Calculate center and radius from the draw_rect
-    float centerX = draw_rect.x + draw_rect.width / 2.0f;
-    float centerY = draw_rect.y + draw_rect.height / 2.0f;
+    const float centerX = rect::center(draw_rect).x;
+    const float centerY = rect::center(draw_rect).y;
     float outerRadius = std::min(draw_rect.width, draw_rect.height) / 2.0f;
     float innerRadius = outerRadius - state.thickness;
     if (innerRadius < 0.0f)
@@ -1761,8 +1761,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
     // Push rotation transform - all subsequent drawing will be rotated around
     // component center
-    float centerX = draw_rect.x + draw_rect.width / 2.0f;
-    float centerY = draw_rect.y + draw_rect.height / 2.0f;
+    const float centerX = rect::center(draw_rect).x;
+    const float centerY = rect::center(draw_rect).y;
     push_rotation(centerX, centerY, rotation);
 
     // Draw shadow first (behind the element)
@@ -2063,13 +2063,10 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       detail::update_scroll_view_content_size(entity);
     }
 
-    if (entity.has<HasColor>() || entity.has<HasLabel>() ||
-        entity.has<HasBorder>() || entity.has<HasNineSliceBorder>() ||
-        entity.has<HasBevelBorder>() ||
-        entity.has<ui::HasImage>() ||
-        entity.has<texture_manager::HasTexture>() ||
-        entity.has<FocusClusterRoot>() || entity.has<HasOnDraw>() ||
-        entity.has<HasCircularProgressState>() || entity.has<HasScrollView>() ||
+    if (entity.has_any<HasColor, HasLabel, HasBorder, HasNineSliceBorder,
+                       HasBevelBorder, ui::HasImage,
+                       texture_manager::HasTexture, FocusClusterRoot, HasOnDraw,
+                       HasCircularProgressState, HasScrollView>() ||
         context.visual_focus_id == entity.id) {
       const bool shaded = entity.has<HasShader>() && entity.get<HasShader>().shader &&
                           entity.get<HasShader>().shader->id != 0;
@@ -2259,8 +2256,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     const HasCircularProgressState &state =
         entity.get<HasCircularProgressState>();
 
-    float centerX = draw_rect.x + draw_rect.width / 2.0f;
-    float centerY = draw_rect.y + draw_rect.height / 2.0f;
+    const float centerX = rect::center(draw_rect).x;
+    const float centerY = rect::center(draw_rect).y;
     float outerRadius = std::min(draw_rect.width, draw_rect.height) / 2.0f;
     float innerRadius = outerRadius - state.thickness;
     if (innerRadius < 0.0f)
@@ -2611,8 +2608,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         label_rect.y += label_inset.y;
         label_rect.width = std::max(0.f, label_rect.width - 2.f * label_inset.x);
         label_rect.height = std::max(0.f, label_rect.height - 2.f * label_inset.y);
-        float centerX = draw_rect.x + draw_rect.width / 2.0f;
-        float centerY = draw_rect.y + draw_rect.height / 2.0f;
+        const float centerX = rect::center(draw_rect).x;
+        const float centerY = rect::center(draw_rect).y;
 
         // Wrap into lines of coloured runs, one command per run. Plain text is
         // the single-run case. Wrapping needs an explicit font size (see
@@ -2870,13 +2867,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       detail::update_scroll_view_content_size(entity);
     }
 
-    if (entity.has<HasColor>() || entity.has<HasLabel>() ||
-        entity.has<HasBorder>() || entity.has<HasNineSliceBorder>() ||
-        entity.has<HasBevelBorder>() ||
-        entity.has<ui::HasImage>() ||
-        entity.has<texture_manager::HasTexture>() ||
-        entity.has<FocusClusterRoot>() || entity.has<HasOnDraw>() ||
-        entity.has<HasCircularProgressState>() || entity.has<HasScrollView>() ||
+    if (entity.has_any<HasColor, HasLabel, HasBorder, HasNineSliceBorder,
+                       HasBevelBorder, ui::HasImage,
+                       texture_manager::HasTexture, FocusClusterRoot, HasOnDraw,
+                       HasCircularProgressState, HasScrollView>() ||
         context.visual_focus_id == entity.id) {
       const bool shaded = entity.has<HasShader>() && entity.get<HasShader>().shader;
       if (shaded)

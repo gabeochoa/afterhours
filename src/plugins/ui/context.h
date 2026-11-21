@@ -489,8 +489,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     if (!opt.has_value())
       return;
     const Entity &e = opt.asE();
-    if (e.has<HasClickListener>() || e.has<HasDragListener>() ||
-        e.has<Hoverable>())
+    if (e.has_any<HasClickListener, HasDragListener, Hoverable>())
       return; // hot could have landed here; the click was simply elsewhere
     warn_once(id,
               "{}({}) will never fire: this element has no click "
