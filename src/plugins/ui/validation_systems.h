@@ -323,7 +323,10 @@ struct ValidateMinFontSize : System<UIComponent, HasLabel> {
     if (!cmp.was_rendered_to_screen || cmp.should_hide)
       return;
 
-    float font_size = resolve_to_pixels(cmp.font_size, screen_height);
+    float font_size = resolve_font_size(
+        cmp.font_size, screen_height, cmp.resolved_scaling_mode,
+        imm::ThemeDefaults::get().theme.ui_scale,
+        imm::ThemeDefaults::get().theme.text_scale);
 
     if (font_size < config.min_font_size) {
       std::string label_hint;

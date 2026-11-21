@@ -329,6 +329,12 @@ struct Theme {
   // values are multiplied by this factor (like browser Ctrl+/- zoom).
   float ui_scale = 1.0f;
 
+  // ===== Text scale =====
+  // Accessibility/user font-size preference: multiplies every resolved font
+  // size (measure + draw) without touching layout sizes. Composes with
+  // ui_scale (whole-UI zoom) and the font tiers. 1.0 = unchanged.
+  float text_scale = 1.0f;
+
   // ===== Text inset =====
   // Space reserved between a label and its own box, on each side, in
   // unscaled pixels. This used to be a hardcoded 5 inside the renderer that
@@ -597,6 +603,13 @@ public:
   // Only affects Adaptive scaling mode. Clamped to [0.5, 3.0].
   Builder &with_ui_scale(float scale) {
     theme_.ui_scale = std::clamp(scale, 0.5f, 3.0f);
+    return *this;
+  }
+
+  // Set the global text-only scale (accessibility font-size preference).
+  // 1.0 = unchanged. Clamped to [0.5, 3.0].
+  Builder &with_text_scale(float scale) {
+    theme_.text_scale = std::clamp(scale, 0.5f, 3.0f);
     return *this;
   }
 
