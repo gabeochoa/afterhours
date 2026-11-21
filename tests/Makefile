@@ -178,6 +178,7 @@ ALL_TESTS := \
 	measure_config_test \
 	scroll_anchor_test \
 	widget_retirement_test \
+	exit_animation_test \
 	text_line_edit_test \
 	grapheme_edit_test \
 	entity_mapping_test \
