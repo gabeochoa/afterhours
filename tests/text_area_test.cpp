@@ -371,6 +371,21 @@ TEST(enter_breaks_the_line_by_default) {
   CHECK(!submitted);
 }
 
+TEST(caret_blink_uses_seconds_and_is_steady_under_instant) {
+  ti::HasTextAreaState s{std::string("ab")};
+  // Blink rate defaults to 0.53s: visible for one rate, hidden for the next,
+  // independent of how many frames those seconds arrive in.
+  CHECK(ti::update_blink(s, 0.2f));
+  CHECK(ti::update_blink(s, 0.2f));
+  CHECK(!ti::update_blink(s, 0.2f)); // 0.6s: past one rate
+  motion::set_instant(true);
+  ti::HasTextAreaState s2{std::string("ab")};
+  bool steady = true;
+  for (int i = 0; i < 10; ++i) steady &= ti::update_blink(s2, 0.2f);
+  motion::set_instant(false);
+  CHECK(steady);
+}
+
 TEST(enter_replaces_selection_and_is_one_undo_step) {
   ImmTestHarness h;
   std::string text = "abcd";
