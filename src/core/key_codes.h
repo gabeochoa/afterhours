@@ -178,52 +178,11 @@ inline std::string to_upper(const std::string &s) {
 
 } // namespace detail
 
-// Map string name to key code (case-insensitive)
-// Accepts: "A", "a", "ENTER", "enter", "CTRL", etc.
-inline int key_from_name(const std::string &name) {
-  // Handle single-char symbols directly (before uppercasing)
-  if (name.length() == 1) {
-    char c = name[0];
-    if (c >= 'a' && c <= 'z')
-      return keys::A + (c - 'a');
-    if (c >= 'A' && c <= 'Z')
-      return keys::A + (c - 'A');
-    if (c >= '0' && c <= '9')
-      return keys::ZERO + (c - '0');
-    // Punctuation symbols
-    switch (c) {
-    case ' ':
-      return keys::SPACE;
-    case '\'':
-      return keys::APOSTROPHE;
-    case ',':
-      return keys::COMMA;
-    case '-':
-      return keys::MINUS;
-    case '.':
-      return keys::PERIOD;
-    case '/':
-      return keys::SLASH;
-    case ';':
-      return keys::SEMICOLON;
-    case '=':
-      return keys::EQUAL;
-    case '[':
-      return keys::LEFT_BRACKET;
-    case ']':
-      return keys::RIGHT_BRACKET;
-    case '\\':
-      return keys::BACKSLASH;
-    case '`':
-      return keys::GRAVE;
-    }
-  }
+namespace detail {
 
-  // Normalize to uppercase for consistent lookup
-  std::string key = detail::to_upper(name);
-
-  // clang-format off
-  static constexpr std::array<std::pair<std::string_view, int>, 85> key_map = {{
+// Named keys, shared by key_from_name and key_to_name.
+// clang-format off
+inline constexpr std::array<std::pair<std::string_view, int>, 85> key_names{{
       // Function keys
       {"F1", keys::F1}, {"F2", keys::F2}, {"F3", keys::F3}, {"F4", keys::F4},
       {"F5", keys::F5}, {"F6", keys::F6}, {"F7", keys::F7}, {"F8", keys::F8},
@@ -273,10 +232,56 @@ inline int key_from_name(const std::string &name) {
       {"KP_DIVIDE", keys::KP_DIVIDE}, {"KP_MULTIPLY", keys::KP_MULTIPLY},
       {"KP_SUBTRACT", keys::KP_SUBTRACT}, {"KP_ADD", keys::KP_ADD},
       {"KP_ENTER", keys::KP_ENTER}, {"KP_EQUAL", keys::KP_EQUAL},
-  }};
-  // clang-format on
+}};
+// clang-format on
 
-  for (const auto &[name_sv, code] : key_map) {
+} // namespace detail
+
+// Map string name to key code (case-insensitive)
+// Accepts: "A", "a", "ENTER", "enter", "CTRL", etc.
+inline int key_from_name(const std::string &name) {
+  // Handle single-char symbols directly (before uppercasing)
+  if (name.length() == 1) {
+    char c = name[0];
+    if (c >= 'a' && c <= 'z')
+      return keys::A + (c - 'a');
+    if (c >= 'A' && c <= 'Z')
+      return keys::A + (c - 'A');
+    if (c >= '0' && c <= '9')
+      return keys::ZERO + (c - '0');
+    // Punctuation symbols
+    switch (c) {
+    case ' ':
+      return keys::SPACE;
+    case '\'':
+      return keys::APOSTROPHE;
+    case ',':
+      return keys::COMMA;
+    case '-':
+      return keys::MINUS;
+    case '.':
+      return keys::PERIOD;
+    case '/':
+      return keys::SLASH;
+    case ';':
+      return keys::SEMICOLON;
+    case '=':
+      return keys::EQUAL;
+    case '[':
+      return keys::LEFT_BRACKET;
+    case ']':
+      return keys::RIGHT_BRACKET;
+    case '\\':
+      return keys::BACKSLASH;
+    case '`':
+      return keys::GRAVE;
+    }
+  }
+
+  // Normalize to uppercase for consistent lookup
+  std::string key = detail::to_upper(name);
+
+  for (const auto &[name_sv, code] : detail::key_names) {
     if (name_sv == key)
       return code;
   }
@@ -324,6 +329,18 @@ inline int gamepad_axis_from_name(const std::string &name) {
       return code;
   }
   return -1;
+}
+
+// Map a key code back to the name key_from_name accepts for it.
+inline std::string key_to_name(int key) {
+  if (key >= keys::A && key <= keys::Z)
+    return std::string(1, static_cast<char>('A' + (key - keys::A)));
+  if (key >= keys::ZERO && key <= keys::NINE)
+    return std::string(1, static_cast<char>('0' + (key - keys::ZERO)));
+  for (const auto &[name, code] : detail::key_names)
+    if (code == key)
+      return std::string(name);
+  return "KEY " + std::to_string(key);
 }
 
 // Key combo with modifiers
