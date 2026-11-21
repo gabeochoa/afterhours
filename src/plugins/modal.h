@@ -1111,7 +1111,7 @@ struct modal : developer::Plugin {
         std::optional<ModalConfig> config = std::nullopt) {
         return detail::create_confirm_content(ctx, ep_pair, open, title, message,
                                               confirm_label, cancel_label,
-                                              /*danger=*/true, config);
+                                              true, config);
     }
 
     // modal::prompt - Text input dialog. On OK, `value` holds the entered text
