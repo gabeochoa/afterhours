@@ -218,6 +218,7 @@ ALL_TESTS := \
 	trailing_anchor_test \
 	dialog_test \
 	escape_owner_test \
+	modal_centering_test \
 	dump_ui_test \
 	scroll_anchor_test \
 	measure_config_test \
@@ -406,6 +407,7 @@ RAYLIB_TESTS := \
 	instance_batcher_persist_test \
 	dialog_test \
 	escape_owner_test \
+	modal_centering_test \
 	dump_ui_test \
 	scroll_anchor_test \
 	measure_config_test \
