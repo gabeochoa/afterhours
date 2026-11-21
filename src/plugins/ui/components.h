@@ -566,8 +566,6 @@ struct HasScrollView : BaseComponent {
   // Pixels of rows a virtualized list chose not to build, added into
   // content_size so the scrollbar still spans the whole list.
   Vector2Type unbuilt_content_size = {0, 0};
-  // Last virtual_list window on this view: built is [first, last) including
-  // overscan, visible is the viewport-only sub-range. See virtual_list_range().
   size_t virtual_first = 0, virtual_last = 0;
   size_t virtual_visible_first = 0, virtual_visible_last = 0;
   size_t virtual_count = 0;
@@ -731,8 +729,6 @@ struct HasVirtualListIndex : BaseComponent {
   size_t pending_prepend = 0;
   float last_scale = 1.f;
   float last_gap = 0.f;
-  // Caller key -> row slot for virtual_list_keyed; slots are never reused so
-  // a row entity (and its retained state) follows its key, not its index.
   std::unordered_map<size_t, EntityID> key_slots;
   EntityID next_key_slot = 0;
 

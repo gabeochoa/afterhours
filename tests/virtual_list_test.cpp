@@ -383,17 +383,17 @@ TEST(virtual_list_visible_range_at_offsets_and_boundaries) {
 
   frame(0.f); frame(0.f);
   CHECK(range().visible_first == 0 && range().visible_last == 10);
-  CHECK(range().first == 0 && range().last == 15); // viewport + 4 overscan + edge row
+  CHECK(range().first == 0 && range().last == 15);
   CHECK(range().count == 100 && !range().near_end(5));
 
-  frame(20.f); frame(20.f); // exact row boundary (2nd build sees the offset)
+  frame(20.f); frame(20.f);
   CHECK(range().visible_first == 1 && range().visible_last == 11);
-  frame(25.f); frame(25.f); // partial rows at both edges count as visible
+  frame(25.f); frame(25.f);
   CHECK(range().visible_first == 1 && range().visible_last == 12);
   frame(200.f); frame(200.f);
   CHECK(range().visible_first == 10 && range().visible_last == 20);
 
-  frame(1800.f); frame(1800.f); // max offset: 100*20 - 200
+  frame(1800.f); frame(1800.f);
   CHECK(range().visible_first == 90 && range().visible_last == 100);
   CHECK(range().last == 100 && range().near_end(5));
 }
@@ -424,12 +424,12 @@ TEST(virtual_list_keyed_identity_survives_insert_and_remove_above) {
     stamp_for[key] = AutoLayout::to_ent_static(id).get<RowStamp>().key;
   CHECK(before.size() >= 10);
 
-  items = {8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21}; // +2 above, -10
+  items = {8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
   frame();
   for (const auto &[key, id] : before) {
     if (key == 10) { CHECK(row_for.count(key) == 0); continue; }
-    if (!row_for.count(key)) continue; // scrolled out of the built window
-    CHECK(row_for[key] == id); // entity follows key, not new index
+    if (!row_for.count(key)) continue;
+    CHECK(row_for[key] == id);
     CHECK(AutoLayout::to_ent_static(id).get<RowStamp>().key == stamp_for[key]);
   }
   CHECK(row_for.count(8) && row_for.count(9));

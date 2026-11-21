@@ -264,7 +264,6 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
       const float v_raw = sv.scroll_offset.y - top_padding;
       const float v_lo = std::max(0.f, v_raw);
       const float v_hi = v_raw + view_h_out;
-      // A row ending exactly at v_lo / starting exactly at v_hi is not visible.
       size_t vf = static_cast<size_t>(std::clamp<long>(rows.index_at(v_lo), 0, n));
       while (vf < count && rows.offset_of(vf) + rows.height_of(vf) <= v_lo) vf++;
       size_t vl = static_cast<size_t>(std::clamp<long>(rows.index_at(v_hi), 0, n));
@@ -318,7 +317,6 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
   HasVirtualListIndex *key_index = nullptr;
   if (keys) {
     key_index = &entity.template addComponentIfMissing<HasVirtualListIndex>();
-    // Drop slots for keys no longer present; live slots keep their numbers.
     std::unordered_set<size_t> live(keys->begin(), keys->end());
     for (auto it = key_index->key_slots.begin(); it != key_index->key_slots.end();)
       it = live.contains(it->first) ? std::next(it) : key_index->key_slots.erase(it);
@@ -327,7 +325,7 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
     bool now_a_different_item = false;
     EntityID slot = static_cast<EntityID>(i % capacity);
     size_t item_key = i + 1;
-    if (keys) { // keyed: slot is assigned once per key, so state follows the item
+    if (keys) {
       item_key = (*keys)[i] + 1;
       auto [it, inserted] = key_index->key_slots.try_emplace((*keys)[i], key_index->next_key_slot);
       if (inserted) key_index->next_key_slot++;
@@ -439,10 +437,6 @@ inline void prepend_virtual_rows(Entity &list, size_t count) {
          static_cast<float>(index) * idx.last_gap;
 }
 
-/// Keyed uniform list: `key_of(index)` gives a stable item key, and the row
-/// entity (with any state on it or its children) follows that key across
-/// inserts/removes/reorders instead of following its window position.
-/// Keys must be unique per item; key_of is asked once per item per build.
 template <typename KeyFn, typename RenderRow>
 ElementResult virtual_list_keyed(HasUIContext auto &ctx, EntityParent ep_pair,
                                  size_t count, float row_height, KeyFn &&key_of,
@@ -456,7 +450,6 @@ ElementResult virtual_list_keyed(HasUIContext auto &ctx, EntityParent ep_pair,
                            std::forward<RenderRow>(render_row), config, &keys);
 }
 
-/// Keyed measured list: keyed identity plus the retained height index above.
 template <typename KeyFn, typename HeightFn, typename RenderRow>
 ElementResult virtual_list_keyed(HasUIContext auto &ctx, EntityParent ep_pair,
                                  size_t count, KeyFn &&key_of, HeightFn &&height_of,
@@ -477,8 +470,6 @@ ElementResult virtual_list_keyed(HasUIContext auto &ctx, EntityParent ep_pair,
   return virtual_list_impl(ctx, ep_pair, rows, std::forward<RenderRow>(render_row), config, &keys);
 }
 
-/// Window of a virtual_list as of its last build: built includes overscan,
-/// visible is only what the viewport shows. Both are [first, last) indices.
 struct VirtualListRange {
   size_t first = 0, last = 0;
   size_t visible_first = 0, visible_last = 0;
