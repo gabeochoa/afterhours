@@ -1,20 +1,13 @@
-// E2EApp: the create() gate, custom handlers running, and `screenshot`
-// queueing a name for post_render.
 #include "ui_test_harness.h"
-
 #include <afterhours/src/plugins/e2e_testing/app.h>
-
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <string>
-
 using namespace afterhours;
 using namespace afterhours::testing;
-
 static int checks_run = 0;
 static int checks_passed = 0;
-
 static void check(bool cond, const std::string &what) {
   checks_run++;
   if (cond)
@@ -22,9 +15,7 @@ static void check(bool cond, const std::string &what) {
   else
     fprintf(stderr, "  FAIL: %s\n", what.c_str());
 }
-
 static int lambda_arg = 0;
-
 struct MyCommand : System<PendingE2ECommand> {
   inline static int seen = 0;
   void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -34,25 +25,21 @@ struct MyCommand : System<PendingE2ECommand> {
     cmd.consume();
   }
 };
-
 int main() {
   printf("=== E2EApp ===\n\n");
   EntityCollection collection;
   EntityHelper::set_default_collection(&collection);
-
   {
     char a0[] = "game";
     char *argv[] = {a0};
     check(E2EApp::create(1, argv) == nullptr, "no --e2e, no app");
   }
-
   {
     char a0[] = "game", a1[] = "--test-script", a2[] = "/nonexistent.e2e";
     char *argv[] = {a0, a1, a2};
     check(E2EApp::create(3, argv) == nullptr,
           "--e2e with no scripts is nullptr, so the game can exit 1");
   }
-
   const auto script =
       std::filesystem::temp_directory_path() / "e2e_app_test.e2e";
   {
@@ -119,7 +106,6 @@ int main() {
   }
   std::filesystem::remove(script);
   EntityHelper::set_default_collection(nullptr);
-
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);

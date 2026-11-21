@@ -1,38 +1,10 @@
 #pragma once
-
-// One-call e2e setup: args, handler order, runner tick, screenshots, exit
-// code. This is the e2e piece split out of the pong-gaps branch
-// (decide-e2e-one-call-setup, option B); it deliberately does not depend on
-// the canvas / none-backend work that branch also carries. A game either
-// drives the loop itself:
-//
-//   auto e2e = testing::E2EApp::create(argc, argv, register_custom);
-//   // per frame: if (e2e) e2e->tick(dt); ... draw ...
-//   // after drawing to your render texture: if (e2e) e2e->post_render(rt);
-//   // at exit: return e2e ? e2e->finish() : 0;
-//
-// or hands its graphics::RunConfig over wholesale:
-//
-//   auto e2e = testing::E2EApp::attach(cfg, argc, argv, register_custom);
-//   graphics::run(cfg);
-//   return e2e ? e2e->exit_code : 0;
-//
-// attach() wraps cfg's frame/cleanup, forces a fixed dt (scripts count
-// frames), maps --headless onto cfg.display, and quits when the scripts
-// finish. Screenshots under attach() need a source for the pixels: set
-// `screenshot_source` to return the game's render texture and the wrapper
-// flushes a queued `screenshot <name>` from it at the top of the next frame
-// (it still holds the last frame). Games driving create() themselves call
-// post_render() directly instead. Handlers tick every frame via tick(),
-// even while gameplay is paused.
-
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <memory>
 #include <string>
-
 #include "../../drawing_helpers.h"
 #include "../../graphics.h"
 #include "../../random_engine.h"
@@ -41,46 +13,31 @@
 #include "platform_test_input.h"
 #include "runner.h"
 #include "test_input.h"
-
 namespace afterhours {
 namespace testing {
-
 struct E2EApp {
   E2EArgs args;
   E2ERunner runner;
   SystemManager handlers;
-  // Where screenshots go when --screenshot-dir is not given.
   std::string default_screenshot_dir;
   std::string pending_screenshot;
-  // Optional pixel source for attach(): the render texture a queued
-  // screenshot should be read from. Unset, screenshots queue but never
-  // flush under attach() (games on create() call post_render() instead).
   std::function<const graphics::RenderTextureType *()> screenshot_source;
-  // Set by finish() when attach()ed; 1 if the run could not start.
   int exit_code = 0;
-
-  // nullptr without --e2e or with no scripts. register_custom adds the
-  // game's handlers between the builtins and the unknown-command handler.
   static std::unique_ptr<E2EApp>
   create(int argc, char *argv[],
          const std::function<void(SystemManager &)> &register_custom = {},
          const std::string &default_screenshot_dir = "") {
     if (!should_run_e2e(argc, argv))
       return nullptr;
-
     auto app = std::make_unique<E2EApp>();
     app->args = parse_e2e_args(argc, argv);
     app->default_screenshot_dir = default_screenshot_dir;
-    // The input plugin only consults injected input while test_mode is on.
     platform_input::set_test_mode(true);
     configure_runner(app->runner, app->args);
-
     E2EApp *self = app.get();
     register_builtin_handlers(app->handlers);
     app->handlers.register_update_system(std::make_unique<HandleScreenshotCommand>(
         [self](const std::string &name) {
-          // Capture is deferred to post_render(), which has the pixels;
-          // queueing always succeeds, a failed write there only logs.
           self->pending_screenshot = name;
           return true;
         }));
@@ -91,7 +48,6 @@ struct E2EApp {
       register_custom(app->handlers);
     register_unknown_handler(app->handlers);
     register_cleanup(app->handlers);
-
     if (!app->args.script_dir.empty())
       app->runner.load_scripts_from_directory(app->args.script_dir);
     else if (!app->args.script_path.empty())
@@ -103,9 +59,6 @@ struct E2EApp {
     }
     return app;
   }
-
-  // For graphics::run: wraps cfg with the e2e loop when argv asks for one,
-  // else returns nullptr and leaves cfg alone.
   static std::shared_ptr<E2EApp>
   attach(graphics::RunConfig &cfg, int argc, char *argv[],
          const std::function<void(SystemManager &)> &register_custom = {},
@@ -114,7 +67,7 @@ struct E2EApp {
       return nullptr;
     std::shared_ptr<E2EApp> app =
         create(argc, argv, register_custom, default_screenshot_dir);
-    if (!app) { // no scripts: init, then quit with a failure
+    if (!app) {
       app = std::make_shared<E2EApp>();
       app->exit_code = 1;
       cfg.init = [init = cfg.init] {
@@ -125,12 +78,11 @@ struct E2EApp {
       return app;
     }
     cfg.display = app->args.display_mode();
-    // Scripts count frames, so a frame must be the same game time every run.
     if (cfg.fixed_dt <= 0.f)
       cfg.fixed_dt = 1.f / 60.f;
     cfg.frame = [app, frame = cfg.frame, dt = cfg.fixed_dt] {
       if (app->screenshot_source) {
-        if (const auto *rt = app->screenshot_source()) // holds last frame
+        if (const auto *rt = app->screenshot_source())
           app->post_render(*rt);
       }
       if (app->finished()) {
@@ -148,25 +100,16 @@ struct E2EApp {
     };
     return app;
   }
-
-  // Opt in to repeatable runs: seeds RandomEngine now and at the start of
-  // every script. Unset, RandomEngine stays randomly seeded.
   void set_seed(std::uint32_t seed) {
     RandomEngine::get().set_seed(seed);
     runner.set_reset_callback([seed] { RandomEngine::get().set_seed(seed); });
   }
-
-  // Call before gameplay: dispatches the next command and runs the handlers,
-  // so injected input lands in the same frame's gameplay.
   void tick(float dt) {
     test_input::reset_frame();
     runner.tick(dt);
     EntityHelper::merge_entity_arrays();
     handlers.tick_all(EntityHelper::get_entities_for_mod(), dt);
   }
-
-  // Call after end_drawing: writes a pending `screenshot <name>` from the
-  // game's render texture.
   void post_render(const graphics::RenderTextureType &target) {
     if (pending_screenshot.empty())
       return;
@@ -187,15 +130,11 @@ struct E2EApp {
     if (!out)
       log_warn("e2e: screenshot '{}' failed to write {}", name, path.string());
   }
-
   bool finished() const { return runner.is_finished(); }
-
-  // Prints per-script results. 0 only if every script ran and passed.
   int finish() const {
     runner.print_results();
     return runner.is_finished() && !runner.has_failed() ? 0 : 1;
   }
 };
-
-} // namespace testing
-} // namespace afterhours
+}
+}
