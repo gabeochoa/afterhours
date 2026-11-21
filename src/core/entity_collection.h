@@ -37,6 +37,11 @@ struct EntityCollection {
   Entities entities_DO_NOT_USE;
   Entities temp_entities;
   std::set<int> permanent_ids;
+  // Declared ownership: owner id -> owned ids, and the reverse (one owner
+  // per owned entity). Runtime-only; pruned to live ids after every sweep
+  // so a recycled id never inherits a dead entity's owner.
+  std::unordered_map<EntityID, std::vector<EntityID>> owned_by_owner_;
+  std::unordered_map<EntityID, EntityID> owner_of_;
   std::unordered_map<ComponentID, Entity *> singletonMap;
 
   // Handle store:
@@ -491,6 +496,99 @@ struct EntityCollection {
     return singletonMap.contains(id);
   }
 
+  // Declare that `owner` owns `owned`: when owner is cleaned up, owned is
+  // cleaned up with it, transitively. Re-declaring moves the owned entity.
+  void declare_ownership(EntityID owner, EntityID owned) {
+    if (owner < 0 || owned < 0 || owner == owned)
+      return;
+    release_ownership(owned);
+    owned_by_owner_[owner].push_back(owned);
+    owner_of_[owned] = owner;
+  }
+  void declare_ownership(Entity &owner, Entity &owned) {
+    declare_ownership(owner.id, owned.id);
+  }
+
+  // Undo declare_ownership for `owned`; returns whether one existed.
+  bool release_ownership(EntityID owned) {
+    auto it = owner_of_.find(owned);
+    if (it == owner_of_.end())
+      return false;
+    auto kids = owned_by_owner_.find(it->second);
+    if (kids != owned_by_owner_.end()) {
+      auto &v = kids->second;
+      v.erase(std::remove(v.begin(), v.end(), owned), v.end());
+      if (v.empty())
+        owned_by_owner_.erase(kids);
+    }
+    owner_of_.erase(it);
+    return true;
+  }
+
+  [[nodiscard]] EntityID owner_of(EntityID owned) const {
+    auto it = owner_of_.find(owned);
+    return it == owner_of_.end() ? -1 : it->second;
+  }
+  [[nodiscard]] std::vector<EntityID> owned_entities(EntityID owner) const {
+    auto it = owned_by_owner_.find(owner);
+    return it == owned_by_owner_.end() ? std::vector<EntityID>{} : it->second;
+  }
+
+  // Flag every owned descendant of a cleanup-flagged entity, cycle-safe.
+  void expand_cleanup_to_owned() {
+    std::vector<EntityID> queue;
+    std::unordered_set<EntityID> seen;
+    auto seed = [&](const Entities &ents) {
+      for (const auto &sp : ents)
+        if (sp && sp->cleanup && seen.insert(sp->id).second)
+          queue.push_back(sp->id);
+    };
+    seed(entities_DO_NOT_USE);
+    seed(temp_entities);
+    for (size_t i = 0; i < queue.size(); ++i) {
+      auto it = owned_by_owner_.find(queue[i]);
+      if (it == owned_by_owner_.end())
+        continue;
+      for (EntityID kid : it->second) {
+        if (!seen.insert(kid).second)
+          continue;
+        queue.push_back(kid);
+        auto mark = [&](Entities &ents) {
+          for (auto &sp : ents)
+            if (sp && sp->id == kid)
+              sp->cleanup = true;
+        };
+        mark(entities_DO_NOT_USE);
+        mark(temp_entities);
+      }
+    }
+  }
+
+  void prune_ownership_to_live() {
+    std::unordered_set<EntityID> live;
+    for (const auto &sp : entities_DO_NOT_USE)
+      if (sp)
+        live.insert(sp->id);
+    for (auto it = owned_by_owner_.begin(); it != owned_by_owner_.end();) {
+      if (!live.count(it->first)) {
+        it = owned_by_owner_.erase(it);
+        continue;
+      }
+      auto &v = it->second;
+      v.erase(std::remove_if(v.begin(), v.end(),
+                             [&](EntityID id) { return !live.count(id); }),
+              v.end());
+      if (v.empty())
+        it = owned_by_owner_.erase(it);
+      else
+        ++it;
+    }
+    for (auto it = owner_of_.begin(); it != owner_of_.end();)
+      it = (live.count(it->first) && live.count(it->second))
+               ? std::next(it)
+               : owner_of_.erase(it);
+  }
+
   void markIDForCleanup(const int e_id) {
     if (e_id < 0)
       return;
@@ -515,6 +613,9 @@ struct EntityCollection {
   }
 
   void cleanup() {
+    // Before merge: merge drops cleanup-flagged temp entities outright, so
+    // the cascade must flag their owned entities first.
+    expand_cleanup_to_owned();
     merge_entity_arrays();
     Entities &entities = get_entities_for_mod();
 
@@ -566,6 +667,7 @@ struct EntityCollection {
       }
     }
     entities.resize(write);
+    prune_ownership_to_live();
   }
 
   void delete_all_entities_NO_REALLY_I_MEAN_ALL() {
@@ -583,6 +685,8 @@ struct EntityCollection {
     temp_entities.clear();
     permanent_ids.clear();
     singletonMap.clear();
+    owned_by_owner_.clear();
+    owner_of_.clear();
   }
 
   void delete_all_entities(const bool include_permanent) {
@@ -632,6 +736,7 @@ struct EntityCollection {
         std::swap(entities[i], entities.back());
       entities.pop_back();
     }
+    prune_ownership_to_live();
   }
 
   // Rebuild the handle store (slots/free list/id mapping) from the current
@@ -672,6 +777,8 @@ struct EntityCollection {
     temp_entities.clear();
     permanent_ids.clear();
     singletonMap.clear();
+    owned_by_owner_.clear();
+    owner_of_.clear();
 
     // Replace and rebuild indices.
     entities_DO_NOT_USE = std::move(new_entities);
