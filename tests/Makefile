@@ -223,6 +223,7 @@ ALL_TESTS := \
 	measure_config_test \
 	scroll_anchor_test \
 	widget_retirement_test \
+	scroll_to_test \
 	text_line_edit_test \
 	grapheme_edit_test \
 	entity_mapping_test \
@@ -290,6 +291,7 @@ ALL_TESTS := \
 	render_order_test \
 	draw_over_test \
 	scroll_smoothing_test \
+	scroll_to_test \
 	setup_test \
 	slot_at_creation_test \
 	size_constraints_test \
