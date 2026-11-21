@@ -1,9 +1,3 @@
-// E2E Testing Framework - Screen-level pixel assertions
-//
-// expect_screenshot needs baselines: something must be captured once honestly
-// before the diff means anything. expect_screen_luma catches the regression
-// without one -- a black screen, a washed-out screen, a missing background --
-// by asserting the average luminance of the whole frame lands in a range.
 #pragma once
 
 #include <chrono>
@@ -64,8 +58,6 @@ inline void set_provider(LumaProvider p) {
 }
 
 #if defined(AFTER_HOURS_USE_RAYLIB) || defined(AFTER_HOURS_SOKOL)
-// capture_frame-style readback composed from main: PNG to a temp file,
-// decoded with the CPU image API (#81) in src/image.h.
 inline void set_builtin_provider() {
   auto p = LumaProvider{};
   p.get_mean_luma = []() -> std::optional<float> {

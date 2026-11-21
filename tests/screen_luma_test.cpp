@@ -1,9 +1,3 @@
-// expect_screen_luma: the mean-luma helper and the command handler.
-//
-// The GPU readback is the consumer's provider, so what is covered here is
-// the part that decides yes or no: mean_luma over known colours, and the
-// handler's retry/fail edges. An assertion that cannot fail is worse than
-// no assertion.
 #define FMT_HEADER_ONLY
 #if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_SOKOL)
 #define AFTER_HOURS_USE_NONE
@@ -66,7 +60,6 @@ static PendingE2ECommand run(std::initializer_list<std::string> args,
 }
 
 int main() {
-  // Known-colour frames produce the expected luma.
   auto black = mean_luma(solid(4, 4, 0, 0, 0));
   check(black && near(*black, 0.f), "black frame is luma 0");
   auto white = mean_luma(solid(4, 4, 255, 255, 255));
@@ -81,7 +74,6 @@ int main() {
         "half black / half white averages to 0.5");
   check(!mean_luma(Image{}), "empty image has no luma");
 
-  // In range consumes; out of range retries and reports the measured value.
   auto ok = run({"0.0", "1.0"}, 0.5f);
   check(ok.is_consumed() && ok.succeeded(), "in-range luma consumes");
   auto low = run({"0.2", "0.8"}, 0.0f);
@@ -89,7 +81,6 @@ int main() {
   check(low.last_mismatch.find("0.000") != std::string::npos,
         "retry reports the measured value");
 
-  // Malformed assertions fail immediately -- they can never pass.
   check(run({"0.5"}, 0.5f).error_message.find("requires") != std::string::npos,
         "missing arg fails");
   auto inverted = run({"0.8", "0.2"}, 0.5f);
@@ -98,7 +89,6 @@ int main() {
   auto big = run({"0.0", "2.0"}, 0.5f);
   check(big.is_consumed() && !big.succeeded(), "max > 1 fails immediately");
 
-  // No provider fails; an unavailable readback retries.
   set_provider(LumaProvider{});
   {
     EntityCollection coll;
