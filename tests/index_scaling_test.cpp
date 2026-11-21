@@ -78,16 +78,9 @@ struct Fixture {
   }
 };
 
-// Entities VISITED, which is the cost. The counter has to come before the
-// component test: put it after and the component test short-circuits first,
-// so it reports the handful that matched and hides the whole walk. Measured
-// that mistake before fixing it.
-//
-// The component test is spelled by hand inside a lambda on purpose:
-// whereHasComponent<Child>() now seeds its walk from the per-component
-// membership list (entity_membership_test), so it visits only the bucket
-// and would measure the membership walk, not the scan this function exists
-// to price as the secondary index's competitor.
+// Counter must precede the component test or short-circuit hides the walk.
+// Hand-spelled (not whereHasComponent): that now seeds from membership lists,
+// which would price the membership walk, not the scan priced here.
 static std::size_t scan_evals(EntityCollection &ec, EntityHandle parent) {
   std::size_t visited = 0;
   auto r = EntityQuery(ec)

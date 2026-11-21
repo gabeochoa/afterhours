@@ -29,11 +29,7 @@ using EntityID = int;
 
 inline std::atomic_int ENTITY_ID_GEN = 0;
 
-// Bumped on every component add/remove, wherever the entity lives. An
-// Entity has no pointer back to its collection, so a per-component
-// membership index cannot be notified per collection; it watches this
-// counter instead and rebuilds when it moves. One relaxed atomic add on
-// a path that already allocates (add) or destroys (remove) a component.
+// No collection back-pointer on Entity, so the membership index watches this counter and rebuilds on change.
 inline std::atomic<std::size_t> COMPONENT_MUTATION_GEN = 0;
 inline void note_component_mutation() {
   COMPONENT_MUTATION_GEN.fetch_add(1, std::memory_order_relaxed);

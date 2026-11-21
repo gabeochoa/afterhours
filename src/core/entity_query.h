@@ -670,11 +670,7 @@ struct EntityQuery {
     // means "provably nothing matches", which is different from unset.
     mutable std::optional<Entities> seed;
 
-    // Component types a whereHasComponent (or a component-scoped filter)
-    // requires. The walk seeds from the smallest per-component membership
-    // list instead of the whole collection; the filters still run, so this
-    // only narrows. Capped at four: more distinct components than that
-    // seeds from the first four, which is still a correct superset.
+    // Seeds walk from smallest membership list; filters still run. Cap 4: first four are still a correct superset.
     std::array<std::uint16_t, 4> required_ids{};
     std::uint8_t required_count = 0;
     void note_required(const ComponentID id) {
@@ -689,9 +685,7 @@ struct EntityQuery {
     const Entities &pool() const {
         if (seed) return *seed;
         if (required_count && source && source_temp_empty) {
-            // Same stand-down as seed_from_id: the membership lists cover
-            // merged entities, which is exactly what `entities` covers, and
-            // a pending temp entity would make the two disagree.
+            // Membership covers merged only; a pending temp would make lists and `entities` disagree.
             seed = source->membership_candidates(std::vector<ComponentID>(
                 required_ids.begin(),
                 required_ids.begin() + required_count));

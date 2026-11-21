@@ -71,8 +71,8 @@ struct EntityCollection {
     std::size_t index_considers = 0; // entities examined during a rebuild
     std::size_t index_rebuilds = 0;  // passes over the entity vector
     std::size_t bucket_resolves = 0; // handles turned back into entities
-    std::size_t membership_rebuilds = 0;    // membership-list rebuild passes
-    std::size_t membership_candidates = 0;  // candidates handed to walks
+    std::size_t membership_rebuilds = 0;
+    std::size_t membership_candidates = 0;
   };
   static Stats &stats() {
     static Stats s;
@@ -196,31 +196,11 @@ struct EntityCollection {
     };
   }
 
-  // ---- Per-component membership lists ------------------------------------
-  // membership_lists_[c] holds every merged entity that has component c,
-  // in entity-vector order. Queries and system passes walk the smallest
-  // relevant list instead of every entity (Cartographer's valley pass:
-  // 8.7k entities scanned per system; Puzzle 14: the same scan behind a
-  // UI plugin at 37% of a frame).
-  //
-  // Rebuilt lazily in one pass, like the secondary indexes above, and for
-  // a stronger reason: Entity has no collection back-pointer, so an
-  // incrementally maintained list cannot hear about add/remove at all,
-  // and the usual swap-remove maintenance would reorder the list away
-  // from entity-vector order, changing iteration order for every query.
-  // A rebuild scans entities in order, so membership order IS entity
-  // order, before and after. Freshness keys on `version` (entity
-  // enter/leave), the entity-vector size, and COMPONENT_MUTATION_GEN
-  // (any component add/remove/recycle, anywhere). Direct writes to
-  // get_entities_for_mod() that bypass create/merge/cleanup are seen
-  // only through the size check; the secondary indexes have the same
-  // blind spot via `version`.
-  //
-  // Cleanup-flagged entities stay listed until cleanup() removes them:
-  // a plain scan sees them too, and dropping them here would change
-  // query results. Upkeep: O(entities + entity-component pairs) on the
-  // first membership walk after a change, O(1) per walk while nothing
-  // changed, one shared_ptr copy per candidate handed out.
+  // Per-component lists in entity-vector order (iteration order must not change).
+  // Lazy rebuild: no back-pointer for incremental upkeep, and swap-remove would reorder.
+  // Freshness: version + vector size + COMPONENT_MUTATION_GEN. Direct get_entities_for_mod()
+  // writes bypassing create/merge/cleanup are seen only via size (same blind spot as indexes).
+  // Cleanup-flagged stay listed until cleanup(): a plain scan sees them too.
   mutable std::vector<Entities> membership_lists_;
   mutable std::size_t membership_version_ = static_cast<std::size_t>(-1);
   mutable std::size_t membership_mutation_ = static_cast<std::size_t>(-1);
@@ -254,7 +234,6 @@ struct EntityCollection {
     membership_size_ = entities_DO_NOT_USE.size();
   }
 
-  // Every merged entity with component `id`, in entity-vector order.
   const Entities &membership_for(ComponentID id) const {
     static const Entities none;
     ensure_membership_fresh();
@@ -263,9 +242,7 @@ struct EntityCollection {
     return membership_lists_[id];
   }
 
-  // Candidates for "has all of `ids`": the smallest list, filtered by the
-  // rest, still in entity-vector order. Filters at the call site re-check
-  // every component anyway, so this only narrows what gets walked.
+  // Smallest list filtered by the rest, in entity order; call-site filters re-check anyway.
   Entities membership_candidates(
       const std::vector<ComponentID> &ids) const {
     Entities out;
@@ -491,10 +468,7 @@ struct EntityCollection {
   void merge_entity_arrays() {
     if (temp_entities.empty())
       return;
-    // Entities enter the merged vector here. Their slots were assigned at
-    // creation, so assign_slot_to_entity below takes its early return and
-    // would not bump `version` for the move; membership (and the secondary
-    // indexes) key freshness on it, so bump for the move itself.
+    // Slots pre-assigned, so assign_slot_to_entity early-returns without bumping version; bump for the move (freshness keys on it).
     ++version;
 
     for (const auto &entity : temp_entities) {

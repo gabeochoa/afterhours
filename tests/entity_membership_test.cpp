@@ -1,13 +1,5 @@
-// entity_membership_test.cpp
-// Per-component membership lists (gap #20): component queries and system
-// passes walk the smallest membership list instead of every entity.
-//
-// Two claims, both counted/compared, never timed:
-//   1. Equivalence: every result below is the set AND order a full scan of
-//      the entity vector produces, stated explicitly at each site.
-//   2. Scaling: entities visited (a filter counter placed BEFORE the
-//      component filter, so it counts the walk, not the matches) stay put
-//      when the world doubles and the answer does not.
+// entity_membership_test.cpp — equivalence is set AND order vs full scan;
+// scaling counts visits via a filter placed before the component filter.
 
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
@@ -48,8 +40,6 @@ template <typename... Cs> struct Recorder : System<Cs...> {
   }
 };
 
-// Removes Rare from the NEXT entity (by creation list) the first time it
-// runs, to pin mid-pass removal semantics.
 struct Remover : System<Rare> {
   std::vector<EntityID> seen;
   Entity *victim = nullptr;
@@ -62,8 +52,6 @@ struct Remover : System<Rare> {
   }
 };
 
-// Adds Rare to a bystander the first time it runs, to pin mid-pass
-// addition semantics.
 struct Adder : System<Rare> {
   std::vector<EntityID> seen;
   Entity *bystander = nullptr;
@@ -77,7 +65,6 @@ struct Adder : System<Rare> {
 };
 
 int main() {
-  // --- equivalence: interleaved component sets, explicit order ----------
   {
     EntityCollection ec;
     std::vector<EntityID> pv, p_only, all;
@@ -98,7 +85,6 @@ int main() {
     CHECK(ids_of(EntityQuery(ec).whereMissingComponent<Pos>().gen()) ==
           std::vector<EntityID>({all[1], all[3], all[5]}));
 
-    // Every terminal walks pool() its own way; cover each.
     CHECK(EntityQuery(ec).whereHasComponent<Pos>().gen_count() == 3);
     auto first = EntityQuery(ec).whereHasComponent<Pos>().gen_first();
     CHECK(first.has_value() && first.asE().id == all[0]);
@@ -116,7 +102,6 @@ int main() {
               .size() == 3);
   }
 
-  // --- order: a component added late keeps the entity's vector slot -----
   {
     EntityCollection ec;
     Entity &early = ec.createEntity();
@@ -128,14 +113,12 @@ int main() {
       expected.push_back(e.id);
     }
     ec.cleanup();
-    // `early` sits at vector position 0 but gains Pos last. A membership
-    // list in add-order would return it last; the scan returns it first.
+    // In add-order `early` (slot 0, Pos last) would sort last; scan order puts it first.
     early.addComponent<Pos>();
     expected.insert(expected.begin(), early_id);
     CHECK(ids_of(EntityQuery(ec).whereHasComponent<Pos>().gen()) == expected);
   }
 
-  // --- churn: remove, retire, cleanup-flag visibility -------------------
   {
     EntityCollection ec;
     Entity &a = ec.createEntity(); a.addComponent<Pos>();
@@ -150,8 +133,7 @@ int main() {
     CHECK(ids_of(EntityQuery(ec).whereHasComponent<Pos>().gen()) ==
           std::vector<EntityID>({aid, cid}));
 
-    // Flagged for cleanup but not yet collected: the scan still sees it,
-    // so the membership walk must too.
+    // Cleanup-flagged but uncollected: scan still sees it, so membership must too.
     ec.markIDForCleanup(cid);
     CHECK(ids_of(EntityQuery(ec).whereHasComponent<Pos>().gen()) ==
           std::vector<EntityID>({aid, cid}));
@@ -164,7 +146,6 @@ int main() {
     CHECK(ids_of(EntityQuery(ec).whereHasComponent<Pos>().gen()) ==
           std::vector<EntityID>({aid}));
 
-    // Recycled slot/pool reuse must not resurrect the retired entity.
     Entity &d = ec.createEntity(); d.addComponent<Pos>();
     const EntityID did = d.id;
     ec.cleanup();
@@ -172,7 +153,6 @@ int main() {
           std::vector<EntityID>({aid, did}));
   }
 
-  // --- temp entities: unseen before merge, seen after -------------------
   {
     EntityCollection ec;
     ec.createEntity().addComponent<Pos>();
@@ -189,7 +169,6 @@ int main() {
     CHECK(got.size() == 2 && got[1].get().id == pending_id);
   }
 
-  // --- singleton: direct fetch and singleton-component query ------------
   {
     EntityCollection ec;
     Entity &host = ec.createEntity();
@@ -204,7 +183,6 @@ int main() {
           std::vector<EntityID>({host_id}));
   }
 
-  // --- system pass: only holders, in entity order; mid-pass edges -------
   {
     EntityCollection ec;
     auto &entities = ec.get_entities_for_mod();
@@ -219,17 +197,17 @@ int main() {
     run_system_over(sys, entities, 0.f, ec, false);
     CHECK(sys.seen == expected);
 
-    // Removed mid-pass: for_each re-checks, so the victim is skipped.
+    // Removed mid-pass: for_each re-check skips it.
     Remover rem;
     auto &ents = ec.get_entities();
-    rem.victim = ents[3].get();  // second Rare holder (i=3)
+    rem.victim = ents[3].get();
     run_system_over(rem, entities, 0.f, ec, false);
     CHECK(rem.seen == std::vector<EntityID>({expected[0], expected[2],
                                              expected[3]}));
 
-    // Added mid-pass: not in the pass-start snapshot, visited next pass.
+    // Added mid-pass: not in snapshot, visited next pass.
     Adder add;
-    Entity &bystander = *ents[1];  // Pos-only entity
+    Entity &bystander = *ents[1];
     const EntityID bystander_id = bystander.id;
     add.bystander = &bystander;
     run_system_over(add, entities, 0.f, ec, false);
@@ -242,7 +220,6 @@ int main() {
                              expected[3]}));
   }
 
-  // --- scaling proof: visits track matches, not world size --------------
   {
     auto visits = [](int world, int matches, std::size_t &rebuilds) {
       EntityCollection ec;
@@ -263,7 +240,6 @@ int main() {
                    .gen();
       rebuilds = EntityCollection::stats().membership_rebuilds - r0;
       CHECK(r.size() == static_cast<std::size_t>(matches));
-      // Second identical query: no rebuild, same visit count.
       std::size_t visited2 = 0;
       auto r2 = EntityQuery(ec)
           .whereLambda([&](const Entity &) {
@@ -285,8 +261,6 @@ int main() {
     CHECK(v_small == 10 && v_big == 10);
     CHECK(rb_small == 1 && rb_big == 1);
 
-    // Multi-component: walk starts from the smallest list (Rare=10), not
-    // the world and not the common component (Pos=world).
     EntityCollection ec;
     for (int i = 0; i < 3000; i++) {
       Entity &e = ec.createEntity();

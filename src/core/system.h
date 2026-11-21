@@ -152,10 +152,7 @@ class SystemBase {
         return {};
     }
 
-    // Positive component types this system requires, or null when that
-    // says nothing about where to look (no components, or the caller must
-    // scan). Lets the runner walk a membership list instead of every
-    // entity; for_each still checks everything, so it only narrows.
+    // Positive required types, or null if that narrows nothing; for_each still checks everything.
     virtual const std::vector<ComponentID> *membership_requirements() const {
         return nullptr;
     }
@@ -523,8 +520,7 @@ struct System
     };
 
     const std::vector<ComponentID> *membership_requirements() const override {
-        // ComponentsOnly is already positive-only (filter_components drops
-        // Not<T> and tag types), so every id here rules entities in.
+        // ComponentsOnly is positive-only (Not<T>/tags dropped), so every id rules in.
         const auto &ids = PositiveIds<ComponentsOnly>::get();
         return ids.empty() ? nullptr : &ids;
     }
@@ -575,13 +571,8 @@ inline void run_system_over(Sys &system, Entities &entities, const float dt,
     } else if (!system.include_derived_children &&
                system.membership_requirements() &&
                &entities == &coll.get_entities()) {
-        // Walk only the entities holding the rarest required component, in
-        // entity order. The candidate list is a pass-start snapshot (the
-        // full scan above snapshots the count the same way): an entity
-        // that gains a component mid-pass is first visited next pass,
-        // while one that loses it is still re-checked by for_each and
-        // skipped. Derived children are excluded above because a derived
-        // component is stored under its own id, not the base's.
+        // Pass-start snapshot: gains mid-pass wait to next pass; losses re-checked by for_each.
+        // Derived excluded: derived components store under their own id, not the base's.
         const Entities candidates =
             coll.membership_candidates(*system.membership_requirements());
         for (const auto &entity : candidates) {
