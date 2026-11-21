@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config.h"
+#include "developer.h"
 #include "frame_loop.h"
 #include <concepts>
 #include <cstdint>
@@ -175,6 +176,8 @@ concept PlatformBackend = requires {
 
   // ── Shaders ──
   { T::load_shader(std::declval<const char *>(), std::declval<const char *>()) } -> std::same_as<ShaderType>;
+  { T::load_shader_from_memory(std::declval<const char *>(), std::declval<const char *>()) } -> std::same_as<ShaderType>;
+  { T::set_shader_value_matrix(std::declval<ShaderType &>(), int{}, std::declval<const MatrixType &>()) } -> std::same_as<void>;
   { T::unload_shader(std::declval<ShaderType &>()) } -> std::same_as<void>;
   { T::get_shader_location(std::declval<ShaderType &>(), std::declval<const char *>()) } -> std::same_as<int>;
   {
