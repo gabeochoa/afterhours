@@ -332,6 +332,7 @@ ALL_TESTS := \
 	tab_toggle_geometry_test \
 	small_components_test \
 	text_area_test \
+	text_area_wrap_cache_test \
 	text_input_test \
 	toast_test \
 	text_wrap_test \
