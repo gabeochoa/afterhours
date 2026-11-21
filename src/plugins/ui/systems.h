@@ -589,6 +589,7 @@ private:
       if (bottom > scroll.scroll_offset.y) {
         scroll.anchor_child = child_id;
         scroll.anchor_child_y = top;
+        scroll.anchor_generation = child_cmp.laid_out_generation;
         break;
       }
     }

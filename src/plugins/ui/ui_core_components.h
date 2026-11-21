@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <set>
@@ -26,6 +27,35 @@ using vec2 = Vector2Type;
 namespace ui {
 
 struct AutoLayoutRoot : BaseComponent {};
+
+// Layout generations (one monotonic sequence). invalidate_layout() marks
+// the next generation as requested; each full AutoLayout pass completes it
+// and stamps the completed number onto every widget it laid out. A
+// consumer records a widget's laid_out_generation (or anchor_generation)
+// at read time and later tells whether that read predates a re-layout by
+// comparing it — which layout produced an anchor — without framework-held
+// view state. A widget never laid out carries 0, told apart from a pass's
+// stamp because the first completed pass is generation 1.
+inline std::uint64_t &layout_generation_storage() {
+  static std::uint64_t v = 0;
+  return v;
+}
+inline std::uint64_t &laid_out_generation_storage() {
+  static std::uint64_t v = 0;
+  return v;
+}
+inline std::uint64_t layout_generation() { return layout_generation_storage(); }
+inline std::uint64_t laid_out_generation() {
+  return laid_out_generation_storage();
+}
+inline void invalidate_layout() {
+  // One generation past the last completed pass: a stale marker, not a
+  // count of asks (a second ask before the pass changes nothing).
+  layout_generation_storage() = laid_out_generation_storage() + 1;
+}
+inline bool layout_is_stale() {
+  return laid_out_generation() < layout_generation();
+}
 
 struct UIComponent : BaseComponent {
   // Sentinel font names. Kept as `const char*` (not `constexpr std::string`,
@@ -82,6 +112,8 @@ struct UIComponent : BaseComponent {
   bool padding_is_default = false;
   bool size_dirty = false;
   bool laid_out = false;
+  // Generation that last wrote this widget's rect; 0 = never laid out.
+  std::uint64_t laid_out_generation = 0;
   AxisArray<Size> desired;
   AxisArray<Size>
       min_size; // Minimum size constraint (Dim::None = no constraint)
@@ -356,6 +388,12 @@ struct UIComponent : BaseComponent {
     computed_rel[Axis::Y] = 0.f;
   }
 };
+
+// Ack for a read taken at `read_gen` (a widget's laid_out_generation or an
+// anchor_generation): true once a later pass re-laid that widget out.
+inline bool laid_out_since(const UIComponent &cmp, std::uint64_t read_gen) {
+  return cmp.laid_out_generation != read_gen;
+}
 
 // final so has_child_of can answer in one test instead of a dynamic_cast
 // per occupied slot. Nothing derives from it, and now nothing can.
