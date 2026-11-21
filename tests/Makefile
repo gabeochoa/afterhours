@@ -80,6 +80,7 @@ ALL_TESTS := \
 	terminal_ui_test \
 	font_atlas_measure_test \
 	font_points_test \
+	window_focus_test \
 	glyph_placeholder_test \
 	monospace_cell_test \
 	font_memory_test \
@@ -291,6 +292,7 @@ endif
 RAYLIB_TESTS := \
 	value_types_test \
 	wrappers_test \
+	window_focus_test \
 	edit_keys_test \
 	default_font_test \
 	load_font_size_test \

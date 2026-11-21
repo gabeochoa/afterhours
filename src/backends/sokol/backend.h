@@ -473,6 +473,12 @@ inline void sokol_event_cb(const sapp_event *ev) {
     s.scroll_x += ev->scroll_x;
     s.scroll_y += ev->scroll_y;
     break;
+  case SAPP_EVENTTYPE_FOCUSED:
+    g_window_focused = true;
+    break;
+  case SAPP_EVENTTYPE_UNFOCUSED:
+    g_window_focused = false;
+    break;
   default:
     break;
   }
@@ -515,6 +521,11 @@ struct MetalPlatformAPI {
   }
   static bool is_window_ready() { return metal_detail::g_initialized; }
   static bool is_window_fullscreen() { return sapp_is_fullscreen(); }
+  // False headless (no window exists to hold focus) and until the first
+  // FOCUSED event arrives.
+  static bool is_window_focused() {
+    return !metal_detail::g_headless && metal_detail::g_window_focused;
+  }
   static void toggle_fullscreen() { sapp_toggle_fullscreen(); }
   // Runtime window sizing controls are intentionally unsupported in the
   // sokol_app layer. Sokol exposes startup size via sapp_desc, but does not

@@ -46,6 +46,9 @@ inline bool is_window_ready() { return PlatformAPI::is_window_ready(); }
 inline bool is_window_fullscreen() {
   return PlatformAPI::is_window_fullscreen();
 }
+// Whether the OS window currently has keyboard focus. False headless (no
+// window exists to hold focus) -- never a fake true.
+inline bool is_window_focused() { return PlatformAPI::is_window_focused(); }
 inline void toggle_fullscreen() { PlatformAPI::toggle_fullscreen(); }
 inline void minimize_window() { PlatformAPI::minimize_window(); }
 inline void set_window_size(int w, int h) { PlatformAPI::set_window_size(w, h); }
