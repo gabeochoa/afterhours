@@ -304,6 +304,7 @@ ALL_TESTS := \
 	text_action_names_test \
 	sizing_repro_test \
 	slider_test \
+	form_binding_test \
 	split_test \
 	downstream_gaps_test \
 	headless_fallback_test \
@@ -418,6 +419,7 @@ RAYLIB_TESTS := \
 	setup_test \
 	size_constraints_test \
 	slider_test \
+	form_binding_test \
 	split_test \
 	stepper_test \
 	styling_test \
@@ -497,7 +499,8 @@ $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OU
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/input_activity_snapshot_test $(OUT)/e2e_gamepad_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/form_binding_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 =======
->>>>>>> 1d51df57 (comments: sicko trim)
+$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/form_binding_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
+>>>>>>> d74e953c (comments: sicko trim repair - restore Makefile code lines)
 
 # Filter to sources: the .d files list every header as a prerequisite, and a
 # bare $^ would hand them all to clang. .cc is the sokol implementation TU.
