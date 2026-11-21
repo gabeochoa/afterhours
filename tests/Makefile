@@ -107,6 +107,7 @@ ALL_TESTS := \
 	text_units_test \
 	text_fit_test \
 	none_measure_test \
+	npc_queue_test \
 	text_unit_motion_test \
 	text_alignment_test \
 	sound_volume_test \
