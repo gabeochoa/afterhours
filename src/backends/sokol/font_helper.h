@@ -251,6 +251,10 @@ inline float get_first_glyph_bearing(const Font, const char *) { return 0.0f; }
 
 inline bool is_font_loaded(const Font &font) { return font.id != FONS_INVALID; }
 
+// fontstash grows its atlas on exhaustion, so nothing stays unpacked; the
+// log in setup_sokol_gl_and_fonts is the only report, as before.
+inline std::vector<int> glyph_packing_failures(const Font &) { return {}; }
+
 // Whether the face can draw a codepoint, from the cmap recorded at load.
 // A font with no recorded cmap (added to fontstash directly, not through
 // load_font_from_file) reports true: unknown is not missing.
