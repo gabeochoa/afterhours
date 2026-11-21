@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <set>
@@ -57,6 +58,7 @@ struct EntityCollection {
   Entities entity_pool_;
   size_t max_pool_size_ = 0;
   std::vector<EntityID> free_ids_;
+  std::uint64_t session_generation_ = 0;
 
   struct CreationOptions {
     bool is_permanent;
@@ -674,6 +676,37 @@ struct EntityCollection {
     temp_entities.clear();
     permanent_ids.clear();
     singletonMap.clear();
+  }
+
+  // Session reset contract (R-128): restart this collection as if freshly
+  // constructed, for deterministic session/replay restarts.
+  // Cleared: all entities (merged, temp, and permanent), singleton
+  // registrations, permanent ids, the slot/free-slot/id->slot tables,
+  // recycled ids, the entity pool, and secondary-index buckets.
+  // Reset: the next entity id restarts at 0, so rebuilding the same world
+  // in the same order reproduces the same ids, handles, and state.
+  // Survives: index registrations (their buckets are rebuilt on next use).
+  // Not reset: systems and application statics/caches retain their state;
+  // compare session_generation() to detect a reset and invalidate them.
+  // Precondition: no other live collection or entity in this process may
+  // be used afterwards, because the shared ENTITY_ID_GEN restarts at 0.
+  // Discard all pre-reset handles: a rebuilt entity may reuse their slot
+  // and generation by design (that is what makes the restart identical).
+  std::uint64_t session_generation() const { return session_generation_; }
+
+  void reset_for_new_session() {
+    delete_all_entities_NO_REALLY_I_MEAN_ALL();
+    slots.clear();
+    free_slots.clear();
+    id_to_slot.clear();
+    free_ids_.clear();
+    entity_pool_.clear();
+    for (auto &[_, idx] : indexes)
+      idx->clear();
+    indexed_version = static_cast<std::size_t>(-1);
+    ++version;
+    ENTITY_ID_GEN.store(0);
+    ++session_generation_;
   }
 
   void delete_all_entities(const bool include_permanent) {

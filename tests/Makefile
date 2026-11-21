@@ -255,6 +255,7 @@ ALL_TESTS := \
 	attachment_test \
 	canonical_snapshot_test \
 	entity_pool_test \
+	session_reset_test \
 	entity_query_test \
 	entity_membership_test \
 	temp_warning_caller_test \
