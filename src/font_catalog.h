@@ -1,13 +1,5 @@
 #pragma once
 
-// Installed-font catalog: enumerate font files in the standard system
-// font directories and read each face's family/style from its `name`
-// table, including faces inside TrueType collections (.ttc). Header-only
-// and std-only like local_time.h, so any backend (or a headless test) can
-// offer a font picker without loading a single face. Loading a chosen
-// face is still FontManager's job; `face_index` names the face in a
-// collection for a collection-aware loader.
-
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
@@ -23,7 +15,7 @@ namespace afterhours::font_catalog {
 
 struct FontFaceInfo {
   std::string path;
-  int face_index = 0; // index inside a .ttc; 0 for a single-face file
+  int face_index = 0;
   bool collection = false;
   std::string family; // typographic family (name ID 16) else family (1)
   std::string style;  // typographic style (17) else subfamily (2), e.g. Bold
@@ -31,8 +23,7 @@ struct FontFaceInfo {
 
 struct Catalog {
   std::vector<FontFaceInfo> faces;
-  // False only where no directory scan is implemented for the platform;
-  // empty with supported=true means "scanned, found none".
+  // False = no platform scan; empty + true = scanned, found none.
   bool supported = true;
 };
 
@@ -70,9 +61,6 @@ inline std::string utf16be_to_utf8(const unsigned char *p, size_t bytes) {
   return out;
 }
 
-// Table directory offsets are absolute from the file start even inside
-// a collection (each face's directory just lives at its own offset), so
-// font_coverage::find_table — which rebases at the face — cannot be used.
 inline const unsigned char *table_at(const unsigned char *d, size_t n,
                                      size_t face, const char *tag) {
   if (face + 12 > n)
@@ -88,8 +76,7 @@ inline const unsigned char *table_at(const unsigned char *d, size_t n,
   return nullptr;
 }
 
-// One name-table string for `id`, preferring Unicode (platform 0/3,
-// UTF-16BE) over MacRoman (platform 1, taken as raw bytes).
+// One name-table string for `id`; prefers Unicode over MacRoman.
 inline std::string name_string(const unsigned char *d, size_t n, size_t face,
                                uint16_t id) {
   if (face >= n)
@@ -112,8 +99,6 @@ inline std::string name_string(const unsigned char *d, size_t n, size_t face,
     if (off + len > n)
       continue;
     const uint16_t language = u16(d + rec + 4);
-    // Localized records share a platform; prefer English so a picker
-    // shows "Regular", not whichever localization the file lists first.
     const int score = ((platform == 3 || platform == 0) ? 2
                        : platform == 1                  ? 1
                                                         : 0) *
@@ -135,11 +120,8 @@ inline bool is_font_file(const std::filesystem::path &p) {
     c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
   return ext == ".ttf" || ext == ".otf" || ext == ".ttc";
 }
-} // namespace detail
+}
 
-// Faces in one file's bytes: N for a collection, 1 for a plain sfnt,
-// empty when the bytes are neither. Family/style may be empty when a
-// face has no readable `name` table; the face still counts.
 [[nodiscard]] inline std::vector<FontFaceInfo>
 faces_in_bytes(const unsigned char *d, size_t n, const std::string &path = {}) {
   std::vector<FontFaceInfo> out;
@@ -182,15 +164,11 @@ faces_for_file(const std::string &path) {
   return faces_in_bytes(bytes.data(), bytes.size(), path);
 }
 
-// Faces in the file at `path` (collection size, else 1); 0 when
-// unreadable or not a font.
+// Faces in file at `path`; 0 when unreadable or not a font.
 [[nodiscard]] inline int face_count_for_file(const std::string &path) {
   return static_cast<int>(faces_for_file(path).size());
 }
 
-// Every face in every font file under `dirs` (searched recursively),
-// sorted by family, style, path. Missing directories are skipped, so an
-// empty result from an empty/missing dir is a valid, supported answer.
 [[nodiscard]] inline Catalog
 list_fonts_in(const std::vector<std::string> &dirs) {
   Catalog catalog;
@@ -253,9 +231,6 @@ list_fonts_in(const std::vector<std::string> &dirs) {
   return dirs;
 }
 
-// All installed faces this platform can enumerate. On a platform with no
-// scan above, returns supported=false (logged once) rather than a
-// plausible-looking empty list.
 [[nodiscard]] inline Catalog list_system_fonts() {
 #if defined(__APPLE__) || defined(_WIN32) || defined(__linux__)
   return list_fonts_in(system_font_dirs());
@@ -266,4 +241,4 @@ list_fonts_in(const std::vector<std::string> &dirs) {
 #endif
 }
 
-} // namespace afterhours::font_catalog
+}
