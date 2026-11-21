@@ -12,6 +12,7 @@
 #ifdef AFTER_HOURS_USE_METAL
 
 #import <Metal/Metal.h>
+#import <AppKit/AppKit.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <ImageIO/ImageIO.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
@@ -295,6 +296,72 @@ extern "C" const void *metal_create_system_device(void) {
   if (!dev)
     return nullptr;
   return (__bridge_retained const void *)dev;
+}
+
+// sokol only calls init_cb from the first MTKView drawRect, which waits for
+// the display link, so drawing the view once from DidFinishLaunching runs
+// init + first frame synchronously instead (floatinghotel measured 65-160 ms).
+static bool g_first_frame_early_drawn = false;
+static int g_first_frame_early_draw_count = 0;
+static int g_first_frame_early_attempt_count = 0;
+static id g_first_frame_observer_will = nil;
+static id g_first_frame_observer_did = nil;
+
+extern "C" bool metal_should_draw_first_frame_early(bool has_view,
+                                                    bool already_drawn) {
+  return has_view && !already_drawn;
+}
+
+extern "C" int metal_first_frame_early_draw_count(void) {
+  return g_first_frame_early_draw_count;
+}
+
+extern "C" int metal_first_frame_early_attempt_count(void) {
+  return g_first_frame_early_attempt_count;
+}
+
+extern "C" void metal_reset_first_frame_early_draw(void) {
+  g_first_frame_early_drawn = false;
+  g_first_frame_early_draw_count = 0;
+  g_first_frame_early_attempt_count = 0;
+}
+
+static void metal_draw_first_frame_early(void) {
+  ++g_first_frame_early_attempt_count;
+  NSWindow *window = [NSApp mainWindow] ?: [NSApp keyWindow];
+  if (!window && [[NSApp windows] count] > 0)
+    window = [[NSApp windows] firstObject];
+  NSView *view = window ? [window contentView] : nil;
+  if (!metal_should_draw_first_frame_early(view != nil,
+                                           g_first_frame_early_drawn))
+    return;
+  g_first_frame_early_drawn = true;
+  ++g_first_frame_early_draw_count;
+  [view drawRect:[view bounds]];
+}
+
+extern "C" void metal_install_first_frame_early_draw(void) {
+  if (g_first_frame_observer_will != nil)
+    return;
+  // Registering for DidFinish inside WillFinish lands after sokol's app
+  // delegate, which creates the window in its own DidFinish handler.
+  g_first_frame_observer_will = [[NSNotificationCenter defaultCenter]
+      addObserverForName:NSApplicationWillFinishLaunchingNotification
+                  object:nil
+                   queue:nil
+              usingBlock:^(NSNotification *) {
+                if (g_first_frame_observer_did != nil)
+                  return;
+                g_first_frame_observer_did =
+                    [[NSNotificationCenter defaultCenter]
+                        addObserverForName:
+                            NSApplicationDidFinishLaunchingNotification
+                                    object:nil
+                                     queue:nil
+                                usingBlock:^(NSNotification *) {
+                                  metal_draw_first_frame_early();
+                                }];
+              }];
 }
 
 #endif // AFTER_HOURS_USE_METAL
