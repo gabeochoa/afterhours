@@ -79,6 +79,9 @@ struct ComponentConfig {
   // + scroll)
   Overflow overflow_x = Overflow::Visible;
   Overflow overflow_y = Overflow::Visible;
+  // Copied onto HasScrollView when this config creates one. See
+  // HasScrollView::scrollbar_gutter.
+  bool scrollbar_gutter = false;
 
   // Background color settings
   Theme::Usage color_usage = Theme::Usage::Default;
@@ -775,6 +778,14 @@ struct ComponentConfig {
     return *this;
   }
 
+  /// Reserve space for the scrollbar even when the content fits, so the
+  /// content width never jumps when the bar appears. Only does anything on a
+  /// view whose overflow scrolls; see HasScrollView::scrollbar_gutter.
+  ComponentConfig &with_scrollbar_gutter(bool enabled = true) {
+    scrollbar_gutter = enabled;
+    return *this;
+  }
+
   /// Enable drag-and-drop reordering of this container's children.
   /// Equivalent to what drag_group() used to do.
   ComponentConfig &with_draggable_children(bool enabled = true) {
@@ -1266,6 +1277,8 @@ struct ComponentConfig {
       merged.overflow_x = overrides.overflow_x;
     if (overrides.overflow_y != Overflow::Visible)
       merged.overflow_y = overrides.overflow_y;
+    if (overrides.scrollbar_gutter)
+      merged.scrollbar_gutter = true;
 
     // Colour and corner detail
     if (overrides.hover_color.has_value())
