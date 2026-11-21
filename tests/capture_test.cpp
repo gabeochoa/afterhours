@@ -51,11 +51,6 @@ int main() {
   capture::record("rectangle", r, c);
   check(capture::calls().size() == 1, "disable stops recording, keeps history");
 
-  // Frame boundary (Puzzle 21): begin_frame() takes the lifetime over from
-  // the UI render pass, and the clear is lazy. The finished frame stays
-  // readable during the next frame's update phase -- when E2E commands run
-  // -- and the first draw of the new frame starts a fresh buffer, so world
-  // draws recorded before the UI pass are no longer thrown away.
   capture::enable();
   capture::clear();
   capture::record("rectangle", r, c);
@@ -68,8 +63,6 @@ int main() {
             capture::calls()[0].op == std::string("circle"),
         "first draw of the new frame flushes the old one");
 
-  // A boundary taken while disabled does not lose the pending clear: the
-  // first record after re-enabling still starts a fresh frame.
   capture::begin_frame();
   capture::disable();
   capture::record("rectangle", r, c);

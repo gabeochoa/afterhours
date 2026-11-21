@@ -36,9 +36,7 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
                          const Vector2Type position, const float font_size,
                          const float, const Color color, const float = 0.0f,
                          const float = 0.0f, const float = 0.0f) {
-  // Recorded before the font checks, like raylib: a draw the GPU cannot
-  // paint yet (no font context in a headless E2E run) is still a draw the
-  // app asked for, and expect_drawn has nothing else to read.
+  // Record before font checks, like raylib, or headless expect_drawn sees no text.
   capture::record("text", RectangleType{position.x, position.y, 0.f, font_size},
                   color, content ? content : "");
   auto *ctx = graphics::metal_detail::g_fons_ctx;
@@ -74,7 +72,6 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
 
 inline void draw_text(const char *content, const float x, const float y,
                       const float font_size, const Color color) {
-  // See draw_text_ex: record first, paint if a font context exists.
   capture::record("text", RectangleType{x, y, 0.f, font_size}, color,
                   content ? content : "");
   auto *ctx = graphics::metal_detail::g_fons_ctx;
@@ -113,10 +110,8 @@ inline void draw_rectangle(const RectangleType rect, const Color color) {
 }
 
 namespace metal_draw_detail {
-// One filled quad with no capture record: building blocks for composite
-// shapes (outlines, rounded corners) that already recorded themselves
-// under their own op. Recording the pieces too made one outline read as
-// an outline plus four rectangles, which raylib never emits.
+// Unrecorded quad for composite shapes: recording pieces would make one
+// outline read as an outline plus four rectangles, unlike raylib.
 inline void fill_rect(const RectangleType rect, const Color color) {
   sgl_begin_quads();
   set_color(color);
@@ -130,14 +125,13 @@ inline void fill_rect(const RectangleType rect, const Color color) {
 
 inline void draw_rectangle_outline(const RectangleType rect, const Color color,
                                    const float thickness) {
-  // Draw 4 thin rects to form an outline. Only the outline is recorded:
-  // raylib emits exactly one rectangle_outline for this call.
+  // Only the outline is recorded: raylib emits one rectangle_outline.
   capture::record("rectangle_outline", rect, color);
   float x = rect.x, y = rect.y, w = rect.width, h = rect.height, t = thickness;
-  metal_draw_detail::fill_rect(RectangleType{x, y, w, t}, color);             // top
-  metal_draw_detail::fill_rect(RectangleType{x, y + h - t, w, t}, color);     // bottom
-  metal_draw_detail::fill_rect(RectangleType{x, y + t, t, h - 2 * t}, color); // left
-  metal_draw_detail::fill_rect(RectangleType{x + w - t, y + t, t, h - 2 * t}, color); // right
+  metal_draw_detail::fill_rect(RectangleType{x, y, w, t}, color);
+  metal_draw_detail::fill_rect(RectangleType{x, y + h - t, w, t}, color);
+  metal_draw_detail::fill_rect(RectangleType{x, y + t, t, h - 2 * t}, color);
+  metal_draw_detail::fill_rect(RectangleType{x + w - t, y + t, t, h - 2 * t}, color);
 }
 
 inline void draw_rectangle_outline(const RectangleType rect,

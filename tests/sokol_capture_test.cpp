@@ -88,9 +88,7 @@ int main() {
     check(has_op("texture_quad"), "texture_quad recorded");
   }
 
-  // One logical draw, one record: an outline is built from four edge quads
-  // on this backend, but raylib emits a single rectangle_outline and the
-  // capture stream must read the same on both.
+  // Capture must match raylib: one rectangle_outline, no edge rectangles.
   {
     afterhours::capture::clear();
     g::begin_drawing();
@@ -108,9 +106,6 @@ int main() {
     check(rectangles == 0, "outline edges are not recorded as rectangles");
   }
 
-  // Text with no usable font: the GPU paints nothing, but the app asked
-  // for the draw, and raylib records it. Recording must not wait on the
-  // font context or headless E2E is blind to text.
   {
     afterhours::capture::clear();
     g::begin_drawing();
@@ -131,9 +126,6 @@ int main() {
     check(saw_plain, "draw_text recorded without a font");
   }
 
-  // Frame boundary: graphics::begin_frame() owns the capture lifetime, so
-  // a world draw stays readable into the next frame's update phase and the
-  // next frame's first draw replaces it.
   {
     afterhours::capture::clear();
     g::begin_frame();

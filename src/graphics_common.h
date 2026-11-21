@@ -96,9 +96,7 @@ concept ColorLike = requires(C c) {
 
 } // namespace afterhours
 
-// The draw-capture frame boundary lives here, not in a backend: every
-// backend's frame starts through graphics::begin_frame(), so hooking it
-// once gives raylib and sokol (Metal/Vulkan) the same lifetime rule.
+// Hooked here so every backend's begin_frame gets the same capture lifetime.
 #include "capture.h"
 
 namespace afterhours::graphics {
@@ -319,10 +317,6 @@ inline void shutdown() {
 }
 
 inline void begin_frame() {
-  // Frame boundary for draw capture (see capture.h): the previous frame
-  // stays readable until this frame's first recorded draw, and the UI
-  // render pass no longer clears the buffer out from under world draws.
-  // Two flag writes per frame; the per-draw disabled cost is unchanged.
   capture::begin_frame();
   auto &backend = get_backend();
   if (backend.begin_frame) {

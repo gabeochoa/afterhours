@@ -72,26 +72,16 @@ inline std::vector<DrawnCall> &calls() {
 inline void enable() { enabled() = true; }
 inline void disable() { enabled() = false; }
 
-// Who decides when a frame starts.
-//
-// The UI render pass used to clear the buffer at its own start, which threw
-// away everything drawn before it -- for a game, the entire world. The frame
-// boundary is the fix: graphics::begin_frame() calls capture::begin_frame()
-// on every backend, and an app with a custom loop can call it directly.
-// Once a boundary is in play the UI pass stops clearing, so world draws
-// recorded before the UI pass survive to be asserted on. An app that never
-// sees a boundary keeps the old UI-pass behaviour.
+// Once a frame boundary is in play (graphics::begin_frame, or directly for
+// custom loops) the UI pass stops clearing, so pre-UI world draws survive.
+// No boundary: old UI-pass clearing.
 inline bool &app_owns_frame() {
   static bool owned = false;
   return owned;
 }
 
-// Set by begin_frame(), consumed by the first record() of the new frame.
-// Clearing lazily instead of eagerly keeps the just-finished frame readable
-// during the update phase -- which is when E2E commands run -- while the
-// first draw of the next frame still starts from an empty buffer. Clearing
-// eagerly at the boundary would wipe the frame an expect_drawn is about to
-// retry against before it ever reads it.
+// Lazy clear: the finished frame must stay readable during update (when E2E
+// runs); eager clearing would wipe it before expect_drawn retries read it.
 inline bool &frame_clear_pending() {
   static bool pending = false;
   return pending;
