@@ -485,3 +485,46 @@ TEST(modal_gate_releases_when_closed_from_another_call_site) {
 }
 
 int main() { return ui_test::run_registered_tests("dialog tests"); }
+
+TEST(confirm_dialog_honors_presentation_config) {
+  ImmTestHarness h;
+  ensure_modal_singleton();
+  modal::detail::get_modal_root().modal_stack.clear();
+  bool open = true;
+  auto config = ModalConfig{}.with_size(pixels(700), pixels(320))
+                    .with_closed_by(ClosedBy::None)
+                    .with_backdrop_color(Color{10, 20, 30, 40});
+  modal::confirm(h.context(), mk(h.root(), 0), open, "Wide?",
+                 "A confirm dialog with caller presentation.", "Apply",
+                 "Cancel", config);
+  h.layout_only();
+  UIComponent *panel = h.find("modal");
+  CHECK(panel != nullptr);
+  if (panel) CHECK_APPROX(panel->rect().width, 700.f);
+  auto result = modal::confirm(h.context(), mk(h.root(), 0), open, "Wide?",
+                               "A confirm dialog with caller presentation.",
+                               "Apply", "Cancel", config);
+  CHECK(result.ent().has<modal::Modal>());
+  if (result.ent().has<modal::Modal>()) {
+    auto &m = result.ent().get<modal::Modal>();
+    CHECK(m.closed_by == ClosedBy::None);
+    CHECK(m.backdrop_color.r == 10 && m.backdrop_color.g == 20 &&
+          m.backdrop_color.b == 30 && m.backdrop_color.a == 40);
+    CHECK(m.title == "Wide?");
+  }
+}
+
+TEST(info_dialog_defaults_unchanged_without_config) {
+  ImmTestHarness h;
+  ensure_modal_singleton();
+  modal::detail::get_modal_root().modal_stack.clear();
+  bool open = true;
+  auto result = modal::info(h.context(), mk(h.root(), 0), open, "Heads up",
+                            "Default presentation still applies.", "OK");
+  h.layout_only();
+  CHECK(result.ent().has<modal::Modal>());
+  if (result.ent().has<modal::Modal>()) {
+    CHECK(result.ent().get<modal::Modal>().show_close_button == false);
+    CHECK(result.ent().get<modal::Modal>().title == "Heads up");
+  }
+}

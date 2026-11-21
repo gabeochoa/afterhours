@@ -633,19 +633,41 @@ struct modal : developer::Plugin {
             return static_cast<int>(RenderLayer::Modal);
         }
 
+        // Caller config wins; title/size fall back to the dialog's defaults when unset.
+        static ModalConfig dialog_config(
+            const std::optional<ModalConfig> &config, const std::string &title,
+            ui::Size default_width, ui::Size default_height) {
+            if (!config.has_value()) {
+                return ModalConfig{}
+                    .with_size(default_width, default_height)
+                    .with_title(title)
+                    .with_show_close_button(false);
+            }
+            ModalConfig cfg = *config;
+            if (cfg.title.empty()) cfg.title = title;
+            const ModalConfig defaults{};
+            if (cfg.width.dim == defaults.width.dim &&
+                cfg.width.value == defaults.width.value &&
+                cfg.height.dim == defaults.height.dim &&
+                cfg.height.value == defaults.height.value) {
+                cfg.width = default_width;
+                cfg.height = default_height;
+            }
+            return cfg;
+        }
+
         // Helper to create info dialog content
         static ui::imm::ElementResult create_info_content(
             ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent ep_pair,
             bool &open, const std::string &title, const std::string &message,
-            const std::string &button_label) {
+            const std::string &button_label,
+            std::optional<ModalConfig> config = std::nullopt) {
             using namespace ui;
             using namespace ui::imm;
 
-            auto result = modal_impl(ctx, ep_pair, open,
-                                     ModalConfig{}
-                                         .with_size(h720(420), h720(280))
-                                         .with_title(title)
-                                         .with_show_close_button(false));
+            auto result = modal_impl(
+                ctx, ep_pair, open,
+                dialog_config(config, title, h720(420), h720(280)));
 
             if (result) {
                 int content_layer = content_layer_of(result);
@@ -668,17 +690,16 @@ struct modal : developer::Plugin {
             ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent ep_pair,
             bool &open, const std::string &title, const std::string &message,
             const std::string &confirm_label, const std::string &cancel_label,
-            bool danger = false) {
+            bool danger = false,
+            std::optional<ModalConfig> config = std::nullopt) {
             using namespace ui;
             using namespace ui::imm;
 
             DialogResult dialog_result = DialogResult::Pending;
 
-            auto result = modal_impl(ctx, ep_pair, open,
-                                     ModalConfig{}
-                                         .with_size(h720(540), h720(280))
-                                         .with_title(title)
-                                         .with_show_close_button(false));
+            auto result = modal_impl(
+                ctx, ep_pair, open,
+                dialog_config(config, title, h720(540), h720(280)));
 
             if (result) {
                 int content_layer = content_layer_of(result);
@@ -718,17 +739,16 @@ struct modal : developer::Plugin {
             ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent ep_pair,
             bool &open, const std::string &title, const std::string &message,
             const std::string &primary_label, const std::string &dismiss_label,
-            const std::string &tertiary_label) {
+            const std::string &tertiary_label,
+            std::optional<ModalConfig> config = std::nullopt) {
             using namespace ui;
             using namespace ui::imm;
 
             DialogResult dialog_result = DialogResult::Pending;
 
-            auto result = modal_impl(ctx, ep_pair, open,
-                                     ModalConfig{}
-                                         .with_size(h720(640), h720(280))
-                                         .with_title(title)
-                                         .with_show_close_button(false));
+            auto result = modal_impl(
+                ctx, ep_pair, open,
+                dialog_config(config, title, h720(640), h720(280)));
 
             if (result) {
                 int content_layer = content_layer_of(result);
@@ -774,17 +794,16 @@ struct modal : developer::Plugin {
             ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent ep_pair,
             bool &open, std::string &value, const std::string &title,
             const std::string &message, const std::string &ok_label,
-            const std::string &cancel_label) {
+            const std::string &cancel_label,
+            std::optional<ModalConfig> config = std::nullopt) {
             using namespace ui;
             using namespace ui::imm;
 
             DialogResult dialog_result = DialogResult::Pending;
 
-            auto result = modal_impl(ctx, ep_pair, open,
-                                     ModalConfig{}
-                                         .with_size(h720(540), h720(300))
-                                         .with_title(title)
-                                         .with_show_close_button(false));
+            auto result = modal_impl(
+                ctx, ep_pair, open,
+                dialog_config(config, title, h720(540), h720(300)));
 
             if (result) {
                 int content_layer = content_layer_of(result);
@@ -1060,9 +1079,11 @@ struct modal : developer::Plugin {
                                        ui::imm::EntityParent ep_pair,
                                        bool &open, const std::string &title,
                                        const std::string &message,
-                                       const std::string &button_label = "OK") {
+                                       const std::string &button_label = "OK",
+                                       std::optional<ModalConfig> config =
+                                           std::nullopt) {
         return detail::create_info_content(ctx, ep_pair, open, title, message,
-                                           button_label);
+                                           button_label, config);
     }
 
     // modal::confirm - Two button confirmation
@@ -1072,9 +1093,12 @@ struct modal : developer::Plugin {
                                const std::string &title,
                                const std::string &message,
                                const std::string &confirm_label = "OK",
-                               const std::string &cancel_label = "Cancel") {
-        return detail::create_confirm_content(
-            ctx, ep_pair, open, title, message, confirm_label, cancel_label);
+                               const std::string &cancel_label = "Cancel",
+                               std::optional<ModalConfig> config =
+                                   std::nullopt) {
+        return detail::create_confirm_content(ctx, ep_pair, open, title,
+                                              message, confirm_label,
+                                              cancel_label, false, config);
     }
 
     // modal::confirm_danger - Two button confirm for destructive actions.
@@ -1084,10 +1108,11 @@ struct modal : developer::Plugin {
         ui::imm::HasUIContext auto &ctx, ui::imm::EntityParent ep_pair,
         bool &open, const std::string &title, const std::string &message,
         const std::string &confirm_label = "Delete",
-        const std::string &cancel_label = "Cancel") {
+        const std::string &cancel_label = "Cancel",
+        std::optional<ModalConfig> config = std::nullopt) {
         return detail::create_confirm_content(ctx, ep_pair, open, title, message,
                                               confirm_label, cancel_label,
-                                              /*danger=*/true);
+                                              /*danger=*/true, config);
     }
 
     // modal::prompt - Text input dialog. On OK, `value` holds the entered text
@@ -1097,9 +1122,12 @@ struct modal : developer::Plugin {
                               std::string &value, const std::string &title,
                               const std::string &message,
                               const std::string &ok_label = "OK",
-                              const std::string &cancel_label = "Cancel") {
+                              const std::string &cancel_label = "Cancel",
+                              std::optional<ModalConfig> config =
+                                  std::nullopt) {
         return detail::create_prompt_content(ctx, ep_pair, open, value, title,
-                                             message, ok_label, cancel_label);
+                                             message, ok_label, cancel_label,
+                                             config);
     }
 
     // modal::fyi - Three button with tertiary option
@@ -1110,10 +1138,11 @@ struct modal : developer::Plugin {
                            const std::string &title, const std::string &message,
                            const std::string &primary_label,
                            const std::string &dismiss_label,
-                           const std::string &tertiary_label = "") {
+                           const std::string &tertiary_label = "",
+                           std::optional<ModalConfig> config = std::nullopt) {
         return detail::create_fyi_content(ctx, ep_pair, open, title, message,
                                           primary_label, dismiss_label,
-                                          tertiary_label);
+                                          tertiary_label, config);
     }
 };
 
