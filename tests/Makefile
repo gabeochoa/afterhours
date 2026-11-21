@@ -146,6 +146,7 @@ ALL_TESTS := \
 	presented_frame_test \
 	triangle_winding_test \
 	charts_test \
+	character3d_test \
 	system_profile_test \
 	allocation_counters_test \
 	profiling_test \
