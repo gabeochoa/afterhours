@@ -221,6 +221,7 @@ Started partway through the project's life, so it does not go all the way back.
 - **Clicks land on the visible part of a clipped element.** `click_ui` / `click_text` aimed at the centre of the element's full rect, which for a partially-clipped element can sit outside its hit area or off-screen — a click on the last option of a scrolled dropdown missed and closed the dropdown without selecting. They aim at the centre of the clipped rect now; a fully-clipped element has no click target and fails instead of clicking an invisible point. Pinned by `click_ui_clicks_the_visible_centre_of_a_clipped_element` in `e2e_arguments_test`.
 
 *Re-run your suite and read the new failures before silencing them.* Two of ours were real: a script that resized to 1080p and never resized back, and an assertion on a row that had never been on screen.
+- **Internal (perf): the runner keeps its own pending-command list.** `has_pending_commands`, `consume_all_pending_commands` and the timeout diagnostic used to scan every entity for `PendingE2ECommand`, up to four times a frame. They now read the runner's own list (serial dispatch keeps it at one entry), O(pending) instead of O(all entities); commands injected straight into the ECS are adopted when the list is empty, so timeouts, skip-cancel and the stuck-command diagnostic behave as before. Covered by `e2e_pending_list_test`.
 
 ### Two silent fallbacks now warn
 
