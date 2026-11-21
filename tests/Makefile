@@ -327,6 +327,7 @@ ALL_TESTS := \
 	shared_handlers_test \
 	default_font_test \
 	load_font_size_test \
+	glyph_packing_test \
 	edit_keys_test \
 	tab_container_test \
 	tab_toggle_geometry_test \
@@ -378,6 +379,7 @@ RAYLIB_TESTS := \
 	edit_keys_test \
 	default_font_test \
 	load_font_size_test \
+	glyph_packing_test \
 	border_width_test \
 	border_only_test \
 	text_visibility_test \
@@ -704,6 +706,7 @@ $(OUT)/font_prewarm_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/f
 $(OUT)/font_points_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/glyph_placeholder_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/load_font_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/glyph_packing_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/font_memory_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/headless_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/capture_perf_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
