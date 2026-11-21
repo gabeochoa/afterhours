@@ -213,9 +213,6 @@ concept PlatformBackend = requires {
 };
 
 struct RunConfig {
-  // Initial window size, applied at creation by both backends. Read your
-  // persisted settings before run() and pass them here to avoid a flash at
-  // the defaults.
   int width = 1280;
   int height = 720;
   // Initial window position (screen coordinates). Negative leaves the

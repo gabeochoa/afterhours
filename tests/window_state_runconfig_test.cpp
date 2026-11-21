@@ -1,9 +1,3 @@
-// window_state_runconfig_test.cpp
-// Persisted window state must reach the window at creation time, not after
-// a flash at the defaults. Size was already on RunConfig and already applied
-// at creation by both backends; position was absent entirely. These check
-// the plumbing values the backends read in run().
-
 #define AFTER_HOURS_USE_RAYLIB
 
 #include <afterhours/src/graphics_common.h>
@@ -46,9 +40,6 @@ int main() {
           "restored size is carried on the config");
     check(cfg.window_x == 120 && cfg.window_y == 80,
           "restored position is carried on the config");
-    // The raylib backend applies position only when both are >= 0, and the
-    // sokol backend warns when either is set. 0,0 is a real origin, not
-    // "unset", so it must not collide with the -1 sentinel.
     cfg.window_x = 0;
     cfg.window_y = 0;
     check(cfg.window_x >= 0 && cfg.window_y >= 0,
