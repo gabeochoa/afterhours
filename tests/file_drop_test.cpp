@@ -1,7 +1,3 @@
-// file_drop_test.cpp
-// Injected drops (the call backends make on a real OS drop) deliver their
-// paths in order when enabled, and nothing when disabled. Real OS drag
-// delivery itself needs a human dragging from Finder/Explorer.
 
 #include <afterhours/src/file_drop.h>
 

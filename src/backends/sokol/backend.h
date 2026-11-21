@@ -503,7 +503,6 @@ inline void sokol_event_cb(const sapp_event *ev) {
     g_window_focused = false;
     break;
   case SAPP_EVENTTYPE_FILES_DROPPED: {
-    // Paths are only valid during this event, so copy them out now.
     std::vector<std::string> paths;
     const int n = sapp_get_num_dropped_files();
     for (int i = 0; i < n; i++)
@@ -1052,7 +1051,7 @@ struct MetalPlatformAPI {
     file_drop::set_enabled(cfg.enable_file_drop);
     desc.enable_dragndrop = cfg.enable_file_drop;
     if (cfg.enable_file_drop)
-      desc.max_dropped_files = 8; // sokol's default of 1 drops all but one path
+      desc.max_dropped_files = 8;
 
     // Map flags
     if (cfg.flags & FLAG_WINDOW_RESIZABLE) {
@@ -1064,7 +1063,7 @@ struct MetalPlatformAPI {
   }
 
   static void run_headless(const RunConfig &cfg) {
-    file_drop::clear(); // no window, so no drop target can exist
+    file_drop::clear();
     Config headless;
     headless.display = DisplayMode::Headless;
     headless.width = cfg.width;

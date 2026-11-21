@@ -401,7 +401,6 @@ struct RaylibPlatformAPI {
     auto run_frame = [&cfg] {
       frame_loop::consume_frame_request();
       frame_loop::note_frame(true);
-      // Poll before the frame so this frame's take_dropped_files() sees it.
       if (file_drop::enabled() && raylib::IsWindowReady() &&
           raylib::IsFileDropped()) {
         raylib::FilePathList dropped = raylib::LoadDroppedFiles();
