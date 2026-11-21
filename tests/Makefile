@@ -148,6 +148,7 @@ ALL_TESTS := \
 	overlay_layer_test \
 	unhandled_command_test \
 	e2e_retry_test \
+	e2e_app_test \
 	e2e_register_command_test \
 	e2e_screenshot_test \
 	e2e_is_running_test \
@@ -289,6 +290,7 @@ ALL_TESTS += staging_texture_leak_test
 endif
 
 RAYLIB_TESTS := \
+	e2e_app_test \
 	value_types_test \
 	wrappers_test \
 	edit_keys_test \
