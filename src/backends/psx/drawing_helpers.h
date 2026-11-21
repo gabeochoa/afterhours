@@ -22,55 +22,18 @@
 
 namespace afterhours {
 
-// ---------------------------------------------------------------------------
-// The PSX validation backend
-//
-// Selected with AFTER_HOURS_USE_PSX. Like the `none` backend it records draw
-// calls instead of issuing them (same capture buffer, same test affordances),
-// and on top of that it runs every texture and render target through the
-// simulated console VRAM in budget.h, so the art-direction mistakes that are
-// free on a desktop GPU -- a 1024x512 texture, forty atlases, a second
-// fullscreen render target -- warn the moment they happen under a PS1 or PS2
-// profile (psx_profile.h). Configure before loading anything:
-//
-//   psx::budget::configure({.console = psx::Console::PS1});
-//
-// Draw calls also feed the per-frame primitive counter; call
-// psx::budget::end_frame() once per frame (there is no window loop here to
-// hang it on) to get the over-budget warnings and peak tracking.
-//
-// This is a *validation* backend: it proves a game's rendering fits the
-// console's budgets, it does not produce a console binary. A real-hardware
-// backend would implement these same functions against the console GPU
-// (PS1: TILE/POLY_FT4/SPRT packets via an ordering table) and reuse the
-// profile/allocator/budget code unchanged. Ops with no console equivalent
-// (shaders, mipmaps, screen capture) keep the none backend's loud
-// @notimplemented behaviour rather than silently pretending.
-//
-// Tests are responsible for clearing between frames -- see clear_draw_calls().
-// ---------------------------------------------------------------------------
-// One buffer for every backend, so a test asks the same question whichever it
-// built against. This backend exists to record, so it records unconditionally
-// rather than waiting for capture::enable().
 using DrawCall = capture::DrawnCall;
 
 inline std::vector<DrawCall> &draw_calls() { return capture::calls(); }
 
 inline void clear_draw_calls() { capture::clear(); }
 
-// Recording is this backend's whole purpose, so it does not wait for a caller
-// to switch capture on the way a real backend does.
 inline const bool capture_always_on = (capture::enable(), true);
 
-// One recorded draw call is roughly one GPU packet on either console, so
-// every record below also charges the frame's primitive budget. Text is the
-// exception: consoles draw a glyph per sprite, so it charges per byte.
 inline void draw_text_ex(const afterhours::Font, const char *text,
                          const Vector2Type position, const float font_size,
                          const float, const Color color, const float = 0.0f,
                          const float = 0.0f, const float = 0.0f) {
-  // Height is the font size, matching raylib, so a geometry assertion reads
-  // the same on either backend.
   capture::record("text", RectangleType{position.x, position.y, 0.f, font_size},
                   color, text ? text : "");
   psx::budget::add_primitives(text ? std::strlen(text) : 0);
@@ -107,8 +70,6 @@ inline void draw_rectangle_rounded_rotated(const RectangleType rect, const float
   capture::record("rectangle_rounded", rect, color);
   psx::budget::add_primitives(1);
 }
-// Every outline goes through here -- borders and the focus ring -- so it has
-// to record, not stub, or neither is observable in a test.
 inline void draw_rectangle_rounded_lines(const RectangleType rect, const float,
                                          const int, const Color color,
                                          const std::bitset<4>) {
@@ -148,7 +109,6 @@ inline void draw_ring_segment(float, float, float, float, float, float, int,
 inline void draw_ring(float, float, float, float, int, Color) {
   log_error("@notimplemented draw_ring");
 }
-// Bookkeeping only, so capture tests can assert transition counts.
 inline void set_blend_mode(blend::Mode mode) {
   if (mode == blend::detail::current_mode())
     return;
@@ -185,8 +145,6 @@ inline void draw_line(int, int, int, int, Color) {
 }
 inline void draw_line_ex(Vector2Type start, Vector2Type end, float thickness,
                          Color color) {
-  // Recorded rather than unimplemented: a dashed polyline is a run of these,
-  // and a test asserting on the pattern has nothing else to read.
   capture::record("line", RectangleType{start.x, start.y, end.x - start.x,
                                         end.y - start.y},
                   color, "");
@@ -236,8 +194,6 @@ inline void draw_ellipse(int, int, float, float, Color) {
 inline void draw_ellipse_lines(int, int, float, float, Color) {
   log_error("@notimplemented draw_ellipse_lines");
 }
-// Recorded as the triangle's bounding box: enough for a test to assert a
-// callout tail exists and points the right way, without a polygon in DrawCall.
 inline void draw_quad(const Vector2Type (&)[4], Color) {
   psx::budget::add_primitives(1);
 }
@@ -272,7 +228,7 @@ inline afterhours::Font &default_font_override() {
   static afterhours::Font font{};
   return font;
 }
-} // namespace detail
+}
 
 inline void set_default_font(afterhours::Font font) {
   detail::default_font_override() = font;
@@ -283,9 +239,6 @@ inline afterhours::Font get_default_font() {
 }
 inline afterhours::Font get_unset_font() { return get_default_font(); }
 
-// Render targets are where console VRAM budgets go to die -- a fullscreen
-// target on PS1 is a third of all VRAM -- so unlike the none backend these
-// are fully tracked here.
 inline graphics::RenderTextureType load_render_texture(int w, int h) {
   graphics::RenderTextureType rt;
   rt.width = w;
@@ -318,8 +271,6 @@ inline void draw_render_texture(const graphics::RenderTextureType &, float,
   log_error("@notimplemented draw_render_texture");
 }
 
-// The sprite path: recorded (dest rect) and charged as one textured quad,
-// which is what either console would emit for it (PS1 SPRT/POLY_FT4).
 inline void draw_texture_rec(TextureType, RectangleType source,
                              Vector2Type position, Color color) {
   capture::record("texture",
@@ -363,11 +314,6 @@ inline constexpr int TEXTURE_WRAP_REPEAT = 0;
 inline constexpr int TEXTURE_WRAP_CLAMP = 1;
 inline constexpr int TEXTURE_WRAP_MIRROR_REPEAT = 2;
 
-// Textures carry no pixels here, only their dimensions and the budget
-// allocation they were charged (TextureType::budget_id, freed on unload).
-// In strict budget mode a texture that does not fit -- or exceeds the
-// console's maximum texture size -- comes back empty (0x0), the closest a
-// texture handle gets to "the console refused this upload".
 inline TextureType make_budgeted_texture(int w, int h, const char *name) {
   const psx::budget::TextureAlloc alloc =
       psx::budget::alloc_texture(w, h, name);
@@ -392,8 +338,6 @@ inline TextureType load_texture(const char *path) {
 
 inline TextureType load_texture_from_rgba(const std::uint8_t *, int w, int h,
                                           int = TEXTURE_FILTER_BILINEAR) {
-  // Pixels are never read: the budget simulation only needs the footprint.
-  // Named by size so budget reports can tell raw-pixel textures apart.
   const std::string label =
       "<rgba " + std::to_string(w) + "x" + std::to_string(h) + ">";
   return make_budgeted_texture(w, h, label.c_str());
@@ -405,13 +349,10 @@ inline void unload_texture(TextureType &tex) {
 }
 
 inline void gen_texture_mipmaps(TextureType &) {
-  // Neither console mipmaps the way a desktop GPU does (PS1 not at all).
   log_error("@notimplemented gen_texture_mipmaps (no console equivalent)");
 }
 
 inline void set_texture_filter(TextureType &, int) {
-  // PS1 texture sampling is nearest-only; asking for bilinear is exactly
-  // the kind of assumption this backend exists to catch, so stay loud.
   log_error("@notimplemented set_texture_filter (no console equivalent)");
 }
 
@@ -421,8 +362,7 @@ inline void draw_fps(int, int) {}
 
 inline TextureType load_texture_with_color_key(const char *path, const Color,
                                                const Color, int) {
-  // Color keying changes pixels, not footprint.
   return load_texture(path);
 }
 
-} // namespace afterhours
+}

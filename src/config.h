@@ -36,8 +36,6 @@
 //   AFTER_HOURS_USE_METAL            legacy alias for USE_SOKOL (sokol family)
 //   AFTER_HOURS_USE_VULKAN           sokol family + force the Vulkan API
 //   AFTER_HOURS_USE_NONE             select none backend (records draw calls)
-//   AFTER_HOURS_USE_PSX              select PSX validation backend (records
-//                                    draw calls + PS1/PS2 VRAM budgets)
 //   AFTER_HOURS_ENABLE_E2E_TESTING   e2e input injection + commands
 //   AFTER_HOURS_UI_SINGLE_COLLECTION single UI entity collection
 //   AFTERHOURS_SINGLE_RENDER_PASS    one render pass
@@ -51,8 +49,6 @@
 // is picked by platform (Metal on Apple, Vulkan on Windows, GLES3 on
 // Emscripten). AFTER_HOURS_USE_METAL is a legacy alias for USE_SOKOL;
 // AFTER_HOURS_USE_VULKAN forces the Vulkan API. AFTER_HOURS_USE_NONE
-// selects the none backend; AFTER_HOURS_USE_PSX the PSX validation backend
-// (src/backends/psx). AFTER_HOURS_USE_D3D11 is not implemented yet.
 #if defined(AFTER_HOURS_USE_D3D11)
 #error "AFTER_HOURS_USE_D3D11 is not implemented yet"
 #endif

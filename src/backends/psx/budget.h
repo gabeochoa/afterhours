@@ -12,61 +12,29 @@
 #include "psx_profile.h"
 #include "vram_allocator.h"
 
-// The PSX budget tracker: one simulated VRAM plus the running totals a game
-// would want to watch while aiming at a console it is not running on.
-//
-// Usage from a game (any backend):
-//
-//   psx::budget::configure({.console = psx::Console::PS1});
-//   ... load textures, render frames ...
-//   log_info("{}", psx::budget::report_string());
-//
-// The PSX backend (drawing_helpers.h in this directory) calls into here from
-// its texture/render-target functions, so a game built with
-// AFTER_HOURS_USE_PSX gets the accounting for free. The tracker itself does
-// not depend on the backend: a raylib/sokol game can call alloc_texture /
-// free_texture around its own loads to get the same warnings today.
-//
-// Warnings, all through log_warn so AFTER_HOURS_REPLACE_LOGGING hosts see
-// them too:
-//   * a texture larger than the console can upload in one piece,
-//   * a texture that does not fit in the VRAM that remains,
-//   * VRAM crossing the warn_at watermark (once per crossing),
-//   * a frame whose primitive count exceeds the profile budget.
 
 namespace afterhours::psx::budget {
 
 struct BudgetConfig {
   Console console = Console::PS1;
-  // Full profile override; when set, `console` is ignored. Use this for
-  // "what if we only had half the VRAM" experiments.
   std::optional<ConsoleProfile> profile_override;
-  // Render setup override; when set, replaces the profile's render setup
-  // (and therefore its framebuffer reservation).
   std::optional<RenderSetup> render_override;
   float warn_at = 0.85f;
-  // Strict: a texture that does not fit (or exceeds the console's maximum
-  // texture size) reports ok=false, and the PSX backend refuses to hand
-  // back a texture for it. Non-strict: the alloc is still recorded as far
-  // as it can be placed, so reports stay truthful, and the game keeps
-  // running. Non-strict overflow that cannot be placed at all tracks the
-  // bytes as overspill (see Report::overspill_bytes) instead of placing.
   bool strict = false;
-  // Bit depth for allocs that do not state one. 0 = profile default.
   int texture_bpp = 0;
   bool reserve_framebuffers = true;
 };
 
 struct TextureAlloc {
-  std::uint64_t id = 0; // pass back to free_texture; 0 = untracked
-  bool ok = false;      // placed in VRAM (and, in strict mode, legal at all)
-  bool oversized = false; // exceeds the console's max texture dimensions
-  VramRect rect;          // image placement, invalid when !ok
-  VramRect clut_rect;     // palette placement, invalid when none
+  std::uint64_t id = 0;
+  bool ok = false;
+  bool oversized = false;
+  VramRect rect;
+  VramRect clut_rect;
   int width_px = 0;
   int height_px = 0;
   int bpp = 0;
-  std::size_t bytes = 0; // image + CLUT, as placed
+  std::size_t bytes = 0;
 };
 
 struct Report {
@@ -76,8 +44,6 @@ struct Report {
   std::size_t vram_free_bytes = 0;
   float vram_fraction_used = 0.f;
   std::size_t framebuffer_bytes = 0;
-  // Bytes of textures that were requested but could not be placed
-  // (non-strict mode). This is the "how far over are we" number.
   std::size_t overspill_bytes = 0;
   std::size_t texture_count = 0;
   std::size_t render_target_count = 0;
@@ -125,13 +91,6 @@ inline BudgetState &state() {
 
 inline void ensure_configured();
 
-// Reserve framebuffers for the profile's render setup. First-fit from the
-// top-left, which puts them where both consoles conventionally lay them out
-// and stacks the second buffer below the first when they cannot sit side by
-// side (PS2 at 640x448 @32bpp, PS1 interlaced modes). A render setup whose
-// framebuffers cannot fit at all warns and runs with what did fit -- PS1
-// 640x480 double-buffered is 1.2MB into 1MB of VRAM, which is precisely the
-// kind of thing this exists to say out loud.
 inline void reserve_framebuffers(BudgetState &s) {
   s.framebuffer_bytes = 0;
   if (!s.config.reserve_framebuffers)
@@ -230,8 +189,6 @@ inline TextureAlloc alloc_impl(int width_px, int height_px, int bpp,
       return out;
   }
 
-  // CLUT first: it is one short row, and placing it before the image keeps
-  // the image's first-fit scan from fragmenting around it.
   if (s.profile.textures_use_clut && !is_render_target) {
     const int clut = clut_units(out.bpp);
     if (clut > 0) {
@@ -275,7 +232,7 @@ inline TextureAlloc alloc_impl(int width_px, int height_px, int bpp,
   return out;
 }
 
-} // namespace detail
+}
 
 inline void configure(const BudgetConfig &config) {
   detail::BudgetState &s = detail::state();
@@ -283,9 +240,6 @@ inline void configure(const BudgetConfig &config) {
   detail::apply_config(s);
 }
 
-// Back to the configured profile with every texture freed and framebuffers
-// re-reserved. The backend calls this on shutdown; tests call it between
-// cases.
 inline void reset() { detail::apply_config(detail::state()); }
 
 inline const ConsoleProfile &profile() {
@@ -295,14 +249,11 @@ inline const ConsoleProfile &profile() {
 
 inline const BudgetConfig &config() { return detail::state().config; }
 
-// Track one texture upload. bpp 0 = config/profile default.
 inline TextureAlloc alloc_texture(int width_px, int height_px,
                                   const char *name, int bpp = 0) {
   return detail::alloc_impl(width_px, height_px, bpp, name, false);
 }
 
-// Track one render target, charged at the render setup's color depth unless
-// bpp says otherwise.
 inline TextureAlloc alloc_render_target(int width_px, int height_px,
                                         const char *name, int bpp = 0) {
   return detail::alloc_impl(width_px, height_px, bpp, name, true);
@@ -331,8 +282,6 @@ inline void add_primitives(std::size_t count) {
   detail::state().primitives_this_frame += count;
 }
 
-// Close out a frame: fold the primitive count into last/peak and warn when
-// the frame ran over the profile's primitive budget.
 inline void end_frame() {
   detail::BudgetState &s = detail::state();
   detail::ensure_configured();
@@ -370,8 +319,6 @@ inline Report report() {
   return r;
 }
 
-// One-line human summary, e.g.
-//   PlayStation 1 VRAM 612KB/1024KB (60%), 300KB framebuffers, 23 textures
 inline std::string report_string() {
   const Report r = report();
   std::string out = std::string(r.profile_name) + " VRAM " +
@@ -392,8 +339,6 @@ inline std::string vram_map_ascii(int cols = 64, int rows = 32) {
   return detail::state().vram.map_ascii(cols, rows);
 }
 
-// Names of every live allocation, largest first -- the "who is eating VRAM"
-// list to walk when the watermark warning fires.
 inline std::vector<std::string> alloc_listing() {
   detail::BudgetState &s = detail::state();
   detail::ensure_configured();
@@ -413,4 +358,4 @@ inline std::vector<std::string> alloc_listing() {
   return out;
 }
 
-} // namespace afterhours::psx::budget
+}

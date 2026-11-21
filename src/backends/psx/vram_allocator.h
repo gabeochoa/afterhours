@@ -6,19 +6,9 @@
 #include <string>
 #include <vector>
 
-// A simulated VRAM allocator over a 2D grid of 16bpp units.
-//
-// Deliberately simple: an occupancy bitmap plus first-fit scan. A game
-// allocates dozens of textures, not thousands, so the O(grid) scan per
-// allocation is irrelevant next to being obviously correct -- free() clears
-// the rect, fragmentation is whatever the bitmap says it is, and there is no
-// free-list bookkeeping to disagree with reality. The point is not to pack
-// optimally; it is to fail in the same situations the real console would
-// fail, on the desktop, where the failure is cheap to debug.
 
 namespace afterhours::psx {
 
-// A placed block in VRAM units (16bpp pixels), origin top-left.
 struct VramRect {
   int x = 0;
   int y = 0;
@@ -38,7 +28,6 @@ public:
   VramAllocator() = default;
   VramAllocator(int width_px, int height_px) { reset(width_px, height_px); }
 
-  // (Re)size the grid and clear every allocation.
   void reset(int width_px, int height_px) {
     width_ = width_px > 0 ? width_px : 0;
     height_ = height_px > 0 ? height_px : 0;
@@ -53,8 +42,6 @@ public:
   int width() const { return width_; }
   int height() const { return height_; }
 
-  // First-fit placement. Returns nullopt when no w x h hole exists, which
-  // includes "wider/taller than VRAM itself".
   std::optional<VramRect> allocate(int w, int h) {
     if (w <= 0 || h <= 0 || w > width_ || h > height_)
       return std::nullopt;
@@ -66,17 +53,12 @@ public:
           mark(rect, 1);
           return rect;
         }
-        // Skip past the occupied cell that killed this candidate row span;
-        // rescanning from x+1 would re-examine the same blocker w times.
         x = blocked + 1;
       }
     }
     return std::nullopt;
   }
 
-  // Claim an exact rect (framebuffers, which live where the render setup
-  // says, not where first-fit feels like). Fails if any cell is taken or the
-  // rect leaves the grid.
   bool reserve(VramRect rect) {
     if (!rect.valid() || rect.x < 0 || rect.y < 0 ||
         rect.x + rect.w > width_ || rect.y + rect.h > height_)
@@ -90,8 +72,6 @@ public:
   void free(VramRect rect) {
     if (!rect.valid())
       return;
-    // Clamp instead of trusting the caller: a double free or a rect from a
-    // previous configuration must not scribble outside the grid.
     const int x0 = rect.x < 0 ? 0 : rect.x;
     const int y0 = rect.y < 0 ? 0 : rect.y;
     const int x1 = rect.x + rect.w > width_ ? width_ : rect.x + rect.w;
@@ -119,9 +99,6 @@ public:
     return used_[index(x, y)] != 0;
   }
 
-  // The VRAM viewer every PSX emulator has, at log resolution: '#'
-  // occupied, '.' free, one character per block of units. A block counts as
-  // occupied when any unit in it is, so small allocations stay visible.
   std::string map_ascii(int cols = 64, int rows = 32) const {
     if (width_ == 0 || height_ == 0 || cols <= 0 || rows <= 0)
       return {};
@@ -152,7 +129,6 @@ private:
            static_cast<std::size_t>(x);
   }
 
-  // Column of the first occupied cell in the w x h span at (x, y), or -1.
   int first_blocked_column(int x, int y, int w, int h) const {
     for (int yy = y; yy < y + h; ++yy)
       for (int xx = x; xx < x + w; ++xx)
@@ -180,4 +156,4 @@ private:
   std::size_t used_count_ = 0;
 };
 
-} // namespace afterhours::psx
+}

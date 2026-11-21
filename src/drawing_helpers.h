@@ -11,8 +11,6 @@
 #elif defined(AFTER_HOURS_SOKOL)
 #include "backends/sokol/drawing_helpers.h"
 #elif defined(AFTER_HOURS_USE_PSX)
-// The PSX backend records draw calls like `none` and additionally runs
-// textures through a simulated PS1/PS2 VRAM budget (backends/psx/budget.h).
 #define AFTER_HOURS_BACKEND_PSX
 #include "backends/psx/drawing_helpers.h"
 #else

@@ -14,10 +14,6 @@ namespace afterhours {
 
 using Font = FontType;
 
-// On either console a font is a bitmap atlas living in VRAM, so every font
-// load charges the budget one atlas page. MyFont carries no handle to free
-// on unload, and on real hardware font atlases effectively live for the
-// whole program anyway, so the charge is permanent until budget::reset().
 inline void charge_font_atlas(const char *what) {
   psx::budget::alloc_texture(256, 256, what);
 }
@@ -52,10 +48,6 @@ inline Font load_font_for_string(const std::string &, const std::string &,
   charge_font_atlas("font atlas (string)");
   return Font();
 }
-// Text measurement seam.
-//
-// AutoLayout has its own hook (set_measure_text_fn on the layout object) but
-// the renderer calls this free function directly, so it needs its own.
 using MeasureTextFn =
     std::function<Vector2Type(const char *, float /*size*/, float /*spacing*/)>;
 

@@ -73,9 +73,6 @@ struct MyTexture {
   uint32_t sampler_id = 0;
 };
 #elif defined(AFTER_HOURS_USE_PSX)
-// PSX validation backend: no GPU handles, but the texture was charged to
-// the simulated console VRAM (backends/psx/budget.h), so it carries the
-// allocation id unload_texture releases. 0 = untracked / refused.
 struct MyTexture {
   float width = 0;
   float height = 0;
