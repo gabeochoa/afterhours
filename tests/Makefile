@@ -255,6 +255,7 @@ ALL_TESTS := \
 	default_font_test \
 	load_font_size_test \
 	edit_keys_test \
+	raw_text_edit_test \
 	tab_container_test \
 	small_components_test \
 	text_area_test \
@@ -292,6 +293,7 @@ RAYLIB_TESTS := \
 	value_types_test \
 	wrappers_test \
 	edit_keys_test \
+	raw_text_edit_test \
 	default_font_test \
 	load_font_size_test \
 	border_width_test \
@@ -382,6 +384,7 @@ $(RAYLIB_BINS): LDFLAGS_T  = $(LDFLAGS_RAYLIB)
 $(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(subst $(RAYLIB_LIB)/libraylib.a,-L$(RAYLIB_LIB) -lraylib,$(LDFLAGS_RAYLIB))
 
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/middle_click_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
+$(OUT)/raw_text_edit_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 
