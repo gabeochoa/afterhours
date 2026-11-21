@@ -20,8 +20,11 @@
 // breaks the source did not have -- see the note on joined_text.
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include "../../ecs.h"
@@ -398,6 +401,74 @@ struct Selection {
     cursor = length;
   }
 };
+
+// Which characters count as part of a "word" for double-click selection and
+// word-wise cursor movement. Prose splits on punctuation, code wants whole
+// identifiers, paths want whole paths, so the caller picks; Prose is the
+// historical default.
+enum class WordPolicy { Prose, Identifier, Path };
+
+// One byte's verdict. Non-ASCII bytes are word characters in every policy:
+// they are UTF-8 payload, and splitting inside a glyph would corrupt it.
+inline bool is_word_char(char c, WordPolicy policy = WordPolicy::Prose) {
+  const auto u = static_cast<unsigned char>(c);
+  if (u >= 0x80)
+    return true;
+  switch (policy) {
+  case WordPolicy::Prose:
+    return !std::isspace(u) && !std::ispunct(u);
+  case WordPolicy::Identifier:
+    return std::isalnum(u) || c == '_';
+  case WordPolicy::Path:
+    return !std::isspace(u);
+  }
+  return false;
+}
+
+/// Start of the word containing or before position, skipping separators.
+inline size_t find_word_start(std::string_view text, size_t pos,
+                              WordPolicy policy = WordPolicy::Prose) {
+  if (pos == 0 || text.empty())
+    return 0;
+  size_t p = pos;
+  while (p > 0 && !is_word_char(text[p - 1], policy))
+    --p;
+  while (p > 0 && is_word_char(text[p - 1], policy))
+    --p;
+  return p;
+}
+
+/// End of the word containing or after position, skipping separators.
+inline size_t find_word_end(std::string_view text, size_t pos,
+                            WordPolicy policy = WordPolicy::Prose) {
+  if (pos >= text.size())
+    return text.size();
+  size_t p = pos;
+  while (p < text.size() && !is_word_char(text[p], policy))
+    ++p;
+  while (p < text.size() && is_word_char(text[p], policy))
+    ++p;
+  return p;
+}
+
+/// Select the word at position (for double-click). Returns {start, end}
+/// byte offsets; on a separator it selects just that separator byte.
+inline std::pair<size_t, size_t>
+select_word_at(std::string_view text, size_t pos,
+               WordPolicy policy = WordPolicy::Prose) {
+  if (text.empty())
+    return {0, 0};
+  pos = std::min(pos, text.size() - 1);
+  if (!is_word_char(text[pos], policy))
+    return {pos, pos + 1};
+  size_t start = pos;
+  while (start > 0 && is_word_char(text[start - 1], policy))
+    --start;
+  size_t end = pos;
+  while (end < text.size() && is_word_char(text[end], policy))
+    ++end;
+  return {start, end};
+}
 
 // The text of a wrapped line, runs concatenated.
 inline std::string line_text(const detail::TextRunLine &line) {
