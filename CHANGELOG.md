@@ -6,6 +6,10 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+### Added
+
+- **Sokol MSAA render targets with resolve (antialiasing part A).** `load_msaa_render_texture(w, h, samples)` / `load_render_texture_with_samples(w, h, samples)` create a multisampled colour+depth target plus a 1x resolve image; sampling and capture/readback use the resolve image, and the pass resolves at `end_pass`. `Config::msaa_samples` (default **1 = off**) applies the same to the sokol headless target, including resizes. Default-off output is byte-identical to before, so E2E captures stay deterministic until a caller opts in. The windowed swapchain flag is part B and is not wired yet. Covered by `sokol_msaa_test` (headless diagonal coverage: intermediate edge pixels only with MSAA).
+
 ### Breaking
 
 **The animation plugin is rewritten around `afterhours::motion`.** `animation::anim<Key>(k).to(v, dur, EasingType)`, `AnimationManager`, `AnimHandle`, `sequence`, `loop_sequence`, `one_shot`, `clamp_value`, `get_value`, `register_update_systems<Key>()` and the declarative `with_animation(Anim::on_hover()...)` / `HasAnimationState` are gone. Every old call is a compile error.
