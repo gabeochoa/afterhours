@@ -51,6 +51,24 @@ struct EntityHelper {
     get_thread_default_collection_ptr() = collection;
   }
 
+  // RAII binding: binds on construct, restores the previous binding on
+  // destruction, so nested scopes unwind in LIFO order and early
+  // returns/exceptions cannot leak the binding. nullptr binds the
+  // singleton's default collection for the scope.
+  struct ScopedCollection {
+    explicit ScopedCollection(EntityCollection *collection)
+        : previous_(std::exchange(get_thread_default_collection_ptr(),
+                                  collection)) {}
+    ~ScopedCollection() { set_default_collection(previous_); }
+    ScopedCollection(const ScopedCollection &) = delete;
+    ScopedCollection &operator=(const ScopedCollection &) = delete;
+    ScopedCollection(ScopedCollection &&) = delete;
+    ScopedCollection &operator=(ScopedCollection &&) = delete;
+
+   private:
+    EntityCollection *previous_;
+  };
+
   // Get the default collection for the current thread
   // Returns the thread-local collection if registered, otherwise the
   // singleton's default
