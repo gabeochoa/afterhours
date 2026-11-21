@@ -2028,8 +2028,6 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         [](RenderInfo a, RenderInfo b) { return a.layer < b.layer; });
 #endif
 
-    // Skipped with a frame boundary: clearing here would discard pre-UI
-    // world draws; the boundary clears lazily at the next frame's first draw.
     if (capture::enabled() && !capture::app_owns_frame())
       capture::clear();
 
@@ -2800,7 +2798,6 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     Arena &arena = get_render_arena();
     arena.reset();
 
-    // See RenderImm.
     if (capture::enabled() && !capture::app_owns_frame())
       capture::clear();
 

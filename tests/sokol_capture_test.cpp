@@ -88,7 +88,6 @@ int main() {
     check(has_op("texture_quad"), "texture_quad recorded");
   }
 
-  // Capture must match raylib: one rectangle_outline, no edge rectangles.
   {
     afterhours::capture::clear();
     g::begin_drawing();

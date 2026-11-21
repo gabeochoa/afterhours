@@ -96,7 +96,6 @@ concept ColorLike = requires(C c) {
 
 } // namespace afterhours
 
-// Hooked here so every backend's begin_frame gets the same capture lifetime.
 #include "capture.h"
 
 namespace afterhours::graphics {

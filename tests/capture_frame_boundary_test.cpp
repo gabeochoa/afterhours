@@ -1,4 +1,3 @@
-// World draws survive the render pass with a frame boundary (Puzzle 21).
 
 #include "ui_test_harness.h"
 
@@ -14,9 +13,8 @@ bool any_rect_at(const std::vector<DrawCall> &calls, float x, float y) {
       return true;
   return false;
 }
-} // namespace
+}
 
-// Must run first: taking a boundary is one-way for the process.
 TEST(world_draw_before_ui_is_cleared_without_a_frame_boundary) {
   ImmTestHarness h;
   capture::clear();

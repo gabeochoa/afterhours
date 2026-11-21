@@ -72,16 +72,11 @@ inline std::vector<DrawnCall> &calls() {
 inline void enable() { enabled() = true; }
 inline void disable() { enabled() = false; }
 
-// Once a frame boundary is in play (graphics::begin_frame, or directly for
-// custom loops) the UI pass stops clearing, so pre-UI world draws survive.
-// No boundary: old UI-pass clearing.
 inline bool &app_owns_frame() {
   static bool owned = false;
   return owned;
 }
 
-// Lazy clear: the finished frame must stay readable during update (when E2E
-// runs); eager clearing would wipe it before expect_drawn retries read it.
 inline bool &frame_clear_pending() {
   static bool pending = false;
   return pending;

@@ -36,7 +36,6 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
                          const Vector2Type position, const float font_size,
                          const float, const Color color, const float = 0.0f,
                          const float = 0.0f, const float = 0.0f) {
-  // Record before font checks, like raylib, or headless expect_drawn sees no text.
   capture::record("text", RectangleType{position.x, position.y, 0.f, font_size},
                   color, content ? content : "");
   auto *ctx = graphics::metal_detail::g_fons_ctx;
@@ -110,8 +109,6 @@ inline void draw_rectangle(const RectangleType rect, const Color color) {
 }
 
 namespace metal_draw_detail {
-// Unrecorded quad for composite shapes: recording pieces would make one
-// outline read as an outline plus four rectangles, unlike raylib.
 inline void fill_rect(const RectangleType rect, const Color color) {
   sgl_begin_quads();
   set_color(color);
@@ -121,11 +118,10 @@ inline void fill_rect(const RectangleType rect, const Color color) {
   sgl_v2f(rect.x, rect.y + rect.height);
   sgl_end();
 }
-} // namespace metal_draw_detail
+}
 
 inline void draw_rectangle_outline(const RectangleType rect, const Color color,
                                    const float thickness) {
-  // Only the outline is recorded: raylib emits one rectangle_outline.
   capture::record("rectangle_outline", rect, color);
   float x = rect.x, y = rect.y, w = rect.width, h = rect.height, t = thickness;
   metal_draw_detail::fill_rect(RectangleType{x, y, w, t}, color);
