@@ -13,6 +13,7 @@ int main() {
   config.audio = true;
   config.frame = [&] {
     auto &sounds = Audio::SoundLibrary::get();
+    Audio::set_recording(true);
     Audio::set_bus_volume("ambience", 0.6f);
 
     std::vector<float> samples(2205, 0.2f);
@@ -24,6 +25,10 @@ int main() {
     Audio::play_at("generated_blip", {0.f, 0.f, -100.f});
 
     std::printf("bird bus volume=%.3f\n", Audio::get_bus_volume("ambience"));
+    for (const auto &rec : Audio::play_log()) {
+      std::printf("played %s bus=%s volume=%.3f pan=%.2f\n", rec.name.c_str(),
+                  rec.bus.c_str(), rec.volume, rec.pan);
+    }
     sounds.unload_all();
     graphics::request_quit();
   };
