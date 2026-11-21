@@ -1,8 +1,3 @@
-// slider_parts — opt-in slider part styling (SliderStyle on ComponentConfig).
-// Unset, a slider is the historical 25% block on a full-height track. Set
-// with_slider_style and it draws a thin centred track, a fill to the knob
-// centre, and a 16px knob in its own colour. Headless: prints the parts it
-// built and fails if the styled parts (or the default's lack of them) differ.
 #include <cstdio>
 
 #include "../../../../ah.h"

@@ -91,9 +91,6 @@ static void update_main_label(Entity &slider_entity,
   }
 }
 
-// Resolve a knob Size to px against a laid-out track. Percent is of the
-// track width; screen sizes resolve against the screen height/width the
-// same way resolve_to_pixels does.
 static float slider_size_px(const Size &sz, float track_w, float screen_w,
                             float screen_h) {
   if (sz.dim == Dim::Percent)
@@ -171,7 +168,6 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                        .with_render_layer(config.render_layer + 1);
   default_color_usage(bg_config, Theme::Usage::Secondary);
   if (config.slider_style.has_value()) {
-    // Hit area only: no full-height paint, and centre the thin track.
     bg_config.with_color_usage(Theme::Usage::None)
         .with_justify_content(JustifyContent::Center);
   }
@@ -182,16 +178,12 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   Entity &slider_bg = elem.ent();
   slider_bg.template addComponentIfMissing<InFocusCluster>();
 
-  // Option 1 (decide-slider-parts): opt-in part styling. Unset, every
-  // geometry and colour below is the historical one, pixel for pixel.
   const bool styled = config.slider_style.has_value();
   const SliderStyle slider_style =
       styled ? config.slider_style.value() : SliderStyle{};
   const Size knob_size = slider_style.handle_size.value_or(pixels(16.f));
   const Size track_thickness_sz =
       slider_style.track_thickness.value_or(pixels(8.f));
-  // When styled the background entity is only the hit/drag area; the
-  // visible track is a centred child drawn below.
   if (styled)
     slider_bg.removeComponentIfExists<HasColor>();
 
@@ -227,7 +219,6 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
         child_cmp.set_desired_margin(
             pixels(r.height > 0.f ? (r.height - hw) * 0.5f : 0.f),
             Axis::top);
-        // Fill follows to the knob centre.
         if (cmp.children.size() > 1) {
           Entity &track_ent =
               UICollectionHolder::getEntityForIDEnforce(cmp.children[1]);
@@ -263,7 +254,6 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       [apply_slider_value, &sliderState, &ctx, styled, knob_size](Entity &draggable) {
         UIComponent &cmp = draggable.get<UIComponent>();
         Rectangle rect = cmp.rect();
-        // Map over handle travel (track minus the handle), not width.
         const float handle_w =
             styled ? detail::slider_size_px(knob_size, rect.width,
                                             ctx.screen_width, ctx.screen_height)
@@ -302,8 +292,6 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   const Size handle_width_size = percent(0.25f);
   const Size handle_left_size = percent(sliderState.value * 0.75f);
 
-  // Styled geometry from the last laid-out track (this frame's layout runs
-  // after the build; the first frame falls back to the size's own fraction).
   const Rectangle prev_rect = slider_bg.get<UIComponent>().rect();
   const float knob_px = detail::slider_size_px(knob_size, prev_rect.width,
                                                ctx.screen_width,
@@ -348,8 +336,6 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   handle.ent().template addComponentIfMissing<InFocusCluster>();
 
   if (styled) {
-    // Visible track: thin, centred (bg is JustifyContent::Center), under
-    // the knob. Fill runs from its start to the knob centre.
     auto track_config =
         ComponentConfig::inherit_from(config, "slider_track")
             .with_size(ComponentSize{percent(1.f), track_thickness_sz})

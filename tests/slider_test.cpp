@@ -368,7 +368,6 @@ TEST(slider_pending_drag_beats_the_callers_value) {
 }
 
 
-// --- Slider part styling (decide-slider-parts, Option 1) ---
 
 namespace {
 Entity &build_styled_slider(ImmTestHarness &h, float &value) {
@@ -397,7 +396,7 @@ Color color_of(ImmTestHarness &h, const char *name) {
   return e.has<HasColor>() ? e.get<HasColor>().color() : Color{0,0,0,0};
 }
 bool color_eq(Color a, Color b){ return a.r==b.r&&a.g==b.g&&a.b==b.b; }
-} // namespace
+}
 
 TEST(slider_part_styling_applies_colours_and_sizes) {
   ImmTestHarness h;
@@ -420,11 +419,8 @@ TEST(slider_part_styling_applies_colours_and_sizes) {
   CHECK(std::fabs(hr.height - 16.f) < 0.05f);
   CHECK(std::fabs(tk.height - 8.f) < 0.05f);
   CHECK(std::fabs(tk.width - tr.width) < 0.05f);
-  // Track and knob are centred vertically in the hit area.
   CHECK(std::fabs((tk.y + tk.height*0.5f) - (tr.y + tr.height*0.5f)) < 0.05f);
   CHECK(std::fabs((hr.y + hr.height*0.5f) - (tr.y + tr.height*0.5f)) < 1.f);
-  // Knob travel is track - knob; at 0.5 the knob centre is mid-track and
-  // the fill runs from the track start to that centre.
   const float centre = 0.5f * (tr.width - 16.f) + 8.f;
   CHECK(std::fabs(hr.x - tr.x - 0.5f * (tr.width - 16.f)) < 0.05f);
   CHECK(std::fabs(fl.width - centre) < 0.5f);
@@ -458,7 +454,6 @@ TEST(slider_part_styling_drag_maps_over_knob_travel) {
   CHECK(track != nullptr);
   if (!track) return;
   const Rectangle tr = track->rect();
-  // Click where value 0.25's knob centre belongs: knob/2 + 0.25*(track-knob).
   const float x = tr.x + 8.f + 0.25f * (tr.width - 16.f);
   h.context().mouse.pos = {x, tr.y + tr.height * 0.5f};
   h.context().mouse.just_pressed = true;

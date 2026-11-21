@@ -42,13 +42,6 @@ struct TextureConfig {
 
 enum struct ButtonVariant { Filled, Outline, Ghost };
 
-/// Opt-in part styling for imm::slider (see decide-slider-parts, Option 1).
-/// Unset on ComponentConfig, a slider looks exactly as it always has: a
-/// 25%-wide block handle on a full-height track, no fill segment. Set it and
-/// the slider draws a centred track of track_thickness, a fill segment from
-/// the track start to the knob centre, and a square knob of handle_size.
-/// Any part left unset falls back to the theme (track Secondary, fill and
-/// knob Primary) or, for the sizes, 8px track / 16px knob.
 struct SliderStyle {
   std::optional<Color> track;
   std::optional<Color> fill;
