@@ -4,5 +4,6 @@
 #include "core/entity.h"
 #include "core/entity_helper.h"
 #include "core/entity_query.h"
+#include "core/simulation_driver.h"
 #include "core/system.h"
 #include "core/typed_entity_handle.h"
