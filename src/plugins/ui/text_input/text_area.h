@@ -599,9 +599,17 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       const bool wants_newline =
           !config.text_area_submit_on_enter || shift;
       if (wants_newline) {
-        if (editable && insert_newline(state)) {
-          reset_blink(state);
-          text_changed = true;
+        if (editable) {
+          // Same contract as typing a character: one undo snapshot, and a
+          // selection is replaced rather than left straddling the break.
+          state.push_undo_snapshot();
+          if (state.has_selection())
+            delete_selection(state);
+          if (insert_newline(state)) {
+            state.clear_selection();
+            reset_blink(state);
+            text_changed = true;
+          }
         }
       } else if (entity.template has<HasTextInputListener>()) {
         if (auto &listener = entity.template get<HasTextInputListener>();
