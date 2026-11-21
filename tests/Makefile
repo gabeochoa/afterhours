@@ -202,6 +202,7 @@ ALL_TESTS := \
 	auto_text_color_test \
 	scissor_coalescing_test \
 	focus_origin_test \
+	reset_focus_test \
 	cleanup_order_test \
 	entity_pool_test \
 	entity_query_test \
