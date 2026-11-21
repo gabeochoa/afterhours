@@ -250,6 +250,7 @@ ALL_TESTS := \
 	styling_test \
 	system_tags_test \
 	should_run_overload_test \
+	system_deactivate_hook_test \
 	library_duplicate_test \
 	shared_handlers_test \
 	default_font_test \
