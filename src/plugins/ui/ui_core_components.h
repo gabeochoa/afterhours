@@ -578,6 +578,9 @@ struct HasCheckboxMark : BaseComponent {};
 struct HasLabel : BaseComponent {
   TextAlignment alignment = TextAlignment::None;
   TextOverflow text_overflow = TextOverflow::Clip;
+  // Set by the renderer on the frame it drew this label: the text was
+  // ellipsized or clipped, so a tooltip duplicating it would be news.
+  bool truncated = false;
   float letter_spacing = 0.f; // Additional spacing between characters (pixels)
   // Per-side space between this label and its box; unset means Theme's value.
   std::optional<Vector2Type> text_inset;
