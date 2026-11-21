@@ -1,11 +1,3 @@
-// R-165 (hanabi #230): mouse.pos before the first pointer event.
-//
-// A freshly built UIContext must not hover anything: the pointer starts
-// off-screen, so pre-event hit tests miss instead of landing on whatever
-// widget happens to sit at the origin. And a non-finite position (sokol
-// reported 0/0 before sapp_init) must never read as inside either, which
-// is what menu/modal backdrop logic treats as "outside".
-
 #include "ui_test_harness.h"
 
 #include <cmath>

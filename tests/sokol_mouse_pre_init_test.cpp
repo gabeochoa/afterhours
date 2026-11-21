@@ -1,10 +1,3 @@
-// R-165 (hanabi #230): get_mouse_position before the first event.
-//
-// The sokol backend divides by sapp_dpi_scale(), which is 0 until
-// sapp_init runs. 0/0 is NaN, and ctx.mouse.pos (plus every inverted
-// "outside" hit test built on it) inherited that NaN. These reads happen
-// without sapp_init on purpose: that is the pre-event state.
-
 #if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_VULKAN) && !defined(AFTER_HOURS_USE_SOKOL)
 #define AFTER_HOURS_USE_SOKOL
 #endif
@@ -32,7 +25,6 @@ static void check(bool cond, const std::string &what) {
 
 int main() {
   printf("=== sokol mouse before first event ===\n\n");
-  // No sapp_init: dpi_scale is still 0 and no event has set the position.
   const auto pos = g::MetalPlatformAPI::get_mouse_position();
   printf("  pos=(%g, %g)\n", pos.x, pos.y);
   check(std::isfinite(pos.x) && std::isfinite(pos.y),
