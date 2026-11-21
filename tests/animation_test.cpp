@@ -349,6 +349,23 @@ int main() {
   {
     afterhours::animation::set_instant(true);
     afterhours::motion::Track<float> tr;
+    tr.from(0.f).to(5.f, Spring{});
+    check(near(tr.value(), 5.f),
+          "instant to() lands immediately, before any advance");
+    afterhours::animation::set_instant(false);
+  }
+
+  {
+    // delay() on a fresh track logs and does nothing; value/active unchanged.
+    afterhours::motion::Track<float> tr;
+    tr.delay(1.f);
+    check(!tr.active() && near(tr.value(), 0.f),
+          "delay() before any to() is a no-op (logs an error)");
+  }
+
+  {
+    afterhours::animation::set_instant(true);
+    afterhours::motion::Track<float> tr;
     bool done = false;
     tr.from(0.f)
         .to(10.f, Spring{})
