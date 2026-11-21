@@ -1,12 +1,3 @@
-// hover_focus_name_test.cpp
-// R-023: hover/focus queries by debug name. UIContext::is_hot/has_focus take
-// an entity id, so render and game systems that know a widget's name had to
-// re-run their own hit test (cartographer). is_hovered/is_focused/
-// is_focus_visible answer by debug name, with the same first-match lookup
-// the e2e expect_hovered command uses.
-//
-// Hover goes through the real hit-target resolution; focus through set_focus.
-
 #include "ui_test_harness.h"
 
 using namespace afterhours;
@@ -16,7 +7,6 @@ using ui_test::ImmTestHarness;
 
 namespace {
 
-// Runs the real hit-target resolution with the mouse at (x, y).
 void resolve_at(ImmTestHarness &h, float x, float y) {
   h.context().mouse.pos = Vector2Type{x, y};
   h.context().mouse.left_down = false;
@@ -25,14 +15,11 @@ void resolve_at(ImmTestHarness &h, float x, float y) {
   sys.resolve();
 }
 
-// Two named, clickable divs, one above the other.
 struct Two {
   ElementResult a;
   ElementResult b;
 };
 
-// Emits the divs without laying out, so multi-frame tests can re-emit after
-// begin_frame() the way a real app rebuilds its UI each frame.
 Two emit_two(ImmTestHarness &h) {
   auto a = div(h.context(), mk(h.root(), 0),
                ComponentConfig{}
@@ -54,24 +41,22 @@ Two build_two(ImmTestHarness &h) {
   h.layout_only();
   return t;
 }
-} // namespace
+}
 
-// The by-name hover query agrees with the by-id one, element for element.
 TEST(hover_query_by_debug_name_matches_is_hot) {
   ImmTestHarness h;
   auto t = build_two(h);
 
-  resolve_at(h, 50.f, 20.f); // over A
+  resolve_at(h, 50.f, 20.f);
   CHECK(h.context().is_hovered("desk_hotspot"));
   CHECK(!h.context().is_hovered("other"));
   CHECK(h.context().is_hot(t.a.ent().id));
 
-  resolve_at(h, 50.f, 120.f); // over B
+  resolve_at(h, 50.f, 120.f);
   CHECK(!h.context().is_hovered("desk_hotspot"));
   CHECK(h.context().is_hovered("other"));
 }
 
-// The same answers hold frame after frame, not just on the build frame.
 TEST(hover_and_focus_queries_hold_across_frames) {
   ImmTestHarness h;
   auto t = build_two(h);
@@ -82,7 +67,7 @@ TEST(hover_and_focus_queries_hold_across_frames) {
     h.begin_frame();
     emit_two(h);
     h.layout_only();
-    resolve_at(h, 50.f, 20.f); // over A every frame
+    resolve_at(h, 50.f, 20.f);
     CHECK(h.context().is_hovered("desk_hotspot"));
     CHECK(h.context().is_focused("other"));
     CHECK(!h.context().is_focused("desk_hotspot"));
@@ -90,7 +75,6 @@ TEST(hover_and_focus_queries_hold_across_frames) {
   }
 }
 
-// Focus by name follows set_focus, and the ring query follows visual_focus_id.
 TEST(focus_query_by_debug_name) {
   ImmTestHarness h;
   auto t = build_two(h);
@@ -110,20 +94,17 @@ TEST(focus_query_by_debug_name) {
   CHECK(h.context().is_focus_visible("other"));
 }
 
-// A name no entity carries is false -- including while nothing is hovered,
-// where hot_id sits at ROOT and an unguarded lookup would read true.
 TEST(missing_debug_name_answers_false) {
   ImmTestHarness h;
   build_two(h);
 
-  resolve_at(h, 400.f, 300.f); // over nothing
+  resolve_at(h, 400.f, 300.f);
   CHECK(h.context().hot_id == h.context().ROOT);
   CHECK(!h.context().is_hovered("nope"));
   CHECK(!h.context().is_focused("nope"));
   CHECK(!h.context().is_focus_visible("nope"));
 }
 
-// A name shared by several widgets takes the first match, same as expect_hovered.
 TEST(shared_debug_name_takes_the_first_match) {
   ImmTestHarness h;
   auto one = div(h.context(), mk(h.root(), 0),
@@ -140,11 +121,11 @@ TEST(shared_debug_name_takes_the_first_match) {
   two.ent().addComponentIfMissing<HasClickListener>([](Entity &) {});
   h.layout_only();
 
-  resolve_at(h, 50.f, 20.f); // over the first row
+  resolve_at(h, 50.f, 20.f);
   CHECK(h.context().is_hovered("row"));
   CHECK(h.context().is_hot(one.ent().id));
 
-  resolve_at(h, 50.f, 120.f); // over the second row, same name
+  resolve_at(h, 50.f, 120.f);
   CHECK(h.context().is_hot(two.ent().id));
   CHECK(!h.context().is_hovered("row"));
 }

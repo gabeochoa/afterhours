@@ -292,9 +292,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
 
   bool has_focus(EntityID id) const { return focus_id == id; }
 
-  // First entity carrying this debug name, or ROOT. Same name lookup the e2e
-  // expect_hovered command uses (ui_commands.h); a name shared by several
-  // widgets takes the first in collection order.
   [[nodiscard]] EntityID entity_by_debug_name(std::string_view name) const {
     auto query = EntityQuery<>(UICollectionHolder::get().collection,
                                {.ignore_temp_warning = true})
