@@ -37,8 +37,6 @@ struct Watcher::Impl {
     }
 
 #ifdef __APPLE__
-    // kqueue, not FSEvents: FSEvents delivery depends on fseventsd, which
-    // on a wedged daemon took 13-15s per change and dropped some outright.
     struct Signature {
         std::uintmax_t size = 0;
         std::int64_t mtime_ns = 0;
@@ -94,7 +92,6 @@ struct Watcher::Impl {
         return true;
     }
 
-    // Directory vnodes only say "something changed"; the snapshot diff names what.
     void scan_dir(const std::filesystem::path &dir, bool emit) {
         std::unordered_map<std::string, Signature> now;
         std::error_code ec;
@@ -122,7 +119,6 @@ struct Watcher::Impl {
             for (const auto &[name, sig] : old)
                 if (!now.count(name)) push_event(dir / name);
         }
-        // Files are watched too: a directory vnode does not fire on content changes.
         for (const auto &[name, sig] : now) {
             auto path = dir / name;
             if (!is_watched(path)) watch_path(path, false);
@@ -168,7 +164,6 @@ struct Watcher::Impl {
                     scan_dir(watched.path, true);
                 } else {
                     push_event(watched.path);
-                    // Keep the parent snapshot in sync, or its scan re-reports this.
                     auto parent = watched.path.parent_path();
                     auto sit = snapshots.find(parent.string());
                     if (sit != snapshots.end())
@@ -244,4 +239,4 @@ std::vector<Event> Watcher::drain() {
     return std::exchange(impl_->events, {});
 }
 
-}  // namespace afterhours::file_watcher
+}
