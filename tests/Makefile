@@ -378,10 +378,14 @@ $(RAYLIB_BINS): CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(RAYLIB_BINS): INCLUDES_T = $(INCLUDES_RAYLIB)
 $(RAYLIB_BINS): LDFLAGS_T  = $(LDFLAGS_RAYLIB)
 
-# Shift+Enter is a raw is_key_down check, and the key injector is only wired in
-# behind this macro. Without it the backend is asked directly and answers false
-# with no window, so the modifier half of a chord cannot be tested at all.
-$(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(subst $(RAYLIB_LIB)/libraylib.a,-L$(RAYLIB_LIB) -lraylib,$(LDFLAGS_RAYLIB))
+# These two tests double every raylib input function they exercise and stub
+# the rest (input_raylib_unused_stubs.h), so they link no raylib at all.
+# Linking the real archive pulls rcore.c.o for the unused window/rlgl entry
+# points, and raylib 6.x's rcore.c.o also defines the doubled input
+# functions: duplicate symbols against a static-only install. Keep just the
+# platform frameworks (either raylib spelling is stripped, so this holds on
+# Linux too).
+$(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(subst -lraylib,,$(subst $(RAYLIB_LIB)/libraylib.a,,$(LDFLAGS_RAYLIB)))
 
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/middle_click_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
