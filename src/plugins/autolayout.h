@@ -1268,8 +1268,42 @@ struct AutoLayout {
       }
     };
 
+    // A shrinkable child may give up space, but never below what its own
+    // content needs: its explicit min, or the extent of its flow children /
+    // label (an ellipsizing label is exempt -- truncating is its job). Without
+    // this, overflow shrink squeezed fixed controls below their children.
+    const auto shrink_floor = [this](UIComponent *child, Axis axis) {
+      float floor = 0.f;
+      const float mn = resolve_constraint(*child, child->min_size[axis], axis);
+      if (mn > 0.f)
+        floor = mn;
+      bool has_flow_child = false;
+      for (EntityID cid : child->children) {
+        UIComponent &gc = cmp(cid);
+        if (!gc.absolute && !gc.should_hide)
+          has_flow_child = true;
+      }
+      if (has_flow_child) {
+        const bool child_main =
+            (child->flex_direction == FlexDirection::Row && axis == Axis::X) ||
+            (child->flex_direction == FlexDirection::Column &&
+             axis == Axis::Y);
+        const float content =
+            child_main ? _sum_children_axis_for_child_exp(*child, axis)
+                       : _max_child_size(*child, axis);
+        floor = fmaxf(floor, content + child->computed_padd[axis]);
+      } else {
+        Entity &ent = to_ent(child->id);
+        if (ent.has<HasLabel>() && !soft_text_floor(*child, axis))
+          floor = fmaxf(floor, get_text_size_for_axis(*child, axis) +
+                                   child->computed_padd[axis]);
+      }
+      return floor;
+    };
+
     const auto fix_violating_children =
-        [num_children, &layout_children](Axis axis, float error) {
+        [num_children, &layout_children, &shrink_floor](Axis axis,
+                                                        float error) {
           VALIDATE(num_children != 0, "Should never have zero children");
 
           size_t num_strict_children = 0;
@@ -1310,9 +1344,13 @@ struct AutoLayout {
           // under-corrected geometrically: with one child at strictness 0.9 it
           // removed 10% of the remaining error per pass, so the 10-iteration
           // cap left 0.9^11 of it behind (432 -> 333.19 instead of 288).
+          // Only children with headroom above their floor take part, so the
+          // error falls on flexible siblings first and fixed controls keep
+          // their content size; what cannot be absorbed stays as overflow.
           float total_shrink_weight = 0.f;
           for (UIComponent *child : layout_children) {
-            total_shrink_weight += 1.f - child->desired[axis].strictness;
+            if (child->computed[axis] > shrink_floor(child, axis))
+              total_shrink_weight += 1.f - child->desired[axis].strictness;
           }
           if (total_shrink_weight <= 0.f) {
             return;
@@ -1325,7 +1363,8 @@ struct AutoLayout {
             float portion_of_error =
                 error * ((1.f - exp.strictness) / total_shrink_weight);
             float cur_size = child->computed[axis];
-            child->computed[axis] = fmaxf(0, cur_size - portion_of_error);
+            child->computed[axis] =
+                fmaxf(shrink_floor(child, axis), cur_size - portion_of_error);
             // NOTE: do NOT decay child->desired strictness here. desired is
             // persistent user intent and is not reset between passes, so
             // writing it back corrupts strictness every frame. The loop still

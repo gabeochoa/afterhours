@@ -303,6 +303,7 @@ ALL_TESTS := \
 	folded_range_test \
 	text_action_names_test \
 	sizing_repro_test \
+	flex_shrink_test \
 	slider_test \
 	split_test \
 	downstream_gaps_test \
