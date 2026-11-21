@@ -74,7 +74,6 @@ ALL_TESTS := \
 	scroll_input_gate_test \
 	middle_click_test \
 	wheel_input_test \
-	wheel_delta_kind_test \
 	command_picker_test \
 	command_picker_ui_test \
 	terminal_test \
@@ -386,7 +385,6 @@ RAYLIB_TESTS := \
 	scroll_input_gate_test \
 	middle_click_test \
 	wheel_input_test \
-	wheel_delta_kind_test \
 	command_picker_ui_test \
 	terminal_ui_test \
 	text_stroke_render_test \

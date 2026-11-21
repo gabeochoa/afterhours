@@ -26,7 +26,7 @@ Entity &make_view(ui_test::ImmTestHarness &h) {
   scroll.content_size = {200, 1000};
   return view.ent();
 }
-} // namespace
+}
 
 TEST(precise_and_notched_deltas_use_their_own_speed) {
   ui_test::ImmTestHarness h;
@@ -45,7 +45,6 @@ TEST(precise_and_notched_deltas_use_their_own_speed) {
   wheel_over(h, view, 0, -10, WheelDeltaKind::Precise);
   CHECK_APPROX(scroll.scroll_target.y, 20.f);
 
-  // Ease (smoothing defaults to 1) carries the precise target to the offset.
   wheel_over(h, view, 0, 0, WheelDeltaKind::Precise);
   CHECK_APPROX(scroll.scroll_offset.y, 20.f);
   testing::input_injector::reset_all();

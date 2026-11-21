@@ -210,7 +210,6 @@ struct input : developer::Plugin {
         if (testing::test_input::detail::test_mode)
             return testing::input_injector::consume_wheel_kind();
 #endif
-        // raylib exposes no precise/notched flag; its wheel is one honest kind.
         return WheelDeltaKind::Notched;
     }
     static float get_gamepad_axis_mvt(const GamepadID gamepad_id,
