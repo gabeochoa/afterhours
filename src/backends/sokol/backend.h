@@ -63,8 +63,7 @@ void begin_texture_mode(graphics::RenderTextureType &rt);
 void end_texture_mode();
 } // namespace afterhours
 
-// Implemented in window_macos.h (the SOKOL_IMPL Objective-C++ TU, via
-// capture_impl.h): queued, coalesced content-area window resizing on macOS.
+// In window_macos.h via capture_impl.h (SOKOL_IMPL TU).
 #ifdef AFTER_HOURS_USE_METAL
 extern "C" void metal_set_window_size(int width, int height);
 extern "C" void metal_set_window_min_size(int width, int height);
@@ -530,11 +529,7 @@ struct MetalPlatformAPI {
   static bool is_window_ready() { return metal_detail::g_initialized; }
   static bool is_window_fullscreen() { return sapp_is_fullscreen(); }
   static void toggle_fullscreen() { sapp_toggle_fullscreen(); }
-  // Runtime window sizing: sokol_app has no runtime resize API, so macOS
-  // goes through the backend-owned AppKit helper in window_macos.h. Requests
-  // queue on the main dispatch queue and apply between draw callbacks,
-  // coalesced to the latest size, in content-area points; see that header
-  // for the contract. Other sokol platforms keep the loud stub.
+  // sokol_app has no runtime resize API; macOS uses window_macos.h.
   static void minimize_window() {
     log_error("@notimplemented minimize_window");
   }
@@ -561,9 +556,6 @@ struct MetalPlatformAPI {
     log_error("@notimplemented set_window_min_size");
 #endif
   }
-  // True while a requested resize has not been applied yet, so callers do
-  // not draw a layout for a size the window has already left (or present a
-  // first frame before its requested size is ready).
   static bool window_resize_pending() {
     if (metal_detail::g_headless)
       return metal_detail::g_pending_headless_size.has_value();
@@ -1003,8 +995,6 @@ struct MetalPlatformAPI {
     }
 
 #ifdef AFTER_HOURS_USE_METAL
-    // Paint each live-resize step at its new size before returning to
-    // AppKit, instead of leaving the step to the next display-link tick.
     ::metal_install_live_resize_draw();
 #endif
 

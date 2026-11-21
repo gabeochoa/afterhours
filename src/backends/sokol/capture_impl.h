@@ -283,10 +283,7 @@ extern "C" int metal_capture_render_texture_png_to_memory(
   return 1;
 }
 
-// macOS window resizing (programmatic set_window_size / set_window_min_size
-// plus painting during a live resize) lives in the same impl TU; see that
-// header for the contract. Apps that used to define metal_set_window_size
-// themselves should delete their copy -- this is the library's now.
+// Apps defining metal_set_window_size themselves must delete it (link clash).
 #include "window_macos.h"
 
 // Create the system default Metal device for headless (windowless) rendering,

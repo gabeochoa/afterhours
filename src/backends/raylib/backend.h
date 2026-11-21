@@ -221,7 +221,6 @@ struct RaylibPlatformAPI {
   static void set_window_min_size(int w, int h) {
     raylib::SetWindowMinSize(w, h);
   }
-  // raylib resizes synchronously; nothing is ever pending.
   static bool window_resize_pending() { return false; }
   static void set_window_state(unsigned int flags) {
     raylib::SetWindowState(flags);
