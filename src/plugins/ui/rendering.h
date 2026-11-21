@@ -1988,7 +1988,11 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                           entity.get<HasShader>().shader->id != 0;
       if (shaded)
         ::afterhours::begin_shader_mode(*entity.get<HasShader>().shader);
+      std::optional<blend_scope> blend;
+      if (entity.has<HasBlend>())
+        blend.emplace(entity.get<HasBlend>().mode);
       render_me(context, font_manager, entity);
+      blend.reset();
       if (shaded)
         ::afterhours::end_shader_mode();
     }
@@ -2785,7 +2789,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       const bool shaded = entity.has<HasShader>() && entity.get<HasShader>().shader;
       if (shaded)
         buffer.add_shader_start(entity.get<HasShader>().shader, layer, entity.id);
+      const bool blended = entity.has<HasBlend>();
+      if (blended)
+        buffer.add_blend_start(entity.get<HasBlend>().mode, layer, entity.id);
       collect_me(buffer, context, font_manager, entity, layer);
+      if (blended)
+        buffer.add_blend_end(layer, entity.id);
       if (shaded)
         buffer.add_shader_end(layer, entity.id);
     }
