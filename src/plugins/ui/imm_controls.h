@@ -520,9 +520,12 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
   // wrong; that was grid snapping rounding an expander up past its space, and
   // it is fixed, so let layout do the arithmetic.
   if (!label.empty()) {
+    // Reserve the label/track gap up front: expand() fills the remainder, so a
+    // fixed right margin shrinks the label by that amount instead of the track.
     div(ctx, mk(entity),
         ComponentConfig::inherit_from(config, "toggle_label")
             .with_size(ComponentSize{expand(), config.size.y_axis})
+            .with_margin(Margin{.right = pixels(8)})
             .with_label(label)
             .with_color_usage(Theme::Usage::None))
         .ent()

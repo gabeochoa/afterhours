@@ -196,6 +196,7 @@ ALL_TESTS := \
 	capture_attribution_test \
 	draw_commands_test \
 	color_contrast_test \
+	auto_text_color_test \
 	scissor_coalescing_test \
 	focus_origin_test \
 	cleanup_order_test \
@@ -209,6 +210,7 @@ ALL_TESTS := \
 	keymap_test \
 	label_clear_test \
 	hit_priority_test \
+	two_trees_test \
 	text_selection_test \
 	text_stroke_test \
 	text_stroke_render_test \
@@ -256,6 +258,7 @@ ALL_TESTS := \
 	load_font_size_test \
 	edit_keys_test \
 	tab_container_test \
+	tab_toggle_geometry_test \
 	small_components_test \
 	text_area_test \
 	text_input_test \
@@ -282,6 +285,7 @@ ALL_TESTS += sokol_geometry_test
 # section of sokol_blend_test.
 ALL_TESTS += sokol_hidpi_test
 ALL_TESTS += sokol_resize_test
+ALL_TESTS += sokol_multires_capture_test
 ALL_TESTS += sokol_headless_run_test
 ALL_TESTS += sokol_include_order_test
 ALL_TESTS += sokol_wrappers_test
@@ -290,6 +294,7 @@ ALL_TESTS += staging_texture_leak_test
 endif
 
 RAYLIB_TESTS := \
+	auto_text_color_test \
 	value_types_test \
 	wrappers_test \
 	edit_keys_test \
@@ -378,10 +383,14 @@ $(RAYLIB_BINS): CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(RAYLIB_BINS): INCLUDES_T = $(INCLUDES_RAYLIB)
 $(RAYLIB_BINS): LDFLAGS_T  = $(LDFLAGS_RAYLIB)
 
-# Shift+Enter is a raw is_key_down check, and the key injector is only wired in
-# behind this macro. Without it the backend is asked directly and answers false
-# with no window, so the modifier half of a chord cannot be tested at all.
-$(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(subst $(RAYLIB_LIB)/libraylib.a,-L$(RAYLIB_LIB) -lraylib,$(LDFLAGS_RAYLIB))
+# These two tests double every raylib input function they exercise and stub
+# the rest (input_raylib_unused_stubs.h), so they link no raylib at all.
+# Linking the real archive pulls rcore.c.o for the unused window/rlgl entry
+# points, and raylib 6.x's rcore.c.o also defines the doubled input
+# functions: duplicate symbols against a static-only install. Keep just the
+# platform frameworks (either raylib spelling is stripped, so this holds on
+# Linux too).
+$(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(subst -lraylib,,$(subst $(RAYLIB_LIB)/libraylib.a,,$(LDFLAGS_RAYLIB)))
 
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/middle_click_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
@@ -450,6 +459,9 @@ $(OUT)/sokol_hidpi_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_resize_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_resize_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_resize_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_multires_capture_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_multires_capture_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_multires_capture_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_headless_run_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_headless_run_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_headless_run_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
@@ -514,6 +526,7 @@ win-vulkan: $(WIN_VULKAN_BINS)
 check-boundaries:
 	bash ../check_plugin_boundaries.sh
 	sh ui_boundary_check.sh
+	sh theme_bypass_check.sh
 .PHONY: check-boundaries
 test: check-boundaries all
 	@fail=0; for t in $(ALL_TESTS); do \
