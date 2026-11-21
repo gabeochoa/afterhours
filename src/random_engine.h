@@ -1,10 +1,5 @@
 #pragma once
 
-// Bit-stable (G-P12): mt19937 is standard-specified (unlike std::hash /
-// uniform_*_distribution, which are implementation-defined). String seeds:
-// FNV-1a; ints: Lemire; floats: 24-bit + fma. Every mapping is a pure
-// function of next_u32() draws. Values differ from old releases: persisted
-// state loads but continues on the new sequence — re-baseline golden draws.
 
 #include <cmath>
 #include <cstdint>
@@ -25,7 +20,6 @@ struct RngStream {
   explicit RngStream(std::uint32_t new_seed) { set_seed(new_seed); }
   explicit RngStream(const std::string &new_seed) { set_seed(new_seed); }
 
-  // FNV-1a 32: h=2166136261; per byte h^=b, h*=16777619 (mod 2^32).
   void set_seed(const std::string &new_seed) {
     std::uint32_t hash = 2166136261u;
     for (char c : new_seed) {
@@ -42,8 +36,6 @@ struct RngStream {
 
   [[nodiscard]] std::uint32_t next_u32() { return rng(); }
 
-  // [a,b] via Lemire multiply-shift ((u64)r*n>>32, rejection keeps it unbiased).
-  // a>b fails loud (old uniform_* backend had UB there).
   [[nodiscard]] int get_int(int a, int b) {
     if (a > b)
       log_error("RngStream::get_int: inverted range [{}, {}] (a must be <= b)",
@@ -52,7 +44,6 @@ struct RngStream {
                               static_cast<std::int64_t>(a) + 1;
     std::int64_t offset = 0;
     if (span == (std::int64_t{1} << 32)) {
-      // Full range: raw draw is already unbiased.
       offset = static_cast<std::int64_t>(next_u32());
     } else {
       const std::uint32_t n = static_cast<std::uint32_t>(span);
@@ -60,7 +51,6 @@ struct RngStream {
       std::uint64_t mixed = static_cast<std::uint64_t>(draw) * n;
       std::uint32_t low = static_cast<std::uint32_t>(mixed);
       if (low < n) {
-        // Threshold is (-n) mod n (32-bit), i.e. (2^32-n) mod n.
         const std::uint32_t threshold =
             static_cast<std::uint32_t>(0u - n) % n;
         while (low < threshold) {
@@ -74,7 +64,6 @@ struct RngStream {
     }
     return static_cast<int>(static_cast<std::int64_t>(a) + offset);
   }
-  // [a,b): top 24 bits scaled by 2^-24, interpolated via fma — no FMA-contraction drift across compilers.
   [[nodiscard]] float get_float(float a, float b) {
     if (a > b)
       log_error(
@@ -102,7 +91,6 @@ struct RngStream {
                             get_int(0, static_cast<int>(count) - 1));
   }
 
-  // Format unchanged (seed + engine state), so old saves load; subsequent draws are the new sequence.
   [[nodiscard]] std::string save() const {
     std::ostringstream out;
     out << seed << ' ' << rng;
@@ -129,8 +117,6 @@ private:
 
 // Seedable global RNG. Unseeded it uses a random_device seed (nondeterministic);
 // call set_seed() with a run/level seed to get a reproducible sequence.
-//
-// Rename deferred (G-P12): source-breaking and no replacement name prescribed.
 SINGLETON_FWD(RandomEngine)
 struct RandomEngine {
   SINGLETON(RandomEngine)

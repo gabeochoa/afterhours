@@ -55,7 +55,6 @@ void test_different_seed_differs() {
   CHECK(a != b);
 }
 
-// Seed is FNV-1a, not implementation-defined std::hash.
 void test_string_seed_stable() {
   auto &r = RandomEngine::get();
   r.set_seed(std::string{"level-3"});
@@ -63,12 +62,10 @@ void test_string_seed_stable() {
   r.set_seed(std::string{"level-3"});
   int y = r.get_int(0, 1000000);
   CHECK(x == y);
-  // FNV-1a 32 over "level-3", pinned.
   CHECK(r.get_seed() == 2911412057u);
   CHECK(x == 288888);
 }
 
-// Golden vectors (G-P12): literals are exact specified-algorithm outputs; any drift (incl. std::hash/uniform_* swap) fails here.
 void test_golden_vectors() {
   RngStream raw(std::uint32_t{12345});
   const std::uint32_t expected_raw[] = {
