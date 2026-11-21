@@ -46,7 +46,6 @@ struct TimingScope {
     Clock::time_point start{};
     std::string_view name;
     SystemPhase phase;
-    // Entities the run loop visited; set by the caller before destruction.
     int entity_count = 0;
     bool active = false;
     TimingScope(std::string_view label, SystemPhase p) : name(label), phase(p) {

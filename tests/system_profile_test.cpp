@@ -192,8 +192,6 @@ TEST(a_system_may_clear_the_hook_while_it_runs) {
   clear_hook();
 }
 
-// Entities visited: N entities in the world means N reported, an empty
-// world reports 0 (not absent), in both the sample and the PerfEntry.
 TEST(entities_visited_per_system) {
   for (int world = 0; world <= 5; world += 5) {
     afterhours::testing::perf_commands::builtin_profile::reset();

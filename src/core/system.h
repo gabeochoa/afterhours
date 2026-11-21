@@ -518,8 +518,7 @@ struct CallbackSystem : System<> {
 enum struct SystemPhase { Update, FixedUpdate, Render };
 
 // Brackets every system the manager runs, including the library's own. Without
-// it a consumer can only time systems it wrote. The end callback also gets the
-// entities the run loop visited (0 when the system did not iterate).
+// it a consumer can only time systems it wrote.
 struct SystemProfileHook {
     std::function<void(std::string_view, SystemPhase)> begin;
     std::function<void(std::string_view, SystemPhase, int)> end;
@@ -600,7 +599,6 @@ struct SystemManager {
         // Re-checked: a system may clear the hook while it runs, and calling
         // a cleared std::function here would throw out of a destructor.
         ~ProfileScope() {
-            // TimingScope destroys after this body, so it sees the count.
 #if AFTERHOURS_ENABLE_PROFILING
             timing.entity_count = entity_count;
 #endif

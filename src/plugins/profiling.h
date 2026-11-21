@@ -30,7 +30,6 @@ struct SystemSample {
     double recent_average_frame_ms = 0;
     double peak_frame_ms = 0;
     std::uint64_t calls = 0;
-    // Entities visited on the last recorded frame (0 when none/empty world).
     int entity_count = 0;
     std::vector<double> frame_history;
     double mean_ms() const { return calls ? total_ms / static_cast<double>(calls) : 0; }
@@ -162,7 +161,6 @@ class Collector {
             value.history[frame_index] = value.sample.last_frame_ms;
             value.sample.total_ms += value.sample.last_frame_ms;
             value.sample.calls += std::exchange(value.frame_calls, 0);
-            // Last record in the frame wins: one call per frame per system.
             value.sample.entity_count = value.frame_entity_count;
         }
 #else
