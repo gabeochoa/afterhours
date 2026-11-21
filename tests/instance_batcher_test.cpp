@@ -121,6 +121,58 @@ int main() {
     check(keyed.copies() == 0, "a flush with on_group empties the groups");
   }
 
+  // Caller-owned buffer: borrow() draws the caller's span in place, with no
+  // copy -- on_group must hand back the caller's own pointer.
+  {
+    std::vector<MatrixType> caller{
+        model_transform({-3, 0, 0}, 0.f, {1, 1, 1}),
+        model_transform({1, 0, -1}, 90.f, {0.8f, 0.8f, 0.8f}),
+        model_transform({0, 0, 2}, 45.f, {1.1f, 1.1f, 1.1f})};
+    InstanceBatcher borrowed;
+    borrowed.borrow(tree, caller);
+    check(borrowed.copies() == 3 && borrowed.group_count() == 1,
+          "borrowed copies count without being copied in");
+    const MatrixType *seen_ptr = nullptr;
+    size_t seen_n = 0;
+    raylib::RenderTexture2D scratch = raylib::LoadRenderTexture(8, 8);
+    raylib::BeginTextureMode(scratch);
+    borrowed.flush(shader, [&](const ModelType &, uint32_t,
+                             std::span<const MatrixType> ts) {
+      seen_ptr = ts.data();
+      seen_n = ts.size();
+      check(ts.size() == 3 && max_abs_diff(ts[0], caller[0]) < 1e-6f &&
+                max_abs_diff(ts[2], caller[2]) < 1e-6f,
+            "borrowed span carries the caller's transforms");
+    });
+    raylib::EndTextureMode();
+    raylib::UnloadRenderTexture(scratch);
+    check(seen_ptr == caller.data() && seen_n == 3,
+          "borrowed flush hands back the caller's own span, uncopied");
+    check(borrowed.copies() == 0, "a borrowed flush empties the group");
+
+    // Mixed owned + borrowed copies in one group draw as two segments.
+    InstanceBatcher mixed;
+    mixed.add(tree, {0, 0, 0}, 0.f, {1, 1, 1});
+    mixed.borrow(tree, caller);
+    mixed.borrow(lantern, std::span<const MatrixType>(caller.data(), 2), 1);
+    check(mixed.copies() == 6 && mixed.group_count() == 2,
+          "mixed owned and borrowed copies count together");
+    std::string segments;
+    raylib::RenderTexture2D scratch2 = raylib::LoadRenderTexture(8, 8);
+    raylib::BeginTextureMode(scratch2);
+    mixed.flush(shader, [&](const ModelType &m, uint32_t key,
+                          std::span<const MatrixType> ts) {
+      segments += std::string(&m == &tree ? "tree" : "lantern") + ":" +
+                  std::to_string(key) + "x" + std::to_string(ts.size()) +
+                  (ts.data() == caller.data() ? "B" : "O") + " ";
+    });
+    raylib::EndTextureMode();
+    raylib::UnloadRenderTexture(scratch2);
+    check(segments == "tree:0x1O tree:0x3B lantern:1x2B ",
+          "mixed group flushes owned then borrowed segments: " + segments);
+    check(mixed.copies() == 0, "a mixed flush empties the groups");
+  }
+
   // Same frame two ways: batched, and one draw_model per copy.
   raylib::Camera3D cam{};
   cam.position = {0, 6, 10};
@@ -162,6 +214,39 @@ int main() {
   printf("  %d covered pixels, %d differ\n", covered, differ);
   check(covered > 2000, "the scene is on screen");
   check(differ <= covered / 200, "batched frame matches draw_model per copy");
+
+  // Borrowed frame: same scene from caller-owned buffers, same pixels.
+  {
+    std::vector<MatrixType> tree_ts, lantern_ts;
+    for (const Copy &c : scene)
+      (c.model == &tree ? tree_ts : lantern_ts)
+          .push_back(model_transform(c.pos, c.yaw, {c.scale, c.scale, c.scale}));
+    InstanceBatcher bb;
+    bb.borrow(tree, tree_ts);
+    bb.borrow(lantern, lantern_ts);
+    raylib::BeginTextureMode(rt);
+    raylib::ClearBackground({0, 0, 0, 0});
+    raylib::BeginMode3D(cam);
+    bb.flush(shader);
+    raylib::EndMode3D();
+    raylib::EndTextureMode();
+    check(bb.copies() == 0, "borrowed flush empties before the pixel check");
+    raylib::Image borrowed_img = raylib::LoadImageFromTexture(rt.texture);
+    raylib::ImageFormat(&borrowed_img, raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+    auto *pc = static_cast<raylib::Color *>(borrowed_img.data);
+    int covered_b = 0, differ_b = 0;
+    for (int i = 0; i < 256 * 256; i++) {
+      if (pc[i].a > 0 || pb[i].a > 0) covered_b++;
+      int d = std::abs(pc[i].r - pb[i].r) + std::abs(pc[i].g - pb[i].g) +
+              std::abs(pc[i].b - pb[i].b) + std::abs(pc[i].a - pb[i].a);
+      if (d > 6) differ_b++;
+    }
+    printf("  %d covered pixels, %d differ (borrowed)\n", covered_b, differ_b);
+    check(covered_b > 2000, "the borrowed scene is on screen");
+    check(differ_b <= covered_b / 200,
+          "borrowed frame matches draw_model per copy");
+    raylib::UnloadImage(borrowed_img);
+  }
 
   raylib::UnloadImage(batched);
   raylib::UnloadImage(direct);

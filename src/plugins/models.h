@@ -412,6 +412,7 @@ inline void draw_mesh_instanced_persistent(const raylib::Mesh &mesh,
 // flush() once a frame. flush() empties the groups but keeps their storage
 // and their GPU instance buffer, so a steady scene stops allocating after
 // its first frame and re-uploads nothing while its transforms stay put.
+// borrow() instead draws from a caller-owned buffer in place, with no copy.
 //
 // Groups are keyed by the model's address; ModelLibrary models keep theirs
 // while loaded. Copies that need a different shader or uniforms go in a
@@ -427,6 +428,14 @@ struct InstanceBatcher {
            Vector3Type scale, uint32_t key = 0) {
     add(model, model_transform(pos, yaw_deg, scale), key);
   }
+  // Draws `ts` from the caller's buffer instead of copying it into the
+  // batcher: flush() uploads from ts.data() as-is. The caller must keep the
+  // buffer alive and unmodified until flush() or clear().
+  void borrow(const ModelType &model, std::span<const MatrixType> ts,
+              uint32_t key = 0) {
+    if (ts.empty()) return;
+    group_for(model, key).borrowed.push_back(ts);
+  }
 
   // `shader` must read the instanceTransform attribute, as
   // load_instancing_shader's does.
@@ -435,22 +444,34 @@ struct InstanceBatcher {
                      std::span<const MatrixType>) {});
   }
 
-  // on_group(model, key, transforms) runs before each group draws: set the
-  // group's uniforms, or draw a shadow pass from the same transforms.
+  // on_group(model, key, transforms) runs before each segment draws: set the
+  // group's uniforms, or draw a shadow pass from the same transforms. A group
+  // with both owned and borrowed copies draws (and hooks) each segment,
+  // owned first.
   template <typename OnGroup> void flush(ShaderType shader, OnGroup &&on_group) {
     for (Group &g : groups) {
-      if (g.transforms.empty()) continue;
-      on_group(*g.model, g.key,
-               std::span<const MatrixType>(g.transforms.data(),
-                                           g.transforms.size()));
-      sync_instance_buffer(g);
-      draw_group_persistent(g, shader);
-      g.transforms.clear();
+      if (!g.transforms.empty()) {
+        auto owned = std::span<const MatrixType>(g.transforms.data(),
+                                                 g.transforms.size());
+        on_group(*g.model, g.key, owned);
+        sync_instance_buffer(g);
+        draw_group_persistent(g, shader);
+        g.transforms.clear();
+      }
+      for (std::span<const MatrixType> ts : g.borrowed) {
+        on_group(*g.model, g.key, ts);
+        draw_model_instanced(*g.model, shader, ts.data(),
+                             static_cast<int>(ts.size()));
+      }
+      g.borrowed.clear();
     }
   }
 
   void clear() {
-    for (Group &g : groups) g.transforms.clear();
+    for (Group &g : groups) {
+      g.transforms.clear();
+      g.borrowed.clear();
+    }
   }
 
   ~InstanceBatcher() {
@@ -469,14 +490,14 @@ struct InstanceBatcher {
   }
   [[nodiscard]] size_t copies() const {
     size_t n = 0;
-    for (const Group &g : groups) n += g.transforms.size();
+    for (const Group &g : groups) n += g.size();
     return n;
   }
   // Groups with at least one copy waiting: the draw calls flush() will make
   // per mesh.
   [[nodiscard]] size_t group_count() const {
     size_t n = 0;
-    for (const Group &g : groups) n += g.transforms.empty() ? 0 : 1;
+    for (const Group &g : groups) n += g.size() == 0 ? 0 : 1;
     return n;
   }
 
@@ -490,6 +511,12 @@ private:
     std::vector<MatrixType> uploaded;
     size_t buffer_creates = 0;
     size_t buffer_uploads = 0;
+    std::vector<std::span<const MatrixType>> borrowed;
+    [[nodiscard]] size_t size() const {
+      size_t n = transforms.size();
+      for (std::span<const MatrixType> ts : borrowed) n += ts.size();
+      return n;
+    }
   };
   struct GroupId {
     const ModelType *model;
@@ -608,6 +635,7 @@ inline void draw_model_instanced(const ModelType &, S, const M *, int) {
 struct InstanceBatcher {
   template <typename M> void add(const ModelType &, const M &, uint32_t = 0) {}
   template <typename V> void add(const ModelType &, V, float, V, uint32_t = 0) {}
+  void borrow(const ModelType &, std::span<const MatrixType>, uint32_t = 0) {}
   template <typename S> void flush(S) {}
   template <typename S, typename F> void flush(S, F &&) {
     warn_once(0, "@notimplemented InstanceBatcher::flush on this backend "
