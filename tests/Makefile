@@ -101,6 +101,7 @@ ALL_TESTS := \
 	color_palette_none_test \
 	wrappers_test \
 	animation_presets_test \
+	timer_test \
 	particles_test \
 	ui_modifiers_test \
 	ancestor_transform_test \
