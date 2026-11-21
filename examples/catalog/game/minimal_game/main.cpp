@@ -1,8 +1,3 @@
-// minimal_game — the shortest ECS game: one ball, one system, one call.
-//
-// Everything below main() is the game; main() is game::run plus the three
-// callbacks. No window code, no frame loop, no UI setup (that is ui::run).
-
 #include <cstdio>
 
 #include "../../../../ah.h"
@@ -34,7 +29,7 @@ int main() {
   cfg.run.width = 320;
   cfg.run.height = 180;
   cfg.run.fixed_dt = 1.f / 60.f;
-  cfg.max_frames = 120; // a windowed game would leave this 0 and run to close
+  cfg.max_frames = 120;
   cfg.setup = [&] {
     ball = &EntityHelper::createEntity();
     ball->addComponent<Position>().x = 10.f;

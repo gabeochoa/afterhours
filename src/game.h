@@ -6,15 +6,6 @@
 
 namespace afterhours::game {
 
-// One-call runner for a raw-draw game: window, frame loop, fixed-step
-// updates, clear + draw, and quit are owned here. ECS games tick their
-// SystemManager from `update`; there is deliberately no subclass to
-// override and no UI setup (that is ui::run's job).
-//
-//     return game::run({.run = {.title = "pong"},
-//                       .setup = [&] { /* create entities */ },
-//                       .update = [&](float dt) { systems.run(dt); },
-//                       .draw = [&] { /* draw the world */ }});
 struct Config {
   graphics::RunConfig run;
   std::function<void()> setup = nullptr;
@@ -42,8 +33,6 @@ inline int run(Config cfg) {
     for (int step = 0; step < rc.step_count(); ++step)
       if (cfg.update) cfg.update(rc.step_dt(dt));
 
-    // Direct-to-window bracket both backends expose; the offscreen
-    // begin_frame/end_frame pair belongs to graphics::init apps.
     graphics::begin_drawing();
     if (cfg.clear) graphics::clear_background(cfg.clear_color);
     if (cfg.draw) cfg.draw();

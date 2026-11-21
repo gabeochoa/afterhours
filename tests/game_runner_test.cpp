@@ -1,9 +1,3 @@
-// game_runner_test.cpp
-// A minimal game runs N headless frames through the one game::run call:
-// setup once, fixed-step updates, one draw per frame, cleanup once.
-// Sokol headless is the backend that can draw with no window (the raylib
-// RunConfig headless path creates no window at all).
-
 #if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_VULKAN) && \
     !defined(AFTER_HOURS_USE_SOKOL)
 #define AFTER_HOURS_USE_SOKOL
@@ -44,7 +38,7 @@ int main() {
   cfg.setup = [&] { setups++; };
   cfg.update = [&](float dt) {
     updates++;
-    moved += 60.f * dt; // 60px/s at the fixed step is 1px per update
+    moved += 60.f * dt;
   };
   cfg.draw = [&] {
     draws++;
