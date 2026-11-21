@@ -462,6 +462,15 @@ struct EntityQuery {
         return ents;
     }
 
+    // Scratch pattern (G-P14): keep a RefEntities across frames and let each
+    // frame's query fill it, reusing its capacity instead of allocating a
+    // fresh result vector per gen(). Non-caching, so a take()/first() query
+    // object is still consumed by one fill, as with values_ignore_cache.
+    RefEntities &gen_into(RefEntities &scratch) const {
+        run_query_into({}, scratch);
+        return scratch;
+    }
+
     template<typename Fn>
     void for_each(Fn &&fn) const {
         for (Entity &entity : gen()) {
@@ -734,6 +743,14 @@ struct EntityQuery {
     }
 
     RefEntities run_query(const UnderlyingOptions options) const {
+        RefEntities out;
+        run_query_into(options, out);
+        return out;
+    }
+
+    void run_query_into(const UnderlyingOptions options,
+                        RefEntities &out) const {
+        out.clear();
         // Fast path: if we only need to know whether *any* entity matches (or
         // to return the first match), we can short-circuit as long as we aren't
         // ordering results. No upfront allocation needed.
@@ -749,12 +766,11 @@ struct EntityQuery {
                     }
                 }
                 if (ok) {
-                    RefEntities result;
-                    result.push_back(const_cast<Entity &>(e));
-                    return result;
+                    out.push_back(const_cast<Entity &>(e));
+                    return;
                 }
             }
-            return {};
+            return;
         }
 
         // One ordered result needs the minimum, not a sorted list. Only when
@@ -771,18 +787,16 @@ struct EntityQuery {
                 Entity &e = *e_ptr;
                 if (passes(e, 0, mods.size())) candidates.push_back(e);
             }
-            if (candidates.empty()) return {};
+            if (candidates.empty()) return;
             auto best = std::min_element(
                 candidates.begin(), candidates.end(),
                 [&](const Entity &a, const Entity &b) {
                     return (*orderby)(a, b);
                 });
-            RefEntities result;
-            result.push_back(*best);
-            return result;
+            out.push_back(*best);
+            return;
         }
 
-        RefEntities out;
         out.reserve(mods.empty() ? entities.size() : entities.size() / 2);
 
         // Mods registered before the orderby filter the scan; the rest run
@@ -810,8 +824,6 @@ struct EntityQuery {
             }
             out.erase(out.begin() + static_cast<long>(kept), out.end());
         }
-
-        return out;
     }
 };
 }  // namespace afterhours
