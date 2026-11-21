@@ -6,6 +6,10 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+### Added
+
+- **Settings files keep their comments.** JSON settings may now use `//` and `/* */` comments and trailing commas, and a load→save cycle patches only changed values in the original text, so comments and formatting elsewhere survive byte-for-byte. Unquoted keys and other JSON5 syntax are not supported. Covered by `settings_comment_test`.
+
 ### Breaking
 
 **The animation plugin is rewritten around `afterhours::motion`.** `animation::anim<Key>(k).to(v, dur, EasingType)`, `AnimationManager`, `AnimHandle`, `sequence`, `loop_sequence`, `one_shot`, `clamp_value`, `get_value`, `register_update_systems<Key>()` and the declarative `with_animation(Anim::on_hover()...)` / `HasAnimationState` are gone. Every old call is a compile error.
