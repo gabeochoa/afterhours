@@ -246,6 +246,8 @@ ALL_TESTS := \
 	lod_test \
 	image_test \
 	image_raylib_test \
+	texture_usable_test \
+	texture_usable_raylib_test \
 	stepper_test \
 	styling_test \
 	system_tags_test \
@@ -273,6 +275,7 @@ ALL_TESTS += bundle_test
 ALL_TESTS += native_dialogs_macos_test
 ALL_TESTS += render_capture_metal_test
 ALL_TESTS += image_metal_test
+ALL_TESTS += texture_usable_metal_test
 # Sokol is Metal here, so macOS-only; renders headless, no window.
 ALL_TESTS += sokol_blend_test
 ALL_TESTS += sokol_capture_test
@@ -476,6 +479,12 @@ $(OUT)/image_metal_test: image_test.cpp ../examples/web/sokol_impl.cc
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
 
 $(OUT)/image_raylib_test: image_test.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $< $(LDFLAGS_RAYLIB) -o $@
+
+$(OUT)/texture_usable_metal_test: texture_usable_test.cpp ../examples/web/sokol_impl.cc
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
+
+$(OUT)/texture_usable_raylib_test: texture_usable_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $< $(LDFLAGS_RAYLIB) -o $@
 
 # Windows/Vulkan cross-build (from macOS, via zig). The .exes link on the Mac
