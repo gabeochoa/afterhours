@@ -550,7 +550,6 @@ class E2ERunner {
         return !has_pending_commands();
     }
     bool has_commands() const { return !commands_.empty(); }
-    // Unconsumed commands this runner dispatched (serial dispatch: 0 or 1).
     size_t pending_command_count() const {
         size_t n = 0;
         for (const auto &e : pending_cmds_)
@@ -743,8 +742,6 @@ class E2ERunner {
         }
     }
 
-    // The runner's own pending list (cost O(pending), not O(all entities)).
-    // Dispatch is serial so this holds at most one entry per frame.
     void prune_pending_cmds() const {
         auto &list = pending_cmds_;
         list.erase(std::remove_if(list.begin(), list.end(),
@@ -754,9 +751,6 @@ class E2ERunner {
                    list.end());
     }
 
-    // Entities inject PendingE2ECommand directly into the ECS (tests, and
-    // eager hosts) without going through dispatch_command. Adopt them so the
-    // runner still observes them; only scanned when the list is empty.
     void adopt_external_pending() const {
         auto pending =
             EntityQuery().whereHasComponent<PendingE2ECommand>().gen();
@@ -858,10 +852,6 @@ class E2ERunner {
     }
 
     std::vector<ParsedCommand> commands_;
-    // Runner-dispatched pending-command entities; the runner is their only
-    // creator, so this list is the whole pending set. mutable: has_pending_
-    // prunes consumed entries while const. Shared ptrs keep entities alive
-    // past ECS cleanup so the consumed check stays valid.
     mutable std::vector<EntityType> pending_cmds_;
     std::string script_path_;
     std::size_t index_ = 0;

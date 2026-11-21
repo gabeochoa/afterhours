@@ -20,8 +20,6 @@ struct ScriptDir {
   }
 };
 
-// Drive the runner like the results test does: tick, then consume commands
-// and run the cleanup system over them.
 static void drive(E2ERunner &runner, auto &&on_command, int max_frames = 200) {
   auto &coll = EntityHelper::get_default_collection();
   E2ECommandCleanupSystem cleanup;
@@ -53,8 +51,6 @@ TEST(pending_list_stays_serial_with_thousands_of_decoys) {
   });
   CHECK(runner.is_finished());
   CHECK(!runner.has_failed());
-  // Serial dispatch keeps at most one pending command; the runner's check no
-  // longer scans the whole entity set to find it.
   CHECK(peak <= 1);
   CHECK(runner.pending_command_count() == 0);
 }
