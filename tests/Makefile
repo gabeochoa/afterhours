@@ -161,6 +161,7 @@ ALL_TESTS := \
 	audio_lifecycle_test \
 	local_time_test \
 	frame_rate_stats_test \
+	lighting_zones_test \
 	graphics_concepts_pedantic_test \
 	fixed_tick_rate_test \
 	sound_playback_test \
