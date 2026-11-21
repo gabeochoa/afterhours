@@ -46,14 +46,12 @@ struct GradientFill {
   Color to{0, 0, 0, 255};
   bool horizontal = true;
 };
-
 struct LineStroke {
   Vector2Type from{0.f, 0.5f};
   Vector2Type to{1.f, 0.5f};
   Color color{255, 255, 255, 255};
   float thickness = 1.f;
 };
-
 enum struct ButtonVariant { Filled, Outline, Ghost };
 
 struct SliderStyle {
@@ -676,12 +674,10 @@ struct ComponentConfig {
     on_draw_over = std::move(fn);
     return *this;
   }
-  // Two-stop linear gradient fill replacing the flat background.
   ComponentConfig &with_gradient(Color from, Color to, bool horizontal = true) {
     gradient = GradientFill{from, to, horizontal};
     return *this;
   }
-  // Line across this widget's rect; endpoints are normalized 0..1 in rect space.
   ComponentConfig &with_line(Vector2Type from, Vector2Type to, Color color,
                              float thickness = 1.f) {
     line_stroke = LineStroke{from, to, color, thickness};

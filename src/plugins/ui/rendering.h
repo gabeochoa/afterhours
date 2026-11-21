@@ -1829,7 +1829,6 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       else
         draw_rectangle_gradient_v(draw_rect, from, to);
     }
-
     if (entity.has<HasColor>() && !entity.has<HasGradient>()) {
       Color col = entity.template get<HasColor>().color();
 

@@ -390,7 +390,6 @@ inline void apply_gradient_line(Entity &entity, const ComponentConfig &config) {
   } else
     entity.removeComponentIfExists<HasLine>();
 }
-
 inline void apply_on_draw(Entity &entity, const ComponentConfig &config) {
   if (auto *hod = entity.toggleComponent<HasOnDraw>(
           config.on_draw_bg || config.on_draw_fg || config.on_draw_over)) {

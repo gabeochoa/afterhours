@@ -1,11 +1,8 @@
-// gradient_line_test.cpp — imm gradient fill + line component (R-057).
 #include "ui_test_harness.h"
-
 using namespace afterhours;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 using ui_test::ImmTestHarness;
-
 TEST(gradient_lerp_endpoints_and_midpoint) {
   const Color a{0, 10, 20, 0}, b{100, 210, 255, 200};
   Color t0 = gradient_lerp(a, b, 0.f), t1 = gradient_lerp(a, b, 1.f);
@@ -16,7 +13,6 @@ TEST(gradient_lerp_endpoints_and_midpoint) {
   Color clamped = gradient_lerp(a, b, 2.f);
   CHECK(clamped.r == 100 && clamped.a == 200);
 }
-
 TEST(gradient_buffer_command_carries_stops) {
   Arena arena(Arena::DEFAULT_CAPACITY);
   RenderCommandBuffer buf(arena);
@@ -29,7 +25,6 @@ TEST(gradient_buffer_command_carries_stops) {
   CHECK(!c.data.gradient.horizontal);
   CHECK(c.data.gradient.rect.width == 30.f);
 }
-
 TEST(line_point_geometry) {
   const RectangleType r{10, 20, 100, 50};
   auto p0 = line_point(r, Vector2Type{0.f, 0.f});
@@ -39,12 +34,10 @@ TEST(line_point_geometry) {
   CHECK_APPROX(p1.x, 110.f); CHECK_APPROX(p1.y, 70.f);
   CHECK_APPROX(mid.x, 60.f); CHECK_APPROX(mid.y, 45.f);
 }
-
 TEST(config_and_imm_line_attach_components) {
   ComponentConfig cfg =
       ComponentConfig{}.with_gradient(Color{1, 2, 3, 255}, Color{4, 5, 6, 255});
   CHECK(cfg.gradient.has_value() && cfg.gradient->horizontal);
-
   ImmTestHarness h;
   auto box = div(h.context(), mk(h.root(), 0),
                  ComponentConfig{}
@@ -69,5 +62,4 @@ TEST(config_and_imm_line_attach_components) {
     CHECK_APPROX(l.to.x, 1.f); CHECK_APPROX(l.to.y, 1.f);
   }
 }
-
 int main() { return ui_test::run_registered_tests("gradient_line"); }
