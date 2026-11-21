@@ -1,5 +1,3 @@
-// kv_settings_test.cpp — kv_settings round-trip, defaults, corrupt lines,
-// atomic save. Small games' settings without JSON.
 
 #include <afterhours/src/plugins/kv_settings.h>
 
@@ -33,7 +31,6 @@ int main() {
   fs::create_directories(dir);
   const fs::path path = dir / "settings.kv";
 
-  // Round-trip: '=' and '#' inside values, interior spaces, empty value.
   kv_settings s;
   s.set("name", "pumpkin beachball");
   s.set("expr", "a = b # c");
@@ -52,7 +49,6 @@ int main() {
   check(loaded.get_double("volume", 9.0) == 0.25, "get_double parses");
   check(loaded.get_bool("muted", false), "get_bool parses 'on'");
 
-  // Defaults: missing keys fall back, garbage falls back, missing file is empty.
   check(s.get("nope", "dflt") == "dflt", "missing key returns fallback");
   check(s.get_int("nope", 7) == 7, "missing int returns fallback");
   kv_settings bad;
@@ -66,7 +62,6 @@ int main() {
   check(missing.entries.empty(), "missing file loads empty");
   check(missing.get_int("level", 3) == 3, "missing file gives defaults");
 
-  // Parse: comments, blank lines, corrupt lines, trimming, duplicates.
   std::map<std::string, std::string> m;
   kv_settings::parse_into(
       "# comment\n  # indented comment\n\nk1=v1\n naked line\n spaced =  hi "
@@ -77,7 +72,6 @@ int main() {
   check(m["a"] == "second", "duplicate key: last wins");
   check(!m.contains("naked line"), "line without '=' skipped");
 
-  // Atomic save: overwriting a valid file leaves a valid file.
   kv_settings s2 = loaded;
   s2.set("level", "99");
   check(s2.save(path), "second save succeeds");
@@ -92,7 +86,6 @@ int main() {
   }
   check(!temp_left, "no temp siblings left after save");
 
-  // erase
   kv_settings s3 = loaded;
   check(s3.erase("level") && !s3.has("level"), "erase removes key");
   check(!s3.erase("level"), "erase of absent key is false");

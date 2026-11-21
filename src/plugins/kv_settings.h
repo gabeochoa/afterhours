@@ -1,9 +1,3 @@
-// kv_settings.h — tiny header-only key=value settings, no JSON dependency.
-//
-// Format: one `key = value` per line. Leading/trailing whitespace on keys and
-// values is trimmed, blank lines and lines whose first non-space char is '#'
-// are skipped, and a line without '=' is ignored. Values may contain '=' and
-// '#'; split is on the first '='. Keys are unique: the last one wins.
 #pragma once
 
 #include <charconv>
@@ -88,20 +82,20 @@ struct kv_settings {
         line.remove_suffix(1);
       const size_t begin = line.find_first_not_of(" \t");
       if (begin == std::string_view::npos)
-        continue; // blank line
+        continue;
       line = line.substr(begin);
       if (line.front() == '#')
-        continue; // comment
+        continue;
       const size_t eq = line.find('=');
       if (eq == std::string_view::npos)
-        continue; // corrupt line: not a key=value pair
+        continue;
       const std::string_view key = line.substr(0, eq);
       std::string_view value = line.substr(eq + 1);
       const size_t key_end = key.find_last_not_of(" \t");
       const size_t value_begin = value.find_first_not_of(" \t");
       const size_t value_end = value.find_last_not_of(" \t");
       if (key_end == std::string_view::npos)
-        continue; // empty key
+        continue;
       map[std::string(key.substr(0, key_end + 1))] =
           value_begin == std::string_view::npos
               ? std::string{}
@@ -110,7 +104,6 @@ struct kv_settings {
     }
   }
 
-  // Returns {} for a missing/unreadable file; corrupt lines are skipped.
   static kv_settings load(const std::filesystem::path &path) {
     kv_settings s;
     if (const auto text = files::read_string(path))
@@ -123,4 +116,4 @@ struct kv_settings {
   }
 };
 
-} // namespace afterhours
+}
