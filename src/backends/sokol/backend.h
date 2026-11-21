@@ -521,8 +521,6 @@ struct MetalPlatformAPI {
   }
   static bool is_window_ready() { return metal_detail::g_initialized; }
   static bool is_window_fullscreen() { return sapp_is_fullscreen(); }
-  // False headless (no window exists to hold focus) and until the first
-  // FOCUSED event arrives.
   static bool is_window_focused() {
     return !metal_detail::g_headless && metal_detail::g_window_focused;
   }
