@@ -210,6 +210,7 @@ ALL_TESTS := \
 	label_clear_test \
 	hit_priority_test \
 	text_selection_test \
+	word_policy_test \
 	text_stroke_test \
 	text_stroke_render_test \
 	multiline_text_test \
