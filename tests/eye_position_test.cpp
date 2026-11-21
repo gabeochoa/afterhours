@@ -1,11 +1,14 @@
-// eye_position_test.cpp
-// The current eye position is plain state: default, set/get round-trip,
-// reset, and a scope that restores what was there. The wired paths
-// (apply_lighting's no-camera overload, Effect::set with a Vector3) run
-// against a real shader in a hidden window.
-
 #include <cstdio>
 #include <string>
+
+namespace raylib {
+#include <raylib.h>
+// raymath zero-initialises with `= { 0 }`, which -Wextra flags once per use.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-field-initializers"
+#include <raymath.h>
+#pragma clang diagnostic pop
+} // namespace raylib
 
 #include <afterhours/ah.h>
 #include <afterhours/src/plugins/effects.h>
@@ -49,7 +52,6 @@ int main() {
   eye_position::reset();
   check(is(eye_position::get(), 0.f, 0.f, 0.f), "reset returns to origin");
 
-  // No-camera apply_lighting reads the eye position for camPos.
   ShaderType shader = load_lit_shader();
   check(raylib::GetShaderLocation(shader, "camPos") != -1,
         "lit shader declares camPos");
@@ -58,8 +60,6 @@ int main() {
   apply_lighting(shader, Lighting{}, Vector3Type{7.f, 8.f, 9.f});
   raylib::UnloadShader(shader);
 
-  // Effect::set with a Vector3 is a no-op until a shader is loaded; the
-  // overload exists so an effect can take the eye position directly.
   effects::Effect effect;
   effect.set("camPos", eye_position::get());
   check(!effect.loaded, "unloaded effect ignores the eye position set");
