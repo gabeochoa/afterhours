@@ -1,7 +1,3 @@
-// text_origin_test.cpp
-// resolved_text_origin() returns the point handed to DrawTextEx, so a caret
-// overlay can ask instead of re-deriving the inset. Each check below proves
-// the query matches what the immediate renderer actually drew.
 
 #include "ui_test_harness.h"
 
@@ -46,7 +42,6 @@ TEST(origin_matches_drawn_glyph_start) {
   CHECK_APPROX(texts.front().rect.x, origin->origin.x);
   CHECK_APPROX(texts.front().rect.y, origin->origin.y);
   CHECK_APPROX(texts.front().rect.height, origin->font_size);
-  // Left-aligned: origin sits one inset from the box edge.
   CHECK_APPROX(origin->origin.x, 10.f + 5.f);
 }
 
