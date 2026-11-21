@@ -576,6 +576,12 @@ struct HasScrollView : BaseComponent {
   // above the fold is detected without anyone reporting one.
   EntityID anchor_child = -1;
   float anchor_child_y = 0.f;
+  // The pinned child's item key (mk_keyed), when it has one: the entity may
+  // be recycled for another item, the key may not. anchor_item_offset
+  // records where the offset sat inside that item when pinned.
+  size_t anchor_item_key = 0;
+  bool has_anchor_item_key = false;
+  float anchor_item_offset = 0.f;
   // Unset until a layout pass has measured it. A plain {0,0} could not be told
   // apart from a view genuinely measured as empty, so a consumer windowing its
   // content read zero on frame one and quietly built everything.
