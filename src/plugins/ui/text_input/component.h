@@ -318,12 +318,12 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       screen_height = static_cast<float>(pcr->current_resolution.height);
     }
 
-    float uis = imm::ThemeDefaults::get().theme.ui_scale;
+    const auto &theme = imm::ThemeDefaults::get().theme;
     // Pass the Size, not its raw .value re-tagged as pixels: an h720() font
     // size carries the 20/720 fraction, so that resolved to 0.028px.
-    float actual_font_size = resolve_to_pixels(
+    float actual_font_size = resolve_font_size(
         field_cmp.font_size, screen_height, field_cmp.resolved_scaling_mode,
-        uis);
+        theme.ui_scale, theme.text_scale);
 
     float pad_left = field_cmp.computed_padd[Axis::left];
     float pad_top = field_cmp.computed_padd[Axis::top];
@@ -481,9 +481,10 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                 window_manager::ProvidesCurrentResolution>())
           screen_h = static_cast<float>(pcr->current_resolution.height);
 
-        float uis = imm::ThemeDefaults::get().theme.ui_scale;
-        float afs = resolve_to_pixels(cmp.font_size, screen_h,
-                                      cmp.resolved_scaling_mode, uis);
+        const auto &theme = imm::ThemeDefaults::get().theme;
+        float afs = resolve_font_size(cmp.font_size, screen_h,
+                                      cmp.resolved_scaling_mode,
+                                      theme.ui_scale, theme.text_scale);
 
         RectangleType fr = cmp.rect();
         float pad_left = cmp.computed_padd[Axis::left];
