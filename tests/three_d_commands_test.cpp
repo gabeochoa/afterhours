@@ -37,7 +37,6 @@ int main() {
                       [&](const td::CameraPose &p) { cam = p; });
   td::register_player([&] { return player; },
                       [&](const td::Vec3 &p) { player = p; });
-  // Fake world: a wall named "wall" at x=5 facing -x.
   td::register_raycast([](td::Vec3 o, td::Vec3 d) {
     td::RayHit h;
     if (d.x > 0.f && o.x < 5.f) {
@@ -103,7 +102,6 @@ int main() {
     check(c.is_retry(), "expect_hit on miss retries");
   }
 
-  // No provider and malformed args fail by name, never silently pass.
   td::clear_providers();
   {
     auto c = run<td::HandleSetCameraCommand>("set_camera",

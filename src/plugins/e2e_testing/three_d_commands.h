@@ -1,12 +1,3 @@
-// Generic 3D E2E commands over registered app providers.
-//
-// No character3d/collision3d plugin exists yet, so the library cannot know
-// where a game's camera or player lives, or how it raycasts. The app
-// registers plain getters/setters and a raycast function once; scripts then
-// use set_camera/expect_camera, set_player_pos/expect_player_pos,
-// raycast/expect_hit/expect_no_hit with no per-game handler to copy-paste.
-// Opt-in like perf_commands: register providers, then
-// register_three_d_commands(sm).
 #pragma once
 
 #include <cmath>
@@ -37,7 +28,7 @@ struct RayHit {
   Vec3 point{};
   Vec3 normal{};
   float distance = 0.f;
-  std::string name; // optional app label for the thing hit
+  std::string name;
 };
 
 struct Providers {
@@ -82,7 +73,6 @@ inline bool near(Vec3 a, Vec3 b) {
 inline std::string str(Vec3 v) {
   return std::format("({:.3f},{:.3f},{:.3f})", v.x, v.y, v.z);
 }
-// Parses args[off..off+2]; on failure fails the command with usage context.
 inline bool parse_vec(PendingE2ECommand &cmd, size_t off, const char *what,
                       Vec3 &out) {
   try {
@@ -186,7 +176,6 @@ struct HandleExpectPlayerPosCommand : System<PendingE2ECommand> {
   }
 };
 
-// Runs the provider raycast and remembers the result for expect_hit.
 inline bool run_raycast(PendingE2ECommand &cmd, const char *what) {
   if (!cmd.has_args(6)) {
     cmd.fail(std::format("{} requires: ox oy oz dx dy dz", what));
@@ -213,7 +202,6 @@ struct HandleRaycastCommand : System<PendingE2ECommand> {
 struct HandleExpectHitCommand : System<PendingE2ECommand> {
   void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("expect_hit")) return;
-    // With 6 args cast a fresh ray; with 0/1 args check the last `raycast`.
     if (cmd.args.size() == 6) {
       if (!run_raycast(cmd, "expect_hit")) return;
     } else if (cmd.args.size() > 1) {
@@ -261,6 +249,6 @@ inline void register_three_d_commands(SystemManager &sm) {
   sm.register_update_system(std::make_unique<HandleExpectNoHitCommand>());
 }
 
-} // namespace three_d_commands
-} // namespace testing
-} // namespace afterhours
+}
+}
+}
