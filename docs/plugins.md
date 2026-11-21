@@ -121,6 +121,12 @@ The action key emits one delayed press; modifiers are held without press events.
 
 With `AFTER_HOURS_ENABLE_E2E_TESTING` defined, `graphics::is_key_pressed`, `is_key_pressed_repeat`, `is_key_down` and `is_key_released` read injected keys on every backend, the same as the input plugin. A released injected key reports `is_key_released` one frame after its press.
 
+## E2E gamepads
+
+`gamepad_connect PAD` plugs in virtual gamepad PAD (0-7) and `gamepad_disconnect PAD` unplugs it. While connected, every read of that pad id comes from the script, not hardware, on raylib and sokol. The input plugin stops at the first unconnected id, so connect pads in order from 0.
+
+`gamepad_button PAD BUTTON` taps a button: one delayed press, held for two frames. `gamepad_down PAD BUTTON` holds it until `gamepad_up PAD BUTTON`. `gamepad_axis PAD AXIS VALUE` holds an axis at VALUE (-1 to 1) until the next `gamepad_axis` for it; set 0 to centre it. Buttons and axes use the `gamepad_buttons` / `gamepad_axes` names, case-insensitive: `gamepad_button 0 RIGHT_FACE_DOWN`, `gamepad_axis 0 LEFT_X 0.8`. A disconnected pad, unknown name or out-of-range value fails the command. Reset, skip and timeout disconnect every virtual pad.
+
 ## E2E arguments
 
 Quote arguments containing spaces: `assert_ui header "text=My Project" hidden=false` or `assert_ui header text="My Project"`. Inside double quotes, `\"` means a literal quote and `\\` means a backslash. Other backslash sequences stay literal; `""` is an empty argument. Unclosed quotes fail the script with its line number.
