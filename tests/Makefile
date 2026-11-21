@@ -88,6 +88,7 @@ ALL_TESTS := \
 	ui_update_lifecycle_single_test \
 	drag_preview_test \
 	drag_scroll_hit_test \
+	parent_gesture_test \
 	label_clip_test \
 	animation_test \
 	motion_config_test \
