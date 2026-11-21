@@ -326,8 +326,14 @@ ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
                            size_t count, float row_height,
                            RenderRow &&render_row,
                            ComponentConfig config = ComponentConfig()) {
-  return virtual_list_impl(ctx, ep_pair,
-                           detail::RowMetrics::uniform_rows(count, row_height),
+  auto [entity, parent] = deref(ep_pair);
+  auto &index = entity.template addComponentIfMissing<HasVirtualListIndex>();
+  index.uniform_height = row_height > 0.f ? row_height : 1.f;
+  index.pending_prepend = 0;
+  index.row_count = count;
+  auto rows = detail::RowMetrics::uniform_rows(count, row_height);
+  rows.index = &index;
+  return virtual_list_impl(ctx, ep_pair, rows,
                            std::forward<RenderRow>(render_row), config);
 }
 
@@ -350,6 +356,10 @@ ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
 {
   auto [entity, parent] = deref(ep_pair);
   auto &index = entity.template addComponentIfMissing<HasVirtualListIndex>();
+  if (index.uniform_height > 0.f) // was uniform: no measured heights exist yet
+    index.invalidate(0, count);
+  index.uniform_height = 0.f;
+  index.row_count = count;
   detail::refresh_virtual_index(index, count,
                                 std::forward<HeightFn>(height_of));
   detail::RowMetrics rows;
@@ -375,6 +385,8 @@ inline void prepend_virtual_rows(Entity &list, size_t count) {
   if (count == 0 || !list.template has<HasVirtualListIndex>())
     return;
   auto &idx = list.template get<HasVirtualListIndex>();
+  if (idx.uniform_height > 0.f)
+    return; // off the retained prefix, which uniform lists do not have
   idx.heights.insert(idx.heights.begin(), count, 0.f);
   idx.prefix.insert(idx.prefix.begin(), count, 0.f);
   // Shift the pending range by the insertion, saturating at the union
@@ -388,29 +400,69 @@ inline void prepend_virtual_rows(Entity &list, size_t count) {
 }
 
 /// Where row `index` starts inside the content, in pixels, as of the last
-/// build of a measured virtual_list. 0 when the list has no retained index.
+/// build of a virtual_list (uniform or measured). 0 when the list has no
+/// retained index, or `index` is past the last build's count.
 [[nodiscard]] inline float virtual_row_offset(const Entity &list,
                                               size_t index) {
   if (!list.template has<HasVirtualListIndex>())
     return 0.f;
   const auto &idx = list.template get<HasVirtualListIndex>();
+  if (idx.uniform_height > 0.f) {
+    if (index >= idx.row_count)
+      return 0.f;
+    return (idx.uniform_height * static_cast<float>(index)) * idx.last_scale +
+           static_cast<float>(index) * idx.last_gap;
+  }
   if (index >= idx.prefix.size())
     return 0.f;
   return idx.prefix[index] * idx.last_scale +
          static_cast<float>(index) * idx.last_gap;
 }
 
-/// Total height of a measured virtual_list's rows, in pixels, as of its
-/// last build.
+/// Total height of a virtual_list's rows, in pixels, as of its last build.
 [[nodiscard]] inline float virtual_rows_total(const Entity &list) {
   if (!list.template has<HasVirtualListIndex>())
     return 0.f;
   const auto &idx = list.template get<HasVirtualListIndex>();
+  if (idx.uniform_height > 0.f) {
+    const size_t count = idx.row_count;
+    return count
+        ? (idx.uniform_height * static_cast<float>(count)) * idx.last_scale +
+              static_cast<float>(count - 1) * idx.last_gap
+        : 0.f;
+  }
   if (idx.prefix.empty())
     return 0.f;
   const size_t count = idx.prefix.size() - 1;
   return idx.prefix[count] * idx.last_scale +
          static_cast<float>(count ? count - 1 : 0) * idx.last_gap;
+}
+
+/// Scroll a virtual_list so row `index` is the first visible row: its top
+/// from the retained row geometry (prefix sums for measured rows, uniform
+/// arithmetic otherwise), both offset and target together so easing cannot
+/// undo it. Top-aligned, not minimally scrolled, so the landing offset is
+/// just that row's offset. `index` clamps to the last build's rows; past
+/// the end, the view goes to the last row, then the build's own clamp caps
+/// it at the scrollable max. A list (or empty list) with no retained rows
+/// does nothing. Vertical only — virtual_list scrolls on one axis.
+inline void scroll_to_item(Entity &list, size_t index) {
+  if (!list.template has<HasVirtualListIndex>() ||
+      !list.template has<HasScrollView>())
+    return;
+  const auto &idx = list.template get<HasVirtualListIndex>();
+  const size_t count = idx.uniform_height > 0.f ? idx.row_count
+                                                : (idx.prefix.empty()
+                                                       ? 0
+                                                       : idx.prefix.size() - 1);
+  if (count == 0)
+    return;
+  const size_t target = std::min(index, count - 1);
+  auto &scroll = list.template get<HasScrollView>();
+  const float y = virtual_row_offset(list, target);
+  scroll.scroll_offset.y = scroll.scroll_target.y =
+      scroll.last_eased_offset.y = y;
+  scroll.clamp_scroll();
 }
 
 

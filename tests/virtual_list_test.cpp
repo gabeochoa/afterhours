@@ -363,4 +363,125 @@ TEST(virtual_list_overscan_survives_apply_overrides) {
             .virtual_list_overscan == 0);
 }
 
+// scroll_to_item: index-based scrolling for rows that are not built yet.
+// scroll_to_entity cannot find them; the offset comes from the retained row
+// geometry instead. Top-aligned, clamped to the last row, then to the max.
+TEST(scroll_to_item_uniform_lands_visible_at_offset) {
+  ImmTestHarness h;
+  std::vector<size_t> built;
+  EntityID list_id = -1;
+  auto frame = [&]() {
+    h.begin_frame();
+    built.clear();
+    auto list = virtual_list(
+        h.context(), mk(h.root(), 0), 2000, 20.f,
+        [&](size_t i, Entity &) { built.push_back(i); },
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(300), pixels(200)})
+            .with_debug_name("vl_scroll_uniform"));
+    list_id = list.id();
+    h.layout_only();
+  };
+  frame();
+  auto &list = AutoLayout::to_ent_static(list_id);
+  auto &scroll = list.get<HasScrollView>();
+  scroll.viewport_size = {300.f, 200.f};
+  scroll.content_size = measure_scroll_content(list.get<UIComponent>(), scroll);
+  CHECK_APPROX(virtual_row_offset(list, 50), 1000.f);
+  CHECK_APPROX(virtual_rows_total(list), 40000.f);
+
+  scroll_to_item(list, 50);
+  CHECK_APPROX(scroll.scroll_offset.y, 1000.f);
+  CHECK_APPROX(scroll.scroll_target.y, 1000.f);
+  scroll.ease_scroll(0.016f);
+  CHECK_APPROX(scroll.scroll_offset.y, 1000.f);
+
+  frame();
+  CHECK(std::any_of(built.begin(), built.end(),
+                    [](size_t i) { return i == 50; }));
+  // The built window starts at the scrolled-to row (overscan aside).
+  CHECK(built.front() <= 50);
+  CHECK_APPROX(scroll.scroll_offset.y, 1000.f);
+}
+
+TEST(scroll_to_item_variable_lands_visible_at_offset) {
+  ImmTestHarness h;
+  std::vector<size_t> built;
+  EntityID list_id = -1;
+  auto frame = [&]() {
+    h.begin_frame();
+    built.clear();
+    auto list = virtual_list(
+        h.context(), mk(h.root(), 0), 2000, alternating_height,
+        [&](size_t i, Entity &) { built.push_back(i); },
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(300), pixels(200)})
+            .with_debug_name("vl_scroll_measured"));
+    list_id = list.id();
+    h.layout_only();
+  };
+  frame();
+  auto &list = AutoLayout::to_ent_static(list_id);
+  auto &scroll = list.get<HasScrollView>();
+  scroll.viewport_size = {300.f, 200.f};
+  scroll.content_size = measure_scroll_content(list.get<UIComponent>(), scroll);
+  // Row 20 starts at 10 * (10 + 40) = 500.
+  CHECK_APPROX(virtual_row_offset(list, 20), 500.f);
+  CHECK_APPROX(virtual_rows_total(list), 50000.f);
+
+  scroll_to_item(list, 20);
+  CHECK_APPROX(scroll.scroll_offset.y, 500.f);
+  CHECK_APPROX(scroll.scroll_target.y, 500.f);
+
+  frame();
+  CHECK(std::any_of(built.begin(), built.end(),
+                    [](size_t i) { return i == 20; }));
+  CHECK_APPROX(scroll.scroll_offset.y, 500.f);
+}
+
+TEST(scroll_to_item_clamps) {
+  ImmTestHarness h;
+  EntityID list_id = -1;
+  auto frame = [&]() {
+    h.begin_frame();
+    auto list = virtual_list(
+        h.context(), mk(h.root(), 0), 100, 20.f,
+        [&](size_t, Entity &) {},
+        ComponentConfig{}
+            .with_size(ComponentSize{pixels(300), pixels(200)})
+            .with_debug_name("vl_scroll_clamp"));
+    list_id = list.id();
+    h.layout_only();
+  };
+  frame();
+  auto &list = AutoLayout::to_ent_static(list_id);
+  auto &scroll = list.get<HasScrollView>();
+  scroll.viewport_size = {300.f, 200.f};
+  scroll.content_size = measure_scroll_content(list.get<UIComponent>(), scroll);
+  // Past the end: the last row (99), whose top (1980) clamps to the max
+  // (2000 - 200 = 1800) on the next build.
+  scroll_to_item(list, 99999);
+  CHECK_APPROX(scroll.scroll_offset.y, 1800.f);
+  // Row 0 goes to exactly 0.
+  scroll_to_item(list, 0);
+  CHECK_APPROX(scroll.scroll_offset.y, 0.f);
+  CHECK_APPROX(scroll.scroll_target.y, 0.f);
+
+  // Empty list and a list that was never built: no crash, no move.
+  EntityID empty_id = -1;
+  h.begin_frame();
+  auto empty = virtual_list(
+      h.context(), mk(h.root(), 0), 0, 20.f,
+      [&](size_t, Entity &) {},
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(300), pixels(200)})
+          .with_debug_name("vl_scroll_empty"));
+  empty_id = empty.id();
+  h.layout_only();
+  auto &empty_list = AutoLayout::to_ent_static(empty_id);
+  empty_list.get<HasScrollView>().scroll_offset.y = 42.f;
+  scroll_to_item(empty_list, 5);
+  CHECK_APPROX(empty_list.get<HasScrollView>().scroll_offset.y, 42.f);
+}
+
 int main() { return ui_test::run_registered_tests("virtual_list"); }
