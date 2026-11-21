@@ -202,8 +202,6 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                                           : base_corners)
           .with_alignment(TextAlignment::Left)
           .with_overflow(Overflow::Hidden)
-          // The field selects natively by focus origin; a synthesized
-          // generic click would position the caret and clear that.
           .with_select_on_focus(false)
           .with_render_layer(config.render_layer + 1);
   // Only impose the theme fill when the caller did not pick one, or an app
@@ -289,8 +287,6 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   // Select all text when gaining focus via tab (not mouse click).
   // Mouse clicks position the cursor via the click listener instead.
   if (state.is_focused && !state.was_focused) {
-    // focus_modality, not is_mouse_press: it is retained, so a pointer focus
-    // noticed a frame after the press still reads as pointer.
     bool mouse_caused_focus = ctx.focus_modality == FocusSource::Pointer;
     if (!mouse_caused_focus && state.text_size() > 0) {
       state.selection_anchor = 0;

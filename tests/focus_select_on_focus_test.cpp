@@ -1,7 +1,3 @@
-// Focus origin decides selection: pointer focus must not select-all in a
-// text field (nor re-click a generic select-on-focus control), while
-// keyboard/programmatic focus selects all and fires select-on-focus.
-
 #include "ui_test_harness.h"
 
 #include <afterhours/src/plugins/ui/text_input/component.h>
@@ -85,16 +81,12 @@ TEST(text_input_selects_all_only_for_non_pointer_focus) {
   if (!field || !outer)
     return;
   auto &state = outer->get<text_input::HasTextInputState>();
-  // A generic flag on the widget must not reach the native field.
   CHECK(!field->has<SelectOnFocus>());
 
-  // Pointer gain, noticed with no press in flight: no select-all.
   h.context().set_focus(field->id, FocusSource::Pointer);
   two_frames(h, emit);
   CHECK(!state.has_selection());
 
-  // Click away, then back by keyboard/programmatic focus: select all,
-  // and typing replaces the selection.
   h.context().set_focus(h.context().ROOT, FocusSource::Explicit);
   two_frames(h, emit);
   h.context().set_focus(field->id, FocusSource::Explicit);
