@@ -163,8 +163,8 @@ struct ComponentConfig {
   std::optional<Size> tooltip_font_size;
   float tooltip_padding = 8.f;
   float tooltip_gap = 4.f;
-  RenderPrimitive::CustomDrawFn on_draw_bg;
-  RenderPrimitive::CustomDrawFn on_draw_fg;
+  RenderPrimitive::CustomDrawContextFn on_draw_bg;
+  RenderPrimitive::CustomDrawContextFn on_draw_fg;
   RenderPrimitive::CustomDrawFn on_draw_over;
 
   std::string font_name = UIComponent::UNSET_FONT;
@@ -650,10 +650,23 @@ struct ComponentConfig {
   }
   // bg: behind fill; fg: over own primitives; over: over whole subtree.
   ComponentConfig &with_on_draw_bg(RenderPrimitive::CustomDrawFn fn) {
-    on_draw_bg = std::move(fn);
+    on_draw_bg = [fn = std::move(fn)](const RenderPrimitive::DrawContext &d) {
+      fn(d.rect);
+    };
     return *this;
   }
   ComponentConfig &with_on_draw_fg(RenderPrimitive::CustomDrawFn fn) {
+    on_draw_fg = [fn = std::move(fn)](const RenderPrimitive::DrawContext &d) {
+      fn(d.rect);
+    };
+    return *this;
+  }
+  // Context variants: d.scale converts callback literals to rect space.
+  ComponentConfig &with_on_draw_bg(RenderPrimitive::CustomDrawContextFn fn) {
+    on_draw_bg = std::move(fn);
+    return *this;
+  }
+  ComponentConfig &with_on_draw_fg(RenderPrimitive::CustomDrawContextFn fn) {
     on_draw_fg = std::move(fn);
     return *this;
   }

@@ -59,6 +59,16 @@ struct RenderPrimitive {
   // it so RenderPrimitive stays trivially destructible for the arena.
   using CustomDrawFn = std::function<void(RectangleType)>;
 
+  // What a custom-draw callback receives: the widget's final on-screen rect
+  // (already scaled) plus the scale that produced it, so literals inside the
+  // callback can be converted with rect-space math. scale is the resolved
+  // ui_scale for Adaptive widgets, 1 for Proportional ones.
+  struct DrawContext {
+    RectangleType rect;
+    float scale = 1.f;
+  };
+  using CustomDrawContextFn = std::function<void(const DrawContext &)>;
+
   RenderPrimitiveType type;
   int layer = 0;
   EntityID entity_id = -1; // For debugging
@@ -181,9 +191,12 @@ struct RenderPrimitive {
 
     struct {
       RectangleType rect;
-      // Stored as a pointer so RenderPrimitive stays
-      // trivially destructible for the arena 
+      // Stored as pointers so RenderPrimitive stays trivially destructible
+      // for the arena. Exactly one is set: fn_ctx (preferred, carries scale)
+      // or fn (legacy rect-only).
+      const CustomDrawContextFn *fn_ctx;
       const CustomDrawFn *fn;
+      float scale;
     } custom;
 
     // Default constructor for union
@@ -370,6 +383,17 @@ public:
     RenderPrimitive cmd(RenderPrimitiveType::Custom, layer, entity_id);
     cmd.data.custom.rect = rect;
     cmd.data.custom.fn = fn;
+    cmd.data.custom.scale = 1.f;
+    return cmd;
+  }
+
+  static RenderPrimitive custom(const RectangleType &rect,
+                                const CustomDrawContextFn *fn, float scale,
+                                int layer, EntityID entity_id = -1) {
+    RenderPrimitive cmd(RenderPrimitiveType::Custom, layer, entity_id);
+    cmd.data.custom.rect = rect;
+    cmd.data.custom.fn_ctx = fn;
+    cmd.data.custom.scale = scale;
     return cmd;
   }
 };
@@ -385,8 +409,8 @@ static_assert(std::is_trivially_destructible_v<RenderPrimitive>,
 // (gradients, feeds, brackets) inline, without a debug-name rect lookup or
 // separate BG/FG render systems. Set via ComponentConfig::with_on_draw_bg/fg.
 struct HasOnDraw : BaseComponent {
-  RenderPrimitive::CustomDrawFn bg;
-  RenderPrimitive::CustomDrawFn fg;
+  RenderPrimitive::CustomDrawContextFn bg;
+  RenderPrimitive::CustomDrawContextFn fg;
   // Drawn after the widget's whole subtree, unlike fg (own primitives only).
   RenderPrimitive::CustomDrawFn over;
 };
@@ -573,6 +597,13 @@ public:
                   const RenderPrimitive::CustomDrawFn *fn, int layer,
                   EntityID entity_id = -1) {
     commands_.push_back(RenderPrimitive::custom(rect, fn, layer, entity_id));
+  }
+
+  void add_custom(const RectangleType &rect,
+                  const RenderPrimitive::CustomDrawContextFn *fn, float scale,
+                  int layer, EntityID entity_id = -1) {
+    commands_.push_back(
+        RenderPrimitive::custom(rect, fn, scale, layer, entity_id));
   }
 
   // Add scissor start
@@ -817,7 +848,10 @@ public:
         break;
 
       case RenderPrimitiveType::Custom:
-        if (cmd.data.custom.fn && *cmd.data.custom.fn)
+        if (cmd.data.custom.fn_ctx && *cmd.data.custom.fn_ctx)
+          (*cmd.data.custom.fn_ctx)(RenderPrimitive::DrawContext{
+              cmd.data.custom.rect, cmd.data.custom.scale});
+        else if (cmd.data.custom.fn && *cmd.data.custom.fn)
           (*cmd.data.custom.fn)(cmd.data.custom.rect);
         i++;
         break;
