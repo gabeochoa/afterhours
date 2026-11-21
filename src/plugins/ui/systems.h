@@ -416,6 +416,8 @@ struct PublishContextTheme : System<UIContext<InputAction>> {
 struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
   UIEntityMappingCache *cache = nullptr;
   window_manager::Resolution resolution;
+  // Gated copies (the bridge's second pass) run only after an invalidation.
+  bool only_if_invalidated = false;
 
   virtual void once(float) override {
     cache = EntityHelper::get_singleton_cmp<UIEntityMappingCache>();
@@ -429,6 +431,9 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
 
   virtual void for_each_with(Entity &, AutoLayoutRoot &, UIComponent &cmp,
                              float) override {
+    if (only_if_invalidated && !layout_is_stale()) {
+      return;
+    }
     if (!cache) {
       return; // Cache not ready yet
     }
@@ -471,6 +476,7 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
       }
     };
     clear(cmp);
+    laid_out_generation_storage() = layout_generation_storage();
   }
 };
 
