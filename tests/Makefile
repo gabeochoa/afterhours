@@ -255,6 +255,7 @@ ALL_TESTS := \
 	default_font_test \
 	load_font_size_test \
 	edit_keys_test \
+	editor_core_test \
 	tab_container_test \
 	small_components_test \
 	text_area_test \
