@@ -7,7 +7,9 @@
 #include "concepts.h"
 
 #include <array>
+#include <cstdint>
 #include <cstdlib>
+#include <limits>
 
 // TODO eventually match this exactly 1-1 with UI input system so we can share
 // concepts
@@ -17,6 +19,7 @@ namespace afterhours {
 namespace testing {
 namespace input_injector {
 
+// TODO: support customization
 inline constexpr int GAMEPAD_COUNT = 8;
 inline constexpr int GAMEPAD_BUTTON_COUNT = 18;
 inline constexpr int GAMEPAD_AXIS_COUNT = 6;
@@ -107,7 +110,7 @@ inline KeyHold key_hold;
 struct GamepadState {
   bool available = false;
   std::array<bool, GAMEPAD_BUTTON_COUNT> down{};
-  std::array<int, GAMEPAD_BUTTON_COUNT> press_count{};
+  std::array<uint8_t, GAMEPAD_BUTTON_COUNT> press_count{};
   std::array<int, GAMEPAD_BUTTON_COUNT> press_delay{};
   std::array<int, GAMEPAD_BUTTON_COUNT> release_in{};
   std::array<float, GAMEPAD_AXIS_COUNT> axes{};
@@ -233,7 +236,8 @@ inline detail::GamepadState &connected_gamepad(int id, int button) {
 inline void set_gamepad_button_down(int id, int button) {
   auto &pad = connected_gamepad(id, button);
   pad.down[button] = true;
-  pad.press_count[button]++;
+  if (pad.press_count[button] < std::numeric_limits<uint8_t>::max())
+    pad.press_count[button]++;
   pad.press_delay[button] = 1;
   pad.release_in[button] = 0;
 }

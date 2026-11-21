@@ -145,6 +145,29 @@ TEST(bad_arguments_fail_with_a_reason) {
         std::string::npos);
 }
 
+TEST(double_press_in_one_frame_registers_twice) {
+  GamepadFixture f;
+  f.run("gamepad_connect", {"0"});
+  inj::set_gamepad_button_down(0, gamepad_buttons::RIGHT_FACE_DOWN);
+  inj::set_gamepad_button_down(0, gamepad_buttons::RIGHT_FACE_DOWN);
+  f.frame();
+  CHECK(GamepadFixture::find(f.collector.inputs_pressed, Jump) != nullptr);
+  f.frame();
+  CHECK(GamepadFixture::find(f.collector.inputs_pressed, Jump) != nullptr);
+  f.frame();
+  CHECK(GamepadFixture::find(f.collector.inputs_pressed, Jump) == nullptr);
+}
+
+TEST(press_count_saturates_at_255) {
+  GamepadFixture f;
+  f.run("gamepad_connect", {"0"});
+  for (int i = 0; i < 300; ++i)
+    inj::set_gamepad_button_down(0, gamepad_buttons::RIGHT_FACE_DOWN);
+  const auto count =
+      inj::detail::gamepads[0].press_count[gamepad_buttons::RIGHT_FACE_DOWN];
+  CHECK(count == 255);
+}
+
 TEST(reset_disconnects_every_pad) {
   GamepadFixture f;
   f.run("gamepad_connect", {"0"});
