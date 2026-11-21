@@ -31,6 +31,15 @@ struct UIElementRecord {
   EntityID parent_id = -1;
 };
 inline std::map<UI_UUID, UIElementRecord> existing_ui_elements;
+// Entity -> item key for keyed elements, so a consumer can find the element
+// showing an item without knowing which recycled entity that is today.
+inline std::unordered_map<EntityID, size_t> ui_element_keys;
+
+inline std::optional<size_t> ui_element_key(EntityID id) {
+  auto it = ui_element_keys.find(id);
+  return it == ui_element_keys.end() ? std::nullopt
+                                     : std::optional<size_t>(it->second);
+}
 
 // Parent -> children, linked once when a child is created and unlinked when
 // the child is retired. This is the persistent counterpart to
@@ -140,6 +149,7 @@ inline EntityParent mk_impl(Entity &parent, EntityID otherID, size_t key,
       if (key_changed_out && record.key != key)
         *key_changed_out = true;
       record.key = key;
+      ui_element_keys[record.id] = key;
     }
     auto entityID = record.id;
     log_trace("Reusing element {} for {}", hash, entityID);
@@ -165,6 +175,8 @@ inline EntityParent mk_impl(Entity &parent, EntityID otherID, size_t key,
   Entity &entity = UICollectionHolder::get().collection.createEntity();
   existing_ui_elements[hash] = {entity.id, ui_build_frame, has_key ? key : 0,
                                 parent.id};
+  if (has_key)
+    ui_element_keys[entity.id] = key;
   link_ui_child(parent.id, entity.id);
   // A slot seen for the first time has not changed item; it has no history.
   log_trace("Creating element {} for {}", hash, entity.id);
@@ -184,6 +196,16 @@ inline EntityParent mk_keyed(Entity &parent, EntityID otherID, size_t key,
   return mk_impl(parent, otherID, key, true, key_changed_out, location);
 }
 } // namespace detail
+
+// Like mk(), but for a recycled slot: `otherID` picks the slot entity and
+// `key` names the item in it (non-zero; 0 reads as unkeyed). The key is the
+// identity scroll anchoring follows when the slot moves to another item.
+inline EntityParent
+mk_keyed(Entity &parent, EntityID otherID, size_t key,
+         bool *key_changed_out = nullptr,
+         const std::source_location location = std::source_location::current()) {
+  return detail::mk_keyed(parent, otherID, key, key_changed_out, location);
+}
 
 // Mark for destruction; the collection's own cleanup() does the freeing.
 inline void mark_ui_element_for_cleanup(EntityID id) {
@@ -215,6 +237,7 @@ inline void cascade_cleanup_to_linked_children(std::vector<EntityID> &dying) {
         existing_ui_elements.erase(rit->second);
         record_by_id.erase(rit);
       }
+      ui_element_keys.erase(kid);
       dying.push_back(kid);
     }
   }
@@ -228,6 +251,7 @@ inline void clear_existing_ui_elements() {
   }
   cascade_cleanup_to_linked_children(dying);
   existing_ui_elements.clear();
+  ui_element_keys.clear();
   ui_element_children.clear();
 }
 
@@ -256,6 +280,7 @@ inline void retire_unbuilt_ui_elements() {
       unlink_ui_child(it->second.parent_id, it->second.id);
       mark_ui_element_for_cleanup(it->second.id);
       dying.push_back(it->second.id);
+      ui_element_keys.erase(it->second.id);
       it = existing_ui_elements.erase(it);
     }
     if (!dying.empty())

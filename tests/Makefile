@@ -175,6 +175,7 @@ ALL_TESTS := \
 	dialog_test \
 	dump_ui_test \
 	scroll_anchor_test \
+	scroll_logical_anchor_test \
 	measure_config_test \
 	scroll_anchor_test \
 	widget_retirement_test \
@@ -317,6 +318,7 @@ RAYLIB_TESTS := \
 	dialog_test \
 	dump_ui_test \
 	scroll_anchor_test \
+	scroll_logical_anchor_test \
 	measure_config_test \
 	scroll_anchor_test \
 	widget_retirement_test \
