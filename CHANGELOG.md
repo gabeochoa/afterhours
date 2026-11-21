@@ -24,6 +24,9 @@ Started partway through the project's life, so it does not go all the way back.
 **`colors::to_hsl`, `colors::to_rgb`, and `colors::get_highlighted` are deleted.** They had no callers, mixed 0-255 and 0-1 units so saturation came out wrong, and returned black with a warning on non-raylib builds.
 *What to do:* use `colors::to_hsv` / `colors::from_hsv`. For `get_highlighted`, `colors::lighten` covers the same job.
 
+**E2E commands run in script order now (serial dispatch).** A command stays pending until it passes or times out; the script no longer moves on while an assertion is retrying.
+*What to do:* a command handled by only one of several SystemManagers now times out in the others instead of passing by accident against a later state. Register it everywhere it must run, or once in a shared pack (`register_shared_handlers`). Re-run the suite and read the new failures before silencing them.
+
 ### Visual — re-baseline
 
 - **raylib falls back across loaded faces per codepoint, like sokol.** A glyph the label's face lacks is now drawn from the first other face loaded through `load_font_*` that has it, instead of the replacement glyph. `measure_text` sums the same runs `draw_text_ex` places. The replacement is used only when no loaded face covers the codepoint. Load order is priority. Known limits: rotated text and text containing `\n` use the primary face only, and fallback glyphs sit on their own face's ascent rather than the primary's baseline. `fallback_runs(font, text)` shows the split. Covered by `raylib_fallback_test`.
@@ -237,3 +240,5 @@ The resolved layout tree is walkable (hanabi #74): `UIComponent::children` is em
 `FlexWrap`'s comment claimed `Wrap` was the default. It is not — `UIComponent` and `ComponentConfig` both start at `NoWrap`, as do 3860 of 3863 nodes in a downstream sweep.
 
 **Resizing, scaling, pillarbox / letterbox** (`docs/letterboxing.md`, linked from the README): the window manager already owned this — `window_manager::content_viewport` (dest + scale), `window_to_content` / `content_to_window`, and `get_mouse_position` already applying the mapping — and pong was re-deriving the present math. The guide documents the content/window model, the present snippet, input mapping, and the fixed non-16:9 opt-out (skip `CollectCurrentResolution`, set `ProvidesCurrentResolution` yourself). No API change.
+
+**Wire-versioning policy** (`docs/wire-versioning.md`, linked from the README): the library ships no transport, so the game owns its wire schema. The library protocol version moves only for transport-contract changes; any message-layout, enum-order, or semantic change bumps the game's wire label instead. Decoders stay strict (exact type, exhausted reader) until a message's decoders and tests stop requiring exhaustion, and mismatch reasons are distinct. pumpkin-beachball's label/protocol split is the model.
