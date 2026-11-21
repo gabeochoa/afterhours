@@ -302,6 +302,8 @@ struct UIPluginPostUpdateBridge : System<> {
         systems.push_back(
             std::make_unique<ui::UpdateDropdownOptions<InputAction>>());
         systems.push_back(std::make_unique<ui::ClearVisibity>());
+        for (const auto &factory : imm::ui_post_update_system_factories())
+            systems.push_back(factory());
         // Pre-layout drag handling: hide dragged entity + insert spacer before
         // BuildUIEntityMapping so the spacer is included in the mapping cache
         // and processed by RunAutoLayout.

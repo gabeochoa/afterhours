@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <functional>
 #include <map>
 #include <source_location>
 #include <sstream>
@@ -31,6 +32,16 @@ struct UIElementRecord {
   EntityID parent_id = -1;
 };
 inline std::map<UI_UUID, UIElementRecord> existing_ui_elements;
+
+// Set while a widget runs its exit animation (see ui_motion::on_exit): the
+// retirement sweep keeps it (and its linked subtree) alive and the post-build
+// bridge re-presents it each frame until the exit track finishes.
+struct HasExitPresence : BaseComponent {
+  bool active = false;
+  EntityID parent_id = -1;
+};
+// Installed by ui_motion::register_bridge; null in apps without motion.
+inline std::function<bool(Entity &)> ui_exit_retention_hook;
 
 // Parent -> children, linked once when a child is created and unlinked when
 // the child is retired. This is the persistent counterpart to
@@ -242,11 +253,51 @@ inline void clear_existing_ui_elements() {
 // an orphan, not a survivor.
 inline void retire_unbuilt_ui_elements() {
   if (ui_retire_grace_frames > 0) {
+    // Exit pass first: a stale widget with an exit rule starts (or continues)
+    // its exit here instead of waiting out the grace window.
+    std::unordered_set<EntityID> retained;
+    if (ui_exit_retention_hook) {
+      for (auto &[hash, record] : existing_ui_elements) {
+        (void)hash;
+        if (ui_build_frame - record.last_built_frame == 0)
+          continue;
+        OptEntity opt = UICollectionHolder::getEntityForID(record.id);
+        if (!opt.valid() || !ui_exit_retention_hook(opt.asE()))
+          continue;
+        // Keep the whole linked subtree: children stop being built because
+        // their parent did, not on their own.
+        std::vector<std::pair<EntityID, EntityID>> stack{
+            {record.id, record.parent_id}};
+        while (!stack.empty()) {
+          auto [id, parent_id] = stack.back();
+          stack.pop_back();
+          retained.insert(id);
+          if (OptEntity e = UICollectionHolder::getEntityForID(id);
+              e.valid()) {
+            auto &xp = e.asE().addComponentIfMissing<HasExitPresence>();
+            xp.active = true;
+            xp.parent_id = parent_id;
+          }
+          if (auto it = ui_element_children.find(id);
+              it != ui_element_children.end())
+            for (EntityID kid : it->second)
+              stack.push_back({kid, id});
+        }
+      }
+    }
     std::vector<EntityID> dying;
     for (auto it = existing_ui_elements.begin();
          it != existing_ui_elements.end();) {
-      if (ui_build_frame - it->second.last_built_frame <=
-          ui_retire_grace_frames) {
+      const bool was_exiting =
+          [&] {
+            OptEntity o = UICollectionHolder::getEntityForID(it->second.id);
+            return o.valid() && o.asE().has<HasExitPresence>() &&
+                   !retained.contains(it->second.id);
+          }();
+      if (!was_exiting &&
+          (retained.contains(it->second.id) ||
+           ui_build_frame - it->second.last_built_frame <=
+               ui_retire_grace_frames)) {
         ++it;
         continue;
       }
