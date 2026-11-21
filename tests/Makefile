@@ -93,6 +93,7 @@ ALL_TESTS := \
 	ui_update_lifecycle_single_test \
 	drag_preview_test \
 	drag_scroll_hit_test \
+	reorder_drag_test \
 	label_clip_test \
 	label_test \
 	animation_test \
