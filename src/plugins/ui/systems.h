@@ -1118,6 +1118,22 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
   }
 };
 
+// Focus-scoped shortcut dispatch: offer this frame's pressed action to
+// the focused control first, then outward through its ancestors (see
+// UIContext::dispatch_focused_shortcut). Registered after HandleTabbing
+// and HandleClicks so focus movement and activation keep their existing
+// consume-once behaviour through pressed(); a consumed shortcut clears
+// the action so no widget or app-level handler sees the same press twice.
+template <typename InputAction>
+struct DispatchShortcuts : System<UIContext<InputAction>> {
+  virtual void for_each_with(Entity &, UIContext<InputAction> &context,
+                             float) override {
+    if (context.last_action == InputAction::None)
+      return;
+    context.dispatch_focused_shortcut(context.last_action);
+  }
+};
+
 template <typename InputAction>
 struct HandleTrayNavigation : SystemWithUIContext<ui::HasTray> {
   UIContext<InputAction> *context;

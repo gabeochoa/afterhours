@@ -316,6 +316,10 @@ struct UIPluginPostUpdateBridge : System<> {
         systems.push_back(std::make_unique<
                           ui::TrackIfComponentWillBeRendered<InputAction>>());
         systems.push_back(std::make_unique<ui::HandleTabbing<InputAction>>());
+        // After tabbing/clicks have had their consume-once pass, offer the
+        // pressed action to the focused control's shortcut scopes.
+        systems.push_back(
+            std::make_unique<ui::DispatchShortcuts<InputAction>>());
         systems.push_back(
             std::make_unique<ui::InputExclusivitySystem<InputAction>>());
         // After InputExclusivitySystem so the input gates it installs are in

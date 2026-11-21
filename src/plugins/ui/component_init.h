@@ -190,6 +190,10 @@ inline void apply_flags(Entity &entity, const ComponentConfig &config) {
   entity.toggleComponent<SelectOnFocus>(config.select_on_focus);
   entity.toggleComponent<HasClickActivationMode>(
       config.has_click_activation_override(), config.click_activation);
+  if (auto *hs = entity.toggleComponent<HasShortcuts>(
+          !config.shortcuts.empty(), config.shortcuts)) {
+    hs->bindings = config.shortcuts;
+  }
   entity.toggleComponent<IsDisabled>(config.disabled);
   entity.toggleComponent<ShouldHide>(config.hidden);
 }
