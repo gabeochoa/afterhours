@@ -83,4 +83,22 @@ TEST(scheduled_toast_fades_over_its_lifetime) {
       components::get_type_id<UIContext<ui_test::TestInputAction>>());
 }
 
+TEST(toast_snaps_under_instant_mode) {
+  ui_test::ImmTestHarness h;
+  EntityHelper::registerSingleton<UIContext<ui_test::TestInputAction>>(h.context_entity());
+  auto notice = toast::schedule(h.context(), toast::Level::Info, 2.0f);
+  EntityHelper::merge_entity_arrays();
+  toast::ToastUpdateSystem update;
+  update.for_each_with(notice.ent(), notice.ent().get<toast::Toast>(), 1.0f);
+  motion::set_instant(true);
+  toast::ToastLayoutSystem<ui_test::TestInputAction> layout;
+  layout.once(0.f);
+  motion::set_instant(false);
+  CHECK(notice.ent().has<HasOpacity>());
+  if (notice.ent().has<HasOpacity>())
+    CHECK(std::fabs(notice.ent().get<HasOpacity>().value - 1.0f) < 0.001f);
+  EntityHelper::get_default_collection().singletonMap.erase(
+      components::get_type_id<UIContext<ui_test::TestInputAction>>());
+}
+
 int main() { return ui_test::run_registered_tests("toast"); }
