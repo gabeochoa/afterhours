@@ -181,6 +181,7 @@ ALL_TESTS := \
 	e2e_resize_steps_test \
 	e2e_render_checkpoint_test \
 	e2e_window_size_test \
+	e2e_app_test \
 	e2e_register_command_test \
 	e2e_screenshot_test \
 	e2e_expect_screenshot_test \
@@ -371,6 +372,7 @@ endif
 
 RAYLIB_TESTS := \
 	auto_text_color_test \
+	e2e_app_test \
 	value_types_test \
 	wrappers_test \
 	window_focus_test \
