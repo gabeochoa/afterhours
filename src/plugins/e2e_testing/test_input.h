@@ -134,6 +134,11 @@ inline void simulate_right_click(float x, float y) {
   m.auto_release = true;
 }
 
+// Hold or release the right button across frames (see input_injector).
+inline void set_right_button_down(bool down) {
+  input_injector::set_right_button_down(down);
+}
+
 // Middle click. Same one-frame hold and auto-release as the other two.
 inline void simulate_middle_click(float x, float y) {
   set_mouse_position(x, y);
@@ -288,6 +293,17 @@ inline int get_char_pressed(BackendFn backend_fn) {
     return 0;
   }
 
+  return backend_fn();
+}
+
+// Get next key (wraps backend call). Drained from the injector's FIFO so
+// polling-style game code sees injected keys; never falls through to the
+// hardware queue in test mode.
+template <typename BackendFn> inline int get_key_pressed(BackendFn backend_fn) {
+  if (int key = input_injector::pop_key_pressed())
+    return key;
+  if (detail::test_mode)
+    return 0;
   return backend_fn();
 }
 
