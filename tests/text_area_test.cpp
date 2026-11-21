@@ -575,6 +575,44 @@ TEST(placeholder_is_drawn_only_while_the_field_is_empty) {
   CHECK(count_placeholders() == empty_count);
 }
 
+// R-030: same rule as text_input -- the hint row takes the caller's colour,
+// and unset it stays theme.font_muted, as it always did.
+TEST(placeholder_color_overrides_the_muted_default) {
+  const Color hint{140, 140, 166, 255}; // Deliberately not theme.font_muted.
+  auto placeholder_color = [&](bool themed) {
+    ImmTestHarness h;
+    std::string text;
+    two_frames(h, [&] {
+      auto cfg = area_config(200.f, 100.f).with_placeholder("Type here");
+      if (themed)
+        cfg.with_placeholder_color(hint);
+      text_area(h.context(), mk(h.root(), 0), text, std::move(cfg));
+    });
+    Color got{1, 2, 3, 4};
+    bool found = false;
+    for (const auto &e :
+         UICollectionHolder::get().collection.get_entities())
+      if (e && e->has<UIComponentDebug>() &&
+          e->get<UIComponentDebug>().name() == "text_area_placeholder" &&
+          e->has<HasLabel>() &&
+          e->get<HasLabel>().explicit_text_color.has_value()) {
+        got = *e->get<HasLabel>().explicit_text_color;
+        found = true;
+      }
+    return found ? got : Color{5, 6, 7, 8};
+  };
+
+  const Color themed = placeholder_color(true);
+  CHECK(themed.r == hint.r && themed.g == hint.g && themed.b == hint.b &&
+        themed.a == hint.a);
+
+  // UIContext's theme is default-constructed, so this is the harness's muted.
+  const Color muted = Theme{}.font_muted;
+  const Color plain = placeholder_color(false);
+  CHECK(plain.r == muted.r && plain.g == muted.g && plain.b == muted.b &&
+        plain.a == muted.a);
+}
+
 TEST(caller_background_replaces_the_default_field_fill) {
   auto field_color = [](ComponentConfig cfg) {
     ImmTestHarness h;
