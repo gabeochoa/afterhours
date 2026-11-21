@@ -59,8 +59,6 @@ int main() {
     // 1px bleeds between glyphs when an app downscales the atlas.
     check(atlas_defaults.padding >= 4, "atlas padding survives downscaling");
 
-    // The filter half of the same ask: auto resolves exactly like the old
-    // hardcoded choice, and an explicit filter overrides it. No GL needed.
     check(atlas_defaults.filter == afterhours::FontAtlasFilter::Auto,
           "atlas filter defaults to auto");
     check(afterhours::resolve_font_filter(atlas_defaults, 4) ==
