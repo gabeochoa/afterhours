@@ -18,7 +18,7 @@ static Volume box() { Volume v; v.bounds = {0, 0, 10, 10}; return v; }
 
 int main() {
   printf("Running trigger_volume tests...\n\n");
-  { // enter/exit edges fire once, not every frame inside
+  {
     auto v = box();
     v.update({{1, 5, 5}}, 0.016f);
     check(v.count() == 1 && v.inside(1) && v.entered.size() == 1 &&
@@ -31,7 +31,7 @@ int main() {
               v.phase() == Phase::Empty,
           "exit edge on leaving");
   }
-  { // two entrants count; progress + phase against required_count
+  {
     auto v = box(); v.required_count = 2;
     v.update({{1, 1, 1}, {2, 2, 2}, {3, 99, 99}}, 0.016f);
     check(v.count() == 2, "two entrants count, outside candidate excluded");
@@ -43,7 +43,7 @@ int main() {
               v.phase() == Phase::Occupied,
           "progress 0.5 and Occupied below required");
   }
-  { // validation rejects: never entrant, no enter edge
+  {
     auto v = box();
     v.validator = [](EntityID id) { return id != 7; };
     v.update({{7, 5, 5}, {8, 5, 5}}, 0.016f);
@@ -51,7 +51,7 @@ int main() {
               v.entered.size() == 1,
           "validation rejects entrant");
   }
-  { // presence smoothing: bounded, rises occupied, falls empty, no overshoot
+  {
     auto v = box();
     for (int i = 0; i < 600; ++i) v.update({{1, 5, 5}}, 1.f / 60.f);
     check(v.presence > 0.99f && v.presence <= 1.f, "presence approaches 1, bounded");
@@ -59,10 +59,10 @@ int main() {
     for (int i = 0; i < 600; ++i) v.update({}, 1.f / 60.f);
     check(v.presence >= 0.f && v.presence < 0.01f && v.presence <= peak,
           "presence falls toward 0, bounded");
-    v.update({{1, 5, 5}}, 10.f); // huge dt must not overshoot
+    v.update({{1, 5, 5}}, 10.f);
     check(v.presence >= 0.f && v.presence <= 1.f, "presence bounded on huge dt");
   }
-  { // 3D only when depth set
+  {
     Volume v; v.bounds = {0, 0, 10, 10, 0, 4};
     v.update({{1, 5, 5, 9}}, 0.016f);
     check(v.count() == 0, "3D volume rejects outside depth");

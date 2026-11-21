@@ -1,11 +1,6 @@
 #pragma once
 
-// TriggerVolume (G-P20, simplest single-player slice): an AABB volume that
-// counts validated entrants, reports enter/exit edges, a phase, a smoothed
-// presence 0..1 and a progress value the game renders however it likes.
-// Multiplayer replication/authority is deliberately not here: entrants are
-// local entity ids, so a networked game replicates its own membership and
-// feeds the same candidates in.
+// Entrants are local ids; multiplayer replication is the game's job.
 
 #include <algorithm>
 #include <cmath>
@@ -40,14 +35,14 @@ struct trigger_volume : developer::Plugin {
 
   struct Volume {
     AABB bounds{};
-    int required_count = 1;          // entrants needed for Phase::Complete
+    int required_count = 1;          // entrants needed for Complete
     float presence_rate = 6.f;       // exp. approach rate, per second
     std::function<bool(EntityID)> validator; // empty = accept all
 
     std::unordered_set<EntityID> entrants;
-    std::vector<EntityID> entered; // edges from the last update() only
+    std::vector<EntityID> entered; // last update() only
     std::vector<EntityID> exited;
-    float presence = 0.f; // smoothed 0..1 toward occupied ? 1 : 0
+    float presence = 0.f;
 
     [[nodiscard]] int count() const { return (int)entrants.size(); }
     [[nodiscard]] bool inside(EntityID id) const { return entrants.count(id) != 0; }
@@ -56,18 +51,16 @@ struct trigger_volume : developer::Plugin {
       return count() >= std::max(1, required_count) ? Phase::Complete
                                                      : Phase::Occupied;
     }
-    // Progress the game renders (bar, ring, label): entrants / required.
     [[nodiscard]] float progress() const {
       return std::clamp((float)count() / (float)std::max(1, required_count),
                         0.f, 1.f);
     }
 
-    // One step: rebuild membership from candidates, diff for edges, smooth.
     void update(const std::vector<Candidate> &candidates, float dt) {
       std::unordered_set<EntityID> next;
       for (const auto &c : candidates) {
         if (!bounds.contains(c.x, c.y, c.z)) continue;
-        if (validator && !validator(c.id)) continue; // rejected: never counts
+        if (validator && !validator(c.id)) continue;
         next.insert(c.id);
       }
       entered.clear();
@@ -79,7 +72,7 @@ struct trigger_volume : developer::Plugin {
       entrants = std::move(next);
 
       const float target = 1.f - static_cast<float>(entrants.empty());
-      // Frame-rate independent exponential approach; stays in [0,1] by construction.
+      // Frame-rate independent; stays in [0,1].
       const float k = dt <= 0.f ? 1.f : 1.f - std::exp(-presence_rate * dt);
       presence = std::clamp(presence + (target - presence) * k, 0.f, 1.f);
     }
@@ -101,8 +94,7 @@ struct trigger_volume : developer::Plugin {
     }
   };
 
-  // ECS glue: every HasTriggerVolume entity tests every Transform entity.
-  // The game supplies how to read a position from its own Transform type.
+  // Game supplies position reads via make_candidate.
   template <typename TransformType>
   struct UpdateTriggerVolumes : System<HasTriggerVolume> {
     std::function<Candidate(const Entity &, const TransformType &)>
