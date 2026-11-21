@@ -215,6 +215,10 @@ struct RaylibPlatformAPI {
   static bool window_should_close() { return raylib::WindowShouldClose(); }
   static bool is_window_ready() { return raylib::IsWindowReady(); }
   static bool is_window_fullscreen() { return raylib::IsWindowFullscreen(); }
+  // False with no window (headless): there is nothing that could hold focus.
+  static bool is_window_focused() {
+    return raylib::IsWindowReady() && raylib::IsWindowFocused();
+  }
   static void toggle_fullscreen() { raylib::ToggleFullscreen(); }
   static void minimize_window() { raylib::MinimizeWindow(); }
   static void set_window_size(int w, int h) { raylib::SetWindowSize(w, h); }
