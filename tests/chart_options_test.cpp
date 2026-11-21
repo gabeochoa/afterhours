@@ -32,7 +32,6 @@ TEST(chart_options_defaults_and_colors) {
   }
   CHECK(grid == 5);
   CHECK(series_lines == 1);
-  // y=100 in explicit [0,200] sits mid-plot, not at the top gridline.
   if (grid_bottom > grid_top) CHECK(series_end_y > grid_top + (grid_bottom - grid_top) * 0.3f);
   bool label_colored = false;
   for (auto &c : h.drawn("text")) if (same(c.color, 4, 5, 6)) label_colored = true;

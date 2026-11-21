@@ -28,7 +28,6 @@ inline std::optional<Bounds> bounds(std::span<const Point> points) {
     return result;
 }
 
-// Explicit domains replace the data extent on that axis; unset axes keep auto-fit.
 inline Bounds apply_domains(Bounds data, std::optional<std::pair<double, double>> x_domain = {},
                             std::optional<std::pair<double, double>> y_domain = {}) {
     if (x_domain) { data.min_x = std::min(x_domain->first, x_domain->second); data.max_x = std::max(x_domain->first, x_domain->second); }
