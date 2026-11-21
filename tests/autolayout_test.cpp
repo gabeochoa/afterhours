@@ -3810,10 +3810,6 @@ TEST(text_is_measured_with_the_drawn_weight_and_letter_spacing) {
 }
 
 
-// ---------------------------------------------------------------------------
-// AlignItems::Stretch: an unspecified (Dim::None) cross-axis size fills the
-// parent's cross content box; explicit cross sizes are left alone.
-// ---------------------------------------------------------------------------
 TEST(align_items_stretch_row_fills_cross_axis) {
   TestLayout t;
   auto &root = t.make_ui(pixels(400), pixels(400));
@@ -3848,7 +3844,6 @@ TEST(align_items_stretch_respects_padding_and_margin) {
   t.ui(child).set_desired_margin(pixels(5), Axis::Y);
   t.add_child(root, child);
   t.run(root);
-  // Content box is 400 - 20 padding; child margin takes another 10.
   CHECK_APPROX(t.ui(child).computed[Axis::Y], 370.f);
 }
 
@@ -3873,12 +3868,9 @@ TEST(align_items_stretch_does_not_resize_children_sized_child) {
   t.add_child(root, child);
   t.add_child(child, inner);
   t.run(root);
-  // children() is an explicit content size, not unspecified: no stretch.
   CHECK_APPROX(t.ui(child).computed[Axis::Y], 30.f);
 }
 
-// A children() parent is sized by its non-stretch children on the cross axis;
-// the stretch child then fills that size instead of leaving it unsolved.
 TEST(align_items_stretch_in_children_row_parent) {
   TestLayout t;
   auto &root = t.make_ui(children(), children());
@@ -3907,8 +3899,6 @@ TEST(align_items_stretch_in_children_column_parent) {
   CHECK_APPROX(t.ui(stretch).computed[Axis::X], 50.f);
 }
 
-// The stretched size is final before descendants solve, so a percent child
-// of the stretched box resolves against the stretched size.
 TEST(align_items_stretch_size_flows_to_percent_child) {
   TestLayout t;
   auto &root = t.make_ui(pixels(400), pixels(400));

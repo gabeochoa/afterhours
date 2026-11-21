@@ -113,8 +113,6 @@ struct AutoLayout {
                : Axis::X;
   }
 
-  // Stretch fills the cross axis only for a child with no explicit size
-  // there (Dim::None); children()/text/pixels/etc. keep their own size.
   bool is_stretch_child(const UIComponent &widget,
                         const UIComponent &child, Axis axis) const {
     const bool is_cross =
@@ -670,7 +668,6 @@ struct AutoLayout {
 
       // Include child margins so Dim::Children parents are sized to fit
       // children including their external spacing.
-      // A stretch child has no intrinsic cross size to contribute yet.
       float cs = is_stretch_child(widget, child, axis)
                      ? child.computed_margin[axis]
                      : snapped_extent(child, axis) +
@@ -712,8 +709,6 @@ struct AutoLayout {
       if (child.should_hide)
         continue;
 
-      // A stretch child contributes only its margin until the parent's
-      // cross size is known (solve_violations then stretches it).
       float cs = is_stretch_child(widget, child, axis)
                      ? 0.f
                      : child.computed[axis];
