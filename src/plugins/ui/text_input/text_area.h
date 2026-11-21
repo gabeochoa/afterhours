@@ -347,8 +347,6 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
         placeholder_row ? config.placeholder
                         : (row.empty() ? " " : row); // Space prevents zero-height
 
-    // viewport_width/line_height are already physical: pixels() would scale
-    // them by ui_scale a second time under Adaptive zoom.
     const float row_scale =
         field_cmp.resolved_scaling_mode == ScalingMode::Adaptive
             ? ctx.theme.ui_scale

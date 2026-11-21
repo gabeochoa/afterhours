@@ -1519,11 +1519,7 @@ TEST(down_arrow_stays_in_a_focused_text_area) {
   CHECK(h.context().has_focus(field->id));
 }
 
-
 TEST(r037_line_rows_stay_inside_field_under_zoom) {
-  // R-037: line rows were sized pixels(viewport_width) where viewport_width
-  // is already physical, so Adaptive zoom scaled them a second time
-  // (577.5 wide in a 412.5 content box at 1.4x).
   for (float scale : {1.0f, 1.4f, 2.0f}) {
     for (auto mode : {ScalingMode::Adaptive, ScalingMode::Proportional}) {
       for (float width : {200.f, 300.f, 450.f}) {
@@ -1563,7 +1559,7 @@ TEST(r037_line_rows_stay_inside_field_under_zoom) {
                 fr.x + fr.width - field->computed_padd[Axis::right] + 0.5f);
           CHECK_APPROX(lr.height, expect_h);
         }
-        CHECK(rows == 2); // short text: one row per source line at every width
+        CHECK(rows == 2);
       }
     }
   }
@@ -1596,7 +1592,6 @@ TEST(r037_line_rows_stay_inside_field_when_scrolled) {
   CHECK(field != nullptr);
   if (!field) return;
   const auto fr = field->rect();
-  // One full physical row (28 at 1.4x), so the fmod translation is zero.
   area->get<ti::HasTextAreaState>().scroll_offset_y = LINE_H * scale;
   for (int i = 0; i < 2; i++) {
     h.begin_frame();
