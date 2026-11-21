@@ -590,6 +590,11 @@ struct HasLabel : BaseComponent {
   // its own color) instead of the single `label` string. `label` still holds the
   // concatenated text so layout/measurement/overflow work unchanged.
   std::vector<TextSpan> spans;
+  // Byte index into `label` (or the joined spans) of the access-key glyph to
+  // underline; -1 draws no underline. Set from an "&x" marker via
+  // ComponentConfig::with_access_label. Single-line only: a wrapped or
+  // hard-broken label keeps the index but draws no underline.
+  int underline_index = -1;
   bool is_disabled = false;
 
   // For auto-contrast text color calculation
@@ -655,6 +660,11 @@ struct HasLabel : BaseComponent {
 
   auto &set_spans(const std::vector<TextSpan> &s) {
     spans = s;
+    return *this;
+  }
+
+  auto &set_underline_index(int index) {
+    underline_index = index;
     return *this;
   }
 
