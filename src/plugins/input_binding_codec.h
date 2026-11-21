@@ -9,34 +9,72 @@
 
 namespace afterhours::input_binding_codec {
 
-inline std::string encode(const input::AnyInput &binding) {
-    return std::visit([](const auto &value) -> std::string {
-        using T = std::decay_t<decltype(value)>;
-        if constexpr (std::is_same_v<T, input::KeyChord>) {
-            return "v1:key:" + std::to_string(value.key) + ":" +
-                   std::to_string(value.required_modifiers) + ":" +
-                   std::to_string(value.has_explicit_modifiers);
-        } else if constexpr (std::is_same_v<T, input::GamepadAxisWithDir>) {
-            return "v1:gamepad_axis:" + std::to_string(static_cast<int>(value.axis)) +
-                   ":" + std::to_string(value.dir);
-        } else if constexpr (std::is_same_v<T, input::MouseAxisWithDir>) {
-            return "v1:mouse_axis:" + std::to_string(static_cast<int>(value.axis)) +
-                   ":" + std::to_string(value.dir);
-        } else if constexpr (std::is_enum_v<T>) {
-            return "v1:gamepad_button:" + std::to_string(static_cast<int>(value));
-        } else {
-            return "v1:gamepad_button:" + std::to_string(value.value);
-        }
-    }, binding);
-}
-
 namespace detail {
+// Persisted enums save by name so reordering values never breaks old saves.
+// Key codes stay numeric: they are external codes, not reordered enums.
+struct NamedCode {
+  int value;
+  std::string_view name;
+};
+
+constexpr NamedCode kGamepadButtons[] = {
+    {gamepad_buttons::LEFT_FACE_UP, "LeftFaceUp"},
+    {gamepad_buttons::LEFT_FACE_RIGHT, "LeftFaceRight"},
+    {gamepad_buttons::LEFT_FACE_DOWN, "LeftFaceDown"},
+    {gamepad_buttons::LEFT_FACE_LEFT, "LeftFaceLeft"},
+    {gamepad_buttons::RIGHT_FACE_UP, "RightFaceUp"},
+    {gamepad_buttons::RIGHT_FACE_RIGHT, "RightFaceRight"},
+    {gamepad_buttons::RIGHT_FACE_DOWN, "RightFaceDown"},
+    {gamepad_buttons::RIGHT_FACE_LEFT, "RightFaceLeft"},
+    {gamepad_buttons::LEFT_TRIGGER_1, "LeftTrigger1"},
+    {gamepad_buttons::LEFT_TRIGGER_2, "LeftTrigger2"},
+    {gamepad_buttons::RIGHT_TRIGGER_1, "RightTrigger1"},
+    {gamepad_buttons::RIGHT_TRIGGER_2, "RightTrigger2"},
+    {gamepad_buttons::MIDDLE_LEFT, "MiddleLeft"},
+    {gamepad_buttons::MIDDLE, "Middle"},
+    {gamepad_buttons::MIDDLE_RIGHT, "MiddleRight"},
+    {gamepad_buttons::LEFT_THUMB, "LeftThumb"},
+    {gamepad_buttons::RIGHT_THUMB, "RightThumb"},
+};
+
+constexpr NamedCode kGamepadAxes[] = {
+    {gamepad_axes::LEFT_X, "LeftX"},       {gamepad_axes::LEFT_Y, "LeftY"},
+    {gamepad_axes::RIGHT_X, "RightX"},     {gamepad_axes::RIGHT_Y, "RightY"},
+    {gamepad_axes::LEFT_TRIGGER, "LeftTrigger"},
+    {gamepad_axes::RIGHT_TRIGGER, "RightTrigger"},
+};
+
+constexpr NamedCode kMouseAxes[] = {
+    {static_cast<int>(input::MouseAxis::X), "X"},
+    {static_cast<int>(input::MouseAxis::Y), "Y"},
+};
+
 inline std::optional<int> integer(std::string_view text) {
     int value = 0;
     const auto result = std::from_chars(text.data(), text.data() + text.size(), value);
     if (result.ec != std::errc{} || result.ptr != text.data() + text.size())
         return std::nullopt;
     return value;
+}
+
+// Encode: the code's name, or its int when it has none (e.g. a fallback
+// GamepadButton built from an arbitrary int).
+template <size_t N>
+inline std::string code_name(const NamedCode (&table)[N], int code) {
+    for (const auto &entry : table)
+        if (entry.value == code) return std::string(entry.name);
+    return std::to_string(code);
+}
+
+// Decode accepts the name (new saves) or the legacy int (old saves).
+template <size_t N>
+inline std::optional<int> code_value(const NamedCode (&table)[N],
+                                     std::string_view text, int lo, int hi) {
+    for (const auto &entry : table)
+        if (entry.name == text) return entry.value;
+    const auto code = integer(text);
+    if (!code || *code < lo || *code > hi) return std::nullopt;
+    return code;
 }
 
 inline bool valid_key(int key) {
@@ -56,6 +94,34 @@ inline bool valid_key(int key) {
 }
 }
 
+inline std::string encode(const input::AnyInput &binding) {
+    return std::visit([](const auto &value) -> std::string {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<T, input::KeyChord>) {
+            return "v1:key:" + std::to_string(value.key) + ":" +
+                   std::to_string(value.required_modifiers) + ":" +
+                   std::to_string(value.has_explicit_modifiers);
+        } else if constexpr (std::is_same_v<T, input::GamepadAxisWithDir>) {
+            return "v1:gamepad_axis:" +
+                   detail::code_name(detail::kGamepadAxes,
+                                     static_cast<int>(value.axis)) +
+                   ":" + std::to_string(value.dir);
+        } else if constexpr (std::is_same_v<T, input::MouseAxisWithDir>) {
+            return "v1:mouse_axis:" +
+                   detail::code_name(detail::kMouseAxes,
+                                     static_cast<int>(value.axis)) +
+                   ":" + std::to_string(value.dir);
+        } else if constexpr (std::is_enum_v<T>) {
+            return "v1:gamepad_button:" +
+                   detail::code_name(detail::kGamepadButtons,
+                                     static_cast<int>(value));
+        } else {
+            return "v1:gamepad_button:" +
+                   detail::code_name(detail::kGamepadButtons, value.value);
+        }
+    }, binding);
+}
+
 inline std::optional<input::AnyInput> decode(std::string_view text) {
     std::array<std::string_view, 5> fields;
     std::size_t count = 0;
@@ -67,9 +133,9 @@ inline std::optional<input::AnyInput> decode(std::string_view text) {
         text.remove_prefix(split + 1);
     }
     if (count < 3 || fields[0] != "v1") return std::nullopt;
-    const auto code = detail::integer(fields[2]);
-    if (!code) return std::nullopt;
     if (fields[1] == "key") {
+        const auto code = detail::integer(fields[2]);
+        if (!code) return std::nullopt;
         if (count != 5 || !detail::valid_key(*code)) return std::nullopt;
         const auto modifiers = detail::integer(fields[3]);
         const auto explicit_modifiers = detail::integer(fields[4]);
@@ -82,20 +148,26 @@ inline std::optional<input::AnyInput> decode(std::string_view text) {
         return key;
     }
     if (fields[1] == "gamepad_button") {
-        if (count != 3 || *code < gamepad_buttons::LEFT_FACE_UP ||
-            *code > gamepad_buttons::RIGHT_THUMB) return std::nullopt;
+        if (count != 3) return std::nullopt;
+        const auto code = detail::code_value(detail::kGamepadButtons, fields[2],
+                                             gamepad_buttons::LEFT_FACE_UP,
+                                             gamepad_buttons::RIGHT_THUMB);
+        if (!code) return std::nullopt;
         return static_cast<input::GamepadButton>(*code);
     }
     if (count != 4) return std::nullopt;
     const auto direction = detail::integer(fields[3]);
     if (!direction || (*direction != -1 && *direction != 1)) return std::nullopt;
     if (fields[1] == "gamepad_axis") {
-        if (*code < gamepad_axes::LEFT_X || *code > gamepad_axes::RIGHT_TRIGGER)
-            return std::nullopt;
+        const auto code = detail::code_value(detail::kGamepadAxes, fields[2],
+                                             gamepad_axes::LEFT_X,
+                                             gamepad_axes::RIGHT_TRIGGER);
+        if (!code) return std::nullopt;
         return input::GamepadAxisWithDir{static_cast<input::GamepadAxis>(*code), *direction};
     }
     if (fields[1] == "mouse_axis") {
-        if (*code < 0 || *code > 1) return std::nullopt;
+        const auto code = detail::code_value(detail::kMouseAxes, fields[2], 0, 1);
+        if (!code) return std::nullopt;
         return input::MouseAxisWithDir{static_cast<input::MouseAxis>(*code), *direction};
     }
     return std::nullopt;
