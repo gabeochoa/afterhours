@@ -1,5 +1,3 @@
-// editor_core_test.cpp — selection/dirty, undo/redo order + redo
-// truncation, bounded history, save hook, pick seam. No window needed.
 #include <cstdio>
 #include <string>
 
@@ -24,7 +22,7 @@ static auto add(char c) {
 }
 
 int main() {
-  { // selection + primary; selection alone is not a document edit
+  {
     Ed ed; World w;
     check(!ed.dirty() && !ed.primary(), "starts clean, no primary");
     ed.select(3); ed.select(5, true);
@@ -42,7 +40,7 @@ int main() {
     check(ed.selection_size() == 0, "clear_selection empties");
     (void)w;
   }
-  { // undo/redo ordering, redo truncation, labels, bounded depth
+  {
     Ed ed(2); World w;
     ed.execute(add('a'), w); ed.execute(add('b'), w);
     check(w.log == "ab" && ed.dirty() && ed.undo_label() == "add b", "do a,b");
@@ -50,13 +48,13 @@ int main() {
     check(ed.redo(w) && w.log == "ab", "redo b");
     check(ed.undo(w) && ed.undo(w) && w.log.empty(), "undo both");
     check(ed.redo(w) && w.log == "a", "redo a");
-    ed.execute(add('c'), w); // truncates redo of b
+    ed.execute(add('c'), w);
     check(w.log == "ac" && !ed.can_redo(), "new edit truncates redo");
     ed.execute(add('d'), w);
     check(ed.history.undo_count() == 2, "history bounded at depth 2");
     check(ed.undo(w) && ed.undo(w) && !ed.undo(w), "only 2 undos kept");
   }
-  { // dirty vs saved revision; save hook fires / vetoes
+  {
     Ed ed; World w; int saves = 0;
     ed.execute(add('x'), w);
     ed.mark_saved();
@@ -72,7 +70,7 @@ int main() {
     ed.mark_dirty();
     check(ed.dirty(), "mark_dirty flags an uncommanded edit");
   }
-  { // pick seam: callback supplies the id, core does no ray math
+  {
     Ed ed;
     ed.set_pick_callback([] { return std::optional<long long>(42); });
     check(ed.pick() == 42 && ed.primary() == 42, "pick selects callback hit");
