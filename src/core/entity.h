@@ -119,6 +119,12 @@ struct Entity {
     return is_missing<A>() || is_missing_any<B, Rest...>();
   }
 
+  template <typename A> bool has_any() const { return has<A>(); }
+
+  template <typename A, typename B, typename... Rest> bool has_any() const {
+    return has<A>() || has_any<B, Rest...>();
+  }
+
   template <typename T> void removeComponent() {
 #if defined(AFTER_HOURS_DEBUG)
     log_trace("removing component_id:{} {} to entity_id: {}",

@@ -566,25 +566,21 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   }
 
   [[nodiscard]] bool is_tab_focusable(const Entity &e) const {
-    if (e.template is_missing<HasClickListener>() &&
-        e.template is_missing<HasDragListener>() &&
-        e.template is_missing<HasLeftRightListener>())
+    if (!e.template has_any<HasClickListener, HasDragListener,
+                            HasLeftRightListener>())
       return false;
-    if (e.template has<SkipWhenTabbing>())
+    if (e.template has_any<SkipWhenTabbing, DoesNotTakeFocus, ShouldHide>())
       return false;
-    if (e.template has<DoesNotTakeFocus>())
-      return false;
-    if (e.template has<ShouldHide>())
-      return false;
-    const Entity *cur = &e;
-    for (int depth = 0; depth < 64 && cur; ++depth) {
-      if (cur->template has<Inert>())
-        return false;
-      if (!cur->template has<UIComponent>())
+    EntityID cur_id = e.id;
+    for (int depth = 0; depth < 64 && cur_id >= 0; ++depth) {
+      OptEntity cur = UICollectionHolder::getEntityForID(cur_id);
+      if (!cur.valid())
         break;
-      OptEntity parent =
-          UICollectionHolder::getEntityForID(cur->get<UIComponent>().parent);
-      cur = parent.valid() ? &parent.asE() : nullptr;
+      if (cur.asE().template has<Inert>())
+        return false;
+      if (!cur.asE().template has<UIComponent>())
+        break;
+      cur_id = cur.asE().template get<UIComponent>().parent;
     }
     if (e.template is_missing<UIComponent>() ||
         e.template get<UIComponent>().skip_when_tabbing ||
