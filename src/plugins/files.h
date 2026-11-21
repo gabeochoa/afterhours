@@ -258,8 +258,6 @@ struct files : developer::Plugin {
   // (pulled in by ui.h) needs them without forcing every UI consumer to link
   // files.cpp.
 
-  // Component-wise containment: true when `p` is `base` or sits under it, so
-  // a sibling sharing a name prefix (opponents_backup vs opponents) is out.
   static bool path_within_root(const fs::path &base, const fs::path &p) {
     auto b = base.begin();
     auto it = p.begin();
@@ -269,12 +267,6 @@ struct files : developer::Plugin {
     return true;
   }
 
-  // Resolve a user/content-supplied relative path confined under `root`, or
-  // nullopt when it would escape. Rejects absolute paths, `..` escapes, and
-  // symlinks whose target leaves the root; `.` / in-root `..` are folded.
-  // Symlinks staying inside are resolved and allowed. This is a check at
-  // call time, not a race-proof sandbox: a directory swapped after the check
-  // is not caught.
   static std::optional<fs::path> resolve_confined(const fs::path &root,
                                                   const fs::path &relative) {
     if (relative.is_absolute() || relative.has_root_name())

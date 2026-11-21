@@ -1,7 +1,3 @@
-// files_confined_path_test.cpp
-// files::resolve_confined / path_within_root. Caller-supplied relative paths
-// must stay under a root: `..` escapes, absolute paths, and symlinks pointing
-// outside are rejected; `.` and in-root `..` fold away.
 
 #include <afterhours/src/plugins/files.h>
 
@@ -43,13 +39,11 @@ int main() {
                            ("afh_confined_outside_" + std::to_string(getpid()));
   fs::remove_all(outside, ec);
   fs::create_directories(outside, ec);
-  // A same-prefix sibling of the root: prefix matching must not let it in.
   const fs::path sibling = fs::path(root.string() + "_backup");
   fs::remove_all(sibling, ec);
   fs::create_directories(sibling, ec);
   const fs::path base = fs::weakly_canonical(fs::absolute(root, ec), ec);
 
-  // 1. Plain, nested, `./`, and in-root `..` paths resolve inside the root.
   check(str(files::resolve_confined(root, "a.txt")) == (base / "a.txt").string(),
         "plain name resolves");
   check(str(files::resolve_confined(root, "sub/deep/f.txt")) ==
@@ -74,7 +68,6 @@ int main() {
             (base / "a.txt").string(),
         "trailing slash on the root is fine");
 
-  // 2. Escapes are rejected.
   check(!files::resolve_confined(root, "../escape.txt").has_value(),
         "../ escape rejected");
   check(!files::resolve_confined(root, "sub/../../escape.txt").has_value(),
@@ -90,7 +83,6 @@ int main() {
   check(!files::resolve_confined(root, "/etc/passwd").has_value(),
         "absolute system path rejected");
 
-  // 3. Symlink policy: staying inside is allowed, leaving is not.
   fs::create_symlink("real", root / "link_in", ec);
   fs::create_symlink(outside, root / "link_out", ec);
   fs::create_symlink(sibling, root / "sub" / "link_sib", ec);
@@ -105,7 +97,6 @@ int main() {
   check(!files::resolve_confined(root, "sub/link_sib/x.txt").has_value(),
         "nested symlink to same-prefix sibling rejected");
 
-  // 4. path_within_root is component-wise, not a string prefix test.
   check(files::path_within_root(base, base), "root contains itself");
   check(files::path_within_root(base, base / "a" / "b"), "root contains a child");
   check(!files::path_within_root(base, sibling), "same-prefix sibling is outside");
