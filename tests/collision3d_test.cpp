@@ -1,4 +1,3 @@
-// collision3d_test.cpp - static world: raycast / overlap / push-out.
 #include <afterhours/src/plugins/collision3d.h>
 
 #include <cmath>
@@ -19,7 +18,6 @@ static bool near3(Vec3 a, Vec3 b, float eps = 1e-3f) {
 }
 
 int main() {
-  // Ray vs AABB / sphere / capsule / heightfield, material ids, nearest wins.
   {
     World w;
     w.add(AABB{{2, -1, -1}, {3, 1, 1}, 7});
@@ -36,7 +34,7 @@ int main() {
   }
   {
     World w;
-    w.add(Capsule{{5, 0, 0}, 0.5f, 1.f, 3}); // spine y in [-1,1]
+    w.add(Capsule{{5, 0, 0}, 0.5f, 1.f, 3});
     auto side = raycast(w, {0, 0, 0}, {1, 0, 0});
     check(side && near(side->t, 4.5f) && side->material == 3 && side->kind == Kind::Capsule, "ray hits capsule side");
     auto cap = raycast(w, {5, 5, 0}, {0, -1, 0});
@@ -56,7 +54,6 @@ int main() {
     check(g && near(*g, 0.3f), "ground_height samples the field");
   }
 
-  // Overlap sets are exact.
   {
     World w;
     w.add(AABB{{0, 0, 0}, {1, 1, 1}, 1});
@@ -66,12 +63,11 @@ int main() {
     auto box = overlap_aabb(w, {-1, -1, -1}, {2, 2, 2});
     check(box.size() == 2 && box[0].material == 1 && box[1].material == 3, "overlap_aabb returns exact set");
     auto sph = overlap_sphere(w, {0.5f, 0.5f, 0.5f}, 1.f);
-    check(sph.size() == 2, "overlap_sphere returns exact set"); // aabb + sphere
+    check(sph.size() == 2, "overlap_sphere returns exact set");
     auto far = overlap_sphere(w, {100, 100, 100}, 1.f);
     check(far.empty(), "overlap far away is empty");
   }
 
-  // Push-out resolves penetration to the surface.
   {
     World w;
     w.add(AABB{{0, 0, 0}, {2, 2, 2}, 1});

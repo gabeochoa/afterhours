@@ -1,7 +1,4 @@
 #pragma once
-// collision3d: static-shape world + queries. Brute-force broadphase
-// (spatial accel is R-223, deferred). No dynamics/solver, no mesh
-// triangles (both deferred), no character integration (R-186).
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -42,9 +39,7 @@ constexpr MaterialId kNoMaterial = -1;
 
 struct AABB { Vec3 min, max; MaterialId material = 0; };
 struct Sphere { Vec3 center; float radius = 0.5f; MaterialId material = 0; };
-// Capsule about the Y axis; spine is centre +/- (0,half_height,0).
 struct Capsule { Vec3 center; float radius = 0.5f; float half_height = 0.5f; MaterialId material = 0; };
-// Heightfield via sampler: sample(x,z)->world Y, valid inside xz bounds.
 struct Heightfield {
   std::function<float(float, float)> sample;
   float min_x = -1e4f, max_x = 1e4f, min_z = -1e4f, max_z = 1e4f;
@@ -100,7 +95,7 @@ inline bool ray_aabb(Vec3 o, Vec3 d, const AABB &b, float &t_out, Vec3 &n_out) {
     }
   }
   t_out = tmin;
-  n_out = (tmin == 0.f) ? normalize(d * -1.f) : n; // inside: oppose ray
+  n_out = (tmin == 0.f) ? normalize(d * -1.f) : n;
   return true;
 }
 
@@ -132,9 +127,8 @@ inline Vec3 hf_normal(const Heightfield &h, float x, float z) {
   float dz = h.sample(x, z + e) - h.sample(x, z - e);
   return normalize({-dx / (2 * e), 1.f, -dz / (2 * e)});
 }
-} // namespace detail
+}
 
-// Nearest hit along origin + dir*t, t in [0,max_dist]. dir need not be unit.
 inline std::optional<Hit> raycast(const World &w, Vec3 origin, Vec3 dir, float max_dist = 1e4f) {
   float dl = length(dir);
   if (dl < 1e-8f || max_dist < 0) return std::nullopt;
@@ -159,7 +153,6 @@ inline std::optional<Hit> raycast(const World &w, Vec3 origin, Vec3 dir, float m
     float t; Vec3 n;
     if (detail::ray_sphere(origin, d, a, c.radius, t, n)) consider(t, n, c.material, Kind::Capsule, i);
     if (detail::ray_sphere(origin, d, b, c.radius, t, n)) consider(t, n, c.material, Kind::Capsule, i);
-    // Side: 2D circle in XZ, then clamp hit y to the spine span.
     Vec3 oc{origin.x - c.center.x, 0, origin.z - c.center.z};
     Vec3 dc{d.x, 0, d.z};
     float A = dot(dc, dc);
@@ -178,7 +171,6 @@ inline std::optional<Hit> raycast(const World &w, Vec3 origin, Vec3 dir, float m
   for (int i = 0; i < (int)w.heightfields.size(); i++) {
     const Heightfield &h = w.heightfields[i];
     if (!h.sample) continue;
-    // March then bisect where the ray crosses the sampled surface.
     const int kSteps = 128;
     float step = max_dist / kSteps, prev_t = 0;
     float prev_f = origin.y - h.sample(origin.x, origin.z);
@@ -218,11 +210,10 @@ inline std::vector<Overlap> overlap_aabb(const World &w, Vec3 qmin, Vec3 qmax) {
   }
   for (int i = 0; i < (int)w.capsules.size(); i++) {
     const Capsule &c = w.capsules[i];
-    // Conservative: spine segment vs query box expanded by radius.
     AABB ex{{qmin.x - c.radius, qmin.y - c.radius, qmin.z - c.radius}, {qmax.x + c.radius, qmax.y + c.radius, qmax.z + c.radius}};
     Vec3 a = detail::capsule_a(c), b = detail::capsule_b(c);
     bool hit = detail::point_in_aabb(a, ex) || detail::point_in_aabb(b, ex);
-    if (!hit) { // segment-box slab test
+    if (!hit) {
       Vec3 d = b - a; float t0 = 0, t1 = 1;
       const float pa[3] = {a.x, a.y, a.z}, da[3] = {d.x, d.y, d.z};
       const float mn[3] = {ex.min.x, ex.min.y, ex.min.z}, mx[3] = {ex.max.x, ex.max.y, ex.max.z};
@@ -242,7 +233,6 @@ inline std::vector<Overlap> overlap_aabb(const World &w, Vec3 qmin, Vec3 qmax) {
   for (int i = 0; i < (int)w.heightfields.size(); i++) {
     const Heightfield &h = w.heightfields[i];
     if (!h.sample || qmax.x < h.min_x || qmin.x > h.max_x || qmax.z < h.min_z || qmin.z > h.max_z) continue;
-    // Sample centre + corners: any height inside the query y-range overlaps.
     float xs[3] = {clampf((qmin.x + qmax.x) * 0.5f, h.min_x, h.max_x), clampf(qmin.x, h.min_x, h.max_x), clampf(qmax.x, h.min_x, h.max_x)};
     float zs[3] = {clampf((qmin.z + qmax.z) * 0.5f, h.min_z, h.max_z), clampf(qmin.z, h.min_z, h.max_z), clampf(qmax.z, h.min_z, h.max_z)};
     bool hit = false;
@@ -273,7 +263,6 @@ inline std::vector<Overlap> overlap_sphere(const World &w, Vec3 center, float ra
     const Heightfield &h = w.heightfields[i];
     if (!h.sample) continue;
     float cx = clampf(center.x, h.min_x, h.max_x), cz = clampf(center.z, h.min_z, h.max_z);
-    // Outside xz bounds: horizontal gap must also fit inside the radius.
     float dx = center.x - cx, dz = center.z - cz;
     if (dx * dx + dz * dz > radius * radius) continue;
     if (center.y - radius <= h.sample(cx, cz)) out.push_back({Kind::Heightfield, i, h.material});
@@ -282,8 +271,6 @@ inline std::vector<Overlap> overlap_sphere(const World &w, Vec3 center, float ra
   return out;
 }
 
-// Minimal translation moving a sphere out of penetration (deepest wins;
-// call again to resolve the next). Zero when not penetrating.
 inline Vec3 push_out_sphere(const World &w, Vec3 center, float radius) {
   Vec3 best{0, 0, 0};
   float best_len = 0;
@@ -293,7 +280,6 @@ inline Vec3 push_out_sphere(const World &w, Vec3 center, float radius) {
   };
   for (const AABB &b : w.aabbs) {
     if (detail::point_in_aabb(center, b)) {
-      // Inside: exit through the nearest face, plus radius.
       float dxl = center.x - b.min.x, dxr = b.max.x - center.x;
       float dyl = center.y - b.min.y, dyr = b.max.y - center.y;
       float dzl = center.z - b.min.z, dzr = b.max.z - center.z;
@@ -340,4 +326,4 @@ inline std::optional<float> ground_height(const World &w, float x, float z) {
   return best;
 }
 
-} // namespace afterhours::collision3d
+}
