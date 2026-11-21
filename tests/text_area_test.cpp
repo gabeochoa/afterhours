@@ -388,7 +388,6 @@ TEST(shift_enter_still_breaks_when_submitting_on_enter) {
   CHECK(!submitted);
 }
 
-// Single-line mode: the same text_area widget/state, one row (R-026).
 namespace {
 std::string after_single_line_enter(bool shift, bool *submitted) {
   ImmTestHarness h;

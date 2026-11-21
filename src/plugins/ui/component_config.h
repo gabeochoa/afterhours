@@ -216,7 +216,7 @@ struct ComponentConfig {
   size_t text_area_max_lines = 0;            // Max lines (0 = unlimited)
   bool text_area_auto_grow = false;          // Height follows the content
   bool text_area_submit_on_enter = false;    // Enter submits, Shift+Enter breaks
-  bool text_area_single_line = false;        // One row: Enter submits, no breaks
+  bool text_area_single_line = false;        // One row: Enter submits
   size_t virtual_list_overscan = VIRTUAL_LIST_OVERSCAN_DEFAULT;
 
   // Button variant configuration
@@ -499,8 +499,7 @@ struct ComponentConfig {
     text_area_submit_on_enter = enabled;
     return *this;
   }
-  // Single-line mode for text_area: same widget/state as multiline, but
-  // Enter (incl. Shift+Enter) submits and pasted breaks become spaces.
+  // One row: Enter submits, pasted breaks become spaces.
   ComponentConfig &with_single_line(bool enabled = true) {
     text_area_single_line = enabled;
     return *this;
