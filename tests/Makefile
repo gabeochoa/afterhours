@@ -313,6 +313,7 @@ ALL_TESTS := \
 	frustum_test \
 	instance_batcher_test \
 	instance_batcher_persist_test \
+	time_of_day_test \
 	lod_test \
 	blob_shadow_test \
 	world_label_test \
@@ -404,6 +405,7 @@ RAYLIB_TESTS := \
 	frustum_test \
 	instance_batcher_test \
 	instance_batcher_persist_test \
+	time_of_day_test \
 	dialog_test \
 	escape_owner_test \
 	dump_ui_test \
