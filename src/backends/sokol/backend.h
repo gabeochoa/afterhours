@@ -65,6 +65,14 @@ void end_texture_mode();
 
 // Implemented in capture_impl.h (the SOKOL_IMPL Objective-C++ TU).
 extern "C" const void *metal_create_system_device(void);
+#ifdef SOKOL_METAL
+extern "C" void metal_install_first_frame_early_draw(void);
+extern "C" bool metal_should_draw_first_frame_early(bool has_view,
+                                                    bool already_drawn);
+extern "C" int metal_first_frame_early_draw_count(void);
+extern "C" int metal_first_frame_early_attempt_count(void);
+extern "C" void metal_reset_first_frame_early_draw(void);
+#endif
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id, int width,
                                              int height, const char *path);
 
@@ -985,6 +993,9 @@ struct MetalPlatformAPI {
       // sokol windows are resizable by default
     }
 
+#ifdef SOKOL_METAL
+    metal_install_first_frame_early_draw();
+#endif
     // sapp_run blocks until the application quits
     sapp_run(&desc);
   }
