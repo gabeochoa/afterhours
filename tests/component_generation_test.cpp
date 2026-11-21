@@ -1,4 +1,3 @@
-// Per-type membership generation: add/remove bumps only that type.
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 
@@ -31,7 +30,6 @@ int main() {
   CHECK(component_generation<Pos>() == p0 + 1);
   CHECK(component_generation<Vel>() == v0);
 
-  // Field mutation is deliberately not tracked.
   e.get<Pos>().x = 42;
   CHECK(component_generation<Pos>() == p0 + 1);
 
@@ -44,7 +42,6 @@ int main() {
   e.removeComponentIfExists<Pos>();
   CHECK(component_generation<Pos>() == p0 + 2);
 
-  // Entity leaving a collection bumps its attached types only.
   EntityCollection ec;
   Entity &a = ec.createEntity();
   a.addComponent<Vel>();
@@ -56,7 +53,6 @@ int main() {
   CHECK(component_generation<Vel>() == v1 + 1);
   CHECK(component_generation<Pos>() == p1);
 
-  // The ComponentID overload agrees with the typed one.
   CHECK(component_generation(components::get_type_id<Vel>()) ==
         component_generation<Vel>());
 

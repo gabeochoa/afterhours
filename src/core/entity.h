@@ -32,6 +32,8 @@ inline std::atomic_int ENTITY_ID_GEN = 0;
 inline std::atomic<std::size_t> COMPONENT_MUTATION_GEN = 0;
 inline void note_component_mutation() {
   COMPONENT_MUTATION_GEN.fetch_add(1, std::memory_order_relaxed);
+}
+
 // Per-type membership generations, bumped only when a component of that type
 // is added or removed, so a system can cache against component_generation<T>()
 // and skip work while it is unchanged. Field writes are invisible: get<T>()
