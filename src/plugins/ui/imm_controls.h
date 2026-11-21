@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <bitset>
+#include <cmath>
 #include <chrono>
 #include <fstream>
 #include <string>
@@ -503,9 +504,19 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
       init_state<HasToggleSwitchState>(entity, [&](auto &) {}, value);
   state.on = value;
 
-  // Animate (smooth lerp toward target)
+  // Animate toward the caller's value (state.on was just synced from it).
+  // dt-corrected exponential: the old per-frame 0.2 lerp ran twice as fast
+  // at 120Hz and never quite settled.
   float target = state.on ? 1.0f : 0.0f;
-  state.animation_progress += (target - state.animation_progress) * 0.2f;
+  if (motion::is_instant()) {
+    state.animation_progress = target;
+  } else {
+    const float dt = ctx.dt > 0.f ? ctx.dt : (1.f / 60.f);
+    const float factor = 1.f - std::pow(0.8f, dt * 60.f);
+    state.animation_progress += (target - state.animation_progress) * factor;
+    if (std::fabs(target - state.animation_progress) < 0.001f)
+      state.animation_progress = target;
+  }
 
   const Theme &theme = ctx.theme;
 
