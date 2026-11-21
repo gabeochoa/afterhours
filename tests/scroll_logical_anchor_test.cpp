@@ -76,14 +76,14 @@ static void settle_at(ImmTestHarness &h, const std::vector<size_t> &items,
   sv.scroll_offset.y = offset;
   sv.scroll_target.y = offset;
   sv.last_eased_offset = sv.scroll_offset;
-  build_and_measure(h, items); // pin the anchor at this offset
+  build_and_measure(h, items);
 }
 
 static void test_prepend_holds_item_at_same_screen_y() {
   ImmTestHarness h;
   settle_at(h, range(5, 20), 5 * ROW_H + 7.f);
 
-  build_and_measure(h, range(0, 25)); // five new items above
+  build_and_measure(h, range(0, 25));
 
   check(near(view_of(h).scroll_offset.y, 10 * ROW_H + 7.f),
         "prepend: offset follows the pinned item, intra-item offset kept");
@@ -93,11 +93,11 @@ static void test_changes_below_leave_offset_alone() {
   ImmTestHarness h;
   settle_at(h, range(5, 20), 5 * ROW_H + 7.f);
 
-  build_and_measure(h, range(5, 30)); // appended below
+  build_and_measure(h, range(5, 30));
   check(near(view_of(h).scroll_offset.y, 5 * ROW_H + 7.f),
         "append below: offset unchanged");
 
-  build_and_measure(h, range(5, 12)); // removed below
+  build_and_measure(h, range(5, 12));
   check(near(view_of(h).scroll_offset.y, 5 * ROW_H + 7.f),
         "remove below: offset unchanged");
 }
@@ -109,14 +109,14 @@ static void test_deleted_anchor_falls_back_to_next_item() {
   auto without_anchor = range(5, 5);
   for (size_t i = 11; i < 25; i++)
     without_anchor.push_back(i);
-  build_and_measure(h, without_anchor); // pinned item 10 gone; 11 at its place
+  build_and_measure(h, without_anchor);
   check(near(view_of(h).scroll_offset.y, 5 * ROW_H + 7.f),
         "deleted anchor: offset kept as fallback");
 
   auto prepended = range(0, 5);
   for (size_t i : without_anchor)
     prepended.push_back(i);
-  build_and_measure(h, prepended); // five above the fallback item (11)
+  build_and_measure(h, prepended);
   check(near(view_of(h).scroll_offset.y, 10 * ROW_H + 7.f),
         "deleted anchor: fallback item is pinned for the next prepend");
 }
