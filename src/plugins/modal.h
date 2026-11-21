@@ -253,11 +253,6 @@ struct modal : developer::Plugin {
             return *root;
         }
 
-        // True when ctx's focus sits inside a temporary layer that owns
-        // Escape itself: an open menu/popover, an open dropdown (both
-        // open-last-frame), or a text field. Walks the parent chain from
-        // the focused element; the field's state lives on its wrapper,
-        // one step above the focused inner field.
         static bool focus_in_temporary_layer(auto &ctx) {
             for (EntityID cur = ctx.focus_id, depth = 0;
                  depth < 64 && cur >= 0 && cur != ctx.ROOT; ++depth) {
@@ -929,14 +924,9 @@ struct modal : developer::Plugin {
 
             // Check for escape key (via InputAction if available)
             if constexpr (magic_enum::enum_contains<InputAction>("MenuBack")) {
-                // One owner per press: focus inside an open temporary layer
-                // (menu/popover, dropdown, or text field) means that layer
-                // owns this Escape -- peek without consuming so it can act.
-                // This watcher runs as an update system, before the imm
-                // build that owns those layers, so it must defer explicitly.
                 if (context->last_action == InputAction::MenuBack &&
                     !detail::focus_in_temporary_layer(*context)) {
-                    context->pressed(InputAction::MenuBack);  // consume
+                    context->pressed(InputAction::MenuBack);
                     if (top_modal.closed_by == ClosedBy::CloseRequest ||
                         top_modal.closed_by == ClosedBy::Any) {
                         modal::close(top_id, DialogResult::Cancelled);

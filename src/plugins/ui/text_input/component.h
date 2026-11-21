@@ -775,9 +775,6 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
       navigate([&] { state.cursor_position = state.text_size(); });
     }
 
-    // Escape blurs the field and consumes the press, so an enclosing
-    // dialog or menu does not also act on it (one owner per press; the
-    // dialog needs a second press to close).
     // FAKE prevents try_to_grab from immediately re-focusing the first widget.
     if (ctx.pressed(InputAction::MenuBack)) {
       state.clear_selection();
