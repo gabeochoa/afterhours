@@ -144,8 +144,7 @@ struct ComponentConfig {
   // is known. An absolute number cannot say "above whatever contains me".
   int render_layer_offset = 0;
 
-  // Custom-draw callbacks (see HasOnDraw): bg draws behind the widget's fill,
-  // fg on top of all its primitives, both receiving the widget's final rect.
+  // Custom-draw callbacks (see HasOnDraw), receiving the final rect.
   std::string tooltip_text;
   float tooltip_delay = 0.5f;
   std::optional<Size> tooltip_font_size;
@@ -614,6 +613,7 @@ struct ComponentConfig {
     render_layer = layer;
     return *this;
   }
+  // bg: behind fill; fg: over own primitives; over: over whole subtree.
   ComponentConfig &with_on_draw_bg(RenderPrimitive::CustomDrawFn fn) {
     on_draw_bg = std::move(fn);
     return *this;
@@ -622,7 +622,6 @@ struct ComponentConfig {
     on_draw_fg = std::move(fn);
     return *this;
   }
-  // After all descendants (fg is only after this widget's own primitives).
   ComponentConfig &with_on_draw_over(RenderPrimitive::CustomDrawFn fn) {
     on_draw_over = std::move(fn);
     return *this;
