@@ -234,6 +234,7 @@ ALL_TESTS := \
 	virtual_list_test \
 	text_action_names_test \
 	sizing_repro_test \
+	flex_shrink_test \
 	slider_test \
 	split_test \
 	downstream_gaps_test \
