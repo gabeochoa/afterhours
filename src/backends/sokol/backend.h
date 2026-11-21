@@ -441,7 +441,6 @@ inline void sokol_event_cb(const sapp_event *ev) {
     }
   }
 
-  // Surface window lifecycle the input switch below would otherwise absorb.
   {
     using namespace window_events;
     const float scale = ev->window_width > 0

@@ -88,9 +88,6 @@ inline bool host_input_activity() {
   return active;
 }
 
-// Raylib has no lifecycle callback, so transitions are edge-detected here.
-// Occlusion honestly means hidden/minimized only — raylib cannot report
-// covered-by-another-window.
 inline void poll_window_events() {
   using namespace window_events;
   static float last_dpi = 0.f;
