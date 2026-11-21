@@ -6,6 +6,10 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+### Added
+
+- **Post-build UI action phase.** `UIContext::post_build(owner, fn)` queues a model-replacing action during build; it runs that frame after layout (before render and click handling), in queue order, seeing final rects. Capture values by value. `discard_post_build(owner)` drops still-queued actions for a document/scene owner that went away; owner `0` (the no-owner overload) cannot be discarded. Actions queued from an action run in the next frame's phase. Existing `defer()` (next frame, pre-build) is unchanged. Covered by `post_build_test`.
+
 ### Breaking
 
 **The animation plugin is rewritten around `afterhours::motion`.** `animation::anim<Key>(k).to(v, dur, EasingType)`, `AnimationManager`, `AnimHandle`, `sequence`, `loop_sequence`, `one_shot`, `clamp_value`, `get_value`, `register_update_systems<Key>()` and the declarative `with_animation(Anim::on_hover()...)` / `HasAnimationState` are gone. Every old call is a compile error.
