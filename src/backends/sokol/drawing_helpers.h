@@ -1885,6 +1885,11 @@ inline TextureType load_texture(const char *path) {
   return tex;
 }
 
+// sg_make_* is only valid once the backend is initialized.
+inline bool texture_is_usable() {
+  return graphics::metal_detail::g_initialized;
+}
+
 inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
                                           int h,
                                           int filter = TEXTURE_FILTER_BILINEAR) {
