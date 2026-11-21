@@ -1,12 +1,3 @@
-// frame_phases_test.cpp
-// R-102: the UI frame phases (build / layout / post-layout input / render)
-// must be drivable separately, not only as SystemManager::run().
-//
-// A forked child runs the monolithic path (ui::setup + run()). The parent
-// registers the same pieces split at the layout boundary, inserts a host
-// system between layout and post-layout, and drives tick/render separately.
-// Both must land on identical rects and identical draw ops.
-
 #ifndef AFTER_HOURS_USE_NONE
 #define AFTER_HOURS_USE_NONE 1
 #endif
@@ -63,7 +54,6 @@ static Rectangle rect_of(EntityID id) {
   return UICollectionHolder::getEntityForIDEnforce(id).get<UIComponent>().rect();
 }
 
-// One summary line both paths must produce byte-identically.
 static std::string summarize() {
   Rectangle b = rect_of(g_button_id), p = rect_of(g_panel_id);
   int texts = 0;
@@ -105,7 +95,6 @@ static std::string run_phased() {
   systems.fixed_tick_all(entities, 1.f / 60.f);
   systems.tick_all(entities, 1.f / 60.f);
   EntityHelper::cleanup();
-  // Host work between layout/input and render: rects are final, nothing drawn.
   CHECK(g_width_after_layout > 0.f);
   CHECK(g_draws_after_layout == 0);
   systems.render_all(1.f / 60.f);
@@ -114,7 +103,6 @@ static std::string run_phased() {
 
 int main() {
   printf("=== frame phases ===\n\n");
-  // Monolithic reference in a child: setup() singletons are once-per-process.
   int fds[2];
   if (pipe(fds) != 0) return 1;
   pid_t pid = fork();

@@ -292,8 +292,7 @@ struct UIPluginPreUpdateBridge : System<> {
     }
 };
 
-// The layout half of the post-build pass, as its own bridge so a host with a
-// custom frame loop can run layout without also consuming input (below).
+// Layout half of the post-build pass, split out as its own bridge.
 template<typename InputAction>
 inline std::vector<std::unique_ptr<SystemBase>> make_layout_systems() {
     std::vector<std::unique_ptr<SystemBase>> systems;
@@ -442,8 +441,7 @@ static void register_before_ui_updates(SystemManager &sm) {
         std::make_unique<ui::UIPluginPreUpdateBridge<InputAction>>());
 }
 
-// Custom-loop alternative to register_after_ui_updates: register these two
-// (with any host systems between them) instead of the monolithic bridge.
+// Custom-loop split: register these two around host systems, not the bridge.
 template<typename InputAction>
 static void register_layout_systems(SystemManager &sm) {
     sm.register_update_system(
