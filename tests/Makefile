@@ -242,6 +242,7 @@ ALL_TESTS := \
 	models_test \
 	house_of_cards_test \
 	frustum_test \
+	eye_position_test \
 	instance_batcher_test \
 	lod_test \
 	image_test \
@@ -313,6 +314,7 @@ RAYLIB_TESTS := \
 	models_test \
 	house_of_cards_test \
 	frustum_test \
+	eye_position_test \
 	instance_batcher_test \
 	dialog_test \
 	dump_ui_test \

@@ -110,6 +110,11 @@ struct Effect {
     if (loaded)
       graphics::set_shader_value(shader, location(uniform), arr, graphics::SHADER_UNIFORM_VEC2);
   }
+  void set(const char *uniform, Vector3Type v) {
+    const float arr[3] = {v.x, v.y, v.z};
+    if (loaded)
+      graphics::set_shader_value(shader, location(uniform), arr, graphics::SHADER_UNIFORM_VEC3);
+  }
   void set(const char *uniform, ColorType c) {
     const float arr[4] = {c.r / 255.f, c.g / 255.f, c.b / 255.f, c.a / 255.f};
     if (loaded)

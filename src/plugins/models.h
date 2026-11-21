@@ -23,6 +23,7 @@
 #include "../logging.h"
 #include "../singleton.h"
 #include "color.h"
+#include "eye_position.h"
 
 namespace afterhours {
 
@@ -216,6 +217,12 @@ inline void apply_lighting(ShaderType shader, const Lighting &l,
   set_uniform(shader, "camPos", &cp, raylib::SHADER_UNIFORM_VEC3);
 }
 
+// Eye-position-only form: camPos comes from eye_position::get(), so a draw
+// with no Camera object still gets viewer-relative lighting and fog.
+inline void apply_lighting(ShaderType shader, const Lighting &l) {
+  apply_lighting(shader, l, eye_position::get());
+}
+
 // One DrawMeshInstanced per mesh instead of one DrawModelEx per copy. The
 // model's materials are used with their shader swapped for `shader`, without
 // modifying the model. model.transform is not applied; raylib bakes glTF node
@@ -364,6 +371,7 @@ inline ShaderStub load_instancing_shader() { return {}; }
 inline ShaderStub load_lit_shader(const char * = DEFAULT_LIGHTING) { return {}; }
 template <typename S, typename V>
 inline void apply_lighting(S, const Lighting &, V) {}
+template <typename S> inline void apply_lighting(S, const Lighting &) {}
 template <typename S, typename M>
 inline void draw_model_instanced(const ModelType &, S, const M *, int) {}
 struct InstanceBatcher {
