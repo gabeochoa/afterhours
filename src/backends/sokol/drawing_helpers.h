@@ -59,14 +59,14 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
   if (dpi > 1.01f) {
     float inv = 1.0f / dpi;
     fonsSetSize(ctx, font_size * dpi);
-    fonsSetSpacing(ctx, spacing * dpi);
+    fonsSetSpacing(ctx, fons_spacing_for(spacing) * dpi);
     sgl_push_matrix();
     sgl_scale(inv, inv, 1.0f);
     fonsDrawText(ctx, position.x * dpi, position.y * dpi, content, nullptr);
     sgl_pop_matrix();
   } else {
     fonsSetSize(ctx, font_size);
-    fonsSetSpacing(ctx, spacing);
+    fonsSetSpacing(ctx, fons_spacing_for(spacing));
     fonsDrawText(ctx, position.x, position.y, content, nullptr);
   }
 }
