@@ -24,8 +24,6 @@ int main() {
   fs::create_directories(job_tmp);
   setenv("E2E_TMPDIR", job_tmp.c_str(), 1);
 
-  // No TestRoots installed: the provider still isolates via E2E_TMPDIR, which
-  // is what gives parallel-runner jobs per-process settings/saves.
   check(files::active_test_roots == nullptr, "no explicit roots in this run");
   files::init("afterhours-e2e-tmpdir-env");
   check(files::get_save_path() == job_tmp / "save",

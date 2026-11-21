@@ -182,12 +182,6 @@ struct files : developer::Plugin {
   };
   inline static TestRoots *active_test_roots = nullptr;
 
-  // E2E/test-mode wiring: when argv carries --e2e/--test-mode/--test-script/
-  // --test-script-dir (the harness spellings), install per-process temp
-  // roots so test runs never touch the real save/config dirs. Call once in
-  // main BEFORE files::init(); returns true when it installed. No-op without
-  // E2E flags, when roots are already installed, or when
-  // AFTERHOURS_NO_E2E_TEMPROOTS is set. Production runs never install.
   static bool maybe_install_e2e_test_roots(int argc, char *argv[]);
 
   // Non-templated version for PluginCore concept compatibility

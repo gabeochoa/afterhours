@@ -29,7 +29,6 @@ int main() {
   const fs::path job_tmp = fresh_dir("afterhours-e2e-tmp-");
   setenv("E2E_TMPDIR", job_tmp.c_str(), 1);
 
-  // Production mode untouched: no E2E flags, no roots.
   {
     char *argv[] = {const_cast<char *>("game"), nullptr};
     check(!files::maybe_install_e2e_test_roots(1, argv),
@@ -37,7 +36,6 @@ int main() {
     check(files::active_test_roots == nullptr, "production leaves roots off");
   }
 
-  // Opt-out env disables the install even with E2E flags.
   setenv("AFTERHOURS_NO_E2E_TEMPROOTS", "1", 1);
   {
     char *argv[] = {const_cast<char *>("game"),
@@ -49,7 +47,6 @@ int main() {
   }
   unsetenv("AFTERHOURS_NO_E2E_TEMPROOTS");
 
-  // Test mode: installs per-process roots under the job's temp dir.
   {
     char *argv[] = {const_cast<char *>("game"),
                     const_cast<char *>("--test-script=x.e2e"), nullptr};
@@ -75,8 +72,6 @@ int main() {
     check(files::get_save_path().filename() == "save",
           "save path is the temp layout, not the real game dir");
 
-    // A nested scope (a second run's roots) starts empty: sequential runs
-    // do not see each other's settings.
     files::TestRoots second_run;
     check(second_run.root != root, "second run gets its own root");
     check(!fs::exists(second_run.save / "settings.json"),

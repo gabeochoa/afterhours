@@ -110,13 +110,11 @@ std::filesystem::path resolve_resource_root(const std::string &root_folder) {
 #endif // !__EMSCRIPTEN__
 
 namespace {
-// The parallel E2E runner sets this per job; honouring it isolates those
-// processes even when the host never installs TestRoots itself.
 std::filesystem::path e2e_tmp_base() {
   const char *env = std::getenv("E2E_TMPDIR");
   return env && env[0] ? std::filesystem::path(env) : std::filesystem::path{};
 }
-} // namespace
+}
 
 namespace {
 std::pair<std::filesystem::path, std::filesystem::path>
@@ -270,8 +268,7 @@ bool files::maybe_install_e2e_test_roots(int argc, char *argv[]) {
   if (const char *opt_out = std::getenv("AFTERHOURS_NO_E2E_TEMPROOTS");
       opt_out && opt_out[0])
     return false;
-  // Leaked: the roots must outlive files::init() and the whole E2E run.
-  new TestRoots(); // NOLINT(cppcoreguidelines-owning-memory)
+  new TestRoots();
   return true;
 }
 
