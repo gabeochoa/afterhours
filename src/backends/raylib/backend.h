@@ -345,6 +345,10 @@ struct RaylibPlatformAPI {
       if (cfg.flags)
         set_config_flags(cfg.flags);
       init_window(cfg.width, cfg.height, cfg.title);
+      // InitWindow has no position parameter; this lands before the first
+      // frame, so the window never presents at the default placement.
+      if (cfg.window_x >= 0 && cfg.window_y >= 0)
+        raylib::SetWindowPosition(cfg.window_x, cfg.window_y);
       if (cfg.target_fps > 0)
         set_target_fps(cfg.target_fps);
     }
