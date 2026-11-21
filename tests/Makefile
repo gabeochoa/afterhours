@@ -96,6 +96,7 @@ ALL_TESTS := \
 	frame_loop_test \
 	color_value_test \
 	value_types_test \
+	effect_uniforms_test \
 	value_types_none_test \
 	color_palette_test \
 	color_palette_none_test \
@@ -290,6 +291,7 @@ endif
 
 RAYLIB_TESTS := \
 	value_types_test \
+	effect_uniforms_test \
 	wrappers_test \
 	edit_keys_test \
 	default_font_test \

@@ -6,6 +6,9 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **Effect uniforms and matrix compose (R-118).** `effects::Effect` now sets `Vector3Type`, `Vector4Type`, `int` and `MatrixType` uniforms (via `graphics::set_shader_value_matrix`), loads a custom vertex shader with `Effect::load(name, fs_file, vs_file)` or `Effect::load_from_memory(name, vs, fs)`, and `graphics::load_shader_from_memory` is exposed. New `plugins/transform.h`: `matrix_identity`, `matrix_multiply` (raylib order: first argument applies first, so a world matrix is `matrix_multiply(local, parent)`), `matrix_compose(pos, euler_deg, scale)` (scale, then Z/X/Y rotations, then translation) and `transform_point`, on every backend. Sokol note: arbitrary GLSL still fails closed there (no GLSL-to-Metal compiler), so memory/vertex shaders and matrix uniforms are raylib-only in practice. Covered by `effect_uniforms_test`.
+
+
 ### Breaking
 
 **The animation plugin is rewritten around `afterhours::motion`.** `animation::anim<Key>(k).to(v, dur, EasingType)`, `AnimationManager`, `AnimHandle`, `sequence`, `loop_sequence`, `one_shot`, `clamp_value`, `get_value`, `register_update_systems<Key>()` and the declarative `with_animation(Anim::on_hover()...)` / `HasAnimationState` are gone. Every old call is a compile error.
