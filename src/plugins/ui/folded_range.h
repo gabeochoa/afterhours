@@ -15,19 +15,6 @@ struct FoldRange {
   bool operator==(const FoldRange &) const = default;
 };
 
-// Maps between model rows and the visible rows a virtual_list should build,
-// where each folded range contributes exactly one placeholder row. The app
-// owns the ranges (diff hunks, source folds, log sections); this only does
-// the index arithmetic, so feed it to virtual_list as:
-//
-//   virtual_list(ctx, ep, rows.visible_count(), h,
-//                [&](size_t v, Entity &row) {
-//                  if (rows.is_fold_row(v)) render_placeholder(rows.fold_at(v));
-//                  else render_model(rows.model_index(v));
-//                });
-//
-// Folds are sorted and non-overlapping: overlapping or nested folds merge
-// into the outer range, adjacent folds stay separate placeholders.
 class FoldedRows {
 public:
   FoldedRows() = default;
@@ -125,7 +112,6 @@ public:
     const size_t k = fold_containing(model);
     if (k < folds_.size())
       return visible_start(k);
-    // Number of folds entirely before `model`.
     size_t before = 0;
     while (before < folds_.size() && folds_[before].end <= model)
       before++;
@@ -135,7 +121,6 @@ public:
 private:
   size_t model_count_ = 0;
   std::vector<FoldRange> folds_;
-  // hidden_prefix_[k] = hidden rows in folds [0, k).
   std::vector<size_t> hidden_prefix_{0};
   size_t hidden_ = 0;
 
@@ -155,7 +140,6 @@ private:
     });
     folds_.clear();
     for (auto r : clean) {
-      // Overlap or nesting folds into the previous range; adjacency does not.
       if (!folds_.empty() && r.begin < folds_.back().end)
         folds_.back().end = std::max(folds_.back().end, r.end);
       else
@@ -167,7 +151,6 @@ private:
     hidden_ = hidden_prefix_.back();
   }
 
-  // Number of folds whose placeholder sits strictly before `visible`.
   size_t folds_before(size_t visible) const {
     size_t lo = 0, hi = folds_.size();
     while (lo < hi) {
@@ -180,7 +163,6 @@ private:
     return lo;
   }
 
-  // folds_.size() when no fold contains `model`.
   size_t fold_containing(size_t model) const {
     size_t lo = 0, hi = folds_.size();
     while (lo < hi) {
@@ -196,6 +178,5 @@ private:
     return model < folds_[k].end ? k : folds_.size();
   }
 };
-
-} // namespace ui
-} // namespace afterhours
+}
+}
