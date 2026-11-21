@@ -433,10 +433,13 @@ inline void apply_nine_slice(Entity &entity, const ComponentConfig &config) {
 // set — see apply_restyle().
 inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
                           const ComponentConfig &config, bool overlay = false) {
-  if (config.rounded_corners.has_value() &&
-      config.rounded_corners.value().any()) {
+  if ((config.rounded_corners.has_value() &&
+       config.rounded_corners.value().any()) ||
+      (config.chamfer_corners.has_value() &&
+       config.chamfer_corners.value().any())) {
     entity.addComponentIfMissing<HasRoundedCorners>()
-        .set(config.rounded_corners.value())
+        .set(config.rounded_corners.value_or(std::bitset<4>().reset()))
+        .set_chamfer(config.chamfer_corners.value_or(std::bitset<4>().reset()))
         .set_roundness(config.roundness.value_or(0.5f))
         .set_radius_px(config.corner_radius)
         .set_segments(config.segments.value_or(8));

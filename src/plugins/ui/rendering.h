@@ -193,6 +193,7 @@ struct FocusRing {
   float roundness = 0.f;
   int segments = 8;
   std::bitset<4> corners;
+  std::bitset<4> chamfer;
   bool contrast_edges = true;
 
   // Outward expansion `t` of the main ring.
@@ -254,6 +255,8 @@ focus_ring_for(const UIContext<InputAction> &context, const Entity &entity,
   // on anything that called disable_rounded_corners().
   const bool custom = entity.has<HasRoundedCorners>();
   ring.corners = custom ? entity.get<HasRoundedCorners>().rounded_corners
+                        : std::bitset<4>().reset();
+  ring.chamfer = custom ? entity.get<HasRoundedCorners>().chamfer_corners
                         : std::bitset<4>().reset();
   if (custom) {
     const auto &corners = entity.get<HasRoundedCorners>();
@@ -333,13 +336,13 @@ inline void draw_focus_paint(const FocusPaint &paint) {
                 ring.rect.y + ring.rect.height * .5f, paint.rotation);
   if (ring.contrast_edges)
     draw_rectangle_rounded_lines(ring.outer_contrast(), ring.roundness_at(ring.thickness),
-                                 ring.segments, ring.contrast, ring.corners);
+                                 ring.segments, ring.contrast, ring.corners, ring.chamfer);
   if (ring.contrast_edges && ring.rect.width > 2.f && ring.rect.height > 2.f)
     draw_rectangle_rounded_lines(ring.inner_contrast(), ring.roundness_at(-1.f),
-                                 ring.segments, ring.contrast, ring.corners);
+                                 ring.segments, ring.contrast, ring.corners, ring.chamfer);
   for (float t = 0; t < ring.thickness; t += 1.f)
     draw_rectangle_rounded_lines(ring.expanded(t), ring.roundness_at(t),
-                                 ring.segments, ring.color, ring.corners);
+                                 ring.segments, ring.color, ring.corners, ring.chamfer);
   pop_rotation();
   if (paint.clip) end_scissor_mode();
 }
@@ -355,13 +358,14 @@ inline void collect_focus_paint(RenderCommandBuffer &buffer, const FocusPaint &p
   if (ring.contrast_edges)
     buffer.add_rounded_rectangle_outline(ring.outer_contrast(), ring.contrast,
         ring.roundness_at(ring.thickness), ring.segments, ring.corners,
-        paint.layer, paint.entity_id, 0.f, paint.rotation);
+        paint.layer, paint.entity_id, 0.f, paint.rotation, ring.chamfer);
   if (ring.contrast_edges && ring.rect.width > 2.f && ring.rect.height > 2.f)
     buffer.add_rounded_rectangle_outline(ring.inner_contrast(), ring.contrast,
         ring.roundness_at(-1.f), ring.segments, ring.corners,
-        paint.layer, paint.entity_id, 0.f, paint.rotation);
+        paint.layer, paint.entity_id, 0.f, paint.rotation, ring.chamfer);
   buffer.add_rounded_rectangle_outline(ring.rect, ring.color, ring.roundness,
-      ring.segments, ring.corners, paint.layer, paint.entity_id, ring.thickness, paint.rotation);
+      ring.segments, ring.corners, paint.layer, paint.entity_id, ring.thickness,
+      paint.rotation, ring.chamfer);
   if (paint.clip) buffer.add_scissor_end(paint.layer, paint.entity_id);
 }
 
@@ -1470,7 +1474,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
   void render_shadow(const Entity &entity, RectangleType draw_rect,
                      const std::bitset<4> &corner_settings,
                      float effective_opacity, float roundness = 0.5f,
-                     int segments = 8) {
+                     int segments = 8,
+                     const std::bitset<4> &chamfer = std::bitset<4>().reset()) {
     if (!entity.has<HasShadow>())
       return;
 
@@ -1486,9 +1491,9 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       RectangleType shadow_rect = {draw_rect.x + shadow.offset_x,
                                    draw_rect.y + shadow.offset_y,
                                    draw_rect.width, draw_rect.height};
-      if (corner_settings.any()) {
+      if ((corner_settings | chamfer).any()) {
         draw_rectangle_rounded(shadow_rect, roundness, segments, shadow_color,
-                               corner_settings);
+                               corner_settings, chamfer);
       } else {
         draw_rectangle(shadow_rect, shadow_color);
       }
@@ -1513,9 +1518,9 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
             static_cast<float>(shadow_color.a) * alpha_factor *
             (1.0f / static_cast<float>(layers)));
 
-        if (corner_settings.any()) {
+        if ((corner_settings | chamfer).any()) {
           draw_rectangle_rounded(shadow_rect, roundness, segments, layer_color,
-                                 corner_settings);
+                                 corner_settings, chamfer);
         } else {
           draw_rectangle(shadow_rect, layer_color);
         }
@@ -1665,6 +1670,9 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     auto corner_settings = entity.has<HasRoundedCorners>()
                                ? entity.get<HasRoundedCorners>().get()
                                : std::bitset<4>().reset();
+    auto chamfer_settings = entity.has<HasRoundedCorners>()
+                                ? entity.get<HasRoundedCorners>().chamfer_corners
+                                : std::bitset<4>().reset();
     float roundness =
         entity.has<HasRoundedCorners>()
             ? resolve_roundness(entity.get<HasRoundedCorners>().radius_px,
@@ -1682,7 +1690,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
     // Draw shadow first (behind the element)
     render_shadow(entity, draw_rect, corner_settings, effective_opacity,
-                  roundness, segments);
+                  roundness, segments, chamfer_settings);
 
     // Custom draw (behind): drawn before the widget's own fill.
     if (entity.has<HasOnDraw>() && entity.get<HasOnDraw>().bg)
@@ -1705,7 +1713,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
       if (col.a > 0) {
         draw_rectangle_rounded(draw_rect, roundness, segments, col,
-                               corner_settings);
+                               corner_settings, chamfer_settings);
       }
     }
 
@@ -1755,7 +1763,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
             border_col = colors::opacity_pct(border_col, effective_opacity);
           }
           draw_uniform_border(draw_rect, roundness, segments, corner_settings,
-                              border.uniform_thickness().value, border_col);
+                              border.uniform_thickness().value, border_col,
+                              chamfer_settings);
         } else {
           // Per-side (and uniform-dotted) border rendering
           float x = draw_rect.x, y = draw_rect.y;
@@ -2084,7 +2093,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                       RectangleType draw_rect,
                       const std::bitset<4> &corner_settings,
                       float effective_opacity, int layer,
-                      float roundness = 0.5f, int segments = 8) {
+                      float roundness = 0.5f, int segments = 8,
+                      const std::bitset<4> &chamfer = std::bitset<4>().reset()) {
     if (!entity.has<HasShadow>())
       return;
 
@@ -2099,10 +2109,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       RectangleType shadow_rect = {draw_rect.x + shadow.offset_x,
                                    draw_rect.y + shadow.offset_y,
                                    draw_rect.width, draw_rect.height};
-      if (corner_settings.any()) {
+      if ((corner_settings | chamfer).any()) {
         buffer.add_rounded_rectangle(shadow_rect, shadow_color, roundness,
                                      segments, corner_settings, layer,
-                                     entity.id);
+                                     entity.id, 0.f, chamfer);
       } else {
         buffer.add_rectangle(shadow_rect, shadow_color, layer, entity.id);
       }
@@ -2126,10 +2136,10 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
             static_cast<float>(shadow_color.a) * alpha_factor *
             (1.0f / static_cast<float>(layers)));
 
-        if (corner_settings.any()) {
+        if ((corner_settings | chamfer).any()) {
           buffer.add_rounded_rectangle(shadow_rect, layer_color, roundness,
                                        segments, corner_settings, layer,
-                                       entity.id);
+                                       entity.id, 0.f, chamfer);
         } else {
           buffer.add_rectangle(shadow_rect, layer_color, layer, entity.id);
         }
@@ -2281,6 +2291,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     auto corner_settings = entity.has<HasRoundedCorners>()
                                ? entity.get<HasRoundedCorners>().get()
                                : std::bitset<4>().reset();
+    auto chamfer_settings = entity.has<HasRoundedCorners>()
+                                ? entity.get<HasRoundedCorners>().chamfer_corners
+                                : std::bitset<4>().reset();
     float roundness =
         entity.has<HasRoundedCorners>()
             ? resolve_roundness(entity.get<HasRoundedCorners>().radius_px,
@@ -2292,7 +2305,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
     // Shadow first
     collect_shadow(buffer, entity, draw_rect, corner_settings,
-                   effective_opacity, layer, roundness, segments);
+                   effective_opacity, layer, roundness, segments,
+                   chamfer_settings);
 
     // Custom draw (behind): enqueued before the fill so it renders under the
     // widget; the fn pointer is stable on the HasOnDraw component for the frame.
@@ -2320,7 +2334,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       if (col.a > 0) {
         buffer.add_rounded_rectangle(draw_rect, col, roundness, segments,
                                      corner_settings, layer, entity.id,
-                                     rotation);
+                                     rotation, chamfer_settings);
       }
     }
 
@@ -2372,7 +2386,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
             border_col = colors::opacity_pct(border_col, effective_opacity);
           }
           buffer.add_border(draw_rect, border_col, roundness, segments, corner_settings,
-                            border.uniform_thickness().value, layer, entity.id);
+                            border.uniform_thickness().value, layer, entity.id,
+                            chamfer_settings);
         } else {
           // Per-side (and uniform-dotted) border rendering (filled rectangles)
           float x = draw_rect.x, y = draw_rect.y;
