@@ -298,9 +298,6 @@ extern "C" const void *metal_create_system_device(void) {
   return (__bridge_retained const void *)dev;
 }
 
-// sokol only calls init_cb from the first MTKView drawRect, which waits for
-// the display link, so drawing the view once from DidFinishLaunching runs
-// init + first frame synchronously instead (floatinghotel measured 65-160 ms).
 static bool g_first_frame_early_drawn = false;
 static int g_first_frame_early_draw_count = 0;
 static int g_first_frame_early_attempt_count = 0;
@@ -343,8 +340,6 @@ static void metal_draw_first_frame_early(void) {
 extern "C" void metal_install_first_frame_early_draw(void) {
   if (g_first_frame_observer_will != nil)
     return;
-  // Registering for DidFinish inside WillFinish lands after sokol's app
-  // delegate, which creates the window in its own DidFinish handler.
   g_first_frame_observer_will = [[NSNotificationCenter defaultCenter]
       addObserverForName:NSApplicationWillFinishLaunchingNotification
                   object:nil

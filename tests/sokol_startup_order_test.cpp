@@ -1,9 +1,3 @@
-// R-136: sokol defers init_cb to the first MTKView drawRect, which waits for
-// the display link. The backend draws the view once from
-// NSApplicationDidFinishLaunchingNotification so init + first frame run
-// before that first vsync. This posts the launch notifications by hand with
-// a probe view standing in for sokol's: no wall-clock, no real vsync.
-// Red on revert: without the install, the probe is never drawn early.
 
 #if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_VULKAN) &&     \
     !defined(AFTER_HOURS_USE_SOKOL)
@@ -54,7 +48,7 @@ int main() {
 
   metal_reset_first_frame_early_draw();
   metal_install_first_frame_early_draw();
-  metal_install_first_frame_early_draw(); // run() installs once; stay idempotent
+  metal_install_first_frame_early_draw();
 
   [NSApplication sharedApplication];
   NSWindow *window =
