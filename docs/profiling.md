@@ -5,6 +5,17 @@ Include `src/plugins/profiling.h`, own a `profiling::Collector`, check `start()`
 call `end_frame()` once after the complete application frame. `end_frame(ms)` accepts
 wall-clock milliseconds, not simulation dt. Multiple managers can contribute.
 
+## Scoped zones
+
+Any code can open a nested zone with
+`AFTERHOURS_PROFILE_ZONE("name")` (or `profiling::ScopedZone zone{name};`),
+optionally with a `SystemPhase`. At destruction the zone's wall-clock
+milliseconds are delivered to every subscribed `Collector` exactly like a
+system sample, so zones nest: a child zone's duration never exceeds its
+parent's. With profiling compiled out the macro and class are inert no-ops,
+so zone calls need no `#if` at their call sites. `AFTERHOURS_PROFILE_COUNTER`
+already covers spot values; zones are for whole blocks of work.
+
 ## Collection contract
 
 - Collector and managers share a thread. Up to eight thread-local subscriptions can
