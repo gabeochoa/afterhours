@@ -346,9 +346,6 @@ struct AutoLayout {
     return widget.computed[axis];
   }
 
-  // Extra trailing padding a scroll view reserves for its bar when it opts
-  // into scrollbar_gutter: right for a vertical bar, bottom for a horizontal
-  // one. Zero for every other widget, so nothing moves unless a view asks.
   float scrollbar_gutter_px(UIComponent &widget, Axis axis) {
     if (widget.id < 0 || static_cast<size_t>(widget.id) >= mapping.size() ||
         mapping[static_cast<size_t>(widget.id)] == nullptr)
@@ -368,7 +365,6 @@ struct AutoLayout {
                              fetch_screen_value_(Axis::Y),
                              widget.resolved_scaling_mode, ui_scale);
   }
-
   float compute_padding_for_standalone_expectation(UIComponent &widget,
                                                    Axis axis) {
     const float no_change = widget.computed_padd[axis];
@@ -502,9 +498,6 @@ struct AutoLayout {
       return no_change;
     }
 
-    // The standalone pass already folded the gutter into no_change, so only
-    // a percent side -- the one kind this pass recomputes from scratch --
-    // needs it added here, or it would be counted twice.
     const auto compute_ = [&](const Size &exp, float parent_value,
                               float gutter) {
       switch (exp.dim) {

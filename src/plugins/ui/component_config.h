@@ -88,8 +88,6 @@ struct ComponentConfig {
   // + scroll)
   Overflow overflow_x = Overflow::Visible;
   Overflow overflow_y = Overflow::Visible;
-  // Copied onto HasScrollView when this config creates one. See
-  // HasScrollView::scrollbar_gutter.
   bool scrollbar_gutter = false;
 
   // Background color settings
@@ -844,9 +842,6 @@ struct ComponentConfig {
     return *this;
   }
 
-  /// Reserve space for the scrollbar even when the content fits, so the
-  /// content width never jumps when the bar appears. Only does anything on a
-  /// view whose overflow scrolls; see HasScrollView::scrollbar_gutter.
   ComponentConfig &with_scrollbar_gutter(bool enabled = true) {
     scrollbar_gutter = enabled;
     return *this;
