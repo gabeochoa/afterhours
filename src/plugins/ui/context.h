@@ -177,7 +177,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
 
   std::set<EntityID> focused_ids;
 
-  // One active selection; anchor/cursor are source-byte offsets (wrap-independent). ROOT = none.
   EntityID text_selection_entity = ROOT;
   text_selection::Selection label_text_selection;
 

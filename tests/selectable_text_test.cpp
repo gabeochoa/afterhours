@@ -1,4 +1,3 @@
-// selectable_text_test.cpp — helpers: measure=chars*10; harness: chars*font_size*0.5, line=font_size tall.
 
 #include "ui_test_harness.h"
 
@@ -30,7 +29,7 @@ ti::TextLayoutCache layout(const std::string &text, float chars) {
             [](std::string_view s) { return measure(std::string(s)); });
   return c;
 }
-} // namespace
+}
 
 TEST(click_streak_counts_within_the_window) {
   ts::ClickStreak streak;
@@ -72,7 +71,6 @@ TEST(offset_at_and_rects_agree_on_wrapped_text) {
   auto cache = layout(text, 10.f);
   CHECK(cache.line_count() == 2);
 
-  // Row 1 +2 chars: byte 13 ("alpha beta " is 11).
   const size_t pos = st::offset_at(cache, text,
                                    Vector2Type{2.f * CHAR_W, 1.5f * LINE_H},
                                    LINE_H, TextAlignment::Left, 10.f * CHAR_W,
@@ -99,7 +97,7 @@ TEST(centered_lines_shift_their_bands) {
       TextAlignment::Center, 10.f * CHAR_W, measure);
   CHECK(rects.size() == 1);
   if (!rects.empty())
-    CHECK(ui_test::approx(rects[0].x, 3.5f * CHAR_W)); // (10-3)/2 cells
+    CHECK(ui_test::approx(rects[0].x, 3.5f * CHAR_W));
 
   const size_t pos = st::offset_at(cache, text,
                                    Vector2Type{4.f * CHAR_W, 0.5f * LINE_H},
@@ -121,12 +119,11 @@ void frame(ImmTestHarness &h, ResolveHitTarget<TestInputAction> &hit,
   sel.once(0.016f);
   sel.for_each_with(label_ent, label_ent.get<UIComponent>(),
                     label_ent.get<HasSelectableText>(), 0.f);
-  // EndUIContextManager invariant: active survives only while button down.
   if (!down)
     ctx.set_active(ctx.ROOT);
 }
 
-} // namespace
+}
 
 TEST(selectable_label_selects_drags_copies_and_clears) {
   ImmTestHarness h;
@@ -147,7 +144,6 @@ TEST(selectable_label_selects_drags_copies_and_clears) {
     CHECK(ent.get<HasCursor>().cursor == CursorType::Text);
   h.layout_only();
 
-  // Harness measure: char=font_size/2 wide.
   auto &cmp = ent.get<UIComponent>();
   const float font_size =
       resolve_to_pixels(cmp.font_size, 600.f, cmp.resolved_scaling_mode,

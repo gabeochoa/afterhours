@@ -844,7 +844,6 @@ static inline Vector2Type default_text_inset() {
   return resolve_text_inset(imm::ThemeDefaults::get().theme);
 }
 
-// Layout cache shared with hit-testing so bands and offsets agree.
 template <typename InputAction, typename DrawRect>
 inline void paint_label_text_selection(UIContext<InputAction> &context,
                                        Entity &entity, const HasLabel &hasLabel,

@@ -336,7 +336,6 @@ struct UIPluginPostUpdateBridge : System<> {
         systems.push_back(
             std::make_unique<ui::CloseDropdownOnClickOutside<InputAction>>());
         systems.push_back(std::make_unique<ui::HandleDrags<InputAction>>());
-        // After HandleDrags: seeds on press, extends while active persists.
         systems.push_back(
             std::make_unique<ui::HandleSelectableText<InputAction>>());
         // Post-layout drag handling: detect drag start, compute hover position,

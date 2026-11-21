@@ -347,7 +347,6 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
     entity.removeComponentIfExists<HasTextUnitMotion>();
   }
 
-  // I-beam only if caller picked no cursor.
   if (config.text_selectable) {
     entity.addComponentIfMissing<HasSelectableText>();
     if (!config.cursor_type.has_value())

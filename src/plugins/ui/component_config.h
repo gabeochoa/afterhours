@@ -428,7 +428,6 @@ struct ComponentConfig {
     text_readonly = ro;
     return *this;
   }
-  // Selection lives on UIContext (one active); stays out of tab order.
   ComponentConfig &with_selectable_text(bool selectable = true) {
     text_selectable = selectable;
     return *this;

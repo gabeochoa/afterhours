@@ -1268,7 +1268,6 @@ struct HandleDrags : SystemWithUIContext<ui::HasDragListener> {
   }
 };
 
-// Only writer besides UIContext::reset; after HandleDrags so active persists across drag.
 template <typename InputAction>
 struct HandleSelectableText : SystemWithUIContext<ui::HasSelectableText> {
   UIContext<InputAction> *context = nullptr;
@@ -1280,7 +1279,6 @@ struct HandleSelectableText : SystemWithUIContext<ui::HasSelectableText> {
       return;
     now_ += dt;
 
-    // Drop if owner gone, lest selection land on an id-reuser.
     if (context->text_selection_entity != context->ROOT) {
       OptEntity owner =
           UICollectionHolder::getEntityForID(context->text_selection_entity);
@@ -1288,7 +1286,6 @@ struct HandleSelectableText : SystemWithUIContext<ui::HasSelectableText> {
         context->clear_text_selection();
     }
 
-    // pressed() consumes: focused fields check in build phase (earlier) and keep priority.
     if constexpr (magic_enum::enum_contains<InputAction>("TextCopy")) {
       if (context->has_selection() && context->pressed(InputAction::TextCopy))
         clipboard::set_text(context->selected_text());
@@ -1320,7 +1317,6 @@ struct HandleSelectableText : SystemWithUIContext<ui::HasSelectableText> {
     if (label.label.empty())
       return;
 
-    // Drawn rect, not clipped hit rect: glyphs are scissored, not moved.
     RectangleType rect = component.rect();
     if (entity.has<HasUIModifiers>())
       rect = entity.get<HasUIModifiers>().apply_modifier(rect);

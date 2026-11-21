@@ -1,7 +1,5 @@
 #pragma once
 
-// Opt-in via with_selectable_text(). Offsets are source bytes via text_input's
-// wrap mapping, so soft wraps invent no offsets. Cross-element/virtualized: out of scope.
 
 #include <algorithm>
 #include <string>
@@ -17,7 +15,6 @@ namespace afterhours {
 namespace ui {
 
 struct HasSelectableText : BaseComponent {
-  // Shared layout: hit-test and renderer must agree on line breaks.
   text_input::TextLayoutCache layout;
   std::string cached_text;
   float cached_wrap_width = -1.f;
@@ -59,7 +56,6 @@ inline bool refresh_layout(HasSelectableText &sel, const std::string &text,
   return true;
 }
 
-// `local` is block top-left; rows clamp like a drag off the edge.
 template <typename MeasureFn>
 inline size_t offset_at(const text_input::TextLayoutCache &cache,
                         std::string_view source, Vector2Type local,
@@ -76,7 +72,6 @@ inline size_t offset_at(const text_input::TextLayoutCache &cache,
   return line.source_offset + within;
 }
 
-// Row break not drawn; a range covering only it paints nothing.
 template <typename MeasureFn>
 inline std::vector<RectangleType>
 selection_rects(const text_input::TextLayoutCache &cache,
@@ -126,6 +121,6 @@ inline void apply_click(text_selection::Selection &sel, const std::string &text,
   }
 }
 
-} // namespace selectable_text
-} // namespace ui
-} // namespace afterhours
+}
+}
+}

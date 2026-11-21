@@ -531,14 +531,12 @@ inline std::string substring(const std::vector<detail::TextRunLine> &lines,
                                           all.size() - range.start));
 }
 
-// Shared: text_input/text_area each had their own copy of this.
 struct ClickStreak {
   float last_time = -1.f;
   size_t last_pos = 0;
   int count = 0;
 };
 
-// Continuation window matches text_input's historical 0.4s / 3 bytes.
 inline int register_click(ClickStreak &streak, float now, size_t pos) {
   constexpr float kMultiClickTime = 0.4f;
   constexpr size_t kMultiClickDist = 3;
@@ -559,9 +557,8 @@ inline bool is_word_separator(char c) {
   return std::isspace(static_cast<unsigned char>(c)) ||
          std::ispunct(static_cast<unsigned char>(c));
 }
-} // namespace detail_sel
+}
 
-// Separator press selects just that byte (mirrors text_input).
 inline Range word_range_at(const std::string &text, size_t pos) {
   if (text.empty())
     return Range{0, 0};
