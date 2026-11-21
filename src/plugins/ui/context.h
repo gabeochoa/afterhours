@@ -21,6 +21,7 @@
 #include "../../../vendor/magic_enum/magic_enum.hpp"
 #endif
 #include <set>
+#include <string_view>
 #include <vector>
 
 #include "../../drawing_helpers.h"
@@ -290,6 +291,39 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   void set_active(EntityID id) { active_id = id; }
 
   bool has_focus(EntityID id) const { return focus_id == id; }
+
+  // First entity carrying this debug name, or ROOT. Same name lookup the e2e
+  // expect_hovered command uses (ui_commands.h); a name shared by several
+  // widgets takes the first in collection order.
+  [[nodiscard]] EntityID entity_by_debug_name(std::string_view name) const {
+    auto query = EntityQuery<>(UICollectionHolder::get().collection,
+                               {.ignore_temp_warning = true})
+                     .whereHasComponent<UIComponentDebug>()
+                     .whereLambda([&](const Entity &e) {
+                       return e.get<UIComponentDebug>().name() == name;
+                     })
+                     .first();
+    for (Entity &entity : query.gen())
+      return entity.id;
+    return ROOT;
+  }
+
+  // Hover/focus by debug name, for render and game systems that know a
+  // widget's name but not its entity. A name no entity carries is false.
+  [[nodiscard]] bool is_hovered(std::string_view name) const {
+    const EntityID id = entity_by_debug_name(name);
+    return id != ROOT && is_hot(id);
+  }
+  [[nodiscard]] bool is_focused(std::string_view name) const {
+    const EntityID id = entity_by_debug_name(name);
+    return id != ROOT && has_focus(id);
+  }
+  // True when the focus ring sits on the named element (visual_focus_id,
+  // which follows focus clusters, trays and :focus-visible).
+  [[nodiscard]] bool is_focus_visible(std::string_view name) const {
+    const EntityID id = entity_by_debug_name(name);
+    return id != ROOT && visual_focus_id == id;
+  }
   // Records WHERE focus was set, not just that it was. A screen whose Tab
   // order breaks has to find the last writer, and nothing reported it: the
   // search was guess-and-rebuild. File and line rather than a built string,
