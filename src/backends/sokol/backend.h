@@ -79,7 +79,6 @@ extern "C" void metal_install_live_resize_draw(void);
 #if defined(SOKOL_METAL)
 extern "C" const void *metal_create_system_device(void);
 #if defined(__APPLE__)
-// Implemented in window_visibility_macos.h (via capture_impl.h).
 extern "C" void ah_sokol_install_hidden_start(void);
 extern "C" void ah_sokol_show_window(void);
 extern "C" void ah_sokol_hide_window(void);

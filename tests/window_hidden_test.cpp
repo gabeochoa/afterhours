@@ -1,4 +1,3 @@
-// R-137: start-hidden plumbing at config level (no real window opened).
 #include <afterhours/src/graphics_common.h>
 #include <cstdio>
 namespace g = afterhours::graphics;

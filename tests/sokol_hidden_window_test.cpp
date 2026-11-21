@@ -1,5 +1,3 @@
-// R-137 sokol side: headless run has no window, so show/hide only move the
-// recorded state — real visibility needs a human on a real window.
 #if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_VULKAN) && !defined(AFTER_HOURS_USE_SOKOL)
 #define AFTER_HOURS_USE_SOKOL
 #endif

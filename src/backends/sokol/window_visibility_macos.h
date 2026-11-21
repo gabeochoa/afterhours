@@ -1,8 +1,4 @@
 #pragma once
-// Deferred first show for sokol/macOS: sokol orders its window front inside
-// applicationDidFinishLaunching, before any user callback, so start-hidden
-// swizzles that delegate method and orders the window out in the same
-// launch turn (it never gets a display cycle). Included from capture_impl.h.
 
 #if defined(__APPLE__) && defined(AFTER_HOURS_USE_METAL)
 
@@ -24,7 +20,7 @@ inline void launch_and_hide(id self, SEL sel, NSNotification *note) {
   if (window)
     [window orderOut:nil];
 }
-} // namespace afterhours::graphics::visibility_detail
+}
 
 extern "C" void ah_sokol_install_hidden_start(void) {
   using namespace afterhours::graphics::visibility_detail;
