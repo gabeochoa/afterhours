@@ -682,7 +682,7 @@ struct input : developer::Plugin {
 
     static void draw_text(const std::string &, const int, const int,
                           const int) {
-        log_error("@notimplemented draw_text");
+        warn_once(0, "@notimplemented draw_text");
     }
     static void set_gamepad_mappings(const std::string &) {
         log_error("@notimplemented set_gamepad_mappings");
@@ -722,43 +722,43 @@ struct input : developer::Plugin {
 
     // TODO good luck ;)
     static MousePosition get_mouse_position() {
-        log_error("@notimplemented get_mouse_position");
+        warn_once(0, "@notimplemented get_mouse_position");
         return {0, 0};
     }
     static MousePosition get_mouse_delta() {
-        log_error("@notimplemented get_mouse_delta");
+        warn_once(0, "@notimplemented get_mouse_delta");
         return {0, 0};
     }
     static bool is_mouse_button_up(const MouseButton) {
-        log_error("@notimplemented is_mouse_button_up");
+        warn_once(0, "@notimplemented is_mouse_button_up");
         return false;
     }
     static bool is_mouse_button_down(const MouseButton) {
-        log_error("@notimplemented is_mouse_button_down");
+        warn_once(0, "@notimplemented is_mouse_button_down");
         return false;
     }
     static bool is_mouse_button_pressed(const MouseButton) {
-        log_error("@notimplemented is_mouse_button_pressed");
+        warn_once(0, "@notimplemented is_mouse_button_pressed");
         return false;
     }
     static bool is_mouse_button_released(const MouseButton) {
-        log_error("@notimplemented is_mouse_button_released");
+        warn_once(0, "@notimplemented is_mouse_button_released");
         return false;
     }
     static float get_mouse_wheel_move() {
-        log_error("@notimplemented get_mouse_wheel_move");
+        warn_once(0, "@notimplemented get_mouse_wheel_move");
         return 0.f;
     }
     static MousePosition get_mouse_wheel_move_v() {
-        log_error("@notimplemented get_mouse_wheel_move_v");
+        warn_once(0, "@notimplemented get_mouse_wheel_move_v");
         return {0, 0};
     }
     static int get_char_pressed() {
-        log_error("@notimplemented get_char_pressed");
+        warn_once(0, "@notimplemented get_char_pressed");
         return 0;
     }
     static bool is_key_pressed(const KeyCode) {
-        log_error("@notimplemented is_key_pressed");
+        warn_once(0, "@notimplemented is_key_pressed");
         return false;
     }
     static bool is_key_pressed_repeat(const KeyCode) {
@@ -767,29 +767,29 @@ struct input : developer::Plugin {
         return false;
     }
     static bool is_key_down(const KeyCode) {
-        log_error("@notimplemented is_key_down");
+        warn_once(0, "@notimplemented is_key_down");
         return false;
     }
     static bool is_gamepad_available(const GamepadID) {
-        log_error("@notimplemented is_gamepad_available");
+        warn_once(0, "@notimplemented is_gamepad_available");
         return false;
     }
     static float get_gamepad_axis_mvt(const GamepadID, const GamepadAxis) {
-        log_error("@notimplemented get_gamepad_axis_mvt");
+        warn_once(0, "@notimplemented get_gamepad_axis_mvt");
         return 0.f;
     }
     static bool is_gamepad_button_pressed(const GamepadID,
                                           const GamepadButton) {
-        log_error("@notimplemented is_gamepad_button_pressed");
+        warn_once(0, "@notimplemented is_gamepad_button_pressed");
         return false;
     }
     static bool is_gamepad_button_down(const GamepadID, const GamepadButton) {
-        log_error("@notimplemented is_gamepad_button_down");
+        warn_once(0, "@notimplemented is_gamepad_button_down");
         return false;
     }
     static void draw_text(const std::string &, const int, const int,
                           const int) {
-        log_error("@notimplemented draw_text");
+        warn_once(0, "@notimplemented draw_text");
     }
     static void set_gamepad_mappings(const std::string &) {
         log_error("@notimplemented set_gamepad_mappings");

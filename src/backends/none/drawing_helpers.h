@@ -98,30 +98,30 @@ inline void draw_rectangle_rounded_lines_ex(const RectangleType rect,
 }
 inline void draw_rectangle_gradient_v(const RectangleType, const Color,
                                       const Color) {
-  log_error("@notimplemented draw_rectangle_gradient_v");
+  warn_once(0, "@notimplemented draw_rectangle_gradient_v");
 }
 inline void draw_rectangle_gradient_h(const RectangleType, const Color,
                                       const Color) {
-  log_error("@notimplemented draw_rectangle_gradient_h");
+  warn_once(0, "@notimplemented draw_rectangle_gradient_h");
 }
 inline void draw_rectangle_gradient_ex(const RectangleType, const Color,
                                        const Color, const Color, const Color) {
-  log_error("@notimplemented draw_rectangle_gradient_ex");
+  warn_once(0, "@notimplemented draw_rectangle_gradient_ex");
 }
 inline void draw_circle_gradient(int, int, float, Color, Color) {
-  log_error("@notimplemented draw_circle_gradient");
+  warn_once(0, "@notimplemented draw_circle_gradient");
 }
 inline void draw_texture_npatch(const texture_manager::Texture,
                                 const RectangleType, int, int, int, int,
                                 const Color) {
-  log_error("@notimplemented draw_texture_npatch");
+  warn_once(0, "@notimplemented draw_texture_npatch");
 }
 inline void draw_ring_segment(float, float, float, float, float, float, int,
                               Color) {
-  log_error("@notimplemented draw_ring_segment");
+  warn_once(0, "@notimplemented draw_ring_segment");
 }
 inline void draw_ring(float, float, float, float, int, Color) {
-  log_error("@notimplemented draw_ring");
+  warn_once(0, "@notimplemented draw_ring");
 }
 // Bookkeeping only, so capture tests can assert transition counts.
 inline void set_blend_mode(blend::Mode mode) {
@@ -150,17 +150,17 @@ inline void end_shader_mode() {
 }
 
 inline void begin_scissor_mode(int, int, int, int) {
-  log_error("@notimplemented begin_scissor_mode");
+  warn_once(0, "@notimplemented begin_scissor_mode");
 }
 inline void end_scissor_mode() {
-  log_error("@notimplemented end_scissor_mode");
+  warn_once(0, "@notimplemented end_scissor_mode");
 }
 inline void push_rotation(float, float, float) {
-  log_error("@notimplemented push_rotation");
+  warn_once(0, "@notimplemented push_rotation");
 }
-inline void pop_rotation() { log_error("@notimplemented pop_rotation"); }
+inline void pop_rotation() { warn_once(0, "@notimplemented pop_rotation"); }
 inline void draw_line(int, int, int, int, Color) {
-  log_error("@notimplemented draw_line");
+  warn_once(0, "@notimplemented draw_line");
 }
 inline void draw_line_ex(Vector2Type start, Vector2Type end, float thickness,
                          Color color) {
@@ -172,7 +172,7 @@ inline void draw_line_ex(Vector2Type start, Vector2Type end, float thickness,
   (void)thickness;
 }
 inline void draw_line_strip(Vector2Type *, int, Color) {
-  log_error("@notimplemented draw_line_strip");
+  warn_once(0, "@notimplemented draw_line_strip");
 }
 inline bool check_collision_point_line(Vector2Type, Vector2Type, Vector2Type,
                                        float) {
@@ -193,26 +193,26 @@ inline RectangleType get_collision_rec(RectangleType a, RectangleType b) {
   return RectangleType{x1, y1, x2 - x1, y2 - y1};
 }
 inline void draw_circle(int, int, float, Color) {
-  log_error("@notimplemented draw_circle");
+  warn_once(0, "@notimplemented draw_circle");
 }
 inline void draw_circle_v(Vector2Type, float, Color) {
-  log_error("@notimplemented draw_circle_v");
+  warn_once(0, "@notimplemented draw_circle_v");
 }
 inline void draw_circle_lines(int, int, float, Color) {
-  log_error("@notimplemented draw_circle_lines");
+  warn_once(0, "@notimplemented draw_circle_lines");
 }
 inline void draw_circle_sector(Vector2Type, float, float, float, int, Color) {
-  log_error("@notimplemented draw_circle_sector");
+  warn_once(0, "@notimplemented draw_circle_sector");
 }
 inline void draw_circle_sector_lines(Vector2Type, float, float, float, int,
                                      Color) {
-  log_error("@notimplemented draw_circle_sector_lines");
+  warn_once(0, "@notimplemented draw_circle_sector_lines");
 }
 inline void draw_ellipse(int, int, float, float, Color) {
-  log_error("@notimplemented draw_ellipse");
+  warn_once(0, "@notimplemented draw_ellipse");
 }
 inline void draw_ellipse_lines(int, int, float, float, Color) {
-  log_error("@notimplemented draw_ellipse_lines");
+  warn_once(0, "@notimplemented draw_ellipse_lines");
 }
 // Recorded as the triangle's bounding box: enough for a test to assert a
 // callout tail exists and points the right way, without a polygon in DrawCall.
@@ -234,13 +234,13 @@ inline void draw_triangle_lines(Vector2Type a, Vector2Type b, Vector2Type c,
   draw_triangle(a, b, c, color);
 }
 inline void draw_poly(Vector2Type, int, float, float, Color) {
-  log_error("@notimplemented draw_poly");
+  warn_once(0, "@notimplemented draw_poly");
 }
 inline void draw_poly_lines(Vector2Type, int, float, float, Color) {
-  log_error("@notimplemented draw_poly_lines");
+  warn_once(0, "@notimplemented draw_poly_lines");
 }
 inline void draw_poly_lines_ex(Vector2Type, int, float, float, float, Color) {
-  log_error("@notimplemented draw_poly_lines_ex");
+  warn_once(0, "@notimplemented draw_poly_lines_ex");
 }
 inline void set_mouse_cursor(int) {
   warn_once(0, "@notimplemented set_mouse_cursor on the none backend");
@@ -272,11 +272,11 @@ inline void unload_render_texture(graphics::RenderTextureType &) {
 }
 
 inline void begin_texture_mode(graphics::RenderTextureType &) {
-  log_error("@notimplemented begin_texture_mode");
+  warn_once(0, "@notimplemented begin_texture_mode");
 }
 
 inline void end_texture_mode() {
-  log_error("@notimplemented end_texture_mode");
+  warn_once(0, "@notimplemented end_texture_mode");
 }
 
 inline void copy_screen_to_render_texture(graphics::RenderTextureType &, RectangleType) {
@@ -285,15 +285,15 @@ inline void copy_screen_to_render_texture(graphics::RenderTextureType &, Rectang
 
 inline void draw_render_texture(const graphics::RenderTextureType &, float,
                                 float, Color) {
-  log_error("@notimplemented draw_render_texture");
+  warn_once(0, "@notimplemented draw_render_texture");
 }
 
 inline void draw_texture_rec(TextureType, RectangleType, Vector2Type, Color) {
-  log_error("@notimplemented draw_texture_rec");
+  warn_once(0, "@notimplemented draw_texture_rec");
 }
 inline void draw_texture_pro(TextureType, RectangleType, RectangleType,
                              Vector2Type, float, Color) {
-  log_error("@notimplemented draw_texture_pro");
+  warn_once(0, "@notimplemented draw_texture_pro");
 }
 
 inline bool capture_render_texture(const graphics::RenderTextureType &,
