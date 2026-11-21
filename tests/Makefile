@@ -191,6 +191,7 @@ ALL_TESTS := \
 	files_resource_path_test \
 	files_cache_path_test \
 	capture_test \
+	capture_perf_test \
 	polyline_test \
 	measure_memo_test \
 	design_defaults_test \
@@ -329,6 +330,7 @@ RAYLIB_TESTS := \
 	triangle_winding_test \
 	clipboard_test \
 	mk_cost_test \
+	capture_perf_test \
 	headless_fallback_test \
 	raylib_fallback_test \
 	models_test \
@@ -593,6 +595,7 @@ $(OUT)/glyph_placeholder_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURD
 $(OUT)/load_font_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/font_memory_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/headless_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/capture_perf_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/raylib_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 # Shares the examples' Kenney tree rather than checking in a second copy.
 $(OUT)/models_test: CXXFLAGS_T += -DAFTERHOURS_MODEL_FIXTURE=\"$(realpath ../examples/catalog/3d/tree-large.glb)\"

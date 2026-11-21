@@ -146,6 +146,17 @@ inline uint64_t font_key(const raylib::Font font) {
          static_cast<uint64_t>(font.glyphCount);
 }
 
+// (font, text) warn memo; generation bumps on coverage change/unload.
+inline uint64_t &glyph_warn_generation() {
+  static uint64_t g = 0;
+  return g;
+}
+inline std::map<std::pair<uint64_t, std::string>, uint64_t> &
+glyph_warn_cache() {
+  static std::map<std::pair<uint64_t, std::string>, uint64_t> m;
+  return m;
+}
+
 inline std::vector<raylib::Font> &fallback_faces() {
   static std::vector<raylib::Font> faces;
   return faces;
@@ -158,6 +169,7 @@ inline void record_font_coverage(const raylib::Font font, const char *file) {
   if (!font_coverage::parse_file(file, ranges))
     return;
   coverage_registry()[font_key(font)] = std::move(ranges);
+  glyph_warn_generation()++;
   auto &faces = fallback_faces();
   if (std::none_of(faces.begin(), faces.end(), [&](const raylib::Font &f) {
         return f.glyphs == font.glyphs;
@@ -246,8 +258,10 @@ inline raylib::Font load_font_from_memory(const unsigned char *data, int size,
   }
   prepare_font_texture(font);
   font_coverage::Ranges ranges;
-  if (font_coverage::parse_cmap(data, static_cast<size_t>(size), ranges))
+  if (font_coverage::parse_cmap(data, static_cast<size_t>(size), ranges)) {
     coverage_registry()[font_key(font)] = std::move(ranges);
+    glyph_warn_generation()++;
+  }
   return font;
 }
 
@@ -326,6 +340,13 @@ inline std::vector<FaceRun> fallback_runs(const raylib::Font font,
 // found out by looking. load_font_from_file asks raylib for the default set,
 // which is 95 ASCII glyphs, so any symbol is a blank unless the caller loaded
 // codepoints for it.
+
+// Test counter: decode-loop runs.
+inline size_t &glyph_warn_decode_runs() {
+  static size_t n = 0;
+  return n;
+}
+
 inline void warn_on_missing_glyphs(const raylib::Font font, const char *text) {
   if (!text)
     return;
@@ -345,6 +366,13 @@ inline void warn_on_missing_glyphs(const raylib::Font font, const char *text) {
   if (ascii_only)
     return;
 
+  auto &cache = glyph_warn_cache();
+  const auto key = std::make_pair(font_key(font), std::string(text));
+  const auto cached = cache.find(key);
+  if (cached != cache.end() && cached->second == glyph_warn_generation())
+    return;
+
+  glyph_warn_decode_runs()++;
   for (int i = 0; text[i] != '\0';) {
     int advance = 0;
     const int cp = raylib::GetCodepointNext(&text[i], &advance);
@@ -358,6 +386,9 @@ inline void warn_on_missing_glyphs(const raylib::Font font, const char *text) {
               "glyph. Load the font with codepoints for the ranges you use.",
               cp);
   }
+  if (cache.size() > 4096)
+    cache.clear(); // cap growth
+  cache[key] = glyph_warn_generation();
 }
 
 // Add codepoint-based font loading for CJK support
@@ -425,6 +456,7 @@ inline int *remove_duplicate_codepoints(int *codepoints, int codepointCount,
 // Convenience function to load a font with codepoints extracted from a string
 inline void unload_font(raylib::Font &font) {
   coverage_registry().erase(font_key(font));
+  glyph_warn_generation()++;
   measure_memo::invalidate();
   raylib::UnloadFont(font);
   font = raylib::Font{};

@@ -253,6 +253,10 @@ Started partway through the project's life, so it does not go all the way back.
 
 *Re-run your suite and read the new failures before silencing them.* Two of ours were real: a script that resized to 1080p and never resized back, and an assertion on a row that had never been on screen.
 
+### Perf
+
+- **Capture and glyph warnings cost one branch per draw when off.** `capture::record` took a `std::string_view`, so every `const char *` text caller paid a `strlen` before the enabled check; it takes a `const char *` now and no string work runs while disabled (0.00 allocations/call and no `strlen` at the remaining un-hoisted sokol/none text sites; behavior when enabled is unchanged). `warn_on_missing_glyphs` re-decoded every non-ASCII string every draw; it now remembers answered (font, text) pairs against a coverage generation, so repeated draws decode once per distinct string (101 draws of one string: 101 decode runs → 1). Covered by `capture_perf_test`.
+
 ### Two silent fallbacks now warn
 
 Same behaviour, they just say so; expect a burst on first run. `with_font_weight` needs a `"<font>@bold"` variant and falls back to the base font without one (this is why it gets filed as "no font weight support"), and `TextOverflow::Wrap` does nothing unless a font size is pinned.
