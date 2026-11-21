@@ -6,6 +6,8 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **Deferred/hidden initial window (R-137).** `graphics::Config::start_hidden` and `graphics::RunConfig::start_hidden` (default false) create the window hidden; call `graphics::show_window()` when the first ready frame should present, `graphics::hide_window()` to hide again, and `graphics::window_is_hidden()` for the recorded state. Raylib uses `FLAG_WINDOW_HIDDEN` (cleared on show); sokol/macOS orders the window out in the same launch turn it is created and orders it front on show (other sokol platforms log `@notimplemented` on show/hide). Headless ignores it. Covered by `window_hidden_test` and `sokol_hidden_window_test`; real window visibility still needs a human check.
+
 ### Breaking
 
 **The animation plugin is rewritten around `afterhours::motion`.** `animation::anim<Key>(k).to(v, dur, EasingType)`, `AnimationManager`, `AnimHandle`, `sequence`, `loop_sequence`, `one_shot`, `clamp_value`, `get_value`, `register_update_systems<Key>()` and the declarative `with_animation(Anim::on_hover()...)` / `HasAnimationState` are gone. Every old call is a compile error.

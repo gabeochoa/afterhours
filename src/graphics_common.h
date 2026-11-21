@@ -115,7 +115,22 @@ struct Config {
   // Supersample factor used when hidpi is set and there is no display to query
   // (headless capture). 2 matches a typical Retina window.
   int hidpi_scale = 2;
+  // Create the window hidden; call graphics::show_window() when ready to
+  // present (avoids first-frame / wrong-size flash). No-op when headless.
+  bool start_hidden = false;
 };
+
+namespace detail {
+inline bool &window_hidden_storage() {
+  static bool hidden = false;
+  return hidden;
+}
+} // namespace detail
+inline bool window_is_hidden() { return detail::window_hidden_storage(); }
+// Backends record their actual window state here; show/hide go through them.
+inline void note_window_hidden(bool hidden) {
+  detail::window_hidden_storage() = hidden;
+}
 
 template <typename T>
 concept GraphicsBackend =
@@ -142,6 +157,8 @@ concept PlatformBackend = requires {
   { T::minimize_window() } -> std::same_as<void>;
   { T::set_window_size(int{}, int{}) } -> std::same_as<void>;
   { T::set_window_min_size(int{}, int{}) } -> std::same_as<void>;
+  { T::show_window() } -> std::same_as<void>;
+  { T::hide_window() } -> std::same_as<void>;
   { T::set_window_state(unsigned{}) } -> std::same_as<void>;
   { T::clear_window_state(unsigned{}) } -> std::same_as<void>;
 
@@ -224,6 +241,9 @@ struct RunConfig {
   DisplayMode display = DisplayMode::Windowed;
 
   bool audio = false;
+
+  // See Config::start_hidden.
+  bool start_hidden = false;
 
   float fixed_dt = 0.f;
   int sim_steps = 1;
