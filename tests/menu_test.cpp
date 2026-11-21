@@ -423,10 +423,6 @@ TEST(menu_rows_take_padding_colour_and_hover_from_the_config) {
                  __LINE__);
 }
 
-// The hit-resolution helpers, copied from hit_priority_test (the only other
-// suite that drives clicks): contexts are assigned rather than resolved via
-// once(), because once() looks the context up as a singleton and the
-// registry refuses to overwrite it per harness.
 namespace {
 void menu_press_at(UIContext<ui_test::TestInputAction> &ctx, float x, float y) {
   ctx.mouse.pos = input::MousePosition{x, y};
@@ -451,16 +447,7 @@ void menu_run_clicks(ImmTestHarness &h) {
                       0.f);
   }
 }
-} // namespace
-
-// R-173: a press on a disabled menu row is consumed by the row -- nothing is
-// chosen, the menu stays open (the press is inside the panel and no focus
-// leaves it), and nothing beneath the menu fires. #169 made disabled
-// elements hit candidates so HandleClicks refuses to activate them, which is
-// what stops the press falling through; this pins it for menu rows, which
-// #169's own test did not cover. Hit ownership is the load-bearing piece:
-// the row itself must win the press, not the panel's tray or whatever sits
-// under the menu.
+}
 TEST(disabled_menu_row_blocks_the_click_and_the_menu_stays_open) {
   ImmTestHarness h;
   bool open = true;
@@ -490,7 +477,6 @@ TEST(disabled_menu_row_blocks_the_click_and_the_menu_stays_open) {
   if (!disabled_row)
     return;
 
-  // The disabled row is the second row: y 128..156 at the menu's x.
   menu_press_at(h.context(), 190.f, 142.f);
   menu_run_clicks(h);
   ui_test::check(h.context().hot_id == disabled_row->id &&
@@ -509,8 +495,6 @@ TEST(disabled_menu_row_blocks_the_click_and_the_menu_stays_open) {
   ui_test::check(open, "the menu stays open", __FILE__, __LINE__);
 }
 
-// Same press on an enabled row chooses it and closes the menu, so the
-// disabled-row test above is not passing vacuously.
 TEST(enabled_menu_row_still_chooses_on_press) {
   ImmTestHarness h;
   bool open = true;
@@ -526,7 +510,6 @@ TEST(enabled_menu_row_still_chooses_on_press) {
   emit();
   h.layout_only();
 
-  // The enabled row is the first row: y 100..128.
   menu_press_at(h.context(), 190.f, 114.f);
   menu_run_clicks(h);
 
@@ -537,10 +520,6 @@ TEST(enabled_menu_row_still_chooses_on_press) {
   ui_test::check(!open, "the menu closes", __FILE__, __LINE__);
 }
 
-// R-296 remainder after #93: rows take padding, background usage and hover
-// from the menu config, but a text colour set on the config was still
-// dropped -- inherit_from copies custom_text_color but not text_color_usage,
-// and the shortcut's resting colour was hardcoded to FontMuted.
 TEST(menu_rows_take_the_config_text_colour) {
   ImmTestHarness h;
   bool open = true;

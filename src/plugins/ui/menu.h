@@ -303,8 +303,6 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
                                       -row_pad_y)
               .with_label(item.shortcut)
               .with_alignment(TextAlignment::Right)
-              // The resting shortcut follows a text colour the caller set on
-              // the menu config; without one it stays the default muted grey.
               .with_custom_text_color(
                   highlighted
                       ? ctx.theme.from_usage(Theme::Usage::Font)
