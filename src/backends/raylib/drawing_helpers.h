@@ -410,8 +410,6 @@ inline void set_blend_mode(blend::Mode mode) {
     raylib::rlSetBlendMode(raylib::RL_BLEND_ALPHA_PREMULTIPLY);
     break;
   case blend::Mode::Layer:
-    // Separate factors: GL's single-factor alpha blend squares the alpha
-    // of translucent draws into a cleared target.
     raylib::rlSetBlendFactorsSeparate(RL_SRC_ALPHA, RL_ONE_MINUS_SRC_ALPHA,
                                       RL_ONE, RL_ONE_MINUS_SRC_ALPHA,
                                       RL_FUNC_ADD, RL_FUNC_ADD);
@@ -600,9 +598,11 @@ inline void set_mouse_cursor(int cursor_id) {
 inline graphics::RenderTextureType load_render_texture(int w, int h) {
   return raylib::LoadRenderTexture(w, h);
 }
+
 inline graphics::RenderTextureType load_render_texture_with_samples(int w, int h, int) {
   return raylib::LoadRenderTexture(w, h);
 }
+
 inline graphics::RenderTextureType load_msaa_render_texture(int w, int h, int) {
   return raylib::LoadRenderTexture(w, h);
 }
@@ -611,8 +611,6 @@ inline void unload_render_texture(graphics::RenderTextureType &rt) {
   raylib::UnloadRenderTexture(rt);
 }
 
-// Stack of active targets so texture modes can nest: raylib's own
-// EndTextureMode always returns to the screen, losing the outer target.
 inline std::vector<graphics::RenderTextureType> &texture_mode_stack() {
   static std::vector<graphics::RenderTextureType> stack;
   return stack;

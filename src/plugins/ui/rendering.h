@@ -2229,12 +2229,6 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
   }
 };
 
-// Render one UI subtree into a caller-owned render texture, with the
-// subtree's root at the texture's origin. Ancestor transforms and clip
-// rects inside the subtree apply as usual (they are computed from the same
-// layout this shifts); ancestors above the root do not. Size the texture
-// to the root's rect. Layers are not re-sorted across the subtree: nodes
-// paint in document (pre-order) order, as in draw_drag_preview.
 template <typename InputAction>
 void render_subtree_to_texture(RenderImm<InputAction> &renderer,
                                UIContext<InputAction> &context,

@@ -569,8 +569,6 @@ inline void set_blend_mode(blend::Mode mode) {
     sgl_load_pipeline(graphics::metal_detail::g_blend_pip_premultiplied);
     break;
   case blend::Mode::Layer:
-    // The default pipeline already uses ONE for src alpha, which is the
-    // whole point of this mode; nothing extra to load beyond it.
     sgl_load_pipeline(graphics::metal_detail::g_blend_pip);
     break;
   }
@@ -891,6 +889,7 @@ inline void draw_quad(const Vector2Type (&p)[4], Color color) {
   capture::record("quad", RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, color, "");
   draw_rectangle(RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, color);
 }
+
 inline void draw_texture_quad(TextureType tex, const Vector2Type (&p)[4], Color tint) {
   const float min_x = std::min({p[0].x, p[1].x, p[2].x, p[3].x}), max_x = std::max({p[0].x, p[1].x, p[2].x, p[3].x});
   const float min_y = std::min({p[0].y, p[1].y, p[2].y, p[3].y}), max_y = std::max({p[0].y, p[1].y, p[2].y, p[3].y});
@@ -1020,10 +1019,12 @@ inline afterhours::Font &default_font_override() {
 inline void set_default_font(afterhours::Font font) {
   detail::default_font_override() = font;
 }
+
 inline void clear_default_font() { detail::default_font_override() = {}; }
 inline afterhours::Font get_default_font() {
   return detail::default_font_override();
 }
+
 inline afterhours::Font get_unset_font() { return get_default_font(); }
 
 // Reused across render textures. Not destroyed on unload: sokol_gl's pipeline
@@ -1243,6 +1244,7 @@ inline graphics::RenderTextureType load_render_texture_with_samples(int w,
 inline graphics::RenderTextureType load_render_texture(int w, int h) {
   return load_render_texture_with_samples(w, h, 1);
 }
+
 inline graphics::RenderTextureType load_msaa_render_texture(int w, int h,
                                                              int samples) {
   return load_render_texture_with_samples(w, h, samples);
@@ -1269,8 +1271,6 @@ inline void unload_render_texture(graphics::RenderTextureType &rt) {
   rt = {};
 }
 
-// Stack of active targets so texture modes can nest: ending the inner mode
-// resumes the outer pass (LOAD preserves what it already drew).
 inline std::vector<graphics::RenderTextureType> &texture_mode_stack() {
   static std::vector<graphics::RenderTextureType> stack;
   return stack;
@@ -1365,7 +1365,7 @@ inline void copy_screen_to_render_texture(graphics::RenderTextureType &, Rectang
 inline void begin_texture_mode(graphics::RenderTextureType &rt) {
   auto &stack = texture_mode_stack();
   if (!stack.empty() && stack.back().color_view_id == rt.color_view_id)
-    return; // already the active target
+    return;
   stack.push_back(rt);
   activate_texture_mode(rt);
 }
@@ -1386,7 +1386,6 @@ inline void end_texture_mode() {
   const bool nested = stack.size() > 1;
   if (!stack.empty())
     stack.pop_back();
-
   if (graphics::metal_detail::g_pass_active) {
     unwind_camera_stack();
     if (graphics::metal_detail::g_fons_ctx)

@@ -15,8 +15,7 @@ enum struct Mode {
   Additive,         // glow, light accumulation
   Multiplied,       // shadow, darkening
   AlphaPremultiply, // compositing a layer that already carries its alpha
-  Layer, // drawing into a layer: colour blends as Alpha, but alpha
-         // accumulates (ONE / ONE_MINUS_SRC_ALPHA) instead of squaring
+  Layer,
 };
 
 namespace detail {
@@ -24,6 +23,7 @@ inline Mode &current_mode() {
   static Mode m = Mode::Alpha;
   return m;
 }
+
 inline std::size_t &transition_count() {
   static std::size_t n = 0;
   return n;
@@ -38,6 +38,7 @@ inline Mode current() { return detail::current_mode(); }
 inline std::size_t transitions_this_frame() {
   return detail::transition_count();
 }
+
 inline void reset_transition_count() { detail::transition_count() = 0; }
 
 } // namespace blend
