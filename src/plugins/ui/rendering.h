@@ -1,6 +1,7 @@
 #pragma once
 
 #include <set>
+#include <atomic>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -2815,6 +2816,14 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           }
         }
 
+        if (wrapped && entity.template has<HasTextUnitMotion>()) {
+          // Per-unit motion is silently skipped for wrapped text; say so once.
+          static std::atomic_bool warned_unit_motion_wrapped{false};
+          if (!warned_unit_motion_wrapped.exchange(true))
+            log_warn("per-unit text motion is skipped for wrapped text "
+                     "(entity {}); the label draws without unit animation",
+                     entity.id);
+        }
         const bool per_unit = !wrapped && entity.template has<HasTextUnitMotion>() &&
                               hasLabel.alignment == TextAlignment::Left &&
                               display_text == hasLabel.label &&
