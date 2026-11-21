@@ -1,37 +1,3 @@
-// E2E script headers -- the per-script declarations a multi-process
-// runner reads before it spawns anything.
-//
-// Pumpkin Beachball's online suite (1,199 lines of hand-rolled Python)
-// and every other networked consumer re-implement the same thing:
-// spawn helper processes, allocate a free port, barrier on a log line,
-// and harvest a failure tail. Cartographer asked for the declarations
-// to live in the script itself. This header is that declaration format,
-// shared by the shipped runner in tools/e2e_parallel_runner.py and by
-// any in-process consumer that wants to schedule scripts itself.
-//
-// Headers are comment lines in the leading comment block of a .e2e
-// script, before the first command. A `#` line after the first command
-// is an ordinary comment and is never a header. Unknown headers are
-// ignored, so a script carrying headers still runs under the plain
-// single-process E2ERunner, which simply never reads them.
-//
-//   # timeout: 30            wall-clock seconds for this script (30, 30s)
-//   # flags: --headless --seed=1
-//                            extra argv for the target, shell-split
-//   # requires: gpu, file:assets.dat, env:STEAM_SDK, cmd:ffmpeg
-//                            unmet requirements skip (not fail) the script
-//   # batch: gpu-heavy       scripts sharing a batch run one at a time,
-//                            in file order; different batches may overlap
-//   # spawn: server ./game --serve --port={port}
-//                            helper process started before the target;
-//                            {port} {tmp} {script} {binary} expand
-//   # wait_for_log: server:READY
-//                            do not start the target until the named
-//                            spawned process prints the needle; with no
-//                            label, the first spawned process is meant
-//
-// This header is std-only on purpose: schedulers and tools include it
-// without pulling in the ECS or a backend.
 #pragma once
 
 #include <algorithm>
@@ -50,14 +16,12 @@ namespace testing {
 
 struct SpawnSpec {
     std::string label;
-    // Argv after shell-splitting, with runner placeholders ({port} and
-    // friends) still unexpanded: the runner owns the values.
     std::vector<std::string> argv;
     std::string raw;
 };
 
 struct WaitForLogSpec {
-    std::string label;  // empty: the first spawned process
+    std::string label;
     std::string needle;
 };
 
@@ -65,17 +29,11 @@ struct ScriptHeaders {
     std::optional<float> timeout_seconds;
     std::vector<std::string> flags;
     std::vector<std::string> requirements;
-    std::string batch;  // empty: the script is its own batch
+    std::string batch;
     std::vector<SpawnSpec> spawns;
     std::vector<WaitForLogSpec> wait_for_logs;
-    // Malformed header lines, spelled for the runner to report. A script
-    // with errors still parses; the runner fails it before spawning.
     std::vector<std::string> errors;
 };
-
-// Shell-like splitting: whitespace separates, single and double quotes
-// group, backslash escapes the next character outside single quotes.
-// An unterminated quote is reported in `error`, never silently accepted.
 inline std::vector<std::string> split_shell_words(const std::string &text,
                                                   std::string *error = nullptr) {
     std::vector<std::string> words;
@@ -152,10 +110,7 @@ inline std::optional<float> parse_timeout_seconds(const std::string &text) {
     }
 }
 
-}  // namespace detail
-
-// Parse the leading header block of script text (the whole file is fine;
-// parsing stops at the first non-comment, non-blank line).
+}
 inline ScriptHeaders parse_script_headers_text(const std::string &text) {
     ScriptHeaders headers;
     std::istringstream input(text);
@@ -210,9 +165,6 @@ inline ScriptHeaders parse_script_headers_text(const std::string &text) {
                 headers.spawns.push_back(std::move(spec));
             }
         } else if (key == "wait_for_log") {
-            // `label:needle`, or a bare needle for the first spawn. The
-            // needle itself may contain colons, so only a colon whose
-            // left side is one spaceless word counts as the separator.
             WaitForLogSpec spec;
             const auto sep = value.find(':');
             const std::string left =
@@ -229,7 +181,6 @@ inline ScriptHeaders parse_script_headers_text(const std::string &text) {
             else
                 headers.wait_for_logs.push_back(std::move(spec));
         }
-        // Unknown headers are deliberately ignored (see file comment).
     }
     return headers;
 }
@@ -245,19 +196,10 @@ inline ScriptHeaders parse_script_headers(const std::string &path) {
     text << file.rdbuf();
     return parse_script_headers_text(text.str());
 }
-
-// The batch a script serializes against: its `# batch:` name, or its own
-// name when it declares none, so undeclared scripts never serialize
-// against each other by accident.
 inline std::string effective_batch(const ScriptHeaders &headers,
                                    const std::string &script_name) {
     return headers.batch.empty() ? script_name : headers.batch;
 }
-
-// Group script indices into batches. Batches appear in first-seen order
-// and keep input order inside, which is the runner's scheduling unit:
-// one batch runs sequentially, batches run in parallel up to the job
-// limit. `names[i]` pairs with `headers[i]`.
 inline std::vector<std::vector<std::size_t>> group_by_batch(
     const std::vector<ScriptHeaders> &headers,
     const std::vector<std::string> &names) {
@@ -277,5 +219,5 @@ inline std::vector<std::vector<std::size_t>> group_by_batch(
     return groups;
 }
 
-}  // namespace testing
-}  // namespace afterhours
+}
+}
