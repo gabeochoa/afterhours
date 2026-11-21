@@ -1,7 +1,4 @@
-// window_helpers_test.cpp
-// Fit/centre geometry is pure math, so it is checked headlessly here. Real
-// window placement (raylib SetWindowPosition / AppKit) needs a human looking
-// at a real window and is not covered by this test.
+// Pure-math fit/centre/letterbox checks; real window placement is not covered.
 
 #define AFTER_HOURS_USE_RAYLIB
 
@@ -70,8 +67,7 @@ int main() {
             cfg_fitted.second == std::pair{0, 0},
         "Config width/height plumb through the fit");
 
-  // Letterbox/pillarbox rects below are pinned from the old
-  // window_manager::content_viewport math (dest size, then centred).
+  // Rects pinned from the old window_manager::content_viewport math.
   check(letterbox_content_size(1280, 720, 2000, 720) == std::pair{1280, 720},
         "wide window pillarboxes: content size");
   check(window_centre_position(0, 0, 2000, 720, 1280, 720) ==

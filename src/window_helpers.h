@@ -1,9 +1,7 @@
 #pragma once
 
-// Window fit/centre geometry (backend-neutral, header-only, std only).
-// Pure math: callers pass the display rect they target, so the helpers never
-// query a monitor and need no backend support. Apply the fitted size with
-// graphics::set_window_size(); place with the returned position yourself.
+// Window fit/centre/letterbox geometry (header-only, std only). Callers pass
+// the display rect; apply sizes with graphics::set_window_size().
 
 #include <algorithm>
 #include <cmath>
@@ -11,9 +9,7 @@
 
 namespace afterhours::graphics {
 
-// The size a window should use on a display: clamped to fit, raised to the
-// min size when one is given (a min larger than the display wins, so the
-// window manager's tiling is what actually shrinks it).
+// Clamp to the display, raised to the min (a min past the display wins).
 inline std::pair<int, int> fit_window_size(int width, int height,
                                            int display_width,
                                            int display_height,
@@ -23,8 +19,7 @@ inline std::pair<int, int> fit_window_size(int width, int height,
           std::clamp(height, min_height, std::max(min_height, display_height))};
 }
 
-// Top-left position centring a window inside a display rect. A window larger
-// than the display pins to the display origin instead of going negative.
+// Centre in a display rect; oversized pins to the display origin.
 inline std::pair<int, int> window_centre_position(int display_x,
                                                   int display_y, int display_w,
                                                   int display_h, int win_w,
@@ -45,8 +40,7 @@ centre_window_on_display(int display_x, int display_y, int display_w,
   return {size, pos};
 }
 
-// Largest size with the content's aspect that fits the window; centre it
-// with window_centre_position to get the letterbox/pillarbox rect.
+// Largest content-aspect size fitting the window (letterbox/pillarbox).
 inline std::pair<int, int> letterbox_content_size(int content_w, int content_h,
                                                   int window_w, int window_h) {
   if (content_w <= 0 || content_h <= 0 || window_w <= 0 || window_h <= 0)
