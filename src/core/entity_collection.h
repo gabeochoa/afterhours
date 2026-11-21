@@ -6,6 +6,7 @@
 #include <set>
 #include <type_traits>
 #include <unordered_map>
+#include <utility>
 #include <unordered_set>
 #include <vector>
 
@@ -415,6 +416,19 @@ struct EntityCollection {
     singletonMap.emplace(id, &ent);
     log_info("Registered singleton {} for {} ({})", ent.id,
              type_name<Component>(), id);
+  }
+
+  // One call: create a permanent entity, add the component, register it as
+  // the singleton, and merge so systems see it immediately. A duplicate call
+  // behaves like the multi-call sequence: registerSingleton logs and keeps
+  // the first registration, so the new component is returned unregistered.
+  template <typename Component, typename... Args>
+  Component &add_singleton(Args &&...args) {
+    Entity &ent = createPermanentEntity();
+    Component &cmp = ent.addComponent<Component>(std::forward<Args>(args)...);
+    registerSingleton<Component>(ent);
+    merge_entity_arrays();
+    return cmp;
   }
 
   template <typename Component> RefEntity get_singleton() const {
