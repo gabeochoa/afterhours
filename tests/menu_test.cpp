@@ -423,6 +423,155 @@ TEST(menu_rows_take_padding_colour_and_hover_from_the_config) {
                  __LINE__);
 }
 
+// The hit-resolution helpers, copied from hit_priority_test (the only other
+// suite that drives clicks): contexts are assigned rather than resolved via
+// once(), because once() looks the context up as a singleton and the
+// registry refuses to overwrite it per harness.
+namespace {
+void menu_press_at(UIContext<ui_test::TestInputAction> &ctx, float x, float y) {
+  ctx.mouse.pos = input::MousePosition{x, y};
+  ctx.mouse.left_down = true;
+  ctx.mouse.just_pressed = true;
+  ctx.mouse.press_moved = false;
+  ctx.set_hot(ctx.ROOT);
+  ctx.set_active(ctx.ROOT);
+}
+
+void menu_run_clicks(ImmTestHarness &h) {
+  ResolveHitTarget<ui_test::TestInputAction> resolver;
+  resolver.context = &h.context();
+  resolver.resolve();
+
+  HandleClicks<ui_test::TestInputAction> sys;
+  sys.context = &h.context();
+  for (const auto &e : UICollectionHolder::get().collection.get_entities()) {
+    if (!e || !e->has<UIComponent>() || !e->has<HasClickListener>())
+      continue;
+    sys.for_each_with(*e, e->get<UIComponent>(), e->get<HasClickListener>(),
+                      0.f);
+  }
+}
+} // namespace
+
+// R-173: a press on a disabled menu row is consumed by the row -- nothing is
+// chosen, the menu stays open (the press is inside the panel and no focus
+// leaves it), and nothing beneath the menu fires. #169 made disabled
+// elements hit candidates so HandleClicks refuses to activate them, which is
+// what stops the press falling through; this pins it for menu rows, which
+// #169's own test did not cover. Hit ownership is the load-bearing piece:
+// the row itself must win the press, not the panel's tray or whatever sits
+// under the menu.
+TEST(disabled_menu_row_blocks_the_click_and_the_menu_stays_open) {
+  ImmTestHarness h;
+  bool open = true;
+  std::vector<MenuItem> items{MenuItem{"Open", "Cmd+O", false, false},
+                              MenuItem{"Quit", "", false, true}};
+  auto emit = [&]() {
+    return context_menu(h.context(), mk(h.root(), 1), items,
+                        Vector2Type{100, 100}, open,
+                        ComponentConfig{}.with_size(
+                            ComponentSize{pixels(180), pixels(28)}));
+  };
+  h.begin_frame();
+  auto under = button(
+      h.context(), mk(h.root(), 0),
+      ComponentConfig{}
+          .with_size(ComponentSize{pixels(180), pixels(28)})
+          .with_absolute_position(100.f, 128.f)
+          .with_label("Under"));
+  int under_fired = 0;
+  under.ent().get<HasClickListener>().cb = [&](Entity &) { ++under_fired; };
+  emit();
+  h.layout_only();
+  ui_test::check(open, "the menu is open", __FILE__, __LINE__);
+  UIComponent *disabled_row = h.find("menu_item_1");
+  ui_test::check(disabled_row != nullptr, "the disabled row exists", __FILE__,
+                 __LINE__);
+  if (!disabled_row)
+    return;
+
+  // The disabled row is the second row: y 128..156 at the menu's x.
+  menu_press_at(h.context(), 190.f, 142.f);
+  menu_run_clicks(h);
+  ui_test::check(h.context().hot_id == disabled_row->id &&
+                     h.context().active_id == disabled_row->id,
+                 "the disabled row owns the press", __FILE__, __LINE__);
+  ui_test::check(under_fired == 0,
+                 "the control beneath the disabled row does not fire",
+                 __FILE__, __LINE__);
+
+  h.begin_frame();
+  int chosen = emit();
+  h.layout_only();
+  ui_test::check(chosen == kNoMenuSelection,
+                 "a press on a disabled row chooses nothing", __FILE__,
+                 __LINE__);
+  ui_test::check(open, "the menu stays open", __FILE__, __LINE__);
+}
+
+// Same press on an enabled row chooses it and closes the menu, so the
+// disabled-row test above is not passing vacuously.
+TEST(enabled_menu_row_still_chooses_on_press) {
+  ImmTestHarness h;
+  bool open = true;
+  std::vector<MenuItem> items{MenuItem{"Open", "Cmd+O", false, false},
+                              MenuItem{"Quit", "", false, true}};
+  auto emit = [&]() {
+    return context_menu(h.context(), mk(h.root(), 0), items,
+                        Vector2Type{100, 100}, open,
+                        ComponentConfig{}.with_size(
+                            ComponentSize{pixels(180), pixels(28)}));
+  };
+  h.begin_frame();
+  emit();
+  h.layout_only();
+
+  // The enabled row is the first row: y 100..128.
+  menu_press_at(h.context(), 190.f, 114.f);
+  menu_run_clicks(h);
+
+  h.begin_frame();
+  int chosen = emit();
+  h.layout_only();
+  ui_test::check(chosen == 0, "the enabled row is chosen", __FILE__, __LINE__);
+  ui_test::check(!open, "the menu closes", __FILE__, __LINE__);
+}
+
+// R-296 remainder after #93: rows take padding, background usage and hover
+// from the menu config, but a text colour set on the config was still
+// dropped -- inherit_from copies custom_text_color but not text_color_usage,
+// and the shortcut's resting colour was hardcoded to FontMuted.
+TEST(menu_rows_take_the_config_text_colour) {
+  ImmTestHarness h;
+  bool open = true;
+  std::vector<MenuItem> items{MenuItem{"Open", "Cmd+O", false, false}};
+  h.begin_frame();
+  context_menu(h.context(), mk(h.root(), 0), items, Vector2Type{40, 40}, open,
+               ComponentConfig{}
+                   .with_size(ComponentSize{pixels(200), pixels(28)})
+                   .with_text_color(Theme::Usage::Accent));
+  h.layout_only();
+
+  const Color want = h.context().theme.from_usage(Theme::Usage::Accent);
+  UIComponent *item = h.find("menu_item_0");
+  UIComponent *sc = h.find("menu_shortcut");
+  ui_test::check(item && sc, "row and shortcut exist", __FILE__, __LINE__);
+  if (!item || !sc)
+    return;
+  auto colour_of = [&](UIComponent *c) {
+    auto e = UICollectionHolder::getEntityForID(c->id);
+    auto colour = e->get<HasLabel>().explicit_text_color;
+    return colour.has_value() && colour->r == want.r && colour->g == want.g &&
+           colour->b == want.b;
+  };
+  ui_test::check(colour_of(item),
+                 "the row label takes the menu's text colour", __FILE__,
+                 __LINE__);
+  ui_test::check(colour_of(sc),
+                 "the shortcut takes the menu's text colour", __FILE__,
+                 __LINE__);
+}
+
 TEST(menu_parts_have_no_rounded_corners) {
   ImmTestHarness h;
   bool open = true;
