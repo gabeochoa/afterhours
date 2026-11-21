@@ -182,6 +182,10 @@ struct UIEntityMappingCache : BaseComponent {
 /// System that builds the entity mapping cache once per frame.
 /// Must run before RunAutoLayout and TrackIfComponentWillBeRendered.
 struct BuildUIEntityMapping : System<> {
+  // All the work is in once(); the per-entity pass would visit every entity
+  // and do nothing (the base for_each_with is empty).
+  bool should_iterate() const override { return false; }
+
   virtual void once(float) override {
     auto *cache = EntityHelper::get_singleton_cmp<UIEntityMappingCache>();
     if (!cache) {
@@ -1295,7 +1299,9 @@ struct HandleLeftRight : SystemWithUIContext<ui::HasLeftRightListener> {
 
 private:
   bool direction_triggered(const Entity &entity, InputAction action) {
-    if (entity.has<HasStepperState>()) return context->pressed_or_repeat(action);
+    // Sliders and steppers step a value: pace held keys by time, not frames.
+    if (entity.has<HasStepperState>() || entity.has<HasSliderState>())
+      return context->pressed_or_repeat(action);
     return context->pressed(action) || context->is_held_down(action);
   }
 
@@ -1801,6 +1807,8 @@ inline void create_or_update_drag_spacer(DragGroupState &state) {
 }
 
 template <typename InputAction> struct HandleDragGroupsPreLayout : System<> {
+  bool should_iterate() const override { return false; }
+
   /// runs BEFORE RunAutoLayout.
   /// - Hides the dragged entity (should_hide) so layout skips it.
   /// - Inserts a spacer entity at the current hover position so the layout
@@ -1833,6 +1841,8 @@ template <typename InputAction> struct HandleDragGroupsPreLayout : System<> {
 };
 
 template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
+  bool should_iterate() const override { return false; }
+
   /// runs AFTER RunAutoLayout and HandleDrags.
   /// - Detects drag start (mouse press inside a drag_group child).
   /// - While dragging: updates hover_group / hover_index, creates an overlay

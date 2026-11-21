@@ -199,7 +199,6 @@ struct toast : developer::Plugin {
             .set_radius_px(ctx.theme.corner_radius);
         entity.addComponent<Toast>(Toast(level, duration, bg_color));
         auto &label = entity.addComponent<ui::HasLabel>("");
-        label.font_name = font_name;
         label.text_inset = Vector2Type{12.f, 8.f};
         label.explicit_text_color =
             colors::auto_text_color(bg_color, ctx.theme.font, ctx.theme.darkfont);
