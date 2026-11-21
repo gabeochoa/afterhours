@@ -144,18 +144,13 @@ inline EffectQuad effect_quad(const EffectPreset &e, RectangleType r, float p) {
   return q;
 }
 
-// Shimmer: a soft highlight band sweeping across a rect, as vertical
-// strips. draw_rectangle_gradient_h is static (fixed stops, no offset), so
-// an animated band cannot compose from it plus a motion track; these strips
-// are the missing slice. Feed each strip to draw_rectangle, or use
-// ui/shimmer.h draw_shimmer. t is seconds since the sweep started.
 struct Shimmer {
   bool enabled = true;
-  float period = 1.6f; // seconds per sweep; <= 0 disables the sweep
-  float band = 0.35f;  // band width as a fraction of rect width
+  float period = 1.6f;
+  float band = 0.35f;
   ColorType base{0, 0, 0, 255};
   ColorType highlight{255, 255, 255, 255};
-  int strips = 16; // vertical strips; clamped to [1, 32]
+  int strips = 16;
 };
 
 struct ShimmerStrip {
@@ -170,18 +165,14 @@ inline std::array<ShimmerStrip, 32> shimmer_strips(const Shimmer &s,
   count = 0;
   if (r.width <= 0.f || r.height <= 0.f)
     return out;
-  // Disabled or no period: one static strip, so a stopped shimmer costs
-  // one draw exactly like the base fill.
   if (!s.enabled || s.period <= 0.f) {
     out[0] = {r, s.base};
     count = 1;
     return out;
   }
   const int n = std::clamp(s.strips, 1, 32);
-  const float phase = std::fmod(t, s.period) / s.period; // [0, 1)
+  const float phase = std::fmod(t, s.period) / s.period;
   const float band = std::clamp(s.band, 0.01f, 2.f);
-  // Center travels from just off the left edge to just off the right, so
-  // the band fully enters and leaves in one period.
   const float center = (-band / 2.f + phase * (1.f + band)) * r.width;
   const float half = band / 2.f * r.width;
   const float w = r.width / n;

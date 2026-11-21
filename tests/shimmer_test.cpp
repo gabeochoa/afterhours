@@ -49,13 +49,11 @@ int main() {
             std::abs(strips[15].rect.x + strips[15].rect.width - 200.f) < 1e-3f,
         "strips tile the rect edge to edge");
 
-  // The band moves right as t grows, and wraps after one period.
   const float x0 = brightest_x(s, r, 0.f);
   const float x1 = brightest_x(s, r, 1.f);
   check(x1 > x0, "shimmer offset animates: brightest strip moves with t");
   check(brightest_x(s, r, 2.f) == x0, "shimmer wraps at one period");
 
-  // At mid-period the band is inside the rect and reaches the highlight.
   int c2 = 0;
   const auto mid = presets::shimmer_strips(s, r, 1.f, c2);
   float peak = 0.f;
@@ -63,7 +61,6 @@ int main() {
     peak = std::max(peak, static_cast<float>(mid[i].color.r));
   check(peak > 180.f, "band peak approaches the highlight colour");
 
-  // Disabled: one static strip, identical at any t.
   presets::Shimmer off = s;
   off.enabled = false;
   int c3 = 0, c4 = 0;
@@ -73,12 +70,10 @@ int main() {
             d0[0].rect.width == 200.f,
         "disabled shimmer is one static base strip");
 
-  // Degenerate rect draws nothing.
   int c5 = 0;
   presets::shimmer_strips(s, {0.f, 0.f, 0.f, 40.f}, 0.f, c5);
   check(c5 == 0, "zero-width rect yields no strips");
 
-  // draw_shimmer emits one recorded rectangle per strip on the none backend.
   capture::enable();
   capture::clear();
   draw_shimmer(r, 1.f, s);
