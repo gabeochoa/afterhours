@@ -103,6 +103,8 @@ struct IgnorePointerEvents : BaseComponent {};
 struct Inert : BaseComponent {};
 struct DoesNotTakeFocus : BaseComponent {};
 
+struct Hoverable : BaseComponent {};
+
 struct HasDragListener : BaseComponent {
   bool down = false;
   std::function<void(Entity &)> cb;
