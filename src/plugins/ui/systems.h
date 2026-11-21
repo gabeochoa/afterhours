@@ -1090,15 +1090,83 @@ bool can_be_focused(UIContext<InputAction> &ctx, const Entity &e) {
   return ctx.is_tab_focusable(e);
 }
 
+// Every focusability input of one entity, for the cache snapshot below.
+template <typename InputAction>
+void snapshot_focus_inputs(UIContext<InputAction> &ctx) {
+  ctx.focus_snapshot_scratch.clear();
+  for (const auto &sp : UICollectionHolder::get().collection.get_entities()) {
+    if (!sp)
+      continue;
+    const Entity &e = *sp;
+    FocusCacheEntry row;
+    row.id = e.id;
+    std::uint32_t flags = 0;
+    if (e.template has<UIComponent>()) {
+      const UIComponent &cmp = e.template get<UIComponent>();
+      flags |= 1u;
+      row.parent = cmp.parent;
+      if (cmp.skip_when_tabbing)
+        flags |= 1u << 7;
+      if (cmp.was_rendered_to_screen)
+        flags |= 1u << 8;
+    }
+    if (e.template has<HasClickListener>())
+      flags |= 1u << 1;
+    if (e.template has<HasDragListener>())
+      flags |= 1u << 2;
+    if (e.template has<HasLeftRightListener>())
+      flags |= 1u << 3;
+    if (e.template has<SkipWhenTabbing>())
+      flags |= 1u << 4;
+    if (e.template has<DoesNotTakeFocus>())
+      flags |= 1u << 5;
+    if (e.template has<ShouldHide>())
+      flags |= 1u << 6;
+    if (e.template has<Inert>())
+      flags |= 1u << 9;
+    if (e.cleanup)
+      flags |= 1u << 10;
+    row.flags = flags;
+    ctx.focus_snapshot_scratch.push_back(row);
+  }
+}
+
 template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
-  UIContext<InputAction> *context;
+  UIContext<InputAction> *context = nullptr;
+  bool replay_cached_ = false;
+  bool built_last_frame_ = false;
 
   virtual void once(float) override {
-    this->context =
-        EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    if (!this->context)
+      this->context =
+          EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
     if (!context)
       return;
+    replay_cached_ = false;
+    if (built_last_frame_) {
+      context->focus_cache_valid = true;
+      built_last_frame_ = false;
+    }
+    snapshot_focus_inputs(*context);
+    replay_cached_ =
+        context->focus_cache_valid &&
+        context->focus_snapshot_gates_gen == context->focus_gates_gen &&
+        context->focus_snapshot_scratch == context->focus_snapshot_cache;
+    if (replay_cached_) {
+      context->focus_order = context->focus_order_cache;
+      for (EntityID id : context->focus_order_cache) {
+        context->try_to_grab(id);
+        context->process_tabbing(id);
+      }
+      return;
+    }
+    context->focus_snapshot_cache = context->focus_snapshot_scratch;
+    context->focus_snapshot_gates_gen = context->focus_gates_gen;
     context->focus_order = context->build_tab_order();
+    context->focus_order_cache = context->focus_order;
+    context->focus_cache_valid = false;
+    context->focus_rebuild_count++;
+    built_last_frame_ = true;
     for (EntityID id : context->focus_order)
       context->focused_ids.insert(id);
     if (!context->focus_order.empty())
@@ -1109,6 +1177,8 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
 
   virtual void for_each_with(Entity &entity, UIComponent &,
                              float) override {
+    if (replay_cached_ || !context)
+      return;
     if (!can_be_focused(*context, entity))
       return;
 
