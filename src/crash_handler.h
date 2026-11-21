@@ -17,8 +17,19 @@
 
 #include "logging.h"
 
-#if (defined(__GNUC__) || defined(__clang__)) && !defined(_WIN32)
+// execinfo.h/backtrace() only exist where the platform ships them. Web
+// (Emscripten) builds are clang and non-Windows, so they hit the old include
+// and have neither header nor functions; wordproc needed a web-only compat
+// shim that upstreamed this. Probe the header instead of the compiler.
+#if !defined(_WIN32) && !defined(__EMSCRIPTEN__) && __has_include(<execinfo.h>)
+#define AFTER_HOURS_HAS_EXECINFO 1
 #include <execinfo.h>
+#endif
+
+#if defined(__EMSCRIPTEN__) && __has_include(<emscripten.h>)
+// Emscripten has no execinfo; it reports its own callstack instead.
+#include <emscripten.h>
+#define AFTER_HOURS_HAS_EMSCRIPTEN_STACK 1
 #endif
 
 namespace afterhours {
@@ -45,7 +56,7 @@ inline volatile std::sig_atomic_t &reporting() {
 }
 
 inline void write_backtrace() {
-#if (defined(__GNUC__) || defined(__clang__)) && !defined(_WIN32)
+#ifdef AFTER_HOURS_HAS_EXECINFO
   void *frames[64];
   const int count = backtrace(frames, 64);
   char **symbols = backtrace_symbols(frames, count);
@@ -58,6 +69,13 @@ inline void write_backtrace() {
     report_line(std::string(index) + symbols[i]);
   }
   std::free(symbols);
+#elif defined(AFTER_HOURS_HAS_EMSCRIPTEN_STACK)
+  // Not freed: this runs at crash time, so the tiny leak is irrelevant.
+  if (const char *stack = emscripten_get_callstack())
+    report_line(stack);
+#else
+  // A missing trace would read as a crash with no stack; say so instead.
+  report_line("stack trace unavailable on this platform");
 #endif
 }
 

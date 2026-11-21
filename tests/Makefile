@@ -139,6 +139,7 @@ ALL_TESTS := \
 	log_file_test \
 	crash_handler_test \
 	crash_handler_reentry_test \
+	crash_handler_web_sim_test \
 	setting_row_style_test \
 	singleton_iteration_test \
 	press_delay_test \
@@ -375,6 +376,12 @@ LDFLAGS_T  =
 $(RAYLIB_BINS): CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(RAYLIB_BINS): INCLUDES_T = $(INCLUDES_RAYLIB)
 $(RAYLIB_BINS): LDFLAGS_T  = $(LDFLAGS_RAYLIB)
+
+# No emcc here, so the web crash-handler branch is compiled as a native
+# binary with web defines simulated: -D__EMSCRIPTEN__ plus tests/web_sim/
+# standing in for the Emscripten sysroot header.
+$(OUT)/crash_handler_web_sim_test: CXXFLAGS_T = $(CXXFLAGS) -D__EMSCRIPTEN__
+$(OUT)/crash_handler_web_sim_test: INCLUDES_T = -Iweb_sim $(INCLUDES)
 
 # Shift+Enter is a raw is_key_down check, and the key injector is only wired in
 # behind this macro. Without it the backend is asked directly and answers false
