@@ -259,7 +259,6 @@ inline MatrixType model_transform(Vector3Type pos, float yaw_deg,
   return m;
 }
 
-// MatrixMultiply without pulling in raymath, in raylib's row-major order.
 inline MatrixType multiply(const MatrixType &left, const MatrixType &right) {
   MatrixType r{};
   r.m0 = left.m0 * right.m0 + left.m1 * right.m4 + left.m2 * right.m8 + left.m3 * right.m12;
@@ -280,14 +279,9 @@ inline MatrixType multiply(const MatrixType &left, const MatrixType &right) {
   r.m15 = left.m12 * right.m3 + left.m13 * right.m7 + left.m14 * right.m11 + left.m15 * right.m15;
   return r;
 }
-
-// As in rmodels.c, not exported by the header.
 #ifndef MAX_MATERIAL_MAPS
 #define MAX_MATERIAL_MAPS 12
 #endif
-
-// Copies transforms in raylib's float16 (index m0..m15) order, which value
-// the instance attributes expect; the struct's memory image is row-grouped.
 inline void to_float16(const std::vector<MatrixType> &transforms, float *out) {
   for (size_t i = 0; i < transforms.size(); i++) {
     const MatrixType &m = transforms[i];
@@ -298,11 +292,6 @@ inline void to_float16(const std::vector<MatrixType> &transforms, float *out) {
     d[12] = m.m12; d[13] = m.m13; d[14] = m.m14; d[15] = m.m15;
   }
 }
-
-// Draws one mesh's instances from a buffer its caller keeps alive, so the
-// per-call buffer create/upload/delete inside DrawMeshInstanced happens on
-// change or growth instead of every frame. Mirrors DrawMeshInstanced step
-// for step; only the instance buffer lifecycle differs.
 inline void draw_mesh_instanced_persistent(const raylib::Mesh &mesh,
                                            const raylib::Material &material,
                                            ShaderType shader,
@@ -327,8 +316,6 @@ inline void draw_mesh_instanced_persistent(const raylib::Mesh &mesh,
     raylib::rlSetUniformMatrix(material.shader.locs[raylib::SHADER_LOC_MATRIX_VIEW], view);
   if (material.shader.locs[raylib::SHADER_LOC_MATRIX_PROJECTION] != -1)
     raylib::rlSetUniformMatrix(material.shader.locs[raylib::SHADER_LOC_MATRIX_PROJECTION], proj);
-  // Instance attributes point at the persistent buffer instead of a fresh
-  // one; sync_instance_buffer filled it in float16 layout.
   raylib::rlEnableVertexArray(mesh.vaoId);
   raylib::rlEnableVertexBuffer(instance_vbo);
   for (unsigned int i = 0; i < 4; i++) {
@@ -340,7 +327,6 @@ inline void draw_mesh_instanced_persistent(const raylib::Mesh &mesh,
   raylib::rlDisableVertexBuffer();
   raylib::rlDisableVertexArray();
   MatrixType model_view = multiply(raylib::rlGetMatrixTransform(), view);
-  // The model sits at identity here, so its normal matrix is identity.
   if (material.shader.locs[raylib::SHADER_LOC_MATRIX_NORMAL] != -1) {
     MatrixType identity = model_transform({0, 0, 0}, 0.f, {1, 1, 1});
     raylib::rlSetUniformMatrix(material.shader.locs[raylib::SHADER_LOC_MATRIX_NORMAL], identity);
@@ -466,16 +452,10 @@ struct InstanceBatcher {
     for (Group &g : groups) g.transforms.clear();
   }
 
-  // GPU buffers the batcher currently holds; freed by the destructor, which
-  // must run while the GL context is alive (as with models and textures).
   ~InstanceBatcher() {
     for (Group &g : groups)
       if (g.instance_vbo != 0) raylib::rlUnloadVertexBuffer(g.instance_vbo);
   }
-
-  // buffer_creates: GPU instance buffers allocated. buffer_uploads: in-place
-  // uploads into a buffer that already existed (a buffer's first fill rides
-  // with its create and is not counted as an upload).
   [[nodiscard]] size_t buffer_creates() const {
     size_t n = 0;
     for (const Group &g : groups) n += g.buffer_creates;
@@ -486,7 +466,6 @@ struct InstanceBatcher {
     for (const Group &g : groups) n += g.buffer_uploads;
     return n;
   }
-
   [[nodiscard]] size_t copies() const {
     size_t n = 0;
     for (const Group &g : groups) n += g.transforms.size();
@@ -505,10 +484,8 @@ private:
     const ModelType *model;
     uint32_t key;
     std::vector<MatrixType> transforms;
-    // Persistent GPU instance buffer plus the last uploaded snapshot, so
-    // flush() creates it once and uploads only on change or growth.
     unsigned int instance_vbo = 0;
-    size_t instance_capacity = 0; // in transforms
+    size_t instance_capacity = 0;
     std::vector<MatrixType> uploaded;
     size_t buffer_creates = 0;
     size_t buffer_uploads = 0;
@@ -529,9 +506,6 @@ private:
   std::vector<Group> groups;
   std::unordered_map<GroupId, size_t, GroupIdHash> index;
 
-  // Creates the group's buffer once, recreates it when the copy count
-  // outgrows it (doubling, so a slowly growing scene reallocates rarely),
-  // and uploads only when the bytes changed.
   static void sync_instance_buffer(Group &g) {
     const size_t want = g.transforms.size();
     if (want == 0) return;
@@ -541,11 +515,8 @@ private:
           g.instance_capacity == 0 ? want
                                    : std::max(want, g.instance_capacity * 2);
       if (g.instance_vbo != 0) raylib::rlUnloadVertexBuffer(g.instance_vbo);
-      // The buffer holds float16 values, so its first fill converts; the
-      // buffer itself outlives this call.
       std::vector<float> flat(cap * 16);
       to_float16(g.transforms, flat.data());
-      // The tail past want (unused capacity) stays zero there.
       g.instance_vbo = raylib::rlLoadVertexBuffer(
           flat.data(), static_cast<int>(cap * sizeof(raylib::float16)), true);
       g.instance_capacity = cap;
@@ -563,7 +534,6 @@ private:
       g.buffer_uploads++;
     }
   }
-
   static void draw_group_persistent(Group &g, ShaderType shader) {
     int loc = shader.locs[raylib::SHADER_LOC_MATRIX_MODEL];
     int count = static_cast<int>(g.transforms.size());
@@ -581,7 +551,6 @@ private:
       raylib::rlDisableVertexArray();
     }
   }
-
   Group &group_for(const ModelType &model, uint32_t key) {
     auto [it, inserted] = index.try_emplace(GroupId{&model, key}, groups.size());
     if (inserted) groups.push_back({&model, key, {}});
