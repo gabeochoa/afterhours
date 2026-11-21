@@ -1,9 +1,3 @@
-// R-013: Cmd chords on macOS never became key events because sokol's view
-// answered performKeyEquivalent: only for Tab. The live AppKit path needs a
-// human at a keyboard, so this tests the exact policy function the view
-// calls, plus the RunConfig plumbing that feeds it. Red on revert: with the
-// policy forced off-equivalent (no SUPER forwarding), the opt-in checks fail.
-
 #if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_VULKAN) && !defined(AFTER_HOURS_USE_SOKOL)
 #define AFTER_HOURS_USE_SOKOL
 #endif
