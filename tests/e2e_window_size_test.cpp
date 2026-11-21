@@ -1,5 +1,3 @@
-// e2e_window_size_test.cpp - 'expect_window_size w h' asserts the current
-// resolution singleton, retrying while a preceding 'resize' settles.
 
 #include "ui_test_harness.h"
 
@@ -39,7 +37,7 @@ PendingE2ECommand make_cmd(std::vector<std::string> args) {
   return cmd;
 }
 
-}  // namespace
+}
 
 TEST(passes_when_current_size_matches) {
   ResolutionFixture f;
@@ -57,7 +55,7 @@ TEST(retries_until_a_resize_settles_then_passes) {
   CHECK(cmd.is_retry());
   CHECK(cmd.last_mismatch.find("800x600") != std::string::npos);
   cmd.reset_retry();
-  f.set_size(1024, 768);  // 'resize' lands a frame later
+  f.set_size(1024, 768);
   handler.for_each_with(f.entity, cmd, 0.f);
   CHECK(cmd.is_consumed() && cmd.succeeded());
 }

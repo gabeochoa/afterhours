@@ -832,11 +832,6 @@ struct HandleResizeCommand : System<PendingE2ECommand> {
     }
 };
 
-// Handle 'expect_window_size w h' - asserts the current window size.
-// Retrying (not immediate fail) because 'resize' applies a frame later: a
-// script asserting straight after it would otherwise flake on first
-// evaluation. The resolution singleton is layout's source of truth, so it
-// is what is compared; the headless backend's raw size is a stub.
 struct HandleExpectWindowSizeCommand : System<PendingE2ECommand> {
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
                                float) override {

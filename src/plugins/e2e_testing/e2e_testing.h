@@ -157,8 +157,6 @@ inline void register_shared_handlers(SystemManager &sm, SystemManager &pack) {
 //
 // Semantic actions (preferred):  action WidgetLeft, hold WidgetLeft, release
 // Component commands:  click_ui, click_button, toggle_checkbox, set_slider
-// Assertions:  expect_focused, expect_checkbox, expect_slider,
-//              expect_window_size
 // Raw key fallbacks:  tab, enter, escape, arrow
 
 } // namespace testing
