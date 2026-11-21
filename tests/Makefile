@@ -163,6 +163,7 @@ ALL_TESTS := \
 	frame_rate_stats_test \
 	graphics_concepts_pedantic_test \
 	fixed_tick_rate_test \
+	simulation_driver_test \
 	sound_playback_test \
 	headless_runconfig_test \
 	harness_spellings_test \
