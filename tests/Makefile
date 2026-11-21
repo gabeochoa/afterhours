@@ -306,6 +306,8 @@ RAYLIB_TESTS := \
 	input_device_activity_test \
 	input_enum_actions_test \
 	render_capture_test \
+	offscreen_layer_test \
+	subtree_texture_test \
 	clipboard_test \
 	mk_cost_test \
 	headless_fallback_test \
