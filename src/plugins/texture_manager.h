@@ -195,9 +195,6 @@ struct HasAnimation : BaseComponent {
 struct AnimationUpdateCurrentFrame : System<HasAnimation> {
   virtual void for_each_with(Entity &entity, HasAnimation &hasAnimation,
                              const float dt) override {
-    // Advance on the scaled clock (pause / time-scale freeze the sprite),
-    // and carry leftover frame time: resetting to a full frame dropped the
-    // remainder and ran 24fps art at ~20fps on a 60Hz display.
     hasAnimation.frame_time -= motion::scaled_dt(dt);
     if (hasAnimation.frame_time > 0) {
       return;

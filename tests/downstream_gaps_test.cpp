@@ -1002,7 +1002,6 @@ TEST(tray_key_repeat_carries_the_remainder) {
   ui::HandleTrayNavigation<ui_test::TestInputAction> nav;
   nav.once(0.f);
   nav.for_each_with(*tray_ent, *t, tray, 0.5f);
-  // 0.5s held crosses the 0.4s delay once; the 0.1s remainder must carry.
   ui_test::check(std::fabs(tray.repeat_timer - 0.1f) < 1e-4f,
                  "repeat timer keeps the remainder after firing", __FILE__,
                  __LINE__);

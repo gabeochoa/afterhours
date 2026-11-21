@@ -497,9 +497,6 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
       init_state<HasToggleSwitchState>(entity, [&](auto &) {}, value);
   state.on = value;
 
-  // Animate toward the caller's value (state.on was just synced from it).
-  // dt-corrected exponential: the old per-frame 0.2 lerp ran twice as fast
-  // at 120Hz and never quite settled.
   float target = state.on ? 1.0f : 0.0f;
   if (motion::is_instant()) {
     state.animation_progress = target;

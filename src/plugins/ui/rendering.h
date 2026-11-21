@@ -1804,7 +1804,6 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                        ? entity.get<HasRoundedCorners>().segments
                        : 8;
 
-    // Push rotation transform about the configured origin (default centre)
     const Vector2Type rot_center = entity.has<HasUIModifiers>()
         ? entity.get<HasUIModifiers>().rotation_center(draw_rect)
         : Vector2Type{draw_rect.x + draw_rect.width / 2.0f,
@@ -2817,7 +2816,6 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         }
 
         if (wrapped && entity.template has<HasTextUnitMotion>()) {
-          // Per-unit motion is silently skipped for wrapped text; say so once.
           static std::atomic_bool warned_unit_motion_wrapped{false};
           if (!warned_unit_motion_wrapped.exchange(true))
             log_warn("per-unit text motion is skipped for wrapped text "

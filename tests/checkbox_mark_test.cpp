@@ -170,7 +170,6 @@ TEST(toggle_knob_speed_is_frame_rate_independent_and_snaps_instant) {
   const float t60 = time_to_90(1.f / 60.f);
   const float t200 = time_to_90(1.f / 200.f);
   CHECK(std::fabs(t60 - t200) < 0.05f);
-  // Instant: knob is at target on the first frame.
   ui_test::ImmTestHarness h;
   bool value = true;
   motion::set_instant(true);

@@ -233,9 +233,6 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
     // read anyway, so favour the end being moved toward.
     const float max_span = std::max(view_h * 3.f, 1.f);
     if (hi - lo > max_span) {
-      // Keep the window containing the CURRENT offset, and spend the rest
-      // of the span toward the target. Dropping the current window (the old
-      // favour-the-target-end truncation) blanks the viewport mid-glide.
       const float cur_lo = sv.scroll_offset.y - top_padding;
       const float cur_hi = cur_lo + view_h;
       lo = cur_lo;

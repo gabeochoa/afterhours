@@ -252,9 +252,7 @@ inline void prewarm_text(const Font font, const char *text,
 
 // Advance width, same as measure_text.
 
-// The UI spacing parameter is 1-based (1 = no letter spacing, matching the
-// raylib call sites' `1 + letter_spacing`); fontstash spacing is the extra
-// itself, and a direct 0 still means no extra.
+// 1-based UI spacing (1 = none, matching raylib); fontstash takes the extra.
 inline float fons_spacing_for(float spacing) {
   return spacing == 0.f ? 0.f : spacing - 1.f;
 }

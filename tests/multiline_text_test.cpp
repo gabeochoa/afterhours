@@ -666,8 +666,6 @@ TEST(wrapped_unit_motion_label_still_draws_plain_text_batched) {
                    .with_text_overflow(TextOverflow::Wrap));
   r.ent().addComponentIfMissing<HasTextUnitMotion>();
   h.render_batched();
-  // Wrapped: per-unit motion is skipped (with a one-time warning), but the
-  // label itself must still draw as plain wrapped text.
   CHECK(!h.drawn("text").empty());
 }
 
