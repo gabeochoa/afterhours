@@ -226,6 +226,7 @@ Started partway through the project's life, so it does not go all the way back.
 
 Same behaviour, they just say so; expect a burst on first run. `with_font_weight` needs a `"<font>@bold"` variant and falls back to the base font without one (this is why it gets filed as "no font weight support"), and `TextOverflow::Wrap` does nothing unless a font size is pinned.
 - **Profiling that cannot collect, and a perf provider being replaced, warn once.** `builtin_profile::enable()` ignored `Collector::start()` returning false when built without `AFTERHOURS_ENABLE_PROFILING`, so `dump_profile` reported an empty profile with no reason; it warns once now and still installs the provider. `perf_commands::set_provider` replacing a provider that already has callbacks warns once; the new provider still takes effect. Covered by `perf_provider_warn_test`.
+- **The stub audio backend (sokol/none) warns once when sound is dropped.** The non-raylib `InitAudioDevice` / `PlaySound` in `audio_helpers.h` were silent no-ops, so a sokol app that tried to play sound found nothing in the log. They warn once per process now ("no audio device on this backend (sokol/none); sound is silent"); raylib builds are unchanged. Backend-level `Config::audio` / `RunConfig::audio` already warned for the config flag; this covers direct calls. The real backend (miniaudio) is deferred until the first sokol game that needs sound (decide-sokol-audio Option 1). Covered by `audio_stub_warn_test`.
 
 ### Already works, despite the gap docs
 

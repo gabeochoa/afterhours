@@ -159,6 +159,7 @@ ALL_TESTS := \
 	card_and_type_scale_test \
 	fixed_timestep_test \
 	audio_lifecycle_test \
+	audio_stub_warn_test \
 	local_time_test \
 	frame_rate_stats_test \
 	graphics_concepts_pedantic_test \
