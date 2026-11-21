@@ -390,7 +390,7 @@ TEST(d26_clicking_the_field_reaches_the_widget_state) {
   CHECK_APPROX(s->cursor_blink_timer, 0.f);
 }
 
-TEST(escape_blurs_without_swallowing_dialog_dismissal) {
+TEST(escape_blurs_and_consumes_the_press) {
   ImmTestHarness h;
   std::string text = "Draft";
   auto emit = [&] { imm::text_input(h.context(), mk(h.root(), 0), text,
@@ -403,7 +403,9 @@ TEST(escape_blurs_without_swallowing_dialog_dismissal) {
   h.context().last_action = ui_test::TestInputAction::MenuBack;
   emit();
   CHECK(h.context().focus_id == h.context().FAKE);
-  CHECK(h.context().pressed(ui_test::TestInputAction::MenuBack));
+  // Single owner (R-019): the blur consumes MenuBack, so an enclosing
+  // dialog or menu cannot also act on the same press.
+  CHECK(!h.context().pressed(ui_test::TestInputAction::MenuBack));
   CHECK(text == "Draft");
 }
 
