@@ -473,9 +473,6 @@ struct FontManager final : BaseComponent {
                           static_cast<int>(codepoint));
   }
 
-  // Codepoints in `font_name` whose glyphs rasterized but never made it
-  // into the atlas. Empty means packing succeeded (or the backend grows
-  // its atlas). Load-time failures are also logged once per glyph.
   [[nodiscard]] std::vector<uint32_t>
   packing_failures(const std::string &font_name) const {
     std::vector<uint32_t> failed;

@@ -20,7 +20,7 @@ static int failures = 0;
   } while (0)
 
 static std::string captured;
-static void capture(const char *, const char *message) {
+static void capture_log(const char *, const char *message) {
   captured += message;
   captured += '\n';
 }
@@ -37,14 +37,13 @@ int main() {
   if (!graphics::init(config))
     return 2;
   void (*previous_sink)(const char *, const char *) = log_sink_fn;
-  log_sink_fn = capture;
+  log_sink_fn = capture_log;
 
   const auto path = std::filesystem::path(AFTERHOURS_TEST_FIXTURES) /
                     "AtkinsonHyperlegible-Regular.ttf";
   int codepoints[] = {'A', 'B', 0xE9};
   const int count = 3;
 
-  // A clean load reports nothing and measures for real.
   ui::FontManager fm;
   fm.load_font_with_codepoints("clean", path.c_str(), codepoints, count, 32);
   const Font clean = fm.get_font("clean");
@@ -54,8 +53,6 @@ int main() {
   CHECK(!fm.has_packing_failure("clean"));
   CHECK(measure_text(clean, "AB", 32.f, 1.f).x > 0.f);
 
-  // Glyphs with no atlas texture (an atlas too large to upload) are their
-  // own report, also once. Checked before the mutation below on purpose.
   Font notex = clean;
   notex.texture.id = 0;
   notex.baseSize = 999;
@@ -66,9 +63,6 @@ int main() {
   check_font_atlas(notex, "notex");
   CHECK(captured.find("no texture") == std::string::npos);
 
-  // Force the failure the skyline packer would leave: a rasterized glyph
-  // with an empty atlas rect. The glyph still measures, so text degrades
-  // to a wrong corner glyph rather than disappearing.
   Font bad = clean;
   int idx = -1;
   for (int i = 0; i < bad.glyphCount; i++)
@@ -91,7 +85,6 @@ int main() {
   CHECK(std::isfinite(degraded.x) && degraded.x > 0.f);
   CHECK(std::isfinite(degraded.y) && degraded.y > 0.f);
 
-  // Reporting the same glyph again stays silent.
   captured.clear();
   report_glyph_packing_failures(bad, "test", {'B'});
   CHECK(captured.find("U+0042") == std::string::npos);

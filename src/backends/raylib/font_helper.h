@@ -38,11 +38,13 @@ inline std::optional<raylib::Font> &default_font_override() {
 inline void set_default_font(raylib::Font font) {
   detail::default_font_override() = font;
 }
+
 inline void clear_default_font() { detail::default_font_override().reset(); }
 
 inline raylib::Font get_default_font() {
   return detail::default_font_override().value_or(raylib::GetFontDefault());
 }
+
 inline raylib::Font get_unset_font() { return get_default_font(); }
 
 // Passing nullptr asks raylib for its default set, which is 95 ASCII glyphs.
@@ -178,8 +180,6 @@ inline void record_font_coverage(const raylib::Font font, const char *file) {
     faces.push_back(font);
 }
 
-// Codepoints that rasterized but never made it into the atlas, keyed the
-// way coverage is keyed. Indexed by font_key like coverage_registry().
 inline std::map<uint64_t, std::vector<int>> &packing_failure_registry() {
   static std::map<uint64_t, std::vector<int>> failures;
   return failures;
@@ -190,8 +190,6 @@ inline bool glyph_rasterized(const raylib::GlyphInfo &glyph) {
          glyph.image.data != nullptr;
 }
 
-// Glyphs with an image but no atlas rect. A codepoint the face lacks has no
-// image, so it never shows up here: this is packing, not coverage.
 inline std::vector<int> glyph_packing_failures(const raylib::Font font) {
   std::vector<int> failed;
   if (!font.glyphs || !font.recs || font.glyphCount <= 0)
@@ -210,9 +208,6 @@ inline std::vector<int> glyph_packing_failures(const raylib::Font font) {
   return failed;
 }
 
-// Skyline failures hide at the atlas corner: every unpacked glyph gets the
-// same rec as the glyph packed there and its pixels are never copied, so
-// only comparing atlas pixels against the glyph's own image tells it apart.
 inline std::vector<int> find_unpacked_glyphs(
     const raylib::GlyphInfo *glyphs, const raylib::Rectangle *recs,
     int glyph_count, const raylib::Image &atlas, int padding) {
@@ -224,7 +219,6 @@ inline std::vector<int> find_unpacked_glyphs(
   for (int i = 0; i < glyph_count; i++) {
     if (!glyph_rasterized(glyphs[i]))
       continue;
-    // Only corner recs can be unpacked; everything else was packed.
     if (recs[i].x != static_cast<float>(padding) ||
         recs[i].y != static_cast<float>(padding))
       continue;
@@ -249,9 +243,6 @@ inline std::vector<int> find_unpacked_glyphs(
   return failed;
 }
 
-// Record unpacked glyphs for FontManager::packing_failures and say it once
-// per glyph: a full atlas otherwise draws the corner glyph for every victim
-// with only a raylib TraceLog warning as evidence.
 inline void report_glyph_packing_failures(const raylib::Font font,
                                           const char *what,
                                           std::vector<int> failed) {
@@ -326,9 +317,6 @@ inline bool font_gl_ready() {
   return raylib::IsWindowReady() || graphics::is_headless();
 }
 
-// Report what a finished load left behind: unpacked glyphs, or glyphs with
-// no atlas texture at all (an atlas too large to upload draws nothing and
-// measures by estimate, with only a lazy measure-time warning otherwise).
 inline void check_font_atlas(const raylib::Font font, const char *what) {
   report_glyph_packing_failures(font, what, glyph_packing_failures(font));
   if (font.glyphCount <= 0 || font.texture.id != 0 || !font_gl_ready())
