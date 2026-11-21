@@ -92,6 +92,7 @@ ALL_TESTS := \
 	animation_test \
 	motion_config_test \
 	reduced_motion_test \
+	gesture_availability_test \
 	appearance_test \
 	frame_loop_test \
 	color_value_test \
@@ -354,6 +355,10 @@ RAYLIB_TESTS := \
 	tree_view_test \
 	layout_inspector_test
 
+ifeq ($(UNAME_S),Darwin)
+ALL_TESTS += gesture_availability_macos_test
+endif
+
 TEST_BINS := $(addprefix $(OUT)/,$(ALL_TESTS))
 
 # Declared after ALL_TESTS so the bare-name aliases are actually included.
@@ -421,6 +426,14 @@ $(OUT)/native_dialogs_macos_test: native_dialogs_macos_test.mm ../src/plugins/na
 ifeq ($(UNAME_S),Darwin)
 $(OUT)/reduced_motion_test: LDFLAGS_T += -framework AppKit
 $(OUT)/appearance_test: LDFLAGS_T += -framework AppKit
+endif
+
+# The macOS variant compiles the real pinch monitor in (AppKit + blocks) and
+# walks Unknown -> install -> Available; the plain target covers the
+# no-gesture-path answer everywhere.
+ifeq ($(UNAME_S),Darwin)
+$(OUT)/gesture_availability_macos_test: gesture_availability_test.cpp
+	$(CXX) $(CXXFLAGS) -DAFTER_HOURS_ENABLE_MACOS_GESTURES -fblocks $(DEPFLAGS) $(INCLUDES) $< -framework AppKit -o $@
 endif
 
 # Sokol's implementation TU must be Objective-C++ for Metal; reuse the web

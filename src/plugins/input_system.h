@@ -840,6 +840,17 @@ struct input : developer::Plugin {
         return gestures::is_pinching();
     }
 
+    /// Whether pinch input can arrive, so gesture UI can be gated instead of
+    /// shown unconditionally on builds that can never deliver one (wm R-022).
+    static gestures::Availability gesture_availability() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        if (testing::test_input::detail::test_mode) {
+            return gestures::Availability::Available;
+        }
+#endif
+        return gestures::gesture_availability();
+    }
+
     enum struct DeviceMedium {
         None,
         Keyboard,
