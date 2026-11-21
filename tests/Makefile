@@ -226,6 +226,7 @@ ALL_TESTS := \
 	text_line_edit_test \
 	grapheme_edit_test \
 	entity_mapping_test \
+	staged_restore_test \
 	files_atomic_write_test \
 	files_resource_path_test \
 	files_cache_path_test \
