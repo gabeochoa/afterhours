@@ -330,6 +330,29 @@ struct HasUIModifiers : BaseComponent {
   float origin_x = 0.5f;
   float origin_y = 0.5f;
 
+  // Pivot rotation turns about: the configured origin of the (already
+  // modifier-applied) rect. Distinct name from #205's rotation_center so
+  // the two branches merge without a duplicate definition.
+  Vector2Type rotation_pivot(RectangleType rect) const {
+    return {rect.x + rect.width * origin_x, rect.y + rect.height * origin_y};
+  }
+
+  // Hit test for the rotated rect: inverse-rotate the point about the
+  // pivot, then the ordinary axis-aligned check.
+  bool contains_rotated(RectangleType rect, float px, float py) const {
+    if (rotation == 0.f)
+      return px >= rect.x && px <= rect.x + rect.width && py >= rect.y &&
+             py <= rect.y + rect.height;
+    const Vector2Type pivot = rotation_pivot(rect);
+    const float rad = -rotation * 3.14159265358979323846f / 180.f;
+    const float c = std::cos(rad), s = std::sin(rad);
+    const float dx = px - pivot.x, dy = py - pivot.y;
+    const float lx = pivot.x + dx * c - dy * s;
+    const float ly = pivot.y + dx * s + dy * c;
+    return lx >= rect.x && lx <= rect.x + rect.width && ly >= rect.y &&
+           ly <= rect.y + rect.height;
+  }
+
   RectangleType apply_modifier(RectangleType rect) const {
     // Apply scale first
     float s = scale;
