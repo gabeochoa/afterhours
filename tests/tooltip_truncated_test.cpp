@@ -1,8 +1,3 @@
-// R-043: a tooltip that just repeats the label should only fire when the
-// label is actually truncated (ellipsized/clipped), not when fully visible.
-// The renderer records the outcome on HasLabel::truncated; UpdateTooltips
-// suppresses a label-duplicate tooltip while that flag is false. Tooltips
-// whose text differs from the label are news either way and still show.
 
 #include "ui_test_harness.h"
 
@@ -34,7 +29,7 @@ void hover_and_update(ImmTestHarness &h, Entity &ent) {
   update.for_each_with(h.context_entity(), h.context(), 0.f);
   update.for_each_with(h.context_entity(), h.context(), 1.f);
 }
-} // namespace
+}
 
 int main() { return ui_test::run_registered_tests("tooltip truncated"); }
 

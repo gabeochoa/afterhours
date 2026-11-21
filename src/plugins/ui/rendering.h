@@ -971,8 +971,6 @@ inline void paint_label_text_selection(UIContext<InputAction> &context,
     draw(r, context.theme.selection);
 }
 
-// Returns whether the text was ellipsized or clipped (caller records it on
-// HasLabel::truncated so a full-text tooltip only fires for hidden text).
 static inline bool draw_text_in_rect(
     const ui::FontManager &fm, const std::string &text, RectangleType rect,
     TextAlignment alignment, Color color, bool show_debug_indicator = false,
@@ -1144,8 +1142,6 @@ static inline bool draw_text_in_rect(
         });
     return truncated_text;
   }();
-  // Ellipsis shortens the string; Clip/Wrap leave it whole and the scissor
-  // (or an over-tall box) cuts it, which position_text_ex reports.
   const bool truncated = text_overflow == TextOverflow::Ellipsis
                              ? render_text != text
                              : !result.text_fits;
@@ -1303,7 +1299,7 @@ static inline bool draw_runs_in_rect(
                                     run.color, show_debug_indicator, stroke,
                                     shadow, rotation, rot_center_x, rot_center_y,
                                     TextOverflow::Clip, letter_spacing, font_size,
-                                    /*report_overflow=*/false,
+                                    false,
                                     Vector2Type{0.f, 0.f}, register_text) ||
                   truncated;
       if (swap)
@@ -2040,7 +2036,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
             font_manager, hasLabel.label.c_str(), label_rect, hasLabel.alignment,
             font_col, SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation,
             centerX, centerY, hasLabel.text_overflow, hasLabel.letter_spacing,
-            explicit_fs, /*report_overflow=*/true, immediate_inset, false,
+            explicit_fs, true, immediate_inset, false,
             label_line_h);
       }
       if (clip_label) {
@@ -2678,8 +2674,6 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                   return measure_text(font, s.c_str(), font_size, spacing).x;
                 });
         }
-        // Same rule as the immediate path: Ellipsis shortens the string,
-        // Clip/Wrap cut it via the scissor, reported by text_fits.
         entity.get<HasLabel>().truncated =
             hasLabel.text_overflow == TextOverflow::Ellipsis
                 ? display_text != hasLabel.label
