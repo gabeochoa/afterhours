@@ -137,6 +137,42 @@ ElementResult div(HasUIContext auto &ctx, EntityParent ep_pair,
   return {true, entity};
 }
 
+namespace detail {
+inline ElementResult label_impl(HasUIContext auto &ctx, EntityParent ep_pair,
+                                const std::string &text,
+                                ComponentConfig config, Theme::Usage usage) {
+  config.with_label(text);
+  if (!config.has_font_override())
+    config.font_name = UIStylingDefaults::get().resolved_font_name();
+  if (config.font_size_is_default)
+    config.font_size = UIStylingDefaults::get().default_font_size;
+  if (config.label_alignment == TextAlignment::None)
+    config.with_alignment(TextAlignment::Left);
+  if (!config.has_text_color_override())
+    config.with_text_color(usage);
+  config.with_ignore_pointer_events();
+  return div(ctx, ep_pair, config);
+}
+} // namespace detail
+
+/// A static text label: the div + with_label + with_font + left alignment +
+/// ignore-pointer-events + theme text colour chain screens hand-roll.
+/// Font and size fall back to UIStylingDefaults; an explicit font, size,
+/// text colour, or alignment in `config` wins.
+ElementResult label(HasUIContext auto &ctx, EntityParent ep_pair,
+                    const std::string &text,
+                    ComponentConfig config = ComponentConfig()) {
+  return detail::label_impl(ctx, ep_pair, text, config, Theme::Usage::Font);
+}
+
+/// label() in the theme's muted font colour.
+ElementResult label_muted(HasUIContext auto &ctx, EntityParent ep_pair,
+                          const std::string &text,
+                          ComponentConfig config = ComponentConfig()) {
+  return detail::label_impl(ctx, ep_pair, text, config,
+                            Theme::Usage::FontMuted);
+}
+
 
 ElementResult image(HasUIContext auto &ctx, EntityParent ep_pair,
                     ComponentConfig config = ComponentConfig()) {
