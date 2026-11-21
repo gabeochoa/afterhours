@@ -551,8 +551,13 @@ inline void draw_texture_quad(TextureType tex, const Vector2Type (&p)[4], Color 
   raylib::rlSetTexture(0);
 }
 
+// Either winding paints on every backend: raylib culls the screen-CW order,
+// so normalize here before the call and app code can pass vertices either way.
 inline void draw_triangle(Vector2Type v1, Vector2Type v2, Vector2Type v3,
                           Color color) {
+  if ((v2.x - v1.x) * (v3.y - v1.y) - (v3.x - v1.x) * (v2.y - v1.y) > 0) {
+    std::swap(v2, v3);
+  }
   const float min_x = std::min({v1.x, v2.x, v3.x}), max_x = std::max({v1.x, v2.x, v3.x});
   const float min_y = std::min({v1.y, v2.y, v3.y}), max_y = std::max({v1.y, v2.y, v3.y});
   capture::record("triangle", RectangleType{min_x, min_y, max_x - min_x, max_y - min_y}, color, "");
