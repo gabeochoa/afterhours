@@ -196,6 +196,7 @@ ALL_TESTS := \
 	capture_attribution_test \
 	draw_commands_test \
 	color_contrast_test \
+	auto_text_color_test \
 	scissor_coalescing_test \
 	focus_origin_test \
 	cleanup_order_test \
@@ -289,6 +290,7 @@ ALL_TESTS += staging_texture_leak_test
 endif
 
 RAYLIB_TESTS := \
+	auto_text_color_test \
 	value_types_test \
 	wrappers_test \
 	edit_keys_test \
