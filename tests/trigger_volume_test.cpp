@@ -69,6 +69,27 @@ int main() {
     v.update({{1, 5, 5, 2}}, 0.016f);
     check(v.count() == 1, "3D volume accepts inside depth");
   }
+  {
+    struct Pos : BaseComponent {
+      float x = 0, y = 0;
+      Pos() = default;
+      Pos(float x_, float y_) : x(x_), y(y_) {}
+    };
+    SystemManager sm;
+    trigger_volume::register_update_systems<Pos>(
+        sm, [](const Entity &e, const Pos &pos) {
+          return Candidate{e.id, pos.x, pos.y};
+        });
+    auto &vol = EntityHelper::createEntity();
+    vol.addComponent<trigger_volume::HasTriggerVolume>(
+        trigger_volume::AABB{0, 0, 10, 10}, 1);
+    auto &actor = EntityHelper::createEntity();
+    actor.addComponent<Pos>(5.f, 5.f);
+    EntityHelper::merge_entity_arrays();
+    sm.run(0.016f);
+    check(vol.get<trigger_volume::HasTriggerVolume>().volume.count() == 1,
+          "registered system counts entrant");
+  }
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   return checks_passed == checks_run ? 0 : 1;
 }

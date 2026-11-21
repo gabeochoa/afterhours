@@ -38,7 +38,6 @@ struct trigger_volume : developer::Plugin {
 
   enum class Phase { Empty, Occupied, Complete };
 
-  // The plain value object; usable with no ECS at all (tests, tools).
   struct Volume {
     AABB bounds{};
     int required_count = 1;          // entrants needed for Phase::Complete
@@ -79,7 +78,7 @@ struct trigger_volume : developer::Plugin {
         if (!next.count(id)) exited.push_back(id);
       entrants = std::move(next);
 
-      const float target = entrants.empty() ? 0.f : 1.f;
+      const float target = 1.f - static_cast<float>(entrants.empty());
       // Frame-rate independent exponential approach; stays in [0,1] by construction.
       const float k = dt <= 0.f ? 1.f : 1.f - std::exp(-presence_rate * dt);
       presence = std::clamp(presence + (target - presence) * k, 0.f, 1.f);
@@ -108,15 +107,16 @@ struct trigger_volume : developer::Plugin {
   struct UpdateTriggerVolumes : System<HasTriggerVolume> {
     std::function<Candidate(const Entity &, const TransformType &)>
         make_candidate;
+    std::vector<Candidate> candidates;
 
     void for_each_with(Entity &, HasTriggerVolume &hv, float dt) override {
       if (!make_candidate) return;
-      std::vector<Candidate> candidates;
-      for (const RefEntity &e :
-           EntityQuery().whereHasComponent<TransformType>().gen()) {
-        Entity &ent = e.get();
-        candidates.push_back(make_candidate(ent, ent.get<TransformType>()));
-      }
+      candidates.clear();
+      EntityQuery().whereHasComponent<TransformType>().for_each_stream(
+          [&](Entity &ent) {
+            candidates.push_back(
+                make_candidate(ent, ent.get<TransformType>()));
+          });
       hv.volume.update(candidates, dt);
     }
   };
@@ -124,6 +124,16 @@ struct trigger_volume : developer::Plugin {
   static void add_singleton_components(Entity &) {}
   static void enforce_singletons(SystemManager &) {}
   static void register_update_systems(SystemManager &) {}
+
+  template <typename TransformType>
+  static void register_update_systems(
+      SystemManager &sm,
+      std::function<Candidate(const Entity &, const TransformType &)>
+          make_candidate) {
+    auto sys = std::make_unique<UpdateTriggerVolumes<TransformType>>();
+    sys->make_candidate = std::move(make_candidate);
+    sm.register_update_system(std::move(sys));
+  }
 };
 
 static_assert(developer::PluginCore<trigger_volume>,
