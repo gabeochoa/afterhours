@@ -352,6 +352,7 @@ ALL_TESTS += triangle_winding_metal_test
 ALL_TESTS += image_metal_test
 # Sokol is Metal here, so macOS-only; renders headless, no window.
 ALL_TESTS += sokol_blend_test
+ALL_TESTS += sokol_chamfer_corners_test
 ALL_TESTS += sokol_capture_test
 ALL_TESTS += sokol_geometry_test
 # Own process: the Metal backend cannot be re-initialised, so this cannot be a
@@ -447,7 +448,8 @@ RAYLIB_TESTS := \
 	label_word_wrap_test \
 	theme_io_test \
 	tree_view_test \
-	layout_inspector_test
+	layout_inspector_test \
+	chamfer_corners_test
 
 ifeq ($(UNAME_S),Darwin)
 ALL_TESTS += gesture_availability_macos_test
@@ -566,11 +568,15 @@ $(OUT)/web_metal_symbols_test: web_metal_symbols_test.cpp web_sim/web_probe.cpp 
 	@echo "native: metal_* symbols referenced" >> $(OUT)/web_metal_symbols.audit
 	$(CXX) $(CXXFLAGS) -DWEB_METAL_AUDIT_PATH=\"$$(realpath $(OUT)/web_metal_symbols.audit)\" $(INCLUDES) $< -o $@
 
+$(OUT)/sokol_chamfer_corners_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_chamfer_corners_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_chamfer_corners_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 # The multi-TU sokol rules emit a .d covering only sokol_impl.cc, so header
 # edits rebuild nothing without an explicit prerequisite (stale-binary trap).
 $(OUT)/sokol_blend_test: ../src/backends/sokol/drawing_helpers.h
 $(OUT)/sokol_capture_test: ../src/backends/sokol/drawing_helpers.h ../src/capture.h ../src/graphics_common.h
 $(OUT)/sokol_geometry_test: ../src/backends/sokol/drawing_helpers.h
+$(OUT)/sokol_chamfer_corners_test: ../src/backends/sokol/drawing_helpers.h
 $(OUT)/sokol_hidpi_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_hidpi_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_hidpi_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)

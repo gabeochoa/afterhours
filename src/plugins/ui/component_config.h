@@ -107,6 +107,7 @@ struct ComponentConfig {
   std::optional<Color> image_tint;
   std::optional<texture_manager::HasTexture::Alignment> image_alignment;
   std::optional<std::bitset<4>> rounded_corners;
+  std::optional<std::bitset<4>> chamfer_corners;
   bool consumes_directional_input = false;
   std::optional<float> roundness;     // If unset, uses theme.roundness
   std::optional<float> corner_radius; // Pixels; wins over roundness when set
@@ -575,6 +576,13 @@ struct ComponentConfig {
   }
   ComponentConfig &with_rounded_corners(const RoundedCorners &corners) {
     rounded_corners = corners.get();
+    chamfer_corners = corners.get_chamfered();
+    return *this;
+  }
+  /// Per-corner 45-degree cuts, sized by the corner radius. A chamfered
+  /// corner needs no rounded bit; chamfer wins where both are set.
+  ComponentConfig &with_chamfer_corners(const std::bitset<4> &corners) {
+    chamfer_corners = corners;
     return *this;
   }
   /// Corner rounding as a fraction of the widget's SHORT SIDE, 0..1. The same
@@ -1220,6 +1228,8 @@ struct ComponentConfig {
 
     if (overrides.has_any_rounded_corners())
       merged.rounded_corners = overrides.rounded_corners;
+    if (overrides.chamfer_corners.has_value())
+      merged.chamfer_corners = overrides.chamfer_corners;
     if (overrides.corner_radius.has_value())
       merged.corner_radius = overrides.corner_radius;
 
