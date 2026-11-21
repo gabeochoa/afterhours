@@ -20,7 +20,7 @@ using namespace afterhours::ui::imm;
 // Width of `str` in the font the field last rendered with.
 //
 // Reads the state rather than closing over the frame's locals. The click and
-// drag listeners are installed with addComponentIfMissing, so the lambda from
+// drag listeners are installed with toggleComponent, so the lambda from
 // the FIRST frame is the one that runs for the life of the widget -- anything
 // it captured by reference from that frame's stack is dangling by the time a
 // real click arrives.
@@ -202,7 +202,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   auto field_result = div(ctx, mk(entity, 0), field_config);
 
   auto &field_entity = field_result.ent();
-  field_entity.template addComponentIfMissing<ConsumesDirectionalInput>();
+  field_entity.template toggleComponent<ConsumesDirectionalInput>(true);
   entity.template addComponentIfMissing<FocusProxy>().target = field_entity.id;
   auto &field_cmp = field_entity.template get<UIComponent>();
 
@@ -277,7 +277,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Update focus state
   if (!state.disabled) {
-    field_entity.template addComponentIfMissing<InFocusCluster>();
+    field_entity.template toggleComponent<InFocusCluster>(true);
   }
   bool field_has_focus = ctx.has_focus(field_entity.id);
   bool parent_has_focus = ctx.has_focus(entity.id);
@@ -287,7 +287,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   // The focus ring text_input has always had: a 2px accent border while
   // focused, over the 1px default border on the field config.
   if (state.is_focused) {
-    field_entity.template addComponentIfMissing<HasBorder>();
+    field_entity.template toggleComponent<HasBorder>(true);
     field_entity.template get<HasBorder>().border =
         Border::all(ctx.theme.accent, pixels(2.0f));
   }
@@ -454,7 +454,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Click to focus AND position the caret. Clicking used to only focus, so
   // there was no way to put the cursor anywhere but where typing left it.
-  field_entity.template addComponentIfMissing<HasClickListener>(
+  field_entity.template toggleComponent<HasClickListener>(true,
       [&ctx](Entity &ent) {
         HasTextAreaState *sp = state_for_field<HasTextAreaState>(ent);
         if (!sp)
@@ -518,7 +518,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   // only moves the cursor end, and only while the button is actually held --
   // HasDragListener keeps firing after the pointer leaves the field, which is
   // what lets a drag run off the bottom and keep selecting.
-  field_entity.template addComponentIfMissing<HasDragListener>(
+  field_entity.template toggleComponent<HasDragListener>(true,
       [&ctx](Entity &ent) {
         HasTextAreaState *sp = state_for_field<HasTextAreaState>(ent);
         if (!sp)
@@ -740,7 +740,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   text = state.text();
-  entity.template addComponentIfMissing<FocusClusterRoot>();
+  entity.template toggleComponent<FocusClusterRoot>(true);
   return ElementResult{state.changed_since, entity};
 }
 

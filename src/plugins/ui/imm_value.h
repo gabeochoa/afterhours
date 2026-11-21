@@ -143,7 +143,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
         .template get<UIComponent>()
         .set_desired_width(percent(0.5f))
         .set_desired_height(percent(1.f));
-    label.ent().template addComponentIfMissing<InFocusCluster>();
+    label.ent().template toggleComponent<InFocusCluster>(true);
   }
 
   // Create slider background
@@ -163,7 +163,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   elem.ent().template get<UIComponent>().set_desired_width(bg_size.x_axis);
 
   Entity &slider_bg = elem.ent();
-  slider_bg.template addComponentIfMissing<InFocusCluster>();
+  slider_bg.template toggleComponent<InFocusCluster>(true);
 
   if (slider_bg.is_missing<ui::HasSliderState>())
     slider_bg.addComponent<ui::HasSliderState>(owned_value);
@@ -205,7 +205,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   };
 
   // Add drag listener
-  slider_bg.addComponentIfMissing<ui::HasDragListener>(
+  slider_bg.toggleComponent<ui::HasDragListener>(true,
       [apply_slider_value, &sliderState, &ctx](Entity &draggable) {
         UIComponent &cmp = draggable.get<UIComponent>();
         Rectangle rect = cmp.rect();
@@ -261,7 +261,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   handle.cmp()
       .set_desired_width(handle_config.size.x_axis)
       .set_desired_height(percent(1.f));
-  handle.ent().template addComponentIfMissing<InFocusCluster>();
+  handle.ent().template toggleComponent<InFocusCluster>(true);
 
   // Add handle label if needed
   if (handle_label_position == SliderHandleValueLabelPosition::OnHandle) {
@@ -276,18 +276,18 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_font(config.font_name, config.font_size);
 
     auto handle_label = div(ctx, mk(handle.ent()), handle_label_config);
-    handle_label.ent().template addComponentIfMissing<InFocusCluster>();
+    handle_label.ent().template toggleComponent<InFocusCluster>(true);
   }
 
   // Add keyboard listener
-  slider_bg.addComponentIfMissing<ui::HasLeftRightListener>(
+  slider_bg.toggleComponent<ui::HasLeftRightListener>(true,
       [apply_slider_value, &sliderState](Entity &ent, int dir) {
         const float step = 0.01f;
         apply_slider_value(ent, sliderState.value + (dir < 0 ? -step : step));
       });
 
   owned_value = sliderState.value;
-  entity.template addComponentIfMissing<FocusClusterRoot>();
+  entity.template toggleComponent<FocusClusterRoot>(true);
   // Consumed on read, not cleared at the top of the build: the drag system runs
   // after it, so clearing first threw away the change it had just recorded and
   // any caller reading the returned bool never saw the drag at all.
@@ -599,11 +599,9 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
       .set_fill_color(fill_color)
       .set_track_color(track_color);
 
-  // Remove HasColor so the regular rectangle rendering doesn't draw a
-  // background
-  entity.removeComponentIfExists<HasColor>();
-  // Also remove border so it doesn't render a rectangle border
-  entity.removeComponentIfExists<HasBorder>();
+  // Ring draws itself; drop the rect fill and border.
+  entity.toggleComponent<HasColor>(false);
+  entity.toggleComponent<HasBorder>(false);
 
   return ElementResult{false, entity, normalized};
 }
@@ -669,7 +667,7 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
   stepperState.index %= options.size();
   stepperState.num_options = options.size();
 
-  entity.addComponentIfMissing<ui::HasLeftRightListener>(
+  entity.toggleComponent<ui::HasLeftRightListener>(true,
       [](Entity &ent, int dir) {
         auto &state = ent.get<HasStepperState>();
         if (state.num_options == 0)

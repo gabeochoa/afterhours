@@ -93,7 +93,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
                 ? Theme::Usage::None : config.color_usage)
             .with_rounded_corners(RoundedCorners(button_corners).right_sharp())
             .with_render_layer(config.render_layer + 0));
-    label.ent().template addComponentIfMissing<InFocusCluster>();
+    label.ent().template toggleComponent<InFocusCluster>(true);
   }
 
   // Index of the trigger button within the dropdown entity's children
@@ -153,9 +153,9 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Mark the label + main dropdown button as a focus cluster, but do not
   // include dropdown items (they should be separately focusable when open).
-  entity.template addComponentIfMissing<FocusClusterRoot>();
+  entity.template toggleComponent<FocusClusterRoot>(true);
   // Mark the main dropdown button as part of the cluster
-  main_btn.ent().template addComponentIfMissing<InFocusCluster>();
+  main_btn.ent().template toggleComponent<InFocusCluster>(true);
 
   // When open, show options in a tray for arrow-key navigation
   if (dropdownState.on) {

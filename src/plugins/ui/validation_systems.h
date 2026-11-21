@@ -88,7 +88,8 @@ struct ValidateMinTouchTarget : System<> {
           config.min_touch_target_size);
       report_violation(config, "MinTouchTarget", message, entity.id);
       if (config.highlight_violations)
-        entity.addComponentIfMissing<ValidationViolation>(message, "MinTouchTarget", 1.f);
+        entity.toggleComponent<ValidationViolation>(
+            true, message, "MinTouchTarget", 1.f);
     }
   }
 

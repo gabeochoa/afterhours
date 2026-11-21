@@ -77,7 +77,7 @@ bool dismiss_menu(Ctx &ctx, HasMenuState &state, bool open) {
   if (inside) ctx.set_focus(state.restore_focus);
   state.was_open_last_frame = false;
   auto panel = UICollectionHolder::getEntityForID(state.panel);
-  if (panel.valid()) panel.asE().template addComponentIfMissing<ShouldHide>();
+  if (panel.valid()) panel.asE().template toggleComponent<ShouldHide>(true);
   return true;
 }
 

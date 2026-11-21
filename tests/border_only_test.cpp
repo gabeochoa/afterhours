@@ -22,7 +22,7 @@ static void check_border_only_pixels(bool batched) {
   h.layout_only();
   auto &e = UICollectionHolder::getEntityForID(id).asE();
   CHECK(e.has<HasBorder>());
-  e.removeComponentIfExists<HasColor>();
+  e.toggleComponent<HasColor>(false);
   CHECK(!e.has<HasColor>());
   graphics::begin_frame();
   graphics::clear_background(Color{0, 0, 0, 255});

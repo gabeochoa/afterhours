@@ -175,40 +175,18 @@ inline void apply_flags(Entity &entity, const ComponentConfig &config) {
   entity.get<UIComponent>().focus_ring_offset = config.focus_ring_offset;
   entity.get<UIComponent>().focus_ring_thickness = config.focus_ring_thickness;
   if (config.consumes_directional_input)
-    entity.addComponentIfMissing<ConsumesDirectionalInput>();
-  if (config.ignore_pointer_events)
-    entity.addComponentIfMissing<IgnorePointerEvents>();
-  else
-    entity.removeComponentIfExists<IgnorePointerEvents>();
-  if (config.inert)
-    entity.addComponentIfMissing<Inert>();
-  else
-    entity.removeComponentIfExists<Inert>();
-  if (config.takes_focus)
-    entity.removeComponentIfExists<DoesNotTakeFocus>();
-  else
-    entity.addComponentIfMissing<DoesNotTakeFocus>();
+    entity.toggleComponent<ConsumesDirectionalInput>(true);
+  entity.toggleComponent<IgnorePointerEvents>(config.ignore_pointer_events);
+  entity.toggleComponent<Inert>(config.inert);
+  entity.toggleComponent<DoesNotTakeFocus>(!config.takes_focus);
   if (config.skip_grid_snap)
     entity.get<UIComponent>().skip_grid_snap = true;
   if (config.select_on_focus)
-    entity.addComponentIfMissing<SelectOnFocus>();
-  if (config.has_click_activation_override()) {
-    entity.addComponentIfMissing<HasClickActivationMode>(
-        config.click_activation);
-  } else {
-    entity.removeComponentIfExists<HasClickActivationMode>();
-  }
-
-  if (config.disabled)
-    entity.addComponentIfMissing<IsDisabled>();
-  else
-    entity.removeComponentIfExists<IsDisabled>();
-
-  if (config.hidden) {
-    entity.addComponentIfMissing<ShouldHide>();
-  } else {
-    entity.removeComponentIfExists<ShouldHide>();
-  }
+    entity.toggleComponent<SelectOnFocus>(true);
+  entity.toggleComponent<HasClickActivationMode>(
+      config.has_click_activation_override(), config.click_activation);
+  entity.toggleComponent<IsDisabled>(config.disabled);
+  entity.toggleComponent<ShouldHide>(config.hidden);
 }
 
 inline void apply_layout(Entity &entity, const ComponentConfig &config) {
@@ -281,8 +259,8 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
           ? PseudoLocale::None
           : UIStylingDefaults::get().pseudo_locale;
   if (!config.tooltip_text.empty())
-    entity.addComponentIfMissing<ui::HasTooltip>(
-        pseudo_localize(config.tooltip_text, pseudo), config.tooltip_delay,
+    entity.toggleComponent<ui::HasTooltip>(
+        true, pseudo_localize(config.tooltip_text, pseudo), config.tooltip_delay,
         ui::overlay::Placement::Below, config.tooltip_font_size,
         config.tooltip_padding, config.tooltip_gap);
 
@@ -338,12 +316,10 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
   } else {
     lbl.clear_text_shadow();
   }
-  if (config.unit_motion.has_value()) {
-    auto &st = entity.addComponentIfMissing<HasTextUnitMotion>();
-    st.cfg = *config.unit_motion;
+  if (auto *st = entity.toggleComponent<HasTextUnitMotion>(
+          config.unit_motion.has_value())) {
+    st->cfg = *config.unit_motion;
     update_text_units(entity, config.label);
-  } else {
-    entity.removeComponentIfExists<HasTextUnitMotion>();
   }
 }
 
@@ -352,55 +328,40 @@ struct ConfiguredTexture : BaseComponent {};
 inline void apply_texture(Entity &entity, const ComponentConfig &config) {
   if (!config.texture_config.has_value()) {
     if (!entity.has<ConfiguredTexture>()) return;
-    entity.removeComponentIfExists<texture_manager::HasTexture>();
+    entity.toggleComponent<texture_manager::HasTexture>(false);
     entity.removeComponent<ConfiguredTexture>();
     return;
   }
-  entity.addComponentIfMissing<ConfiguredTexture>();
+  entity.toggleComponent<ConfiguredTexture>(true);
   const TextureConfig &conf = config.texture_config.value();
-  auto &ht = entity.addComponentIfMissing<texture_manager::HasTexture>(
-      conf.texture, conf.alignment);
-  ht.texture = conf.texture;
-  ht.alignment = conf.alignment;
+  auto *ht = entity.toggleComponent<texture_manager::HasTexture>(
+      true, conf.texture, conf.alignment);
+  ht->texture = conf.texture;
+  ht->alignment = conf.alignment;
 }
 
 inline void apply_shadow(Entity &entity, const ComponentConfig &config) {
-  if (!config.has_shadow()) {
-    entity.removeComponentIfExists<HasShadow>();
-    return;
-  }
-  const Shadow &shadow = config.shadow_config.value();
-  auto &hs = entity.addComponentIfMissing<HasShadow>(shadow);
-  hs.shadow = shadow;
+  if (auto *hs = entity.toggleComponent<HasShadow>(config.has_shadow()))
+    hs->shadow = config.shadow_config.value();
 }
 
 inline void apply_border(Entity &entity, const ComponentConfig &config) {
-  if (!config.has_border()) {
-    entity.removeComponentIfExists<HasBorder>();
-    return;
-  }
-  const Border &border = config.border_config.value();
-  auto &hb = entity.addComponentIfMissing<HasBorder>(border);
-  hb.border = border;
+  if (auto *hb = entity.toggleComponent<HasBorder>(config.has_border()))
+    hb->border = config.border_config.value();
 }
 
 inline void apply_bevel(Entity &entity, const ComponentConfig &config) {
-  if (!config.has_bevel()) {
-    entity.removeComponentIfExists<HasBevelBorder>();
-    return;
-  }
-  const BevelBorder &bevel = config.bevel_config.value();
-  entity.addComponentIfMissing<HasBevelBorder>(bevel);
+  entity.toggleComponent<HasBevelBorder>(
+      config.has_bevel(),
+      config.has_bevel() ? config.bevel_config.value() : BevelBorder{});
 }
 
 inline void apply_on_draw(Entity &entity, const ComponentConfig &config) {
-  if (!config.on_draw_bg && !config.on_draw_fg) {
-    entity.removeComponentIfExists<HasOnDraw>();
-    return;
+  if (auto *hod = entity.toggleComponent<HasOnDraw>(
+          config.on_draw_bg || config.on_draw_fg)) {
+    hod->bg = config.on_draw_bg;
+    hod->fg = config.on_draw_fg;
   }
-  auto &hod = entity.addComponentIfMissing<HasOnDraw>();
-  hod.bg = config.on_draw_bg;
-  hod.fg = config.on_draw_fg;
 }
 
 inline void apply_render_layer(HasUIContext auto &ctx, Entity &entity,
@@ -417,13 +378,9 @@ inline void apply_render_layer(HasUIContext auto &ctx, Entity &entity,
 }
 
 inline void apply_nine_slice(Entity &entity, const ComponentConfig &config) {
-  if (!config.has_nine_slice()) {
-    entity.removeComponentIfExists<HasNineSliceBorder>();
-    return;
-  }
-  const NineSliceBorder &nine_slice = config.nine_slice_config.value();
-  auto &hn = entity.addComponentIfMissing<HasNineSliceBorder>(nine_slice);
-  hn.nine_slice = nine_slice;
+  if (auto *hn =
+          entity.toggleComponent<HasNineSliceBorder>(config.has_nine_slice()))
+    hn->nine_slice = config.nine_slice_config.value();
 }
 
 // Most of this already behaves as an overlay: every field guards on has_value()
@@ -452,9 +409,9 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
                       config.overflow_y == Overflow::Hidden ||
                       config.overflow_y == Overflow::Scroll;
     if (needs_clip) {
-      entity.addComponentIfMissing<HasClipChildren>();
+      entity.toggleComponent<HasClipChildren>(true);
     } else if (!overlay) {
-      entity.removeComponentIfExists<HasClipChildren>();
+      entity.toggleComponent<HasClipChildren>(false);
     }
 
     bool needs_scroll = config.overflow_x == Overflow::Scroll ||
@@ -472,7 +429,7 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
                           config.overflow_y == Overflow::Auto);
     } else if (entity.has<HasScrollView>() &&
                entity.get<HasScrollView>().config_owned) {
-      entity.removeComponentIfExists<HasScrollView>();
+      entity.toggleComponent<HasScrollView>(false);
     }
   }
 
@@ -491,8 +448,8 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   }
 
   if (Theme::is_valid(config.color_usage)) {
-    entity.addComponentIfMissing<HasColor>(
-        ctx.theme.from_usage(config.color_usage, config.disabled));
+    entity.toggleComponent<HasColor>(
+        true, ctx.theme.from_usage(config.color_usage, config.disabled));
     entity.get<HasColor>().set(
         ctx.theme.from_usage(config.color_usage, config.disabled));
   } else if (config.color_usage == Theme::Usage::Custom) {
@@ -501,17 +458,17 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
       const Color custom =
           config.disabled ? ctx.theme.disabled_variant(config.custom_color.value())
                           : config.custom_color.value();
-      entity.addComponentIfMissing<HasColor>(custom);
+      entity.toggleComponent<HasColor>(true, custom);
       entity.get<HasColor>().set(custom);
     } else {
-      entity.addComponentIfMissing<HasColor>(colors::UI_PINK);
+      entity.toggleComponent<HasColor>(true, colors::UI_PINK);
       entity.get<HasColor>().set(colors::UI_PINK);
     }
   } else if (config.color_usage == Theme::Usage::None ||
              (!overlay && config.color_usage == Theme::Usage::Default)) {
     // Auto-add transparent background for elements that don't specify
     // a color, so child divs don't retain stale backgrounds.
-    entity.addComponentIfMissing<HasColor>(colors::transparent());
+    entity.toggleComponent<HasColor>(true, colors::transparent());
     entity.get<HasColor>().set(colors::transparent());
   }
   // Apply per-component hover color if specified
@@ -519,10 +476,10 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
     entity.get<HasColor>().hover_color = config.hover_color;
   }
   if (config.image_tint.has_value()) {
-    entity.addComponentIfMissing<HasImageTint>(*config.image_tint).color =
+    entity.toggleComponent<HasImageTint>(true, *config.image_tint)->color =
         *config.image_tint;
   } else if (!overlay) {
-    entity.removeComponentIfExists<HasImageTint>();
+    entity.toggleComponent<HasImageTint>(false);
   }
   // opacity has no "unset" value, so in overlay mode a default 1.0 is treated
   // as "not mentioned" rather than "make it opaque".
@@ -532,7 +489,7 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   }
   // Apply cursor type if specified
   if (config.cursor_type.has_value()) {
-    entity.addComponentIfMissing<HasCursor>(config.cursor_type.value());
+    entity.toggleComponent<HasCursor>(true, config.cursor_type.value());
   }
   if (entity.has<HasUIModifiers>()) {
     auto &prior = entity.get<HasUIModifiers>();
