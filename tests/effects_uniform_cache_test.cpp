@@ -1,8 +1,3 @@
-// effects_uniform_cache_test.cpp
-// Effect::set must not re-upload an unchanged uniform value, and must
-// re-upload after a shader reload (locations and values both reset).
-//
-// Opens a hidden window: SetShaderValue needs a GL context.
 
 #include <cstdio>
 #include <fstream>
@@ -48,31 +43,25 @@ int main() {
   e.loaded = e.shader.id != 0;
   check(e.loaded, "test shader compiles");
 
-  // Same float 10x: one upload, not ten.
   for (int i = 0; i < 10; i++) e.set("uFloat", 1.5f);
   printf("  float x10 uploads=%d\n", e.upload_count);
   check(e.upload_count == 1, "unchanged float uploads once");
 
-  // Changed value uploads again, then skips.
   e.set("uFloat", 2.5f);
   e.set("uFloat", 2.5f);
   printf("  float changed+repeat uploads=%d\n", e.upload_count);
   check(e.upload_count == 2, "changed float uploads, repeat skips");
 
-  // Same vec2 10x: one upload.
   for (int i = 0; i < 10; i++) e.set("uVec2", Vector2Type{3.f, 4.f});
   printf("  vec2 x10 uploads=%d\n", e.upload_count);
   check(e.upload_count == 3, "unchanged vec2 uploads once");
 
-  // Same colour 10x: one upload.
   for (int i = 0; i < 10; i++) e.set("uColor", ColorType{10, 20, 30, 255});
   printf("  color x10 uploads=%d\n", e.upload_count);
   check(e.upload_count == 4, "unchanged colour uploads once");
 
-  // Locations are looked up once per uniform, however many sets.
   check(e.locations.size() == 3, "location cache holds one entry per uniform");
 
-  // Reload clears both caches, so the same value uploads again.
   {
     const std::string path = "/tmp/effects_uniform_cache_test.fs";
     { std::ofstream out(path); out << FS; }

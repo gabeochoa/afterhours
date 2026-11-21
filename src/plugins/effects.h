@@ -51,7 +51,7 @@ struct Effect {
     bool valid = false;
   };
   std::unordered_map<std::string, LastValue> last_values;
-  int upload_count = 0; // test seam: counts real backend uploads
+  int upload_count = 0;
 
   static Effect load(const std::string &name, const std::string &file = "") {
     Effect e;
@@ -113,8 +113,6 @@ struct Effect {
     return loc;
   }
 
-  // Upload only when the value differs: per-frame sets of a constant
-  // uniform were paying a backend SetShaderValue every call.
   void upload(const char *uniform, int type, const float *data, int n) {
     LastValue &last = last_values[uniform];
     if (last.valid && last.type == type &&
