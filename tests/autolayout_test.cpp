@@ -721,10 +721,6 @@ TEST(screen_pct_half) {
   CHECK_APPROX(t.ui(root).computed[Axis::Y], 360.f);
 }
 
-// ---------------------------------------------------------------------------
-// percent(1.0) child + margin fits the parent: the percent share is charged
-// its margin, so the footprint (size + margin) equals the share.
-// ---------------------------------------------------------------------------
 TEST(margin_shrinks_percent_child_to_fit) {
   TestLayout t;
   auto &root = t.make_ui(pixels(300), pixels(300));
