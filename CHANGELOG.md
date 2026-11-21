@@ -24,6 +24,9 @@ Started partway through the project's life, so it does not go all the way back.
 **`colors::to_hsl`, `colors::to_rgb`, and `colors::get_highlighted` are deleted.** They had no callers, mixed 0-255 and 0-1 units so saturation came out wrong, and returned black with a warning on non-raylib builds.
 *What to do:* use `colors::to_hsv` / `colors::from_hsv`. For `get_highlighted`, `colors::lighten` covers the same job.
 
+**Escape has one owner per press.** A text field's Escape blur now consumes `MenuBack` (it used to deliberately leave the press for an enclosing dialog, so one press blurred the field *and* closed the dialog), and the modal close watcher defers to focus inside an open menu/popover, dropdown, or text field instead of closing the modal through it — the watcher is an update system and runs before the imm build that owns those layers. Stacked Escape now peels topmost-first: menu, then field blur, then modal, one layer per press.
+*What to do:* apps that relied on Escape closing a field and its dialog in one press need a second press for the dialog. Apps that dismissed a modal while a menu was open inside it now get the menu closed first. Covered by `escape_owner_test`.
+
 ### Visual — re-baseline
 
 - **raylib falls back across loaded faces per codepoint, like sokol.** A glyph the label's face lacks is now drawn from the first other face loaded through `load_font_*` that has it, instead of the replacement glyph. `measure_text` sums the same runs `draw_text_ex` places. The replacement is used only when no loaded face covers the codepoint. Load order is priority. Known limits: rotated text and text containing `\n` use the primary face only, and fallback glyphs sit on their own face's ascent rather than the primary's baseline. `fallback_runs(font, text)` shows the split. Covered by `raylib_fallback_test`.
