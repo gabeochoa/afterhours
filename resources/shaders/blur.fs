@@ -1,9 +1,5 @@
 #version 330
 
-// Separable gaussian for effects::BlurPass: one pass along `direction`
-// (in UV units), run twice (horizontal, then vertical). Weights match the
-// sokol/Metal blur in drawing_helpers.h so both backends blur identically;
-// direction (0, 0) is an exact copy.
 
 in vec2 fragTexCoord;
 in vec4 fragColor;
@@ -15,7 +11,6 @@ uniform vec2 direction;
 out vec4 finalColor;
 
 vec4 tap(float offset) {
-    // Render textures wrap on raylib; clamp like sokol's CLAMP_TO_EDGE sampler.
     return texture(texture0, clamp(fragTexCoord + direction * offset, 0.0, 1.0));
 }
 

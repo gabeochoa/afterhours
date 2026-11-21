@@ -1,9 +1,3 @@
-// blur_shader_test.cpp
-// R-117: BlurPass shipped with no blur.fs anywhere in the tree, so on raylib
-// Effect::load("blur") always failed and with_blur drew unblurred. This runs
-// the real pass headless over a sharp edge and measures the spread.
-//
-// Set BLUR_SHOT_DIR to also write before/after PNGs there (for PR evidence).
 
 #define FMT_HEADER_ONLY
 #include <afterhours/src/drawing_helpers.h>
@@ -62,7 +56,6 @@ static void write_shot(const RgbaCapture &c, const char *name) {
 }
 
 int main() {
-  // Effect::load resolves resources/shaders/blur.fs under the repo root.
   if (std::filesystem::exists("../resources/shaders/blur.fs"))
     std::filesystem::current_path("..");
   check(std::filesystem::exists("resources/shaders/blur.fs"),
@@ -89,7 +82,7 @@ int main() {
   check(max_step(*before, y) == 255, "source edge is a single 255 step");
 
   pass.apply(frame, RectangleType{0, 0, W, H}, 6.f);
-  end_texture_mode(); // apply() leaves the frame bound for the caller
+  end_texture_mode();
   auto after = capture_render_texture_rgba(frame);
   check(after.has_value(), "capture after blur");
   printf("  edge: step 255 -> %d, x=edge-4: 0 -> %d, x=edge+4: 255 -> %d, far: %d/%d\n",
@@ -112,7 +105,7 @@ int main() {
   check(id_before && id_after && id_before->pixels == id_after->pixels,
         "radius 0 is the identity");
   unload_render_texture(identity);
-  } // pass and its render textures die before shutdown
+  }
 
   graphics::shutdown();
   if (failures)
