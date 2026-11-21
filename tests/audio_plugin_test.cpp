@@ -154,6 +154,28 @@ int main() {
     check(sounds.is_playing("chirp_a1"), "pool alias play is playing");
     check(Audio::expect_sound_played("chirp_a1"), "pool alias play logged");
 
+    // Prefix-policy plays must record too (they bypass play()).
+    Audio::clear_play_log();
+    sounds.play_random_match("chirp");
+    check(Audio::play_log().size() == 1 &&
+              Audio::play_log().front().name.rfind("chirp", 0) == 0,
+          "play_random_match logged with prefix name");
+    Audio::clear_play_log();
+    sounds.play_first_available_match("chirp");
+    check(Audio::play_log().size() == 1 &&
+              Audio::play_log().front().name.rfind("chirp", 0) == 0,
+          "play_first_available_match logged with prefix name");
+    Audio::clear_play_log();
+    sounds.play_if_none_playing("chirp");
+    check(Audio::play_log().size() <= 1, "play_if_none_playing logs at most once");
+    if (Audio::play_log().size() == 1) {
+        check(Audio::play_log().front().name.rfind("chirp", 0) == 0,
+              "play_if_none_playing logged with prefix name");
+    }
+    Audio::clear_play_log();
+    sounds.play_random_match("no_such_prefix");
+    check(Audio::play_log().empty(), "no-match policy play logs nothing");
+
     const std::vector<float> samples(441, 0.25f);
     check(sounds.add_samples("beep_gen", samples, 44100, 1, "effects"),
           "add_samples registers generated sound");

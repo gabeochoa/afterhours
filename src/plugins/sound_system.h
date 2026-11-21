@@ -222,10 +222,20 @@ struct sound_system : developer::Plugin {
         }
 
         void play_random_match(const std::string &prefix) {
-            auto match = impl.get_random_match(prefix);
-            if (match.has_value()) {
-                ::afterhours::PlaySound(match.value());
+            auto matches = impl.lookup(prefix);
+            const auto num = static_cast<size_t>(
+                std::distance(matches.first, matches.second));
+            if (num == 0) return;
+            size_t idx = 0;
+#if AFTER_HOURS_RANDOM_ENABLED
+            if (num > 1) {
+                idx = static_cast<size_t>(afterhours::RandomEngine::get().get_int(
+                    0, static_cast<int>(num) - 1));
             }
+#endif
+            auto it = matches.first;
+            std::advance(it, idx);
+            play_loaded(it->first);
         }
 
         void play_if_none_playing(const std::string &prefix) {
@@ -239,7 +249,7 @@ struct sound_system : developer::Plugin {
                     return;
                 }
             }
-            ::afterhours::PlaySound(matches.first->second);
+            play_loaded(matches.first->first);
         }
 
         void play_first_available_match(const std::string &prefix) {
@@ -250,11 +260,11 @@ struct sound_system : developer::Plugin {
             }
             for (auto it = matches.first; it != matches.second; ++it) {
                 if (!::afterhours::IsSoundPlaying(it->second)) {
-                    ::afterhours::PlaySound(it->second);
+                    play_loaded(it->first);
                     return;
                 }
             }
-            ::afterhours::PlaySound(matches.first->second);
+            play_loaded(matches.first->first);
         }
 
         void update_volume(const float new_v) {
