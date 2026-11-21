@@ -107,7 +107,9 @@ struct MousePointerState {
   // pos and delta are in the same space as UIComponent::rect() -- letterbox
   // and resolution scaling are already applied. Callers reaching for the
   // backend's raw mouse instead have to redo that conversion by hand.
-  input::MousePosition pos{};
+  // Off-screen until the first event, so a pre-event hit test misses
+  // instead of landing on whatever sits at the origin.
+  input::MousePosition pos{-1.f, -1.f};
   // Movement since the previous frame. Derived from pos rather than the
   // backend's mouse delta, which is raw window pixels. Zero when there is no
   // cursor, and no dead zone, unlike moved_this_frame below.

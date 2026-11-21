@@ -904,6 +904,7 @@ struct MetalPlatformAPI {
     // struct, so it is applied in input_system.h's Metal branch instead --
     // which is where the raylib path does it as well.
     float dpi = sapp_dpi_scale();
+    if (!(dpi > 0.f)) dpi = 1.f; // pre-init reads 0; 0/0 is NaN
     return {s.mouse_x / dpi, s.mouse_y / dpi};
   }
   static Vec2 get_screen_to_world_2d(const Vec2 &position,
@@ -962,6 +963,7 @@ struct MetalPlatformAPI {
   static Vec2 get_mouse_delta() {
     auto &s = metal_detail::input_state();
     float dpi = sapp_dpi_scale();
+    if (!(dpi > 0.f)) dpi = 1.f; // pre-init reads 0; 0/0 is NaN
     return {s.mouse_dx / dpi, s.mouse_dy / dpi};
   }
 
