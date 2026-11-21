@@ -18,6 +18,7 @@
 #include <afterhours/src/random_engine.h>
 
 #include <cstdio>
+#include <cstring>
 #include <vector>
 
 using namespace afterhours;
@@ -54,7 +55,9 @@ void test_different_seed_differs() {
   CHECK(a != b);
 }
 
-// String seed is stable: same string -> same sequence.
+// String seed is stable: same string -> same sequence, and the seed is the
+// specified FNV-1a 32-bit hash of the bytes (not std::hash, which is
+// implementation-defined and differed across STLs).
 void test_string_seed_stable() {
   auto &r = RandomEngine::get();
   r.set_seed(std::string{"level-3"});
@@ -62,8 +65,67 @@ void test_string_seed_stable() {
   r.set_seed(std::string{"level-3"});
   int y = r.get_int(0, 1000000);
   CHECK(x == y);
-  CHECK(r.get_seed() == static_cast<std::uint32_t>(
-                            std::hash<std::string>{}(std::string{"level-3"})));
+  // FNV-1a 32 over "level-3" — pinned literal, STL-independent.
+  CHECK(r.get_seed() == 2911412057u);
+  CHECK(x == 288888);
+}
+
+// Golden vectors for the bit-stable contract (G-P12). Every literal is the
+// exact output of the specified algorithms (mt19937 raw draws, FNV-1a seed,
+// Lemire int mapping, 24-bit float mapping) for the given seed. If any
+// hash/mapping/engine behavior drifts — including a future std::hash or
+// std::uniform_* swap — these fail loudly on every STL.
+void test_golden_vectors() {
+  // Raw draws: mt19937, seed 12345.
+  RngStream raw(std::uint32_t{12345});
+  const std::uint32_t expected_raw[] = {
+      3992670690u, 3823185381u, 1358822685u, 561383553u,
+      789925284u,  170765737u,  878579710u,  3549516158u};
+  for (auto want : expected_raw) CHECK(raw.next_u32() == want);
+
+  // Raw draws cross-check with a second seed.
+  RngStream raw42(std::uint32_t{42});
+  CHECK(raw42.next_u32() == 1608637542u);
+  CHECK(raw42.next_u32() == 3421126067u);
+  CHECK(raw42.next_u32() == 4083286876u);
+  CHECK(raw42.next_u32() == 787846414u);
+
+  // Mapped ints: Lemire [0, 1000000], seed 12345.
+  RngStream ints(std::uint32_t{12345});
+  const int expected_ints[] = {929617, 890155, 316375, 130707,
+                               183918, 39759,  204560, 826436};
+  for (int want : expected_ints) CHECK(ints.get_int(0, 1000000) == want);
+
+  // Mapped floats: 24-bit construction [-1, 1), seed 12345 — compare bits.
+  RngStream floats(std::uint32_t{12345});
+  const std::uint32_t expected_float_bits[] = {0x3f5bf6a2u, 0x3f47c25au,
+                                               0xbebc080cu, 0xbf3d13f0u};
+  for (auto want : expected_float_bits) {
+    float got = floats.get_float(-1.0f, 1.0f);
+    std::uint32_t got_bits = 0;
+    memcpy(&got_bits, &got, sizeof(got_bits));
+    CHECK(got_bits == want);
+    CHECK(got >= -1.0f && got < 1.0f);
+  }
+
+  // Bools derive from the int mapping (get_int(0,1) == 1), seed 12345.
+  RngStream bools(std::uint32_t{12345});
+  const int expected_bools[] = {1, 1, 0, 0, 0, 0, 0, 1};
+  for (int want : expected_bools) CHECK((bools.get_bool() ? 1 : 0) == want);
+
+  // String-seeded stream: seed value and first mapped draw are pinned.
+  RngStream named(std::string{"level-3"});
+  CHECK(named.get_seed() == 2911412057u);
+  CHECK(named.get_int(0, 1000000) == 288888);
+
+  // Degenerate and full ranges stay exact.
+  RngStream degenerate(std::uint32_t{7});
+  CHECK(degenerate.get_int(42, 42) == 42);
+  RngStream full(std::uint32_t{7});
+  CHECK(full.get_int(INT32_MIN, INT32_MAX) == -1819742033);
+  CHECK(full.get_int(INT32_MIN, INT32_MAX) == -1171069756);
+  RngStream flat(std::uint32_t{7});
+  CHECK(flat.get_float(3.0f, 3.0f) == 3.0f);
 }
 
 // get_int is inclusive [a,b] and stays in range.
@@ -177,6 +239,7 @@ int main() {
     {"same_seed_same_sequence", test_same_seed_same_sequence},
     {"different_seed_differs", test_different_seed_differs},
     {"string_seed_stable", test_string_seed_stable},
+    {"golden_vectors", test_golden_vectors},
     {"int_range_bounds", test_int_range_bounds},
     {"float_range_bounds", test_float_range_bounds},
     {"get_index", test_get_index},
