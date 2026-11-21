@@ -24,7 +24,7 @@ std::vector<MenuItem> two_rows() {
           MenuItem{"Safe", "", false, false}};
 }
 
-} // namespace
+}
 
 TEST(access_key_parse_marked_label) {
   const auto p = parse_access_key("&File");
@@ -99,7 +99,7 @@ TEST(menu_alt_char_activates_the_row) {
   testing::input_injector::reset_all();
   testing::input_injector::set_key_held(keys::LEFT_ALT);
   testing::input_injector::set_key_down(keys::F);
-  testing::input_injector::reset_frame(); // the press lands next frame
+  testing::input_injector::reset_frame();
   h.begin_frame();
   const int chosen =
       context_menu(h.context(), mk(h.root(), 0), two_rows(),
@@ -143,8 +143,6 @@ TEST(underline_is_drawn_under_the_marked_glyph) {
     }
   ui_test::check(text_x >= 0.f, "the marked label renders", __FILE__,
                  __LINE__);
-  // Harness measure: every char advances font_size * 0.5; "Saf" is 3 chars
-  // and the e is the 4th.
   bool found = false;
   for (const auto &c : calls) {
     if (c.op == "text" || c.rect.height != 1.f)
@@ -164,8 +162,6 @@ TEST(plain_label_draws_no_underline) {
           ComponentSize{pixels(120), pixels(24)}));
   const auto &calls = h.render();
   bool found = false;
-  // The label's own box is the only thing in frame; nothing but its text
-  // may be a 1px-tall rect here.
   for (const auto &c : calls)
     if (c.op != "text" && c.rect.height == 1.f)
       found = true;

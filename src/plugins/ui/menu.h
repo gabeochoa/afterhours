@@ -227,9 +227,6 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
                                             scaling, ctx.theme.ui_scale,
                                             ctx.screen_height);
 
-  // Alt+access-char activation: a row whose label marks "&X" is chosen by
-  // pressing Alt+H (either Alt side). First match wins; disabled rows and
-  // separators never match. A mouse click this frame can still override.
   int chosen = kNoMenuSelection;
   if (input::is_key_down(keys::LEFT_ALT) ||
       input::is_key_down(keys::RIGHT_ALT)) {

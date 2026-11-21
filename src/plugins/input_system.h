@@ -803,9 +803,6 @@ struct input : developer::Plugin {
         log_error("@notimplemented get_char_pressed");
         return 0;
     }
-    // The none branch must see the same E2E layer as the raylib one: headless
-    // UI tests are built with the none backend precisely so no window is
-    // needed, and the key-injection tests would be blind without it.
     static bool is_key_pressed(const KeyCode keycode) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
         return testing::test_input::is_key_pressed(

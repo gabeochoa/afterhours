@@ -69,7 +69,6 @@ struct ComponentConfig {
   bool padding_is_default = false;
   Margin margin;
   std::string label;
-  // Byte index into label of the access-key glyph to underline; -1 = none.
   int label_underline_index = -1;
   bool is_absolute = false;
   FlexDirection flex_direction = FlexDirection::Column;
@@ -273,8 +272,6 @@ struct ComponentConfig {
     return *this;
   }
 
-  // Label with an Alt-style access key: "&File" displays as "File" with the
-  // F underlined (see access_key.h). A label with no marker sets plain text.
   ComponentConfig &with_access_label(const std::string &lbl) {
     const auto parsed = parse_access_key(lbl);
     label = parsed.display;
@@ -899,7 +896,7 @@ struct ComponentConfig {
   ComponentConfig &with_styled_label(std::vector<TextSpan> spans) {
     styled_label = std::move(spans);
     label.clear();
-    label_underline_index = -1; // styled runs carry their own spans now
+    label_underline_index = -1;
     for (const auto &s : styled_label)
       label += s.text;
     return *this;
