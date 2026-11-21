@@ -17,7 +17,11 @@
 #if defined(AFTERHOURS_STB_IMAGE_IMPLEMENTATION) && !defined(STB_IMAGE_IMPLEMENTATION)
 #define STB_IMAGE_IMPLEMENTATION
 #endif
+#if defined(AFTERHOURS_STB_IMAGE_IMPLEMENTATION) && !defined(STB_IMAGE_WRITE_IMPLEMENTATION)
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#endif
 #include <stb/stb_image.h>
+#include <stb/stb_image_write.h>
 #endif
 
 namespace afterhours {
@@ -113,6 +117,68 @@ inline std::optional<Image> load_image(const std::filesystem::path &path,
   const std::vector<std::uint8_t> bytes(std::istreambuf_iterator<char>(file),
                                         {});
   return decode_image(bytes, limits);
+}
+
+inline std::optional<Image> make_image(int width, int height, Color color,
+                                       ImageLimits limits = {}) {
+  const std::size_t bytes =
+      static_cast<std::size_t>(std::max(0, width)) *
+      static_cast<std::size_t>(std::max(0, height)) * 4;
+  if (width <= 0 || height <= 0 || width > limits.max_dimension ||
+      height > limits.max_dimension || bytes > limits.max_bytes) {
+    log_warn("make_image: {}x{} exceeds limits ({} px, {} bytes)", width,
+             height, limits.max_dimension, limits.max_bytes);
+    return std::nullopt;
+  }
+  Image image{width, height, std::vector<std::uint8_t>(bytes)};
+  for (std::size_t i = 0; i + 3 < image.rgba.size(); i += 4) {
+    image.rgba[i] = color.r;
+    image.rgba[i + 1] = color.g;
+    image.rgba[i + 2] = color.b;
+    image.rgba[i + 3] = color.a;
+  }
+  return image;
+}
+
+inline std::optional<std::vector<std::uint8_t>>
+encode_image(const Image &image) {
+  if (image.width <= 0 || image.height <= 0 ||
+      image.rgba.size() < static_cast<std::size_t>(image.width) *
+                              static_cast<std::size_t>(image.height) * 4) {
+    log_warn("encode_image: image is empty or truncated");
+    return std::nullopt;
+  }
+  std::vector<std::uint8_t> bytes;
+  // to_func, not to_mem: to_mem is only declared with the implementation
+  // compiled in, which raylib's own lib already ships.
+  const int ok = stbi_write_png_to_func(
+      [](void *context, void *data, int size) {
+        auto &out = *static_cast<std::vector<std::uint8_t> *>(context);
+        const auto *p = static_cast<const std::uint8_t *>(data);
+        out.insert(out.end(), p, p + size);
+      },
+      &bytes, image.width, image.height, 4, image.rgba.data(),
+      image.width * 4);
+  if (ok == 0 || bytes.empty()) {
+    log_warn("encode_image: PNG encode failed");
+    return std::nullopt;
+  }
+  return bytes;
+}
+
+inline bool export_image(const Image &image,
+                         const std::filesystem::path &path) {
+  auto bytes = encode_image(image);
+  if (!bytes)
+    return false;
+  std::ofstream file(path, std::ios::binary);
+  if (!file) {
+    log_warn("export_image: cannot open '{}'", path.string());
+    return false;
+  }
+  file.write(reinterpret_cast<const char *>(bytes->data()),
+             static_cast<std::streamsize>(bytes->size()));
+  return static_cast<bool>(file);
 }
 
 } // namespace afterhours

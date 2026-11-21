@@ -82,6 +82,25 @@ TEST(reset_frame_clears_unconsumed_delta) {
   CHECK(d.y == 0.0f);
 }
 
+TEST(right_button_hold_persists_across_frames) {
+  input_injector::reset_all();
+  test_input::set_right_button_down(true);
+  CHECK(input_injector::is_mouse_right_button_down());
+  CHECK(input_injector::is_mouse_right_button_pressed());
+  test_input::reset_frame();
+  CHECK(input_injector::is_mouse_right_button_down());
+  CHECK(!input_injector::is_mouse_right_button_pressed());
+
+  test_input::set_right_button_down(false);
+  CHECK(!input_injector::is_mouse_right_button_down());
+  CHECK(input_injector::is_mouse_right_button_released());
+
+  // Re-setting the same state is not a new edge.
+  test_input::reset_frame();
+  test_input::set_right_button_down(false);
+  CHECK(!input_injector::is_mouse_right_button_released());
+}
+
 TEST(scheduled_click_sets_press_and_release_edges) {
   input_injector::reset_all();
   input_injector::schedule_click_at(100.0f, 200.0f, 40.0f, 20.0f);

@@ -9,6 +9,8 @@
 
 // TODO eventually match this exactly 1-1 with UI input system so we can share
 // concepts
+#include <queue>
+
 namespace afterhours {
 namespace testing {
 namespace input_injector {
@@ -88,6 +90,14 @@ struct KeyHold {
   int keycode = 0;
   float remaining = 0.0f;
 };
+// FIFO of injected presses for get_key_pressed-style polling. consume_press
+// stays multi-reader for is_key_pressed; this queue is drained destructively,
+// exactly like raylib's GetKeyPressed queue.
+struct QueuedPress {
+  int key = 0;
+  int delay = 1;
+};
+inline std::queue<QueuedPress> key_press_queue{};
 inline KeyHold key_hold;
 } // namespace detail
 
@@ -99,6 +109,7 @@ inline void set_key_down(int key) {
     detail::synthetic_keys[key] = true;
     detail::synthetic_press_count[key]++;
     detail::synthetic_press_delay[key] = 1;
+    detail::key_press_queue.push({key, 1});
   }
 }
 
@@ -137,6 +148,16 @@ inline bool consume_press(int key) {
     return false;
   return detail::synthetic_press_count[key] > 0 &&
          detail::synthetic_press_delay[key] == 0;
+}
+
+/// Pop the next mature injected key press, or 0 when none is ready.
+inline int pop_key_pressed() {
+  auto &q = detail::key_press_queue;
+  if (q.empty() || q.front().delay > 0)
+    return 0;
+  int key = q.front().key;
+  q.pop();
+  return key;
 }
 
 inline bool consume_release(int key) {
@@ -219,6 +240,23 @@ inline void release_scheduled_click() {
     detail::mouse.just_pressed = false;
     detail::mouse.just_released = true;
     detail::pending_click.pending = false;
+  }
+}
+
+/// Hold or release the right button across frames. Unlike simulate_right_click
+/// this does not auto-release, so scripts can drag with it.
+inline void set_right_button_down(bool down) {
+  auto &m = detail::mouse;
+  if (m.right_down == down)
+    return;
+  m.active = true;
+  m.auto_release = false;
+  m.right_down = down;
+  if (down) {
+    m.right_just_pressed = true;
+    m.right_press_read = false;
+  } else {
+    m.right_just_released = true;
   }
 }
 
@@ -333,6 +371,17 @@ inline void reset_frame() {
       detail::synthetic_release_count[i]--;
     }
   }
+  // Mature the FIFO: an entry queued this frame waits one frame, like every
+  // other injected press.
+  std::queue<detail::QueuedPress> matured;
+  while (!detail::key_press_queue.empty()) {
+    detail::QueuedPress p = detail::key_press_queue.front();
+    detail::key_press_queue.pop();
+    if (p.delay > 0)
+      p.delay--;
+    matured.push(p);
+  }
+  detail::key_press_queue = std::move(matured);
 }
 
 /// Clear all synthetic input state
@@ -342,6 +391,7 @@ inline void reset_all() {
   detail::synthetic_press_delay.fill(0);
   detail::synthetic_release_count.fill(0);
   detail::synthetic_release_delay.fill(0);
+  std::queue<detail::QueuedPress>().swap(detail::key_press_queue);
   detail::mouse = {};
   detail::pending_click = {};
   detail::key_hold = {};
