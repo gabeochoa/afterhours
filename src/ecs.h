@@ -5,4 +5,5 @@
 #include "core/entity_helper.h"
 #include "core/entity_query.h"
 #include "core/system.h"
+#include "core/staged_restore.h"
 #include "core/typed_entity_handle.h"
