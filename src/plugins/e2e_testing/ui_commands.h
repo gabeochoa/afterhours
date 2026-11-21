@@ -329,7 +329,6 @@ struct HandleClickUICommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'right_click_ui name [under=scope]' - secondary click on a component by debug name.
 // A context menu is opened by name in the app and could only be opened by
 // coordinate in a test, which goes stale the moment the layout moves.
 template <typename InputAction>
@@ -608,7 +607,6 @@ struct HandleExpectFocusedCommand : System<PendingE2ECommand> {
 };
 
 // Forward declarations: defined with the other scope helpers below.
-// Forward declarations: defined with the other scope helpers below.
 inline bool is_within_scope(Entity &entity, EntityID scope);
 inline bool is_partially_visible(const Entity &entity);
 
@@ -670,7 +668,6 @@ struct HandleExpectHoveredCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'click_label "text" [under=scope|in=scope]' - clicks the element with the
 // exact label, but only if the click would land on it. click_text clicks the
 // first substring match at its centre without checking what is on top, so a
 // click that hit a modal or a covering element still passed. This one
@@ -1241,12 +1238,10 @@ inline void reset_multi_click(const std::string &name) {
   }
 }
 
-// 'double_click_ui name [dx dy] [under=scope]' and 'triple_click_ui ...'.
 //
 // Clicking a named element at an offset rather than at raw screen coordinates:
 // a layout change then retargets the click instead of silently landing on
 // empty space. dx/dy are from the element's top left; omitted means centre.
-// Name resolution (incl. scoping) is element_point() above.
 
 namespace multi_click_ui_detail {
 inline int phase = 0;
