@@ -254,6 +254,7 @@ ALL_TESTS := \
 	frustum_test \
 	instance_batcher_test \
 	lod_test \
+	world_label_test \
 	image_test \
 	image_raylib_test \
 	stepper_test \
