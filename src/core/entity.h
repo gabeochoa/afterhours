@@ -176,6 +176,19 @@ struct Entity {
     return removeComponent<T>();
   }
 
+  template <typename T, typename... Args>
+  T *toggleComponent(bool on, Args &&...args) {
+    if (!on) {
+      removeComponentIfExists<T>();
+      return nullptr;
+    }
+    if constexpr (std::is_constructible_v<T, Args &&...>) {
+      return &addComponentIfMissing<T>(std::forward<Args>(args)...);
+    } else {
+      return has<T>() ? &get<T>() : nullptr;
+    }
+  }
+
   template <typename A> void addAll() { addComponent<A>(); }
 
   template <typename A, typename B, typename... Rest> void addAll() {
