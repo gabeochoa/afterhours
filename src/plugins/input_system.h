@@ -757,16 +757,34 @@ struct input : developer::Plugin {
         log_error("@notimplemented get_char_pressed");
         return 0;
     }
-    static bool is_key_pressed(const KeyCode) {
+    // The none branch must see the same E2E layer as the raylib one: headless
+    // UI tests are built with the none backend precisely so no window is
+    // needed, and the key-injection tests would be blind without it.
+    static bool is_key_pressed(const KeyCode keycode) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_key_pressed(
+            keycode, [](int) { return false; });
+#else
         log_error("@notimplemented is_key_pressed");
         return false;
+#endif
     }
-    static bool is_key_pressed_repeat(const KeyCode) {
+    static bool is_key_pressed_repeat(const KeyCode keycode) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_key_pressed(
+            keycode, [](int) { return false; });
+#else
         return false;
+#endif
     }
-    static bool is_key_down(const KeyCode) {
+    static bool is_key_down(const KeyCode keycode) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_key_down(keycode,
+                                                [](int) { return false; });
+#else
         log_error("@notimplemented is_key_down");
         return false;
+#endif
     }
     static bool is_gamepad_available(const GamepadID) {
         log_error("@notimplemented is_gamepad_available");

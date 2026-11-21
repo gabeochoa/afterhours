@@ -216,6 +216,7 @@ ALL_TESTS := \
 	subtree_hover_test \
 	inert_test \
 	menu_test \
+	access_key_test \
 	color_swatch_test \
 	overlay_placement_test \
 	progress_bar_test \
@@ -392,6 +393,8 @@ $(OUT)/%: %.cpp
 
 # Exceptions. A rule with prerequisites and no recipe adds to the pattern rule
 # above instead of replacing it.
+# Any target declared with prerequisites and no recipe adds to the pattern rule.
+$(OUT)/access_key_test: CXXFLAGS_T = $(CXXFLAGS) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/ui_update_lifecycle_single_test: ui_update_lifecycle_single_test.cpp
 	$(CXX) $(CXXFLAGS_T) $(DEPFLAGS) $(INCLUDES_T) $< $(LDFLAGS_T) -o $@
 
