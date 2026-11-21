@@ -220,8 +220,10 @@ ALL_TESTS := \
 	escape_owner_test \
 	dump_ui_test \
 	scroll_anchor_test \
+	sticky_children_test \
 	measure_config_test \
 	scroll_anchor_test \
+	sticky_children_test \
 	widget_retirement_test \
 	text_line_edit_test \
 	grapheme_edit_test \
@@ -408,8 +410,10 @@ RAYLIB_TESTS := \
 	escape_owner_test \
 	dump_ui_test \
 	scroll_anchor_test \
+	sticky_children_test \
 	measure_config_test \
 	scroll_anchor_test \
+	sticky_children_test \
 	widget_retirement_test \
 	text_line_edit_test \
 	grapheme_edit_test \

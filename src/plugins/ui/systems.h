@@ -595,6 +595,78 @@ private:
   }
 };
 
+/// Pins HasSticky children to their scroll viewport edge, clamped to their
+/// parent, by shifting the whole subtree in layout space (so descendants,
+/// clips and hit rects move together). Runs after MeasureScrollViews.
+struct ApplyStickyChildren : System<HasSticky, UIComponent> {
+  virtual void for_each_with(Entity &entity, HasSticky &sticky,
+                             UIComponent &cmp, float) override {
+    OptEntity scroll_opt;
+    EntityID pid = cmp.parent;
+    for (int guard = 0; pid >= 0 && guard < 64; ++guard) {
+      OptEntity p = UICollectionHolder::getEntityForID(pid);
+      if (!p.valid()) break;
+      if (p.asE().has<HasScrollView>()) { scroll_opt = p; break; }
+      if (!p.asE().has<UIComponent>()) break;
+      pid = p.asE().get<UIComponent>().parent;
+    }
+    if (!scroll_opt.valid()) return;
+    Entity &view_ent = scroll_opt.asE();
+    const auto &sv = view_ent.get<HasScrollView>();
+    const RectangleType view = view_ent.get<UIComponent>().rect();
+    const RectangleType rect = cmp.rect();
+    float p_top = view.y, p_left = view.x;
+    float p_bottom = view.y + std::max(view.height, sv.content_size.y);
+    float p_right = view.x + std::max(view.width, sv.content_size.x);
+    if (cmp.parent >= 0 && cmp.parent != view_ent.id) {
+      OptEntity p = UICollectionHolder::getEntityForID(cmp.parent);
+      if (p.valid() && p.asE().has<UIComponent>()) {
+        const RectangleType pr = p.asE().get<UIComponent>().rect();
+        p_top = pr.y; p_left = pr.x;
+        p_bottom = pr.y + pr.height; p_right = pr.x + pr.width;
+      }
+    }
+    float dx = 0.f, dy = 0.f;
+    if (sticky.top) {
+      const float screen = rect.y - sv.scroll_offset.y;
+      const float pinned = std::min(
+          std::max(screen, view.y + sticky.top_offset),
+          p_bottom - sv.scroll_offset.y - rect.height);
+      dy = pinned - screen;
+    } else if (sticky.bottom) {
+      const float screen = rect.y - sv.scroll_offset.y;
+      const float pinned = std::max(
+          std::min(screen, view.y + view.height - sticky.bottom_offset - rect.height),
+          p_top - sv.scroll_offset.y);
+      dy = pinned - screen;
+    }
+    if (sticky.left) {
+      const float screen = rect.x - sv.scroll_offset.x;
+      const float pinned = std::min(
+          std::max(screen, view.x + sticky.left_offset),
+          p_right - sv.scroll_offset.x - rect.width);
+      dx = pinned - screen;
+    } else if (sticky.right) {
+      const float screen = rect.x - sv.scroll_offset.x;
+      const float pinned = std::max(
+          std::min(screen, view.x + view.width - sticky.right_offset - rect.width),
+          p_left - sv.scroll_offset.x);
+      dx = pinned - screen;
+    }
+    if (dx == 0.f && dy == 0.f) return;
+    const std::function<void(Entity &)> shift = [&](Entity &e) {
+      auto &c = e.get<UIComponent>();
+      c.computed_rel[Axis::X] += dx;
+      c.computed_rel[Axis::Y] += dy;
+      for (EntityID id : c.children) {
+        OptEntity ch = UICollectionHolder::getEntityForID(id);
+        if (ch.valid() && ch.asE().has<UIComponent>()) shift(ch.asE());
+      }
+    };
+    shift(entity);
+  }
+};
+
 template <typename InputAction>
 struct TrackIfComponentWillBeRendered : System<> {
   UIEntityMappingCache *cache = nullptr;
