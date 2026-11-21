@@ -21,7 +21,6 @@ static void check(bool cond, const char *expr, int line) {
 static bool open_tile(int tile) { return tile != 1; }
 
 int main() {
-  // Stamp composition: two stamps overlap, unmapped chars are transparent.
   {
     Grid g(5, 3, 0);
     const std::pair<char, int> legend[] = {{'#', 1}, {'.', 2}, {'@', 3}};
@@ -31,10 +30,9 @@ int main() {
     const std::string_view actor[] = {" @ "};
     CHECK(stamp(g, actor, legend, 0, 1) == 1);
     CHECK(g.at({1, 1}) == 3);
-    CHECK(g.at({0, 1}) == 1); // space did not erase the wall
+    CHECK(g.at({0, 1}) == 1);
   }
 
-  // Stamp clipping: negative origin and past the far edge.
   {
     Grid g(3, 3, 0);
     const std::pair<char, int> legend[] = {{'#', 1}};
@@ -46,33 +44,29 @@ int main() {
     CHECK(stamp(g, block, legend, 10, 10) == 0);
   }
 
-  // Reachability on a walled map: the sealed room is unreachable.
   {
     const std::pair<char, int> legend[] = {{'#', 1}};
     const std::string_view walls[] = {"#####", "#...#", "#####", "#...#",
                                       "#####"};
-    // Open cells only: stamp walls onto an open grid row by row via '#'.
     Grid walled(5, 5, 0);
     stamp(walled, walls, legend, 0, 0);
     auto mask = reachable(walled, {1, 1}, open_tile);
     CHECK(mask[walled.index({2, 1})] == 1);
-    CHECK(mask[walled.index({1, 3})] == 0); // sealed lower room
+    CHECK(mask[walled.index({1, 3})] == 0);
     const Cell targets[] = {{2, 1}, {1, 3}, {9, 9}};
     CHECK(!all_targets_reachable(walled, {1, 1}, targets, open_tile));
     auto missing = unreachable_targets(walled, {1, 1}, targets, open_tile);
     CHECK(missing.size() == 2);
     CHECK(missing[0] == (Cell{1, 3}));
-    CHECK(missing[1] == (Cell{9, 9})); // out of bounds counts unreachable
+    CHECK(missing[1] == (Cell{9, 9}));
     const Cell ok[] = {{2, 1}, {3, 1}};
     CHECK(all_targets_reachable(walled, {1, 1}, ok, open_tile));
-    // Impassable / out-of-bounds starts reach nothing.
     CHECK(reachable(walled, {0, 0}, open_tile) ==
           std::vector<char>(25, 0));
     CHECK(reachable(walled, {-1, 0}, open_tile) ==
           std::vector<char>(25, 0));
   }
 
-  // Determinism: repeated runs produce byte-identical grids and masks.
   {
     const std::pair<char, int> legend[] = {{'#', 1}, {'.', 2}};
     const std::string_view pat[] = {"#..#", ".##.", "#..#"};

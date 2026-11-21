@@ -1,10 +1,5 @@
 #pragma once
 
-// Tile-grid procgen, simplest slice (Pharmasea G-P23): ASCII `stamp` plus
-// reachability `validate`. Pure and deterministic: fixed neighbour and
-// legend-scan order, no hash-container iteration anywhere. WFC is
-// deliberately deferred -- it needs a tile-adjacency model games have not
-// agreed on yet, and stamp+validate covers hand-authored procgen today.
 
 #include <cstddef>
 #include <span>
@@ -23,7 +18,7 @@ struct Cell {
 struct Grid {
   int w = 0;
   int h = 0;
-  std::vector<int> tiles; // row-major, size w*h
+  std::vector<int> tiles;
 
   Grid() = default;
   Grid(int width, int height, int fill = 0)
@@ -43,10 +38,6 @@ struct Grid {
   void set(Cell c, int tile) { tiles[index(c)] = tile; }
 };
 
-// Blit `pattern` rows into `grid` at (origin_x, origin_y), mapping each
-// character through `legend` (first matching entry wins). Characters with
-// no legend entry leave the cell untouched, so spaces act as transparency.
-// Cells outside the grid are clipped. Returns how many cells were written.
 inline int stamp(Grid &grid, std::span<const std::string_view> pattern,
                  std::span<const std::pair<char, int>> legend, int origin_x,
                  int origin_y) {
@@ -72,16 +63,12 @@ inline int stamp(Grid &grid, std::span<const std::string_view> pattern,
   return written;
 }
 
-// Flood fill (4-neighbour) from `start` over cells where `passable(tile)`
-// is true. Returns a row-major mask (size w*h, 1 = reachable). An
-// out-of-bounds or impassable start yields an all-zero mask.
 template <typename Passable>
 [[nodiscard]] std::vector<char> reachable(const Grid &grid, Cell start,
                                           Passable passable) {
   std::vector<char> mask(grid.tiles.size(), 0);
   if (!grid.in_bounds(start) || !passable(grid.at(start)))
     return mask;
-  // Vector-as-queue with a head index: visit order is fully fixed.
   std::vector<Cell> queue{start};
   mask[grid.index(start)] = 1;
   for (std::size_t head = 0; head < queue.size(); head++) {
@@ -99,7 +86,6 @@ template <typename Passable>
   return mask;
 }
 
-// The targets, in input order, that `reachable` cannot get to.
 template <typename Passable>
 [[nodiscard]] std::vector<Cell>
 unreachable_targets(const Grid &grid, Cell start,
@@ -119,4 +105,4 @@ template <typename Passable>
   return unreachable_targets(grid, start, targets, passable).empty();
 }
 
-} // namespace afterhours::tile_grid
+}
