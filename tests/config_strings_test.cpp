@@ -1,9 +1,3 @@
-// ComponentConfig strings were copied whole-config on the per-widget merge
-// path: apply_overrides copied every string even for empty overrides, and
-// merge_with_defaults copied the config again on the way in and out.
-//
-// Counted rather than timed (mk_cost style): long (>SSO) strings, warm the
-// steady state, then N unchanged repeats of the targeted path must allocate 0.
 
 #define AFTER_HOURS_USE_NONE 1
 #define FMT_HEADER_ONLY
@@ -51,7 +45,6 @@ int main() {
       .with_tooltip("a-long-tooltip-text-over-sso-limit-1234567")
       .with_placeholder("a-long-placeholder-over-sso-limit-12345");
 
-  // Behaviour: value-form merge still produces the same merged config.
   {
     ComponentConfig over;
     over.with_label("replacement-long-label-over-sso-limit-123456789")
@@ -73,8 +66,6 @@ int main() {
 
   constexpr int N = 100;
 
-  // Targeted hot path: the merge overwrite_defaults runs for every widget.
-  // Warm it (first pass applies the default font), then unchanged repeats.
   {
     ComponentConfig cfg = base;
     sd.merge_with_defaults_into(ComponentType::Div, cfg);
@@ -90,12 +81,11 @@ int main() {
     CHECK(cfg.font_name == F);
   }
 
-  // Re-applying the same overrides in place (restyle on an unchanged frame).
   {
     ComponentConfig cfg;
     ComponentConfig over;
     over.with_label(L).with_debug_name(base.debug_name);
-    cfg.apply_overrides_from(over); // warm
+    cfg.apply_overrides_from(over);
     g_allocs = 0;
     g_counting = true;
     for (int i = 0; i < N; i++) cfg.apply_overrides_from(over);
@@ -106,7 +96,6 @@ int main() {
     CHECK(cfg.label == L);
   }
 
-  // inherit_from with real-world (short, SSO) debug/font names: no heap.
   {
     ComponentConfig parent;
     parent.with_font("default", ui::pixels(16.f));

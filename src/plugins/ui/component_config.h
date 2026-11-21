@@ -1113,7 +1113,6 @@ struct ComponentConfig {
     return *this;
   }
 
-  // In-place form of apply_overrides: same merge, no whole-config copy.
   ComponentConfig &apply_overrides_from(const ComponentConfig &overrides) {
     ComponentConfig &merged = *this;
 

@@ -243,8 +243,6 @@ struct UIStylingDefaults {
   ComponentConfig merge_with_defaults(ComponentType component_type,
                                       const ComponentConfig &config) const;
 
-  // In-place form of merge_with_defaults: no whole-config copy on the
-  // per-widget path.
   void merge_with_defaults_into(ComponentType component_type,
                                 ComponentConfig &config) const;
 };

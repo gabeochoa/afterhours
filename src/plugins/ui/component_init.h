@@ -63,8 +63,6 @@ inline void UIStylingDefaults::merge_with_defaults_into(
     ComponentType component_type, ComponentConfig &config) const {
   const ComponentConfig *defaults = find_component_config(component_type);
 
-  // Apply default font name if the user didn't set one explicitly. Once it
-  // is set this check is false, so a repeat merge allocates nothing.
   if (config.font_name == UIComponent::UNSET_FONT &&
       default_font_name != UIComponent::UNSET_FONT) {
     config.font_name = default_font_name;
