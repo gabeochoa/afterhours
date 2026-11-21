@@ -349,6 +349,7 @@ ALL_TESTS := \
 	theme_io_test \
 	tree_view_test \
 	window_helpers_test \
+	skeletal_test \
 	translation_test \
 	layout_inspector_test \
 	letter_spacing_zero_test
