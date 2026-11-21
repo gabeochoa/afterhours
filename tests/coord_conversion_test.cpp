@@ -1,9 +1,3 @@
-// coord_conversion_test.cpp
-// layout_to_window / window_to_layout compose ui_scale and a scroll offset
-// around the letterbox (content_viewport). Before, an app with design-unit
-// coordinates divided the mouse by the zoom by hand and re-derived the
-// letterbox itself; the mouse path already mapped window pixels to content
-// pixels through window_to_content, but nothing exposed the layout layer.
 
 #include "ui_test_harness.h"
 
@@ -38,16 +32,12 @@ bool near_rect(RectangleType a, RectangleType b, float eps = 0.5f) {
 
 } // namespace
 
-// The floatinghotel case: a draggable panel holds design units, the pointer
-// arrives as window pixels, zoom is not 100%, and the panel sits in a scroller.
 TEST(layout_point_round_trips_through_letterbox_scale_and_scroll) {
   set_content_resolution(1280, 720);
   const int win_w = 2000, win_h = 900; // pillarboxed letterbox
   const float ui_scale = 1.4f;
   const Vector2Type scroll{30.f, 120.f};
 
-  // Points must stay inside the content after scroll: layout*1.4 - scroll
-  // is what lands on the letterbox, so y below ~86 is scrolled off the top.
   for (auto p : {Vector2Type{200.f, 150.f}, Vector2Type{640.f, 360.f},
                  Vector2Type{900.f, 550.f}}) {
     const auto win = window_manager::layout_to_window(p, win_w, win_h, ui_scale,
@@ -69,8 +59,6 @@ TEST(layout_rect_round_trips_through_letterbox_scale_and_scroll) {
 
   const auto win = window_manager::layout_rect_to_window(r, win_w, win_h,
                                                          ui_scale, scroll);
-  // Letterbox: 1920x1080 at x=320, scale 2/3. Content origin is 2x layout
-  // minus scroll (184, 112), which lands at (320 + 184*1.5, 112*1.5).
   printf("  rect %.0f,%.0f %.0fx%.0f -> window %.0f,%.0f %.0fx%.0f\n", r.x, r.y,
          r.width, r.height, win.x, win.y, win.width, win.height);
   CHECK(near_rect(win, RectangleType{596.f, 168.f, 720.f, 270.f}, 1.f));
@@ -80,7 +68,6 @@ TEST(layout_rect_round_trips_through_letterbox_scale_and_scroll) {
   CHECK(near_rect(back, r, 1.f));
 }
 
-// With no zoom and no scroll the layout helpers are the letterbox transforms.
 TEST(layout_helpers_default_to_the_letterbox_transform) {
   set_content_resolution(1280, 720);
   const int win_w = 2000, win_h = 720;
@@ -101,7 +88,6 @@ TEST(layout_helpers_default_to_the_letterbox_transform) {
                   RectangleType{corner.x, corner.y, r.width, r.height}));
 }
 
-// A non-positive scale would divide by zero on the way back; treat it as 1x.
 TEST(non_positive_scale_is_one) {
   set_content_resolution(1280, 720);
   const Vector2Type p{100.f, 100.f};

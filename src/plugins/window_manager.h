@@ -332,13 +332,6 @@ struct window_manager : developer::Plugin {
     return content_to_window(p, window_w, window_h);
   }
 
-  // Layout coordinates are design units (a pixels() size before ui_scale),
-  // content coordinates are resolved layout pixels (ui_scale applied), window
-  // coordinates are OS window pixels. These compose ui_scale and a scroll
-  // offset around the letterbox above, so a draggable panel converts and
-  // inverts instead of dividing the mouse by the zoom by hand. Scroll is
-  // content pixels, matching HasScrollView::scroll_offset; the full ancestor
-  // chain stays ui::detail::apply_ancestor_transform's job.
   static Vector2Type layout_to_window(Vector2Type p, int window_w,
                                       int window_h, float ui_scale = 1.f,
                                       Vector2Type scroll_offset = {0.f, 0.f}) {
@@ -348,8 +341,6 @@ struct window_manager : developer::Plugin {
         window_w, window_h);
   }
 
-  // A window point on a letterbox bar has no layout inverse (window_to_content
-  // returns it unchanged), so do not invert a point you did not place.
   static Vector2Type window_to_layout(Vector2Type p, int window_w,
                                       int window_h, float ui_scale = 1.f,
                                       Vector2Type scroll_offset = {0.f, 0.f}) {
