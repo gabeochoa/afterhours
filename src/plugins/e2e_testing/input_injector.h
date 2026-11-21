@@ -3,6 +3,7 @@
 #pragma once
 
 #include "../../core/key_codes.h"
+#include "../../core/wheel_delta.h"
 #include "concepts.h"
 
 #include <array>
@@ -62,6 +63,7 @@ inline MouseState mouse;
 struct WheelState {
   float x = 0.0f;
   float y = 0.0f;
+  WheelDeltaKind kind = WheelDeltaKind::Notched;
 };
 inline WheelState wheel;
 inline bool wheel_fresh = false;
@@ -258,9 +260,11 @@ inline bool is_mouse_middle_button_released() {
 }
 
 /// Set scroll wheel delta for the current frame
-inline void set_mouse_wheel(float dx, float dy) {
+inline void set_mouse_wheel(float dx, float dy,
+                            WheelDeltaKind kind = WheelDeltaKind::Notched) {
   detail::wheel.x = dx;
   detail::wheel.y = dy;
+  detail::wheel.kind = kind;
   detail::wheel_fresh = true;
   detail::wheel_read = false;
   // Wheel injection should be observable even if no prior mouse move occurred.
@@ -269,6 +273,12 @@ inline void set_mouse_wheel(float dx, float dy) {
 
 /// Read the synthetic wheel delta. Stable within a frame, like raylib's, so
 /// every reader in a frame sees it -- but the frame it is read is its last.
+inline WheelDeltaKind consume_wheel_kind() {
+  if (detail::wheel.x != 0.f || detail::wheel.y != 0.f)
+    detail::wheel_read = true;
+  return detail::wheel.kind;
+}
+
 inline Position consume_wheel() {
   if (detail::wheel.x != 0.f || detail::wheel.y != 0.f)
     detail::wheel_read = true;
