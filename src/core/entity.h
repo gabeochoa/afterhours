@@ -29,6 +29,30 @@ using EntityID = int;
 
 inline std::atomic_int ENTITY_ID_GEN = 0;
 
+// Per-type membership generations, bumped only when a component of that type
+// is added or removed, so a system can cache against component_generation<T>()
+// and skip work while it is unchanged. Field writes are invisible: get<T>()
+// hands out a mutable reference, so this covers membership, not mutation.
+// If #188's global COMPONENT_MUTATION_GEN lands, fold it into these bumps.
+inline std::array<std::atomic<std::size_t>, max_num_components>
+    COMPONENT_GENERATIONS{};
+
+inline void bump_component_generation(ComponentID id) {
+  if (id < max_num_components)
+    COMPONENT_GENERATIONS[id].fetch_add(1, std::memory_order_relaxed);
+}
+
+[[nodiscard]] inline std::size_t component_generation(ComponentID id) {
+  return id < max_num_components
+             ? COMPONENT_GENERATIONS[id].load(std::memory_order_relaxed)
+             : 0;
+}
+
+template <typename T>
+[[nodiscard]] std::size_t component_generation() {
+  return component_generation(components::get_type_id<T>());
+}
+
 struct Entity {
   EntityID id;
   int entity_type = 0;
@@ -54,6 +78,7 @@ struct Entity {
   void recycle(EntityID new_id) {
     for (size_t i = componentSet.next_set(0); i < max_num_components;
          i = componentSet.next_set(i + 1)) {
+      bump_component_generation(i);
       componentArray[i].reset();
     }
     componentSet.reset();
@@ -130,6 +155,7 @@ struct Entity {
     }
     componentSet.set(components::get_type_id<T>(), false);
     componentArray[components::get_type_id<T>()].reset();
+    bump_component_generation(components::get_type_id<T>());
   }
 
   template <typename T, typename... TArgs> T &addComponent(TArgs &&...args) {
@@ -151,6 +177,7 @@ struct Entity {
     const ComponentID component_id = components::get_type_id<T>();
     componentArray[component_id] = std::move(component);
     componentSet.set(component_id, true);
+    bump_component_generation(component_id);
 
 #if defined(AFTER_HOURS_DEBUG)
     log_trace("your set is now {}", componentSet.to_string());
