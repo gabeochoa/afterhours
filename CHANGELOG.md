@@ -6,6 +6,10 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+### Added
+
+- **Window exposure and backing-scale changes are surfaced** via `afterhours::window_events` (`src/window_events.h`): backends push `Resized`/`ScaleChanged`/`Occluded`/`Revealed`/`Suspended`/`Resumed` events the app drains with `take()`, plus pollable `occluded()`/`last_scale()`. Sokol maps its native events (scale derived from framebuffer/window ratio on resize); raylib edge-detects resize/DPI/hidden-or-minimized each frame (covered-by-another-window is not detectable there). Previously resize was absorbed internally and scale changes were silent.
+
 ### Breaking
 
 **The animation plugin is rewritten around `afterhours::motion`.** `animation::anim<Key>(k).to(v, dur, EasingType)`, `AnimationManager`, `AnimHandle`, `sequence`, `loop_sequence`, `one_shot`, `clamp_value`, `get_value`, `register_update_systems<Key>()` and the declarative `with_animation(Anim::on_hover()...)` / `HasAnimationState` are gone. Every old call is a compile error.
