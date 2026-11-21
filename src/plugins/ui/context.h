@@ -199,6 +199,20 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   const char *focus_set_file = nullptr;
   int focus_set_line = 0;
 
+  // True while an external/native surface (e.g. a tracking NSMenu) owns the
+  // pointer: hit-testing must produce no hot/active, so nothing underneath
+  // hovers or clicks. Keyboard/focus are untouched.
+  bool pointer_owned_externally = false;
+
+  void claim_pointer_ownership() {
+    pointer_owned_externally = true;
+    hot_id = prev_hot_id = active_id = prev_active_id = ROOT;
+  }
+  void release_pointer_ownership() { pointer_owned_externally = false; }
+  [[nodiscard]] bool pointer_is_owned_externally() const {
+    return pointer_owned_externally;
+  }
+
   MousePointerState mouse;
   InputAction last_action = InputAction::None;
   uint8_t last_action_modifiers = 0;
@@ -376,7 +390,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   /// plain div is the obvious first thing to try and would otherwise never
   /// fire, so it says so rather than quietly answering no.
   [[nodiscard]] bool is_right_click(EntityID id) const {
-    if (!mouse.right_just_released)
+    if (pointer_owned_externally || !mouse.right_just_released)
       return false;
     if (contains_in_subtree(id, prev_hot_id))
       return true;
@@ -384,7 +398,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     return false;
   }
   [[nodiscard]] bool is_middle_click(EntityID id) const {
-    if (!mouse.middle_just_released)
+    if (pointer_owned_externally || !mouse.middle_just_released)
       return false;
     if (contains_in_subtree(id, prev_hot_id))
       return true;
@@ -402,8 +416,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   }
 
   void active_if_mouse_inside(EntityID id, RectangleType rect) {
-    // Check if input is blocked for this element (e.g., by a modal)
-    if (!is_input_allowed(id)) {
+    if (pointer_owned_externally || !is_input_allowed(id)) {
       return;
     }
 
@@ -429,6 +442,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     last_processed = ROOT;
     hot_id = ROOT;
     active_id = ROOT;
+    pointer_owned_externally = false;
     focused_ids.clear();
     render_cmds.clear();
     input_gates.clear();

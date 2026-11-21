@@ -818,6 +818,11 @@ struct ResolveHitTarget : SystemWithUIContext<> {
   void resolve() {
     if (!context)
       return;
+    if (context->pointer_is_owned_externally()) {
+      context->set_hot(context->ROOT);
+      context->set_active(context->ROOT);
+      return;
+    }
 
     EntityID winner = context->ROOT;
     int best_layer = std::numeric_limits<int>::min();
@@ -2067,7 +2072,9 @@ struct HandleScrollbarDrag : SystemWithUIContext<HasScrollView> {
     if (!context)
       return;
     if (!cmp.was_rendered_to_screen || cmp.should_hide ||
-        entity.has<ShouldHide>() || !context->is_input_allowed(entity.id)) {
+        entity.has<ShouldHide>() ||
+        context->pointer_is_owned_externally() ||
+        !context->is_input_allowed(entity.id)) {
       scroll.dragging_scrollbar = false;
       return;
     }
@@ -2263,7 +2270,9 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
     if (rect.width <= 0.0f || rect.height <= 0.0f)
       return;
 
-    if (!context || !context->is_input_allowed(entity.id)) return;
+    if (!context || context->pointer_is_owned_externally() ||
+        !context->is_input_allowed(entity.id))
+      return;
 
     if (!is_mouse_inside(context->mouse.pos, detail::hit_rect(entity, cmp)))
       return;
