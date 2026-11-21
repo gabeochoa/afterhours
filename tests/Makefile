@@ -118,6 +118,7 @@ ALL_TESTS := \
 	text_fit_test \
 	none_measure_test \
 	triangle_winding_none_test \
+	npc_queue_test \
 	text_unit_motion_test \
 	text_alignment_test \
 	sound_volume_test \
