@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -164,6 +165,47 @@ inline bool expand_font_atlas(FONScontext *ctx) {
   log_info("font atlas expanded to {}x{}; glyphs that did not fit now draw",
            nw, nh);
   return true;
+}
+
+#ifndef AFTERHOURS_FONT_ATLAS_SIZE
+#define AFTERHOURS_FONT_ATLAS_SIZE 2048
+#endif
+inline constexpr int kFontAtlasInitialSize = AFTERHOURS_FONT_ATLAS_SIZE;
+
+// R8 atlas, so width*height is the GPU byte count.
+inline std::size_t font_atlas_bytes(FONScontext *ctx) {
+  if (!ctx)
+    return 0;
+  int w = 0, h = 0;
+  fonsGetAtlasSize(ctx, &w, &h);
+  return (w > 0 && h > 0) ? static_cast<std::size_t>(w) *
+                                static_cast<std::size_t>(h)
+                          : 0;
+}
+
+// Rebuild at the initial size, dropping every cached glyph; live glyphs
+// re-rasterize on next use. Call only at a frame boundary, before any
+// measure/draw that frame, or already-emitted quads keep stale UVs.
+inline bool shrink_font_atlas(FONScontext *ctx) {
+  if (!ctx)
+    return false;
+  int w = 0, h = 0;
+  fonsGetAtlasSize(ctx, &w, &h);
+  if (w <= kFontAtlasInitialSize && h <= kFontAtlasInitialSize)
+    return false;
+  if (!fonsResetAtlas(ctx, kFontAtlasInitialSize, kFontAtlasInitialSize))
+    return false;
+  log_info("font atlas shrunk to {}x{}; cached glyphs will re-rasterize",
+           kFontAtlasInitialSize, kFontAtlasInitialSize);
+  return true;
+}
+
+inline bool shrink_font_atlas() {
+  return shrink_font_atlas(graphics::metal_detail::g_fons_ctx);
+}
+
+inline std::size_t font_atlas_bytes() {
+  return font_atlas_bytes(graphics::metal_detail::g_fons_ctx);
 }
 
 inline Font load_font_from_file_with_codepoints(const char *file, int *, int,
