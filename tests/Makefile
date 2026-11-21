@@ -96,6 +96,7 @@ ALL_TESTS := \
 	reduced_motion_test \
 	appearance_test \
 	frame_loop_test \
+	headless_cadence_test \
 	color_value_test \
 	value_types_test \
 	value_types_none_test \
@@ -212,6 +213,7 @@ ALL_TESTS := \
 	scissor_coalescing_test \
 	blend_batch_test \
 	focus_origin_test \
+	tab_order_test \
 	reset_focus_test \
 	cleanup_order_test \
 	entity_pool_test \

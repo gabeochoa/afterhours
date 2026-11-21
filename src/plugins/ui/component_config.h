@@ -113,6 +113,7 @@ struct ComponentConfig {
   std::optional<Vector2Type> text_inset;
   std::optional<CursorType> cursor_type; // Cursor to show on hover
   bool skip_when_tabbing = false;
+  bool focus_scope = false;
   std::optional<float> focus_ring_offset;
   // Per-component ring thickness, overriding Theme::focus_ring_thickness.
   // Unset means the theme's value; 0 opts this component out of the ring.
@@ -216,6 +217,7 @@ struct ComponentConfig {
   size_t text_area_max_lines = 0;            // Max lines (0 = unlimited)
   bool text_area_auto_grow = false;          // Height follows the content
   bool text_area_submit_on_enter = false;    // Enter submits, Shift+Enter breaks
+  bool text_area_single_line = false;        // One row: Enter submits
   size_t virtual_list_overscan = VIRTUAL_LIST_OVERSCAN_DEFAULT;
 
   // Button variant configuration
@@ -498,6 +500,11 @@ struct ComponentConfig {
     text_area_submit_on_enter = enabled;
     return *this;
   }
+  // One row: Enter submits, pasted breaks become spaces.
+  ComponentConfig &with_single_line(bool enabled = true) {
+    text_area_single_line = enabled;
+    return *this;
+  }
   ComponentConfig &with_virtual_list_overscan(size_t overscan) {
     virtual_list_overscan = overscan;
     return *this;
@@ -636,6 +643,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_skip_tabbing(bool skip) {
     skip_when_tabbing = skip;
+    return *this;
+  }
+  ComponentConfig &with_focus_scope(bool scope = true) {
+    focus_scope = scope;
     return *this;
   }
   ComponentConfig &with_focus_ring_offset(float offset) {
@@ -1103,6 +1114,7 @@ struct ComponentConfig {
   bool is_disabled() const { return disabled; }
   bool is_hidden() const { return hidden; }
   bool skips_when_tabbing() const { return skip_when_tabbing; }
+  bool is_focus_scope() const { return focus_scope; }
   bool selects_on_focus() const { return select_on_focus; }
   bool has_click_activation_override() const {
     return click_activation != ClickActivationMode::Default;
@@ -1180,6 +1192,8 @@ struct ComponentConfig {
       merged.hidden = overrides.hidden;
     if (overrides.skips_when_tabbing())
       merged.skip_when_tabbing = overrides.skip_when_tabbing;
+    if (overrides.is_focus_scope())
+      merged.focus_scope = true;
     if (overrides.focus_ring_offset.has_value())
       merged.focus_ring_offset = overrides.focus_ring_offset;
     if (overrides.focus_ring_thickness.has_value())
@@ -1361,6 +1375,8 @@ struct ComponentConfig {
       merged.text_area_auto_grow = true;
     if (overrides.text_area_submit_on_enter)
       merged.text_area_submit_on_enter = true;
+    if (overrides.text_area_single_line)
+      merged.text_area_single_line = true;
     if (overrides.virtual_list_overscan != VIRTUAL_LIST_OVERSCAN_DEFAULT)
       merged.virtual_list_overscan = overrides.virtual_list_overscan;
 

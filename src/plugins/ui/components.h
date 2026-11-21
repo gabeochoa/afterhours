@@ -155,6 +155,8 @@ struct SelectOnFocus : BaseComponent {};
 struct FocusClusterRoot : BaseComponent {};
 struct InFocusCluster : BaseComponent {};
 
+struct FocusScope : BaseComponent {};
+
 struct FocusProxy : BaseComponent {
   EntityID target = -1;
 };
