@@ -127,6 +127,7 @@ ALL_TESTS := \
 	render_capture_test \
 	charts_test \
 	system_profile_test \
+	allocation_counters_test \
 	profiling_test \
 	profiling_disabled_test \
 	perf_provider_warn_test \
