@@ -77,6 +77,7 @@ ALL_TESTS := \
 	command_picker_ui_test \
 	terminal_test \
 	terminal_commands_test \
+	state_commands_test \
 	terminal_ui_test \
 	font_atlas_measure_test \
 	font_points_test \
