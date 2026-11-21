@@ -179,7 +179,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_skip_tabbing(true)
             .with_render_layer(config.render_layer))
         .ent()
-        .template toggleComponent<InFocusCluster>(true);
+        .template addComponentIfMissing<InFocusCluster>();
   }
 
   // Build display text (apply mask if configured)
@@ -219,7 +219,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   auto field_result = div(ctx, mk(entity, has_label ? 1 : 0), field_config);
 
   auto &field_entity = field_result.ent();
-  field_entity.template toggleComponent<ConsumesDirectionalInput>(true);
+  field_entity.template addComponentIfMissing<ConsumesDirectionalInput>();
   entity.template addComponentIfMissing<FocusProxy>().target = field_entity.id;
 
   // Ensure HasLabel exists and set display text
@@ -277,7 +277,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Update focus state - check if this field OR the parent container has focus
   if (!state.disabled) {
-    field_entity.template toggleComponent<InFocusCluster>(true);
+    field_entity.template addComponentIfMissing<InFocusCluster>();
   }
   bool field_has_focus = ctx.has_focus(field_entity.id);
   bool parent_has_focus = ctx.has_focus(entity.id);
@@ -298,7 +298,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
 
   if (state.is_focused) {
     auto focus_color = ctx.theme.accent;
-    field_entity.template toggleComponent<HasBorder>(true);
+    field_entity.template addComponentIfMissing<HasBorder>();
     field_entity.template get<HasBorder>().border =
         Border::all(focus_color, pixels(2.0f));
   }
@@ -451,7 +451,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   // Click to focus, position cursor, handle multi-click and shift+click
-  field_entity.template toggleComponent<HasClickListener>(true,
+  field_entity.template addComponentIfMissing<HasClickListener>(
       [&ctx](Entity &ent) {
         // The state is on the widget's outer entity, not on this field.
         HasTextInputState *sp = state_for_field<HasTextInputState>(ent);
@@ -791,7 +791,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   }
 
   text = state.text();
-  entity.template toggleComponent<FocusClusterRoot>(true);
+  entity.template addComponentIfMissing<FocusClusterRoot>();
   return ElementResult{state.changed_since, entity};
 }
 

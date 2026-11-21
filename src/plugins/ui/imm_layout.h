@@ -165,7 +165,7 @@ ElementResult divider(HasUIContext auto &ctx, EntityParent ep_pair, Axis axis,
   // The no-op callback is only there to make the element hit-testable; the
   // movement is read off `down` on the next build pass instead, so the caller
   // can act on it in normal control flow rather than inside a lambda.
-  entity.toggleComponent<HasDragListener>(true, [](Entity &) {});
+  entity.addComponentIfMissing<HasDragListener>([](Entity &) {});
 
   const float moved = entity.get<HasDragListener>().down
                           ? (moves_in_x ? ctx.mouse.delta.x : ctx.mouse.delta.y)
@@ -385,13 +385,13 @@ ElementResult tray(HasUIContext auto &ctx, EntityParent ep_pair,
   init_component(ctx, ep_pair, config, ComponentType::Tray, false, "tray");
 
   // Tray root is a tab stop
-  entity.toggleComponent<HasClickListener>(true, [](Entity &) {});
+  entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
   // Add tray state
-  entity.toggleComponent<HasTray>(true);
+  entity.addComponentIfMissing<HasTray>();
   // The tray owns its own arrow keys: otherwise process_tabbing consumes
   // WidgetDown nine systems before HandleTrayNavigation looks for it, and a
   // Column tray -- every dropdown's option list -- cannot be navigated at all.
-  entity.toggleComponent<ConsumesDirectionalInput>(true);
+  entity.addComponentIfMissing<ConsumesDirectionalInput>();
 
   return ElementResult{false, entity};
 }

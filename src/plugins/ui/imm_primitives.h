@@ -224,7 +224,7 @@ image_button(HasUIContext auto &ctx, EntityParent ep_pair,
   img.source_rect = source_rect;
   img.alignment = alignment;
 
-  entity.toggleComponent<HasClickListener>(true, [](Entity &) {});
+  entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
   return ElementResult{entity.get<HasClickListener>().down, entity};
 }
 

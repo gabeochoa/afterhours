@@ -99,7 +99,7 @@ ElementResult button(HasUIContext auto &ctx, EntityParent ep_pair,
                                                     : JustifyContent::FlexStart;
   }
 
-  entity.toggleComponent<HasClickListener>(true, [](Entity &) {});
+  entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
 
   return ElementResult{entity.get<HasClickListener>().down, entity};
 }
@@ -183,7 +183,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   init_component(ctx, ep_pair, config, ComponentType::Div, false,
                  "checkbox_row");
 
-  entity.template toggleComponent<FocusClusterRoot>(true);
+  entity.template addComponentIfMissing<FocusClusterRoot>();
 
   // Resolve responsive defaults for sizing
   if (config.size.is_default) {
@@ -230,13 +230,13 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
     }
 
     Entity &label_ent = div(ctx, mk(entity), label_config).ent();
-    label_ent.template toggleComponent<InFocusCluster>(true);
+    label_ent.template addComponentIfMissing<InFocusCluster>();
     // A checkbox's label is part of its hit target; only the indicator was.
-    if (label_ent.template toggleComponent<HasClickListener>(
+    if (auto *listener = label_ent.template toggleComponent<HasClickListener>(
             !config.disabled, [](Entity &) {})) {
       // Indicator is the tab stop; the label is only a hit target.
-      label_ent.template toggleComponent<SkipWhenTabbing>(true);
-      if (label_ent.template get<HasClickListener>().down) {
+      label_ent.template addComponentIfMissing<SkipWhenTabbing>();
+      if (listener->down) {
         state.on = !state.on;
         label_clicked = true;
       }
@@ -277,10 +277,10 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
 
   auto toggle_pair = mk(entity);
   auto &indicator = deref(toggle_pair).first;
-  indicator.template toggleComponent<HasLabel>(true);
+  indicator.template addComponentIfMissing<HasLabel>();
   auto toggle_result =
       primitive::toggle_button(ctx, toggle_pair, toggle_config, state.on);
-  indicator.template toggleComponent<InFocusCluster>(true);
+  indicator.template addComponentIfMissing<InFocusCluster>();
   const auto &text = state.on ? config.checkbox_checked_indicator
                               : config.checkbox_unchecked_indicator;
   indicator.template get<HasLabel>().set_label(text.value_or(""));
@@ -491,7 +491,7 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
                  "toggle_switch_row");
 
   // Add FocusClusterRoot to container for consistent focus ring on entire row
-  entity.template toggleComponent<FocusClusterRoot>(true);
+  entity.template addComponentIfMissing<FocusClusterRoot>();
 
   HasToggleSwitchState &state =
       init_state<HasToggleSwitchState>(entity, [&](auto &) {}, value);
@@ -523,7 +523,7 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_label(label)
             .with_color_usage(Theme::Usage::None))
         .ent()
-        .template toggleComponent<InFocusCluster>(true);
+        .template addComponentIfMissing<InFocusCluster>();
   }
 
   // Pill style (iOS-like sliding knob)
@@ -553,7 +553,7 @@ ElementResult toggle_switch(HasUIContext auto &ctx, EntityParent ep_pair,
           .with_roundness(0.5f)
           .with_self_align(SelfAlign::Center),
       state.on);
-  track_btn.ent().template toggleComponent<InFocusCluster>(true);
+  track_btn.ent().template addComponentIfMissing<InFocusCluster>();
   track_btn.ent().template get<HasColor>().skip_hover_override = true;
   bool clicked = track_btn;
 
