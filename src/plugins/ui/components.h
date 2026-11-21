@@ -706,7 +706,8 @@ struct HasScrollView : BaseComponent {
 // text). Rows are in the caller's unscaled units.
 struct HasVirtualListIndex : BaseComponent {
   std::vector<float> heights;
-  std::vector<float> prefix; // prefix[i] = height of rows [0, i)
+  // double: a float32 prefix sum drifts by hundreds of px at 100k rows
+  std::vector<double> prefix; // prefix[i] = height of rows [0, i)
   // The pending re-measure range [dirty_from, dirty_to). Its empty value is
   // the union identity [kDirtyEmpty, 0), so invalidate is an unconditional
   // min/max with no empty case to branch on.
