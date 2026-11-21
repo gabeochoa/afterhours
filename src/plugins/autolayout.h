@@ -175,6 +175,76 @@ struct AutoLayout {
     return *this;
   }
 
+  // Returns the first-line ascent (px from the line top to the baseline)
+  // for a font name at a pixel size; tests inject it with their measure fn.
+  using BaselineFn = std::function<float(const std::string &, float)>;
+  BaselineFn external_baseline = nullptr;
+  auto &set_baseline_fn(const BaselineFn &fn) {
+    external_baseline = fn;
+    return *this;
+  }
+
+  static bool wants_baseline(const UIComponent &parent,
+                             const UIComponent &child) {
+    return child.self_align == SelfAlign::Baseline ||
+           (child.self_align == SelfAlign::Auto &&
+            parent.align_items == AlignItems::Baseline);
+  }
+
+  // Px from the child's rect() top to its first text baseline, or nullopt
+  // when it has no label (callers then fall back to its top edge).
+  std::optional<float> baseline_offset(UIComponent &child) {
+    if (child.id < 0 || static_cast<size_t>(child.id) >= mapping.size() ||
+        !mapping[static_cast<size_t>(child.id)])
+      return std::nullopt;
+    const Entity &ent = *mapping[static_cast<size_t>(child.id)];
+    if (ent.is_missing<HasLabel>() || ent.get<HasLabel>().label.empty())
+      return std::nullopt;
+    const HasLabel &label = ent.get<HasLabel>();
+    std::string font_name = child.font_name;
+    if (font_name != UIComponent::UNSET_FONT)
+      if (auto *fm = EntityHelper::get_singleton_cmp<FontManager>())
+        font_name = fm->resolve_weighted(font_name, child.font_weight);
+    const float font_size = resolve_to_pixels(
+        child.font_size, fetch_screen_value_(Axis::Y),
+        child.resolved_scaling_mode, ui_scale);
+    if (font_size <= 0.f)
+      return std::nullopt;
+    const float spacing = 1.f + label.letter_spacing;
+    const std::string first_line =
+        label.label.substr(0, label.label.find('\n'));
+    Vector2Type measured;
+    if (external_measure_text)
+      measured = external_measure_text(font_name, first_line, font_size, spacing);
+    else if (auto *tc = EntityHelper::get_singleton_cmp<ui::TextMeasureCache>())
+      measured = tc->measure(first_line, font_name, font_size, spacing);
+    else if (auto *fm2 = EntityHelper::get_singleton_cmp<FontManager>())
+      measured = measure_text(fm2->get_font(font_name), first_line.c_str(),
+                              font_size, spacing);
+    else
+      measured = Vector2Type{0.f, font_size};
+    float ascent = 0.8f * font_size;
+    if (external_baseline)
+      ascent = external_baseline(font_name, font_size);
+    else if (auto *fm3 = EntityHelper::get_singleton_cmp<FontManager>())
+      ascent = text_ascent(fm3->get_font(font_name), font_size);
+    // The renderer centres the first line in its box (or in one pinned line
+    // height for multi-line labels), so mirror that before adding ascent.
+    float line_box = child.computed[Axis::Y];
+    if (label.line_height.has_value()) {
+      const float lh = resolve_to_pixels(*label.line_height,
+                                         fetch_screen_value_(Axis::Y),
+                                         child.resolved_scaling_mode, ui_scale);
+      if (lh > 0.f)
+        line_box = lh;
+    } else if (label.label.find('\n') != std::string::npos) {
+      line_box = measured.y;
+    }
+    const float inset = inset_for(ent);
+    return inset + fmaxf(0.f, (line_box - 2.f * inset - measured.y) * 0.5f) +
+           ascent + label.text_y_offset;
+  }
+
   // Per-side inset for this entity: its own override if it set one, else the
   // theme's. The override is stored unscaled, so it scales here the way
   // text_inset_x already was.
@@ -686,6 +756,37 @@ struct AutoLayout {
     return end;
   }
   float _max_child_size(UIComponent &widget, Axis axis) {
+    // A baseline row is as tall as the deepest bottom below the shared
+    // baseline, which can exceed the tallest child.
+    if (axis == Axis::Y &&
+        static_cast<bool>(widget.flex_direction & FlexDirection::Row)) {
+      float target = 0.f;
+      bool any = false;
+      for (EntityID child_id : widget.children) {
+        UIComponent &child = cmp(child_id);
+        if (child.absolute || child.should_hide || !wants_baseline(widget, child))
+          continue;
+        any = true;
+        const float b = baseline_offset(child).value_or(0.f);
+        target = fmaxf(target, child.computed_margin[Axis::top] + b);
+      }
+      if (any) {
+        float need = 0.f;
+        for (EntityID child_id : widget.children) {
+          UIComponent &child = cmp(child_id);
+          if (child.absolute || child.should_hide)
+            continue;
+          float bottom = child.computed[axis] + child.computed_margin[axis];
+          if (wants_baseline(widget, child)) {
+            const float b = baseline_offset(child).value_or(0.f);
+            bottom = target - b + child.computed[axis] +
+                     child.computed_margin[Axis::bottom];
+          }
+          need = fmaxf(need, bottom);
+        }
+        return need;
+      }
+    }
     float max_child_size = 0.f;
     for (EntityID child_id : widget.children) {
       UIComponent &child = cmp(child_id);
@@ -1605,6 +1706,21 @@ struct AutoLayout {
       }
     }
 
+    // Shared first-line baseline for this row (margin-box coords, matching
+    // computed_rel); non-text baseline children contribute their top edge.
+    float row_baseline = 0.f;
+    if (is_row) {
+      for (EntityID child_id : widget.children) {
+        UIComponent &child = cmp(child_id);
+        if (child.absolute || child.should_hide ||
+            !wants_baseline(widget, child))
+          continue;
+        row_baseline = fmaxf(
+            row_baseline, child.computed_margin[Axis::top] +
+                              baseline_offset(child).value_or(0.f));
+      }
+    }
+
     // Position children
     float offx = is_row ? start_offset : 0.f;
     float offy = is_column ? start_offset : 0.f;
@@ -1759,7 +1875,12 @@ struct AutoLayout {
       // is what CSS does and what the caller asked for. Gating on > 0 dropped
       // back to FlexStart instead, so the overflow went entirely out one side
       // and the widget sat off-centre by half its excess.
-      if (cross_remaining != 0.f) {
+      if (is_row && wants_baseline(widget, child)) {
+        // Baseline ignores cross_remaining: it positions from the shared
+        // baseline, not from the row's free space.
+        cross_offset = row_baseline - child.computed_margin[Axis::top] -
+                       baseline_offset(child).value_or(0.f);
+      } else if (cross_remaining != 0.f) {
         // Use child's self_align if set, otherwise fall back to parent's
         // align_items
         if (child.self_align != SelfAlign::Auto) {
@@ -1775,6 +1896,8 @@ struct AutoLayout {
           case SelfAlign::Center:
             cross_offset = cross_remaining / 2.f;
             break;
+          case SelfAlign::Baseline:
+            break; // handled above (rows only; columns fall back to start)
           }
         } else {
           // Use parent's align_items
@@ -1790,6 +1913,8 @@ struct AutoLayout {
           case AlignItems::Stretch:
             // Stretch is handled in size calculation, not positioning
             break;
+          case AlignItems::Baseline:
+            break; // handled above (rows only; columns fall back to start)
           }
         }
       }
