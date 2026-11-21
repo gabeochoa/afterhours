@@ -106,13 +106,14 @@ struct HandleClickUICommand : System<PendingE2ECommand> {
       cmd.fail("click_ui requires component name");
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
 
     auto pos = find_component_center<InputAction>(cmd.arg(0));
     if (pos) {
       test_input::simulate_click(pos->x, pos->y);
       cmd.consume();
     } else {
-      cmd.fail(std::format("UI component not found: {}", cmd.arg(0)));
+      cmd.retry_with(std::format("UI component not found: {}", cmd.arg(0)));
     }
   }
 };
@@ -129,13 +130,14 @@ struct HandleRightClickUICommand : System<PendingE2ECommand> {
       cmd.fail("right_click_ui requires component name");
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
 
     auto pos = find_component_center<InputAction>(cmd.arg(0));
     if (pos) {
       test_input::simulate_right_click(pos->x, pos->y);
       cmd.consume();
     } else {
-      cmd.fail(std::format("UI component not found: {}", cmd.arg(0)));
+      cmd.retry_with(std::format("UI component not found: {}", cmd.arg(0)));
     }
   }
 };
@@ -150,13 +152,14 @@ struct HandleRightClickTextCommand : System<PendingE2ECommand> {
       cmd.fail("right_click_text requires text");
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
 
     auto pos = find_component_with_text<InputAction>(cmd.arg(0));
     if (pos) {
       test_input::simulate_right_click(pos->x, pos->y);
       cmd.consume();
     } else {
-      cmd.fail(std::format("No UI with text: {}", cmd.arg(0)));
+      cmd.retry_with(std::format("No UI with text: {}", cmd.arg(0)));
     }
   }
 };
@@ -171,13 +174,14 @@ struct HandleClickTextCommand : System<PendingE2ECommand> {
       cmd.fail("click_text requires text");
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
 
     auto pos = find_component_with_text<InputAction>(cmd.arg(0));
     if (pos) {
       test_input::simulate_click(pos->x, pos->y);
       cmd.consume();
     } else {
-      cmd.fail(std::format("No UI with text: {}", cmd.arg(0)));
+      cmd.retry_with(std::format("No UI with text: {}", cmd.arg(0)));
     }
   }
 };
@@ -192,6 +196,7 @@ struct HandleFocusUICommand : System<PendingE2ECommand> {
       cmd.fail("focus_ui requires component name");
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
 
     const auto &name = cmd.arg(0);
     auto query = ui_query()
@@ -221,7 +226,7 @@ struct HandleFocusUICommand : System<PendingE2ECommand> {
         return;
       }
     }
-    cmd.fail(std::format("UI component not found: {}", cmd.arg(0)));
+    cmd.retry_with(std::format("UI component not found: {}", cmd.arg(0)));
   }
 };
 
@@ -461,6 +466,7 @@ struct HandleClickLabelCommand : System<PendingE2ECommand> {
       cmd.fail("click_label requires text");
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
     const std::string &text = cmd.arg(0);
     EntityID scope = -1;
     for (size_t i = 1; i < cmd.args.size(); i++) {
@@ -553,6 +559,7 @@ struct HandleClickButtonCommand : System<PendingE2ECommand> {
       cmd.fail("click_button requires button text");
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
 
     const auto &text = cmd.arg(0);
     auto query =
@@ -575,7 +582,7 @@ struct HandleClickButtonCommand : System<PendingE2ECommand> {
       cmd.consume();
       return;
     }
-    cmd.fail(std::format("Button not found: {}", cmd.arg(0)));
+    cmd.retry_with(std::format("Button not found: {}", cmd.arg(0)));
   }
 };
 
@@ -589,6 +596,7 @@ struct HandleToggleCheckboxCommand : System<PendingE2ECommand> {
       cmd.fail("toggle_checkbox requires name");
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
 
     const auto &name = cmd.arg(0);
     auto query = ui_query()
@@ -609,7 +617,7 @@ struct HandleToggleCheckboxCommand : System<PendingE2ECommand> {
       cmd.consume();
       return;
     }
-    cmd.fail(std::format("Checkbox not found: {}", cmd.arg(0)));
+    cmd.retry_with(std::format("Checkbox not found: {}", cmd.arg(0)));
   }
 };
 
@@ -646,6 +654,7 @@ struct HandleSetSliderCommand : System<PendingE2ECommand> {
       cmd.fail("set_slider requires name and value");
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
 
     auto value = cmd.maybe_arg_as<float>(1);
     if (!value) {
@@ -709,7 +718,7 @@ struct HandleSetSliderCommand : System<PendingE2ECommand> {
       cmd.retry();
       return;
     }
-    cmd.fail(std::format("Slider not found: {}", cmd.arg(0)));
+    cmd.retry_with(std::format("Slider not found: {}", cmd.arg(0)));
   }
 };
 
@@ -723,6 +732,7 @@ struct HandleSelectDropdownCommand : System<PendingE2ECommand> {
       cmd.fail("select_dropdown requires name and option");
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
 
     const auto &name = cmd.arg(0);
     auto query = ui_query()
@@ -746,7 +756,7 @@ struct HandleSelectDropdownCommand : System<PendingE2ECommand> {
       cmd.consume();
       return;
     }
-    cmd.fail(std::format("Dropdown not found: {}", cmd.arg(0)));
+    cmd.retry_with(std::format("Dropdown not found: {}", cmd.arg(0)));
   }
 };
 
@@ -1472,6 +1482,7 @@ struct HandleAssertUICommand : System<PendingE2ECommand> {
       cmd.fail("assert_ui requires: <name> <prop>=<value> [...]");
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
 
     std::string name = cmd.args[0];
 
@@ -1529,6 +1540,7 @@ struct HandleExpectPointInCommand : System<PendingE2ECommand> {
                            cmd.arg(1), cmd.arg(2)));
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
     const std::string name = cmd.arg(0);
     auto opt = ui_query()
         .whereHasComponent<ui::UIComponent>()
@@ -1562,6 +1574,7 @@ struct HandleAssertUITextCommand : System<PendingE2ECommand> {
       cmd.fail("assert_ui_text requires: \"<text>\" <prop>=<value> [...]");
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
 
     std::string text = cmd.args[0];
 
@@ -1662,6 +1675,7 @@ struct HandleExpectNoUICommand : System<PendingE2ECommand> {
       cmd.fail("expect_no_ui requires: <debug_name>");
       return;
     }
+    if (render_checkpoint_pending(cmd)) return;
     if (cmd.frames_alive == 0) {
       cmd.retry();
       return;
@@ -1716,6 +1730,7 @@ struct HandleDumpUICommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("dump_ui")) return;
     if (!cmd.has_args(1)) { cmd.fail("dump_ui requires a name argument"); return; }
+    if (render_checkpoint_pending(cmd)) return;
 
     std::string dump_name = cmd.args[0];
     std::string subtree_root = cmd.has_args(2) ? cmd.args[1] : "";
