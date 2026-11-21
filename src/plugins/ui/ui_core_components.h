@@ -28,22 +28,21 @@ namespace ui {
 
 struct AutoLayoutRoot : BaseComponent {};
 
-// Layout generations: invalidate_layout() bumps the requested generation and
-// RunAutoLayout records the one it laid out. When they differ, rect() answers
-// predate the last invalidation and the gated pass in the post-update bridge
-// re-lays out before render; readers that cannot wait can check the signal.
 inline std::uint64_t &layout_generation_storage() {
   static std::uint64_t v = 0;
   return v;
 }
+
 inline std::uint64_t &laid_out_generation_storage() {
   static std::uint64_t v = 0;
   return v;
 }
+
 inline std::uint64_t layout_generation() { return layout_generation_storage(); }
 inline std::uint64_t laid_out_generation() {
   return laid_out_generation_storage();
 }
+
 inline void invalidate_layout() { layout_generation_storage()++; }
 inline bool layout_is_stale() {
   return laid_out_generation() < layout_generation();
@@ -266,8 +265,6 @@ struct UIComponent : BaseComponent {
     return *this;
   }
 
-  // Post-layout size change: mark this subtree dirty so the gated pass
-  // re-lays it out before render instead of reading stale rects a frame.
   void invalidate_layout() {
     size_dirty = true;
     ui::invalidate_layout();

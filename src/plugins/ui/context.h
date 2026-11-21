@@ -475,8 +475,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   [[nodiscard]] bool focus_in_subtree(EntityID id) const {
     return contains_in_subtree(id, focus_id);
   }
-  // Ask for one more layout pass before render (post-layout size changes);
-  // layout_is_stale() tells readers their rect() predates that ask.
   void invalidate_layout() { ui::invalidate_layout(); }
   [[nodiscard]] bool layout_is_stale() const { return ui::layout_is_stale(); }
 

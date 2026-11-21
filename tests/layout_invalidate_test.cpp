@@ -1,9 +1,3 @@
-// layout_invalidate_test.cpp
-// In-frame layout invalidation (floatinghotel): a size mutated after the
-// layout pass used to read stale rects until the next frame. Mutating plus
-// invalidate_layout() must re-lay out in the same frame via the gated pass;
-// without the invalidation the gated pass is a no-op and the stale signal
-// stays clear, so the caller can tell which case it is in.
 
 #include "ui_test_harness.h"
 #include <afterhours/src/plugins/ui/systems.h>
@@ -42,15 +36,14 @@ TEST(mutate_after_layout_reads_fresh_same_frame) {
   CHECK_APPROX(b.cmp().rect().y, 50.f);
   CHECK(!layout_is_stale());
 
-  // Post-layout mutation, as a post-build action or later system would do.
   const auto before = layout_generation();
   a.cmp().set_desired_height(pixels(90));
   a.cmp().invalidate_layout();
   CHECK(layout_generation() == before + 1);
   CHECK(layout_is_stale());
-  CHECK_APPROX(b.cmp().rect().y, 50.f); // not yet re-laid out
+  CHECK_APPROX(b.cmp().rect().y, 50.f);
 
-  run_layout(h, true); // the bridge's gated pass, still this frame
+  run_layout(h, true);
   CHECK_APPROX(a.cmp().rect().height, 90.f);
   CHECK_APPROX(b.cmp().rect().y, 90.f);
   CHECK(!layout_is_stale());
@@ -66,9 +59,9 @@ TEST(no_invalidate_defers_and_stale_signal_stays_clear) {
                ComponentConfig{}.with_size({pixels(200), pixels(30)}));
 
   run_layout(h, false);
-  a.cmp().set_desired_height(pixels(90)); // no invalidate_layout()
+  a.cmp().set_desired_height(pixels(90));
   run_layout(h, true);
-  CHECK_APPROX(b.cmp().rect().y, 50.f); // gated pass correctly skipped
+  CHECK_APPROX(b.cmp().rect().y, 50.f);
   CHECK(!layout_is_stale());
 
   h.context().invalidate_layout();

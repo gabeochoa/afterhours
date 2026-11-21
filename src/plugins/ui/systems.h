@@ -416,7 +416,6 @@ struct PublishContextTheme : System<UIContext<InputAction>> {
 struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
   UIEntityMappingCache *cache = nullptr;
   window_manager::Resolution resolution;
-  // Gated copies (the bridge's second pass) run only after an invalidation.
   bool only_if_invalidated = false;
 
   virtual void once(float) override {
