@@ -1268,10 +1268,6 @@ struct AutoLayout {
       }
     };
 
-    // A shrinkable child may give up space, but never below what its own
-    // content needs: its explicit min, or the extent of its flow children /
-    // label (an ellipsizing label is exempt -- truncating is its job). Without
-    // this, overflow shrink squeezed fixed controls below their children.
     const auto shrink_floor = [this](UIComponent *child, Axis axis) {
       float floor = 0.f;
       const float mn = resolve_constraint(*child, child->min_size[axis], axis);
@@ -1344,9 +1340,6 @@ struct AutoLayout {
           // under-corrected geometrically: with one child at strictness 0.9 it
           // removed 10% of the remaining error per pass, so the 10-iteration
           // cap left 0.9^11 of it behind (432 -> 333.19 instead of 288).
-          // Only children with headroom above their floor take part, so the
-          // error falls on flexible siblings first and fixed controls keep
-          // their content size; what cannot be absorbed stays as overflow.
           float total_shrink_weight = 0.f;
           for (UIComponent *child : layout_children) {
             if (child->computed[axis] > shrink_floor(child, axis))
