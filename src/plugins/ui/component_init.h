@@ -450,19 +450,17 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
     }
   }
 
-  if (config.sticky_top || config.sticky_bottom || config.sticky_left ||
-      config.sticky_right) {
-    auto &st = entity.addComponentIfMissing<HasSticky>();
-    st.top = config.sticky_top;
-    st.bottom = config.sticky_bottom;
-    st.left = config.sticky_left;
-    st.right = config.sticky_right;
-    st.top_offset = config.sticky_top_offset;
-    st.bottom_offset = config.sticky_bottom_offset;
-    st.left_offset = config.sticky_left_offset;
-    st.right_offset = config.sticky_right_offset;
-  } else {
-    entity.removeComponentIfExists<HasSticky>();
+  if (auto *st = entity.toggleComponent<HasSticky>(
+          config.sticky_top || config.sticky_bottom || config.sticky_left ||
+          config.sticky_right)) {
+    st->top = config.sticky_top;
+    st->bottom = config.sticky_bottom;
+    st->left = config.sticky_left;
+    st->right = config.sticky_right;
+    st->top_offset = config.sticky_top_offset;
+    st->bottom_offset = config.sticky_bottom_offset;
+    st->left_offset = config.sticky_left_offset;
+    st->right_offset = config.sticky_right_offset;
   }
 
   if (config.draggable_children) {
