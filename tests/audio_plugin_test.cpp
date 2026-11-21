@@ -32,7 +32,7 @@ void check_near(float actual, float expected, const char *what) {
                      expected, actual);
     }
 }
-}  // namespace
+}
 
 namespace raylib {
 Sound LoadSound(const char *) {
@@ -75,7 +75,7 @@ void UnloadMusicStream(Music) {}
 void PlayMusicStream(Music) {}
 void StopMusicStream(Music) {}
 void UpdateMusicStream(Music) {}
-}  // namespace raylib
+}
 
 int main() {
     using Audio = afterhours::sound_system;

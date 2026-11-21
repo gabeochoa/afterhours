@@ -132,7 +132,6 @@ inline void UnloadMusicStream(MusicStub) {}
 inline MusicStub LoadMusicStream(const char *) { return MusicStub{}; }
 #endif
 
-// Samples are copied; empty/invalid input returns an empty sound.
 inline SoundType load_sound_from_samples(std::span<const float> samples,
                                          int sample_rate, int channels = 1) {
   if (samples.empty() || sample_rate <= 0 || channels <= 0) return SoundType{};
@@ -140,7 +139,6 @@ inline SoundType load_sound_from_samples(std::span<const float> samples,
   const auto frames =
       static_cast<unsigned int>(samples.size() / static_cast<size_t>(channels));
   if (frames == 0) return SoundType{};
-  // raylib takes ownership of nothing here: copy, load, then free ours.
   float *copy = static_cast<float *>(
       std::malloc(samples.size() * sizeof(float)));
   if (!copy) return SoundType{};
