@@ -219,6 +219,8 @@ ALL_TESTS := \
 	color_swatch_test \
 	overlay_placement_test \
 	progress_bar_test \
+	psx_budget_test \
+	psx_backend_test \
 	pagination_test \
 	random_engine_test \
 	render_order_test \
@@ -244,6 +246,7 @@ ALL_TESTS := \
 	frustum_test \
 	instance_batcher_test \
 	lod_test \
+	proximity_pool_test \
 	image_test \
 	image_raylib_test \
 	stepper_test \
