@@ -144,8 +144,7 @@ struct ComponentConfig {
   // is known. An absolute number cannot say "above whatever contains me".
   int render_layer_offset = 0;
 
-  // Custom-draw callbacks (see HasOnDraw): bg draws behind the widget's fill,
-  // fg on top of all its primitives, both receiving the widget's final rect.
+  // Custom-draw callbacks (see HasOnDraw), receiving the final rect.
   std::string tooltip_text;
   float tooltip_delay = 0.5f;
   std::optional<Size> tooltip_font_size;
@@ -153,6 +152,7 @@ struct ComponentConfig {
   float tooltip_gap = 4.f;
   RenderPrimitive::CustomDrawFn on_draw_bg;
   RenderPrimitive::CustomDrawFn on_draw_fg;
+  RenderPrimitive::CustomDrawFn on_draw_over;
 
   std::string font_name = UIComponent::UNSET_FONT;
   colors::FontWeight font_weight = colors::FontWeight::Regular;
@@ -613,12 +613,17 @@ struct ComponentConfig {
     render_layer = layer;
     return *this;
   }
+  // bg: behind fill; fg: over own primitives; over: over whole subtree.
   ComponentConfig &with_on_draw_bg(RenderPrimitive::CustomDrawFn fn) {
     on_draw_bg = std::move(fn);
     return *this;
   }
   ComponentConfig &with_on_draw_fg(RenderPrimitive::CustomDrawFn fn) {
     on_draw_fg = std::move(fn);
+    return *this;
+  }
+  ComponentConfig &with_on_draw_over(RenderPrimitive::CustomDrawFn fn) {
+    on_draw_over = std::move(fn);
     return *this;
   }
   ComponentConfig &with_disabled(bool dis) {
@@ -1268,6 +1273,8 @@ struct ComponentConfig {
       merged.on_draw_bg = overrides.on_draw_bg;
     if (overrides.on_draw_fg)
       merged.on_draw_fg = overrides.on_draw_fg;
+    if (overrides.on_draw_over)
+      merged.on_draw_over = overrides.on_draw_over;
 
     // Size constraints
     if (overrides.min_width.dim != Dim::None)

@@ -395,13 +395,14 @@ inline void apply_bevel(Entity &entity, const ComponentConfig &config) {
 }
 
 inline void apply_on_draw(Entity &entity, const ComponentConfig &config) {
-  if (!config.on_draw_bg && !config.on_draw_fg) {
+  if (!config.on_draw_bg && !config.on_draw_fg && !config.on_draw_over) {
     entity.removeComponentIfExists<HasOnDraw>();
     return;
   }
   auto &hod = entity.addComponentIfMissing<HasOnDraw>();
   hod.bg = config.on_draw_bg;
   hod.fg = config.on_draw_fg;
+  hod.over = config.on_draw_over;
 }
 
 inline void apply_render_layer(HasUIContext auto &ctx, Entity &entity,
