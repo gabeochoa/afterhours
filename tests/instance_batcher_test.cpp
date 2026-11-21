@@ -4,9 +4,6 @@
 //     composition DrawModelEx uses
 //   - copies of two models land in two groups, and flush empties them
 //   - a batched frame renders the same pixels as one draw_model per copy
-//   - per-instance tint reaches pixels and matches tinted draw_model
-//   - instanced / plain / instanced mixing renders every copy (VAO-safe)
-//   - flush() with no shader draws through the batcher-owned default shader
 //
 // Opens a hidden window: models and render targets need a GL context.
 
@@ -169,9 +166,6 @@ int main() {
   raylib::UnloadImage(batched);
   raylib::UnloadImage(direct);
 
-  // Per-instance tint: same tree twice, red on the left, blue on the right.
-  // Batched pixels must match draw_model with the same tints, and the two
-  // halves must carry their tints (not just differ from each other).
   {
     struct TintedCopy {
       raylib::Vector3 pos;
@@ -235,9 +229,6 @@ int main() {
     raylib::UnloadImage(tint_direct);
   }
 
-  // Mixed sequence: instanced flush, plain draw_model of the same model,
-  // instanced flush again. All four copies must draw and match the
-  // all-plain reference, proving the VAO is clean after each flush.
   {
     InstanceBatcher mixed;
     mixed.add(tree, {-3, 0, 0}, 0.f, {0.8f, 0.8f, 0.8f});
@@ -282,8 +273,6 @@ int main() {
     raylib::UnloadImage(plain_img);
   }
 
-  // Batcher-owned default shader: flush() with no shader argument draws
-  // through the shader the batcher loaded itself.
   {
     InstanceBatcher owned;
     owned.add(tree, {0, 0, 0}, 0.f, {1, 1, 1});

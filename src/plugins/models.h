@@ -233,8 +233,6 @@ inline void draw_model_instanced_tinted(const ModelType &model, ShaderType shade
 inline void draw_model_instanced(const ModelType &model, ShaderType shader,
                                  const MatrixType *transforms, int count) {
   if (count <= 0) return;
-  // A shader declaring instanceTint reads black for an attribute nobody
-  // supplied, so hand it white tints instead of leaving it unsupplied.
   if (raylib::GetShaderLocationAttrib(shader, "instanceTint") >= 0) {
     std::vector<Color> white(static_cast<size_t>(count),
                              Color{255, 255, 255, 255});
@@ -251,8 +249,6 @@ inline void draw_model_instanced(const ModelType &model, ShaderType shader,
     // off again, draw_model of this model draws nothing.
     // TODO(backend-agnostic): plugins should not call rlgl. Move this cleanup
     // behind a backend call.
-    // Always unbind, even with a shader raylib cannot locate instances on,
-    // so a plain draw right after this one starts from a clean VAO.
     if (raylib::rlEnableVertexArray(model.meshes[i].vaoId) && loc >= 0) {
       for (int c = 0; c < 4; c++) {
         raylib::rlDisableVertexAttribute(static_cast<unsigned int>(loc + c));
@@ -263,9 +259,6 @@ inline void draw_model_instanced(const ModelType &model, ShaderType shader,
   }
 }
 
-// draw_model_instanced with one tint per copy, via the instanceTint
-// attribute (load_instancing_shader declares it). A shader without that
-// attribute draws untinted and says so, rather than silently ignoring tints.
 inline void draw_model_instanced_tinted(const ModelType &model, ShaderType shader,
                                         const MatrixType *transforms,
                                         const Color *tints, int count) {
@@ -283,8 +276,6 @@ inline void draw_model_instanced_tinted(const ModelType &model, ShaderType shade
     material.shader = shader;
     unsigned int color_buffer = raylib::rlLoadVertexBuffer(
         tints, static_cast<int>(count * sizeof(Color)), true);
-    // Point the tint attribute at the colours before DrawMeshInstanced
-    // rebinds the same VAO for the instance matrices.
     if (raylib::rlEnableVertexArray(model.meshes[i].vaoId)) {
       raylib::rlEnableVertexAttribute(static_cast<unsigned int>(tint_loc));
       raylib::rlSetVertexAttribute(static_cast<unsigned int>(tint_loc), 4,
@@ -491,8 +482,6 @@ inline void draw_mesh_instanced_persistent(const raylib::Mesh &mesh,
 // second batcher.
 struct InstanceBatcher {
   InstanceBatcher() = default;
-  // The batcher owns its default shader, so it cannot be copied without
-  // unloading it twice. It can be moved.
   InstanceBatcher(const InstanceBatcher &) = delete;
   InstanceBatcher &operator=(const InstanceBatcher &) = delete;
   InstanceBatcher(InstanceBatcher &&o) noexcept
@@ -530,9 +519,6 @@ struct InstanceBatcher {
            Vector3Type scale, uint32_t key = 0) {
     add(model, model_transform(pos, yaw_deg, scale), key);
   }
-  // Per-instance tint, multiplied into the diffuse colour. The flush shader
-  // must declare instanceTint (load_instancing_shader does); untinted copies
-  // added to the same group draw white.
   void add(const ModelType &model, const MatrixType &transform, uint32_t key,
            Color tint) {
     Group &g = group_for(model, key);
@@ -543,8 +529,6 @@ struct InstanceBatcher {
     add(model, model_transform(pos, yaw_deg, scale), key, tint);
   }
 
-  // The batcher's own instancing shader, loaded on first use and unloaded
-  // when the batcher dies. flush() with no shader draws through it.
   ShaderType &default_instancing_shader() {
     if (!has_default_shader) {
       default_shader = load_instancing_shader();
