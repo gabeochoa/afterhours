@@ -120,6 +120,13 @@ struct UIComponent : BaseComponent {
   // absolute elements so their children are positioned correctly.
   float absolute_pos_x = 0.f;
   float absolute_pos_y = 0.f;
+  AbsoluteAnchor absolute_anchor = AbsoluteAnchor::LeadingTop;
+  // Unresolved offsets, set only via ComponentConfig: Percent here means a
+  // fraction of the parent's content box, which is unknown at init time, so
+  // autolayout resolves these (falling back to absolute_pos_* when unset).
+  Size absolute_offset_x = pixels(0.f);
+  Size absolute_offset_y = pixels(0.f);
+  bool absolute_offset_is_size = false;
 
   // Resolved scaling mode for this component (set during creation from the
   // cascade: component override > screen context > app default).
