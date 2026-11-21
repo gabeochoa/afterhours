@@ -253,7 +253,7 @@ inline void prewarm_text(const Font font, const char *text,
 // Advance width, same as measure_text.
 
 inline Vector2Type measure_text(const Font font, const char *text,
-                                const float size, const float /*spacing*/) {
+                                const float size, const float spacing) {
   if (!std::isfinite(size) || size <= 0.f)
     return Vector2Type{0, 0};
   auto *ctx = graphics::metal_detail::g_fons_ctx;
@@ -267,8 +267,8 @@ inline Vector2Type measure_text(const Font font, const char *text,
   const float dpi_now = graphics::metal_detail::dpi_scale();
   const std::uint64_t font_id = (static_cast<std::uint64_t>(fid) << 32) ^
                                 static_cast<std::uint64_t>(dpi_now * 1024.f);
-  const auto key =
-      measure_memo::key_for(text ? text : "", size, 1.f, font_id);
+  const auto key = measure_memo::key_for(text ? text : "", size, spacing,
+                                          font_id);
   Vector2Type cached{};
   if (measure_memo::lookup(key, cached))
     return cached;
@@ -277,6 +277,10 @@ inline Vector2Type measure_text(const Font font, const char *text,
   float dpi = graphics::metal_detail::dpi_scale();
   fonsSetSize(ctx, size * dpi);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
+  // Raylib's default 1px gap is sokol's 0 baseline (decision decide-sokol-spacing
+  // option B): only the excess over 1 is extra letter spacing. Unclamped, so
+  // negative extra spacing tightens glyphs. Scaled by dpi like the size.
+  fonsSetSpacing(ctx, (spacing - 1.f) * dpi);
   // Advance, not the ink box: ink drops the side bearings, so text sized from
   // it comes up short and clips.
   std::string shown;
