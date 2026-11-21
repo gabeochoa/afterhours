@@ -442,7 +442,6 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_text_overflow(TextOverflow::Ellipsis);
 
     if (style == TabStyle::Paper && is_active) {
-      // No chamfer primitive; rounded top corners are the stand-in.
       tab_config.with_border_top(ctx.theme.accent, pixels(1.0f))
           .with_rounded_corners(RoundedCorners().top_round());
     } else {

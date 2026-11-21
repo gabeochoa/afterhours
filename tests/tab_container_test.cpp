@@ -177,7 +177,6 @@ TEST(tab_container_clamps_a_stale_active_tab_when_tabs_shrink) {
   CHECK(result.as<int>() == 0);
 }
 
-// Entity carrying the debug name (find() only returns the UIComponent).
 static Entity *find_ent(ImmTestHarness &h, const std::string &name) {
   for (const auto &e : h.coll.get_entities())
     if (e && e->has<UIComponentDebug>() &&
@@ -186,8 +185,6 @@ static Entity *find_ent(ImmTestHarness &h, const std::string &name) {
   return nullptr;
 }
 
-// Paper variant: active tab gets the accent top edge (no bottom underline)
-// and still selects on click; geometry matches the default row.
 TEST(tab_container_paper_active_top_edge_and_selects) {
   ImmTestHarness h;
   std::vector<std::string> tabs = {"One", "Two", "Three"};
@@ -216,12 +213,9 @@ TEST(tab_container_paper_active_top_edge_and_selects) {
   CHECK(!b0.border.bottom.has_border());
   auto &b1 = e1->template get<HasBorder>();
   CHECK(!b1.border.top.has_border());
-  // Same row as default: one bar height, tabs side by side.
   CHECK_APPROX(t0->rect().y, t1->rect().y);
   CHECK(t1->rect().x > t0->rect().x);
 
-  // Click tab_1: press state + HandleClicks (the systems the real app runs
-  // between layout and the next build), then re-emit.
   const Rectangle r = t1->rect();
   auto &ctx = h.context();
   ctx.mouse.pos = input::MousePosition{r.x + r.width * 0.5f,
@@ -250,8 +244,6 @@ TEST(tab_container_paper_active_top_edge_and_selects) {
   CHECK(active == 1);
 }
 
-// Default style unchanged: active tab has the bottom accent underline and no
-// top edge.
 TEST(tab_container_default_keeps_bottom_underline) {
   ImmTestHarness h;
   std::vector<std::string> tabs = {"One", "Two", "Three"};
