@@ -62,7 +62,7 @@ inline RectangleType pad(RectangleType r, float all) {
   return pad(r, Sides::all(all));
 }
 
-// Inset is pad under the name geometry headers use; negative grows, like pad.
+// pad under the geometry name; negative grows.
 inline RectangleType inset(RectangleType r, Sides s) { return pad(r, s); }
 inline RectangleType inset(RectangleType r, float all) { return pad(r, all); }
 
@@ -97,9 +97,7 @@ inline Split cut_right(RectangleType r, float w) {
           RectangleType{r.x + r.width - take, r.y, take, r.height}};
 }
 
-// One cut API for callers who think in strips: always {strip, rest},
-// whichever edge it came off. cut_top/cut_bottom/cut_left/cut_right keep
-// spatial order instead, so the same bind reads differently per edge.
+// Always {strip, rest}; the cut_* keep spatial order.
 enum class Edge { top, bottom, left, right };
 struct Take {
   RectangleType strip;
@@ -128,8 +126,7 @@ inline Take cut(RectangleType r, Edge edge, float amount) {
   return {r, RectangleType{r.x, r.y, 0, 0}};
 }
 
-// All nine placements of a size inside a rect; the five align_* below are
-// the centre column/row of this table.
+// Nine placements; align_* are the centre row/column.
 enum class Align {
   top_left,
   top,
@@ -216,8 +213,7 @@ inline RectangleType intersection(RectangleType a, RectangleType b) {
                        std::max(0.f, y2 - y1)};
 }
 
-// The smallest rect holding both. Not the union shape when the two share
-// only a corner; it is the bounding box, which is what layout needs.
+// Bounding box of both.
 inline RectangleType bounding(RectangleType a, RectangleType b) {
   const float x1 = std::min(a.x, b.x);
   const float y1 = std::min(a.y, b.y);

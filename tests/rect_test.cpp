@@ -119,7 +119,6 @@ TEST(the_repro_from_the_report) {
   CHECK(same(box, RectangleType{118, 93, 64, 36}));
 }
 
-// inset is pad's name in geometry headers; negative must grow, not clamp.
 TEST(inset_alias_and_negative_grows) {
   const RectangleType r{10, 20, 100, 50};
   CHECK(same(inset(r, 5.f), pad(r, 5.f)));
@@ -128,8 +127,6 @@ TEST(inset_alias_and_negative_grows) {
   CHECK(same(inset(r, -5.f), expand(r, 5.f)));
 }
 
-// cut() always hands back {strip, rest}, whichever edge; strip + rest must
-// reassemble the original on every edge.
 TEST(cut_always_returns_strip_then_rest_and_reassembles) {
   const RectangleType r{7, 13, 199, 101};
   for (const auto edge :
@@ -151,7 +148,6 @@ TEST(cut_always_returns_strip_then_rest_and_reassembles) {
   CHECK(same(right.rest, RectangleType{7, 13, 159, 101}));
 }
 
-// All nine placements, corners exact; the old five agree with align_*.
 TEST(align_within_corners_exact_and_matches_align_star) {
   const RectangleType r{0, 0, 100, 100};
   CHECK(same(align_within(r, 40, 20, Align::top_left),
