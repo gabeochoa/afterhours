@@ -52,6 +52,9 @@ struct RenderTextureType {
   uint32_t tex_view_id = 0;
   uint32_t sampler_id = 0;
   uint32_t sgl_ctx_id = 0;
+  uint32_t resolve_img_id = 0;
+  uint32_t resolve_view_id = 0;
+  int sample_count = 1;
   int width = 0;   // physical, i.e. logical * scale
   int height = 0;
   // Supersample factor. Drawing stays in logical coords (width / scale) and
@@ -108,6 +111,7 @@ struct Config {
   int target_fps = 60;
   unsigned int config_flags = 0;
   bool enable_msaa = true;
+  int msaa_samples = 1;
   bool audio = false;
   // Supersample the render texture at design*dpi (crisp on Retina); game keeps
   // logical coords. Honoured by raylib windowed and sokol headless capture.
@@ -142,6 +146,7 @@ concept PlatformBackend = requires {
   { T::minimize_window() } -> std::same_as<void>;
   { T::set_window_size(int{}, int{}) } -> std::same_as<void>;
   { T::set_window_min_size(int{}, int{}) } -> std::same_as<void>;
+  { T::window_resize_pending() } -> std::same_as<bool>;
   { T::set_window_state(unsigned{}) } -> std::same_as<void>;
   { T::clear_window_state(unsigned{}) } -> std::same_as<void>;
   { T::window_state() } -> std::same_as<unsigned>;
