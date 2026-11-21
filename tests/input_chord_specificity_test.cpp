@@ -38,5 +38,19 @@ int main() {
   std::vector<input::ActionDone> other_key = {pressed(Save, S, ctrl), pressed(Redo, Z, ctrl_shift)};
   input::suppress_permissive_duplicates(other_key);
   assert(fired(other_key, Save) && fired(other_key, Redo));
+
+  // Backend-free: the injected key reader must control modifiers too, or a
+  // unit test can never prove Cmd+B fires only while Cmd is held.
+  auto no_buttons = [](input::GamepadID, input::GamepadButton) { return 0.f; };
+  auto cmd_held = [](int key) {
+    return key == afterhours::keys::LEFT_SUPER || key == 'B';
+  };
+  input::ValidInputs cmd_b = {input::AnyInput{Chord{'B', Chord::MOD_SUPER}}};
+  auto hit = input::check_single_action_impl(0, cmd_b, cmd_held, no_buttons);
+  assert(hit.value == 1.f && hit.matched_key == 'B');
+
+  auto cmd_released = [](int key) { return key == 'B'; };
+  auto miss = input::check_single_action_impl(0, cmd_b, cmd_released, no_buttons);
+  assert(miss.value == 0.f);
   return 0;
 }
