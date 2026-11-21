@@ -1,17 +1,5 @@
 #pragma once
 
-// List-menu navigation for a menu the app draws itself (Pumpkin K).
-//
-//   list_menu::State nav;
-//   auto r = list_menu::update_list_menu(nav, (int)rows.size());
-//   if (r.activated) open(rows[nav.selected]);
-//   // draw each row yourself, highlighting nav.selected
-//
-// Caller owns the rows and the drawing; this owns only the selection
-// index. Feed it ListMenuInput directly in tests, or use the overload
-// with no input argument to read this frame's keys (Up/Down with repeat,
-// PageUp/PageDown, Home/End, Enter/Space to activate).
-
 #include <functional>
 
 #include "../../core/key_codes.h"
@@ -86,7 +74,6 @@ inline Result update_list_menu(State &s, int count, const Input &in,
     s.selected = -1;
     return r;
   }
-  // Drop a selection that fell off the list or onto a disabled row.
   if (s.selected >= count ||
       (s.selected >= 0 && !row_enabled(enabled, s.selected)))
     s.selected = first_enabled(count, enabled);

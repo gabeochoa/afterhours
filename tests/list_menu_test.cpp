@@ -1,7 +1,3 @@
-// list_menu_test.cpp
-// list_menu::update_list_menu: widget-free list navigation (Pumpkin K),
-// driven by injected ListMenuInput plus one key-injected frame.
-
 #include <cstdio>
 #include <string>
 
@@ -25,7 +21,6 @@ static void check(bool cond, const std::string &what) {
 static Input key(bool Input::*f) { Input i; i.*f = true; return i; }
 
 int main() {
-  // First update selects the first row; down/up move.
   {
     State s;
     auto r = list_menu::update_list_menu(s, 3, Input{});
@@ -35,7 +30,6 @@ int main() {
     list_menu::update_list_menu(s, 3, key(&Input::up));
     check(s.selected == 0, "up moves back");
   }
-  // Wrap (default) vs clamp.
   {
     State s; s.selected = 2;
     list_menu::update_list_menu(s, 3, key(&Input::down));
@@ -49,7 +43,6 @@ int main() {
     list_menu::update_list_menu(s, 3, key(&Input::up));
     check(s.selected == 0, "clamp: up at first row stays");
   }
-  // Disabled rows are skipped, including by home/end and sanitizing.
   {
     auto enabled = [](int i) { return i != 1 && i != 3; };
     State s;
@@ -69,7 +62,6 @@ int main() {
                                           [](int) { return false; });
     check(none.selected == -1 && !r.activated, "all disabled: no selection");
   }
-  // Page / home / end.
   {
     State s; s.page_size = 3;
     list_menu::update_list_menu(s, 10, key(&Input::page_down));
@@ -86,7 +78,6 @@ int main() {
     list_menu::update_list_menu(s, 10, key(&Input::page_down));
     check(s.selected == 9, "clamped page down stops at last row");
   }
-  // Activation only fires with a valid selection; empty list is safe.
   {
     State s;
     auto r = list_menu::update_list_menu(s, 3, key(&Input::activate));
@@ -96,13 +87,11 @@ int main() {
     r = list_menu::update_list_menu(s, 3, Input{});
     check(!r.activated, "no activate input: no activation");
   }
-  // Shrinking list drops an out-of-range selection.
   {
     State s; s.selected = 4;
     list_menu::update_list_menu(s, 2, Input{});
     check(s.selected == 0, "shrunk list resets selection to first row");
   }
-  // Key-driven overload reads injected keys.
   {
     State s;
     testing::test_input::reset_all();
