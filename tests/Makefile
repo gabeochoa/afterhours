@@ -209,6 +209,7 @@ ALL_TESTS := \
 	keymap_test \
 	label_clear_test \
 	hit_priority_test \
+	two_trees_test \
 	text_selection_test \
 	text_stroke_test \
 	text_stroke_render_test \
@@ -281,6 +282,7 @@ ALL_TESTS += sokol_geometry_test
 # section of sokol_blend_test.
 ALL_TESTS += sokol_hidpi_test
 ALL_TESTS += sokol_resize_test
+ALL_TESTS += sokol_multires_capture_test
 ALL_TESTS += sokol_headless_run_test
 ALL_TESTS += sokol_include_order_test
 ALL_TESTS += sokol_wrappers_test
@@ -448,6 +450,9 @@ $(OUT)/sokol_hidpi_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_resize_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_resize_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_resize_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_multires_capture_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_multires_capture_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_multires_capture_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_headless_run_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_headless_run_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_headless_run_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
@@ -512,6 +517,7 @@ win-vulkan: $(WIN_VULKAN_BINS)
 check-boundaries:
 	bash ../check_plugin_boundaries.sh
 	sh ui_boundary_check.sh
+	sh theme_bypass_check.sh
 .PHONY: check-boundaries
 test: check-boundaries all
 	@fail=0; for t in $(ALL_TESTS); do \
