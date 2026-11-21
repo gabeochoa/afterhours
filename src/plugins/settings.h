@@ -87,7 +87,7 @@ struct settings : developer::Plugin {
   template <typename SettingsData> struct ProvidesSettings : BaseComponent {
     SettingsData data;
     std::string settings_file;
-    std::string raw_settings_text; // original file text, for comment-preserving save
+    std::string raw_settings_text;
     std::vector<std::function<void(const SettingsData &)>> on_change_callbacks;
 
     ProvidesSettings() = default;
@@ -215,7 +215,7 @@ struct settings : developer::Plugin {
                            const fs::path &settings_path) {
     try {
       json j = provider->data.to_json();
-      std::string content = j.dump(2); // Pretty print with 2-space indent
+      std::string content = j.dump(2);
 #ifdef AFTERHOURS_SETTINGS_NLOHMANN_JSON
       if (!provider->raw_settings_text.empty()) {
         auto spliced = settings_preserve::splice(provider->raw_settings_text, j);

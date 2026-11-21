@@ -1,5 +1,3 @@
-// R-142: settings load->modify one value->save keeps comments/formatting
-// elsewhere byte-stable; comments + trailing commas parse; invalid errors.
 #include <afterhours/src/plugins/settings.h>
 #include <cstdio>
 #include <filesystem>
@@ -38,7 +36,7 @@ int main() {
       "  // loudness\n"
       "  \"volume\": 50,\n"
       "  \"name\": \"hi\",   /* inline */\n"
-      "  \"muted\": false,\n" // trailing comma tolerated
+      "  \"muted\": false,\n"
       "}\n";
   write_all(path, original);
 
@@ -56,13 +54,11 @@ int main() {
   check(saved.find("\"name\": \"hi\",") != std::string::npos, "unchanged line byte-stable");
   check(saved.find("\"muted\": false,") != std::string::npos, "trailing-comma line byte-stable");
 
-  // Invalid file still fails (returns false, data untouched).
   write_all(path, "{ \"volume\": oops,, }\n");
   provider.data.volume = 7;
   check(!settings::load_from_json(&provider, path), "invalid file returns failure");
   check(provider.data.volume == 7, "invalid load leaves data untouched");
 
-  // Fresh file (no prior text) still saves plain JSON.
   settings::ProvidesSettings<Data> fresh{Data{}, "settings.json"};
   fresh.data.volume = 3;
   check(settings::save_to_json(&fresh, path), "fresh save succeeds");

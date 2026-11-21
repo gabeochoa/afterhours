@@ -1,7 +1,4 @@
 #pragma once
-// Comment-preserving splice for settings files (R-142): keep the original
-// text and patch only changed value spans, so comments/formatting elsewhere
-// stay byte-stable. Parse side tolerates // /* */ comments + trailing commas.
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
@@ -25,7 +22,7 @@ inline void skip_ws_comments(const std::string &s, size_t &i) {
 }
 
 inline size_t scan_string(const std::string &s, size_t i) {
-  ++i; // opening quote
+  ++i;
   while (i < s.size()) {
     if (s[i] == '\\') { i += 2; continue; }
     if (s[i] == '"') return i + 1;
@@ -35,7 +32,6 @@ inline size_t scan_string(const std::string &s, size_t i) {
 }
 
 inline std::string decode_key(const std::string &s, size_t b, size_t e) {
-  // b/e span the quoted string; decode only common escapes (keys are simple).
   std::string out;
   for (size_t i = b + 1; i + 1 < e; ++i) {
     if (s[i] == '\\' && i + 1 < e) {
@@ -105,7 +101,6 @@ inline std::vector<std::pair<size_t, size_t>> array_elems(const std::string &s, 
   return out;
 }
 
-// Blank trailing commas (offset-preserving) so nlohmann can parse.
 inline std::string sanitized(const std::string &s) {
   std::string out = s; size_t i = 0;
   while (i < s.size()) {
@@ -144,11 +139,11 @@ inline void collect(const std::string &s, const Json &oldj, const Json &newj,
     for (auto &m : o.members) {
       if (newj.contains(m.key)) continue;
       size_t b = m.ks, e = m.ve; size_t j = e; skip_ws_comments(s, j);
-      if (j < s.size() && s[j] == ',') e = j + 1; // drop member + following comma
+      if (j < s.size() && s[j] == ',') e = j + 1;
       edits.push_back({b, e, ""});
     }
     if (!inserts.empty()) {
-      size_t j = o.close; // decide comma from last non-ws/comment char
+      size_t j = o.close;
       size_t k = o.close;
       while (k > vs && std::string(" \t\n\r").find(s[k - 1]) != std::string::npos) --k;
       bool empty = (k > vs && s[k - 1] == '{');
@@ -181,9 +176,8 @@ inline std::string splice(const std::string &original, const Json &newj) {
               [](const Edit &a, const Edit &b) { return a.b > b.b; });
     std::string out = original;
     for (auto &e : edits) out.replace(e.b, e.e - e.b, e.text);
-    // Self-check: spliced text must parse back to the new values.
     if (parse_tolerant(out) != newj) return "";
     return out;
   } catch (...) { return ""; }
 }
-} // namespace afterhours::settings_preserve
+}
