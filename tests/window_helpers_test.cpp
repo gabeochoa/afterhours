@@ -15,6 +15,7 @@
 using afterhours::graphics::centre_window_on_display;
 using afterhours::graphics::Config;
 using afterhours::graphics::fit_window_size;
+using afterhours::graphics::letterbox_content_size;
 using afterhours::graphics::window_centre_position;
 
 static int checks_run = 0;
@@ -56,8 +57,8 @@ int main() {
 
   const auto fitted =
       centre_window_on_display(0, 0, 1920, 1080, 2200, 900, 800, 600);
-  check(fitted.width == 1920 && fitted.height == 900 && fitted.x == 0 &&
-            fitted.y == 90,
+  check(fitted.first == std::pair{1920, 900} &&
+            fitted.second == std::pair{0, 90},
         "centre_window_on_display fits then centres");
 
   Config cfg;
@@ -65,9 +66,31 @@ int main() {
   cfg.height = 1440;
   const auto cfg_fitted =
       centre_window_on_display(0, 0, 1920, 1080, cfg.width, cfg.height);
-  check(cfg_fitted.width == 1920 && cfg_fitted.height == 1080 &&
-            cfg_fitted.x == 0 && cfg_fitted.y == 0,
+  check(cfg_fitted.first == std::pair{1920, 1080} &&
+            cfg_fitted.second == std::pair{0, 0},
         "Config width/height plumb through the fit");
+
+  // Letterbox/pillarbox rects below are pinned from the old
+  // window_manager::content_viewport math (dest size, then centred).
+  check(letterbox_content_size(1280, 720, 2000, 720) == std::pair{1280, 720},
+        "wide window pillarboxes: content size");
+  check(window_centre_position(0, 0, 2000, 720, 1280, 720) ==
+            std::pair{360, 0},
+        "wide window pillarboxes: bars on the sides");
+  check(letterbox_content_size(1280, 720, 1280, 1000) == std::pair{1280, 720},
+        "tall window letterboxes: content size");
+  check(window_centre_position(0, 0, 1280, 1000, 1280, 720) ==
+            std::pair{0, 140},
+        "tall window letterboxes: bars top and bottom");
+  check(letterbox_content_size(1280, 720, 2560, 1440) == std::pair{2560, 1440},
+        "exact fit fills the window");
+  check(window_centre_position(0, 0, 2560, 1440, 2560, 1440) ==
+            std::pair{0, 0},
+        "exact fit has no bars");
+  check(letterbox_content_size(720, 1280, 2000, 720) == std::pair{405, 720},
+        "tall content in a wide window: content size");
+  check(window_centre_position(0, 0, 2000, 720, 405, 720) == std::pair{797, 0},
+        "tall content in a wide window: pillarbox offset");
 
   printf("%d/%d checks passed\n", checks_passed, checks_run);
   return checks_passed == checks_run ? 0 : 1;
