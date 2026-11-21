@@ -409,6 +409,14 @@ inline void set_blend_mode(blend::Mode mode) {
   case blend::Mode::AlphaPremultiply:
     raylib::rlSetBlendMode(raylib::RL_BLEND_ALPHA_PREMULTIPLY);
     break;
+  case blend::Mode::Layer:
+    // Separate factors: GL's single-factor alpha blend squares the alpha
+    // of translucent draws into a cleared target.
+    raylib::rlSetBlendFactorsSeparate(RL_SRC_ALPHA, RL_ONE_MINUS_SRC_ALPHA,
+                                      RL_ONE, RL_ONE_MINUS_SRC_ALPHA,
+                                      RL_FUNC_ADD, RL_FUNC_ADD);
+    raylib::rlSetBlendMode(raylib::RL_BLEND_CUSTOM_SEPARATE);
+    break;
   }
 }
 
@@ -603,11 +611,30 @@ inline void unload_render_texture(graphics::RenderTextureType &rt) {
   raylib::UnloadRenderTexture(rt);
 }
 
+// Stack of active targets so texture modes can nest: raylib's own
+// EndTextureMode always returns to the screen, losing the outer target.
+inline std::vector<graphics::RenderTextureType> &texture_mode_stack() {
+  static std::vector<graphics::RenderTextureType> stack;
+  return stack;
+}
+
 inline void begin_texture_mode(graphics::RenderTextureType &rt) {
+  texture_mode_stack().push_back(rt);
   raylib::BeginTextureMode(rt);
 }
 
-inline void end_texture_mode() { raylib::EndTextureMode(); }
+inline void end_texture_mode() {
+  auto &stack = texture_mode_stack();
+  if (stack.empty()) {
+    raylib::EndTextureMode();
+    return;
+  }
+  stack.pop_back();
+  if (stack.empty())
+    raylib::EndTextureMode();
+  else
+    raylib::BeginTextureMode(stack.back());
+}
 
 inline void copy_screen_to_render_texture(graphics::RenderTextureType &dst, RectangleType src) {
   raylib::rlDrawRenderBatchActive();

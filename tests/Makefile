@@ -394,6 +394,8 @@ RAYLIB_TESTS := \
 	render_capture_test \
 	presented_frame_test \
 	triangle_winding_test \
+	offscreen_layer_test \
+	subtree_texture_test \
 	clipboard_test \
 	mk_cost_test \
 	capture_perf_test \
