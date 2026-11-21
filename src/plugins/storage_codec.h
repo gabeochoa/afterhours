@@ -1,54 +1,11 @@
 #pragma once
 
-// Versioned storage codecs: the envelope three projects hand-rolled.
-//
-// Floatinghotel, MyNameChef and Pharmasea each persisted data as "some
-// bytes, hope the layout never changes": adding one field broke every
-// existing save, and a file written by a newer build was silently read
-// as garbage by an older one. This header is the shared fix.
-//
-// A Codec<T> stamps every payload with a format version, runs an
-// ordered migration chain on decode when the stored version is older,
-// and reports *why* a decode failed instead of returning a bare
-// optional. The outcome names deliberately match the save-envelope
-// vocabulary Pharmasea asked for (G-P18), so a save system can switch
-// on them directly:
-//
-//   Ok       stored version == current version; value decoded.
-//   Migrated stored version <  current version; the migration chain
-//            ran cleanly and the migrated payload decoded. Callers
-//            usually re-save so the file advances on disk.
-//   Corrupt  not a codec envelope, a malformed/negative version, a
-//            missing or failing migration, or a payload the current
-//            decoder rejects. The data is unusable; do not overwrite
-//            it blindly (keep it for inspection / fall back to
-//            defaults explicitly at the call site).
-//   TooNew   stored version >  current version (written by a newer
-//            build). The payload is never handed to the decoder, so a
-//            downgrade cannot corrupt a newer save.
-//
-// Envelope (payload is everything after the second newline, verbatim,
-// so binary payloads such as bitsery buffers survive round-trip):
-//
-//   afterhours-storage-codec/1
-//   <decimal version>
-//   <payload>
-//
-// Persistence composition (the codec is transport only; durability
-// stays with the files plugin, #82):
-//
-//   files::write_string_atomic(path, codec.encode(value));
-//   if (auto text = files::read_string(path)) {
-//     auto result = codec.decode(*text);
-//     if (result.ok()) use(result.value);
-//     else if (result.status == DecodeStatus::TooNew) keep_the_file();
-//     else fall_back_to_defaults();
-//   }
-//
-// Adoption of the existing settings/save callers onto this envelope
-// is deliberately NOT done here: it changes on-disk bytes for every
-// live save, so it belongs in per-project follow-ups that can migrate
-// real files. This header is additive and breaks no existing caller.
+// Versioned envelope. Status names match Pharmasea's save vocabulary (G-P18):
+//   Ok: current. Migrated: chain ran (callers usually re-save). Corrupt: unusable —
+//   do not overwrite blindly. TooNew: newer build; payload never reaches decoder.
+// Envelope: "afterhours-storage-codec/1\n<version>\n<payload>" — payload after
+// second newline is verbatim, so binary payloads survive. Codec is transport
+// only; durability stays with files::write_string_atomic.
 
 #include <charconv>
 #include <functional>
@@ -77,9 +34,9 @@ inline const char *to_string(DecodeStatus status) {
 template <typename T> struct DecodeResult {
   DecodeStatus status = DecodeStatus::Corrupt;
   std::optional<T> value; // set only when ok()
-  int found_version = 0;  // version stamped in the envelope (0 if unreadable)
+  int found_version = 0;
   int current_version = 0;
-  std::string message; // human-readable detail for logs; never parse this
+  std::string message; // for logs; never parse this
 
   [[nodiscard]] bool ok() const {
     return status == DecodeStatus::Ok || status == DecodeStatus::Migrated;
@@ -100,9 +57,7 @@ inline std::optional<int> parse_version(std::string_view text) {
 }
 } // namespace detail
 
-// Version stamped in an envelope, without decoding. nullopt when the
-// text is not a codec envelope at all (callers may use this to detect
-// legacy, pre-codec files and route them to a v1 migration path).
+// nullopt if not an envelope; use to route legacy pre-codec files to v1.
 inline std::optional<int> peek_version(std::string_view text) {
   const auto first = text.find('\n');
   if (first == std::string_view::npos ||
@@ -116,12 +71,10 @@ inline std::optional<int> peek_version(std::string_view text) {
 
 template <typename T> class Codec {
 public:
-  // Current-version payload <-> T. decode_payload returns nullopt for
-  // bytes it cannot read; the codec reports that as Corrupt.
+  // decode returns nullopt for unreadable bytes (reported as Corrupt).
   using EncodeFn = std::function<std::string(const T &)>;
   using DecodeFn = std::function<std::optional<T>(std::string_view)>;
-  // Payload at version N -> payload at version N+1. nullopt = the
-  // stored payload cannot be carried forward (reported as Corrupt).
+  // N -> N+1; nullopt = cannot carry forward (Corrupt).
   using MigrationFn =
       std::function<std::optional<std::string>(std::string_view)>;
 
@@ -134,11 +87,7 @@ public:
       throw std::invalid_argument("storage::Codec: encode/decode required");
   }
 
-  // Migrations in version order: migrations[0] takes v1 payloads to
-  // v2, migrations[1] takes v2 to v3, and so on. Supplying a chain
-  // shorter than current_version-1 is allowed at construction (old
-  // files then report Corrupt/"missing migration" instead of failing
-  // the build), but every shipped chain should cover 1..current-1.
+  // migrations[i] takes v(i+1) to v(i+2). Short chain allowed: old files then report Corrupt, not a build failure.
   Codec(int current_version, EncodeFn encode, DecodeFn decode,
         std::vector<MigrationFn> migrations)
       : Codec(current_version, std::move(encode), std::move(decode)) {
@@ -146,7 +95,6 @@ public:
       migration(static_cast<int>(i) + 1, std::move(migrations[i]));
   }
 
-  // Register the migration from `from_version` to `from_version + 1`.
   Codec &migration(int from_version, MigrationFn fn) {
     if (from_version < 1 || from_version >= current_version_)
       throw std::invalid_argument(
@@ -234,8 +182,6 @@ private:
   std::map<int, MigrationFn> migrations_;
 };
 
-// Codec for the common case where the payload already is a string
-// (settings text, JSON documents, hand-rolled key=value saves).
 inline Codec<std::string> make_string_codec(
     int current_version,
     std::vector<Codec<std::string>::MigrationFn> migrations = {}) {
