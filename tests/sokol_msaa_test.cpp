@@ -1,11 +1,3 @@
-// sokol_msaa_test.cpp — antialiasing part A (decide-sokol-antialiasing).
-// Headless Metal coverage test: a diagonal drawn into a 4x MSAA render
-// target, resolved to 1x, must show partial-coverage (intermediate) edge
-// pixels, while the 1x path shows a hard binary edge. Also proves the
-// default-off path is unchanged: the headless target reports sample_count
-// 1 with no resolve image, and its diagonal has no intermediate pixels.
-//
-// Own process: the Metal backend cannot be re-initialised. macOS/Metal only.
 
 #if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_VULKAN) && \
     !defined(AFTER_HOURS_USE_SOKOL)
@@ -31,16 +23,12 @@ static void check(bool cond, const std::string &what) {
 
 static constexpr int W = 64, H = 64;
 
-// Draw a white diagonal triangle covering roughly the lower-left half on a
-// black background, read back RGBA.
 static std::vector<uint8_t> render_diagonal(g::RenderTextureType &rt) {
   afterhours::begin_texture_mode(rt);
   afterhours::draw_rectangle(RectangleType{0, 0, W, H}, Color{0, 0, 0, 255});
-  // Triangle (0,0)-(W,H)-(0,H): its hypotenuse is the diagonal edge.
   afterhours::draw_triangle(Vector2Type{0, 0}, Vector2Type{W, H},
                             Vector2Type{0, H}, Color{255, 255, 255, 255});
   afterhours::end_texture_mode();
-  // Commit so the pass (and MSAA resolve at end_pass) completes before readback.
   sg_commit();
   auto cap = afterhours::capture_render_texture_rgba(rt);
   if (!cap) return {};
@@ -61,7 +49,6 @@ int main() {
   g::Config cfg;
   cfg.display = g::DisplayMode::Headless;
   cfg.width = W; cfg.height = H; cfg.title = "msaa test";
-  // cfg.msaa_samples deliberately left at default 1 (off).
   if (!g::init(cfg)) {
     printf("SKIP: headless Metal init failed (no GPU available)\n");
     return 0;
@@ -95,8 +82,6 @@ int main() {
   check(plain_mid == 0, "1x diagonal has a hard edge (no intermediate pixels)");
   check(msaa_mid >= 16, "4x MSAA diagonal shows coverage (intermediate pixels)");
 
-  // Default-off byte identity: rendering the same diagonal into the default
-  // headless target must match the plain 1x target pixel for pixel.
   g::begin_drawing();
   afterhours::draw_rectangle(RectangleType{0, 0, W, H}, Color{0, 0, 0, 255});
   afterhours::draw_triangle(Vector2Type{0, 0}, Vector2Type{W, H},

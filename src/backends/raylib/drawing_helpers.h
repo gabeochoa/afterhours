@@ -587,7 +587,6 @@ inline void set_mouse_cursor(int cursor_id) {
 inline graphics::RenderTextureType load_render_texture(int w, int h) {
   return raylib::LoadRenderTexture(w, h);
 }
-// Raylib render textures are 1x here; MSAA is a sokol part-A surface.
 inline graphics::RenderTextureType load_render_texture_with_samples(int w, int h, int) {
   return raylib::LoadRenderTexture(w, h);
 }

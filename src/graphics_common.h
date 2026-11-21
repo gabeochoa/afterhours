@@ -52,10 +52,6 @@ struct RenderTextureType {
   uint32_t tex_view_id = 0;
   uint32_t sampler_id = 0;
   uint32_t sgl_ctx_id = 0;
-  // MSAA (antialiasing part A): when sample_count > 1, color/depth are
-  // multisampled and resolve_img_id/resolve_view_id hold the 1x resolve
-  // target. tex_view and capture/readback point at the resolve image.
-  // sample_count == 1 (default) leaves both ids 0 and is byte-identical.
   uint32_t resolve_img_id = 0;
   uint32_t resolve_view_id = 0;
   int sample_count = 1;
@@ -115,10 +111,6 @@ struct Config {
   int target_fps = 60;
   unsigned int config_flags = 0;
   bool enable_msaa = true;
-  // Sokol MSAA render-target samples (antialiasing part A). 1 = off (default):
-  // headless/E2E captures are byte-identical to before. >1 (typically 4) makes
-  // the sokol headless render target multisampled with a 1x resolve. The
-  // windowed swapchain flag is part B and is not wired here.
   int msaa_samples = 1;
   bool audio = false;
   // Supersample the render texture at design*dpi (crisp on Retina); game keeps

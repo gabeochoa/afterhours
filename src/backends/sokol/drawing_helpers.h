@@ -1038,8 +1038,6 @@ inline sgl_context sgl_context_for(sg_pixel_format color_fmt,
   return ctx;
 }
 
-// Image id capture/readback should use: the 1x resolve image for MSAA
-// targets, otherwise the color image. Defined before the capture helpers.
 inline uint32_t render_texture_capture_image_id(
     const graphics::RenderTextureType &rt) {
   return rt.resolve_img_id ? rt.resolve_img_id : rt.color_img_id;
@@ -1060,7 +1058,6 @@ inline graphics::RenderTextureType load_render_texture_with_samples(int w,
   sg_pixel_format depth_fmt = env.depth_format;
   if (depth_fmt == _SG_PIXELFORMAT_DEFAULT)
     depth_fmt = SG_PIXELFORMAT_DEPTH_STENCIL;
-  // Explicit samples win; 1 keeps the historic env-default (1) path untouched.
   int sc = samples > 1 ? samples : env.sample_count;
   if (sc <= 0)
     sc = 1;
@@ -1122,8 +1119,7 @@ inline graphics::RenderTextureType load_render_texture_with_samples(int w,
     return rt;
   }
 
-  // MSAA: 1x resolve image + view; tex/capture read the resolve, not the
-  // multisampled color image (sokol validates that pairing).
+  // sokol validates that pairing: tex/capture read the 1x resolve image.
   sg_image resolve{};
   sg_view resolve_view{};
   if (sc > 1) {
@@ -1305,9 +1301,7 @@ inline void begin_texture_mode(graphics::RenderTextureType &rt) {
 
   sgl_defaults();
   if (rt.sample_count > 1) {
-    // g_blend_pip belongs to the default (1x) sgl context; applying it in an
-    // MSAA pass fails sokol's pipeline/attachment sample-count validation.
-    // Make the equivalent blend pipeline inside this target's sgl context.
+    // sokol validates pipeline/attachment sample counts: blend here, not g_blend_pip.
     static std::unordered_map<uint32_t, uint32_t> msaa_blend_pips;
     auto it = msaa_blend_pips.find(rt.sgl_ctx_id);
     if (it == msaa_blend_pips.end()) {
