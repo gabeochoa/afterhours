@@ -1,7 +1,9 @@
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -42,12 +44,46 @@ struct sound_system : developer::Plugin {
                                         current_volume * get_master_volume());
         }
 
+        // Closed captions: a sound name maps to accessibility text. Playing
+        // the sound stamps the caption; last_caption() is the query UI uses.
+        // No rendering here by design.
+        struct Caption {
+            std::string text;
+            float started_at = 0.f;
+            float duration = 4.f;
+        };
+        void set_caption(const std::string &name, const std::string &text,
+                         float duration = 4.f) {
+            captions_[name] = Caption{text, 0.f, duration};
+        }
+        void clear_caption(const std::string &name) { captions_.erase(name); }
+        [[nodiscard]] bool has_caption(const std::string &name) const {
+            return captions_.contains(name);
+        }
+        // Seconds, for caption timestamps; tests inject a fake clock.
+        void set_caption_clock(std::function<float()> clock) {
+            caption_clock_ = std::move(clock);
+        }
+        [[nodiscard]] std::optional<Caption> last_caption() const {
+            if (!last_) return std::nullopt;
+            if (now() - last_->started_at >= last_->duration)
+                return std::nullopt;
+            return last_;
+        }
+        void note_played(const std::string &name) {
+            auto it = captions_.find(name);
+            if (it == captions_.end()) return;
+            last_ = it->second;
+            last_->started_at = now();
+        }
+
         void play(const char *const name) {
             if (!contains(name)) {
                 log_warn("SoundLibrary::play: no sound loaded named '{}'", name);
                 return;
             }
             ::afterhours::PlaySound(get(name));
+            note_played(name);
         }
 
         void play_random_match(const std::string &prefix) {
@@ -73,6 +109,7 @@ struct sound_system : developer::Plugin {
                 }
             }
             ::afterhours::PlaySound(matches.first->second);
+            note_played(matches.first->first);
         }
 
         void play_first_available_match(const std::string &prefix) {
@@ -84,10 +121,12 @@ struct sound_system : developer::Plugin {
             for (auto it = matches.first; it != matches.second; ++it) {
                 if (!::afterhours::IsSoundPlaying(it->second)) {
                     ::afterhours::PlaySound(it->second);
+                    note_played(it->first);
                     return;
                 }
             }
             ::afterhours::PlaySound(matches.first->second);
+            note_played(matches.first->first);
         }
 
         void update_volume(const float new_v) {
@@ -101,6 +140,14 @@ struct sound_system : developer::Plugin {
 
        private:
         float current_volume = 1.f;
+        std::map<std::string, Caption> captions_;
+        std::optional<Caption> last_;
+        std::function<float()> caption_clock_ = [] {
+            return std::chrono::duration<float>(
+                       std::chrono::steady_clock::now().time_since_epoch())
+                .count();
+        };
+        [[nodiscard]] float now() const { return caption_clock_(); }
 
         struct SoundLibraryImpl : Library<SoundType> {
             virtual SoundType convert_filename_to_object(
@@ -280,6 +327,7 @@ struct sound_system : developer::Plugin {
                         auto &s = lib.get(alias_name);
                         if (!::afterhours::IsSoundPlaying(s)) {
                             ::afterhours::PlaySound(s);
+                            lib.note_played(base);
                             idx = (try_index + 1) % names.size();
                             return;
                         }
