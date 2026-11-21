@@ -13,6 +13,7 @@
 #include "../texture_manager.h"
 #include "components.h"
 #include "extension.h"
+#include "overlay.h"
 #include "text_unit_motion.h"
 #include "render_primitives.h"
 #include "rounded_corners.h"
@@ -146,6 +147,7 @@ struct ComponentConfig {
   // fg on top of all its primitives, both receiving the widget's final rect.
   std::string tooltip_text;
   float tooltip_delay = 0.5f;
+  overlay::Placement tooltip_placement = overlay::Placement::Below;
   std::optional<Size> tooltip_font_size;
   float tooltip_padding = 8.f;
   float tooltip_gap = 4.f;
@@ -581,6 +583,10 @@ struct ComponentConfig {
   ComponentConfig &with_tooltip(const std::string &text, float delay = 0.5f) {
     tooltip_text = text;
     tooltip_delay = delay;
+    return *this;
+  }
+  ComponentConfig &with_tooltip_placement(overlay::Placement placement) {
+    tooltip_placement = placement;
     return *this;
   }
   ComponentConfig &with_tooltip_font_size(Size size) {
@@ -1202,6 +1208,7 @@ struct ComponentConfig {
     if (!overrides.tooltip_text.empty()) {
       merged.tooltip_text = overrides.tooltip_text;
       merged.tooltip_delay = overrides.tooltip_delay;
+      merged.tooltip_placement = overrides.tooltip_placement;
       merged.tooltip_font_size = overrides.tooltip_font_size;
       merged.tooltip_padding = overrides.tooltip_padding;
       merged.tooltip_gap = overrides.tooltip_gap;
