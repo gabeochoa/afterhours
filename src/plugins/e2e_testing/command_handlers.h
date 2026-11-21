@@ -38,12 +38,6 @@ inline std::pair<float, float> e2e_screen_size() {
     return {1280.f, 720.f};  // fallback
 }
 
-// Render checkpoint for lookups: true while cmd must wait for a render
-// newer than dispatch, so it cannot resolve against a view drawn before
-// the latest logic ticks (hosts may tick many times per render). The
-// runner arms it by stamping seen_render at dispatch; an unarmed command
-// (seen_render < 0, e.g. a handler driven directly) evaluates immediately.
-// Counted by registry generation, not frames, like expect_no_text.
 inline bool render_checkpoint_pending(PendingE2ECommand &cmd) {
     if (cmd.seen_render < 0) return false;
     if (cmd.seen_render ==
