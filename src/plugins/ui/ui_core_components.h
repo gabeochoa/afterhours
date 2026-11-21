@@ -391,8 +391,7 @@ struct UIComponent : BaseComponent {
   }
 };
 
-// Ack for a read taken at `read_gen` (a widget's laid_out_generation or an
-// anchor_generation): true once a later pass re-laid that widget out.
+// True once a later pass re-laid out the widget read at read_gen.
 inline bool laid_out_since(const UIComponent &cmp, std::uint64_t read_gen) {
   return cmp.laid_out_generation != read_gen;
 }
