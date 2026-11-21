@@ -271,6 +271,22 @@ inline void run_systems_on_ui_entities(
     }
 }
 
+// Swap the one system of exact type Old in a bridge's list, keeping its
+// slot so order is preserved. False when absent: a failed replacement is
+// visible instead of silently leaving the stock system running.
+template<typename Old, typename New>
+static bool replace_bridge_system(
+    std::vector<std::unique_ptr<SystemBase>> &systems,
+    std::unique_ptr<New> replacement) {
+    for (auto &system : systems) {
+        if (system && typeid(*system) == typeid(Old)) {
+            system = std::move(replacement);
+            return true;
+        }
+    }
+    return false;
+}
+
 // Bridge system: runs ClearUIComponentChildren + BeginUIContextManager
 // on UI collection entities.
 template<typename InputAction>
@@ -391,6 +407,49 @@ struct UIPluginRenderBridge : System<> {
         run_systems_on_ui_entities(systems, dt, /*is_render=*/true);
     }
 };
+
+/// Replace a built-in bridge system with your own, in place, after
+/// setup()/register_*_systems(). Returns false (changing nothing) when the
+/// bridge or the Old system is not registered, so assert the result:
+///     bool ok = ui::replace_post_update_system<MyAction,
+///         ui::HandleScrollInput<MyAction>>(sm,
+///         std::make_unique<MyScrollInput>());
+template<typename InputAction, typename Old, typename New>
+static bool replace_pre_update_system(SystemManager &sm,
+                                      std::unique_ptr<New> replacement) {
+    for (auto &system : sm.update_systems_) {
+        if (auto *bridge = dynamic_cast<UIPluginPreUpdateBridge<InputAction> *>(
+                system.get()))
+            return replace_bridge_system<Old>(bridge->systems,
+                                              std::move(replacement));
+    }
+    return false;
+}
+
+template<typename InputAction, typename Old, typename New>
+static bool replace_post_update_system(SystemManager &sm,
+                                       std::unique_ptr<New> replacement) {
+    for (auto &system : sm.update_systems_) {
+        if (auto *bridge =
+                dynamic_cast<UIPluginPostUpdateBridge<InputAction> *>(
+                    system.get()))
+            return replace_bridge_system<Old>(bridge->systems,
+                                              std::move(replacement));
+    }
+    return false;
+}
+
+template<typename InputAction, typename Old, typename New>
+static bool replace_render_system(SystemManager &sm,
+                                  std::unique_ptr<New> replacement) {
+    for (auto &system : sm.render_systems_) {
+        if (auto *bridge = dynamic_cast<UIPluginRenderBridge<InputAction> *>(
+                system.get()))
+            return replace_bridge_system<Old>(bridge->systems,
+                                              std::move(replacement));
+    }
+    return false;
+}
 
 // --- Registration functions ---
 
