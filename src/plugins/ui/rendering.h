@@ -1,6 +1,7 @@
 #pragma once
 
 #include <set>
+#include <atomic>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -1674,10 +1675,13 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                        ? entity.get<HasRoundedCorners>().segments
                        : 8;
 
-    // Push rotation transform - all subsequent drawing will be rotated around
-    // component center
-    float centerX = draw_rect.x + draw_rect.width / 2.0f;
-    float centerY = draw_rect.y + draw_rect.height / 2.0f;
+    // Push rotation transform about the configured origin (default centre)
+    const Vector2Type rot_center = entity.has<HasUIModifiers>()
+        ? entity.get<HasUIModifiers>().rotation_center(draw_rect)
+        : Vector2Type{draw_rect.x + draw_rect.width / 2.0f,
+                      draw_rect.y + draw_rect.height / 2.0f};
+    float centerX = rot_center.x;
+    float centerY = rot_center.y;
     push_rotation(centerX, centerY, rotation);
 
     // Draw shadow first (behind the element)
@@ -2517,8 +2521,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         label_rect.y += label_inset.y;
         label_rect.width = std::max(0.f, label_rect.width - 2.f * label_inset.x);
         label_rect.height = std::max(0.f, label_rect.height - 2.f * label_inset.y);
-        float centerX = draw_rect.x + draw_rect.width / 2.0f;
-        float centerY = draw_rect.y + draw_rect.height / 2.0f;
+        const Vector2Type rot_center = entity.has<HasUIModifiers>()
+            ? entity.get<HasUIModifiers>().rotation_center(draw_rect)
+            : Vector2Type{draw_rect.x + draw_rect.width / 2.0f,
+                          draw_rect.y + draw_rect.height / 2.0f};
+        float centerX = rot_center.x;
+        float centerY = rot_center.y;
 
         // Wrap into lines of coloured runs, one command per run. Plain text is
         // the single-run case. Wrapping needs an explicit font size (see
@@ -2630,6 +2638,14 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           }
         }
 
+        if (wrapped && entity.template has<HasTextUnitMotion>()) {
+          // Per-unit motion is silently skipped for wrapped text; say so once.
+          static std::atomic_bool warned_unit_motion_wrapped{false};
+          if (!warned_unit_motion_wrapped.exchange(true))
+            log_warn("per-unit text motion is skipped for wrapped text "
+                     "(entity {}); the label draws without unit animation",
+                     entity.id);
+        }
         const bool per_unit = !wrapped && entity.template has<HasTextUnitMotion>() &&
                               hasLabel.alignment == TextAlignment::Left &&
                               display_text == hasLabel.label &&

@@ -90,6 +90,7 @@ ALL_TESTS := \
 	drag_scroll_hit_test \
 	label_clip_test \
 	animation_test \
+	sprite_animation_test \
 	motion_config_test \
 	reduced_motion_test \
 	appearance_test \

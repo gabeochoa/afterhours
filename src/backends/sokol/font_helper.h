@@ -188,8 +188,15 @@ inline Font load_font_for_string(const std::string &,
 
 // Advance width, same as measure_text.
 
+// The UI spacing parameter is 1-based (1 = no letter spacing, matching the
+// raylib call sites' `1 + letter_spacing`); fontstash spacing is the extra
+// itself, and a direct 0 still means no extra.
+inline float fons_spacing_for(float spacing) {
+  return spacing == 0.f ? 0.f : spacing - 1.f;
+}
+
 inline Vector2Type measure_text(const Font font, const char *text,
-                                const float size, const float /*spacing*/) {
+                                const float size, const float spacing) {
   if (!std::isfinite(size) || size <= 0.f)
     return Vector2Type{0, 0};
   auto *ctx = graphics::metal_detail::g_fons_ctx;
@@ -204,7 +211,7 @@ inline Vector2Type measure_text(const Font font, const char *text,
   const std::uint64_t font_id = (static_cast<std::uint64_t>(fid) << 32) ^
                                 static_cast<std::uint64_t>(dpi_now * 1024.f);
   const auto key =
-      measure_memo::key_for(text ? text : "", size, 1.f, font_id);
+      measure_memo::key_for(text ? text : "", size, spacing, font_id);
   Vector2Type cached{};
   if (measure_memo::lookup(key, cached))
     return cached;
@@ -212,6 +219,7 @@ inline Vector2Type measure_text(const Font font, const char *text,
   // Measure at DPI-scaled size (matching draw_text_ex) and convert back.
   float dpi = graphics::metal_detail::dpi_scale();
   fonsSetSize(ctx, size * dpi);
+  fonsSetSpacing(ctx, fons_spacing_for(spacing) * dpi);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   // Advance, not the ink box: ink drops the side bearings, so text sized from
   // it comes up short and clips.
@@ -243,6 +251,7 @@ inline float monospace_cell_advance(const Font font, const float size) {
   fonsSetFont(ctx, fid);
   const float dpi = graphics::metal_detail::dpi_scale();
   fonsSetSize(ctx, size * dpi);
+  fonsSetSpacing(ctx, 0.f);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   return fonsTextAdvance(ctx, "0", nullptr) / dpi;
 }
