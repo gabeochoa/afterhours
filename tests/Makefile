@@ -246,6 +246,7 @@ ALL_TESTS := \
 	lod_test \
 	image_test \
 	image_raylib_test \
+	per_draw_filter_test \
 	stepper_test \
 	styling_test \
 	system_tags_test \
@@ -476,6 +477,9 @@ $(OUT)/image_metal_test: image_test.cpp ../examples/web/sokol_impl.cc
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
 
 $(OUT)/image_raylib_test: image_test.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $< $(LDFLAGS_RAYLIB) -o $@
+
+$(OUT)/per_draw_filter_test: per_draw_filter_test.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $< $(LDFLAGS_RAYLIB) -o $@
 
 # Windows/Vulkan cross-build (from macOS, via zig). The .exes link on the Mac

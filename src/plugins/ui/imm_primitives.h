@@ -171,6 +171,7 @@ ElementResult sprite(HasUIContext auto &ctx, EntityParent ep_pair,
   img.texture = texture;
   img.source_rect = source_rect;
   img.alignment = alignment;
+  img.filter = config.image_filter;
 
   return {false, entity};
 }
@@ -192,6 +193,7 @@ image_button(HasUIContext auto &ctx, EntityParent ep_pair,
   img.texture = texture;
   img.source_rect = source_rect;
   img.alignment = alignment;
+  img.filter = config.image_filter;
 
   entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
   return ElementResult{entity.get<HasClickListener>().down, entity};
