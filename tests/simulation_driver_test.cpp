@@ -23,7 +23,7 @@ static uint32_t run_world(int ticks, int *render_calls) {
     x = x * 1664525u + 1013904223u;
   });
   sim.systems.register_render_system([&](float) { (*render_calls)++; });
-  CHECK(sim.step(ticks) == 0);  // not begun: no ticks, not finished
+  CHECK(sim.step(ticks) == 0);
   CHECK(!sim.finished());
   sim.begin();
   CHECK(sim.step(ticks) == ticks);
@@ -51,7 +51,7 @@ int main() {
   sim.resume();
   CHECK(sim.advance(0.25f) == 2);
   sim.speed = 2.f;
-  CHECK(sim.advance(0.25f) == 5);  // 0.05 carry + 0.5 at 2x = 5 whole 0.1 ticks
+  CHECK(sim.advance(0.25f) == 5);
   CHECK(sim.tick_count() == 7);
   CHECK(sim.elapsed() == 7 * 0.1f);
   CHECK(sim.run_until([&] { return ticks >= 10; }, 2) == false);

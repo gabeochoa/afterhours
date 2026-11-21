@@ -8,7 +8,6 @@
 
 namespace afterhours {
 
-// Headless, deterministic driver: fixed ticks with synthetic dt, never render.
 struct SimulationDriver {
     enum class State { Idle, Running, Paused, Finished };
 
@@ -36,7 +35,6 @@ struct SimulationDriver {
     void finish() {
         if (state_ == State::Running || state_ == State::Paused) state_ = State::Finished;
     }
-    // Restart resets elapsed time; registered systems and entities stay the caller's.
     void reset() {
         state_ = State::Idle;
         tick_count_ = 0;
@@ -58,7 +56,6 @@ struct SimulationDriver {
         return n;
     }
 
-    // Wall-dt entry for live hosts: speed scales it, whole fixed ticks run, remainder carries.
     int advance(float dt) {
         if (!running() || dt <= 0.f || speed <= 0.f) return 0;
         VALIDATE(systems.fixed_tick_rate > 0.f, "fixed_tick_rate must be positive");
@@ -69,10 +66,9 @@ struct SimulationDriver {
         return step(n);
     }
 
-    // Bounded by tick count, so paused/wall time cannot extend it; false means the bound ran out.
     bool run_until(const std::function<bool()> &done, int max_ticks) {
         if (done && done()) {
-            if (!running()) return false;  // an unstarted world is not a completed one
+            if (!running()) return false;
             finish();
             return true;
         }
@@ -92,4 +88,4 @@ struct SimulationDriver {
     float carry_ = 0.f;
 };
 
-}  // namespace afterhours
+}
