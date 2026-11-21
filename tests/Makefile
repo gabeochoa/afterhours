@@ -197,6 +197,7 @@ ALL_TESTS := \
 	draw_commands_test \
 	color_contrast_test \
 	scissor_coalescing_test \
+	blend_batch_test \
 	focus_origin_test \
 	cleanup_order_test \
 	entity_pool_test \
