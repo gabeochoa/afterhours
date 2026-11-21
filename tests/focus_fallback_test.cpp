@@ -1,10 +1,3 @@
-// A removed focused row must not send focus to the first focusable.
-//
-// floatinghotel's virtualized rows leave the build as you scroll; focus used
-// to fall to ROOT and the next frame's try_to_grab handed it to whatever was
-// focusable first, so the user was teleported to the top of the list. The
-// rule now: next focusable after the dead one in last frame's tab order,
-// else previous, else ROOT.
 
 #include "ui_test_harness.h"
 
@@ -13,8 +6,6 @@ using namespace afterhours::ui;
 using ui_test::ImmTestHarness;
 
 namespace {
-// Build `slots` buttons (skipping `skip`), run HandleTabbing over them in
-// build order, then close the frame. Returns the button entities built.
 std::vector<Entity *> build_rows(ImmTestHarness &h, int slots, int skip) {
   using namespace afterhours::ui::imm;
   h.begin_frame();
@@ -37,7 +28,7 @@ void end_frame(ImmTestHarness &h) {
   EndUIContextManager<ui_test::TestInputAction>{}.for_each_with(
       h.context_entity(), h.context(), .016f);
 }
-} // namespace
+}
 
 TEST(focused_row_removed_falls_to_next_sibling) {
   ImmTestHarness h;
@@ -47,13 +38,11 @@ TEST(focused_row_removed_falls_to_next_sibling) {
   end_frame(h);
   CHECK(ctx.has_focus(rows[1]->id));
 
-  // Middle row leaves the list; its entity is never visited by tabbing.
   auto survivors = build_rows(h, 3, 1);
   CHECK(survivors.size() == 2);
   end_frame(h);
   CHECK(ctx.has_focus(survivors[1]->id));
 
-  // And it stays put on the next frame instead of being re-grabbed.
   auto again = build_rows(h, 3, 1);
   end_frame(h);
   CHECK(ctx.has_focus(again[1]->id));
@@ -78,7 +67,6 @@ TEST(focused_first_row_removed_falls_to_next_not_first) {
   ctx.set_focus(rows[0]->id, FocusSource::Explicit);
   end_frame(h);
 
-  // Slot 0 is gone; the next sibling after it is slot 1.
   auto survivors = build_rows(h, 3, 0);
   end_frame(h);
   CHECK(ctx.has_focus(survivors[0]->id));

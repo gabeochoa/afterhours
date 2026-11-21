@@ -663,12 +663,6 @@ struct EndUIContextManager : System<UIContext<InputAction>> {
         context.set_active(context.ROOT);
       }
       if (!context.focused_ids.contains(context.focus_id)) {
-        // The focused row/element went away (removed, retired, or no longer
-        // focusable). Fall back to its neighbour in last frame's tab order --
-        // next, else previous -- so a virtualized row leaving the viewport
-        // keeps focus near where the user was instead of jumping to the
-        // first focusable. Grab, so the move never lights the ring or
-        // rewrites the modality the dead focus carried.
         const EntityID dead = context.focus_id;
         EntityID target = context.ROOT;
         const auto &order = context.last_focus_order;

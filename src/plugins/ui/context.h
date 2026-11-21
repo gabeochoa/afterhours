@@ -181,9 +181,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
 
   EntityID text_selection_entity = ROOT;
   text_selection::Selection label_text_selection;
-  // Focusable ids in HandleTabbing order: this frame's (built by
-  // try_to_grab) and last frame's (kept so a removed focused row falls back
-  // to its neighbour instead of the first focusable).
   std::vector<EntityID> this_focus_order;
   std::vector<EntityID> last_focus_order;
 
