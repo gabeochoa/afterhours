@@ -41,8 +41,6 @@ template <typename T> struct Library {
   using iterator = typename Storage::iterator;
   using const_iterator = typename Storage::const_iterator;
 
-  // Interned handle: resolve a name once, then get() by integer with no
-  // string compare in hot loops; invalid_handle is never returned.
   using Handle = uint32_t;
   static constexpr Handle invalid_handle = UINT32_MAX;
 
@@ -50,13 +48,9 @@ template <typename T> struct Library {
 
  private:
   std::unordered_map<std::string, Handle> handle_by_name;
-  // Index == Handle; std::map nodes are stable so the pointer stays valid
-  // until the entry is dropped from storage.
   std::vector<T *> by_handle;
 
  public:
-  // Resolve name to a stable handle; later handles for the same name are
-  // equal. The name does not need to be loaded yet.
   [[nodiscard]] Handle intern(const std::string &name) {
     auto [it, inserted] = handle_by_name.emplace(name, Handle{});
     if (inserted) {
@@ -113,8 +107,6 @@ template <typename T> struct Library {
     return handle < by_handle.size() && by_handle[handle] != nullptr;
   }
 
-  // Drop every handle -> item link; call after storage is cleared directly
-  // (entries dropped above would otherwise leave dangling links).
   void reset_handles() { by_handle.assign(by_handle.size(), nullptr); }
 
   [[nodiscard]] T &get(const std::string &name) {
@@ -159,7 +151,6 @@ template <typename T> struct Library {
     for (auto kv : storage) {
       unload(kv.second);
     }
-    // Unloaded objects are no longer drawable/playable by handle either.
     reset_handles();
   }
   virtual void unload(T) = 0;

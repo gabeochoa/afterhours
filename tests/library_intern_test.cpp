@@ -1,6 +1,3 @@
-// library_intern_test.cpp
-// Interned asset handles: intern(name) resolves once, get(Handle) returns
-// the same entry as get(name), the same name always yields the same handle.
 
 #define FMT_HEADER_ONLY
 #define AFTER_HOURS_USE_NONE
@@ -51,14 +48,12 @@ int main() {
   check(&lib.get(tree) == &lib.get("tree"), "handle and string name one entry");
   check(lib.contains(tree) && lib.contains(rock), "contains(Handle)");
 
-  // A handle for a name not yet loaded is absent until add() links it.
   auto later = lib.intern("later");
   check(!lib.contains(later), "unloaded handle is absent");
   lib.add("later", 3);
   check(lib.contains(later) && lib.get(later) == 3,
         "add() links a pre-interned handle");
 
-  // Unknown handles fail loudly, like a missing string name does.
   bool threw = false;
   try {
     (void)lib.get(IntLibrary::invalid_handle);
@@ -69,7 +64,6 @@ int main() {
   check(!lib.contains(IntLibrary::invalid_handle),
         "invalid handle is not contained");
 
-  // After unload_all the objects are gone; handles must say so, not dangle.
   lib.unload_all();
   check(!lib.contains(tree), "handle is dropped by unload_all");
 
