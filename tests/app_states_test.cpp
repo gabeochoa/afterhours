@@ -44,7 +44,6 @@ struct UngatedSystem : System<> {
 };
 
 int main() {
-  // enter/exit order, and what current() reads inside each hook
   {
     State<App> state{App::Menu};
     CHECK(state.current() == App::Menu);
@@ -67,14 +66,12 @@ int main() {
     CHECK((log == std::vector<std::string>{"exit1:menu@menu", "exit2",
                                            "enter1:game@game", "enter2"}));
 
-    // same-state set(): no refire
     CHECK(!state.set(App::Game));
     CHECK(log.size() == 4);
     CHECK(state.set(App::Pause));
     CHECK(log.size() == 8);
   }
 
-  // run_if(in_state(...)) on/off per state, with and without dt
   {
     State<App> state{App::Menu};
     CHECK(run_if(in_state(state, App::Menu)));
@@ -88,7 +85,6 @@ int main() {
     CHECK(run_if(in_state(state, App::Game)));
   }
 
-  // one SystemManager, systems gated by state
   {
     State<App> state{App::Menu};
     int menu_runs = 0, game_runs = 0, always_runs = 0;
