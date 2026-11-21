@@ -1,13 +1,13 @@
 // slot_at_creation_test.cpp
 //
 // A slot is assigned when the entity is created, not when it is merged, so
-// handle_for() works on an entity still sitting in temp.
+// handle_for() and getEntityForID() work on an entity still sitting in temp.
 //
 // Merge grants two unrelated things: identity (a slot, which is what
-// handle_for needs) and visibility (membership of the main array, which is what
-// queries walk). Callers wanting only the first used to trigger both mid-frame.
-// Only identity moved -- temp is still invisible to queries, and the last test
-// here pins that so the split does not quietly widen.
+// handle_for and getEntityForID need) and visibility (membership of the main
+// array, which is what queries walk). Callers wanting only the first used to
+// trigger both mid-frame. Only identity moved -- temp is still invisible to
+// queries, and the tests here pin both sides so the split does not widen.
 //
 // Build (from afterhours/tests/):
 //   make slot_at_creation_test
@@ -220,6 +220,59 @@ TEST(teardown_with_entities_in_both_arrays_leaves_nothing_resolvable) {
 }
 
 // ============================================================================
+// Find-by-id before the merge (hanabi #70 / R-167)
+// ============================================================================
+
+// The #70 ask: getEntityForID must see the pending set. Slot assignment at
+// creation (createEntityWithOptions) is what makes this work; these pin it
+// so a later refactor cannot silently restore the merge-gated lookup.
+TEST(getEntityForID_finds_a_temp_entity_same_frame) {
+  clear_all();
+  Entity &e = EntityHelper::createEntity();
+  e.addComponent<Marker>(42);
+
+  OptEntity got = EntityHelper::getEntityForID(e.id);
+  CHECK(got.has_value());
+  CHECK(got->id == e.id);
+  CHECK(got->get<Marker>().value == 42);
+
+  clear_all();
+}
+
+TEST(getEntityForID_and_handle_stay_stable_across_merge) {
+  clear_all();
+  Entity &e = EntityHelper::createEntity();
+  const EntityID id = e.id;
+  const EntityHandle h = EntityHelper::handle_for(e);
+  CHECK(h.is_valid());
+
+  EntityHelper::merge_entity_arrays();
+
+  OptEntity got = EntityHelper::getEntityForID(id);
+  CHECK(got.has_value());
+  CHECK(got->id == id);
+  CHECK(EntityHelper::resolve(h).has_value());
+  CHECK(EntityHelper::resolve(h)->id == id);
+
+  clear_all();
+}
+
+TEST(whereID_query_still_misses_a_temp_entity) {
+  clear_all();
+  Entity &e = EntityHelper::createEntity();
+  const EntityID id = e.id;
+
+  // Unlike getEntityForID, queries walk the merged array only, so whereID
+  // misses the temp entity by design (it logs "query will miss N ents").
+  CHECK(EntityQuery<>({.ignore_temp_warning = true}).whereID(id).gen_count() == 0);
+  CHECK(EntityHelper::getEntityForID(id).has_value());
+
+  EntityHelper::merge_entity_arrays();
+  CHECK(EntityQuery<>().whereID(id).gen_count() == 1);
+
+  clear_all();
+}
+
 // Visibility deliberately did NOT move
 // ============================================================================
 
