@@ -282,6 +282,7 @@ ALL_TESTS := \
 	color_swatch_test \
 	overlay_placement_test \
 	tooltip_test \
+	delayed_busy_test \
 	progress_bar_test \
 	psx_budget_test \
 	psx_backend_test \
@@ -413,6 +414,7 @@ RAYLIB_TESTS := \
 	widget_retirement_test \
 	text_line_edit_test \
 	grapheme_edit_test \
+	delayed_busy_test \
 	progress_bar_test \
 	render_order_test \
 	setup_test \
