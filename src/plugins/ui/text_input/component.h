@@ -146,8 +146,6 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                                       pixels(default_component_size.y));
   }
 
-  // The padding belongs to the field, not this wrapper row: capture it now
-  // and clear it so the wrapper does not apply the same inset a second time.
   const Padding requested_padding = config.padding;
   const bool caller_set_padding = requested_padding.top.dim != Dim::None ||
                                   requested_padding.left.dim != Dim::None ||
@@ -269,13 +267,9 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                           : pixels(field_h * 0.5f);
       field_cmp.enable_font(fn, fs, true);
 
-      // Height-derived only as a fallback, like the font size above: an
-      // explicit with_padding wins and stays put at any field height.
       float pad_w;
       if (caller_set_padding) {
         field_cmp.set_desired_padding(requested_padding);
-        // Layout resolved the caller's dims last frame; read it back so the
-        // text origin matches the box the renderer drew.
         pad_w = field_cmp.computed_padd[Axis::left];
       } else {
         float pad_h = field_h * 0.125f;

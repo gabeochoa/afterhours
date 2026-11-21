@@ -441,13 +441,10 @@ TEST(text_field_padding_does_not_hide_a_real_leaf_padding_warning) {
   log_sink_fn = previous_sink;
 }
 
-// R-029: with_padding was overwritten by height-derived padding. An explicit
-// padding must be honoured at any height; unset keeps the derived default.
 TEST(d29_custom_padding_honoured_at_two_heights) {
   for (float height : {45.f, 80.f}) {
     ImmTestHarness h;
     std::string text = "hello";
-    // One extra frame: the text origin reads last frame's resolved padding.
     for (int i = 0; i < 3; i++) {
       h.begin_frame();
       imm::text_input(h.context(), mk(h.root(), 0), text,
