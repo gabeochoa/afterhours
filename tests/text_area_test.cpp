@@ -1519,4 +1519,103 @@ TEST(down_arrow_stays_in_a_focused_text_area) {
   CHECK(h.context().has_focus(field->id));
 }
 
+
+TEST(r037_line_rows_stay_inside_field_under_zoom) {
+  // R-037: line rows were sized pixels(viewport_width) where viewport_width
+  // is already physical, so Adaptive zoom scaled them a second time
+  // (577.5 wide in a 412.5 content box at 1.4x).
+  for (float scale : {1.0f, 1.4f, 2.0f}) {
+    for (auto mode : {ScalingMode::Adaptive, ScalingMode::Proportional}) {
+      for (float width : {200.f, 300.f, 450.f}) {
+        ImmTestHarness h;
+        h.context().theme.ui_scale = scale;
+        h.context().scaling_mode = mode;
+        std::string text = "hi\nbye";
+        auto emit = [&] {
+          text_area(h.context(), mk(h.root(), 0), text,
+                    ComponentConfig{}
+                        .with_size(ComponentSize{pixels(width), pixels(150)})
+                        .with_font(UIComponent::DEFAULT_FONT, WIDGET_FONT)
+                        .with_line_height(pixels(LINE_H))
+                        .with_scaling_mode(mode));
+        };
+        for (int i = 0; i < 2; i++) {
+          h.begin_frame();
+          emit();
+          h.layout_only(false, {800, 600}, scale);
+        }
+        auto *field = h.find("text_area_field");
+        CHECK(field != nullptr);
+        if (!field) continue;
+        const auto fr = field->rect();
+        const float expect_h =
+            mode == ScalingMode::Adaptive ? LINE_H * scale : LINE_H;
+        int rows = 0;
+        for (const auto &e :
+             UICollectionHolder::get().collection.get_entities()) {
+          if (!e || !e->has<UIComponentDebug>() ||
+              e->get<UIComponentDebug>().name() != "text_area_line")
+            continue;
+          ++rows;
+          const auto lr = e->get<UIComponent>().rect();
+          CHECK(lr.x >= fr.x - 0.5f);
+          CHECK(lr.x + lr.width <=
+                fr.x + fr.width - field->computed_padd[Axis::right] + 0.5f);
+          CHECK_APPROX(lr.height, expect_h);
+        }
+        CHECK(rows == 2); // short text: one row per source line at every width
+      }
+    }
+  }
+}
+
+TEST(r037_line_rows_stay_inside_field_when_scrolled) {
+  ImmTestHarness h;
+  const float scale = 1.4f;
+  h.context().theme.ui_scale = scale;
+  h.context().scaling_mode = ScalingMode::Adaptive;
+  std::string text = "a\nb\nc\nd\ne\nf";
+  Entity *area = nullptr;
+  auto emit = [&] {
+    area = &text_area(h.context(), mk(h.root(), 0), text,
+                      ComponentConfig{}
+                          .with_size(ComponentSize{pixels(300), pixels(70)})
+                          .with_font(UIComponent::DEFAULT_FONT, WIDGET_FONT)
+                          .with_line_height(pixels(LINE_H))
+                          .with_scaling_mode(ScalingMode::Adaptive))
+               .ent();
+  };
+  for (int i = 0; i < 2; i++) {
+    h.begin_frame();
+    emit();
+    h.layout_only(false, {800, 600}, scale);
+  }
+  CHECK(area != nullptr);
+  if (!area) return;
+  auto *field = h.find("text_area_field");
+  CHECK(field != nullptr);
+  if (!field) return;
+  const auto fr = field->rect();
+  // One full physical row (28 at 1.4x), so the fmod translation is zero.
+  area->get<ti::HasTextAreaState>().scroll_offset_y = LINE_H * scale;
+  for (int i = 0; i < 2; i++) {
+    h.begin_frame();
+    emit();
+    h.layout_only(false, {800, 600}, scale);
+  }
+  int rows = 0;
+  for (const auto &e : UICollectionHolder::get().collection.get_entities()) {
+    if (!e || !e->has<UIComponentDebug>() ||
+        e->get<UIComponentDebug>().name() != "text_area_line")
+      continue;
+    ++rows;
+    const auto lr = e->get<UIComponent>().rect();
+    CHECK(lr.x >= fr.x - 0.5f);
+    CHECK(lr.x + lr.width <=
+          fr.x + fr.width - field->computed_padd[Axis::right] + 0.5f);
+    CHECK_APPROX(lr.height, LINE_H * scale);
+  }
+  CHECK(rows > 0);
+}
+
 int main() { return ui_test::run_registered_tests("text_area"); }
