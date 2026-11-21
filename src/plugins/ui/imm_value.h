@@ -547,7 +547,7 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
   // Use styling defaults if available, otherwise scale to 720p baseline (50px)
   if (config.size.is_default) {
     auto &styling_defaults = UIStylingDefaults::get();
-    if (auto def = styling_defaults.get_component_config(
+    if (auto def = styling_defaults.find_component_config(
             ComponentType::CircularProgress)) {
       config.size = def->size;
     } else {

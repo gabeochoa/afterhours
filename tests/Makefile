@@ -230,6 +230,7 @@ ALL_TESTS := \
 	defer_test \
 	draw_sort_test \
 	config_size_test \
+	config_strings_test \
 	overdraw_audit_test \
 	virtual_list_test \
 	text_action_names_test \
