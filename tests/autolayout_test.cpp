@@ -3940,8 +3940,9 @@ TEST(align_items_stretch_size_flows_to_percent_child) {
   t.add_child(child, inner);
   t.run(root);
   CHECK_APPROX(t.ui(inner).computed[Axis::Y], 400.f);
+}
+
 namespace {
-// Full layout with a stub text measure: height = font size, ascent = 0.8x it.
 void layout_with_baseline(TestLayout &t, Entity &root,
                           const std::vector<Entity *> &mapping) {
   AutoLayout al({1280, 720}, mapping);
@@ -3979,7 +3980,7 @@ std::vector<Entity *> mapping_for(std::initializer_list<Entity *> ents) {
     m[e->id] = e;
   return m;
 }
-} // namespace
+}
 
 TEST(baseline_row_mixed_font_sizes_share_baseline) {
   TestLayout t;
@@ -3990,7 +3991,6 @@ TEST(baseline_row_mixed_font_sizes_share_baseline) {
   auto &large = make_text_child(t, root, 40.f);
   layout_with_baseline(t, root, mapping_for({&root, &small, &large}));
 
-  // Measured baselines: 0.8*20=16 from small's top, 0.8*40=32 from large's.
   CHECK_APPROX(t.ui(large).rect().y, 0.f);
   CHECK_APPROX(t.ui(small).rect().y, 16.f);
   CHECK_APPROX(t.ui(small).rect().y + 16.f, t.ui(large).rect().y + 32.f);
@@ -4006,7 +4006,7 @@ TEST(baseline_row_non_text_child_top_sits_on_baseline) {
   t.add_child(root, avatar);
   layout_with_baseline(t, root, mapping_for({&root, &label, &avatar}));
 
-  CHECK_APPROX(t.ui(avatar).rect().y, 32.f); // the 40px label's baseline
+  CHECK_APPROX(t.ui(avatar).rect().y, 32.f);
 }
 
 TEST(baseline_self_align_overrides_parent_flex_start) {
@@ -4029,15 +4029,14 @@ TEST(baseline_children_sized_row_grows_below_baseline) {
   auto &root = t.make_ui(pixels(400), Size{.dim = Dim::Children, .value = 0.f});
   t.ui(root).set_flex_direction(FlexDirection::Row);
   t.ui(root).set_align_items(AlignItems::Baseline);
-  auto &a = make_text_child(t, root, 40.f); // box 40, baseline 32, 8 below
+  auto &a = make_text_child(t, root, 40.f);
   auto &b = t.make_ui(pixels(60), pixels(39));
   TestLayout::ui(b).font_size_explicitly_set = true;
   TestLayout::ui(b).font_size = pixels(10.f);
-  b.addComponent<HasLabel>().label = "Aa"; // baseline (39-10)/2+8 = 22.5
+  b.addComponent<HasLabel>().label = "Aa";
   t.add_child(root, b);
   layout_with_baseline(t, root, mapping_for({&root, &a, &b}));
 
-  // Shared baseline 32; b's bottom lands at 32-22.5+39 = 48.5, past a's 40.
   CHECK_APPROX(t.ui(root).computed[Axis::Y], 48.5f);
   CHECK_APPROX(t.ui(b).rect().y + 22.5f, 32.f);
 }

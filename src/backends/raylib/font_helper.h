@@ -37,11 +37,13 @@ inline std::optional<raylib::Font> &default_font_override() {
 inline void set_default_font(raylib::Font font) {
   detail::default_font_override() = font;
 }
+
 inline void clear_default_font() { detail::default_font_override().reset(); }
 
 inline raylib::Font get_default_font() {
   return detail::default_font_override().value_or(raylib::GetFontDefault());
 }
+
 inline raylib::Font get_unset_font() { return get_default_font(); }
 
 // Passing nullptr asks raylib for its default set, which is 95 ASCII glyphs.
@@ -604,8 +606,6 @@ inline float monospace_cell_advance(const raylib::Font font,
   return advance * size / static_cast<float>(font.baseSize);
 }
 
-// Baseline from the top of the drawn line: 'H' sits on the baseline, so its
-// glyph top offset plus its height lands on it. Falls back to 0.8x size.
 inline float text_ascent(const raylib::Font font, const float size) {
   if (!std::isfinite(size) || size <= 0.f)
     return 0.f;

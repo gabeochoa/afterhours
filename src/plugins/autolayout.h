@@ -213,8 +213,6 @@ struct AutoLayout {
     return *this;
   }
 
-  // Returns the first-line ascent (px from the line top to the baseline)
-  // for a font name at a pixel size; tests inject it with their measure fn.
   using BaselineFn = std::function<float(const std::string &, float)>;
   BaselineFn external_baseline = nullptr;
   auto &set_baseline_fn(const BaselineFn &fn) {
@@ -229,8 +227,6 @@ struct AutoLayout {
             parent.align_items == AlignItems::Baseline);
   }
 
-  // Px from the child's rect() top to its first text baseline, or nullopt
-  // when it has no label (callers then fall back to its top edge).
   std::optional<float> baseline_offset(UIComponent &child) {
     if (child.id < 0 || static_cast<size_t>(child.id) >= mapping.size() ||
         !mapping[static_cast<size_t>(child.id)])
@@ -266,8 +262,6 @@ struct AutoLayout {
       ascent = external_baseline(font_name, font_size);
     else if (auto *fm3 = EntityHelper::get_singleton_cmp<FontManager>())
       ascent = text_ascent(fm3->get_font(font_name), font_size);
-    // The renderer centres the first line in its box (or in one pinned line
-    // height for multi-line labels), so mirror that before adding ascent.
     float line_box = child.computed[Axis::Y];
     if (label.line_height.has_value()) {
       const float lh = resolve_to_pixels(*label.line_height,
@@ -799,8 +793,6 @@ struct AutoLayout {
     return end;
   }
   float _max_child_size(UIComponent &widget, Axis axis) {
-    // A baseline row is as tall as the deepest bottom below the shared
-    // baseline, which can exceed the tallest child.
     if (axis == Axis::Y &&
         static_cast<bool>(widget.flex_direction & FlexDirection::Row)) {
       float target = 0.f;
@@ -1756,8 +1748,6 @@ struct AutoLayout {
       }
     }
 
-    // Shared first-line baseline for this row (margin-box coords, matching
-    // computed_rel); non-text baseline children contribute their top edge.
     float row_baseline = 0.f;
     if (is_row) {
       for (EntityID child_id : widget.children) {
@@ -1916,8 +1906,6 @@ struct AutoLayout {
       // back to FlexStart instead, so the overflow went entirely out one side
       // and the widget sat off-centre by half its excess.
       if (is_row && wants_baseline(widget, child)) {
-        // Baseline ignores cross_remaining: it positions from the shared
-        // baseline, not from the row's free space.
         cross_offset = row_baseline - child.computed_margin[Axis::top] -
                        baseline_offset(child).value_or(0.f);
       } else if (cross_remaining != 0.f) {
@@ -1937,7 +1925,7 @@ struct AutoLayout {
             cross_offset = cross_remaining / 2.f;
             break;
           case SelfAlign::Baseline:
-            break; // handled above (rows only; columns fall back to start)
+            break;
           }
         } else {
           // Use parent's align_items
@@ -1954,7 +1942,7 @@ struct AutoLayout {
             // Stretch is handled in size calculation, not positioning
             break;
           case AlignItems::Baseline:
-            break; // handled above (rows only; columns fall back to start)
+            break;
           }
         }
       }

@@ -18,11 +18,13 @@ inline Font load_font_from_file(const char *, int = 0) {
                "returning an empty font");
   return Font();
 }
+
 inline Font load_font_from_file_with_codepoints(const char *, int *, int,
                                                 int = 32) {
   log_warn("Codepoint-based font loading not supported without a backend");
   return Font();
 }
+
 inline Font load_font_from_memory(const unsigned char *, int, const char *,
                                   int = 0) {
   warn_once(0, "@notimplemented load_font_from_memory on the none backend; "
@@ -71,6 +73,7 @@ inline Vector2Type measure_text(const Font, const char *text, const float size,
   const size_t len = text ? std::strlen(text) : 0;
   return Vector2Type{static_cast<float>(len) * size * 0.5f, size};
 }
+
 inline Vector2Type measure_text_utf8(const Font f, const char *text,
                                      const float size, const float spacing) {
   return measure_text(f, text, size, spacing);
@@ -82,10 +85,10 @@ inline float monospace_cell_advance(const Font font, const float size) {
   return measure_text(font, "0", size, 1.f).x;
 }
 
-// No face to measure: use the common 0.8 ascent/line-height ratio.
 inline float text_ascent(const Font, const float size) {
   return size > 0.f ? size * 0.8f : 0.f;
 }
+
 inline float get_first_glyph_bearing(const Font, const char *) { return 0.0f; }
 inline bool is_font_loaded(const Font &) { return false; }
 inline bool font_has_glyph(const Font, int) { return false; }
