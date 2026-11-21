@@ -224,6 +224,7 @@ ALL_TESTS := \
 	render_order_test \
 	scroll_smoothing_test \
 	setup_test \
+	bridge_replace_test \
 	slot_at_creation_test \
 	size_constraints_test \
 	theme_scope_test \
@@ -325,6 +326,7 @@ RAYLIB_TESTS := \
 	progress_bar_test \
 	render_order_test \
 	setup_test \
+	bridge_replace_test \
 	size_constraints_test \
 	slider_test \
 	split_test \
