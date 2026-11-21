@@ -16,8 +16,6 @@ inline void draw_uniform_border(RectangleType rect, float roundness, int segment
   const float width = std::min(thickness, shorter * .5f);
   const float radius = std::clamp(roundness, 0.f, 1.f) * shorter * .5f;
   const int steps = std::max(4, segments);
-  // Corners walk TR, BR, BL, TL; the bits follow the named layout
-  // (3=TL, 2=TR, 1=BL, 0=BR) the fills and outlines now both honour.
   const std::array<int, 4> bits{2, 0, 1, 3};
   Vector2Type first_outer{}, first_inner{}, previous_outer{}, previous_inner{};
   const auto join = [&](Vector2Type outer, Vector2Type inner) {

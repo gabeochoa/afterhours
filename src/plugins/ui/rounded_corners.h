@@ -28,8 +28,6 @@ enum CornerState {
 class RoundedCorners {
 private:
   std::bitset<4> corners;
-  // Per-corner chamfer: a straight 45-degree cut instead of an arc, sized by
-  // the same roundness/radius_px. Wins over rounded for its corner.
   std::bitset<4> chamfered;
 
 public:
@@ -40,19 +38,15 @@ public:
     chamfered.set(corner);
     return *this;
   }
-
   RoundedCorners &chamfer_left() {
     chamfered.set(TOP_LEFT).set(BOTTOM_LEFT);
     return *this;
   }
-
   RoundedCorners &all_chamfer() {
     chamfered.set();
     return *this;
   }
-
   const std::bitset<4> &get_chamfered() const { return chamfered; }
-
   RoundedCorners &top_left(CornerState state) {
     corners.set(TOP_LEFT, state);
     return *this;

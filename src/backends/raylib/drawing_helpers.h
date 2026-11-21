@@ -34,7 +34,6 @@ inline int CalculateSegments(const float radius) {
 inline void DrawCorner(const float x, const float y, const float radius,
                        const int segments, const Color color, float angle,
                        const bool chamfer = false) {
-  // A chamfer is the corner arc with one step: the chord between its ends.
   const int count = chamfer ? 1 : segments;
   const float stepLength = 90.0f / (float)count;
 
@@ -271,16 +270,14 @@ inline void draw_rectangle_rounded(
     return;
   }
 
-  // A chamfered corner needs the same radius as a rounded one, so the cut
-  // size is roundness/radius_px either way.
   const std::bitset<4> styled = corners | chamfer;
   const float ROUND = roundness;
   const float SHARP = 0.f;
   raylib::DrawRectangleCustom(rect,
-                              styled.test(0) ? ROUND : SHARP, // Bottom Right
-                              styled.test(1) ? ROUND : SHARP, // Bottom Left
-                              styled.test(2) ? ROUND : SHARP, // Top Right
-                              styled.test(3) ? ROUND : SHARP, // Top-Left
+                              styled.test(0) ? ROUND : SHARP,
+                              styled.test(1) ? ROUND : SHARP,
+                              styled.test(2) ? ROUND : SHARP,
+                              styled.test(3) ? ROUND : SHARP,
                               segments, chamfer.test(0), chamfer.test(1),
                               chamfer.test(2), chamfer.test(3), color);
 }
@@ -305,9 +302,6 @@ inline void draw_rectangle_rounded_lines(
     raylib::DrawRectangleRoundedLines(rect, roundness, segments, color);
     return;
   }
-
-  // Chamfered corners need a per-corner walk: DrawRectangleRoundedLines
-  // arcs every corner. A chamfered corner is one straight diagonal.
   const float x = rect.x, y = rect.y, w = rect.width, h = rect.height;
   const float r = (w < h ? w : h) * 0.5f * roundness;
   const std::bitset<4> styled = corners | chamfer;
@@ -317,7 +311,6 @@ inline void draw_rectangle_rounded_lines(
   const float rBR = styled.test(0) ? r : 0.f;
   const int segs = segments > 0 ? segments : 8;
   const float PI_HALF = 3.14159265f * 0.5f;
-
   Vector2Type prev{x + rTL, y};
   bool has_prev = false;
   auto line_to = [&](Vector2Type p) {
@@ -333,7 +326,6 @@ inline void draw_rectangle_rounded_lines(
       line_to(Vector2Type{cx + radius * cosf(a), cy + radius * sinf(a)});
     }
   };
-
   line_to(Vector2Type{x + w - rTR, y});
   arc_to(x + w - rTR, y + rTR, rTR, -PI_HALF, chamfer.test(2));
   line_to(Vector2Type{x + w, y + h - rBR});

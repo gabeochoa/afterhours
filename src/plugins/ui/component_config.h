@@ -579,8 +579,6 @@ struct ComponentConfig {
     chamfer_corners = corners.get_chamfered();
     return *this;
   }
-  /// Per-corner 45-degree cuts, sized by the corner radius. A chamfered
-  /// corner needs no rounded bit; chamfer wins where both are set.
   ComponentConfig &with_chamfer_corners(const std::bitset<4> &corners) {
     chamfer_corners = corners;
     return *this;

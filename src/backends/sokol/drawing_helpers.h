@@ -296,7 +296,6 @@ inline void draw_rectangle_rounded_lines(
   sgl_v2f(x + rTL, y);
   sgl_v2f(x + w - rTR, y);
 
-  // Top-right arc (one segment is a chamfer's diagonal)
   for (int i = 0; i <= (chamfer.test(2) ? 1 : segs); i++) {
     float a =
         -PI_HALF + PI_HALF * static_cast<float>(i) /

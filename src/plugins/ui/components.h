@@ -241,7 +241,6 @@ struct HasNavigationBarState : ui::HasDropdownState {
 
 struct HasRoundedCorners : BaseComponent {
   std::bitset<4> rounded_corners = std::bitset<4>().reset();
-  // Per-corner 45-degree cuts; sized by roundness/radius_px, wins over rounded.
   std::bitset<4> chamfer_corners = std::bitset<4>().reset();
   float roundness = 0.5f; // 0.0 = sharp, 1.0 = fully rounded
   // A radius in pixels, which wins over roundness when set. roundness is a

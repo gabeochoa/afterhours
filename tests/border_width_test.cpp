@@ -60,7 +60,6 @@ static void check_border_pixels(bool batched) {
         if (outside || inner) CHECK(red(x + offset, y + height / 2) == 0);
         else if (edge) CHECK(std::abs(red(x + offset, y + height / 2) - 100) <= 2);
       }
-      // Mask 5 rounds the right side only: TL stays square, TR gets cut.
       CHECK((red(x, y) > 0) == (i == 0 || i == 2 || i == 5));
       CHECK((red(x + w - 1, y) > 0) == (i == 0 || i == 5));
     }
