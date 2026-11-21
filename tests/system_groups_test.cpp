@@ -1,7 +1,3 @@
-// system_groups_test.cpp
-// Named system groups: register systems under a group name, then
-// enable/disable/query by group. Groups gate *beside* should_run, so a
-// system only runs when its group is enabled AND should_run passes.
 
 #include "ui_test_harness.h"
 
@@ -29,8 +25,6 @@ struct Recorder : System<Marker> {
     void for_each_with(Entity &, Marker &, float) override {}
 };
 
-// The group gate must call the non-const should_run, like the loops did: a
-// system that overrides only that overload has to stay gated.
 struct MutableGate : System<Marker> {
     int *runs;
     explicit MutableGate(int &r) : runs(&r) {}
@@ -54,7 +48,7 @@ bool ran(int id) {
     return false;
 }
 
-} // namespace
+}
 
 TEST(a_disabled_group_gates_exactly_its_systems) {
     runs().clear();
@@ -62,7 +56,7 @@ TEST(a_disabled_group_gates_exactly_its_systems) {
     sm.register_update_system(rec(1), "world");
     sm.register_update_system(rec(2), "world");
     sm.register_update_system(rec(3), "audio");
-    sm.register_update_system(rec(4)); // no group
+    sm.register_update_system(rec(4));
 
     sm.set_group_enabled("world", false);
     Entities entities;
@@ -77,9 +71,7 @@ TEST(a_disabled_group_gates_exactly_its_systems) {
 TEST(group_gate_composes_with_should_run) {
     runs().clear();
     SystemManager sm;
-    // Group enabled, should_run false: still skipped.
     sm.register_update_system(rec(1, false), "world");
-    // Group disabled, should_run true: skipped.
     sm.register_update_system(rec(2, true), "audio");
     sm.set_group_enabled("audio", false);
 
@@ -105,7 +97,6 @@ TEST(disabling_a_group_preserves_run_order) {
 
     CHECK((runs() == std::vector<int>{1, 3, 5}));
 
-    // Re-enabling restores the original order.
     runs().clear();
     sm.set_group_enabled("b", true);
     sm.tick(entities, 0.016f);
@@ -119,8 +110,6 @@ TEST(groups_are_enabled_by_default_and_queryable) {
     sm.register_update_system(rec(2, true, "beta"), "world");
     sm.register_update_system(rec(3, true, "gamma"), "audio");
 
-    // Unknown groups start enabled, so the order of the calls does not
-    // matter.
     CHECK(sm.group_enabled("world"));
     CHECK(sm.group_enabled("never-registered"));
 

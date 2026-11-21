@@ -653,10 +653,6 @@ struct SystemManager {
     std::vector<std::unique_ptr<SystemBase>> render_systems_;
 
    private:
-    // Named groups: a system registered with a group name belongs to that
-    // group; a disabled group skips its systems. Both gates must pass, so
-    // groups compose with should_run instead of replacing it (a system that
-    // returns false from should_run still never runs, group or no group).
     std::unordered_map<SystemBase *, std::string> system_group_;
     std::unordered_map<std::string, bool> group_enabled_;
 
@@ -707,8 +703,6 @@ struct SystemManager {
         render_systems_.emplace_back(std::move(system));
     }
 
-    // Groups are enabled by default, even an unknown one, so the order of
-    // set_group_enabled and registration does not matter.
     void set_group_enabled(std::string_view group, bool enabled) {
         group_enabled_[std::string(group)] = enabled;
     }
@@ -718,7 +712,6 @@ struct SystemManager {
         return it == group_enabled_.end() || it->second;
     }
 
-    // Names of the systems in a group, in registration order.
     std::vector<std::string_view> systems_in_group(
         std::string_view group) const {
         std::vector<std::string_view> out;
