@@ -107,6 +107,7 @@ ALL_TESTS := \
 	text_units_test \
 	text_fit_test \
 	none_measure_test \
+	triangle_winding_none_test \
 	text_unit_motion_test \
 	text_alignment_test \
 	sound_volume_test \
@@ -125,6 +126,7 @@ ALL_TESTS := \
 	input_remap_test \
 	file_watcher_test \
 	render_capture_test \
+	triangle_winding_test \
 	charts_test \
 	system_profile_test \
 	profiling_test \
@@ -272,6 +274,7 @@ ifeq ($(UNAME_S),Darwin)
 ALL_TESTS += bundle_test
 ALL_TESTS += native_dialogs_macos_test
 ALL_TESTS += render_capture_metal_test
+ALL_TESTS += triangle_winding_metal_test
 ALL_TESTS += image_metal_test
 # Sokol is Metal here, so macOS-only; renders headless, no window.
 ALL_TESTS += sokol_blend_test
@@ -306,6 +309,7 @@ RAYLIB_TESTS := \
 	input_device_activity_test \
 	input_enum_actions_test \
 	render_capture_test \
+	triangle_winding_test \
 	clipboard_test \
 	mk_cost_test \
 	headless_fallback_test \
@@ -470,6 +474,9 @@ $(OUT)/staging_texture_leak_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/staging_texture_leak_test: ../src/backends/sokol/capture_impl.h
 
 $(OUT)/render_capture_metal_test: render_capture_test.cpp ../examples/web/sokol_impl.cc
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
+
+$(OUT)/triangle_winding_metal_test: triangle_winding_test.cpp ../examples/web/sokol_impl.cc
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) -DAFTER_HOURS_USE_SOKOL -x objective-c++ $(filter %.cpp %.cc,$^) $(SOKOL_FRAMEWORKS) -o $@
 
 $(OUT)/image_metal_test: image_test.cpp ../examples/web/sokol_impl.cc
