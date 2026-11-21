@@ -544,6 +544,7 @@ public:
   FetchFn fetch_fn = nullptr;
   bool skip_hover_override = false;
   std::optional<Color> hover_color; // Per-component hover background override
+  std::optional<Vector2Type> bg_inset; // fill inset from the widget rect
 
   HasColor(const Color c) : color_(c) {}
   HasColor(const FetchFn &fetch)

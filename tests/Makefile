@@ -247,6 +247,7 @@ ALL_TESTS := \
 	image_test \
 	image_raylib_test \
 	stepper_test \
+	bg_inset_test \
 	styling_test \
 	system_tags_test \
 	should_run_overload_test \

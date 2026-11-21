@@ -518,6 +518,9 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   if (config.hover_color.has_value() && entity.has<HasColor>()) {
     entity.get<HasColor>().hover_color = config.hover_color;
   }
+  if (config.bg_inset.has_value() && entity.has<HasColor>()) {
+    entity.get<HasColor>().bg_inset = config.bg_inset;
+  }
   if (config.image_tint.has_value()) {
     entity.addComponentIfMissing<HasImageTint>(*config.image_tint).color =
         *config.image_tint;

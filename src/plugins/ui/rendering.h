@@ -46,6 +46,22 @@ static inline Color resolve_image_tint(const Entity &entity, float opacity) {
   return colors::opacity_pct(tint, opacity);
 }
 
+// The rect the background fill paints: the widget rect shrunk by the
+// configured inset, clamped so an oversized inset collapses to empty rather
+// than inverting. Shadows, borders, hit testing, and content keep the full
+// widget rect.
+static inline RectangleType fill_rect_for(const Entity &entity,
+                                          const RectangleType &draw_rect) {
+  if (!entity.has<HasColor>())
+    return draw_rect;
+  const auto &inset = entity.get<HasColor>().bg_inset;
+  if (!inset.has_value())
+    return draw_rect;
+  const float w = std::max(0.f, draw_rect.width - 2.f * inset->x);
+  const float h = std::max(0.f, draw_rect.height - 2.f * inset->y);
+  return {draw_rect.x + inset->x, draw_rect.y + inset->y, w, h};
+}
+
 static inline bool is_hidden_for_render(const Entity &entity) {
   const Entity *current = &entity;
   for (int depth = 0; depth < 64; ++depth) {
@@ -1704,8 +1720,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       }
 
       if (col.a > 0) {
-        draw_rectangle_rounded(draw_rect, roundness, segments, col,
-                               corner_settings);
+        draw_rectangle_rounded(detail::fill_rect_for(entity, draw_rect),
+                               roundness, segments, col, corner_settings);
       }
     }
 
@@ -2318,9 +2334,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       }
 
       if (col.a > 0) {
-        buffer.add_rounded_rectangle(draw_rect, col, roundness, segments,
-                                     corner_settings, layer, entity.id,
-                                     rotation);
+        buffer.add_rounded_rectangle(
+            detail::fill_rect_for(entity, draw_rect), col, roundness, segments,
+            corner_settings, layer, entity.id, rotation);
       }
     }
 
