@@ -1,7 +1,3 @@
-// RAII collection binding: EntityHelper::ScopedCollection binds the
-// thread-local default collection for its scope and restores the previous
-// binding on destruction, including on exception and early-return paths.
-
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 
@@ -33,7 +29,7 @@ static bool bound_to(EntityCollection &c) {
 static int early_return(EntityCollection &c) {
   EntityHelper::ScopedCollection scope(&c);
   CHECK(bound_to(c));
-  return 42; // destructors run on the return path too
+  return 42;
 }
 
 int main() {
@@ -47,21 +43,19 @@ int main() {
       EntityHelper::ScopedCollection inner(&b);
       CHECK(bound_to(b));
     }
-    CHECK(bound_to(a)); // LIFO: inner scope restores the outer binding
+    CHECK(bound_to(a));
   }
-  CHECK(bound_to(singleton_default())); // default unchanged outside scope
+  CHECK(bound_to(singleton_default()));
 
-  // Binding to nullptr selects the singleton default for the scope.
   EntityHelper::set_default_collection(&a);
   {
     EntityHelper::ScopedCollection scope(nullptr);
     CHECK(bound_to(singleton_default()));
   }
-  CHECK(bound_to(a)); // restores the previous (raw) binding, not nullptr
+  CHECK(bound_to(a));
   EntityHelper::set_default_collection(nullptr);
   CHECK(bound_to(singleton_default()));
 
-  // Exception path restores the previous binding.
   try {
     EntityHelper::ScopedCollection scope(&a);
     CHECK(bound_to(a));
