@@ -34,7 +34,7 @@ inline void draw_circle_v(Vector2Type center, float radius, Color color);
 
 inline void draw_text_ex(const afterhours::Font font, const char *content,
                          const Vector2Type position, const float font_size,
-                         const float, const Color color, const float = 0.0f,
+                         const float spacing, const Color color, const float = 0.0f,
                          const float = 0.0f, const float = 0.0f) {
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx)
@@ -59,12 +59,14 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
   if (dpi > 1.01f) {
     float inv = 1.0f / dpi;
     fonsSetSize(ctx, font_size * dpi);
+    fonsSetSpacing(ctx, spacing * dpi);
     sgl_push_matrix();
     sgl_scale(inv, inv, 1.0f);
     fonsDrawText(ctx, position.x * dpi, position.y * dpi, content, nullptr);
     sgl_pop_matrix();
   } else {
     fonsSetSize(ctx, font_size);
+    fonsSetSpacing(ctx, spacing);
     fonsDrawText(ctx, position.x, position.y, content, nullptr);
   }
 }
@@ -87,12 +89,14 @@ inline void draw_text(const char *content, const float x, const float y,
   if (dpi > 1.01f) {
     float inv = 1.0f / dpi;
     fonsSetSize(ctx, font_size * dpi);
+    fonsSetSpacing(ctx, 0.f);
     sgl_push_matrix();
     sgl_scale(inv, inv, 1.0f);
     fonsDrawText(ctx, x * dpi, y * dpi, content, nullptr);
     sgl_pop_matrix();
   } else {
     fonsSetSize(ctx, font_size);
+    fonsSetSpacing(ctx, 0.f);
     fonsDrawText(ctx, x, y, content, nullptr);
   }
 }
