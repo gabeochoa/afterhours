@@ -800,9 +800,9 @@ ElementResult color_swatch_presets(HasUIContext auto &ctx,
           .with_border(ctx.theme.from_usage(Theme::Usage::Secondary),
                        std::max(1.f, item_h * 0.04f))
           .with_corner_radius(std::max(2.f, item_h * 0.25f))
-          // popover() puts its panel one layer over this config; the swatch
-          // chip on each sibling button also sits one over, so claim one
-          // extra here or a neighbouring chip draws through the palette.
+          // popover() puts its panel in the overlay band over this config;
+          // the swatch chip on each sibling button sits one over, so claim
+          // one extra here or a neighbouring chip draws through the palette.
           .with_render_layer(config.render_layer + 1);
 
   bool changed = false;

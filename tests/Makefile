@@ -146,6 +146,7 @@ ALL_TESTS := \
 	e2e_key_command_test \
 	e2e_type_command_test \
 	overlay_layer_test \
+	popup_overlay_layer_test \
 	unhandled_command_test \
 	e2e_retry_test \
 	e2e_register_command_test \
@@ -347,6 +348,7 @@ RAYLIB_TESTS := \
 	mouse_axis_action_test \
 	unhandled_command_test \
 	overlay_layer_test \
+	popup_overlay_layer_test \
 	press_delay_test \
 	graphics_key_injection_test \
 	text_wrap_test \
