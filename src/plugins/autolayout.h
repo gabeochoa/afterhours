@@ -346,6 +346,29 @@ struct AutoLayout {
     return widget.computed[axis];
   }
 
+  // Extra trailing padding a scroll view reserves for its bar when it opts
+  // into scrollbar_gutter: right for a vertical bar, bottom for a horizontal
+  // one. Zero for every other widget, so nothing moves unless a view asks.
+  float scrollbar_gutter_px(UIComponent &widget, Axis axis) {
+    if (widget.id < 0 || static_cast<size_t>(widget.id) >= mapping.size() ||
+        mapping[static_cast<size_t>(widget.id)] == nullptr)
+      return 0.f;
+    Entity &ent = *mapping[static_cast<size_t>(widget.id)];
+    if (!ent.has<HasScrollView>())
+      return 0.f;
+    const HasScrollView &sv = ent.get<HasScrollView>();
+    if (!sv.scrollbar_gutter)
+      return 0.f;
+    const bool trailing =
+        ((axis == Axis::right || axis == Axis::X) && sv.vertical_enabled) ||
+        ((axis == Axis::bottom || axis == Axis::Y) && sv.horizontal_enabled);
+    if (!trailing)
+      return 0.f;
+    return resolve_to_pixels(sv.scrollbar_thickness,
+                             fetch_screen_value_(Axis::Y),
+                             widget.resolved_scaling_mode, ui_scale);
+  }
+
   float compute_padding_for_standalone_expectation(UIComponent &widget,
                                                    Axis axis) {
     const float no_change = widget.computed_padd[axis];
@@ -375,14 +398,16 @@ struct AutoLayout {
     const auto &padd = widget.desired_padding;
     switch (axis) {
     case Axis::X:
-      return compute_(padd[Axis::left]) + compute_(padd[Axis::right]);
+      return compute_(padd[Axis::left]) + compute_(padd[Axis::right]) +
+             scrollbar_gutter_px(widget, axis);
     case Axis::Y:
-      return compute_(padd[Axis::top]) + compute_(padd[Axis::bottom]);
+      return compute_(padd[Axis::top]) + compute_(padd[Axis::bottom]) +
+             scrollbar_gutter_px(widget, axis);
     case Axis::top:
     case Axis::left:
     case Axis::right:
     case Axis::bottom:
-      return compute_(padd[axis]);
+      return compute_(padd[axis]) + scrollbar_gutter_px(widget, axis);
     }
     return no_change;
   }
@@ -477,7 +502,11 @@ struct AutoLayout {
       return no_change;
     }
 
-    const auto compute_ = [&](const Size &exp, float parent_value) {
+    // The standalone pass already folded the gutter into no_change, so only
+    // a percent side -- the one kind this pass recomputes from scratch --
+    // needs it added here, or it would be counted twice.
+    const auto compute_ = [&](const Size &exp, float parent_value,
+                              float gutter) {
       switch (exp.dim) {
       // Unsupported kinds fall through into Percent.
       case Dim::Children:
@@ -487,7 +516,7 @@ struct AutoLayout {
       case Dim::Expand:
         log_error("Padding by expand not supported");
       case Dim::Percent:
-        return exp.value * parent_value;
+        return exp.value * parent_value + gutter;
       case Dim::ScreenPercent:
       case Dim::None:
       case Dim::Pixels:
@@ -499,17 +528,21 @@ struct AutoLayout {
     const auto &padd = widget.desired_padding;
     switch (axis) {
     case Axis::X:
-      return compute_(padd[Axis::left], parent.computed[Axis::X]) +
-             compute_(padd[Axis::right], parent.computed[Axis::X]);
+      return compute_(padd[Axis::left], parent.computed[Axis::X], 0.f) +
+             compute_(padd[Axis::right], parent.computed[Axis::X],
+                      scrollbar_gutter_px(widget, Axis::right));
     case Axis::Y:
-      return compute_(padd[Axis::top], parent.computed[Axis::Y]) +
-             compute_(padd[Axis::bottom], parent.computed[Axis::Y]);
+      return compute_(padd[Axis::top], parent.computed[Axis::Y], 0.f) +
+             compute_(padd[Axis::bottom], parent.computed[Axis::Y],
+                      scrollbar_gutter_px(widget, Axis::bottom));
     case Axis::left:
     case Axis::right:
-      return compute_(padd[axis], parent.computed[Axis::X]);
+      return compute_(padd[axis], parent.computed[Axis::X],
+                      scrollbar_gutter_px(widget, axis));
     case Axis::top:
     case Axis::bottom:
-      return compute_(padd[axis], parent.computed[Axis::Y]);
+      return compute_(padd[axis], parent.computed[Axis::Y],
+                      scrollbar_gutter_px(widget, axis));
     }
     return no_change;
   }

@@ -693,6 +693,15 @@ struct HasScrollView : BaseComponent {
 
   // Off for a view that supplies its own bar, or where one would be noise.
   bool show_scrollbar = true;
+  // Reserve the scrollbar's space even when nothing overflows, like CSS
+  // `scrollbar-gutter: stable`. Autolayout adds the resolved
+  // scrollbar_thickness to the trailing padding (right for a vertical bar,
+  // bottom for a horizontal one) on each enabled axis, always -- "only while
+  // needed" would make the content width depend on whether the content
+  // overflows, which is a layout feedback loop, and would reintroduce the
+  // jump this exists to remove. The bar is drawn in that reserved space.
+  // Off by default, so no view moves unless it opts in.
+  bool scrollbar_gutter = false;
   // Set while the thumb is held. The drag owns scroll_offset until released.
   bool dragging_scrollbar = false;
   bool drag_is_vertical = true;
