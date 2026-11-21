@@ -1,6 +1,3 @@
-// add_singleton: one call creates a permanent entity, adds the component,
-// registers it as the singleton, and merges it into the entity list.
-
 #include <cstdio>
 #include <string>
 
@@ -32,8 +29,6 @@ int main() {
 
   EntityCollection coll;
 
-  // One call: the component is retrievable as the singleton, with args
-  // forwarded, and the entity is already in the merged list.
   {
     Config &cfg = coll.add_singleton<Config>(42);
     check(cfg.value == 42, "constructor args forwarded");
@@ -50,15 +45,11 @@ int main() {
     check(merged, "entity merged into the entity list by the one call");
   }
 
-  // A second component type works the same way.
   {
     Other &other = coll.add_singleton<Other>();
     check(coll.get_singleton_cmp<Other>() == &other, "second singleton type");
   }
 
-  // Duplicate call: same as the multi-call sequence. registerSingleton
-  // logs and emplace keeps the first registration, so the singleton still
-  // points at the first entity and the second component is unregistered.
   {
     Config *first = coll.get_singleton_cmp<Config>();
     Config &second = coll.add_singleton<Config>(7);

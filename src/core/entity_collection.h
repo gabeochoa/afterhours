@@ -418,10 +418,6 @@ struct EntityCollection {
              type_name<Component>(), id);
   }
 
-  // One call: create a permanent entity, add the component, register it as
-  // the singleton, and merge so systems see it immediately. A duplicate call
-  // behaves like the multi-call sequence: registerSingleton logs and keeps
-  // the first registration, so the new component is returned unregistered.
   template <typename Component, typename... Args>
   Component &add_singleton(Args &&...args) {
     Entity &ent = createPermanentEntity();
