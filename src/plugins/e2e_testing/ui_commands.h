@@ -1255,6 +1255,18 @@ inline std::string truncate_text(const std::string &s, size_t max_len = 80) {
   return s.substr(0, max_len) + "...";
 }
 
+// Geometry prints unrounded when it is fractional (5dp, trimmed), so a
+// subpixel excess over a viewport edge stays visible in dumps; integral
+// values keep the historical integer spelling.
+inline std::string format_dim(float v) {
+  if (std::fabs(v - std::round(v)) < 1e-4f)
+    return std::format("{}", std::lroundf(v));
+  std::string s = std::format("{:.5f}", v);
+  s.erase(s.find_last_not_of('0') + 1, std::string::npos);
+  if (!s.empty() && s.back() == '.') s.pop_back();
+  return s;
+}
+
 inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
   if (depth > 64) return;
 
@@ -1273,8 +1285,8 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
   }
 
   out += std::format(" x=\"{}\" y=\"{}\" w=\"{}\" h=\"{}\"",
-                     std::lroundf(rect.x), std::lroundf(rect.y),
-                     std::lroundf(rect.width), std::lroundf(rect.height));
+                     format_dim(rect.x), format_dim(rect.y),
+                     format_dim(rect.width), format_dim(rect.height));
 
   if (entity.has<ui::HasLabel>())
     out += " text=\"" + xml_escape(truncate_text(entity.get<ui::HasLabel>().label)) + "\"";
@@ -1293,8 +1305,8 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
   if (entity.has<ui::HasScrollView>()) {
     auto &sv = entity.get<ui::HasScrollView>();
     out += std::format(" scroll_x=\"{}\" scroll_y=\"{}\"",
-                       std::lroundf(sv.scroll_offset.x),
-                       std::lroundf(sv.scroll_offset.y));
+                       format_dim(sv.scroll_offset.x),
+                       format_dim(sv.scroll_offset.y));
   }
 
   if (cmp.should_hide)
@@ -1398,12 +1410,13 @@ inline std::string check_ui_property(Entity &entity, const std::string &prop,
   RectangleType rect = get_screen_rect(entity);
 
   long actual_int = 0;
+  float actual_float = 0.f;
   bool is_int_prop = true;
 
-  if (prop == "x") actual_int = std::lroundf(rect.x);
-  else if (prop == "y") actual_int = std::lroundf(rect.y);
-  else if (prop == "w") actual_int = std::lroundf(rect.width);
-  else if (prop == "h") actual_int = std::lroundf(rect.height);
+  if (prop == "x") { actual_float = rect.x; actual_int = std::lroundf(rect.x); }
+  else if (prop == "y") { actual_float = rect.y; actual_int = std::lroundf(rect.y); }
+  else if (prop == "w") { actual_float = rect.width; actual_int = std::lroundf(rect.width); }
+  else if (prop == "h") { actual_float = rect.height; actual_int = std::lroundf(rect.height); }
   else if (prop == "hidden") {
     std::string actual_str = cmp.should_hide ? "true" : "false";
     if (actual_str != expected)
@@ -1422,9 +1435,10 @@ inline std::string check_ui_property(Entity &entity, const std::string &prop,
   else if (prop == "scroll_x" || prop == "scroll_y") {
     if (!entity.has<ui::HasScrollView>())
       return std::format("{}={} but element has no scroll view", prop, expected);
-    actual_int = std::lroundf(prop == "scroll_x"
-                                  ? entity.get<ui::HasScrollView>().scroll_offset.x
-                                  : entity.get<ui::HasScrollView>().scroll_offset.y);
+    actual_float = prop == "scroll_x"
+                       ? entity.get<ui::HasScrollView>().scroll_offset.x
+                       : entity.get<ui::HasScrollView>().scroll_offset.y;
+    actual_int = std::lroundf(actual_float);
   }
   else if (prop == "bg" || prop == "fg") {
     Color want;
@@ -1458,6 +1472,15 @@ inline std::string check_ui_property(Entity &entity, const std::string &prop,
   }
 
   if (is_int_prop) {
+    // A fractional expectation pins the subpixel layout value (tolerance
+    // 0.01px); an integer one keeps the legacy rounded comparison.
+    if (expected.find_first_of(".eE") != std::string::npos) {
+      const float expected_float = std::stof(expected);
+      if (std::fabs(actual_float - expected_float) > 0.01f)
+        return std::format("{}={} but got {}", prop, expected,
+                           format_dim(actual_float));
+      return "";
+    }
     long expected_int = std::stol(expected);
     if (actual_int != expected_int)
       return std::format("{}={} but got {}", prop, expected_int, actual_int);

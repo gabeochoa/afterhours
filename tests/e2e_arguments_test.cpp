@@ -364,6 +364,33 @@ static PendingE2ECommand pending_for(std::string name, std::vector<std::string> 
   return pending;
 }
 
+
+TEST(assert_ui_fractional_geometry) {
+  ui_test::ImmTestHarness h;
+  h.begin_frame();
+  // Same subpixel row as the dump_ui case: fractional expected values pin
+  // the layout value itself, so 0.00625px of viewport excess is visible
+  // instead of rounding to a clean integer bottom.
+  ui::imm::div(h.context(), ui::imm::mk(h.root(), 0),
+               ui::imm::ComponentConfig{}
+                   .with_size({ui::pixels(100.6f), ui::pixels(25.6f)})
+                   .with_absolute_position(10.40625f, 574.40625f)
+                   .with_debug_name("subpixel_row"));
+  h.layout_only();
+
+  auto exact = pending_for("assert_ui", {"subpixel_row", "y=574.40625", "h=25.6"});
+  ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), exact, 0.f);
+  CHECK(exact.is_consumed() && exact.error_message.empty());
+  // 0.05px off is outside the fractional tolerance: retries, not a pass.
+  auto off = pending_for("assert_ui", {"subpixel_row", "y=574.45"});
+  ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), off, 0.f);
+  CHECK(off.is_retry());
+  // Integer expectations keep the legacy rounded behaviour.
+  auto legacy = pending_for("assert_ui", {"subpixel_row", "y=574", "x=10"});
+  ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), legacy, 0.f);
+  CHECK(legacy.is_consumed() && legacy.error_message.empty());
+}
+
 TEST(assert_ui_colour_properties) {
   ui_test::ImmTestHarness h;
   h.begin_frame();
