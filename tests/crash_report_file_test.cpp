@@ -111,7 +111,6 @@ int main() {
     std::filesystem::remove(sys_path);
   }
 
-  // --- a sink that aborts mid-report cannot lose the file (#126) ---
   {
     const auto sink_path = dir / "afh_crash_report_sink.txt";
     std::filesystem::remove(sink_path);
