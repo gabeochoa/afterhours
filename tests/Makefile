@@ -218,6 +218,7 @@ ALL_TESTS := \
 	menu_test \
 	color_swatch_test \
 	overlay_placement_test \
+	delayed_busy_test \
 	progress_bar_test \
 	pagination_test \
 	random_engine_test \
@@ -322,6 +323,7 @@ RAYLIB_TESTS := \
 	widget_retirement_test \
 	text_line_edit_test \
 	grapheme_edit_test \
+	delayed_busy_test \
 	progress_bar_test \
 	render_order_test \
 	setup_test \
