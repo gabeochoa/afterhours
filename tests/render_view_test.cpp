@@ -1,5 +1,3 @@
-// RenderView under the none backend: frustum/corners/LOD derived exactly
-// from camera + target size, and PostChain runs steps in insertion order.
 
 #define FMT_HEADER_ONLY
 #define AFTER_HOURS_USE_NONE
@@ -20,6 +18,7 @@ static void check(bool c, const std::string &w) {
   ++checks;
   if (!c) { ++failures; std::printf("  FAIL: %s\n", w.c_str()); }
 }
+
 static bool near(float a, float b, float eps = 1e-4f) { return std::fabs(a - b) <= eps; }
 static bool near_v(Vector3Type a, float x, float y, float z) {
   return near(a.x, x) && near(a.y, y) && near(a.z, z);
@@ -30,8 +29,6 @@ int main() {
   cam.position = {0, 0, 0}; cam.target = {0, 0, -1}; cam.up = {0, 1, 0};
   cam.fovy = 90.f; cam.projection = camera::PERSPECTIVE;
 
-  // Perspective 90deg, aspect 2 (200x100): tan(45)=1, near corners at
-  // (+/-2,+/-1,-1), far (1000x) at (+/-2000,+/-1000,-1000).
   {
     RenderView v = make_render_view(cam, 200, 100, 1.f, 1000.f);
     check(near(v.aspect(), 2.f), "aspect from target");
@@ -43,7 +40,6 @@ int main() {
     check(near_v(c[3], -2, 1, -1), "near top-left exact");
     check(near_v(c[4], -2000, -1000, -1000), "far bottom-left exact");
     check(near_v(c[6], 2000, 1000, -1000), "far top-right exact");
-    // Corners lie on frustum planes (inside, on boundary).
     check(v.contains_point({0, 0, -10}), "ahead inside via view");
     check(!v.contains_point({0, 0, 10}), "behind outside via view");
     check(!v.contains_point({0, 0, -2000}), "past far outside via view");
@@ -51,7 +47,6 @@ int main() {
       float m=1e9f; for (auto &pl: v.frustum.planes) m=std::fmin(m, std::fabs(pl.distance(p.x,p.y,p.z))); return m < 1e-3f; }(), "corner on/inside frustum");
   }
 
-  // Orthographic: fovy is view height (4), aspect 2 -> half 2 x 4.
   {
     Camera3D o = cam; o.projection = camera::ORTHOGRAPHIC; o.fovy = 4.f;
     RenderView v = make_render_view(o, 200, 100, 1.f, 10.f);
@@ -62,7 +57,6 @@ int main() {
     check(!v.contains_point({4.1f, 0, -5}), "ortho outside side");
   }
 
-  // LOD scale: target height / 1080. 1080 -> 1, 540 -> 0.5, 2160 -> 2.
   {
     check(near(make_render_view(cam, 1920, 1080).lod_scale, 1.f), "1080p lod_scale 1");
     check(near(make_render_view(cam, 960, 540).lod_scale, 0.5f), "540p lod_scale 0.5");
@@ -70,7 +64,6 @@ int main() {
     RenderView v = make_render_view(cam, 3840, 2160);
     check(near(v.lod_distance(100.f), 50.f), "lod_distance divides by scale");
     Lod lod;
-    // Threshold 30 at 2160p: effective 50/2=25 stays level 0; 100/2=50 goes far.
     check(v.lod_level(lod, 50.f, {30.f}) == 0, "lod_level holds at scaled distance");
     check(v.lod_level(lod, 100.f, {30.f}) == 1, "lod_level advances at scaled distance");
     RenderView empty = make_render_view(cam, 0, 0);
@@ -78,7 +71,6 @@ int main() {
     check(near(empty.lod_distance(10.f), 10.f), "empty target lod passthrough");
   }
 
-  // PostChain: empty no-op, order is insertion, clear empties.
   {
     std::vector<int> order;
     PostChain chain;

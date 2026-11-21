@@ -1,18 +1,5 @@
 #pragma once
 
-// One view of the world: camera, render-target size, derived frustum and
-// a LOD scale, kept together so culling and LOD agree on the same frame.
-//
-//   RenderView view = make_render_view(camera, screen_w, screen_h);
-//   if (!view.intersects_box(min, max)) continue;
-//   int level = lod.update(view.lod_distance(dist), thresholds);
-//
-// LOD scale is target height relative to 1080p: thresholds authored at
-// 1080p scale with resolution, so lod_distance() divides by it. The full
-// world post-process chain is deferred: Effect/BlurPass have no common
-// pass interface and own GPU targets, so a real chain needs that design
-// first. PostChain below is only the trivially composable order runner:
-// wrap existing passes as callables and they run in insertion order.
 
 #include <array>
 #include <cmath>
@@ -41,29 +28,31 @@ struct RenderView {
   [[nodiscard]] float aspect() const {
     return target_h > 0 ? static_cast<float>(target_w) / static_cast<float>(target_h) : 0.f;
   }
+
   [[nodiscard]] bool contains_point(Vector3Type p) const { return frustum.contains_point(p); }
   [[nodiscard]] bool intersects_sphere(Vector3Type c, float r) const {
     return frustum.intersects_sphere(c, r);
   }
+
   [[nodiscard]] bool intersects_box(Vector3Type mn, Vector3Type mx) const {
     return frustum.intersects_box(mn, mx);
   }
-  // Distance as LOD thresholds see it: larger targets use farther thresholds.
+
   [[nodiscard]] float lod_distance(float d) const {
     return d / (lod_scale > 0.f ? lod_scale : 1.f);
   }
+
   int lod_level(Lod &lod, float distance, std::span<const float> thresholds,
                 float margin = 0.15f) const {
     return lod.update(lod_distance(distance), thresholds, margin);
   }
+
   int lod_level(Lod &lod, float distance, std::initializer_list<float> thresholds,
                 float margin = 0.15f) const {
     return lod_level(lod, distance,
                      std::span<const float>(thresholds.begin(), thresholds.size()), margin);
   }
 
-  // 8 corners: near quad then far quad, each bottom-left, bottom-right,
-  // top-right, top-left as seen by the camera.
   [[nodiscard]] std::array<Vector3Type, 8> corners() const {
     using namespace detail_frustum;
     V pos{camera.position.x, camera.position.y, camera.position.z};
@@ -106,8 +95,6 @@ inline RenderView make_render_view(const Camera3D &cam, int target_w, int target
   return v;
 }
 
-// Ordered runner for passes the caller already owns (e.g. BlurPass::apply
-// wrapped in a lambda). Empty chain is a no-op; steps run in add order.
 struct PostChain {
   std::vector<std::function<void()>> steps;
   void add(std::function<void()> step) { steps.push_back(std::move(step)); }
@@ -116,4 +103,4 @@ struct PostChain {
   void run() const { for (const auto &s : steps) if (s) s(); }
 };
 
-} // namespace afterhours
+}
