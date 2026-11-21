@@ -189,8 +189,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   if (config.size.is_default) {
     auto &styling_defaults = UIStylingDefaults::get();
     if (auto def =
-            styling_defaults.get_component_config(ComponentType::Checkbox);
-        def.has_value()) {
+            styling_defaults.find_component_config(ComponentType::Checkbox)) {
       config.size = def->size;
     } else {
       config.size = ComponentSize(pixels(default_component_size.x),
