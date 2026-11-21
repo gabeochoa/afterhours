@@ -356,9 +356,6 @@ inline Collector &default_collector() {
     return collector;
 }
 
-// Public scoped zone: wall-clock time from construction to destruction,
-// fanned out to every subscribed Collector via detail::TimingScope. Zones
-// nest freely; a child zone's duration never exceeds its parent's.
 class ScopedZone {
  public:
 #if AFTERHOURS_ENABLE_PROFILING

@@ -337,7 +337,6 @@ TEST(nested_scoped_zones_record_parent_and_child_durations) {
     CHECK(render && render->phase == SystemPhase::Render);
     CHECK(outer->phase == SystemPhase::Update);
     collector.stop();
-    // Zones without a subscribed collector are silent no-ops, not errors.
     { AFTERHOURS_PROFILE_ZONE("unrecorded"); }
 }
 
