@@ -46,7 +46,7 @@ inline bool is_space(uint32_t cp) {
   return cp == ' ' || cp == '\t' || cp == '\n' || cp == '\r' || cp == 0x00A0;
 }
 
-// Length of the unit at s[i]; sets valid (RFC 3629; invalid takes maximal subpart).
+// Unit length at s[i]; sets valid (RFC 3629; invalid takes max subpart).
 inline size_t utf8_unit_length(std::string_view s, size_t i, bool &valid) {
   const unsigned char c = static_cast<unsigned char>(s[i]);
   if (c < 0x80) {
@@ -111,7 +111,7 @@ inline bool is_valid_utf8(std::string_view text) {
   return true;
 }
 
-// Invalid sequences become U+FFFD (one per maximal subpart); valid text passes through.
+// Invalid sequences become U+FFFD (maximal subpart); valid passes through.
 inline std::string sanitize_utf8(std::string_view text) {
   std::string out;
   for (size_t i = 0; i < text.size();) {
