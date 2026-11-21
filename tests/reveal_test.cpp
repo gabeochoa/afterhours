@@ -1,6 +1,3 @@
-// reveal_test.cpp
-// Reveal: progress advances/reverses with injected dt, ends clamp, instant
-// snaps, and easing keeps the exact ends.
 
 #include <afterhours/src/plugins/reveal.h>
 
@@ -24,7 +21,6 @@ static void check(bool cond, const std::string &what) {
 static bool near(float a, float b) { return std::fabs(a - b) < 1e-5f; }
 
 int main() {
-  // Advances with injected dt and clamps at open.
   {
     Reveal r{.duration = 0.4f};
     check(near(r.update(0.1f, true), 0.25f), "quarter open");
@@ -35,7 +31,6 @@ int main() {
     check(near(r.update(0.1f, true), 1.f), "stays at 1");
   }
 
-  // Reverses from mid-flight and clamps at closed.
   {
     Reveal r{.duration = 0.4f};
     r.update(0.2f, true);
@@ -44,7 +39,6 @@ int main() {
     check(r.settled(false) && near(r.eased(), 0.f), "settled closed, eased is exact");
   }
 
-  // Non-positive dt and non-positive duration.
   {
     Reveal r{.duration = 0.4f};
     check(near(r.update(0.f, true), 0.f), "zero dt no change");
@@ -54,7 +48,6 @@ int main() {
     check(near(no_dur.update(0.001f, false), 0.f), "zero duration snaps closed");
   }
 
-  // Instant mode snaps regardless of duration.
   {
     Reveal r{.duration = 5.f};
     motion::set_instant(true);
@@ -63,7 +56,6 @@ int main() {
     motion::set_instant(false);
   }
 
-  // Easing uses a motion::curves curve and stays monotonic in range.
   {
     Reveal r{.duration = 1.f, .curve = &motion::curves::ease_out_quad};
     float prev = -1.f;
@@ -84,7 +76,6 @@ int main() {
     check(mid > 0.5f && mid < 1.f, "ease_out mid ahead of linear");
   }
 
-  // snap() jumps without dt.
   {
     Reveal r{};
     r.snap(true);
