@@ -1,8 +1,3 @@
-// batched_text_overflow_test.cpp
-// Same overflowing label in RenderImm and RenderBatched must give the same
-// result: Clip keeps the full text (scissored to its box), Ellipsis draws the
-// same truncated text, and the overflow debug overlay (this TU enables it)
-// is emitted by both renderers for Clip but not for intentional Ellipsis.
 #define AFTERHOURS_DEBUG_TEXT_OVERFLOW 1
 #include "ui_test_harness.h"
 
@@ -32,7 +27,6 @@ static Drawn run(bool batched, TextOverflow mode, float w, float h, float fs,
   if (batched) harness.render_batched(); else harness.render();
   Drawn out;
   out.texts = harness.drawn("text");
-  // Imm records filled rects as "rectangle", batched as "rectangle_rounded".
   for (const char *op : {"rectangle", "rectangle_rounded"})
     for (auto &c : harness.drawn(op))
       if (c.color.r == 255 && c.color.g == 50 && c.color.b == 50)

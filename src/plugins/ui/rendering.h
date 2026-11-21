@@ -663,7 +663,6 @@ position_text_ex(const ui::FontManager &fm, const std::string &text,
     // would report a box sized to exactly its own text -- a Dim::Text box --
     // as overflowing by precisely the margin, always.
     const float usable_y = measures_as_block ? container.height : max_text_size.y;
-    // Ellipsis truncates to fit on purpose, so width alone is not overflow.
     text_fits = ts.y <= usable_y &&
                 (text_overflow == TextOverflow::Ellipsis ||
                  ts.x <= max_text_size.x);
@@ -2653,7 +2652,6 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
               static_cast<int>(label_clip.x), static_cast<int>(label_clip.y),
               static_cast<int>(label_clip.width),
               static_cast<int>(label_clip.height), layer, entity.id);
-        // Match RenderImm's overflow debug: red overlay + 2px border.
         if (SHOW_TEXT_OVERFLOW_DEBUG && !result.text_fits) {
           RectangleType dr = text_rect;
           dr.x += hasLabel.text_x_offset;
