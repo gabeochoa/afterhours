@@ -261,6 +261,7 @@ ALL_TESTS := \
 	text_input_test \
 	toast_test \
 	text_wrap_test \
+	text_cache_key_chunk_test \
 	theme_io_test \
 	tree_view_test \
 	translation_test \
@@ -350,6 +351,7 @@ RAYLIB_TESTS := \
 	press_delay_test \
 	graphics_key_injection_test \
 	text_wrap_test \
+	text_cache_key_chunk_test \
 	theme_io_test \
 	tree_view_test \
 	layout_inspector_test

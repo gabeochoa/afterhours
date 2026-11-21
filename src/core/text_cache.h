@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <concepts>
 #include <cstdint>
 #include <functional>
@@ -32,9 +33,33 @@ public:
   static constexpr uint32_t DEFAULT_MAX_AGE = 120;
   static constexpr size_t DEFAULT_MAX_ENTRIES = 4096;
 
+public:
+  // Typed identity of one measurement. Entries compare the whole key, so a
+  // hash collision can never serve another text/font/size/spacing's size.
+  struct Key {
+    std::string text;
+    std::string font_name;
+    uint32_t font_size_bits = 0;
+    uint32_t spacing_bits = 0;
+    bool operator==(const Key &) const = default;
+    static Key make(std::string_view text_, std::string_view font_name_,
+                    float font_size, float spacing) {
+      return {std::string(text_), std::string(font_name_),
+              std::bit_cast<uint32_t>(font_size),
+              std::bit_cast<uint32_t>(spacing)};
+    }
+  };
+
 private:
+  struct KeyHash {
+    size_t operator()(const Key &k) const noexcept {
+      return static_cast<size_t>(compute_hash(
+          k.text, k.font_name, std::bit_cast<float>(k.font_size_bits),
+          std::bit_cast<float>(k.spacing_bits)));
+    }
+  };
   struct LRUEntry {
-    uint64_t key;
+    Key key;
     Vector2Type size;
     uint32_t last_used_generation = 0;
   };
@@ -44,7 +69,7 @@ private:
 
   MeasureTextFn measure_fn_;
   LRUList lru_list_;
-  std::unordered_map<uint64_t, LRUIter> lookup_;
+  std::unordered_map<Key, LRUIter, KeyHash> lookup_;
 
   uint32_t current_generation_ = 0;
   uint32_t prune_interval_ = DEFAULT_PRUNE_INTERVAL;
@@ -72,11 +97,13 @@ public:
   [[nodiscard]] Vector2Type measure(std::string_view text,
                                     std::string_view font_name, float font_size,
                                     float spacing = 1.0f) {
+    return measure(Key::make(text, font_name, font_size, spacing));
+  }
+
+  [[nodiscard]] Vector2Type measure(const Key &key) {
     if (!measure_fn_) {
       return {0.0f, 0.0f};
     }
-
-    uint64_t key = compute_hash(text, font_name, font_size, spacing);
     auto it = lookup_.find(key);
     if (it != lookup_.end()) {
       it->second->last_used_generation = current_generation_;
@@ -86,14 +113,17 @@ public:
     }
 
     cache_misses_++;
-    Vector2Type size = measure_fn_(text, font_name, font_size, spacing);
+    Vector2Type size =
+        measure_fn_(key.text, key.font_name,
+                    std::bit_cast<float>(key.font_size_bits),
+                    std::bit_cast<float>(key.spacing_bits));
 
     while (lookup_.size() >= max_entries_) {
       evict_lru();
     }
 
     lru_list_.push_front({key, size, current_generation_});
-    lookup_[key] = lru_list_.begin();
+    lookup_[lru_list_.front().key] = lru_list_.begin();
     return size;
   }
 

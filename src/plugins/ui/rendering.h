@@ -1095,7 +1095,7 @@ static inline void draw_runs_in_rect(
     return;
 
   // Memoised: this runs every frame, usually on text that hasn't changed.
-  const std::uint64_t wrap_key =
+  const auto wrap_key =
       detail::wrap_memo::key_for(runs, wrap_width, font_size, spacing, base_font);
   const std::vector<detail::TextRunLine> *cached =
       detail::wrap_memo::lookup(wrap_key);
@@ -2566,7 +2566,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                           : std::vector<TextSpan>{
                                 TextSpan{display_text, font_col}};
             // Memoised, same as the immediate path.
-            const std::uint64_t wrap_key = detail::wrap_memo::key_for(
+            const auto wrap_key = detail::wrap_memo::key_for(
                 runs, wrap_width, font_size, spacing, cmp.font_name);
             const std::vector<detail::TextRunLine> *cached =
                 detail::wrap_memo::lookup(wrap_key);
