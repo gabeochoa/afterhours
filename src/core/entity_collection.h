@@ -449,8 +449,6 @@ struct EntityCollection {
     } else {
       e = std::make_shared<Entity>(alloc_entity_id());
     }
-    // Stamp the level the caller scoped creation to, so unload_level() can
-    // find exactly these entities later.
     e->level_id = current_level_tls;
     temp_entities.push_back(e);
     // Identity does not wait for the merge: handle_for works immediately, so a

@@ -1,14 +1,10 @@
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
-
 #include <afterhours/ah.h>
 #include <afterhours/src/core/level_scope.h>
-
 #include <cstdio>
 #include <vector>
-
 using namespace afterhours;
-
 static std::vector<void (*)()> &tests() {
   static std::vector<void (*)()> t;
   return t;
@@ -20,7 +16,6 @@ struct Reg {
   static void name();                                                          \
   static Reg reg_##name(name);                                                 \
   static void name()
-
 static int failures = 0;
 #define CHECK(expr)                                                            \
   do {                                                                         \
@@ -29,44 +24,39 @@ static int failures = 0;
       fprintf(stderr, "  FAIL: %s (%s:%d)\n", #expr, __FILE__, __LINE__);      \
     }                                                                          \
   } while (0)
-
 struct Marker : BaseComponent {
   int v = 0;
 };
-
-// One local collection per test, so levels never leak between them.
 struct Fixture {
   EntityCollection coll;
   Fixture() {
     level_scope::clear_registrations();
     EntityHelper::set_default_collection(&coll);
   }
+
   ~Fixture() {
     EntityHelper::set_default_collection(nullptr);
     level_scope::clear_registrations();
   }
+
   Entity &create(int level) {
     auto guard = level_scope::scoped(level);
     return EntityHelper::createEntity();
   }
 };
-
 TEST(interleaved_unload_leaves_other_level) {
   Fixture f;
   Entity &a1 = f.create(1);
   Entity &b1 = f.create(2);
   Entity &a2 = f.create(1);
   Entity &b2 = f.create(2);
-  Entity &g = EntityHelper::createEntity(); // unscoped
+  Entity &g = EntityHelper::createEntity();
   const int a1_id = a1.id, a2_id = a2.id;
   const int b1_id = b1.id, b2_id = b2.id, g_id = g.id;
-
   CHECK(level_scope::count_in_level(1) == 2);
   CHECK(level_scope::count_in_level(2) == 2);
   CHECK(level_scope::count_in_level(0) == 1);
-
   level_scope::unload_level(1);
-
   CHECK(!EntityHelper::getEntityForID(a1_id).valid());
   CHECK(!EntityHelper::getEntityForID(a2_id).valid());
   CHECK(EntityHelper::getEntityForID(b1_id).valid());
@@ -83,15 +73,11 @@ TEST(cache_clears_fire_per_level) {
   level_scope::register_cache_clear(2, [&] { ++cleared_b; });
   (void)f.create(1);
   (void)f.create(2);
-
   level_scope::unload_level(1);
   CHECK(cleared_a == 1);
   CHECK(cleared_b == 0);
-
-  // Unload forgets the callbacks: a second unload of level 1 fires nothing.
   level_scope::unload_level(1);
   CHECK(cleared_a == 1);
-
   level_scope::unload_level(2);
   CHECK(cleared_b == 1);
 }
@@ -122,7 +108,6 @@ TEST(singleton_deregistered_on_unload) {
   e.addComponent<Marker>();
   EntityHelper::registerSingleton<Marker>(e);
   CHECK(EntityHelper::has_singleton<Marker>());
-
   level_scope::unload_level(1);
   CHECK(!EntityHelper::has_singleton<Marker>());
 }
@@ -135,15 +120,11 @@ TEST(reset_all_levels_and_hook) {
   (void)f.create(2);
   Entity &g = EntityHelper::createEntity();
   const int g_id = g.id;
-
   level_scope::reset_all_levels();
-
   CHECK(resets == 1);
   CHECK(level_scope::count_in_level(1) == 0);
   CHECK(level_scope::count_in_level(2) == 0);
   CHECK(EntityHelper::getEntityForID(g_id).valid());
-
-  // Hooks persist across resets.
   (void)f.create(1);
   level_scope::reset_all_levels();
   CHECK(resets == 2);
@@ -158,9 +139,8 @@ TEST(recycled_entity_not_stamped_stale) {
     Entity &e = EntityHelper::createEntity();
     e.cleanup = true;
   }
-  coll.cleanup(); // recycles the entity into the pool
+  coll.cleanup();
   Entity &e2 = EntityHelper::createEntity();
-  // No guard: a recycled entity must not keep (or lose) a stale level stamp.
   CHECK(e2.level_id == kUnscopedLevel);
   CHECK(level_scope::count_in_level(1) == 0);
 }
