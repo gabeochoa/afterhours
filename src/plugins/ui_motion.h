@@ -311,7 +311,7 @@ inline MotionValues apply_motion(Ctx &ctx, Entity &entity,
   if (st.exiting) {
     st.exiting = false;
     st.exit_done = false;
-    entity.template removeComponentIfExists<ui::imm::HasExitPresence>();
+    entity.template toggleComponent<ui::imm::HasExitPresence>(false);
   }
   st.rest[static_cast<size_t>(MotionProperty::CornerRadius)] = rests.corner_radius;
   const MotionInputs in{ctx.was_hot(entity.id), ctx.was_active(entity.id),
@@ -381,7 +381,7 @@ inline bool exit_retention(Entity &entity) {
     return false;
   if (motion::is_instant()) {
     st.exit_done = true;
-    entity.template addComponentIfMissing<ui::imm::HasExitPresence>();
+    entity.template toggleComponent<ui::imm::HasExitPresence>(true);
     return false;
   }
   auto &tracks = entity.template addComponentIfMissing<motion::HasTracks>();
