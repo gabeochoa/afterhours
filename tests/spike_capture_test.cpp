@@ -13,7 +13,7 @@ auto record_fn(profiling::Collector &collector) {
         }
     };
 }
-} // namespace
+}
 
 TEST(slow_frame_is_captured_with_its_samples) {
     profiling::Collector collector({600, 8, 1, false, 20, 4});
@@ -41,7 +41,7 @@ TEST(fast_frames_are_not_retained) {
     const auto record = record_fn(collector);
     record("work", 5);
     collector.end_frame(10);
-    collector.end_frame(20); // exactly at threshold: not a spike
+    collector.end_frame(20);
     collector.end_frame(19.999);
     CHECK(collector.spikes().empty());
     CHECK(collector.snapshot().spikes.empty());

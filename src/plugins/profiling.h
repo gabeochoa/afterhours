@@ -20,7 +20,6 @@ struct Options {
     std::size_t max_systems = 256;
     std::size_t max_counters = 32;
     bool sample_process = true;
-    // Frames longer than this are copied into the spike ring; 0 disables retention.
     double spike_threshold_ms = 0;
     std::size_t spike_capacity = 4;
 };
@@ -37,7 +36,6 @@ struct SystemSample {
     double mean_ms() const { return calls ? total_ms / static_cast<double>(calls) : 0; }
 };
 struct Counter { std::string name, unit; double value = 0; };
-// Retained slow frame: frame number, wall-clock duration, and that frame's per-system costs.
 struct Spike {
     std::uint64_t frame = 0;
     double frame_ms = 0;
