@@ -714,13 +714,7 @@ inline bool text_action_pressed(auto &ctx, std::string_view name,
   return default_text_chord_pressed(name, repeat);
 }
 
-/// Undo/redo, clipboard and select-all -- the part of editing that is the same
-/// whether the field is one line or many. Returns true if the text changed.
-///
-/// Copy and select-all are allowed while readonly; cut, paste, undo and redo
-/// are not. Each action resolves through text_action_pressed, so a smaller
-/// InputAction still compiles and edits via the library defaults.
-///
+/// Falls back to library defaults for actions the host enum lacks.
 template <typename Ctx, typename State>
 inline bool handle_clipboard_and_undo(Ctx &ctx, State &s, bool editable) {
   using InputAction = typename std::remove_reference_t<Ctx>::value_type;
