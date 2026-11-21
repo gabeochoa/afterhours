@@ -113,6 +113,7 @@ ALL_TESTS := \
 	synth_beep_test \
 	settings_save_test \
 	settings_path_test \
+	settings_table_test \
 	files_test_roots_test \
 	clipboard_test \
 	native_dialogs_test \
