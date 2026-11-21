@@ -15,6 +15,8 @@ enum struct Mode {
   Additive,         // glow, light accumulation
   Multiplied,       // shadow, darkening
   AlphaPremultiply, // compositing a layer that already carries its alpha
+  Layer, // drawing into a layer: colour blends as Alpha, but alpha
+         // accumulates (ONE / ONE_MINUS_SRC_ALPHA) instead of squaring
 };
 
 namespace detail {
