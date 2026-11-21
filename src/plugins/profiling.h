@@ -90,9 +90,6 @@ inline const char *phase_name(SystemPhase phase) {
     return "Update";
 }
 
-// Folded-stack lines ("frame;<phase>;<system> <total_ms>") for flamegraph.pl,
-// aggregated by stack and sorted by stack. Snapshots have per-system totals
-// only, no call stacks, so every line is a one-level stack.
 inline std::string snapshot_to_collapsed(const Snapshot &snapshot) {
     std::map<std::string, double> totals;
     for (const auto &sample : snapshot.systems) {
