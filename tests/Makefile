@@ -166,6 +166,7 @@ ALL_TESTS := \
 	card_and_type_scale_test \
 	fixed_timestep_test \
 	audio_lifecycle_test \
+	notimplemented_log_test \
 	local_time_test \
 	frame_rate_stats_test \
 	graphics_concepts_pedantic_test \
@@ -235,6 +236,7 @@ ALL_TESTS := \
 	pagination_test \
 	random_engine_test \
 	render_order_test \
+	draw_over_test \
 	scroll_smoothing_test \
 	setup_test \
 	slot_at_creation_test \
@@ -475,6 +477,7 @@ $(OUT)/sokol_hidpi_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_resize_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_resize_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_resize_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_resize_test: ../src/backends/sokol/backend.h ../src/backends/sokol/window_macos.h ../src/backends/sokol/capture_impl.h
 $(OUT)/sokol_multires_capture_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_multires_capture_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_multires_capture_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
