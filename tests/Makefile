@@ -254,6 +254,7 @@ ALL_TESTS := \
 	cleanup_order_test \
 	attachment_test \
 	canonical_snapshot_test \
+	ownership_cascade_test \
 	entity_pool_test \
 	entity_query_test \
 	entity_membership_test \
