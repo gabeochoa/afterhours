@@ -46,7 +46,6 @@ static PendingE2ECommand run_expect(HandleExpectScreenshotCommand handler,
   return cmd;
 }
 
-// Capture callback that writes `p` as PNG wherever it is told to.
 static ScreenshotCaptureFn capture_of(std::vector<std::uint8_t> p, int w,
                                       int h) {
   return [p = std::move(p), w, h](const std::string &path) {
@@ -64,7 +63,7 @@ TEST(identical_images_pass) {
 TEST(one_channel_off_by_one_is_within_tolerance) {
   auto a = pixels(4, 4, 10);
   auto b = a;
-  b[0] = 11; // red +1 on one pixel
+  b[0] = 11;
   auto d = diff_images(image_of(a, 4, 4), image_of(b, 4, 4));
   CHECK(d.mismatched_pixels == 0);
   CHECK(d.max_channel_delta == 1);
@@ -75,7 +74,7 @@ TEST(real_diff_fails_and_reports_counts) {
   auto dir = dir_for("diff");
   auto base = pixels(10, 10, 10);
   auto cur = base;
-  cur[0] = 200; // one pixel, well past tolerance: 1% > 0.05% budget
+  cur[0] = 200;
   CHECK(write_png(dir / "menu.png", base, 10, 10));
   ScreenshotBaselineOptions opts;
   opts.baseline_dir = dir.string();

@@ -1,8 +1,4 @@
 #pragma once
-// Opt-in: including this header pulls in PNG decode (src/image.h), so one TU
-// in a NONE/headless build must define AFTERHOURS_STB_IMAGE_IMPLEMENTATION
-// (raylib/sokol builds already link stb_image).
-
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -15,8 +11,6 @@
 namespace afterhours {
 namespace testing {
 
-// Defaults mirror wm_afterhours: a pixel counts only when some channel moves
-// by more than 8, and at most 0.05% of pixels may count.
 struct ScreenshotBaselineOptions {
   int channel_tolerance = 8;
   double max_mismatch_pct = 0.05;
@@ -80,8 +74,6 @@ struct ExpectScreenshotResult {
   }
 };
 
-// Map parsed CLI flags (E2EArgs::update_baselines / screenshot_dir) to options
-// without this header depending on harness.h.
 inline ScreenshotBaselineOptions
 screenshot_baseline_options(bool update_baselines,
                             const std::string &screenshot_dir = "") {
@@ -96,8 +88,6 @@ inline std::string baseline_path_for(const ScreenshotBaselineOptions &o,
   return (std::filesystem::path(o.baseline_dir) / (name + ".png")).string();
 }
 
-// Missing baseline fails (first run included): create it explicitly with
-// update mode, so a typo'd name can never silently bless a new image.
 inline ExpectScreenshotResult
 check_screenshot_baseline(const std::filesystem::path &current_path,
                           const std::string &name,
