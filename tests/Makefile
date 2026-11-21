@@ -141,6 +141,7 @@ ALL_TESTS := \
 	rounded_corners_test \
 	viewport_test \
 	grid_test \
+	pathfinding_provider_test \
 	bitset_test \
 	log_file_test \
 	crash_handler_test \
@@ -150,6 +151,7 @@ ALL_TESTS := \
 	ui_idle_cost_test \
 	press_delay_test \
 	graphics_key_injection_test \
+	e2e_gamepad_test \
 	e2e_key_command_test \
 	e2e_type_command_test \
 	overlay_layer_test \
@@ -157,6 +159,7 @@ ALL_TESTS := \
 	e2e_retry_test \
 	e2e_register_command_test \
 	e2e_screenshot_test \
+	e2e_expect_screenshot_test \
 	e2e_is_running_test \
 	e2e_defer_unknown_test \
 	e2e_results_test \
@@ -214,6 +217,8 @@ ALL_TESTS := \
 	cleanup_order_test \
 	entity_pool_test \
 	entity_query_test \
+	temp_warning_caller_test \
+	query_scratch_test \
 	get_or_default_test \
 	component_toggle_test \
 	query_extreme_by_test \
@@ -223,6 +228,7 @@ ALL_TESTS := \
 	keymap_test \
 	label_clear_test \
 	hit_priority_test \
+	pointer_owner_test \
 	two_trees_test \
 	text_selection_test \
 	text_stroke_test \
@@ -308,6 +314,7 @@ ALL_TESTS += sokol_headless_run_test
 ALL_TESTS += sokol_include_order_test
 ALL_TESTS += sokol_wrappers_test
 ALL_TESTS += sokol_frame_dt_test
+ALL_TESTS += sokol_msaa_test
 ALL_TESTS += staging_texture_leak_test
 endif
 
@@ -377,6 +384,7 @@ RAYLIB_TESTS := \
 	overlay_layer_test \
 	press_delay_test \
 	graphics_key_injection_test \
+	e2e_gamepad_test \
 	text_wrap_test \
 	label_word_wrap_test \
 	theme_io_test \
@@ -416,7 +424,7 @@ $(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(
 
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/middle_click_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
-$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
+$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/e2e_gamepad_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 
 # Filter to sources: the .d files list every header as a prerequisite, and a
 # bare $^ would hand them all to clang. .cc is the sokol implementation TU.
@@ -434,6 +442,7 @@ $(OUT)/touch_target_single_test: touch_target_single_test.cpp
 $(OUT)/entity_mapping_test: ../examples/entity_mapping_test_helper.cpp
 $(OUT)/entity_mapping_test: INCLUDES_T += -I../examples
 $(OUT)/random_engine_test:  CXXFLAGS_T += -DAFTER_HOURS_ENABLE_RANDOM
+$(OUT)/temp_warning_caller_test: CXXFLAGS_T += -DAFTER_HOURS_DEBUG
 $(OUT)/graphics_concepts_pedantic_test: CXXFLAGS_T += -Wpedantic -Werror
 $(OUT)/graphics_concepts_pedantic_test: INCLUDES_T = -I$(INCLUDE_ROOT) -isystem $(AFTERHOURS_ROOT)/vendor -isystem $(BREW_PREFIX)/include
 $(OUT)/sound_volume_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
@@ -497,6 +506,10 @@ $(OUT)/sokol_frame_dt_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_frame_dt_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_frame_dt_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_frame_dt_test: ../src/backends/sokol/backend.h
+$(OUT)/sokol_msaa_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_msaa_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_msaa_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_msaa_test: ../src/backends/sokol/drawing_helpers.h ../src/backends/sokol/backend.h
 
 $(OUT)/staging_texture_leak_test: ../examples/web/sokol_impl.cc
 $(OUT)/staging_texture_leak_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
