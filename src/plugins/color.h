@@ -85,6 +85,7 @@ constexpr Color gray_75() { return gray(192); }
 constexpr Color rgb(unsigned char r, unsigned char g, unsigned char b) {
   return {r, g, b, 255};
 }
+
 constexpr Color rgba(unsigned char r, unsigned char g, unsigned char b,
                      unsigned char a) {
   return {r, g, b, a};

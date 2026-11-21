@@ -1,11 +1,3 @@
-// bg_inset_test.cpp
-// Background fill inset geometry (gap R-067 / hanabi #107, #111).
-//
-// The fill used to be the widget rect, always: padding insets the content,
-// never the box, so a caller could not paint a smaller selection/hover chip
-// inside a bigger hit target. with_background_inset(h, v) insets the fill
-// only; layout, hit rect, and content stay on the widget rect. Unset, the
-// fill is pixel-identical to before.
 
 #include "ui_test_harness.h"
 
@@ -25,7 +17,6 @@ template <typename F> void measure_fill(ComponentConfig cfg, F &&fn) {
   fn(r, fills);
 }
 
-// Default: the fill is the widget rect, whatever the padding.
 TEST(fill_is_widget_rect_by_default) {
   measure_fill(ComponentConfig{}
                    .with_size({pixels(200), pixels(28)})
@@ -42,7 +33,6 @@ TEST(fill_is_widget_rect_by_default) {
                });
 }
 
-// Inset shrinks the fill by (h, v) per side; widget rect is untouched.
 TEST(inset_shrinks_fill_only) {
   measure_fill(ComponentConfig{}
                    .with_size({pixels(200), pixels(28)})
@@ -59,8 +49,6 @@ TEST(inset_shrinks_fill_only) {
                });
 }
 
-// Hover paints the same inset rect: one fill geometry for selection/custom/
-// hover, so the chip and the hit target can differ without a second rect.
 TEST(hover_fill_uses_same_inset_rect) {
   measure_fill(ComponentConfig{}
                    .with_size({pixels(200), pixels(28)})
@@ -78,8 +66,6 @@ TEST(hover_fill_uses_same_inset_rect) {
                });
 }
 
-// Inset and padding are independent: padding moves content, inset moves the
-// fill, and neither moves the hit rect.
 TEST(inset_composes_with_padding) {
   measure_fill(ComponentConfig{}
                    .with_size({pixels(200), pixels(28)})
@@ -100,7 +86,6 @@ TEST(inset_composes_with_padding) {
                });
 }
 
-// An inset larger than half the box collapses to empty, never inverts.
 TEST(oversized_inset_collapses) {
   measure_fill(ComponentConfig{}
                    .with_size({pixels(200), pixels(28)})

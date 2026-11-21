@@ -58,10 +58,6 @@ static inline Color resolve_image_tint(const Entity &entity, float opacity) {
   return colors::opacity_pct(tint, opacity);
 }
 
-// The rect the background fill paints: the widget rect shrunk by the
-// configured inset, clamped so an oversized inset collapses to empty rather
-// than inverting. Shadows, borders, hit testing, and content keep the full
-// widget rect.
 static inline RectangleType fill_rect_for(const Entity &entity,
                                           const RectangleType &draw_rect) {
   if (!entity.has<HasColor>())
