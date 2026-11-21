@@ -139,9 +139,6 @@ hsplit(HasUIContext auto &ctx, EntityParent ep_pair, const Size (&sizes)[N],
 /// a vertical bar between a left and right pane, Axis::Y for a horizontal one
 /// between a top and bottom. Sizes itself thin across that axis and full-length
 /// along the other, and sets the matching resize cursor.
-/// The drawn bar keeps its thickness, but the hit rect is padded out to
-/// Theme::divider_min_hit_thickness across the drag axis, so a thin line
-/// stays grabbable.
 ///
 /// Truthy on the frames it moved; `.as<float>()` is that frame's movement in
 /// the same space as rect(). Delta, not position, so grabbing the bar off
@@ -165,9 +162,6 @@ ElementResult divider(HasUIContext auto &ctx, EntityParent ep_pair, Axis axis,
 
   auto elem = div(ctx, ep_pair, config);
   Entity &entity = elem.ent();
-  // The drawn bar keeps its thickness, but a 4px line is not a grabbable
-  // target: pad the hit rect out to the theme's minimum band across the drag
-  // axis. Only for a pixel thickness -- a percent one is sized by the parent.
   const Size across = moves_in_x ? config.size.x_axis : config.size.y_axis;
   const float min_hit = ctx.theme.divider_min_hit_thickness;
   if (across.dim == Dim::Pixels && across.value < min_hit) {

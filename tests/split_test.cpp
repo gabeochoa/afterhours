@@ -198,9 +198,6 @@ TEST(divider_y_axis_is_a_horizontal_bar) {
   CHECK(hbar.ent().get<HasCursor>().cursor == CursorType::ResizeV);
 }
 
-// The hit band is wider than the drawn line: a 4px bar grabs across the
-// theme's 12px minimum, padded evenly on both sides, across the drag axis
-// only. The drawn rect is untouched.
 TEST(divider_hit_band_exceeds_drawn_thickness) {
   ImmTestHarness h;
   auto bar = divider(h.context(), mk(h.root(), 0), Axis::X);
@@ -216,7 +213,6 @@ TEST(divider_hit_band_exceeds_drawn_thickness) {
   CHECK_APPROX(hit.y, drawn.y);
 }
 
-// Same band for a horizontal bar, across its (vertical) drag axis.
 TEST(divider_hit_band_horizontal_bar) {
   ImmTestHarness h;
   auto bar = divider(h.context(), mk(h.root(), 0), Axis::Y);
@@ -231,7 +227,6 @@ TEST(divider_hit_band_horizontal_bar) {
   CHECK_APPROX(hit.width, drawn.width);
 }
 
-// A caller thickness at or above the minimum gets no padding.
 TEST(divider_hit_band_respects_larger_caller_thickness) {
   ImmTestHarness h;
   auto bar = divider(h.context(), mk(h.root(), 0), Axis::X,
@@ -246,7 +241,6 @@ TEST(divider_hit_band_respects_larger_caller_thickness) {
   CHECK_APPROX(hit.x, rect_of(bar).x);
 }
 
-// A zero theme minimum disables the floor: hit equals drawn.
 TEST(divider_hit_band_disabled_by_zero_theme) {
   ImmTestHarness h;
   h.context().theme.divider_min_hit_thickness = 0.f;
@@ -258,8 +252,6 @@ TEST(divider_hit_band_disabled_by_zero_theme) {
   CHECK_APPROX(hit.width, rect_of(bar).width);
 }
 
-// A press inside the band but outside the drawn line resolves to the
-// divider; a press just outside the band does not.
 TEST(divider_hit_band_wins_press_between_band_and_line) {
   ImmTestHarness h;
   auto bar =
@@ -282,12 +274,12 @@ TEST(divider_hit_band_wins_press_between_band_and_line) {
     resolver.resolve();
   };
 
-  const float line_x = rect_of(bar).x; // drawn bar spans [line_x, line_x+4)
-  resolve_at(line_x - 2.f, 100.f);     // inside the band, outside the line
+  const float line_x = rect_of(bar).x;
+  resolve_at(line_x - 2.f, 100.f);
   CHECK(h.context().is_hot(bar.id()));
   CHECK(h.context().is_active(bar.id()));
 
-  resolve_at(line_x - 6.f, 100.f); // just outside the 12px band
+  resolve_at(line_x - 6.f, 100.f);
   CHECK(!h.context().is_hot(bar.id()));
 }
 

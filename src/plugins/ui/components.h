@@ -360,9 +360,6 @@ struct HasUIModifiers : BaseComponent {
   }
 };
 
-// Expands the hit-test rect without moving the drawn one, so a thin visible
-// target (a divider line, a scrollbar thumb) stays grabbable. Pads are added
-// on each side, in the same space as rect().
 struct HasHitExpand : BaseComponent {
   float pad_x = 0.f;
   float pad_y = 0.f;
