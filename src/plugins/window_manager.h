@@ -18,6 +18,7 @@
 #endif
 #include "../logging.h"
 #include "../warn_once.h"
+#include "../window_helpers.h"
 
 // Forward declarations: sapp_* from sokol_app.h, and the Cocoa resize
 // helper defined in the app's .mm translation unit (Metal only).
@@ -277,16 +278,13 @@ struct window_manager : developer::Plugin {
     if (content_w <= 0.f || content_h <= 0.f)
       return vp;
 
-    int dest_w = window_w;
-    int dest_h = static_cast<int>(
-        std::round((double)dest_w * content_h / content_w));
-    if (dest_h > window_h) {
-      dest_h = window_h;
-      dest_w = static_cast<int>(
-          std::round((double)dest_h * content_w / content_h));
-    }
-    vp.dest = RectangleType{static_cast<float>((window_w - dest_w) / 2),
-                            static_cast<float>((window_h - dest_h) / 2),
+    const auto [dest_w, dest_h] = graphics::letterbox_content_size(
+        static_cast<int>(content_w), static_cast<int>(content_h), window_w,
+        window_h);
+    const auto [dest_x, dest_y] = graphics::window_centre_position(
+        0, 0, window_w, window_h, dest_w, dest_h);
+    vp.dest = RectangleType{static_cast<float>(dest_x),
+                            static_cast<float>(dest_y),
                             static_cast<float>(dest_w),
                             static_cast<float>(dest_h)};
     vp.scale = dest_w > 0 ? content_w / static_cast<float>(dest_w) : 1.f;

@@ -37,6 +37,9 @@ template <typename V>
 inline void draw_cylinder_wires(V, V, float, float, int, Color) {
   log_error("@notimplemented draw_cylinder_wires");
 }
+inline void draw_ellipse_3d(Vector3Type, float, float, Color) {
+  log_error("@notimplemented draw_ellipse_3d");
+}
 template <typename V> inline void draw_line_3d(V, V, Color) {
   log_error("@notimplemented draw_line_3d");
 }
