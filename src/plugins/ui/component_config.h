@@ -134,6 +134,10 @@ struct ComponentConfig {
   float scale = 1.0f; // Visual scale applied after layout (smooth animations)
   Size translate_x = pixels(0.0f);
   Size translate_y = pixels(0.0f);
+  bool sticky_top = false, sticky_bottom = false, sticky_left = false,
+       sticky_right = false;
+  float sticky_top_offset = 0.f, sticky_bottom_offset = 0.f,
+        sticky_left_offset = 0.f, sticky_right_offset = 0.f;
 
   // debugs
   std::string debug_name = "";
@@ -673,6 +677,26 @@ struct ComponentConfig {
   ComponentConfig &with_translate(Size x, Size y) {
     translate_x = x;
     translate_y = y;
+    return *this;
+  }
+  ComponentConfig &with_sticky_top(float offset = 0.f) {
+    sticky_top = true;
+    sticky_top_offset = offset;
+    return *this;
+  }
+  ComponentConfig &with_sticky_bottom(float offset = 0.f) {
+    sticky_bottom = true;
+    sticky_bottom_offset = offset;
+    return *this;
+  }
+  ComponentConfig &with_sticky_left(float offset = 0.f) {
+    sticky_left = true;
+    sticky_left_offset = offset;
+    return *this;
+  }
+  ComponentConfig &with_sticky_right(float offset = 0.f) {
+    sticky_right = true;
+    sticky_right_offset = offset;
     return *this;
   }
   ComponentConfig &with_opacity(float v) {
@@ -1232,6 +1256,17 @@ struct ComponentConfig {
       merged.translate_x = overrides.translate_x;
     if (overrides.translate_y.value != 0.0f)
       merged.translate_y = overrides.translate_y;
+    if (overrides.sticky_top || overrides.sticky_bottom ||
+        overrides.sticky_left || overrides.sticky_right) {
+      merged.sticky_top = overrides.sticky_top;
+      merged.sticky_bottom = overrides.sticky_bottom;
+      merged.sticky_left = overrides.sticky_left;
+      merged.sticky_right = overrides.sticky_right;
+      merged.sticky_top_offset = overrides.sticky_top_offset;
+      merged.sticky_bottom_offset = overrides.sticky_bottom_offset;
+      merged.sticky_left_offset = overrides.sticky_left_offset;
+      merged.sticky_right_offset = overrides.sticky_right_offset;
+    }
     if (overrides.flex_gap.value != 0.0f)
       merged.flex_gap = overrides.flex_gap;
     if (overrides.border_config.has_value())
