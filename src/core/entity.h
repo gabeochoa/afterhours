@@ -176,6 +176,15 @@ struct Entity {
     return removeComponent<T>();
   }
 
+  // Returns the component when present so callers can assign fields in place.
+  template <typename T> T *toggleComponent(bool present) {
+    if (!present) {
+      removeComponentIfExists<T>();
+      return nullptr;
+    }
+    return &addComponentIfMissing<T>();
+  }
+
   template <typename A> void addAll() { addComponent<A>(); }
 
   template <typename A, typename B, typename... Rest> void addAll() {
