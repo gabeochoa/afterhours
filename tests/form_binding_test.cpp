@@ -1,4 +1,3 @@
-// form_binding_test.cpp -- ui::form data-bound rows (G-P15 core slice).
 #include "ui_test_harness.h"
 
 #include <afterhours/src/plugins/e2e_testing/test_input.h>
@@ -20,7 +19,7 @@ void emit_slider(ImmTestHarness &h, float &v) {
 Entity &slider_bg(ImmTestHarness &h) {
   return AutoLayout::to_ent_static(h.find("slider_background")->id);
 }
-} // namespace
+}
 
 TEST(form_slider_drag_mutates_bound_and_external_write_reflects) {
   ImmTestHarness h;
@@ -53,7 +52,7 @@ TEST(form_checkbox_click_mutates_bound_and_external_write_reflects) {
   for (int phase = 0; phase < 3; ++phase) {
     h.begin_frame();
     if (indicator) indicator->get<HasClickListener>().down = (phase == 1);
-    if (phase == 2) value = true; // external write
+    if (phase == 2) value = true;
     auto result = form::checkbox(h.context(), mk(h.root(), 0), "Music", value);
     CHECK(value == (phase >= 1));
     auto &row = result.ent();
@@ -79,7 +78,7 @@ TEST(form_text_insert_mutates_bound_and_external_write_reflects) {
     h.context().set_focus(f->id);
     h.context().focused_ids = {f->id};
   }
-  emit(); // settle the focus transition before placing the caret
+  emit();
   state.cursor_position = value.size();
   state.selection_anchor.reset();
   testing::test_input::detail::test_mode = true;
@@ -125,7 +124,7 @@ TEST(form_toggle_external_write_reflects) {
   value = true;
   auto result = form::toggle(h.context(), mk(h.root(), 0), "Sound", value);
   CHECK(value);
-  CHECK(result.ent().has<HasToggleSwitchState>() || true); // row wraps toggle_switch
+  CHECK(result.ent().has<HasToggleSwitchState>() || true);
 }
 
 int main() { return ui_test::run_registered_tests("form binding"); }

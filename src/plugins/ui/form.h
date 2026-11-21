@@ -1,9 +1,5 @@
 #pragma once
 
-// Data-bound form rows over the imm widgets (G-P15, smallest slice).
-// Each helper is a labeled row that reads the bound value every frame
-// (external writes show up) and writes it back when the widget edits it.
-// Deferred: data-bound lists, menu/settings shell, rect-bridge migration.
 
 #include <algorithm>
 #include <string>
@@ -19,7 +15,6 @@ namespace ui {
 namespace form {
 using namespace imm;
 
-// Fraction slider, 0..1 (the imm slider's existing contract).
 inline ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                             const std::string &label, float &value,
                             ComponentConfig config = ComponentConfig()) {
@@ -50,8 +45,6 @@ inline ElementResult text(HasUIContext auto &ctx, EntityParent ep_pair,
   return imm::text_input(ctx, ep_pair, value, config.with_label(label));
 }
 
-// Integer as a stepper over [min_value, max_value]; the range is materialised
-// as option labels, so keep it small (a settings count, not a free numeric field).
 inline ElementResult integer(HasUIContext auto &ctx, EntityParent ep_pair,
                              const std::string &label, int &value,
                              int min_value = 0, int max_value = 10,
@@ -67,6 +60,6 @@ inline ElementResult integer(HasUIContext auto &ctx, EntityParent ep_pair,
   return result;
 }
 
-} // namespace form
-} // namespace ui
-} // namespace afterhours
+}
+}
+}
