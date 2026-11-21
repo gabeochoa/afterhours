@@ -832,6 +832,38 @@ struct HandleResizeCommand : System<PendingE2ECommand> {
     }
 };
 
+// Handle 'expect_window_size w h' - asserts the current window size.
+// Retrying (not immediate fail) because 'resize' applies a frame later: a
+// script asserting straight after it would otherwise flake on first
+// evaluation. The resolution singleton is layout's source of truth, so it
+// is what is compared; the headless backend's raw size is a stub.
+struct HandleExpectWindowSizeCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("expect_window_size")) return;
+        if (!cmd.has_args(2)) {
+            cmd.fail("expect_window_size requires width height arguments");
+            return;
+        }
+        const int w = cmd.arg_as<int>(0);
+        const int h = cmd.arg_as<int>(1);
+        if (w <= 0 || h <= 0) {
+            cmd.fail(std::format("expect_window_size: invalid dimensions {}x{}",
+                                 w, h));
+            return;
+        }
+        auto *pcr = EntityHelper::get_singleton_cmp<
+            window_manager::ProvidesCurrentResolution>();
+        if (!pcr) {
+            cmd.retry_with("expect_window_size: resolution singleton unset");
+            return;
+        }
+        cmd.expect(pcr->width() == w && pcr->height() == h,
+                   std::format("expect_window_size: is {}x{}, expected {}x{}",
+                               pcr->width(), pcr->height(), w, h));
+    }
+};
+
 // Handle 'assert_no_overflow' command - checks that all rendered UI elements
 // fit within the current viewport AND that text content fits its containers.
 // Checks three things:
