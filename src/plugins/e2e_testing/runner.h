@@ -113,8 +113,8 @@ constexpr std::array<std::string_view, 7> coord_commands = {
     "middle_click", "middle_down"
 };
 
-constexpr std::array<std::string_view, 16> single_arg_commands = {
-    "key", "select_all", "screenshot", "arrow",
+constexpr std::array<std::string_view, 17> single_arg_commands = {
+    "key", "select_all", "screenshot", "screenshot_presented", "arrow",
     "action", "hold", "release", "click_ui",
     "click_text", "click_button", "focus_ui",
     "toggle_checkbox", "expect_focused",
@@ -416,6 +416,9 @@ class E2ERunner {
     }
     template <typename F> void set_screenshot_callback(F fn) {
         screenshot_fn_ = as_screenshot_fn(std::move(fn));
+    }
+    template <typename F> void set_presented_screenshot_callback(F fn) {
+        presented_screenshot_fn_ = as_screenshot_fn(std::move(fn));
     }
     void set_reset_callback(std::function<void()> fn) { clear_fn_ = fn; }
     void set_results_path(std::string path) { results_path_ = std::move(path); }
@@ -719,6 +722,13 @@ class E2ERunner {
         // Handle screenshot if callback set
         if (cmd.name == "screenshot" && screenshot_fn_ && !cmd.args.empty())
             take_screenshot(screenshot_fn_, pending);
+        if (cmd.name == "screenshot_presented" && !cmd.args.empty()) {
+            if (!presented_screenshot_fn_)
+                pending.fail("screenshot_presented: no presented-frame "
+                             "screenshot callback registered");
+            else
+                take_screenshot(presented_screenshot_fn_, pending);
+        }
 
         // End of a script in a batch run.
         if (cmd.name == kScriptBoundary) {
@@ -845,6 +855,7 @@ class E2ERunner {
     int current_script_errors_ = 0;
 
     ScreenshotFn screenshot_fn_;
+    ScreenshotFn presented_screenshot_fn_;
     std::string results_path_;
     std::function<void()> clear_fn_;
     std::function<std::string(const std::string &)> property_getter_;
