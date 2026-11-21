@@ -51,8 +51,6 @@ static inline RectangleType snap_origin(RectangleType rect,
 
 static inline float compute_effective_opacity(const Entity &entity);
 
-// The theme this entity was built under, falling back to the live one for
-// entities built outside init_component.
 static inline const Theme &theme_for(const Entity &entity,
                                      const Theme &fallback) {
   return entity.has<HasThemeSnapshot>()

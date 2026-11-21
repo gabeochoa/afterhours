@@ -15,6 +15,7 @@ Theme green_theme() {
   t.primary = Color{0, 200, 0, 255};
   return t;
 }
+
 Theme red_theme() {
   Theme t;
   t.primary = Color{200, 0, 0, 255};
@@ -129,7 +130,6 @@ TEST(direct_theme_mutation_does_not_recolor_earlier_widgets_at_render) {
                         .with_label("before").with_auto_text_color(false)
                         .with_debug_name("before_label"));
 
-  // The hanabi pattern: mutate the context theme to colour one later widget.
   h.context().theme.font = Color{200, 0, 0, 255};
   auto after = div(h.context(), mk(h.root(), 1),
                    ComponentConfig{}
@@ -154,13 +154,11 @@ TEST(theme_set_one_frame_does_not_leak_into_the_next) {
   app.font = Color{0, 200, 0, 255};
   ThemeDefaults::get().set_theme(app);
 
-  // Frame N: a screen sets its own theme.
   ThemeDefaults::get().begin_frame();
   h.context().theme = ThemeDefaults::get().get_theme();
   h.context().set_theme(red_theme());
   CHECK(h.context().theme.primary.r > 150);
 
-  // Frame N+1, mirroring BeginUIContextManager in systems.h.
   ThemeDefaults::get().begin_frame();
   h.context().theme = ThemeDefaults::get().get_theme();
   CHECK(h.context().theme.primary.g > 150);

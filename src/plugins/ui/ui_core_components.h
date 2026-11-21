@@ -573,9 +573,6 @@ inline bool operator==(const TextSpan &a, const TextSpan &b) {
          a.color.a == b.color.a && a.weight == b.weight;
 }
 
-// The theme in effect when this entity was built. Render-time readers use
-// this instead of the live context theme, which by render time holds
-// whatever the last system to touch it left behind.
 struct HasThemeSnapshot : BaseComponent {
   Theme theme;
 };
