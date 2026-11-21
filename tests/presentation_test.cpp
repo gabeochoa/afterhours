@@ -1,4 +1,3 @@
-// presentation_test.cpp — shared present/dismiss path for full screens.
 
 #include "ui_test_harness.h"
 

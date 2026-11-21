@@ -12,13 +12,6 @@
 
 namespace afterhours {
 
-// Shared present/dismiss path for full-screen screens (menu, pause, loading):
-// modal.h owns the same lifecycle for dialog panels, but it forces a backdrop,
-// a centered panel and the modal stack. A screen that draws its own content
-// (imm children or hand-drawn passes under the returned container) needs only
-// the lifecycle: presence fade, an input gate for everything outside the
-// screen, and focus restore on dismiss. That slice lives here; screens keep
-// their own layout and drawing.
 struct presentation {
     struct Config {
         std::optional<motion::Mode> enter_motion;
@@ -56,18 +49,12 @@ struct presentation {
         return "presentation:" + std::to_string(id);
     }
 
-    // Presence in [0,1] for hand-drawn content under a presented screen.
     static float presence_of(Entity &entity) {
         if (!entity.has<motion::HasTracks>()) return 1.f;
         auto &track = entity.get<motion::HasTracks>().track<float>(kTrack);
         return track.started() ? track.value() : 1.f;
     }
 
-    // Call every frame with the screen's `open` flag. Returns the screen
-    // container while presenting (including while exiting); add children to
-    // it, or gate hand-drawn passes on the result and presence_of(ent).
-    // Keep calling after `open` flips false until this returns false once,
-    // or the input gate and saved focus are never released.
     static ui::imm::ElementResult host(ui::imm::HasUIContext auto &ctx,
                                        ui::imm::EntityParent ep_pair,
                                        bool &open, Config config = {}) {
@@ -138,4 +125,4 @@ struct presentation {
     }
 };
 
-}  // namespace afterhours
+}
