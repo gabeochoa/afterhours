@@ -14,6 +14,8 @@
 /// - systems.h          - ECS systems for text editing (blink, line index,
 /// selection)
 /// - component.h        - The text_input() immediate-mode widget
+/// - raw_text_edit.h    - RawTextEdit + update_raw_text_edit: the same
+///                        editing with no widget, for hand-drawn fields
 /// - text_area_state.h  - HasTextAreaState for multiline text editing
 /// - text_area.h        - The text_area() immediate-mode widget (multiline)
 ///
@@ -43,6 +45,7 @@
 
 #include "component.h"
 #include "line_index.h"
+#include "raw_text_edit.h"
 #include "selection.h"
 #include "state.h"
 #include "storage.h"
