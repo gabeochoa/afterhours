@@ -176,13 +176,17 @@ struct Entity {
     return removeComponent<T>();
   }
 
-  // Returns the component when present so callers can assign fields in place.
-  template <typename T> T *toggleComponent(bool present) {
-    if (!present) {
+  template <typename T, typename... Args>
+  T *toggleComponent(bool on, Args &&...args) {
+    if (!on) {
       removeComponentIfExists<T>();
       return nullptr;
     }
-    return &addComponentIfMissing<T>();
+    if constexpr (std::is_constructible_v<T, Args &&...>) {
+      return &addComponentIfMissing<T>(std::forward<Args>(args)...);
+    } else {
+      return has<T>() ? &get<T>() : nullptr;
+    }
   }
 
   template <typename A> void addAll() { addComponent<A>(); }

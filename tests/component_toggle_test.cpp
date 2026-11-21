@@ -47,6 +47,11 @@ struct ToggleProbe : BaseComponent {
   int value = 7;
 };
 
+struct ToggleArgProbe : BaseComponent {
+  explicit ToggleArgProbe(int v) : value(v) {}
+  int value;
+};
+
 TEST(toggle_on_adds_and_returns_usable_ptr) {
   Entity &e = EntityHelper::createEntity();
   ToggleProbe *p = e.toggleComponent<ToggleProbe>(true);
@@ -78,6 +83,22 @@ TEST(toggle_off_when_absent_is_noop) {
   Entity &e = EntityHelper::createEntity();
   CHECK(e.toggleComponent<ToggleProbe>(false) == nullptr);
   CHECK(!e.has<ToggleProbe>());
+  EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
+}
+
+TEST(toggle_on_forwards_ctor_args_and_preserves_existing) {
+  Entity &e = EntityHelper::createEntity();
+  ToggleArgProbe *p = e.toggleComponent<ToggleArgProbe>(true, 11);
+  CHECK(p != nullptr);
+  CHECK(p->value == 11);
+  ToggleArgProbe *again = e.toggleComponent<ToggleArgProbe>(true, 99);
+  CHECK(again == p);
+  CHECK(again->value == 11);
+  CHECK(e.toggleComponent<ToggleArgProbe>(false) == nullptr);
+  CHECK(!e.has<ToggleArgProbe>());
+  ToggleArgProbe *fresh = e.toggleComponent<ToggleArgProbe>(true, 33);
+  CHECK(fresh != nullptr);
+  CHECK(fresh->value == 33);
   EntityHelper::delete_all_entities_NO_REALLY_I_MEAN_ALL();
 }
 
