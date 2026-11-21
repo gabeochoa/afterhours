@@ -124,7 +124,7 @@ template <typename T> struct Library {
       // storage.at() throwing std::out_of_range (a hard abort under
       // -fno-exceptions). Static so we can return a reference.
       static T missing{};
-      missing = T{}; // reset each miss so callers can't corrupt the fallback
+      missing = T{};
       return missing;
     }
     return it->second;
