@@ -172,6 +172,7 @@ ALL_TESTS := \
 	pseudo_locale_test \
 	editing_capability_test \
 	autolayout_test \
+	origin_rounding_test \
 	dialog_test \
 	dump_ui_test \
 	scroll_anchor_test \

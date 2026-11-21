@@ -223,7 +223,8 @@ struct ImmTestHarness {
   // computed sizes, so anything reproducing an app-side layout must pass true.
   // Resolution follows suit: the grid unit is derived from screen height.
   void layout_only(bool grid_snap = false,
-                   window_manager::Resolution res = {800, 600}) {
+                   window_manager::Resolution res = {800, 600},
+                   float scale = 1.0f) {
     coll.merge_entity_arrays();
     auto &entities = coll.get_entities();
     EntityID max_id = 0;
@@ -235,7 +236,7 @@ struct ImmTestHarness {
       if (e)
         mapping[static_cast<size_t>(e->id)] = e.get();
     AutoLayout::autolayout(root_entity->get<UIComponent>(), res, mapping,
-                           grid_snap, 1.0f);
+                           grid_snap, scale);
     for (const auto &e : entities)
       if (e && e->has<UIComponent>())
         e->get<UIComponent>().was_rendered_to_screen = true;
@@ -281,8 +282,13 @@ struct ImmTestHarness {
     return &font_entity->get<FontManager>();
   }
 
+  // ui_scale the next render()/render_batched() lays out at. layout_only()
+  // takes the scale as an argument; the render helpers call it internally,
+  // so they read it from here (default 1.0, the old behaviour).
+  float layout_scale = 1.0f;
+
   template <typename Renderer> const std::vector<DrawCall> &render_with() {
-    layout_only();
+    layout_only(false, {800, 600}, layout_scale);
     render_font();
 
     // Same rule as the UI render pass: an app that took the frame boundary

@@ -37,6 +37,19 @@ namespace ui {
 
 namespace detail {
 
+// Snap a rect's origin to the device-pixel grid (1/effective-scale logical
+// px): a fractional origin rasterizes a shape a row/column short. Size is
+// untouched, and layout math upstream of the draw never sees the snap.
+static inline RectangleType snap_origin(RectangleType rect,
+                                        ScalingMode mode, float ui_scale) {
+  const float scale = mode == ScalingMode::Adaptive ? ui_scale : 1.0f;
+  if (scale <= 0.f)
+    return rect;
+  rect.x = std::round(rect.x * scale) / scale;
+  rect.y = std::round(rect.y * scale) / scale;
+  return rect;
+}
+
 static inline float compute_effective_opacity(const Entity &entity);
 
 static inline Color resolve_image_tint(const Entity &entity, float opacity) {
@@ -244,7 +257,9 @@ focus_ring_for(const UIContext<InputAction> &context, const Entity &entity,
 
   const float ring_offset =
       cmp.focus_ring_offset.value_or(context.theme.focus_ring_offset);
-  ring.rect = cmp.focus_rect(ring_offset);
+  ring.rect = detail::snap_origin(cmp.focus_rect(ring_offset),
+                                   cmp.resolved_scaling_mode,
+                                   context.theme.ui_scale);
   if (entity.has<HasUIModifiers>())
     ring.rect = entity.get<HasUIModifiers>().apply_modifier(ring.rect);
   ring.rect = detail::apply_ancestor_transform(entity, ring.rect);
@@ -1651,7 +1666,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       return;
     const UIComponent &cmp = entity.get<UIComponent>();
     const float effective_opacity = detail::compute_effective_opacity(entity);
-    RectangleType draw_rect = cmp.rect();
+    RectangleType draw_rect = detail::snap_origin(
+        cmp.rect(), cmp.resolved_scaling_mode, context.theme.ui_scale);
     if (entity.has<HasUIModifiers>())
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
     draw_rect = detail::apply_ancestor_transform(entity, draw_rect);
@@ -2267,7 +2283,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     const UIComponent &cmp = entity.get<UIComponent>();
 
     const float effective_opacity = detail::compute_effective_opacity(entity);
-    RectangleType draw_rect = cmp.rect();
+    RectangleType draw_rect = detail::snap_origin(
+        cmp.rect(), cmp.resolved_scaling_mode, context.theme.ui_scale);
     if (entity.has<HasUIModifiers>())
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
     draw_rect = detail::apply_ancestor_transform(entity, draw_rect);
