@@ -165,6 +165,7 @@ ALL_TESTS := \
 	fixed_tick_rate_test \
 	sound_playback_test \
 	headless_runconfig_test \
+	game_runner_test \
 	harness_spellings_test \
 	fit_content_test \
 	label_inset_test \
@@ -451,6 +452,10 @@ $(OUT)/sokol_resize_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_headless_run_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_headless_run_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_headless_run_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/game_runner_test: ../examples/web/sokol_impl.cc
+$(OUT)/game_runner_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/game_runner_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/game_runner_test: ../src/game.h
 $(OUT)/sokol_include_order_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_include_order_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_include_order_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
