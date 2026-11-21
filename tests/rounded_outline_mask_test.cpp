@@ -1,11 +1,3 @@
-// rounded_outline_mask_test.cpp
-// Pixel proofs that a partial corner mask means the same thing for a
-// rounded fill and its outline, in whichever backend compiles this file
-// (raylib via RAYLIB_TESTS, sokol via sokol_rounded_outline_mask_test).
-//
-// Mask under test: only the top-left corner rounded (bit 3). A rounded
-// corner cuts the extreme corner pixel and curves through the diagonal;
-// a sharp corner keeps the extreme corner pixel lit.
 
 #if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_VULKAN) && \
     !defined(AFTER_HOURS_USE_SOKOL)
@@ -70,7 +62,6 @@ int main() {
   printf("backend: sokol\n");
 #endif
 
-  // Helper: top_round must round the top corners only.
   {
     using namespace afterhours::ui::imm;
     const auto bits = RoundedCorners().top_round().get();
@@ -94,8 +85,6 @@ int main() {
   std::bitset<4> only_tl;
   only_tl.set(3);
 
-  // Fill, only TL rounded: radius = 30 at roundness 1. The cut region
-  // probe (44,44) sits outside the TL arc but inside a square corner.
   {
     auto px = render([&] {
       afterhours::draw_rectangle_rounded(rect, 1.0f, 8, kFg, only_tl);
@@ -111,10 +100,6 @@ int main() {
     check(lit(px, 115, 95), "fill: sharp BR corner stays square");
   }
 
-  // Outline, only TL rounded: no ink may reach the TL corner, the arc
-  // must pass near the diagonal point (49,49), and every sharp corner
-  // keeps ink at its vertex. Windows, not single pixels: the two
-  // backends rasterize a 1px line on opposite sides of the ideal edge.
   {
     auto px = render([&] {
       afterhours::draw_rectangle_rounded_lines(rect, 1.0f, 8, kFg, only_tl);
