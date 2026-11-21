@@ -157,6 +157,15 @@ inline void reset_frame() {
   const bool press_seen = m.press_read;
   const bool middle_press_seen = m.middle_press_read;
   const bool right_press_seen = m.right_press_read;
+  // A press edge that never got read and will not survive this reset died
+  // here; without this note the step that injected it passes silently.
+  if (m.just_pressed && !press_seen && !(pf > 0 && m.left_down))
+    input_injector::detail::note_unread_press("left mouse button");
+  if (m.right_just_pressed && !right_press_seen && !(pf > 0 && m.right_down))
+    input_injector::detail::note_unread_press("right mouse button");
+  if (m.middle_just_pressed && !middle_press_seen &&
+      !(pf > 0 && m.middle_down))
+    input_injector::detail::note_unread_press("middle mouse button");
   m.press_read = false;
   m.middle_press_read = false;
   m.right_press_read = false;
