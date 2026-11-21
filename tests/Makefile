@@ -170,6 +170,7 @@ ALL_TESTS := \
 	get_unique_test \
 	singleton_add_test \
 	ui_idle_cost_test \
+	spatial_index_test \
 	press_delay_test \
 	graphics_key_injection_test \
 	e2e_gamepad_test \
