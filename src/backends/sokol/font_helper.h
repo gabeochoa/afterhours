@@ -25,6 +25,20 @@ struct Font {
 
 inline void mesh_font_fallbacks(FONScontext *ctx, int new_id);
 
+// Display pixels per logical pixel. fontstash rasterizes per draw at size*
+// dpi (see measure_text / draw helpers), so no load-time scaling is needed;
+// these exist so callers can ask the same question on every backend.
+inline float font_display_scale() {
+  const float dpi = graphics::metal_detail::dpi_scale();
+  return dpi > 1.f ? dpi : 1.f;
+}
+
+inline int display_scaled_size(int nominal) {
+  const float scaled =
+      std::round(static_cast<float>(nominal) * font_display_scale());
+  return scaled >= 1.f ? static_cast<int>(scaled) : 1;
+}
+
 inline std::string fontstash_name(const char *name) {
   char key[24];
   std::snprintf(key, sizeof(key), "ah:%016zx",
@@ -166,8 +180,13 @@ inline bool expand_font_atlas(FONScontext *ctx) {
   return true;
 }
 
+// Already rasterized at display pixels per draw; the nominal size is ignored.
+inline Font load_font_at_display_size(const char *file, int = 32) {
+  return load_font_from_file(file);
+}
+
 inline Font load_font_from_file_with_codepoints(const char *file, int *, int,
-                                                int = 32) {
+                                                int = 0) {
   // fontstash loads full TTF; codepoint filtering not needed
   return load_font_from_file(file);
 }

@@ -79,6 +79,7 @@ ALL_TESTS := \
 	terminal_commands_test \
 	terminal_ui_test \
 	font_atlas_measure_test \
+	font_display_size_test \
 	font_points_test \
 	glyph_placeholder_test \
 	monospace_cell_test \
@@ -293,6 +294,7 @@ RAYLIB_TESTS := \
 	wrappers_test \
 	edit_keys_test \
 	default_font_test \
+	font_display_size_test \
 	load_font_size_test \
 	border_width_test \
 	text_visibility_test \
@@ -558,6 +560,7 @@ $(OUT)/font_atlas_measure_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CUR
 $(OUT)/font_points_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/glyph_placeholder_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/load_font_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/font_display_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/font_memory_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/headless_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/raylib_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"

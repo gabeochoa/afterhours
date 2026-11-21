@@ -26,6 +26,17 @@ Started partway through the project's life, so it does not go all the way back.
 
 ### Visual — re-baseline
 
+- **Default font loads rasterize at display pixels on raylib.** A default
+  `load_font_from_file` (and the other loaders' default sizes) used to bake a
+  fixed 32px atlas, which hidpi supersampling then upscaled. The default
+  nominal size is now scaled by `font_display_scale()` (the window DPI scale,
+  or `graphics::render_scale()` headless), so a 2x display gets a 64px atlas.
+  Explicit sizes are unchanged, logical `measure_text` results are unchanged,
+  and sokol already rasterized per draw at `size * dpi`. New
+  `load_font_at_display_size(file, nominal)` for callers passing an explicit
+  nominal size. Covered by `font_display_size_test`.
+
+
 - **raylib falls back across loaded faces per codepoint, like sokol.** A glyph the label's face lacks is now drawn from the first other face loaded through `load_font_*` that has it, instead of the replacement glyph. `measure_text` sums the same runs `draw_text_ex` places. The replacement is used only when no loaded face covers the codepoint. Load order is priority. Known limits: rotated text and text containing `\n` use the primary face only, and fallback glyphs sit on their own face's ascent rather than the primary's baseline. `fallback_runs(font, text)` shows the split. Covered by `raylib_fallback_test`.
 - **A codepoint no loaded face covers draws a visible replacement.** It used to draw nothing on raylib (a blank glyph) and the face's `.notdef` on sokol. Now it draws U+FFFD when a face has it, otherwise `?`, and `measure_text` measures that same replacement. A ZWJ emoji sequence or a flag becomes one replacement, and uncovered variation selectors and skin-tone modifiers vanish. U+FFFD joins `default_codepoints()` so raylib loads it when the face has it. Labels with uncovered symbols change pixels and width; load a face that covers them. `drawable_text(font, text, storage)` returns what will be drawn, and `font_coverage::visible_text` is the rule. Covered by `glyph_placeholder_test` and `headless_fallback_test`.
 - **`colors::UI_RED`, `UI_GREEN`, `UI_BLUE` are raylib's red, green and blue on every backend.** They were raylib's values on raylib but pure 255 primaries on sokol and none, so the same name drew two colors. raylib builds are unchanged. On sokol (wordproc, floatinghotel), anything drawn with them shifts to raylib's shade. Want the pure primary? Use `colors::rgb(255, 0, 0)`. `UI_WHITE` and `UI_PINK` still differ per backend.
