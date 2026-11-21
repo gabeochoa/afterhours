@@ -215,6 +215,7 @@ use `tools/web.mk` for raylib games.
 - [Optional APIs](docs/plugins.md) and [profiling](docs/profiling.md)
 - [Measurements](docs/profiling-measurements.md) and [text measurement](docs/font-atlas-measurement.md)
 - [Resizing, scaling, pillarbox / letterbox](docs/letterboxing.md)
+- [Native macOS desktop integration](docs/macos-desktop.md) — app-side, by decision
 - [Backlog](todo.md), [research](docs/roadmap.md), and [changelog](CHANGELOG.md)
 
 ## License
