@@ -800,11 +800,6 @@ struct HandleExpectCheckboxCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'expect_accessible <debug_name> [name=..] [role=..] [value=..]
-// [description=..]', or 'expect_accessible name=<accessible name> [...]'
-// with no debug name (the first arg is a prop): finds the element BY its
-// accessible name, so a script can audit that every wordless control names
-// itself without knowing debug names. Every prop given must match.
 template <typename InputAction>
 struct HandleExpectAccessibleCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -831,7 +826,6 @@ struct HandleExpectAccessibleCommand : System<PendingE2ECommand> {
       want[raw.substr(0, eq)] = raw.substr(eq + 1);
     }
     if (!debug_name.empty() && want.empty()) want["name"] = debug_name;
-
     auto query = ui_query()
                      .whereHasComponent<ui::UIComponent>()
                      .whereHasComponent<ui::HasAccessibility>()
@@ -1386,7 +1380,6 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
       out += " accessible_description=\"" +
              xml_escape(truncate_text(a.description)) + "\"";
   }
-
   const auto sides = [&](const char *attr, const auto &v) {
     const float t = v[ui::Axis::top], r = v[ui::Axis::right],
                 b = v[ui::Axis::bottom], l = v[ui::Axis::left];

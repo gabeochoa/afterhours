@@ -1,23 +1,11 @@
-// accessibility_test.cpp
-// Option 1 of docs/.../decide-accessibility.md: accessible name/role/value
-// semantics on widgets (no platform AT bridge).
-//
-// Covers: explicit name > label > tooltip resolution (a whitespace-only
-// label does not count), widget role/value defaults (button, checkbox,
-// toggle, slider, progress, stepper, dropdown), dump_ui output, and the
-// E2E `expect_accessible` command in both debug-name and by-name forms.
-
 #define AFTER_HOURS_ENABLE_E2E_TESTING
 #include "ui_test_harness.h"
-
 using namespace afterhours;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 using ui_test::ImmTestHarness;
 using ui_test::TestInputAction;
-
 namespace {
-
 const HasAccessibility *a11y_of(ImmTestHarness &h, const std::string &debug) {
   for (const auto &e : h.coll.get_entities()) {
     if (e && e->has<UIComponentDebug>() &&
@@ -27,7 +15,6 @@ const HasAccessibility *a11y_of(ImmTestHarness &h, const std::string &debug) {
   }
   return nullptr;
 }
-
 testing::PendingE2ECommand run_expect(ImmTestHarness &h,
                                       std::vector<std::string> args) {
   testing::PendingE2ECommand cmd;
@@ -37,17 +24,12 @@ testing::PendingE2ECommand run_expect(ImmTestHarness &h,
       .for_each_with(h.root(), cmd, 0.f);
   return cmd;
 }
-
 std::string dump_of(ImmTestHarness &h) {
   std::string xml;
   testing::ui_commands::dump_ui_node(xml, h.root(), 0);
   return xml;
 }
-
-} // namespace
-
-// --- name resolution: explicit > label > tooltip ---------------------------
-
+}
 TEST(explicit_name_beats_label_and_tooltip) {
   ImmTestHarness h;
   button(h.context(), mk(h.root(), 0),
@@ -65,7 +47,6 @@ TEST(explicit_name_beats_label_and_tooltip) {
     CHECK(a->description == "Save the document");
   }
 }
-
 TEST(label_is_the_default_name) {
   ImmTestHarness h;
   button(h.context(), mk(h.root(), 0),
@@ -75,9 +56,7 @@ TEST(label_is_the_default_name) {
   CHECK(a != nullptr);
   if (a) CHECK(a->name == "Cancel");
 }
-
 TEST(space_only_label_falls_back_to_tooltip) {
-  // The hanabi icon-button shape: .with_label(" ") plus a tooltip.
   ImmTestHarness h;
   button(h.context(), mk(h.root(), 0),
          ComponentConfig{}
@@ -92,7 +71,6 @@ TEST(space_only_label_falls_back_to_tooltip) {
     CHECK(a->name != " ");
   }
 }
-
 TEST(no_name_anywhere_carries_no_component) {
   ImmTestHarness h;
   div(h.context(), mk(h.root(), 0),
@@ -102,9 +80,6 @@ TEST(no_name_anywhere_carries_no_component) {
   h.layout_only();
   CHECK(a11y_of(h, "plain") == nullptr);
 }
-
-// --- widget defaults --------------------------------------------------------
-
 TEST(checkbox_role_name_and_on_off_value) {
   ImmTestHarness h;
   bool on = true;
@@ -119,7 +94,6 @@ TEST(checkbox_role_name_and_on_off_value) {
     CHECK(a->value == "on");
   }
 }
-
 TEST(toggle_switch_role_and_value) {
   ImmTestHarness h;
   bool on = false;
@@ -134,7 +108,6 @@ TEST(toggle_switch_role_and_value) {
     CHECK(a->value == "off");
   }
 }
-
 TEST(slider_role_name_and_percent_value) {
   ImmTestHarness h;
   float v = 0.42f;
@@ -152,7 +125,6 @@ TEST(slider_role_name_and_percent_value) {
     CHECK(a->value == "42%");
   }
 }
-
 TEST(progress_bar_role_and_percent_value) {
   ImmTestHarness h;
   progress_bar(h.context(), mk(h.root(), 0), 0.75f,
@@ -168,7 +140,6 @@ TEST(progress_bar_role_and_percent_value) {
     CHECK(a->value == "75%");
   }
 }
-
 TEST(stepper_value_is_current_option) {
   ImmTestHarness h;
   std::vector<std::string> opts{"Low", "Medium", "High"};
@@ -186,7 +157,6 @@ TEST(stepper_value_is_current_option) {
     CHECK(a->value == "Medium");
   }
 }
-
 TEST(dropdown_value_is_current_option) {
   ImmTestHarness h;
   std::vector<std::string> opts{"Red", "Green"};
@@ -202,7 +172,6 @@ TEST(dropdown_value_is_current_option) {
     CHECK(a->value == "Green");
   }
 }
-
 TEST(explicit_role_and_value_beat_widget_defaults) {
   ImmTestHarness h;
   bool on = false;
@@ -221,9 +190,6 @@ TEST(explicit_role_and_value_beat_widget_defaults) {
     CHECK(a->value == "muted");
   }
 }
-
-// --- dump_ui + E2E ----------------------------------------------------------
-
 TEST(dump_ui_writes_accessible_fields) {
   ImmTestHarness h;
   button(h.context(), mk(h.root(), 0),
@@ -236,7 +202,6 @@ TEST(dump_ui_writes_accessible_fields) {
   CHECK(xml.find("role=\"button\"") != std::string::npos);
   CHECK(xml.find("accessible_name=\"Close\"") != std::string::npos);
 }
-
 TEST(expect_accessible_by_debug_name) {
   ImmTestHarness h;
   float v = 0.5f;
@@ -252,7 +217,6 @@ TEST(expect_accessible_by_debug_name) {
   CHECK(bad.is_retry());
   CHECK(bad.last_mismatch.find("51%") != std::string::npos);
 }
-
 TEST(expect_accessible_by_accessible_name) {
   ImmTestHarness h;
   button(h.context(), mk(h.root(), 0),
@@ -266,5 +230,4 @@ TEST(expect_accessible_by_accessible_name) {
   auto missing = run_expect(h, {"name=Nope"});
   CHECK(missing.is_retry());
 }
-
 int main() { return ui_test::run_registered_tests("accessibility"); }

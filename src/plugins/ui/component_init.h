@@ -190,13 +190,6 @@ inline AccessibleRole default_accessible_role(ComponentType type) {
   default: return AccessibleRole::None;
   }
 }
-
-// Stamp the resolved semantics onto the entity. `label_for_name` is the
-// widget's visible label (composites clear config.label before building
-// their row, so they pass the saved copy); `value` is the widget-computed
-// value (a slider's percent, a checkbox's on/off) used only when the
-// caller set no explicit accessible value. Nothing resolved -> no
-// component, so plain layout elements cost nothing.
 inline void apply_accessibility(Entity &entity, const ComponentConfig &config,
                                 AccessibleRole fallback_role,
                                 const std::string &label_for_name = "",
@@ -228,7 +221,6 @@ inline void apply_accessibility(Entity &entity, const ComponentConfig &config,
   ha.value = resolved.value;
   ha.description = resolved.description;
 }
-
 inline void apply_flags(Entity &entity, const ComponentConfig &config) {
   entity.get<UIComponent>().skip_when_tabbing = config.skip_when_tabbing;
   entity.get<UIComponent>().focus_ring_offset = config.focus_ring_offset;

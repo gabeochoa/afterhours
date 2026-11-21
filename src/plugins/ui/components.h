@@ -83,9 +83,6 @@ struct UIComponentDebug : BaseComponent {
   }
 };
 
-// Accessible role for a widget, in the vocabulary a platform AT bridge
-// (NSAccessibility / UIA / AT-SPI) or a test would use. None means "no
-// semantics declared": plain layout divs stay None and carry no component.
 enum struct AccessibleRole {
   None,
   Button,
@@ -103,7 +100,6 @@ enum struct AccessibleRole {
   Tab,
   Link,
 };
-
 inline const char *accessible_role_name(AccessibleRole role) {
   switch (role) {
   case AccessibleRole::Button: return "button";
@@ -124,7 +120,6 @@ inline const char *accessible_role_name(AccessibleRole role) {
   }
   return "none";
 }
-
 inline bool accessible_role_from_name(const std::string &s,
                                       AccessibleRole &out) {
   for (auto r : {AccessibleRole::Button, AccessibleRole::Checkbox,
@@ -139,18 +134,11 @@ inline bool accessible_role_from_name(const std::string &s,
   }
   return false;
 }
-
-// True when a string carries no visible name at all: empty or whitespace
-// only. The hanabi icon buttons are built .with_label(" "), so a space must
-// not count as a name, or it shadows the tooltip fallback below.
 inline bool accessible_is_blank(const std::string &s) {
   for (char c : s)
     if (c != ' ' && c != '\t' && c != '\n' && c != '\r') return false;
   return true;
 }
-
-// Plain (copyable) config-side mirror of HasAccessibility, for
-// ComponentConfig: in the config, `name` is the EXPLICIT name only.
 struct AccessibleConfig {
   AccessibleRole role = AccessibleRole::None;
   std::string name;
@@ -161,32 +149,21 @@ struct AccessibleConfig {
            description.empty();
   }
 };
-
-// Semantics for one UI element: what a screen reader, dump_ui, or an E2E
-// script calls it. `name` here is the EXPLICIT name only; the name a reader
-// actually uses is resolved_name(), which falls back explicit > label >
-// tooltip. The fallback is computed from the live label/tooltip at apply
-// time and stored resolved, so a bridge never re-derives it per frame.
 struct HasAccessibility : BaseComponent {
   AccessibleRole role = AccessibleRole::None;
-  std::string name;        // resolved accessible name (see above)
-  std::string value;       // e.g. "42%" for a slider, "on"/"off" for a switch
-  std::string description; // longer help text; tooltip is the usual source
-
+  std::string name;
+  std::string value;
+  std::string description;
   HasAccessibility() = default;
   HasAccessibility(AccessibleRole r, std::string n, std::string v = "",
                    std::string d = "")
       : role(r), name(std::move(n)), value(std::move(v)),
         description(std::move(d)) {}
-
   bool empty() const {
     return role == AccessibleRole::None && name.empty() && value.empty() &&
            description.empty();
   }
 };
-
-// Resolve the accessible name: explicit name wins, then a non-blank label,
-// then a non-blank tooltip. Returns "" when none of them names the control.
 inline std::string resolve_accessible_name(const std::string &explicit_name,
                                            const std::string &label,
                                            const std::string &tooltip) {
@@ -195,7 +172,6 @@ inline std::string resolve_accessible_name(const std::string &explicit_name,
   if (!accessible_is_blank(tooltip)) return tooltip;
   return "";
 }
-
 struct HasClickListener : BaseComponent {
   bool down = false;
   std::function<void(Entity &)> cb;

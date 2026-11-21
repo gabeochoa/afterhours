@@ -149,10 +149,6 @@ struct ComponentConfig {
   // Trailing: (x,y) insets from far edges; explicit size grows inward.
   AbsoluteAnchor absolute_anchor = AbsoluteAnchor::LeadingTop;
 
-  // Accessibility semantics (one field on purpose; see config_size_test).
-  // In the config, `accessible.name` is the EXPLICIT name: empty means
-  // "derive it" (label, then tooltip). On the entity the stored
-  // HasAccessibility carries the resolved name.
   AccessibleConfig accessible;
 
   // debugs
@@ -625,11 +621,6 @@ struct ComponentConfig {
     debug_name = name;
     return *this;
   }
-  // Accessible name + role for screen readers, dump_ui and E2E
-  // (expect_accessible). The name is explicit: it beats the label, which
-  // beats the tooltip, so an icon-only button built .with_label(" ") can
-  // be named here or simply given a tooltip. Widgets fill the role (and
-  // value, e.g. a slider's percent) in when the caller does not.
   ComponentConfig &with_accessible(AccessibleRole role,
                                    const std::string &name) {
     accessible.role = role;
