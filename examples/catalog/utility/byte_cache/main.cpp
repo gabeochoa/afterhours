@@ -3,7 +3,6 @@
 
 #include "../../../../src/byte_cache.h"
 
-// Accounted bytes are values' own bytes, not process memory.
 int main() {
   using namespace afterhours;
   auto cost = [](const std::string &v) { return v.size(); };

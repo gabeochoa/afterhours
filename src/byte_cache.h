@@ -9,11 +9,6 @@
 
 namespace afterhours {
 
-// Byte-budgeted LRU. Costlier-than-budget puts are rejected, cache unchanged.
-// get() pointers die on erase/evict/replace/clear/destroy; for shared handles,
-// eviction only drops the cache's reference. Accounted bytes are the sum of
-// cost() over held entries -- not process/GPU memory, and bookkeeping is
-// charged only if cost() includes it. Single-threaded; callers lock.
 template <typename K, typename V,
           typename Cost = std::function<std::size_t(const V &)>,
           typename Hash = std::hash<K>>
@@ -31,7 +26,6 @@ public:
 
   ByteCache() = default;
 
-  // Default cost is sizeof(V): only honest for fixed-size values.
   explicit ByteCache(std::size_t budget_bytes, Cost cost = Cost{})
       : budget_(budget_bytes), cost_(std::move(cost)) {
     if (!cost_) {
@@ -95,7 +89,6 @@ public:
     return true;
   }
 
-  // Not counted as an eviction.
   bool erase(const K &key) {
     auto it = index_.find(key);
     if (it == index_.end())
@@ -106,14 +99,12 @@ public:
     return true;
   }
 
-  // Lifetime counts survive clear(); use reset_stats() to zero them.
   void clear() {
     lru_.clear();
     index_.clear();
     accounted_ = 0;
   }
 
-  // Evicts to `bytes` without changing the configured budget.
   void shrink_to(std::size_t bytes) { evict_until(bytes); }
 
   [[nodiscard]] std::size_t size() const { return index_.size(); }
@@ -165,4 +156,4 @@ private:
   std::uint64_t rejections_ = 0;
 };
 
-} // namespace afterhours
+}

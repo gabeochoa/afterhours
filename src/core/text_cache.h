@@ -34,7 +34,6 @@ public:
   static constexpr size_t DEFAULT_MAX_ENTRIES = 4096;
 
 private:
-  // Fixed cost per entry makes the byte budget equal the old 4096-entry cap.
   static constexpr size_t kEntryCost = sizeof(uint64_t) + sizeof(Vector2Type);
 
   MeasureTextFn measure_fn_;
@@ -66,7 +65,6 @@ public:
   void set_max_age(uint32_t frames) { max_age_ = frames; }
   void set_max_entries(size_t count) {
     max_entries_ = count;
-    // Legacy invariant: count 0 held one entry.
     cache_.set_budget((count == 0 ? 1 : count) * kEntryCost);
     if (last_used_generation_.size() > cache_.size()) {
       std::unordered_map<uint64_t, uint32_t> kept;

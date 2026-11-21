@@ -1,4 +1,3 @@
-// ByteCache (decide-memory-budgets.md Option 1).
 
 #include <afterhours/src/byte_cache.h>
 #include <afterhours/src/core/text_cache.h>
