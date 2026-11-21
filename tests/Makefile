@@ -140,6 +140,7 @@ ALL_TESTS := \
 	crash_handler_test \
 	crash_handler_reentry_test \
 	setting_row_style_test \
+	settings_presets_test \
 	singleton_iteration_test \
 	press_delay_test \
 	graphics_key_injection_test \
