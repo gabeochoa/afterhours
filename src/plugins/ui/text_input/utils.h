@@ -648,11 +648,6 @@ inline void insert_pasted_text(State &s, const std::string &clip) {
   }
 }
 
-// Library-owned default chords for the Text* actions, mirroring the text
-// section of ui::default_keymap<DefaultAction>() (that function lives in
-// utilities.h, which this header must not pull in). Used only when the host's
-// InputAction has no enumerator by that name, so text_input edits through
-// defaults instead of requiring the host to pre-declare every Text* name.
 inline bool default_text_chord_pressed(std::string_view name, bool repeat) {
   using KeyChord = input::KeyChord;
   constexpr uint8_t SHIFT = KeyChord::MOD_SHIFT;
@@ -711,8 +706,6 @@ inline bool default_text_chord_pressed(std::string_view name, bool repeat) {
 }
 
 // Host action if the enum carries `name`, else the library default chord.
-// Hosts that declare the names (and bind them, e.g. via default_keymap) get
-// exactly the old ctx.pressed path; smaller enums get the defaults.
 template <typename InputAction>
 inline bool text_action_pressed(auto &ctx, std::string_view name,
                                 bool repeat = false) {

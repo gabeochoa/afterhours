@@ -1,8 +1,3 @@
-// text_input_no_host_enum_test.cpp
-// A host InputAction with NO Text* enumerators still compiles and edits:
-// text_action_pressed falls back to the library default chords. Before, the
-// widget referenced InputAction::TextBackspace & friends directly, so this
-// enum was a compile error and the host had to pre-declare every name.
 
 #include "ui_test_harness.h"
 
@@ -16,8 +11,6 @@ using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 using namespace afterhours::testing;
 
-// Widget actions only -- exactly what a host writing its own enum from the
-// widget names ends up with. No TextBackspace, TextCopy, TextPaste, ...
 enum struct BareAction {
   None,
   WidgetMod,
@@ -115,7 +108,6 @@ void hold_mods(uint8_t mods, bool down) {
   }
 }
 
-// Press a chord for one frame: hold its modifiers, tap its key.
 void press_chord(input::KeyChord chord) {
   input_injector::reset_all();
   hold_mods(chord.required_modifiers, true);
@@ -123,7 +115,7 @@ void press_chord(input::KeyChord chord) {
   input_injector::reset_frame();
 }
 
-} // namespace
+}
 
 TEST(bare_enum_text_input_edits_and_copies_via_defaults) {
   clipboard::MemoryProvider memory;
@@ -142,8 +134,6 @@ TEST(bare_enum_text_input_edits_and_copies_via_defaults) {
   h.ctx->set_focus(entity.id);
   emit();
 
-  // Gaining focus selects all; End (default chord) collapses to the caret
-  // at the end, then Backspace deletes the last character.
   press_chord({keys::END, 0});
   emit();
   input_injector::reset_all();
@@ -152,7 +142,6 @@ TEST(bare_enum_text_input_edits_and_copies_via_defaults) {
   input_injector::reset_all();
   CHECK(value == "hell");
 
-  // Select all + copy via the primary-modifier defaults.
 #if defined(__APPLE__)
   constexpr uint8_t PRIMARY = input::KeyChord::MOD_SUPER;
 #else
@@ -166,7 +155,6 @@ TEST(bare_enum_text_input_edits_and_copies_via_defaults) {
   input_injector::reset_all();
   CHECK(clipboard::get_text() == "hell");
 
-  // Paste via the default chord replaces the still-selected text.
   clipboard::set_text("xy");
   press_chord({keys::V, PRIMARY});
   emit();

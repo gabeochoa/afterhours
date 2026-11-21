@@ -36,8 +36,6 @@ constexpr bool has_editing_action(std::string_view name) {
   return magic_enum::enum_contains<InputAction>(name);
 }
 
-// Kept as a no-op: missing Text* names now fall back to the library
-// defaults (text_action_pressed) instead of compiling the feature out.
 template <typename InputAction> inline void report_missing_editing_actions() {}
 
 // Given a local x coordinate within a text field, find the byte offset

@@ -91,9 +91,6 @@ constexpr static InputValidationMode validation_mode =
         }                                                                   \
     } while (0)
 
-// Kept as a no-op: a Text* name missing from the host enum now falls back
-// to the library default chord (text_input::text_action_pressed) instead of
-// compiling the editing feature out, so there is nothing to warn about.
 template<typename InputAction>
 static void warn_missing_text_actions() {}
 
