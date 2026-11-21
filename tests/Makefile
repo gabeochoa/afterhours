@@ -153,6 +153,7 @@ ALL_TESTS := \
 	e2e_is_running_test \
 	e2e_defer_unknown_test \
 	e2e_results_test \
+	e2e_script_headers_test \
 	point_in_element_test \
 	e2e_ui_gestures_test \
 	mouse_axis_action_test \
