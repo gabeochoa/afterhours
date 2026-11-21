@@ -7,16 +7,10 @@ using ui_test::ImmTestHarness;
 
 namespace {
 constexpr bool close(float a, float b) { return std::abs(a - b) < .01f; }
-// Layout resolves Dim::None padding to 0 too (see the div computed test),
-// so an empty side counts as zero without spelling pixels(0).
 constexpr bool resolves_to_zero(const Size &s) {
   return s.dim == Dim::None || close(resolve_to_pixels(s, 720.f), 0.f);
 }
 } // namespace
-
-// Explicit empty padding must read as zero, while unset must keep taking
-// the widget default. Padding{} and "never set" are the same struct, so
-// only a caller-set flag can tell them apart.
 
 TEST(explicit_empty_padding_beats_registered_default) {
   auto &defaults = UIStylingDefaults::get();

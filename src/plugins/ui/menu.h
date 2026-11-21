@@ -253,8 +253,6 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
                    .without_border()
                    .with_label(item.label)
                    .with_disabled(item.disabled);
-    // Copy only a caller-set padding: copying an unset one would mark the
-    // row explicit and suppress the button default it would otherwise get.
     const bool caller_set_padding =
         config.padding_explicitly_set || config.padding.top.dim != Dim::None ||
         config.padding.left.dim != Dim::None ||

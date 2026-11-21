@@ -66,9 +66,6 @@ struct ComponentConfig {
 
   Padding padding;
   bool padding_is_default = false;
-  // Caller set padding via with_padding, even to Padding{} (zero). The
-  // struct alone cannot tell that from unset, and an explicit empty set
-  // must not be replaced by a widget default.
   bool padding_explicitly_set = false;
   Margin margin;
   std::string label;
