@@ -240,6 +240,7 @@ ALL_TESTS := \
 	headless_fallback_test \
 	raylib_fallback_test \
 	models_test \
+	scene_lights_test \
 	house_of_cards_test \
 	frustum_test \
 	instance_batcher_test \
@@ -311,6 +312,7 @@ RAYLIB_TESTS := \
 	headless_fallback_test \
 	raylib_fallback_test \
 	models_test \
+	scene_lights_test \
 	house_of_cards_test \
 	frustum_test \
 	instance_batcher_test \
