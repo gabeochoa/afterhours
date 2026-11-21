@@ -316,7 +316,7 @@ std::optional<FocusPaint> prepare_focus_paint(const UIContext<InputAction> &cont
         compute_intersected_clip_rect(entity, /*include_self=*/false);
     return FocusPaint{*ring, entity.id, i - 1, cmd.layer,
                       entity.has<HasUIModifiers>() ? entity.get<HasUIModifiers>().rotation : 0.f,
-                      has_clip && !entity.has<HasScrollView>() ? std::optional{clip} : std::nullopt};
+                      has_clip ? std::optional{clip} : std::nullopt};
   }
   return {};
 }
@@ -749,7 +749,7 @@ inline void register_label_for_testing(const Entity &entity,
                                        float screen_width, float screen_height) {
   if (!testing::test_input::detail::test_mode) return;
   RectangleType viewport{0.f, 0.f, screen_width, screen_height};
-  if (!entity.has<HasScrollView>()) {
+  {
     const auto [has_clip, clip] = compute_intersected_clip_rect(entity);
     if (has_clip) {
       const RectangleType scissor{
@@ -1841,7 +1841,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       // are exempt: an axis-aligned scissor would cut their corners.
       RectangleType label_clip = text_rect;
       std::optional<RectangleType> ancestor_clip;
-      if (!entity.has<HasScrollView>()) {
+      {
         auto [has_clip, clip_rect] =
             detail::compute_intersected_clip_rect(entity);
         if (has_clip) {
@@ -1941,11 +1941,11 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
           font_manager.resolve_weighted(cmp.font_name, cmp.font_weight));
     }
 
-    // Scroll views define their own viewport — don't clip them by ancestors.
-    // Everything else (including HasClipChildren) gets clipped by the
-    // intersection of ALL ancestor clip rects.
+    // Clipped by the intersection of ALL ancestor clip rects. A scroll
+    // view's own rect is excluded by compute_intersected_clip_rect, so
+    // this clips its decorations to ancestors without shrinking its viewport.
     bool needs_scissor = false;
-    if (!entity.has<HasScrollView>()) {
+    {
       auto [has_clip, clip_rect] =
           detail::compute_intersected_clip_rect(entity);
       if (has_clip) {
@@ -2474,7 +2474,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       // would cut their corners.
       RectangleType label_clip = text_rect;
       std::optional<RectangleType> ancestor_clip;
-      if (!entity.has<HasScrollView>()) {
+      {
         auto [has_clip, clip_rect] =
             detail::compute_intersected_clip_rect(entity);
         if (has_clip) {
@@ -2755,11 +2755,11 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           font_manager.resolve_weighted(cmp.font_name, cmp.font_weight));
     }
 
-    // Scroll views define their own viewport — don't clip them by ancestors.
-    // Everything else (including HasClipChildren) gets clipped by the
-    // intersection of ALL ancestor clip rects.
+    // Clipped by the intersection of ALL ancestor clip rects. A scroll
+    // view's own rect is excluded by compute_intersected_clip_rect, so
+    // this clips its decorations to ancestors without shrinking its viewport.
     bool needs_scissor = false;
-    if (!entity.has<HasScrollView>()) {
+    {
       auto [has_clip, clip_rect] =
           detail::compute_intersected_clip_rect(entity);
       if (has_clip) {
