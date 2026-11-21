@@ -16,7 +16,6 @@ static int failures = 0;
   } while (0)
 
 int main() {
-  // Empty / missing dirs are a supported, empty answer — not an error.
   const auto empty = fc::list_fonts_in({});
   CHECK(empty.supported && empty.faces.empty());
   const auto missing = fc::list_fonts_in({"/nonexistent-font-dir-r084"});
@@ -28,9 +27,6 @@ int main() {
     std::printf("  dir: %s\n", d.c_str());
 
 #if defined(__APPLE__)
-  // This machine's real catalog: many faces, and families every macOS
-  // install ships. Guarded to Apple so other platforms only assert the
-  // generic contract below.
   const auto catalog = fc::list_system_fonts();
   CHECK(catalog.supported);
   CHECK(catalog.faces.size() > 100);
@@ -46,7 +42,6 @@ int main() {
   CHECK(helvetica);
   CHECK(courier);
 
-  // A known collection on every macOS install: Courier.ttc has 4 faces.
   const std::string ttc = "/System/Library/Fonts/Courier.ttc";
   if (std::filesystem::exists(ttc)) {
     CHECK(fc::face_count_for_file(ttc) == 4);
