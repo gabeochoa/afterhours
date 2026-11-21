@@ -715,9 +715,6 @@ struct HasScrollView : BaseComponent {
 struct HasVirtualListIndex : BaseComponent {
   std::vector<float> heights;
   std::vector<float> prefix; // prefix[i] = height of rows [0, i)
-  // Uniform lists keep no prefix: every row is `uniform_height` (unscaled),
-  // 0 means measured rows instead. `row_count` is the last build's count so
-  // index-based scrolling can clamp without a prefix to size.
   float uniform_height = 0.f;
   size_t row_count = 0;
   // The pending re-measure range [dirty_from, dirty_to). Its empty value is

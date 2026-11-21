@@ -356,7 +356,7 @@ ElementResult virtual_list(HasUIContext auto &ctx, EntityParent ep_pair,
 {
   auto [entity, parent] = deref(ep_pair);
   auto &index = entity.template addComponentIfMissing<HasVirtualListIndex>();
-  if (index.uniform_height > 0.f) // was uniform: no measured heights exist yet
+  if (index.uniform_height > 0.f)
     index.invalidate(0, count);
   index.uniform_height = 0.f;
   index.row_count = count;
@@ -386,7 +386,7 @@ inline void prepend_virtual_rows(Entity &list, size_t count) {
     return;
   auto &idx = list.template get<HasVirtualListIndex>();
   if (idx.uniform_height > 0.f)
-    return; // off the retained prefix, which uniform lists do not have
+    return;
   idx.heights.insert(idx.heights.begin(), count, 0.f);
   idx.prefix.insert(idx.prefix.begin(), count, 0.f);
   // Shift the pending range by the insertion, saturating at the union
@@ -438,14 +438,6 @@ inline void prepend_virtual_rows(Entity &list, size_t count) {
          static_cast<float>(count ? count - 1 : 0) * idx.last_gap;
 }
 
-/// Scroll a virtual_list so row `index` is the first visible row: its top
-/// from the retained row geometry (prefix sums for measured rows, uniform
-/// arithmetic otherwise), both offset and target together so easing cannot
-/// undo it. Top-aligned, not minimally scrolled, so the landing offset is
-/// just that row's offset. `index` clamps to the last build's rows; past
-/// the end, the view goes to the last row, then the build's own clamp caps
-/// it at the scrollable max. A list (or empty list) with no retained rows
-/// does nothing. Vertical only — virtual_list scrolls on one axis.
 inline void scroll_to_item(Entity &list, size_t index) {
   if (!list.template has<HasVirtualListIndex>() ||
       !list.template has<HasScrollView>())

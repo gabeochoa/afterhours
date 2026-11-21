@@ -363,9 +363,6 @@ TEST(virtual_list_overscan_survives_apply_overrides) {
             .virtual_list_overscan == 0);
 }
 
-// scroll_to_item: index-based scrolling for rows that are not built yet.
-// scroll_to_entity cannot find them; the offset comes from the retained row
-// geometry instead. Top-aligned, clamped to the last row, then to the max.
 TEST(scroll_to_item_uniform_lands_visible_at_offset) {
   ImmTestHarness h;
   std::vector<size_t> built;
@@ -399,7 +396,6 @@ TEST(scroll_to_item_uniform_lands_visible_at_offset) {
   frame();
   CHECK(std::any_of(built.begin(), built.end(),
                     [](size_t i) { return i == 50; }));
-  // The built window starts at the scrolled-to row (overscan aside).
   CHECK(built.front() <= 50);
   CHECK_APPROX(scroll.scroll_offset.y, 1000.f);
 }
@@ -425,7 +421,6 @@ TEST(scroll_to_item_variable_lands_visible_at_offset) {
   auto &scroll = list.get<HasScrollView>();
   scroll.viewport_size = {300.f, 200.f};
   scroll.content_size = measure_scroll_content(list.get<UIComponent>(), scroll);
-  // Row 20 starts at 10 * (10 + 40) = 500.
   CHECK_APPROX(virtual_row_offset(list, 20), 500.f);
   CHECK_APPROX(virtual_rows_total(list), 50000.f);
 
@@ -458,16 +453,12 @@ TEST(scroll_to_item_clamps) {
   auto &scroll = list.get<HasScrollView>();
   scroll.viewport_size = {300.f, 200.f};
   scroll.content_size = measure_scroll_content(list.get<UIComponent>(), scroll);
-  // Past the end: the last row (99), whose top (1980) clamps to the max
-  // (2000 - 200 = 1800) on the next build.
   scroll_to_item(list, 99999);
   CHECK_APPROX(scroll.scroll_offset.y, 1800.f);
-  // Row 0 goes to exactly 0.
   scroll_to_item(list, 0);
   CHECK_APPROX(scroll.scroll_offset.y, 0.f);
   CHECK_APPROX(scroll.scroll_target.y, 0.f);
 
-  // Empty list and a list that was never built: no crash, no move.
   EntityID empty_id = -1;
   h.begin_frame();
   auto empty = virtual_list(
