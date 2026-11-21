@@ -4,11 +4,12 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <format>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
 #if AFTERHOURS_ENABLE_PROFILING
-#include <map>
 #include "process_metrics.h"
 #endif
 
@@ -78,6 +79,34 @@ inline Snapshot select_frames(const Snapshot &source, std::size_t first, std::si
         result.systems.push_back(std::move(selected));
     }
     return result;
+}
+
+inline const char *phase_name(SystemPhase phase) {
+    switch (phase) {
+        case SystemPhase::Update: return "Update";
+        case SystemPhase::FixedUpdate: return "FixedUpdate";
+        case SystemPhase::Render: return "Render";
+    }
+    return "Update";
+}
+
+// Folded-stack lines ("frame;<phase>;<system> <total_ms>") for flamegraph.pl,
+// aggregated by stack and sorted by stack. Snapshots have per-system totals
+// only, no call stacks, so every line is a one-level stack.
+inline std::string snapshot_to_collapsed(const Snapshot &snapshot) {
+    std::map<std::string, double> totals;
+    for (const auto &sample : snapshot.systems) {
+        std::string name = sample.name;
+        for (char &c : name)
+            if (c == ';' || c == '\n' || c == '\r') c = '_';
+        totals["frame;" + std::string(phase_name(sample.phase)) + ";" + name] += sample.total_ms;
+    }
+    std::string out;
+    for (const auto &[stack, ms] : totals) {
+        if (!std::isfinite(ms) || ms <= 0) continue;
+        out += std::format("{} {:.3f}\n", stack, ms);
+    }
+    return out;
 }
 
 class Collector {
