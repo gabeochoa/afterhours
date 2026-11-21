@@ -85,6 +85,8 @@ int main() {
     Audio::set_master_volume(1.f);
     Audio::set_sound_volume(1.f);
     Audio::set_music_volume(1.f);
+    Audio::set_recording(true);
+    Audio::clear_play_log();
 
     sounds.load_on_bus("bird.wav", "bird", "ambience");
     music.load_on_bus("song.ogg", "song", "music");
@@ -128,18 +130,29 @@ int main() {
     check_near(sound_pans.at(sounds.get("bird").frameCount), 0.5f,
                "backend received pan");
     check(sounds.is_playing("bird"), "play_at sound is playing");
+    check(Audio::play_log().size() == 1, "play_at logged one record");
+    if (Audio::play_log().size() == 1) {
+        const auto &rec = Audio::play_log().front();
+        check(rec.name == "bird" && rec.bus == "ambience", "record names sound+bus");
+        check_near(rec.volume, 0.4f, "record volume = effects 0.8 * falloff 0.5");
+        check_near(rec.pan, 0.5f, "record pan centred ahead");
+        check(rec.positional, "record marked positional");
+    }
     check(!Audio::play_at("bird", {0.f, 0.f, -20.f}),
           "play_at out of range plays nothing");
     check(!Audio::play_at("missing", {0.f, 0.f, 0.f}),
           "play_at unknown sound returns false");
+    check(Audio::play_log().size() == 1, "out-of-range play not logged as played");
 
     sounds.load_pool("chirp.wav", "chirp", 3, "ambience");
     check(sounds.contains("chirp"), "pool base registered");
     check(sounds.contains("chirp_a0") && sounds.contains("chirp_a1") &&
               sounds.contains("chirp_a2"),
           "pool aliases registered");
+    Audio::clear_play_log();
     sounds.play_loaded("chirp_a1");
     check(sounds.is_playing("chirp_a1"), "pool alias play is playing");
+    check(Audio::expect_sound_played("chirp_a1"), "pool alias play logged");
 
     const std::vector<float> samples(441, 0.25f);
     check(sounds.add_samples("beep_gen", samples, 44100, 1, "effects"),
@@ -153,8 +166,10 @@ int main() {
     check(sounds.add("beep_direct", direct), "load_sound_from_samples + add");
     check(afterhours::load_sound_from_samples({}, 44100).frameCount == 0,
           "empty samples return an empty sound");
+    Audio::clear_play_log();
     sounds.play("beep_gen");
     check(sounds.is_playing("beep_gen"), "generated sound play is playing");
+    check(Audio::play_count("beep_gen") == 1, "generated sound play logged");
 
     check(sounds.is_playing("beep_gen"), "played generated sound is playing");
     sounds.pause("beep_gen");
@@ -163,6 +178,27 @@ int main() {
     check(sounds.is_playing("beep_gen"), "resume restarts playback state");
     sounds.stop("beep_gen");
     check(!sounds.is_playing("beep_gen"), "stop ends playback state");
+
+    Audio::set_recording(false);
+    Audio::clear_play_log();
+    sounds.play("beep_gen");
+    check(Audio::play_log().empty(), "no logging while recording is off");
+    Audio::set_recording(true);
+
+    const char *wav_path = "/tmp/afterhours_audio_plugin_test.wav";
+    check(afterhours::export_wav(wav_path, samples, 44100, 1),
+          "export_wav writes a file");
+    if (std::FILE *f = std::fopen(wav_path, "rb")) {
+        char header[4] = {};
+        const size_t read = std::fread(header, 1, 4, f);
+        check(read == 4 && header[0] == 'R' && header[1] == 'I',
+              "exported file starts with RIFF");
+        std::fclose(f);
+    } else {
+        check(false, "exported wav opens");
+    }
+    check(!afterhours::export_wav(wav_path, {}, 44100),
+          "export_wav rejects empty samples");
 
     sounds.unload_all();
     music.unload_all();

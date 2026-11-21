@@ -19,6 +19,17 @@
 namespace afterhours {
 
 struct sound_system : developer::Plugin {
+    // Logged even on stub backends, where PlaySound itself is a no-op.
+    struct PlayRecord {
+        std::string name;
+        std::string bus;
+        float volume = 1.f;
+        float pan = 0.5f;
+        float pitch = 1.f;
+        bool positional = false;
+        Vector3Type position{0.f, 0.f, 0.f};
+    };
+
     struct Listener {
         Vector3Type position;
         Vector3Type forward;
@@ -179,7 +190,6 @@ struct sound_system : developer::Plugin {
                          float pan = 0.5f, float pitch = 1.f,
                          bool positional = false,
                          Vector3Type position = Vector3Type{0.f, 0.f, 0.f}) {
-            (void) position;
             if (!contains(name)) {
                 log_warn("SoundLibrary::play: no sound loaded named '{}'",
                          name.c_str());
@@ -193,6 +203,9 @@ struct sound_system : developer::Plugin {
                 ::afterhours::SetSoundPitch(sound, pitch);
             }
             ::afterhours::PlaySound(sound);
+            record_play(PlayRecord{name, bus_of(name),
+                                   effective_volume(name) * volume_scale, pan,
+                                   pitch, positional, position});
         }
 
         void stop(const std::string &name) {
@@ -338,6 +351,8 @@ struct sound_system : developer::Plugin {
             }
             auto &music = get(name);
             ::afterhours::PlayMusicStream(music);
+            record_play(PlayRecord{name, bus_of(name), effective_volume(name),
+                                   0.5f, 1.f, false, Vector3Type{0.f, 0.f, 0.f}});
         }
         void stop(const std::string &name) {
             if (contains(name)) ::afterhours::StopMusicStream(get(name));
@@ -559,6 +574,25 @@ struct sound_system : developer::Plugin {
         return SoundLibrary::get().get_bus_volume(bus);
     }
 
+    static void set_recording(bool on) { recording_ = on; }
+    [[nodiscard]] static bool recording() { return recording_; }
+    [[nodiscard]] static const std::vector<PlayRecord> &play_log() {
+        return play_log_;
+    }
+    static void clear_play_log() { play_log_.clear(); }
+    [[nodiscard]] static int play_count(const std::string &name) {
+        int n = 0;
+        for (const auto &r : play_log_)
+            if (r.name == name) ++n;
+        return n;
+    }
+    [[nodiscard]] static bool expect_sound_played(const std::string &name) {
+        return play_count(name) > 0;
+    }
+    static void record_play(const PlayRecord &rec) {
+        if (recording_) play_log_.push_back(rec);
+    }
+
     // Volumes are independent preferences; backend gains are master * category.
     static void set_master_volume(float volume) {
         master_volume = volume;
@@ -585,6 +619,8 @@ struct sound_system : developer::Plugin {
    private:
     inline static float master_volume = 1.f;
     inline static Listener listener_{};
+    inline static bool recording_ = false;
+    inline static std::vector<PlayRecord> play_log_{};
 };
 
 // Compile-time verification that sound_system satisfies the PluginCore concept
