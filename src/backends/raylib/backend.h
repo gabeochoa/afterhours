@@ -9,6 +9,7 @@
 
 #ifdef AFTER_HOURS_USE_RAYLIB
 
+#include "../../file_drop.h"
 #include "../../graphics_common.h"
 #include "headless.h"
 #include "windowed.h"
@@ -340,6 +341,7 @@ struct RaylibPlatformAPI {
   // ── Unified run loop ──
   static void run(const RunConfig &cfg) {
     quit_flag() = false;
+    file_drop::set_enabled(cfg.enable_file_drop);
     const bool headless = cfg.display == DisplayMode::Headless;
     if (!headless) {
       if (cfg.flags)
@@ -357,6 +359,16 @@ struct RaylibPlatformAPI {
     auto run_frame = [&cfg] {
       frame_loop::consume_frame_request();
       frame_loop::note_frame(true);
+      // Poll before the frame so this frame's take_dropped_files() sees it.
+      if (file_drop::enabled() && raylib::IsWindowReady() &&
+          raylib::IsFileDropped()) {
+        raylib::FilePathList dropped = raylib::LoadDroppedFiles();
+        std::vector<std::string> paths;
+        for (unsigned int i = 0; i < dropped.count; i++)
+          paths.emplace_back(dropped.paths[i]);
+        raylib::UnloadDroppedFiles(dropped);
+        file_drop::push_dropped_files(std::move(paths));
+      }
       if (cfg.frame)
         cfg.frame();
     };
@@ -383,6 +395,7 @@ struct RaylibPlatformAPI {
     raylib_backend::close_audio();
     if (!headless)
       close_window();
+    file_drop::set_enabled(false);
   }
 };
 

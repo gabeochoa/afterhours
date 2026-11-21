@@ -225,6 +225,9 @@ struct RunConfig {
 
   bool audio = false;
 
+  // Opt in to OS file drag-and-drop; drain with file_drop::take_dropped_files().
+  bool enable_file_drop = false;
+
   float fixed_dt = 0.f;
   int sim_steps = 1;
 
