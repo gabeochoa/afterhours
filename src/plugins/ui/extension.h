@@ -41,8 +41,6 @@ inline void register_ui_extension_system(UIExtensionSystemFactory factory) {
   ui_extension_system_factories().push_back(std::move(factory));
 }
 
-// Same factories, but for systems that must run after user builds (the
-// post-update bridge, before autolayout) rather than before them.
 inline std::vector<UIExtensionSystemFactory> &
 ui_post_update_system_factories() {
   static std::vector<UIExtensionSystemFactory> factories;

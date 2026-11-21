@@ -308,7 +308,7 @@ inline MotionValues apply_motion(Ctx &ctx, Entity &entity,
     st.exit_mode = r.mode;
     st.exit_delay = r.delay;
   }
-  if (st.exiting) { // rebuilt mid-exit: the caller wants it back
+  if (st.exiting) {
     st.exiting = false;
     st.exit_done = false;
     entity.template removeComponentIfExists<ui::imm::HasExitPresence>();
@@ -373,8 +373,6 @@ inline MotionValues apply_motion(Ctx &ctx, Entity &entity,
   return out;
 }
 
-// Start (first call) or poll the exit: true while the exit track is running.
-// Instant motion finishes on the spot, so callers retire immediately.
 inline bool exit_retention(Entity &entity) {
   if (!entity.has<HasMotionState>())
     return false;
@@ -383,7 +381,6 @@ inline bool exit_retention(Entity &entity) {
     return false;
   if (motion::is_instant()) {
     st.exit_done = true;
-    // Marker so the sweep retires it now instead of after the grace window.
     entity.template addComponentIfMissing<ui::imm::HasExitPresence>();
     return false;
   }
@@ -428,8 +425,6 @@ inline bool exit_retention(Entity &entity) {
   return active;
 }
 
-// Write the current exit-track values onto the widget for a frame in which
-// nobody rebuilt it (called by PresentExitingWidgets / tests).
 inline void apply_exit_frame(Entity &entity) {
   if (!entity.has<HasMotionState>() || !entity.has<motion::HasTracks>())
     return;
@@ -462,8 +457,6 @@ inline void apply_exit_frame(Entity &entity) {
   }
 }
 
-// Re-presents exiting widgets: runs after user builds, before autolayout, so
-// a departing widget keeps its last layout while its exit track runs.
 struct PresentExitingWidgets : System<ui::imm::HasExitPresence> {
   void for_each_with(Entity &entity, ui::imm::HasExitPresence &xp,
                      float) override {

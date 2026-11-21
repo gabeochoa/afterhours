@@ -1,5 +1,3 @@
-// Exit animations: a widget built with on_exit stays in the tree while its
-// exit track runs after the caller stops building it, then is retired.
 #include "ui_test_harness.h"
 
 #include <afterhours/src/plugins/ui_motion.h>
@@ -45,8 +43,6 @@ static ComponentConfig row_config() {
           motion::Timeline{.keys = {{0.f, 0.f}, {0.3f, 1.f}}}));
 }
 
-// One frame in which the row is not built: advance, re-present, lay out,
-// then let the retirement sweep decide whether it is finished.
 static void exit_frame(ImmTestHarness &h) {
   h.begin_frame();
   advance_tracks(h, 0.1f);
@@ -68,7 +64,7 @@ TEST(exit_runs_to_completion_then_widget_is_gone) {
   const EntityID child_id = child.ent().id;
   h.layout_only();
   CHECK(h.find("exit_row") != nullptr);
-  CHECK_APPROX(ent(id).get<HasOpacity>().value, 0.f); // enter starts faded
+  CHECK_APPROX(ent(id).get<HasOpacity>().value, 0.f);
 
   bool saw_mid_exit = false;
   for (int i = 0; i < 20 && alive(h, id); i++) {
@@ -80,9 +76,9 @@ TEST(exit_runs_to_completion_then_widget_is_gone) {
     if (opacity > 0.05f && opacity < 0.95f)
       saw_mid_exit = true;
   }
-  CHECK(saw_mid_exit); // it faded through, not snapped or stuck
+  CHECK(saw_mid_exit);
   CHECK(!alive(h, id));
-  CHECK(!alive(h, child_id)); // subtree goes with it, same sweep
+  CHECK(!alive(h, child_id));
 }
 
 TEST(instant_motion_retires_without_exit_frames) {
@@ -92,13 +88,12 @@ TEST(instant_motion_retires_without_exit_frames) {
   const EntityID id = built.ent().id;
   h.layout_only();
   motion::set_instant(true);
-  exit_frame(h); // the build frame's sweep: nothing is stale yet
-  exit_frame(h); // first unbuilt frame: snaps shut and retires
+  exit_frame(h);
+  exit_frame(h);
   motion::set_instant(false);
   CHECK(!alive(h, id));
 }
 
-// One call site: mk() identity is the source location.
 static EntityID build_row(ImmTestHarness &h) {
   return div(h.context(), mk(h.root(), 0), row_config()).ent().id;
 }

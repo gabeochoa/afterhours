@@ -33,14 +33,10 @@ struct UIElementRecord {
 };
 inline std::map<UI_UUID, UIElementRecord> existing_ui_elements;
 
-// Set while a widget runs its exit animation (see ui_motion::on_exit): the
-// retirement sweep keeps it (and its linked subtree) alive and the post-build
-// bridge re-presents it each frame until the exit track finishes.
 struct HasExitPresence : BaseComponent {
   bool active = false;
   EntityID parent_id = -1;
 };
-// Installed by ui_motion::register_bridge; null in apps without motion.
 inline std::function<bool(Entity &)> ui_exit_retention_hook;
 
 // Parent -> children, linked once when a child is created and unlinked when
@@ -253,8 +249,6 @@ inline void clear_existing_ui_elements() {
 // an orphan, not a survivor.
 inline void retire_unbuilt_ui_elements() {
   if (ui_retire_grace_frames > 0) {
-    // Exit pass first: a stale widget with an exit rule starts (or continues)
-    // its exit here instead of waiting out the grace window.
     std::unordered_set<EntityID> retained;
     if (ui_exit_retention_hook) {
       for (auto &[hash, record] : existing_ui_elements) {
@@ -264,8 +258,6 @@ inline void retire_unbuilt_ui_elements() {
         OptEntity opt = UICollectionHolder::getEntityForID(record.id);
         if (!opt.valid() || !ui_exit_retention_hook(opt.asE()))
           continue;
-        // Keep the whole linked subtree: children stop being built because
-        // their parent did, not on their own.
         std::vector<std::pair<EntityID, EntityID>> stack{
             {record.id, record.parent_id}};
         while (!stack.empty()) {
