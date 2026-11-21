@@ -4,6 +4,7 @@
 #include <array>
 
 #include <cmath>
+#include <cstdint>
 #include <algorithm>
 #include <map>
 #include <variant>
@@ -1143,12 +1144,30 @@ struct input : developer::Plugin {
         }
     };
 
+    // Non-consuming snapshot of this frame's mapped activity: reading it
+    // never drains inputs/inputs_pressed, so idle checks can peek safely.
+    struct InputActivity {
+        bool any = false;
+        bool pressed = false;
+        std::uint64_t frame = 0;
+        std::uint64_t last_activity_frame = 0;
+    };
+
     struct InputCollector : public BaseComponent {
         DeviceActivity device_activity;
+        InputActivity activity;
         std::vector<input::ActionDone> inputs;
         std::vector<input::ActionDone> inputs_pressed;
         std::vector<input::ActionDone> inputs_pressed_repeat;
         float since_last_input = 0.f;
+
+        void note_activity_frame() {
+            ++activity.frame;
+            activity.pressed = !inputs_pressed.empty() ||
+                               !inputs_pressed_repeat.empty();
+            activity.any = activity.pressed || !inputs.empty();
+            if (activity.any) activity.last_activity_frame = activity.frame;
+        }
     };
 
     using InputCollectorInputAction = InputCollector;
@@ -1217,6 +1236,10 @@ struct input : developer::Plugin {
         [[nodiscard]] float since_last_input() {
             return data.value().get().since_last_input;
         }
+
+        [[nodiscard]] InputActivity input_activity() const {
+            return data.value().get().activity;
+        }
     };
 
     static auto get_input_collector() -> PossibleInputCollector {
@@ -1224,6 +1247,12 @@ struct input : developer::Plugin {
         InputCollector *ic = EntityHelper::get_singleton_cmp<InputCollector>();
         if (ic == nullptr) return {};
         return *ic;
+    }
+
+    static InputActivity input_activity() {
+        auto collector = get_input_collector();
+        if (!collector.has_value()) return {};
+        return collector.input_activity();
     }
 
     template <typename Action>
@@ -1304,6 +1333,7 @@ struct input : developer::Plugin {
             suppress_permissive_duplicates(collector.inputs_pressed);
             suppress_permissive_duplicates(collector.inputs_pressed_repeat);
 
+            collector.note_activity_frame();
             if (collector.inputs.empty()) {
                 collector.since_last_input += dt;
             } else {
@@ -1460,6 +1490,7 @@ struct LayeredInputSystem
         if (layer_it == mapper.layers.end()) {
             collector.device_activity.end_frame(input::is_mouse_button_down(0) || input::is_mouse_button_down(1));
             // No mapping for this layer, nothing to poll
+            collector.note_activity_frame();
             if (collector.inputs.empty()) {
                 collector.since_last_input += dt;
             }
@@ -1491,6 +1522,7 @@ struct LayeredInputSystem
         input::suppress_permissive_duplicates(collector.inputs_pressed);
         input::suppress_permissive_duplicates(collector.inputs_pressed_repeat);
 
+        collector.note_activity_frame();
         if (collector.inputs.empty()) {
             collector.since_last_input += dt;
         } else {
