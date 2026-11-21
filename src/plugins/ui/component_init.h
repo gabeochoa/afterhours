@@ -347,13 +347,9 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
     entity.removeComponentIfExists<HasTextUnitMotion>();
   }
 
-  if (config.text_selectable) {
-    entity.addComponentIfMissing<HasSelectableText>();
-    if (!config.cursor_type.has_value())
-      entity.addComponentIfMissing<HasCursor>(CursorType::Text);
-  } else {
-    entity.removeComponentIfExists<HasSelectableText>();
-  }
+  if (entity.toggleComponent<HasSelectableText>(config.text_selectable) &&
+      !config.cursor_type.has_value())
+    entity.addComponentIfMissing<HasCursor>(CursorType::Text);
 }
 
 struct ConfiguredTexture : BaseComponent {};
