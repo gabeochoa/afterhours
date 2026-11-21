@@ -1,4 +1,3 @@
-// storage_codec_test.cpp — G-P18 envelope names.
 #include <afterhours/src/plugins/storage_codec.h>
 
 #include <charconv>
@@ -21,7 +20,7 @@ void check(bool ok, const char *what) {
 
 struct Prefs {
   int volume = 0;
-  int brightness = 0; // v2 only; absent in v1
+  int brightness = 0;
   bool operator==(const Prefs &) const = default;
 };
 
@@ -63,14 +62,14 @@ Codec<Prefs> prefs_codec() {
                ";brightness=" + std::to_string(p.brightness);
       },
       decode_prefs,
-      {// v1->v2: default the new field.
+      {
        [](std::string_view v1) -> std::optional<std::string> {
          if (v1.rfind("volume=", 0) != 0) return std::nullopt;
          return std::string(v1) + ";brightness=100";
        }});
 }
 
-} // namespace
+}
 
 int main() {
   const auto codec = prefs_codec();
@@ -100,7 +99,7 @@ int main() {
        {"", "volume=5", "afterhours-storage-codec/1\nx\nvolume=5",
         "afterhours-storage-codec/1\n0\nvolume=5",
         "afterhours-storage-codec/1\n2\ngarbage",
-        "afterhours-storage-codec/1\n2\nvolume=5" /* missing v2 field */}) {
+        "afterhours-storage-codec/1\n2\nvolume=5" }) {
     const auto r = codec.decode(bad);
     check(r.status == DecodeStatus::Corrupt && !r.value,
           "corrupt input is Corrupt with no value");
@@ -138,7 +137,6 @@ int main() {
             DecodeStatus::Corrupt,
         "failing migration is Corrupt");
 
-  // Only first two newlines are envelope; rest verbatim.
   const std::string binary("a\nb\0c", 5);
   const auto bin_codec = afterhours::storage::make_string_codec(1);
   const auto bin = bin_codec.decode(bin_codec.encode(binary));

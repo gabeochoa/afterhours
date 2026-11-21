@@ -1,11 +1,5 @@
 #pragma once
 
-// Versioned envelope. Status names match Pharmasea's save vocabulary (G-P18):
-//   Ok: current. Migrated: chain ran (callers usually re-save). Corrupt: unusable —
-//   do not overwrite blindly. TooNew: newer build; payload never reaches decoder.
-// Envelope: "afterhours-storage-codec/1\n<version>\n<payload>" — payload after
-// second newline is verbatim, so binary payloads survive. Codec is transport
-// only; durability stays with files::write_string_atomic.
 
 #include <charconv>
 #include <functional>
@@ -33,10 +27,10 @@ inline const char *to_string(DecodeStatus status) {
 
 template <typename T> struct DecodeResult {
   DecodeStatus status = DecodeStatus::Corrupt;
-  std::optional<T> value; // set only when ok()
+  std::optional<T> value;
   int found_version = 0;
   int current_version = 0;
-  std::string message; // for logs; never parse this
+  std::string message;
 
   [[nodiscard]] bool ok() const {
     return status == DecodeStatus::Ok || status == DecodeStatus::Migrated;
@@ -55,9 +49,8 @@ inline std::optional<int> parse_version(std::string_view text) {
     return std::nullopt;
   return value;
 }
-} // namespace detail
+}
 
-// nullopt if not an envelope; use to route legacy pre-codec files to v1.
 inline std::optional<int> peek_version(std::string_view text) {
   const auto first = text.find('\n');
   if (first == std::string_view::npos ||
@@ -71,10 +64,8 @@ inline std::optional<int> peek_version(std::string_view text) {
 
 template <typename T> class Codec {
 public:
-  // decode returns nullopt for unreadable bytes (reported as Corrupt).
   using EncodeFn = std::function<std::string(const T &)>;
   using DecodeFn = std::function<std::optional<T>(std::string_view)>;
-  // N -> N+1; nullopt = cannot carry forward (Corrupt).
   using MigrationFn =
       std::function<std::optional<std::string>(std::string_view)>;
 
@@ -87,7 +78,6 @@ public:
       throw std::invalid_argument("storage::Codec: encode/decode required");
   }
 
-  // migrations[i] takes v(i+1) to v(i+2). Short chain allowed: old files then report Corrupt, not a build failure.
   Codec(int current_version, EncodeFn encode, DecodeFn decode,
         std::vector<MigrationFn> migrations)
       : Codec(current_version, std::move(encode), std::move(decode)) {
@@ -145,7 +135,7 @@ public:
     if (*version > current_version_) {
       result.status = DecodeStatus::TooNew;
       result.message = "stored version is newer than this build";
-      return result; // never feed a newer payload to an older decoder
+      return result;
     }
 
     for (int v = *version; v < current_version_; ++v) {
@@ -194,4 +184,4 @@ inline Codec<std::string> make_string_codec(
       std::move(migrations));
 }
 
-} // namespace afterhours::storage
+}
