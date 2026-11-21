@@ -74,6 +74,7 @@ struct RenderPrimitive {
       float roundness;
       int segments;
       std::bitset<4> corners;
+      std::bitset<4> chamfer;
       float rotation; // Rotation in degrees (clockwise, around center)
     } rectangle;
 
@@ -83,6 +84,7 @@ struct RenderPrimitive {
       float roundness;
       int segments;
       std::bitset<4> corners;
+      std::bitset<4> chamfer;
       float thickness; // Line thickness for outline (0 = default thin line)
       float rotation;
     } outline;
@@ -217,7 +219,8 @@ public:
   static RenderPrimitive
   rounded_rectangle(const RectangleType &rect, Color fill, float roundness,
                     int segments, const std::bitset<4> &corners, int layer,
-                    EntityID entity_id = -1, float rotation = 0.0f) {
+                    EntityID entity_id = -1, float rotation = 0.0f,
+                    const std::bitset<4> &chamfer = std::bitset<4>().reset()) {
     RenderPrimitive cmd(RenderPrimitiveType::RoundedRectangle, layer,
                         entity_id);
     cmd.data.rectangle.rect = rect;
@@ -225,6 +228,7 @@ public:
     cmd.data.rectangle.roundness = roundness;
     cmd.data.rectangle.segments = segments;
     cmd.data.rectangle.corners = corners;
+    cmd.data.rectangle.chamfer = chamfer;
     cmd.data.rectangle.rotation = rotation;
     return cmd;
   }
@@ -250,7 +254,9 @@ public:
                             float roundness, int segments,
                             const std::bitset<4> &corners, int layer,
                             EntityID entity_id = -1, float thickness = 0.0f,
-                            float rotation = 0.f) {
+                            float rotation = 0.f,
+                            const std::bitset<4> &chamfer =
+                                std::bitset<4>().reset()) {
     RenderPrimitive cmd(RenderPrimitiveType::RoundedRectangleOutline, layer,
                         entity_id);
     cmd.data.outline.rect = rect;
@@ -258,6 +264,7 @@ public:
     cmd.data.outline.roundness = roundness;
     cmd.data.outline.segments = segments;
     cmd.data.outline.corners = corners;
+    cmd.data.outline.chamfer = chamfer;
     cmd.data.outline.thickness = thickness;
     cmd.data.outline.rotation = rotation;
     return cmd;
@@ -406,15 +413,20 @@ public:
   void add_rounded_rectangle(const RectangleType &rect, Color fill,
                              float roundness, int segments,
                              const std::bitset<4> &corners, int layer,
-                             EntityID entity_id = -1, float rotation = 0.0f) {
+                             EntityID entity_id = -1, float rotation = 0.0f,
+                             const std::bitset<4> &chamfer =
+                                 std::bitset<4>().reset()) {
     commands_.push_back(RenderPrimitive::rounded_rectangle(
-        rect, fill, roundness, segments, corners, layer, entity_id, rotation));
+        rect, fill, roundness, segments, corners, layer, entity_id, rotation,
+        chamfer));
   }
 
   void add_border(RectangleType rect, Color color, float roundness, int segments,
-                  std::bitset<4> corners, float thickness, int layer, EntityID id) {
+                  std::bitset<4> corners, float thickness, int layer, EntityID id,
+                  std::bitset<4> chamfer = std::bitset<4>().reset()) {
     auto command = RenderPrimitive::rounded_rectangle_outline(
-        rect, color, roundness, segments, corners, layer, id, thickness);
+        rect, color, roundness, segments, corners, layer, id, thickness, 0.f,
+        chamfer);
     command.type = RenderPrimitiveType::Border;
     commands_.push_back(command);
   }
@@ -431,10 +443,12 @@ public:
                                      float roundness, int segments,
                                      const std::bitset<4> &corners, int layer,
                                      EntityID entity_id = -1,
-                                     float thickness = 0.0f, float rotation = 0.f) {
+                                     float thickness = 0.0f, float rotation = 0.f,
+                                     const std::bitset<4> &chamfer =
+                                         std::bitset<4>().reset()) {
     commands_.push_back(RenderPrimitive::rounded_rectangle_outline(
         rect, color, roundness, segments, corners, layer, entity_id,
-        thickness, rotation));
+        thickness, rotation, chamfer));
   }
 
   // Add text with optional stroke and shadow
@@ -653,7 +667,8 @@ public:
       case RenderPrimitiveType::Border: {
         const auto &border = cmd.data.outline;
         draw_uniform_border(border.rect, border.roundness, border.segments,
-                            border.corners, border.thickness, border.color);
+                            border.corners, border.thickness, border.color,
+                            border.chamfer);
         ++i;
         break;
       }
@@ -810,7 +825,7 @@ private:
       const auto &rect = cmds[i].data.rectangle;
       draw_rectangle_rounded_rotated(rect.rect, rect.roundness, rect.segments,
                                      rect.fill_color, rect.corners,
-                                     rect.rotation);
+                                     rect.rotation, rect.chamfer);
     }
   }
 
@@ -859,12 +874,13 @@ private:
                   ? 0.f
                   : std::clamp(2.f * (r0 + t) / shorter, 0.f, 1.f);
           draw_rectangle_rounded_lines(thickRect, rn, outline.segments,
-                                       outline.color, outline.corners);
+                                       outline.color, outline.corners,
+                                       outline.chamfer);
         }
       } else {
         draw_rectangle_rounded_lines(outline.rect, outline.roundness,
                                      outline.segments, outline.color,
-                                     outline.corners);
+                                     outline.corners, outline.chamfer);
       }
       pop_rotation();
     }
