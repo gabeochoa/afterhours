@@ -1,10 +1,3 @@
-// The focusable set used to be a std::set cleared and refilled every frame:
-// one tree-node malloc per focusable widget per frame, plus the full
-// can_be_focused walk (ancestor chain + input gates) for every entity.
-// HandleTabbing now snapshots every focusability input; while the snapshot
-// still matches, the cached order is replayed and no rebuild happens.
-//
-// Counted, not timed: rebuild counts and allocations are deterministic.
 
 #include "ui_test_harness.h"
 
@@ -38,8 +31,6 @@ struct TabRig {
     tabbing.context = &h.context();
   }
 
-  // One frame: rebuild the widgets, lay out, run tabbing, end the frame the
-  // way EndUIContextManager does (focused_ids cleared, storage kept).
   void frame(bool skip_middle = false, int count = 3) {
     using namespace afterhours::ui::imm;
     auto &ctx = h.context();
@@ -77,7 +68,7 @@ struct TabRig {
   }
 };
 
-} // namespace
+}
 
 TEST(unchanged_frames_rebuild_once_and_allocate_nothing) {
   TabRig rig;
@@ -95,7 +86,6 @@ TEST(unchanged_frames_rebuild_once_and_allocate_nothing) {
     CHECK(ctx.focus_rebuild_count == 1);
     CHECK(ctx.focused_ids.ids == want);
     CHECK(ctx.focused_ids.capacity() == cap);
-    // Measure the tabbing pass itself on the last unchanged frame.
     if (i == 9) {
       ctx.focused_ids.clear();
       g_allocs = 0;
@@ -120,7 +110,6 @@ TEST(edits_invalidate_and_membership_matches_the_walk) {
   const std::size_t after_first = ctx.focus_rebuild_count;
   rig.end_frame();
 
-  // Config skip toggles in both directions.
   rig.frame(true);
   CHECK(ctx.focus_rebuild_count == after_first + 1);
   CHECK(ctx.focused_ids.ids == rig.expected_membership());
@@ -134,7 +123,6 @@ TEST(edits_invalidate_and_membership_matches_the_walk) {
   CHECK(ctx.focused_ids.ids == rig.expected_membership());
   rig.end_frame();
 
-  // A component added mid-frame, after the widgets were built.
   rig.frame(false);
   rig.end_frame();
   const std::size_t before_manual = ctx.focus_rebuild_count;
@@ -152,7 +140,6 @@ TEST(edits_invalidate_and_membership_matches_the_walk) {
   CHECK(ctx.focused_ids.contains(rig.ents[1]->id));
   rig.end_frame();
 
-  // An input gate blocks everything, then goes away.
   ctx.add_input_gate("block", [](EntityID) { return false; });
   rig.tabbing.once(.016f);
   for (Entity *e : rig.ents)
@@ -166,7 +153,6 @@ TEST(edits_invalidate_and_membership_matches_the_walk) {
   CHECK(ctx.focused_ids.ids == rig.expected_membership());
   rig.end_frame();
 
-  // A widget that appears later joins the set; nothing else changes.
   rig.frame(false, 4);
   CHECK(ctx.focused_ids.ids == rig.expected_membership());
   CHECK(ctx.focused_ids.size() == 4);

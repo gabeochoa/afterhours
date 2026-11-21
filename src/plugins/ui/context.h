@@ -160,8 +160,6 @@ enum struct FocusSource {
   Explicit
 };
 
-// Flat focusable-id set: clear() keeps the buffer, so refilling it every
-// frame costs no allocation once warm (a std::set paid one node per id).
 struct FocusedIdSet {
   std::vector<EntityID> ids;
   void insert(EntityID id) {
@@ -186,9 +184,6 @@ struct FocusedIdSet {
   bool operator==(const FocusedIdSet &) const = default;
 };
 
-// One entity's focusability inputs, snapshotted by HandleTabbing: if every
-// row still matches, the cached focus order is still exact and the rebuild
-// (ancestor walks, gate calls, inserts) can be skipped for the frame.
 struct FocusCacheEntry {
   EntityID id = -1;
   EntityID parent = -1;
@@ -218,9 +213,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   EntityID text_selection_entity = ROOT;
   text_selection::Selection label_text_selection;
 
-  // Focus-order cache (filled by HandleTabbing). focus_snapshot rows are the
-  // inputs the cached order was built from; focus_rebuild_count counts full
-  // rebuilds so tests can prove unchanged frames do not pay for one again.
   std::vector<EntityID> focus_order_cache;
   std::vector<FocusCacheEntry> focus_snapshot_cache;
   std::vector<FocusCacheEntry> focus_snapshot_scratch;

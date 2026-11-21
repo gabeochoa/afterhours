@@ -1090,7 +1090,6 @@ bool can_be_focused(UIContext<InputAction> &ctx, const Entity &e) {
   return ctx.is_tab_focusable(e);
 }
 
-// Every focusability input of one entity, for the cache snapshot below.
 template <typename InputAction>
 void snapshot_focus_inputs(UIContext<InputAction> &ctx) {
   ctx.focus_snapshot_scratch.clear();
