@@ -127,7 +127,6 @@ struct MotionTarget {
   bool set = false;
   float value = 0.f;
   std::optional<float> reset_to;
-  // Single-value change pulse: go to `value`, then return to `pulse_rest`.
   std::optional<float> pulse_rest;
   motion::Mode mode = motion::Spring::smooth();
   float delay = 0.f;
@@ -250,9 +249,6 @@ inline MotionTargets resolve_motion(const std::vector<MotionRule> &rules,
     seen = r.stamp;
     if (fired) {
       assign(r, [](const MotionProp &p, size_t) { return p.to; }, false, true);
-      // A single-value change (no from) is a pulse: reach `to`, then return
-      // to rest instead of targeting rest again next frame and never
-      // arriving. Two-value changes keep their from->to settle.
       for (size_t i = 0; i < kMotionProperties; ++i) {
         const MotionProp &p = motion_prop(r.props, i);
         if (p.set && !p.has_from)
@@ -345,9 +341,6 @@ inline MotionValues apply_motion(Ctx &ctx, Entity &entity,
     else if (!tr.started())
       tr.from(st.rest[i]);
     if (t.pulse_rest.has_value()) {
-      // Only start the pulse when neither leg is already the track target:
-      // during the return leg target() is pulse_rest, during the outward
-      // leg the queue tail is pulse_rest, so both read as in-flight.
       if (!tr.active() || (tr.target() != t.value && tr.target() != *t.pulse_rest)) {
         tr.to(t.value, t.mode);
         tr.then(*t.pulse_rest, t.mode);
@@ -422,8 +415,6 @@ inline std::vector<MotionRule> motion_rules(const ui::imm::ComponentConfig &conf
   std::vector<MotionRule> rules;
   for (const MotionExt *ext : ui::imm::extensions_all<MotionExt>(config))
     rules.push_back(ext->rule);
-  // Built-in presets return a bare MotionRule; .with(presets::fade_up())
-  // stored one as an extension and it was silently dropped before this.
   for (const MotionRule *ext : ui::imm::extensions_all<MotionRule>(config))
     rules.push_back(*ext);
   return rules;

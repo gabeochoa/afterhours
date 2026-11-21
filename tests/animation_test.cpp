@@ -356,7 +356,6 @@ int main() {
   }
 
   {
-    // delay() on a fresh track logs and does nothing; value/active unchanged.
     afterhours::motion::Track<float> tr;
     tr.delay(1.f);
     check(!tr.active() && near(tr.value(), 0.f),

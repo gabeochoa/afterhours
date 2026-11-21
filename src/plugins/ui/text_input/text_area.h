@@ -612,8 +612,6 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                                  (!config.text_area_submit_on_enter || shift);
       if (wants_newline) {
         if (editable) {
-          // Same contract as typing a character: one undo snapshot, and a
-          // selection is replaced rather than left straddling the break.
           state.push_undo_snapshot();
           if (state.has_selection())
             delete_selection(state);

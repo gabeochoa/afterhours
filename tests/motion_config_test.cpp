@@ -223,7 +223,6 @@ int main() {
   }
 
   {
-    // Single-value on_change is a pulse: fired target carries pulse_rest.
     HasMotionState st;
     std::vector<MotionRule> pop{{MotionTrigger::Change, {.scale = 0.97f}, motion::Spring::bouncy()}};
     pop[0].stamp = 1;
@@ -239,7 +238,6 @@ int main() {
   }
 
   {
-    // Built-in presets return MotionRule and must be collected.
     ui::imm::ComponentConfig cfg;
     cfg.with(afterhours::presets::fade_up());
     auto rules = motion_rules(cfg);
@@ -248,8 +246,6 @@ int main() {
   }
 
   {
-    // apply_motion: a pulse reaches its target, then returns; a with_reset
-    // re-fire mid-flight does not teleport to the reset pose.
     struct FakeCtx {
       bool was_hot(afterhours::EntityID) { return false; }
       bool was_active(afterhours::EntityID) { return false; }
@@ -265,7 +261,7 @@ int main() {
     };
     apply_motion(ctx, e, rules);
     rules[0].stamp = 2;
-    apply_motion(ctx, e, rules); // pulse starts
+    apply_motion(ctx, e, rules);
     advance(0.05f);
     apply_motion(ctx, e, rules);
     float mid = apply_motion(ctx, e, rules).scale;
@@ -293,11 +289,11 @@ int main() {
     rules.push_back(on_change(1, {.scale = {1.3f, 1.f}}, slow).rule);
     apply_motion(ctx, e, rules);
     rules[0].stamp = 2;
-    apply_motion(ctx, e, rules); // from 1.3 -> 1 over 1s
+    apply_motion(ctx, e, rules);
     e.get<motion::HasTracks>().advance(0.5f);
     float before = apply_motion(ctx, e, rules).scale;
     rules[0].stamp = 3;
-    apply_motion(ctx, e, rules); // re-fire while active
+    apply_motion(ctx, e, rules);
     float after = e.get<motion::HasTracks>().track<float>(kScale).value();
     check(std::fabs(after - before) < 1e-4f && std::fabs(after - 1.3f) > 0.05f,
           "with_reset re-fire mid-flight does not teleport to reset pose");

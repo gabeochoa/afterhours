@@ -132,10 +132,6 @@ template <typename T> struct Track {
     chain.push_back(s);
     begin(s);
     if (instant_flag() && !is_essential) {
-      // Land now so a sample before the first advance already reads the
-      // target; the track stays active so advance() still runs its instant
-      // finish (chain, completion callback), and an essential() call after
-      // to() can still take the normal path.
       pos = step.target;
       vel.fill(0.f);
     }

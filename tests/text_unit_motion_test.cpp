@@ -96,8 +96,6 @@ int main() {
               floats.at(unit_key(2, UnitProp::Opacity)).active(),
           "only the unit whose text changed animates again");
 
-    // Change a unit while it is still animating: it must not snap back to
-    // the enter pose (opacity 0). Advance a little, retarget, keep opacity.
     {
       auto &tr = e.get<motion::HasTracks>().floats.at(unit_key(2, UnitProp::Opacity));
       tr.advance(0.05f);

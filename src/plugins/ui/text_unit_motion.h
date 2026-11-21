@@ -106,8 +106,6 @@ inline void update_text_units(Entity &entity, const std::string &label) {
     const float delay =
         stagger_delay(changed, changed_indices.size(), st.cfg.stagger, st.cfg.order, st.seed);
     ++changed;
-    // A unit changed while its tracks are still running continues from the
-    // pose on screen; only a genuinely new (inactive) unit starts at from.
     auto start = [&](UnitProp prop, float from_value, float to_value) {
       auto &tr = tracks.track<float>(unit_key(i, prop));
       if (tr.active())
