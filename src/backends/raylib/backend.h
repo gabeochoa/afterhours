@@ -194,6 +194,8 @@ struct RaylibPlatformAPI {
   struct color_type {
     unsigned char r, g, b, a;
   };
+  // Raylib has no GetWindowState, so requested flag bits are tracked here.
+  static inline unsigned int window_state_flags_ = 0;
 
   // ── Constants ──
   static constexpr unsigned int FLAG_WINDOW_RESIZABLE =
@@ -223,10 +225,13 @@ struct RaylibPlatformAPI {
   }
   static void set_window_state(unsigned int flags) {
     raylib::SetWindowState(flags);
+    window_state_flags_ |= flags;
   }
   static void clear_window_state(unsigned int flags) {
     raylib::ClearWindowState(flags);
+    window_state_flags_ &= ~flags;
   }
+  static unsigned int window_state() { return window_state_flags_; }
 
   // ── Config ──
   static void set_config_flags(unsigned int flags) {
