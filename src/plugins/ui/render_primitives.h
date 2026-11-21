@@ -3,6 +3,7 @@
 #include "../../graphics_common.h"
 
 #include "../../capture.h"
+#include "../../blend.h"
 
 #include <algorithm>
 #include <atomic>
@@ -42,6 +43,8 @@ enum class RenderPrimitiveType {
   ScissorEnd,
   ShaderStart,
   ShaderEnd,
+  BlendStart,
+  BlendEnd,
   Ring,
   RingSegment,
   NineSlice,
@@ -144,6 +147,10 @@ struct RenderPrimitive {
     struct {
       graphics::ShaderType *shader;
     } shader;
+
+    struct {
+      blend::Mode mode;
+    } blend;
 
     struct {
       float center_x;
@@ -298,6 +305,17 @@ public:
 
   static RenderPrimitive shader_end(int layer, EntityID entity_id = -1) {
     return RenderPrimitive(RenderPrimitiveType::ShaderEnd, layer, entity_id);
+  }
+
+  static RenderPrimitive blend_start(blend::Mode mode, int layer,
+                                     EntityID entity_id = -1) {
+    RenderPrimitive cmd(RenderPrimitiveType::BlendStart, layer, entity_id);
+    cmd.data.blend.mode = mode;
+    return cmd;
+  }
+
+  static RenderPrimitive blend_end(int layer, EntityID entity_id = -1) {
+    return RenderPrimitive(RenderPrimitiveType::BlendEnd, layer, entity_id);
   }
 
   static RenderPrimitive ring(float center_x, float center_y,
@@ -577,6 +595,14 @@ public:
     commands_.push_back(RenderPrimitive::shader_end(layer, entity_id));
   }
 
+  void add_blend_start(blend::Mode mode, int layer, EntityID entity_id = -1) {
+    commands_.push_back(RenderPrimitive::blend_start(mode, layer, entity_id));
+  }
+
+  void add_blend_end(int layer, EntityID entity_id = -1) {
+    commands_.push_back(RenderPrimitive::blend_end(layer, entity_id));
+  }
+
   // Add ring (for circular progress background)
   void add_ring(float center_x, float center_y, float inner_radius,
                 float outer_radius, int segments, Color color, int layer,
@@ -638,6 +664,7 @@ public:
     size_t text_commands = 0;
     size_t image_commands = 0;
     size_t scissor_operations = 0;
+    size_t blend_operations = 0;
   };
 
   void render(const RenderCommandBuffer &buffer, FontManager &fonts) {
@@ -646,6 +673,7 @@ public:
     stats_.total_commands = commands.size();
 
     std::optional<std::array<int, 4>> active_clip;
+    blend::Mode active_blend = blend::current();
     size_t i = 0;
     while (i < commands.size()) {
       const auto &cmd = commands[i];
@@ -745,6 +773,31 @@ public:
 
       case RenderPrimitiveType::ShaderEnd:
         ::afterhours::end_shader_mode();
+        i++;
+        break;
+
+      case RenderPrimitiveType::BlendStart:
+        // set_blend_mode flushes on change, so a redundant start is not free.
+        if (cmd.data.blend.mode != active_blend) {
+          set_blend_mode(cmd.data.blend.mode);
+          active_blend = cmd.data.blend.mode;
+          stats_.blend_operations++;
+        }
+        i++;
+        break;
+
+      case RenderPrimitiveType::BlendEnd:
+        if (i + 1 < commands.size() &&
+            commands[i + 1].type == RenderPrimitiveType::BlendStart &&
+            commands[i + 1].data.blend.mode == active_blend) {
+          i += 2; // adjacent End/Start of the active mode draws nothing apart
+          break;
+        }
+        if (active_blend != blend::Mode::Alpha) {
+          set_blend_mode(blend::Mode::Alpha);
+          active_blend = blend::Mode::Alpha;
+          stats_.blend_operations++;
+        }
         i++;
         break;
 

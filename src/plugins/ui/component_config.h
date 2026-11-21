@@ -84,6 +84,7 @@ struct ComponentConfig {
   Theme::Usage color_usage = Theme::Usage::Default;
   std::optional<Color> custom_color;
   std::optional<Color> hover_color; // Per-component hover background override
+  std::optional<bool> skip_hover_override;
   // Text color settings (explicit override)
   Theme::Usage text_color_usage = Theme::Usage::Default;
   std::optional<Color> custom_text_color;
@@ -119,6 +120,7 @@ struct ComponentConfig {
   bool ignore_pointer_events = false; // invisible to hit-testing
   bool inert = false;
   bool takes_focus = true;
+  bool hoverable = false;
   // User data, not localizable copy: the pseudo-locale stress leaves this
   // label (and this component's RTL mirroring) alone.
   bool pseudo_locale_exempt = false;
@@ -232,6 +234,7 @@ struct ComponentConfig {
   std::optional<TextUnitMotion> unit_motion;
   float blur = 0.f;
   graphics::ShaderType *shader = nullptr;
+  std::optional<blend::Mode> blend_mode;
   float origin_x = 0.5f;
   float origin_y = 0.5f;
 
@@ -396,6 +399,10 @@ struct ComponentConfig {
     hover_color = color;
     return *this;
   }
+  ComponentConfig &with_skip_hover_override(bool skip = true) {
+    skip_hover_override = skip;
+    return *this;
+  }
 
   // Backwards-compatible aliases kept intentionally while call sites migrate.
   ComponentConfig &with_color_usage(Theme::Usage usage) {
@@ -470,6 +477,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_word_wrap(bool enabled) {
     text_area_word_wrap = enabled;
+    // Labels read text_overflow, not text_area_word_wrap -- without this a
+    // plain label silently stayed one line, so with_word_wrap only ever
+    // wrapped a text_area.
+    text_overflow = enabled ? TextOverflow::Wrap : TextOverflow::Clip;
     return *this;
   }
   ComponentConfig &with_max_lines(size_t max) {
@@ -596,6 +607,9 @@ struct ComponentConfig {
     tooltip_gap = gap;
     return *this;
   }
+  // Hit rule for overlaps: highest layer wins; on a tie the element later
+  // in tree (paint) order wins -- so a close-x button drawn after its tab,
+  // or nested inside it, takes the click.
   ComponentConfig &with_render_layer(int layer) {
     render_layer = layer;
     return *this;
@@ -653,6 +667,10 @@ struct ComponentConfig {
     takes_focus = takes;
     return *this;
   }
+  ComponentConfig &with_hoverable(bool on = true) {
+    hoverable = on;
+    return *this;
+  }
   ComponentConfig &with_pseudo_locale_exempt(bool exempt = true) {
     pseudo_locale_exempt = exempt;
     return *this;
@@ -693,6 +711,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_shader(graphics::ShaderType &s) {
     shader = &s;
+    return *this;
+  }
+  ComponentConfig &with_blend_mode(blend::Mode m) {
+    blend_mode = m;
     return *this;
   }
   ComponentConfig &with_blur(float radius) {
@@ -1171,6 +1193,8 @@ struct ComponentConfig {
       merged.inert = true;
     if (!overrides.takes_focus)
       merged.takes_focus = false;
+    if (overrides.hoverable)
+      merged.hoverable = true;
     if (overrides.pseudo_locale_exempt)
       merged.pseudo_locale_exempt = true;
     if (overrides.selects_on_focus())
@@ -1278,6 +1302,8 @@ struct ComponentConfig {
     // Colour and corner detail
     if (overrides.hover_color.has_value())
       merged.hover_color = overrides.hover_color;
+    if (overrides.skip_hover_override.has_value())
+      merged.skip_hover_override = overrides.skip_hover_override;
     // Defaults true, so only a caller turning it off can be detected.
     if (!overrides.auto_text_color)
       merged.auto_text_color = false;
@@ -1372,6 +1398,8 @@ struct ComponentConfig {
       merged.blur = overrides.blur;
     if (overrides.shader)
       merged.shader = overrides.shader;
+    if (overrides.blend_mode.has_value())
+      merged.blend_mode = overrides.blend_mode;
     if (overrides.origin_x != 0.5f || overrides.origin_y != 0.5f) {
       merged.origin_x = overrides.origin_x;
       merged.origin_y = overrides.origin_y;
