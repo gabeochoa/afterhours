@@ -199,6 +199,7 @@ ALL_TESTS := \
 	scissor_coalescing_test \
 	focus_origin_test \
 	cleanup_order_test \
+	event_phases_test \
 	entity_pool_test \
 	entity_query_test \
 	get_or_default_test \
