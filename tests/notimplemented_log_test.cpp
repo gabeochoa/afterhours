@@ -1,8 +1,3 @@
-// Unimplemented platform/backend paths log "@notimplemented ..." once per
-// callsite instead of failing silently. Compiled with no backend defined, so
-// every header below takes its none/stub arm. Follows the
-// audio_stub_warn_test pattern: capture log_sink_fn, call twice, expect
-// exactly one warning naming the function.
 #define AFTER_HOURS_USE_NONE 1
 
 #include <afterhours/src/plugins/clipboard.h>
@@ -47,7 +42,6 @@ static int count_containing(const std::string &needle) {
   return n;
 }
 
-// Call fn twice; expect exactly one @notimplemented line naming `name`.
 template <typename F> static void check_once(F &&fn, const char *name) {
   const int before = count_containing(name);
   fn();
@@ -61,7 +55,6 @@ int main() {
   const auto previous = log_sink_fn;
   log_sink_fn = capture_sink;
 
-  // clipboard (none fallback)
   check_once([] { afterhours::clipboard::set_text("x"); },
              "clipboard::set_text");
   check_once([] { (void)afterhours::clipboard::get_text(); },
@@ -71,7 +64,6 @@ int main() {
   check(afterhours::clipboard::get_text().empty(),
         "clipboard stub still returns empty");
 
-  // none drawing helpers
   check_once(
       [] {
         afterhours::graphics::ShaderType s{};
@@ -100,7 +92,6 @@ int main() {
       },
       "capture_render_texture_png");
 
-  // none font helper
   check_once([] { (void)afterhours::load_font_from_file("x.ttf"); },
              "load_font_from_file");
   check_once(
@@ -112,7 +103,6 @@ int main() {
       [] { (void)afterhours::load_font_for_string("x", "y"); },
       "load_font_for_string");
 
-  // models stub (non-raylib)
   check_once([] { (void)afterhours::load_model("x.glb"); }, "load_model");
   check_once(
       [] {
@@ -125,7 +115,6 @@ int main() {
   check_once([] { (void)afterhours::load_instancing_shader(); },
              "load_instancing_shader");
 
-  // texture_manager (no backend)
   check_once(
       [] {
         afterhours::texture_manager::draw_texture_pro(
@@ -137,7 +126,6 @@ int main() {
       },
       "texture_manager::draw_texture_pro");
 
-  // camera stub
   check_once(
       [] {
         afterhours::camera::HasCamera cam;
@@ -151,11 +139,9 @@ int main() {
       },
       "camera::HasCamera::set_zoom");
 
-  // window_manager (no backend)
   check_once([] { afterhours::window_manager::set_window_size(800, 600); },
              "window_manager::set_window_size");
 
-  // input (no backend): the one poll that used to return silently
   check_once([] { (void)afterhours::input::is_key_pressed_repeat(65); },
              "is_key_pressed_repeat");
   check(!afterhours::input::is_key_pressed_repeat(65),
