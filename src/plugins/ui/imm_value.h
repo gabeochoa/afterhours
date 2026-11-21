@@ -91,6 +91,18 @@ static void update_main_label(Entity &slider_entity,
   }
 }
 
+// Resolve a knob Size to px against a laid-out track. Percent is of the
+// track width; screen sizes resolve against the screen height/width the
+// same way resolve_to_pixels does.
+static float slider_size_px(const Size &sz, float track_w, float screen_w,
+                            float screen_h) {
+  if (sz.dim == Dim::Percent)
+    return sz.value * track_w;
+  if (sz.dim == Dim::Pixels)
+    return sz.value;
+  return resolve_to_pixels(sz, screen_w, screen_h);
+}
+
 } // namespace detail
 
 
@@ -158,12 +170,30 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
                        .with_rounded_corners(elem_corners)
                        .with_render_layer(config.render_layer + 1);
   default_color_usage(bg_config, Theme::Usage::Secondary);
+  if (config.slider_style.has_value()) {
+    // Hit area only: no full-height paint, and centre the thin track.
+    bg_config.with_color_usage(Theme::Usage::None)
+        .with_justify_content(JustifyContent::Center);
+  }
   auto elem = div(ctx, mk(entity, parent.id + entity.id + 0), bg_config);
 
   elem.ent().template get<UIComponent>().set_desired_width(bg_size.x_axis);
 
   Entity &slider_bg = elem.ent();
   slider_bg.template addComponentIfMissing<InFocusCluster>();
+
+  // Option 1 (decide-slider-parts): opt-in part styling. Unset, every
+  // geometry and colour below is the historical one, pixel for pixel.
+  const bool styled = config.slider_style.has_value();
+  const SliderStyle slider_style =
+      styled ? config.slider_style.value() : SliderStyle{};
+  const Size knob_size = slider_style.handle_size.value_or(pixels(16.f));
+  const Size track_thickness_sz =
+      slider_style.track_thickness.value_or(pixels(8.f));
+  // When styled the background entity is only the hit/drag area; the
+  // visible track is a centred child drawn below.
+  if (styled)
+    slider_bg.removeComponentIfExists<HasColor>();
 
   if (slider_bg.is_missing<ui::HasSliderState>())
     slider_bg.addComponent<ui::HasSliderState>(owned_value);
@@ -173,7 +203,7 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
     sliderState.value = detail::sanitize_fraction(owned_value);
 
   // Create value update function
-  auto apply_slider_value = [&sliderState, original_label, handle_label_position](
+  auto apply_slider_value = [&sliderState, original_label, handle_label_position, styled, knob_size](
                                 Entity &target, float new_value_pct) {
     if (!std::isfinite(new_value_pct))
       return; // degenerate maths (e.g. 0-width track) keeps the old value
@@ -188,8 +218,32 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       EntityID child_id = cmp.children[0];
       Entity &child = UICollectionHolder::getEntityForIDEnforce(child_id);
       UIComponent &child_cmp = child.get<UIComponent>();
-      child_cmp.set_desired_margin(
-          percent(sliderState.value * 0.75f), Axis::left);
+      if (styled) {
+        const Rectangle r = cmp.rect();
+        const float hw = detail::slider_size_px(knob_size, r.width, 1280.f, 720.f);
+        const float frac = r.width > 0.f ? hw / r.width : 0.f;
+        child_cmp.set_desired_margin(
+            percent(sliderState.value * (1.f - frac)), Axis::left);
+        child_cmp.set_desired_margin(
+            pixels(r.height > 0.f ? (r.height - hw) * 0.5f : 0.f),
+            Axis::top);
+        // Fill follows to the knob centre.
+        if (cmp.children.size() > 1) {
+          Entity &track_ent =
+              UICollectionHolder::getEntityForIDEnforce(cmp.children[1]);
+          UIComponent &track_cmp = track_ent.get<UIComponent>();
+          if (!track_cmp.children.empty()) {
+            Entity &fill_ent = UICollectionHolder::getEntityForIDEnforce(
+                track_cmp.children[0]);
+            const float centre =
+                sliderState.value * (1.f - frac) + frac * 0.5f;
+            fill_ent.get<UIComponent>().set_desired_width(percent(centre));
+          }
+        }
+      } else {
+        child_cmp.set_desired_margin(
+            percent(sliderState.value * 0.75f), Axis::left);
+      }
 
       // Update labels based on position
       if (handle_label_position == SliderHandleValueLabelPosition::OnHandle) {
@@ -206,11 +260,14 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Add drag listener
   slider_bg.addComponentIfMissing<ui::HasDragListener>(
-      [apply_slider_value, &sliderState, &ctx](Entity &draggable) {
+      [apply_slider_value, &sliderState, &ctx, styled, knob_size](Entity &draggable) {
         UIComponent &cmp = draggable.get<UIComponent>();
         Rectangle rect = cmp.rect();
-        // Map over handle travel (track minus the 25% handle), not width.
-        const float handle_w = rect.width * 0.25f;
+        // Map over handle travel (track minus the handle), not width.
+        const float handle_w =
+            styled ? detail::slider_size_px(knob_size, rect.width,
+                                            ctx.screen_width, ctx.screen_height)
+                   : rect.width * 0.25f;
         const float travel = rect.width - handle_w;
         if (travel <= 0.f)
           return;
@@ -245,23 +302,82 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   const Size handle_width_size = percent(0.25f);
   const Size handle_left_size = percent(sliderState.value * 0.75f);
 
-  // TODO: Support custom handle height via a dedicated config field
-  // (e.g. with_slider_handle_height) to allow oversized knob-style handles.
-  auto handle_config =
-      ComponentConfig::inherit_from(config, "slider_handle")
-          .with_size(ComponentSize{handle_width_size, percent(1.f)})
-          .with_absolute_position()
-          .with_margin(Margin{.left = handle_left_size})
-          .with_rounded_corners(config.rounded_corners.value())
-          .with_debug_name("slider_handle")
-          .with_render_layer(config.render_layer + 2);
-  default_color_usage(handle_config, Theme::Usage::Primary);
+  // Styled geometry from the last laid-out track (this frame's layout runs
+  // after the build; the first frame falls back to the size's own fraction).
+  const Rectangle prev_rect = slider_bg.get<UIComponent>().rect();
+  const float knob_px = detail::slider_size_px(knob_size, prev_rect.width,
+                                               ctx.screen_width,
+                                               ctx.screen_height);
+  const float knob_frac =
+      prev_rect.width > 0.f
+          ? knob_px / prev_rect.width
+          : (knob_size.dim == Dim::Percent ? knob_size.value : 0.f);
+  const float knob_left_frac = sliderState.value * (1.f - knob_frac);
+  const float knob_centre_frac = knob_left_frac + knob_frac * 0.5f;
 
-  auto handle = div(ctx, mk(slider_bg), handle_config);
+  auto handle_config =
+      styled ? ComponentConfig::inherit_from(config, "slider_handle")
+                   .with_size(ComponentSize{knob_size, knob_size})
+                   .with_absolute_position()
+                   .with_margin(Margin{.top = pixels(prev_rect.height > 0.f
+                                                         ? (prev_rect.height - knob_px) * 0.5f
+                                                         : 0.f),
+                                       .left = percent(knob_left_frac)})
+                   .with_rounded_corners(
+                       config.rounded_corners.has_value() &&
+                               config.rounded_corners.value().any()
+                           ? std::bitset<4>(0b1111)
+                           : config.rounded_corners.value())
+                   .with_debug_name("slider_handle")
+                   .with_render_layer(config.render_layer + 3)
+             : ComponentConfig::inherit_from(config, "slider_handle")
+                   .with_size(ComponentSize{handle_width_size, percent(1.f)})
+                   .with_absolute_position()
+                   .with_margin(Margin{.left = handle_left_size})
+                   .with_rounded_corners(config.rounded_corners.value())
+                   .with_debug_name("slider_handle")
+                   .with_render_layer(config.render_layer + 2);
+  default_color_usage(handle_config, Theme::Usage::Primary);
+  if (styled && slider_style.handle.has_value())
+    handle_config.with_custom_background(slider_style.handle.value());
+
+  auto handle = div(ctx, mk(slider_bg, 0), handle_config);
   handle.cmp()
       .set_desired_width(handle_config.size.x_axis)
-      .set_desired_height(percent(1.f));
+      .set_desired_height(styled ? knob_size : percent(1.f));
   handle.ent().template addComponentIfMissing<InFocusCluster>();
+
+  if (styled) {
+    // Visible track: thin, centred (bg is JustifyContent::Center), under
+    // the knob. Fill runs from its start to the knob centre.
+    auto track_config =
+        ComponentConfig::inherit_from(config, "slider_track")
+            .with_size(ComponentSize{percent(1.f), track_thickness_sz})
+            .with_rounded_corners(elem_corners)
+            .with_debug_name("slider_track")
+            .with_render_layer(config.render_layer + 1);
+    default_color_usage(track_config, Theme::Usage::Secondary);
+    if (slider_style.track.has_value())
+      track_config.with_custom_background(slider_style.track.value());
+    auto track = div(ctx, mk(slider_bg, 1), track_config);
+    track.ent().template addComponentIfMissing<InFocusCluster>();
+
+    auto fill_corners = RoundedCorners(elem_corners);
+    if (sliderState.value < 0.99f)
+      fill_corners.sharp(TOP_RIGHT).sharp(BOTTOM_RIGHT);
+    auto fill_config =
+        ComponentConfig::inherit_from(config, "slider_fill")
+            .with_size(ComponentSize{percent(knob_centre_frac), percent(1.f)})
+            .with_absolute_position()
+            .with_rounded_corners(fill_corners)
+            .with_debug_name("slider_fill")
+            .with_render_layer(config.render_layer + 2);
+    default_color_usage(fill_config, Theme::Usage::Primary);
+    if (slider_style.fill.has_value())
+      fill_config.with_custom_background(slider_style.fill.value());
+    auto fill = div(ctx, mk(track.ent(), 0), fill_config);
+    fill.ent().template addComponentIfMissing<InFocusCluster>();
+  }
 
   // Add handle label if needed
   if (handle_label_position == SliderHandleValueLabelPosition::OnHandle) {
