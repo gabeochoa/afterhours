@@ -407,6 +407,24 @@ TEST(escape_blurs_without_swallowing_dialog_dismissal) {
   CHECK(text == "Draft");
 }
 
+TEST(escape_does_not_blur_when_with_escape_blurs_is_off) {
+  ImmTestHarness h;
+  std::string text = "Draft";
+  auto emit = [&] { imm::text_input(h.context(), mk(h.root(), 0), text,
+      ComponentConfig{}.with_size({pixels(220), pixels(40)})
+          .with_escape_blurs(false)); };
+  two_frames(h, emit);
+  auto *field = find_field_entity();
+  CHECK(field != nullptr);
+  if (!field) return;
+  h.context().set_focus(field->id);
+  h.context().last_action = ui_test::TestInputAction::MenuBack;
+  emit();
+  CHECK(h.context().focus_id == field->id);
+  CHECK(h.context().pressed(ui_test::TestInputAction::MenuBack));
+  CHECK(text == "Draft");
+}
+
 TEST(text_field_padding_does_not_hide_a_real_leaf_padding_warning) {
   ImmTestHarness h;
   static std::string warnings;
