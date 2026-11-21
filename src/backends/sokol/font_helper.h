@@ -277,9 +277,7 @@ inline Vector2Type measure_text(const Font font, const char *text,
   float dpi = graphics::metal_detail::dpi_scale();
   fonsSetSize(ctx, size * dpi);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
-  // Raylib's default 1px gap is sokol's 0 baseline (decision decide-sokol-spacing
-  // option B): only the excess over 1 is extra letter spacing. Unclamped, so
-  // negative extra spacing tightens glyphs. Scaled by dpi like the size.
+  // Only excess over raylib's 1px gap counts; negatives tighten, dpi-scaled.
   fonsSetSpacing(ctx, (spacing - 1.f) * dpi);
   // Advance, not the ink box: ink drops the side bearings, so text sized from
   // it comes up short and clips.
