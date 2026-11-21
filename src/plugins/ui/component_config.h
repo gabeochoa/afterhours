@@ -151,6 +151,8 @@ struct ComponentConfig {
   float tooltip_gap = 4.f;
   RenderPrimitive::CustomDrawFn on_draw_bg;
   RenderPrimitive::CustomDrawFn on_draw_fg;
+  // Fired synchronously inside text_input/text_area on Enter, never stored.
+  std::function<void(std::string_view)> on_submit;
 
   std::string font_name = UIComponent::UNSET_FONT;
   colors::FontWeight font_weight = colors::FontWeight::Regular;
@@ -605,6 +607,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_on_draw_fg(RenderPrimitive::CustomDrawFn fn) {
     on_draw_fg = std::move(fn);
+    return *this;
+  }
+  ComponentConfig &with_on_submit(std::function<void(std::string_view)> fn) {
+    on_submit = std::move(fn);
     return *this;
   }
   ComponentConfig &with_disabled(bool dis) {
@@ -1244,6 +1250,8 @@ struct ComponentConfig {
       merged.on_draw_bg = overrides.on_draw_bg;
     if (overrides.on_draw_fg)
       merged.on_draw_fg = overrides.on_draw_fg;
+    if (overrides.on_submit)
+      merged.on_submit = overrides.on_submit;
 
     // Size constraints
     if (overrides.min_width.dim != Dim::None)

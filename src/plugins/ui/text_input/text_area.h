@@ -545,6 +545,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
         reset_blink(s);
       });
 
+  bool submitted = false;
   // Handle input when focused
   if (state.is_focused) {
     bool text_changed = false;
@@ -603,10 +604,17 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
           reset_blink(state);
           text_changed = true;
         }
-      } else if (entity.template has<HasTextInputListener>()) {
-        if (auto &listener = entity.template get<HasTextInputListener>();
-            listener.on_submit)
-          listener.on_submit(entity);
+      } else {
+        submitted = true;
+        if (entity.template has<HasTextInputListener>()) {
+          if (auto &listener = entity.template get<HasTextInputListener>();
+              listener.on_submit)
+            listener.on_submit(entity);
+        }
+        if (config.on_submit) {
+          const std::string submitted_text = state.text();
+          config.on_submit(submitted_text);
+        }
       }
     }
 
@@ -741,7 +749,9 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
 
   text = state.text();
   entity.template addComponentIfMissing<FocusClusterRoot>();
-  return ElementResult{state.changed_since, entity};
+  ElementResult result{state.changed_since, entity};
+  result.submitted = submitted;
+  return result;
 }
 
 } // namespace text_input
