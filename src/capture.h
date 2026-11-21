@@ -71,22 +71,40 @@ inline std::vector<DrawnCall> &calls() {
 
 inline void enable() { enabled() = true; }
 inline void disable() { enabled() = false; }
-inline void clear() { calls().clear(); }
 
 // Who decides when a frame starts.
 //
 // The UI render pass used to clear the buffer at its own start, which threw
-// away everything drawn before it -- for a game, the entire world. An app that
-// calls begin_frame() takes that over, so world draws survive to be asserted
-// on. One that never calls it keeps the old behaviour.
+// away everything drawn before it -- for a game, the entire world. The frame
+// boundary is the fix: graphics::begin_frame() calls capture::begin_frame()
+// on every backend, and an app with a custom loop can call it directly.
+// Once a boundary is in play the UI pass stops clearing, so world draws
+// recorded before the UI pass survive to be asserted on. An app that never
+// sees a boundary keeps the old UI-pass behaviour.
 inline bool &app_owns_frame() {
   static bool owned = false;
   return owned;
 }
 
+// Set by begin_frame(), consumed by the first record() of the new frame.
+// Clearing lazily instead of eagerly keeps the just-finished frame readable
+// during the update phase -- which is when E2E commands run -- while the
+// first draw of the next frame still starts from an empty buffer. Clearing
+// eagerly at the boundary would wipe the frame an expect_drawn is about to
+// retry against before it ever reads it.
+inline bool &frame_clear_pending() {
+  static bool pending = false;
+  return pending;
+}
+
+inline void clear() {
+  calls().clear();
+  frame_clear_pending() = false;
+}
+
 inline void begin_frame() {
   app_owns_frame() = true;
-  clear();
+  frame_clear_pending() = true;
 }
 
 // A view, not a `const std::string &`: that made every `const char *` caller
@@ -95,6 +113,10 @@ inline void record(const char *op, const RectangleType &rect,
                    const ColorType &color, std::string_view text = {}) {
   if (!enabled())
     return;
+  if (frame_clear_pending()) {
+    calls().clear();
+    frame_clear_pending() = false;
+  }
   calls().push_back({op, rect, color, std::string(text), current_entity(),
                      current_layer()});
 }

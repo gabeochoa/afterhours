@@ -88,6 +88,70 @@ int main() {
     check(has_op("texture_quad"), "texture_quad recorded");
   }
 
+  // One logical draw, one record: an outline is built from four edge quads
+  // on this backend, but raylib emits a single rectangle_outline and the
+  // capture stream must read the same on both.
+  {
+    afterhours::capture::clear();
+    g::begin_drawing();
+    afterhours::draw_rectangle_outline(RectangleType{10, 10, 50, 40},
+                                       Color{0, 255, 0, 255});
+    g::end_drawing();
+    int outlines = 0, rectangles = 0;
+    for (const auto &c : afterhours::capture::calls()) {
+      if (c.op == "rectangle_outline")
+        outlines++;
+      if (c.op == "rectangle")
+        rectangles++;
+    }
+    check(outlines == 1, "outline recorded exactly once");
+    check(rectangles == 0, "outline edges are not recorded as rectangles");
+  }
+
+  // Text with no usable font: the GPU paints nothing, but the app asked
+  // for the draw, and raylib records it. Recording must not wait on the
+  // font context or headless E2E is blind to text.
+  {
+    afterhours::capture::clear();
+    g::begin_drawing();
+    afterhours::Font no_font{};
+    afterhours::draw_text_ex(no_font, "nofont", Vector2Type{10, 10}, 16, 0,
+                             Color{255, 255, 255, 255});
+    afterhours::draw_text("alsonofont", 10, 30, 16,
+                          Color{255, 255, 255, 255});
+    g::end_drawing();
+    bool saw_ex = false, saw_plain = false;
+    for (const auto &c : afterhours::capture::calls()) {
+      if (c.op == "text" && c.text == "nofont")
+        saw_ex = true;
+      if (c.op == "text" && c.text == "alsonofont")
+        saw_plain = true;
+    }
+    check(saw_ex, "draw_text_ex recorded without a font");
+    check(saw_plain, "draw_text recorded without a font");
+  }
+
+  // Frame boundary: graphics::begin_frame() owns the capture lifetime, so
+  // a world draw stays readable into the next frame's update phase and the
+  // next frame's first draw replaces it.
+  {
+    afterhours::capture::clear();
+    g::begin_frame();
+    g::begin_drawing();
+    afterhours::draw_rectangle(RectangleType{1, 2, 3, 4},
+                               Color{255, 0, 0, 255});
+    g::end_drawing();
+    g::begin_frame();
+    check(has_op("rectangle"),
+          "world draw survives the frame boundary until first redraw");
+    g::begin_drawing();
+    afterhours::draw_circle_v(Vector2Type{50, 50}, 10,
+                              Color{255, 0, 255, 255});
+    g::end_drawing();
+    check(has_op("circle") && !has_op("rectangle"),
+          "first draw of the new frame flushes the old frame");
+  }
+
   // Text goes through the font path: load a face so the backend has a font
   // context, then draw through both text entry points.
   {

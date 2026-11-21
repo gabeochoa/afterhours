@@ -36,6 +36,11 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
                          const Vector2Type position, const float font_size,
                          const float, const Color color, const float = 0.0f,
                          const float = 0.0f, const float = 0.0f) {
+  // Recorded before the font checks, like raylib: a draw the GPU cannot
+  // paint yet (no font context in a headless E2E run) is still a draw the
+  // app asked for, and expect_drawn has nothing else to read.
+  capture::record("text", RectangleType{position.x, position.y, 0.f, font_size},
+                  color, content ? content : "");
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx)
     return;
@@ -43,8 +48,6 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
                                       : graphics::metal_detail::g_active_font;
   if (fid == FONS_INVALID)
     return;
-  capture::record("text", RectangleType{position.x, position.y, 0.f, font_size},
-                  color, content ? content : "");
   fonsSetFont(ctx, fid);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
@@ -71,11 +74,12 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
 
 inline void draw_text(const char *content, const float x, const float y,
                       const float font_size, const Color color) {
+  // See draw_text_ex: record first, paint if a font context exists.
+  capture::record("text", RectangleType{x, y, 0.f, font_size}, color,
+                  content ? content : "");
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx || graphics::metal_detail::g_active_font == FONS_INVALID)
     return;
-  capture::record("text", RectangleType{x, y, 0.f, font_size}, color,
-                  content ? content : "");
   fonsSetFont(ctx, graphics::metal_detail::g_active_font);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
@@ -108,15 +112,32 @@ inline void draw_rectangle(const RectangleType rect, const Color color) {
   sgl_end();
 }
 
+namespace metal_draw_detail {
+// One filled quad with no capture record: building blocks for composite
+// shapes (outlines, rounded corners) that already recorded themselves
+// under their own op. Recording the pieces too made one outline read as
+// an outline plus four rectangles, which raylib never emits.
+inline void fill_rect(const RectangleType rect, const Color color) {
+  sgl_begin_quads();
+  set_color(color);
+  sgl_v2f(rect.x, rect.y);
+  sgl_v2f(rect.x + rect.width, rect.y);
+  sgl_v2f(rect.x + rect.width, rect.y + rect.height);
+  sgl_v2f(rect.x, rect.y + rect.height);
+  sgl_end();
+}
+} // namespace metal_draw_detail
+
 inline void draw_rectangle_outline(const RectangleType rect, const Color color,
                                    const float thickness) {
-  // Draw 4 thin rects to form an outline
+  // Draw 4 thin rects to form an outline. Only the outline is recorded:
+  // raylib emits exactly one rectangle_outline for this call.
   capture::record("rectangle_outline", rect, color);
   float x = rect.x, y = rect.y, w = rect.width, h = rect.height, t = thickness;
-  draw_rectangle(RectangleType{x, y, w, t}, color);             // top
-  draw_rectangle(RectangleType{x, y + h - t, w, t}, color);     // bottom
-  draw_rectangle(RectangleType{x, y + t, t, h - 2 * t}, color); // left
-  draw_rectangle(RectangleType{x + w - t, y + t, t, h - 2 * t}, color); // right
+  metal_draw_detail::fill_rect(RectangleType{x, y, w, t}, color);             // top
+  metal_draw_detail::fill_rect(RectangleType{x, y + h - t, w, t}, color);     // bottom
+  metal_draw_detail::fill_rect(RectangleType{x, y + t, t, h - 2 * t}, color); // left
+  metal_draw_detail::fill_rect(RectangleType{x + w - t, y + t, t, h - 2 * t}, color); // right
 }
 
 inline void draw_rectangle_outline(const RectangleType rect,

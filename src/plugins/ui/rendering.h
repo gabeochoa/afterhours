@@ -2029,9 +2029,12 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 #endif
 
     // The buffer holds THIS frame, so an assertion reads what is on screen
-    // rather than everything drawn since the process started. Skipped when the
-    // app calls capture::begin_frame(): clearing here would throw away what it
-    // drew before the UI, which for a game is the whole world.
+    // rather than everything drawn since the process started. Skipped once
+    // a frame boundary is in play (graphics::begin_frame() takes one every
+    // frame, or the app calls capture::begin_frame() itself): clearing here
+    // would throw away what it drew before the UI, which for a game is the
+    // whole world. The boundary clears lazily at the next frame's first
+    // draw, so this frame stays readable until then.
     if (capture::enabled() && !capture::app_owns_frame())
       capture::clear();
 
@@ -2802,7 +2805,9 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     Arena &arena = get_render_arena();
     arena.reset();
 
-    // Same reason as RenderImm: the buffer is one frame, not the whole run.
+    // Same reason as RenderImm: the buffer is one frame, not the whole run,
+    // unless a frame boundary (graphics::begin_frame / capture::begin_frame)
+    // owns the lifetime instead.
     if (capture::enabled() && !capture::app_owns_frame())
       capture::clear();
 
