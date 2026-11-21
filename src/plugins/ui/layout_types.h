@@ -353,6 +353,7 @@ enum struct AlignItems {
   FlexEnd,   // Align to end of cross axis
   Center,    // Center on cross axis
   Stretch,   // Stretch to fill (for items without explicit cross-axis size)
+  Baseline,  // Rows only: align first text baselines; non-text tops sit on it
 };
 
 /// Controls how an individual element aligns itself within its parent.
@@ -363,6 +364,7 @@ enum struct SelfAlign {
   FlexStart, // Align to start of cross axis
   FlexEnd,   // Align to end of cross axis
   Center,    // Center on cross axis - common for centering content containers
+  Baseline,  // Rows only: align this child's first text baseline (see AlignItems)
 };
 
 /// Controls whether children wrap to new rows/columns when they exceed

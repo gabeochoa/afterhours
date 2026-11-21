@@ -3940,6 +3940,118 @@ TEST(align_items_stretch_size_flows_to_percent_child) {
   t.add_child(child, inner);
   t.run(root);
   CHECK_APPROX(t.ui(inner).computed[Axis::Y], 400.f);
+namespace {
+// Full layout with a stub text measure: height = font size, ascent = 0.8x it.
+void layout_with_baseline(TestLayout &t, Entity &root,
+                          const std::vector<Entity *> &mapping) {
+  AutoLayout al({1280, 720}, mapping);
+  al.set_measure_text_fn([](const std::string &, const std::string &s, float fs,
+                            float) -> Vector2Type {
+    return {static_cast<float>(s.size()) * 10.f, fs};
+  });
+  al.set_baseline_fn([](const std::string &, float fs) { return 0.8f * fs; });
+  al.build_cmp_cache();
+  al.prune_stale_children(root.get<UIComponent>());
+  al.reset_and_calculate_standalone(root.get<UIComponent>());
+  al.calculate_those_with_parents(root.get<UIComponent>());
+  al.calculate_those_with_children(root.get<UIComponent>());
+  al.solve_violations(root.get<UIComponent>());
+  al.compute_relative_positions(root.get<UIComponent>());
+  al.compute_rect_bounds(root.get<UIComponent>());
+  (void)t;
+}
+
+Entity &make_text_child(TestLayout &t, Entity &root, float font_px) {
+  auto &e = t.make_ui(pixels(60), Size{.dim = Dim::Text, .value = 0.f});
+  TestLayout::ui(e).font_size_explicitly_set = true;
+  TestLayout::ui(e).font_size = pixels(font_px);
+  e.addComponent<HasLabel>().label = "Aa";
+  t.add_child(root, e);
+  return e;
+}
+
+std::vector<Entity *> mapping_for(std::initializer_list<Entity *> ents) {
+  EntityID mx = 0;
+  for (auto *e : ents)
+    mx = std::max(mx, e->id);
+  std::vector<Entity *> m(static_cast<size_t>(mx) + 1, nullptr);
+  for (auto *e : ents)
+    m[e->id] = e;
+  return m;
+}
+} // namespace
+
+TEST(baseline_row_mixed_font_sizes_share_baseline) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(100));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_align_items(AlignItems::Baseline);
+  auto &small = make_text_child(t, root, 20.f);
+  auto &large = make_text_child(t, root, 40.f);
+  layout_with_baseline(t, root, mapping_for({&root, &small, &large}));
+
+  // Measured baselines: 0.8*20=16 from small's top, 0.8*40=32 from large's.
+  CHECK_APPROX(t.ui(large).rect().y, 0.f);
+  CHECK_APPROX(t.ui(small).rect().y, 16.f);
+  CHECK_APPROX(t.ui(small).rect().y + 16.f, t.ui(large).rect().y + 32.f);
+}
+
+TEST(baseline_row_non_text_child_top_sits_on_baseline) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(100));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_align_items(AlignItems::Baseline);
+  auto &label = make_text_child(t, root, 40.f);
+  auto &avatar = t.make_ui(pixels(20), pixels(20));
+  t.add_child(root, avatar);
+  layout_with_baseline(t, root, mapping_for({&root, &label, &avatar}));
+
+  CHECK_APPROX(t.ui(avatar).rect().y, 32.f); // the 40px label's baseline
+}
+
+TEST(baseline_self_align_overrides_parent_flex_start) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(100));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_align_items(AlignItems::FlexStart);
+  auto &small = make_text_child(t, root, 20.f);
+  auto &large = make_text_child(t, root, 40.f);
+  t.ui(small).set_self_align(SelfAlign::Baseline);
+  t.ui(large).set_self_align(SelfAlign::Baseline);
+  layout_with_baseline(t, root, mapping_for({&root, &small, &large}));
+
+  CHECK_APPROX(t.ui(small).rect().y, 16.f);
+  CHECK_APPROX(t.ui(large).rect().y, 0.f);
+}
+
+TEST(baseline_children_sized_row_grows_below_baseline) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), Size{.dim = Dim::Children, .value = 0.f});
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_align_items(AlignItems::Baseline);
+  auto &a = make_text_child(t, root, 40.f); // box 40, baseline 32, 8 below
+  auto &b = t.make_ui(pixels(60), pixels(39));
+  TestLayout::ui(b).font_size_explicitly_set = true;
+  TestLayout::ui(b).font_size = pixels(10.f);
+  b.addComponent<HasLabel>().label = "Aa"; // baseline (39-10)/2+8 = 22.5
+  t.add_child(root, b);
+  layout_with_baseline(t, root, mapping_for({&root, &a, &b}));
+
+  // Shared baseline 32; b's bottom lands at 32-22.5+39 = 48.5, past a's 40.
+  CHECK_APPROX(t.ui(root).computed[Axis::Y], 48.5f);
+  CHECK_APPROX(t.ui(b).rect().y + 22.5f, 32.f);
+}
+
+TEST(baseline_in_column_falls_back_to_start) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(400));
+  t.ui(root).set_flex_direction(FlexDirection::Column);
+  t.ui(root).set_align_items(AlignItems::Baseline);
+  auto &child = t.make_ui(pixels(100), pixels(50));
+  t.add_child(root, child);
+  t.run(root);
+
+  CHECK_APPROX(t.ui(child).computed_rel[Axis::X], 0.f);
 }
 
 // ============================================================================

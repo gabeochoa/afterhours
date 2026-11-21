@@ -604,6 +604,22 @@ inline float monospace_cell_advance(const raylib::Font font,
   return advance * size / static_cast<float>(font.baseSize);
 }
 
+// Baseline from the top of the drawn line: 'H' sits on the baseline, so its
+// glyph top offset plus its height lands on it. Falls back to 0.8x size.
+inline float text_ascent(const raylib::Font font, const float size) {
+  if (!std::isfinite(size) || size <= 0.f)
+    return 0.f;
+  if (!font_is_usable(font) || font.baseSize <= 0 || !font.glyphs || !font.recs)
+    return size * 0.8f;
+  const int idx = raylib::GetGlyphIndex(font, 'H');
+  if (idx < 0 || idx >= font.glyphCount)
+    return size * 0.8f;
+  const float scale = size / static_cast<float>(font.baseSize);
+  return (static_cast<float>(font.glyphs[idx].offsetY) +
+          static_cast<float>(font.recs[idx].height)) *
+         scale;
+}
+
 // Get the left-side bearing (offsetX) for the first glyph in a string.
 inline float get_first_glyph_bearing(const raylib::Font font,
                                      const char *text) {
