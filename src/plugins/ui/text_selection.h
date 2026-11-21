@@ -77,10 +77,6 @@ namespace wrap_memo {
 // allocation site.
 constexpr std::size_t kMaxEntries = 512;
 
-// Typed identity of one wrap. Entries compare the whole key, so a hash
-// collision (or two widths that quantise alike) can never serve wrong lines.
-// `incoming_state` is caller-owned chunk/lexical state (e.g. inside a
-// multiline comment at the chunk cut); callers encode fields, not padding.
 struct Key {
   std::vector<TextSpan> runs;
   std::string font_name;
@@ -394,12 +390,9 @@ wrap_lines(const std::string &text, float max_width, MeasureFn &&measure) {
   return lines;
 }
 
-// Resumable wrap for text arriving in chunks. Only the unfinished hard line
-// is buffered, because a '\n' makes every line before it final; feeding all
-// chunks then finish_wrap_chunk() yields wrap_lines() of the whole text.
 struct WrapChunkState {
   std::string pending;
-  size_t base = 0; // stream offset of pending's first byte
+  size_t base = 0;
 };
 
 template <typename MeasureFn>

@@ -34,8 +34,6 @@ public:
   static constexpr size_t DEFAULT_MAX_ENTRIES = 4096;
 
 public:
-  // Typed identity of one measurement. Entries compare the whole key, so a
-  // hash collision can never serve another text/font/size/spacing's size.
   struct Key {
     std::string text;
     std::string font_name;

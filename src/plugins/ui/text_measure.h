@@ -65,8 +65,6 @@ wrap_text_lines(const std::string &text, float max_width,
 
 using WrapChunkState = detail::WrapChunkState;
 
-/// Wrap the hard lines completed by `chunk`; call finish_wrap_text_chunk at
-/// end of stream. Concatenating both gives wrap_text_lines of the whole text.
 inline std::vector<detail::WrappedLine>
 wrap_text_chunk(WrapChunkState &state, std::string_view chunk, float max_width,
                 const std::string &font_name, float font_size,

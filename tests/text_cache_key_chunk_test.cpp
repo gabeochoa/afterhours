@@ -1,8 +1,3 @@
-// Typed text-cache keys and resumable chunk wrapping (R-093).
-// Previously wrap_memo hashed max_width/font_size/spacing after truncating
-// float*64 to uint64, so 100.f and 100.01f (or 20.f and 20.01f) were the
-// SAME key and served each other's lines; TextMeasureCache/wrap_memo also
-// trusted a bare uint64 hash with no equality check on the stored key.
 
 #include "ui_test_harness.h"
 
@@ -22,12 +17,10 @@ TEST(typed_wrap_key_separates_previously_colliding_widths_and_sizes) {
   const std::vector<TextSpan> runs{{"hello world", Color{1, 2, 3, 255}}};
   const auto base = wm::key_for(runs, 100.f, 20.f, 1.f, "Face");
   CHECK(wm::key_for(runs, 100.f, 20.f, 1.f, "Face") == base);
-  // These pairs collided under float*64 truncation.
   CHECK(wm::key_for(runs, 100.01f, 20.f, 1.f, "Face") != base);
   CHECK(wm::key_for(runs, 100.f, 20.01f, 1.f, "Face") != base);
   CHECK(wm::key_for(runs, 100.f, 20.f, 1.01f, "Face") != base);
   CHECK(wm::key_for(runs, 100.f, 20.f, 1.f, "Other") != base);
-  // Run-boundary / font-boundary shifts and caller chunk state differ.
   const std::vector<TextSpan> split{{"ab", Color{1, 2, 3, 255}},
                                     {"c", Color{1, 2, 3, 255}}};
   const std::vector<TextSpan> joined{{"abc", Color{1, 2, 3, 255}}};
@@ -60,7 +53,6 @@ TEST(typed_measure_key_distinguishes_text_font_boundary) {
                            static_cast<float>(font.size()),
                        size};
   });
-  // "ab"+"c" vs "abc"+"": a stream-hash key has no field boundary here.
   const auto a = TextMeasureCache::Key::make("ab", "c", 20.f, 1.f);
   const auto b = TextMeasureCache::Key::make("abc", "", 20.f, 1.f);
   CHECK(a != b);
@@ -98,7 +90,6 @@ TEST(chunk_resume_matches_whole_text_wrap) {
   check_chunking(whole, {"aaa b", "bb cc", "c\ndd ", "ee\n", "\nlast wo",
                          "rd here"});
   check_chunking(whole, {"", "aaa bbb ccc\n", "", "dd ee\n\nlast word here"});
-  // One byte at a time splits words, spaces and newlines at every cut.
   std::vector<std::string> bytes;
   for (char c : whole)
     bytes.emplace_back(1, c);
