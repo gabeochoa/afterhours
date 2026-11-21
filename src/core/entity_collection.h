@@ -196,11 +196,6 @@ struct EntityCollection {
     };
   }
 
-  // Per-component lists in entity-vector order (iteration order must not change).
-  // Lazy rebuild: no back-pointer for incremental upkeep, and swap-remove would reorder.
-  // Freshness: version + vector size + COMPONENT_MUTATION_GEN. Direct get_entities_for_mod()
-  // writes bypassing create/merge/cleanup are seen only via size (same blind spot as indexes).
-  // Cleanup-flagged stay listed until cleanup(): a plain scan sees them too.
   mutable std::vector<Entities> membership_lists_;
   mutable std::size_t membership_version_ = static_cast<std::size_t>(-1);
   mutable std::size_t membership_mutation_ = static_cast<std::size_t>(-1);
@@ -242,7 +237,6 @@ struct EntityCollection {
     return membership_lists_[id];
   }
 
-  // Smallest list filtered by the rest, in entity order; call-site filters re-check anyway.
   Entities membership_candidates(
       const std::vector<ComponentID> &ids) const {
     Entities out;
@@ -468,7 +462,6 @@ struct EntityCollection {
   void merge_entity_arrays() {
     if (temp_entities.empty())
       return;
-    // Slots pre-assigned, so assign_slot_to_entity early-returns without bumping version; bump for the move (freshness keys on it).
     ++version;
 
     for (const auto &entity : temp_entities) {

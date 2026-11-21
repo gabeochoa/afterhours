@@ -29,7 +29,6 @@ using EntityID = int;
 
 inline std::atomic_int ENTITY_ID_GEN = 0;
 
-// No collection back-pointer on Entity, so the membership index watches this counter and rebuilds on change.
 inline std::atomic<std::size_t> COMPONENT_MUTATION_GEN = 0;
 inline void note_component_mutation() {
   COMPONENT_MUTATION_GEN.fetch_add(1, std::memory_order_relaxed);

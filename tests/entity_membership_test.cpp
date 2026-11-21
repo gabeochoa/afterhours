@@ -1,5 +1,3 @@
-// entity_membership_test.cpp — equivalence is set AND order vs full scan;
-// scaling counts visits via a filter placed before the component filter.
 
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
@@ -113,7 +111,6 @@ int main() {
       expected.push_back(e.id);
     }
     ec.cleanup();
-    // In add-order `early` (slot 0, Pos last) would sort last; scan order puts it first.
     early.addComponent<Pos>();
     expected.insert(expected.begin(), early_id);
     CHECK(ids_of(EntityQuery(ec).whereHasComponent<Pos>().gen()) == expected);
@@ -133,7 +130,6 @@ int main() {
     CHECK(ids_of(EntityQuery(ec).whereHasComponent<Pos>().gen()) ==
           std::vector<EntityID>({aid, cid}));
 
-    // Cleanup-flagged but uncollected: scan still sees it, so membership must too.
     ec.markIDForCleanup(cid);
     CHECK(ids_of(EntityQuery(ec).whereHasComponent<Pos>().gen()) ==
           std::vector<EntityID>({aid, cid}));
@@ -197,7 +193,6 @@ int main() {
     run_system_over(sys, entities, 0.f, ec, false);
     CHECK(sys.seen == expected);
 
-    // Removed mid-pass: for_each re-check skips it.
     Remover rem;
     auto &ents = ec.get_entities();
     rem.victim = ents[3].get();
@@ -205,7 +200,6 @@ int main() {
     CHECK(rem.seen == std::vector<EntityID>({expected[0], expected[2],
                                              expected[3]}));
 
-    // Added mid-pass: not in snapshot, visited next pass.
     Adder add;
     Entity &bystander = *ents[1];
     const EntityID bystander_id = bystander.id;

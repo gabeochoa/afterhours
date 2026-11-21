@@ -152,7 +152,6 @@ class SystemBase {
         return {};
     }
 
-    // Positive required types, or null if that narrows nothing; for_each still checks everything.
     virtual const std::vector<ComponentID> *membership_requirements() const {
         return nullptr;
     }
@@ -520,7 +519,6 @@ struct System
     };
 
     const std::vector<ComponentID> *membership_requirements() const override {
-        // ComponentsOnly is positive-only (Not<T>/tags dropped), so every id rules in.
         const auto &ids = PositiveIds<ComponentsOnly>::get();
         return ids.empty() ? nullptr : &ids;
     }
@@ -571,8 +569,6 @@ inline void run_system_over(Sys &system, Entities &entities, const float dt,
     } else if (!system.include_derived_children &&
                system.membership_requirements() &&
                &entities == &coll.get_entities()) {
-        // Pass-start snapshot: gains mid-pass wait to next pass; losses re-checked by for_each.
-        // Derived excluded: derived components store under their own id, not the base's.
         const Entities candidates =
             coll.membership_candidates(*system.membership_requirements());
         for (const auto &entity : candidates) {

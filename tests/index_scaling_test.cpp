@@ -78,9 +78,6 @@ struct Fixture {
   }
 };
 
-// Counter must precede the component test or short-circuit hides the walk.
-// Hand-spelled (not whereHasComponent): that now seeds from membership lists,
-// which would price the membership walk, not the scan priced here.
 static std::size_t scan_evals(EntityCollection &ec, EntityHandle parent) {
   std::size_t visited = 0;
   auto r = EntityQuery(ec)

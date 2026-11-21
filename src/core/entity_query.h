@@ -670,7 +670,6 @@ struct EntityQuery {
     // means "provably nothing matches", which is different from unset.
     mutable std::optional<Entities> seed;
 
-    // Seeds walk from smallest membership list; filters still run. Cap 4: first four are still a correct superset.
     std::array<std::uint16_t, 4> required_ids{};
     std::uint8_t required_count = 0;
     void note_required(const ComponentID id) {
@@ -685,7 +684,6 @@ struct EntityQuery {
     const Entities &pool() const {
         if (seed) return *seed;
         if (required_count && source && source_temp_empty) {
-            // Membership covers merged only; a pending temp would make lists and `entities` disagree.
             seed = source->membership_candidates(std::vector<ComponentID>(
                 required_ids.begin(),
                 required_ids.begin() + required_count));
