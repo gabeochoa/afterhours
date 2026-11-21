@@ -112,6 +112,7 @@ ALL_TESTS := \
 	sound_volume_test \
 	synth_beep_test \
 	settings_save_test \
+	storage_codec_test \
 	settings_path_test \
 	files_test_roots_test \
 	clipboard_test \
