@@ -1087,6 +1087,18 @@ static inline void draw_runs_in_rect(
     return measure_text(font, s.c_str(), font_size, spacing).x;
   };
 
+  // Ellipsis: cut the runs to the box like the plain path does, before
+  // layout, so the memo and draw loop only ever see the truncated runs.
+  std::vector<TextSpan> ellipsized;
+  const std::vector<TextSpan> *runs_ptr = &runs;
+  if (text_overflow == TextOverflow::Ellipsis) {
+    const float max_width = rect.width - 2.f * inset.x;
+    if (max_width > 0.f) {
+      ellipsized = detail::ellipsize_runs(runs, max_width, weighted_width);
+      runs_ptr = &ellipsized;
+    }
+  }
+
   // Only wrap when asked and a size is known, matching draw_text_in_rect.
   const bool wants_wrap =
       text_overflow == TextOverflow::Wrap && explicit_font_size > 0.f;
@@ -1095,15 +1107,15 @@ static inline void draw_runs_in_rect(
     return;
 
   // Memoised: this runs every frame, usually on text that hasn't changed.
-  const std::uint64_t wrap_key =
-      detail::wrap_memo::key_for(runs, wrap_width, font_size, spacing, base_font);
+  const std::uint64_t wrap_key = detail::wrap_memo::key_for(
+      *runs_ptr, wrap_width, font_size, spacing, base_font);
   const std::vector<detail::TextRunLine> *cached =
       detail::wrap_memo::lookup(wrap_key);
   const std::vector<detail::TextRunLine> &lines =
       cached ? *cached
              : detail::wrap_memo::store(
                    wrap_key,
-                   detail::wrap_runs_to_width(runs, wrap_width,
+                   detail::wrap_runs_to_width(*runs_ptr, wrap_width,
                                               weighted_width));
   float line_h = line_height_px > 0.f
                      ? line_height_px
@@ -2561,10 +2573,15 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
               wants_wrap ? label_rect.width : 1e9f;
 
           if (wrap_width > 0.f) {
-            const std::vector<TextSpan> runs =
+            std::vector<TextSpan> runs =
                 has_spans ? hasLabel.spans
                           : std::vector<TextSpan>{
                                 TextSpan{display_text, font_col}};
+            // Ellipsis: display_text already cut the plain text above, but
+            // styled runs come from the uncut spans, so cut them here too.
+            if (hasLabel.text_overflow == TextOverflow::Ellipsis && has_spans)
+              runs = detail::ellipsize_runs(runs, label_rect.width,
+                                            weighted_width);
             // Memoised, same as the immediate path.
             const std::uint64_t wrap_key = detail::wrap_memo::key_for(
                 runs, wrap_width, font_size, spacing, cmp.font_name);
