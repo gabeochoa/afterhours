@@ -28,14 +28,6 @@ namespace ui {
 
 struct AutoLayoutRoot : BaseComponent {};
 
-// Layout generations (one monotonic sequence). invalidate_layout() marks
-// the next generation as requested; each full AutoLayout pass completes it
-// and stamps the completed number onto every widget it laid out. A
-// consumer records a widget's laid_out_generation (or anchor_generation)
-// at read time and later tells whether that read predates a re-layout by
-// comparing it — which layout produced an anchor — without framework-held
-// view state. A widget never laid out carries 0, told apart from a pass's
-// stamp because the first completed pass is generation 1.
 inline std::uint64_t &layout_generation_storage() {
   static std::uint64_t v = 0;
   return v;
@@ -53,8 +45,6 @@ inline std::uint64_t laid_out_generation() {
 }
 
 inline void invalidate_layout() {
-  // One generation past the last completed pass: a stale marker, not a
-  // count of asks (a second ask before the pass changes nothing).
   layout_generation_storage() = laid_out_generation_storage() + 1;
 }
 
@@ -117,7 +107,6 @@ struct UIComponent : BaseComponent {
   bool padding_is_default = false;
   bool size_dirty = false;
   bool laid_out = false;
-  // Generation that last wrote this widget's rect; 0 = never laid out.
   std::uint64_t laid_out_generation = 0;
   AxisArray<Size> desired;
   AxisArray<Size>

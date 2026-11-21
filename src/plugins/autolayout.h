@@ -1965,8 +1965,6 @@ struct AutoLayout {
     }
   }
 
-  // Stamp this pass's generation onto the widgets it laid out, so a reader
-  // can name — and later re-check — the layout its rect belongs to.
   void stamp_generation(UIComponent &widget, std::uint64_t gen) {
     widget.laid_out_generation = gen;
     for (EntityID child : widget.children) {
@@ -2002,8 +2000,6 @@ struct AutoLayout {
     al.solve_violations(widget);
     al.compute_relative_positions(widget);
     al.compute_rect_bounds(widget);
-    // First completion is generation 1, so stamped widgets never read as
-    // never-laid-out (0).
     laid_out_generation_storage()++;
     al.stamp_generation(widget, laid_out_generation());
   }
@@ -2047,8 +2043,6 @@ struct AutoLayout {
     }
     al.compute_relative_positions(widget);
     al.compute_rect_bounds(widget);
-    // Subtree only: stamp the last completed generation, leaving the rest
-    // of the tree's stamps (and the global completed generation) alone.
     al.stamp_generation(widget, laid_out_generation());
   }
 
