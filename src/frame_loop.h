@@ -107,8 +107,7 @@ struct CadenceStats {
   uint64_t skipped = 0;
 };
 
-// Pure admission decision extracted from the sokol frame callback so it
-// can be driven headlessly with synthetic callback times.
+// Pure admission decision from the sokol callback, driven headlessly.
 class CadenceDriver {
 public:
   CadenceDriver() = default;

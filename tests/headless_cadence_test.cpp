@@ -48,7 +48,6 @@ int main() {
   }
 
   {
-    // 1200 callbacks at 100Hz against a 60fps cap: every second one admits.
     CadenceDriver driver(Mode::Continuous, 60);
     int frames = 0;
     std::vector<double> callbacks(1200, 0.010);
