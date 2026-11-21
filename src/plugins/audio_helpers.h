@@ -2,7 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <span>
 #include <vector>
 
 #include "../logging.h"
@@ -45,6 +49,12 @@ inline raylib::Sound LoadSound(const char *filename) {
 }
 inline raylib::Sound LoadSoundFromWave(raylib::Wave wave) {
   return raylib::LoadSoundFromWave(wave);
+}
+inline SoundType LoadSoundAlias(SoundType source) {
+  return raylib::LoadSoundAlias(source);
+}
+inline void UnloadSoundAlias(SoundType alias) {
+  raylib::UnloadSoundAlias(alias);
 }
 
 inline void UnloadWave(raylib::Wave wave) { raylib::UnloadWave(wave); }
@@ -107,6 +117,8 @@ inline void SetSoundVolume(SoundStub, float) {}
 inline void UnloadSound(SoundStub) {}
 inline SoundStub LoadSound(const char *) { return SoundStub{}; }
 inline SoundStub LoadSoundFromWave(WaveStub) { return SoundStub{}; }
+inline SoundStub LoadSoundAlias(SoundStub) { return SoundStub{}; }
+inline void UnloadSoundAlias(SoundStub) {}
 
 inline void UnloadWave(WaveStub w) { std::free(w.data); }
 inline bool ExportWave(WaveStub, const char *) { return false; }
@@ -119,6 +131,32 @@ inline void SetMusicVolume(MusicStub, float) {}
 inline void UnloadMusicStream(MusicStub) {}
 inline MusicStub LoadMusicStream(const char *) { return MusicStub{}; }
 #endif
+
+// Samples are copied; empty/invalid input returns an empty sound.
+inline SoundType load_sound_from_samples(std::span<const float> samples,
+                                         int sample_rate, int channels = 1) {
+  if (samples.empty() || sample_rate <= 0 || channels <= 0) return SoundType{};
+#ifdef AFTER_HOURS_USE_RAYLIB
+  const auto frames =
+      static_cast<unsigned int>(samples.size() / static_cast<size_t>(channels));
+  if (frames == 0) return SoundType{};
+  // raylib takes ownership of nothing here: copy, load, then free ours.
+  float *copy = static_cast<float *>(
+      std::malloc(samples.size() * sizeof(float)));
+  if (!copy) return SoundType{};
+  std::memcpy(copy, samples.data(), samples.size() * sizeof(float));
+  WaveType wave{.frameCount = frames,
+                .sampleRate = static_cast<unsigned int>(sample_rate),
+                .sampleSize = 32,
+                .channels = static_cast<unsigned int>(channels),
+                .data = copy};
+  SoundType sound = raylib::LoadSoundFromWave(wave);
+  std::free(copy);
+  return sound;
+#else
+  return SoundType{};
+#endif
+}
 
 namespace synth {
 
