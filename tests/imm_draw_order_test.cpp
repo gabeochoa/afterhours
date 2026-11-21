@@ -1,9 +1,3 @@
-// imm_draw_order_test.cpp
-// World draws from an app render system registered before the UI pass land
-// under imm, and app draws registered with register_render_systems_after_ui
-// land over it, in one capture buffer (#189 kept pre-UI draws alive; this
-// pins the paint order itself).
-
 #ifndef AFTER_HOURS_USE_NONE
 #define AFTER_HOURS_USE_NONE 1
 #endif
@@ -60,13 +54,10 @@ int main() {
   printf("=== imm draw order ===\n\n");
   SystemManager systems;
   ui::setup_with_resolution<>(systems, {800, 600}, std::make_unique<BuildUI>());
-  // The debug-overlay render system reads the collector; ui::run creates it,
-  // setup() leaves it to the app.
   auto &in = EntityHelper::createEntity();
   in.addComponent<input::InputCollector>();
   EntityHelper::registerSingleton<input::InputCollector>(in);
 
-  // World first, then the whole imm pass, then the app's over-UI layer.
   systems.register_render_system(std::make_unique<DrawRect>(Color{200, 0, 0, 255}));
   ui::register_render_systems_after_ui<DefaultAction>(
       systems, DefaultAction::None,
