@@ -6,6 +6,10 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+### Added
+
+- **E2E `reset_profile` command and `dump_profile --json`.** `reset_profile` clears the builtin collector's frames/systems/counters while recording continues, so the next `dump_profile` covers only the window after it (Cartographer R-238). `dump_profile --json` logs one single-line JSON object with the full snapshot — frames, fps, p50/p95/p99, per-system mean/average/recent/peak/last/calls, counters — for machine consumers (Cartographer R-233). The JSON reads the builtin collector, not the pluggable provider, and fails loudly with no frames or with profiling compiled out. A snapshot-diff tool is deliberately deferred. Covered by `system_profile_test`.
+
 ### Breaking
 
 **The animation plugin is rewritten around `afterhours::motion`.** `animation::anim<Key>(k).to(v, dur, EasingType)`, `AnimationManager`, `AnimHandle`, `sequence`, `loop_sequence`, `one_shot`, `clamp_value`, `get_value`, `register_update_systems<Key>()` and the declarative `with_animation(Anim::on_hover()...)` / `HasAnimationState` are gone. Every old call is a compile error.
