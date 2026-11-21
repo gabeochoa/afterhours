@@ -11,6 +11,8 @@
 #include <cstdio>
 #include <random>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace raylib {
 #include <raylib.h>
@@ -119,6 +121,58 @@ int main() {
     check(seen == "tree:0x1 tree:1x2 lantern:1x1 ",
           "on_group runs per group with its key and transforms: " + seen);
     check(keyed.copies() == 0, "a flush with on_group empties the groups");
+  }
+
+  // drain hands over exactly what flush would draw, without drawing, and
+  // leaves the batcher reusable.
+  {
+    auto fill = [&](InstanceBatcher &b) {
+      for (const Copy &c : scene)
+        b.add(*c.model, c.pos, c.yaw, {c.scale, c.scale, c.scale});
+      b.add(tree, {9, 9, 9}, 0.f, {1, 1, 1}, 7);
+    };
+    InstanceBatcher drained, flushed;
+    fill(drained);
+    fill(flushed);
+    auto collect = [&](InstanceBatcher &b, bool do_drain) {
+      std::string seen;
+      std::vector<raylib::Matrix> mats;
+      auto visit = [&](const ModelType &m, uint32_t key,
+                       std::span<const MatrixType> ts) {
+        seen += std::string(&m == &tree ? "tree" : "lantern") + ":" +
+                std::to_string(key) + "x" + std::to_string(ts.size()) + ":";
+        for (const MatrixType &t : ts) {
+          seen += std::to_string(t.m12) + "," + std::to_string(t.m14) + ";";
+          mats.push_back(t);
+        }
+      };
+      if (do_drain) {
+        b.drain(visit);
+      } else {
+        raylib::RenderTexture2D scratch = raylib::LoadRenderTexture(8, 8);
+        raylib::BeginTextureMode(scratch);
+        b.flush(shader, visit);
+        raylib::EndTextureMode();
+        raylib::UnloadRenderTexture(scratch);
+      }
+      return std::pair{seen, mats};
+    };
+    auto [drained_seen, drained_mats] = collect(drained, true);
+    auto [flushed_seen, flushed_mats] = collect(flushed, false);
+    check(drained_seen == flushed_seen,
+          "drain groups match what flush would draw: " + drained_seen);
+    check(drained_mats.size() == 6 && flushed_mats.size() == 6,
+          "drain count matches");
+    bool same = drained_mats.size() == flushed_mats.size();
+    for (size_t i = 0; same && i < drained_mats.size(); i++)
+      same = max_abs_diff(drained_mats[i], flushed_mats[i]) < 1e-6f;
+    check(same, "drained transforms match flush transforms");
+    check(drained.copies() == 0 && drained.group_count() == 0,
+          "batcher is empty after drain");
+    drained.add(tree, {0, 0, 0}, 0.f, {1, 1, 1});
+    check(drained.copies() == 1 && drained.group_count() == 1,
+          "batcher is reusable after drain");
+    drained.clear();
   }
 
   // Same frame two ways: batched, and one draw_model per copy.
