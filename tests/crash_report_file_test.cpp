@@ -1,9 +1,3 @@
-// crash_report_file_test.cpp
-// crash::install(report_path) has to leave a usable file behind: signal,
-// backtrace, the system SystemManager said was running, and the log tail.
-// The direct-writer checks run in-process; the real-signal checks fork, like
-// crash_handler_test, so the suite itself never dies.
-
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -49,7 +43,7 @@ std::size_t occurrences(const std::string &haystack, const std::string &needle) 
 
 void aborting_sink(const char *, const char *) { std::abort(); }
 
-} // namespace
+}
 
 int main() {
   std::printf("=== crash report file tests ===\n\n");
@@ -58,10 +52,9 @@ int main() {
   const auto path = dir / "afh_crash_report.txt";
   std::filesystem::remove(path);
 
-  // --- the writer, directly ---
   auto *sink_before = log_sink_fn;
   afterhours::crash::install(path.string().c_str());
-  afterhours::crash::install(path.string().c_str()); // again: no double chain
+  afterhours::crash::install(path.string().c_str());
   afterhours::crash::set_running_system("DirectWriterSystem");
   if (log_sink_fn)
     log_sink_fn("[INFO]", "tail marker one");
@@ -87,7 +80,6 @@ int main() {
   afterhours::crash::set_running_system(nullptr);
   std::filesystem::remove(path);
 
-  // --- a real abort inside a system the manager is running ---
   {
     const auto sys_path = dir / "afh_crash_report_system.txt";
     std::filesystem::remove(sys_path);
@@ -103,7 +95,7 @@ int main() {
       });
       afterhours::Entities entities;
       sm.tick(entities, 0.016f);
-      _exit(0); // the handler re-raises, so this is unreachable
+      _exit(0);
     }
     int status = 0;
     waitpid(pid, &status, 0);
@@ -112,8 +104,6 @@ int main() {
           "the child still dies of the abort");
     check(file.find("SIGABRT") != std::string::npos,
           "the file names the signal");
-    // The name comes from SystemManager's profile scope (the demangled type),
-    // not from anything the test set by hand: (a) feeding (b).
     check(file.find("CallbackSystem") != std::string::npos,
           "the file names the system SystemManager was running");
     check(file.find("last words from inside the system") != std::string::npos,
@@ -129,7 +119,7 @@ int main() {
     const pid_t pid = fork();
     if (pid == 0) {
       alarm(5);
-      log_sink_fn = aborting_sink; // installed before, so it gets chained
+      log_sink_fn = aborting_sink;
       afterhours::crash::install(sink_path.string().c_str());
       volatile int *bad = nullptr;
       *bad = 1;

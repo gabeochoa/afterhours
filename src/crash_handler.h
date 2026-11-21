@@ -8,14 +8,6 @@
 // Reports to stderr and log_sink_fn, so log_file.h picks it up. Not through
 // log_error: a host that replaced logging with one that aborts would re-enter
 // the handler from inside the report.
-//
-// crash::install(report_path) additionally writes the whole report -- signal,
-// backtrace, the system that was running, and the recent log tail -- to a
-// file at that path, so a shipped build that dies with no console attached
-// still leaves something behind. The file is written before the stderr/sink
-// pass, so a sink that aborts mid-report cannot take the file with it. Both
-// entry points are opt-in: nothing is installed, chained or written until
-// one of them is called.
 
 #include <cstddef>
 #include <csignal>
@@ -71,7 +63,6 @@ inline void write_backtrace() {
 #endif
 }
 
-// The same backtrace, to a file instead of stderr/sink.
 inline void write_backtrace_to(std::FILE *out) {
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(_WIN32)
   void *frames[64];
@@ -87,10 +78,6 @@ inline void write_backtrace_to(std::FILE *out) {
 #endif
 }
 
-// --- report file + log tail (crash::install(report_path) only) ---
-
-// Fixed storage, no allocation: the tail sink runs on the logging path and
-// the reader runs inside a signal handler, so neither may allocate.
 inline constexpr std::size_t tail_line_count = 48;
 inline constexpr std::size_t tail_line_length = 256;
 
@@ -122,9 +109,6 @@ inline void (*&previous_sink())(const char *, const char *) {
   return sink;
 }
 
-// Chained in front of whatever sink was there: keeps a bounded tail for the
-// report file and forwards every line, so log_file.h and host sinks see
-// exactly what they saw before.
 inline void tail_sink(const char *level, const char *message) {
   tail_append(level, message);
   if (previous_sink())
@@ -153,9 +137,6 @@ inline std::terminate_handler &previous_terminate() {
   return handler;
 }
 
-// The whole report, to the file at the installed report path. Directly
-// callable (tests use it without raising a signal); report() guards it with
-// the report-once flag, this does not. False when no path is installed.
 inline bool write_report_file(const char *what) {
   if (report_path_buffer()[0] == '\0')
     return false;
@@ -183,7 +164,6 @@ inline void report(const char *what) {
   if (reporting())
     return;
   reporting() = 1;
-  // File first: it does not touch the sink, so nothing below can lose it.
   write_report_file(what);
   report_line(std::string("---- afterhours crash: ") + what + " ----");
   if (running_system() != nullptr)
@@ -244,12 +224,6 @@ inline void install_handler() {
   detail::previous_terminate() = std::set_terminate(detail::on_terminate);
 }
 
-// As install_handler(), plus a report file: on a fatal signal the report
-// (signal, backtrace, running system, recent log tail) is also written to
-// report_path, replacing any file there. The log tail is captured by
-// chaining in front of the current log_sink_fn, so call this after your log
-// sink is set up; lines logged before the call are not in the tail. A null
-// or empty path installs the handlers with no report file.
 inline void install(const char *report_path) {
   if (report_path != nullptr && report_path[0] != '\0') {
     std::strncpy(detail::report_path_buffer(), report_path,
@@ -264,9 +238,6 @@ inline void install(const char *report_path) {
   install_handler();
 }
 
-// Undo install()/install_handler(): default signal handling and the previous
-// terminate handler and log sink are restored, and the report path is
-// cleared. Mostly for tests and for hosts that install per-session.
 inline void uninstall() {
   for (int sig : {SIGSEGV, SIGABRT,
 #ifdef SIGBUS
