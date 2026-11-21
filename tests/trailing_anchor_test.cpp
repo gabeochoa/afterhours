@@ -1,23 +1,6 @@
-// trailing_anchor_test.cpp
-// Absolute trailing anchors + percent offsets (hanabi #93 / R-062):
-// trailing/bottom-anchored rects exact at multiple parent sizes and percent
-// combos, percent absolute positions resolve against the parent's content
-// box on their own axis, and leading pixel positions are unchanged.
-// Build: make trailing_anchor_test
-
-// fmt is used by autolayout.h for warning messages; enable header-only mode
 #define FMT_HEADER_ONLY
 #define AFTER_HOURS_USE_NONE
 #include <fmt/format.h>
-
-// Capture layout warnings instead of printing them.
-//
-// A few tests below deliberately overflow their parent (NoWrap with children
-// that do not fit, a min_height that beats the space expand leaves). The
-// warning is the behaviour under test, not noise, so those tests assert it via
-// EXPECT_WARN. Every other test must produce no warnings at all -- the runner
-// fails any test that warns without declaring it, which is what stops a real
-// regression from hiding in the log.
 #define AFTER_HOURS_REPLACE_LOGGING
 #include <cstdio>
 #include <format>
@@ -63,11 +46,6 @@ inline void log_once_per(Duration, int, std::format_string<Args...>,
 
 using namespace afterhours;
 using namespace afterhours::ui;
-
-// ============================================================================
-// Test helpers
-// ============================================================================
-
 static int tests_run = 0;
 static int tests_passed = 0;
 
@@ -102,10 +80,6 @@ static void check(bool cond, const char *expr, const char *file, int line) {
 }
 
 #define CHECK(expr) check((expr), #expr, __FILE__, __LINE__)
-
-// Declare that this test is expected to emit a warning containing `needle`.
-// Consumes the matching warnings so the runner does not flag them as
-// unexpected, and fails if the warning never arrived.
 static bool expect_warn(std::string_view needle, const char *file, int line) {
   auto &w = captured_warnings();
   size_t before = w.size();
@@ -130,15 +104,6 @@ static bool approx(float a, float b, float eps = 0.5f) {
     if (!approx(_a, _b))                                                       \
       fprintf(stderr, "        got %.2f vs %.2f\n", _a, _b);                   \
   } while (0)
-
-// ============================================================================
-// Test harness: create entities and run autolayout without a full ECS
-// ============================================================================
-
-// A simple entity pool for tests. Each test creates entities, wires up
-// UIComponent parent/child relationships, builds the mapping, and calls
-// AutoLayout::autolayout().
-
 struct TestLayout {
   std::vector<std::unique_ptr<Entity>> entities;
   window_manager::Resolution resolution{1280, 720};
@@ -147,8 +112,6 @@ struct TestLayout {
     entities.push_back(std::make_unique<Entity>());
     return *entities.back();
   }
-
-  // Create a UI entity with the given desired size.
   Entity &make_ui(Size w, Size h) {
     Entity &e = make_entity();
     auto &ui = e.addComponent<UIComponent>(e.id);
@@ -156,25 +119,15 @@ struct TestLayout {
     ui.set_desired_height(h);
     return e;
   }
-
-  // Wire parent-child relationship.
   void add_child(Entity &parent, Entity &child) {
     auto &pc = parent.get<UIComponent>();
     auto &cc = child.get<UIComponent>();
     pc.add_child(child.id);
     cc.set_parent(parent.id);
   }
-
-  // UI scale for adaptive mode (passed to autolayout).
   float ui_scale = 1.0f;
 
   void run(Entity &root) { run_without(root, -1); }
-
-  // Same as run(), but leaves `omit` as a null hole in the mapping while its
-  // parent still lists it as a child. This is the stale-child case that
-  // UIEntityMappingCache documents (systems.h): the mapping is rebuilt each
-  // frame from live UI entities, so an entity cleaned up while its parent
-  // still references it leaves exactly this hole.
   void run_without(Entity &root, EntityID omit) {
     EntityID max_id = 0;
     for (auto &e : entities) {
@@ -189,27 +142,16 @@ struct TestLayout {
     AutoLayout::autolayout(root.get<UIComponent>(), resolution, mapping,
                            /*enable_grid_snapping=*/false, ui_scale);
   }
-
-  // Create a UI entity with adaptive scaling mode.
   Entity &make_ui_adaptive(Size w, Size h) {
     Entity &e = make_ui(w, h);
     e.get<UIComponent>().resolved_scaling_mode = ScalingMode::Adaptive;
     return e;
   }
-
-  // Set scaling mode on an existing entity.
   static void set_adaptive(Entity &e) {
     e.get<UIComponent>().resolved_scaling_mode = ScalingMode::Adaptive;
   }
-
-  // Shortcut: get UIComponent from entity.
   static UIComponent &ui(Entity &e) { return e.get<UIComponent>(); }
 };
-
-// ============================================================================
-// Tests
-// ============================================================================
-
 static void set_abs(Entity &e, AbsoluteAnchor anchor, Size ox, Size oy) {
   auto &u = TestLayout::ui(e);
   u.make_absolute();
@@ -225,7 +167,7 @@ TEST(trailing_pixels_exact) {
   set_abs(child, AbsoluteAnchor::TrailingBottom, pixels(18), pixels(6));
   t.add_child(root, child); t.run(root);
   auto r = t.ui(child).rect();
-  CHECK_APPROX(r.x, 302.f); CHECK_APPROX(r.y, 254.f); // 400-18-80, 300-6-40
+  CHECK_APPROX(r.x, 302.f); CHECK_APPROX(r.y, 254.f);
   CHECK_APPROX(r.width, 80.f); CHECK_APPROX(r.height, 40.f);
 }
 
@@ -237,8 +179,8 @@ TEST(trailing_percent_offset_and_size) {
   t.add_child(root, child); t.run(root);
   auto r = t.ui(child).rect();
   CHECK_APPROX(r.width, 100.f); CHECK_APPROX(r.height, 60.f);
-  CHECK_APPROX(r.x, 280.f); // 400 - 20 (5% of 400) - 100
-  CHECK_APPROX(r.y, 30.f);  // 10% of 300
+  CHECK_APPROX(r.x, 280.f);
+  CHECK_APPROX(r.y, 30.f);
 }
 
 TEST(leading_percent_position) {
@@ -252,7 +194,6 @@ TEST(leading_percent_position) {
 }
 
 TEST(trailing_percent_across_parent_sizes) {
-  // {parent w,h, child w,h, offx%, offy%, want x, want y} TrailingBottom
   struct Case { float pw, ph, cw, ch, ox, oy, wx, wy; };
   const Case cases[] = {
       {200.f, 100.f, 50.f, 20.f, 0.10f, 0.10f, 130.f, 70.f},
@@ -280,7 +221,7 @@ TEST(trailing_anchor_uses_content_box) {
   t.add_child(root, child); t.run(root);
   auto r = t.ui(child).rect();
   CHECK_APPROX(r.x, 300.f); CHECK_APPROX(r.y, 250.f);
-  CHECK_APPROX(r.x + r.width, 380.f); // parent right edge minus right padding
+  CHECK_APPROX(r.x + r.width, 380.f);
 }
 
 TEST(leading_pixels_unchanged) {

@@ -121,9 +121,6 @@ struct AutoLayout {
                              fetch_screen_value_(Axis::Y));
   }
 
-  // One resolution site for absolute placement: Percent offsets take the
-  // parent's content box on their own axis; other dims keep their existing
-  // screen/pixel meaning, so leading pixel positions are pixel-identical.
   void resolve_absolute_rel(UIComponent &child, float container_w,
                             float container_h) {
     const auto offset = [&](Axis axis, float container) {
@@ -147,10 +144,6 @@ struct AutoLayout {
         trail_x ? container_w - ox - snapped_extent(child, Axis::X) : ox;
     child.computed_rel[Axis::Y] =
         trail_y ? container_h - oy - snapped_extent(child, Axis::Y) : oy;
-    // RTL mirroring swaps the layout order too: an absolute child
-    // anchors from the other side of the parent's content box, so a
-    // column pinned left in LTR stands on the right in RTL -- the
-    // page-level mirror real RTL interfaces perform.
     if (child.rtl_mirrored && !trail_x)
       child.computed_rel[Axis::X] = container_w - child.computed_rel[Axis::X] -
                                     snapped_extent(child, Axis::X);

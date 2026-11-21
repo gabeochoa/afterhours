@@ -918,9 +918,6 @@ struct ComponentConfig {
   ComponentConfig &with_absolute_position(Size x, Size y) {
     return with_absolute_position().with_translate(x, y);
   }
-  // Offset is measured inward from the anchored edges: TrailingBottom with
-  // (18, 6) puts the element's right edge 18px left of the parent's content
-  // right edge. Percent offsets resolve against the parent's content box.
   ComponentConfig &with_absolute_position(AbsoluteAnchor anchor, Size x,
                                           Size y) {
     absolute_anchor = anchor;
