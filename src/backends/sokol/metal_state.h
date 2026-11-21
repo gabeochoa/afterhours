@@ -46,9 +46,8 @@ inline bool g_on_demand = false;
 inline uint64_t g_start_time = 0;
 
 inline FONScontext *g_fons_ctx = nullptr;
-static constexpr int MAX_FONTS = 16;
-inline int g_font_ids[MAX_FONTS] = {};
-inline int g_font_count = 0;
+// No cap: a font picker can register every family/weight it offers.
+inline std::vector<int> g_font_ids;
 inline int g_active_font = FONS_INVALID;
 // Context the font tracking belongs to, and the fallback pairs already
 // registered in it. See mesh_font_fallbacks in font_helper.h.

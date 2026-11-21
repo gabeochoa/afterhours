@@ -45,15 +45,13 @@ inline Font register_loaded_font(FONScontext *ctx, int id,
   if (ctx != graphics::metal_detail::g_font_fallback_ctx) {
     graphics::metal_detail::g_font_fallback_ctx = ctx;
     graphics::metal_detail::g_font_fallback_pairs.clear();
-    graphics::metal_detail::g_font_count = 0;
+    graphics::metal_detail::g_font_ids.clear();
     graphics::metal_detail::g_active_font = FONS_INVALID;
   }
   // Track loaded fonts and set the first one as active default
   auto &md = graphics::metal_detail::g_font_ids;
-  if (graphics::metal_detail::g_font_count <
-      graphics::metal_detail::MAX_FONTS) {
-    md[graphics::metal_detail::g_font_count++] = id;
-  }
+  if (std::find(md.begin(), md.end(), id) == md.end())
+    md.push_back(id);
   if (graphics::metal_detail::g_active_font == FONS_INVALID) {
     graphics::metal_detail::g_active_font = id;
   }
@@ -74,8 +72,13 @@ inline Font load_font_from_memory(const unsigned char *data, int size,
   }
   const std::string key = fontstash_name(name);
   const int existing = fonsGetFontByName(ctx, key.c_str());
-  if (existing != FONS_INVALID)
-    return Font{existing};
+  if (existing != FONS_INVALID) {
+    // Re-register: an unload may have untracked this still-loaded face.
+    font_coverage::Ranges ranges;
+    const bool has_cmap =
+        font_coverage::parse_cmap(data, static_cast<size_t>(size), ranges);
+    return register_loaded_font(ctx, existing, has_cmap ? &ranges : nullptr);
+  }
   font_coverage::Ranges ranges;
   const bool has_cmap =
       font_coverage::parse_cmap(data, static_cast<size_t>(size), ranges);
@@ -104,8 +107,11 @@ inline Font load_font_from_file(const char *file, int = 0) {
     return Font{FONS_INVALID};
   }
   const int existing = fonsGetFontByName(ctx, fontstash_name(file).c_str());
-  if (existing != FONS_INVALID)
-    return Font{existing};
+  if (existing != FONS_INVALID) {
+    font_coverage::Ranges ranges;
+    const bool has_cmap = font_coverage::parse_file(file, ranges);
+    return register_loaded_font(ctx, existing, has_cmap ? &ranges : nullptr);
+  }
   std::vector<unsigned char> bytes;
   if (!font_coverage::read_file(file, bytes)) {
     log_warn("Failed to load font: {}", file);
@@ -130,7 +136,7 @@ inline void mesh_font_fallbacks(FONScontext *ctx, int new_id) {
     return;
   auto &pairs = graphics::metal_detail::g_font_fallback_pairs;
   const auto &md = graphics::metal_detail::g_font_ids;
-  const int count = graphics::metal_detail::g_font_count;
+  const int count = static_cast<int>(md.size());
   for (int i = 0; i < count; i++) {
     const int other = md[i];
     if (other == new_id)
@@ -179,7 +185,27 @@ inline int *remove_duplicate_codepoints(int *, int,
   return nullptr;
 }
 
-inline void unload_font(Font &font) { font = Font{}; }
+inline bool font_same_face(const Font a, const Font b) { return a.id == b.id; }
+
+// fontstash has no per-font delete, so its slot and atlas glyphs stay until
+// the context dies; this frees the tracking slot, coverage and fallbacks.
+inline void unload_font(Font &font) {
+  const int id = font.id;
+  font = Font{};
+  if (id == FONS_INVALID)
+    return;
+  auto &md = graphics::metal_detail::g_font_ids;
+  md.erase(std::remove(md.begin(), md.end(), id), md.end());
+  graphics::metal_detail::g_font_coverage.erase(id);
+  auto &pairs = graphics::metal_detail::g_font_fallback_pairs;
+  std::erase_if(pairs, [id](const std::pair<int, int> &p) {
+    return p.first == id || p.second == id;
+  });
+  if (graphics::metal_detail::g_active_font == id)
+    graphics::metal_detail::g_active_font =
+        md.empty() ? FONS_INVALID : md.front();
+  measure_memo::invalidate();
+}
 
 inline Font load_font_for_string(const std::string &,
                                  const std::string &font_file, int = 96) {
@@ -278,8 +304,8 @@ inline const char *drawable_text(int font_id, const char *text,
     const int c = static_cast<int>(cp);
     if (font_has_glyph(Font{font_id}, c))
       return true;
-    for (int i = 0; i < graphics::metal_detail::g_font_count; i++)
-      if (font_has_glyph(Font{graphics::metal_detail::g_font_ids[i]}, c))
+    for (const int other_id : graphics::metal_detail::g_font_ids)
+      if (font_has_glyph(Font{other_id}, c))
         return true;
     return false;
   };
