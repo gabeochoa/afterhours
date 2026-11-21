@@ -157,6 +157,7 @@ ALL_TESTS := \
 	rect_test \
 	rounded_corners_test \
 	viewport_test \
+	coord_conversion_test \
 	grid_test \
 	pathfinding_provider_test \
 	bitset_test \
