@@ -1,11 +1,4 @@
-// capture::record and warn_on_missing_glyphs sit on every draw. Counted, not
-// timed: allocations and decode-loop runs are deterministic, and a millisecond
-// cannot tell a strlen from a malloc.
-//
-// - record() disabled must allocate nothing, even for a long text argument.
-// - warn_on_missing_glyphs must not decode pure ASCII, and must not re-decode
-//   a (font, text) pair it already answered -- warn_once already keeps the log
-//   quiet, the loop is what was left.
+// Counted, not timed: allocations and decode runs are deterministic.
 
 #define FMT_HEADER_ONLY
 #include <afterhours/src/backends/raylib/font_helper.h>
@@ -44,7 +37,6 @@ int main() {
   const RectangleType r{1.f, 2.f, 3.f, 4.f};
   const ColorType c{10, 20, 30, 255};
 
-  // Disabled: recording a long text must not build a string or touch the heap.
   capture::disable();
   capture::clear();
   const std::string long_text(4096, 'x');
@@ -58,7 +50,6 @@ int main() {
   CHECK(g_allocs == 0);
   CHECK(capture::calls().empty());
 
-  // Enabled: unchanged, text kept.
   capture::enable();
   capture::record("text", r, c, "hello");
   CHECK(capture::calls().size() == 1);
@@ -66,7 +57,6 @@ int main() {
   capture::disable();
   capture::clear();
 
-  // Glyph warn: ASCII never decodes, whatever the font.
   const std::string path =
       (std::filesystem::path(AFTERHOURS_TEST_FIXTURES) /
        "AtkinsonHyperlegible-Regular.ttf")
@@ -79,7 +69,6 @@ int main() {
               glyph_warn_decode_runs());
   CHECK(glyph_warn_decode_runs() == 0);
 
-  // Non-ASCII decodes once per (font, text), not once per draw.
   const char *non_ascii = "caf\xC3\xA9 \xE2\x98\x83";
   warn_on_missing_glyphs(font, non_ascii);
   for (int i = 0; i < 100; i++)
@@ -88,13 +77,11 @@ int main() {
               glyph_warn_decode_runs());
   CHECK(glyph_warn_decode_runs() == 1);
 
-  // A different string under the same font is a different question.
   warn_on_missing_glyphs(font, "\xE2\x98\x83 snowman");
   std::printf("  warn non-ASCII new string: %zu decode runs\n",
               glyph_warn_decode_runs());
   CHECK(glyph_warn_decode_runs() == 2);
 
-  // Coverage answers did not move under the cache.
   CHECK(font_has_glyph(font, 'A'));
   CHECK(!font_has_glyph(font, 0x2603));
 

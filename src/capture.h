@@ -89,9 +89,7 @@ inline void begin_frame() {
   clear();
 }
 
-// A `const char *`, not a view: converting a `const char *` to a string_view
-// runs strlen, so a view from the caller still paid a scan per draw before
-// this could return early. The check now precedes any string work.
+// const char*: a string_view would strlen before the early-out.
 inline void record(const char *op, const RectangleType &rect,
                    const ColorType &color, const char *text = nullptr) {
   if (!enabled())

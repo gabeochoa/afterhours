@@ -121,10 +121,7 @@ inline uint64_t font_key(const raylib::Font font) {
          static_cast<uint64_t>(font.glyphCount);
 }
 
-// Coverage is fixed once a font loads, but warn_on_missing_glyphs re-decoded
-// every string on every draw to re-ask it. Remember the (font, text) pairs
-// already answered; a generation bumped whenever coverage is recorded or
-// dropped keeps a reloaded face from inheriting a stale answer.
+// (font, text) warn memo; generation bumps on coverage change/unload.
 inline uint64_t &glyph_warn_generation() {
   static uint64_t g = 0;
   return g;
@@ -317,9 +314,7 @@ inline std::vector<FaceRun> fallback_runs(const raylib::Font font,
 // which is 95 ASCII glyphs, so any symbol is a blank unless the caller loaded
 // codepoints for it.
 
-// How many times the decode loop below actually ran. Test-only counter: the
-// warn_once gate already keeps the log quiet, this is what the loop itself
-// costs per draw.
+// Test counter: decode-loop runs.
 inline size_t &glyph_warn_decode_runs() {
   static size_t n = 0;
   return n;
@@ -365,7 +360,7 @@ inline void warn_on_missing_glyphs(const raylib::Font font, const char *text) {
               cp);
   }
   if (cache.size() > 4096)
-    cache.clear(); // dynamic strings could grow this forever
+    cache.clear(); // cap growth
   cache[key] = glyph_warn_generation();
 }
 
