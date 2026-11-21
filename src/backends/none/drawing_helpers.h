@@ -255,6 +255,14 @@ inline graphics::RenderTextureType load_render_texture(int, int) {
   log_error("@notimplemented load_render_texture");
   return {};
 }
+inline graphics::RenderTextureType load_render_texture_with_samples(int, int, int) {
+  log_error("@notimplemented load_render_texture_with_samples");
+  return {};
+}
+inline graphics::RenderTextureType load_msaa_render_texture(int, int, int) {
+  log_error("@notimplemented load_msaa_render_texture");
+  return {};
+}
 
 inline void unload_render_texture(graphics::RenderTextureType &) {
   log_error("@notimplemented unload_render_texture");

@@ -285,6 +285,7 @@ ALL_TESTS += sokol_headless_run_test
 ALL_TESTS += sokol_include_order_test
 ALL_TESTS += sokol_wrappers_test
 ALL_TESTS += sokol_frame_dt_test
+ALL_TESTS += sokol_msaa_test
 ALL_TESTS += staging_texture_leak_test
 endif
 
@@ -463,6 +464,10 @@ $(OUT)/sokol_frame_dt_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_frame_dt_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_frame_dt_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_frame_dt_test: ../src/backends/sokol/backend.h
+$(OUT)/sokol_msaa_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_msaa_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_msaa_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_msaa_test: ../src/backends/sokol/drawing_helpers.h ../src/backends/sokol/backend.h
 
 $(OUT)/staging_texture_leak_test: ../examples/web/sokol_impl.cc
 $(OUT)/staging_texture_leak_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++

@@ -58,6 +58,9 @@
 // includes drawing_helpers.h (it renders UI), so the definitions are present.
 namespace afterhours {
 graphics::RenderTextureType load_render_texture(int w, int h);
+graphics::RenderTextureType load_render_texture_with_samples(int w, int h,
+                                                             int samples);
+graphics::RenderTextureType load_msaa_render_texture(int w, int h, int samples);
 void unload_render_texture(graphics::RenderTextureType &rt);
 void begin_texture_mode(graphics::RenderTextureType &rt);
 void end_texture_mode();
@@ -127,7 +130,8 @@ inline void apply_headless_resize() {
   if (width == g_headless_w && height == g_headless_h)
     return;
   const int scale = std::max(1, g_headless_rt.scale);
-  auto replacement = ::afterhours::load_render_texture(width * scale, height * scale);
+  auto replacement = ::afterhours::load_render_texture_with_samples(
+      width * scale, height * scale, g_headless_rt.sample_count);
   if (replacement.color_img_id == 0)
     return;
   replacement.scale = scale;
@@ -1086,8 +1090,8 @@ inline bool metal_init(const Config &cfg) {
     const int scale =
         cfg.hidpi ? (cfg.hidpi_scale > 1 ? cfg.hidpi_scale : 2) : 1;
     graphics::render_scale() = scale;
-    metal_detail::g_headless_rt =
-        load_render_texture(cfg.width * scale, cfg.height * scale);
+    metal_detail::g_headless_rt = load_render_texture_with_samples(
+        cfg.width * scale, cfg.height * scale, cfg.msaa_samples);
     metal_detail::g_headless_rt.scale = scale;
     if (metal_detail::g_headless_rt.color_img_id == 0) {
       log_error("metal headless: offscreen render texture creation failed "
@@ -1132,11 +1136,13 @@ inline bool metal_capture_frame(const std::filesystem::path &path) {
   if (rt.color_img_id == 0)
     return false;
 #ifdef AFTER_HOURS_USE_VULKAN
-  return vulkan_capture_render_texture(rt.color_img_id, rt.width, rt.height,
-                                       path.string().c_str());
+  return vulkan_capture_render_texture(
+      rt.resolve_img_id ? rt.resolve_img_id : rt.color_img_id, rt.width,
+      rt.height, path.string().c_str());
 #else
-  return metal_capture_render_texture(rt.color_img_id, rt.width, rt.height,
-                                      path.string().c_str());
+  return metal_capture_render_texture(
+      rt.resolve_img_id ? rt.resolve_img_id : rt.color_img_id, rt.width,
+      rt.height, path.string().c_str());
 #endif
 }
 
