@@ -901,6 +901,8 @@ struct ComponentConfig {
   }
 
   // TODO eventually rename this to is_absolute() instead 0
+  // "Absolute" is in the PARENT's frame, not the window's: to hit-test in
+  // window space during build, use ElementResult::rect_now()/point_in().
   ComponentConfig &with_absolute_position() {
     is_absolute = true;
     if (has_margin()) {
