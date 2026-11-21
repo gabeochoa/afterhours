@@ -272,6 +272,7 @@ ALL_TESTS := \
 	two_trees_test \
 	text_selection_test \
 	selectable_text_test \
+	word_policy_test \
 	text_stroke_test \
 	text_stroke_render_test \
 	multiline_text_test \
