@@ -412,7 +412,6 @@ inline void draw_mesh_instanced_persistent(const raylib::Mesh &mesh,
 // flush() once a frame. flush() empties the groups but keeps their storage
 // and their GPU instance buffer, so a steady scene stops allocating after
 // its first frame and re-uploads nothing while its transforms stay put.
-// borrow() instead draws from a caller-owned buffer in place, with no copy.
 //
 // Groups are keyed by the model's address; ModelLibrary models keep theirs
 // while loaded. Copies that need a different shader or uniforms go in a
@@ -428,9 +427,6 @@ struct InstanceBatcher {
            Vector3Type scale, uint32_t key = 0) {
     add(model, model_transform(pos, yaw_deg, scale), key);
   }
-  // Draws `ts` from the caller's buffer instead of copying it into the
-  // batcher: flush() uploads from ts.data() as-is. The caller must keep the
-  // buffer alive and unmodified until flush() or clear().
   void borrow(const ModelType &model, std::span<const MatrixType> ts,
               uint32_t key = 0) {
     if (ts.empty()) return;
@@ -444,10 +440,6 @@ struct InstanceBatcher {
                      std::span<const MatrixType>) {});
   }
 
-  // on_group(model, key, transforms) runs before each segment draws: set the
-  // group's uniforms, or draw a shadow pass from the same transforms. A group
-  // with both owned and borrowed copies draws (and hooks) each segment,
-  // owned first.
   template <typename OnGroup> void flush(ShaderType shader, OnGroup &&on_group) {
     for (Group &g : groups) {
       if (!g.transforms.empty()) {

@@ -121,8 +121,6 @@ int main() {
     check(keyed.copies() == 0, "a flush with on_group empties the groups");
   }
 
-  // Caller-owned buffer: borrow() draws the caller's span in place, with no
-  // copy -- on_group must hand back the caller's own pointer.
   {
     std::vector<MatrixType> caller{
         model_transform({-3, 0, 0}, 0.f, {1, 1, 1}),
@@ -150,7 +148,6 @@ int main() {
           "borrowed flush hands back the caller's own span, uncopied");
     check(borrowed.copies() == 0, "a borrowed flush empties the group");
 
-    // Mixed owned + borrowed copies in one group draw as two segments.
     InstanceBatcher mixed;
     mixed.add(tree, {0, 0, 0}, 0.f, {1, 1, 1});
     mixed.borrow(tree, caller);
@@ -215,7 +212,6 @@ int main() {
   check(covered > 2000, "the scene is on screen");
   check(differ <= covered / 200, "batched frame matches draw_model per copy");
 
-  // Borrowed frame: same scene from caller-owned buffers, same pixels.
   {
     std::vector<MatrixType> tree_ts, lantern_ts;
     for (const Copy &c : scene)
