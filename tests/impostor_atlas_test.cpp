@@ -1,9 +1,3 @@
-// impostor_atlas_test.cpp
-// pack(): deterministic for a given item set, placements never overlap,
-// and an atlas that cannot hold everything fails as a whole.
-// billboard_basis(): orthonormal, forward aims at the eye, and the quad
-// covers the bounding sphere; the pole and eye-at-centre cases stay sane.
-
 #include <afterhours/src/plugins/impostor_atlas.h>
 
 #include <cmath>
@@ -27,6 +21,7 @@ static float len(Vec3 a) { return std::sqrt(dot(a, a)); }
 static bool near(float a, float b, float eps = 1e-4f) {
   return std::fabs(a - b) <= eps;
 }
+
 static bool overlaps(const AtlasPlacement &a, const AtlasPlacement &b) {
   return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height &&
          b.y < a.y + a.height;
@@ -63,7 +58,6 @@ int main() {
     }
   }
 
-  // Determinism: shuffled input, same rect per name.
   std::vector<AtlasItem> shuffled = {items[3], items[0], items[4], items[1],
                                      items[2]};
   auto again = pack(shuffled, 2048, 2048, 2);
@@ -74,7 +68,6 @@ int main() {
       check(a && b && a->x == b->x && a->y == b->y, "deterministic per name");
     }
 
-  // Failures are whole-atlas, never partial.
   check(!pack({{"too-wide", 4096, 16}}, 2048, 2048).has_value(),
         "item wider than atlas fails");
   check(!pack({{"a", 1024, 1024}, {"b", 1024, 1024}, {"c", 1024, 1024}},
@@ -85,7 +78,6 @@ int main() {
         "empty item fails");
   check(pack({}, 64, 64).has_value(), "no items packs to an empty layout");
 
-  // Billboard basis from an axis view.
   {
     BillboardBasis b = billboard_basis({0, 0, 0}, {0, 0, 10}, 2.f);
     check(near(dot(b.forward, {0, 0, 1}), 1.f), "forward at eye (+z)");
@@ -95,7 +87,6 @@ int main() {
     check(near(dot(b.right, b.up), 0.f) && near(dot(b.right, b.forward), 0.f) &&
               near(dot(b.up, b.forward), 0.f),
           "basis orthonormal");
-    // half_size covers the sphere silhouette: radius / sin(half-angle).
     check(b.half_size > 2.f && near(b.half_size, 2.f * 10.f / std::sqrt(96.f)),
           "half size covers bounding sphere");
     Vec3 corner = quad_point({0, 0, 0}, b, 1.f, 1.f);
@@ -103,7 +94,6 @@ int main() {
               near(corner.z, 0.f),
           "quad corner in the facing plane");
   }
-  // Diagonal view still faces the eye.
   {
     Vec3 eye{3.f, 4.f, 5.f};
     BillboardBasis b = billboard_basis({1, 1, 1}, eye, 1.f);
@@ -113,14 +103,12 @@ int main() {
     check(near(dot(b.right, b.up), 0.f) && near(len(b.up), 1.f),
           "orthonormal (diagonal)");
   }
-  // Looking straight down: the pole fallback keeps a valid basis.
   {
     BillboardBasis b = billboard_basis({0, 0, 0}, {0, 10, 0}, 1.f);
     check(near(len(b.right), 1.f) && near(len(b.up), 1.f) &&
               near(dot(b.right, b.up), 0.f),
           "orthonormal at the pole");
   }
-  // Eye at the centre degenerates to a finite basis, not NaNs.
   {
     BillboardBasis b = billboard_basis({1, 2, 3}, {1, 2, 3}, 2.f);
     check(std::isfinite(b.half_size) && near(len(b.forward), 1.f),
