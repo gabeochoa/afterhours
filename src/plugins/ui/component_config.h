@@ -118,6 +118,7 @@ struct ComponentConfig {
   std::optional<float> focus_ring_thickness;
   bool ignore_pointer_events = false; // invisible to hit-testing
   bool inert = false;
+  bool draw_only = false; // decorative: layout+render only, no interaction
   bool takes_focus = true;
   // User data, not localizable copy: the pseudo-locale stress leaves this
   // label (and this component's RTL mirroring) alone.
@@ -643,6 +644,12 @@ struct ComponentConfig {
     inert = on;
     return *this;
   }
+  /// Purely decorative element: still laid out and drawn, but skips hit
+  /// testing, focus/tab order, UIComponentDebug and default HasOpacity.
+  ComponentConfig &with_draw_only(bool on = true) {
+    draw_only = on;
+    return *this;
+  }
   ComponentConfig &with_takes_focus(bool takes = true) {
     takes_focus = takes;
     return *this;
@@ -1163,6 +1170,8 @@ struct ComponentConfig {
       merged.ignore_pointer_events = true;
     if (overrides.inert)
       merged.inert = true;
+    if (overrides.draw_only)
+      merged.draw_only = true;
     if (!overrides.takes_focus)
       merged.takes_focus = false;
     if (overrides.pseudo_locale_exempt)
