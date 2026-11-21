@@ -63,7 +63,6 @@ void begin_texture_mode(graphics::RenderTextureType &rt);
 void end_texture_mode();
 } // namespace afterhours
 
-// In window_macos.h via capture_impl.h (SOKOL_IMPL TU).
 #ifdef AFTER_HOURS_USE_METAL
 extern "C" void metal_set_window_size(int width, int height);
 extern "C" void metal_set_window_min_size(int width, int height);
@@ -529,7 +528,6 @@ struct MetalPlatformAPI {
   static bool is_window_ready() { return metal_detail::g_initialized; }
   static bool is_window_fullscreen() { return sapp_is_fullscreen(); }
   static void toggle_fullscreen() { sapp_toggle_fullscreen(); }
-  // sokol_app has no runtime resize API; macOS uses window_macos.h.
   static void minimize_window() {
     log_error("@notimplemented minimize_window");
   }

@@ -1,9 +1,3 @@
-// macOS sokol resizing. Include after sokol headers (capture_impl.h does).
-// Sizes are content-area points; requests coalesce to the latest and apply
-// on the main queue between draws, so the drawable never changes mid-draw.
-// metal_window_resize_pending() holds callers off a mismatched layout.
-// Live resize: draw synchronously in windowDidResize: or a step can be
-// applied that no frame ever paints.
 
 #pragma once
 
@@ -17,7 +11,6 @@
 #include <optional>
 #include <utility>
 
-// Requires SOKOL_IMPL already included: reads _sapp and the delegate class.
 
 namespace afterhours::graphics::window_macos_detail {
 
@@ -66,7 +59,6 @@ inline void apply_pending_window_size() {
   if (min_size.height > 0)
     target_h = std::max(target_h, static_cast<int>(min_size.height));
 
-  // Top-left anchored: macOS frames are bottom-left.
   NSRect frame = [window frame];
   const CGFloat title_bar =
       frame.size.height - [[window contentView] frame].size.height;
@@ -75,14 +67,11 @@ inline void apply_pending_window_size() {
                  frame.origin.y - ((target_h + title_bar) - frame.size.height),
                  target_w, target_h + title_bar);
 
-  // TopLeft placement or AppKit stretches the last frame to the new bounds
-  // until the next draw (sokol #700/#727).
   NSView *content_view = [window contentView];
   if (content_view.layer)
     content_view.layerContentsPlacement =
         NSViewLayerContentsPlacementTopLeft;
 
-  // animate:NO would desync the drawable; display:NO defers paint to frame cb.
   [window setFrame:new_frame display:NO animate:NO];
   [content_view setNeedsDisplay:YES];
 }
@@ -108,13 +97,11 @@ inline bool &live_resize_installed() {
 
 inline void window_did_resize_and_draw(id delegate, SEL selector,
                                        NSNotification *notification) {
-  // Original first: sokol updates the drawable dimensions here.
   orig_window_did_resize()(delegate, selector, notification);
 
   NSWindow *window = (__bridge NSWindow *)sapp_macos_get_window();
   if (!window)
     return;
-  // Tracking-run-loop mode covers programmatic resizes driven like a drag.
   const bool live = [window inLiveResize] ||
                     [NSRunLoop.currentRunLoop.currentMode
                         isEqualToString:NSEventTrackingRunLoopMode];
@@ -122,13 +109,11 @@ inline void window_did_resize_and_draw(id delegate, SEL selector,
     return;
   if (!_sapp.valid || _sapp.first_frame)
     return;
-  // Drawing now would present a size a queued resize already superseded.
   if (pending_size().has_value())
     return;
 
   if (drawing_for_resize())
     return;
-  // Black so the newly exposed strip cannot flash white before the draw.
   window.backgroundColor =
       [NSColor colorWithSRGBRed:0 green:0 blue:0 alpha:1];
   MTKView *view = (MTKView *)window.contentView;
@@ -140,7 +125,7 @@ inline void window_did_resize_and_draw(id delegate, SEL selector,
   ++live_resize_draw_count();
 }
 
-} // namespace afterhours::graphics::window_macos_detail
+}
 
 extern "C" void metal_set_window_size(int width, int height) {
   using namespace afterhours::graphics::window_macos_detail;
@@ -182,4 +167,4 @@ extern "C" void metal_install_live_resize_draw(void) {
       resize, reinterpret_cast<IMP>(window_did_resize_and_draw));
 }
 
-#endif // __APPLE__ && AFTER_HOURS_USE_METAL
+#endif
