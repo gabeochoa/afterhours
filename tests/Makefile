@@ -101,6 +101,7 @@ ALL_TESTS := \
 	color_palette_test \
 	color_palette_none_test \
 	wrappers_test \
+	window_state_test \
 	animation_presets_test \
 	particles_test \
 	ui_modifiers_test \
@@ -305,6 +306,7 @@ RAYLIB_TESTS := \
 	auto_text_color_test \
 	value_types_test \
 	wrappers_test \
+	window_state_test \
 	edit_keys_test \
 	default_font_test \
 	load_font_size_test \
