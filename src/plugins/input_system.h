@@ -762,6 +762,8 @@ struct input : developer::Plugin {
         return false;
     }
     static bool is_key_pressed_repeat(const KeyCode) {
+        warn_once(0, "@notimplemented is_key_pressed_repeat on this "
+                     "backend (no raylib/sokol)");
         return false;
     }
     static bool is_key_down(const KeyCode) {
