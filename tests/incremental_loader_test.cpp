@@ -22,12 +22,12 @@ static IncrementalLoader loader_with(int n, std::vector<int> &order) {
 }
 
 int main() {
-  {  // empty is done/sane
+  {
     IncrementalLoader l;
     CHECK(l.done()); CHECK(l.progress() == 1.f);
     CHECK(l.pump_items(3) == 0); CHECK(l.pump_time(5, [] { return 0.0; }) == 0);
   }
-  {  // item budget exact + ceil(N/budget) calls + order
+  {
     std::vector<int> order;
     auto l = loader_with(7, order);
     CHECK(l.pump_items(3) == 3); CHECK(!l.done());
@@ -37,27 +37,25 @@ int main() {
     CHECK((order == std::vector<int>{0, 1, 2, 3, 4, 5, 6}));
     CHECK(l.pump_items(3) == 0);
   }
-  {  // zero budget runs nothing for items
+  {
     std::vector<int> order; auto l = loader_with(2, order);
     CHECK(l.pump_items(0) == 0); CHECK(order.empty());
   }
-  {  // time budget with injected deterministic clock: each now() call +10ms
+  {
     std::vector<int> order; auto l = loader_with(10, order);
     double t = 0; auto clock = [&] { return (t += 10); };
-    // start=10; after step1 t=20 (10<25 run), step2 t=30 (20<25), step3 t=40 stop
     CHECK(l.pump_time(25, clock) == 3);
     CHECK((order == std::vector<int>{0, 1, 2}));
-    // zero time budget still runs one step (no stall)
     auto l2 = loader_with(2, order);
     double t2 = 0; auto c2 = [&] { return (t2 += 100); };
     CHECK(l2.pump_time(0, c2) == 1);
   }
-  {  // cancel
+  {
     std::vector<int> order; auto l = loader_with(5, order);
     CHECK(l.pump_items(2) == 2); l.cancel();
     CHECK(l.cancelled()); CHECK(l.done()); CHECK(l.remaining() == 0);
     CHECK(l.pump_items(2) == 0); CHECK(order.size() == 2);
-    CHECK(l.progress() == 1.f);  // total() now equals completed after cancel
+    CHECK(l.progress() == 1.f);
     l.clear(); CHECK(!l.cancelled()); CHECK(l.total() == 0);
   }
   printf("%d/%d checks passed\n", checks_passed, checks_run);

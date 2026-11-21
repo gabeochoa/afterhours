@@ -6,18 +6,13 @@
 
 namespace afterhours {
 
-// Main-thread incremental loader: queue load steps (e.g. one
-// ModelLibrary::load per step) and pump a slice each frame so the loading
-// screen stays a normal system. Distinct from jobs::Pool (draft #78):
-// steps run on the caller's thread, never on workers.
 struct IncrementalLoader {
   using Step = std::function<void()>;
-  using ClockFn = std::function<double()>;  // monotonic milliseconds
+  using ClockFn = std::function<double()>;
 
   void add(Step step) { steps_.push_back(std::move(step)); }
   void clear() { steps_.clear(); done_ = 0; cancelled_ = false; }
 
-  // Drops pending steps; work already run is not undone.
   void cancel() { steps_.clear(); cancelled_ = true; }
   [[nodiscard]] bool cancelled() const { return cancelled_; }
 
@@ -36,8 +31,6 @@ struct IncrementalLoader {
     return ran;
   }
 
-  // Runs at least one step (a step may exceed the budget; stalling forever
-  // helps no one), then stops once the injected clock passes the budget.
   size_t pump_time(double budget_ms, const ClockFn &now_ms) {
     if (steps_.empty() || !now_ms) return 0;
     const double start = now_ms();
@@ -53,7 +46,7 @@ struct IncrementalLoader {
   void run_one() {
     Step step = std::move(steps_.front());
     steps_.pop_front();
-    ++done_;  // count before running so progress is sane if a step re-enters
+    ++done_;
     if (step) step();
   }
 
@@ -62,4 +55,4 @@ struct IncrementalLoader {
   bool cancelled_ = false;
 };
 
-}  // namespace afterhours
+}
