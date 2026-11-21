@@ -43,7 +43,6 @@ struct RaylibHeadless {
     config = cfg;
     logical_w_ = cfg.width;
     logical_h_ = cfg.height;
-    // No display to query headless, so hidpi_scale is the density (Config).
     render_scale_ =
         cfg.hidpi ? (cfg.hidpi_scale > 1 ? cfg.hidpi_scale : 2) : 1;
     graphics::render_scale() = render_scale_;
@@ -131,7 +130,6 @@ struct RaylibHeadless {
   inline void begin_frame() {
     raylib::BeginTextureMode(render_texture);
     if (render_scale_ != 1) {
-      // Same projection override as RaylibWindowed: logical draws, dense pixels.
       raylib::rlDrawRenderBatchActive();
       raylib::rlMatrixMode(RL_PROJECTION);
       raylib::rlLoadIdentity();

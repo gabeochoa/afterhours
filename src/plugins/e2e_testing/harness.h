@@ -34,8 +34,6 @@ struct E2EArgs {
   float time_scale = 1.0f;
   int capture_interval = 0;
   std::string results_json;
-  // Screenshot density: capture renders at logical size * this factor
-  // (2 = Retina). Layout is unchanged; this is not ui_scale.
   int capture_scale = 1;
 
   // For RunConfig::display, so a consumer need not map the bool themselves.

@@ -1,10 +1,3 @@
-// capture_supersample_test.cpp
-// Supersampled capture: layout/drawing stays logical, the headless target
-// gets denser pixels. sokol_hidpi_test covers 2x alone in one process; this
-// compares a known edge at 1x vs 2x, so it re-execs itself per scale (the
-// Metal backend cannot be re-initialised in-process).
-//
-// macOS/Metal only -- registered in tests/Makefile behind UNAME_S == Darwin.
 
 #if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_VULKAN) && !defined(AFTER_HOURS_USE_SOKOL)
 #define AFTER_HOURS_USE_SOKOL
@@ -26,7 +19,7 @@ using afterhours::Color;
 
 static constexpr int W = 200;
 static constexpr int H = 200;
-static constexpr float EDGE = 100.4f; // logical x of the white rect's edge
+static constexpr float EDGE = 100.4f;
 
 static int render_child(int scale, const std::string &out) {
   g::Config cfg;
@@ -37,7 +30,7 @@ static int render_child(int scale, const std::string &out) {
   cfg.hidpi_scale = scale;
   cfg.title = "capture supersample test";
   if (!g::init(cfg))
-    return 2; // no GPU: parent reports SKIP
+    return 2;
   g::begin_drawing();
   afterhours::draw_rectangle(RectangleType{0, 0, W, H}, Color{0, 0, 0, 255});
   afterhours::draw_rectangle(RectangleType{0, 0, EDGE, H},
