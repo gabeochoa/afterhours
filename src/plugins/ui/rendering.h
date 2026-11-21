@@ -1979,6 +1979,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     }
 
     if (entity.has<HasColor>() || entity.has<HasLabel>() ||
+        entity.has<HasBorder>() || entity.has<HasNineSliceBorder>() ||
+        entity.has<HasBevelBorder>() ||
         entity.has<ui::HasImage>() ||
         entity.has<texture_manager::HasTexture>() ||
         entity.has<FocusClusterRoot>() || entity.has<HasOnDraw>() ||
@@ -2781,6 +2783,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     }
 
     if (entity.has<HasColor>() || entity.has<HasLabel>() ||
+        entity.has<HasBorder>() || entity.has<HasNineSliceBorder>() ||
+        entity.has<HasBevelBorder>() ||
         entity.has<ui::HasImage>() ||
         entity.has<texture_manager::HasTexture>() ||
         entity.has<FocusClusterRoot>() || entity.has<HasOnDraw>() ||

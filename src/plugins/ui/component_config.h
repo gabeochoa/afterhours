@@ -470,6 +470,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_word_wrap(bool enabled) {
     text_area_word_wrap = enabled;
+    // Labels read text_overflow, not text_area_word_wrap -- without this a
+    // plain label silently stayed one line, so with_word_wrap only ever
+    // wrapped a text_area.
+    text_overflow = enabled ? TextOverflow::Wrap : TextOverflow::Clip;
     return *this;
   }
   ComponentConfig &with_max_lines(size_t max) {
@@ -596,6 +600,9 @@ struct ComponentConfig {
     tooltip_gap = gap;
     return *this;
   }
+  // Hit rule for overlaps: highest layer wins; on a tie the element later
+  // in tree (paint) order wins -- so a close-x button drawn after its tab,
+  // or nested inside it, takes the click.
   ComponentConfig &with_render_layer(int layer) {
     render_layer = layer;
     return *this;
