@@ -1,8 +1,4 @@
 #pragma once
-// Shared model-library core (std only, every backend): textures deduplicated
-// by content hash, and glTF header bounds read without decoding any mesh.
-// Full glTF mesh import and budgeted async loading are deliberately deferred;
-// the latter composes with IncrementalLoader-style frame budgets elsewhere.
 
 #include <array>
 #include <cstdint>
@@ -67,6 +63,7 @@ template <typename Texture> struct TextureRegistry {
     auto it = by_name.find(name);
     return it == by_name.end() ? nullptr : it->second;
   }
+
   [[nodiscard]] std::size_t size() const { return by_hash.size(); }
   template <typename Unload> void clear(Unload &&unload) {
     for (auto &[_, tex] : by_hash) unload(*tex);
@@ -83,6 +80,7 @@ struct GltfBounds {
   [[nodiscard]] std::array<float, 3> center() const {
     return {(min[0] + max[0]) * .5f, (min[1] + max[1]) * .5f, (min[2] + max[2]) * .5f};
   }
+
   [[nodiscard]] std::array<float, 3> size() const {
     return {max[0] - min[0], max[1] - min[1], max[2] - min[2]};
   }
@@ -94,7 +92,6 @@ enum struct GltfError {
 };
 
 namespace detail_gltf {
-// Minimal JSON reader: just enough to walk glTF's meshes/accessors.
 struct Json {
   enum Type { Null, Num, Str, Arr, Obj } type = Null;
   double num = 0; std::string str;
@@ -122,23 +119,26 @@ struct Parser {
     if (e == tmp.c_str()) return false;
     out.type = Json::Num; p += static_cast<std::ptrdiff_t>(e - tmp.c_str()); return true;
   }
+
   bool lit(const char *s, Json &out) {
     std::size_t n = std::strlen(s); if (static_cast<std::size_t>(end - p) < n || std::memcmp(p, s, n)) return false;
     p += static_cast<std::ptrdiff_t>(n); if (out.type != Json::Null) out.type = Json::Num, out.num = (s[0] == 't');
     return true;
   }
+
   bool string(std::string &out) {
     if (*p != '"') return false;
     for (p++; p < end && *p != '"'; p++) {
       if (*p == '\\') {
         if (++p >= end) return false;
-        if (*p == 'u' && p + 4 < end) { out += '?'; p += 4; } else out += *p; // keys/values we read are ASCII
+        if (*p == 'u' && p + 4 < end) { out += '?'; p += 4; } else out += *p;
         continue;
       }
       out += *p;
     }
     return p < end && (*p++ == '"');
   }
+
   bool object(Json &out) {
     out.type = Json::Obj; p++;
     ws(); if (p < end && *p == '}') { p++; return true; }
@@ -153,6 +153,7 @@ struct Parser {
     }
     return false;
   }
+
   bool array(Json &out) {
     out.type = Json::Arr; p++;
     ws(); if (p < end && *p == ']') { p++; return true; }
@@ -171,10 +172,8 @@ inline bool vec3(const Json *j, std::array<float, 3> &out) {
   for (int i = 0; i < 3; i++) out[static_cast<std::size_t>(i)] = static_cast<float>(j->arr[static_cast<std::size_t>(i)].num);
   return true;
 }
-} // namespace detail_gltf
+}
 
-// Bounds = union of min/max on every POSITION accessor named by a mesh
-// primitive. No buffers are decoded.
 inline model_lib_std::expected<GltfBounds, GltfError>
 gltf_bounds_from_json(std::span<const char> text) {
   using namespace detail_gltf;
@@ -225,7 +224,7 @@ gltf_bounds_from_bytes(std::span<const std::uint8_t> bytes) {
   };
   if (u32(4) != 2) return model_lib_std::unexpected(GltfError::UNSUPPORTED_VERSION);
   std::uint32_t json_len = u32(12);
-  if (u32(16) != 0x4E4F534A /*JSON*/ || 20ull + json_len > bytes.size())
+  if (u32(16) != 0x4E4F534A || 20ull + json_len > bytes.size())
     return model_lib_std::unexpected(GltfError::TRUNCATED);
   return gltf_bounds_from_json({reinterpret_cast<const char *>(bytes.data() + 20), json_len});
 }
@@ -235,8 +234,7 @@ gltf_bounds_from_file(const char *path) {
   std::ifstream in(path, std::ios::binary);
   if (!in) return model_lib_std::unexpected(GltfError::FILE_OPEN_FAILED);
   std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-  // A .glb that lost its magic is corrupt, not a JSON text file.
   return gltf_bounds_from_bytes(bytes);
 }
 
-} // namespace afterhours
+}

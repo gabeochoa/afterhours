@@ -14,6 +14,7 @@ static void check(bool c, const char *what) {
   run++;
   if (c) passed++; else fprintf(stderr, "  FAIL: %s\n", what);
 }
+
 static bool near(std::array<float, 3> a, float x, float y, float z) {
   return std::fabs(a[0] - x) < 1e-6f && std::fabs(a[1] - y) < 1e-6f && std::fabs(a[2] - z) < 1e-6f;
 }
