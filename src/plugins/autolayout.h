@@ -113,6 +113,18 @@ struct AutoLayout {
                : Axis::X;
   }
 
+  // Stretch fills the cross axis only for a child with no explicit size
+  // there (Dim::None); children()/text/pixels/etc. keep their own size.
+  bool is_stretch_child(const UIComponent &widget,
+                        const UIComponent &child, Axis axis) const {
+    const bool is_cross =
+        (widget.flex_direction == FlexDirection::Row && axis == Axis::Y) ||
+        (widget.flex_direction == FlexDirection::Column && axis == Axis::X);
+    return is_cross && widget.align_items == AlignItems::Stretch &&
+           child.self_align == SelfAlign::Auto &&
+           child.desired[axis].dim == Dim::None;
+  }
+
   // Takes the Size, not its .value: for h720(20) that is the 20/720 fraction,
   // so the float overload above resolves the gap to 0.028px.
   float resolve_gap(const Size &gap, const UIComponent &widget, Axis axis) {
@@ -658,7 +670,11 @@ struct AutoLayout {
 
       // Include child margins so Dim::Children parents are sized to fit
       // children including their external spacing.
-      float cs = snapped_extent(child, axis) + child.computed_margin[axis];
+      // A stretch child has no intrinsic cross size to contribute yet.
+      float cs = is_stretch_child(widget, child, axis)
+                     ? child.computed_margin[axis]
+                     : snapped_extent(child, axis) +
+                           child.computed_margin[axis];
 
       if ( //
           child.desired[axis].dim == Dim::Percent &&
@@ -696,7 +712,11 @@ struct AutoLayout {
       if (child.should_hide)
         continue;
 
-      float cs = child.computed[axis];
+      // A stretch child contributes only its margin until the parent's
+      // cross size is known (solve_violations then stretches it).
+      float cs = is_stretch_child(widget, child, axis)
+                     ? 0.f
+                     : child.computed[axis];
       if (cs == -1) {
         if (child.desired[axis].dim == Dim::Percent &&
             widget.desired[axis].dim == Dim::Children) {
@@ -1188,10 +1208,13 @@ struct AutoLayout {
       const float content =
           fmaxf(0.f, widget.computed[cross] - widget.computed_padd[cross]);
       for (UIComponent *child : layout_children) {
-        if (child->desired[cross].dim != Dim::Expand)
-          continue;
-        child->computed[cross] =
-            fmaxf(0.f, content - child->computed_margin[cross]);
+        if (child->desired[cross].dim == Dim::Expand) {
+          child->computed[cross] =
+              fmaxf(0.f, content - child->computed_margin[cross]);
+        } else if (is_stretch_child(widget, *child, cross)) {
+          child->computed[cross] =
+              fmaxf(0.f, content - child->computed_margin[cross]);
+        }
       }
     }
 
