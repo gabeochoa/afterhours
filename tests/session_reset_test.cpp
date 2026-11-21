@@ -1,6 +1,3 @@
-// session_reset_test.cpp
-// R-128: reset_for_new_session restarts a collection deterministically:
-// build a world, reset, rebuild -> identical ids, handles, and state.
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 
@@ -31,9 +28,11 @@ static std::vector<TestEntry> &test_registry() {
   static std::vector<TestEntry> r;
   return r;
 }
+
 static void register_test(const char *name, void (*fn)()) {
   test_registry().push_back({name, fn});
 }
+
 static void check(bool cond, const char *expr, const char *file, int line) {
   tests_run++;
   if (cond)
@@ -111,8 +110,6 @@ TEST(reset_rebuild_is_identical) {
   CHECK(ec.has_singleton<Session>());
   CHECK((ec.indexed<Health, int>(100).size() == 1));
 
-  // Dirty the world: deletion recycles an id/pool slot, singleton mutates,
-  // and an unmerged temp entity is left behind.
   ec.get_entities()[1]->cleanup = true;
   ec.cleanup();
   ec.createEntity().addComponent<Health>(1);

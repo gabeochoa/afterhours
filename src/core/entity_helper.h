@@ -73,6 +73,7 @@ struct EntityHelper {
   static Entities &get_entities_for_mod() {
     return get_default_collection().get_entities_for_mod();
   }
+
   static const Entities &get_entities() {
     return get_default_collection().get_entities();
   }
@@ -199,7 +200,6 @@ struct EntityHelper {
     get_default_collection().delete_all_entities(include_permanent);
   }
 
-  // See EntityCollection::reset_for_new_session for the contract.
   static void reset_for_new_session() {
     get_default_collection().reset_for_new_session();
   }
