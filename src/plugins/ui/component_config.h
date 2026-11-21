@@ -216,6 +216,7 @@ struct ComponentConfig {
   size_t text_area_max_lines = 0;            // Max lines (0 = unlimited)
   bool text_area_auto_grow = false;          // Height follows the content
   bool text_area_submit_on_enter = false;    // Enter submits, Shift+Enter breaks
+  bool text_area_single_line = false;        // One row: Enter submits
   size_t virtual_list_overscan = VIRTUAL_LIST_OVERSCAN_DEFAULT;
 
   // Button variant configuration
@@ -496,6 +497,11 @@ struct ComponentConfig {
   // default, so a text_area keeps Enter meaning newline.
   ComponentConfig &with_submit_on_enter(bool enabled = true) {
     text_area_submit_on_enter = enabled;
+    return *this;
+  }
+  // One row: Enter submits, pasted breaks become spaces.
+  ComponentConfig &with_single_line(bool enabled = true) {
+    text_area_single_line = enabled;
     return *this;
   }
   ComponentConfig &with_virtual_list_overscan(size_t overscan) {
@@ -1361,6 +1367,8 @@ struct ComponentConfig {
       merged.text_area_auto_grow = true;
     if (overrides.text_area_submit_on_enter)
       merged.text_area_submit_on_enter = true;
+    if (overrides.text_area_single_line)
+      merged.text_area_single_line = true;
     if (overrides.virtual_list_overscan != VIRTUAL_LIST_OVERSCAN_DEFAULT)
       merged.virtual_list_overscan = overrides.virtual_list_overscan;
 
