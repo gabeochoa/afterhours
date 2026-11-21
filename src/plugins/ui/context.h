@@ -165,11 +165,6 @@ namespace imm {
 struct UIStylingDefaults;
 } // namespace imm
 
-// Opaque, generation-checked reference to the control that had focus when it
-// was captured. When a slot-holding control is deleted its generation bumps,
-// so a later restore no-ops instead of focusing an unrelated control that
-// reused the slot. A capture that found no handle (entity without a slot)
-// falls back to the recorded id, which does not get that protection.
 struct FocusReturnToken {
   EntityHandle handle = EntityHandle::invalid();
   EntityID id = -1;
@@ -411,9 +406,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     focus_id = id;
   }
 
-  // Snapshot the focused control so it can be restored after a dialog or
-  // overlay takes focus away. Opaque on purpose: the caller never juggles
-  // entity ids, so a control rebuilt under a new id is simply missed.
   [[nodiscard]] FocusReturnToken capture_focus_return() const {
     FocusReturnToken token;
     if (focus_id == ROOT)
@@ -422,8 +414,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     OptEntity e = UICollectionHolder::getEntityForID(focus_id);
     if (!e.has_value())
       return token;
-    // UI entities live in the UI collection; handles are collection-local, so
-    // whichever collection owns the entity is the one that can answer for it.
     Entity &entity = e.asE();
     token.handle = UICollectionHolder::get().collection.handle_for(entity);
     if (token.handle.is_invalid())
@@ -431,8 +421,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     return token;
   }
 
-  // Put focus back on the captured control. Returns false and leaves focus
-  // where it is when the control is gone or can no longer take focus.
   bool restore_focus_return(const FocusReturnToken &token) {
     if (!token.valid())
       return false;
@@ -444,8 +432,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     } else {
       e = UICollectionHolder::getEntityForID(token.id);
     }
-    // A handle is collection-local: the wrong collection resolving a slot/gen
-    // coincidence onto a different control is the failure this check refuses.
     if (!e.has_value() || e.asE().id != token.id)
       return false;
     Entity &target = e.asE();

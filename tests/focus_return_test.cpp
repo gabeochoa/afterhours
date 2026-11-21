@@ -1,6 +1,3 @@
-// Focus-return tokens: capture where focus sits, move focus away, restore it.
-// The generation check is the point: an entity id is reused after deletion,
-// so restoring a dead control by id could focus some other control instead.
 #include "ui_test_harness.h"
 
 using namespace afterhours;
@@ -50,8 +47,6 @@ TEST(restore_after_delete_is_a_safe_no_op) {
   CHECK(h.context().focus_id == b.id);
 }
 
-// The hard case the token exists for: the id comes back on a new entity. A
-// raw id would restore onto the wrong control; the generation refuses.
 TEST(restore_does_not_follow_a_reused_id) {
   ImmTestHarness h;
   Entity &a = make_focusable(h);
@@ -65,7 +60,7 @@ TEST(restore_does_not_follow_a_reused_id) {
   delete_entity(h, a);
 
   Entity &c = make_focusable(h);
-  CHECK(c.id == dead_id); // guards: the new entity really reuses the id
+  CHECK(c.id == dead_id);
   h.begin_frame();
 
   CHECK(!h.context().restore_focus_return(token));
@@ -99,9 +94,6 @@ TEST(capture_with_nothing_focused_is_an_empty_token) {
   CHECK(h.context().focus_id == b.id);
 }
 
-// A capture taken before merge still generation-checks: the handle is assigned
-// at creation, so a control deleted while still in the temp pool does not
-// restore onto whatever takes its id.
 TEST(capture_before_merge_still_generation_checks) {
   ImmTestHarness h;
   Entity &a = make_focusable(h);
