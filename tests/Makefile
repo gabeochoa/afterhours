@@ -94,6 +94,7 @@ ALL_TESTS := \
 	reduced_motion_test \
 	appearance_test \
 	frame_loop_test \
+	frame_phases_test \
 	color_value_test \
 	value_types_test \
 	value_types_none_test \
