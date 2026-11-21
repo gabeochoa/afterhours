@@ -243,19 +243,16 @@ struct RunConfig {
   frame_loop::Mode frame_mode = frame_loop::Mode::Continuous;
 };
 
-// What the player actually sees: the canvas (render texture) letterboxed
-// into the window/drawable. Canvas capture alone misses the bars and the
-// window size, so a presented frame can differ from the canvas in both.
 struct PresentedFrame {
   int window_w = 0;
   int window_h = 0;
   int canvas_w = 0;
   int canvas_h = 0;
-  float dest_x = 0.f; // letterbox content rect, in window pixels
+  float dest_x = 0.f;
   float dest_y = 0.f;
   float dest_w = 0.f;
   float dest_h = 0.f;
-  float scale = 1.f; // canvas pixels per window pixel
+  float scale = 1.f;
 };
 
 inline PresentedFrame presented_frame(int canvas_w, int canvas_h, int window_w,
@@ -291,8 +288,6 @@ struct BackendInterface {
   void (*begin_frame)() = nullptr;
   void (*end_frame)() = nullptr;
   bool (*capture_frame)(const std::filesystem::path &) = nullptr;
-  // Null on backends that cannot read the presented frame back; capture
-  // then reports failure rather than silently returning the canvas.
   bool (*capture_presented_frame)(const std::filesystem::path &, int, int) =
       nullptr;
   float (*get_delta_time)() = nullptr;
@@ -375,8 +370,6 @@ inline bool capture_frame(const std::filesystem::path &path) {
   return false;
 }
 
-// Presented-frame capture beside capture_frame (canvas): the image is
-// window_w x window_h with the canvas letterboxed inside it, bars included.
 inline bool capture_presented_frame(const std::filesystem::path &path,
                                     int window_w, int window_h) {
   auto &backend = get_backend();
