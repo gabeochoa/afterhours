@@ -46,10 +46,7 @@ inline bool is_space(uint32_t cp) {
   return cp == ' ' || cp == '\t' || cp == '\n' || cp == '\r' || cp == 0x00A0;
 }
 
-// Length of the unit at s[i]; sets valid. A valid unit is one RFC 3629
-// sequence (rejects overlongs, surrogates, >U+10FFFF). An invalid unit
-// consumes its maximal subpart -- lead plus any valid continuations -- so one
-// replacement covers it (WHATWG).
+// Length of the unit at s[i]; sets valid (RFC 3629; invalid takes maximal subpart).
 inline size_t utf8_unit_length(std::string_view s, size_t i, bool &valid) {
   const unsigned char c = static_cast<unsigned char>(s[i]);
   if (c < 0x80) {
@@ -57,7 +54,7 @@ inline size_t utf8_unit_length(std::string_view s, size_t i, bool &valid) {
     return 1;
   }
   size_t len = 0;
-  unsigned char lo = 0x80, hi = 0xBF; // range for the byte after the lead
+  unsigned char lo = 0x80, hi = 0xBF;
   if (c >= 0xC2 && c <= 0xDF)
     len = 2;
   else if (c == 0xE0) {
@@ -91,12 +88,12 @@ inline size_t utf8_unit_length(std::string_view s, size_t i, bool &valid) {
   for (size_t k = 2; k < avail; ++k) {
     if ((static_cast<unsigned char>(s[i + k]) & 0xC0) != 0x80) {
       valid = false;
-      return k; // lead + k-1 continuations is the maximal subpart
+      return k;
     }
   }
   if (avail < len) {
     valid = false;
-    return avail; // truncated tail: one replacement for the whole remainder
+    return avail;
   }
   valid = true;
   return len;
@@ -104,7 +101,6 @@ inline size_t utf8_unit_length(std::string_view s, size_t i, bool &valid) {
 
 } // namespace text_units_detail
 
-// True when text is well-formed UTF-8.
 inline bool is_valid_utf8(std::string_view text) {
   for (size_t i = 0; i < text.size();) {
     bool valid = false;
@@ -115,10 +111,7 @@ inline bool is_valid_utf8(std::string_view text) {
   return true;
 }
 
-// Copy of text with every invalid UTF-8 sequence replaced by U+FFFD, one per
-// maximal subpart. Lossy by design; valid text passes through byte-identical.
-// Apply at ingest (clipboard, file reads, app data) so label/JSON draws never
-// see raw repository bytes.
+// Invalid sequences become U+FFFD (one per maximal subpart); valid text passes through.
 inline std::string sanitize_utf8(std::string_view text) {
   std::string out;
   for (size_t i = 0; i < text.size();) {
