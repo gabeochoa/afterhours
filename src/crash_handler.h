@@ -70,11 +70,9 @@ inline void write_backtrace() {
   }
   std::free(symbols);
 #elif defined(AFTER_HOURS_HAS_EMSCRIPTEN_STACK)
-  // Not freed: this runs at crash time, so the tiny leak is irrelevant.
   if (const char *stack = emscripten_get_callstack())
     report_line(stack);
 #else
-  // A missing trace would read as a crash with no stack; say so instead.
   report_line("stack trace unavailable on this platform");
 #endif
 }

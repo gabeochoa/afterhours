@@ -377,9 +377,6 @@ $(RAYLIB_BINS): CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(RAYLIB_BINS): INCLUDES_T = $(INCLUDES_RAYLIB)
 $(RAYLIB_BINS): LDFLAGS_T  = $(LDFLAGS_RAYLIB)
 
-# No emcc here, so the web crash-handler branch is compiled as a native
-# binary with web defines simulated: -D__EMSCRIPTEN__ plus tests/web_sim/
-# standing in for the Emscripten sysroot header.
 $(OUT)/crash_handler_web_sim_test: CXXFLAGS_T = $(CXXFLAGS) -D__EMSCRIPTEN__
 $(OUT)/crash_handler_web_sim_test: INCLUDES_T = -Iweb_sim $(INCLUDES)
 

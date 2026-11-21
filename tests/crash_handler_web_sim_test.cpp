@@ -1,14 +1,3 @@
-// Simulates a web (Emscripten) build of crash_handler on a native box: no
-// emcc here, so the Makefile builds this target with -D__EMSCRIPTEN__ and
-// -Iweb_sim (a shim <emscripten.h> standing in for the Emscripten sysroot).
-//
-// What it proves: crash_handler.h neither includes execinfo.h nor calls
-// backtrace under __EMSCRIPTEN__ (the web build failure wordproc reported),
-// and the crash report still names the crash, the running system, and the
-// Emscripten callstack. The degradation branch (no emscripten.h at all) is
-// covered by the preprocessor audit in the matching gap PR, not a binary,
-// because Emscripten always ships the header.
-
 #include <cstdio>
 #include <string>
 
