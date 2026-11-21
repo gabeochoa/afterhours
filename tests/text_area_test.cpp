@@ -628,10 +628,8 @@ TEST(placeholder_is_drawn_only_while_the_field_is_empty) {
   CHECK(count_placeholders() == empty_count);
 }
 
-// R-030: same rule as text_input -- the hint row takes the caller's colour,
-// and unset it stays theme.font_muted, as it always did.
 TEST(placeholder_color_overrides_the_muted_default) {
-  const Color hint{140, 140, 166, 255}; // Deliberately not theme.font_muted.
+  const Color hint{140, 140, 166, 255};
   auto placeholder_color = [&](bool themed) {
     ImmTestHarness h;
     std::string text;
@@ -659,7 +657,6 @@ TEST(placeholder_color_overrides_the_muted_default) {
   CHECK(themed.r == hint.r && themed.g == hint.g && themed.b == hint.b &&
         themed.a == hint.a);
 
-  // UIContext's theme is default-constructed, so this is the harness's muted.
   const Color muted = Theme{}.font_muted;
   const Color plain = placeholder_color(false);
   CHECK(plain.r == muted.r && plain.g == muted.g && plain.b == muted.b &&

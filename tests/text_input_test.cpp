@@ -203,10 +203,8 @@ TEST(d12_placeholder_is_muted_and_real_text_is_not) {
   }
 }
 
-// R-030: the hint's ink is a property of the field, not of whatever
-// font_muted happens to hold for the frame.
 TEST(r030_placeholder_color_overrides_the_muted_default) {
-  const Color hint{140, 140, 166, 255}; // Deliberately not theme.font_muted.
+  const Color hint{140, 140, 166, 255};
   {
     ImmTestHarness h;
     std::string text;
@@ -228,7 +226,6 @@ TEST(r030_placeholder_color_overrides_the_muted_default) {
                      __LINE__);
   }
   {
-    // The override must not leak onto typed text.
     ImmTestHarness h;
     std::string text = "typed";
     two_frames(h, [&] {
