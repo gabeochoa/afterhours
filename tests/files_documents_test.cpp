@@ -42,8 +42,6 @@ int main() {
   { std::ofstream out(file); out << "x"; }
   check(fs::exists(file, ec), "the temp file exists");
 
-  // reveal_command is the seam: it builds the invocation without running
-  // it, so this never pops a Finder/Explorer window.
   const auto cmd = files::reveal_command(file);
   check(cmd.has_value(), "reveal_command accepts an existing file");
   if (cmd) {

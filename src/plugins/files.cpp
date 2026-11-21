@@ -364,8 +364,7 @@ fs::path files::get_documents_path() {
   log_error("@notimplemented files::get_documents_path on Emscripten");
   return {};
 #else
-  // sago only, in this one file: platform_folders.h defines its functions
-  // non-inline, so a second include site would be an ODR violation.
+  // platform_folders.h has non-inline defs: include only here.
   return fs::path(sago::getDocumentsFolder());
 #endif
 }
