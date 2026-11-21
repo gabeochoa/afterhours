@@ -251,6 +251,14 @@ struct RaylibPlatformAPI {
   }
   static void toggle_fullscreen() { raylib::ToggleFullscreen(); }
   static void minimize_window() { raylib::MinimizeWindow(); }
+  static void show_window() {
+    raylib::ClearWindowState(raylib::FLAG_WINDOW_HIDDEN);
+    note_window_hidden(false);
+  }
+  static void hide_window() {
+    raylib::SetWindowState(raylib::FLAG_WINDOW_HIDDEN);
+    note_window_hidden(true);
+  }
   static void set_window_size(int w, int h) { raylib::SetWindowSize(w, h); }
   static void set_window_min_size(int w, int h) {
     raylib::SetWindowMinSize(w, h);
@@ -379,9 +387,13 @@ struct RaylibPlatformAPI {
   static void run(const RunConfig &cfg) {
     quit_flag() = false;
     const bool headless = cfg.display == DisplayMode::Headless;
+    note_window_hidden(!headless && cfg.start_hidden);
     if (!headless) {
-      if (cfg.flags)
-        set_config_flags(cfg.flags);
+      unsigned int flags = cfg.flags;
+      if (cfg.start_hidden)
+        flags |= raylib::FLAG_WINDOW_HIDDEN;
+      if (flags)
+        set_config_flags(flags);
       init_window(cfg.width, cfg.height, cfg.title);
       // InitWindow has no position parameter; this lands before the first
       // frame, so the window never presents at the default placement.
