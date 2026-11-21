@@ -245,8 +245,6 @@ inline float resolve_to_pixels(const Size &size, float screen_dimension,
   return size.value;
 }
 
-// Resolve a font size: resolve_to_pixels plus the global text scale, so a
-// text-only accessibility factor composes with ui_scale and the font tiers.
 // The one site every font-size resolution should go through.
 inline float resolve_font_size(const Size &size, float screen_dimension,
                                ScalingMode mode, float ui_scale, float text_scale,

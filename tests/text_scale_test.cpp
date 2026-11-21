@@ -22,15 +22,12 @@ TEST(resolve_font_size_is_identical_at_scale_one) {
 TEST(resolve_font_size_multiplies_by_the_text_scale) {
   const auto config = ComponentConfig{}.with_font_size(FontSize::Medium);
   const float base = ThemeDefaults::get().theme.font_sizing.get(FontSize::Medium);
-  // Adaptive: composes with ui_scale.
   CHECK_APPROX(resolve_font_size(config.font_size, 1080.f,
                                  ScalingMode::Adaptive, 1.4f, 1.5f),
                base * 1.4f * 1.5f);
-  // Proportional: h720 resolves against the screen, then the scale applies.
   CHECK_APPROX(resolve_font_size(config.font_size, 1080.f,
                                  ScalingMode::Proportional, 1.4f, 1.5f),
                base * 1.5f * 1.5f);
-  // Explicit pixels behave the same way.
   CHECK_APPROX(resolve_font_size(pixels(16), 720.f, ScalingMode::Proportional,
                                  1.f, 1.5f),
                24.f);
