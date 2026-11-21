@@ -437,9 +437,6 @@ struct modal : developer::Plugin {
             // (Left/Right) and bottom/top sheets & banners.
             float sw = static_cast<float>(screen_w);
             float sh = static_cast<float>(screen_h);
-            // with_absolute_position's translate is multiplied by ui_scale in
-            // Adaptive mode, but the panel size above is not scaled, so divide
-            // it back out to land the origin in screen space at any zoom.
             const bool adaptive =
                 ctx.scaling_mode.value_or(UIStylingDefaults::get().scaling_mode) ==
                 ScalingMode::Adaptive;
