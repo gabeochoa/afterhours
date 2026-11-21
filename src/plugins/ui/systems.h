@@ -226,6 +226,7 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
   virtual void for_each_with(Entity &entity, UIContext<InputAction> &context,
                              float dt) override {
     context.render_cmds.clear();
+    context.focus_order.clear();
     context.dt = dt;
     context.last_action = InputAction::None;
     context.last_action_modifiers = 0;
@@ -1081,23 +1082,7 @@ struct CloseDropdownOnClickOutside : System<HasDropdownState, UIComponent> {
 // not ShouldHide, was rendered this frame, and input is allowed.
 template <typename InputAction>
 bool can_be_focused(UIContext<InputAction> &ctx, const Entity &e) {
-  if (e.template is_missing<HasClickListener>() &&
-      e.template is_missing<HasDragListener>() &&
-      e.template is_missing<HasLeftRightListener>())
-    return false;
-  if (e.template has<SkipWhenTabbing>())
-    return false;
-  if (e.template has<DoesNotTakeFocus>())
-    return false;
-  if (e.template has<ShouldHide>() || detail::in_inert_subtree(e))
-    return false;
-  if (e.template is_missing<UIComponent>() ||
-      e.template get<UIComponent>().skip_when_tabbing ||
-      !e.template get<UIComponent>().was_rendered_to_screen)
-    return false;
-  if (!ctx.is_input_allowed(e.id))
-    return false;
-  return true;
+  return ctx.is_tab_focusable(e);
 }
 
 template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
@@ -1106,6 +1091,14 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
   virtual void once(float) override {
     this->context =
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    if (!context)
+      return;
+    // Initial grab takes the first in tree order, not first allocated.
+    context->focus_order = context->build_tab_order();
+    for (EntityID id : context->focus_order)
+      context->focused_ids.insert(id);
+    if (!context->focus_order.empty())
+      context->try_to_grab(context->focus_order.front());
   }
 
   virtual ~HandleTabbing() {}

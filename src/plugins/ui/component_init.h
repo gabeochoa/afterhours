@@ -176,6 +176,10 @@ inline void apply_flags(Entity &entity, const ComponentConfig &config) {
   entity.get<UIComponent>().focus_ring_thickness = config.focus_ring_thickness;
   if (config.consumes_directional_input)
     entity.addComponentIfMissing<ConsumesDirectionalInput>();
+  if (config.focus_scope)
+    entity.addComponentIfMissing<FocusScope>();
+  else
+    entity.removeComponentIfExists<FocusScope>();
   if (config.ignore_pointer_events)
     entity.addComponentIfMissing<IgnorePointerEvents>();
   else

@@ -1281,13 +1281,15 @@ TEST(d36_tray_keeps_its_own_arrow_keys) {
                  __LINE__);
 }
 
-// The default must not change: an ordinary widget still tabs on Down, which is
-// what every existing app relies on.
+// Default: Down tabs to the next widget (list-based now, so destination not ROOT).
 TEST(d36_plain_widget_still_tabs_on_down) {
   ImmTestHarness h;
   auto b = button(h.context(), mk(h.root(), 0),
                   ComponentConfig{}.with_size(
                       ComponentSize{pixels(100), pixels(20)}));
+  auto b2 = button(h.context(), mk(h.root(), 1),
+                   ComponentConfig{}.with_size(
+                       ComponentSize{pixels(100), pixels(20)}));
   h.layout_only();
 
   auto &ctx = h.context();
@@ -1295,9 +1297,9 @@ TEST(d36_plain_widget_still_tabs_on_down) {
   ctx.last_action = ui_test::TestInputAction::WidgetDown;
   ctx.process_tabbing(b.ent().id);
 
-  ui_test::check(ctx.focus_id == ctx.ROOT,
-                 "Down still releases focus for the next widget to grab",
-                 __FILE__, __LINE__);
+  ui_test::check(ctx.focus_id == b2.ent().id,
+                 "Down still moves focus to the next widget", __FILE__,
+                 __LINE__);
 }
 
 // An app that owns its own directional nav can turn the folding off wholesale
@@ -1307,6 +1309,11 @@ TEST(d36_theme_can_stop_arrows_tabbing) {
   auto b = button(h.context(), mk(h.root(), 0),
                   ComponentConfig{}.with_size(
                       ComponentSize{pixels(100), pixels(20)}));
+  h.layout_only();
+
+  auto b2 = button(h.context(), mk(h.root(), 1),
+                   ComponentConfig{}.with_size(
+                       ComponentSize{pixels(100), pixels(20)}));
   h.layout_only();
 
   auto &ctx = h.context();
@@ -1322,7 +1329,7 @@ TEST(d36_theme_can_stop_arrows_tabbing) {
   // Tab itself must still work with arrows_tab off.
   ctx.last_action = ui_test::TestInputAction::WidgetNext;
   ctx.process_tabbing(b.ent().id);
-  ui_test::check(ctx.focus_id == ctx.ROOT, "Tab still tabs", __FILE__,
+  ui_test::check(ctx.focus_id == b2.ent().id, "Tab still tabs", __FILE__,
                  __LINE__);
 }
 

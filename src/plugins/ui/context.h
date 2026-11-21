@@ -175,6 +175,8 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   EntityID FAKE = -2;
 
   std::set<EntityID> focused_ids;
+  // This frame's tab-focusable ids in tree order (rebuilt by HandleTabbing).
+  std::vector<EntityID> focus_order;
 
   EntityID hot_id = ROOT;          // hot means the mouse is over this element
   EntityID prev_hot_id = ROOT;     // previous frame's hot_id (for animations)
@@ -430,6 +432,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     hot_id = ROOT;
     active_id = ROOT;
     focused_ids.clear();
+    focus_order.clear();
     render_cmds.clear();
     input_gates.clear();
     last_action = InputAction::None;
@@ -546,6 +549,111 @@ template <typename InputAction> struct UIContext final : BaseComponent {
            opt.asE().template has<ConsumesDirectionalInput>();
   }
 
+  // Single focusability rule so hit arbitration and tab order cannot drift.
+  [[nodiscard]] bool is_tab_focusable(const Entity &e) const {
+    if (e.template is_missing<HasClickListener>() &&
+        e.template is_missing<HasDragListener>() &&
+        e.template is_missing<HasLeftRightListener>())
+      return false;
+    if (e.template has<SkipWhenTabbing>())
+      return false;
+    if (e.template has<DoesNotTakeFocus>())
+      return false;
+    if (e.template has<ShouldHide>())
+      return false;
+    const Entity *cur = &e;
+    for (int depth = 0; depth < 64 && cur; ++depth) {
+      if (cur->template has<Inert>())
+        return false;
+      if (!cur->template has<UIComponent>())
+        break;
+      OptEntity parent =
+          UICollectionHolder::getEntityForID(cur->get<UIComponent>().parent);
+      cur = parent.valid() ? &parent.asE() : nullptr;
+    }
+    if (e.template is_missing<UIComponent>() ||
+        e.template get<UIComponent>().skip_when_tabbing ||
+        !e.template get<UIComponent>().was_rendered_to_screen)
+      return false;
+    return is_input_allowed(e.id);
+  }
+
+  // Tree order is visual order for flex layouts. Unreached focusables are
+  // appended in allocation order rather than dropping out of Tab.
+  [[nodiscard]] std::vector<EntityID> build_tab_order() const {
+    std::vector<EntityID> order;
+    std::set<EntityID> visited;
+    const auto visit = [&](auto &&self, Entity &entity) -> void {
+      if (!visited.insert(entity.id).second)
+        return;
+      if (is_tab_focusable(entity))
+        order.push_back(entity.id);
+      if (!entity.template has<UIComponent>())
+        return;
+      for (EntityID child_id : entity.get<UIComponent>().children) {
+        OptEntity child = UICollectionHolder::getEntityForID(child_id);
+        if (child.has_value() && child.asE().template has<UIComponent>())
+          self(self, child.asE());
+      }
+    };
+    for (const auto &e : UICollectionHolder::get().collection.get_entities()) {
+      if (e && e->template has<UIComponent>() &&
+          e->get<UIComponent>().parent == -1)
+        visit(visit, *e);
+    }
+    for (const auto &e : UICollectionHolder::get().collection.get_entities()) {
+      if (e && !visited.contains(e->id) && is_tab_focusable(*e))
+        order.push_back(e->id);
+    }
+    return order;
+  }
+
+  [[nodiscard]] EntityID nearest_focus_scope(EntityID id) const {
+    EntityID cur = id;
+    for (int depth = 0; depth < 64 && cur >= 0; ++depth) {
+      OptEntity opt = UICollectionHolder::getEntityForID(cur);
+      if (!opt.valid())
+        return ROOT;
+      Entity &e = opt.asE();
+      if (e.template has<FocusScope>())
+        return e.id;
+      if (!e.template has<UIComponent>())
+        return ROOT;
+      cur = e.get<UIComponent>().parent;
+    }
+    return ROOT;
+  }
+
+  [[nodiscard]] std::vector<EntityID>
+  tab_order_for(EntityID focused, const std::vector<EntityID> &order) const {
+    const EntityID scope = nearest_focus_scope(focused);
+    if (scope == ROOT)
+      return order;
+    std::vector<EntityID> scoped;
+    for (EntityID id : order)
+      if (nearest_focus_scope(id) == scope)
+        scoped.push_back(id);
+    return scoped;
+  }
+
+  void move_focus(int dir) {
+    const std::vector<EntityID> order = build_tab_order();
+    focus_order = order;
+    const std::vector<EntityID> scoped = tab_order_for(focus_id, order);
+    if (scoped.empty())
+      return;
+    const auto it = std::find(scoped.begin(), scoped.end(), focus_id);
+    if (it == scoped.end()) {
+      set_focus(dir < 0 ? scoped.back() : scoped.front(),
+                FocusSource::Explicit);
+      return;
+    }
+    const long n = static_cast<long>(scoped.size());
+    const long idx = (static_cast<long>(it - scoped.begin()) + dir) % n;
+    set_focus(scoped[static_cast<size_t>(idx < 0 ? idx + n : idx)],
+              FocusSource::Explicit);
+  }
+
   void process_tabbing(EntityID id) {
     if (has_focus(id)) {
       // Arrow Up/Down move focus just like Tab / Shift+Tab, EXCEPT when the
@@ -553,33 +661,32 @@ template <typename InputAction> struct UIContext final : BaseComponent {
       // adjusting a value) or the app has taken them over wholesale.
       const bool arrows_navigate =
           theme.arrows_tab && !focused_consumes_directional_input();
+      bool forward = false, backward = false;
       if constexpr (magic_enum::enum_contains<InputAction>("WidgetNext")) {
-        bool forward = pressed(InputAction::WidgetNext);
+        forward = pressed(InputAction::WidgetNext);
         if constexpr (magic_enum::enum_contains<InputAction>("WidgetDown")) {
           if (arrows_navigate && pressed(InputAction::WidgetDown))
             forward = true;
         }
-        if (forward) {
-          set_focus(ROOT);
-          if constexpr (magic_enum::enum_contains<InputAction>("WidgetMod")) {
-            if (is_held_down(InputAction::WidgetMod)) {
-              set_focus(last_processed);
-            }
-          }
-        }
       }
       if constexpr (magic_enum::enum_contains<InputAction>("WidgetBack")) {
-        bool backward = pressed(InputAction::WidgetBack);
+        backward = pressed(InputAction::WidgetBack);
         if constexpr (magic_enum::enum_contains<InputAction>("WidgetUp")) {
           if (arrows_navigate && pressed(InputAction::WidgetUp))
             backward = true;
         }
-        if (backward) {
-          set_focus(last_processed);
+      }
+      if (forward) {
+        bool reverse = false;
+        if constexpr (magic_enum::enum_contains<InputAction>("WidgetMod")) {
+          reverse = is_held_down(InputAction::WidgetMod);
         }
+        move_focus(reverse ? -1 : 1);
+      } else if (backward) {
+        move_focus(-1);
       }
     }
-    // before any returns
+    // Compatibility only; navigation uses build_tab_order().
     last_processed = id;
   }
 
