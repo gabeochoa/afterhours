@@ -1,5 +1,3 @@
-// attachment_test.cpp — AttachedTo relation: pose inheritance, reparent,
-// cleanup detach, type-filter rejection.
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 #include <afterhours/ah.h>
@@ -35,8 +33,8 @@ static void test_reparent_moves() {
   CHECK(attachment::parent_of(c) == b.id);
   CHECK(attachment::children_of(ec, a.id).empty());
   CHECK(attachment::children_of(ec, b.id) == std::vector<EntityID>{c.id});
-  CHECK(!attachment::attach(ec, b, c)); // cycle rejected (c's parent is b)
-  CHECK(!attachment::attach(ec, a, a)); // self rejected
+  CHECK(!attachment::attach(ec, b, c));
+  CHECK(!attachment::attach(ec, a, a));
   attachment::detach(c); CHECK(!attachment::is_attached(c));
 }
 static void test_cleanup_detaches() {
@@ -46,7 +44,6 @@ static void test_cleanup_detaches() {
   p.cleanup = true;
   CHECK(attachment::prune(ec) == 2);
   CHECK(!attachment::is_attached(c) && !attachment::is_attached(d));
-  // Child marked cleanup also loses its relation in prune.
   auto &p2 = ec.createEntity(); ec.merge_entity_arrays();
   CHECK(attachment::attach(ec, c, p2)); c.cleanup = true;
   CHECK(attachment::prune(ec) == 1); CHECK(!attachment::is_attached(c));
@@ -58,7 +55,7 @@ static void test_filter_rejection() {
   ec.merge_entity_arrays();
   auto only_pose_parents = [](const Entity &, const Entity &parent) { return parent.has<HasPose2D>(); };
   CHECK(!attachment::attach(ec, c, p, {}, "", only_pose_parents));
-  CHECK(!attachment::is_attached(c)); // rejection leaves no relation
+  CHECK(!attachment::is_attached(c));
   p.addComponent<HasPose2D>(1.f, 2.f);
   CHECK(attachment::attach(ec, c, p, {}, "", only_pose_parents));
 }

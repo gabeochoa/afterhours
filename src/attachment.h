@@ -1,9 +1,5 @@
 #pragma once
 
-// One attachment relation instead of per-pair held-item/furniture/rope
-// bookkeeping: a child names its single parent, an optional socket, and a
-// local pose; its world pose is composed from the parent's on demand.
-// System-free: games call the helpers where they already update transforms.
 
 #include <cmath>
 #include <functional>
@@ -21,7 +17,6 @@ struct Pose2D {
   float x = 0.f, y = 0.f, angle_deg = 0.f;
 };
 
-// An entity's own (unattached) pose; a parent's pose feeds composition.
 struct HasPose2D : BaseComponent {
   Pose2D pose;
   HasPose2D() = default;
@@ -31,8 +26,8 @@ struct HasPose2D : BaseComponent {
 
 struct AttachedTo : BaseComponent {
   EntityID parent = -1;
-  std::string socket; // opaque name, e.g. "hand_r"; empty = parent origin
-  Pose2D local;       // offset in parent space
+  std::string socket;
+  Pose2D local;
   [[nodiscard]] bool attached() const { return parent >= 0; }
 };
 
@@ -58,14 +53,10 @@ inline const Entity *find(const EntityCollection &ec, EntityID id) {
   return nullptr;
 }
 
-// Attaching a child that is already attached moves it (single-parent
-// invariant). Returns false, leaving any old attachment intact, on
-// self-attach, a would-be cycle, or filter rejection.
 inline bool attach(Entity &child, Entity &parent, Pose2D local = {},
                    std::string socket = "", const Filter &filter = nullptr) {
   if (child.id == parent.id) return false;
   if (filter && !filter(child, parent)) return false;
-  // Direct back-edge would cycle; deeper chains need the collection overload.
   if (parent.has<AttachedTo>() && parent.get<AttachedTo>().parent == child.id)
     return false;
   auto &rel = child.addComponentIfMissing<AttachedTo>();
@@ -105,11 +96,9 @@ inline std::vector<EntityID> children_of(const EntityCollection &ec, EntityID pa
   return out;
 }
 
-// World pose: attached entities ignore their own HasPose2D and inherit the
-// parent's world pose composed with `local`; unattached ones use HasPose2D.
 inline std::optional<Pose2D> world_pose(const EntityCollection &ec,
                                         const Entity &e, int depth = 0) {
-  if (depth > 64) return std::nullopt; // cycle guard for hand-edited relations
+  if (depth > 64) return std::nullopt;
   if (is_attached(e)) {
     const Entity *p = find(ec, e.get<AttachedTo>().parent);
     if (!p) return std::nullopt;
@@ -121,10 +110,6 @@ inline std::optional<Pose2D> world_pose(const EntityCollection &ec,
   return std::nullopt;
 }
 
-// Detach every relation whose parent is gone or marked cleanup, and strip
-// relations from entities themselves marked cleanup. Call before
-// EntityCollection::cleanup() so survivors never point at a dead parent.
-// Returns how many relations were removed.
 inline int prune(EntityCollection &ec) {
   int n = 0;
   for (auto &sp : ec.get_entities_for_mod()) {
@@ -135,5 +120,5 @@ inline int prune(EntityCollection &ec) {
   return n;
 }
 
-} // namespace attachment
-} // namespace afterhours
+}
+}
