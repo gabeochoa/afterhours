@@ -1,4 +1,3 @@
-// npc_queue_test.cpp — NpcQueue join/leave/advance/at-front + slot_position.
 
 #include <afterhours/src/plugins/npc_queue.h>
 
@@ -75,7 +74,7 @@ TEST(join_at_inserts_at_slot) {
   CHECK(q.join(3));
   CHECK(q.join_at(2, 1));
   CHECK(q.members() == std::vector<int>({1, 2, 3}));
-  CHECK(q.join_at(9, 99)); // clamps to the back
+  CHECK(q.join_at(9, 99));
   CHECK(q.members() == std::vector<int>({1, 2, 3, 9}));
 }
 
@@ -87,7 +86,7 @@ TEST(mid_queue_removal_compacts) {
   CHECK(q.members() == std::vector<int>({1, 2, 4, 5}));
   CHECK(q.position_of(4) == std::optional<size_t>{2});
   CHECK(q.position_of(5) == std::optional<size_t>{3});
-  CHECK(!q.leave(3)); // already gone
+  CHECK(!q.leave(3));
   CHECK(!q.leave(99));
   CHECK(q.size() == 4);
 }
@@ -110,7 +109,7 @@ TEST(advance_pops_front_and_notifies_next) {
   CHECK(q.join(1));
   CHECK(q.join(2));
   CHECK(q.join(3));
-  CHECK(front_calls == std::vector<int>({1})); // only the first arrival at front
+  CHECK(front_calls == std::vector<int>({1}));
   const auto popped = q.advance();
   CHECK(popped.has_value() && *popped == 1);
   CHECK(front_calls == std::vector<int>({1, 2}));
@@ -118,7 +117,7 @@ TEST(advance_pops_front_and_notifies_next) {
   CHECK(q.advance() == std::optional<int>{2});
   CHECK(front_calls == std::vector<int>({1, 2, 3}));
   CHECK(q.advance() == std::optional<int>{3});
-  CHECK(front_calls == std::vector<int>({1, 2, 3})); // emptying the line notifies no one
+  CHECK(front_calls == std::vector<int>({1, 2, 3}));
   CHECK(!q.advance().has_value());
   CHECK(q.empty());
 }
@@ -129,13 +128,13 @@ TEST(at_front_callback_fires_only_on_new_front) {
   q.set_at_front_callback([&](int id) { front_calls.push_back(id); });
   CHECK(q.join_at(5, 0));
   CHECK(front_calls == std::vector<int>({5}));
-  CHECK(q.join_at(4, 0)); // displaces the front
+  CHECK(q.join_at(4, 0));
   CHECK(front_calls == std::vector<int>({5, 4}));
-  CHECK(q.join(6));       // joins behind: front unchanged
+  CHECK(q.join(6));
   CHECK(front_calls == std::vector<int>({5, 4}));
-  CHECK(q.leave(5));      // non-front removal: no call
+  CHECK(q.leave(5));
   CHECK(front_calls == std::vector<int>({5, 4}));
-  CHECK(q.leave(4));      // front leaves: next becomes front
+  CHECK(q.leave(4));
   CHECK(front_calls == std::vector<int>({5, 4, 6}));
   CHECK(q.at_front(6));
   q.clear();
@@ -151,18 +150,15 @@ TEST(slot_position_along_line) {
   CHECK(near(p1.x, 20.f) && near(p1.y, 0.f));
   const Vector2Type p2 = npc_queue::slot_position(line, 2, 20.f);
   CHECK(near(p2.x, 40.f) && near(p2.y, 0.f));
-  const Vector2Type p3 = npc_queue::slot_position(line, 3, 20.f); // around the corner
+  const Vector2Type p3 = npc_queue::slot_position(line, 3, 20.f);
   CHECK(near(p3.x, 40.f) && near(p3.y, 20.f));
-  const Vector2Type p4 = npc_queue::slot_position(line, 9, 20.f); // past the end clamps
+  const Vector2Type p4 = npc_queue::slot_position(line, 9, 20.f);
   CHECK(near(p4.x, 40.f) && near(p4.y, 30.f));
   const std::vector<Vector2Type> none;
   const Vector2Type p5 = npc_queue::slot_position(none, 0, 20.f);
   CHECK(near(p5.x, 0.f) && near(p5.y, 0.f));
 }
 
-// ============================================================================
-// Main
-// ============================================================================
 
 int main() {
   printf("Running npc_queue tests...\n\n");
