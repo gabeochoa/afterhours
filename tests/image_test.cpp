@@ -1,9 +1,7 @@
 #define FMT_HEADER_ONLY
-// stb_image_write for encode_image/export_image: one TU defines the
-// implementation, in every backend variant of this test.
-#define AFTERHOURS_STB_IMAGE_IMPLEMENTATION
 #if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_SOKOL)
 #define AFTER_HOURS_USE_NONE
+#define AFTERHOURS_STB_IMAGE_IMPLEMENTATION
 #include <fmt/format.h>
 #include <afterhours/ah.h>
 #else

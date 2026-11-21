@@ -148,15 +148,21 @@ encode_image(const Image &image) {
     log_warn("encode_image: image is empty or truncated");
     return std::nullopt;
   }
-  int out_len = 0;
-  std::uint8_t *png = stbi_write_png_to_mem(
-      image.rgba.data(), 0, image.width, image.height, 4, &out_len);
-  if (png == nullptr || out_len <= 0) {
+  std::vector<std::uint8_t> bytes;
+  // to_func, not to_mem: to_mem is only declared with the implementation
+  // compiled in, which raylib's own lib already ships.
+  const int ok = stbi_write_png_to_func(
+      [](void *context, void *data, int size) {
+        auto &out = *static_cast<std::vector<std::uint8_t> *>(context);
+        const auto *p = static_cast<const std::uint8_t *>(data);
+        out.insert(out.end(), p, p + size);
+      },
+      &bytes, image.width, image.height, 4, image.rgba.data(),
+      image.width * 4);
+  if (ok == 0 || bytes.empty()) {
     log_warn("encode_image: PNG encode failed");
     return std::nullopt;
   }
-  std::vector<std::uint8_t> bytes(png, png + out_len);
-  stbi_image_free(png);
   return bytes;
 }
 
