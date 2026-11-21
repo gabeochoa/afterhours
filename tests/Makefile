@@ -265,7 +265,8 @@ ALL_TESTS := \
 	tree_view_test \
 	translation_test \
 	layout_inspector_test \
-	letter_spacing_zero_test
+	letter_spacing_zero_test \
+	mouse_pre_event_test
 
 # .app packaging is macOS-only, and the test shells out to plutil.
 ifeq ($(UNAME_S),Darwin)
@@ -285,6 +286,7 @@ ALL_TESTS += sokol_headless_run_test
 ALL_TESTS += sokol_include_order_test
 ALL_TESTS += sokol_wrappers_test
 ALL_TESTS += sokol_frame_dt_test
+ALL_TESTS += sokol_mouse_pre_init_test
 ALL_TESTS += staging_texture_leak_test
 endif
 
@@ -565,3 +567,8 @@ $(OUT)/raylib_fallback_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR
 $(OUT)/models_test: CXXFLAGS_T += -DAFTERHOURS_MODEL_FIXTURE=\"$(realpath ../examples/catalog/3d/tree-large.glb)\"
 $(OUT)/house_of_cards_test: CXXFLAGS_T += -DAFTERHOURS_MODELS_DIR=\"$(realpath ../examples/catalog/3d)\"
 $(OUT)/instance_batcher_test: CXXFLAGS_T += -DAFTERHOURS_MODELS_DIR=\"$(realpath ../examples/catalog/3d)\"
+
+$(OUT)/sokol_mouse_pre_init_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_mouse_pre_init_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_mouse_pre_init_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_mouse_pre_init_test: ../src/backends/sokol/backend.h
