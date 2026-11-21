@@ -43,7 +43,6 @@ static void unwire() {
   afterhours::graphics::metal_detail::g_active_font = FONS_INVALID;
 }
 
-// The baseline first-draw cost: a real draw rasterizes its glyphs.
 static int first_draw_rasterizes() {
   auto *ctx = context();
   wire(ctx);
@@ -58,17 +57,14 @@ static int first_draw_rasterizes() {
   return rasterized;
 }
 
-// After a prewarm, the first real draw rasterizes nothing new.
 static void prewarm_covers_first_draw(int expected) {
   auto *ctx = context();
   wire(ctx);
   CHECK(ctx->fonts[0]->nglyphs == 0);
   afterhours::prewarm_text(afterhours::Font{0}, kText, 32.f);
-  // Atlas bytes staged at prewarm: glyphs rasterized, dirty rect non-empty.
   CHECK(ctx->fonts[0]->nglyphs == expected);
   int dirty[4]{};
   CHECK(fonsValidateTexture(ctx, dirty) == 1);
-  // First real draw: zero new glyph rasterizations, zero new atlas bytes.
   fonsSetFont(ctx, 0);
   fonsSetSize(ctx, 32);
   fonsDrawText(ctx, 0, 0, kText, nullptr);
@@ -78,7 +74,6 @@ static void prewarm_covers_first_draw(int expected) {
   unwire();
 }
 
-// Prewarm rasterizes at the draw's raster size (size * dpi), not size.
 static void prewarm_matches_retina_draw() {
   test_dpi = 2;
   auto *ctx = context();
@@ -95,7 +90,6 @@ static void prewarm_matches_retina_draw() {
   test_dpi = 1;
 }
 
-// A size that was not prewarmed still pays its own first draw.
 static void unprewarmed_size_still_rasterizes() {
   auto *ctx = context();
   wire(ctx);
@@ -111,7 +105,7 @@ static void unprewarmed_size_still_rasterizes() {
 }
 
 static void guards() {
-  afterhours::prewarm_text(afterhours::Font{0}, kText, 32.f); // no context
+  afterhours::prewarm_text(afterhours::Font{0}, kText, 32.f);
   CHECK(afterhours::graphics::metal_detail::g_fons_ctx == nullptr);
   auto *ctx = context();
   wire(ctx);
@@ -119,7 +113,6 @@ static void guards() {
   afterhours::prewarm_text(afterhours::Font{0}, kText, 0.f);
   afterhours::prewarm_text(afterhours::Font{0}, kText, -1.f);
   CHECK(ctx->fonts[0]->nglyphs == 0);
-  // Invalid font id falls back to the active font, like draw_text_ex.
   afterhours::prewarm_text(afterhours::Font{FONS_INVALID}, "A", 32.f);
   CHECK(ctx->fonts[0]->nglyphs > 0);
   fonsDeleteInternal(ctx);
