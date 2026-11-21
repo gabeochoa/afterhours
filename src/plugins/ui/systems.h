@@ -653,18 +653,42 @@ template <typename InputAction>
 struct EndUIContextManager : System<UIContext<InputAction>> {
   virtual void for_each_with(Entity &, UIContext<InputAction> &context,
                              float) override {
-    if (context.focus_id == context.ROOT || context.focus_id == context.FAKE)
-      return;
-
-    if (context.mouse.left_down) {
-      if (context.is_active(context.ROOT)) {
-        context.set_active(context.FAKE);
+    if (context.focus_id != context.ROOT &&
+        context.focus_id != context.FAKE) {
+      if (context.mouse.left_down) {
+        if (context.is_active(context.ROOT)) {
+          context.set_active(context.FAKE);
+        }
+      } else {
+        context.set_active(context.ROOT);
       }
-    } else {
-      context.set_active(context.ROOT);
+      if (!context.focused_ids.contains(context.focus_id)) {
+        // The focused row/element went away (removed, retired, or no longer
+        // focusable). Fall back to its neighbour in last frame's tab order --
+        // next, else previous -- so a virtualized row leaving the viewport
+        // keeps focus near where the user was instead of jumping to the
+        // first focusable. Grab, so the move never lights the ring or
+        // rewrites the modality the dead focus carried.
+        const EntityID dead = context.focus_id;
+        EntityID target = context.ROOT;
+        const auto &order = context.last_focus_order;
+        const auto at = std::find(order.begin(), order.end(), dead);
+        if (at != order.end()) {
+          for (auto it = at + 1; it != order.end() && target == context.ROOT;
+               ++it)
+            if (context.focused_ids.contains(*it))
+              target = *it;
+          for (auto it = at; it != order.begin() && target == context.ROOT;) {
+            --it;
+            if (context.focused_ids.contains(*it))
+              target = *it;
+          }
+        }
+        context.set_focus(target, FocusSource::Grab);
+      }
     }
-    if (!context.focused_ids.contains(context.focus_id))
-      context.focus_id = context.ROOT;
+    context.last_focus_order = std::move(context.this_focus_order);
+    context.this_focus_order.clear();
     context.focused_ids.clear();
 
     if (auto *text_cache =

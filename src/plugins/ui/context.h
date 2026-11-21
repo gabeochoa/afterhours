@@ -175,6 +175,11 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   EntityID FAKE = -2;
 
   std::set<EntityID> focused_ids;
+  // Focusable ids in HandleTabbing order: this frame's (built by
+  // try_to_grab) and last frame's (kept so a removed focused row falls back
+  // to its neighbour instead of the first focusable).
+  std::vector<EntityID> this_focus_order;
+  std::vector<EntityID> last_focus_order;
 
   EntityID hot_id = ROOT;          // hot means the mouse is over this element
   EntityID prev_hot_id = ROOT;     // previous frame's hot_id (for animations)
@@ -430,6 +435,8 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     hot_id = ROOT;
     active_id = ROOT;
     focused_ids.clear();
+    this_focus_order.clear();
+    last_focus_order.clear();
     render_cmds.clear();
     input_gates.clear();
     last_action = InputAction::None;
@@ -440,6 +447,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
 
   void try_to_grab(EntityID id) {
     focused_ids.insert(id);
+    this_focus_order.push_back(id);
     if (!has_focus(ROOT))
       return;
     if (grab_initial_focus) {
