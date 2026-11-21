@@ -133,7 +133,7 @@ Text commands such as `type`, `expect_text` and the value in `expect_input_text`
 
 ## E2E --time-scale on a fixed-step sim
 
-Speed comes from more fixed steps, never a bigger dt. `--time-scale 4` on a sim with `fixed_dt` set should run 4 ticks of `fixed_dt` per frame, not one tick of 4x dt: a scaled dt changes behaviour (clamps, tunnelling, non-deterministic replays) — that is failure mode one. Failure mode two is the quieter one: `RunConfig::step_dt` ignores the scale for a fixed step, so prime the flag and nothing speeds up until someone hand-rolls `sim_steps`, per app, drifting.
+`--time-scale N` runs N fixed ticks of `fixed_dt` per frame. It never scales dt.
 
 The reference wiring is three calls in `src/plugins/e2e_testing/harness.h` (`afterhours::testing`):
 
