@@ -1,8 +1,3 @@
-// label_test.cpp
-// imm::label / label_muted must match the longhand div chain screens
-// hand-roll: with_label + with_font(default) + Left + ignore-pointer +
-// theme text colour.
-
 #include "ui_test_harness.h"
 
 using namespace afterhours;
@@ -119,7 +114,6 @@ TEST(label_explicit_overrides_win) {
     if (g.explicit_text_color)
       CHECK(same_color(*g.explicit_text_color, custom));
   }
-  // A size-only override keeps that size and still gets the default face.
   auto size_only = label(h.context(), mk(h.root(), 1), "Big",
                          sized("big").with_font_size(pixels(32)));
   CHECK(size_only.ent().get<UIComponent>().font_name ==

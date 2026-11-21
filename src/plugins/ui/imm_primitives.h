@@ -155,10 +155,8 @@ inline ElementResult label_impl(HasUIContext auto &ctx, EntityParent ep_pair,
 }
 } // namespace detail
 
-/// A static text label: the div + with_label + with_font + left alignment +
-/// ignore-pointer-events + theme text colour chain screens hand-roll.
-/// Font and size fall back to UIStylingDefaults; an explicit font, size,
-/// text colour, or alignment in `config` wins.
+/// Static text label; ignores pointer events. Font/size fall back to
+/// UIStylingDefaults; an explicit config value wins.
 ElementResult label(HasUIContext auto &ctx, EntityParent ep_pair,
                     const std::string &text,
                     ComponentConfig config = ComponentConfig()) {
