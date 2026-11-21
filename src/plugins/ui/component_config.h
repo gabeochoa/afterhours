@@ -231,6 +231,7 @@ struct ComponentConfig {
   std::optional<TextUnitMotion> unit_motion;
   float blur = 0.f;
   graphics::ShaderType *shader = nullptr;
+  std::optional<blend::Mode> blend_mode;
   float origin_x = 0.5f;
   float origin_y = 0.5f;
 
@@ -694,6 +695,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_shader(graphics::ShaderType &s) {
     shader = &s;
+    return *this;
+  }
+  ComponentConfig &with_blend_mode(blend::Mode m) {
+    blend_mode = m;
     return *this;
   }
   ComponentConfig &with_blur(float radius) {
@@ -1371,6 +1376,8 @@ struct ComponentConfig {
       merged.blur = overrides.blur;
     if (overrides.shader)
       merged.shader = overrides.shader;
+    if (overrides.blend_mode.has_value())
+      merged.blend_mode = overrides.blend_mode;
     if (overrides.origin_x != 0.5f || overrides.origin_y != 0.5f) {
       merged.origin_x = overrides.origin_x;
       merged.origin_y = overrides.origin_y;

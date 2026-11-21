@@ -661,6 +661,10 @@ inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
     entity.addComponentIfMissing<HasShader>().shader = config.shader;
   else
     entity.removeComponentIfExists<HasShader>();
+  if (config.blend_mode.has_value())
+    entity.addComponentIfMissing<HasBlend>().mode = *config.blend_mode;
+  else
+    entity.removeComponentIfExists<HasBlend>();
   if (config.blur > 0.f)
     entity.addComponentIfMissing<HasBlur>().radius = config.blur;
   if (config.origin_x != 0.5f || config.origin_y != 0.5f) {
