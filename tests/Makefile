@@ -195,6 +195,7 @@ ALL_TESTS := \
 	query_skip_mods_test \
 	capture_attribution_test \
 	draw_commands_test \
+	screen_luma_test \
 	color_contrast_test \
 	scissor_coalescing_test \
 	focus_origin_test \
