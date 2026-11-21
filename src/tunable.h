@@ -8,14 +8,11 @@
 #include <type_traits>
 #include <vector>
 #include "logging.h"
-// Live-reloadable named values: tunable<T> registers itself by name and a
-// kv text source (file contents, a console `set` command) is re-applied
-// later without a restart; only changed values fire on_change.
 namespace afterhours {
 struct tunable_reload_result {
-  std::size_t applied = 0; // lines that parsed and matched a tunable
-  std::size_t changed = 0; // of those, lines that changed a value
-  std::vector<std::string> errors; // bad lines, each with its line number
+  std::size_t applied = 0;
+  std::size_t changed = 0;
+  std::vector<std::string> errors;
 };
 namespace tunable_detail {
 inline std::string_view trim(std::string_view s) {
@@ -63,7 +60,7 @@ struct entry {
   virtual ~entry() = default;
   virtual bool apply(std::string_view text, std::string &error, bool &changed_now) = 0;
 };
-} // namespace tunable_detail
+}
 class tunable_registry {
  public:
   bool add(const std::string &name, tunable_detail::entry *e) {
@@ -77,7 +74,6 @@ class tunable_registry {
   }
   std::size_t size() const { return entries_.size(); }
   bool contains(const std::string &name) const { return entries_.count(name) > 0; }
-  // One `name = value` pair, for a console `set` command (error out-param optional).
   bool set(const std::string &name, std::string_view text, std::string *error = nullptr) {
     auto it = entries_.find(name);
     if (it == entries_.end()) {
@@ -92,8 +88,6 @@ class tunable_registry {
     }
     return true;
   }
-  // `name = value` lines; blank lines and # or // comments are skipped.
-  // Bad lines are collected in the result, never fatal.
   tunable_reload_result reload(std::string_view source) {
     tunable_reload_result result;
     std::size_t pos = 0, line_no = 0;
@@ -125,12 +119,10 @@ class tunable_registry {
  private:
   std::map<std::string, tunable_detail::entry *> entries_;
 };
-// Process-wide registry; tunables register themselves here on construction.
 inline tunable_registry &tunable_registry_instance() {
   static tunable_registry instance;
   return instance;
 }
-// Free wrappers so a console command or file-watch callback needs no lookup.
 inline tunable_reload_result reload_tunables(std::string_view source) {
   return tunable_registry_instance().reload(source);
 }
@@ -150,7 +142,7 @@ template <typename T> class tunable : public tunable_detail::entry {
   operator const T &() const { return value_; }
   void on_change(std::function<void(const T &)> callback) { callback_ = std::move(callback); }
   void set(const T &v) {
-    if (v == value_) return; // unchanged values never fire
+    if (v == value_) return;
     value_ = v;
     if (callback_) callback_(value_);
   }
@@ -170,4 +162,4 @@ template <typename T> class tunable : public tunable_detail::entry {
   bool registered_ = false;
   std::function<void(const T &)> callback_;
 };
-} // namespace afterhours
+}
