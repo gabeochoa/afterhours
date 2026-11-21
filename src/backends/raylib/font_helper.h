@@ -85,10 +85,35 @@ enum struct FontAtlasPacker {
   Skyline = 1, // slower to pack, fits more
 };
 
+// Auto is the historical choice (trilinear with mipmaps, bilinear without).
+enum struct FontAtlasFilter {
+  Auto = -1,
+  Point = raylib::TEXTURE_FILTER_POINT,
+  Bilinear = raylib::TEXTURE_FILTER_BILINEAR,
+  Trilinear = raylib::TEXTURE_FILTER_TRILINEAR,
+};
+
 struct FontAtlasConfig {
   int padding = 4;
   FontAtlasPacker packer = FontAtlasPacker::Skyline;
+  FontAtlasFilter filter = FontAtlasFilter::Auto;
 };
+
+inline raylib::TextureFilter
+resolve_font_filter(const FontAtlasConfig &config, int mipmaps) {
+  switch (config.filter) {
+    case FontAtlasFilter::Point:
+      return raylib::TEXTURE_FILTER_POINT;
+    case FontAtlasFilter::Bilinear:
+      return raylib::TEXTURE_FILTER_BILINEAR;
+    case FontAtlasFilter::Trilinear:
+      return raylib::TEXTURE_FILTER_TRILINEAR;
+    case FontAtlasFilter::Auto:
+      break;
+  }
+  return mipmaps > 1 ? raylib::TEXTURE_FILTER_TRILINEAR
+                     : raylib::TEXTURE_FILTER_BILINEAR;
+}
 
 // What every load uses unless a caller passes its own. Set it once at startup:
 // fonts are loaded from several places, and threading a parameter through all
@@ -145,13 +170,15 @@ inline void record_font_coverage(const raylib::Font font, const char *file) {
 // texels per pixel and thin strokes fall between them: glyphs fragment
 // and fade at sub-1.0 UI scale. Mipmaps + trilinear average the atlas
 // properly at every size.
-inline void prepare_font_texture(raylib::Font &font) {
+inline void prepare_font_texture(
+    raylib::Font &font,
+    const FontAtlasConfig &atlas_config = default_font_atlas_config()) {
   if (font.texture.id == 0)
     return;
   raylib::GenTextureMipmaps(&font.texture);
-  raylib::SetTextureFilter(font.texture, font.texture.mipmaps > 1
-                                             ? raylib::TEXTURE_FILTER_TRILINEAR
-                                             : raylib::TEXTURE_FILTER_BILINEAR);
+  raylib::SetTextureFilter(
+      font.texture,
+      resolve_font_filter(atlas_config, font.texture.mipmaps));
 }
 
 inline raylib::Font
