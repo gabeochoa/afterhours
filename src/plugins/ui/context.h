@@ -429,6 +429,11 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     last_processed = ROOT;
     hot_id = ROOT;
     active_id = ROOT;
+    // Pristine, not just unfocused: the ring is drawn off has_interacted and
+    // focus_visible() reads focus_modality, so either left set would draw (or
+    // suppress) a ring the fresh context would not.
+    has_interacted = false;
+    focus_modality = FocusSource::Grab;
     focused_ids.clear();
     render_cmds.clear();
     input_gates.clear();

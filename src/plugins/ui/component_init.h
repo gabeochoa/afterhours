@@ -663,10 +663,11 @@ inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
   resolve_scaling_mode(entity, ctx, config);
   apply_visuals(ctx, entity, config);
   run_init_hooks(ctx, entity, config);
-  if (config.shader)
-    entity.addComponentIfMissing<HasShader>().shader = config.shader;
-  else
-    entity.removeComponentIfExists<HasShader>();
+  if (auto *hs = entity.toggleComponent<HasShader>(config.shader != nullptr))
+    hs->shader = config.shader;
+  if (auto *hb =
+          entity.toggleComponent<HasBlend>(config.blend_mode.has_value()))
+    hb->mode = *config.blend_mode;
   if (config.blur > 0.f)
     entity.addComponentIfMissing<HasBlur>().radius = config.blur;
   if (config.origin_x != 0.5f || config.origin_y != 0.5f) {
