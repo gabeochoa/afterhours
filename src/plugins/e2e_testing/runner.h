@@ -392,10 +392,23 @@ class E2ERunner {
                  script_results_.size(), commands_.size());
     }
 
+    // Injected presses from the step just finished that expired with no
+    // system reading them fail that step, naming the press.
+    void fail_unread_presses() {
+        for (const auto &label : input_injector::take_unread_presses()) {
+            failed_ = true;
+            current_script_errors_++;
+            log_warn("[E2E ERROR] {} (line {}): injected press {} was never "
+                     "read by any system",
+                     current_script_name(), last_dispatched_line_, label);
+        }
+    }
+
     void reset() {
         test_input::reset_all();
         key_release_detail::reset();
         index_ = 0;
+        last_dispatched_line_ = 0;
         wait_time_ = 0.0f;
         wait_ticks_ = 0;
         wall_deadline.reset();
@@ -439,6 +452,8 @@ class E2ERunner {
             wait_time_ -= dt;
             return;
         }
+
+        fail_unread_presses();
 
         if (!wall_deadline || std::chrono::steady_clock::now() >= *wall_deadline)
             elapsed_time_ += dt;
@@ -679,6 +694,7 @@ class E2ERunner {
 
    private:
     void dispatch_command(const ParsedCommand &cmd) {
+        last_dispatched_line_ = cmd.line_number;
         wall_deadline.reset();
         if (!cmd.parse_error.empty()) {
             log_warn("[E2E ERROR] {}:{}: {}: {}", current_script_name(),
@@ -843,6 +859,7 @@ class E2ERunner {
     std::vector<ScriptResult> script_results_;
     std::size_t current_script_idx_ = 0;
     int current_script_errors_ = 0;
+    int last_dispatched_line_ = 0;
 
     ScreenshotFn screenshot_fn_;
     std::string results_path_;
