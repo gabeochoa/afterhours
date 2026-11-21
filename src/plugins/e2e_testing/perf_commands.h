@@ -84,9 +84,6 @@ inline void disable() { profiling::default_collector().stop(); }
 
 } // namespace builtin_profile
 
-// Single-line JSON rendering of a collector snapshot, for dump_profile
-// --json. Hand-rolled (no JSON dependency this header does not already
-// have): names are escaped, numbers print with three decimals.
 inline std::string escape_json_string(std::string_view in) {
     std::string out;
     out.reserve(in.size());
@@ -150,8 +147,6 @@ struct HandleDumpProfileCommand : System<PendingE2ECommand> {
     void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
         if (cmd.is_consumed() || !cmd.is("dump_profile")) return;
 
-        // Flags may come in any position; the first bare arg stays the count,
-        // parsed exactly as before (unparsable means 0).
         bool want_json = false;
         int count = 20;
         bool count_seen = false;
@@ -168,9 +163,6 @@ struct HandleDumpProfileCommand : System<PendingE2ECommand> {
             }
         }
         if (want_json) {
-            // JSON reads the builtin collector, not the pluggable provider:
-            // custom providers only promise fps/p99/top entries, while the
-            // snapshot below is the full machine-readable record.
             if (!profiling::available) {
                 cmd.fail("dump_profile --json unavailable: rebuild with "
                          "AFTERHOURS_ENABLE_PROFILING=1 to collect it");
@@ -292,9 +284,6 @@ struct HandleExpectP99BelowCommand : System<PendingE2ECommand> {
 struct HandleResetProfileCommand : System<PendingE2ECommand> {
     void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
         if (cmd.is_consumed() || !cmd.is("reset_profile")) return;
-        // Windowed stats start here: reset() clears frames/systems/counters
-        // while preserving recording state, so the next dump_profile covers
-        // only what runs after this command.
         builtin_profile::reset();
         cmd.consume();
     }

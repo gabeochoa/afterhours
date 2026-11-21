@@ -75,9 +75,6 @@ std::string &captured_log() {
   return s;
 }
 
-// R-238: reset_profile gives windowed stats a starting line. Frames recorded
-// before it vanish from the next dump, while recording itself continues, so
-// a script can bracket exactly the frames it cares about.
 TEST(reset_profile_command_clears_frames_and_keeps_recording) {
   using namespace afterhours::testing::perf_commands;
   using afterhours::testing::PendingE2ECommand;
@@ -106,8 +103,6 @@ TEST(reset_profile_command_clears_frames_and_keeps_recording) {
   builtin_profile::disable();
 }
 
-// R-233: dump_profile --json emits one machine-readable line carrying the
-// full snapshot, not the human text table.
 TEST(dump_profile_json_emits_snapshot_as_json) {
   using namespace afterhours::testing::perf_commands;
   using afterhours::testing::PendingE2ECommand;
