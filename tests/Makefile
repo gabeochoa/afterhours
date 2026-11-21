@@ -289,6 +289,7 @@ ALL_TESTS := \
 	random_engine_test \
 	render_order_test \
 	draw_over_test \
+	imm_draw_order_test \
 	scroll_smoothing_test \
 	setup_test \
 	slot_at_creation_test \
