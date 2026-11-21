@@ -2096,9 +2096,6 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
           font_manager.resolve_weighted(cmp.font_name, cmp.font_weight));
     }
 
-    // Clipped by the intersection of ALL ancestor clip rects. A scroll
-    // view's own rect is excluded by compute_intersected_clip_rect, so
-    // this clips its decorations to ancestors without shrinking its viewport.
     bool needs_scissor = false;
     {
       auto [has_clip, clip_rect] =
@@ -2933,9 +2930,6 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
           font_manager.resolve_weighted(cmp.font_name, cmp.font_weight));
     }
 
-    // Clipped by the intersection of ALL ancestor clip rects. A scroll
-    // view's own rect is excluded by compute_intersected_clip_rect, so
-    // this clips its decorations to ancestors without shrinking its viewport.
     bool needs_scissor = false;
     {
       auto [has_clip, clip_rect] =

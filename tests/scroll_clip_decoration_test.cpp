@@ -1,11 +1,3 @@
-// scroll_clip_decoration_test.cpp
-// A nested scroll view's own decorations (background/border) must be
-// clipped to ancestor viewports. 6931c61 clipped the scrollbars the same
-// way; the view's own fill escaped because both renderers exempted
-// HasScrollView from the ancestor scissor entirely. The exempting was
-// meant to protect the view's own viewport -- compute_intersected_clip_rect
-// already excludes the view itself, so the ancestor clip is safe to apply.
-
 #include "ui_test_harness.h"
 
 using namespace afterhours;
@@ -61,8 +53,6 @@ TEST(nested_scroll_background_and_border_are_scissored_to_outer_viewport) {
         (cmds[i].type == RenderPrimitiveType::RoundedRectangle ||
          cmds[i].type == RenderPrimitiveType::Rectangle)) {
       fill_at = i;
-      // The viewport geometry itself is untouched: the fill still spans
-      // the full 150px-tall inner view; only painting is clipped.
       CHECK_APPROX(cmds[i].data.rectangle.rect.height, 150.f);
     }
     if (fill_at >= 0 && cmds[i].type == RenderPrimitiveType::ScissorEnd)
