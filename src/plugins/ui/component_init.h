@@ -280,11 +280,22 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
       config.unit_motion.has_value() || config.pseudo_locale_exempt
           ? PseudoLocale::None
           : UIStylingDefaults::get().pseudo_locale;
-  if (!config.tooltip_text.empty())
-    entity.addComponentIfMissing<ui::HasTooltip>(
+  if (config.tooltip_text.empty()) {
+    entity.removeComponentIfExists<ui::HasTooltip>();
+  } else {
+    // Refresh every rebuild: imm configs are rebuilt each frame, so a changed
+    // text/placement must reach the showing tooltip and a cleared one must go.
+    auto &tip = entity.addComponentIfMissing<ui::HasTooltip>(
         pseudo_localize(config.tooltip_text, pseudo), config.tooltip_delay,
-        ui::overlay::Placement::Below, config.tooltip_font_size,
+        config.tooltip_placement, config.tooltip_font_size,
         config.tooltip_padding, config.tooltip_gap);
+    tip.text = pseudo_localize(config.tooltip_text, pseudo);
+    tip.delay = config.tooltip_delay;
+    tip.placement = config.tooltip_placement;
+    tip.font_size = config.tooltip_font_size;
+    tip.padding = config.tooltip_padding;
+    tip.gap = config.tooltip_gap;
+  }
 
   if (config.label.empty() && !entity.has<ui::HasLabel>())
     return;
