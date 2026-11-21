@@ -150,7 +150,7 @@ struct modal : developer::Plugin {
         ClosedBy closed_by = ClosedBy::CloseRequest;
         bool show_close_button = true;
         size_t open_order = 0;
-        EntityID previously_focused_element = -1;
+        ui::FocusReturnToken previously_focused_element{};
         int render_layer = static_cast<int>(RenderLayer::Modal);
         std::string title;
 
@@ -162,7 +162,8 @@ struct modal : developer::Plugin {
         Modal() = default;
 
         // Initialize modal state when opening
-        void open_with(const ModalConfig &config, EntityID focus_to_restore) {
+        void open_with(const ModalConfig &config,
+                       const ui::FocusReturnToken &focus_to_restore) {
             result = DialogResult::Pending;
             backdrop_color = config.backdrop_color;
             closed_by = config.closed_by;
@@ -354,10 +355,8 @@ struct modal : developer::Plugin {
                 if (it != root.modal_stack.end()) {
                     root.modal_stack.erase(it);
                 }
-                if (m.previously_focused_element >= 0) {
-                    if (ctx.focus_id == ctx.ROOT || is_entity_in_tree(entity.id, ctx.focus_id))
-                        ctx.set_focus(m.previously_focused_element);
-                }
+                if (ctx.focus_id == ctx.ROOT || is_entity_in_tree(entity.id, ctx.focus_id))
+                    ctx.restore_focus_return(m.previously_focused_element);
                 m.phase = Modal::Phase::Hidden;
             };
 
@@ -365,7 +364,7 @@ struct modal : developer::Plugin {
                 if (m.exiting()) {
                     presence.to(1.f, config.enter_motion.value_or(motion::Spring::smooth()));
                 } else {
-                    m.open_with(config, ctx.focus_id);
+                    m.open_with(config, ctx.capture_focus_return());
                     auto &root = get_modal_root();
                     m.open_order = root.modal_sequence++;
                     root.modal_stack.push_back(entity.id);
@@ -970,7 +969,7 @@ struct modal : developer::Plugin {
                     auto &m = opt->template get<Modal>();
                     if (context->focus_id == context->ROOT ||
                         detail::is_entity_in_tree(id, context->focus_id))
-                        context->set_focus(m.previously_focused_element);
+                        context->restore_focus_return(m.previously_focused_element);
                     m.was_open_last_frame = false;
                     m.pending_close = false;
                     m.phase = Modal::Phase::Hidden;

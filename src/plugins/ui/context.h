@@ -165,6 +165,20 @@ namespace imm {
 struct UIStylingDefaults;
 } // namespace imm
 
+// Opaque, generation-checked reference to the control that had focus when it
+// was captured. When a slot-holding control is deleted its generation bumps,
+// so a later restore no-ops instead of focusing an unrelated control that
+// reused the slot. A capture that found no handle (entity without a slot)
+// falls back to the recorded id, which does not get that protection.
+struct FocusReturnToken {
+  EntityHandle handle = EntityHandle::invalid();
+  EntityID id = -1;
+
+  [[nodiscard]] constexpr bool valid() const {
+    return handle.is_valid() || id >= 0;
+  }
+};
+
 // final for the same reason as FontManager: the render systems look it up
 // with has_child_of on every entity, every frame.
 template <typename InputAction> struct UIContext final : BaseComponent {
@@ -395,6 +409,52 @@ template <typename InputAction> struct UIContext final : BaseComponent {
       focus_set_line = static_cast<int>(loc.line());
     }
     focus_id = id;
+  }
+
+  // Snapshot the focused control so it can be restored after a dialog or
+  // overlay takes focus away. Opaque on purpose: the caller never juggles
+  // entity ids, so a control rebuilt under a new id is simply missed.
+  [[nodiscard]] FocusReturnToken capture_focus_return() const {
+    FocusReturnToken token;
+    if (focus_id == ROOT)
+      return token;
+    token.id = focus_id;
+    OptEntity e = UICollectionHolder::getEntityForID(focus_id);
+    if (!e.has_value())
+      return token;
+    // UI entities live in the UI collection; handles are collection-local, so
+    // whichever collection owns the entity is the one that can answer for it.
+    Entity &entity = e.asE();
+    token.handle = UICollectionHolder::get().collection.handle_for(entity);
+    if (token.handle.is_invalid())
+      token.handle = EntityHelper::get_default_collection().handle_for(entity);
+    return token;
+  }
+
+  // Put focus back on the captured control. Returns false and leaves focus
+  // where it is when the control is gone or can no longer take focus.
+  bool restore_focus_return(const FocusReturnToken &token) {
+    if (!token.valid())
+      return false;
+    OptEntity e;
+    if (token.handle.is_valid()) {
+      e = UICollectionHolder::get().collection.resolve(token.handle);
+      if (!e.has_value())
+        e = EntityHelper::get_default_collection().resolve(token.handle);
+    } else {
+      e = UICollectionHolder::getEntityForID(token.id);
+    }
+    // A handle is collection-local: the wrong collection resolving a slot/gen
+    // coincidence onto a different control is the failure this check refuses.
+    if (!e.has_value() || e.asE().id != token.id)
+      return false;
+    Entity &target = e.asE();
+    if (target.template is_missing<UIComponent>() ||
+        target.template has<DoesNotTakeFocus>() ||
+        target.template has<ShouldHide>())
+      return false;
+    set_focus(target.id, FocusSource::Explicit);
+    return true;
   }
 
   // :focus-visible: the ring exists for users who cannot see a pointer.
