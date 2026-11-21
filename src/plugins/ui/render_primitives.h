@@ -665,6 +665,7 @@ public:
     size_t image_commands = 0;
     size_t scissor_operations = 0;
     size_t blend_operations = 0;
+    size_t shader_operations = 0;
   };
 
   void render(const RenderCommandBuffer &buffer, FontManager &fonts) {
@@ -674,6 +675,7 @@ public:
 
     std::optional<std::array<int, 4>> active_clip;
     blend::Mode active_blend = blend::current();
+    graphics::ShaderType *active_shader = nullptr;
     size_t i = 0;
     while (i < commands.size()) {
       const auto &cmd = commands[i];
@@ -741,14 +743,20 @@ public:
         i++;
         break;
 
-      case RenderPrimitiveType::ScissorStart:
-        active_clip = {cmd.data.scissor.x, cmd.data.scissor.y,
-                       cmd.data.scissor.width, cmd.data.scissor.height};
-        begin_scissor_mode(cmd.data.scissor.x, cmd.data.scissor.y,
-                           cmd.data.scissor.width, cmd.data.scissor.height);
+      case RenderPrimitiveType::ScissorStart: {
+        std::array<int, 4> clip{cmd.data.scissor.x, cmd.data.scissor.y,
+                                cmd.data.scissor.width, cmd.data.scissor.height};
+        // Same clip already active (label clip == ancestor clip): re-setting it changes no pixels.
+        if (active_clip && *active_clip == clip) {
+          i++;
+          break;
+        }
+        active_clip = clip;
+        begin_scissor_mode(clip[0], clip[1], clip[2], clip[3]);
         stats_.scissor_operations++;
         i++;
         break;
+      }
 
       case RenderPrimitiveType::ScissorEnd:
         if (active_clip && i + 1 < commands.size() &&
@@ -759,20 +767,43 @@ public:
             break;
           }
         }
+        if (!active_clip) {
+          i++;
+          break;
+        }
         active_clip.reset();
         end_scissor_mode();
         stats_.scissor_operations++;
         i++;
         break;
 
-      case RenderPrimitiveType::ShaderStart:
-        if (cmd.data.shader.shader && cmd.data.shader.shader->id != 0)
-          ::afterhours::begin_shader_mode(*cmd.data.shader.shader);
+      case RenderPrimitiveType::ShaderStart: {
+        auto *shader = cmd.data.shader.shader;
+        if (!shader || shader->id == 0 || active_shader == shader) {
+          i++;
+          break;
+        }
+        active_shader = shader;
+        ::afterhours::begin_shader_mode(*shader);
+        stats_.shader_operations++;
         i++;
         break;
+      }
 
       case RenderPrimitiveType::ShaderEnd:
+        if (active_shader && i + 1 < commands.size() &&
+            commands[i + 1].type == RenderPrimitiveType::ShaderStart &&
+            commands[i + 1].data.shader.shader == active_shader) {
+          i += 2;
+          break;
+        }
+        if (!active_shader) {
+          i++;
+          break;
+        }
+        active_shader = nullptr;
         ::afterhours::end_shader_mode();
+        stats_.shader_operations++;
         i++;
         break;
 
