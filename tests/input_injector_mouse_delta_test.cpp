@@ -95,7 +95,6 @@ TEST(right_button_hold_persists_across_frames) {
   CHECK(!input_injector::is_mouse_right_button_down());
   CHECK(input_injector::is_mouse_right_button_released());
 
-  // Re-setting the same state is not a new edge.
   test_input::reset_frame();
   test_input::set_right_button_down(false);
   CHECK(!input_injector::is_mouse_right_button_released());

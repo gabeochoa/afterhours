@@ -149,8 +149,7 @@ encode_image(const Image &image) {
     return std::nullopt;
   }
   std::vector<std::uint8_t> bytes;
-  // to_func, not to_mem: to_mem is only declared with the implementation
-  // compiled in, which raylib's own lib already ships.
+  // to_mem needs the impl TU; raylib's lib already ships it.
   const int ok = stbi_write_png_to_func(
       [](void *context, void *data, int size) {
         auto &out = *static_cast<std::vector<std::uint8_t> *>(context);

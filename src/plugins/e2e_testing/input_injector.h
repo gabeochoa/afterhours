@@ -90,9 +90,7 @@ struct KeyHold {
   int keycode = 0;
   float remaining = 0.0f;
 };
-// FIFO of injected presses for get_key_pressed-style polling. consume_press
-// stays multi-reader for is_key_pressed; this queue is drained destructively,
-// exactly like raylib's GetKeyPressed queue.
+// Drained destructively by pop_key_pressed, like GetKeyPressed.
 struct QueuedPress {
   int key = 0;
   int delay = 1;
@@ -371,8 +369,6 @@ inline void reset_frame() {
       detail::synthetic_release_count[i]--;
     }
   }
-  // Mature the FIFO: an entry queued this frame waits one frame, like every
-  // other injected press.
   std::queue<detail::QueuedPress> matured;
   while (!detail::key_press_queue.empty()) {
     detail::QueuedPress p = detail::key_press_queue.front();

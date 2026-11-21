@@ -27,8 +27,6 @@
 #endif
 
 #include <stb/stb_image.h>
-// encode_image/export_image in src/image.h need the write declarations on
-// every TU that includes them; the implementation rides the same impl TU.
 #include <stb/stb_image_write.h>
 
 // ── Impl-TU sentinel ─────────────────────────────────────────────────────────
