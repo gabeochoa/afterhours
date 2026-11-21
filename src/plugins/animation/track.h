@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "../../developer.h"
+#include "../../logging.h"
 #include "instant.h"
 #include "spring.h"
 #include "timeline.h"
@@ -130,6 +131,14 @@ template <typename T> struct Track {
     Step s{C::to(v), std::move(mode), 0.f};
     chain.push_back(s);
     begin(s);
+    if (instant_flag() && !is_essential) {
+      // Land now so a sample before the first advance already reads the
+      // target; the track stays active so advance() still runs its instant
+      // finish (chain, completion callback), and an essential() call after
+      // to() can still take the normal path.
+      pos = step.target;
+      vel.fill(0.f);
+    }
     return *this;
   }
 
@@ -150,6 +159,9 @@ template <typename T> struct Track {
       queue.back().delay = seconds;
     else if (is_active)
       delay_left = seconds;
+    else
+      log_error("motion::Track::delay() called before any to()/then(); "
+                "the delay has no step to attach to and does nothing");
     return *this;
   }
 
