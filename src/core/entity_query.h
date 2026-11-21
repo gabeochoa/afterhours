@@ -171,6 +171,7 @@ struct EntityQuery {
     auto &whereHasComponent() {
         static_assert(sizeof...(Ts) > 0,
                       "whereHasComponent<> needs at least one component type");
+        (note_required(components::get_type_id<Ts>()), ...);
         return add_mod(new WhereHasComponent<Ts...>());
     }
     template<typename T>
@@ -296,6 +297,7 @@ struct EntityQuery {
     auto &whereHasComponent() {
         static_assert(sizeof...(Ts) > 0,
                       "whereHasComponent<> needs at least one component type");
+        (note_required(components::get_type_id<Ts>()), ...);
         return add_filter([](const Entity &e) { return e.has<Ts...>(); });
     }
     template<typename T>
@@ -351,6 +353,7 @@ struct EntityQuery {
     // -----------------------------------------------------------------------
     template<typename T, typename Fn>
     TReturn &whereComponentAndLambda(Fn &&pred) {
+        note_required(components::get_type_id<T>());
         return add_filter([pred = std::forward<Fn>(pred)](const Entity &e) {
             return e.has<T>() && pred(e.get<T>());
         });
@@ -359,6 +362,7 @@ struct EntityQuery {
     // The value is copied into the filter; a FilterFn outlives the call.
     template<typename T, typename M>
     TReturn &whereFieldHasValue(M T::*field, std::type_identity_t<M> value) {
+        note_required(components::get_type_id<T>());
         return add_filter([field, value = std::move(value)](const Entity &e) {
             return e.has<T>() && e.get<T>().*field == value;
         });
@@ -664,9 +668,37 @@ struct EntityQuery {
     bool source_temp_empty = true;
     // A candidate set to walk instead of the whole collection. Empty-but-set
     // means "provably nothing matches", which is different from unset.
-    std::optional<Entities> seed;
+    mutable std::optional<Entities> seed;
 
-    const Entities &pool() const { return seed ? *seed : entities; }
+    // Component types a whereHasComponent (or a component-scoped filter)
+    // requires. The walk seeds from the smallest per-component membership
+    // list instead of the whole collection; the filters still run, so this
+    // only narrows. Capped at four: more distinct components than that
+    // seeds from the first four, which is still a correct superset.
+    std::array<std::uint16_t, 4> required_ids{};
+    std::uint8_t required_count = 0;
+    void note_required(const ComponentID id) {
+        if (id > 0xFFFF) return;
+        const auto short_id = static_cast<std::uint16_t>(id);
+        for (std::uint8_t i = 0; i < required_count; i++)
+            if (required_ids[i] == short_id) return;
+        if (required_count < required_ids.size())
+            required_ids[required_count++] = short_id;
+    }
+
+    const Entities &pool() const {
+        if (seed) return *seed;
+        if (required_count && source && source_temp_empty) {
+            // Same stand-down as seed_from_id: the membership lists cover
+            // merged entities, which is exactly what `entities` covers, and
+            // a pending temp entity would make the two disagree.
+            seed = source->membership_candidates(std::vector<ComponentID>(
+                required_ids.begin(),
+                required_ids.begin() + required_count));
+            return *seed;
+        }
+        return entities;
+    }
 
     // Helper to initialize the entities reference in the constructor.
     // If force_merge is requested, merge first, then return the (now-updated)

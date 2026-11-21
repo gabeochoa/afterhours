@@ -201,6 +201,7 @@ ALL_TESTS := \
 	cleanup_order_test \
 	entity_pool_test \
 	entity_query_test \
+	entity_membership_test \
 	get_or_default_test \
 	query_extreme_by_test \
 	query_filters_test \

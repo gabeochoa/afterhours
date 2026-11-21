@@ -29,6 +29,16 @@ using EntityID = int;
 
 inline std::atomic_int ENTITY_ID_GEN = 0;
 
+// Bumped on every component add/remove, wherever the entity lives. An
+// Entity has no pointer back to its collection, so a per-component
+// membership index cannot be notified per collection; it watches this
+// counter instead and rebuilds when it moves. One relaxed atomic add on
+// a path that already allocates (add) or destroys (remove) a component.
+inline std::atomic<std::size_t> COMPONENT_MUTATION_GEN = 0;
+inline void note_component_mutation() {
+  COMPONENT_MUTATION_GEN.fetch_add(1, std::memory_order_relaxed);
+}
+
 struct Entity {
   EntityID id;
   int entity_type = 0;
@@ -52,6 +62,8 @@ struct Entity {
   virtual ~Entity() {}
 
   void recycle(EntityID new_id) {
+    if (componentSet.any())
+      note_component_mutation();
     for (size_t i = componentSet.next_set(0); i < max_num_components;
          i = componentSet.next_set(i + 1)) {
       componentArray[i].reset();
@@ -130,6 +142,7 @@ struct Entity {
     }
     componentSet.set(components::get_type_id<T>(), false);
     componentArray[components::get_type_id<T>()].reset();
+    note_component_mutation();
   }
 
   template <typename T, typename... TArgs> T &addComponent(TArgs &&...args) {
@@ -151,6 +164,7 @@ struct Entity {
     const ComponentID component_id = components::get_type_id<T>();
     componentArray[component_id] = std::move(component);
     componentSet.set(component_id, true);
+    note_component_mutation();
 
 #if defined(AFTER_HOURS_DEBUG)
     log_trace("your set is now {}", componentSet.to_string());

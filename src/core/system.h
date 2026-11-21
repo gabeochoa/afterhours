@@ -152,6 +152,14 @@ class SystemBase {
         return {};
     }
 
+    // Positive component types this system requires, or null when that
+    // says nothing about where to look (no components, or the caller must
+    // scan). Lets the runner walk a membership list instead of every
+    // entity; for_each still checks everything, so it only narrows.
+    virtual const std::vector<ComponentID> *membership_requirements() const {
+        return nullptr;
+    }
+
     virtual void for_each(Entity &, const float) = 0;
     virtual void for_each(const Entity &, const float) const = 0;
 
@@ -503,6 +511,24 @@ struct System
         return OnlySingletons<ComponentsOnly>::find(coll);
     }
 
+    template<typename>
+    struct PositiveIds;
+    template<typename... Cs>
+    struct PositiveIds<type_list<Cs...>> {
+        static const std::vector<ComponentID> &get() {
+            static const std::vector<ComponentID> ids{
+                components::get_type_id<Cs>()...};
+            return ids;
+        }
+    };
+
+    const std::vector<ComponentID> *membership_requirements() const override {
+        // ComponentsOnly is already positive-only (filter_components drops
+        // Not<T> and tag types), so every id here rules entities in.
+        const auto &ids = PositiveIds<ComponentsOnly>::get();
+        return ids.empty() ? nullptr : &ids;
+    }
+
     using ForEachBase::for_each_with;
     using ForEachBase::for_each_with_derived;
 };
@@ -546,6 +572,23 @@ inline void run_system_over(Sys &system, Entities &entities, const float dt,
         only.has_value()) {
         Entity &ent = *only.value();
         if (!skip_cleanup || !ent.cleanup) visit(ent);
+    } else if (!system.include_derived_children &&
+               system.membership_requirements() &&
+               &entities == &coll.get_entities()) {
+        // Walk only the entities holding the rarest required component, in
+        // entity order. The candidate list is a pass-start snapshot (the
+        // full scan above snapshots the count the same way): an entity
+        // that gains a component mid-pass is first visited next pass,
+        // while one that loses it is still re-checked by for_each and
+        // skipped. Derived children are excluded above because a derived
+        // component is stored under its own id, not the base's.
+        const Entities candidates =
+            coll.membership_candidates(*system.membership_requirements());
+        for (const auto &entity : candidates) {
+            if (!entity) continue;
+            if (skip_cleanup && entity->cleanup) continue;
+            visit(*entity);
+        }
     } else {
         // Index-based so a push_back to entities (e.g. a for_each that
         // triggers a merge) doesn't invalidate our iterator.
