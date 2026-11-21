@@ -144,7 +144,7 @@ struct ComponentConfig {
   // ui modifiers
   float opacity = 1.0f;
   float scale = 1.0f; // Visual scale applied after layout (smooth animations)
-  float rotation = 0.0f; // Degrees, clockwise, about with_origin (default centre)
+  float rotation = 0.0f;
   Size translate_x = pixels(0.0f);
   Size translate_y = pixels(0.0f);
   // Trailing: (x,y) insets from far edges; explicit size grows inward.
@@ -748,8 +748,6 @@ struct ComponentConfig {
     scale = s;
     return *this;
   }
-  /// Rotate the drawn widget (degrees, clockwise) about with_origin;
-  /// hit testing and the focus ring follow the same rotation.
   ComponentConfig &with_rotation(float deg) {
     rotation = deg;
     return *this;

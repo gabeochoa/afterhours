@@ -338,15 +338,10 @@ struct HasUIModifiers : BaseComponent {
   float origin_x = 0.5f;
   float origin_y = 0.5f;
 
-  // Pivot rotation turns about: the configured origin of the (already
-  // modifier-applied) rect. Distinct name from #205's rotation_center so
-  // the two branches merge without a duplicate definition.
   Vector2Type rotation_pivot(RectangleType rect) const {
     return {rect.x + rect.width * origin_x, rect.y + rect.height * origin_y};
   }
 
-  // Hit test for the rotated rect: inverse-rotate the point about the
-  // pivot, then the ordinary axis-aligned check.
   bool contains_rotated(RectangleType rect, float px, float py) const {
     if (rotation == 0.f)
       return px >= rect.x && px <= rect.x + rect.width && py >= rect.y &&

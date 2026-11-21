@@ -146,8 +146,6 @@ static inline RectangleType hit_rect(const Entity &entity,
   return clip_hit_rect(entity, rect);
 }
 
-// The one rotated hit test: same rect as hit_rect, but the point is
-// inverse-rotated about the widget's pivot (clip stays axis-aligned).
 static inline bool point_in_hit_rect(const Entity &entity,
                                      const UIComponent &component,
                                      const input::MousePosition &pos) {

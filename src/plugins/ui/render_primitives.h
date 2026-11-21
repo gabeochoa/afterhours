@@ -88,7 +88,7 @@ struct RenderPrimitive {
       std::bitset<4> corners;
       float thickness; // Line thickness for outline (0 = default thin line)
       float rotation;
-      float rot_center_x; // 0,0 = rotate about the rect centre
+      float rot_center_x;
       float rot_center_y;
     } outline;
 
@@ -902,8 +902,6 @@ private:
     for (size_t i = start; i < end; ++i) {
       capture::Scope attribute(cmds[i].entity_id, cmds[i].layer);
       const auto &outline = cmds[i].data.outline;
-      // An explicit pivot (focus ring about its widget's origin) wins;
-      // 0,0 keeps the historical rotate-about-the-rect-centre.
       push_rotation(outline.rot_center_x != 0.f || outline.rot_center_y != 0.f
                         ? outline.rot_center_x
                         : outline.rect.x + outline.rect.width * .5f,

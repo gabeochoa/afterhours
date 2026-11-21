@@ -329,7 +329,6 @@ std::optional<FocusPaint> prepare_focus_paint(const UIContext<InputAction> &cont
     if (!descendants.contains(cmd.id)) continue;
     const auto [has_clip, clip] =
         compute_intersected_clip_rect(entity, /*include_self=*/false);
-    // Ring rotates about the widget's pivot, not the (expanded) ring rect's.
     RectangleType widget = cmp.rect();
     Vector2Type pivot;
     if (entity.has<HasUIModifiers>()) {

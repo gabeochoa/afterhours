@@ -1,8 +1,3 @@
-// rotation_hit_test.cpp -- R-083: with_rotation hit testing + focus ring.
-//
-// Before: ComponentConfig had no with_rotation, and hit testing used the
-// axis-aligned layout rect, so a rotated widget was clickable where it was
-// NOT drawn and dead where its rotated corners actually landed.
 
 #include "ui_test_harness.h"
 
@@ -41,7 +36,6 @@ bool click_fires(ImmTestHarness &h, Entity &ent, float x, float y) {
   return ent.get<HasClickListener>().down;
 }
 
-// A 200x40 button at a known rect; rotation is the only variable.
 ElementResult make_button(ImmTestHarness &h, float rotation, bool origin_tl = false) {
   h.begin_frame();
   auto cfg = ComponentConfig{}
@@ -53,13 +47,12 @@ ElementResult make_button(ImmTestHarness &h, float rotation, bool origin_tl = fa
   if (origin_tl) cfg.with_origin(0.f, 0.f);
   return button(h.context(), mk(h.root(), 0), cfg);
 }
-} // namespace
+}
 
 TEST(rotated_contains_geometry) {
   HasUIModifiers m;
   m.rotation = 90.f;
-  const RectangleType r{100.f, 100.f, 200.f, 40.f}; // centre 200,120
-  // Rotated 90deg the rect stands 40 wide x 200 tall about the centre.
+  const RectangleType r{100.f, 100.f, 200.f, 40.f};
   ui_test::check(m.contains_rotated(r, 200.f, 200.f),
                  "point below the AABB but inside the rotated rect hits", __FILE__, __LINE__);
   ui_test::check(!m.contains_rotated(r, 110.f, 110.f),
@@ -113,7 +106,7 @@ TEST(unrotated_button_corner_still_hits) {
 
 TEST(focus_ring_paint_carries_rotation_and_pivot) {
   ImmTestHarness h;
-  auto b = make_button(h, 90.f, /*origin_tl=*/true);
+  auto b = make_button(h, 90.f, true);
   Entity &ent = b.ent();
   h.layout_only();
   mark_rendered();
@@ -126,7 +119,6 @@ TEST(focus_ring_paint_carries_rotation_and_pivot) {
   if (!paint) return;
   ui_test::check(paint->rotation == 90.f, "ring carries the widget rotation", __FILE__, __LINE__);
   UIComponent *cmp = h.find("rot_btn");
-  // Origin 0,0: the pivot is the widget's top-left, not its centre.
   ui_test::check(cmp && std::fabs(paint->rotation_pivot.x - cmp->rect().x) < 1.5f &&
                      std::fabs(paint->rotation_pivot.y - cmp->rect().y) < 1.5f,
                  "ring pivots on the configured origin", __FILE__, __LINE__);
