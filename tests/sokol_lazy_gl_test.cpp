@@ -1,6 +1,3 @@
-// sokol_gl+fontstash are set up on the first draw, not at startup: headless init must
-// leave g_sgl_ready false, the first begin_drawing must set it, and shapes
-// drawn after that lazy init must still land on the GPU (pixel readback).
 
 #if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_VULKAN) && !defined(AFTER_HOURS_USE_SOKOL)
 #define AFTER_HOURS_USE_SOKOL
@@ -62,7 +59,6 @@ int main() {
           "white circle drawn after lazy init is lit");
   }
 
-  // An offscreen texture created after init also gets its context lazily.
   auto child = afterhours::load_render_texture(64, 64);
   check(child.sgl_ctx_id == 0, "load_render_texture defers its sgl context");
   g::begin_frame();

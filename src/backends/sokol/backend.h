@@ -47,9 +47,6 @@
 #include <string>
 #include <unordered_map>
 
-// Shared state (also used by font_helper.h). The macro tells font_helper.h
-// that ensure_sokol_gl_and_fonts() will be defined in this TU; standalone
-// font_helper.h users (font_atlas_measure_test) set g_fons_ctx themselves.
 #define AFTERHOURS_FONT_HELPER_HAS_ENSURE 1
 #include "font_helper.h"
 #include "metal_state.h"
@@ -170,10 +167,6 @@ inline sgl_pipeline g_blend_pip_premultiplied{};
 
 inline bool g_sgl_ready = false;
 
-// sokol_gl + fontstash setup, deferred to the first draw or font load:
-// sgl_setup compiles the sgl shader on Metal (tens of ms), which an app
-// that never draws should not pay at startup. sfons_create builds an sgl
-// pipeline itself, so the two must come up together, in this order.
 inline void ensure_sokol_gl_and_fonts() {
   if (g_sgl_ready)
     return;
@@ -384,8 +377,6 @@ inline void sokol_init_cb() {
   stm_setup();
   g_start_time = stm_now();
 
-  // sokol_gl + fontstash are deferred to the first draw or font load
-  // (ensure_sokol_gl_and_fonts).
 
   g_initialized = true;
 
@@ -1164,7 +1155,6 @@ inline bool metal_init(const Config &cfg) {
     }
     stm_setup();
     metal_detail::g_start_time = stm_now();
-    // sokol_gl + fontstash are deferred to the first draw or font load.
     metal_detail::g_initialized = true;
 
     const int scale =

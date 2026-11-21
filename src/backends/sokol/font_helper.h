@@ -18,9 +18,8 @@
 #include "metal_state.h"
 
 namespace afterhours::graphics::metal_detail {
-// Defined in backend.h, which includes this header before the definition.
 inline void ensure_sokol_gl_and_fonts();
-} // namespace afterhours::graphics::metal_detail
+}
 
 namespace afterhours {
 

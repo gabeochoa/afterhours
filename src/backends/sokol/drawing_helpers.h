@@ -1205,8 +1205,6 @@ inline graphics::RenderTextureType load_render_texture_with_samples(int w,
     return rt;
   }
 
-  // The sgl context is created on the first begin_texture_mode, not here, so
-  // loading a texture never pays sokol_gl setup (see ensure_sokol_gl_and_fonts).
   rt.color_img_id = color.id;
   rt.depth_img_id = depth.id;
   rt.color_view_id = color_view.id;
@@ -1250,8 +1248,6 @@ inline void unload_render_texture(graphics::RenderTextureType &rt) {
 inline void begin_texture_mode(graphics::RenderTextureType &rt) {
   graphics::metal_detail::ensure_sokol_gl_and_fonts();
   if (rt.sgl_ctx_id == 0) {
-    // Deferred from load_render_texture: keyed on the images' formats, which
-    // the image descriptors carry, so no format needs storing on the texture.
     const auto cdesc = sg_query_image_desc({rt.color_img_id});
     const auto ddesc = sg_query_image_desc({rt.depth_img_id});
     const sgl_context ctx =
