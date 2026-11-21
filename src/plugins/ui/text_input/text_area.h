@@ -189,6 +189,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
           // Lines past the bottom of a fixed-height field must not paint
           // over whatever sits below it.
           .with_overflow(Overflow::Hidden)
+          .with_select_on_focus(false)
           .with_render_layer(config.render_layer + 1);
   // A caller's background (with_custom_background / with_transparent_bg)
   // replaces the default fill, as it does on text_input; the hardcoded

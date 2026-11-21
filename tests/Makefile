@@ -198,6 +198,7 @@ ALL_TESTS := \
 	color_contrast_test \
 	scissor_coalescing_test \
 	focus_origin_test \
+	focus_select_on_focus_test \
 	cleanup_order_test \
 	entity_pool_test \
 	entity_query_test \
@@ -334,6 +335,7 @@ RAYLIB_TESTS := \
 	small_components_test \
 	text_area_test \
 	text_input_test \
+	focus_select_on_focus_test \
 	color_swatch_test \
 	editing_capability_test \
 	label_inset_test \

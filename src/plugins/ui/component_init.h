@@ -192,6 +192,8 @@ inline void apply_flags(Entity &entity, const ComponentConfig &config) {
     entity.get<UIComponent>().skip_grid_snap = true;
   if (config.select_on_focus)
     entity.addComponentIfMissing<SelectOnFocus>();
+  else
+    entity.removeComponentIfExists<SelectOnFocus>();
   if (config.has_click_activation_override()) {
     entity.addComponentIfMissing<HasClickActivationMode>(
         config.click_activation);
