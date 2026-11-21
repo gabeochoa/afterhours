@@ -419,7 +419,7 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Render cursor when focused
   if (state.is_focused) {
-    bool show_cursor = update_blink(state, 0.016f);
+    bool show_cursor = update_blink(state, ctx.dt > 0.f ? ctx.dt : (1.f / 60.f));
 
     // Use computed padding for positioning
     float pad_left = field_cmp.computed_padd[Axis::left];
