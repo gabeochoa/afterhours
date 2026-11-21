@@ -1,8 +1,3 @@
-// popup_overlay_layer_test.cpp
-// R-052: popup panels live in a reserved overlay band over their anchor, so
-// a text_area built after an open dropdown cannot paint its lines (+2) or
-// cursor (+10) over the tray.
-
 #include "ui_test_harness.h"
 
 #include <afterhours/src/plugins/ui/menu.h>
@@ -24,8 +19,6 @@ ComponentConfig area_config() {
       .with_line_height(pixels(20));
 }
 
-// Cursor/line layers of a focused text_area at the default layer, recorded
-// before any popup opens (focusing the area would close the popup).
 struct TextLayers {
   int line = -1;
   int cursor = -1;
@@ -57,7 +50,6 @@ TEST(dropdown_tray_clears_a_later_text_area) {
   std::vector<std::string> options{"First", "Second"};
   size_t selected = 0;
   auto emit = [&] {
-    // Failing arrangement: dropdown first, text_area after it.
     dropdown(h.context(), mk(h.root(), 0), options, selected,
              ComponentConfig{}.with_size({pixels(200), pixels(40)}));
     text_area(h.context(), mk(h.root(), 1), text, area_config());
@@ -135,8 +127,6 @@ TEST(nested_popups_keep_relative_order) {
               .with_render_layer(outer_layer));
   h.layout_only();
 
-  // The inner panel has a distinct debug name only via its holder; both
-  // panels share "popover_panel", so compare the two panel layers directly.
   std::vector<int> panels;
   for (const auto &e : UICollectionHolder::get().collection.get_entities())
     if (e && e->has<UIComponentDebug>() &&
