@@ -246,7 +246,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
         fn();
   }
 
-  // Model-replacing actions queued during build, run after layout this frame.
   using PostBuildOwner = std::uint64_t;
   static constexpr PostBuildOwner no_post_build_owner = 0;
   struct PostBuildAction {
@@ -258,11 +257,9 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   void post_build(std::function<void()> fn) {
     post_build(no_post_build_owner, std::move(fn));
   }
-  // Capture values by value: the model may be replaced before this runs.
   void post_build(PostBuildOwner owner, std::function<void()> fn) {
     post_build_actions.push_back({owner, std::move(fn)});
   }
-  // Discard still-queued actions for an owner that went away during build.
   void discard_post_build(PostBuildOwner owner) {
     if (owner == no_post_build_owner)
       return;
@@ -272,7 +269,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   std::size_t pending_post_build_count() const {
     return post_build_actions.size();
   }
-  // Copies first, so an action may queue work for the next post-build phase.
   void run_post_build() {
     if (post_build_actions.empty())
       return;

@@ -1,5 +1,3 @@
-// post_build_test.cpp
-// Actions queued during build run after layout, in order, with stale owners dropped.
 
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
@@ -51,7 +49,7 @@ struct BuildUI : System<DefaultUIContext> {
 int main() {
   printf("=== post_build ===\n\n");
 
-  { // No phase runs it: queueing alone never executes.
+  {
     UIContext<DefaultAction> local;
     int ran = 0;
     local.post_build([&] { ran++; });
@@ -65,7 +63,7 @@ int main() {
   systems.run(1.f);
 
   CHECK(g_order == "ab");
-  CHECK(g_width_seen > 0.f); // laid out before the action ran
+  CHECK(g_width_seen > 0.f);
   CHECK(g_stale_runs == 0);
 
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);

@@ -595,7 +595,6 @@ private:
   }
 };
 
-// After layout, before render/click handling: queued model changes see final rects and cannot invalidate the pass that queued them.
 template <typename InputAction>
 struct RunPostBuildActions : System<UIContext<InputAction>> {
   virtual void for_each_with(Entity &, UIContext<InputAction> &context,
