@@ -903,8 +903,7 @@ static inline void draw_text_in_rect(
       return measure_text(font, s.c_str(), font_size, spacing).x;
     };
 
-    // Greedy word wrap. Words wider than max_width are placed on their own
-    // line (not character-split) — callers that need hard breaks can size up.
+    // Greedy word wrap. Words wider than max_width break between graphemes.
     std::vector<std::string> lines =
         detail::wrap_text_to_width(text, max_width, line_width);
 
