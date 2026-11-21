@@ -649,6 +649,7 @@ inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
     mods.origin_x = config.origin_x;
     mods.origin_y = config.origin_y;
   }
+  entity.addComponentIfMissing<HasThemeSnapshot>().theme = ctx.theme;
   apply_label(ctx, entity, config);
   apply_texture(entity, config);
   apply_shadow(entity, config);

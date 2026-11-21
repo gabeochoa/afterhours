@@ -51,6 +51,15 @@ static inline RectangleType snap_origin(RectangleType rect,
 
 static inline float compute_effective_opacity(const Entity &entity);
 
+// The theme this entity was built under, falling back to the live one for
+// entities built outside init_component.
+static inline const Theme &theme_for(const Entity &entity,
+                                     const Theme &fallback) {
+  return entity.has<HasThemeSnapshot>()
+             ? entity.get<HasThemeSnapshot>().theme
+             : fallback;
+}
+
 static inline Color resolve_image_tint(const Entity &entity, float opacity) {
   const Color tint = entity.has<HasImageTint>()
                          ? entity.get<HasImageTint>().color
@@ -1388,10 +1397,11 @@ void draw_layer_scrollbars(UIContext<InputAction> &context, size_t begin,
       const auto geometry = scrollbar_geometry(
           scroll, view, vertical, metrics.thickness, metrics.min_thumb);
       if (!geometry.visible) return;
+      const Theme &theme = theme_for(entity, context.theme);
       const auto track = colors::opacity_pct(scroll.scrollbar_track_color.value_or(
-          context.theme.from_usage(scroll.scrollbar_track_usage)), opacity);
+          theme.from_usage(scroll.scrollbar_track_usage)), opacity);
       const auto thumb = colors::opacity_pct(scroll.scrollbar_thumb_color.value_or(
-          context.theme.from_usage(scroll.scrollbar_thumb_usage)), opacity);
+          theme.from_usage(scroll.scrollbar_thumb_usage)), opacity);
       // Fully rounded: at 6px wide that is a capsule, which reads as a bar.
       draw(cmd, geometry.track, track, has_clip, clip);
       draw(cmd, geometry.thumb, thumb, has_clip, clip);
@@ -1914,12 +1924,12 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
     }
 
     if (entity.has<HasCheckboxMark>()) {
-      render_checkbox_mark(draw_rect, entity.get<HasLabel>(), context.theme,
+      render_checkbox_mark(draw_rect, entity.get<HasLabel>(), detail::theme_for(entity, context.theme),
                            effective_opacity, draw_line_ex);
     } else if (entity.has<HasLabel>()) {
       const HasLabel &hasLabel = entity.get<HasLabel>();
       warn_ignored_label_padding(entity, cmp);
-      Color font_col = detail::resolve_label_color(hasLabel, context.theme);
+      Color font_col = detail::resolve_label_color(hasLabel, detail::theme_for(entity, context.theme));
 
       if (effective_opacity < 1.0f) {
         font_col = colors::opacity_pct(font_col, effective_opacity);
@@ -1958,7 +1968,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
               : 0.f;
 
       const Vector2Type immediate_inset =
-          resolve_text_inset(context.theme, hasLabel.text_inset);
+          resolve_text_inset(detail::theme_for(entity, context.theme), hasLabel.text_inset);
 
       RectangleType label_rect = text_rect;
       label_rect.x += hasLabel.text_x_offset;
@@ -2564,7 +2574,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
     // Label/text
     if (entity.has<HasCheckboxMark>()) {
-      render_checkbox_mark(draw_rect, entity.get<HasLabel>(), context.theme,
+      render_checkbox_mark(draw_rect, entity.get<HasLabel>(), detail::theme_for(entity, context.theme),
                            effective_opacity,
                            [&](Vector2Type start, Vector2Type end, float thickness, Color color) {
         buffer.add_line(start, end, thickness, color, layer, entity.id);
@@ -2572,7 +2582,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     } else if (entity.has<HasLabel>()) {
       const HasLabel &hasLabel = entity.get<HasLabel>();
       warn_ignored_label_padding(entity, cmp);
-      Color font_col = detail::resolve_label_color(hasLabel, context.theme);
+      Color font_col = detail::resolve_label_color(hasLabel, detail::theme_for(entity, context.theme));
 
       if (effective_opacity < 1.0f) {
         font_col = colors::opacity_pct(font_col, effective_opacity);
@@ -2611,7 +2621,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
               : 0.f;
 
       const Vector2Type label_inset =
-          resolve_text_inset(context.theme, hasLabel.text_inset);
+          resolve_text_inset(detail::theme_for(entity, context.theme), hasLabel.text_inset);
 
       // Position text to get font size
       TextPositionResult result = position_text_ex(
