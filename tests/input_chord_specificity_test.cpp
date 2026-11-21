@@ -39,8 +39,6 @@ int main() {
   input::suppress_permissive_duplicates(other_key);
   assert(fired(other_key, Save) && fired(other_key, Redo));
 
-  // Backend-free: the injected key reader must control modifiers too, or a
-  // unit test can never prove Cmd+B fires only while Cmd is held.
   auto no_buttons = [](input::GamepadID, input::GamepadButton) { return 0.f; };
   auto cmd_held = [](int key) {
     return key == afterhours::keys::LEFT_SUPER || key == 'B';

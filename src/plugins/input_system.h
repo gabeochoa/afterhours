@@ -911,9 +911,6 @@ struct input : developer::Plugin {
         return mods;
     }
 
-    // Modifier state read through the caller's key reader, so a backend-free
-    // injected reader controls the chord half too (backend is_key_down would
-    // read the stub and always report nothing held).
     template <typename KeyCheckFn>
     static uint8_t modifiers_from(KeyCheckFn key_check) {
         uint8_t mods = 0;
