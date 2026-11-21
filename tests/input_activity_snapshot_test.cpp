@@ -33,8 +33,6 @@ int main() {
     auto press = snapshot();
     assert(press.any && press.pressed && press.frame == 2 &&
            press.last_activity_frame == 2);
-    // Reading the snapshot must not drain the queues: the action still fires
-    // for a consumer that reads inputs_pressed after the snapshot.
     assert(snapshot().last_activity_frame == 2);
     assert(collector.inputs_pressed.size() == 1 &&
            collector.inputs_pressed[0].action == 1);
@@ -52,7 +50,6 @@ int main() {
     assert(!idle2.any && !idle2.pressed && idle2.frame == 4 &&
            idle2.last_activity_frame == 3);
 
-    // An axis-only ActionDone counts as activity through the same snapshot.
     input::InputCollector axis_collector;
     axis_collector.inputs.emplace_back(input::DeviceMedium::GamepadAxis, 0, 1,
                                        .8f, .016f);

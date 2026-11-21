@@ -1144,8 +1144,6 @@ struct input : developer::Plugin {
         }
     };
 
-    // Non-consuming snapshot of this frame's mapped activity: reading it
-    // never drains inputs/inputs_pressed, so idle checks can peek safely.
     struct InputActivity {
         bool any = false;
         bool pressed = false;
