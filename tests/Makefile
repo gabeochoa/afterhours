@@ -215,6 +215,7 @@ ALL_TESTS := \
 	cleanup_order_test \
 	entity_pool_test \
 	entity_query_test \
+	temp_warning_caller_test \
 	query_scratch_test \
 	get_or_default_test \
 	component_toggle_test \
@@ -438,6 +439,7 @@ $(OUT)/touch_target_single_test: touch_target_single_test.cpp
 $(OUT)/entity_mapping_test: ../examples/entity_mapping_test_helper.cpp
 $(OUT)/entity_mapping_test: INCLUDES_T += -I../examples
 $(OUT)/random_engine_test:  CXXFLAGS_T += -DAFTER_HOURS_ENABLE_RANDOM
+$(OUT)/temp_warning_caller_test: CXXFLAGS_T += -DAFTER_HOURS_DEBUG
 $(OUT)/graphics_concepts_pedantic_test: CXXFLAGS_T += -Wpedantic -Werror
 $(OUT)/graphics_concepts_pedantic_test: INCLUDES_T = -I$(INCLUDE_ROOT) -isystem $(AFTERHOURS_ROOT)/vendor -isystem $(BREW_PREFIX)/include
 $(OUT)/sound_volume_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)

@@ -5,6 +5,9 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#if defined(AFTER_HOURS_DEBUG)
+#include <source_location>
+#endif
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -629,11 +632,29 @@ struct EntityQuery {
         bool ignore_temp_warning = false;
     };
 
-    EntityQuery(const QueryOptions &options = {})
-        : EntityQuery(EntityHelper::get_default_collection(), options) {}
+    EntityQuery(const QueryOptions &options = {}
+#if defined(AFTER_HOURS_DEBUG)
+                ,
+                const std::source_location location =
+                    std::source_location::current()
+#endif
+                )
+        : EntityQuery(EntityHelper::get_default_collection(), options
+#if defined(AFTER_HOURS_DEBUG)
+                      ,
+                      location
+#endif
+                      ) {
+    }
 
     explicit EntityQuery(EntityCollection &collection,
-                         const QueryOptions &options = {})
+                         const QueryOptions &options = {}
+#if defined(AFTER_HOURS_DEBUG)
+                         ,
+                         const std::source_location location =
+                             std::source_location::current()
+#endif
+                         )
         : entities(init_entities_ref(collection, options)),
           source(&collection),
           source_temp_empty(collection.get_temp().empty()) {
@@ -654,7 +675,19 @@ struct EntityQuery {
                     log_warn("  temp entity {}: null", i);
                 }
             }
+#if defined(AFTER_HOURS_DEBUG)
+            const char *file =
+                location.file_name() ? location.file_name() : "<unknown>";
+            const char *base = file;
+            for (const char *p = file; *p; ++p) {
+                if (*p == '/' || *p == '\\') base = p + 1;
+            }
+            log_error("query will miss {} ents in temp (query at {}:{} in {})",
+                      size, base, location.line(),
+                      location.function_name());
+#else
             log_error("query will miss {} ents in temp", size);
+#endif
         }
     }
     explicit EntityQuery(const Entities &entsIn) : entities(entsIn) {}
