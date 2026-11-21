@@ -51,8 +51,8 @@ struct RngStream {
   // Same string -> same seed on every platform; get_seed() returns h.
   void set_seed(const std::string &new_seed) {
     std::uint32_t hash = 2166136261u;
-    for (unsigned char byte : new_seed) {
-      hash ^= byte;
+    for (char c : new_seed) {
+      hash ^= static_cast<unsigned char>(c);
       hash *= 16777619u;
     }
     set_seed(hash);
