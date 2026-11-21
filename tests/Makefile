@@ -213,6 +213,7 @@ ALL_TESTS := \
 	cleanup_order_test \
 	entity_pool_test \
 	entity_query_test \
+	query_scratch_test \
 	get_or_default_test \
 	component_toggle_test \
 	query_extreme_by_test \
