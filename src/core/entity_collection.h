@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <set>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -463,6 +464,13 @@ struct EntityCollection {
     if (!ent.has<Component>())
       return nullptr;
     return &(ent.get<Component>());
+  }
+
+  // Fetch singleton components together. Each element is exactly what
+  // get_singleton_cmp returns alone: nullptr when that one is unregistered.
+  template <typename... Components>
+  std::tuple<Components *...> get_unique() const {
+    return {get_singleton_cmp<Components>()...};
   }
 
   template <typename Component> Component &get_singleton_cmp_enforce() const {

@@ -152,6 +152,11 @@ struct EntityHelper {
     return get_default_collection().get_singleton_cmp_const<Component>();
   }
 
+  template <typename... Components>
+  static std::tuple<Components *...> get_unique() {
+    return get_default_collection().get_unique<Components...>();
+  }
+
   template <typename Component> static Component &get_singleton_cmp_enforce() {
     return get_default_collection().get_singleton_cmp_enforce<Component>();
   }
