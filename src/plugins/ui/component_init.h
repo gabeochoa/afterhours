@@ -14,6 +14,7 @@
 #include "component_config.h"
 #include "components.h"
 #include "context.h"
+#include "selectable_text.h"
 #include "entity_management.h"
 #include "fmt/format.h"
 
@@ -344,6 +345,17 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
     update_text_units(entity, config.label);
   } else {
     entity.removeComponentIfExists<HasTextUnitMotion>();
+  }
+
+  // Selectable read-only text: the marker makes the label hit-testable for
+  // press/drag (HandleSelectableText does the rest). An I-beam on hover
+  // unless the caller picked a cursor of their own.
+  if (config.text_selectable) {
+    entity.addComponentIfMissing<HasSelectableText>();
+    if (!config.cursor_type.has_value())
+      entity.addComponentIfMissing<HasCursor>(CursorType::Text);
+  } else {
+    entity.removeComponentIfExists<HasSelectableText>();
   }
 }
 

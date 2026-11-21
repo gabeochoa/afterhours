@@ -29,6 +29,7 @@
 #include "../../warn_once.h"
 #include "../input_system.h"
 #include "components.h"
+#include "text_selection.h"
 #include "theme.h"
 #include "ui_collection.h"
 // UIComponent, for the parent-chain walk in contains_in_subtree. Not pulled in
@@ -176,6 +177,15 @@ template <typename InputAction> struct UIContext final : BaseComponent {
 
   std::set<EntityID> focused_ids;
 
+  // The one active read-only text selection (a label built with
+  // with_selectable_text). Anchor and cursor are byte offsets into the
+  // owning label's source string, so the selection means the same thing
+  // however the text wraps. ROOT = no selection. Kept here rather than on
+  // the entity so there is exactly one selection and a press anywhere else
+  // can clear it.
+  EntityID text_selection_entity = ROOT;
+  text_selection::Selection label_text_selection;
+
   EntityID hot_id = ROOT;          // hot means the mouse is over this element
   EntityID prev_hot_id = ROOT;     // previous frame's hot_id (for animations)
   EntityID focus_id = ROOT;        // current actual focused element
@@ -276,6 +286,40 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   [[nodiscard]] bool is_input_allowed(EntityID id) const {
     return std::all_of(input_gates.begin(), input_gates.end(),
                        [id](const auto &pair) { return pair.second(id); });
+  }
+
+  // --- Read-only text selection (selectable labels) ---
+
+  [[nodiscard]] bool has_selection() const {
+    return text_selection_entity != ROOT &&
+           label_text_selection.has_selection();
+  }
+  [[nodiscard]] text_selection::Range selection_range() const {
+    return label_text_selection.range();
+  }
+  void set_text_selection(EntityID id, size_t anchor, size_t cursor) {
+    text_selection_entity = id;
+    label_text_selection.anchor = anchor;
+    label_text_selection.cursor = cursor;
+  }
+  void clear_text_selection() {
+    text_selection_entity = ROOT;
+    label_text_selection.collapse_to(0);
+  }
+  // The selected bytes of the owning label's source string, "" when there
+  // is no selection or the owner is gone.
+  [[nodiscard]] std::string selected_text() const {
+    if (!has_selection())
+      return "";
+    OptEntity opt = UICollectionHolder::getEntityForID(text_selection_entity);
+    if (!opt.valid() || !opt.asE().template has<HasLabel>())
+      return "";
+    const std::string &label = opt.asE().template get<HasLabel>().label;
+    const text_selection::Range r = label_text_selection.range();
+    if (r.start >= label.size())
+      return "";
+    return label.substr(r.start,
+                        std::min(r.length(), label.size() - r.start));
   }
 
   [[nodiscard]] bool is_hot(EntityID id) const { return hot_id == id; };
@@ -429,6 +473,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     last_processed = ROOT;
     hot_id = ROOT;
     active_id = ROOT;
+    clear_text_selection();
     focused_ids.clear();
     render_cmds.clear();
     input_gates.clear();

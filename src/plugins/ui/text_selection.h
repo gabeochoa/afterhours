@@ -20,6 +20,7 @@
 // breaks the source did not have -- see the note on joined_text.
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -528,6 +529,75 @@ inline std::string substring(const std::vector<detail::TextRunLine> &lines,
     return "";
   return all.substr(range.start, std::min(range.length(),
                                           all.size() - range.start));
+}
+
+// ---------------------------------------------------------------------------
+// Click streaks and word/line ranges, shared by every text surface.
+//
+// text_input and text_area each grew their own copy of the 0.4s multi-click
+// counting (double = word, triple = line/all). This is the one copy; new
+// surfaces use it rather than growing a third.
+// ---------------------------------------------------------------------------
+
+struct ClickStreak {
+  float last_time = -1.f;
+  size_t last_pos = 0;
+  int count = 0;
+};
+
+// Feed one press; returns the streak length (1, 2, 3+). A press counts as a
+// continuation when it lands within kMultiClickTime of the previous one and
+// within a few bytes of it -- the same window text_input has always used.
+inline int register_click(ClickStreak &streak, float now, size_t pos) {
+  constexpr float kMultiClickTime = 0.4f;
+  constexpr size_t kMultiClickDist = 3;
+  const size_t dist = pos > streak.last_pos ? pos - streak.last_pos
+                                            : streak.last_pos - pos;
+  if (streak.last_time >= 0.f && (now - streak.last_time) < kMultiClickTime &&
+      dist <= kMultiClickDist)
+    streak.count++;
+  else
+    streak.count = 1;
+  streak.last_time = now;
+  streak.last_pos = pos;
+  return streak.count;
+}
+
+namespace detail_sel {
+inline bool is_word_separator(char c) {
+  return std::isspace(static_cast<unsigned char>(c)) ||
+         std::ispunct(static_cast<unsigned char>(c));
+}
+} // namespace detail_sel
+
+// The word under `pos`, mirroring text_input's select_word_at: a press on a
+// separator selects just that separator byte.
+inline Range word_range_at(const std::string &text, size_t pos) {
+  if (text.empty())
+    return Range{0, 0};
+  pos = std::min(pos, text.size() - 1);
+  if (detail_sel::is_word_separator(text[pos]))
+    return Range{pos, pos + 1};
+  size_t start = pos;
+  while (start > 0 && !detail_sel::is_word_separator(text[start - 1]))
+    start--;
+  size_t end = pos;
+  while (end < text.size() && !detail_sel::is_word_separator(text[end]))
+    end++;
+  return Range{start, end};
+}
+
+// The hard line under `pos`: bytes between the surrounding '\n's, newline
+// excluded.
+inline Range line_range_at(const std::string &text, size_t pos) {
+  pos = std::min(pos, text.size());
+  size_t start = pos;
+  while (start > 0 && text[start - 1] != '\n')
+    start--;
+  size_t end = pos;
+  while (end < text.size() && text[end] != '\n')
+    end++;
+  return Range{start, end};
 }
 
 } // namespace text_selection

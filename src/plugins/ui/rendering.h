@@ -17,6 +17,8 @@
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
 #include "../e2e_testing/test_input.h"
 #include "../e2e_testing/visible_text.h"
+#include "selectable_text.h"
+#include "text_measure.h"
 #endif
 #include "../../memory/arena.h"
 #include "../input_system.h"
@@ -840,6 +842,44 @@ void render_checkbox_mark(RectangleType rect, const HasLabel &style,
 // path for every screen that does not swap its theme.
 static inline Vector2Type default_text_inset() {
   return resolve_text_inset(imm::ThemeDefaults::get().theme);
+}
+
+// Paint the active read-only selection behind a selectable label's glyphs.
+// Both render paths call this with their own rect arithmetic: block_left /
+// block_top / block_height locate the box lines align and centre within,
+// avail_width is the width a line aligns in, wrap_width the width the text
+// wrapped at. The layout cache is the one HandleSelectableText hit-tests
+// against, refreshed here when the text or metrics moved.
+template <typename InputAction, typename DrawRect>
+inline void paint_label_text_selection(UIContext<InputAction> &context,
+                                       Entity &entity, const HasLabel &hasLabel,
+                                       const UIComponent &cmp, float block_left,
+                                       float block_top, float block_height,
+                                       float avail_width, float wrap_width,
+                                       float font_size, float line_height,
+                                       DrawRect &&draw) {
+  if (!entity.template has<HasSelectableText>() ||
+      context.text_selection_entity != entity.id || !context.has_selection())
+    return;
+  auto &sel = entity.template get<HasSelectableText>();
+  const std::string font_name =
+      cmp.font_name == UIComponent::UNSET_FONT
+          ? std::string(UIComponent::DEFAULT_FONT)
+          : cmp.font_name;
+  const float spacing = 1.f + hasLabel.letter_spacing;
+  auto measure = [&](const auto &s) {
+    return measure_text_line(std::string(s), font_name, font_size, spacing).x;
+  };
+  selectable_text::refresh_layout(sel, hasLabel.label, wrap_width, font_size,
+                                  line_height, measure);
+  const Vector2Type origin{
+      block_left,
+      block_top + std::max(0.f, (block_height - sel.layout.total_height()) *
+                                    0.5f)};
+  for (const RectangleType &r : selectable_text::selection_rects(
+           sel.layout, hasLabel.label, context.selection_range(), origin,
+           line_height, hasLabel.alignment, avail_width, measure))
+    draw(r, context.theme.selection);
 }
 
 static inline void draw_text_in_rect(
@@ -1856,6 +1896,36 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                            static_cast<int>(label_clip.y),
                            static_cast<int>(label_clip.width),
                            static_cast<int>(label_clip.height));
+      // Selection bands behind the glyphs, inside the same clip.
+      if (entity.has<HasSelectableText>()) {
+        const std::string sel_font =
+            cmp.font_name == UIComponent::UNSET_FONT
+                ? std::string(UIComponent::DEFAULT_FONT)
+                : cmp.font_name;
+        const float sel_fs =
+            explicit_fs > 0.f
+                ? explicit_fs
+                : position_text_ex(font_manager, hasLabel.label, label_rect,
+                                   hasLabel.alignment, immediate_inset,
+                                   explicit_fs, hasLabel.letter_spacing,
+                                   hasLabel.text_overflow, false)
+                      .rect.height;
+        const float sel_lh =
+            label_line_h > 0.f
+                ? label_line_h
+                : measure_text_line("Ag", sel_font, sel_fs,
+                                    1.f + hasLabel.letter_spacing)
+                      .y;
+        paint_label_text_selection(
+            context, entity, hasLabel, cmp, label_rect.x + immediate_inset.x,
+            label_rect.y, label_rect.height,
+            std::max(0.f, label_rect.width - 2.f * immediate_inset.x),
+            hasLabel.text_overflow == TextOverflow::Wrap && explicit_fs > 0.f
+                ? std::max(0.f, label_rect.width - 2.f * immediate_inset.x)
+                : 1e9f,
+            sel_fs, sel_lh,
+            [](const RectangleType &r, Color c) { draw_rectangle(r, c); });
+      }
       // Without this branch with_styled_label is a no-op here, so the same
       // UI renders differently depending on `use_batched`.
       if (!hasLabel.spans.empty()) {
@@ -2519,6 +2589,30 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         label_rect.height = std::max(0.f, label_rect.height - 2.f * label_inset.y);
         float centerX = draw_rect.x + draw_rect.width / 2.0f;
         float centerY = draw_rect.y + draw_rect.height / 2.0f;
+
+        // Selection bands behind the glyphs, inside the same scissor.
+        if (entity.has<HasSelectableText>()) {
+          const std::string sel_font =
+              cmp.font_name == UIComponent::UNSET_FONT
+                  ? std::string(UIComponent::DEFAULT_FONT)
+                  : cmp.font_name;
+          const bool sel_wraps =
+              hasLabel.text_overflow == TextOverflow::Wrap && explicit_fs > 0.f;
+          const float sel_fs = sel_wraps ? explicit_fs : result.rect.height;
+          const float sel_lh =
+              label_line_h > 0.f
+                  ? label_line_h
+                  : measure_text_line("Ag", sel_font, sel_fs,
+                                      1.f + hasLabel.letter_spacing)
+                        .y;
+          paint_label_text_selection(
+              context, entity, hasLabel, cmp, label_rect.x, label_rect.y,
+              label_rect.height, label_rect.width,
+              sel_wraps ? label_rect.width : 1e9f, sel_fs, sel_lh,
+              [&](const RectangleType &r, Color c) {
+                buffer.add_rectangle(r, c, layer, entity.id);
+              });
+        }
 
         // Wrap into lines of coloured runs, one command per run. Plain text is
         // the single-run case. Wrapping needs an explicit font size (see
