@@ -634,9 +634,6 @@ inline void draw_texture_rec(TextureType tex, RectangleType src,
   raylib::DrawTextureRec(tex, src, pos, tint);
 }
 
-// Raylib keeps the filter as GL state, not on the Texture struct, so the
-// override below restores to the last filter this backend set on the texture
-// (unknown textures get raylib's GL default, POINT).
 inline std::unordered_map<unsigned int, int> &known_texture_filters() {
   static std::unordered_map<unsigned int, int> m;
   return m;
@@ -651,9 +648,6 @@ inline int known_texture_filter(TextureType tex) {
 inline void draw_texture_pro(TextureType tex, RectangleType src, RectangleType dest,
                              Vector2Type origin, float rotation, Color tint,
                              int filter) {
-  // Raylib filters per texture, so a per-draw override flips the texture's
-  // filter around this draw; the batch must flush first or the restore would
-  // retint the queued draws. Only paid when an override is actually used.
   const int saved = known_texture_filter(tex);
   if (filter >= 0 && filter != saved) {
     raylib::rlDrawRenderBatchActive();

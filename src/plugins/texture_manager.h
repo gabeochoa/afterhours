@@ -12,9 +12,6 @@ using Rectangle = raylib::Rectangle;
 using Texture = raylib::Texture2D;
 using Color = raylib::Color;
 
-// Forward declaration of the raylib backend draw_texture_pro (defined in
-// backends/raylib/drawing_helpers.h, included after this header), so the
-// per-draw filter override lives in one place. Same pattern as sokol below.
 } // namespace texture_manager
 void draw_texture_pro(TextureType tex, RectangleType src, RectangleType dest,
                       Vector2Type origin, float rotation, ColorType tint,
@@ -34,13 +31,6 @@ using Texture = TextureType;
 using Color = ColorType;
 
 #if defined(AFTER_HOURS_SOKOL)
-// Forward declaration of the sokol backend draw_texture_pro (defined in
-// backends/sokol/drawing_helpers.h, included after this header). Routing the
-// wrapper here lets sprite/animation rendering (RenderSprites / RenderAnimation
-// below) light up on the sokol backend. The call resolves at the sprite
-// systems' use sites, by which point the definition is visible. No default
-// here: the backend's own 6-param forward declaration would make 6-arg
-// calls ambiguous.
 } // namespace texture_manager
 void draw_texture_pro(TextureType tex, RectangleType src, RectangleType dest,
                       Vector2Type origin, float rotation, ColorType tint,

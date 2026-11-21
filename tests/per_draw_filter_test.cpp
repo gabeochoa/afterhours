@@ -1,6 +1,3 @@
-// Per-draw texture filter override (R-119): the same texture drawn twice in
-// one frame, once Point and once Bilinear, must read back differently, and a
-// draw with no override must match the texture's own filter.
 #include <afterhours/src/graphics.h>
 #include <afterhours/src/image.h>
 
@@ -20,7 +17,6 @@ static void check(bool cond, const char *what) {
   }
 }
 
-// 2x1 texture: black left texel, white right texel.
 static const std::vector<unsigned char> kPixels = {
     0, 0, 0, 255, 255, 255, 255, 255};
 
@@ -49,8 +45,6 @@ int main() {
   TextureType tex = load_texture_from_rgba(kPixels.data(), 2, 1);
   set_texture_filter(tex, graphics::TEXTURE_FILTER_POINT);
 
-  // x=20 samples at u=0.4: nearest texel is black (0), bilinear blends
-  // 30% toward white (~76).
   const int point = draw_and_read(tex, graphics::TEXTURE_FILTER_POINT, 20);
   const int bilinear = draw_and_read(tex, graphics::TEXTURE_FILTER_BILINEAR, 20);
   const int def = draw_and_read(tex, -1, 20);

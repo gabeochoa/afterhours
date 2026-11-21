@@ -1589,10 +1589,6 @@ inline void draw_texture_pro(TextureType tex, RectangleType src,
   sg_view tv = {tex.view_id};
   sg_sampler smp = {tex.sampler_id};
   if (filter >= 0) {
-    // Sokol samplers are per-draw, so an override just swaps the sampler; one
-    // cached sampler per filter, clamp wrap (this draw samples 0..1 only).
-    // Filter values are POINT=0, BILINEAR=1, TRILINEAR=2, so the value itself
-    // is the cache slot (anisotropic and out-of-range clamp to trilinear).
     static sg_sampler cache[3] = {};
     const int slot = filter > 2 ? 2 : filter;
     if (cache[slot].id == 0)
