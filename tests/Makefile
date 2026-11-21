@@ -225,6 +225,7 @@ ALL_TESTS := \
 	keymap_test \
 	label_clear_test \
 	hit_priority_test \
+	pointer_owner_test \
 	two_trees_test \
 	text_selection_test \
 	text_stroke_test \
