@@ -1,7 +1,3 @@
-// Absolute children of a scroll view are content at their position:
-// a child placed beyond the flow must extend the scrollable extent to
-// its far edge (not just add its size), an overlay inside the flow must
-// not grow the extent, and the child must move with the scroll offset.
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 
@@ -29,8 +25,6 @@ struct Built {
   Entity *abs_child = nullptr;
 };
 
-// flow: 5 rows x 20px in a 200x100 column scroll view; optionally one
-// absolute child.
 static Built build(ImmTestHarness &h, bool with_abs, float abs_x, float abs_y,
                    float abs_w, float abs_h, bool overlay_only = false) {
   h.begin_frame();

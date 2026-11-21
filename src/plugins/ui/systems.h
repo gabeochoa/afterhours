@@ -500,8 +500,6 @@ inline Vector2Type measure_scroll_content(const UIComponent &cmp, const HasScrol
       out_of_flow += c.computed[main] + c.computed_margin[main];
       continue;
     }
-    // Absolute children sit at an explicit position, so count their far
-    // edge from the content origin, not just their size.
     first = std::min(first, c.computed_rel[main]);
     last = std::max(last, c.computed_rel[main] + c.computed[main] +
                               c.computed_margin[main]);
