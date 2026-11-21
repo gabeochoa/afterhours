@@ -66,7 +66,7 @@ struct toast : developer::Plugin {
         float duration = 3.0f;
         float elapsed = 0.0f;
         bool dismissed = false;
-        bool hovered = false;  // set by layout; update pauses expiry while set
+        bool hovered = false;
 
         Toast() = default;
         Toast(Level lvl, float dur, Color color = {100, 100, 100, 255})
@@ -114,8 +114,6 @@ struct toast : developer::Plugin {
             EntityHelper::registerSingleton<ToastRoot>(singleton);
         }
 
-        // Height the wrapped label needs inside `width_px`, at least the
-        // configured single-line height.
         static float wrapped_height(const std::string &text, float width_px,
                                     float min_height, const std::string &font,
                                     float font_px, float inset_x,
@@ -138,7 +136,6 @@ struct toast : developer::Plugin {
             const std::string label =
                 icon.empty() ? msg : icon + " " + msg;
 
-            // A repeat of a live toast refreshes it instead of stacking a copy.
             for (Entity &entity : EntityQuery()
                                       .whereHasComponent<Toast>()
                                       .gen()) {
@@ -182,7 +179,6 @@ struct toast : developer::Plugin {
         float duration = 3.0f, Color custom_color = {100, 100, 100, 255}) {
         using namespace ui;
 
-        // Stack limit: evict the oldest live toasts to make room.
         {
             std::vector<Entity *> live;
             for (Entity &e : EntityQuery().whereHasComponent<Toast>().gen())
@@ -298,7 +294,7 @@ struct toast : developer::Plugin {
 
     struct ToastUpdateSystem : System<Toast> {
         void for_each_with(Entity &entity, Toast &t, float dt) override {
-            if (!t.hovered) t.elapsed += dt;  // hover pauses expiry
+            if (!t.hovered) t.elapsed += dt;
             if (t.is_expired()) {
                 entity.cleanup = true;
             }
@@ -342,7 +338,6 @@ struct toast : developer::Plugin {
                 if (ui.desired[ui::Axis::Y].dim != ui::Dim::None)
                     base_height = resolve_size(ui.desired[ui::Axis::Y], screen_w, screen_h);
 
-                // Grow to fit the wrapped label, capped to the screen.
                 float toast_height = base_height;
                 if (entity.has<ui::HasLabel>()) {
                     const auto &label = entity.get<ui::HasLabel>();
@@ -382,7 +377,6 @@ struct toast : developer::Plugin {
                     entity.get<ui::HasOpacity>().value = alpha_ease;
                 }
 
-                // Any click dismisses; hovering pauses expiry (via Toast::hovered).
                 t.hovered = false;
                 if (ctx_ptr) {
                     const RectangleType rect{x_pos, y_pos, toast_width,

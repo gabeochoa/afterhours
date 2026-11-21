@@ -102,7 +102,7 @@ struct CtxSingleton {
         components::get_type_id<UIContext<ui_test::TestInputAction>>());
   }
 };
-}  // namespace
+}
 
 TEST(long_toast_wraps_within_width_and_grows_short_unchanged) {
   ui_test::ImmTestHarness h;
@@ -151,7 +151,7 @@ TEST(toast_stack_is_capped_at_max_visible) {
   ui_test::ImmTestHarness h;
   for (int i = 0; i < toast::MAX_VISIBLE + 2; i++) {
     toast::send_info(h.context(), "Notice " + std::to_string(i), 30.f);
-    EntityHelper::merge_entity_arrays();  // frame boundary between sends
+    EntityHelper::merge_entity_arrays();
   }
   CHECK(live_toast_count() == toast::MAX_VISIBLE);
 }
