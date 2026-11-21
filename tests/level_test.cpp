@@ -1,4 +1,3 @@
-// level_test.cpp — level::Registry: register, load, mutate, write back.
 #define FMT_HEADER_ONLY
 #define AFTER_HOURS_USE_NONE
 #include <fmt/format.h>
@@ -66,7 +65,6 @@ int main() {
   check(out.records[1].type == "sign" && out.records[1].get_string("text", "") == "bye" &&
         out.records[1].get_int("hp", 0) == 7, "mutated sign round-trips");
 
-  // Reloading the written records reproduces the mutated state.
   EntityCollection coll2;
   auto reloaded = reg.load(coll2, out.records);
   check(reloaded.ok() && reloaded.level.size() == 2 &&

@@ -1,19 +1,5 @@
 #pragma once
 
-// Level plugin core: a typed entity registry, an in-memory loader, and
-// write-back. A level is a list of Records the caller already parsed;
-// folder walking and any file format are the caller's job.
-//
-//   level::Registry reg;
-//   reg.register_type("crate",
-//       [](Entity &e, const level::Record &r) {
-//         e.addComponent<Position>(r.get_float("x", 0.f), r.get_float("y", 0.f));
-//       },
-//       [](const Entity &e, level::Record &r) {
-//         r.set("x", e.get<Position>().x); r.set("y", e.get<Position>().y);
-//       });
-//   auto loaded = reg.load(collection, records);  // loaded.level.entities
-//   auto out = reg.write_back(loaded.level);     // mutated values, as Records
 
 #include <cstdint>
 #include <functional>
@@ -50,6 +36,7 @@ struct Record {
     if (auto *p = std::get_if<std::int64_t>(&it->second)) return *p;
     return std::nullopt;
   }
+
   [[nodiscard]] std::optional<double> get_double(const std::string &n) const {
     auto it = fields.find(n);
     if (it == fields.end()) return std::nullopt;
@@ -57,18 +44,21 @@ struct Record {
     if (auto *p = std::get_if<std::int64_t>(&it->second)) return double(*p);
     return std::nullopt;
   }
+
   [[nodiscard]] std::optional<bool> get_bool(const std::string &n) const {
     auto it = fields.find(n);
     if (it == fields.end()) return std::nullopt;
     if (auto *p = std::get_if<bool>(&it->second)) return *p;
     return std::nullopt;
   }
+
   [[nodiscard]] std::optional<std::string> get_string(const std::string &n) const {
     auto it = fields.find(n);
     if (it == fields.end()) return std::nullopt;
     if (auto *p = std::get_if<std::string>(&it->second)) return *p;
     return std::nullopt;
   }
+
   [[nodiscard]] std::int64_t get_int(const std::string &n, std::int64_t fb) const {
     return get_int(n).value_or(fb);
   }
@@ -89,7 +79,7 @@ enum class ErrorKind { UnknownType, DuplicateType, EmptyTypeName, NoWriter };
 struct Error {
   ErrorKind kind = ErrorKind::UnknownType;
   std::string type;
-  std::size_t index = 0; // record index on load, entity index on write-back
+  std::size_t index = 0;
   std::string message;
 };
 
@@ -120,18 +110,17 @@ public:
   using Construct = std::function<void(Entity &, const Record &)>;
   using Write = std::function<void(const Entity &, Record &)>;
 
-  // False (and no change) on an empty name or a name already registered.
   bool register_type(std::string name, Construct construct, Write write) {
     if (name.empty() || !construct) return false;
     if (types_.contains(name)) return false;
     types_.emplace(std::move(name), Type{std::move(construct), std::move(write)});
     return true;
   }
+
   [[nodiscard]] bool has(const std::string &name) const { return types_.contains(name); }
   [[nodiscard]] std::size_t size() const { return types_.size(); }
   void clear() { types_.clear(); }
 
-  // Unknown types are collected as typed errors and skipped; the rest load.
   [[nodiscard]] LoadResult load(EntityCollection &collection,
                                 const std::vector<Record> &records) const {
     LoadResult out;
@@ -152,7 +141,6 @@ public:
     return out;
   }
 
-  // Entities flagged for cleanup are skipped; they are gone, not saved.
   [[nodiscard]] WriteResult write_back(const LoadedLevel &loaded) const {
     WriteResult out;
     for (std::size_t i = 0; i < loaded.entries.size(); ++i) {
@@ -177,7 +165,6 @@ public:
     return out;
   }
 
-  // Mark every loaded entity for the collection's next cleanup() sweep.
   static void unload(EntityCollection &collection, LoadedLevel &loaded) {
     for (auto &entry : loaded.entries)
       if (entry.entity) collection.markIDForCleanup(entry.entity->id);
@@ -192,4 +179,4 @@ private:
   std::unordered_map<std::string, Type> types_;
 };
 
-} // namespace afterhours::level
+}
