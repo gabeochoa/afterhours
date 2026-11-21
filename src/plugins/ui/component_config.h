@@ -207,6 +207,10 @@ struct ComponentConfig {
   bool text_cut_disabled = false;
   bool text_paste_disabled = false;
 
+  // Text input: Escape blurs the field. Off lets the app use Escape for
+  // its own overlay (slash menu, autocomplete) without losing the caret.
+  bool text_escape_blurs = true;
+
   // Text input: hint shown while the bound string is empty.
   std::string placeholder;
 
@@ -469,6 +473,11 @@ struct ComponentConfig {
   }
   ComponentConfig &with_slider_style(const SliderStyle &style) {
     slider_style = style;
+    return *this;
+  }
+
+  ComponentConfig &with_escape_blurs(bool blur = true) {
+    text_escape_blurs = blur;
     return *this;
   }
   ComponentConfig &with_toggle_indicators(const std::string &on,
@@ -1404,6 +1413,8 @@ struct ComponentConfig {
       merged.text_cut_disabled = true;
     if (overrides.text_paste_disabled)
       merged.text_paste_disabled = true;
+    if (!overrides.text_escape_blurs)
+      merged.text_escape_blurs = false;
     if (!overrides.placeholder.empty())
       if (merged.placeholder != overrides.placeholder) merged.placeholder = overrides.placeholder;
     if (overrides.text_area_line_height.has_value())

@@ -775,7 +775,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     }
 
     // FAKE prevents try_to_grab from immediately re-focusing the first widget.
-    if (ctx.pressed(InputAction::MenuBack)) {
+    // with_escape_blurs(false) leaves both focus and the press to the app.
+    if (config.text_escape_blurs && ctx.pressed(InputAction::MenuBack)) {
       state.clear_selection();
       ctx.set_focus(ctx.FAKE);
     }
