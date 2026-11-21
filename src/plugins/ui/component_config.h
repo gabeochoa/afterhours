@@ -113,6 +113,7 @@ struct ComponentConfig {
   std::optional<Vector2Type> text_inset;
   std::optional<CursorType> cursor_type; // Cursor to show on hover
   bool skip_when_tabbing = false;
+  bool focus_scope = false;
   std::optional<float> focus_ring_offset;
   // Per-component ring thickness, overriding Theme::focus_ring_thickness.
   // Unset means the theme's value; 0 opts this component out of the ring.
@@ -644,6 +645,10 @@ struct ComponentConfig {
     skip_when_tabbing = skip;
     return *this;
   }
+  ComponentConfig &with_focus_scope(bool scope = true) {
+    focus_scope = scope;
+    return *this;
+  }
   ComponentConfig &with_focus_ring_offset(float offset) {
     focus_ring_offset = offset;
     return *this;
@@ -1109,6 +1114,7 @@ struct ComponentConfig {
   bool is_disabled() const { return disabled; }
   bool is_hidden() const { return hidden; }
   bool skips_when_tabbing() const { return skip_when_tabbing; }
+  bool is_focus_scope() const { return focus_scope; }
   bool selects_on_focus() const { return select_on_focus; }
   bool has_click_activation_override() const {
     return click_activation != ClickActivationMode::Default;
@@ -1186,6 +1192,8 @@ struct ComponentConfig {
       merged.hidden = overrides.hidden;
     if (overrides.skips_when_tabbing())
       merged.skip_when_tabbing = overrides.skip_when_tabbing;
+    if (overrides.is_focus_scope())
+      merged.focus_scope = true;
     if (overrides.focus_ring_offset.has_value())
       merged.focus_ring_offset = overrides.focus_ring_offset;
     if (overrides.focus_ring_thickness.has_value())
