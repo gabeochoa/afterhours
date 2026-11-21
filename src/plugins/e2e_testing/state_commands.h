@@ -1,15 +1,3 @@
-// Generic E2E state commands over a registered state source.
-//
-// Any app string/int it wants to assert or drive from a script is registered
-// by name; scripts then use `expect_state <name> <value>` /
-// `set_state <name> <value>`. Values are single tokens (enum names, numbers),
-// so the runner's default split parsing carries them with no extra rules.
-// The getter/setter are plain string functions, so a future typed State<E>
-// can plug in by adapting its enum to/from a string without depending on
-// this header.
-//
-// Opt-in like perf_commands: register at least one state, then
-// register_state_commands(sm).
 #pragma once
 
 #include <functional>
@@ -22,7 +10,6 @@ namespace afterhours {
 namespace testing {
 namespace state_commands {
 
-// One registered state: read it as a string, and (optionally) write it.
 struct StateSource {
     std::function<std::string()> get;
     std::function<void(const std::string &)> set;
@@ -35,18 +22,15 @@ inline std::map<std::string, StateSource> &states() {
 
 inline void clear_states() { states().clear(); }
 
-// Register a readable+writable string state.
 inline void register_state(std::string name, std::function<std::string()> get,
                            std::function<void(const std::string &)> set) {
     states()[std::move(name)] = StateSource{std::move(get), std::move(set)};
 }
 
-// Register a read-only string state (set_state on it fails by name).
 inline void register_state(std::string name, std::function<std::string()> get) {
     states()[std::move(name)] = StateSource{std::move(get), nullptr};
 }
 
-// Register an int state; scripts see it as its decimal string.
 inline void register_state_int(std::string name, std::function<int()> get,
                                std::function<void(int)> set) {
     states()[std::move(name)] = StateSource{

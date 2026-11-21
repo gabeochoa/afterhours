@@ -49,7 +49,6 @@ int main() {
                          [&](int v) { level = v; });
   sc::register_state("build", [] { return std::string("42"); });
 
-  // A script driving changes then asserting them.
   check(run_set("screen", "gameplay").succeeded(), "set_state screen ok");
   check(screen == "gameplay", "set_state wrote screen");
   check(run_expect("screen", "gameplay").succeeded(), "expect_state screen passes");
@@ -57,14 +56,12 @@ int main() {
   check(level == 7, "set_state int wrote level");
   check(run_expect("level", "7").succeeded(), "expect_state int passes as decimal");
 
-  // Mismatch retries (wait_until / timeout machinery owns the verdict).
   {
     auto c = run_expect("screen", "menu");
     check(c.is_retry() && c.last_mismatch.find("gameplay") != std::string::npos,
           "expect_state mismatch retries naming actual value");
   }
 
-  // Unknown state fails by name and lists what is registered.
   {
     auto c = run_expect("bogus_state", "x");
     check(c.is_consumed() && !c.succeeded(), "expect_state unknown fails");
@@ -77,7 +74,6 @@ int main() {
           "set_state unknown fails by name");
   }
 
-  // Read-only state: expect works, set fails by name.
   {
     check(run_expect("build", "42").succeeded(), "expect_state read-only passes");
     auto s = run_set("build", "9");
@@ -85,7 +81,6 @@ int main() {
           "set_state read-only fails by name");
   }
 
-  // Malformed commands fail immediately with usage.
   {
     PendingE2ECommand c;
     c.name = "expect_state";
@@ -95,7 +90,6 @@ int main() {
           "expect_state without value fails with usage");
   }
 
-  // Script parsing: two single-token args, no runner changes needed.
   {
     const char *path = "/tmp/afterhours_state_commands_test.e2e";
     FILE *f = fopen(path, "w");
