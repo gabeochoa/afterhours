@@ -547,6 +547,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
         reset_blink(s);
       });
 
+  bool submitted = false;
   // Handle input when focused
   if (state.is_focused) {
     report_missing_editing_actions<InputAction>();
@@ -781,16 +782,24 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     }
 
     // Enter/Submit
-    if (ctx.pressed(InputAction::WidgetPress) &&
-        entity.has<HasTextInputListener>())
-      if (auto &listener = entity.get<HasTextInputListener>();
-          listener.on_submit)
-        listener.on_submit(entity);
+    if (ctx.pressed(InputAction::WidgetPress)) {
+      submitted = true;
+      if (entity.has<HasTextInputListener>())
+        if (auto &listener = entity.get<HasTextInputListener>();
+            listener.on_submit)
+          listener.on_submit(entity);
+      if (config.on_submit) {
+        const std::string submitted_text = state.text();
+        config.on_submit(submitted_text);
+      }
+    }
   }
 
   text = state.text();
   entity.template addComponentIfMissing<FocusClusterRoot>();
-  return ElementResult{state.changed_since, entity};
+  ElementResult result{state.changed_since, entity};
+  result.submitted = submitted;
+  return result;
 }
 
 } // namespace text_input
