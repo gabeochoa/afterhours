@@ -411,6 +411,17 @@ struct ModelLibrary {
   [[nodiscard]] const ModelType &get(const std::string &name) const {
     return impl.get(name);
   }
+  using Handle = Library<ModelType>::Handle;
+  [[nodiscard]] Handle intern(const std::string &name) {
+    return impl.intern(name);
+  }
+  [[nodiscard]] ModelType &get(Handle handle) { return impl.get(handle); }
+  [[nodiscard]] const ModelType &get(Handle handle) const {
+    return impl.get(handle);
+  }
+  [[nodiscard]] bool contains(Handle handle) const {
+    return impl.contains(handle);
+  }
   [[nodiscard]] bool contains(const std::string &name) const {
     return impl.contains(name);
   }
@@ -421,6 +432,7 @@ struct ModelLibrary {
   void unload_all() {
     impl.unload_all();
     impl.storage.clear();
+    impl.reset_handles();
   }
 
 private:
