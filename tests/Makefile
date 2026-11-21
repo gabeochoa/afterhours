@@ -280,6 +280,7 @@ ALL_TESTS += sokol_geometry_test
 # Own process: the Metal backend cannot be re-initialised, so this cannot be a
 # section of sokol_blend_test.
 ALL_TESTS += sokol_hidpi_test
+ALL_TESTS += capture_supersample_test
 ALL_TESTS += sokol_resize_test
 ALL_TESTS += sokol_headless_run_test
 ALL_TESTS += sokol_include_order_test
@@ -445,6 +446,10 @@ $(OUT)/sokol_geometry_test: ../src/backends/sokol/drawing_helpers.h
 $(OUT)/sokol_hidpi_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_hidpi_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_hidpi_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/capture_supersample_test: ../examples/web/sokol_impl.cc
+$(OUT)/capture_supersample_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/capture_supersample_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/capture_supersample_test: ../src/backends/sokol/drawing_helpers.h ../src/backends/sokol/backend.h
 $(OUT)/sokol_resize_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_resize_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_resize_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
