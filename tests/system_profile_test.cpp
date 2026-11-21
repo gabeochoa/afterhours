@@ -53,7 +53,7 @@ void install_logging_hook() {
       [](std::string_view n, SystemPhase p) {
         log().push_back({std::string(n), p, true});
       },
-      [](std::string_view n, SystemPhase p) {
+      [](std::string_view n, SystemPhase p, int) {
         log().push_back({std::string(n), p, false});
       }});
 }
@@ -189,6 +189,43 @@ TEST(a_system_may_clear_the_hook_while_it_runs) {
 
   sm.tick(entities, 0.016f); // used to terminate here
   CHECK(true);
+  clear_hook();
+}
+
+// Entities visited: N entities in the world means N reported, an empty
+// world reports 0 (not absent), in both the sample and the PerfEntry.
+TEST(entities_visited_per_system) {
+  for (int world = 0; world <= 5; world += 5) {
+    afterhours::testing::perf_commands::builtin_profile::reset();
+    afterhours::testing::perf_commands::builtin_profile::enable();
+
+    SystemManager sm;
+    sm.register_update_system(std::make_unique<UnnamedUpdateSystem>());
+    Entities entities;
+    for (int i = 0; i < world; ++i) {
+      entities.push_back(std::make_shared<Entity>());
+      entities.back()->addComponent<Marker>();
+    }
+    for (int frame = 0; frame < 2; frame++) {
+      sm.tick(entities, 0.016f);
+      profiling::default_collector().end_frame(16.0);
+    }
+    auto entries = afterhours::testing::perf_commands::provider().top_entries(10);
+    bool found = false;
+    for (const auto &e : entries) {
+      if (e.name.find("UnnamedUpdateSystem") == std::string::npos) continue;
+      found = true;
+      printf("  world=%d visited=%d\n", world, e.entity_count.value_or(-1));
+      CHECK(e.entity_count.value_or(-1) == world);
+    }
+    CHECK(found);
+    const auto snapshot = profiling::default_collector().snapshot();
+    for (const auto &s : snapshot.systems) {
+      if (s.name.find("UnnamedUpdateSystem") == std::string::npos) continue;
+      CHECK(s.entity_count == world);
+    }
+    afterhours::testing::perf_commands::builtin_profile::disable();
+  }
   clear_hook();
 }
 
