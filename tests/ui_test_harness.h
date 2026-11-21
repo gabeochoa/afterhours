@@ -53,8 +53,9 @@ enum struct TestInputAction {
   WidgetDown,
   WidgetLeft,
   WidgetRight,
-  // text_input references these directly rather than behind if constexpr, so
-  // any InputAction used with it has to declare them.
+  // Host-declared text actions; text_input also works without them via the
+  // library defaults (text_action_pressed), this enum just exercises the
+  // host-action path.
   TextBackspace,
   TextDelete,
   TextHome,

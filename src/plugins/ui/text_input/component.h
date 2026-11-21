@@ -36,28 +36,9 @@ constexpr bool has_editing_action(std::string_view name) {
   return magic_enum::enum_contains<InputAction>(name);
 }
 
-// Names whatever resolved to nothing, once per run.
-template <typename InputAction> inline void report_missing_editing_actions() {
-  static bool reported = false;
-  if (reported)
-    return;
-  reported = true;
-
-  std::string missing;
-  for (const std::string_view name : optional_editing_actions) {
-    if (!has_editing_action<InputAction>(name)) {
-      if (!missing.empty())
-        missing += ", ";
-      missing += name;
-    }
-  }
-  if (missing.empty())
-    return;
-  log_warn("text_input: these editing actions are off because {} has no "
-           "enumerator by that name: {}. Add the enumerator and bind it, or "
-           "ignore this if you meant to leave them out.",
-           type_name<InputAction>(), missing);
-}
+// Kept as a no-op: missing Text* names now fall back to the library
+// defaults (text_action_pressed) instead of compiling the feature out.
+template <typename InputAction> inline void report_missing_editing_actions() {}
 
 // Given a local x coordinate within a text field, find the byte offset
 // in the display text that's closest to that position.
@@ -554,31 +535,29 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Undo/Redo (before clipboard/char input so Ctrl+Z doesn't insert)
     if (editable) {
-      if constexpr (magic_enum::enum_contains<InputAction>("TextUndo")) {
-        if (ctx.pressed(InputAction::TextUndo)) {
-          state.undo();
-          reset_blink(state);
-        }
+      if (text_action_pressed<InputAction>(ctx, "TextUndo")) {
+        state.undo();
+        reset_blink(state);
       }
-      if constexpr (magic_enum::enum_contains<InputAction>("TextRedo")) {
-        if (ctx.pressed(InputAction::TextRedo)) {
-          state.redo();
-          reset_blink(state);
-        }
+      if (text_action_pressed<InputAction>(ctx, "TextRedo")) {
+        state.redo();
+        reset_blink(state);
       }
     }
 
     // Copy is allowed while readonly unless the field disables it.
     // Cut/Paste need editable and honour their own disable flags.
-    if constexpr (magic_enum::enum_contains<InputAction>("TextCopy")) {
-      if (!state.copy_disabled && ctx.pressed(InputAction::TextCopy)) {
+    {
+      if (!state.copy_disabled &&
+          text_action_pressed<InputAction>(ctx, "TextCopy")) {
         if (state.has_selection())
           clipboard::set_text(state.selected_text());
       }
     }
     if (editable) {
-      if constexpr (magic_enum::enum_contains<InputAction>("TextCut")) {
-        if (!state.cut_disabled && ctx.pressed(InputAction::TextCut)) {
+      {
+        if (!state.cut_disabled &&
+            text_action_pressed<InputAction>(ctx, "TextCut")) {
           if (state.has_selection()) {
             state.push_undo_snapshot();
             clipboard::set_text(state.selected_text());
@@ -587,8 +566,9 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
           }
         }
       }
-      if constexpr (magic_enum::enum_contains<InputAction>("TextPaste")) {
-        if (!state.paste_disabled && ctx.pressed(InputAction::TextPaste)) {
+      {
+        if (!state.paste_disabled &&
+            text_action_pressed<InputAction>(ctx, "TextPaste")) {
           state.push_undo_snapshot();
           if (state.has_selection()) delete_selection(state);
           std::string clip = clipboard::get_text();
@@ -602,7 +582,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     }
 
     // Select all (allowed in readonly)
-    if (ctx.pressed(InputAction::TextSelectAll)) {
+    if (text_action_pressed<InputAction>(ctx, "TextSelectAll")) {
       state.selection_anchor = 0;
       state.cursor_position = state.text_size();
       reset_blink(state);
@@ -642,8 +622,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     };
 
     // Word-level movement (Ctrl+Arrow / Alt+Arrow)
-    if constexpr (magic_enum::enum_contains<InputAction>("TextWordLeft")) {
-      if (ctx.pressed_or_repeat(InputAction::TextWordLeft)) {
+    {
+      if (text_action_pressed<InputAction>(ctx, "TextWordLeft", true)) {
         navigate([&] {
           if (!shift_held && state.has_selection()) {
             state.cursor_position = state.selection_start();
@@ -653,8 +633,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
         });
       }
     }
-    if constexpr (magic_enum::enum_contains<InputAction>("TextWordRight")) {
-      if (ctx.pressed_or_repeat(InputAction::TextWordRight)) {
+    {
+      if (text_action_pressed<InputAction>(ctx, "TextWordRight", true)) {
         navigate([&] {
           if (!shift_held && state.has_selection()) {
             state.cursor_position = state.selection_end();
@@ -668,13 +648,13 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     // Character-level selection movement (Shift+Arrow via chord actions).
     // These are kept for backward compatibility; the shift_held path in
     // navigate() handles selection automatically.
-    if constexpr (magic_enum::enum_contains<InputAction>("TextSelectLeft")) {
-      if (ctx.pressed_or_repeat(InputAction::TextSelectLeft)) {
+    {
+      if (text_action_pressed<InputAction>(ctx, "TextSelectLeft", true)) {
         navigate([&] { move_cursor_left(state); });
       }
     }
-    if constexpr (magic_enum::enum_contains<InputAction>("TextSelectRight")) {
-      if (ctx.pressed_or_repeat(InputAction::TextSelectRight)) {
+    {
+      if (text_action_pressed<InputAction>(ctx, "TextSelectRight", true)) {
         navigate([&] { move_cursor_right(state); });
       }
     }
@@ -701,8 +681,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
 
     // Deletion (word-level and character-level) - only if editable
     if (editable) {
-      if constexpr (magic_enum::enum_contains<InputAction>("TextDeleteWordBack")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteWordBack)) {
+      {
+        if (text_action_pressed<InputAction>(ctx, "TextDeleteWordBack", true)) {
           state.push_undo_snapshot();
           if (state.has_selection()) {
             delete_selection(state);
@@ -712,8 +692,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
           reset_blink(state);
         }
       }
-      if constexpr (magic_enum::enum_contains<InputAction>("TextDeleteWordForward")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteWordForward)) {
+      {
+        if (text_action_pressed<InputAction>(ctx, "TextDeleteWordForward", true)) {
           state.push_undo_snapshot();
           if (state.has_selection()) {
             delete_selection(state);
@@ -723,8 +703,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
           reset_blink(state);
         }
       }
-      if constexpr (magic_enum::enum_contains<InputAction>("TextDeleteLineBack")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteLineBack)) {
+      {
+        if (text_action_pressed<InputAction>(ctx, "TextDeleteLineBack", true)) {
           state.push_undo_snapshot();
           if (state.has_selection()) {
             delete_selection(state);
@@ -734,8 +714,8 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
           reset_blink(state);
         }
       }
-      if constexpr (magic_enum::enum_contains<InputAction>("TextDeleteLineForward")) {
-        if (ctx.pressed_or_repeat(InputAction::TextDeleteLineForward)) {
+      {
+        if (text_action_pressed<InputAction>(ctx, "TextDeleteLineForward", true)) {
           state.push_undo_snapshot();
           if (state.has_selection()) {
             delete_selection(state);
@@ -746,7 +726,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
         }
       }
 
-      if (ctx.pressed_or_repeat(InputAction::TextBackspace)) {
+      if (text_action_pressed<InputAction>(ctx, "TextBackspace", true)) {
         state.push_undo_snapshot();
         if (state.has_selection()) {
           delete_selection(state);
@@ -755,7 +735,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
         }
         reset_blink(state);
       }
-      if (ctx.pressed_or_repeat(InputAction::TextDelete)) {
+      if (text_action_pressed<InputAction>(ctx, "TextDelete", true)) {
         state.push_undo_snapshot();
         if (state.has_selection()) {
           delete_selection(state);
@@ -767,10 +747,10 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
     }
 
     // Home/End: Shift extends selection, plain collapses it
-    if (ctx.pressed_or_repeat(InputAction::TextHome)) {
+    if (text_action_pressed<InputAction>(ctx, "TextHome", true)) {
       navigate([&] { state.cursor_position = 0; });
     }
-    if (ctx.pressed_or_repeat(InputAction::TextEnd)) {
+    if (text_action_pressed<InputAction>(ctx, "TextEnd", true)) {
       navigate([&] { state.cursor_position = state.text_size(); });
     }
 

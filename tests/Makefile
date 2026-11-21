@@ -333,6 +333,7 @@ ALL_TESTS := \
 	small_components_test \
 	text_area_test \
 	text_input_test \
+	text_input_no_host_enum_test \
 	toast_test \
 	text_wrap_test \
 	label_word_wrap_test \
@@ -395,6 +396,7 @@ RAYLIB_TESTS := \
 	presented_frame_test \
 	triangle_winding_test \
 	clipboard_test \
+	text_input_no_host_enum_test \
 	mk_cost_test \
 	capture_perf_test \
 	headless_fallback_test \
@@ -494,6 +496,9 @@ $(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/middle_click_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/input_activity_snapshot_test $(OUT)/e2e_gamepad_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
+$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/middle_click_test $(OUT)/edit_keys_test $(OUT)/text_input_no_host_enum_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
+$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OUT)/edit_keys_test $(OUT)/text_input_no_host_enum_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
+$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/text_input_no_host_enum_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 
 # Filter to sources: the .d files list every header as a prerequisite, and a
 # bare $^ would hand them all to clang. .cc is the sokol implementation TU.
