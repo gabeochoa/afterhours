@@ -1,19 +1,5 @@
 #pragma once
 
-// Intro/loading scene-sequence runner (Pharmasea G-P7, core slice).
-//
-//   IntroSequence seq;
-//   seq.add({.hold = 2.f, .draw = [](float alpha){ /* card at alpha */ }});
-//   seq.add({.wait_for_progress = true, .hold = 0.f,
-//            .draw = [](float alpha){ /* loading card */ }});
-//   seq.on_finished([]{ /* start game */ });
-//   // per frame: seq.set_progress(loaded_fraction); seq.update(dt); seq.draw();
-//
-// Steps run in order: fade in, hold, fade out, next. A wait_for_progress
-// step holds (at full alpha) until set_progress() reaches 1. Drawing the
-// cards is the caller's: each step's draw callback receives the current
-// alpha, or read index()/alpha() and draw yourself. Themed cards/art and
-// any asset pipeline stay game-side.
 
 #include <algorithm>
 #include <cstddef>
@@ -42,7 +28,6 @@ struct IntroSequence {
     return index_ < steps_.size() ? &steps_[index_] : nullptr;
   }
 
-  // Alpha for the current step: ramps up in fade-in, 1 in hold, down in fade-out.
   float alpha() const {
     const Step *s = current();
     if (!s || finished_) return 0.f;
@@ -57,7 +42,6 @@ struct IntroSequence {
     return 0.f;
   }
 
-  // Fast-forward the current step (no-op if it is not skippable).
   void skip() {
     const Step *s = current();
     if (!s || finished_ || !s->skippable) return;
@@ -69,14 +53,13 @@ struct IntroSequence {
     if (steps_.empty()) { finish(); return; }
     if (dt <= 0.f) return;
     phase_t_ += dt;
-    // Loop so one large dt can cross several phase/step boundaries.
     while (!finished_) {
       const Step &s = steps_[index_];
       float dur = phase_ == Phase::FadeIn    ? s.fade_in
                   : phase_ == Phase::Hold    ? s.hold
                                              : s.fade_out;
       if (phase_ == Phase::Hold && s.wait_for_progress && progress_ < 1.f) {
-        phase_t_ = 0.f; // hold timer starts once loading completes
+        phase_t_ = 0.f;
         return;
       }
       if (phase_t_ < dur) return;
@@ -100,8 +83,9 @@ private:
     phase_t_ = 0.f;
     if (index_ >= steps_.size()) finish();
   }
+
   void finish() {
-    if (finished_) return; // finished callback fires exactly once
+    if (finished_) return;
     finished_ = true;
     if (on_finished_) on_finished_();
   }
@@ -115,4 +99,4 @@ private:
   bool finished_ = false;
 };
 
-} // namespace afterhours
+}

@@ -10,7 +10,7 @@ using S = IntroSequence::Step;
 static IntroSequence seq_of(std::vector<S> s) { IntroSequence q; for (auto &x : s) q.add(std::move(x)); return q; }
 
 int main() {
-  { // order + timing + alpha + draw callback receives alpha
+  {
     std::vector<int> drawn; std::vector<float> alphas;
     auto mk = [&](int id) { return S{.fade_in=.5f,.hold=1.f,.fade_out=.5f,.draw=[&, id](float a){drawn.push_back(id);alphas.push_back(a);}}; };
     auto q = seq_of({mk(0), mk(1)}); int done = 0; q.on_finished([&]{done++;});
@@ -22,14 +22,14 @@ int main() {
     q.update(2.f); check(q.finished() && done==1, "finishes after last fade-out");
     q.update(1.f); check(done==1, "finish fires once");
   }
-  { // skip fast-forwards current step only; non-skippable ignores skip
+  {
     auto q = seq_of({S{.hold=10.f}, S{.hold=10.f,.skippable=false}, S{.hold=10.f}});
     q.skip(); check(q.index()==1, "skip advances one step");
     q.skip(); check(q.index()==1, "non-skippable step ignores skip");
     q.update(20.f); check(q.index()==2, "timed advance past non-skippable");
     q.skip(); check(q.finished(), "skip on last step finishes");
   }
-  { // progress step gates until external progress reaches 1
+  {
     auto q = seq_of({S{.fade_in=0,.hold=.5f,.fade_out=0,.wait_for_progress=true}, S{.fade_in=0,.hold=.5f,.fade_out=0}});
     q.set_progress(.5f); q.update(10.f); check(q.index()==0, "progress <1 gates");
     q.set_progress(2.f); check(near(q.progress(),1.f), "progress clamped to 1");
