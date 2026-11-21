@@ -185,6 +185,7 @@ ALL_TESTS := \
 	files_resource_path_test \
 	files_cache_path_test \
 	capture_test \
+	capture_async_test \
 	polyline_test \
 	measure_memo_test \
 	design_defaults_test \
