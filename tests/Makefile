@@ -257,6 +257,7 @@ ALL_TESTS := \
 	load_font_size_test \
 	edit_keys_test \
 	tab_container_test \
+	tab_toggle_geometry_test \
 	small_components_test \
 	text_area_test \
 	text_input_test \
