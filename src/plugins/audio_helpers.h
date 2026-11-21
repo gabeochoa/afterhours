@@ -88,54 +88,6 @@ struct WaveStub {
 using SoundType = SoundStub;
 using MusicType = MusicStub;
 using WaveType = WaveStub;
-
-// The stub silently dropped sound with no log line. Warn once per process
-// (decision: decide-sokol-audio Option 3) so a sokol/none app knows it is
-// silent. The real backend (Option 1) lands with the first sokol game that
-// needs sound.
-namespace audio_stub_detail {
-inline bool &warned() {
-  static bool w = false;
-  return w;
-}
-inline void warn_once() {
-  if (warned())
-    return;
-  warned() = true;
-  log_warn("audio: no audio device on this backend (sokol/none); sound is "
-           "silent");
-}
-} // namespace audio_stub_detail
-
-inline void InitAudioDevice() { audio_stub_detail::warn_once(); }
-inline void CloseAudioDevice() {}
-inline bool IsAudioDeviceReady() { return false; }
-inline void SetMasterVolume(float) {}
-inline float GetMasterVolume() { return 0.f; }
-inline void SetAudioStreamBufferSizeDefault(int) {}
-
-inline void PlaySound(SoundStub) { audio_stub_detail::warn_once(); }
-inline void StopSound(SoundStub) {}
-inline void PauseSound(SoundStub) {}
-inline void ResumeSound(SoundStub) {}
-inline void SetSoundPitch(SoundStub, float) {}
-inline void SetSoundPan(SoundStub, float) {}
-inline bool IsSoundPlaying(SoundStub) { return false; }
-inline void SetSoundVolume(SoundStub, float) {}
-inline void UnloadSound(SoundStub) {}
-inline SoundStub LoadSound(const char *) { return SoundStub{}; }
-inline SoundStub LoadSoundFromWave(WaveStub) { return SoundStub{}; }
-
-inline void UnloadWave(WaveStub w) { std::free(w.data); }
-inline bool ExportWave(WaveStub, const char *) { return false; }
-
-inline void PlayMusicStream(MusicStub) {}
-inline void StopMusicStream(MusicStub) {}
-inline bool IsMusicStreamPlaying(MusicStub) { return false; }
-inline void UpdateMusicStream(MusicStub) {}
-inline void SetMusicVolume(MusicStub, float) {}
-inline void UnloadMusicStream(MusicStub) {}
-inline MusicStub LoadMusicStream(const char *) { return MusicStub{}; }
 #endif
 
 namespace synth {
