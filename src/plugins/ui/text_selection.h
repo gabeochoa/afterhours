@@ -331,10 +331,6 @@ text_run_offsets(const TextRunLine &line, MeasureFn &&measure,
   return offsets;
 }
 
-// Greedy word-wrap: split `text` into lines each no wider than `max_width`,
-// using `measure` to size candidate lines. A word wider than max_width is
-// broken between grapheme clusters. Returns at least one line for non-empty
-// input. `measure` returns the pixel width of a string.
 template <typename MeasureFn>
 static inline std::vector<std::string>
 wrap_text_to_width(const std::string &text, float max_width,
