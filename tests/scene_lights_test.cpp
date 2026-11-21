@@ -1,5 +1,3 @@
-// SceneLights broadcast: uniforms land on a registered shader and the
-// shared GLSL chunk compiles/renders. Hidden window (needs a GL context).
 #include <cstdio>
 #include <string>
 #include <afterhours/ah.h>

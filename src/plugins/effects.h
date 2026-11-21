@@ -273,7 +273,6 @@ struct BlurPass {
   }
 };
 
-// Shared GLSL for SceneLights: concatenate after your `#version`/ins, before main.
 inline constexpr const char *SCENE_LIGHTS_GLSL = R"(
 uniform vec3 ahSunDirection;
 uniform vec3 ahSunColor;
@@ -313,7 +312,7 @@ struct SceneLights {
   ColorType ambient{110, 120, 140, 255};
   ColorType fog{135, 190, 230, 255};
   float fog_near = 0.f;
-  float fog_far = 0.f; // <= fog_near: no fog
+  float fog_far = 0.f;
   Vector3Type camera_pos{};
   Point points[4]{};
   int point_count = 0;
@@ -337,7 +336,6 @@ struct SceneLights {
   }
 };
 
-// Broadcast to every registered shader; missing uniforms are ignored by raylib.
 inline int apply_scene_lights(const SceneLights &lights) {
   int count = 0;
   for (Effect *e : Effect::registry())
