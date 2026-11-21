@@ -16,6 +16,11 @@
 #include "../../developer.h"
 #include "metal_state.h"
 
+namespace afterhours::graphics::metal_detail {
+// Defined in backend.h, which includes this header before the definition.
+inline void ensure_sokol_gl_and_fonts();
+} // namespace afterhours::graphics::metal_detail
+
 namespace afterhours {
 
 // Font is an int (fontstash font ID). We wrap it so the type is distinct.
@@ -63,6 +68,9 @@ inline Font register_loaded_font(FONScontext *ctx, int id,
 
 inline Font load_font_from_memory(const unsigned char *data, int size,
                                   const char *name, int = 0) {
+#ifdef AFTERHOURS_FONT_HELPER_HAS_ENSURE
+  graphics::metal_detail::ensure_sokol_gl_and_fonts();
+#endif
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx) {
     log_warn("fontstash context not ready yet (load_font_from_memory)");
@@ -94,6 +102,9 @@ inline Font load_font_from_memory(const unsigned char *data, int size,
 }
 
 inline Font load_font_from_file(const char *file, int = 0) {
+#ifdef AFTERHOURS_FONT_HELPER_HAS_ENSURE
+  graphics::metal_detail::ensure_sokol_gl_and_fonts();
+#endif
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx) {
     log_warn("fontstash context not ready yet (load_font_from_file)");
