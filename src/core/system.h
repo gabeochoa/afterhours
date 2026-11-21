@@ -518,24 +518,27 @@ struct CallbackSystem : System<> {
 enum struct SystemPhase { Update, FixedUpdate, Render };
 
 // Brackets every system the manager runs, including the library's own. Without
-// it a consumer can only time systems it wrote.
+// it a consumer can only time systems it wrote. The end callback also gets the
+// entities the run loop visited (0 when the system did not iterate).
 struct SystemProfileHook {
     std::function<void(std::string_view, SystemPhase)> begin;
-    std::function<void(std::string_view, SystemPhase)> end;
+    std::function<void(std::string_view, SystemPhase, int)> end;
     explicit operator bool() const { return begin && end; }
 };
 
 // One iteration pass, shared by every phase and by the UI collection runner.
 // Templated on the system so the const render pass still picks the const
-// for_each overloads.
+// for_each overloads. Returns entities visited (entries iterated, not matches).
 template<typename Sys>
-inline void run_system_over(Sys &system, Entities &entities, const float dt,
+inline int run_system_over(Sys &system, Entities &entities, const float dt,
                             const EntityCollection &coll,
                             const bool skip_cleanup) {
-    if (!system.should_iterate()) return;
+    if (!system.should_iterate()) return 0;
     system.on_iteration_begin(dt);
+    int visited = 0;
 
     auto visit = [&](auto &entity) {
+        ++visited;
         if (system.include_derived_children)
             system.for_each_derived(entity, dt);
         else
@@ -558,6 +561,7 @@ inline void run_system_over(Sys &system, Entities &entities, const float dt,
         }
     }
     system.on_iteration_end(dt);
+    return visited;
 }
 
 struct SystemManager {
@@ -574,6 +578,7 @@ struct SystemManager {
     struct ProfileScope {
         const SystemBase *sys = nullptr;
         SystemPhase phase{};
+        int entity_count = 0;
 #if AFTERHOURS_ENABLE_PROFILING
         profiling::detail::TimingScope timing;
 #endif
@@ -595,8 +600,12 @@ struct SystemManager {
         // Re-checked: a system may clear the hook while it runs, and calling
         // a cleared std::function here would throw out of a destructor.
         ~ProfileScope() {
+            // TimingScope destroys after this body, so it sees the count.
+#if AFTERHOURS_ENABLE_PROFILING
+            timing.entity_count = entity_count;
+#endif
             if (sys && profile_hook().end)
-                profile_hook().end(sys->name(), phase);
+                profile_hook().end(sys->name(), phase, entity_count);
             crash::set_running_system(nullptr);
         }
         ProfileScope(const ProfileScope &) = delete;
@@ -642,8 +651,9 @@ struct SystemManager {
             if (!system->should_run(dt)) continue;
             ProfileScope profile_scope(system.get(), SystemPhase::Update);
             system->once(dt);
-            run_system_over(*system, entities, dt,
-                            EntityHelper::get_default_collection(), false);
+            profile_scope.entity_count = run_system_over(
+                *system, entities, dt, EntityHelper::get_default_collection(),
+                false);
             system->after(dt);
             EntityHelper::merge_entity_arrays();
         }
@@ -654,8 +664,9 @@ struct SystemManager {
             if (!system->should_run(dt)) continue;
             ProfileScope profile_scope(system.get(), SystemPhase::FixedUpdate);
             system->once(dt);
-            run_system_over(*system, entities, dt,
-                            EntityHelper::get_default_collection(), false);
+            profile_scope.entity_count = run_system_over(
+                *system, entities, dt, EntityHelper::get_default_collection(),
+                false);
             system->after(dt);
         }
     }
@@ -665,8 +676,9 @@ struct SystemManager {
             if (!system->should_run(dt)) continue;
             ProfileScope profile_scope(system.get(), SystemPhase::Render);
             system->once(dt);
-            run_system_over(*system, entities, dt,
-                            EntityHelper::get_default_collection(), false);
+            profile_scope.entity_count = run_system_over(
+                *system, entities, dt, EntityHelper::get_default_collection(),
+                false);
             system->after(dt);
 #ifndef AFTERHOURS_SINGLE_RENDER_PASS
             const SystemBase &sys = *system;
