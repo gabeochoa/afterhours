@@ -209,6 +209,7 @@ ALL_TESTS := \
 	entity_pool_test \
 	entity_query_test \
 	get_or_default_test \
+	component_toggle_test \
 	query_extreme_by_test \
 	query_filters_test \
 	typed_entity_handle_test \
