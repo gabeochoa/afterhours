@@ -6,6 +6,8 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **Convenience dialogs accept presentation config.** `modal::info`, `confirm`, `confirm_danger`, `prompt`, and `fyi` take an optional trailing `ModalConfig` (size, panel padding/border/font, backdrop, `ClosedBy`, anchor, motion). Omitting it keeps the previous defaults exactly.
+
 ### Breaking
 
 **The animation plugin is rewritten around `afterhours::motion`.** `animation::anim<Key>(k).to(v, dur, EasingType)`, `AnimationManager`, `AnimHandle`, `sequence`, `loop_sequence`, `one_shot`, `clamp_value`, `get_value`, `register_update_systems<Key>()` and the declarative `with_animation(Anim::on_hover()...)` / `HasAnimationState` are gone. Every old call is a compile error.
