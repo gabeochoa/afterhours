@@ -150,6 +150,36 @@ TEST(toggle_switch_follows_the_callers_value) {
   }
 }
 
+TEST(toggle_knob_speed_is_frame_rate_independent_and_snaps_instant) {
+  auto time_to_90 = [](float dt) {
+    ui_test::ImmTestHarness h;
+    h.context().dt = dt;
+    bool value = true;
+    float progress = 0.f;
+    int frames = 0;
+    for (; frames < 1000; ++frames) {
+      h.begin_frame();
+      auto r = toggle_switch(h.context(), mk(h.root(), 0), value, ComponentConfig{});
+      progress = r.ent().get<HasToggleSwitchState>().animation_progress;
+      h.layout_only();
+      if (progress >= 0.9f) break;
+    }
+    CHECK(progress >= 0.9f);
+    return (frames + 1) * dt;
+  };
+  const float t60 = time_to_90(1.f / 60.f);
+  const float t200 = time_to_90(1.f / 200.f);
+  CHECK(std::fabs(t60 - t200) < 0.05f);
+  // Instant: knob is at target on the first frame.
+  ui_test::ImmTestHarness h;
+  bool value = true;
+  motion::set_instant(true);
+  h.begin_frame();
+  auto r = toggle_switch(h.context(), mk(h.root(), 0), value, ComponentConfig{});
+  motion::set_instant(false);
+  CHECK(std::fabs(r.ent().get<HasToggleSwitchState>().animation_progress - 1.f) < 1e-6f);
+}
+
 TEST(group_reset_updates_marks_and_selection_limits) {
   ui_test::ImmTestHarness h;
   std::bitset<3> values;
