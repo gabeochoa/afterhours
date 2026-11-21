@@ -263,6 +263,7 @@ ALL_TESTS := \
 	text_wrap_test \
 	theme_io_test \
 	tree_view_test \
+	skeletal_test \
 	translation_test \
 	layout_inspector_test \
 	letter_spacing_zero_test
