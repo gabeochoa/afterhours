@@ -10,9 +10,6 @@ static_assert(std::is_same_v<afterhours::Vector4Type, raylib::Vector4>);
 static_assert(std::is_same_v<afterhours::MatrixType, raylib::Matrix>);
 static_assert(std::is_same_v<afterhours::graphics::Camera2D, raylib::Camera2D>);
 
-// Gap 12: distance_sq is afterhours::distance_sq on the raylib path too
-// (previously only the fallback MyVec2 had it). Global re-export keeps the
-// unqualified call working.
 static_assert(afterhours::distance_sq(Vector2Type{0, 0},
                                       Vector2Type{3, 4}) == 25.f);
 static_assert(::distance_sq(Vector2Type{1, 1}, Vector2Type{1, 1}) == 0.f);

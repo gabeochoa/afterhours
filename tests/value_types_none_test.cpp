@@ -10,8 +10,6 @@ static_assert(offsetof(MatrixType, m4) == 1 * sizeof(float));
 static_assert(offsetof(MatrixType, m1) == 4 * sizeof(float));
 static_assert(offsetof(MatrixType, m15) == 15 * sizeof(float));
 
-// Gap 12: distance_sq is afterhours::distance_sq on the none/sokol fallback
-// path too (same MyVec2 helper as before, now namespaced + re-exported).
 static_assert(afterhours::distance_sq(Vector2Type{0, 0},
                                       Vector2Type{3, 4}) == 25.f);
 static_assert(::distance_sq(Vector2Type{1, 1}, Vector2Type{1, 1}) == 0.f);

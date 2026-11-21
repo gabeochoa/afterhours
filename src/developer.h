@@ -224,13 +224,6 @@ using afterhours::Vector4Type;
 using afterhours::MatrixType;
 #endif // AFTER_HOURS_USE_RAYLIB
 
-// distance_sq over Vector2Type, on every backend (raylib, sokol, none).
-// Previously this existed only as a global next to the fallback MyVec2, so
-// raylib/sokol consumers kept private copies. It is now afterhours::distance_sq
-// everywhere, with a global re-export so existing unqualified calls keep
-// working. Projects carrying their own global distance_sq(Vector2Type,
-// Vector2Type) will see a redefinition and should delete their copy; a
-// different-typed overload (e.g. vec3) is unaffected.
 namespace afterhours {
 constexpr float distance_sq(const Vector2Type a, const Vector2Type b) {
   return (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
