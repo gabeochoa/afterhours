@@ -192,6 +192,8 @@ struct ComponentConfig {
 
   // Text input: hint shown while the bound string is empty.
   std::string placeholder;
+  // Hint ink override; unset keeps theme.font_muted on both text widgets.
+  std::optional<Color> placeholder_color;
 
   std::optional<std::string> checkbox_checked_indicator;
   std::optional<std::string> checkbox_unchecked_indicator;
@@ -730,6 +732,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_placeholder(std::string hint) {
     placeholder = std::move(hint);
+    return *this;
+  }
+  ComponentConfig &with_placeholder_color(Color color) {
+    placeholder_color = color;
     return *this;
   }
   /// Flex wrap: lets CHILDREN flow onto a new row/column. NOT text wrapping --
@@ -1317,6 +1323,8 @@ struct ComponentConfig {
       merged.text_paste_disabled = true;
     if (!overrides.placeholder.empty())
       merged.placeholder = overrides.placeholder;
+    if (overrides.placeholder_color.has_value())
+      merged.placeholder_color = overrides.placeholder_color;
     if (overrides.text_area_line_height.has_value())
       merged.text_area_line_height = overrides.text_area_line_height;
     // Defaults true; see auto_text_color.
@@ -1411,6 +1419,8 @@ struct ComponentConfig {
       custom_text_color = parent.custom_text_color;
       auto_text_color = parent.auto_text_color;
     }
+    if (parent.placeholder_color.has_value())
+      placeholder_color = parent.placeholder_color;
     // Same rule: a composite dropped the caller's edge and corner silently.
     if (parent.roundness.has_value())
       roundness = parent.roundness;
