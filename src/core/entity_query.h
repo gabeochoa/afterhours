@@ -462,6 +462,7 @@ struct EntityQuery {
         return ents;
     }
 
+    // Materializes into caller-owned scratch (not lazy).
     RefEntities &gen_into(RefEntities &scratch) const {
         run_query_into({}, scratch);
         return scratch;
@@ -777,7 +778,7 @@ struct EntityQuery {
             orderby_index.has_value() && *orderby_index < mods.size();
         if (options.stop_on_first && orderby && !filters_after_sort) {
             RefEntities candidates;
-            candidates.reserve(entities.size() / 2);
+            candidates.reserve(pool().size() / 2);
             for (const auto &e_ptr : pool()) {
                 if (!e_ptr) continue;
                 Entity &e = *e_ptr;
@@ -793,7 +794,7 @@ struct EntityQuery {
             return;
         }
 
-        out.reserve(mods.empty() ? entities.size() : entities.size() / 2);
+        out.reserve(mods.empty() ? pool().size() : pool().size() / 2);
 
         // Mods registered before the orderby filter the scan; the rest run
         // after the sort, so each operation applies at its position in the
