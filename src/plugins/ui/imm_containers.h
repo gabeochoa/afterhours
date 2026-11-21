@@ -238,6 +238,8 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
     entity.disableTag(UITag::InputExclusivity);
   }
 
+  detail::apply_accessibility(entity, config, AccessibleRole::Dropdown,
+                                label_str, current_option);
   option_index = dropdownState.last_option_clicked;
   return ElementResult{dropdownState.changed_since, entity,
                        dropdownState.last_option_clicked};

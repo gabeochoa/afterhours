@@ -135,6 +135,12 @@ struct ComponentConfig {
   Size translate_x = pixels(0.0f);
   Size translate_y = pixels(0.0f);
 
+  // Accessibility semantics (one field on purpose; see config_size_test).
+  // In the config, `accessible.name` is the EXPLICIT name: empty means
+  // "derive it" (label, then tooltip). On the entity the stored
+  // HasAccessibility carries the resolved name.
+  AccessibleConfig accessible;
+
   // debugs
   std::string debug_name = "";
   int render_layer = 0;
@@ -577,6 +583,34 @@ struct ComponentConfig {
     debug_name = name;
     return *this;
   }
+  // Accessible name + role for screen readers, dump_ui and E2E
+  // (expect_accessible). The name is explicit: it beats the label, which
+  // beats the tooltip, so an icon-only button built .with_label(" ") can
+  // be named here or simply given a tooltip. Widgets fill the role (and
+  // value, e.g. a slider's percent) in when the caller does not.
+  ComponentConfig &with_accessible(AccessibleRole role,
+                                   const std::string &name) {
+    accessible.role = role;
+    accessible.name = name;
+    return *this;
+  }
+  ComponentConfig &with_accessible_name(const std::string &name) {
+    accessible.name = name;
+    return *this;
+  }
+  ComponentConfig &with_accessible_role(AccessibleRole role) {
+    accessible.role = role;
+    return *this;
+  }
+  ComponentConfig &with_accessible_value(const std::string &value) {
+    accessible.value = value;
+    return *this;
+  }
+  ComponentConfig &with_accessible_description(const std::string &desc) {
+    accessible.description = desc;
+    return *this;
+  }
+  bool has_accessible_override() const { return !accessible.empty(); }
   // Hover text. Placement flips at a screen edge the way a dropdown does.
   ComponentConfig &with_tooltip(const std::string &text, float delay = 0.5f) {
     tooltip_text = text;
@@ -1208,6 +1242,8 @@ struct ComponentConfig {
     }
     if (!overrides.debug_name.empty())
       merged.debug_name = overrides.debug_name;
+    if (overrides.has_accessible_override())
+      merged.accessible = overrides.accessible;
 
     // Flexbox alignment properties
     if (overrides.justify_content != JustifyContent::FlexStart)
