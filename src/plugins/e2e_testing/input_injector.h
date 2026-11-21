@@ -36,9 +36,6 @@ inline std::array<int, 512> synthetic_press_count{};
 inline std::array<int, 512> synthetic_press_delay{};
 inline std::array<int, 512> synthetic_release_count{};
 inline std::array<int, 512> synthetic_release_delay{};
-// A press generation nobody observed: consume_press never returned it and
-// the key was never seen held while it lived. Recorded so the runner can
-// fail the step instead of passing a press that did nothing.
 inline std::array<bool, 512> synthetic_press_read{};
 inline std::vector<std::string> unread_presses;
 
@@ -175,8 +172,6 @@ inline void set_key_up(int key) {
 inline bool is_key_down(int key) {
   if (key < 0 || key >= 512 || !detail::synthetic_keys[key])
     return false;
-  // Observing the key held counts as reading its press: held-state is how
-  // movement-style consumers take an injected key.
   detail::synthetic_press_read[key] = true;
   return true;
 }
@@ -381,7 +376,6 @@ inline bool is_mouse_button_pressed() {
   return pressed;
 }
 inline bool is_mouse_button_down() {
-  // Observing the button held while its press edge is live reads the press.
   if (detail::mouse.just_pressed)
     detail::mouse.press_read = true;
   return detail::mouse.active && detail::mouse.left_down;
@@ -516,8 +510,6 @@ inline void reset_frame() {
   detail::key_press_queue = std::move(matured);
 }
 
-/// Injected presses whose read window closed with no system observing
-/// them, oldest first. Drained by the runner to fail the owning step.
 inline std::vector<std::string> take_unread_presses() {
   std::vector<std::string> out = std::move(detail::unread_presses);
   detail::unread_presses.clear();

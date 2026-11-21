@@ -180,21 +180,17 @@ inline std::string to_upper(const std::string &s) {
 
 namespace detail {
 
-// Named keys, shared by key_from_name and key_to_name.
 // clang-format off
 inline constexpr std::array<std::pair<std::string_view, int>, 85> key_names{{
-      // Function keys
       {"F1", keys::F1}, {"F2", keys::F2}, {"F3", keys::F3}, {"F4", keys::F4},
       {"F5", keys::F5}, {"F6", keys::F6}, {"F7", keys::F7}, {"F8", keys::F8},
       {"F9", keys::F9}, {"F10", keys::F10}, {"F11", keys::F11}, {"F12", keys::F12},
 
-      // Navigation
       {"UP", keys::UP}, {"DOWN", keys::DOWN}, {"LEFT", keys::LEFT}, {"RIGHT", keys::RIGHT},
       {"HOME", keys::HOME}, {"END", keys::END}, {"INSERT", keys::INSERT},
       {"PAGE_UP", keys::PAGE_UP}, {"PAGEUP", keys::PAGE_UP},
       {"PAGE_DOWN", keys::PAGE_DOWN}, {"PAGEDOWN", keys::PAGE_DOWN},
 
-      // Editing
       {"ENTER", keys::ENTER}, {"RETURN", keys::ENTER},
       {"TAB", keys::TAB},
       {"BACKSPACE", keys::BACKSPACE},
@@ -202,7 +198,6 @@ inline constexpr std::array<std::pair<std::string_view, int>, 85> key_names{{
       {"SPACE", keys::SPACE},
       {"ESCAPE", keys::ESCAPE}, {"ESC", keys::ESCAPE},
 
-      // Modifiers
       {"SHIFT", keys::LEFT_SHIFT}, {"LSHIFT", keys::LEFT_SHIFT}, {"LEFT_SHIFT", keys::LEFT_SHIFT},
       {"RSHIFT", keys::RIGHT_SHIFT}, {"RIGHT_SHIFT", keys::RIGHT_SHIFT},
       {"CTRL", keys::LEFT_CONTROL}, {"CONTROL", keys::LEFT_CONTROL},
@@ -212,19 +207,16 @@ inline constexpr std::array<std::pair<std::string_view, int>, 85> key_names{{
       {"RALT", keys::RIGHT_ALT}, {"RIGHT_ALT", keys::RIGHT_ALT},
       {"SUPER", keys::LEFT_SUPER}, {"WIN", keys::LEFT_SUPER}, {"CMD", keys::LEFT_SUPER},
 
-      // Punctuation (named)
       {"APOSTROPHE", keys::APOSTROPHE}, {"COMMA", keys::COMMA},
       {"MINUS", keys::MINUS}, {"PERIOD", keys::PERIOD}, {"SLASH", keys::SLASH},
       {"SEMICOLON", keys::SEMICOLON}, {"EQUAL", keys::EQUAL},
       {"LEFT_BRACKET", keys::LEFT_BRACKET}, {"RIGHT_BRACKET", keys::RIGHT_BRACKET},
       {"BACKSLASH", keys::BACKSLASH}, {"GRAVE", keys::GRAVE},
 
-      // Lock keys
       {"CAPS_LOCK", keys::CAPS_LOCK}, {"CAPSLOCK", keys::CAPS_LOCK},
       {"SCROLL_LOCK", keys::SCROLL_LOCK}, {"NUM_LOCK", keys::NUM_LOCK},
       {"PRINT_SCREEN", keys::PRINT_SCREEN}, {"PAUSE", keys::PAUSE},
 
-      // Keypad
       {"KP_0", keys::KP_0}, {"KP_1", keys::KP_1}, {"KP_2", keys::KP_2},
       {"KP_3", keys::KP_3}, {"KP_4", keys::KP_4}, {"KP_5", keys::KP_5},
       {"KP_6", keys::KP_6}, {"KP_7", keys::KP_7}, {"KP_8", keys::KP_8},
@@ -240,7 +232,6 @@ inline constexpr std::array<std::pair<std::string_view, int>, 85> key_names{{
 // Map string name to key code (case-insensitive)
 // Accepts: "A", "a", "ENTER", "enter", "CTRL", etc.
 inline int key_from_name(const std::string &name) {
-  // Handle single-char symbols directly (before uppercasing)
   if (name.length() == 1) {
     char c = name[0];
     if (c >= 'a' && c <= 'z')
@@ -249,7 +240,6 @@ inline int key_from_name(const std::string &name) {
       return keys::A + (c - 'A');
     if (c >= '0' && c <= '9')
       return keys::ZERO + (c - '0');
-    // Punctuation symbols
     switch (c) {
     case ' ':
       return keys::SPACE;
@@ -278,7 +268,6 @@ inline int key_from_name(const std::string &name) {
     }
   }
 
-  // Normalize to uppercase for consistent lookup
   std::string key = detail::to_upper(name);
 
   for (const auto &[name_sv, code] : detail::key_names) {

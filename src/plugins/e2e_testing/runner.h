@@ -406,8 +406,6 @@ class E2ERunner {
                  script_results_.size(), commands_.size());
     }
 
-    // Injected presses from the step just finished that expired with no
-    // system reading them fail that step, naming the press.
     void fail_unread_presses() {
         for (const auto &label : input_injector::take_unread_presses()) {
             failed_ = true;

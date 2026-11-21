@@ -10,8 +10,6 @@ using namespace afterhours;
 using namespace afterhours::testing;
 namespace inj = afterhours::testing::input_injector;
 
-// Reads a key press through the injector accessors, the way an app's
-// input collection does. Skips `skip_calls` calls first when set.
 struct KeyReader : System<> {
   int skip_calls = 0;
 
@@ -25,7 +23,6 @@ struct KeyReader : System<> {
   }
 };
 
-// Reads a left mouse press the moment it is observable.
 struct MouseReader : System<> {
   bool should_iterate() const override { return false; }
   void once(float) override { inj::is_mouse_button_pressed(); }
@@ -119,8 +116,6 @@ TEST(read_presses_still_pass) {
 }
 
 TEST(press_read_late_within_its_window_passes) {
-  // The reader skips the injection frame and consumes the press on the
-  // following one, inside the one-frame survival window.
   RunnerFixture f;
   register_all_handlers(f.sm);
   auto *reader = new KeyReader;
