@@ -242,6 +242,7 @@ ALL_TESTS := \
 	models_test \
 	house_of_cards_test \
 	frustum_test \
+	heightfield_test \
 	instance_batcher_test \
 	lod_test \
 	image_test \
