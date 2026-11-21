@@ -613,6 +613,14 @@ struct HasScrollView : BaseComponent {
   void scroll_to_left() {
     scroll_offset.x = scroll_target.x = last_eased_offset.x = 0.f;
   }
+
+  // Jump to a content offset in one call, on both axes at once. Clamped to
+  // the measured extents; an unmeasured view takes the raw value and clamps
+  // on its first measure (same sentinel rule as the ends).
+  void scroll_to(Vector2Type offset) {
+    scroll_offset = scroll_target = last_eased_offset = offset;
+    clamp_scroll();
+  }
   void scroll_to_right() {
     scroll_offset.x = scroll_target.x = last_eased_offset.x = right_offset();
   }

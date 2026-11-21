@@ -745,12 +745,13 @@ inline float focus_scroll_delta(float start, float extent, float viewport_start,
   return 0.f;
 }
 
-template <typename InputAction>
-void reveal_focused_component(UIContext<InputAction> &context) {
-  auto opt = UICollectionHolder::getEntityForID(context.visual_focus_id);
-  if (!opt.valid() || !opt->template has<UIComponent>()) return;
-  const Entity &focused = opt.asE();
-  const auto &cmp = focused.get<UIComponent>();
+// Bring any entity into view in each scrollable ancestor (smallest scroll
+// that shows it fully, per enabled axis). This is the general scroll_to the
+// keyboard-focus reveal uses; call it directly for tab strips, carousels and
+// lists instead of nudging scroll_offset by hand.
+inline void scroll_to_entity(const Entity &entity) {
+  if (!entity.has<UIComponent>()) return;
+  const auto &cmp = entity.get<UIComponent>();
   EntityID parent_id = cmp.parent;
   int guard = 0;
   while (parent_id >= 0 && ++guard <= 64) {
@@ -760,9 +761,9 @@ void reveal_focused_component(UIContext<InputAction> &context) {
     parent_id = parent_cmp.parent;
     if (!parent->template has<HasScrollView>()) continue;
     auto &scroll = parent->template get<HasScrollView>();
-    auto target = detail::apply_ancestor_transform(focused, cmp.rect());
-    if (focused.has<HasUIModifiers>())
-      target = focused.get<HasUIModifiers>().apply_modifier(target);
+    auto target = detail::apply_ancestor_transform(entity, cmp.rect());
+    if (entity.has<HasUIModifiers>())
+      target = entity.get<HasUIModifiers>().apply_modifier(target);
     const auto viewport = detail::apply_ancestor_transform(parent.asE(), parent_cmp.rect());
     if (scroll.horizontal_enabled)
       scroll.scroll_offset.x += focus_scroll_delta(target.x, target.width, viewport.x, viewport.width);
@@ -771,6 +772,13 @@ void reveal_focused_component(UIContext<InputAction> &context) {
     scroll.scroll_target = scroll.scroll_offset;
     scroll.clamp_scroll();
   }
+}
+
+template <typename InputAction>
+void reveal_focused_component(UIContext<InputAction> &context) {
+  auto opt = UICollectionHolder::getEntityForID(context.visual_focus_id);
+  if (!opt.valid() || !opt->template has<UIComponent>()) return;
+  scroll_to_entity(opt.asE());
 }
 
 template <typename InputAction> struct RevealKeyboardFocus : System<> {
