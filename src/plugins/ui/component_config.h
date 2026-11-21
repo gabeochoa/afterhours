@@ -84,6 +84,10 @@ struct ComponentConfig {
   Theme::Usage color_usage = Theme::Usage::Default;
   std::optional<Color> custom_color;
   std::optional<Color> hover_color; // Per-component hover background override
+  // Inset of the background fill (selection, custom, hover) from the widget
+  // rect, per axis. Unset means the fill is the widget rect. Hit testing,
+  // layout, and content stay on the widget rect.
+  std::optional<Vector2Type> bg_inset;
   // Text color settings (explicit override)
   Theme::Usage text_color_usage = Theme::Usage::Default;
   std::optional<Color> custom_text_color;
@@ -394,6 +398,16 @@ struct ComponentConfig {
   ComponentConfig &with_custom_hover_bg(Color color) {
     hover_color = color;
     return *this;
+  }
+  // Insets the background fill (custom/selection/hover) from the widget rect;
+  // a big hit target can carry a small chip. Shadows, borders, and content
+  // keep the widget rect. Default: fill is the widget rect.
+  ComponentConfig &with_background_inset(float h, float v) {
+    bg_inset = Vector2Type{h, v};
+    return *this;
+  }
+  ComponentConfig &with_background_inset(float both) {
+    return with_background_inset(both, both);
   }
 
   // Backwards-compatible aliases kept intentionally while call sites migrate.
@@ -1270,6 +1284,8 @@ struct ComponentConfig {
     // Colour and corner detail
     if (overrides.hover_color.has_value())
       merged.hover_color = overrides.hover_color;
+    if (overrides.bg_inset.has_value())
+      merged.bg_inset = overrides.bg_inset;
     // Defaults true, so only a caller turning it off can be detected.
     if (!overrides.auto_text_color)
       merged.auto_text_color = false;
