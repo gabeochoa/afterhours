@@ -179,6 +179,7 @@ inline void apply_flags(Entity &entity, const ComponentConfig &config) {
   entity.toggleComponent<IgnorePointerEvents>(config.ignore_pointer_events);
   entity.toggleComponent<Inert>(config.inert);
   entity.toggleComponent<DoesNotTakeFocus>(!config.takes_focus);
+  entity.toggleComponent<Hoverable>(config.hoverable);
   if (config.skip_grid_snap)
     entity.get<UIComponent>().skip_grid_snap = true;
   if (config.select_on_focus)
@@ -358,9 +359,10 @@ inline void apply_bevel(Entity &entity, const ComponentConfig &config) {
 
 inline void apply_on_draw(Entity &entity, const ComponentConfig &config) {
   if (auto *hod = entity.toggleComponent<HasOnDraw>(
-          config.on_draw_bg || config.on_draw_fg)) {
+          config.on_draw_bg || config.on_draw_fg || config.on_draw_over)) {
     hod->bg = config.on_draw_bg;
     hod->fg = config.on_draw_fg;
+    hod->over = config.on_draw_over;
   }
 }
 
@@ -475,6 +477,8 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   if (config.hover_color.has_value() && entity.has<HasColor>()) {
     entity.get<HasColor>().hover_color = config.hover_color;
   }
+  if (config.skip_hover_override.has_value() && entity.has<HasColor>())
+    entity.get<HasColor>().skip_hover_override = *config.skip_hover_override;
   if (config.image_tint.has_value()) {
     entity.toggleComponent<HasImageTint>(true, *config.image_tint)->color =
         *config.image_tint;

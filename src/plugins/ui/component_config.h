@@ -84,6 +84,7 @@ struct ComponentConfig {
   Theme::Usage color_usage = Theme::Usage::Default;
   std::optional<Color> custom_color;
   std::optional<Color> hover_color; // Per-component hover background override
+  std::optional<bool> skip_hover_override;
   // Text color settings (explicit override)
   Theme::Usage text_color_usage = Theme::Usage::Default;
   std::optional<Color> custom_text_color;
@@ -119,6 +120,7 @@ struct ComponentConfig {
   bool ignore_pointer_events = false; // invisible to hit-testing
   bool inert = false;
   bool takes_focus = true;
+  bool hoverable = false;
   // User data, not localizable copy: the pseudo-locale stress leaves this
   // label (and this component's RTL mirroring) alone.
   bool pseudo_locale_exempt = false;
@@ -142,8 +144,7 @@ struct ComponentConfig {
   // is known. An absolute number cannot say "above whatever contains me".
   int render_layer_offset = 0;
 
-  // Custom-draw callbacks (see HasOnDraw): bg draws behind the widget's fill,
-  // fg on top of all its primitives, both receiving the widget's final rect.
+  // Custom-draw callbacks (see HasOnDraw), receiving the final rect.
   std::string tooltip_text;
   float tooltip_delay = 0.5f;
   std::optional<Size> tooltip_font_size;
@@ -151,6 +152,7 @@ struct ComponentConfig {
   float tooltip_gap = 4.f;
   RenderPrimitive::CustomDrawFn on_draw_bg;
   RenderPrimitive::CustomDrawFn on_draw_fg;
+  RenderPrimitive::CustomDrawFn on_draw_over;
 
   std::string font_name = UIComponent::UNSET_FONT;
   colors::FontWeight font_weight = colors::FontWeight::Regular;
@@ -396,6 +398,10 @@ struct ComponentConfig {
     hover_color = color;
     return *this;
   }
+  ComponentConfig &with_skip_hover_override(bool skip = true) {
+    skip_hover_override = skip;
+    return *this;
+  }
 
   // Backwards-compatible aliases kept intentionally while call sites migrate.
   ComponentConfig &with_color_usage(Theme::Usage usage) {
@@ -607,12 +613,17 @@ struct ComponentConfig {
     render_layer = layer;
     return *this;
   }
+  // bg: behind fill; fg: over own primitives; over: over whole subtree.
   ComponentConfig &with_on_draw_bg(RenderPrimitive::CustomDrawFn fn) {
     on_draw_bg = std::move(fn);
     return *this;
   }
   ComponentConfig &with_on_draw_fg(RenderPrimitive::CustomDrawFn fn) {
     on_draw_fg = std::move(fn);
+    return *this;
+  }
+  ComponentConfig &with_on_draw_over(RenderPrimitive::CustomDrawFn fn) {
+    on_draw_over = std::move(fn);
     return *this;
   }
   ComponentConfig &with_disabled(bool dis) {
@@ -653,6 +664,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_takes_focus(bool takes = true) {
     takes_focus = takes;
+    return *this;
+  }
+  ComponentConfig &with_hoverable(bool on = true) {
+    hoverable = on;
     return *this;
   }
   ComponentConfig &with_pseudo_locale_exempt(bool exempt = true) {
@@ -1177,6 +1192,8 @@ struct ComponentConfig {
       merged.inert = true;
     if (!overrides.takes_focus)
       merged.takes_focus = false;
+    if (overrides.hoverable)
+      merged.hoverable = true;
     if (overrides.pseudo_locale_exempt)
       merged.pseudo_locale_exempt = true;
     if (overrides.selects_on_focus())
@@ -1256,6 +1273,8 @@ struct ComponentConfig {
       merged.on_draw_bg = overrides.on_draw_bg;
     if (overrides.on_draw_fg)
       merged.on_draw_fg = overrides.on_draw_fg;
+    if (overrides.on_draw_over)
+      merged.on_draw_over = overrides.on_draw_over;
 
     // Size constraints
     if (overrides.min_width.dim != Dim::None)
@@ -1282,6 +1301,8 @@ struct ComponentConfig {
     // Colour and corner detail
     if (overrides.hover_color.has_value())
       merged.hover_color = overrides.hover_color;
+    if (overrides.skip_hover_override.has_value())
+      merged.skip_hover_override = overrides.skip_hover_override;
     // Defaults true, so only a caller turning it off can be detected.
     if (!overrides.auto_text_color)
       merged.auto_text_color = false;
