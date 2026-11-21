@@ -283,6 +283,9 @@ extern "C" int metal_capture_render_texture_png_to_memory(
   return 1;
 }
 
+// Apps defining metal_set_window_size themselves must delete it (link clash).
+#include "window_macos.h"
+
 // Create the system default Metal device for headless (windowless) rendering,
 // where there is no sokol_app to hand us one. Returned as a retained void* fed
 // to sg_setup via sg_desc.environment.metal.device. Never released: the device
