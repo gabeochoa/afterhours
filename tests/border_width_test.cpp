@@ -23,7 +23,8 @@ static void check_border_pixels(bool batched) {
           .with_transparent_bg().with_border(Color{200, 100, 50, 128},
                                              i == 4 ? h720(3.6f) : pixels(widths[i]))
           .with_roundness(i == 0 || i == 5 ? 0.f : .5f)
-          .with_rounded_corners(std::bitset<4>(i == 2 ? 5 : 15));
+          // i == 2: left corners rounded (bits 3+1), the rest sharp.
+          .with_rounded_corners(std::bitset<4>(i == 2 ? 0b1010 : 15));
       ids[i] = div(h.context(), mk(h.root(), static_cast<int>(i)), style).ent().id;
     }
     h.layout_only();
