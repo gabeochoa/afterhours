@@ -83,6 +83,12 @@ static inline bool is_mouse_inside(const input::MousePosition &mouse_pos,
          mouse_pos.y >= rect.y && mouse_pos.y <= rect.y + rect.height;
 }
 
+// Defined in systems.h: lay out the tree as built so far and return the
+// element's rect in window space, instead of last frame's (or 0x0 on the
+// first frame). One layout pass per call -- ask once per decision, not in a
+// per-widget loop.
+RectangleType rect_now(Entity &ent);
+
 struct RenderInfo {
   EntityID id;
   int layer = 0;
@@ -470,6 +476,21 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   /// resolved until after.
   [[nodiscard]] bool mouse_was_in_subtree(EntityID id) const {
     return contains_in_subtree(id, prev_hot_id);
+  }
+  // This frame's geometry, laid out on demand (see rect_now above). Unlike
+  // mouse_was_in_subtree these answer about the tree as built so far, so a
+  // press that also moved the pointer is tested where it actually landed.
+  [[nodiscard]] RectangleType rect_now(EntityID id) {
+    OptEntity opt = UICollectionHolder::getEntityForID(id);
+    if (!opt.has_value())
+      return RectangleType{};
+    return ui::rect_now(opt.asE());
+  }
+  [[nodiscard]] bool point_in(EntityID id, const input::MousePosition &pos) {
+    OptEntity opt = UICollectionHolder::getEntityForID(id);
+    if (!opt.has_value())
+      return false;
+    return is_mouse_inside(pos, ui::rect_now(opt.asE()));
   }
   /// Does focus sit on this element or anything inside it?
   [[nodiscard]] bool focus_in_subtree(EntityID id) const {

@@ -61,6 +61,7 @@ OUT := $(realpath ..)/output
 $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
+	build_geometry_test \
 	border_width_test \
 	border_only_test \
 	checkbox_mark_test \
