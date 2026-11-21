@@ -104,6 +104,7 @@ ALL_TESTS := \
 	headless_cadence_test \
 	color_value_test \
 	value_types_test \
+	effect_uniforms_test \
 	value_types_none_test \
 	color_palette_test \
 	color_palette_none_test \
@@ -372,6 +373,7 @@ endif
 RAYLIB_TESTS := \
 	auto_text_color_test \
 	value_types_test \
+	effect_uniforms_test \
 	wrappers_test \
 	window_focus_test \
 	window_state_test \

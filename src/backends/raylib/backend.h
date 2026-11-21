@@ -237,6 +237,8 @@ struct RaylibPlatformAPI {
   static constexpr int SHADER_UNIFORM_VEC2 = raylib::SHADER_UNIFORM_VEC2;
   static constexpr int SHADER_UNIFORM_FLOAT = raylib::SHADER_UNIFORM_FLOAT;
   static constexpr int SHADER_UNIFORM_VEC4 = raylib::SHADER_UNIFORM_VEC4;
+  static constexpr int SHADER_UNIFORM_VEC3 = raylib::SHADER_UNIFORM_VEC3;
+  static constexpr int SHADER_UNIFORM_INT = raylib::SHADER_UNIFORM_INT;
 
   // ── Window lifecycle ──
   static void init_window(int w, int h, const char *title) {
@@ -306,6 +308,12 @@ struct RaylibPlatformAPI {
   // ── Shaders ──
   static ShaderType load_shader(const char *vsFileName, const char *fsFileName) {
     return raylib::LoadShader(vsFileName, fsFileName);
+  }
+  static ShaderType load_shader_from_memory(const char *vsCode, const char *fsCode) {
+    return raylib::LoadShaderFromMemory(vsCode, fsCode);
+  }
+  static void set_shader_value_matrix(ShaderType &shader, int locIndex, const MatrixType &m) {
+    raylib::SetShaderValueMatrix(shader, locIndex, m);
   }
   static void unload_shader(ShaderType &shader) { raylib::UnloadShader(shader); }
   static int get_shader_location(ShaderType &shader, const char *uniformName) {
