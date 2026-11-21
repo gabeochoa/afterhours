@@ -979,6 +979,7 @@ struct MetalPlatformAPI {
     desc.sample_count = 1;
     desc.enable_clipboard = true;
     desc.clipboard_size = 16 * 1024;  // 16 KB clipboard buffer
+    desc.macos.forward_cmd_chords = cfg.macos_forward_cmd_chords;
 
     // Map flags
     if (cfg.flags & FLAG_WINDOW_RESIZABLE) {
