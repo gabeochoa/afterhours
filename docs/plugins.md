@@ -135,7 +135,7 @@ Text commands such as `type`, `expect_text` and the value in `expect_input_text`
 
 `--time-scale N` runs N fixed ticks of `fixed_dt` per frame. It never scales dt.
 
-The reference wiring is three calls in `src/plugins/e2e_testing/harness.h` (`afterhours::testing`):
+Wire it up with `afterhours::testing` in `src/plugins/e2e_testing/harness.h`:
 
 ```cpp
 graphics::RunConfig cfg;
@@ -144,7 +144,7 @@ apply_time_scale(cfg, args.time_scale);          // sim_steps *= substeps
 run_fixed_steps(systems, entities, cfg, dt);    // step_count() fixed_ticks
 ```
 
-`substeps_for_time_scale` rounds a fractional scale to a whole step and never below 1: below 1 means slow the frame down, not drop steps. Without `fixed_dt`, `apply_time_scale` is a no-op and scaling dt is the honest mode. Covered by `time_scale_substeps_test`.
+`substeps_for_time_scale` rounds a fractional scale to a whole step, minimum 1. Without `fixed_dt`, `apply_time_scale` does nothing.
 
 ## Image tint
 
