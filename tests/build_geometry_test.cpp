@@ -1,8 +1,3 @@
-// build_geometry_test.cpp
-// Geometry on the build frame (hanabi #286): rect() during build is last
-// frame's rect -- 0x0 on the first frame -- so a widget cannot hit-test a
-// press against itself until a frame later. rect_now()/point_in() lay out
-// on demand and must agree with the layout pass that runs after build.
 
 #include "ui_test_harness.h"
 #include <afterhours/src/plugins/ui/imm_layout.h>
@@ -19,8 +14,6 @@ static bool rect_eq(RectangleType a, RectangleType b) {
          std::fabs(a.height - b.height) < 1.5f;
 }
 
-// The hanabi rail: absolute inside an offset pane. The configured translate
-// (384,6) is in the pane's frame; the window-space answer is (664,73).
 TEST(first_frame_absolute_rail) {
   ImmTestHarness h;
   auto pane = div(h.context(), mk(h.root(), 100),
@@ -33,7 +26,7 @@ TEST(first_frame_absolute_rail) {
                       .with_absolute_position(384.f, 6.f));
 
   auto stale = rail.cmp().rect();
-  CHECK_APPROX(stale.width, 0.f); // never laid out: the reported trap
+  CHECK_APPROX(stale.width, 0.f);
 
   auto now = rail.rect_now();
   CHECK_APPROX(now.x, 664.f);
@@ -44,12 +37,10 @@ TEST(first_frame_absolute_rail) {
   CHECK(!h.context().point_in(rail.id(), {100.f, 100.f}));
   CHECK(rail.point_in({669.f, 100.f}));
 
-  h.layout_only(); // the pass that used to be the first correct answer
+  h.layout_only();
   CHECK(rect_eq(now, rail.cmp().rect()));
 }
 
-// A flow widget too: rect_now equals the post-build layout, not just the
-// absolute fast path.
 TEST(flow_widget_same_frame) {
   ImmTestHarness h;
   auto pane = div(h.context(), mk(h.root(), 100),
@@ -69,8 +60,6 @@ TEST(flow_widget_same_frame) {
   CHECK(rect_eq(now, body.cmp().rect()));
 }
 
-// After a resize/rebuild, the same-frame answer tracks the new geometry in
-// the same call, rather than reporting the previous frame's rect.
 TEST(resized_widget_same_frame) {
   ImmTestHarness h;
   auto build = [&](float pane_w, float rail_x) {
@@ -90,7 +79,7 @@ TEST(resized_widget_same_frame) {
   h.layout_only();
   CHECK(rect_eq(f1, rail1.cmp().rect()));
 
-  auto rail2 = build(500.f, 484.f); // pane widened, rail re-anchored
+  auto rail2 = build(500.f, 484.f);
   auto f2 = rail2.rect_now();
   CHECK_APPROX(f2.x, 764.f);
   h.layout_only();

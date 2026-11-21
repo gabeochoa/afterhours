@@ -474,12 +474,6 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
   }
 };
 
-// Synchronous layout for build-frame geometry queries (hanabi #286): without
-// this, rect() during build is last frame's rect, and 0x0 on the first frame.
-// An absolute widget whose ancestors are already laid out only re-lays its own
-// subtree; anything else lays out the root as built so far (later siblings do
-// not exist yet, so Children/Expand parents can still shift at the real pass,
-// which runs unchanged after build). One pass per call: ask once per decision.
 inline RectangleType rect_now(Entity &ent) {
   if (!ent.has<UIComponent>())
     return RectangleType{};
