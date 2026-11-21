@@ -1,15 +1,5 @@
 #pragma once
 
-// Shared heightfield sampler + tiled mesh builder (header-only, no backend).
-//
-//   Heightfield hf(cols, rows, cell, heights);  // heights[row*cols+col]
-//   float y = hf.sample_height(x, z);
-//   HeightfieldVec3 n = hf.normal_at(x, z);
-//   HeightfieldMesh m = hf.build_tile_mesh(tile_col, tile_row, 8, 8);
-//
-// Grid point (col,row) sits at world (origin_x+col*cell, h, origin_z+row*cell).
-// Out-of-range samples clamp to the edge, so callers never index past the grid.
-// Mesh arrays are plain floats the caller uploads; no renderer types here.
 
 #include <algorithm>
 #include <cmath>
@@ -23,9 +13,9 @@ struct HeightfieldVec3 {
 };
 
 struct HeightfieldMesh {
-  std::vector<float> positions; // xyz per vertex
-  std::vector<float> normals;   // xyz per vertex
-  std::vector<float> uvs;       // uv per vertex, over the whole field
+  std::vector<float> positions;
+  std::vector<float> normals;
+  std::vector<float> uvs;
   std::vector<std::uint32_t> indices;
   int vertex_cols = 0, vertex_rows = 0;
 };
@@ -69,7 +59,6 @@ struct Heightfield {
 
   [[nodiscard]] HeightfieldVec3 normal_at(float x, float z) const {
     if (!valid()) return {0.f, 1.f, 0.f};
-    // Central differences; edge clamping in sample_height gives one-sided slope there.
     float dx = (sample_height(x + cell, z) - sample_height(x - cell, z)) / (2.f * cell);
     float dz = (sample_height(x, z + cell) - sample_height(x, z - cell)) / (2.f * cell);
     HeightfieldVec3 n{-dx, 1.f, -dz};
@@ -78,7 +67,6 @@ struct Heightfield {
     return n;
   }
 
-  // Vertices for cells [tile_col, tile_col+tile_cols) x [tile_row, tile_row+tile_rows), clamped.
   [[nodiscard]] HeightfieldMesh build_tile_mesh(int tile_col, int tile_row,
                                                 int tile_cols, int tile_rows) const {
     HeightfieldMesh m;
@@ -102,7 +90,6 @@ struct Heightfield {
       for (int c = 0; c + 1 < m.vertex_cols; c++) {
         auto a = std::uint32_t(r * m.vertex_cols + c), b = a + 1;
         auto d = a + std::uint32_t(m.vertex_cols), e = d + 1;
-        // (a,d,b)(b,d,e): cross products face +Y for x-right/z-forward grids.
         m.indices.insert(m.indices.end(), {a, d, b, b, d, e});
       }
     }
@@ -110,4 +97,4 @@ struct Heightfield {
   }
 };
 
-} // namespace afterhours
+}
