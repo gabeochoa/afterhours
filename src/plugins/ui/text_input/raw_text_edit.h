@@ -1,33 +1,17 @@
 #pragma once
 
-// Text editing for a field the app draws itself (Pumpkin G/L).
-//
-//   text_input::RawTextEdit field{"127.0.0.1"};
-//   text_input::update_raw_text_edit(field, dt);  // every frame
-//   // draw field.text() with the caret at field.cursor_position yourself
-//
-// The state is the widget's own state struct, minus the widget: every edit
-// runs through the same ops in utils.h (insert_char, the word/line deletes,
-// insert_pasted_text) and the same platform chords as edit_keys.h, so a
-// hand-drawn field and an imm text_input can never drift apart.
-
 #include "edit_keys.h"
 #include "state.h"
 
 namespace afterhours {
 namespace text_input {
 
-// Not a second state: the raw-draw field owns this directly instead of
-// hanging it off an entity.
 using RawTextEdit = HasTextInputState;
 
 inline bool raw_text_cursor_visible(const RawTextEdit &s) {
   return s.cursor_blink_timer < s.cursor_blink_rate;
 }
 
-/// One frame of editing: blink, edit/clipboard chords, the char queue, then
-/// caret movement (Shift extends the selection, the platform word modifier
-/// moves by word). Returns true when the text changed.
 inline bool update_raw_text_edit(RawTextEdit &s, float dt) {
   update_blink(s, dt);
   bool changed = false;
@@ -63,7 +47,6 @@ inline bool update_raw_text_edit(RawTextEdit &s, float dt) {
   auto pressed_repeat = [](int key) {
     return input::is_key_pressed(key) || input::is_key_pressed_repeat(key);
   };
-  // Same collapse/extend rule as the widget's navigate().
   auto navigate = [&](auto move) {
     if (shift) {
       if (!s.selection_anchor) s.selection_anchor = s.cursor_position;

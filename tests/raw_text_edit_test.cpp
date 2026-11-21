@@ -1,8 +1,3 @@
-// raw_text_edit_test.cpp
-// text_input::update_raw_text_edit: the widget-free field (Pumpkin G/L)
-// edits through the same ops and chords as the imm text_input, driven here
-// entirely by injected input.
-
 #define AFTERHOURS_NO_IMM_TEXT_INPUT
 
 #include <cstdio>
@@ -51,7 +46,6 @@ static void hold_mods(uint8_t mods, bool down) {
   }
 }
 
-// One frame with a single key press (plus its chord modifiers held).
 static void press_frame(RawTextEdit &f, input::KeyChord chord) {
   testing::test_input::reset_all();
   hold_mods(chord.required_modifiers, true);
@@ -66,8 +60,6 @@ static void press_frame(RawTextEdit &f, DefaultAction action) {
   press_frame(f, chord_for(action));
 }
 
-// One frame with raw modifiers held and a plain key press (movement keys
-// have no chord of their own; the helper reads the modifiers directly).
 static void move_frame(RawTextEdit &f, int key, bool shift = false,
                        bool word_mod = false) {
   testing::test_input::reset_all();
