@@ -186,6 +186,36 @@ inline Font load_font_for_string(const std::string &,
   return load_font_from_file(font_file.c_str());
 }
 
+// First text draw rasterizes every glyph it needs into the fontstash atlas
+// (stb_truetype per glyph), so that cost lands on the app's first measured
+// frame. Iterate the strings the app will draw, at the sizes it will draw
+// them, to move that rasterization to load time: text iteration runs the
+// same glyph loader fonsDrawText uses without queueing any vertices, so
+// nothing draws and no frame or render pass is needed. Size is logical
+// pixels; the raster size matches draw_text_ex (size * dpi). The atlas
+// bytes staged here upload on the first frame's existing sfons_flush.
+inline void prewarm_text(const Font font, const char *text,
+                         const float size) {
+  auto *ctx = graphics::metal_detail::g_fons_ctx;
+  if (!ctx || !text || !std::isfinite(size) || size <= 0.f)
+    return;
+  int fid = (font.id != FONS_INVALID) ? font.id
+                                      : graphics::metal_detail::g_active_font;
+  if (fid == FONS_INVALID)
+    return;
+  std::string shown;
+  text = drawable_text(fid, text, shown);
+  const float dpi = graphics::metal_detail::dpi_scale();
+  fonsSetFont(ctx, fid);
+  fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
+  fonsSetSize(ctx, dpi > 1.01f ? size * dpi : size);
+  FONStextIter iter;
+  FONSquad quad{};
+  if (fonsTextIterInit(ctx, &iter, 0, 0, text, nullptr))
+    while (fonsTextIterNext(ctx, &iter, &quad)) {
+    }
+}
+
 // Advance width, same as measure_text.
 
 inline Vector2Type measure_text(const Font font, const char *text,
