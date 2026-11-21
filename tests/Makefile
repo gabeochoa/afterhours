@@ -512,6 +512,7 @@ win-vulkan: $(WIN_VULKAN_BINS)
 check-boundaries:
 	bash ../check_plugin_boundaries.sh
 	sh ui_boundary_check.sh
+	sh theme_bypass_check.sh
 .PHONY: check-boundaries
 test: check-boundaries all
 	@fail=0; for t in $(ALL_TESTS); do \

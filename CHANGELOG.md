@@ -6,6 +6,10 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+### Added
+
+- **Theme-bypass lint.** `tests/theme_bypass_check.sh` (wired into `make check-boundaries` / `make test`) flags hardcoded `Color{...}` literals in `src/plugins/ui/`, so widgets take colors from `Theme` instead of inventing them. `tests/theme_bypass_allowlist.txt` documents the exact expected hit count per file with a reason; a count mismatch fails, so the allowlist cannot go stale or silently absorb new literals. Covered by the script's `--self-test` (planted bypass, allowlist pass, stale entry, clean tree).
+
 ### Breaking
 
 **The animation plugin is rewritten around `afterhours::motion`.** `animation::anim<Key>(k).to(v, dur, EasingType)`, `AnimationManager`, `AnimHandle`, `sequence`, `loop_sequence`, `one_shot`, `clamp_value`, `get_value`, `register_update_systems<Key>()` and the declarative `with_animation(Anim::on_hover()...)` / `HasAnimationState` are gone. Every old call is a compile error.
