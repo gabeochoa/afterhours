@@ -1295,7 +1295,9 @@ struct HandleLeftRight : SystemWithUIContext<ui::HasLeftRightListener> {
 
 private:
   bool direction_triggered(const Entity &entity, InputAction action) {
-    if (entity.has<HasStepperState>()) return context->pressed_or_repeat(action);
+    // Sliders and steppers step a value: pace held keys by time, not frames.
+    if (entity.has<HasStepperState>() || entity.has<HasSliderState>())
+      return context->pressed_or_repeat(action);
     return context->pressed(action) || context->is_held_down(action);
   }
 
