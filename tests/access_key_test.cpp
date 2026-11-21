@@ -1,7 +1,3 @@
-// R-097: Alt-style access keys. "&File" displays "File" with the F
-// underlined; Alt+F activates the row. "&&" is an escaped literal '&', a
-// trailing '&' is literal, and plain labels pass through untouched.
-
 #include "ui_test_harness.h"
 
 #include <afterhours/src/plugins/e2e_testing/input_injector.h>
