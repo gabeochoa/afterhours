@@ -228,6 +228,7 @@ ALL_TESTS := \
 	size_constraints_test \
 	theme_scope_test \
 	defer_test \
+	post_build_test \
 	draw_sort_test \
 	config_size_test \
 	overdraw_audit_test \
@@ -325,6 +326,7 @@ RAYLIB_TESTS := \
 	progress_bar_test \
 	render_order_test \
 	setup_test \
+	post_build_test \
 	size_constraints_test \
 	slider_test \
 	split_test \

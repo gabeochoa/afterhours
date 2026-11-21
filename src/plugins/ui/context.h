@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <bitset>
 #include <cmath>
+#include <cstdint>
 #include <functional>
 #if __has_include(<magic_enum/magic_enum.hpp>)
 #include <magic_enum/magic_enum.hpp>
@@ -226,6 +227,43 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     for (auto &fn : pending)
       if (fn)
         fn();
+  }
+
+  // Model-replacing actions queued during build, run after layout this frame.
+  using PostBuildOwner = std::uint64_t;
+  static constexpr PostBuildOwner no_post_build_owner = 0;
+  struct PostBuildAction {
+    PostBuildOwner owner = no_post_build_owner;
+    std::function<void()> fn;
+  };
+  std::vector<PostBuildAction> post_build_actions;
+
+  void post_build(std::function<void()> fn) {
+    post_build(no_post_build_owner, std::move(fn));
+  }
+  // Capture values by value: the model may be replaced before this runs.
+  void post_build(PostBuildOwner owner, std::function<void()> fn) {
+    post_build_actions.push_back({owner, std::move(fn)});
+  }
+  // Discard still-queued actions for an owner that went away during build.
+  void discard_post_build(PostBuildOwner owner) {
+    if (owner == no_post_build_owner)
+      return;
+    std::erase_if(post_build_actions,
+                  [&](const PostBuildAction &a) { return a.owner == owner; });
+  }
+  std::size_t pending_post_build_count() const {
+    return post_build_actions.size();
+  }
+  // Copies first, so an action may queue work for the next post-build phase.
+  void run_post_build() {
+    if (post_build_actions.empty())
+      return;
+    auto pending = std::move(post_build_actions);
+    post_build_actions.clear();
+    for (auto &a : pending)
+      if (a.fn)
+        a.fn();
   }
 
   // Prefer this over assigning `theme` directly. Colour resolution and layout
