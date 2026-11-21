@@ -267,6 +267,7 @@ ALL_TESTS := \
 	input_injector_mouse_delta_test \
 	keymap_test \
 	label_clear_test \
+	div_label_align_test \
 	hit_priority_test \
 	pointer_owner_test \
 	two_trees_test \

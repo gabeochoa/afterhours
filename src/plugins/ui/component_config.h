@@ -115,6 +115,9 @@ struct ComponentConfig {
   // TODO should everything be inheritable?
   // inheritable options
   TextAlignment label_alignment = TextAlignment::None;
+  // Resolved vertical placement for the own label. Stamped by init from the
+  // flex alignment (Div only); Middle is the legacy hard-centred behaviour.
+  VerticalAlignment label_vertical = VerticalAlignment::Middle;
   TextOverflow text_overflow = TextOverflow::Clip;
   std::optional<float> letter_spacing;
   // Per-side space between this label and its own box, overriding
@@ -1214,6 +1217,8 @@ struct ComponentConfig {
 
     if (overrides.has_label_alignment_override())
       merged.label_alignment = overrides.label_alignment;
+    if (overrides.label_vertical != VerticalAlignment::Middle)
+      merged.label_vertical = overrides.label_vertical;
 
     if (!overrides.label.empty())
       if (merged.label != overrides.label) merged.label = overrides.label;
