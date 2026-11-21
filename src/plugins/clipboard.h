@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../config.h"
+#include "../warn_once.h"
 
 #include <string>
 #include <string_view>
@@ -84,11 +85,22 @@ inline bool has_text() {
 #else
 
 // Fallback implementations when no backend is available
-inline void set_text(std::string_view) {}
+inline void set_text(std::string_view) {
+  warn_once(0, "@notimplemented clipboard::set_text on this backend "
+               "(no raylib/sokol); text is dropped");
+}
 
-inline std::string get_text() { return ""; }
+inline std::string get_text() {
+  warn_once(0, "@notimplemented clipboard::get_text on this backend "
+               "(no raylib/sokol); returning empty");
+  return "";
+}
 
-inline bool has_text() { return false; }
+inline bool has_text() {
+  warn_once(0, "@notimplemented clipboard::has_text on this backend "
+               "(no raylib/sokol); returning false");
+  return false;
+}
 
 #endif
 
