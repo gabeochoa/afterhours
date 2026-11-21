@@ -38,8 +38,6 @@ inline std::pair<float, float> e2e_screen_size() {
     return {1280.f, 720.f};  // fallback
 }
 
-// State for 'resize_steps' (defined below with the resize commands);
-// reset_test_state resets it too, and that handler is registered first.
 namespace resize_steps_detail {
 inline int step = 0;
 inline int start_w = 0, start_h = 0;
@@ -49,7 +47,7 @@ inline void reset() {
     start_w = 0;
     start_h = 0;
 }
-}  // namespace resize_steps_detail
+}
 
 // Handle 'type "text"' command - types characters
 struct HandleTypeCommand : System<PendingE2ECommand> {
@@ -808,9 +806,6 @@ struct HandleResetTestStateCommand : System<PendingE2ECommand> {
     ResetFn on_reset_;
 };
 
-// One resize, through the same path every resize command uses: the ECS
-// resolution singleton (authoritative source for UI layout) first, then the
-// backend's window/drawable.
 inline void apply_e2e_resize(int w, int h) {
     auto *pcr = EntityHelper::get_singleton_cmp<
         window_manager::ProvidesCurrentResolution>();
@@ -818,7 +813,7 @@ inline void apply_e2e_resize(int w, int h) {
         pcr->current_resolution.width = w;
         pcr->current_resolution.height = h;
         pcr->should_refetch =
-            false;  // Prevent CollectCurrentResolution from overwriting
+            false;
     }
     window_manager::set_window_size(w, h);
 }
@@ -848,11 +843,6 @@ struct HandleResizeCommand : System<PendingE2ECommand> {
     }
 };
 
-// Handle 'resize_steps w h steps' - a stepped resize: one intermediate size
-// per frame from the current size to w x h, through the same path as
-// 'resize'. Layout therefore sees (and can be asserted at) every step, which
-// a single 'resize' never exercises. This is the runner-side half of a live
-// resize; it does not drive an OS live-resize tracking loop.
 struct HandleResizeStepsCommand : System<PendingE2ECommand> {
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
                                float) override {
@@ -885,7 +875,7 @@ struct HandleResizeStepsCommand : System<PendingE2ECommand> {
         apply_e2e_resize(at(start_w, w, step, steps),
                          at(start_h, h, step, steps));
         if (step < steps) {
-            cmd.retry();  // next intermediate size next frame
+            cmd.retry();
         } else {
             reset();
             cmd.consume();
@@ -893,14 +883,6 @@ struct HandleResizeStepsCommand : System<PendingE2ECommand> {
     }
 };
 
-// Handle 'wait_resized w h' - wait until a resize has settled: the
-// resolution singleton and the backend's drawable (fetch_raw_window_size)
-// both read w x h, and one frame has been presented at that size. A
-// presented frame is a render pass, observed the way expect_no_text
-// observes one: the VisibleTextRegistry generation moves (the UI render
-// pass clears it once per frame in test mode). Until then this retries, so
-// wrap it in wait_until for a bounded failure with this mismatch as the
-// error.
 struct HandleWaitResizedCommand : System<PendingE2ECommand> {
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
                                float) override {

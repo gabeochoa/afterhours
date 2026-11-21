@@ -1,11 +1,3 @@
-// e2e_resize_steps_test.cpp
-// resize_steps applies one intermediate size per frame through the resize
-// path, and wait_resized only passes once the resolution singleton and the
-// backend drawable both read the target and a frame has been presented at
-// that size. Headless: the no-backend drawable tracks the last requested
-// size, and a presented frame is a VisibleTextRegistry generation bump --
-// what the UI render pass does once per frame in test mode.
-
 #include "ui_test_harness.h"
 
 #include <afterhours/src/plugins/e2e_testing/runner.h>
@@ -31,7 +23,6 @@ struct ResizeFixture {
     singleton.addComponent<window_manager::ProvidesCurrentResolution>(start);
     EntityHelper::registerSingleton<
         window_manager::ProvidesCurrentResolution>(singleton);
-    // The no-backend drawable starts wherever a previous test left it.
     window_manager::set_window_size(start.width, start.height);
     resize_steps_detail::reset();
     VisibleTextRegistry::instance().clear();
@@ -47,7 +38,7 @@ struct ResizeFixture {
   }
 };
 
-}  // namespace
+}
 
 TEST(resize_steps_applies_one_intermediate_size_per_frame) {
   ResizeFixture f;
@@ -83,15 +74,15 @@ TEST(wait_resized_waits_for_a_presented_frame_at_the_target) {
   CHECK(cmd.last_mismatch.find("no frame presented") != std::string::npos);
   cmd.reset_retry();
   handler.for_each_with(f.entity, cmd, 0.f);
-  CHECK(cmd.is_retry());  // still no render pass since the size landed
+  CHECK(cmd.is_retry());
   cmd.reset_retry();
-  VisibleTextRegistry::instance().clear();  // one presented frame
+  VisibleTextRegistry::instance().clear();
   handler.for_each_with(f.entity, cmd, 0.f);
   CHECK(cmd.is_consumed() && cmd.succeeded());
 }
 
 TEST(wait_resized_reports_resolution_then_drawable_mismatches) {
-  ResizeFixture f;  // at 800x600, singleton and drawable alike
+  ResizeFixture f;
   HandleWaitResizedCommand handler;
   PendingE2ECommand cmd;
   cmd.name = "wait_resized";
@@ -101,7 +92,6 @@ TEST(wait_resized_reports_resolution_then_drawable_mismatches) {
   CHECK(cmd.last_mismatch.find("resolution is 800x600") != std::string::npos);
   cmd.reset_retry();
 
-  // Singleton moved by hand; the drawable has not caught up yet.
   f.singleton.get<window_manager::ProvidesCurrentResolution>()
       .current_resolution = {640, 480};
   handler.for_each_with(f.entity, cmd, 0.f);
@@ -165,7 +155,6 @@ TEST(resize_scripts_parse_and_run_end_to_end) {
       cleanup.for_each_with(*e, cmd, 1.f / 60.f);
     }
     f.coll.cleanup();
-    // The frame's render pass: a frame presented at the current size.
     VisibleTextRegistry::instance().clear();
   }
   std::filesystem::remove(path);

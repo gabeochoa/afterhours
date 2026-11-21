@@ -8,7 +8,6 @@ using namespace afterhours::testing;
 int main(int argc, char *argv[]) {
     const E2EArgs args = parse_e2e_args(argc, argv);
 
-    // The resolution the stepped resize starts from.
     Entity &singleton = EntityHelper::createEntity();
     window_manager::add_singleton_components(
         singleton, window_manager::Resolution{800, 600}, 60);
@@ -22,9 +21,6 @@ int main(int argc, char *argv[]) {
     while (!args.script_path.empty() && !runner.is_finished()) {
         runner.tick(1.f / 60.f);
         systems.run(1.f / 60.f);
-        // This example has no renderer; its frame loop is the present, which
-        // is what the UI render pass signals in a real app (one registry
-        // clear per rendered frame). wait_resized waits for that signal.
         VisibleTextRegistry::instance().clear();
     }
     if (!args.script_path.empty()) runner.print_results();
