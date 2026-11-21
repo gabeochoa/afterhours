@@ -6,6 +6,10 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+### Added
+
+- **`component_generation<T>()` (and a `ComponentID` overload): a per-component-type membership generation counter.** It bumps when a component of that type is added or removed, when an entity holding it leaves a collection, or on bulk entity replacement; other types are unaffected. Cache per-type work against it instead of rescanning every entity. Scope is membership only: writing a component field through `get<T>()` is not detectable and does not bump it. Covered by `component_generation_test`.
+
 ### Breaking
 
 **The animation plugin is rewritten around `afterhours::motion`.** `animation::anim<Key>(k).to(v, dur, EasingType)`, `AnimationManager`, `AnimHandle`, `sequence`, `loop_sequence`, `one_shot`, `clamp_value`, `get_value`, `register_update_systems<Key>()` and the declarative `with_animation(Anim::on_hover()...)` / `HasAnimationState` are gone. Every old call is a compile error.

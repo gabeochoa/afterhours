@@ -291,6 +291,10 @@ struct EntityCollection {
   void invalidate_entity_slot_if_any(const EntityType &sp) {
     if (!sp)
       return;
+    // Leaving the collection removes every attached type's membership.
+    for (size_t c = sp->componentSet.next_set(0); c < max_num_components;
+         c = sp->componentSet.next_set(c + 1))
+      bump_component_generation(c);
     const EntityID id = sp->id;
     const EntityHandle::Slot slot = sp->ah_slot_index;
     sp->ah_slot_index = EntityHandle::INVALID_SLOT;
@@ -660,6 +664,10 @@ struct EntityCollection {
         continue;
       if (sp->cleanup)
         continue;
+      // A bulk-replaced list is a membership change for every type present.
+      for (size_t c = sp->componentSet.next_set(0); c < max_num_components;
+           c = sp->componentSet.next_set(c + 1))
+        bump_component_generation(c);
       assign_slot_to_entity(sp);
     }
   }
