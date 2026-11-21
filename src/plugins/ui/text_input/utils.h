@@ -245,13 +245,10 @@ inline bool contains_cjk(const std::string &text) {
   return false;
 }
 
-/// Separator under the Prose policy (whitespace or punctuation).
 inline bool is_word_separator(char c) {
   return !ui::text_selection::is_word_char(c);
 }
 
-// Word boundaries live in ui/text_selection.h so read-only viewers share one
-// policy surface; these forward with the caller-chosen policy (Prose default).
 inline size_t find_word_start(std::string_view text, size_t pos,
                               ui::text_selection::WordPolicy policy =
                                   ui::text_selection::WordPolicy::Prose) {

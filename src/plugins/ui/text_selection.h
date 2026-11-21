@@ -432,14 +432,8 @@ struct Selection {
   }
 };
 
-// Which characters count as part of a "word" for double-click selection and
-// word-wise cursor movement. Prose splits on punctuation, code wants whole
-// identifiers, paths want whole paths, so the caller picks; Prose is the
-// historical default.
 enum class WordPolicy { Prose, Identifier, Path };
 
-// One byte's verdict. Non-ASCII bytes are word characters in every policy:
-// they are UTF-8 payload, and splitting inside a glyph would corrupt it.
 inline bool is_word_char(char c, WordPolicy policy = WordPolicy::Prose) {
   const auto u = static_cast<unsigned char>(c);
   if (u >= 0x80)
@@ -455,7 +449,6 @@ inline bool is_word_char(char c, WordPolicy policy = WordPolicy::Prose) {
   return false;
 }
 
-/// Start of the word containing or before position, skipping separators.
 inline size_t find_word_start(std::string_view text, size_t pos,
                               WordPolicy policy = WordPolicy::Prose) {
   if (pos == 0 || text.empty())
@@ -468,7 +461,6 @@ inline size_t find_word_start(std::string_view text, size_t pos,
   return p;
 }
 
-/// End of the word containing or after position, skipping separators.
 inline size_t find_word_end(std::string_view text, size_t pos,
                             WordPolicy policy = WordPolicy::Prose) {
   if (pos >= text.size())
@@ -481,8 +473,6 @@ inline size_t find_word_end(std::string_view text, size_t pos,
   return p;
 }
 
-/// Select the word at position (for double-click). Returns {start, end}
-/// byte offsets; on a separator it selects just that separator byte.
 inline std::pair<size_t, size_t>
 select_word_at(std::string_view text, size_t pos,
                WordPolicy policy = WordPolicy::Prose) {

@@ -29,7 +29,6 @@ static void check_range(std::pair<size_t, size_t> got, size_t start, size_t end,
 int main() {
   printf("Running word policy tests...\n\n");
 
-  // Prose default, unchanged: punctuation and space split words.
   check_range(ts::select_word_at("hello world", 1), 0, 5,
               "prose: hello");
   check_range(ts::select_word_at("hello world", 7), 6, 11,
@@ -40,7 +39,6 @@ int main() {
             std::make_pair<size_t, size_t>(5, 6),
         "prose: click on space selects the separator byte");
 
-  // Identifier: underscore joins, punctuation still splits.
   check_range(ts::select_word_at("alpha_beta gamma", 7,
                                  ts::WordPolicy::Identifier),
               0, 10, "identifier: alpha_beta whole");
@@ -50,12 +48,10 @@ int main() {
                                  ts::WordPolicy::Identifier),
               0, 3, "identifier: dot still separates");
 
-  // Identifier: multibyte glyphs (é, λ) join the identifier.
-  const std::string uni = "alpha_\xc3\xa9\xce\xbb and"; // alpha_éλ
+  const std::string uni = "alpha_\xc3\xa9\xce\xbb and";
   check_range(ts::select_word_at(uni, 6, ts::WordPolicy::Identifier), 0, 10,
               "identifier: unicode identifier whole");
 
-  // Path: slashes, dots, underscores join; space still separates.
   check_range(ts::select_word_at("src/foo/bar.cpp plus", 5,
                                  ts::WordPolicy::Path),
               0, 15, "path: src/foo/bar.cpp whole");
@@ -67,7 +63,6 @@ int main() {
   check_range(ts::select_word_at("a b", 1, ts::WordPolicy::Path),
               1, 2, "path: click on space selects the separator byte");
 
-  // Cursor word movement honours the policy too.
   check(ts::find_word_end("alpha_beta gamma", 0,
                           ts::WordPolicy::Identifier) == 10,
         "find_word_end identifier");
@@ -79,7 +74,6 @@ int main() {
   check(ts::find_word_start("src/foo", 7, ts::WordPolicy::Path) == 0,
         "find_word_start path");
 
-  // Edges: empty text and past-the-end positions clamp, never overrun.
   check_range(ts::select_word_at("", 0), 0, 0, "empty text");
   check_range(ts::select_word_at("hi", 99), 0, 2, "pos past end clamps");
   check(ts::find_word_start("", 0) == 0, "empty find_word_start");
