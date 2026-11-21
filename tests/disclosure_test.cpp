@@ -1,7 +1,3 @@
-// disclosure_test.cpp
-// Tests for the imm::disclosure widget: collapsed hides the body, expanded
-// shows it, and the header toggles by mouse click and by keyboard
-// (WidgetPress on the focused header), with state persisting across frames.
 
 #include "ui_test_harness.h"
 #include <afterhours/src/plugins/ui/disclosure.h>
@@ -61,7 +57,7 @@ struct Fixture {
   bool expanded() { return widget->get<HasDisclosureState>().expanded; }
 };
 
-} // namespace
+}
 
 TEST(collapsed_hides_body_expanded_shows) {
   Fixture f;
@@ -73,7 +69,6 @@ TEST(collapsed_hides_body_expanded_shows) {
 
   f.h.begin_frame();
   auto result = f.build(DisclosureConfig{.default_expanded = true});
-  // default_expanded only seeds new state; existing state stays collapsed.
   CHECK(!f.expanded());
   (void)result;
 
@@ -122,8 +117,6 @@ TEST(toggle_by_keyboard_and_state_persists) {
   for (int frame = 0; frame < 3; frame++) {
     f.h.begin_frame();
     f.build();
-    // HandleClicks clears `down` every frame in a real app; do the same so
-    // the one activation does not re-toggle on the next build.
     f.header().get<HasClickListener>().down = false;
     CHECK(f.expanded());
     CHECK(f.h.find("disclosure_body_content") != nullptr);

@@ -27,11 +27,6 @@ struct DisclosureConfig {
   float chevron_size = 14.f;
 };
 
-// A header row (drawn chevron + label) that shows or hides the body built by
-// `body`. The body callback runs only while expanded and receives the body
-// container entity to add children to with mk(). Expanded state lives on the
-// widget entity (HasDisclosureState), so it survives across frames; the
-// result is true only on the frame the header was activated.
 template <typename BodyFn>
 ElementResult disclosure(HasUIContext auto &ctx, EntityParent ep_pair,
                          const std::string &label, BodyFn &&body,
@@ -58,8 +53,6 @@ ElementResult disclosure(HasUIContext auto &ctx, EntityParent ep_pair,
                                           pixels(disclosure_config.header_height)})
                  .with_flex_direction(FlexDirection::Row)
                  .with_align_items(AlignItems::Center)
-                 // Small padding so the label child is not clipped to the
-                 // button's default padded content box.
                  .with_padding(Padding::all(pixels(2)))
                  .with_label(""));
   bool changed = false;
@@ -69,7 +62,6 @@ ElementResult disclosure(HasUIContext auto &ctx, EntityParent ep_pair,
     changed = true;
   }
 
-  // The chevron is drawn, not a text glyph, so it renders in any font.
   div(ctx, mk(header.ent(), 0),
       ComponentConfig{}
           .with_size(ComponentSize{pixels(disclosure_config.chevron_size),
@@ -104,8 +96,8 @@ ElementResult disclosure(HasUIContext auto &ctx, EntityParent ep_pair,
   return ElementResult{changed, entity};
 }
 
-} // namespace imm
+}
 
-} // namespace ui
+}
 
-} // namespace afterhours
+}
