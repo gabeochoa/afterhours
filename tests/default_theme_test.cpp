@@ -230,7 +230,9 @@ TEST(text_inset_positions_plain_and_styled_text_in_both_renderers) {
       CHECK(calls.size() == 1);
       if (calls.size() != 1) continue;
       CHECK_APPROX(calls.front().rect.x, 52.f);
-      CHECK_APPROX(calls.front().rect.y, 64.f);
+      // 50 + inset 8: a default div's label reads FlexStart on both axes,
+      // so it sits at the top. It used to be hard-centred (64).
+      CHECK_APPROX(calls.front().rect.y, 58.f);
     }
   }
 }
