@@ -10,6 +10,8 @@
 #include <string_view>
 #include <type_traits>
 #include <typeinfo>
+#include <unordered_map>
+#include <vector>
 
 #include <cstdlib>
 #if __has_include(<cxxabi.h>)
@@ -650,7 +652,38 @@ struct SystemManager {
     std::vector<std::unique_ptr<SystemBase>> fixed_update_systems_;
     std::vector<std::unique_ptr<SystemBase>> render_systems_;
 
+   private:
+    // Named groups: a system registered with a group name belongs to that
+    // group; a disabled group skips its systems. Both gates must pass, so
+    // groups compose with should_run instead of replacing it (a system that
+    // returns false from should_run still never runs, group or no group).
+    std::unordered_map<SystemBase *, std::string> system_group_;
+    std::unordered_map<std::string, bool> group_enabled_;
+
+    void assign_group(SystemBase *sys, std::string_view group) {
+        system_group_[sys] = std::string(group);
+    }
+
+    bool system_group_enabled(SystemBase *sys) const {
+        const auto it = system_group_.find(sys);
+        if (it == system_group_.end()) return true;
+        const auto g = group_enabled_.find(it->second);
+        return g == group_enabled_.end() || g->second;
+    }
+
+    bool gate_ok(SystemBase *sys, const float dt) const {
+        return system_group_enabled(sys) &&
+               sys->should_run(dt);
+    }
+
+   public:
     void register_update_system(std::unique_ptr<SystemBase> system) {
+        update_systems_.emplace_back(std::move(system));
+    }
+
+    void register_update_system(std::unique_ptr<SystemBase> system,
+                                std::string_view group) {
+        assign_group(system.get(), group);
         update_systems_.emplace_back(std::move(system));
     }
 
@@ -658,8 +691,48 @@ struct SystemManager {
         fixed_update_systems_.emplace_back(std::move(system));
     }
 
+    void register_fixed_update_system(std::unique_ptr<SystemBase> system,
+                                      std::string_view group) {
+        assign_group(system.get(), group);
+        fixed_update_systems_.emplace_back(std::move(system));
+    }
+
     void register_render_system(std::unique_ptr<SystemBase> system) {
         render_systems_.emplace_back(std::move(system));
+    }
+
+    void register_render_system(std::unique_ptr<SystemBase> system,
+                                std::string_view group) {
+        assign_group(system.get(), group);
+        render_systems_.emplace_back(std::move(system));
+    }
+
+    // Groups are enabled by default, even an unknown one, so the order of
+    // set_group_enabled and registration does not matter.
+    void set_group_enabled(std::string_view group, bool enabled) {
+        group_enabled_[std::string(group)] = enabled;
+    }
+
+    bool group_enabled(std::string_view group) const {
+        const auto it = group_enabled_.find(std::string(group));
+        return it == group_enabled_.end() || it->second;
+    }
+
+    // Names of the systems in a group, in registration order.
+    std::vector<std::string_view> systems_in_group(
+        std::string_view group) const {
+        std::vector<std::string_view> out;
+        auto scan = [&](const auto &list) {
+            for (const auto &sys : list) {
+                const auto it = system_group_.find(sys.get());
+                if (it != system_group_.end() && it->second == group)
+                    out.push_back(sys->name());
+            }
+        };
+        scan(update_systems_);
+        scan(fixed_update_systems_);
+        scan(render_systems_);
+        return out;
     }
 
     void register_update_system(const std::function<void(float)> &cb) {
@@ -676,7 +749,7 @@ struct SystemManager {
 
     void tick(Entities &entities, const float dt) {
         for (auto &system : update_systems_) {
-            if (!system->should_run(dt)) continue;
+            if (!gate_ok(system.get(), dt)) continue;
             ProfileScope profile_scope(system.get(), SystemPhase::Update);
             system->once(dt);
             profile_scope.entity_count = run_system_over(
@@ -689,7 +762,7 @@ struct SystemManager {
 
     void fixed_tick(Entities &entities, const float dt) {
         for (auto &system : fixed_update_systems_) {
-            if (!system->should_run(dt)) continue;
+            if (!gate_ok(system.get(), dt)) continue;
             ProfileScope profile_scope(system.get(), SystemPhase::FixedUpdate);
             system->once(dt);
             profile_scope.entity_count = run_system_over(
@@ -701,7 +774,7 @@ struct SystemManager {
 
     void render(Entities &entities, const float dt) {
         for (auto &system : render_systems_) {
-            if (!system->should_run(dt)) continue;
+            if (!gate_ok(system.get(), dt)) continue;
             ProfileScope profile_scope(system.get(), SystemPhase::Render);
             system->once(dt);
             profile_scope.entity_count = run_system_over(
