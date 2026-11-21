@@ -1215,8 +1215,6 @@ static inline void draw_runs_in_rect(
     return measure_text(font, s.c_str(), font_size, spacing).x;
   };
 
-  // Ellipsis: cut the runs to the box like the plain path does, before
-  // layout, so the memo and draw loop only ever see the truncated runs.
   std::vector<TextSpan> ellipsized;
   const std::vector<TextSpan> *runs_ptr = &runs;
   if (text_overflow == TextOverflow::Ellipsis) {
@@ -2755,8 +2753,6 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                 has_spans ? hasLabel.spans
                           : std::vector<TextSpan>{
                                 TextSpan{display_text, font_col}};
-            // Ellipsis: display_text already cut the plain text above, but
-            // styled runs come from the uncut spans, so cut them here too.
             if (hasLabel.text_overflow == TextOverflow::Ellipsis && has_spans)
               runs = detail::ellipsize_runs(runs, label_rect.width,
                                             weighted_width);

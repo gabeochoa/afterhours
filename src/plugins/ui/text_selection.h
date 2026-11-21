@@ -299,11 +299,6 @@ wrap_runs_to_width(const std::vector<TextSpan> &runs, float max_width,
   return lines;
 }
 
-// Truncate styled runs to `max_width` with the same "..." tail plain labels
-// get from ellipsize_text, preserving colour/weight across the cut. The cut
-// lands on a grapheme boundary inside whichever run crosses the limit; the
-// ellipsis is appended in that run's style. `measure(text, weight)` matches
-// the callable wrap_runs_to_width takes.
 template <typename MeasureFn>
 static inline std::vector<TextSpan>
 ellipsize_runs(const std::vector<TextSpan> &runs, float max_width,
@@ -336,8 +331,6 @@ ellipsize_runs(const std::vector<TextSpan> &runs, float max_width,
   };
   if (measure_range(0, text.size()) <= max_width)
     return runs;
-  // The ellipsis is charged in the weight of the run the cut lands in, so
-  // the ellipsis price moves with the prefix instead of being fixed upfront.
   const auto weight_at = [&](size_t pos) {
     return runs[std::min(run_at(pos), runs.size() - 1)].weight;
   };
