@@ -111,11 +111,8 @@ struct presentation {
         if (p.exiting() && !presence.active()) finish_close();
         p.was_open_last_frame = open;
 
-        if (!p.presenting()) {
-            entity.template addComponentIfMissing<ShouldHide>();
-            return {false, entity};
-        }
-        entity.template removeComponentIfExists<ShouldHide>();
+        entity.template toggleComponent<ShouldHide>(!p.presenting());
+        if (!p.presenting()) return {false, entity};
         auto result = div(ctx, ep_pair,
                           ComponentConfig{}
                               .with_size(ComponentSize{percent(1.0f), percent(1.0f)})
