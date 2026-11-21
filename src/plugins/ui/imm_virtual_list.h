@@ -6,6 +6,7 @@
 #include <chrono>
 #include <fstream>
 #include <string>
+#include <unordered_set>
 #include <utility>
 
 #include "../../ecs.h"
@@ -141,7 +142,8 @@ template <typename RenderRow>
 ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
                                 detail::RowMetrics rows,
                                 RenderRow &&render_row,
-                                ComponentConfig config = ComponentConfig()) {
+                                ComponentConfig config = ComponentConfig(),
+                                const std::vector<size_t> *keys = nullptr) {
   auto [entity, parent] = deref(ep_pair);
   const size_t count = rows.count;
   if (config.size.is_default)
@@ -157,6 +159,9 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
   if (count == 0) {
     scroll.scroll_offset.y = 0.f;
     scroll.scroll_target.y = 0.f;
+    scroll.virtual_first = scroll.virtual_last = 0;
+    scroll.virtual_visible_first = scroll.virtual_visible_last = 0;
+    scroll.virtual_count = 0;
     return {true, entity};
   }
   const auto mode = cmp.resolved_scaling_mode;
@@ -200,7 +205,7 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
 
   const long n = static_cast<long>(count);
   const long overscan = static_cast<long>(config.virtual_list_overscan);
-  float lo = 0.f, hi = 0.f;
+  float lo = 0.f, hi = 0.f, view_h_out = 0.f;
 
   if (entity.template has<HasScrollView>()) {
     auto &sv = entity.template get<HasScrollView>();
@@ -231,6 +236,7 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
     // the list, and building every row in between is the whole list, which is
     // the cost this exists to avoid. Rows travelled past that fast cannot be
     // read anyway, so favour the end being moved toward.
+    view_h_out = view_h;
     const float max_span = std::max(view_h * 3.f, 1.f);
     if (hi - lo > max_span) {
       if (sv.scroll_target.y >= sv.scroll_offset.y)
@@ -248,6 +254,25 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
     last = static_cast<size_t>(std::clamp<long>(l, 0, n));
   }
   const size_t window = (last > first) ? (last - first) : 0;
+  {
+    auto &sv = entity.template get<HasScrollView>();
+    sv.virtual_first = first;
+    sv.virtual_last = last;
+    sv.virtual_count = count;
+    sv.virtual_visible_first = sv.virtual_visible_last = 0;
+    if (view_h_out > 0.f && count > 0) {
+      const float v_raw = sv.scroll_offset.y - top_padding;
+      const float v_lo = std::max(0.f, v_raw);
+      const float v_hi = v_raw + view_h_out;
+      // A row ending exactly at v_lo / starting exactly at v_hi is not visible.
+      size_t vf = static_cast<size_t>(std::clamp<long>(rows.index_at(v_lo), 0, n));
+      while (vf < count && rows.offset_of(vf) + rows.height_of(vf) <= v_lo) vf++;
+      size_t vl = static_cast<size_t>(std::clamp<long>(rows.index_at(v_hi), 0, n));
+      vl = (vl < count && rows.offset_of(vl) < v_hi) ? vl + 1 : vl;
+      sv.virtual_visible_first = vf;
+      sv.virtual_visible_last = std::max(vf, std::min(vl, count));
+    }
+  }
 
   // How many row entities get recycled. Derived from the viewport rather than
   // from this frame's window, and rounded up to a block, because a modulus
@@ -290,11 +315,25 @@ ElementResult virtual_list_impl(HasUIContext auto &ctx, EntityParent ep_pair,
             .with_debug_name("vlist_skipped_above"));
   }
 
+  HasVirtualListIndex *key_index = nullptr;
+  if (keys) {
+    key_index = &entity.template addComponentIfMissing<HasVirtualListIndex>();
+    // Drop slots for keys no longer present; live slots keep their numbers.
+    std::unordered_set<size_t> live(keys->begin(), keys->end());
+    for (auto it = key_index->key_slots.begin(); it != key_index->key_slots.end();)
+      it = live.contains(it->first) ? std::next(it) : key_index->key_slots.erase(it);
+  }
   for (size_t i = first; i < last; ++i) {
     bool now_a_different_item = false;
-    auto row = div(ctx,
-                   detail::mk_keyed(entity, static_cast<EntityID>(i % capacity),
-                                    i + 1, &now_a_different_item),
+    EntityID slot = static_cast<EntityID>(i % capacity);
+    size_t item_key = i + 1;
+    if (keys) { // keyed: slot is assigned once per key, so state follows the item
+      item_key = (*keys)[i] + 1;
+      auto [it, inserted] = key_index->key_slots.try_emplace((*keys)[i], key_index->next_key_slot);
+      if (inserted) key_index->next_key_slot++;
+      slot = it->second;
+    }
+    auto row = div(ctx, detail::mk_keyed(entity, slot, item_key, &now_a_different_item),
                    ComponentConfig{}
                        .with_size(
                            ComponentSize{percent(1.0f), pixels(rows.height_of(i) / rows.scale)})
@@ -398,6 +437,62 @@ inline void prepend_virtual_rows(Entity &list, size_t count) {
     return 0.f;
   return idx.prefix[index] * idx.last_scale +
          static_cast<float>(index) * idx.last_gap;
+}
+
+/// Keyed uniform list: `key_of(index)` gives a stable item key, and the row
+/// entity (with any state on it or its children) follows that key across
+/// inserts/removes/reorders instead of following its window position.
+/// Keys must be unique per item; key_of is asked once per item per build.
+template <typename KeyFn, typename RenderRow>
+ElementResult virtual_list_keyed(HasUIContext auto &ctx, EntityParent ep_pair,
+                                 size_t count, float row_height, KeyFn &&key_of,
+                                 RenderRow &&render_row,
+                                 ComponentConfig config = ComponentConfig())
+  requires std::invocable<KeyFn, size_t>
+{
+  std::vector<size_t> keys(count);
+  for (size_t i = 0; i < count; i++) keys[i] = static_cast<size_t>(key_of(i));
+  return virtual_list_impl(ctx, ep_pair, detail::RowMetrics::uniform_rows(count, row_height),
+                           std::forward<RenderRow>(render_row), config, &keys);
+}
+
+/// Keyed measured list: keyed identity plus the retained height index above.
+template <typename KeyFn, typename HeightFn, typename RenderRow>
+ElementResult virtual_list_keyed(HasUIContext auto &ctx, EntityParent ep_pair,
+                                 size_t count, KeyFn &&key_of, HeightFn &&height_of,
+                                 RenderRow &&render_row,
+                                 ComponentConfig config = ComponentConfig())
+  requires std::invocable<KeyFn, size_t> && std::invocable<HeightFn, size_t>
+{
+  auto [entity, parent] = deref(ep_pair);
+  (void)parent;
+  auto &index = entity.template addComponentIfMissing<HasVirtualListIndex>();
+  detail::refresh_virtual_index(index, count, std::forward<HeightFn>(height_of));
+  detail::RowMetrics rows;
+  rows.count = count;
+  rows.borrowed = &index.prefix;
+  rows.index = &index;
+  std::vector<size_t> keys(count);
+  for (size_t i = 0; i < count; i++) keys[i] = static_cast<size_t>(key_of(i));
+  return virtual_list_impl(ctx, ep_pair, rows, std::forward<RenderRow>(render_row), config, &keys);
+}
+
+/// Window of a virtual_list as of its last build: built includes overscan,
+/// visible is only what the viewport shows. Both are [first, last) indices.
+struct VirtualListRange {
+  size_t first = 0, last = 0;
+  size_t visible_first = 0, visible_last = 0;
+  size_t count = 0;
+  [[nodiscard]] bool near_end(size_t within) const {
+    return count > 0 && visible_last + within >= count;
+  }
+};
+
+[[nodiscard]] inline VirtualListRange virtual_list_range(const Entity &list) {
+  if (!list.template has<HasScrollView>()) return {};
+  const auto &sv = list.template get<HasScrollView>();
+  return {sv.virtual_first, sv.virtual_last, sv.virtual_visible_first,
+          sv.virtual_visible_last, sv.virtual_count};
 }
 
 /// Total height of a measured virtual_list's rows, in pixels, as of its
