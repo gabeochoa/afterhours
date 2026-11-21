@@ -8,10 +8,20 @@
 // Reports to stderr and log_sink_fn, so log_file.h picks it up. Not through
 // log_error: a host that replaced logging with one that aborts would re-enter
 // the handler from inside the report.
+//
+// crash::install(report_path) additionally writes the whole report -- signal,
+// backtrace, the system that was running, and the recent log tail -- to a
+// file at that path, so a shipped build that dies with no console attached
+// still leaves something behind. The file is written before the stderr/sink
+// pass, so a sink that aborts mid-report cannot take the file with it. Both
+// entry points are opt-in: nothing is installed, chained or written until
+// one of them is called.
 
+#include <cstddef>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <exception>
 #include <string>
 
@@ -61,10 +71,120 @@ inline void write_backtrace() {
 #endif
 }
 
+// The same backtrace, to a file instead of stderr/sink.
+inline void write_backtrace_to(std::FILE *out) {
+#if (defined(__GNUC__) || defined(__clang__)) && !defined(_WIN32)
+  void *frames[64];
+  const int count = backtrace(frames, 64);
+  char **symbols = backtrace_symbols(frames, count);
+  if (symbols == nullptr)
+    return;
+  for (int i = 2; i < count; i++)
+    std::fprintf(out, "  #%-2d %s\n", i - 2, symbols[i]);
+  std::free(symbols);
+#else
+  (void)out;
+#endif
+}
+
+// --- report file + log tail (crash::install(report_path) only) ---
+
+// Fixed storage, no allocation: the tail sink runs on the logging path and
+// the reader runs inside a signal handler, so neither may allocate.
+inline constexpr std::size_t tail_line_count = 48;
+inline constexpr std::size_t tail_line_length = 256;
+
+inline char (&tail_lines())[tail_line_count][tail_line_length] {
+  static char lines[tail_line_count][tail_line_length] = {};
+  return lines;
+}
+
+inline volatile std::sig_atomic_t &tail_written() {
+  static volatile std::sig_atomic_t count = 0;
+  return count;
+}
+
+inline void tail_append(const char *level, const char *message) {
+  char *slot = tail_lines()[tail_written() % tail_line_count];
+  std::size_t n = 0;
+  for (const char *p = level; *p && n + 1 < tail_line_length; p++)
+    slot[n++] = *p;
+  if (n + 1 < tail_line_length)
+    slot[n++] = ' ';
+  for (const char *p = message; *p && n + 1 < tail_line_length; p++)
+    slot[n++] = (*p == '\n' || *p == '\r') ? ' ' : *p;
+  slot[n] = '\0';
+  tail_written() = tail_written() + 1;
+}
+
+inline void (*&previous_sink())(const char *, const char *) {
+  static void (*sink)(const char *, const char *) = nullptr;
+  return sink;
+}
+
+// Chained in front of whatever sink was there: keeps a bounded tail for the
+// report file and forwards every line, so log_file.h and host sinks see
+// exactly what they saw before.
+inline void tail_sink(const char *level, const char *message) {
+  tail_append(level, message);
+  if (previous_sink())
+    previous_sink()(level, message);
+}
+
+inline bool &sink_chained() {
+  static bool chained = false;
+  return chained;
+}
+
+inline constexpr std::size_t report_path_length = 1024;
+
+inline char *report_path_buffer() {
+  static char path[report_path_length] = {};
+  return path;
+}
+
+inline bool &installed() {
+  static bool on = false;
+  return on;
+}
+
+inline std::terminate_handler &previous_terminate() {
+  static std::terminate_handler handler = nullptr;
+  return handler;
+}
+
+// The whole report, to the file at the installed report path. Directly
+// callable (tests use it without raising a signal); report() guards it with
+// the report-once flag, this does not. False when no path is installed.
+inline bool write_report_file(const char *what) {
+  if (report_path_buffer()[0] == '\0')
+    return false;
+  std::FILE *out = std::fopen(report_path_buffer(), "w");
+  if (out == nullptr)
+    return false;
+  std::fprintf(out, "---- afterhours crash: %s ----\n", what);
+  if (running_system() != nullptr)
+    std::fprintf(out, "while running system: %s\n", running_system());
+  else
+    std::fprintf(out, "not inside a system\n");
+  std::fprintf(out, "backtrace:\n");
+  write_backtrace_to(out);
+  const std::size_t written = static_cast<std::size_t>(tail_written());
+  const std::size_t count =
+      written < tail_line_count ? written : tail_line_count;
+  std::fprintf(out, "recent log (last %zu lines):\n", count);
+  for (std::size_t i = written - count; i < written; i++)
+    std::fprintf(out, "%s\n", tail_lines()[i % tail_line_count]);
+  std::fclose(out);
+  return true;
+}
+
 inline void report(const char *what) {
   if (reporting())
     return;
   reporting() = 1;
+  // File first: it does not touch the sink, so nothing below can lose it.
+  write_report_file(what);
   report_line(std::string("---- afterhours crash: ") + what + " ----");
   if (running_system() != nullptr)
     report_line(std::string("while running system: ") + running_system());
@@ -112,13 +232,56 @@ inline void on_terminate() {
 
 // Call once at startup. Fine before the log file exists; it buffers.
 inline void install_handler() {
+  if (detail::installed())
+    return;
+  detail::installed() = true;
   for (int sig : {SIGSEGV, SIGABRT,
 #ifdef SIGBUS
                   SIGBUS,
 #endif
                   SIGILL, SIGFPE})
     std::signal(sig, detail::on_signal);
-  std::set_terminate(detail::on_terminate);
+  detail::previous_terminate() = std::set_terminate(detail::on_terminate);
+}
+
+// As install_handler(), plus a report file: on a fatal signal the report
+// (signal, backtrace, running system, recent log tail) is also written to
+// report_path, replacing any file there. The log tail is captured by
+// chaining in front of the current log_sink_fn, so call this after your log
+// sink is set up; lines logged before the call are not in the tail. A null
+// or empty path installs the handlers with no report file.
+inline void install(const char *report_path) {
+  if (report_path != nullptr && report_path[0] != '\0') {
+    std::strncpy(detail::report_path_buffer(), report_path,
+                 detail::report_path_length - 1);
+    detail::report_path_buffer()[detail::report_path_length - 1] = '\0';
+  }
+  if (!detail::sink_chained()) {
+    detail::previous_sink() = log_sink_fn;
+    log_sink_fn = detail::tail_sink;
+    detail::sink_chained() = true;
+  }
+  install_handler();
+}
+
+// Undo install()/install_handler(): default signal handling and the previous
+// terminate handler and log sink are restored, and the report path is
+// cleared. Mostly for tests and for hosts that install per-session.
+inline void uninstall() {
+  for (int sig : {SIGSEGV, SIGABRT,
+#ifdef SIGBUS
+                  SIGBUS,
+#endif
+                  SIGILL, SIGFPE})
+    std::signal(sig, SIG_DFL);
+  if (detail::previous_terminate() != nullptr)
+    std::set_terminate(detail::previous_terminate());
+  if (detail::sink_chained() && log_sink_fn == detail::tail_sink)
+    log_sink_fn = detail::previous_sink();
+  detail::previous_sink() = nullptr;
+  detail::sink_chained() = false;
+  detail::report_path_buffer()[0] = '\0';
+  detail::installed() = false;
 }
 
 // What the report names as the running system. SystemManager sets this.
