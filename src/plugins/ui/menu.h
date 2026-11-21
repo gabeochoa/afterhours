@@ -421,8 +421,6 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
   init_component(ctx, ep_pair, root_config, ComponentType::Div, false,
                  "popover_root");
 
-  // A never-opened popover needs no menu state; creating it on every
-  // closed call is the only work a closed popover would otherwise do.
   if (!open && !entity.template has<HasMenuState>())
     return ElementResult{false, entity};
   auto &state = entity.template addComponentIfMissing<HasMenuState>();
@@ -434,10 +432,6 @@ popover(HasUIContext auto &ctx, EntityParent ep_pair,
   if (detail::dismiss_menu(ctx, state, open)) {
     open = false;
     state.was_open_last_frame = false;
-    // A library dismissal (focus left, outside press, MenuBack) still
-    // owes the body one frame: a button inside records its click on the
-    // press frame and the caller reads it on this one. A caller closing
-    // (open already false) owes nothing.
     if (!(caller_open && was_open))
       return ElementResult{false, entity};
   }

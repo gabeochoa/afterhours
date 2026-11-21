@@ -613,20 +613,15 @@ TEST(popover_lifecycle_close_during_enter_anchor_gone_and_reopen) {
                        ComponentSize{pixels(200), pixels(120)}));
   };
   h.begin_frame(); CHECK(emit()); h.layout_only();
-  // Close during the enter frame's lifetime: no body on the next frame.
   open = false;
   h.begin_frame(); CHECK(!emit()); h.layout_only();
-  // Reopen cleanly.
   open = true;
   h.begin_frame(); CHECK(emit()); h.layout_only();
   h.begin_frame(); CHECK(emit()); h.layout_only();
   CHECK(open);
-  // Anchor gone: the caller cannot call the popover for a frame, then
-  // makes the one closed transition call that resets the state.
   h.begin_frame(); h.layout_only();
   open = false;
   h.begin_frame(); CHECK(!emit()); h.layout_only();
-  // Reopening after that must not dismiss itself from stale state.
   open = true;
   h.begin_frame(); CHECK(emit()); h.layout_only();
   h.begin_frame(); CHECK(emit()); h.layout_only();
