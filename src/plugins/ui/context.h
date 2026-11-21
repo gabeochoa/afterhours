@@ -617,18 +617,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     return a;
   }
 
-  // Route `action` from the focused control outward: the focused element's
-  // HasShortcuts first, then each ancestor's, up to the root. A handler
-  // returning true consumes the action -- it is cleared from last_action /
-  // all_actions / all_actions_repeat so nothing downstream (including an
-  // app-level pressed()) fires for the same press -- and routing stops.
-  // Returning false at every scope leaves the action untouched for the
-  // app-level fallback. Returns whether anything consumed it.
-  //
-  // Additive by design: it runs only for actions some scope in the focus
-  // chain handles, and never touches WidgetNext/WidgetBack/WidgetPress
-  // handling in process_tabbing -- those systems run before this one and
-  // consume through pressed() as before.
   bool dispatch_focused_shortcut(InputAction action) {
     if (action == InputAction::None)
       return false;
@@ -639,8 +627,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
       if (!opt.has_value())
         break;
       Entity &e = opt.asE();
-      // Input gates (modals) apply: a gated scope's handlers are skipped,
-      // and the action keeps bubbling to an ungated enclosing scope.
       if (is_input_allowed(cur) && e.template has<HasShortcuts>() &&
           e.template get<HasShortcuts>().dispatch(wanted, e)) {
         last_action = InputAction::None;

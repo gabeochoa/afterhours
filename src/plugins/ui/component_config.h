@@ -163,7 +163,6 @@ struct ComponentConfig {
   // this element or a descendant holds focus and the bound action is
   // pressed. Copied onto the entity by apply_flags each frame.
   std::vector<ShortcutBinding> shortcuts;
-
   std::string tooltip_text;
   float tooltip_delay = 0.5f;
   overlay::Placement tooltip_placement = overlay::Placement::Below;
@@ -717,12 +716,6 @@ struct ComponentConfig {
     return *this;
   }
 
-  /// Bind a focus-scoped shortcut: while this element or anything inside
-  /// it holds focus, `action` is offered to this handler before any
-  /// enclosing scope. Return true from the handler to consume the press
-  /// (routing stops, the action is cleared); return false to let it
-  /// bubble outward and, if nobody consumes it, reach the app as before.
-  /// Chainable: each call adds one binding, in dispatch order.
   ComponentConfig &with_shortcut(int action,
                                  std::function<bool(Entity &)> handler) {
     shortcuts.push_back(ShortcutBinding{action, std::move(handler)});
