@@ -3,9 +3,7 @@
 
 #include "../../../../src/byte_cache.h"
 
-// Two caches on one ByteCache, the way floatinghotel's token (4 MiB) and
-// blob-page (32 MiB) caches move onto it. Costs are the values' own bytes;
-// accounted bytes are not process memory (see byte_cache.h).
+// Accounted bytes are values' own bytes, not process memory.
 int main() {
   using namespace afterhours;
   auto cost = [](const std::string &v) { return v.size(); };
@@ -16,7 +14,7 @@ int main() {
   pages.put(1, std::string("blob-page-bytes"));
   (void)tokens.get("int");
   (void)tokens.get("missing");
-  tokens.shrink_to(4); // e.g. on memory pressure: evict down to 4 bytes
+  tokens.shrink_to(4);
 
   const auto s = tokens.stats();
   std::printf("byte_cache: tokens hits=%llu misses=%llu accounted=%zu "

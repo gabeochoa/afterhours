@@ -34,10 +34,7 @@ public:
   static constexpr size_t DEFAULT_MAX_ENTRIES = 4096;
 
 private:
-  // Fixed-size values, so a byte budget is a count bound in disguise:
-  // DEFAULT_MAX_ENTRIES entries at kEntryCost each is exactly the old
-  // 4096-entry cap. This cache now sits on ByteCache (see byte_cache.h);
-  // its accounted bytes are this fixed accounting, not process memory.
+  // Fixed cost per entry makes the byte budget equal the old 4096-entry cap.
   static constexpr size_t kEntryCost = sizeof(uint64_t) + sizeof(Vector2Type);
 
   MeasureTextFn measure_fn_;
@@ -69,10 +66,9 @@ public:
   void set_max_age(uint32_t frames) { max_age_ = frames; }
   void set_max_entries(size_t count) {
     max_entries_ = count;
-    // A count of 0 held one entry under the old loop; keep that.
+    // Legacy invariant: count 0 held one entry.
     cache_.set_budget((count == 0 ? 1 : count) * kEntryCost);
     if (last_used_generation_.size() > cache_.size()) {
-      // Entries the smaller budget evicted lose their generation stamp.
       std::unordered_map<uint64_t, uint32_t> kept;
       for (const auto &[key, gen] : last_used_generation_)
         if (cache_.contains(key))
@@ -131,7 +127,6 @@ public:
   }
 
   [[nodiscard]] size_t size() const { return cache_.size(); }
-  // Accounted bytes under the fixed per-entry cost (not process memory).
   [[nodiscard]] size_t accounted_bytes() const {
     return cache_.accounted_bytes();
   }
