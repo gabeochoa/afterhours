@@ -105,6 +105,7 @@ ALL_TESTS := \
 	window_state_test \
 	animation_presets_test \
 	particles_test \
+	trigger_volume_test \
 	ui_modifiers_test \
 	ancestor_transform_test \
 	text_units_test \
