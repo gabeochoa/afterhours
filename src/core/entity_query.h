@@ -462,10 +462,6 @@ struct EntityQuery {
         return ents;
     }
 
-    // Scratch pattern (G-P14): keep a RefEntities across frames and let each
-    // frame's query fill it, reusing its capacity instead of allocating a
-    // fresh result vector per gen(). Non-caching, so a take()/first() query
-    // object is still consumed by one fill, as with values_ignore_cache.
     RefEntities &gen_into(RefEntities &scratch) const {
         run_query_into({}, scratch);
         return scratch;

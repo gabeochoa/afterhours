@@ -1,7 +1,3 @@
-// query_scratch_test.cpp
-// G-P14: gen_into(scratch) reuses the caller's buffer capacity, so repeated
-// queries allocate no result storage after warmup, unlike gen() which
-// allocates a fresh RefEntities every call.
 
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
@@ -16,9 +12,6 @@
 
 using namespace afterhours;
 
-// Counts heap allocations of at least kBig bytes while enabled, which is
-// the result-buffer size here; the query's own small bookkeeping is below
-// it, so the count is the materialization's, not construction's.
 static std::atomic<bool> g_counting{false};
 static std::atomic<size_t> g_big_allocs{0};
 static constexpr size_t kBig = 256;
@@ -98,7 +91,6 @@ int main() {
     ec.createEntity().addComponent<Tag>();
   ec.cleanup();
 
-  // gen() allocates one result buffer per fresh query.
   {
     begin_count();
     for (int i = 0; i < kIters; ++i) {
@@ -111,7 +103,6 @@ int main() {
          kIters);
   CHECK(count_big_allocs >= static_cast<size_t>(kIters));
 
-  // gen_into(): warmup grows the scratch once, then zero result allocs.
   RefEntities scratch;
   {
     auto warm = EntityQuery(ec).whereHasComponent<Tag>().gen_into(scratch);
@@ -129,7 +120,6 @@ int main() {
          kIters);
   CHECK(count_big_allocs == 0);
 
-  // Same results as gen(), in the same order.
   auto fresh = EntityQuery(ec).whereHasComponent<Tag>().gen();
   CHECK(ids_of(fresh) == ids_of(scratch));
   CHECK(scratch.capacity() >= scratch.size());
