@@ -1,4 +1,3 @@
-// Draw-only elements: counted cost before/after, identical draw output.
 #include "ui_test_harness.h"
 
 using namespace ui_test;
@@ -42,12 +41,12 @@ TEST(draw_only_costs_fewer_components_same_entities) {
   const int deco_n = component_count(deco.ent());
   printf("  plain div: %d components; draw-only div: %d components\n", plain_n,
          deco_n);
-  CHECK(plain.ent().id != deco.ent().id); // still 1 entity each
+  CHECK(plain.ent().id != deco.ent().id);
   CHECK(deco.ent().hasTag(UITag::DrawOnly));
   CHECK(!deco.ent().has<UIComponentDebug>());
   CHECK(!deco.ent().has<HasOpacity>());
   CHECK(deco.ent().get<UIComponent>().skip_when_tabbing);
-  CHECK(deco_n == plain_n - 2); // UIComponentDebug + HasOpacity, tag is free
+  CHECK(deco_n == plain_n - 2);
 }
 
 TEST(draw_only_label_and_opacity_kept_when_needed) {

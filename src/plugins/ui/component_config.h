@@ -129,7 +129,7 @@ struct ComponentConfig {
   std::optional<float> focus_ring_thickness;
   bool ignore_pointer_events = false; // invisible to hit-testing
   bool inert = false;
-  bool draw_only = false; // decorative: layout+render only, no interaction
+  bool draw_only = false;
   bool takes_focus = true;
   bool hoverable = false;
   // User data, not localizable copy: the pseudo-locale stress leaves this
@@ -702,8 +702,6 @@ struct ComponentConfig {
     inert = on;
     return *this;
   }
-  /// Purely decorative element: still laid out and drawn, but skips hit
-  /// testing, focus/tab order, UIComponentDebug and default HasOpacity.
   ComponentConfig &with_draw_only(bool on = true) {
     draw_only = on;
     return *this;

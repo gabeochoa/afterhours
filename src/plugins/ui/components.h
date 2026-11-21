@@ -799,7 +799,7 @@ struct HasClipChildren : BaseComponent {};
 
 // Tag IDs for UI overlay input exclusivity.
 enum class UITag : TagId {
-  DrawOnly = 41, // Purely decorative: no hit test, no focus, no debug/opacity components
+  DrawOnly = 41,
   InputExclusivity =
       40, // Entity's tree receives exclusive input, blocking all
           // other entities. Used by overlay components (dropdowns,

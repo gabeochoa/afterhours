@@ -622,7 +622,6 @@ inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
 
   if (entity.is_missing<UIComponent>()) {
     entity.addComponent<ui::UIComponent>(entity.id).set_parent(parent.id);
-    // Draw-only elements pay no debug-name string/component; every reader guards has<>.
     if (!config.draw_only)
       entity.addComponent<UIComponentDebug>(debug_name);
 
@@ -632,7 +631,6 @@ inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
     entity.removeComponentIfExists<UIComponentDebug>();
 
   if (!entity.has<UIComponentDebug>()) {
-    // no debug component to name
   } else if (!config.debug_name.empty()) {
     entity.get<UIComponentDebug>().set(config.debug_name);
   } else if (!config.label.empty()) {
