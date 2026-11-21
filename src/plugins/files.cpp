@@ -361,6 +361,7 @@ fs::path files::get_executable_dir() {
 
 fs::path files::get_documents_path() {
 #ifdef __EMSCRIPTEN__
+  log_error("@notimplemented files::get_documents_path on Emscripten");
   return {};
 #else
   // sago only, in this one file: platform_folders.h defines its functions
@@ -372,6 +373,7 @@ fs::path files::get_documents_path() {
 std::optional<std::vector<std::string>>
 files::reveal_command(const fs::path &path) {
 #ifdef __EMSCRIPTEN__
+  log_error("@notimplemented files::reveal_command on Emscripten");
   return std::nullopt;
 #endif
   std::error_code ec;
@@ -421,6 +423,7 @@ bool files::reveal(const fs::path &path) {
   ::CloseHandle(pi.hProcess);
   return ok;
 #elif defined(__EMSCRIPTEN__)
+  log_error("@notimplemented files::reveal on Emscripten");
   return false;
 #else
   const pid_t pid = ::fork();
