@@ -155,6 +155,7 @@ ALL_TESTS := \
 	e2e_results_test \
 	point_in_element_test \
 	e2e_ui_gestures_test \
+	e2e_name_lookup_test \
 	mouse_axis_action_test \
 	card_and_type_scale_test \
 	fixed_timestep_test \
