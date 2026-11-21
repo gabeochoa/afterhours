@@ -19,6 +19,9 @@ namespace text_input {
 // Canonical definition lives in ui/text_selection.h; selection geometry needs
 // it and must not depend on the editing module.
 using afterhours::ui::utf8_char_length;
+// Clipboard/host bytes are outside UTF-8 control; normalize once at the door.
+using afterhours::ui::is_valid_utf8;
+using afterhours::ui::sanitize_utf8;
 
 
 // Get number of bytes in a UTF-8 character starting at pos
@@ -163,7 +166,8 @@ inline bool insert_char(AnyTextInputState auto &s, int codepoint) {
 template <typename State>
 inline void replace_text_externally(State &s, const std::string &text) {
   s.storage.clear();
-  s.storage.insert(0, text);
+  // Host text may come from a file read; normalize so storage stays valid.
+  s.storage.insert(0, sanitize_utf8(text));
   s.cursor_position = std::min(s.cursor_position, s.text_size());
   const std::string stored = s.text();
   if (s.cursor_position > 0 && s.cursor_position < stored.size() &&
@@ -618,12 +622,16 @@ template <typename State> inline void insert_newline_if_multiline(State &s) {
 /// insert_char.
 template <typename State>
 inline void insert_pasted_text(State &s, const std::string &clip) {
-  for (size_t i = 0; i < clip.size();) {
-    const int cp = utf8_to_codepoint(clip, i);
-    const size_t len = utf8_char_length(clip, i);
+  // Clipboard bytes are external: invalid input pastes as U+FFFD, not dropped.
+  const std::string clean =
+      is_valid_utf8(clip) ? clip : sanitize_utf8(clip);
+  const std::string &text = clean;
+  for (size_t i = 0; i < text.size();) {
+    const int cp = utf8_to_codepoint(text, i);
+    const size_t len = utf8_char_length(text, i);
     i += len > 0 ? len : 1;
     if (cp == '\r') {
-      if (i < clip.size() && clip[i] == '\n')
+      if (i < text.size() && text[i] == '\n')
         continue; // CRLF: the \n below is the one break
     }
     const bool is_break = cp == '\n' || cp == '\r';
