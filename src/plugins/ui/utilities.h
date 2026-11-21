@@ -271,9 +271,6 @@ inline void run_systems_on_ui_entities(
     }
 }
 
-// Swap the one system of exact type Old in a bridge's list, keeping its
-// slot so order is preserved. False when absent: a failed replacement is
-// visible instead of silently leaving the stock system running.
 template<typename Old, typename New>
 static bool replace_bridge_system(
     std::vector<std::unique_ptr<SystemBase>> &systems,
@@ -411,12 +408,6 @@ struct UIPluginRenderBridge : System<> {
     }
 };
 
-/// Replace a built-in bridge system with your own, in place, after
-/// setup()/register_*_systems(). Returns false (changing nothing) when the
-/// bridge or the Old system is not registered, so assert the result:
-///     bool ok = ui::replace_post_update_system<MyAction,
-///         ui::HandleScrollInput<MyAction>>(sm,
-///         std::make_unique<MyScrollInput>());
 template<typename InputAction, typename Old, typename New>
 static bool replace_pre_update_system(SystemManager &sm,
                                       std::unique_ptr<New> replacement) {

@@ -1,6 +1,3 @@
-// bridge_replace_test.cpp — ui::replace_*_system swaps a built-in bridge
-// system in place (same slot/order), reports failure, and leaves the
-// unreplaced default list identical.
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 #define AFTER_HOURS_IMM_UI
@@ -41,7 +38,6 @@ static std::vector<std::string> names_of(
 int main() {
   printf("=== bridge system replace ===\n\n");
 
-  // Unreplaced default, constructed directly.
   UIPluginPostUpdateBridge<DefaultAction> stock;
   const auto default_names = names_of(stock.systems);
   size_t scroll_idx = stock.systems.size();
@@ -61,7 +57,6 @@ int main() {
   if (!bridge) return 1;
   CHECK(names_of(bridge->systems) == default_names);
 
-  // Missing bridge / missing target: explicit false, nothing changes.
   CHECK((!replace_pre_update_system<DefaultAction,
                                    HandleScrollInput<DefaultAction>>(
       sm, std::make_unique<ReplacementScroll>())));
@@ -69,7 +64,6 @@ int main() {
       sm, std::make_unique<ReplacementScroll>())));
   CHECK(names_of(bridge->systems) == default_names);
 
-  // Replace stock scroll: same size, same order, replacement in the slot.
   CHECK((replace_post_update_system<DefaultAction,
                                    HandleScrollInput<DefaultAction>>(
       sm, std::make_unique<ReplacementScroll>())));
@@ -87,11 +81,9 @@ int main() {
       stock_present = true;
   CHECK(!stock_present);
 
-  // The slot bridge execution calls once() on now runs the replacement.
   bridge->systems[scroll_idx]->once(0.f);
   CHECK(g_replacement_runs == 1);
 
-  // Second replacement of the now-absent stock system fails visibly.
   CHECK((!replace_post_update_system<DefaultAction,
                                     HandleScrollInput<DefaultAction>>(
       sm, std::make_unique<ReplacementScroll>())));
