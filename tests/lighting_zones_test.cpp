@@ -31,17 +31,14 @@ int main() {
   set.add_zone(a);
   set.add_zone(b);
 
-  // Deep inside one zone: exact.
   const ZoneLighting west = set.sample({5.f, 5.f, 5.f});
   check(near(west.ambient.r, 1.f) && near(west.ambient.b, 0.f), "inside west ambient");
   check(near(west.exposure, 2.f) && near(west.fog_far, 50.f), "inside west exposure/fog");
 
-  // Midpoint of the blend band on the shared face: average of both zones.
   const ZoneLighting mid = set.sample({10.f, 5.f, 5.f});
   check(near(mid.ambient.r, 0.5f) && near(mid.ambient.b, 0.5f), "shared face averages ambient");
   check(near(mid.exposure, 3.f) && near(mid.fog_near, 5.f), "shared face averages scalars");
 
-  // Outside all zones: default.
   const ZoneLighting out = set.sample({-100.f, 5.f, 5.f});
   check(near(out.ambient.r, 0.f) && near(out.exposure, 1.f) && near(out.fog_far, 100.f),
         "outside is default");

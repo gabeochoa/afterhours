@@ -1,8 +1,5 @@
 #pragma once
 
-// Interior lighting zones: named boxes, each carrying lighting params, and a
-// sample(point) that blends across zone boundaries. Zone math only — no
-// renderer integration (feed the result into effects::SceneLights yourself).
 
 #include <algorithm>
 #include <cmath>
@@ -11,8 +8,6 @@
 
 namespace afterhours {
 
-// Plain value types, mirroring the fields effects::SceneLights broadcasts
-// (ambient / fog / exposure) without depending on the graphics backend.
 struct Vec3f {
   float x = 0.f;
   float y = 0.f;
@@ -29,7 +24,7 @@ struct ZoneLighting {
   Rgb ambient{};
   Rgb fog{};
   float fog_near = 0.f;
-  float fog_far = 0.f; // <= fog_near: no fog, as in SceneLights
+  float fog_far = 0.f;
   float exposure = 1.f;
 };
 
@@ -38,7 +33,7 @@ struct LightingZone {
   Vec3f min{};
   Vec3f max{};
   ZoneLighting lighting{};
-  float blend_width = 2.f; // world units the blend band straddles the face
+  float blend_width = 2.f;
 };
 
 [[nodiscard]] inline ZoneLighting lerp(const ZoneLighting &a,
@@ -62,7 +57,6 @@ struct LightingZoneSet {
            p.y <= z.max.y && p.z >= z.min.z && p.z <= z.max.z;
   }
 
-  // Positive inside (distance to nearest face), negative outside.
   [[nodiscard]] float signed_distance(const LightingZone &z, Vec3f p) const {
     if (contains(z, p))
       return std::min({p.x - z.min.x, z.max.x - p.x, p.y - z.min.y,
@@ -74,8 +68,6 @@ struct LightingZoneSet {
   }
 
   [[nodiscard]] ZoneLighting sample(Vec3f p) const {
-    // Weight ramps 0->1 across blend_width straddling the face, so a point
-    // on a face shared by two zones weights both 0.5 and averages them.
     ZoneLighting sum{};
     float wsum = 0.f;
     for (const LightingZone &z : zones) {
@@ -87,10 +79,8 @@ struct LightingZoneSet {
       wsum += w;
     }
     if (wsum <= 0.f) return default_lighting;
-    // Short of full weight the remainder stays default_lighting, so far
-    // outside every zone the sample is exactly the default.
     return wsum >= 1.f ? sum : lerp(sum, default_lighting, 1.f - wsum);
   }
 };
 
-} // namespace afterhours
+}
