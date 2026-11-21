@@ -32,6 +32,9 @@ inline std::atomic_int ENTITY_ID_GEN = 0;
 struct Entity {
   EntityID id;
   int entity_type = 0;
+  // App-owned word in the header cache line: the library never reads it, so
+  // a per-frame stamp costs no componentArray/heap chase. Cleared on recycle.
+  std::uint64_t user_data = 0;
 
   // Runtime-only metadata used by the handle-based store.
   // - INVALID_SLOT means this entity has not been assigned a stable slot yet
@@ -60,6 +63,7 @@ struct Entity {
     tags.reset();
     cleanup = false;
     entity_type = 0;
+    user_data = 0;
     ah_slot_index = EntityHandle::INVALID_SLOT;
     id = new_id;
   }
