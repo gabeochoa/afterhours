@@ -34,6 +34,7 @@ enum class RenderPrimitiveType {
   Border,
   Rectangle,
   RoundedRectangle,
+  GradientRectangle,
   RectangleOutline,
   RoundedRectangleOutline,
   Text,
@@ -89,6 +90,13 @@ struct RenderPrimitive {
       float thickness; // Line thickness for outline (0 = default thin line)
       float rotation;
     } outline;
+
+    struct {
+      RectangleType rect;
+      Color from;
+      Color to;
+      bool horizontal;
+    } gradient;
 
     struct {
       RectangleType rect;
@@ -270,6 +278,19 @@ public:
     return cmd;
   }
 
+  static RenderPrimitive gradient_rectangle(const RectangleType &rect,
+                                            Color from, Color to,
+                                            bool horizontal, int layer,
+                                            EntityID entity_id = -1) {
+    RenderPrimitive cmd(RenderPrimitiveType::GradientRectangle, layer,
+                        entity_id);
+    cmd.data.gradient.rect = rect;
+    cmd.data.gradient.from = from;
+    cmd.data.gradient.to = to;
+    cmd.data.gradient.horizontal = horizontal;
+    return cmd;
+  }
+
   static RenderPrimitive image(const RectangleType &dest_rect,
                                const RectangleType &source_rect,
                                TextureType texture, Color tint, int layer,
@@ -391,6 +412,35 @@ struct HasOnDraw : BaseComponent {
   RenderPrimitive::CustomDrawFn over;
 };
 
+// Two-stop linear gradient replacing a widget's flat fill (ComponentConfig::with_gradient).
+struct HasGradient : BaseComponent {
+  Color from{0, 0, 0, 255};
+  Color to{0, 0, 0, 255};
+  bool horizontal = true;
+};
+
+// Line drawn across a widget's rect between normalized (0..1) endpoints (ComponentConfig::with_line).
+struct HasLine : BaseComponent {
+  Vector2Type from{0.f, 0.5f};
+  Vector2Type to{1.f, 0.5f};
+  Color color{255, 255, 255, 255};
+  float thickness = 1.f;
+};
+
+inline Color gradient_lerp(Color a, Color b, float t) {
+  t = std::clamp(t, 0.f, 1.f);
+  const auto ch = [t](unsigned char x, unsigned char y) {
+    return static_cast<unsigned char>(static_cast<float>(x) +
+                                      (static_cast<float>(y) - static_cast<float>(x)) * t + 0.5f);
+  };
+  return Color{ch(a.r, b.r), ch(a.g, b.g), ch(a.b, b.b), ch(a.a, b.a)};
+}
+
+inline Vector2Type line_point(const RectangleType &rect, Vector2Type normalized) {
+  return Vector2Type{rect.x + normalized.x * rect.width,
+                     rect.y + normalized.y * rect.height};
+}
+
 // Render command buffer using arena allocation for zero-allocation rendering
 class RenderCommandBuffer {
 private:
@@ -420,6 +470,13 @@ public:
                      EntityID entity_id = -1, float rotation = 0.0f) {
     commands_.push_back(
         RenderPrimitive::rectangle(rect, fill, layer, entity_id, rotation));
+  }
+
+  void add_gradient_rectangle(const RectangleType &rect, Color from, Color to,
+                              bool horizontal, int layer,
+                              EntityID entity_id = -1) {
+    commands_.push_back(RenderPrimitive::gradient_rectangle(
+        rect, from, to, horizontal, layer, entity_id));
   }
 
   // Add a rounded rectangle
@@ -692,6 +749,17 @@ public:
                      cmd.data.line.thickness, cmd.data.line.color);
         ++i;
         break;
+
+      case RenderPrimitiveType::GradientRectangle: {
+        const auto &g = cmd.data.gradient;
+        // Flat (unrounded) quad: backend helpers interpolate vertex colours.
+        if (g.horizontal)
+          draw_rectangle_gradient_h(g.rect, g.from, g.to);
+        else
+          draw_rectangle_gradient_v(g.rect, g.from, g.to);
+        ++i;
+        break;
+      }
 
       case RenderPrimitiveType::Rectangle: {
         size_t batch_end = find_batch_end(commands, i);

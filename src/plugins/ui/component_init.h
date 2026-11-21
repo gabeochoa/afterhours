@@ -373,6 +373,24 @@ inline void apply_bevel(Entity &entity, const ComponentConfig &config) {
       config.has_bevel() ? config.bevel_config.value() : BevelBorder{});
 }
 
+inline void apply_gradient_line(Entity &entity, const ComponentConfig &config) {
+  if (config.gradient.has_value()) {
+    auto &g = entity.addComponentIfMissing<HasGradient>();
+    g.from = config.gradient->from;
+    g.to = config.gradient->to;
+    g.horizontal = config.gradient->horizontal;
+  } else
+    entity.removeComponentIfExists<HasGradient>();
+  if (config.line_stroke.has_value()) {
+    auto &l = entity.addComponentIfMissing<HasLine>();
+    l.from = config.line_stroke->from;
+    l.to = config.line_stroke->to;
+    l.color = config.line_stroke->color;
+    l.thickness = config.line_stroke->thickness;
+  } else
+    entity.removeComponentIfExists<HasLine>();
+}
+
 inline void apply_on_draw(Entity &entity, const ComponentConfig &config) {
   if (auto *hod = entity.toggleComponent<HasOnDraw>(
           config.on_draw_bg || config.on_draw_fg || config.on_draw_over)) {
@@ -656,6 +674,7 @@ inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
   apply_bevel(entity, config);
   apply_nine_slice(entity, config);
   apply_on_draw(entity, config);
+  apply_gradient_line(entity, config);
   apply_render_layer(ctx, entity, parent, config);
   return created;
 }

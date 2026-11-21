@@ -296,6 +296,7 @@ ALL_TESTS := \
 	theme_scope_test \
 	defer_test \
 	draw_sort_test \
+	gradient_line_test \
 	config_size_test \
 	config_strings_test \
 	overdraw_audit_test \

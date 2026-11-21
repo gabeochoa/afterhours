@@ -41,6 +41,19 @@ struct TextureConfig {
 // - Make it obvious which components need new features when adding them
 // See: https://en.cppreference.com/w/cpp/language/constraints
 
+struct GradientFill {
+  Color from{0, 0, 0, 255};
+  Color to{0, 0, 0, 255};
+  bool horizontal = true;
+};
+
+struct LineStroke {
+  Vector2Type from{0.f, 0.5f};
+  Vector2Type to{1.f, 0.5f};
+  Color color{255, 255, 255, 255};
+  float thickness = 1.f;
+};
+
 enum struct ButtonVariant { Filled, Outline, Ghost };
 
 struct SliderStyle {
@@ -166,6 +179,8 @@ struct ComponentConfig {
   RenderPrimitive::CustomDrawFn on_draw_bg;
   RenderPrimitive::CustomDrawFn on_draw_fg;
   RenderPrimitive::CustomDrawFn on_draw_over;
+  std::optional<GradientFill> gradient;
+  std::optional<LineStroke> line_stroke;
 
   std::string font_name = UIComponent::UNSET_FONT;
   colors::FontWeight font_weight = colors::FontWeight::Regular;
@@ -659,6 +674,17 @@ struct ComponentConfig {
   }
   ComponentConfig &with_on_draw_over(RenderPrimitive::CustomDrawFn fn) {
     on_draw_over = std::move(fn);
+    return *this;
+  }
+  // Two-stop linear gradient fill replacing the flat background.
+  ComponentConfig &with_gradient(Color from, Color to, bool horizontal = true) {
+    gradient = GradientFill{from, to, horizontal};
+    return *this;
+  }
+  // Line across this widget's rect; endpoints are normalized 0..1 in rect space.
+  ComponentConfig &with_line(Vector2Type from, Vector2Type to, Color color,
+                             float thickness = 1.f) {
+    line_stroke = LineStroke{from, to, color, thickness};
     return *this;
   }
   ComponentConfig &with_disabled(bool dis) {
@@ -1329,6 +1355,10 @@ struct ComponentConfig {
       merged.on_draw_fg = overrides.on_draw_fg;
     if (overrides.on_draw_over)
       merged.on_draw_over = overrides.on_draw_over;
+    if (overrides.gradient.has_value())
+      merged.gradient = overrides.gradient;
+    if (overrides.line_stroke.has_value())
+      merged.line_stroke = overrides.line_stroke;
 
     // Size constraints
     if (overrides.min_width.dim != Dim::None)

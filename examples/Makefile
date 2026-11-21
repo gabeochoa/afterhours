@@ -105,6 +105,10 @@ $(OUT)/on_draw_example: on_draw_example.cpp
 	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $(filter %.cpp,$^) $(LDFLAGS_RAYLIB) -o $@
 	@echo "Built: on_draw_example"
 
+$(OUT)/gradient_line_example: gradient_line_example.cpp
+	$(CXX) $(CXXFLAGS_RAYLIB) $(DEPFLAGS) $(INCLUDES_RAYLIB) $(filter %.cpp,$^) $(LDFLAGS_RAYLIB) -o $@
+	@echo "Built: gradient_line_example"
+
 # Performance stress tests - no raylib dependency
 $(OUT)/perf_stress_test: perf_stress_test.cpp
 	$(CXX) $(CXXFLAGS) -DAFTER_HOURS_USE_NONE $(DEPFLAGS) $(INCLUDES) $(filter %.cpp,$^) -o $@
