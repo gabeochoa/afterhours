@@ -6,8 +6,8 @@
 // Custom component authors should compose using these primitives and utilities:
 //
 // Primitives:
-//   div, hstack, vstack, spacer, separator, button, image, sprite,
-//   image_button, circular_progress
+//   div, label, label_muted, hstack, vstack, spacer, separator, button,
+//   image, sprite, image_button, circular_progress
 //
 // Composites (built from primitives):
 //   icon_row, button_group, checkbox, checkbox_group, radio_group,
