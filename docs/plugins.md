@@ -63,11 +63,11 @@ The plot shares axes across series, displays bounds and a legend, handles empty 
 
 ## File watching
 
-Include `src/plugins/file_watcher.h` and compile `file_watcher.cpp`. Link CoreServices on macOS. Other platforms expose the same API and return `Unsupported` from `start`.
+Include `src/plugins/file_watcher.h` and compile `file_watcher.cpp`. Other platforms expose the same API and return `Unsupported` from `start`.
 
 Own a `Watcher`, call `start` with existing roots, and check the `Started`, `Unsupported` or `Error` result. Starting again stops the previous watch first. Use `drain` on the app thread to receive owned paths and rescan hints. Events are notifications to inspect current state, not a complete filesystem journal. Native coalescing can combine changes. Rename may report old and new paths.
 
-The macOS backend uses FSEvents on a private serial dispatch queue. It never calls application code from that queue. The event buffer is bounded; overflow produces one event with an empty path and `must_rescan = true`, meaning rescan all watched roots. Native dropped-event and root-change flags also request rescans. Choose the limit and latency through `Options`.
+The macOS backend uses kqueue vnode events on a private thread (it used to use FSEvents, whose delivery depends on fseventsd and can be delayed or dropped when that daemon is unhealthy). It never calls application code from that thread. The event buffer is bounded; overflow produces one event with an empty path and `must_rescan = true`, meaning rescan all watched roots. Choose the limit through `Options`; `latency_seconds` is accepted for compatibility but no longer changes macOS delivery.
 
 Call start, stop and destruction from the owning app thread. `stop` waits for in-flight native callbacks and clears pending events; destruction calls stop. No callbacks can retain the watcher after stop. Filtering, debounce, Git state and refresh policy remain application-owned.
 
@@ -120,6 +120,12 @@ Backend tests capture the same nonsquare target with a translucent red top and o
 The action key emits one delayed press; modifiers are held without press events. The handler releases the chord after two frames. Reset, skip and timeout clear injected input.
 
 With `AFTER_HOURS_ENABLE_E2E_TESTING` defined, `graphics::is_key_pressed`, `is_key_pressed_repeat`, `is_key_down` and `is_key_released` read injected keys on every backend, the same as the input plugin. A released injected key reports `is_key_released` one frame after its press.
+
+## E2E gamepads
+
+`gamepad_connect PAD` plugs in virtual gamepad PAD (0-7) and `gamepad_disconnect PAD` unplugs it. While connected, every read of that pad id comes from the script, not hardware, on raylib and sokol. The input plugin stops at the first unconnected id, so connect pads in order from 0.
+
+`gamepad_button PAD BUTTON` taps a button: one delayed press, held for two frames. `gamepad_down PAD BUTTON` holds it until `gamepad_up PAD BUTTON`. `gamepad_axis PAD AXIS VALUE` holds an axis at VALUE (-1 to 1) until the next `gamepad_axis` for it; set 0 to centre it. Buttons and axes use the `gamepad_buttons` / `gamepad_axes` names, case-insensitive: `gamepad_button 0 RIGHT_FACE_DOWN`, `gamepad_axis 0 LEFT_X 0.8`. A disconnected pad, unknown name or out-of-range value fails the command. Reset, skip and timeout disconnect every virtual pad.
 
 ## E2E arguments
 
