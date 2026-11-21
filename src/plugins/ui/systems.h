@@ -1201,7 +1201,7 @@ struct HandleTrayNavigation : SystemWithUIContext<ui::HasTray> {
       float threshold =
           tray.was_held ? tray.repeat_interval : tray.repeat_delay;
       if (tray.repeat_timer >= threshold) {
-        tray.repeat_timer = 0.f;
+        tray.repeat_timer -= threshold; // carry the remainder
         tray.was_held = true;
         // Determine direction from whichever key is held
         dir = context->is_held_down(fwd) ? 1 : -1;
