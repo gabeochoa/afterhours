@@ -232,6 +232,11 @@ struct Theme {
   std::optional<Color> surface_raised;
   float panel_corner_radius = 12.f;
 
+  // Minimum grab band, in pixels, across a divider's drag axis. The drawn
+  // line keeps the caller's thickness; the hit rect grows to this floor via
+  // HasHitExpand. 0 disables the floor.
+  float divider_min_hit_thickness = 12.f;
+
   Color raised_surface() const {
     if (surface_raised) return *surface_raised;
     return colors::mix(surface, colors::auto_text_color(surface, font, darkfont),
