@@ -243,8 +243,6 @@ struct ComponentConfig {
   std::optional<texture_manager::Texture> icon_texture;
   std::optional<texture_manager::Rectangle> icon_source_rect;
   IconPosition icon_position = IconPosition::Left;
-  // Unset keeps the built-in 60%-of-button-height size. Set, the icon uses
-  // this rect instead (cartographer needed a 24px icon in a 48px tab).
   std::optional<ComponentSize> icon_size;
 
   // Nine-slice border configuration
@@ -401,7 +399,6 @@ struct ComponentConfig {
     icon_position = pos;
     return *this;
   }
-  // The icon's own size; unset keeps the 60%-of-button-height default.
   ComponentConfig &with_icon_size(ComponentSize sz) {
     icon_size = sz;
     return *this;

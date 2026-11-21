@@ -1,8 +1,3 @@
-// icon_sizing_test.cpp
-// `with_icon` sized the icon at 60% of the button height with no override, so
-// a 24px tab icon in a 48px button needed hand-tuned padding (cartographer).
-// `with_icon_size` fixes that; placement (Left/Right) already worked and is
-// pinned here too. An unset size keeps the built-in 60% behaviour.
 #include "ui_test_harness.h"
 
 using namespace afterhours;
@@ -40,7 +35,6 @@ TEST(configured_size_is_the_icon_size) {
                                IconPosition::Left, &b);
   CHECK_APPROX(r.width, 24.f);
   CHECK_APPROX(r.height, 24.f);
-  // Vertically centered against the button, like the default size was.
   CHECK_APPROX(r.y + r.height / 2, b.y + b.height / 2);
 }
 
@@ -67,14 +61,11 @@ TEST(the_built_in_size_still_applies_by_default) {
   UIComponent *icon = h.find("btn_icon");
   CHECK(icon != nullptr);
   if (icon) {
-    CHECK_APPROX(icon->rect().width, 28.8f); // 60% of 48
+    CHECK_APPROX(icon->rect().width, 28.8f);
     CHECK_APPROX(icon->rect().height, 28.8f);
   }
 }
 
-// Neither renderer re-fits the icon: both read the layout rect, so the
-// configured size still holds after each renderer's pass runs (the sprite
-// draw itself is a backend call the none backend does not record).
 TEST(configured_size_survives_both_renderers) {
   for (int renderer = 0; renderer < 2; ++renderer) {
     ImmTestHarness h;
