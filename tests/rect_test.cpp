@@ -119,4 +119,70 @@ TEST(the_repro_from_the_report) {
   CHECK(same(box, RectangleType{118, 93, 64, 36}));
 }
 
+// inset is pad's name in geometry headers; negative must grow, not clamp.
+TEST(inset_alias_and_negative_grows) {
+  const RectangleType r{10, 20, 100, 50};
+  CHECK(same(inset(r, 5.f), pad(r, 5.f)));
+  CHECK(same(inset(r, Sides{.left = 3}), pad(r, Sides{.left = 3})));
+  CHECK(same(pad(r, -5.f), RectangleType{5, 15, 110, 60}));
+  CHECK(same(inset(r, -5.f), expand(r, 5.f)));
+}
+
+// cut() always hands back {strip, rest}, whichever edge; strip + rest must
+// reassemble the original on every edge.
+TEST(cut_always_returns_strip_then_rest_and_reassembles) {
+  const RectangleType r{7, 13, 199, 101};
+  for (const auto edge :
+       {Edge::top, Edge::bottom, Edge::left, Edge::right}) {
+    const auto t = cut(r, edge, 40.f);
+    CHECK(same(bounding(t.strip, t.rest), r));
+    CHECK(!overlaps(t.strip, t.rest));
+    CHECK(t.strip.width + t.rest.width == r.width ||
+          t.strip.height + t.rest.height == r.height);
+  }
+  const auto top = cut(r, Edge::top, 40.f);
+  CHECK(same(top.strip, RectangleType{7, 13, 199, 40}));
+  CHECK(same(top.rest, RectangleType{7, 53, 199, 61}));
+  const auto bottom = cut(r, Edge::bottom, 40.f);
+  CHECK(same(bottom.strip, RectangleType{7, 74, 199, 40}));
+  CHECK(same(bottom.rest, RectangleType{7, 13, 199, 61}));
+  const auto right = cut(r, Edge::right, 40.f);
+  CHECK(same(right.strip, RectangleType{166, 13, 40, 101}));
+  CHECK(same(right.rest, RectangleType{7, 13, 159, 101}));
+}
+
+// All nine placements, corners exact; the old five agree with align_*.
+TEST(align_within_corners_exact_and_matches_align_star) {
+  const RectangleType r{0, 0, 100, 100};
+  CHECK(same(align_within(r, 40, 20, Align::top_left),
+             RectangleType{0, 0, 40, 20}));
+  CHECK(same(align_within(r, 40, 20, Align::top_right),
+             RectangleType{60, 0, 40, 20}));
+  CHECK(same(align_within(r, 40, 20, Align::bottom_left),
+             RectangleType{0, 80, 40, 20}));
+  CHECK(same(align_within(r, 40, 20, Align::bottom_right),
+             RectangleType{60, 80, 40, 20}));
+  CHECK(same(align_within(r, 40, 20, Align::center), align_center(r, 40, 20)));
+  CHECK(same(align_within(r, 40, 20, Align::top), align_top(r, 40, 20)));
+  CHECK(same(align_within(r, 40, 20, Align::bottom), align_bottom(r, 40, 20)));
+  CHECK(same(align_within(r, 40, 20, Align::left), align_left(r, 40, 20)));
+  CHECK(same(align_within(r, 40, 20, Align::right), align_right(r, 40, 20)));
+  CHECK(same(align_within(r, RectangleType{0, 0, 40, 20}, Align::center),
+             align_center(r, 40, 20)));
+}
+
+TEST(intersection_bounding_contains_and_empty) {
+  const RectangleType a{0, 0, 100, 100};
+  CHECK(same(intersection(a, RectangleType{50, 50, 100, 100}),
+             RectangleType{50, 50, 50, 50}));
+  CHECK(is_empty(intersection(a, RectangleType{200, 200, 10, 10})));
+  CHECK(same(bounding(a, RectangleType{50, 50, 100, 100}),
+             RectangleType{0, 0, 150, 150}));
+  CHECK(contains(a, RectangleType{10, 10, 50, 50}));
+  CHECK(contains(a, a));
+  CHECK(!contains(a, RectangleType{90, 90, 50, 50}));
+  CHECK(is_empty(RectangleType{0, 0, 0, 10}));
+  CHECK(!is_empty(a));
+}
+
 int main() { return ui_test::run_registered_tests("rect"); }
