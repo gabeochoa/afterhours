@@ -96,6 +96,7 @@ struct ComponentConfig {
   std::optional<TextureConfig> texture_config;
   std::optional<Color> image_tint;
   std::optional<texture_manager::HasTexture::Alignment> image_alignment;
+  std::optional<int> image_filter; // Per-draw filter override for sprites
   std::optional<std::bitset<4>> rounded_corners;
   bool consumes_directional_input = false;
   std::optional<float> roundness;     // If unset, uses theme.roundness
@@ -945,6 +946,11 @@ struct ComponentConfig {
     return *this;
   }
 
+  ComponentConfig &with_image_filter(int filter) {
+    image_filter = filter;
+    return *this;
+  }
+
   // Shadow configuration methods
   ComponentConfig &with_shadow(const Shadow &shadow) {
     shadow_config = shadow;
@@ -1190,6 +1196,8 @@ struct ComponentConfig {
       merged.image_tint = overrides.image_tint;
     if (overrides.has_image_alignment())
       merged.image_alignment = overrides.image_alignment;
+    if (overrides.image_filter.has_value())
+      merged.image_filter = overrides.image_filter;
 
     if (overrides.is_absolute)
       merged.is_absolute = overrides.is_absolute;
