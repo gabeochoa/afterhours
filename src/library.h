@@ -14,9 +14,13 @@ namespace ah_std = tl; // fallback to tl::expected/unexpected
 #include "../expected.hpp"
 namespace ah_std = tl; // fallback to tl::expected/unexpected
 #endif
+#include <cstdint>
 #include <map>
+#include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "logging.h"
 #include "type_name.h"
@@ -37,7 +41,34 @@ template <typename T> struct Library {
   using iterator = typename Storage::iterator;
   using const_iterator = typename Storage::const_iterator;
 
+  // Interned handle: resolve a name once, then get() by integer with no
+  // string compare in hot loops; invalid_handle is never returned.
+  using Handle = uint32_t;
+  static constexpr Handle invalid_handle = UINT32_MAX;
+
   Storage storage;
+
+ private:
+  std::unordered_map<std::string, Handle> handle_by_name;
+  // Index == Handle; std::map nodes are stable so the pointer stays valid
+  // until the entry is dropped from storage.
+  std::vector<T *> by_handle;
+
+ public:
+  // Resolve name to a stable handle; later handles for the same name are
+  // equal. The name does not need to be loaded yet.
+  [[nodiscard]] Handle intern(const std::string &name) {
+    auto [it, inserted] = handle_by_name.emplace(name, Handle{});
+    if (inserted) {
+      it->second = static_cast<Handle>(by_handle.size());
+      by_handle.push_back(nullptr);
+    }
+    return it->second;
+  }
+
+  [[nodiscard]] Handle intern(const char *name) {
+    return intern(std::string(name ? name : ""));
+  }
 
   [[nodiscard]] auto size() const { return storage.size(); }
   [[nodiscard]] auto begin() const { return storage.begin(); }
@@ -56,8 +87,35 @@ template <typename T> struct Library {
       return ah_std::unexpected(Error::DUPLICATE_NAME);
     }
     storage[name] = item;
+    by_handle[intern(name)] = &storage[name];
     return name;
   }
+
+  [[nodiscard]] T &get(Handle handle) {
+    if (!contains(handle)) {
+      log_warn("asking for an item by unknown handle {} for {}", handle,
+               type_name<T>());
+      throw std::out_of_range("Library: unknown handle");
+    }
+    return *by_handle.at(handle);
+  }
+
+  [[nodiscard]] const T &get(Handle handle) const {
+    if (!contains(handle)) {
+      log_warn("asking for an item by unknown handle {} for {}", handle,
+               type_name<T>());
+      throw std::out_of_range("Library: unknown handle");
+    }
+    return *by_handle.at(handle);
+  }
+
+  [[nodiscard]] bool contains(Handle handle) const {
+    return handle < by_handle.size() && by_handle[handle] != nullptr;
+  }
+
+  // Drop every handle -> item link; call after storage is cleared directly
+  // (entries dropped above would otherwise leave dangling links).
+  void reset_handles() { by_handle.assign(by_handle.size(), nullptr); }
 
   [[nodiscard]] T &get(const std::string &name) {
     if (!this->contains(name)) {
@@ -101,6 +159,8 @@ template <typename T> struct Library {
     for (auto kv : storage) {
       unload(kv.second);
     }
+    // Unloaded objects are no longer drawable/playable by handle either.
+    reset_handles();
   }
   virtual void unload(T) = 0;
 
