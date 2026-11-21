@@ -347,9 +347,7 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
     entity.removeComponentIfExists<HasTextUnitMotion>();
   }
 
-  // Selectable read-only text: the marker makes the label hit-testable for
-  // press/drag (HandleSelectableText does the rest). An I-beam on hover
-  // unless the caller picked a cursor of their own.
+  // I-beam only if caller picked no cursor.
   if (config.text_selectable) {
     entity.addComponentIfMissing<HasSelectableText>();
     if (!config.cursor_type.has_value())

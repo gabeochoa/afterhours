@@ -1268,15 +1268,11 @@ struct HandleDrags : SystemWithUIContext<ui::HasDragListener> {
   }
 };
 
-// Press, drag and copy for selectable read-only labels
-// (ComponentConfig::with_selectable_text). The selection lives on UIContext;
-// this system is its only writer besides UIContext::reset. Registered after
-// HandleDrags: ResolveHitTarget has already granted active to the label
-// under the press, and active persisting across the drag is what extends it.
+// Only writer besides UIContext::reset; after HandleDrags so active persists across drag.
 template <typename InputAction>
 struct HandleSelectableText : SystemWithUIContext<ui::HasSelectableText> {
   UIContext<InputAction> *context = nullptr;
-  float now_ = 0.f; // own clock for click streaks
+  float now_ = 0.f;
 
   virtual void once(float dt) override {
     context = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
@@ -1284,8 +1280,7 @@ struct HandleSelectableText : SystemWithUIContext<ui::HasSelectableText> {
       return;
     now_ += dt;
 
-    // The owner went away (or stopped being selectable): drop the selection
-    // rather than leaving it on whatever reuses the id.
+    // Drop if owner gone, lest selection land on an id-reuser.
     if (context->text_selection_entity != context->ROOT) {
       OptEntity owner =
           UICollectionHolder::getEntityForID(context->text_selection_entity);
@@ -1293,17 +1288,12 @@ struct HandleSelectableText : SystemWithUIContext<ui::HasSelectableText> {
         context->clear_text_selection();
     }
 
-    // Copy. pressed() consumes the action, so a focused text field -- which
-    // checks during the build phase, before post-update systems run --
-    // keeps priority, and the action cannot re-fire for a second consumer.
+    // pressed() consumes: focused fields check in build phase (earlier) and keep priority.
     if constexpr (magic_enum::enum_contains<InputAction>("TextCopy")) {
       if (context->has_selection() && context->pressed(InputAction::TextCopy))
         clipboard::set_text(context->selected_text());
     }
 
-    // A press anywhere else clears. A press ON the owner is re-seeded in
-    // for_each_with below; a press on another selectable label clears here
-    // and seeds there.
     if (context->mouse.just_pressed &&
         context->active_id != context->text_selection_entity)
       context->clear_text_selection();
@@ -1330,10 +1320,7 @@ struct HandleSelectableText : SystemWithUIContext<ui::HasSelectableText> {
     if (label.label.empty())
       return;
 
-    // The same layout inputs the renderer paints from, so a point and the
-    // band it selects are measured against the same breaks. The rect is the
-    // drawn one (ancestor transforms applied), NOT the clipped hit rect:
-    // glyphs are scissored to the clip, not moved by it.
+    // Drawn rect, not clipped hit rect: glyphs are scissored, not moved.
     RectangleType rect = component.rect();
     if (entity.has<HasUIModifiers>())
       rect = entity.get<HasUIModifiers>().apply_modifier(rect);

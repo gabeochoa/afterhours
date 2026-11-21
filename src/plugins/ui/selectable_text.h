@@ -1,19 +1,7 @@
 #pragma once
 
-// Selectable read-only text for labels (decide-selectable-text, option A).
-//
-// A label opted in with ComponentConfig::with_selectable_text() can be
-// dragged over, shift-clicked, double-clicked (word) and triple-clicked
-// (line), and copied with TextCopy. The one active selection lives on
-// UIContext (entity + anchor/cursor byte offsets into the label's SOURCE
-// string), so a press anywhere else clears it and the element itself stays
-// out of the tab order -- it is text, not a widget.
-//
-// Offsets are source bytes throughout: the layout is text_input's
-// TextLayoutCache over detail::wrap_lines, the same mapping the editor
-// uses, so a soft wrap never invents offsets the source does not have.
-// Cross-element selection and virtualized sources are deliberately out of
-// scope (that is the TextSource controller, option C of the decision note).
+// Opt-in via with_selectable_text(). Offsets are source bytes via text_input's
+// wrap mapping, so soft wraps invent no offsets. Cross-element/virtualized: out of scope.
 
 #include <algorithm>
 #include <string>
@@ -29,10 +17,7 @@ namespace afterhours {
 namespace ui {
 
 struct HasSelectableText : BaseComponent {
-  // Wrapped layout of the label's current text, rebuilt when the text, the
-  // wrap width, the font size or the line height changes. Shared by the
-  // input system (points -> offsets) and the renderer (selection bands), so
-  // the two can never disagree about where a line breaks.
+  // Shared layout: hit-test and renderer must agree on line breaks.
   text_input::TextLayoutCache layout;
   std::string cached_text;
   float cached_wrap_width = -1.f;
@@ -43,9 +28,6 @@ struct HasSelectableText : BaseComponent {
 
 namespace selectable_text {
 
-// How far a line's glyphs sit from the block's left edge under its
-// alignment. Left-aligned text (the only kind text_input draws) shifts by
-// nothing.
 inline float line_shift(TextAlignment alignment, float avail_width,
                         float line_width) {
   switch (alignment) {
@@ -60,9 +42,6 @@ inline float line_shift(TextAlignment alignment, float avail_width,
   return 0.f;
 }
 
-// Rebuild the cached layout when anything it depends on moved. `measure`
-// sizes a string in pixels at the label's font, like everywhere else here.
-// Returns true when it rebuilt.
 template <typename MeasureFn>
 inline bool refresh_layout(HasSelectableText &sel, const std::string &text,
                            float wrap_width, float font_size,
@@ -80,9 +59,7 @@ inline bool refresh_layout(HasSelectableText &sel, const std::string &text,
   return true;
 }
 
-// Which source byte a point lands on. `local` is relative to the text
-// block's top left (the first line's band origin); rows clamp to the block,
-// like a drag that runs off the top or bottom.
+// `local` is block top-left; rows clamp like a drag off the edge.
 template <typename MeasureFn>
 inline size_t offset_at(const text_input::TextLayoutCache &cache,
                         std::string_view source, Vector2Type local,
@@ -99,9 +76,7 @@ inline size_t offset_at(const text_input::TextLayoutCache &cache,
   return line.source_offset + within;
 }
 
-// One band per visual row the range covers, at the same origin offset_at
-// measures points from. The break between rows is not drawn, so a range
-// covering only it paints nothing.
+// Row break not drawn; a range covering only it paints nothing.
 template <typename MeasureFn>
 inline std::vector<RectangleType>
 selection_rects(const text_input::TextLayoutCache &cache,
@@ -134,9 +109,6 @@ selection_rects(const text_input::TextLayoutCache &cache,
   return rects;
 }
 
-// What one press does to a selection: a plain press collapses to the press
-// point, shift extends the cursor, a second press takes the word, a third
-// takes the hard line.
 inline void apply_click(text_selection::Selection &sel, const std::string &text,
                         size_t pos, int streak, bool extend) {
   if (streak >= 3) {

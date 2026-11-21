@@ -225,8 +225,6 @@ struct Theme {
   Color success{43, 126, 87, 255}; // Green
   Color warning{178, 116, 23, 255}; // Amber
   Color focus{155, 199, 255, 255};
-  // Text selection highlight (selectable read-only labels; text fields draw
-  // the same tint). Translucent so the glyphs stay readable through it.
   Color selection{70, 130, 220, 110};
 
   std::optional<Color> border;

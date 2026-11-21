@@ -844,12 +844,7 @@ static inline Vector2Type default_text_inset() {
   return resolve_text_inset(imm::ThemeDefaults::get().theme);
 }
 
-// Paint the active read-only selection behind a selectable label's glyphs.
-// Both render paths call this with their own rect arithmetic: block_left /
-// block_top / block_height locate the box lines align and centre within,
-// avail_width is the width a line aligns in, wrap_width the width the text
-// wrapped at. The layout cache is the one HandleSelectableText hit-tests
-// against, refreshed here when the text or metrics moved.
+// Layout cache shared with hit-testing so bands and offsets agree.
 template <typename InputAction, typename DrawRect>
 inline void paint_label_text_selection(UIContext<InputAction> &context,
                                        Entity &entity, const HasLabel &hasLabel,
@@ -1896,7 +1891,6 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                            static_cast<int>(label_clip.y),
                            static_cast<int>(label_clip.width),
                            static_cast<int>(label_clip.height));
-      // Selection bands behind the glyphs, inside the same clip.
       if (entity.has<HasSelectableText>()) {
         const std::string sel_font =
             cmp.font_name == UIComponent::UNSET_FONT
@@ -2590,7 +2584,6 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         float centerX = draw_rect.x + draw_rect.width / 2.0f;
         float centerY = draw_rect.y + draw_rect.height / 2.0f;
 
-        // Selection bands behind the glyphs, inside the same scissor.
         if (entity.has<HasSelectableText>()) {
           const std::string sel_font =
               cmp.font_name == UIComponent::UNSET_FONT

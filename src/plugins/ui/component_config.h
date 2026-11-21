@@ -184,7 +184,6 @@ struct ComponentConfig {
   // Text input: readonly mode (focusable, selectable, but not editable)
   bool text_readonly = false;
 
-  // Label: user-selectable read-only text (see with_selectable_text)
   bool text_selectable = false;
 
   // Text input: clipboard operations this field refuses. All allowed by
@@ -429,10 +428,7 @@ struct ComponentConfig {
     text_readonly = ro;
     return *this;
   }
-  // Read-only label the user can select and copy (drag, shift-click,
-  // double-click word, triple-click line; TextCopy copies). The selection
-  // lives on UIContext, not on this element, and the element stays out of
-  // the tab order -- it is text, not a widget.
+  // Selection lives on UIContext (one active); stays out of tab order.
   ComponentConfig &with_selectable_text(bool selectable = true) {
     text_selectable = selectable;
     return *this;

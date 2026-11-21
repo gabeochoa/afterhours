@@ -531,23 +531,14 @@ inline std::string substring(const std::vector<detail::TextRunLine> &lines,
                                           all.size() - range.start));
 }
 
-// ---------------------------------------------------------------------------
-// Click streaks and word/line ranges, shared by every text surface.
-//
-// text_input and text_area each grew their own copy of the 0.4s multi-click
-// counting (double = word, triple = line/all). This is the one copy; new
-// surfaces use it rather than growing a third.
-// ---------------------------------------------------------------------------
-
+// Shared: text_input/text_area each had their own copy of this.
 struct ClickStreak {
   float last_time = -1.f;
   size_t last_pos = 0;
   int count = 0;
 };
 
-// Feed one press; returns the streak length (1, 2, 3+). A press counts as a
-// continuation when it lands within kMultiClickTime of the previous one and
-// within a few bytes of it -- the same window text_input has always used.
+// Continuation window matches text_input's historical 0.4s / 3 bytes.
 inline int register_click(ClickStreak &streak, float now, size_t pos) {
   constexpr float kMultiClickTime = 0.4f;
   constexpr size_t kMultiClickDist = 3;
@@ -570,8 +561,7 @@ inline bool is_word_separator(char c) {
 }
 } // namespace detail_sel
 
-// The word under `pos`, mirroring text_input's select_word_at: a press on a
-// separator selects just that separator byte.
+// Separator press selects just that byte (mirrors text_input).
 inline Range word_range_at(const std::string &text, size_t pos) {
   if (text.empty())
     return Range{0, 0};
@@ -587,8 +577,6 @@ inline Range word_range_at(const std::string &text, size_t pos) {
   return Range{start, end};
 }
 
-// The hard line under `pos`: bytes between the surrounding '\n's, newline
-// excluded.
 inline Range line_range_at(const std::string &text, size_t pos) {
   pos = std::min(pos, text.size());
   size_t start = pos;

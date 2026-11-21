@@ -177,12 +177,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
 
   std::set<EntityID> focused_ids;
 
-  // The one active read-only text selection (a label built with
-  // with_selectable_text). Anchor and cursor are byte offsets into the
-  // owning label's source string, so the selection means the same thing
-  // however the text wraps. ROOT = no selection. Kept here rather than on
-  // the entity so there is exactly one selection and a press anywhere else
-  // can clear it.
+  // One active selection; anchor/cursor are source-byte offsets (wrap-independent). ROOT = none.
   EntityID text_selection_entity = ROOT;
   text_selection::Selection label_text_selection;
 
@@ -288,8 +283,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
                        [id](const auto &pair) { return pair.second(id); });
   }
 
-  // --- Read-only text selection (selectable labels) ---
-
   [[nodiscard]] bool has_selection() const {
     return text_selection_entity != ROOT &&
            label_text_selection.has_selection();
@@ -306,8 +299,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     text_selection_entity = ROOT;
     label_text_selection.collapse_to(0);
   }
-  // The selected bytes of the owning label's source string, "" when there
-  // is no selection or the owner is gone.
   [[nodiscard]] std::string selected_text() const {
     if (!has_selection())
       return "";
