@@ -173,16 +173,13 @@ TEST(assert_ui_with_under_scope) {
   auto right_wide = pending_for("assert_ui", {"row", "w=220", "under=right_panel"});
   ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), right_wide, 0.f);
   CHECK(right_wide.is_consumed() && right_wide.succeeded());
-  // The wide row is NOT in the left panel: retry, never consume.
   auto wrong = pending_for("assert_ui", {"row", "w=220", "under=left_panel"});
   ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), wrong, 0.f);
   CHECK(wrong.is_retry());
-  // Unscoped: ambiguous, fail loudly.
   auto amb = pending_for("assert_ui", {"row", "w=100"});
   ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), amb, 0.f);
   CHECK(amb.is_consumed() && !amb.succeeded());
   CHECK(amb.error_message.find("2 elements match") != std::string::npos);
-  // Missing scope retries (assertion family), it does not fail at once.
   auto noscope = pending_for("assert_ui", {"row", "w=100", "under=nope"});
   ui_commands::HandleAssertUICommand{}.for_each_with(h.root(), noscope, 0.f);
   CHECK(noscope.is_retry());

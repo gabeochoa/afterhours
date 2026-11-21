@@ -456,7 +456,6 @@ struct HandleClickTextCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'focus_ui name [under=scope]' - focuses UI component by debug name (for tabbing)
 template <typename InputAction>
 struct HandleFocusUICommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -590,7 +589,6 @@ struct HandleArrowCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'expect_focused name [under=scope]' - asserts a component is focused
 template <typename InputAction>
 struct HandleExpectFocusedCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -667,7 +665,6 @@ struct HandleExpectNoFocusCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'expect_hovered name [under=scope]' - asserts the named element is hovered.
 template <typename InputAction>
 struct HandleExpectHoveredCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -786,7 +783,6 @@ struct HandleClickButtonCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'toggle_checkbox name [under=scope]' - toggles checkbox by debug name
 template <typename InputAction>
 struct HandleToggleCheckboxCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -901,14 +897,13 @@ struct HandleSetSliderCommand : System<PendingE2ECommand> {
     auto &m = input_injector::detail::mouse;
     m.left_down = true;
     m.just_pressed = true;
-    m.press_frames = 0; // no auto-release; phase 2 releases
+    m.press_frames = 0;
     m.active = true;
     phase = 1;
     cmd.retry();
   }
 };
 
-// Handle 'select_dropdown name option [under=scope]' - selects dropdown option by debug name
 template <typename InputAction>
 struct HandleSelectDropdownCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -936,7 +931,6 @@ struct HandleSelectDropdownCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'expect_checkbox name state [under=scope]' - asserts checkbox is checked/unchecked
 template <typename InputAction>
 struct HandleExpectCheckboxCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -970,7 +964,6 @@ struct HandleExpectCheckboxCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'expect_slider name value [tolerance] [under=scope]' - asserts slider value
 template <typename InputAction>
 struct HandleExpectSliderCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -1111,7 +1104,6 @@ struct HandleReleaseActionCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'expect_input_text name "expected" [under=scope]' - asserts a text input's content
 template <typename InputAction>
 struct HandleExpectInputTextCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -1152,7 +1144,6 @@ struct HandleExpectInputTextCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'expect_selected_text name "text" [under=scope]' - asserts WHAT is selected rather
 // than which byte offsets. Offsets from a click depend on font metrics, so an
 // offset assertion on a clicked selection is really an assertion about the
 // font; this one says "double clicking there selected that word" and stays
@@ -1346,7 +1337,6 @@ struct HandlePointerUICommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'expect_input_selection name start end [under=scope]' - asserts selection range
 template <typename InputAction>
 struct HandleExpectInputSelectionCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
