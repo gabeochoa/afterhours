@@ -91,55 +91,11 @@ constexpr static InputValidationMode validation_mode =
         }                                                                   \
     } while (0)
 
-// Every text-editing action the UI plugin looks up by name. Each site is an
-// `if constexpr (enum_contains<InputAction>("..."))`, so an enum that does not
-// carry the name compiles the feature out to nothing: no error, no warning,
-// nothing to grep. hanabi lost word editing for the life of the project to a
-// name nobody had written down.
-//
-// Optional, so a missing one is not an error. Reported together, once, naming
-// what stopped existing.
+// Kept as a no-op: a Text* name missing from the host enum now falls back
+// to the library default chord (text_input::text_action_pressed) instead of
+// compiling the editing feature out, so there is nothing to warn about.
 template<typename InputAction>
-static void warn_missing_text_actions() {
-    std::string missing;
-    const auto note = [&missing](const char *name) {
-        if (!missing.empty())
-            missing += ", ";
-        missing += name;
-    };
-#define AH_CHECK_TEXT_ACTION(name)                                          \
-    if constexpr (!magic_enum::enum_contains<InputAction>(name))            \
-    note(name)
-
-    AH_CHECK_TEXT_ACTION("TextCopy");
-    AH_CHECK_TEXT_ACTION("TextCut");
-    AH_CHECK_TEXT_ACTION("TextPaste");
-    AH_CHECK_TEXT_ACTION("TextUndo");
-    AH_CHECK_TEXT_ACTION("TextRedo");
-    AH_CHECK_TEXT_ACTION("TextSelectAll");
-    AH_CHECK_TEXT_ACTION("TextSelectLeft");
-    AH_CHECK_TEXT_ACTION("TextSelectRight");
-    AH_CHECK_TEXT_ACTION("TextWordLeft");
-    AH_CHECK_TEXT_ACTION("TextWordRight");
-    AH_CHECK_TEXT_ACTION("TextDeleteWordBack");
-    AH_CHECK_TEXT_ACTION("TextDeleteWordForward");
-    AH_CHECK_TEXT_ACTION("TextDeleteLineBack");
-    AH_CHECK_TEXT_ACTION("TextDeleteLineForward");
-#undef AH_CHECK_TEXT_ACTION
-
-    // An app with no imm text input (a hand-drawn field can use
-    // text_input::edit_command_from_keys) defines AFTERHOURS_NO_IMM_TEXT_INPUT.
-#ifndef AFTERHOURS_NO_IMM_TEXT_INPUT
-    if (!missing.empty())
-        log_warn("InputAction is missing {}. Those text-editing features are "
-                 "compiled out, so the keys will do nothing. Add the names to "
-                 "your enum, or define AFTERHOURS_NO_IMM_TEXT_INPUT if the app "
-                 "has no imm text input.",
-                 missing);
-#else
-    (void) missing;
-#endif
-}
+static void warn_missing_text_actions() {}
 
 // Initialize the UI plugin. Creates the root UI entity and all singletons
 // in the UI collection. Singletons are also registered in the default

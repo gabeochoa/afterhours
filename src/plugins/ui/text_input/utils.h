@@ -1,6 +1,8 @@
 #pragma once
 
 #include "../../clipboard.h"
+#include "../../input_system.h"
+#include "../../../core/key_codes.h"
 #include "../text_selection.h"
 #include "../text_units.h"
 #include "../ui_collection.h"
@@ -641,12 +643,85 @@ inline void insert_pasted_text(State &s, const std::string &clip) {
   }
 }
 
+// Library-owned default chords for the Text* actions, mirroring the text
+// section of ui::default_keymap<DefaultAction>() (that function lives in
+// utilities.h, which this header must not pull in). Used only when the host's
+// InputAction has no enumerator by that name, so text_input edits through
+// defaults instead of requiring the host to pre-declare every Text* name.
+inline bool default_text_chord_pressed(std::string_view name, bool repeat) {
+  using KeyChord = input::KeyChord;
+  constexpr uint8_t SHIFT = KeyChord::MOD_SHIFT;
+#if defined(__APPLE__)
+  constexpr uint8_t PRIMARY = KeyChord::MOD_SUPER;
+  constexpr uint8_t WORD = KeyChord::MOD_ALT;
+#else
+  constexpr uint8_t PRIMARY = KeyChord::MOD_CTRL;
+  constexpr uint8_t WORD = KeyChord::MOD_CTRL;
+#endif
+  static const std::pair<std::string_view, std::vector<KeyChord>> table[] = {
+      {"TextBackspace", {KeyChord{keys::BACKSPACE, 0}}},
+      {"TextDelete", {KeyChord{keys::DELETE_KEY, 0}}},
+      {"TextCopy", {KeyChord{keys::C, PRIMARY}}},
+      {"TextCut", {KeyChord{keys::X, PRIMARY}}},
+      {"TextPaste", {KeyChord{keys::V, PRIMARY}}},
+      {"TextUndo", {KeyChord{keys::Z, PRIMARY}}},
+      {"TextSelectAll", {KeyChord{keys::A, PRIMARY}}},
+      {"TextRedo", {KeyChord{keys::Z, static_cast<uint8_t>(PRIMARY | SHIFT)}
+#if !defined(__APPLE__)
+                    ,
+                    KeyChord{keys::Y, PRIMARY}
+#endif
+                    }},
+      {"TextDeleteWordBack", {KeyChord{keys::BACKSPACE, WORD}}},
+      {"TextDeleteWordForward", {KeyChord{keys::DELETE_KEY, WORD}}},
+      {"TextWordLeft", {KeyChord{keys::LEFT, WORD}}},
+      {"TextWordRight", {KeyChord{keys::RIGHT, WORD}}},
+      {"TextSelectLeft", {KeyChord{keys::LEFT, SHIFT}}},
+      {"TextSelectRight", {KeyChord{keys::RIGHT, SHIFT}}},
+#if defined(__APPLE__)
+      {"TextHome", {KeyChord{keys::HOME, 0}, KeyChord{keys::LEFT, PRIMARY},
+                    KeyChord{keys::A, KeyChord::MOD_CTRL}}},
+      {"TextEnd", {KeyChord{keys::END, 0}, KeyChord{keys::RIGHT, PRIMARY},
+                   KeyChord{keys::E, KeyChord::MOD_CTRL}}},
+      {"TextDeleteLineBack", {KeyChord{keys::BACKSPACE, PRIMARY}}},
+      {"TextDeleteLineForward", {KeyChord{keys::K, KeyChord::MOD_CTRL}}},
+#else
+      {"TextHome", {KeyChord{keys::HOME, 0}}},
+      {"TextEnd", {KeyChord{keys::END, 0}}},
+      {"TextDeleteLineBack",
+       {KeyChord{keys::BACKSPACE,
+                 static_cast<uint8_t>(KeyChord::MOD_CTRL | SHIFT)}}},
+#endif
+  };
+  const uint8_t mods = input::get_current_modifiers();
+  for (const auto &[n, chords] : table) {
+    if (n != name) continue;
+    for (const auto &chord : chords)
+      if (chord.required_modifiers == mods &&
+          (repeat ? input::is_key_pressed_repeat(chord.key)
+                  : input::is_key_pressed(chord.key)))
+        return true;
+  }
+  return false;
+}
+
+// Host action if the enum carries `name`, else the library default chord.
+// Hosts that declare the names (and bind them, e.g. via default_keymap) get
+// exactly the old ctx.pressed path; smaller enums get the defaults.
+template <typename InputAction>
+inline bool text_action_pressed(auto &ctx, std::string_view name,
+                                bool repeat = false) {
+  if (const auto value = magic_enum::enum_cast<InputAction>(name))
+    return repeat ? ctx.pressed_or_repeat(*value) : ctx.pressed(*value);
+  return default_text_chord_pressed(name, repeat);
+}
+
 /// Undo/redo, clipboard and select-all -- the part of editing that is the same
 /// whether the field is one line or many. Returns true if the text changed.
 ///
 /// Copy and select-all are allowed while readonly; cut, paste, undo and redo
-/// are not. Each action is guarded on existing in the app's enum, so a smaller
-/// InputAction still compiles.
+/// are not. Each action resolves through text_action_pressed, so a smaller
+/// InputAction still compiles and edits via the library defaults.
 ///
 template <typename Ctx, typename State>
 inline bool handle_clipboard_and_undo(Ctx &ctx, State &s, bool editable) {
@@ -654,59 +729,50 @@ inline bool handle_clipboard_and_undo(Ctx &ctx, State &s, bool editable) {
   bool changed = false;
 
   if (editable) {
-    if constexpr (magic_enum::enum_contains<InputAction>("TextUndo")) {
-      if (ctx.pressed(InputAction::TextUndo)) {
-        s.undo();
-        reset_blink(s);
-        changed = true;
-      }
+    if (text_action_pressed<InputAction>(ctx, "TextUndo")) {
+      s.undo();
+      reset_blink(s);
+      changed = true;
     }
-    if constexpr (magic_enum::enum_contains<InputAction>("TextRedo")) {
-      if (ctx.pressed(InputAction::TextRedo)) {
-        s.redo();
-        reset_blink(s);
-        changed = true;
-      }
+    if (text_action_pressed<InputAction>(ctx, "TextRedo")) {
+      s.redo();
+      reset_blink(s);
+      changed = true;
     }
   }
 
-  if constexpr (magic_enum::enum_contains<InputAction>("TextCopy")) {
-    if (!s.copy_disabled && ctx.pressed(InputAction::TextCopy) && s.has_selection())
-      clipboard::set_text(s.selected_text());
-  }
+  if (!s.copy_disabled &&
+      text_action_pressed<InputAction>(ctx, "TextCopy") && s.has_selection())
+    clipboard::set_text(s.selected_text());
 
   if (editable) {
-    if constexpr (magic_enum::enum_contains<InputAction>("TextCut")) {
-      if (!s.cut_disabled && ctx.pressed(InputAction::TextCut) && s.has_selection()) {
+    if (!s.cut_disabled &&
+        text_action_pressed<InputAction>(ctx, "TextCut") && s.has_selection()) {
+      s.push_undo_snapshot();
+      clipboard::set_text(s.selected_text());
+      delete_selection(s);
+      reset_blink(s);
+      changed = true;
+    }
+    if (!s.paste_disabled &&
+        text_action_pressed<InputAction>(ctx, "TextPaste")) {
+      const std::string clip = clipboard::get_text();
+      if (!clip.empty()) {
         s.push_undo_snapshot();
-        clipboard::set_text(s.selected_text());
-        delete_selection(s);
+        if (s.has_selection())
+          delete_selection(s);
+        insert_pasted_text(s, clip);
+        s.clear_selection();
         reset_blink(s);
         changed = true;
       }
     }
-    if constexpr (magic_enum::enum_contains<InputAction>("TextPaste")) {
-      if (!s.paste_disabled && ctx.pressed(InputAction::TextPaste)) {
-        const std::string clip = clipboard::get_text();
-        if (!clip.empty()) {
-          s.push_undo_snapshot();
-          if (s.has_selection())
-            delete_selection(s);
-          insert_pasted_text(s, clip);
-          s.clear_selection();
-          reset_blink(s);
-          changed = true;
-        }
-      }
-    }
   }
 
-  if constexpr (magic_enum::enum_contains<InputAction>("TextSelectAll")) {
-    if (ctx.pressed(InputAction::TextSelectAll)) {
-      s.selection_anchor = 0;
-      s.cursor_position = s.text_size();
-      reset_blink(s);
-    }
+  if (text_action_pressed<InputAction>(ctx, "TextSelectAll")) {
+    s.selection_anchor = 0;
+    s.cursor_position = s.text_size();
+    reset_blink(s);
   }
   return changed;
 }
