@@ -6,6 +6,10 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+### Added
+
+- **`afterhours::EventQueue<Event, Phase>` (`core/event_queue.h`, via `ecs.h`) — ordered event phases.** `emit(phase, event)` assigns a monotonic sequence; `drain(handler, max_work=4096)` delivers sorted by phase, stable (emission order) within a phase, so replay/netcode agree regardless of emission order. Events emitted while draining form the next batch and drain in turn; exceeding `max_work` returns `limit_exceeded` with the remainder left pending. Call `drain` at explicit flush points between system phases. Covered by `event_phases_test`.
+
 ### Breaking
 
 **The animation plugin is rewritten around `afterhours::motion`.** `animation::anim<Key>(k).to(v, dur, EasingType)`, `AnimationManager`, `AnimHandle`, `sequence`, `loop_sequence`, `one_shot`, `clamp_value`, `get_value`, `register_update_systems<Key>()` and the declarative `with_animation(Anim::on_hover()...)` / `HasAnimationState` are gone. Every old call is a compile error.
