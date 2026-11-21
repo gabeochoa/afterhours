@@ -56,7 +56,7 @@ Result result_from(NSSavePanel *panel, NSModalResponse response) {
     return Selected{std::filesystem::path(path)};
 }
 
-}  // namespace
+}
 
 Result show_native(const Request &request) {
     if (![NSThread isMainThread]) return Error{"Native dialogs require the main thread"};
@@ -81,7 +81,6 @@ CancelFn show_native_async(const Request &request, Completion completion) {
             std::string error;
             NSSavePanel *panel = make_panel(request, error);
             if (!panel) { done(Error{error}); return {}; }
-            // beginWithCompletionHandler returns immediately; panel stays up without runModal.
             [panel beginWithCompletionHandler:^(NSModalResponse response) {
               @try { done(result_from(panel, response)); } @catch (NSException *e) {
                   const char *r = [[e reason] UTF8String];

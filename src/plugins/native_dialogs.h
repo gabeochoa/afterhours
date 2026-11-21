@@ -35,11 +35,9 @@ using RequestId = std::uint64_t;
 using Backend = std::function<Result(const Request &)>;
 using Completion = std::function<void(Result)>;
 using CancelFn = std::function<void()>;
-// Starts a dialog without blocking; returns a best-effort cancel function.
 using AsyncBackend = std::function<CancelFn(const Request &, Completion)>;
 
 Result show_native(const Request &request);
-// Nonblocking: completion runs later (macOS panel handler); elsewhere Unsupported.
 CancelFn show_native_async(const Request &request, Completion completion);
 AsyncBackend native_async_backend();
 
@@ -56,7 +54,6 @@ class Queue {
         return id;
     }
 
-    // Starts pending requests and drains async completions to take_result().
     void process_pending() {
         if (processing_) return;
         struct Guard {
@@ -82,7 +79,6 @@ class Queue {
         drain_inbox();
     }
 
-    // Frame-boundary drain for async completions without starting new work.
     void poll() { process_pending(); }
 
     bool cancel(RequestId id) {
