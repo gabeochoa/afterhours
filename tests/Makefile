@@ -114,6 +114,8 @@ ALL_TESTS := \
 	settings_save_test \
 	settings_path_test \
 	files_test_roots_test \
+	files_e2e_temp_roots_test \
+	files_e2e_tmpdir_env_test \
 	clipboard_test \
 	native_dialogs_test \
 	input_binding_codec_test \
@@ -408,6 +410,8 @@ $(OUT)/sound_volume_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
 $(OUT)/files_test_roots_test: ../src/plugins/files.cpp
+$(OUT)/files_e2e_temp_roots_test: ../src/plugins/files.cpp
+$(OUT)/files_e2e_tmpdir_env_test: ../src/plugins/files.cpp
 $(OUT)/files_cache_path_test: ../src/plugins/files.cpp
 $(OUT)/bundle_test: ../src/plugins/files.cpp
 $(OUT)/file_watcher_test: ../src/plugins/file_watcher.cpp
