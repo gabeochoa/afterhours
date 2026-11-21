@@ -350,6 +350,10 @@ struct UIPluginPostUpdateBridge : System<> {
             std::make_unique<ui::ComputeVisualFocusId<InputAction>>());
         systems.push_back(
             std::make_unique<ui::RevealKeyboardFocus<InputAction>>());
+        // Re-lay out before render if a post-layout system invalidated sizes.
+        auto relayout = std::make_unique<ui::RunAutoLayout>();
+        relayout->only_if_invalidated = true;
+        systems.push_back(std::move(relayout));
         systems.push_back(
             std::make_unique<ui::EndUIContextManager<InputAction>>());
     }
