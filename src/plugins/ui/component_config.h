@@ -184,6 +184,8 @@ struct ComponentConfig {
   // Text input: readonly mode (focusable, selectable, but not editable)
   bool text_readonly = false;
 
+  bool text_selectable = false;
+
   // Text input: clipboard operations this field refuses. All allowed by
   // default; masking a field does not change them.
   bool text_copy_disabled = false;
@@ -424,6 +426,11 @@ struct ComponentConfig {
   }
   ComponentConfig &with_readonly(bool ro = true) {
     text_readonly = ro;
+    return *this;
+  }
+  // Selection lives on UIContext (one active); stays out of tab order.
+  ComponentConfig &with_selectable_text(bool selectable = true) {
+    text_selectable = selectable;
     return *this;
   }
   ComponentConfig &with_copy_disabled(bool disabled = true) {

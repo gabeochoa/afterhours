@@ -9,11 +9,14 @@
 #include "../../ecs.h"
 #include "../../logging.h"
 #include "../autolayout.h"
+#include "../clipboard.h"
 #include "../input_system.h"
 #include "../window_manager.h"
 #include "components.h"
 #include "context.h"
 #include "entity_management.h"
+#include "selectable_text.h"
+#include "text_measure.h"
 #include "fmt/format.h"
 #include "theme.h"
 #include "ui_collection.h"
@@ -858,7 +861,8 @@ private:
   // Every guard HandleClicks applies before it would fire, so resolution and
   // firing agree on who is eligible.
   bool is_candidate(const Entity &e, const UIComponent &cmp) const {
-    if (e.is_missing<HasClickListener>() && e.is_missing<HasDragListener>())
+    if (e.is_missing<HasClickListener>() && e.is_missing<HasDragListener>() &&
+        e.is_missing<HasSelectableText>())
       return false;
     // Opted out of hit-testing entirely: the element behind it wins instead.
     if (e.has<IgnorePointerEvents>() || detail::in_inert_subtree(e))
@@ -1260,6 +1264,125 @@ struct HandleDrags : SystemWithUIContext<ui::HasDragListener> {
         context->set_focus(entity.id, FocusSource::Pointer);
       hasDragListener.down = true;
       hasDragListener.cb(entity);
+    }
+  }
+};
+
+// Only writer besides UIContext::reset; after HandleDrags so active persists across drag.
+template <typename InputAction>
+struct HandleSelectableText : SystemWithUIContext<ui::HasSelectableText> {
+  UIContext<InputAction> *context = nullptr;
+  float now_ = 0.f;
+
+  virtual void once(float dt) override {
+    context = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    if (!context)
+      return;
+    now_ += dt;
+
+    // Drop if owner gone, lest selection land on an id-reuser.
+    if (context->text_selection_entity != context->ROOT) {
+      OptEntity owner =
+          UICollectionHolder::getEntityForID(context->text_selection_entity);
+      if (!owner.valid() || !owner.asE().template has<HasSelectableText>())
+        context->clear_text_selection();
+    }
+
+    // pressed() consumes: focused fields check in build phase (earlier) and keep priority.
+    if constexpr (magic_enum::enum_contains<InputAction>("TextCopy")) {
+      if (context->has_selection() && context->pressed(InputAction::TextCopy))
+        clipboard::set_text(context->selected_text());
+    }
+
+    if (context->mouse.just_pressed &&
+        context->active_id != context->text_selection_entity)
+      context->clear_text_selection();
+  }
+
+  virtual void for_each_with(Entity &entity, UIComponent &component,
+                             HasSelectableText &selectable, float) override {
+    if (!component.was_rendered_to_screen || component.should_hide ||
+        entity.has<ShouldHide>())
+      return;
+    if (!entity.has<HasLabel>())
+      return;
+
+    const bool pressed_here =
+        context->mouse.just_pressed && context->is_active(entity.id);
+    const bool dragging_here =
+        context->mouse.left_down && !context->mouse.just_pressed &&
+        context->is_active(entity.id) &&
+        context->text_selection_entity == entity.id;
+    if (!pressed_here && !dragging_here)
+      return;
+
+    const HasLabel &label = entity.get<HasLabel>();
+    if (label.label.empty())
+      return;
+
+    // Drawn rect, not clipped hit rect: glyphs are scissored, not moved.
+    RectangleType rect = component.rect();
+    if (entity.has<HasUIModifiers>())
+      rect = entity.get<HasUIModifiers>().apply_modifier(rect);
+    rect = detail::apply_ancestor_transform(entity, rect);
+    const Vector2Type inset =
+        resolve_text_inset(context->theme, label.text_inset);
+    const std::string font_name =
+        component.font_name == UIComponent::UNSET_FONT
+            ? std::string(UIComponent::DEFAULT_FONT)
+            : component.font_name;
+    const float screen_h =
+        context->screen_height > 0.f ? context->screen_height : 720.f;
+    const float ui_scale = imm::ThemeDefaults::get().theme.ui_scale;
+    const float font_size =
+        resolve_to_pixels(component.font_size, screen_h,
+                          component.resolved_scaling_mode, ui_scale);
+    const float spacing = 1.f + label.letter_spacing;
+    auto measure = [&](const auto &s) {
+      return measure_text_line(std::string(s), font_name, font_size, spacing)
+          .x;
+    };
+    float line_height =
+        label.line_height.has_value()
+            ? resolve_to_pixels(*label.line_height, screen_h,
+                                component.resolved_scaling_mode, ui_scale)
+            : measure_text_line("Ag", font_name, font_size, spacing).y;
+    if (line_height <= 0.f)
+      line_height = font_size;
+    if (line_height <= 0.f)
+      return;
+
+    const float wrap_width = label.text_overflow == TextOverflow::Wrap
+                                 ? std::max(0.f, rect.width - 2.f * inset.x)
+                                 : 1e9f;
+    selectable_text::refresh_layout(selectable, label.label, wrap_width,
+                                    font_size, line_height, measure);
+
+    const Vector2Type origin{
+        rect.x + label.text_x_offset + inset.x,
+        rect.y + label.text_y_offset +
+            std::max(0.f, (rect.height - selectable.layout.total_height()) *
+                              0.5f)};
+    const Vector2Type local{context->mouse.pos.x - origin.x,
+                            context->mouse.pos.y - origin.y};
+    const float avail = std::max(0.f, rect.width - 2.f * inset.x);
+    const size_t pos = selectable_text::offset_at(
+        selectable.layout, label.label, local, line_height, label.alignment,
+        avail, measure);
+
+    if (pressed_here) {
+      const bool shift = input::is_key_down(keys::LEFT_SHIFT) ||
+                         input::is_key_down(keys::RIGHT_SHIFT);
+      text_selection::Selection sel;
+      if (context->text_selection_entity == entity.id)
+        sel = context->label_text_selection;
+      const int streak =
+          text_selection::register_click(selectable.clicks, now_, pos);
+      selectable_text::apply_click(sel, label.label, pos, streak, shift);
+      context->set_text_selection(entity.id, sel.anchor, sel.cursor);
+    } else {
+      context->set_text_selection(entity.id,
+                                  context->label_text_selection.anchor, pos);
     }
   }
 };

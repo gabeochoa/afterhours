@@ -14,6 +14,7 @@
 #include "component_config.h"
 #include "components.h"
 #include "context.h"
+#include "selectable_text.h"
 #include "entity_management.h"
 #include "fmt/format.h"
 
@@ -344,6 +345,15 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
     update_text_units(entity, config.label);
   } else {
     entity.removeComponentIfExists<HasTextUnitMotion>();
+  }
+
+  // I-beam only if caller picked no cursor.
+  if (config.text_selectable) {
+    entity.addComponentIfMissing<HasSelectableText>();
+    if (!config.cursor_type.has_value())
+      entity.addComponentIfMissing<HasCursor>(CursorType::Text);
+  } else {
+    entity.removeComponentIfExists<HasSelectableText>();
   }
 }
 
