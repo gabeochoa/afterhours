@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "imm_components.h"
+#include "access_key.h"
 #include "overlay.h"
 
 namespace afterhours {
@@ -226,7 +227,26 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
                                             scaling, ctx.theme.ui_scale,
                                             ctx.screen_height);
 
+  // Alt+access-char activation: a row whose label marks "&X" is chosen by
+  // pressing Alt+H (either Alt side). First match wins; disabled rows and
+  // separators never match. A mouse click this frame can still override.
   int chosen = kNoMenuSelection;
+  if (input::is_key_down(keys::LEFT_ALT) ||
+      input::is_key_down(keys::RIGHT_ALT)) {
+    int access_index = 0;
+    for (const auto &item : items) {
+      if (!item.separator && !item.disabled) {
+        const auto parsed = parse_access_key(item.label);
+        const int code =
+            parsed.has_access ? key_code_for_access_char(parsed.key) : 0;
+        if (code != 0 && input::is_key_pressed(code)) {
+          chosen = access_index;
+          break;
+        }
+      }
+      access_index++;
+    }
+  }
   int index = 0;
   for (const auto &item : items) {
     if (item.separator) {
@@ -251,7 +271,7 @@ int menu_list(HasUIContext auto &ctx, EntityParent ep_pair,
                    .with_size(ComponentSize{percent(1.0f), pixels(item_h)})
                    .disable_rounded_corners()
                    .without_border()
-                   .with_label(item.label)
+                   .with_access_label(item.label)
                    .with_disabled(item.disabled);
     if (!config.padding_is_default)
       row.with_padding(config.padding);
