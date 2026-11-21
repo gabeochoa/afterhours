@@ -10,7 +10,6 @@ using namespace afterhours;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
-// Each pane is a focus scope: Tab cycles inside it; the other pane needs a click.
 struct TwoPanes : System<DefaultUIContext> {
   EntityID left_first = -1;
   EntityID left_second = -1;

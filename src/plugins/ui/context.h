@@ -175,7 +175,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   EntityID FAKE = -2;
 
   std::set<EntityID> focused_ids;
-  // This frame's tab-focusable ids in tree order (rebuilt by HandleTabbing).
   std::vector<EntityID> focus_order;
 
   EntityID hot_id = ROOT;          // hot means the mouse is over this element
@@ -549,7 +548,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
            opt.asE().template has<ConsumesDirectionalInput>();
   }
 
-  // Single focusability rule so hit arbitration and tab order cannot drift.
   [[nodiscard]] bool is_tab_focusable(const Entity &e) const {
     if (e.template is_missing<HasClickListener>() &&
         e.template is_missing<HasDragListener>() &&
@@ -578,8 +576,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     return is_input_allowed(e.id);
   }
 
-  // Tree order is visual order for flex layouts. Unreached focusables are
-  // appended in allocation order rather than dropping out of Tab.
   [[nodiscard]] std::vector<EntityID> build_tab_order() const {
     std::vector<EntityID> order;
     std::set<EntityID> visited;
@@ -686,7 +682,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
         move_focus(-1);
       }
     }
-    // Compatibility only; navigation uses build_tab_order().
     last_processed = id;
   }
 

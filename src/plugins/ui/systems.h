@@ -1093,7 +1093,6 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
     if (!context)
       return;
-    // Initial grab takes the first in tree order, not first allocated.
     context->focus_order = context->build_tab_order();
     for (EntityID id : context->focus_order)
       context->focused_ids.insert(id);

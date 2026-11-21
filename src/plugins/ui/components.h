@@ -153,7 +153,6 @@ struct SelectOnFocus : BaseComponent {};
 struct FocusClusterRoot : BaseComponent {};
 struct InFocusCluster : BaseComponent {};
 
-// Tab stays inside this subtree (with_focus_scope); outside any scope, the whole list.
 struct FocusScope : BaseComponent {};
 
 struct FocusProxy : BaseComponent {

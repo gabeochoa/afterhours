@@ -620,7 +620,6 @@ struct ComponentConfig {
     skip_when_tabbing = skip;
     return *this;
   }
-  /// Tab cycles inside this subtree, wrapping at its edges; nearest scope wins.
   ComponentConfig &with_focus_scope(bool scope = true) {
     focus_scope = scope;
     return *this;
@@ -1160,7 +1159,6 @@ struct ComponentConfig {
       merged.hidden = overrides.hidden;
     if (overrides.skips_when_tabbing())
       merged.skip_when_tabbing = overrides.skip_when_tabbing;
-    // Conditional or an override would clear a base config's scope.
     if (overrides.is_focus_scope())
       merged.focus_scope = true;
     if (overrides.focus_ring_offset.has_value())

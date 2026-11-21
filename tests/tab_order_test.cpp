@@ -1,5 +1,3 @@
-// Tab follows tree order, not allocation order (which made floatinghotel's
-// file tree need 7 Tabs to reach its first row); FocusScope traps Tab (hanabi #336).
 
 #include "ui_test_harness.h"
 
@@ -23,7 +21,6 @@ struct Panes {
   EntityID a1, a2, b1;
 };
 
-// One builder for both emission orders so entities are identical; only tree order changes.
 Panes build_panes(ImmTestHarness &h, bool a_first, bool scope_a = false) {
   using namespace imm;
   auto &ctx = h.context();
@@ -45,14 +42,14 @@ Panes build_panes(ImmTestHarness &h, bool a_first, bool scope_a = false) {
   return out;
 }
 
-} // namespace
+}
 
 TEST(tree_order_beats_allocation_order) {
   ImmTestHarness h;
   auto &ctx = h.context();
-  const Panes alloc = build_panes(h, /*a_first=*/false);
+  const Panes alloc = build_panes(h, false);
   h.begin_frame();
-  const Panes p = build_panes(h, /*a_first=*/true);
+  const Panes p = build_panes(h, true);
   CHECK(p.a1 == alloc.a1 && p.b1 == alloc.b1);
 
   const std::vector<EntityID> expected{p.a1, p.a2, p.b1};
@@ -92,7 +89,7 @@ TEST(focus_scope_traps_tab_and_wraps_at_its_edges) {
   ImmTestHarness h;
   auto &ctx = h.context();
   h.begin_frame();
-  const Panes p = build_panes(h, /*a_first=*/true, /*scope_a=*/true);
+  const Panes p = build_panes(h, true, true);
 
   CHECK(ctx.nearest_focus_scope(p.a1) != ctx.ROOT);
   CHECK(ctx.nearest_focus_scope(p.b1) == ctx.ROOT);
@@ -106,14 +103,13 @@ TEST(focus_scope_traps_tab_and_wraps_at_its_edges) {
   CHECK(ctx.has_focus(p.a2));
 }
 
-// Unscoped Tab is how focus enters a scope.
 TEST(unscoped_focus_tabs_the_whole_list) {
   using namespace imm;
   ImmTestHarness h;
   auto &ctx = h.context();
   h.begin_frame();
   auto outside = button(ctx, mk(h.root(), 2), ComponentConfig{});
-  const Panes p = build_panes(h, /*a_first=*/true, /*scope_a=*/true);
+  const Panes p = build_panes(h, true, true);
 
   const auto order = ctx.build_tab_order();
   CHECK(order.size() == 4);
@@ -178,9 +174,9 @@ TEST(handle_tabbing_publishes_tree_order_and_grabs_its_first) {
   auto &ctx = h.context();
   EntityHelper::registerSingleton<UIContext<ui_test::TestInputAction>>(
       h.context_entity());
-  const Panes alloc = build_panes(h, /*a_first=*/false);
+  const Panes alloc = build_panes(h, false);
   h.begin_frame();
-  const Panes p = build_panes(h, /*a_first=*/true);
+  const Panes p = build_panes(h, true);
   CHECK(p.a1 == alloc.a1);
 
   HandleTabbing<ui_test::TestInputAction> tabbing;

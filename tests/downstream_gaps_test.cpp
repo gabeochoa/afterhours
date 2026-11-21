@@ -1281,7 +1281,6 @@ TEST(d36_tray_keeps_its_own_arrow_keys) {
                  __LINE__);
 }
 
-// Default: Down tabs to the next widget (list-based now, so destination not ROOT).
 TEST(d36_plain_widget_still_tabs_on_down) {
   ImmTestHarness h;
   auto b = button(h.context(), mk(h.root(), 0),
