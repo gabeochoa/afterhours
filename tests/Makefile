@@ -120,6 +120,7 @@ ALL_TESTS := \
 	triangle_winding_none_test \
 	text_unit_motion_test \
 	text_alignment_test \
+	text_origin_test \
 	sound_volume_test \
 	audio_plugin_test \
 	audio_stream_test \

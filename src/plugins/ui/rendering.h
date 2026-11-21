@@ -915,6 +915,53 @@ resolve_text_inset(const Theme &theme,
   return Vector2Type{base.x * theme.ui_scale, base.y * theme.ui_scale};
 }
 
+// Where a laid-out widget's text actually starts: the exact point handed to
+// DrawTextEx (the origin), plus the resolved font size and inset. Callers
+// use it for caret overlays and IME candidate windows instead of re-deriving
+// the inset. Valid after autolayout; stale after any relayout. In laid-out
+// coordinates: add ancestor scroll/clip transforms for screen space.
+struct ResolvedTextOrigin {
+  Vector2Type origin{0.f, 0.f};
+  float font_size = 0.f;
+  Vector2Type inset{0.f, 0.f};
+  RectangleType laid_out_rect{0.f, 0.f, 0.f, 0.f};
+  bool text_fits = true;
+};
+
+// Nullopt when the entity has no HasLabel. Styled spans are measured as the
+// joined label, which is how the immediate renderer sizes them.
+static inline std::optional<ResolvedTextOrigin>
+resolved_text_origin(const Entity &entity,
+                     const ui::FontManager &fm, const Theme &theme,
+                     float screen_height) {
+  if (!entity.has<HasLabel>() || !entity.has<UIComponent>())
+    return std::nullopt;
+  const HasLabel &hasLabel = entity.get<HasLabel>();
+  const UIComponent &cmp = entity.get<UIComponent>();
+  float explicit_fs = 0.f;
+  if (cmp.font_size_explicitly_set) {
+    const float uis = imm::ThemeDefaults::get().theme.ui_scale;
+    explicit_fs = resolve_to_pixels(cmp.font_size, screen_height,
+                                    cmp.resolved_scaling_mode, uis);
+  }
+  const Vector2Type inset = resolve_text_inset(theme, hasLabel.text_inset);
+  RectangleType label_rect = cmp.rect();
+  label_rect.x += hasLabel.text_x_offset;
+  label_rect.width -= hasLabel.text_x_offset;
+  label_rect.y += hasLabel.text_y_offset;
+  const TextPositionResult pos = position_text_ex(
+      fm, hasLabel.label.c_str(), label_rect, hasLabel.alignment, inset,
+      explicit_fs, hasLabel.letter_spacing, hasLabel.text_overflow,
+      /*report_overflow=*/false);
+  return ResolvedTextOrigin{
+      .origin = Vector2Type{pos.rect.x, pos.rect.y},
+      .font_size = pos.rect.height,
+      .inset = inset,
+      .laid_out_rect = cmp.rect(),
+      .text_fits = pos.text_fits,
+  };
+}
+
 template <typename DrawLine>
 void render_checkbox_mark(RectangleType rect, const HasLabel &style,
                           const Theme &theme, float opacity, DrawLine draw) {
