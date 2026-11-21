@@ -38,6 +38,22 @@ inline std::pair<float, float> e2e_screen_size() {
     return {1280.f, 720.f};  // fallback
 }
 
+// Render checkpoint for lookups: true while cmd must wait for a render
+// newer than dispatch, so it cannot resolve against a view drawn before
+// the latest logic ticks (hosts may tick many times per render). The
+// runner arms it by stamping seen_render at dispatch; an unarmed command
+// (seen_render < 0, e.g. a handler driven directly) evaluates immediately.
+// Counted by registry generation, not frames, like expect_no_text.
+inline bool render_checkpoint_pending(PendingE2ECommand &cmd) {
+    if (cmd.seen_render < 0) return false;
+    if (cmd.seen_render ==
+        static_cast<long long>(VisibleTextRegistry::instance().generation())) {
+        cmd.retry();
+        return true;
+    }
+    return false;
+}
+
 // Handle 'type "text"' command - types characters
 struct HandleTypeCommand : System<PendingE2ECommand> {
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
@@ -587,6 +603,7 @@ struct HandleExpectTextCommand : System<PendingE2ECommand> {
             return;
         }
 
+        if (render_checkpoint_pending(cmd)) return;
         auto &registry = VisibleTextRegistry::instance();
         if (cmd.is("expect_text_fully_visible")
                 ? registry.contains_fully_visible(cmd.args[0])
@@ -613,6 +630,7 @@ struct HandleExpectTextInsensitiveCommand : System<PendingE2ECommand> {
             return;
         }
 
+        if (render_checkpoint_pending(cmd)) return;
         if (VisibleTextRegistry::instance().contains_ignoring_case(
                 cmd.args[0])) {
             cmd.consume();
@@ -851,6 +869,7 @@ struct HandleAssertNoOverflowCommand : System<PendingE2ECommand> {
         if (cmd.is_consumed() ||
             (!cmd.is("assert_no_overflow") && !check_parents))
             return;
+        if (render_checkpoint_pending(cmd)) return;
 
         auto [vw, vh] = e2e_screen_size();
         // Same reason the parent tolerance scales: a full-width element snaps

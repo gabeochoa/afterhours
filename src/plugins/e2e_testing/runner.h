@@ -697,6 +697,10 @@ class E2ERunner {
         pending.wait_until_seconds = cmd.wait_until_seconds;
         pending.retry_budget = cmd.wait_until_seconds;
         pending.wall_deadline = wall_deadline;
+        // Arm the render checkpoint: lookups wait for a render newer than
+        // this stamp before resolving (see render_checkpoint_pending).
+        pending.seen_render =
+            static_cast<long long>(VisibleTextRegistry::instance().generation());
 
         // Handle validate specially since it needs property_getter
         if (cmd.name == "validate" && property_getter_ &&

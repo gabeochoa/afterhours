@@ -64,8 +64,9 @@ struct PendingE2ECommand : BaseComponent {
   // reset_retry() keeps it: it is the most recent evaluation, not a frame's.
   std::string last_mismatch;
   int frames_alive = 0; // How many frames this command has existed
-  // VisibleTextRegistry generation this command first looked at, for the
-  // assertions that need a render to have happened since. -1 = not yet looked.
+  // VisibleTextRegistry generation at dispatch (stamped by E2ERunner), for
+  // the lookups that need a render to have happened since. -1 = unarmed:
+  // evaluate immediately (handlers driven outside the runner).
   long long seen_render = -1;
   static constexpr int MAX_FRAMES = 30; // Commands timeout after 30 frames (~0.5s at 60fps)
   CommandState state = CommandState::Ready;

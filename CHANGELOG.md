@@ -6,6 +6,10 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+### Behaviour
+
+- **E2E UI lookups wait for a render checkpoint.** `click_ui`/`click_text`/`click_button`/`click_label`/`focus_ui`/`toggle_checkbox`/`set_slider`/`select_dropdown`, `assert_ui`, `assert_ui_text`, `expect_no_ui`, `expect_point_in`, `dump_ui`, `expect_text*` and `assert_no_overflow` no longer resolve against a view drawn before the latest logic ticks when a host batches ticks: the runner stamps the render generation at dispatch and lookups retry until a newer render lands (not-found clicks now retry to the usual timeout instead of failing on first sight). Hosts that dispatch commands by hand can stamp `PendingE2ECommand::seen_render` the same way; unarmed commands evaluate immediately as before. Covered by `e2e_render_checkpoint_test`.
+
 ### Breaking
 
 **The animation plugin is rewritten around `afterhours::motion`.** `animation::anim<Key>(k).to(v, dur, EasingType)`, `AnimationManager`, `AnimHandle`, `sequence`, `loop_sequence`, `one_shot`, `clamp_value`, `get_value`, `register_update_systems<Key>()` and the declarative `with_animation(Anim::on_hover()...)` / `HasAnimationState` are gone. Every old call is a compile error.
