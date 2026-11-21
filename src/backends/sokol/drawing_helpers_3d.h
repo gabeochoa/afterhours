@@ -269,7 +269,6 @@ inline void draw_cylinder_wires(Vector3Type start, Vector3Type end, float rtop,
   sgl_end();
 }
 
-// Flat ellipse on the XZ plane through center, as a triangle fan.
 inline void draw_ellipse_3d(Vector3Type center, float radius_x, float radius_z,
                             Color c) {
   constexpr int SEGMENTS = 24;

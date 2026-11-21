@@ -44,7 +44,6 @@ inline void draw_cylinder_wires(raylib::Vector3 start, raylib::Vector3 end,
   raylib::DrawCylinderWiresEx(start, end, rtop, rbot, slices, c);
 }
 
-// Flat ellipse on the XZ plane through center, as a triangle fan.
 inline void draw_ellipse_3d(raylib::Vector3 center, float radius_x,
                             float radius_z, Color c) {
   constexpr int SEGMENTS = 24;

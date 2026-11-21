@@ -1,8 +1,3 @@
-// blob_shadow_test.cpp
-// compute_blob_shadow math under the none backend: centre on the sampled
-// ground, radii from the footprint, alpha fading and radii spreading with
-// height, below-ground clamped.
-
 #define FMT_HEADER_ONLY
 #define AFTER_HOURS_USE_NONE
 #include <fmt/format.h>

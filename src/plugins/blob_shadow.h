@@ -1,15 +1,8 @@
 #pragma once
 
-// Blob shadows: a soft dark ellipse on the ground under an object.
-// The directional ShadowMap pass is deferred (needs renderer integration
-// decisions); this is the cheap stand-in games ship first.
-//
-//   auto blob = compute_blob_shadow(pos, 0.6f, 0.4f,
-//                                   [](float x, float z) { return ground_y(x, z); });
-//   draw_blob_shadow(blob);  // inside begin_3d/end_3d
-//
-// Height above the ground fades the blob and spreads it. Below-ground
-// objects clamp to the ground (full strength, footprint size).
+// Blob shadows: soft dark ellipse on the ground under an object.
+// ShadowMap pass deferred (needs renderer integration decisions).
+// draw_blob_shadow must be called inside begin_3d/end_3d.
 
 #include <algorithm>
 #include <cmath>
@@ -61,7 +54,6 @@ BlobShadow compute_blob_shadow(Vector3Type pos, float footprint_x,
   return out;
 }
 
-// Round footprint, and flat-ground convenience overloads.
 template <typename Ground>
 BlobShadow compute_blob_shadow(Vector3Type pos, float footprint_radius,
                                Ground &&ground_y,
@@ -87,9 +79,7 @@ inline void draw_blob_shadow(const BlobShadow &blob,
                              const BlobShadowConfig &cfg = {}) {
   if (!blob.visible()) return;
   const int rings = std::max(1, cfg.rings);
-  // Each ring adds alpha/rings, so the centre accumulates to blob.alpha
-  // and only the faintest ring reaches the edge: a radial falloff from
-  // flat ellipse draws, no gradient primitive needed.
+  // Concentric rings approximate a radial falloff (no gradient primitive).
   const auto a = static_cast<unsigned char>(
       std::clamp(blob.alpha / static_cast<float>(rings), 0.f, 1.f) * 255.f);
   if (a == 0) return;
