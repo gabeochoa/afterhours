@@ -115,6 +115,7 @@ ALL_TESTS := \
 	ui_modifiers_test \
 	ancestor_transform_test \
 	text_units_test \
+	utf8_sanitize_test \
 	text_fit_test \
 	none_measure_test \
 	triangle_winding_none_test \
