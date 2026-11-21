@@ -27,6 +27,7 @@
 #include <cstdlib>
 #include <format>
 #include <functional>
+#include <map>
 #include <string_view>
 #include <magic_enum/magic_enum.hpp>
 
@@ -790,6 +791,82 @@ struct HandleExpectCheckboxCommand : System<PendingE2ECommand> {
   }
 };
 
+// Handle 'expect_accessible <debug_name> [name=..] [role=..] [value=..]
+// [description=..]', or 'expect_accessible name=<accessible name> [...]'
+// with no debug name (the first arg is a prop): finds the element BY its
+// accessible name, so a script can audit that every wordless control names
+// itself without knowing debug names. Every prop given must match.
+template <typename InputAction>
+struct HandleExpectAccessibleCommand : System<PendingE2ECommand> {
+  virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+    if (cmd.is_consumed() || !cmd.is("expect_accessible")) return;
+    if (!cmd.has_args(1)) {
+      cmd.fail("expect_accessible requires a name or name=<accessible name>");
+      return;
+    }
+    std::map<std::string, std::string> want;
+    size_t first_prop = 0;
+    std::string debug_name;
+    if (cmd.arg(0).find('=') == std::string::npos) {
+      debug_name = cmd.arg(0);
+      first_prop = 1;
+    }
+    for (size_t i = first_prop; i < cmd.args.size(); ++i) {
+      const std::string &raw = cmd.arg(i);
+      auto eq = raw.find('=');
+      if (eq == std::string::npos || eq == 0) {
+        cmd.fail(std::format("expect_accessible: expected prop=value, got '{}'",
+                             raw));
+        return;
+      }
+      want[raw.substr(0, eq)] = raw.substr(eq + 1);
+    }
+    if (!debug_name.empty() && want.empty()) want["name"] = debug_name;
+
+    auto query = ui_query()
+                     .whereHasComponent<ui::UIComponent>()
+                     .whereHasComponent<ui::HasAccessibility>()
+                     .whereLambda([&](const Entity &e) {
+                       if (!e.get<ui::UIComponent>().was_rendered_to_screen)
+                         return false;
+                       if (!debug_name.empty())
+                         return e.has<ui::UIComponentDebug>() &&
+                                e.get<ui::UIComponentDebug>().name() ==
+                                    debug_name;
+                       auto it = want.find("name");
+                       return it == want.end() ||
+                              e.get<ui::HasAccessibility>().name == it->second;
+                     })
+                     .first();
+    for (Entity &entity : query.gen()) {
+      auto &a = entity.get<ui::HasAccessibility>();
+      for (auto &[prop, expected] : want) {
+        std::string actual;
+        if (prop == "name") actual = a.name;
+        else if (prop == "role") actual = ui::accessible_role_name(a.role);
+        else if (prop == "value") actual = a.value;
+        else if (prop == "description") actual = a.description;
+        else {
+          cmd.fail(std::format("expect_accessible: unknown prop '{}'", prop));
+          return;
+        }
+        if (actual != expected) {
+          cmd.retry_with(std::format(
+              "expect_accessible {}={} but got {} (role={} name=\"{}\" "
+              "value=\"{}\")",
+              prop, expected, actual, ui::accessible_role_name(a.role),
+              a.name, a.value));
+          return;
+        }
+      }
+      cmd.consume();
+      return;
+    }
+    cmd.retry_with(std::format("expect_accessible: no element found for '{}'",
+                               debug_name.empty() ? want["name"] : debug_name));
+  }
+};
+
 // Handle 'expect_slider name value [tolerance]' - asserts slider value
 template <typename InputAction>
 struct HandleExpectSliderCommand : System<PendingE2ECommand> {
@@ -1279,6 +1356,19 @@ inline void dump_ui_node(std::string &out, Entity &entity, int depth) {
   if (entity.has<ui::HasLabel>())
     out += " text=\"" + xml_escape(truncate_text(entity.get<ui::HasLabel>().label)) + "\"";
 
+  if (entity.has<ui::HasAccessibility>()) {
+    auto &a = entity.get<ui::HasAccessibility>();
+    if (a.role != ui::AccessibleRole::None)
+      out += std::format(" role=\"{}\"", ui::accessible_role_name(a.role));
+    if (!a.name.empty())
+      out += " accessible_name=\"" + xml_escape(truncate_text(a.name)) + "\"";
+    if (!a.value.empty())
+      out += " accessible_value=\"" + xml_escape(truncate_text(a.value)) + "\"";
+    if (!a.description.empty())
+      out += " accessible_description=\"" +
+             xml_escape(truncate_text(a.description)) + "\"";
+  }
+
   const auto sides = [&](const char *attr, const auto &v) {
     const float t = v[ui::Axis::top], r = v[ui::Axis::right],
                 b = v[ui::Axis::bottom], l = v[ui::Axis::left];
@@ -1417,6 +1507,21 @@ inline std::string check_ui_property(Entity &entity, const std::string &prop,
     auto &label = entity.get<ui::HasLabel>().label;
     if (label != expected)
       return std::format("text=\"{}\" but got \"{}\"", expected, label);
+    return "";
+  }
+  else if (prop == "accessible_name" || prop == "role" ||
+           prop == "accessible_value" || prop == "accessible_description") {
+    is_int_prop = false;
+    if (!entity.has<ui::HasAccessibility>())
+      return std::format("{}={} but element has no accessibility semantics",
+                         prop, expected);
+    auto &a = entity.get<ui::HasAccessibility>();
+    std::string actual = prop == "role" ? ui::accessible_role_name(a.role)
+                         : prop == "accessible_name" ? a.name
+                         : prop == "accessible_value" ? a.value
+                                                      : a.description;
+    if (actual != expected)
+      return std::format("{}=\"{}\" but got \"{}\"", prop, expected, actual);
     return "";
   }
   else if (prop == "scroll_x" || prop == "scroll_y") {
@@ -1819,6 +1924,8 @@ void register_ui_commands(SystemManager &sm,
       std::make_unique<HandleExpectCheckboxCommand<InputAction>>());
   sm.register_update_system(
       std::make_unique<HandleExpectSliderCommand<InputAction>>());
+  sm.register_update_system(
+      std::make_unique<HandleExpectAccessibleCommand<InputAction>>());
   sm.register_update_system(
       std::make_unique<HandleExpectInputTextCommand<InputAction>>());
   sm.register_update_system(

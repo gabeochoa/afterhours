@@ -287,6 +287,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
       });
 
   owned_value = sliderState.value;
+  detail::apply_accessibility(
+      entity, config, AccessibleRole::Slider, original_label,
+      fmt::format("{}%", std::lround(sliderState.value * 100)));
   entity.template addComponentIfMissing<FocusClusterRoot>();
   // Consumed on read, not cleared at the top of the build: the drag system runs
   // after it, so clearing first threw away the change it had just recorded and
@@ -521,6 +524,9 @@ ElementResult progress_bar(
             .with_render_layer(config.render_layer + 2));
   }
 
+  detail::apply_accessibility(
+      entity, config, AccessibleRole::ProgressBar, original_label,
+      fmt::format("{}%", static_cast<int>(normalized * 100)));
   return ElementResult{false, entity, normalized};
 }
 
@@ -762,6 +768,9 @@ ElementResult stepper(HasUIContext auto &ctx, EntityParent ep_pair,
     stepperState.changed_since = true;
   }
 
+  detail::apply_accessibility(
+      entity, config, AccessibleRole::Stepper, config.label,
+      std::string(options[stepperState.index % options.size()]));
   // Write state back to caller
   option_index = stepperState.index;
   const bool changed = std::exchange(stepperState.changed_since, false);
