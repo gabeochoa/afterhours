@@ -367,14 +367,15 @@ inline void sokol_init_cb() {
 }
 
 inline void sokol_frame_cb() {
-  g_frame_elapsed += sapp_frame_duration();
-  const bool granted =
-      g_on_demand ? frame_loop::consume_frame_request()
-                  : g_target_fps <= 0 || g_frame_elapsed >= 1.0 / g_target_fps;
-  frame_loop::note_frame(granted);
-  if (!granted)
+  const bool requested =
+      g_on_demand ? frame_loop::consume_frame_request() : false;
+  const auto decision = g_cadence.on_callback(
+      sapp_frame_duration(), requested,
+      g_on_demand ? frame_loop::Mode::OnDemand : frame_loop::Mode::Continuous,
+      g_target_fps);
+  frame_loop::note_frame(decision.admitted);
+  if (!decision.admitted)
     return;
-  g_frame_elapsed = 0.0;
   const double lap = stm_sec(stm_laptime(&g_last_frame_tick));
   g_frame_dt = lap > 0.0 ? lap : sapp_frame_duration();
   if (g_frame_fn)
@@ -950,7 +951,8 @@ struct MetalPlatformAPI {
     metal_detail::g_frame_fn = cfg.frame;
     metal_detail::g_cleanup_fn = cfg.cleanup;
     metal_detail::g_target_fps = cfg.target_fps;
-    metal_detail::g_frame_elapsed = 1.0;
+    metal_detail::g_cadence.configure(cfg.frame_mode, cfg.target_fps);
+    metal_detail::g_cadence.prime();
     metal_detail::g_last_frame_tick = 0;
     metal_detail::g_on_demand =
         cfg.frame_mode == frame_loop::Mode::OnDemand;
