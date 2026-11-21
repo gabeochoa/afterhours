@@ -341,7 +341,8 @@ ALL_TESTS := \
 	window_helpers_test \
 	translation_test \
 	layout_inspector_test \
-	letter_spacing_zero_test
+	letter_spacing_zero_test \
+	imm_instance_test
 
 # .app packaging is macOS-only, and the test shells out to plutil.
 ifeq ($(UNAME_S),Darwin)

@@ -79,6 +79,27 @@ inline EntityParent
 mk(Entity &parent, EntityID otherID = -1,
    const std::source_location location = std::source_location::current());
 
+// Active instance keys, outermost first; mixed into every mk hash below.
+inline std::vector<EntityID> imm_instance_stack;
+
+// Salts every mk() inside its scope, so one subtree function built N times
+// under the same parent gets N distinct entity sets.
+struct ImmScope {
+  explicit ImmScope(EntityID instance_key) {
+    imm_instance_stack.push_back(instance_key);
+  }
+  ~ImmScope() { imm_instance_stack.pop_back(); }
+  ImmScope(const ImmScope &) = delete;
+  ImmScope &operator=(const ImmScope &) = delete;
+};
+
+// THE way to root a repeated subtree: distinct instance_key per instance;
+// descendants hang off the returned root, so they need no change.
+inline EntityParent
+mk_instance(Entity &parent, EntityID instance_key,
+            const std::source_location location =
+                std::source_location::current());
+
 namespace detail {
 // A recycled list row reuses one entity for a position in the visible window
 // rather than creating one per item. `otherID` is that position and `key` is
@@ -116,6 +137,9 @@ inline UI_UUID hash_call_site(EntityID parent_id, EntityID otherID,
   };
   mix_int(parent_id);
   mix_int(otherID);
+  mix_int(static_cast<long long>(imm_instance_stack.size()));
+  for (EntityID k : imm_instance_stack)
+    mix_int(k);
   mix_str(loc.file_name());
   mix_int(loc.line());
   mix_int(loc.column());
@@ -175,6 +199,12 @@ inline EntityParent
 mk(Entity &parent, EntityID otherID,
    const std::source_location location) {
   return mk_impl(parent, otherID, 0, false, nullptr, location);
+}
+
+inline EntityParent mk_instance(Entity &parent, EntityID instance_key,
+                                const std::source_location location) {
+  ImmScope scope(instance_key);
+  return mk_impl(parent, -1, 0, false, nullptr, location);
 }
 
 namespace detail {
