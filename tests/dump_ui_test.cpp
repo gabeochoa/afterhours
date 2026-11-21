@@ -465,7 +465,7 @@ TEST(imm_scroll_view) {
 
   std::string xml = h.dump();
   CHECK(xml.find("scroll_x=\"0\"") != std::string::npos);
-  CHECK(xml.find("scroll_y=\"43\"") != std::string::npos);
+  CHECK(xml.find("scroll_y=\"42.7\"") != std::string::npos);
 }
 
 // Integer-rounded coordinates
@@ -546,6 +546,37 @@ TEST(imm_spacing_attributes) {
   CHECK(xml.find("gap=\"6\"") != std::string::npos);
   CHECK(count_occurrences(xml, "padding=") == 1);
   CHECK(count_occurrences(xml, "gap=") == 1);
+}
+
+
+// Subpixel geometry is exposed unrounded: the floatinghotel EOF row sat at
+// y=848.40625 h=25.6 (bottom 874.00625, 0.00625 past a viewport ending at
+// 874) and rounded dump values (848 + 26 = 874) hid that excess entirely.
+TEST(imm_subpixel_coords_exposed) {
+  ImmTestHarness h;
+
+  imm::div(h.context(), imm::mk(h.root(), 0),
+           ComponentConfig{}
+               .with_size(ComponentSize{pixels(100.6f), pixels(25.6f)})
+               .with_absolute_position(10.40625f, 574.40625f)
+               .with_debug_name("subpixel_row"));
+  imm::div(h.context(), imm::mk(h.root(), 1),
+           ComponentConfig{}
+               .with_size(ComponentSize{pixels(123), pixels(45)})
+               .with_debug_name("precise"));
+
+  h.layout_only();
+  std::string xml = h.dump();
+  printf("%s", xml.c_str());
+
+  // Fractional values print unrounded; integral ones stay integer-formatted.
+  CHECK(xml.find("name=\"subpixel_row\"") != std::string::npos);
+  CHECK(xml.find("x=\"10.40625\"") != std::string::npos);
+  CHECK(xml.find("y=\"574.40625\"") != std::string::npos);
+  CHECK(xml.find("w=\"100.6\"") != std::string::npos);
+  CHECK(xml.find("h=\"25.6\"") != std::string::npos);
+  CHECK(xml.find("w=\"123\"") != std::string::npos);
+  CHECK(xml.find("h=\"45\"") != std::string::npos);
 }
 
 int main() {
