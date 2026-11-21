@@ -198,6 +198,7 @@ ALL_TESTS := \
 	color_contrast_test \
 	scissor_coalescing_test \
 	focus_origin_test \
+	tab_order_test \
 	cleanup_order_test \
 	entity_pool_test \
 	entity_query_test \
