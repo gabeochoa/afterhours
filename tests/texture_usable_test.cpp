@@ -1,13 +1,3 @@
-// texture_is_usable(): per-backend readiness query plus the metadata-only
-// image_size() it exists to pair with (Pumpkin D, Tier 4).
-//
-// A game that clamps sprites headlessly needs image dimensions without a
-// GPU, and needs to know whether a texture upload would work before it
-// tries one. image_size() answers the first by reading the header only
-// (stbi_info, no decode); texture_is_usable() answers the second from the
-// live backend state, so a NONE-stage clamp keeps working while an upload
-// request is skipped instead of failing loudly.
-
 #define FMT_HEADER_ONLY
 #if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_SOKOL)
 #define AFTER_HOURS_USE_NONE
@@ -36,7 +26,6 @@ static void check(bool cond, const std::string &what) {
   }
 }
 
-// Minimal valid 3x2 RGBA PNG (same fixture as image_test).
 static const std::array<std::uint8_t, 86> png_3x2 = {
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
     0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x02,
@@ -48,8 +37,6 @@ static const std::array<std::uint8_t, 86> png_3x2 = {
     0x60, 0x82};
 
 static void check_size_query() {
-  // Header only: no decode_image call, and on backends without a texture
-  // context the answer comes back anyway — that is the clamp use case.
   auto size = image_size(png_3x2);
   check(size && size->width == 3 && size->height == 2, "image_size reads 3x2");
   check(!texture_is_usable(),
@@ -65,7 +52,6 @@ static void check_live_backend() {
   check(graphics::init(config), "headless init");
   check(texture_is_usable(), "usable after headless init");
 
-  // The query is honest: a usable answer means the upload actually lands.
   auto image = decode_image(png_3x2);
   check(image.has_value(), "decode for upload");
   if (image) {
