@@ -1,8 +1,3 @@
-// proximity_pool_test.cpp
-// ProximityPool under the none backend: nearest-N assignment, stable
-// assignments (no churn while the nearest set is unchanged), farthest
-// recycling when demand exceeds N, and release on demand drop.
-
 #define FMT_HEADER_ONLY
 #define AFTER_HOURS_USE_NONE
 #include <fmt/format.h>
@@ -53,7 +48,6 @@ static void wire(ProximityPool &pool, Counters &c) {
 }
 
 int main() {
-  // Nearest N of a larger demand, with the acquire payload.
   {
     EntityCollection col;
     Counters c;
@@ -80,9 +74,6 @@ int main() {
     check(got1 && got2, "acquires carry the two nearest positions");
     check(c.acquire_indices.size() == 2, "indices ride along");
   }
-
-  // Stable: same nearest set (player steps closer, indices reordered in
-  // the span) means the same entities stay put and nothing churns.
   {
     EntityCollection col;
     Counters c;
@@ -102,8 +93,6 @@ int main() {
     }
     check(e5 != nullptr, "entity on the nearest position exists");
     c.reset();
-
-    // Player moved a little; the nearest three are the same three.
     pool.update({1.f, 0.f, 0.f}, desired);
     check(c.acquires == 0 && c.releases == 0,
           "unchanged nearest set churns nothing");
@@ -115,11 +104,6 @@ int main() {
     }
     check(kept, "nearest position keeps its entity");
   }
-
-  // Player teleports: the still-nearest-2 entity stays, the farthest one
-  // is recycled onto the new nearest position (one release + one acquire).
-  // From (100,0,0) the nearest two of {1,2,100} are {100, 2}, so the
-  // entity on 2 stays and the one on 1 (farthest from the player) moves.
   {
     EntityCollection col;
     Counters c;
@@ -161,8 +145,6 @@ int main() {
     check(new_near, "teleported player gets coverage at the new spot");
     check(far_recycled, "recycled entity came from the farthest slot");
   }
-
-  // Demand drops below N: extras release. Empty span releases all.
   {
     EntityCollection col;
     Counters c;
@@ -197,8 +179,6 @@ int main() {
     check(pool.entity_at(99) == nullptr && pool.position_at(99) == nullptr,
           "out-of-range slots read empty");
   }
-
-  // Demand exceeds N from a cold start: exactly N active, all nearest.
   {
     EntityCollection col;
     Counters c;

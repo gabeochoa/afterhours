@@ -1,24 +1,4 @@
 #pragma once
-
-// Player-centred pool of reusable entities: a fixed set of N entities
-// recycled onto the N desired positions nearest the player each update.
-//
-//   ProximityPool pool(player_collection, 64);
-//   pool.set_on_acquire([](Entity &e, const Vector3Type &pos, size_t i) {
-//     e.get<MyComp>().pos = pos;  // spawn / activate
-//   });
-//   pool.set_on_release([](Entity &e) { /* despawn / deactivate */ });
-//   pool.update(player_pos, desired_positions);  // nearest K = min(N, size)
-//   // also: entity_at(slot), position_at(slot), active_count()
-//
-// Assignment is stable: a slot keeps its desired position while that
-// position is still among the nearest (greedy nearest first, distance 0
-// wins), so walking around does not churn. on_acquire fires whenever a
-// slot takes a (different) desired position, on_release whenever it gives
-// one up; staying put fires neither, so a counting test sees 0 churn.
-// An empty desired span releases everything. Brute-force nearest at
-// N*M; the spatial index (R-223) can take over later.
-
 #include <algorithm>
 #include <functional>
 #include <span>
@@ -36,10 +16,6 @@ struct ProximityPool {
   using Release = std::function<void(Entity &)>;
 
   ProximityPool() = default;
-
-  // Owns `capacity` entities created in `collection` right away (factory
-  // runs on each). They are ordinary entities: do not delete them out from
-  // under the pool.
   ProximityPool(EntityCollection &collection, size_t capacity,
                 Factory factory = {}) {
     init(collection, capacity, std::move(factory));
@@ -74,7 +50,6 @@ struct ProximityPool {
   int desired_at(size_t slot) const {
     return slot < slots_.size() ? slots_[slot].desired : -1;
   }
-  // Null for a free slot.
   const Vector3Type *position_at(size_t slot) const {
     if (slot >= slots_.size() || slots_[slot].desired < 0)
       return nullptr;
@@ -84,8 +59,6 @@ struct ProximityPool {
   void update(const Vector3Type &player,
               std::span<const Vector3Type> desired) {
     const size_t want = std::min(slots_.size(), desired.size());
-
-    // Nearest `want` desired indices to the player.
     std::vector<size_t> targets(desired.size());
     for (size_t i = 0; i < desired.size(); ++i)
       targets[i] = i;
@@ -95,10 +68,6 @@ struct ProximityPool {
                                dist_sq(desired[b], player);
                       });
     targets.resize(want);
-
-    // Greedy nearest: smallest (slot, target) distance first, each used
-    // once. A slot already sitting on a target wins it at distance 0, so
-    // unchanged assignments never churn.
     struct Pair {
       float dist;
       size_t slot, target;
@@ -114,7 +83,6 @@ struct ProximityPool {
     std::vector<int> next(slots_.size(), -1);
     std::vector<char> used(targets.size(), 0);
     std::vector<char> taken(slots_.size(), 0);
-    // Empty desired span: no targets, every slot releases below.
     for (const auto &p : pairs) {
       if (taken[p.slot])
         continue;
@@ -130,7 +98,7 @@ struct ProximityPool {
       Slot &slot = slots_[s];
       const int fresh = next[s];
       if (fresh == slot.desired)
-        continue; // stable: same desired position, no callbacks
+        continue;
       if (slot.desired >= 0 && on_release_)
         on_release_(*slot.entity);
       slot.desired = fresh;
@@ -146,7 +114,7 @@ struct ProximityPool {
 private:
   struct Slot {
     Entity *entity;
-    int desired = -1; // index into the last desired span, -1 = free
+    int desired = -1;
     Vector3Type position{};
   };
 
@@ -162,8 +130,8 @@ private:
     for (size_t i = 0; i < v.size(); ++i)
       if (v[i] == x)
         return i;
-    return v.size() - 1; // unreachable: target was built from v
+    return v.size() - 1;
   }
 };
 
-} // namespace afterhours
+}
