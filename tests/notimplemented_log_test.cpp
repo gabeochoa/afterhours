@@ -161,6 +161,21 @@ int main() {
   check(!afterhours::input::is_key_pressed_repeat(65),
         "input stub still returns false");
 
+  check_once(
+      [] {
+        afterhours::draw_line(0, 0, 10, 10, afterhours::Color{});
+      },
+      "draw_line");
+  check_once([] { (void)afterhours::input::get_mouse_position(); },
+             "get_mouse_position");
+  check_once([] { (void)afterhours::input::is_key_pressed(65); },
+             "is_key_pressed");
+  check_once(
+      [] {
+        afterhours::input::draw_text("x", 0, 0, 12);
+      },
+      "draw_text");
+
   log_sink_fn = previous;
   std::printf("%d/%d checks passed\n", checks_passed, checks_run);
   return checks_passed == checks_run ? 0 : 1;
