@@ -16,6 +16,7 @@
 #include "../../capture.h"
 #include "../../render_capture.h"
 #include "../../graphics.h"
+#include "../../render_counters.h"
 #include "../../plugins/color.h"
 #include "../../plugins/texture_manager.h"
 #include "font_helper.h"
@@ -1232,6 +1233,7 @@ inline graphics::RenderTextureType load_render_texture_with_samples(int w,
   rt.resolve_view_id = resolve_view.id;
   rt.sampler_id = smp.id;
   rt.sgl_ctx_id = sgl_ctx.id;
+  render_counters::note_create();
   return rt;
 }
 
@@ -1866,6 +1868,7 @@ inline TextureType load_texture_from_pixels(const unsigned char *rgba, int w,
   tex.img_id = img.id;
   tex.view_id = view.id;
   tex.sampler_id = smp.id;
+  render_counters::note_create();
   return tex;
 }
 

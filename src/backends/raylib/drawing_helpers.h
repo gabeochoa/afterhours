@@ -16,6 +16,7 @@
 #include "../../render_capture.h"
 #include "../../developer.h"
 #include "../../graphics.h"
+#include "../../render_counters.h"
 #include "../../plugins/color.h"
 #include "../../plugins/texture_manager.h"
 #include "font_helper.h"
@@ -590,7 +591,9 @@ inline void set_mouse_cursor(int cursor_id) {
 }
 
 inline graphics::RenderTextureType load_render_texture(int w, int h) {
-  return raylib::LoadRenderTexture(w, h);
+  auto rt = raylib::LoadRenderTexture(w, h);
+  if (rt.id != 0) render_counters::note_create();
+  return rt;
 }
 inline graphics::RenderTextureType load_render_texture_with_samples(int w, int h, int) {
   return raylib::LoadRenderTexture(w, h);
@@ -720,7 +723,9 @@ inline constexpr int TEXTURE_WRAP_MIRROR_REPEAT =
     raylib::TEXTURE_WRAP_MIRROR_REPEAT;
 
 inline TextureType load_texture(const char *path) {
-  return raylib::LoadTexture(path);
+  auto texture = raylib::LoadTexture(path);
+  if (texture.id != 0) render_counters::note_create();
+  return texture;
 }
 
 inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
@@ -737,6 +742,7 @@ inline TextureType load_texture_from_rgba(const std::uint8_t *rgba, int w,
     log_error("load_texture_from_rgba: upload failed ({}x{})", w, h);
     return texture;
   }
+  render_counters::note_create();
   raylib::SetTextureFilter(texture, filter);
   return texture;
 }
@@ -780,6 +786,7 @@ load_texture_with_color_key(const char *path, const Color key,
   TextureType texture = raylib::LoadTextureFromImage(img);
   raylib::UnloadImage(img);
   if (texture.id != 0) {
+    render_counters::note_create();
     raylib::SetTextureFilter(texture, filter);
   }
   return texture;
