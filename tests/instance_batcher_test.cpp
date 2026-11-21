@@ -4,6 +4,9 @@
 //     composition DrawModelEx uses
 //   - copies of two models land in two groups, and flush empties them
 //   - a batched frame renders the same pixels as one draw_model per copy
+//   - per-instance tint reaches pixels and matches tinted draw_model
+//   - instanced / plain / instanced mixing renders every copy (VAO-safe)
+//   - flush() with no shader draws through the batcher-owned default shader
 //
 // Opens a hidden window: models and render targets need a GL context.
 
@@ -165,6 +168,143 @@ int main() {
 
   raylib::UnloadImage(batched);
   raylib::UnloadImage(direct);
+
+  // Per-instance tint: same tree twice, red on the left, blue on the right.
+  // Batched pixels must match draw_model with the same tints, and the two
+  // halves must carry their tints (not just differ from each other).
+  {
+    struct TintedCopy {
+      raylib::Vector3 pos;
+      Color tint;
+    };
+    TintedCopy tinted_scene[] = {{{-2, 0, 0}, {255, 0, 0, 255}},
+                                 {{2, 0, 0}, {0, 0, 255, 255}}};
+    InstanceBatcher tinted;
+    for (const TintedCopy &c : tinted_scene)
+      tinted.add(tree, c.pos, 0.f, {1, 1, 1}, 0, c.tint);
+    check(tinted.copies() == 2 && tinted.group_count() == 1,
+          "tinted copies group by model");
+    auto render_tinted = [&](bool batched_tint) {
+      raylib::BeginTextureMode(rt);
+      raylib::ClearBackground({0, 0, 0, 0});
+      raylib::BeginMode3D(cam);
+      if (batched_tint) {
+        tinted.flush(shader);
+      } else {
+        for (const TintedCopy &c : tinted_scene)
+          draw_model(tree, c.pos, 0.f, {1, 1, 1}, c.tint);
+      }
+      raylib::EndMode3D();
+      raylib::EndTextureMode();
+      raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
+      raylib::ImageFormat(&img, raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+      return img;
+    };
+    raylib::Image tint_batched = render_tinted(true);
+    raylib::Image tint_direct = render_tinted(false);
+    auto *pt = static_cast<raylib::Color *>(tint_batched.data);
+    auto *pd = static_cast<raylib::Color *>(tint_direct.data);
+    int tint_differ = 0, tint_covered = 0;
+    long left_r = 0, left_b = 0, right_r = 0, right_b = 0, left_n = 0, right_n = 0;
+    for (int y = 0; y < 256; y++) {
+      for (int x = 0; x < 256; x++) {
+        int i = y * 256 + x;
+        if (pt[i].a > 0 || pd[i].a > 0) tint_covered++;
+        int d = std::abs(pt[i].r - pd[i].r) + std::abs(pt[i].g - pd[i].g) +
+                std::abs(pt[i].b - pd[i].b) + std::abs(pt[i].a - pd[i].a);
+        if (d > 6) tint_differ++;
+        if (pt[i].a > 0) {
+          if (x < 128) {
+            left_r += pt[i].r; left_b += pt[i].b; left_n++;
+          } else {
+            right_r += pt[i].r; right_b += pt[i].b; right_n++;
+          }
+        }
+      }
+    }
+    printf("  tint: %d covered, %d differ, left R-B %ld, right R-B %ld\n",
+           tint_covered, tint_differ,
+           left_n ? (left_r - left_b) / left_n : 0,
+           right_n ? (right_r - right_b) / right_n : 0);
+    check(tint_covered > 1000, "tinted scene is on screen");
+    check(tint_differ <= tint_covered / 200,
+          "tinted batched frame matches draw_model with tints");
+    check(left_n > 0 && right_n > 0 && left_r > left_b && right_b > right_r,
+          "per-instance tint reaches pixels (red left, blue right)");
+    raylib::UnloadImage(tint_batched);
+    raylib::UnloadImage(tint_direct);
+  }
+
+  // Mixed sequence: instanced flush, plain draw_model of the same model,
+  // instanced flush again. All four copies must draw and match the
+  // all-plain reference, proving the VAO is clean after each flush.
+  {
+    InstanceBatcher mixed;
+    mixed.add(tree, {-3, 0, 0}, 0.f, {0.8f, 0.8f, 0.8f});
+    mixed.add(lantern, {3, 0, 0}, 0.f, {1, 1, 1});
+    auto render_mixed = [&](bool mixed_mode) {
+      raylib::BeginTextureMode(rt);
+      raylib::ClearBackground({0, 0, 0, 0});
+      raylib::BeginMode3D(cam);
+      if (mixed_mode) {
+        mixed.flush(shader);
+        draw_model(tree, {0, 0, 0}, 45.f, {0.7f, 0.7f, 0.7f});
+        mixed.add(tree, {0, 0, 2.5f}, 90.f, {0.6f, 0.6f, 0.6f});
+        mixed.flush(shader);
+      } else {
+        draw_model(tree, {-3, 0, 0}, 0.f, {0.8f, 0.8f, 0.8f});
+        draw_model(lantern, {3, 0, 0}, 0.f, {1, 1, 1});
+        draw_model(tree, {0, 0, 0}, 45.f, {0.7f, 0.7f, 0.7f});
+        draw_model(tree, {0, 0, 2.5f}, 90.f, {0.6f, 0.6f, 0.6f});
+      }
+      raylib::EndMode3D();
+      raylib::EndTextureMode();
+      raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
+      raylib::ImageFormat(&img, raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+      return img;
+    };
+    raylib::Image mixed_img = render_mixed(true);
+    raylib::Image plain_img = render_mixed(false);
+    auto *pm = static_cast<raylib::Color *>(mixed_img.data);
+    auto *pp = static_cast<raylib::Color *>(plain_img.data);
+    int mixed_covered = 0, mixed_differ = 0;
+    for (int i = 0; i < 256 * 256; i++) {
+      if (pm[i].a > 0 || pp[i].a > 0) mixed_covered++;
+      int d = std::abs(pm[i].r - pp[i].r) + std::abs(pm[i].g - pp[i].g) +
+              std::abs(pm[i].b - pp[i].b) + std::abs(pm[i].a - pp[i].a);
+      if (d > 6) mixed_differ++;
+    }
+    printf("  mixed: %d covered, %d differ\n", mixed_covered, mixed_differ);
+    check(mixed_covered > 1500, "mixed instanced+plain scene is on screen");
+    check(mixed_differ <= mixed_covered / 200,
+          "instanced, plain, instanced sequence matches all-plain");
+    raylib::UnloadImage(mixed_img);
+    raylib::UnloadImage(plain_img);
+  }
+
+  // Batcher-owned default shader: flush() with no shader argument draws
+  // through the shader the batcher loaded itself.
+  {
+    InstanceBatcher owned;
+    owned.add(tree, {0, 0, 0}, 0.f, {1, 1, 1});
+    raylib::BeginTextureMode(rt);
+    raylib::ClearBackground({0, 0, 0, 0});
+    raylib::BeginMode3D(cam);
+    owned.flush();
+    raylib::EndMode3D();
+    raylib::EndTextureMode();
+    check(owned.copies() == 0, "flush() with owned default shader empties groups");
+    raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
+    raylib::ImageFormat(&img, raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+    auto *po = static_cast<raylib::Color *>(img.data);
+    int owned_covered = 0;
+    for (int i = 0; i < 256 * 256; i++)
+      if (po[i].a > 0) owned_covered++;
+    printf("  owned shader: %d covered\n", owned_covered);
+    check(owned_covered > 500, "owned default shader draws the scene");
+    raylib::UnloadImage(img);
+  }
+
   raylib::UnloadRenderTexture(rt);
   raylib::UnloadShader(shader);
   models.unload_all();
