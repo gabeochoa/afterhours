@@ -86,7 +86,10 @@ struct PendingE2ECommand : BaseComponent {
 
   // Check if this is a wait command (exempt from timeout)
   bool is_wait_command() const {
-    return name == "wait" || name == "wait_frames" || name == "wait_wall";
+    // resize_steps is here too: it applies one size per frame for as many
+    // frames as it was asked for, which can be more than MAX_FRAMES.
+    return name == "wait" || name == "wait_frames" || name == "wait_wall" ||
+           name == "wait_resized" || name == "resize_steps";
   }
 
   // Check if this is a specific command

@@ -38,6 +38,19 @@ inline std::pair<float, float> e2e_screen_size() {
     return {1280.f, 720.f};  // fallback
 }
 
+// State for 'resize_steps' (defined below with the resize commands);
+// reset_test_state resets it too, and that handler is registered first.
+namespace resize_steps_detail {
+inline int step = 0;
+inline int start_w = 0, start_h = 0;
+
+inline void reset() {
+    step = 0;
+    start_w = 0;
+    start_h = 0;
+}
+}  // namespace resize_steps_detail
+
 // Handle 'type "text"' command - types characters
 struct HandleTypeCommand : System<PendingE2ECommand> {
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
@@ -783,6 +796,7 @@ struct HandleResetTestStateCommand : System<PendingE2ECommand> {
         }
         test_input::reset_all();
         key_release_detail::reset();
+        resize_steps_detail::reset();
         double_click_detail::reset();
         triple_click_detail::reset();
         shift_tab_detail::reset();
@@ -793,6 +807,21 @@ struct HandleResetTestStateCommand : System<PendingE2ECommand> {
    private:
     ResetFn on_reset_;
 };
+
+// One resize, through the same path every resize command uses: the ECS
+// resolution singleton (authoritative source for UI layout) first, then the
+// backend's window/drawable.
+inline void apply_e2e_resize(int w, int h) {
+    auto *pcr = EntityHelper::get_singleton_cmp<
+        window_manager::ProvidesCurrentResolution>();
+    if (pcr) {
+        pcr->current_resolution.width = w;
+        pcr->current_resolution.height = h;
+        pcr->should_refetch =
+            false;  // Prevent CollectCurrentResolution from overwriting
+    }
+    window_manager::set_window_size(w, h);
+}
 
 // Handle 'resize w h' command - resizes the window/viewport
 // Updates ProvidesCurrentResolution singleton and calls set_window_size().
@@ -814,20 +843,116 @@ struct HandleResizeCommand : System<PendingE2ECommand> {
             return;
         }
 
-        // Update the ECS resolution singleton (authoritative source for UI
-        // layout)
-        auto *pcr = EntityHelper::get_singleton_cmp<
-            window_manager::ProvidesCurrentResolution>();
-        if (pcr) {
-            pcr->current_resolution.width = w;
-            pcr->current_resolution.height = h;
-            pcr->should_refetch =
-                false;  // Prevent CollectCurrentResolution from overwriting
+        apply_e2e_resize(w, h);
+        cmd.consume();
+    }
+};
+
+// Handle 'resize_steps w h steps' - a stepped resize: one intermediate size
+// per frame from the current size to w x h, through the same path as
+// 'resize'. Layout therefore sees (and can be asserted at) every step, which
+// a single 'resize' never exercises. This is the runner-side half of a live
+// resize; it does not drive an OS live-resize tracking loop.
+struct HandleResizeStepsCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("resize_steps")) return;
+        if (!cmd.has_args(3)) {
+            cmd.fail("resize_steps requires width height steps arguments");
+            return;
+        }
+        const int w = cmd.arg_as<int>(0);
+        const int h = cmd.arg_as<int>(1);
+        const int steps = cmd.arg_as<int>(2);
+        if (w <= 0 || h <= 0 || steps <= 0) {
+            cmd.fail(std::format(
+                "resize_steps: invalid target {}x{} in {} steps", w, h,
+                steps));
+            return;
         }
 
-        // Physically resize the window (no-op in headless mode)
-        window_manager::set_window_size(w, h);
+        using namespace resize_steps_detail;
+        if (step == 0) {
+            auto [sw, sh] = e2e_screen_size();
+            start_w = static_cast<int>(sw);
+            start_h = static_cast<int>(sh);
+        }
+        step++;
+        const auto at = [](int from, int to, int i, int n) {
+            return static_cast<int>(std::round(
+                from + (to - from) * (static_cast<double>(i) / n)));
+        };
+        apply_e2e_resize(at(start_w, w, step, steps),
+                         at(start_h, h, step, steps));
+        if (step < steps) {
+            cmd.retry();  // next intermediate size next frame
+        } else {
+            reset();
+            cmd.consume();
+        }
+    }
+};
 
+// Handle 'wait_resized w h' - wait until a resize has settled: the
+// resolution singleton and the backend's drawable (fetch_raw_window_size)
+// both read w x h, and one frame has been presented at that size. A
+// presented frame is a render pass, observed the way expect_no_text
+// observes one: the VisibleTextRegistry generation moves (the UI render
+// pass clears it once per frame in test mode). Until then this retries, so
+// wrap it in wait_until for a bounded failure with this mismatch as the
+// error.
+struct HandleWaitResizedCommand : System<PendingE2ECommand> {
+    virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
+                               float) override {
+        if (cmd.is_consumed() || !cmd.is("wait_resized")) return;
+        if (!cmd.has_args(2)) {
+            cmd.fail("wait_resized requires width height arguments");
+            return;
+        }
+        const int w = cmd.arg_as<int>(0);
+        const int h = cmd.arg_as<int>(1);
+        if (w <= 0 || h <= 0) {
+            cmd.fail(std::format("wait_resized: invalid dimensions {}x{}", w,
+                                 h));
+            return;
+        }
+
+        auto *pcr = EntityHelper::get_singleton_cmp<
+            window_manager::ProvidesCurrentResolution>();
+        if (!pcr || pcr->width() != w || pcr->height() != h) {
+            cmd.seen_render = -1;
+            cmd.retry_with(std::format(
+                "wait_resized: resolution is {}, expected {}x{}",
+                pcr ? std::format("{}x{}", pcr->width(), pcr->height())
+                    : std::string("unset"),
+                w, h));
+            return;
+        }
+        const auto drawable = window_manager::fetch_raw_window_size();
+        if (drawable.width != w || drawable.height != h) {
+            cmd.seen_render = -1;
+            cmd.retry_with(std::format(
+                "wait_resized: drawable is {}x{}, expected {}x{}",
+                drawable.width, drawable.height, w, h));
+            return;
+        }
+        auto &registry = VisibleTextRegistry::instance();
+        const long long gen = static_cast<long long>(registry.generation());
+        if (cmd.seen_render < 0) {
+            cmd.seen_render = gen;
+            cmd.retry_with(std::format(
+                "wait_resized: {}x{} reached but no frame presented at "
+                "that size yet",
+                w, h));
+            return;
+        }
+        if (gen == cmd.seen_render) {
+            cmd.retry_with(std::format(
+                "wait_resized: {}x{} reached but no frame presented at "
+                "that size yet",
+                w, h));
+            return;
+        }
         cmd.consume();
     }
 };

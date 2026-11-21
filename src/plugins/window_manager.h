@@ -214,16 +214,18 @@ struct window_manager : developer::Plugin {
 #endif
   }
 #else
+  // No backend: there is no window to measure, so the drawable is whatever
+  // size was last requested. Tracking it (instead of discarding the request)
+  // is what lets a headless test observe a resize land.
+  inline static Resolution no_backend_size{1280, 720};
   static Resolution fetch_maximum_resolution() {
     return Resolution{.width = 1280, .height = 720};
   }
-  static Resolution fetch_current_resolution() {
-    return Resolution{.width = 1280, .height = 720};
+  static Resolution fetch_current_resolution() { return no_backend_size; }
+  static Resolution fetch_raw_window_size() { return no_backend_size; }
+  static void set_window_size(const int width, const int height) {
+    if (width > 0 && height > 0) no_backend_size = Resolution{width, height};
   }
-  static Resolution fetch_raw_window_size() {
-    return Resolution{.width = 1280, .height = 720};
-  }
-  static void set_window_size(const int, const int) {}
 #endif
 
   static std::vector<Resolution> fetch_available_resolutions() {
