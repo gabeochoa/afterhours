@@ -111,6 +111,7 @@ ALL_TESTS := \
 	text_alignment_test \
 	sound_volume_test \
 	audio_plugin_test \
+	audio_stream_test \
 	synth_beep_test \
 	settings_save_test \
 	settings_path_test \
@@ -408,6 +409,8 @@ $(OUT)/sound_volume_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/sound_volume_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/audio_plugin_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/audio_plugin_test: INCLUDES_T = $(INCLUDES_RAYLIB)
+$(OUT)/audio_stream_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
+$(OUT)/audio_stream_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
 $(OUT)/files_test_roots_test: ../src/plugins/files.cpp
