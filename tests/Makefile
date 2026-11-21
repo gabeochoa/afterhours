@@ -150,6 +150,7 @@ ALL_TESTS := \
 	e2e_retry_test \
 	e2e_register_command_test \
 	e2e_screenshot_test \
+	e2e_expect_screenshot_test \
 	e2e_is_running_test \
 	e2e_defer_unknown_test \
 	e2e_results_test \
