@@ -64,7 +64,8 @@ TEST(warning_names_calling_file_line_and_function) {
   ec.createEntity();
   CHECK(!ec.get_temp().empty());
   captured().clear();
-  const int line = __LINE__ + 1;
+  const int line = __LINE__ + 2;
+  (void)line;
   EntityQuery q(ec);
   (void)q;
   const auto miss = miss_messages();
@@ -72,11 +73,15 @@ TEST(warning_names_calling_file_line_and_function) {
   if (!miss.empty()) {
     CHECK(miss[0].find("query will miss 1 ents in temp") !=
           std::string::npos);
+#if defined(AFTER_HOURS_DEBUG)
     CHECK(miss[0].find("temp_warning_caller_test.cpp") != std::string::npos);
     CHECK(miss[0].find(":" + std::to_string(line) + " in ") !=
           std::string::npos);
     CHECK(miss[0].find("warning_names_calling_file_line_and_function") !=
           std::string::npos);
+#else
+    CHECK(miss[0].find("query at") == std::string::npos);
+#endif
   }
   CHECK(captured_contains("temp entity 0"));
 }
@@ -91,15 +96,20 @@ TEST(each_call_site_reports_its_own_line) {
   EntityQuery b(ec);
   (void)a;
   (void)b;
+  (void)first_line; (void)second_line;
   CHECK(first_line != second_line);
   const auto miss = miss_messages();
   CHECK(miss.size() == 2);
+#if defined(AFTER_HOURS_DEBUG)
   if (miss.size() == 2) {
     CHECK(miss[0].find(":" + std::to_string(first_line) + " in ") !=
           std::string::npos);
     CHECK(miss[1].find(":" + std::to_string(second_line) + " in ") !=
           std::string::npos);
   }
+#else
+  for (const auto &m : miss) CHECK(m.find("query at") == std::string::npos);
+#endif
 }
 
 TEST(default_collection_query_names_its_caller_too) {
@@ -107,17 +117,22 @@ TEST(default_collection_query_names_its_caller_too) {
   ec.createEntity();
   EntityHelper::set_default_collection(&ec);
   captured().clear();
-  const int line = __LINE__ + 1;
+  const int line = __LINE__ + 2;
+  (void)line;
   EntityQuery q;
   (void)q;
   EntityHelper::set_default_collection(nullptr);
   const auto miss = miss_messages();
   CHECK(miss.size() == 1);
+#if defined(AFTER_HOURS_DEBUG)
   if (!miss.empty()) {
     CHECK(miss[0].find("temp_warning_caller_test.cpp") != std::string::npos);
     CHECK(miss[0].find(":" + std::to_string(line) + " in ") !=
           std::string::npos);
   }
+#else
+  if (!miss.empty()) CHECK(miss[0].find("query at") == std::string::npos);
+#endif
 }
 
 TEST(no_warning_once_temp_is_merged) {
