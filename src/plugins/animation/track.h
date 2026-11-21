@@ -45,10 +45,12 @@ namespace detail {
 inline float srgb_to_linear(float u) {
   return u <= 0.04045f ? u / 12.92f : std::pow((u + 0.055f) / 1.055f, 2.4f);
 }
+
 inline float linear_to_srgb(float u) {
   u = std::clamp(u, 0.f, 1.f);
   return u <= 0.0031308f ? u * 12.92f : 1.055f * std::pow(u, 1.f / 2.4f) - 0.055f;
 }
+
 inline std::array<float, 3> srgb_to_oklab(float r, float g, float b) {
   const float lr = srgb_to_linear(r), lg = srgb_to_linear(g), lb = srgb_to_linear(b);
   const float l = std::cbrt(0.4122214708f * lr + 0.5363325363f * lg + 0.0514459929f * lb);
@@ -58,6 +60,7 @@ inline std::array<float, 3> srgb_to_oklab(float r, float g, float b) {
           1.9779984951f * l - 2.4285922050f * m + 0.4505937099f * s,
           0.0259040371f * l + 0.7827717662f * m - 0.8086757660f * s};
 }
+
 inline std::array<float, 3> oklab_to_srgb(float L, float a, float b) {
   const float l0 = L + 0.3963377774f * a + 0.2158037573f * b;
   const float m0 = L - 0.1055613458f * a - 0.0638541728f * b;
@@ -170,10 +173,6 @@ template <typename T> struct Track {
     return *this;
   }
 
-  // Flip playback direction. Timeline-only: a spring has no past to replay.
-  // On a finished once-timeline this resumes it at its end, playing back
-  // to the start -- the close half of a transition. Toggling again plays
-  // forward from wherever the track currently sits.
   Track &reverse() {
     if (!std::holds_alternative<Timeline>(step.mode))
       return *this;
@@ -190,7 +189,6 @@ template <typename T> struct Track {
     return *this;
   }
 
-  // Scrub a timeline track to an absolute time and sample it there.
   void seek(float t) {
     if (!std::holds_alternative<Timeline>(step.mode))
       return;
@@ -233,8 +231,6 @@ template <typename T> struct Track {
     }
     dt = std::max(dt, 0.f);
     if (dir < 0.f) {
-      // Reversed playback: step the timeline back. Looping modes wrap
-      // through Timeline::at() and never finish, like their forward twins.
       const bool looping = std::holds_alternative<Timeline>(step.mode) &&
                            std::get<Timeline>(step.mode).repeat !=
                                Timeline::Repeat::Once;

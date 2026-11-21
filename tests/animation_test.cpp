@@ -293,8 +293,6 @@ int main() {
   }
 
   {
-    // Scrubbing is direction-free: at() at a time is that time's value
-    // whether the playhead arrived going up or down.
     const Timeline tl{.keys = {{0.f, 0.f},
                                {.08f, 6.f},
                                {.16f, -6.f},
@@ -316,7 +314,6 @@ int main() {
   }
 
   {
-    // seek() scrubs a live track to the same value at() reads.
     afterhours::motion::Track<float> tr;
     tr.from(0.f).to(6.f, Timeline{.keys = {{0.f, 0.f},
                                             {.08f, 1.f},
@@ -331,8 +328,6 @@ int main() {
   }
 
   {
-    // reverse() plays a once-timeline back to its start, and a finished
-    // one resumes backwards -- the close half of a transition.
     afterhours::motion::Track<float> tr;
     int completions = 0;
     tr.from(0.f)
@@ -358,8 +353,6 @@ int main() {
   }
 
   {
-    // Forward and reverse walks sample identical values at the same t.
-    // dt divides the length exactly, so both walks land on the same grid.
     auto walk = [](bool backwards, std::vector<float> &out) {
       afterhours::motion::Track<float> tr;
       tr.from(0.f)
@@ -385,8 +378,6 @@ int main() {
     std::vector<float> fwd, bwd;
     walk(false, fwd);
     walk(true, bwd);
-    // Interior samples share times (.05-.25); the end samples differ
-    // (forward ends at .3, backwards at 0), so compare those reversed.
     bool same = fwd.size() == 6 && bwd.size() == 6;
     for (size_t i = 0; same && i < 5; ++i)
       same = near(fwd[i], bwd[4 - i]);
