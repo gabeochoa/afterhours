@@ -1,6 +1,3 @@
-// delayed_busy_test.cpp
-// The delayed busy indicator only appears once an op outlives its delay, so
-// fast ops never flash a spinner. All clocks advance from injected dt.
 
 #include <cmath>
 
@@ -11,7 +8,6 @@ using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 using ui_test::ImmTestHarness;
 
-// A fast op never shows the indicator at any point.
 TEST(fast_op_never_shows) {
   DelayedBusy busy;
   busy.start();
@@ -23,7 +19,6 @@ TEST(fast_op_never_shows) {
   CHECK(!busy.visible());
 }
 
-// While hidden the widget builds nothing.
 TEST(fast_op_builds_nothing) {
   ImmTestHarness h;
   DelayedBusy busy;
@@ -37,7 +32,6 @@ TEST(fast_op_builds_nothing) {
   CHECK(h.find("progress_track") == nullptr);
 }
 
-// A slow op shows the indicator once elapsed passes the delay, then hides.
 TEST(slow_op_shows_after_delay_then_hides) {
   DelayedBusy busy;
   busy.start();
@@ -60,8 +54,6 @@ TEST(slow_op_shows_after_delay_then_hides) {
   CHECK(!busy.visible());
 }
 
-// Min-visible keeps the indicator up briefly on completion (flash-off),
-// but an op that already outran it hides immediately.
 TEST(min_visible_drains_on_completion) {
   DelayedBusy busy;
   busy.min_visible = 0.5f;
@@ -83,7 +75,6 @@ TEST(min_visible_drains_on_completion) {
   CHECK(!long_op.visible());
 }
 
-// Restarting resets every clock, including a pending min-visible drain.
 TEST(restart_resets) {
   DelayedBusy busy;
   busy.min_visible = 0.5f;
@@ -98,7 +89,6 @@ TEST(restart_resets) {
   CHECK(!busy.visible());
 }
 
-// Negative and non-finite dt never move the clocks.
 TEST(bad_dt_ignored) {
   DelayedBusy busy;
   busy.start();
@@ -109,7 +99,6 @@ TEST(bad_dt_ignored) {
   CHECK(!busy.visible());
 }
 
-// The indeterminate sweep counts cycles from start().
 TEST(indeterminate_sweep) {
   DelayedBusy busy;
   busy.start();
@@ -119,7 +108,6 @@ TEST(indeterminate_sweep) {
   CHECK(std::fabs(busy.indeterminate() - 0.25f) < 0.01f);
 }
 
-// value < 0 renders the indeterminate circular progress at the sweep.
 TEST(indeterminate_widget_branch) {
   ImmTestHarness h;
   DelayedBusy busy;

@@ -708,14 +708,10 @@ ElementResult circular_progress(HasUIContext auto &ctx, EntityParent ep_pair,
   return ElementResult{false, entity, normalized};
 }
 
-// Show-after-delay gate for busy affordances: the spinner/bar appears only
-// once an operation has run past `delay` seconds, so fast ops never flash
-// one. Owns the clocks; the caller advances them with an injected dt via
-// update() (no wall clock), and renders through delayed_busy() below.
 struct DelayedBusy {
-  float delay = 0.25f;         // seconds before the indicator first shows
-  float min_visible = 0.0f;    // seconds to stay visible once shown
-  float sweep_period = 1.0f;   // indeterminate cycle length, seconds
+  float delay = 0.25f;
+  float min_visible = 0.0f;
+  float sweep_period = 1.0f;
 
   void start() {
     elapsed_ = 0.f;
@@ -728,7 +724,7 @@ struct DelayedBusy {
   void update(float dt) {
     if (!started_) return;
     if (!std::isfinite(dt) || dt < 0.f) dt = 0.f;
-    if (finished_) { // drain the min-visible remainder, then hide
+    if (finished_) {
       drain_ = std::max(0.f, drain_ - dt);
       return;
     }
@@ -746,7 +742,6 @@ struct DelayedBusy {
     return started_ && shown_ && (!finished_ || drain_ > 0.f);
   }
 
-  // 0..1 position of the indeterminate sweep, counted from start().
   [[nodiscard]] float indeterminate() const {
     const float period = sweep_period > 0.f ? sweep_period : 1.f;
     return std::fmod(elapsed_ / period, 1.f);
@@ -762,10 +757,6 @@ private:
   bool started_ = false;
 };
 
-// Busy indicator that renders nothing until `busy` has run past its delay:
-// value >= 0 → determinate progress_bar(value); value < 0 → indeterminate
-// circular_progress at the gate's sweep position. The caller drives
-// busy.update(dt) per frame. Returns falsy and builds nothing while hidden.
 inline ElementResult
 delayed_busy(HasUIContext auto &ctx, EntityParent ep_pair,
              DelayedBusy &busy, float value,

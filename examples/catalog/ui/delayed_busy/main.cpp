@@ -1,9 +1,3 @@
-// Delayed busy indicator: a busy/spinner affordance that only appears after
-// a short delay, so fast operations never flash one on screen.
-// delay = 0.25s (default): updates before then build nothing; after then a
-// determinate progress_bar (value >= 0) or an indeterminate circular_progress
-// (value < 0) shows. finish() hides it; min_visible (default 0) can keep it
-// up briefly on completion. The caller drives busy.update(dt) per frame.
 
 #include "../../../../ah.h"
 #include "../../../../src/plugins/ui/component_init.h"
@@ -44,8 +38,6 @@ enum struct ExampleInputAction {
   MenuBack,
 };
 
-// A fresh context + root per step, then a layout pass (widget debug names
-// register there), so a build never sees a previous frame's widgets.
 static bool bar_built(DelayedBusy &busy, float value) {
   EntityCollection &coll = UICollectionHolder::get().collection;
 
@@ -124,8 +116,6 @@ int main() {
   busy.update(0.16f);
   expect(bar_built(busy, 0.5f), "0.26s in: progress bar appears");
   busy.finish();
-  // The previous build's track entity still exists in the collection, so
-  // check the gate rather than presence: finish() hides it again.
   expect(!busy.visible(), "op completes: indicator hides");
 
   return failures == 0 ? 0 : 1;
