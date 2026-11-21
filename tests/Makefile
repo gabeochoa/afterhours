@@ -134,6 +134,7 @@ ALL_TESTS := \
 	rect_test \
 	rounded_corners_test \
 	viewport_test \
+	coord_conversion_test \
 	grid_test \
 	bitset_test \
 	log_file_test \
