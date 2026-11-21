@@ -1,4 +1,3 @@
-// Declared ownership: deleting an owner cascade-deletes what it owns.
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 
@@ -23,6 +22,7 @@ static void check(bool cond, const char *expr, const char *file, int line) {
 static bool alive(EntityCollection &ec, EntityID id) {
   return ec.getEntityForID(id).has_value();
 }
+
 static void kill(EntityCollection &ec, EntityID id) {
   auto e = ec.getEntityForID(id);
   CHECK(e.has_value());
@@ -54,7 +54,7 @@ static void test_temp_owner_cascades_before_merge() {
   Entity &owner = ec.createEntity();
   Entity &owned = ec.createEntity();
   ec.declare_ownership(owner, owned);
-  owner.cleanup = true; // flagged while both are still temp
+  owner.cleanup = true;
   ec.cleanup();
   CHECK(!alive(ec, owner.id));
   CHECK(!alive(ec, owned.id));
@@ -66,7 +66,7 @@ static void test_cycles_do_not_hang() {
   Entity &b = ec.createEntity();
   Entity &c = ec.createEntity();
   ec.declare_ownership(a, b);
-  ec.declare_ownership(b, a); // cycle
+  ec.declare_ownership(b, a);
   ec.declare_ownership(b, c);
   ec.merge_entity_arrays();
   kill(ec, a.id);
@@ -86,7 +86,7 @@ static void test_release_and_redeclare_move() {
   kill(ec, a.id);
   CHECK(alive(ec, owned.id));
 
-  ec.declare_ownership(b, owned); // re-declare moves ownership to b
+  ec.declare_ownership(b, owned);
   CHECK(ec.owner_of(owned.id) == b.id);
   kill(ec, b.id);
   CHECK(!alive(ec, owned.id));
@@ -100,7 +100,7 @@ static void test_owned_deleted_first_recycled_id_not_inherited() {
   ec.merge_entity_arrays();
   kill(ec, owned.id);
   CHECK(ec.owner_of(owned.id) == -1);
-  Entity &fresh = ec.createEntity(); // may reuse owned's recycled id
+  Entity &fresh = ec.createEntity();
   ec.merge_entity_arrays();
   kill(ec, owner.id);
   CHECK(alive(ec, fresh.id));

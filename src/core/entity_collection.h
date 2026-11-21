@@ -39,9 +39,6 @@ struct EntityCollection {
   Entities entities_DO_NOT_USE;
   Entities temp_entities;
   std::set<int> permanent_ids;
-  // Declared ownership: owner id -> owned ids, and the reverse (one owner
-  // per owned entity). Runtime-only; pruned to live ids after every sweep
-  // so a recycled id never inherits a dead entity's owner.
   std::unordered_map<EntityID, std::vector<EntityID>> owned_by_owner_;
   std::unordered_map<EntityID, EntityID> owner_of_;
   std::unordered_map<ComponentID, Entity *> singletonMap;
@@ -587,8 +584,6 @@ struct EntityCollection {
     return singletonMap.contains(id);
   }
 
-  // Declare that `owner` owns `owned`: when owner is cleaned up, owned is
-  // cleaned up with it, transitively. Re-declaring moves the owned entity.
   void declare_ownership(EntityID owner, EntityID owned) {
     if (owner < 0 || owned < 0 || owner == owned)
       return;
@@ -704,8 +699,6 @@ struct EntityCollection {
   }
 
   void cleanup() {
-    // Before merge: merge drops cleanup-flagged temp entities outright, so
-    // the cascade must flag their owned entities first.
     expand_cleanup_to_owned();
     merge_entity_arrays();
     Entities &entities = get_entities_for_mod();
