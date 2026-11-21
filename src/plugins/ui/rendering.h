@@ -365,6 +365,92 @@ inline void collect_focus_paint(RenderCommandBuffer &buffer, const FocusPaint &p
   if (paint.clip) buffer.add_scissor_end(paint.layer, paint.entity_id);
 }
 
+struct OverPaint {
+  EntityID entity_id;
+  size_t after_command;
+  size_t command_index;
+  int layer;
+};
+
+// One entry per entity with on_draw_over: fire after its last descendant
+// command (same subtree search as the focus ring), innermost first.
+template <typename InputAction>
+inline std::vector<OverPaint> prepare_over_paints(
+    const UIContext<InputAction> &context) {
+  std::vector<OverPaint> out;
+  for (size_t i = 0; i < context.render_cmds.size(); ++i) {
+    auto opt = UICollectionHolder::getEntityForID(context.render_cmds[i].id);
+    if (!opt.valid() || !opt->template has<HasOnDraw>() ||
+        !opt->template get<HasOnDraw>().over || !opt->template has<UIComponent>())
+      continue;
+    const Entity &entity = opt.asE();
+    if (is_hidden_for_render(entity)) continue;
+    std::set<EntityID> descendants{entity.id};
+    std::vector<EntityID> pending{entity.id};
+    while (!pending.empty()) {
+      const auto id = pending.back();
+      pending.pop_back();
+      auto child = UICollectionHolder::getEntityForID(id);
+      if (!child.valid() || !child->template has<UIComponent>()) continue;
+      for (auto next : child->template get<UIComponent>().children)
+        if (descendants.insert(next).second) pending.push_back(next);
+    }
+    size_t after = i;
+    for (size_t j = context.render_cmds.size(); j > 0; --j)
+      if (descendants.contains(context.render_cmds[j - 1].id)) {
+        after = j - 1;
+        break;
+      }
+    out.push_back({entity.id, after, i, context.render_cmds[i].layer});
+  }
+  // Same after_command: inner (later in document order) paints first.
+  std::stable_sort(out.begin(), out.end(), [](const OverPaint &a, const OverPaint &b) {
+    if (a.after_command != b.after_command) return a.after_command < b.after_command;
+    return a.command_index > b.command_index;
+  });
+  return out;
+}
+
+inline RectangleType on_draw_rect(const Entity &entity) {
+  RectangleType r = entity.get<UIComponent>().rect();
+  if (entity.has<HasUIModifiers>())
+    r = entity.get<HasUIModifiers>().apply_modifier(r);
+  return apply_ancestor_transform(entity, r);
+}
+
+inline void draw_over_paint(const OverPaint &paint) {
+  auto opt = UICollectionHolder::getEntityForID(paint.entity_id);
+  if (!opt.valid() || !opt->template has<HasOnDraw>() ||
+      !opt->template get<HasOnDraw>().over)
+    return;
+  const Entity &entity = opt.asE();
+  const auto [has_clip, clip] = compute_intersected_clip_rect(entity);
+  const bool clipped = has_clip && !entity.has<HasScrollView>();
+  if (clipped)
+    begin_scissor_mode(static_cast<int>(clip.x), static_cast<int>(clip.y),
+                       static_cast<int>(clip.width), static_cast<int>(clip.height));
+  capture::Scope attribute(paint.entity_id, paint.layer);
+  entity.get<HasOnDraw>().over(on_draw_rect(entity));
+  if (clipped) end_scissor_mode();
+}
+
+inline void collect_over_paint(RenderCommandBuffer &buffer, const OverPaint &paint) {
+  auto opt = UICollectionHolder::getEntityForID(paint.entity_id);
+  if (!opt.valid() || !opt->template has<HasOnDraw>() ||
+      !opt->template get<HasOnDraw>().over)
+    return;
+  const Entity &entity = opt.asE();
+  const auto [has_clip, clip] = compute_intersected_clip_rect(entity);
+  const bool clipped = has_clip && !entity.has<HasScrollView>();
+  if (clipped)
+    buffer.add_scissor_start(static_cast<int>(clip.x), static_cast<int>(clip.y),
+                             static_cast<int>(clip.width), static_cast<int>(clip.height),
+                             paint.layer, paint.entity_id);
+  buffer.add_custom(on_draw_rect(entity), &entity.get<HasOnDraw>().over,
+                    paint.layer, paint.entity_id);
+  if (clipped) buffer.add_scissor_end(paint.layer, paint.entity_id);
+}
+
 } // namespace detail
 
 // The public focus-ring resolution: what both renderers draw for the
@@ -2042,6 +2128,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       capture::clear();
 
     const auto focus_paint = detail::prepare_focus_paint(context);
+    const auto over_paints = detail::prepare_over_paints(context);
     const auto scrollbar = [](const RenderInfo &cmd, RectangleType rect,
                               ColorType color, bool has_clip, RectangleType clip) {
       capture::Scope attribute(cmd.id, cmd.layer);
@@ -2061,16 +2148,18 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       }
       auto id = cmd.id;
       OptEntity opt_ent = UICollectionHolder::getEntityForID(id);
-      if (!opt_ent.valid())
-        continue; // Skip stale entity IDs
-      Entity &ent = opt_ent.asE();
-      capture::Scope attribute(ent.id, cmd.layer);
-      render(context, font_manager, ent);
+      if (opt_ent.valid()) {
+        Entity &ent = opt_ent.asE();
+        capture::Scope attribute(ent.id, cmd.layer);
+        render(context, font_manager, ent);
+        if (context.is_hot(ent.id) && ent.has<HasCursor>()) {
+          cursor_to_set = to_cursor_id(ent.get<HasCursor>().cursor);
+        }
+      }
       if (focus_paint && focus_paint->after_command == index)
         detail::draw_focus_paint(*focus_paint);
-      if (context.is_hot(ent.id) && ent.has<HasCursor>()) {
-        cursor_to_set = to_cursor_id(ent.get<HasCursor>().cursor);
-      }
+      for (const auto &over : over_paints)
+        if (over.after_command == index) detail::draw_over_paint(over);
     }
     detail::draw_layer_scrollbars(context, layer_begin, context.render_cmds.size(), scrollbar);
     set_mouse_cursor(cursor_to_set);
@@ -2845,6 +2934,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
     // Collect all commands
     const auto focus_paint = detail::prepare_focus_paint(context);
+    const auto over_paints = detail::prepare_over_paints(context);
     const auto scrollbar = [&](const RenderInfo &cmd, RectangleType rect,
                                ColorType color, bool has_clip, RectangleType clip) {
       if (has_clip)
@@ -2866,15 +2956,17 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       auto id = cmd.id;
       auto layer = cmd.layer;
       OptEntity opt_ent = UICollectionHolder::getEntityForID(id);
-      if (!opt_ent.valid())
-        continue; // Skip stale entity IDs
-      Entity &ent = opt_ent.asE();
-      collect(buffer, context, font_manager, ent, layer);
+      if (opt_ent.valid()) {
+        Entity &ent = opt_ent.asE();
+        collect(buffer, context, font_manager, ent, layer);
+        if (context.is_hot(ent.id) && ent.has<HasCursor>()) {
+          cursor_to_set = to_cursor_id(ent.get<HasCursor>().cursor);
+        }
+      }
       if (focus_paint && focus_paint->after_command == index)
         detail::collect_focus_paint(buffer, *focus_paint);
-      if (context.is_hot(ent.id) && ent.has<HasCursor>()) {
-        cursor_to_set = to_cursor_id(ent.get<HasCursor>().cursor);
-      }
+      for (const auto &over : over_paints)
+        if (over.after_command == index) detail::collect_over_paint(buffer, over);
     }
     detail::draw_layer_scrollbars(context, layer_begin, context.render_cmds.size(), scrollbar);
     set_mouse_cursor(cursor_to_set);

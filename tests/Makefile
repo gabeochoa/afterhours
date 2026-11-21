@@ -141,6 +141,7 @@ ALL_TESTS := \
 	rounded_corners_test \
 	viewport_test \
 	grid_test \
+	pathfinding_provider_test \
 	bitset_test \
 	log_file_test \
 	crash_handler_test \
@@ -157,6 +158,7 @@ ALL_TESTS := \
 	e2e_retry_test \
 	e2e_register_command_test \
 	e2e_screenshot_test \
+	e2e_expect_screenshot_test \
 	e2e_is_running_test \
 	e2e_defer_unknown_test \
 	e2e_results_test \
@@ -166,6 +168,7 @@ ALL_TESTS := \
 	card_and_type_scale_test \
 	fixed_timestep_test \
 	audio_lifecycle_test \
+	notimplemented_log_test \
 	local_time_test \
 	frame_rate_stats_test \
 	graphics_concepts_pedantic_test \
@@ -212,6 +215,7 @@ ALL_TESTS := \
 	cleanup_order_test \
 	entity_pool_test \
 	entity_query_test \
+	query_scratch_test \
 	get_or_default_test \
 	component_toggle_test \
 	query_extreme_by_test \
@@ -236,6 +240,7 @@ ALL_TESTS := \
 	pagination_test \
 	random_engine_test \
 	render_order_test \
+	draw_over_test \
 	scroll_smoothing_test \
 	setup_test \
 	slot_at_creation_test \
@@ -306,6 +311,7 @@ ALL_TESTS += sokol_headless_run_test
 ALL_TESTS += sokol_include_order_test
 ALL_TESTS += sokol_wrappers_test
 ALL_TESTS += sokol_frame_dt_test
+ALL_TESTS += sokol_msaa_test
 ALL_TESTS += staging_texture_leak_test
 endif
 
@@ -442,9 +448,6 @@ $(OUT)/files_test_roots_test: ../src/plugins/files.cpp
 $(OUT)/files_cache_path_test: ../src/plugins/files.cpp
 $(OUT)/bundle_test: ../src/plugins/files.cpp
 $(OUT)/file_watcher_test: ../src/plugins/file_watcher.cpp
-ifeq ($(UNAME_S),Darwin)
-$(OUT)/file_watcher_test: LDFLAGS_T += -framework CoreServices
-endif
 
 $(OUT)/native_dialogs_macos_test: native_dialogs_macos_test.mm ../src/plugins/native_dialogs_macos.mm
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDES) $(filter %.mm,$^) -framework Cocoa -o $@
@@ -479,6 +482,7 @@ $(OUT)/sokol_hidpi_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_resize_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_resize_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_resize_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_resize_test: ../src/backends/sokol/backend.h ../src/backends/sokol/window_macos.h ../src/backends/sokol/capture_impl.h
 $(OUT)/sokol_multires_capture_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_multires_capture_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_multires_capture_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
@@ -497,6 +501,10 @@ $(OUT)/sokol_frame_dt_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_frame_dt_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_frame_dt_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_frame_dt_test: ../src/backends/sokol/backend.h
+$(OUT)/sokol_msaa_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_msaa_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_msaa_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_msaa_test: ../src/backends/sokol/drawing_helpers.h ../src/backends/sokol/backend.h
 
 $(OUT)/staging_texture_leak_test: ../examples/web/sokol_impl.cc
 $(OUT)/staging_texture_leak_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
