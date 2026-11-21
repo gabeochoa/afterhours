@@ -545,14 +545,23 @@ ElementResult icon_row(HasUIContext auto &ctx, EntityParent ep_pair,
                        ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);
 
-  auto row = hstack(ctx, ep_pair,
-                    ComponentConfig::inherit_from(config, "icon_row")
-                        .with_size(config.size)
-                        .with_margin(config.margin)
-                        .with_padding(config.padding)
-                        .with_debug_name(config.debug_name.empty()
-                                             ? "icon_row"
-                                             : config.debug_name));
+  auto row_config =
+      ComponentConfig::inherit_from(config, "icon_row")
+          .with_size(config.size)
+          .with_margin(config.margin)
+          .with_padding(config.padding)
+          .with_gap(config.flex_gap)
+          .with_align_items(config.align_items)
+          .with_justify_content(config.justify_content)
+          .with_self_align(config.self_align)
+          .with_flex_wrap(config.flex_wrap)
+          .with_translate(config.translate_x, config.translate_y)
+          .with_skip_grid_snap(config.skip_grid_snap)
+          .with_debug_name(config.debug_name.empty() ? "icon_row"
+                                                     : config.debug_name);
+  // Direct field set: with_absolute_position() warns on margins.
+  row_config.is_absolute = config.is_absolute;
+  auto row = hstack(ctx, ep_pair, row_config);
 
   size_t i = 0;
   for (const auto &frame : frames) {
@@ -564,6 +573,7 @@ ElementResult icon_row(HasUIContext auto &ctx, EntityParent ep_pair,
                .with_image_alignment(
                    afterhours::texture_manager::HasTexture::Alignment::Center)
                .with_size(ComponentSize{icon_width, icon_height})
+               .with_skip_grid_snap(config.skip_grid_snap)
                .with_debug_name(fmt::format("icon_row_item_{}", i)));
     i++;
   }
