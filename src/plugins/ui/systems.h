@@ -456,10 +456,12 @@ struct RunAutoLayout : System<AutoLayoutRoot, UIComponent> {
     if (scoped) {
       for (UIComponent *w : dirty)
         AutoLayout::autolayout_subtree(*w, resolution, cache->components, enable_grid,
-                                       ui_scale, theme.text_inset.x * ui_scale);
+                                       ui_scale, theme.text_inset.x * ui_scale,
+                                       theme.text_scale);
     } else {
       AutoLayout::autolayout(cmp, resolution, cache->components, enable_grid,
-                             ui_scale, theme.text_inset.x * ui_scale);
+                             ui_scale, theme.text_inset.x * ui_scale,
+                             theme.text_scale);
       cmp.laid_out = true;
     }
     const std::function<void(UIComponent &)> clear = [&](UIComponent &w) {

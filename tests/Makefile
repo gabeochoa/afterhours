@@ -67,6 +67,7 @@ ALL_TESTS := \
 	touch_target_test \
 	touch_target_single_test \
 	font_tier_scaling_test \
+	text_scale_test \
 	text_visibility_test \
 	image_tint_test \
 	e2e_arguments_test \
