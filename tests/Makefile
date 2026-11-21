@@ -220,6 +220,7 @@ ALL_TESTS := \
 	escape_owner_test \
 	dump_ui_test \
 	scroll_anchor_test \
+	scroll_absolute_content_test \
 	measure_config_test \
 	scroll_anchor_test \
 	widget_retirement_test \
