@@ -59,7 +59,7 @@ AFTER_HOURS_REPLACE_LOGGING
   `log_trace`, `log_info`, `log_warn`, `log_error` as `(fmt, args...)`, and `log_once_per(duration, level, fmt, args...)`
 - `fmt` uses `{}` placeholders (std::format style); `duration` is a `std::chrono` duration and `level` is a `VENDOR_LOG_*` value
 - functions or macros both work, but a macro must expand to one statement (`do { ... } while (0)`): the library calls these from brace-less `if`/`else`
-- `log_file.h` only sees what reaches `log_sink_fn`; forward your logs to it yourself if you want them in the file
+- `log_file.h` only sees what reaches `log_sink_fn`; forward your logs to it yourself if you want them in the file. The sink flushes every line (a crash keeps the tail), buffers up to 512 pre-init lines (oldest dropped) and replays them on `log_file::open(path)`; reopening truncates
 - `crash::report()` logs through `log_error`, so a `log_error` that aborts recurses under `crash::install_handler()`
 
 ```cpp
