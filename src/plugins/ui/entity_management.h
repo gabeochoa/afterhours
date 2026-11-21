@@ -31,8 +31,6 @@ struct UIElementRecord {
   EntityID parent_id = -1;
 };
 inline std::map<UI_UUID, UIElementRecord> existing_ui_elements;
-// Entity -> item key for keyed elements, so a consumer can find the element
-// showing an item without knowing which recycled entity that is today.
 inline std::unordered_map<EntityID, size_t> ui_element_keys;
 
 inline std::optional<size_t> ui_element_key(EntityID id) {
@@ -197,9 +195,6 @@ inline EntityParent mk_keyed(Entity &parent, EntityID otherID, size_t key,
 }
 } // namespace detail
 
-// Like mk(), but for a recycled slot: `otherID` picks the slot entity and
-// `key` names the item in it (non-zero; 0 reads as unkeyed). The key is the
-// identity scroll anchoring follows when the slot moves to another item.
 inline EntityParent
 mk_keyed(Entity &parent, EntityID otherID, size_t key,
          bool *key_changed_out = nullptr,

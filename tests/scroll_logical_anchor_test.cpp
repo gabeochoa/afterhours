@@ -1,13 +1,3 @@
-// Logical scroll anchors: the viewport follows an ITEM, not the entity
-// that happens to be showing it.
-//
-// anchor_scroll pins a child entity. A recycled row (one entity per screen
-// slot, the item in it changing -- the virtual-list shape, built here
-// without the list) breaks that pin: after a prepend the pinned entity
-// shows a different item at the same place, so nothing appears to move and
-// the reader lands on different content. Keying rows by item
-// (mk_keyed_rows / imm::mk_keyed) must hold the same item at the same
-// screen y instead.
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 
@@ -37,8 +27,6 @@ static bool near(float a, float b) { return std::fabs(a - b) < 0.51f; }
 
 constexpr float ROW_H = 20.f;
 
-// Build a scrolling column over `items`, one recycled entity per position
-// (slot = position, key = item), and measure it the way the update pass does.
 static void build_and_measure(ImmTestHarness &h,
                               const std::vector<size_t> &items) {
   h.begin_frame();
@@ -91,8 +79,6 @@ static void settle_at(ImmTestHarness &h, const std::vector<size_t> &items,
   build_and_measure(h, items); // pin the anchor at this offset
 }
 
-// Prepending above the viewport: same item, same screen y, including an
-// intra-item offset (the reader is 7px into the pinned item, not on its edge).
 static void test_prepend_holds_item_at_same_screen_y() {
   ImmTestHarness h;
   settle_at(h, range(5, 20), 5 * ROW_H + 7.f);
@@ -103,7 +89,6 @@ static void test_prepend_holds_item_at_same_screen_y() {
         "prepend: offset follows the pinned item, intra-item offset kept");
 }
 
-// Appending or removing below the viewport must not move anything.
 static void test_changes_below_leave_offset_alone() {
   ImmTestHarness h;
   settle_at(h, range(5, 20), 5 * ROW_H + 7.f);
@@ -117,8 +102,6 @@ static void test_changes_below_leave_offset_alone() {
         "remove below: offset unchanged");
 }
 
-// The pinned item is deleted: keep the (clamped) offset as the fallback and
-// re-pin to the item now at the top, so a later prepend still holds it.
 static void test_deleted_anchor_falls_back_to_next_item() {
   ImmTestHarness h;
   settle_at(h, range(5, 20), 5 * ROW_H + 7.f);

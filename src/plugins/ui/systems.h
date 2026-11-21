@@ -568,27 +568,20 @@ private:
     };
 
     if (scroll.has_anchor_item_key) {
-      // Follow the item, not the entity: a recycled slot now showing another
-      // item must not hold the view, and the item may sit in a new slot.
       for (EntityID child_id : cmp.children) {
         auto key = imm::ui_element_key(child_id);
         if (!key || *key != scroll.anchor_item_key)
           continue;
         if (auto now = child_top(child_id)) {
-          // Delta, not absolute: a caller/user move since the pin is a new
-          // position to hold, not a jump back to the pinned point.
           const float moved = *now - scroll.anchor_child_y;
           if (moved != 0.f) {
             scroll.scroll_offset.y += moved;
             scroll.scroll_target.y += moved;
-            // The easing treats a caller's edit as authoritative; this is one.
             scroll.last_eased_offset = scroll.scroll_offset;
           }
         }
         break;
       }
-      // Item gone: keep the offset (clamped below) and let the re-pin pick
-      // the item now at the top as the fallback.
     } else if (scroll.anchor_child != -1) {
       if (auto now = child_top(scroll.anchor_child)) {
         const float moved = *now - scroll.anchor_child_y;
