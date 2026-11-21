@@ -135,6 +135,7 @@ ALL_TESTS := \
 	rounded_corners_test \
 	viewport_test \
 	grid_test \
+	pathfinding_provider_test \
 	bitset_test \
 	log_file_test \
 	crash_handler_test \
