@@ -1,16 +1,3 @@
-// web_metal_symbols_test.cpp
-// R-144: web (Emscripten/GLES3) builds pulled in Metal symbols that do not
-// exist there (metal_create_system_device / metal_capture_render_texture),
-// because the sokol backend keyed its capture/device code on
-// AFTER_HOURS_USE_VULKAN-vs-everything-else instead of the compiled API.
-//
-// The real assertion is a build-time symbol audit in tests/Makefile: the
-// simulated-web TU web_sim/web_probe.cpp is compiled with web defines and
-// the resulting object must have no undefined metal_*/vulkan_* symbols,
-// while a SOKOL_METAL control compile of the same TU must still reference
-// the Metal symbols (guards against over-excluding the native path). The
-// Makefile fails the suite if either audit fails; this binary re-reads the
-// audit proof file the rule left behind and reports it.
 
 #include <cstdio>
 
@@ -34,7 +21,6 @@ static void check(bool cond, const std::string &what) {
 }
 
 int main(int argc, char **argv) {
-  // Path to the audit proof file, passed by the Makefile rule.
   const char *proof =
       argc > 1 ? argv[1] : WEB_METAL_AUDIT_PATH;
   std::ifstream in(proof);

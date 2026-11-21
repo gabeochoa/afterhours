@@ -438,12 +438,6 @@ $(OUT)/sokol_capture_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_geometry_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_geometry_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_geometry_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
-# R-144 simulated-web symbol audit (web_sim): compile web_sim/web_probe.cpp
-# with the exact macro state emcc produces (-DSOKOL_GLES3 -D__EMSCRIPTEN__)
-# and fail if the object references Metal/Vulkan symbols; a SOKOL_METAL
-# control compile must still reference them. The proof file is the binary's
-# runtime input. No emcc is available here, so this is a simulated-define
-# audit, not a real web link (see web_sim/web_probe.cpp).
 $(OUT)/web_metal_symbols_test: web_metal_symbols_test.cpp web_sim/web_probe.cpp web_sim/emscripten.h
 	$(CXX) $(CXXFLAGS) -c -DAFTER_HOURS_USE_SOKOL -DSOKOL_GLES3=1 -D__EMSCRIPTEN__ -isystem $(CURDIR)/web_sim $(INCLUDES) web_sim/web_probe.cpp -o $(OUT)/web_probe_web.o
 	@if nm -u $(OUT)/web_probe_web.o | grep -E '_?(metal|vulkan)_'; then echo "web probe references Metal/Vulkan symbols (R-144 regression)"; exit 1; fi
