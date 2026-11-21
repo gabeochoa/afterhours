@@ -861,7 +861,8 @@ private:
     if (e.is_missing<HasClickListener>() && e.is_missing<HasDragListener>())
       return false;
     // Opted out of hit-testing entirely: the element behind it wins instead.
-    if (e.has<IgnorePointerEvents>() || detail::in_inert_subtree(e))
+    if (e.has<IgnorePointerEvents>() || e.hasTag(UITag::DrawOnly) ||
+        detail::in_inert_subtree(e))
       return false;
     if (!cmp.was_rendered_to_screen)
       return false;
@@ -1088,6 +1089,8 @@ bool can_be_focused(UIContext<InputAction> &ctx, const Entity &e) {
   if (e.template has<SkipWhenTabbing>())
     return false;
   if (e.template has<DoesNotTakeFocus>())
+    return false;
+  if (e.hasTag(UITag::DrawOnly))
     return false;
   if (e.template has<ShouldHide>() || detail::in_inert_subtree(e))
     return false;
