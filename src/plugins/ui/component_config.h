@@ -595,6 +595,9 @@ struct ComponentConfig {
     tooltip_gap = gap;
     return *this;
   }
+  // Hit rule for overlaps: highest layer wins; on a tie the element later
+  // in tree (paint) order wins -- so a close-x button drawn after its tab,
+  // or nested inside it, takes the click.
   ComponentConfig &with_render_layer(int layer) {
     render_layer = layer;
     return *this;
