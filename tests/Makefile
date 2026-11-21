@@ -243,6 +243,7 @@ ALL_TESTS := \
 	house_of_cards_test \
 	frustum_test \
 	instance_batcher_test \
+	time_of_day_test \
 	lod_test \
 	image_test \
 	image_raylib_test \
@@ -314,6 +315,7 @@ RAYLIB_TESTS := \
 	house_of_cards_test \
 	frustum_test \
 	instance_batcher_test \
+	time_of_day_test \
 	dialog_test \
 	dump_ui_test \
 	scroll_anchor_test \
