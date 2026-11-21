@@ -52,6 +52,13 @@ inline void set_window_size(int w, int h) { PlatformAPI::set_window_size(w, h); 
 inline void set_window_min_size(int w, int h) {
   PlatformAPI::set_window_min_size(w, h);
 }
+// True while a set_window_size / set_window_min_size request has not been
+// applied yet. On sokol/macOS requests apply between draw callbacks, so a
+// caller can hold a layout or a first frame until the window catches up;
+// backends that resize synchronously always return false.
+inline bool window_resize_pending() {
+  return PlatformAPI::window_resize_pending();
+}
 inline void set_window_state(unsigned int flags) {
   PlatformAPI::set_window_state(flags);
 }
