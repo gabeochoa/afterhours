@@ -181,10 +181,8 @@ inline void apply_flags(Entity &entity, const ComponentConfig &config) {
   entity.toggleComponent<Inert>(config.inert);
   entity.toggleComponent<DoesNotTakeFocus>(!config.takes_focus);
   entity.toggleComponent<Hoverable>(config.hoverable);
-  if (config.skip_grid_snap)
-    entity.get<UIComponent>().skip_grid_snap = true;
-  if (config.select_on_focus)
-    entity.addComponentIfMissing<SelectOnFocus>();
+  entity.get<UIComponent>().skip_grid_snap = config.skip_grid_snap;
+  entity.toggleComponent<SelectOnFocus>(config.select_on_focus);
   entity.toggleComponent<HasClickActivationMode>(
       config.has_click_activation_override(), config.click_activation);
   entity.toggleComponent<IsDisabled>(config.disabled);
