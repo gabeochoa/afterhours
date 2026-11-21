@@ -71,22 +71,30 @@ inline std::vector<DrawnCall> &calls() {
 
 inline void enable() { enabled() = true; }
 inline void disable() { enabled() = false; }
-inline void clear() { calls().clear(); }
 
-// Who decides when a frame starts.
-//
-// The UI render pass used to clear the buffer at its own start, which threw
-// away everything drawn before it -- for a game, the entire world. An app that
-// calls begin_frame() takes that over, so world draws survive to be asserted
-// on. One that never calls it keeps the old behaviour.
+// Once a frame boundary is in play (graphics::begin_frame, or directly for
+// custom loops) the UI pass stops clearing, so pre-UI world draws survive.
+// No boundary: old UI-pass clearing.
 inline bool &app_owns_frame() {
   static bool owned = false;
   return owned;
 }
 
+// Lazy clear: the finished frame must stay readable during update (when E2E
+// runs); eager clearing would wipe it before expect_drawn retries read it.
+inline bool &frame_clear_pending() {
+  static bool pending = false;
+  return pending;
+}
+
+inline void clear() {
+  calls().clear();
+  frame_clear_pending() = false;
+}
+
 inline void begin_frame() {
   app_owns_frame() = true;
-  clear();
+  frame_clear_pending() = true;
 }
 
 // A view, not a `const std::string &`: that made every `const char *` caller
@@ -95,6 +103,10 @@ inline void record(const char *op, const RectangleType &rect,
                    const ColorType &color, std::string_view text = {}) {
   if (!enabled())
     return;
+  if (frame_clear_pending()) {
+    calls().clear();
+    frame_clear_pending() = false;
+  }
   calls().push_back({op, rect, color, std::string(text), current_entity(),
                      current_layer()});
 }
