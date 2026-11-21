@@ -232,6 +232,7 @@ ALL_TESTS := \
 	files_documents_test \
 	capture_test \
 	capture_perf_test \
+	capture_async_test \
 	polyline_test \
 	measure_memo_test \
 	design_defaults_test \
