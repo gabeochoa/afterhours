@@ -80,7 +80,14 @@ struct UpdateTooltips : System<UIContext<InputAction>> {
       if (!oe.valid())
         break;
       Entity &e = oe.asE();
-      if (e.has<HasTooltip>() && e.has<UIComponent>()) {
+      // A tooltip that just repeats the label is only news when the label
+      // is actually truncated; other tooltips (and any reworded text) are
+      // always news. Walk on so a parent's tooltip can still apply.
+      if (e.has<HasTooltip>() && e.has<UIComponent>() &&
+          !(e.has<HasLabel>() &&
+            !e.get<HasLabel>().label.empty() &&
+            e.get<HasTooltip>().text == e.get<HasLabel>().label &&
+            !e.get<HasLabel>().truncated)) {
         owner = id;
         anchor = e.get<UIComponent>().rect();
         text = e.get<HasTooltip>().text;
