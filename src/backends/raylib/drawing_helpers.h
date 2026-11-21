@@ -262,11 +262,12 @@ inline void draw_rectangle_rounded(
 
   const float ROUND = roundness;
   const float SHARP = 0.f;
+  // DrawRectangleCustom takes its roundness args bottom-right first.
   raylib::DrawRectangleCustom(rect,
-                              corners.test(3) ? ROUND : SHARP, // Top-Left
-                              corners.test(2) ? ROUND : SHARP, // Top Right
-                              corners.test(1) ? ROUND : SHARP, // Bototm Left
                               corners.test(0) ? ROUND : SHARP, // Bottom Right
+                              corners.test(1) ? ROUND : SHARP, // Bottom Left
+                              corners.test(2) ? ROUND : SHARP, // Top Right
+                              corners.test(3) ? ROUND : SHARP, // Top-Left
                               segments, color);
 }
 
@@ -285,7 +286,41 @@ inline void draw_rectangle_rounded_lines(
     return;
   }
 
-  raylib::DrawRectangleRoundedLines(rect, roundness, segments, color);
+  // Partial mask: DrawRectangleRoundedLines rounds every corner, so walk
+  // the perimeter with a per-corner radius (0 = sharp), like the sokol path.
+  const float x = rect.x, y = rect.y, w = rect.width, h = rect.height;
+  const float r = (w < h ? w : h) * 0.5f * roundness;
+  const float rTL = corners.test(3) ? r : 0.f;
+  const float rTR = corners.test(2) ? r : 0.f;
+  const float rBL = corners.test(1) ? r : 0.f;
+  const float rBR = corners.test(0) ? r : 0.f;
+  const int segs = segments > 0 ? segments : 8;
+  const float PI_HALF = 3.14159265f * 0.5f;
+
+  Vector2Type prev{x + rTL, y};
+  bool has_prev = true;
+  auto line_to = [&](Vector2Type p) {
+    if (has_prev && (p.x != prev.x || p.y != prev.y))
+      raylib::DrawLineEx(prev, p, 1.f, color);
+    prev = p;
+    has_prev = true;
+  };
+  auto arc_to = [&](float cx, float cy, float radius, float start) {
+    for (int i = 0; i <= segs; i++) {
+      const float a = start + PI_HALF * static_cast<float>(i) / segs;
+      line_to(Vector2Type{cx + radius * cosf(a), cy + radius * sinf(a)});
+    }
+  };
+
+  line_to(Vector2Type{x + w - rTR, y});
+  arc_to(x + w - rTR, y + rTR, rTR, -PI_HALF);
+  line_to(Vector2Type{x + w, y + h - rBR});
+  arc_to(x + w - rBR, y + h - rBR, rBR, 0.f);
+  line_to(Vector2Type{x + rBL, y + h});
+  arc_to(x + rBL, y + h - rBL, rBL, PI_HALF);
+  line_to(Vector2Type{x, y + rTL});
+  arc_to(x + rTL, y + rTL, rTL, 3.14159265f);
+  line_to(Vector2Type{x + rTL, y});
 }
 
 inline void draw_rectangle_rounded_lines_ex(const RectangleType rect,
