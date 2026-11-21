@@ -1,15 +1,8 @@
 #pragma once
 
 // World-space labels: nameplates, order bubbles, debug tags.
-//
 //   WorldLabel label{.text = "Soup!", .anchor = {x, y, z}};
 //   draw_world_label(font, camera, label, screen_w, screen_h);
-//
-// The label is drawn as screen-space text through draw_text_centered, so it
-// always faces the camera (billboarding is free in screen space) and never
-// needs a renderer of its own. project_world_label does the math on its own
-// and hands back the screen rect + faded alpha, for callers that want to
-// draw something else there (an icon, a bubble) instead of text.
 
 #include <cmath>
 #include <string>
@@ -113,7 +106,6 @@ inline bool draw_world_label(const Font font, const Camera3D &cam,
   if (label.text.empty()) return false;
   Vector3Type anchor{label.anchor.x, label.anchor.y + label.rise,
                      label.anchor.z};
-  // Measure first: the rect (and the centred draw below) needs the text size.
   Vector2Type size =
       measure_text(font, label.text.c_str(), label.font_size, 1.f);
   WorldLabelProjection p =

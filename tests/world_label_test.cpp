@@ -1,8 +1,3 @@
-// world_label_test.cpp
-// project_world_label at a known camera (origin, looking down -Z, 60deg
-// vertical fov, 800x600) and the fade curve's endpoints. Pure math: no
-// window, either backend.
-
 #define FMT_HEADER_ONLY
 #define AFTER_HOURS_USE_NONE
 #include <fmt/format.h>
@@ -40,7 +35,6 @@ static Camera3D cam() {
 }
 
 int main() {
-  // Centre: straight ahead lands mid-screen, rect centred + bottom-anchored.
   {
     auto p = project_world_label(cam(), {0, 0, -10}, 800, 600, {100, 20});
     check(p.visible, "centre point visible");
@@ -48,7 +42,6 @@ int main() {
     check(near(p.distance, 10), "centre distance 10");
     check(near(p.rect.x, 350) && near(p.rect.y, 280), "rect centred above anchor");
   }
-  // Edge: at 10 ahead, x = z*tan(30)*aspect puts the point on the right edge.
   {
     float edge = 10.f * std::tan(30.f * DEG2RAD) * (800.f / 600.f);
     auto p = project_world_label(cam(), {edge, 0, -10}, 800, 600);
@@ -58,14 +51,12 @@ int main() {
     auto off = project_world_label(cam(), {edge * 1.5f, 0, -10}, 800, 600);
     check(!off.visible, "past the edge culled");
   }
-  // Behind and on the camera plane: culled, never mirrored to the front.
   {
     check(!project_world_label(cam(), {0, 0, 10}, 800, 600).visible,
           "behind camera culled");
     check(!project_world_label(cam(), {0, 0, 0}, 800, 600).visible,
           "on camera culled");
   }
-  // Fade curve: endpoints and midpoint.
   {
     check(near(world_label_alpha(5, 20, 60), 1), "inside near is opaque");
     check(near(world_label_alpha(20, 20, 60), 1), "at near is opaque");
@@ -73,8 +64,6 @@ int main() {
     check(near(world_label_alpha(60, 20, 60), 0), "at far is clear");
     check(near(world_label_alpha(90, 20, 60), 0), "past far stays clear");
   }
-  // Draw path: a faded-in label records one text call at the projected spot;
-  // a behind-camera label records nothing.
   {
     capture::clear();
     WorldLabel label;
