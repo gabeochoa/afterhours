@@ -542,6 +542,9 @@ struct MetalPlatformAPI {
   static void clear_window_state(unsigned int flags) {
     metal_detail::g_window_state_flags &= ~flags;
   }
+  static unsigned int window_state() {
+    return metal_detail::g_window_state_flags;
+  }
 
   // ── Config (legacy API -- prefer RunConfig fields) ──
   static void set_config_flags(unsigned int) { /* handled via RunConfig.flags */
