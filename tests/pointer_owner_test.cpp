@@ -1,5 +1,3 @@
-// R-012 / hanabi #601: an external/native surface owning the pointer must
-// suppress UI hover/clicks underneath; releasing ownership restores them.
 #include "ui_test_harness.h"
 
 using namespace afterhours;
@@ -24,7 +22,7 @@ void run_clicks(ImmTestHarness &h) {
     sys.for_each_with(*e, e->get<UIComponent>(), e->get<HasClickListener>(), 0.f);
   }
 }
-} // namespace
+}
 
 TEST(owned_pointer_suppresses_hover_and_click_then_release_restores) {
   ImmTestHarness h;
@@ -51,12 +49,10 @@ TEST(owned_pointer_suppresses_hover_and_click_then_release_restores) {
     run_clicks(h);
   };
 
-  // Unowned baseline: no behavior change.
   build(); press();
   CHECK(fired == 1);
   CHECK(h.context().is_hot(btn_id));
 
-  // Owned: hover and press both suppressed.
   build();
   h.context().claim_pointer_ownership();
   CHECK(h.context().pointer_is_owned_externally());
@@ -66,12 +62,10 @@ TEST(owned_pointer_suppresses_hover_and_click_then_release_restores) {
   CHECK(!h.context().is_hot(btn_id));
   CHECK(h.context().hot_id == h.context().ROOT);
   CHECK(h.context().active_id == h.context().ROOT);
-  // Right/middle queries also stay silent while owned.
   h.context().mouse.right_just_released = true;
   CHECK(!h.context().is_right_click(btn_id));
   h.context().mouse.right_just_released = false;
 
-  // Claim mid-press clears an already-claimed active/hot.
   h.context().release_pointer_ownership();
   build(); press();
   CHECK(fired == 2);
@@ -79,7 +73,6 @@ TEST(owned_pointer_suppresses_hover_and_click_then_release_restores) {
   CHECK(h.context().active_id == h.context().ROOT);
   CHECK(h.context().hot_id == h.context().ROOT);
 
-  // Release restores normal resolution.
   h.context().release_pointer_ownership();
   CHECK(!h.context().pointer_is_owned_externally());
   build(); press();

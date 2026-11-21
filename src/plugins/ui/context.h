@@ -199,9 +199,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   const char *focus_set_file = nullptr;
   int focus_set_line = 0;
 
-  // True while an external/native surface (e.g. a tracking NSMenu) owns the
-  // pointer: hit-testing must produce no hot/active, so nothing underneath
-  // hovers or clicks. Keyboard/focus are untouched.
   bool pointer_owned_externally = false;
 
   void claim_pointer_ownership() {
