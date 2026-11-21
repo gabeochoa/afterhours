@@ -70,6 +70,80 @@ bool saw(const std::string &needle, SystemPhase phase) {
 
 } // namespace
 
+std::string &captured_log() {
+  static std::string s;
+  return s;
+}
+
+// R-238: reset_profile gives windowed stats a starting line. Frames recorded
+// before it vanish from the next dump, while recording itself continues, so
+// a script can bracket exactly the frames it cares about.
+TEST(reset_profile_command_clears_frames_and_keeps_recording) {
+  using namespace afterhours::testing::perf_commands;
+  using afterhours::testing::PendingE2ECommand;
+  builtin_profile::reset();
+  builtin_profile::enable();
+
+  SystemManager sm;
+  sm.register_update_system(std::make_unique<UnnamedUpdateSystem>());
+  Entities entities;
+  sm.tick(entities, 0.016f);
+  profiling::default_collector().end_frame(16.0);
+  CHECK(profiling::default_collector().snapshot().frames == 1);
+
+  Entity entity;
+  PendingE2ECommand command;
+  command.name = "reset_profile";
+  HandleResetProfileCommand{}.for_each_with(entity, command, 0.f);
+  CHECK(command.is_consumed());
+  CHECK(command.succeeded());
+  CHECK(profiling::default_collector().snapshot().frames == 0);
+
+  sm.tick(entities, 0.016f);
+  profiling::default_collector().end_frame(16.0);
+  CHECK(profiling::default_collector().snapshot().frames == 1);
+
+  builtin_profile::disable();
+}
+
+// R-233: dump_profile --json emits one machine-readable line carrying the
+// full snapshot, not the human text table.
+TEST(dump_profile_json_emits_snapshot_as_json) {
+  using namespace afterhours::testing::perf_commands;
+  using afterhours::testing::PendingE2ECommand;
+  builtin_profile::reset();
+  builtin_profile::enable();
+
+  SystemManager sm;
+  sm.register_update_system(std::make_unique<UnnamedUpdateSystem>());
+  Entities entities;
+  sm.tick(entities, 0.016f);
+  profiling::default_collector().end_frame(16.0);
+
+  captured_log().clear();
+  log_sink_fn = [](const char *, const char *message) {
+    captured_log() += message;
+    captured_log() += '\n';
+  };
+
+  Entity entity;
+  PendingE2ECommand command;
+  command.name = "dump_profile";
+  command.args = {"--json"};
+  HandleDumpProfileCommand{}.for_each_with(entity, command, 0.f);
+  log_sink_fn = nullptr;
+
+  CHECK(command.is_consumed());
+  CHECK(command.succeeded());
+  CHECK(captured_log().find("\"frames\":1") != std::string::npos);
+  CHECK(captured_log().find("\"systems\"") != std::string::npos);
+  CHECK(captured_log().find("UnnamedUpdateSystem") != std::string::npos);
+  CHECK(captured_log().find("=== PERFORMANCE PROFILE ===") ==
+        std::string::npos);
+
+  builtin_profile::disable();
+}
+
 TEST(a_system_reports_its_own_type_name) {
   UnnamedUpdateSystem sys;
   const std::string n(sys.name());
@@ -190,6 +264,18 @@ TEST(a_system_may_clear_the_hook_while_it_runs) {
   sm.tick(entities, 0.016f); // used to terminate here
   CHECK(true);
   clear_hook();
+}
+
+TEST(dump_profile_rejects_unknown_flags) {
+  using namespace afterhours::testing::perf_commands;
+  using afterhours::testing::PendingE2ECommand;
+  Entity entity;
+  PendingE2ECommand command;
+  command.name = "dump_profile";
+  command.args = {"--yaml"};
+  HandleDumpProfileCommand{}.for_each_with(entity, command, 0.f);
+  CHECK(command.is_consumed());
+  CHECK(!command.succeeded());
 }
 
 int main() { return ui_test::run_registered_tests("system profile"); }
