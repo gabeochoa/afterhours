@@ -64,6 +64,22 @@ struct ShaderType {
 };
 } // namespace afterhours::graphics
 
+#elif defined(AFTER_HOURS_USE_PSX)
+
+namespace afterhours::graphics {
+// No GPU, but a render target still costs (simulated) VRAM, so it carries
+// its size and the budget allocation to release on unload. See
+// backends/psx/budget.h.
+struct RenderTextureType {
+  int width = 0;
+  int height = 0;
+  uint64_t budget_id = 0;
+};
+struct ShaderType {
+  uint32_t id = 0;
+};
+} // namespace afterhours::graphics
+
 #else // no backend
 
 namespace afterhours::graphics {
