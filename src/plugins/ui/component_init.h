@@ -283,8 +283,6 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
   if (config.tooltip_text.empty()) {
     entity.removeComponentIfExists<ui::HasTooltip>();
   } else {
-    // Refresh every rebuild: imm configs are rebuilt each frame, so a changed
-    // text/placement must reach the showing tooltip and a cleared one must go.
     auto &tip = entity.addComponentIfMissing<ui::HasTooltip>(
         pseudo_localize(config.tooltip_text, pseudo), config.tooltip_delay,
         config.tooltip_placement, config.tooltip_font_size,

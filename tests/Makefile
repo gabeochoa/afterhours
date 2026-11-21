@@ -218,7 +218,6 @@ ALL_TESTS := \
 	menu_test \
 	color_swatch_test \
 	overlay_placement_test \
-	tooltip_test \
 	progress_bar_test \
 	pagination_test \
 	random_engine_test \

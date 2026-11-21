@@ -19,7 +19,7 @@ TooltipState &ensure_state() {
   s.text.clear();
   return s;
 }
-} // namespace
+}
 
 TEST(focus_shows_tooltip_immediately_and_dismisses_on_leave) {
   ui_test::ImmTestHarness h;

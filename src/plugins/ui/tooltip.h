@@ -63,7 +63,6 @@ struct UpdateTooltips : System<UIContext<InputAction>> {
     if (state == nullptr)
       return;
 
-    // Find the element that actually wants a tooltip. The hot/focused element
     // is often a child that has none, so walk up: hovering a button's label
     // should still count as hovering the button.
     EntityID owner = -1;
@@ -99,7 +98,6 @@ struct UpdateTooltips : System<UIContext<InputAction>> {
     };
 
     find_owner(context.hot_id);
-    // Deliberate keyboard focus (not pointer or the initial grab) shows at once.
     const bool from_focus = owner == -1 && context.focus_visible() &&
                             context.has_interacted;
     if (from_focus)
