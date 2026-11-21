@@ -151,6 +151,25 @@ static inline RectangleType hit_rect(const Entity &entity,
   return clip_hit_rect(entity, rect);
 }
 
+// The one rotated hit test: same rect as hit_rect, but the point is
+// inverse-rotated about the widget's pivot (clip stays axis-aligned).
+static inline bool point_in_hit_rect(const Entity &entity,
+                                     const UIComponent &component,
+                                     const input::MousePosition &pos) {
+  RectangleType rect = component.rect();
+  const HasUIModifiers *mods =
+      entity.has<HasUIModifiers>() ? &entity.get<HasUIModifiers>() : nullptr;
+  if (mods)
+    rect = mods->apply_modifier(rect);
+  rect = apply_ancestor_transform(entity, rect);
+  auto [has_clip, clip] = compute_intersected_clip_rect(entity);
+  if (has_clip && !is_mouse_inside(pos, clip))
+    return false;
+  if (mods)
+    return mods->contains_rotated(rect, pos.x, pos.y);
+  return is_mouse_inside(pos, rect);
+}
+
 } // namespace detail
 
 /// Singleton component that caches entity mappings for fast lookups during
@@ -874,7 +893,7 @@ private:
     UIComponent &cmp = entity.get<UIComponent>();
 
     if (is_candidate(entity, cmp) &&
-        is_mouse_inside(context->mouse.pos, detail::hit_rect(entity, cmp)) &&
+        detail::point_in_hit_rect(entity, cmp, context->mouse.pos) &&
         // >= rather than >: on a tie the later visit is painted on top.
         cmp.render_layer >= best_layer) {
       best_layer = cmp.render_layer;
@@ -952,14 +971,7 @@ inline bool is_point_inside_entity_tree(EntityID entity_id,
 
   const UIComponent &cmp = entity.get<UIComponent>();
 
-  // Check if point is inside this entity's rect
-  RectangleType rect = cmp.rect();
-  if (entity.has<HasUIModifiers>()) {
-    rect = entity.get<HasUIModifiers>().apply_modifier(rect);
-  }
-  rect = detail::apply_ancestor_transform(entity, rect);
-  rect = detail::clip_hit_rect(entity, rect);
-  if (is_mouse_inside(pos, rect))
+  if (detail::point_in_hit_rect(entity, cmp, pos))
     return true;
 
   // Check children recursively
@@ -1920,8 +1932,7 @@ template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
             const RectangleType drawn =
                 detail::apply_ancestor_transform(child, child_cmp.rect());
 
-            if (is_mouse_inside(ctx->mouse.pos,
-                                detail::clip_hit_rect(child, drawn))) {
+            if (detail::point_in_hit_rect(child, child_cmp, ctx->mouse.pos)) {
               state->armed = true;
               state->armed_item = child.id;
               state->armed_group = group.id;
@@ -1989,7 +2000,7 @@ template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
 
     for (Entity &group : groups) {
       auto &group_cmp = group.get<UIComponent>();
-      if (!is_mouse_inside(ctx->mouse.pos, detail::hit_rect(group, group_cmp)))
+      if (!detail::point_in_hit_rect(group, group_cmp, ctx->mouse.pos))
         continue;
 
       // Move hover tag to this group
@@ -2265,7 +2276,7 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
 
     if (!context || !context->is_input_allowed(entity.id)) return;
 
-    if (!is_mouse_inside(context->mouse.pos, detail::hit_rect(entity, cmp)))
+    if (!detail::point_in_hit_rect(entity, cmp, context->mouse.pos))
       return;
 
     Vector2Type wheel_v = input::get_mouse_wheel_move_v();

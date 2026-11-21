@@ -103,6 +103,7 @@ ALL_TESTS := \
 	animation_presets_test \
 	particles_test \
 	ui_modifiers_test \
+	rotation_hit_test \
 	ancestor_transform_test \
 	text_units_test \
 	text_fit_test \

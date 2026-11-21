@@ -6,6 +6,8 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+- **`with_rotation(deg)` on `ComponentConfig`** rotates a widget about `with_origin` (default centre); hit testing, scroll/drag gates and the focus ring now follow the same rotation instead of the axis-aligned layout rect, so a tilted card is clickable where it is drawn and not in its old corners. Unrotated widgets are unchanged. Covered by `rotation_hit_test`.
+
 ### Breaking
 
 **The animation plugin is rewritten around `afterhours::motion`.** `animation::anim<Key>(k).to(v, dur, EasingType)`, `AnimationManager`, `AnimHandle`, `sequence`, `loop_sequence`, `one_shot`, `clamp_value`, `get_value`, `register_update_systems<Key>()` and the declarative `with_animation(Anim::on_hover()...)` / `HasAnimationState` are gone. Every old call is a compile error.
