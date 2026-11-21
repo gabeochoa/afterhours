@@ -187,6 +187,15 @@ struct EntityHelper {
     get_default_collection().delete_all_entities(include_permanent);
   }
 
+  // See EntityCollection::reset_for_new_session for the contract.
+  static void reset_for_new_session() {
+    get_default_collection().reset_for_new_session();
+  }
+
+  static std::uint64_t session_generation() {
+    return get_default_collection().session_generation();
+  }
+
   static void forEachEntity(const std::function<ForEachFlow(Entity &)> &cb) {
     for (const auto &e : get_entities()) {
       if (!e)
