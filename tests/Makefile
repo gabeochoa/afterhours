@@ -62,6 +62,7 @@ $(shell mkdir -p $(OUT))
 
 ALL_TESTS := \
 	border_width_test \
+	border_only_test \
 	checkbox_mark_test \
 	touch_target_test \
 	touch_target_single_test \
@@ -295,6 +296,7 @@ RAYLIB_TESTS := \
 	default_font_test \
 	load_font_size_test \
 	border_width_test \
+	border_only_test \
 	text_visibility_test \
 	image_tint_test \
 	scroll_input_gate_test \
