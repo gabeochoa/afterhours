@@ -943,7 +943,6 @@ private:
 
     Vector2Type startPos = {cmd.data.text.rect.x, cmd.data.text.rect.y};
 
-    // Place text vertically per its vertical alignment.
     {
       Vector2Type textSize =
           measure_text_utf8(font, cmd.data.text.text, fontSize, spacing);

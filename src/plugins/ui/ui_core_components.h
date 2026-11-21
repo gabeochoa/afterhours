@@ -549,15 +549,11 @@ enum struct TextAlignment {
   None,
 };
 
-// Vertical counterpart of TextAlignment. TextAlignment has no vertical
-// concept, so vertical placement was hard-centred; a Div's own label now
-// reads its container's flex alignment into this instead.
 enum struct VerticalAlignment {
   Top,
   Middle,
   Bottom,
 };
-
 enum struct TextOverflow {
   Clip,     // Default: text is clipped at container boundary
   Ellipsis, // Text is truncated with "..." when it overflows
@@ -642,7 +638,6 @@ struct HasLabel : BaseComponent {
     vertical = v_;
     return *this;
   }
-
   auto &set_text_overflow(TextOverflow overflow) {
     text_overflow = overflow;
     return *this;

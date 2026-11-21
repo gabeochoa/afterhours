@@ -100,14 +100,9 @@ inline bool rtl_mirroring(const ComponentConfig &config) {
          UIStylingDefaults::get().pseudo_locale == PseudoLocale::RtlWords;
 }
 
-// A Div's own label is not a flex child, so the flex alignment that
-// positions its children never reached it. Read it the same way autolayout
-// reads it for children: main axis = justify, cross axis = align. A single
-// text item packs at the start under SpaceBetween and centres under
-// SpaceAround; Stretch cannot stretch text, so it starts too.
 inline TextAlignment own_label_horizontal(const ComponentConfig &config) {
   TextAlignment out = TextAlignment::Left;
-  if (config.flex_direction == FlexDirection::Row) { // main axis is horizontal
+  if (config.flex_direction == FlexDirection::Row) {
     switch (config.justify_content) {
     case JustifyContent::Center:
     case JustifyContent::SpaceAround:
@@ -120,7 +115,7 @@ inline TextAlignment own_label_horizontal(const ComponentConfig &config) {
       out = TextAlignment::Left;
       break;
     }
-  } else { // cross axis is horizontal
+  } else {
     switch (config.align_items) {
     case AlignItems::Center:
       out = TextAlignment::Center;
@@ -143,7 +138,7 @@ inline TextAlignment own_label_horizontal(const ComponentConfig &config) {
 }
 
 inline VerticalAlignment own_label_vertical(const ComponentConfig &config) {
-  if (config.flex_direction == FlexDirection::Row) { // cross axis is vertical
+  if (config.flex_direction == FlexDirection::Row) {
     switch (config.align_items) {
     case AlignItems::Center:
       return VerticalAlignment::Middle;
@@ -153,7 +148,7 @@ inline VerticalAlignment own_label_vertical(const ComponentConfig &config) {
       return VerticalAlignment::Top;
     }
   }
-  switch (config.justify_content) { // main axis is vertical
+  switch (config.justify_content) {
   case JustifyContent::Center:
   case JustifyContent::SpaceAround:
     return VerticalAlignment::Middle;
@@ -213,8 +208,6 @@ inline void overwrite_defaults(HasUIContext auto &ctx,
   // centred control label is centred in any direction, and flipping it
   // pushed it against the right edge until it clipped.
   if (component_type == ComponentType::Div) {
-    // An explicit with_alignment still wins horizontally; vertically there
-    // is no competing lever, so flex always drives it.
     if (config.label_alignment == TextAlignment::None)
       config.with_alignment(own_label_horizontal(config));
     config.label_vertical = own_label_vertical(config);

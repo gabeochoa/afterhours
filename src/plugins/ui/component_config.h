@@ -115,8 +115,6 @@ struct ComponentConfig {
   // TODO should everything be inheritable?
   // inheritable options
   TextAlignment label_alignment = TextAlignment::None;
-  // Resolved vertical placement for the own label. Stamped by init from the
-  // flex alignment (Div only); Middle is the legacy hard-centred behaviour.
   VerticalAlignment label_vertical = VerticalAlignment::Middle;
   TextOverflow text_overflow = TextOverflow::Clip;
   std::optional<float> letter_spacing;

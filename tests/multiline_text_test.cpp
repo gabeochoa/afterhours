@@ -92,8 +92,6 @@ TEST(hard_newline_lines_are_stacked_and_read_flexstart) {
   CHECK(calls.size() == 3);
   if (calls.size() != 3)
     return;
-  // A default div reads FlexStart, so the 60px block starts at the top.
-  // It used to be hard-centred (30 down) like its first version claimed.
   CHECK_APPROX(calls[0].rect.y, 0.f);
   CHECK_APPROX(calls[1].rect.y, LINE_H);
   CHECK_APPROX(calls[2].rect.y, 2.f * LINE_H);
@@ -237,9 +235,6 @@ TEST(line_height_override_stacks_hard_broken_lines) {
   CHECK(calls.size() == 3);
   if (calls.size() != 3)
     return;
-  // A default div reads FlexStart, so the 3 rows of 30 start at the top;
-  // each 20px line of glyphs sits centred in its 30px row, 5 further down.
-  // Before, the rows started 15 down (vertically hard-centred).
   CHECK_APPROX(calls[0].rect.y, 5.f);
   CHECK_APPROX(calls[1].rect.y, 35.f);
   CHECK_APPROX(calls[2].rect.y, 65.f);

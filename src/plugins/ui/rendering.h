@@ -1055,8 +1055,6 @@ static inline void draw_text_in_rect(
         }
       }
       float total_h = line_h * static_cast<float>(lines.size());
-      // Stack the block per its vertical placement within the rect. The
-      // Middle case reduces to plain centring: inset.y cancels out.
       float y = rect.y + inset.y;
       if (vertical == VerticalAlignment::Middle)
         y += std::max(0.f, (rect.height - 2.f * inset.y - total_h) * 0.5f);
