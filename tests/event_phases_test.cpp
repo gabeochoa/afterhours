@@ -1,4 +1,3 @@
-// event_phases_test.cpp — ordered event phases (R-130 / AH-04).
 #include <afterhours/src/core/event_queue.h>
 
 #include <cstdio>
@@ -30,13 +29,10 @@ static std::vector<std::string> run_once() {
 }
 
 int main() {
-  // Phase order regardless of emission order; same phase stable.
   CHECK(run_once() == (std::vector<std::string>{"death-a", "death-b", "summon",
                                                  "heal", "complete"}));
-  // Deterministic across runs.
   CHECK(run_once() == run_once());
 
-  // Monotonic sequence returned by emit.
   {
     EventQueue<int> q;
     CHECK(q.emit(2, 1) == 0);
@@ -45,11 +41,10 @@ int main() {
     CHECK(q.pending() == 2);
     std::vector<int> out;
     q.drain([&](int, int e) { out.push_back(e); });
-    CHECK(out == (std::vector<int>{2, 1}));  // phase 1 before phase 2
+    CHECK(out == (std::vector<int>{2, 1}));
     CHECK(q.empty());
   }
 
-  // Cascaded events wait for the next batch, then phase-order within it.
   {
     EventQueue<std::string, Phase> q;
     q.emit(Phase::Death, "death");
@@ -65,7 +60,6 @@ int main() {
     CHECK(out == (std::vector<std::string>{"death", "on-death", "complete"}));
   }
 
-  // Work limit: stops, reports, remainder (incl. cascades) stays pending.
   {
     EventQueue<int> q;
     for (int i = 0; i < 5; i++) q.emit(0, i);
@@ -76,7 +70,6 @@ int main() {
     CHECK(!r2.limit_exceeded && out == (std::vector<int>{0, 1, 2, 3, 4}));
   }
 
-  // clear() drops pending without delivering.
   {
     EventQueue<int> q;
     q.emit(0, 1);

@@ -8,19 +8,13 @@
 
 namespace afterhours {
 
-// Optional ordered event queue (AH-04). Systems emit with an
-// application-defined phase; delivery is sorted by phase and stable within a
-// phase, so replay/netcode runs agree regardless of emission order. Call
-// drain() at an explicit flush point (e.g. between named system phases);
-// events emitted while draining form the next batch and are drained in turn.
 template <typename Event, typename Phase = int>
 struct EventQueue {
     struct DrainResult {
         std::size_t delivered = 0;
-        bool limit_exceeded = false;  // work left pending; drain again
+        bool limit_exceeded = false;
     };
 
-    // Returns the monotonic emission sequence (same-phase tie-break order).
     std::uint64_t emit(Phase phase, Event event) {
         const std::uint64_t seq = next_seq_++;
         pending_.push_back(Entry{phase, seq, std::move(event)});
@@ -40,7 +34,6 @@ struct EventQueue {
             for (std::size_t i = 0; i < batch.size(); ++i) {
                 if (result.delivered >= max_work) {
                     result.limit_exceeded = true;
-                    // Keep the undelivered tail ahead of cascaded emits.
                     pending_.insert(pending_.begin(),
                                     std::make_move_iterator(batch.begin() +
                                                             (long) i),
@@ -69,4 +62,4 @@ struct EventQueue {
     std::uint64_t next_seq_ = 0;
 };
 
-}  // namespace afterhours
+}
