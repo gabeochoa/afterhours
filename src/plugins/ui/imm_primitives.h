@@ -178,6 +178,7 @@ ElementResult line(HasUIContext auto &ctx, EntityParent ep_pair,
     config.with_size(ComponentSize{percent(1.f), pixels(thickness)});
   return div(ctx, ep_pair, config);
 }
+
 ElementResult image(HasUIContext auto &ctx, EntityParent ep_pair,
                     ComponentConfig config = ComponentConfig()) {
   auto [entity, parent] = deref(ep_pair);

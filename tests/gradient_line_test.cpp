@@ -62,4 +62,5 @@ TEST(config_and_imm_line_attach_components) {
     CHECK_APPROX(l.to.x, 1.f); CHECK_APPROX(l.to.y, 1.f);
   }
 }
+
 int main() { return ui_test::run_registered_tests("gradient_line"); }

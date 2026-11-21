@@ -429,6 +429,7 @@ inline Color gradient_lerp(Color a, Color b, float t) {
   };
   return Color{ch(a.r, b.r), ch(a.g, b.g), ch(a.b, b.b), ch(a.a, b.a)};
 }
+
 inline Vector2Type line_point(const RectangleType &rect, Vector2Type normalized) {
   return Vector2Type{rect.x + normalized.x * rect.width,
                      rect.y + normalized.y * rect.height};
