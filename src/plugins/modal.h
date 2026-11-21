@@ -633,7 +633,6 @@ struct modal : developer::Plugin {
             return static_cast<int>(RenderLayer::Modal);
         }
 
-        // Caller config wins; title/size fall back to the dialog's defaults when unset.
         static ModalConfig dialog_config(
             const std::optional<ModalConfig> &config, const std::string &title,
             ui::Size default_width, ui::Size default_height) {
@@ -1112,7 +1111,6 @@ struct modal : developer::Plugin {
         std::optional<ModalConfig> config = std::nullopt) {
         return detail::create_confirm_content(ctx, ep_pair, open, title, message,
                                               confirm_label, cancel_label,
-                                              /*danger=*/true, config);
     }
 
     // modal::prompt - Text input dialog. On OK, `value` holds the entered text
