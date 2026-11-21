@@ -54,11 +54,11 @@ constexpr Color UI_BLACK = BLACK;
 constexpr Color UI_RED = RED;
 constexpr Color UI_GREEN = GREEN;
 constexpr Color UI_BLUE = BLUE;
-#ifdef AFTER_HOURS_USE_RAYLIB
+// Auto-text fallback must agree across backends: use raylib's value everywhere.
 constexpr Color UI_WHITE = RAYWHITE;
+#ifdef AFTER_HOURS_USE_RAYLIB
 constexpr Color UI_PINK = PINK;
 #else
-constexpr Color UI_WHITE = WHITE;
 constexpr Color UI_PINK = {250, 200, 200, 255};
 #endif
 
