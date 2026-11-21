@@ -1,6 +1,3 @@
-// instance_field_test.cpp
-// InstanceField under the none backend: deterministic scatter, chunk
-// assignment at boundaries (incl. negatives), LOD bands, stable density cut.
 
 #define FMT_HEADER_ONLY
 #define AFTER_HOURS_USE_NONE
@@ -23,7 +20,6 @@ static void check(bool c, const std::string &w) {
 static bool near(float a, float b) { return std::fabs(a - b) < 1e-5f; }
 
 int main() {
-  // Scatter determinism: same seed -> identical transforms, different seed differs.
   {
     auto a = scatter_field({0, 2, 0}, {100, 2, 100}, 200, 42u, 0.5f, 1.5f);
     auto b = scatter_field({0, 2, 0}, {100, 2, 100}, 200, 42u, 0.5f, 1.5f);
@@ -42,7 +38,6 @@ int main() {
     check(scatter_field({0,0,0},{1,0,1},0,1u).empty(), "zero count scatters nothing");
   }
 
-  // Chunk assignment at boundaries.
   {
     check(field_chunk_key_for({0, 0, 0}, 16.f).x == 0, "origin in chunk 0");
     check(field_chunk_key_for({15.9f, 0, 0}, 16.f).x == 0, "just inside stays");
@@ -51,7 +46,6 @@ int main() {
     check(field_chunk_key_for({-16.f, 0, -32.f}, 16.f).z == -2, "negative boundary exact");
   }
 
-  // Build partitions, sorts, finds.
   InstanceField field;
   {
     std::vector<InstanceTransform> ts = {
@@ -66,7 +60,6 @@ int main() {
     check(field.chunks[0].key.x == -1, "chunks sorted by (z,x)");
   }
 
-  // LOD by distance bands (chunk 0 center = 8,8 for size 16).
   {
     check(field_lod_for(10.f, {.full=40.f,.reduced=90.f}) == FieldLod::Full, "near is full");
     check(field_lod_for(40.f, {.full=40.f,.reduced=90.f}) == FieldLod::Full, "full edge inclusive");
@@ -78,16 +71,14 @@ int main() {
     check(at_cam.size() == 4, "camera near: all three chunks within full band");
   }
 
-  // Selected: full near, density subset mid (stable), none far.
   {
     std::vector<InstanceTransform> ts;
     for (int i = 0; i < 100; i++) ts.push_back({{1.f + (i % 10), 0, 1.f + (i / 10)}, 0, {1,1,1}});
-    InstanceField f; f.build(ts, 16.f); // one chunk, center 8,8
+    InstanceField f; f.build(ts, 16.f);
     auto full = f.selected({8,0,8}, {.full=40.f,.reduced=90.f,.density=0.25f});
     check(full.size() == 100, "full band keeps all");
     auto far = f.selected({1000,0,8}, {.full=40.f,.reduced=90.f,.density=0.25f});
     check(far.empty(), "skip band keeps none");
-    // camera 50 from center: reduced
     auto mid1 = f.selected({58,0,8}, {.full=40.f,.reduced=90.f,.density=0.25f});
     auto mid2 = f.selected({60,0,9}, {.full=40.f,.reduced=90.f,.density=0.25f});
     check(mid1 == mid2, "reduced subset stable as camera moves in band");

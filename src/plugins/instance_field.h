@@ -1,14 +1,5 @@
 #pragma once
 
-// Chunked instanced fields (grass, props) with distance LOD and scatter.
-//
-//   InstanceField field;
-//   field.build(scatter_field(min, max, 5000, RngStream{42}), 16.f);
-//   field.append_selected(camera_pos, {.full = 40.f, .reduced = 90.f},
-//                         out);  // feed out to InstanceBatcher via model_transform
-//
-// Header-level math only: no drawing, no GPU buffers. Distances are XZ
-// (ground plane), so a flying camera does not pop chunks in and out.
 
 #include <algorithm>
 #include <cmath>
@@ -29,9 +20,6 @@ struct InstanceTransform {
   bool operator==(const InstanceTransform &) const = default;
 };
 
-// Deterministic scatter in [min, max] on XZ (y = min.y). Same stream state
-// in -> same transforms out; use one RngStream per field so other systems
-// drawing from a shared stream cannot reshuffle a field.
 inline std::vector<InstanceTransform> scatter_field(Vector3Type min,
                                                     Vector3Type max, int count,
                                                     RngStream &rng,
@@ -73,13 +61,11 @@ struct FieldChunk {
 enum class FieldLod { Full, Reduced, Skip };
 
 struct FieldLodBands {
-  float full = 40.f;          // <= full: every instance
-  float reduced = 90.f;       // <= reduced: `density` fraction; past: skip
-  float density = 0.25f;      // kept fraction in the reduced band, [0,1]
+  float full = 40.f;
+  float reduced = 90.f;
+  float density = 0.25f;
 };
 
-// Which chunk (on XZ) holds a point. floor, not truncation, so negative
-// coordinates land in the chunk that actually contains them.
 [[nodiscard]] inline FieldChunkKey
 field_chunk_key_for(Vector3Type pos, float chunk_size) {
   return {static_cast<int>(std::floor(pos.x / chunk_size)),
@@ -94,8 +80,6 @@ field_chunk_key_for(Vector3Type pos, float chunk_size) {
 }
 
 namespace detail_field {
-// SplitMix-style finalizer: spreads sequential indices evenly over [0,1)
-// so a density cut takes instances from across the chunk, not a corner.
 [[nodiscard]] inline float keep_fraction(FieldChunkKey key, size_t index) {
   uint64_t h = static_cast<uint64_t>(static_cast<uint32_t>(key.x)) *
                    0x9e3779b97f4a7c15ull +
@@ -105,13 +89,13 @@ namespace detail_field {
   h ^= h >> 33;
   h *= 0xff51afd7ed558ccdull;
   h ^= h >> 33;
-  return static_cast<float>(h >> 40) / 16777216.f; // top 24 bits -> [0,1)
+  return static_cast<float>(h >> 40) / 16777216.f;
 }
-} // namespace detail_field
+}
 
 struct InstanceField {
   float chunk_size = 16.f;
-  std::vector<FieldChunk> chunks; // sorted by (z, x) for stable iteration
+  std::vector<FieldChunk> chunks;
 
   void build(std::span<const InstanceTransform> instances, float chunk) {
     chunk_size = chunk > 0.f ? chunk : 16.f;
@@ -159,10 +143,6 @@ struct InstanceField {
     return field_lod_for(distance_xz(camera, chunk), bands);
   }
 
-  // Appends the instances the caller should draw this frame: all of a Full
-  // chunk, a deterministic `density` subset of a Reduced chunk, none of a
-  // skipped chunk. The subset is a function of chunk+index only, so it does
-  // not shimmer as the camera moves within the band.
   void append_selected(Vector3Type camera, const FieldLodBands &bands,
                        std::vector<InstanceTransform> &out) const {
     float density = std::clamp(bands.density, 0.f, 1.f);
@@ -187,4 +167,4 @@ struct InstanceField {
   }
 };
 
-} // namespace afterhours
+}
