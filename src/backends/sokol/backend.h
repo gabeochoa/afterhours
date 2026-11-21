@@ -47,7 +47,10 @@
 #include <string>
 #include <unordered_map>
 
-// Shared state (also used by font_helper.h)
+// Shared state (also used by font_helper.h). The macro tells font_helper.h
+// that ensure_sokol_gl_and_fonts() will be defined in this TU; standalone
+// font_helper.h users (font_atlas_measure_test) set g_fons_ctx themselves.
+#define AFTERHOURS_FONT_HELPER_HAS_ENSURE 1
 #include "font_helper.h"
 #include "metal_state.h"
 
@@ -145,9 +148,16 @@ inline sgl_pipeline g_blend_pip_additive{};
 inline sgl_pipeline g_blend_pip_multiplied{};
 inline sgl_pipeline g_blend_pip_premultiplied{};
 
-// sokol_gl + fontstash setup shared by the windowed (sokol_init_cb) and headless
-// (metal_init) bootstraps. Assumes sg_setup() has already run.
-inline void setup_sokol_gl_and_fonts() {
+inline bool g_sgl_ready = false;
+
+// sokol_gl + fontstash setup, deferred to the first draw or font load:
+// sgl_setup compiles the sgl shader on Metal (tens of ms), which an app
+// that never draws should not pay at startup. sfons_create builds an sgl
+// pipeline itself, so the two must come up together, in this order.
+inline void ensure_sokol_gl_and_fonts() {
+  if (g_sgl_ready)
+    return;
+  g_sgl_ready = true;
   sgl_desc_t sgl_desc{};
   sgl_desc.max_vertices = 1 << 18; // 262144 vertices
   sgl_desc.max_commands = 1 << 16; // 65536 commands
@@ -354,8 +364,8 @@ inline void sokol_init_cb() {
   stm_setup();
   g_start_time = stm_now();
 
-  // Initialize sokol_gl (2D drawing) + fontstash (text). Shared with headless.
-  setup_sokol_gl_and_fonts();
+  // sokol_gl + fontstash are deferred to the first draw or font load
+  // (ensure_sokol_gl_and_fonts).
 
   g_initialized = true;
 
@@ -389,7 +399,10 @@ inline void sokol_cleanup_cb() {
     sfons_destroy(g_fons_ctx);
     g_fons_ctx = nullptr;
   }
-  sgl_shutdown();
+  if (g_sgl_ready) {
+    sgl_shutdown();
+    g_sgl_ready = false;
+  }
   sg_shutdown();
   g_initialized = false;
 }
@@ -553,6 +566,7 @@ struct MetalPlatformAPI {
 
   // ── Frame ──
   static void begin_drawing() {
+    metal_detail::ensure_sokol_gl_and_fonts();
     // Headless: no swapchain — render into the offscreen texture instead. This
     // sets up the ortho projection + GL→Metal fixup internally, so we return.
     if (metal_detail::g_headless) {
@@ -620,6 +634,7 @@ struct MetalPlatformAPI {
   }
 
   static void clear_background(::afterhours::ColorLike auto c) {
+    metal_detail::ensure_sokol_gl_and_fonts();
     // Update pass action so sg_begin_pass clears to this color
     metal_detail::g_pass_action.colors[0].clear_value = {
         static_cast<float>(c.r) / 255.0f,
@@ -1080,7 +1095,7 @@ inline bool metal_init(const Config &cfg) {
     }
     stm_setup();
     metal_detail::g_start_time = stm_now();
-    metal_detail::setup_sokol_gl_and_fonts();
+    // sokol_gl + fontstash are deferred to the first draw or font load.
     metal_detail::g_initialized = true;
 
     const int scale =
@@ -1112,7 +1127,10 @@ inline void metal_shutdown() {
     sfons_destroy(metal_detail::g_fons_ctx);
     metal_detail::g_fons_ctx = nullptr;
   }
-  sgl_shutdown();
+  if (metal_detail::g_sgl_ready) {
+    sgl_shutdown();
+    metal_detail::g_sgl_ready = false;
+  }
   sg_shutdown();
 #ifdef AFTER_HOURS_USE_VULKAN
   vulkan_destroy_headless_environment();

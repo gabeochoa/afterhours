@@ -282,6 +282,7 @@ ALL_TESTS += sokol_geometry_test
 ALL_TESTS += sokol_hidpi_test
 ALL_TESTS += sokol_resize_test
 ALL_TESTS += sokol_headless_run_test
+ALL_TESTS += sokol_lazy_gl_test
 ALL_TESTS += sokol_include_order_test
 ALL_TESTS += sokol_wrappers_test
 ALL_TESTS += sokol_frame_dt_test
@@ -451,6 +452,10 @@ $(OUT)/sokol_resize_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_headless_run_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_headless_run_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_headless_run_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_lazy_gl_test: ../examples/web/sokol_impl.cc
+$(OUT)/sokol_lazy_gl_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/sokol_lazy_gl_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/sokol_lazy_gl_test: ../src/backends/sokol/drawing_helpers.h ../src/backends/sokol/backend.h
 $(OUT)/sokol_include_order_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_include_order_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_include_order_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
