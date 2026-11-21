@@ -1,5 +1,3 @@
-// --time-scale on a fixed-step sim: more fixed steps, never a bigger dt.
-
 #include <afterhours/ah.h>
 
 #include <afterhours/src/plugins/e2e_testing/harness.h>
@@ -30,7 +28,6 @@ int main() {
 
   auto &entities = EntityHelper::get_entities_for_mod();
 
-  // Scale 4: four counted ticks, each of the fixed dt, not one of 4x dt.
   {
     graphics::RunConfig cfg;
     cfg.fixed_dt = 1.f / 60.f;
@@ -48,7 +45,6 @@ int main() {
     CHECK(last_dt == cfg.fixed_dt);
   }
 
-  // Scale 1 is unchanged: one tick of the fixed dt.
   {
     graphics::RunConfig cfg;
     cfg.fixed_dt = 1.f / 60.f;
@@ -65,7 +61,6 @@ int main() {
     CHECK(last_dt == cfg.fixed_dt);
   }
 
-  // No fixed_dt: apply is a no-op, wall-clock dt stays the (scaled) mode.
   {
     graphics::RunConfig cfg;
     CHECK(apply_time_scale(cfg, 4.f) == 1);

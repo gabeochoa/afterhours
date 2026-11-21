@@ -130,27 +130,16 @@ inline int count_e2e_scripts(const std::string &dir) {
   return count;
 }
 
-// Reference wiring for `--time-scale` on a fixed-step sim: speed comes from
-// more fixed steps, never a bigger dt. Scaling dt (headless get_delta_time,
-// motion::scaled_dt) changes behaviour, and setting fixed_dt alone makes
-// --time-scale a no-op because RunConfig::step_dt ignores the scale for a
-// fixed step — so the flag and the sim never met until this.
 inline int substeps_for_time_scale(float time_scale) {
-  // Fractional scales round to a whole step; below 1 can't mean fewer than
-  // one step, so slow the frame down instead of dropping steps.
   return std::max(1, static_cast<int>(std::lround(time_scale)));
 }
 
-// Turns the flag into substeps on a RunConfig with fixed_dt set; a no-op
-// (one step of wall clock) without it, where scaling dt is the honest mode.
 inline int apply_time_scale(graphics::RunConfig &cfg, float time_scale) {
   if (cfg.fixed_dt > 0.f)
     cfg.sim_steps = std::max(1, cfg.sim_steps) * substeps_for_time_scale(time_scale);
   return cfg.step_count();
 }
 
-// One frame of the reference loop: step_count() fixed ticks of fixed_dt, so
-// --time-scale 4 is 4 ticks of 1/60, counted, not one tick of 4/60.
 inline void run_fixed_steps(SystemManager &sm, Entities &entities,
                             const graphics::RunConfig &cfg, float wall_dt) {
   const float dt = cfg.step_dt(wall_dt);
