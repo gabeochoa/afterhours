@@ -184,6 +184,7 @@ ALL_TESTS := \
 	files_atomic_write_test \
 	files_resource_path_test \
 	files_cache_path_test \
+	files_documents_test \
 	capture_test \
 	polyline_test \
 	measure_memo_test \
@@ -409,6 +410,7 @@ $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
 $(OUT)/files_test_roots_test: ../src/plugins/files.cpp
 $(OUT)/files_cache_path_test: ../src/plugins/files.cpp
+$(OUT)/files_documents_test: ../src/plugins/files.cpp
 $(OUT)/bundle_test: ../src/plugins/files.cpp
 $(OUT)/file_watcher_test: ../src/plugins/file_watcher.cpp
 ifeq ($(UNAME_S),Darwin)
