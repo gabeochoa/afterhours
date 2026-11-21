@@ -4,10 +4,6 @@ using namespace afterhours;
 using namespace afterhours::ui;
 using namespace ui_test;
 
-// Representative scene shaped like the measured screens (docs/performance.md:
-// Cozy Cafe 66 draws, Images 59): every widget re-enters its ancestor clip for
-// its label and restores it afterwards, and shaded widgets wrap each draw in
-// the same shader. Before the fix this submitted 62 scissor ops for 30 widgets.
 TEST(representative_scene_draws_unchanged_state_ops_coalesce) {
   Arena arena(Arena::DEFAULT_CAPACITY);
   RenderCommandBuffer buffer(arena);
@@ -33,7 +29,6 @@ TEST(representative_scene_draws_unchanged_state_ops_coalesce) {
   CHECK(renderer.stats().total_commands == 270);
   CHECK(capture::calls().size() == 90);
   CHECK(renderer.stats().scissor_operations == 2);
-  // Shader pairs stay: unshaded rects sit between one widget's End and the next Start.
   CHECK(renderer.stats().shader_operations == 60);
   bool order_ok = capture::calls().size() == 90;
   for (size_t i = 0; order_ok && i < capture::calls().size(); ++i) {

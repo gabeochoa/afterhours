@@ -746,7 +746,6 @@ public:
       case RenderPrimitiveType::ScissorStart: {
         std::array<int, 4> clip{cmd.data.scissor.x, cmd.data.scissor.y,
                                 cmd.data.scissor.width, cmd.data.scissor.height};
-        // Same clip already active (label clip == ancestor clip): re-setting it changes no pixels.
         if (active_clip && *active_clip == clip) {
           i++;
           break;
