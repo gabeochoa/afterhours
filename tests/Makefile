@@ -96,6 +96,7 @@ ALL_TESTS := \
 	label_clip_test \
 	label_test \
 	animation_test \
+	reveal_test \
 	motion_config_test \
 	reduced_motion_test \
 	gesture_availability_test \
