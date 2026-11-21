@@ -1,11 +1,5 @@
-// Tab follows the UI tree, not entity allocation order, and a FocusScope
-// bounds Tab to its subtree.
-//
-// Tab order used to be the order HandleTabbing streamed over the entity
-// collection -- creation order -- so a virtualized list tabbed in the
-// order its rows happened to be allocated (floatinghotel's file tree
-// needed 7 Tab presses to reach the first row), and Tab in one split
-// pane walked out into the other pane (hanabi #336).
+// Tab follows tree order, not allocation order (which made floatinghotel's
+// file tree need 7 Tabs to reach its first row); FocusScope traps Tab (hanabi #336).
 
 #include "ui_test_harness.h"
 
@@ -29,10 +23,7 @@ struct Panes {
   EntityID a1, a2, b1;
 };
 
-// Two panes under the root: pane 0 holds a1/a2, pane 1 holds b1. One
-// builder for both emission orders, so the mk() call sites (and thus the
-// entities) are the same whichever pane a frame happens to emit first --
-// only the root's child order, i.e. the tree, changes.
+// One builder for both emission orders so entities are identical; only tree order changes.
 Panes build_panes(ImmTestHarness &h, bool a_first, bool scope_a = false) {
   using namespace imm;
   auto &ctx = h.context();
@@ -56,16 +47,13 @@ Panes build_panes(ImmTestHarness &h, bool a_first, bool scope_a = false) {
 
 } // namespace
 
-// Frame one allocates pane B's row first (pooled entities in allocation
-// order); frame two emits pane A first, as the screen is laid out. Tab
-// must follow frame two's tree, not frame one's allocation.
 TEST(tree_order_beats_allocation_order) {
   ImmTestHarness h;
   auto &ctx = h.context();
   const Panes alloc = build_panes(h, /*a_first=*/false);
   h.begin_frame();
   const Panes p = build_panes(h, /*a_first=*/true);
-  CHECK(p.a1 == alloc.a1 && p.b1 == alloc.b1); // same entities, reused
+  CHECK(p.a1 == alloc.a1 && p.b1 == alloc.b1);
 
   const std::vector<EntityID> expected{p.a1, p.a2, p.b1};
   CHECK(ctx.build_tab_order() == expected);
@@ -75,16 +63,12 @@ TEST(tree_order_beats_allocation_order) {
   CHECK(ctx.has_focus(p.a2));
   press_tab(ctx);
   CHECK(ctx.has_focus(p.b1));
-  press_tab(ctx); // wraps at the end of the whole list
+  press_tab(ctx);
   CHECK(ctx.has_focus(p.a1));
-  press_shift_tab(ctx); // backward from the first wraps to the last
+  press_shift_tab(ctx);
   CHECK(ctx.has_focus(p.b1));
 }
 
-// Regression for the pre-tree-order behaviour on a flat screen: buttons
-// built in order tabbed in that order. They still do -- tree order and
-// allocation order agree here -- except wrapping, which used to land a
-// frame later via the next frame's initial grab.
 TEST(flat_list_still_tabs_in_build_order_and_wraps) {
   using namespace imm;
   ImmTestHarness h;
@@ -116,14 +100,13 @@ TEST(focus_scope_traps_tab_and_wraps_at_its_edges) {
   ctx.set_focus(p.a1);
   press_tab(ctx);
   CHECK(ctx.has_focus(p.a2));
-  press_tab(ctx); // wraps inside the scope; never reaches pane B
+  press_tab(ctx);
   CHECK(ctx.has_focus(p.a1));
-  press_shift_tab(ctx); // backward wraps the other way
+  press_shift_tab(ctx);
   CHECK(ctx.has_focus(p.a2));
 }
 
-// Outside every scope, Tab uses the whole list -- which is how focus gets
-// INTO a scope in the first place.
+// Unscoped Tab is how focus enters a scope.
 TEST(unscoped_focus_tabs_the_whole_list) {
   using namespace imm;
   ImmTestHarness h;
@@ -137,7 +120,7 @@ TEST(unscoped_focus_tabs_the_whole_list) {
   CHECK(order.front() == outside.ent().id);
   ctx.set_focus(outside.ent().id);
   press_tab(ctx);
-  CHECK(ctx.has_focus(order[1])); // enters the scope's first stop
+  CHECK(ctx.has_focus(order[1]));
   CHECK(ctx.has_focus(p.a1));
 }
 
@@ -156,15 +139,12 @@ TEST(nested_scope_nearest_one_wins) {
   auto o2 = button(ctx, mk(outer.ent(), 2), ComponentConfig{});
   h.layout_only();
 
-  // Inside the inner scope, Tab sees only the inner buttons.
   ctx.set_focus(i1.ent().id);
   press_tab(ctx);
   CHECK(ctx.has_focus(i2.ent().id));
   press_tab(ctx);
   CHECK(ctx.has_focus(i1.ent().id));
 
-  // On an outer-scope button, the inner buttons are not stops: the outer
-  // scope's own list is [o1, o2].
   ctx.set_focus(o1.ent().id);
   press_tab(ctx);
   CHECK(ctx.has_focus(o2.ent().id));
@@ -172,8 +152,6 @@ TEST(nested_scope_nearest_one_wins) {
   CHECK(ctx.has_focus(o1.ent().id));
 }
 
-// WidgetMod held during a forward Tab walks backward (the old
-// last_processed reverse), now through the ordered list.
 TEST(widget_mod_reverses_tab) {
   using namespace imm;
   ImmTestHarness h;
@@ -195,8 +173,6 @@ TEST(widget_mod_reverses_tab) {
   (void)c;
 }
 
-// The system path: HandleTabbing publishes the tree-ordered list and the
-// initial grab takes its first element, not the first allocated.
 TEST(handle_tabbing_publishes_tree_order_and_grabs_its_first) {
   ImmTestHarness h;
   auto &ctx = h.context();

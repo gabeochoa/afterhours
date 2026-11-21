@@ -175,10 +175,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   EntityID FAKE = -2;
 
   std::set<EntityID> focused_ids;
-  // Every tab-focusable id in tree (pre-order) order for the current frame.
-  // Rebuilt each frame by HandleTabbing; build_tab_order() computes the
-  // same list on demand. Tab order used to be entity allocation order, so
-  // pooled or virtualized rows tabbed in the order they were allocated.
+  // This frame's tab-focusable ids in tree order (rebuilt by HandleTabbing).
   std::vector<EntityID> focus_order;
 
   EntityID hot_id = ROOT;          // hot means the mouse is over this element
@@ -552,8 +549,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
            opt.asE().template has<ConsumesDirectionalInput>();
   }
 
-  // The one focusability rule. systems.h's can_be_focused() forwards here
-  // so hit/focus arbitration and tab order can never drift apart.
+  // Single focusability rule so hit arbitration and tab order cannot drift.
   [[nodiscard]] bool is_tab_focusable(const Entity &e) const {
     if (e.template is_missing<HasClickListener>() &&
         e.template is_missing<HasDragListener>() &&
@@ -565,7 +561,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
       return false;
     if (e.template has<ShouldHide>())
       return false;
-    // Inert anywhere on the ancestor chain disables the whole subtree.
     const Entity *cur = &e;
     for (int depth = 0; depth < 64 && cur; ++depth) {
       if (cur->template has<Inert>())
@@ -583,12 +578,8 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     return is_input_allowed(e.id);
   }
 
-  // Focusable ids in tree order: pre-order from the roots, the way
-  // ResolveHitTarget already walks. For flex layouts tree order is visual
-  // order, so virtualized rows tab where they sit, not where they were
-  // allocated. Focusable entities no root reaches (a parent id that no
-  // longer resolves) keep the old allocation order at the end rather than
-  // silently dropping out of Tab.
+  // Tree order is visual order for flex layouts. Unreached focusables are
+  // appended in allocation order rather than dropping out of Tab.
   [[nodiscard]] std::vector<EntityID> build_tab_order() const {
     std::vector<EntityID> order;
     std::set<EntityID> visited;
@@ -617,8 +608,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     return order;
   }
 
-  // The FocusScope bounding Tab for `id`: the nearest ancestor (or the
-  // element itself) carrying FocusScope, or ROOT when there is none.
   [[nodiscard]] EntityID nearest_focus_scope(EntityID id) const {
     EntityID cur = id;
     for (int depth = 0; depth < 64 && cur >= 0; ++depth) {
@@ -635,8 +624,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     return ROOT;
   }
 
-  // Where Tab may go from `focused`: inside its scope, that scope's
-  // members in tree order; outside every scope, the whole list.
   [[nodiscard]] std::vector<EntityID>
   tab_order_for(EntityID focused, const std::vector<EntityID> &order) const {
     const EntityID scope = nearest_focus_scope(focused);
@@ -649,9 +636,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     return scoped;
   }
 
-  // Move focus one step (dir > 0 forward, < 0 backward), wrapping at the
-  // edges of the focused element's scope. With nothing (valid) focused,
-  // forward lands on the first element and backward on the last.
   void move_focus(int dir) {
     const std::vector<EntityID> order = build_tab_order();
     focus_order = order;
@@ -693,7 +677,6 @@ template <typename InputAction> struct UIContext final : BaseComponent {
         }
       }
       if (forward) {
-        // WidgetMod held while tabbing forward walks backward, as before.
         bool reverse = false;
         if constexpr (magic_enum::enum_contains<InputAction>("WidgetMod")) {
           reverse = is_held_down(InputAction::WidgetMod);
@@ -703,8 +686,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
         move_focus(-1);
       }
     }
-    // Kept updated for compatibility; navigation no longer streams
-    // through it (it now follows build_tab_order()).
+    // Compatibility only; navigation uses build_tab_order().
     last_processed = id;
   }
 

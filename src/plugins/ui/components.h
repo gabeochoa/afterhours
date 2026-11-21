@@ -153,11 +153,7 @@ struct SelectOnFocus : BaseComponent {};
 struct FocusClusterRoot : BaseComponent {};
 struct InFocusCluster : BaseComponent {};
 
-// Tab/Shift+Tab stay inside this element's subtree and wrap at its edges
-// (a split pane, a dialog). Set with ComponentConfig::with_focus_scope().
-// An element outside every scope tabs through the whole tree-ordered list.
-// Focus *groups* (one Tab stop per group, arrows inside) are a follow-up
-// that builds on this; they are not this component.
+// Tab stays inside this subtree (with_focus_scope); outside any scope, the whole list.
 struct FocusScope : BaseComponent {};
 
 struct FocusProxy : BaseComponent {

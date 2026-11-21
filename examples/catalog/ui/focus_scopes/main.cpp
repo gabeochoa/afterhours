@@ -10,9 +10,7 @@ using namespace afterhours;
 using namespace afterhours::ui;
 using namespace afterhours::ui::imm;
 
-// Two panes, each a focus scope. Focus starts in the left pane and Tab
-// cycles inside it, wrapping at its edges; the right pane is reached by
-// clicking, not by tabbing past the end.
+// Each pane is a focus scope: Tab cycles inside it; the other pane needs a click.
 struct TwoPanes : System<DefaultUIContext> {
   EntityID left_first = -1;
   EntityID left_second = -1;
@@ -62,7 +60,7 @@ int main() {
   const bool starts_left = ctx.has_focus(screen.left_first);
   tab();
   const bool to_second = ctx.has_focus(screen.left_second);
-  tab(); // wraps inside the left pane instead of reaching Right 1
+  tab();
   const bool wrapped = ctx.has_focus(screen.left_first);
   const bool never_right = !ctx.has_focus(screen.right_first);
 

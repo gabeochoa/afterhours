@@ -112,7 +112,6 @@ struct ComponentConfig {
   std::optional<Vector2Type> text_inset;
   std::optional<CursorType> cursor_type; // Cursor to show on hover
   bool skip_when_tabbing = false;
-  // This element bounds Tab/Shift+Tab to its subtree (see FocusScope).
   bool focus_scope = false;
   std::optional<float> focus_ring_offset;
   // Per-component ring thickness, overriding Theme::focus_ring_thickness.
@@ -621,9 +620,7 @@ struct ComponentConfig {
     skip_when_tabbing = skip;
     return *this;
   }
-  /// Tab and Shift+Tab cycle inside this element's subtree and wrap at its
-  /// edges instead of walking on into the rest of the screen. Put it on a
-  /// split pane or a dialog. Nesting works: the nearest scope wins.
+  /// Tab cycles inside this subtree, wrapping at its edges; nearest scope wins.
   ComponentConfig &with_focus_scope(bool scope = true) {
     focus_scope = scope;
     return *this;
@@ -1163,8 +1160,7 @@ struct ComponentConfig {
       merged.hidden = overrides.hidden;
     if (overrides.skips_when_tabbing())
       merged.skip_when_tabbing = overrides.skip_when_tabbing;
-    // Only when asked for, like ignore_pointer_events: an unconditional
-    // copy would clear a base config's scope every time it is overridden.
+    // Conditional or an override would clear a base config's scope.
     if (overrides.is_focus_scope())
       merged.focus_scope = true;
     if (overrides.focus_ring_offset.has_value())

@@ -226,7 +226,7 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
   virtual void for_each_with(Entity &entity, UIContext<InputAction> &context,
                              float dt) override {
     context.render_cmds.clear();
-    context.focus_order.clear(); // rebuilt by HandleTabbing this frame
+    context.focus_order.clear();
     context.dt = dt;
     context.last_action = InputAction::None;
     context.last_action_modifiers = 0;
@@ -1093,10 +1093,7 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
     if (!context)
       return;
-    // Publish this frame's tree-ordered list and let the first element in
-    // it (not the first allocated) win the initial grab. The per-entity
-    // pass below still runs try_to_grab/process_tabbing, which are no-ops
-    // for the grab once focus is taken.
+    // Initial grab takes the first in tree order, not first allocated.
     context->focus_order = context->build_tab_order();
     for (EntityID id : context->focus_order)
       context->focused_ids.insert(id);
