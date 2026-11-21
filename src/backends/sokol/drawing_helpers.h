@@ -1301,7 +1301,7 @@ inline void begin_texture_mode(graphics::RenderTextureType &rt) {
 
   sgl_defaults();
   if (rt.sample_count > 1) {
-    // sokol validates pipeline/attachment sample counts: blend here, not g_blend_pip.
+    // sokol checks sample counts: blend here, not g_blend_pip.
     static std::unordered_map<uint32_t, uint32_t> msaa_blend_pips;
     auto it = msaa_blend_pips.find(rt.sgl_ctx_id);
     if (it == msaa_blend_pips.end()) {
