@@ -842,7 +842,9 @@ static inline Vector2Type default_text_inset() {
   return resolve_text_inset(imm::ThemeDefaults::get().theme);
 }
 
-static inline void draw_text_in_rect(
+// Returns whether the text was ellipsized or clipped (caller records it on
+// HasLabel::truncated so a full-text tooltip only fires for hidden text).
+static inline bool draw_text_in_rect(
     const ui::FontManager &fm, const std::string &text, RectangleType rect,
     TextAlignment alignment, Color color, bool show_debug_indicator = false,
     const std::optional<TextStroke> &stroke = std::nullopt,
@@ -925,6 +927,7 @@ static inline void draw_text_in_rect(
       float total_h = line_h * static_cast<float>(lines.size());
       // Vertically center the block within the rect.
       float y = rect.y + std::max(0.f, (rect.height - total_h) * 0.5f);
+      bool truncated = false;
       for (const auto &ln : lines) {
         // A line that does not fully fit is dropped, not drawn: the
         // own-box clip would otherwise slice it mid-glyph.
@@ -935,10 +938,12 @@ static inline void draw_text_in_rect(
                             rot_center_x, rot_center_y, TextOverflow::Clip,
                             letter_spacing, font_size, /*report_overflow=*/false,
                             inset, false);
+        } else {
+          truncated = true;
         }
         y += line_h;
       }
-      return;
+      return truncated;
     }
     // Single line that fits: fall through to normal single-line rendering.
   }
@@ -989,7 +994,7 @@ static inline void draw_text_in_rect(
   // MIN_FONT_SIZE, so any text below the floor was silently not drawn, and the
   // clamp above was the only thing keeping that from happening.
   if (result.rect.height < 1.f) {
-    return;
+    return !text.empty();
   }
 
   // Handle text overflow ellipsis truncation
@@ -1011,6 +1016,11 @@ static inline void draw_text_in_rect(
         });
     return truncated_text;
   }();
+  // Ellipsis shortens the string; Clip/Wrap leave it whole and the scissor
+  // (or an over-tall box) cuts it, which position_text_ex reports.
+  const bool truncated = text_overflow == TextOverflow::Ellipsis
+                             ? render_text != text
+                             : !result.text_fits;
 
   RectangleType sizing = result.rect;
 
@@ -1039,6 +1049,7 @@ static inline void draw_text_in_rect(
   detail::draw_text_at_position(fm, render_text, rect, alignment, sizing, color,
                                 rotation, rot_center_x, rot_center_y,
                                 letter_spacing);
+  return truncated;
 }
 
 // Draw coloured runs through the same wrap primitive as the plain path.
@@ -1047,7 +1058,7 @@ static inline void draw_text_in_rect(
 // Non-const fm: per-run weights are drawn by swapping the active font around
 // each run, since draw_text_in_rect resolves the face itself. The active font
 // is restored before returning.
-static inline void draw_runs_in_rect(
+static inline bool draw_runs_in_rect(
     ui::FontManager &fm, const std::vector<TextSpan> &runs,
     RectangleType rect, TextAlignment alignment,
     bool show_debug_indicator = false,
@@ -1061,7 +1072,7 @@ static inline void draw_runs_in_rect(
     // Pinned row height; 0 means the measured one.
     float line_height_px = 0.0f) {
   if (runs.empty() || rect.width <= 0.f)
-    return;
+    return false;
 
   Font font = fm.get_active_font();
   float font_size = explicit_font_size;
@@ -1092,7 +1103,7 @@ static inline void draw_runs_in_rect(
       text_overflow == TextOverflow::Wrap && explicit_font_size > 0.f;
   const float wrap_width = wants_wrap ? (rect.width - 2.f * inset.x) : 1e9f;
   if (wrap_width <= 0.f)
-    return;
+    return false;
 
   // Memoised: this runs every frame, usually on text that hasn't changed.
   const std::uint64_t wrap_key =
@@ -1108,6 +1119,7 @@ static inline void draw_runs_in_rect(
   float line_h = line_height_px > 0.f
                      ? line_height_px
                      : measure_text(font, "Ag", font_size, spacing).y;
+  bool truncated = false;
   // Auto-fit above sized the font against the joined text, i.e. for a single
   // line. Hard breaks still split it, so shrink to fit every line. A pinned
   // row height is not shrunk: lines past the bottom are dropped below.
@@ -1130,6 +1142,7 @@ static inline void draw_runs_in_rect(
     // A line that does not fully fit is dropped, not drawn: the
     // own-box clip would otherwise slice it mid-glyph.
     if (y + line_h > rect.y + rect.height + 0.5f) {
+      truncated = true;
       y += line_h;
       continue;
     }
@@ -1158,16 +1171,19 @@ static inline void draw_runs_in_rect(
         fm.set_active(want);
       // Same as the per-line calls above: a run's rect is sized to that run,
       // so charging it margins would report overflow for every one of them.
-      draw_text_in_rect(fm, run.text, run_rect, TextAlignment::Left, run.color,
-                        show_debug_indicator, stroke, shadow, rotation,
-                        rot_center_x, rot_center_y, TextOverflow::Clip,
-                        letter_spacing, font_size, /*report_overflow=*/false,
-                        Vector2Type{0.f, 0.f}, register_text);
+      truncated = draw_text_in_rect(fm, run.text, run_rect, TextAlignment::Left,
+                                    run.color, show_debug_indicator, stroke,
+                                    shadow, rotation, rot_center_x, rot_center_y,
+                                    TextOverflow::Clip, letter_spacing, font_size,
+                                    /*report_overflow=*/false,
+                                    Vector2Type{0.f, 0.f}, register_text) ||
+                  truncated;
       if (swap)
         fm.set_active(base_font);
     }
     y += line_h;
   }
+  return truncated;
 }
 
 static inline Vector2Type
@@ -1859,20 +1875,18 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       // Without this branch with_styled_label is a no-op here, so the same
       // UI renders differently depending on `use_batched`.
       if (!hasLabel.spans.empty()) {
-        draw_runs_in_rect(font_manager, hasLabel.spans, label_rect,
-                          hasLabel.alignment, SHOW_TEXT_OVERFLOW_DEBUG, stroke,
-                          shadow, rotation, centerX, centerY,
-                          hasLabel.text_overflow, hasLabel.letter_spacing,
-                          explicit_fs, hasLabel.label, immediate_inset, false,
-                          label_line_h);
+        entity.get<HasLabel>().truncated = draw_runs_in_rect(
+            font_manager, hasLabel.spans, label_rect, hasLabel.alignment,
+            SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation, centerX, centerY,
+            hasLabel.text_overflow, hasLabel.letter_spacing, explicit_fs,
+            hasLabel.label, immediate_inset, false, label_line_h);
       } else {
-        draw_text_in_rect(font_manager, hasLabel.label.c_str(), label_rect,
-                          hasLabel.alignment, font_col,
-                          SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation,
-                          centerX, centerY, hasLabel.text_overflow,
-                          hasLabel.letter_spacing, explicit_fs,
-                          /*report_overflow=*/true, immediate_inset, false,
-                          label_line_h);
+        entity.get<HasLabel>().truncated = draw_text_in_rect(
+            font_manager, hasLabel.label.c_str(), label_rect, hasLabel.alignment,
+            font_col, SHOW_TEXT_OVERFLOW_DEBUG, stroke, shadow, rotation,
+            centerX, centerY, hasLabel.text_overflow, hasLabel.letter_spacing,
+            explicit_fs, /*report_overflow=*/true, immediate_inset, false,
+            label_line_h);
       }
       if (clip_label) {
         if (ancestor_clip)
@@ -2506,6 +2520,12 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
                   return measure_text(font, s.c_str(), font_size, spacing).x;
                 });
         }
+        // Same rule as the immediate path: Ellipsis shortens the string,
+        // Clip/Wrap cut it via the scissor, reported by text_fits.
+        entity.get<HasLabel>().truncated =
+            hasLabel.text_overflow == TextOverflow::Ellipsis
+                ? display_text != hasLabel.label
+                : !result.text_fits;
 
         // Pass the container rect (text_rect) not the position rect
         // (result.rect) render_text will handle centering within the container
