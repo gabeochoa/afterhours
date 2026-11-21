@@ -182,6 +182,7 @@ ALL_TESTS := \
 	grapheme_edit_test \
 	entity_mapping_test \
 	files_atomic_write_test \
+	files_confined_path_test \
 	files_resource_path_test \
 	files_cache_path_test \
 	capture_test \
@@ -406,6 +407,7 @@ $(OUT)/graphics_concepts_pedantic_test: INCLUDES_T = -I$(INCLUDE_ROOT) -isystem 
 $(OUT)/sound_volume_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/sound_volume_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
+$(OUT)/files_confined_path_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
 $(OUT)/files_test_roots_test: ../src/plugins/files.cpp
 $(OUT)/files_cache_path_test: ../src/plugins/files.cpp

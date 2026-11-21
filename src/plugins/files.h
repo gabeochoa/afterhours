@@ -243,6 +243,54 @@ struct files : developer::Plugin {
   // (pulled in by ui.h) needs them without forcing every UI consumer to link
   // files.cpp.
 
+  // Component-wise containment: true when `p` is `base` or sits under it, so
+  // a sibling sharing a name prefix (opponents_backup vs opponents) is out.
+  static bool path_within_root(const fs::path &base, const fs::path &p) {
+    auto b = base.begin();
+    auto it = p.begin();
+    for (; b != base.end(); ++b, ++it)
+      if (it == p.end() || *it != *b)
+        return false;
+    return true;
+  }
+
+  // Resolve a user/content-supplied relative path confined under `root`, or
+  // nullopt when it would escape. Rejects absolute paths, `..` escapes, and
+  // symlinks whose target leaves the root; `.` / in-root `..` are folded.
+  // Symlinks staying inside are resolved and allowed. This is a check at
+  // call time, not a race-proof sandbox: a directory swapped after the check
+  // is not caught.
+  static std::optional<fs::path> resolve_confined(const fs::path &root,
+                                                  const fs::path &relative) {
+    if (relative.is_absolute() || relative.has_root_name())
+      return std::nullopt;
+    std::error_code ec;
+    const fs::path base = fs::weakly_canonical(fs::absolute(root, ec), ec);
+    if (ec)
+      return std::nullopt;
+    fs::path cur = base;
+    for (const auto &part : relative) {
+      const std::string name = part.string();
+      if (name.empty() || name == ".")
+        continue;
+      if (name == "..") {
+        if (cur == base)
+          return std::nullopt;
+        cur = cur.parent_path();
+        continue;
+      }
+      cur /= part;
+      ec.clear();
+      if (fs::is_symlink(cur, ec)) {
+        const fs::path target = fs::canonical(cur, ec);
+        if (ec || !path_within_root(base, target))
+          return std::nullopt;
+        cur = target;
+      }
+    }
+    return cur;
+  }
+
   static bool write_string_atomic(const fs::path &path,
                                   std::string_view content) {
     namespace sys = files_plugin_internal;
