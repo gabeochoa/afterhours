@@ -755,15 +755,28 @@ struct HandleScreenshotCommand : System<PendingE2ECommand> {
     template <typename F>
     explicit HandleScreenshotCommand(F fn)
         : screenshot_fn_(as_screenshot_fn(std::move(fn))) {}
+    template <typename F, typename G>
+    HandleScreenshotCommand(F fn, G presented_fn)
+        : screenshot_fn_(as_screenshot_fn(std::move(fn))),
+          presented_screenshot_fn_(as_screenshot_fn(std::move(presented_fn))) {}
 
     virtual void for_each_with(Entity &, PendingE2ECommand &cmd,
                                float) override {
-        if (cmd.is_consumed() || !cmd.is("screenshot")) return;
-        take_screenshot(screenshot_fn_, cmd);
+        if (cmd.is_consumed()) return;
+        if (cmd.is("screenshot")) {
+            take_screenshot(screenshot_fn_, cmd);
+        } else if (cmd.is("screenshot_presented")) {
+            if (!presented_screenshot_fn_)
+                cmd.fail("screenshot_presented: no presented-frame "
+                         "screenshot callback registered");
+            else
+                take_screenshot(presented_screenshot_fn_, cmd);
+        }
     }
 
    private:
     ScreenshotFn screenshot_fn_;
+    ScreenshotFn presented_screenshot_fn_;
 };
 
 // Handle 'reset_test_state' command - resets test state between tests
