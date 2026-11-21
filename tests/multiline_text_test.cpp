@@ -658,4 +658,19 @@ TEST(batched_line_height_override_stacks_wrapped_lines) {
   CHECK_APPROX(line_gap(calls), 30.f);
 }
 
+TEST(wrapped_unit_motion_label_still_draws_plain_text_batched) {
+  ImmTestHarness h;
+  auto r = div(h.context(), mk(h.root(), 0),
+               ComponentConfig{}
+                   .with_size(ComponentSize{pixels(120), pixels(120)})
+                   .with_label("alpha beta gamma delta epsilon zeta")
+                   .with_font_size(FS)
+                   .with_text_overflow(TextOverflow::Wrap));
+  r.ent().addComponentIfMissing<HasTextUnitMotion>();
+  h.render_batched();
+  // Wrapped: per-unit motion is skipped (with a one-time warning), but the
+  // label itself must still draw as plain wrapped text.
+  CHECK(!h.drawn("text").empty());
+}
+
 int main() { return ui_test::run_registered_tests("multiline text"); }
