@@ -66,6 +66,16 @@ inline std::ostream &operator<<(std::ostream &os, const Dim &dim) {
   return os;
 }
 
+/// Which parent content-box edges an absolute element's offset is measured
+/// from. Leading/Trailing follow the X axis as written (no RTL flip; the
+/// existing rtl_mirrored path still mirrors a LeadingTop element).
+enum struct AbsoluteAnchor {
+  LeadingTop,
+  TrailingTop,
+  LeadingBottom,
+  TrailingBottom,
+};
+
 enum class ScreenReference { LayoutAxis, Height };
 
 struct Size {
