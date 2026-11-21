@@ -211,15 +211,13 @@ inline void apply_accessibility(Entity &entity, const ComponentConfig &config,
       !accessible_is_blank(config.tooltip_text) &&
       config.tooltip_text != resolved.name)
     resolved.description = config.tooltip_text;
-  if (resolved.empty()) {
-    entity.removeComponentIfExists<HasAccessibility>();
-    return;
+  if (auto *ha =
+          entity.toggleComponent<HasAccessibility>(!resolved.empty())) {
+    ha->role = resolved.role;
+    ha->name = resolved.name;
+    ha->value = resolved.value;
+    ha->description = resolved.description;
   }
-  auto &ha = entity.addComponentIfMissing<HasAccessibility>();
-  ha.role = resolved.role;
-  ha.name = resolved.name;
-  ha.value = resolved.value;
-  ha.description = resolved.description;
 }
 inline void apply_flags(Entity &entity, const ComponentConfig &config) {
   entity.get<UIComponent>().skip_when_tabbing = config.skip_when_tabbing;
