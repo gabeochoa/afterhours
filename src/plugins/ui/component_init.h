@@ -176,7 +176,12 @@ inline void overwrite_defaults(HasUIContext auto &ctx,
 }
 
 inline void apply_flags(Entity &entity, const ComponentConfig &config) {
-  entity.get<UIComponent>().skip_when_tabbing = config.skip_when_tabbing;
+  if (config.draw_only)
+    entity.enableTag(UITag::DrawOnly);
+  else
+    entity.disableTag(UITag::DrawOnly);
+  entity.get<UIComponent>().skip_when_tabbing =
+      config.skip_when_tabbing || config.draw_only;
   entity.get<UIComponent>().focus_ring_offset = config.focus_ring_offset;
   entity.get<UIComponent>().focus_ring_thickness = config.focus_ring_thickness;
   if (config.consumes_directional_input)
@@ -502,7 +507,9 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
   }
   // opacity has no "unset" value, so in overlay mode a default 1.0 is treated
   // as "not mentioned" rather than "make it opaque".
-  if (!overlay || config.opacity != 1.0f) {
+  if (config.draw_only && config.opacity == 1.0f) {
+    entity.removeComponentIfExists<HasOpacity>();
+  } else if (!overlay || config.opacity != 1.0f) {
     entity.addComponentIfMissing<HasOpacity>().value =
         std::clamp(config.opacity, 0.0f, 1.0f);
   }
@@ -615,12 +622,18 @@ inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
 
   if (entity.is_missing<UIComponent>()) {
     entity.addComponent<ui::UIComponent>(entity.id).set_parent(parent.id);
-    entity.addComponent<UIComponentDebug>(debug_name);
+    // Draw-only elements pay no debug-name string/component; every reader guards has<>.
+    if (!config.draw_only)
+      entity.addComponent<UIComponentDebug>(debug_name);
 
     created = true;
   }
+  if (config.draw_only)
+    entity.removeComponentIfExists<UIComponentDebug>();
 
-  if (!config.debug_name.empty()) {
+  if (!entity.has<UIComponentDebug>()) {
+    // no debug component to name
+  } else if (!config.debug_name.empty()) {
     entity.get<UIComponentDebug>().set(config.debug_name);
   } else if (!config.label.empty()) {
     // Auto-derive debug name from label: "<label> <component_type>"
