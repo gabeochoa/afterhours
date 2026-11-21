@@ -58,38 +58,20 @@ inline std::optional<Position> visible_center(Entity &entity) {
   return Position{rect.x + rect.width / 2, rect.y + rect.height / 2};
 }
 
-// ---------------------------------------------------------------------------
-// Unified name/text resolution (decision: decide-e2e-name-lookup).
-//
-// Every name- or text-addressed command resolves through resolve_ui_* so an
-// ambiguous lookup fails loudly with the candidate list instead of silently
-// clicking the first entity in id order (which shifts as ids get reused).
-//
-// Scope: `under=<debug_name>` restricts the search to that element's subtree
-// (a UIComponent::parent walk to a debug-named ancestor). `in=<debug_name>`
-// is accepted as an alias: click_label and assert_ui_text already used it,
-// and they keep it. A scope matching nothing takes each handler's existing
-// not-found path (fail or retry); a scope matching several elements fails,
-// since the scope itself is ambiguous.
-// ---------------------------------------------------------------------------
-
 enum struct UIMatchKind {
-  DebugName,     // UIComponentDebug::name() == needle
-  TextSubstring, // HasLabel::label contains needle
-  TextExact,     // HasLabel::label == needle
+  DebugName,
+  TextSubstring,
+  TextExact,
 };
 
 enum struct UIVisibility {
-  Any,                       // candidates regardless of render state
-  Rendered,                  // was_rendered_to_screen
-  RenderedPartiallyVisible,  // Rendered + is_partially_visible
-  Clickable,                 // Rendered + a visible centre (click target)
+  Any,
+  Rendered,
+  RenderedPartiallyVisible,
+  Clickable,
 };
-
-// Forward declarations of the scope/visibility helpers defined below.
 inline bool is_within_scope(Entity &entity, EntityID scope);
 inline bool is_partially_visible(const Entity &entity);
-
 inline std::string describe_candidate(Entity &entity) {
   auto rect = get_screen_rect(entity);
   std::string desc = std::format("#{} @({},{})", entity.id,
@@ -166,9 +148,8 @@ inline std::vector<Entity *> resolve_ui_candidates(
 
 struct UIResolution {
   Entity *entity = nullptr;
-  std::string ambiguous; // non-empty when >1 candidate: fail, don't guess
+  std::string ambiguous;
 };
-
 inline UIResolution resolve_ui_single(
     const std::string &needle, EntityID scope, UIMatchKind kind,
     UIVisibility vis,
@@ -193,13 +174,11 @@ inline UIResolution resolve_ui_single(
 }
 
 enum struct ScopeStatus { Ok, NotFound, Ambiguous };
-
 struct ScopeOutcome {
   ScopeStatus status = ScopeStatus::NotFound;
   EntityID id = -1;
   size_t count = 0;
 };
-
 inline ScopeOutcome resolve_scope_entity(const std::string &scope_name) {
   ScopeOutcome out;
   for (Entity &e : ui_query()
@@ -219,11 +198,6 @@ inline ScopeOutcome resolve_scope_entity(const std::string &scope_name) {
     out.status = ScopeStatus::Ambiguous;
   return out;
 }
-
-// Removes trailing `under=<name>`/`in=<name>` tokens from args[start..],
-// returning the remaining positional tokens in order. At least
-// min_positionals tokens are kept, so `expect_input_text name "under=x"`
-// is still a name+text pair, never a name missing its text.
 inline std::vector<std::string> strip_trailing_scope(
     const PendingE2ECommand &cmd, size_t start, size_t min_positionals,
     std::string &scope_name, std::string &error) {
@@ -246,10 +220,6 @@ inline std::vector<std::string> strip_trailing_scope(
     pos.push_back(cmd.args[i]);
   return pos;
 }
-
-// Prop-style handlers (`assert_ui name prop=val ...`): pulls `under=/in=`
-// tokens (anywhere after args[start-1]) into scope_name; every other token
-// is returned in order.
 inline std::vector<std::string> split_scope_props(
     const PendingE2ECommand &cmd, size_t start, std::string &scope_name,
     std::string &error) {
@@ -271,10 +241,6 @@ inline std::vector<std::string> split_scope_props(
   }
   return rest;
 }
-
-// Resolves the scope for a command into `scope`. Returns false when the
-// command must return now (ambiguous scope fails; a missing scope fails or
-// retries per retry_when_missing, matching each handler's not-found path).
 inline bool scope_or_done(PendingE2ECommand &cmd,
                           const std::string &cmd_label,
                           const std::string &scope_name,
@@ -300,16 +266,10 @@ inline bool scope_or_done(PendingE2ECommand &cmd,
   scope = so.id;
   return true;
 }
-
-// Point inside a named element at an offset from its top left. `off` holds
-// the args after the name (dx, dy); "center" or a missing value means the
-// rect middle. error carries the ambiguity text; point empty means no
-// element matched in scope (caller reports not-found).
 struct ElementPointResult {
   std::optional<Position> point;
   std::string error;
 };
-
 inline ElementPointResult element_point(
     const std::string &name, const std::vector<std::string> &off,
     bool use_offset, EntityID scope) {
@@ -331,10 +291,6 @@ inline ElementPointResult element_point(
                      rect.y + off_at(2, rect.height)};
   return r;
 }
-
-// Back-compat: the one clickable centre, no scope. New code must use
-// resolve_ui_single so ambiguity fails loudly instead of being refused
-// silently here.
 template <typename InputAction>
 std::optional<Position> find_component_center(const std::string &name) {
   auto res = resolve_ui_single(name, -1, UIMatchKind::DebugName,
@@ -342,8 +298,6 @@ std::optional<Position> find_component_center(const std::string &name) {
   if (!res.entity) return std::nullopt;
   return visible_center(*res.entity);
 }
-
-// Back-compat: the one clickable centre by substring, no scope.
 template <typename InputAction>
 std::optional<Position> find_component_with_text(const std::string &text) {
   auto res = resolve_ui_single(text, -1, UIMatchKind::TextSubstring,
@@ -351,8 +305,6 @@ std::optional<Position> find_component_with_text(const std::string &text) {
   if (!res.entity) return std::nullopt;
   return visible_center(*res.entity);
 }
-
-// Handle 'click_ui name [under=scope]' - clicks UI component by debug name
 template <typename InputAction>
 struct HandleClickUICommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -405,7 +357,6 @@ struct HandleRightClickUICommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'right_click_text "text" [under=scope]' - secondary click on a component by label.
 template <typename InputAction>
 struct HandleRightClickTextCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -431,7 +382,6 @@ struct HandleRightClickTextCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'click_text "text" [under=scope]' - clicks UI component containing text
 template <typename InputAction>
 struct HandleClickTextCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
@@ -782,7 +732,6 @@ struct HandleClickLabelCommand : System<PendingE2ECommand> {
   }
 };
 
-// Handle 'click_button "text" [under=scope]' - clicks button by its label text
 template <typename InputAction>
 struct HandleClickButtonCommand : System<PendingE2ECommand> {
   virtual void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
