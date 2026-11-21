@@ -48,6 +48,21 @@ AFTER_HOURS_USE_METAL
   headless (offscreen) rendering; headless honours Config.hidpi to supersample
   captures.
 
+AFTER_HOURS_USE_PSX
+- selects the PSX validation backend (src/backends/psx): like the none
+  backend it records draw calls instead of issuing them, and in addition it
+  charges every texture, render target and font atlas to a simulated
+  PlayStation 1 or PlayStation 2 VRAM, warning when art would not fit the
+  real console (texture over the hardware maximum, VRAM full, frame over
+  the primitive budget). Configure it once with
+  `psx::budget::configure({.console = psx::Console::PS1})`; the profile
+  carries the render setup (resolution, depth, buffering), whose
+  framebuffers are reserved out of VRAM first. The budget API
+  (src/backends/psx/budget.h) also works standalone on the raylib/sokol
+  backends: call `psx::budget::alloc_texture` / `free_texture` around your
+  own loads. It validates that rendering fits a console; it does not emit
+  a console binary. See examples/catalog/utility/psx_budget.
+
 AFTER_HOURS_IMM_UI
 - enables the immediate-mode UI helpers (div/button/slider/...)
 
@@ -116,7 +131,7 @@ afterhours names six value types through macros, so a game can hand it its own:
 | `RectangleType` | `raylib::Rectangle` | `MyRectangle` | `x, y, width, height` |
 | `ColorType` | `raylib::Color` | `MyColor` | `r, g, b, a` (`unsigned char`) |
 | `FontType` | `raylib::Font` | `MyFont` (empty) | none |
-| `TextureType` | `raylib::Texture2D` | `MyTexture` | `width, height` (sokol adds GPU ids) |
+| `TextureType` | `raylib::Texture2D` | `MyTexture` | `width, height` (sokol adds GPU ids, psx adds a budget id) |
 
 All six are optional. To use your own type, `#define` the macro (or pass `-D`) before the first afterhours include. Any afterhours header can be the first, because they all pull in `developer.h`, which reads the macros once. Define one any later and afterhours and your code end up using different types.
 
