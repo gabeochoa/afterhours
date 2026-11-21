@@ -528,6 +528,7 @@ struct pathfinding : developer::Plugin {
   }
 
   static void set_distance_fn(const std::function<float(Vec2, Vec2)> &fn) {
+    // TODO: extract require_provider helper
     auto *provider = get_provider();
     if (!provider) {
       log_error("Pathfinding plugin not initialized. Call pathfinding::init() "
