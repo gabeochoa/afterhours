@@ -6,6 +6,10 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+### Added
+
+- **Settings presets that flip to Custom** (`ui::imm::SettingsPreset`, `active_preset_name`, `settings_preset_stepper` in `src/plugins/ui/settings_presets.h`). A preset table over a comparable values struct; the stepper selector derives its index from the values each frame, so editing any value off a preset reads "Custom" and editing back reads the preset name. The Custom slot is read-only. Covered by `settings_presets_test`.
+
 ### Breaking
 
 **The animation plugin is rewritten around `afterhours::motion`.** `animation::anim<Key>(k).to(v, dur, EasingType)`, `AnimationManager`, `AnimHandle`, `sequence`, `loop_sequence`, `one_shot`, `clamp_value`, `get_value`, `register_update_systems<Key>()` and the declarative `with_animation(Anim::on_hover()...)` / `HasAnimationState` are gone. Every old call is a compile error.
