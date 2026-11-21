@@ -1,8 +1,6 @@
 #define AFTERHOURS_STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "ui_test_harness.h"
 #include <afterhours/src/plugins/e2e_testing/screenshot_baseline.h>
-#include <stb/stb_image_write.h>
 
 #include <unistd.h>
 
