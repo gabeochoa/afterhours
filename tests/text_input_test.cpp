@@ -403,8 +403,6 @@ TEST(escape_blurs_and_consumes_the_press) {
   h.context().last_action = ui_test::TestInputAction::MenuBack;
   emit();
   CHECK(h.context().focus_id == h.context().FAKE);
-  // Single owner (R-019): the blur consumes MenuBack, so an enclosing
-  // dialog or menu cannot also act on the same press.
   CHECK(!h.context().pressed(ui_test::TestInputAction::MenuBack));
   CHECK(text == "Draft");
 }
