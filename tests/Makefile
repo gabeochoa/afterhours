@@ -72,6 +72,7 @@ ALL_TESTS := \
 	e2e_arguments_test \
 	scrollbar_render_test \
 	scroll_input_gate_test \
+	focus_stack_test \
 	middle_click_test \
 	wheel_input_test \
 	command_picker_test \
@@ -383,6 +384,7 @@ RAYLIB_TESTS := \
 	text_visibility_test \
 	image_tint_test \
 	scroll_input_gate_test \
+	focus_stack_test \
 	middle_click_test \
 	wheel_input_test \
 	command_picker_ui_test \
@@ -491,7 +493,7 @@ $(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(
 # Linux too).
 $(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(subst -lraylib,,$(subst $(RAYLIB_LIB)/libraylib.a,,$(LDFLAGS_RAYLIB)))
 
-$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/middle_click_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
+$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/focus_stack_test $(OUT)/middle_click_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/input_activity_snapshot_test $(OUT)/e2e_gamepad_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 
