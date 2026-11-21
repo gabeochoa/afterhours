@@ -1,6 +1,3 @@
-// effect_uniforms_test.cpp
-// R-118: Effect vec3/vec4/int/matrix uniforms + vertex shader, and matrix compose.
-// Pixel checks read back a render texture; matrix checks compare to raymath.
 
 #include <cmath>
 #include <cstdio>
@@ -13,7 +10,7 @@ namespace raylib {
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #include <raymath.h>
 #pragma clang diagnostic pop
-} // namespace raylib
+}
 
 #include <afterhours/ah.h>
 #include <afterhours/src/plugins/effects.h>
@@ -26,16 +23,17 @@ static void check(bool cond, const std::string &what) {
   checks_run++;
   if (cond) checks_passed++; else fprintf(stderr, "  FAIL: %s\n", what.c_str());
 }
+
 static float max_diff(const MatrixType &a, const raylib::Matrix &b) {
   const float *pa = &a.m0, *pb = &b.m0;
   float w = 0;
   for (int i = 0; i < 16; i++) w = std::fmax(w, std::fabs(pa[i] - pb[i]));
   return w;
 }
+
 static bool near(float a, float b) { return std::fabs(a - b) < 1e-4f; }
 
 int main() {
-  // Matrix math (no window needed).
   {
     std::mt19937 rng(7);
     std::uniform_real_distribution<float> u(-2.f, 2.f);
@@ -44,7 +42,6 @@ int main() {
       float av[16], bv[16];
       for (float &x : av) x = u(rng);
       for (float &x : bv) x = u(rng);
-      // MatrixType/raylib::Matrix share field order, so a flat copy is exact.
       MatrixType a, b;
       std::memcpy(&a, av, sizeof(av)); std::memcpy(&b, bv, sizeof(bv));
       raylib::Matrix ra, rb;
@@ -54,7 +51,6 @@ int main() {
       Vector3Type pos{u(rng) * 5, u(rng) * 5, u(rng) * 5};
       Vector3Type e{u(rng) * 90, u(rng) * 90, u(rng) * 90};
       Vector3Type sc{1 + std::fabs(u(rng)), 1 + std::fabs(u(rng)), 1 + std::fabs(u(rng))};
-      // raymath MatrixMultiply(a, b) applies a first, so build in application order.
       raylib::Matrix expected = raylib::MatrixMultiply(
           raylib::MatrixScale(sc.x, sc.y, sc.z),
           raylib::MatrixMultiply(
@@ -103,7 +99,7 @@ void main() { fragTexCoord = vertexTexCoord; fragColor = vertexColor;
     raylib::Image img = raylib::LoadImageFromTexture(rt.texture);
     raylib::ImageFormat(&img, raylib::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
     auto *px = static_cast<raylib::Color *>(img.data);
-    raylib::Color c = px[(31 - y) * 32 + x]; // render textures are Y-flipped
+    raylib::Color c = px[(31 - y) * 32 + x];
     raylib::UnloadImage(img);
     raylib::UnloadRenderTexture(rt);
     return c;
@@ -118,7 +114,6 @@ void main() { fragTexCoord = vertexTexCoord; fragColor = vertexColor;
     e.set("u_int", 1);
     e.set("u_mat", matrix_compose({0.25f, 0.f, 0.5f}, {0, 0, 0}, {1, 1, 1}));
     raylib::Color c = render_pixel(e, 8, 16);
-    // (1,0,0)*0.5 + (0,.5,0) + (0.25,0,0.5) = (0.75, 0.5, 0.5)
     check(std::abs(c.r - 191) <= 2 && std::abs(c.g - 128) <= 2 && std::abs(c.b - 128) <= 2,
           "vec3/vec4/float/int/matrix uniforms reach the fragment shader");
     e.set("u_int", 0);

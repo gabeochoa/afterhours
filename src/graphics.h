@@ -104,6 +104,7 @@ inline ShaderType load_shader(const char *vsFileName, const char *fsFileName) {
 inline ShaderType load_shader_from_memory(const char *vsCode, const char *fsCode) {
   return PlatformAPI::load_shader_from_memory(vsCode, fsCode);
 }
+
 inline void set_shader_value_matrix(ShaderType &shader, int locIndex, const MatrixType &m) {
   PlatformAPI::set_shader_value_matrix(shader, locIndex, m);
 }

@@ -1,9 +1,5 @@
 #pragma once
 
-// Backend-independent 4x4 helpers on MatrixType (raylib field layout).
-//
-//   MatrixType world = matrix_multiply(local, parent); // local applied first, then parent
-//   MatrixType local = matrix_compose(pos, euler_deg, scale);
 
 #include <cmath>
 
@@ -17,7 +13,6 @@ inline MatrixType matrix_identity() {
   return m;
 }
 
-// Same result as raylib's MatrixMultiply(a, b): a applies first, then b.
 inline MatrixType matrix_multiply(const MatrixType &a, const MatrixType &b) {
   MatrixType r{};
   r.m0 = a.m0 * b.m0 + a.m1 * b.m4 + a.m2 * b.m8 + a.m3 * b.m12;
@@ -48,9 +43,8 @@ inline MatrixType axis_rot(int axis, float deg) {
   if (axis == 2) { m.m0 = c; m.m1 = s; m.m4 = -s; m.m5 = c; }
   return m;
 }
-} // namespace detail_transform
+}
 
-// Scale first, then Z, X, Y rotations (degrees), then translation.
 inline MatrixType matrix_compose(Vector3Type pos, Vector3Type euler_deg,
                                  Vector3Type scale) {
   MatrixType s = matrix_identity();
@@ -69,4 +63,4 @@ inline Vector3Type transform_point(const MatrixType &m, Vector3Type p) {
           m.m2 * p.x + m.m6 * p.y + m.m10 * p.z + m.m14};
 }
 
-} // namespace afterhours
+}

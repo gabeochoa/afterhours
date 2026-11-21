@@ -777,12 +777,10 @@ struct MetalPlatformAPI {
     return shader;
   }
   static ShaderType load_shader_from_memory(const char *, const char *) {
-    // Sokol/Metal cannot compile arbitrary GLSL; custom shaders fail closed here.
     log_error("load_shader_from_memory: custom GLSL shaders are not supported on the sokol backend");
     return ShaderType{};
   }
   static void set_shader_value_matrix(ShaderType &, int, const MatrixType &) {
-    // No custom-shader path on sokol (see load_shader); nothing to set.
   }
   static void unload_shader(ShaderType &shader) {
     if (shader.id == 0)

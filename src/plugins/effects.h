@@ -52,7 +52,6 @@ struct Effect {
   static Effect load(const std::string &name, const std::string &file = "") {
     return load(name, file, "");
   }
-  // vs_file/fs_file are shader file names under resources/shaders (graphics::load_shader order).
   static Effect load(const std::string &name, const std::string &fs_file,
                      const std::string &vs_file) {
     Effect e;
