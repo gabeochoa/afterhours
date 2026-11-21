@@ -911,6 +911,23 @@ struct input : developer::Plugin {
         return mods;
     }
 
+    // Modifier state read through the caller's key reader, so a backend-free
+    // injected reader controls the chord half too (backend is_key_down would
+    // read the stub and always report nothing held).
+    template <typename KeyCheckFn>
+    static uint8_t modifiers_from(KeyCheckFn key_check) {
+        uint8_t mods = 0;
+        if (key_check(keys::LEFT_SHIFT) || key_check(keys::RIGHT_SHIFT))
+            mods |= KeyChord::MOD_SHIFT;
+        if (key_check(keys::LEFT_CONTROL) || key_check(keys::RIGHT_CONTROL))
+            mods |= KeyChord::MOD_CTRL;
+        if (key_check(keys::LEFT_ALT) || key_check(keys::RIGHT_ALT))
+            mods |= KeyChord::MOD_ALT;
+        if (key_check(keys::LEFT_SUPER) || key_check(keys::RIGHT_SUPER))
+            mods |= KeyChord::MOD_SUPER;
+        return mods;
+    }
+
     struct GamepadAxisWithDir {
         GamepadAxis axis;
         int dir = -1;
@@ -1025,7 +1042,7 @@ struct input : developer::Plugin {
         const GamepadID id, const ValidInputs &valid_inputs,
         KeyCheckFn key_check, ButtonCheckFn button_check) {
         ActionCheckResult result;
-        uint8_t current_mods = get_current_modifiers();
+        uint8_t current_mods = modifiers_from(key_check);
         for (const auto &inp : valid_inputs) {
             DeviceMedium temp_medium = DeviceMedium::None;
             float temp = 0.f;
