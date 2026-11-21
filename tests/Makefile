@@ -428,9 +428,6 @@ $(OUT)/reduced_motion_test: LDFLAGS_T += -framework AppKit
 $(OUT)/appearance_test: LDFLAGS_T += -framework AppKit
 endif
 
-# The macOS variant compiles the real pinch monitor in (AppKit + blocks) and
-# walks Unknown -> install -> Available; the plain target covers the
-# no-gesture-path answer everywhere.
 ifeq ($(UNAME_S),Darwin)
 $(OUT)/gesture_availability_macos_test: gesture_availability_test.cpp
 	$(CXX) $(CXXFLAGS) -DAFTER_HOURS_ENABLE_MACOS_GESTURES -fblocks $(DEPFLAGS) $(INCLUDES) $< -framework AppKit -o $@

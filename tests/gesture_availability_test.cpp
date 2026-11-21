@@ -24,8 +24,6 @@ int main() {
   check(first == second, "the availability query is stable across calls");
 
 #if defined(__APPLE__) && defined(AFTER_HOURS_ENABLE_MACOS_GESTURES)
-  // This binary links AppKit and compiles the real monitor in, so install
-  // has a live source to arm.
   check(first == Availability::Unknown,
         "before install the answer is unknown, not a claim");
   afterhours::gestures::install_pinch_monitor();
@@ -33,8 +31,6 @@ int main() {
             Availability::Available,
         "a live monitor means pinch can be delivered");
 #else
-  // No gesture path in this build: the answer is a definite unavailable,
-  // and installing must not change it.
   check(first == Availability::Unavailable,
         "a build with no gesture path reports unavailable");
   afterhours::gestures::install_pinch_monitor();
