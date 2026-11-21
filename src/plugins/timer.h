@@ -92,8 +92,6 @@ struct timer : developer::Plugin {
       return false;
     }
 
-    // Pointer-free snapshot DTO: feeds snapshot::take_components<HasTimer,
-    // HasTimerDTO> (see core/snapshot.h).
     struct HasTimerDTO {
       float reset_time = 0.0f;
       float current_time = 0.0f;

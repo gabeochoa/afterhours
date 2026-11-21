@@ -1,5 +1,3 @@
-// timer_test.cpp
-// Countdown form of HasTimer + to_dto/from_dto round-trip (R-259).
 
 #define AFTER_HOURS_USE_NONE
 #include <afterhours/src/plugins/timer.h>
@@ -28,7 +26,6 @@ int main() {
   printf("Running timer tests...\n\n");
   using HasTimer = timer::HasTimer;
 
-  // --- count-up unchanged -------------------------------------------------
   {
     HasTimer t(10.f);
     check(!t.is_ready(), "count-up not ready at 0");
@@ -40,7 +37,6 @@ int main() {
     check(t.update(5.f), "count-up fires at reset_time");
   }
 
-  // --- countdown ticks down to ready --------------------------------------
   {
     HasTimer t = HasTimer::make_countdown(10.f);
     check(t.countdown, "countdown flag set");
@@ -55,7 +51,6 @@ int main() {
     check(t.update(1.f), "countdown stays firing once expired");
   }
 
-  // --- countdown auto_reset restores full remaining -----------------------
   {
     HasTimer t = HasTimer::make_countdown(5.f, true);
     check(t.update(5.f), "auto countdown fires at zero");
@@ -63,7 +58,6 @@ int main() {
     check(!t.is_ready(), "auto countdown not immediately ready again");
   }
 
-  // --- pause / reset / set_time in countdown ------------------------------
   {
     HasTimer t = HasTimer::make_countdown(8.f);
     t.pause();
@@ -80,7 +74,6 @@ int main() {
     check(approx(t.get_remaining(), 1.f), "countdown add_time subtracts");
   }
 
-  // --- DTO round-trip: countdown + paused + auto_reset survive ------------
   {
     HasTimer t = HasTimer::make_countdown(12.f, true);
     t.pause();
@@ -96,7 +89,6 @@ int main() {
     check(restored.is_ready() == t.is_ready(), "restored ready matches");
   }
 
-  // --- DTO round-trip: count-up still survives ----------------------------
   {
     HasTimer t(6.f, true);
     t.current_time = 2.25f;
