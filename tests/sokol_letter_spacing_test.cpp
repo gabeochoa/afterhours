@@ -1,8 +1,3 @@
-// Sokol letter spacing (decision decide-sokol-spacing, option B):
-// measure_text and draw_text_ex honour their spacing argument via
-// fonsSetSpacing((spacing - 1) * dpi). Raylib's default 1px gap is sokol's
-// 0 baseline, so nothing moves at letter_spacing = 0 and with_letter_spacing(n)
-// adds exactly n px per glyph gap. Unclamped: negative extra spacing tightens.
 #if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_VULKAN) && !defined(AFTER_HOURS_USE_SOKOL)
 #define AFTER_HOURS_USE_SOKOL
 #endif
@@ -50,21 +45,14 @@ static void letter_spacing() {
   md::g_fons_ctx = ctx;
   md::g_active_font = 0;
   const float size = 32.f;
-  const char *text = "AVATAR"; // 6 glyphs, 5 gaps
+  const char *text = "AVATAR";
   for (float dpi : {1.f, 2.f}) {
     test_dpi = dpi;
-    // Baseline: spacing == 1 is no extra spacing, and matches the rendered
-    // advance at fons spacing 0 (this is what drew on sokol before).
     afterhours::measure_memo::clear();
     const float base =
         afterhours::measure_text(afterhours::Font{0}, text, size, 1.f).x;
     CHECK(base > 0.f);
     CHECK_NEAR(rendered_advance(ctx, text, size, dpi, 0.f), base, 1e-4f);
-    // Extra spacing widens measurement roughly (n-1)*extra — fontstash rounds
-    // each glyph's advance to a whole pixel, so the delta is within one
-    // pixel per gap of the ideal. What must hold exactly: measured width
-    // equals what is drawn (fonsTextAdvance / fonsTextBounds with the same
-    // spacing set).
     for (float extra : {2.f, 4.f, -0.75f}) {
       afterhours::measure_memo::clear();
       const float m =
@@ -79,15 +67,12 @@ static void letter_spacing() {
       fonsSetSpacing(ctx, extra * dpi);
       CHECK_NEAR(fonsTextBounds(ctx, 0, 0, text, nullptr, nullptr) / dpi, m, 1e-4f);
     }
-    // Two glyphs: exactly one gap, so a small widening bounded by it.
     afterhours::measure_memo::clear();
     const float two = afterhours::measure_text(afterhours::Font{0}, "WA", size, 3.f).x;
     afterhours::measure_memo::clear();
     const float two_base = afterhours::measure_text(afterhours::Font{0}, "WA", size, 1.f).x;
     CHECK(two > two_base);
     CHECK(two - two_base <= 2.5f);
-    // Single glyph: no gaps, spacing is a no-op; explicit zero extra spacing
-    // (spacing == 1) clears any inherited value back to the baseline.
     const float one = [&] {
       afterhours::measure_memo::clear();
       return afterhours::measure_text(afterhours::Font{0}, "A", size, 1.f).x;
@@ -98,11 +83,8 @@ static void letter_spacing() {
     CHECK(afterhours::measure_text(afterhours::Font{0}, "A", size, 1.f).x == one);
     afterhours::measure_memo::clear();
     CHECK(afterhours::measure_text(afterhours::Font{0}, text, size, 1.f).x == base);
-    // Empty string: spacing is a no-op.
     afterhours::measure_memo::clear();
     CHECK(afterhours::measure_text(afterhours::Font{0}, "", size, 3.f).x == 0.f);
-    // The memo keys on spacing: a wider spacing must not serve the baseline
-    // entry (or overwrite it).
     afterhours::measure_memo::clear();
     const float a = afterhours::measure_text(afterhours::Font{0}, text, size, 1.f).x;
     const float b = afterhours::measure_text(afterhours::Font{0}, text, size, 3.f).x;

@@ -57,8 +57,6 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
   // space that is 1/dpi_scale, so the resulting quads land at the correct
   // logical pixel position.
   float dpi = graphics::metal_detail::dpi_scale();
-  // Raylib's default 1px gap is sokol's 0 baseline (decide-sokol-spacing B):
-  // match measure_text's fonsSetSpacing((spacing - 1) * dpi).
   fonsSetSpacing(ctx, (spacing - 1.f) * dpi);
   if (dpi > 1.01f) {
     float inv = 1.0f / dpi;
@@ -88,8 +86,6 @@ inline void draw_text(const char *content, const float x, const float y,
                                       content, shown);
 
   float dpi = graphics::metal_detail::dpi_scale();
-  // No spacing argument: the 0 baseline, so a prior draw_text_ex cannot
-  // leak letter spacing into this call.
   fonsSetSpacing(ctx, 0.f);
   if (dpi > 1.01f) {
     float inv = 1.0f / dpi;
