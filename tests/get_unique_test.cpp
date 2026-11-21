@@ -1,8 +1,3 @@
-// get_unique_test.cpp
-// get_unique<A, B>() fetches a pair of singleton components in one call.
-// Each element must behave exactly like get_singleton_cmp alone: same
-// pointer when registered, nullptr when missing.
-
 #include <cstdio>
 #include <string>
 #include <tuple>
@@ -37,7 +32,6 @@ struct NeverRegistered : BaseComponent {};
 int main() {
   printf("Running get_unique tests...\n\n");
 
-  // --- pair fetch returns both, through the same addresses ----------------
   {
     EntityCollection coll;
     Entity &host = coll.createEntity();
@@ -60,7 +54,6 @@ int main() {
           "tuple access matches structured binding");
   }
 
-  // --- the two singletons may live on different entities ------------------
   {
     EntityCollection coll;
     Entity &ea = coll.createEntity();
@@ -75,7 +68,6 @@ int main() {
           "pair fetch does not require one shared entity");
   }
 
-  // --- a missing one behaves like single-fetch missing -------------------
   {
     EntityCollection coll;
     Entity &host = coll.createEntity();
@@ -96,7 +88,6 @@ int main() {
     check(e == nullptr && f == nullptr, "both missing gives two nullptrs");
   }
 
-  // --- duplicate type reads the same singleton twice ----------------------
   {
     EntityCollection coll;
     Entity &host = coll.createEntity();
@@ -107,7 +98,6 @@ int main() {
     check(a != nullptr && a == b, "get_unique<A, A> reads one singleton twice");
   }
 
-  // --- the same template carries more than two -----------------------------
   {
     EntityCollection coll;
     Entity &host = coll.createEntity();
