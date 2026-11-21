@@ -39,16 +39,19 @@ struct Timeline {
     const float len = length();
     if (len <= 0.f)
       return keys.back().v;
-    t = std::max(t, 0.f);
     switch (repeat) {
     case Repeat::Once:
-      t = std::min(t, len);
+      t = std::clamp(t, 0.f, len);
       break;
     case Repeat::Loop:
       t = std::fmod(t, len);
+      if (t < 0.f)
+        t += len;
       break;
     case Repeat::PingPong: {
-      const float cycle = std::fmod(t, 2.f * len);
+      float cycle = std::fmod(t, 2.f * len);
+      if (cycle < 0.f)
+        cycle += 2.f * len;
       t = cycle <= len ? cycle : 2.f * len - cycle;
       break;
     }
