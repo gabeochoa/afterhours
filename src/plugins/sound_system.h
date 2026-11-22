@@ -78,6 +78,19 @@ struct sound_system : developer::Plugin {
         [[nodiscard]] const SoundType &get(const std::string &name) const {
             return impl.get(name);
         }
+        using Handle = Library<SoundType>::Handle;
+        [[nodiscard]] Handle intern(const std::string &name) {
+            return impl.intern(name);
+        }
+        [[nodiscard]] SoundType &get(Handle handle) {
+            return impl.get(handle);
+        }
+        [[nodiscard]] const SoundType &get(Handle handle) const {
+            return impl.get(handle);
+        }
+        [[nodiscard]] bool contains(Handle handle) const {
+            return impl.contains(handle);
+        }
         [[nodiscard]] bool contains(const std::string &name) const {
             return impl.contains(name);
         }
@@ -278,6 +291,19 @@ struct sound_system : developer::Plugin {
         }
         [[nodiscard]] const MusicType &get(const std::string &name) const {
             return impl.get(name);
+        }
+        using Handle = Library<MusicType>::Handle;
+        [[nodiscard]] Handle intern(const std::string &name) {
+            return impl.intern(name);
+        }
+        [[nodiscard]] MusicType &get(Handle handle) {
+            return impl.get(handle);
+        }
+        [[nodiscard]] const MusicType &get(Handle handle) const {
+            return impl.get(handle);
+        }
+        [[nodiscard]] bool contains(Handle handle) const {
+            return impl.contains(handle);
         }
         [[nodiscard]] bool contains(const std::string &name) const {
             return impl.contains(name);
