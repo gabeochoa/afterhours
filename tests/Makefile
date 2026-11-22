@@ -150,6 +150,7 @@ ALL_TESTS := \
 	log_file_test \
 	crash_handler_test \
 	crash_handler_reentry_test \
+	crash_report_file_test \
 	setting_row_style_test \
 	singleton_iteration_test \
 	ui_idle_cost_test \
