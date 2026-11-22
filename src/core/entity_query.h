@@ -5,6 +5,9 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#if defined(AFTER_HOURS_DEBUG)
+#include <source_location>
+#endif
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -462,6 +465,12 @@ struct EntityQuery {
         return ents;
     }
 
+    // Materializes into caller-owned scratch (not lazy).
+    RefEntities &gen_into(RefEntities &scratch) const {
+        run_query_into({}, scratch);
+        return scratch;
+    }
+
     template<typename Fn>
     void for_each(Fn &&fn) const {
         for (Entity &entity : gen()) {
@@ -623,11 +632,29 @@ struct EntityQuery {
         bool ignore_temp_warning = false;
     };
 
-    EntityQuery(const QueryOptions &options = {})
-        : EntityQuery(EntityHelper::get_default_collection(), options) {}
+    EntityQuery(const QueryOptions &options = {}
+#if defined(AFTER_HOURS_DEBUG)
+                ,
+                const std::source_location location =
+                    std::source_location::current()
+#endif
+                )
+        : EntityQuery(EntityHelper::get_default_collection(), options
+#if defined(AFTER_HOURS_DEBUG)
+                      ,
+                      location
+#endif
+                      ) {
+    }
 
     explicit EntityQuery(EntityCollection &collection,
-                         const QueryOptions &options = {})
+                         const QueryOptions &options = {}
+#if defined(AFTER_HOURS_DEBUG)
+                         ,
+                         const std::source_location location =
+                             std::source_location::current()
+#endif
+                         )
         : entities(init_entities_ref(collection, options)),
           source(&collection),
           source_temp_empty(collection.get_temp().empty()) {
@@ -648,7 +675,19 @@ struct EntityQuery {
                     log_warn("  temp entity {}: null", i);
                 }
             }
+#if defined(AFTER_HOURS_DEBUG)
+            const char *file =
+                location.file_name() ? location.file_name() : "<unknown>";
+            const char *base = file;
+            for (const char *p = file; *p; ++p) {
+                if (*p == '/' || *p == '\\') base = p + 1;
+            }
+            log_error("query will miss {} ents in temp (query at {}:{} in {})",
+                      size, base, location.line(),
+                      location.function_name());
+#else
             log_error("query will miss {} ents in temp", size);
+#endif
         }
     }
     explicit EntityQuery(const Entities &entsIn) : entities(entsIn) {}
@@ -734,6 +773,14 @@ struct EntityQuery {
     }
 
     RefEntities run_query(const UnderlyingOptions options) const {
+        RefEntities out;
+        run_query_into(options, out);
+        return out;
+    }
+
+    void run_query_into(const UnderlyingOptions options,
+                        RefEntities &out) const {
+        out.clear();
         // Fast path: if we only need to know whether *any* entity matches (or
         // to return the first match), we can short-circuit as long as we aren't
         // ordering results. No upfront allocation needed.
@@ -749,12 +796,11 @@ struct EntityQuery {
                     }
                 }
                 if (ok) {
-                    RefEntities result;
-                    result.push_back(const_cast<Entity &>(e));
-                    return result;
+                    out.push_back(const_cast<Entity &>(e));
+                    return;
                 }
             }
-            return {};
+            return;
         }
 
         // One ordered result needs the minimum, not a sorted list. Only when
@@ -765,25 +811,23 @@ struct EntityQuery {
             orderby_index.has_value() && *orderby_index < mods.size();
         if (options.stop_on_first && orderby && !filters_after_sort) {
             RefEntities candidates;
-            candidates.reserve(entities.size() / 2);
+            candidates.reserve(pool().size() / 2);
             for (const auto &e_ptr : pool()) {
                 if (!e_ptr) continue;
                 Entity &e = *e_ptr;
                 if (passes(e, 0, mods.size())) candidates.push_back(e);
             }
-            if (candidates.empty()) return {};
+            if (candidates.empty()) return;
             auto best = std::min_element(
                 candidates.begin(), candidates.end(),
                 [&](const Entity &a, const Entity &b) {
                     return (*orderby)(a, b);
                 });
-            RefEntities result;
-            result.push_back(*best);
-            return result;
+            out.push_back(*best);
+            return;
         }
 
-        RefEntities out;
-        out.reserve(mods.empty() ? entities.size() : entities.size() / 2);
+        out.reserve(mods.empty() ? pool().size() : pool().size() / 2);
 
         // Mods registered before the orderby filter the scan; the rest run
         // after the sort, so each operation applies at its position in the
@@ -810,8 +854,6 @@ struct EntityQuery {
             }
             out.erase(out.begin() + static_cast<long>(kept), out.end());
         }
-
-        return out;
     }
 };
 }  // namespace afterhours
