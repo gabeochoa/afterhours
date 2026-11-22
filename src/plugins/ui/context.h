@@ -21,6 +21,7 @@
 #include "../../../vendor/magic_enum/magic_enum.hpp"
 #endif
 #include <set>
+#include <string_view>
 #include <vector>
 
 #include "../../drawing_helpers.h"
@@ -310,7 +311,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     text_selection_entity = ROOT;
     label_text_selection.collapse_to(0);
   }
-  [[nodiscard]] std::string selected_text() const {
+  [[nodiscard]] std::string_view selected_text() const {
     if (!has_selection())
       return "";
     OptEntity opt = UICollectionHolder::getEntityForID(text_selection_entity);
@@ -320,8 +321,8 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     const text_selection::Range r = label_text_selection.range();
     if (r.start >= label.size())
       return "";
-    return label.substr(r.start,
-                        std::min(r.length(), label.size() - r.start));
+    return std::string_view(label).substr(
+        r.start, std::min(r.length(), label.size() - r.start));
   }
 
   [[nodiscard]] bool is_hot(EntityID id) const { return hot_id == id; };

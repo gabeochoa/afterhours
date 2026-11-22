@@ -561,6 +561,9 @@ inline std::string substring(const std::vector<detail::TextRunLine> &lines,
                                           all.size() - range.start));
 }
 
+inline constexpr float kMultiClickTime = 0.4f;
+inline constexpr size_t kMultiClickDist = 3;
+
 struct ClickStreak {
   float last_time = -1.f;
   size_t last_pos = 0;
@@ -568,8 +571,6 @@ struct ClickStreak {
 };
 
 inline int register_click(ClickStreak &streak, float now, size_t pos) {
-  constexpr float kMultiClickTime = 0.4f;
-  constexpr size_t kMultiClickDist = 3;
   const size_t dist = pos > streak.last_pos ? pos - streak.last_pos
                                             : streak.last_pos - pos;
   if (streak.last_time >= 0.f && (now - streak.last_time) < kMultiClickTime &&

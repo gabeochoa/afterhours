@@ -942,10 +942,7 @@ inline void paint_label_text_selection(UIContext<InputAction> &context,
       context.text_selection_entity != entity.id || !context.has_selection())
     return;
   auto &sel = entity.template get<HasSelectableText>();
-  const std::string font_name =
-      cmp.font_name == UIComponent::UNSET_FONT
-          ? std::string(UIComponent::DEFAULT_FONT)
-          : cmp.font_name;
+  const std::string font_name = cmp.resolved_font_name();
   const float spacing = 1.f + hasLabel.letter_spacing;
   auto measure = [&](const auto &s) {
     return measure_text_line(std::string(s), font_name, font_size, spacing).x;
@@ -1976,10 +1973,7 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                            static_cast<int>(label_clip.width),
                            static_cast<int>(label_clip.height));
       if (entity.has<HasSelectableText>()) {
-        const std::string sel_font =
-            cmp.font_name == UIComponent::UNSET_FONT
-                ? std::string(UIComponent::DEFAULT_FONT)
-                : cmp.font_name;
+        const std::string sel_font = cmp.resolved_font_name();
         const float sel_fs =
             explicit_fs > 0.f
                 ? explicit_fs
@@ -2678,10 +2672,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         float centerY = draw_rect.y + draw_rect.height / 2.0f;
 
         if (entity.has<HasSelectableText>()) {
-          const std::string sel_font =
-              cmp.font_name == UIComponent::UNSET_FONT
-                  ? std::string(UIComponent::DEFAULT_FONT)
-                  : cmp.font_name;
+          const std::string sel_font = cmp.resolved_font_name();
           const bool sel_wraps =
               hasLabel.text_overflow == TextOverflow::Wrap && explicit_fs > 0.f;
           const float sel_fs = sel_wraps ? explicit_fs : result.rect.height;

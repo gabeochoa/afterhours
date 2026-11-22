@@ -1324,10 +1324,7 @@ struct HandleSelectableText : SystemWithUIContext<ui::HasSelectableText> {
     rect = detail::apply_ancestor_transform(entity, rect);
     const Vector2Type inset =
         resolve_text_inset(context->theme, label.text_inset);
-    const std::string font_name =
-        component.font_name == UIComponent::UNSET_FONT
-            ? std::string(UIComponent::DEFAULT_FONT)
-            : component.font_name;
+    const std::string font_name = component.resolved_font_name();
     const float screen_h =
         context->screen_height > 0.f ? context->screen_height : 720.f;
     const float ui_scale = imm::ThemeDefaults::get().theme.ui_scale;
