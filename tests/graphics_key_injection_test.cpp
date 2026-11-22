@@ -52,6 +52,18 @@ int main() {
   inj::reset_frame();
   check(!gfx::is_key_released(keys::A), "releasing an up key is no edge");
 
+  inj::reset_all();
+  afterhours::testing::test_input::push_key(keys::S);
+  afterhours::testing::test_input::push_key(keys::A);
+  check(gfx::get_key_pressed() == keys::NULL_KEY,
+        "get_key_pressed waits a frame");
+  inj::reset_frame();
+  check(gfx::get_key_pressed() == keys::S, "get_key_pressed pops FIFO first");
+  check(gfx::get_key_pressed() == keys::A, "then the second");
+  check(gfx::get_key_pressed() == keys::NULL_KEY, "then nothing");
+  check(gfx::is_key_pressed(keys::S), "popping does not eat is_key_pressed");
+  inj::reset_frame();
+
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   return checks_passed == checks_run ? 0 : 1;
 }

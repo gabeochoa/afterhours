@@ -3,6 +3,7 @@
 #include "../core/base_component.h"
 #include "../core/system.h"
 #include "../developer.h"
+#include "../warn_once.h"
 
 namespace afterhours {
 
@@ -67,10 +68,22 @@ struct camera : developer::Plugin {
 #else
   struct HasCamera : public BaseComponent {
     HasCamera() {}
-    void set_position(float, float) {}
-    void set_offset(float, float) {}
-    void set_zoom(float) {}
-    void set_rotation(float) {}
+    void set_position(float, float) {
+      warn_once(0, "@notimplemented camera::HasCamera::set_position on "
+                   "this backend (camera is raylib-only)");
+    }
+    void set_offset(float, float) {
+      warn_once(0, "@notimplemented camera::HasCamera::set_offset on "
+                   "this backend (camera is raylib-only)");
+    }
+    void set_zoom(float) {
+      warn_once(0, "@notimplemented camera::HasCamera::set_zoom on this "
+                   "backend (camera is raylib-only)");
+    }
+    void set_rotation(float) {
+      warn_once(0, "@notimplemented camera::HasCamera::set_rotation on "
+                   "this backend (camera is raylib-only)");
+    }
   };
 
   static void add_singleton_components(Entity &entity) {

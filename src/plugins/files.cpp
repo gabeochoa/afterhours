@@ -1,7 +1,9 @@
 #define AFTERHOURS_FILES_CPP_COMPILED
 
+// No graphics needed in this TU; none backend keeps <raylib.h> out of this Windows TU.
 #if defined(_WIN32)
 #undef AFTER_HOURS_USE_RAYLIB
+#define AFTER_HOURS_USE_NONE
 #endif
 
 #include "files.h"
@@ -10,10 +12,6 @@
 #include <format>
 #include <random>
 #include <tuple>
-
-#if defined(_WIN32)
-#define AFTER_HOURS_USE_RAYLIB
-#endif
 
 // On Emscripten the virtual filesystem provides save/config/resource paths
 // directly — no platform_folders dependency needed.
