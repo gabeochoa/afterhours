@@ -96,60 +96,66 @@ inline std::string describe_candidate(Entity &entity) {
   return desc;
 }
 
-inline std::vector<Entity *> resolve_ui_candidates(
+inline RefEntities resolve_ui_candidates(
     const std::string &needle, EntityID scope, UIMatchKind kind,
     UIVisibility vis,
     const std::function<bool(Entity &)> &extra = nullptr) {
-  std::vector<Entity *> out;
+  RefEntities out;
+  // TODO: make kind/visibility first-class query modifiers (whereRendered/whereClickable?) instead of hand-rolled predicates here.
   for (Entity &e : ui_query()
            .whereHasComponent<ui::UIComponent>()
-           .whereLambda([&](const Entity &cand) {
-             if (kind == UIMatchKind::DebugName) {
-               if (!cand.has<ui::UIComponentDebug>()) return false;
-               if (cand.get<ui::UIComponentDebug>().name() != needle)
-                 return false;
-             } else if (kind == UIMatchKind::TextExact) {
-               if (!cand.has<ui::HasLabel>()) return false;
-               if (cand.get<ui::HasLabel>().label != needle) return false;
-             } else {
-               if (!cand.has<ui::HasLabel>()) return false;
-               if (cand.get<ui::HasLabel>().label.find(needle) ==
-                   std::string::npos)
-                 return false;
-             }
-             if (scope != -1 &&
-                 !is_within_scope(const_cast<Entity &>(cand), scope))
-               return false;
-             auto &cmp = cand.get<ui::UIComponent>();
-             switch (vis) {
-               case UIVisibility::Any: break;
-               case UIVisibility::Rendered:
-                 if (!cmp.was_rendered_to_screen) return false;
-                 break;
-               case UIVisibility::RenderedPartiallyVisible:
-                 if (!cmp.was_rendered_to_screen ||
-                     !is_partially_visible(cand))
-                   return false;
-                 break;
-               case UIVisibility::Clickable:
-                 if (!cmp.was_rendered_to_screen) return false;
-                 if (!visible_center(const_cast<Entity &>(cand)))
-                   return false;
-                 break;
-             }
-             return true;
-           })
+           .whereLambdaIf(kind == UIMatchKind::DebugName,
+                          [&](const Entity &cand) {
+                            return cand.has<ui::UIComponentDebug>() &&
+                                   cand.get<ui::UIComponentDebug>().name() ==
+                                       needle;
+                          })
+           .whereLambdaIf(kind == UIMatchKind::TextExact,
+                          [&](const Entity &cand) {
+                            return cand.has<ui::HasLabel>() &&
+                                   cand.get<ui::HasLabel>().label == needle;
+                          })
+           .whereLambdaIf(kind == UIMatchKind::TextSubstring,
+                          [&](const Entity &cand) {
+                            return cand.has<ui::HasLabel>() &&
+                                   cand.get<ui::HasLabel>().label.find(
+                                       needle) != std::string::npos;
+                          })
+           .whereLambdaIf(scope != -1,
+                          [&](const Entity &cand) {
+                            return is_within_scope(
+                                const_cast<Entity &>(cand), scope);
+                          })
+           .whereLambdaIf(vis == UIVisibility::Rendered,
+                          [&](const Entity &cand) {
+                            return cand.get<ui::UIComponent>()
+                                .was_rendered_to_screen;
+                          })
+           .whereLambdaIf(vis == UIVisibility::RenderedPartiallyVisible,
+                          [&](const Entity &cand) {
+                            return cand.get<ui::UIComponent>()
+                                       .was_rendered_to_screen &&
+                                   is_partially_visible(cand);
+                          })
+           .whereLambdaIf(vis == UIVisibility::Clickable,
+                          [&](const Entity &cand) {
+                            return cand.get<ui::UIComponent>()
+                                       .was_rendered_to_screen &&
+                                   visible_center(const_cast<Entity &>(cand))
+                                       .has_value();
+                          })
            .gen()) {
     if (extra && !extra(e)) continue;
-    out.push_back(&e);
+    out.push_back(e);
   }
   return out;
 }
 
 struct UIResolution {
-  Entity *entity = nullptr;
+  OptEntity entity;
   std::string ambiguous;
 };
+
 inline UIResolution resolve_ui_single(
     const std::string &needle, EntityID scope, UIMatchKind kind,
     UIVisibility vis,
@@ -162,9 +168,9 @@ inline UIResolution resolve_ui_single(
   }
   if (candidates.empty()) return out;
   std::string list;
-  for (Entity *e : candidates) {
+  for (Entity &e : candidates) {
     if (!list.empty()) list += "; ";
-    list += describe_candidate(*e);
+    list += describe_candidate(e);
   }
   out.ambiguous =
       std::format("{} elements match '{}'; scope it with under=<scope> "
@@ -281,7 +287,7 @@ inline ElementPointResult element_point(
     return r;
   }
   if (!res.entity) return r;
-  const RectangleType rect = get_screen_rect(*res.entity);
+  const RectangleType rect = get_screen_rect(res.entity.asE());
   const auto off_at = [&](size_t i, float extent) {
     if (!use_offset || off.size() <= i - 1 || off[i - 1] == "center")
       return extent * 0.5f;
@@ -296,14 +302,14 @@ std::optional<Position> find_component_center(const std::string &name) {
   auto res = resolve_ui_single(name, -1, UIMatchKind::DebugName,
                                UIVisibility::Clickable);
   if (!res.entity) return std::nullopt;
-  return visible_center(*res.entity);
+  return visible_center(res.entity.asE());
 }
 template <typename InputAction>
 std::optional<Position> find_component_with_text(const std::string &text) {
   auto res = resolve_ui_single(text, -1, UIMatchKind::TextSubstring,
                                UIVisibility::Clickable);
   if (!res.entity) return std::nullopt;
-  return visible_center(*res.entity);
+  return visible_center(res.entity.asE());
 }
 template <typename InputAction>
 struct HandleClickUICommand : System<PendingE2ECommand> {
@@ -324,7 +330,7 @@ struct HandleClickUICommand : System<PendingE2ECommand> {
       cmd.fail(std::format("UI component not found: {}", pos[0]));
       return;
     }
-    auto centre = visible_center(*res.entity);
+    auto centre = visible_center(res.entity.asE());
     test_input::simulate_click(centre->x, centre->y);
     cmd.consume();
   }
@@ -352,7 +358,7 @@ struct HandleRightClickUICommand : System<PendingE2ECommand> {
       cmd.fail(std::format("UI component not found: {}", pos[0]));
       return;
     }
-    auto centre = visible_center(*res.entity);
+    auto centre = visible_center(res.entity.asE());
     test_input::simulate_right_click(centre->x, centre->y);
     cmd.consume();
   }
@@ -378,7 +384,7 @@ struct HandleRightClickTextCommand : System<PendingE2ECommand> {
       cmd.fail(std::format("No UI with text: {}", pos[0]));
       return;
     }
-    auto centre = visible_center(*res.entity);
+    auto centre = visible_center(res.entity.asE());
     test_input::simulate_right_click(centre->x, centre->y);
     cmd.consume();
   }
@@ -403,7 +409,7 @@ struct HandleClickTextCommand : System<PendingE2ECommand> {
       cmd.fail(std::format("No UI with text: {}", pos[0]));
       return;
     }
-    auto centre = visible_center(*res.entity);
+    auto centre = visible_center(res.entity.asE());
     test_input::simulate_click(centre->x, centre->y);
     cmd.consume();
   }
@@ -699,7 +705,7 @@ struct HandleClickLabelCommand : System<PendingE2ECommand> {
       cmd.retry_with(std::format("No UI with text: {}", text));
       return;
     }
-    Entity &target = *res.entity;
+    Entity &target = res.entity.asE();
     if (!target.has_any<ui::HasClickListener, ui::HasDragListener>()) {
       cmd.fail(std::format("click_label \"{}\": element has no click listener", text));
       return;
@@ -754,7 +760,7 @@ struct HandleClickButtonCommand : System<PendingE2ECommand> {
       cmd.fail(std::format("Button not found: {}", pos[0]));
       return;
     }
-    auto rect = get_screen_rect(*res.entity);
+    auto rect = get_screen_rect(res.entity.asE());
     test_input::simulate_click(rect.x + rect.width / 2,
                                rect.y + rect.height / 2);
     cmd.consume();
@@ -1741,7 +1747,7 @@ struct HandleExpectPointInCommand : System<PendingE2ECommand> {
       cmd.retry();
       return;
     }
-    Entity &entity = *res.entity;
+    Entity &entity = res.entity.asE();
     RectangleType rect = get_screen_rect(entity);
     if (ui::is_mouse_inside(input::MousePosition{x, y}, rect)) {
       cmd.consume();
