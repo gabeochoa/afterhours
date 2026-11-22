@@ -1,0 +1,10 @@
+gamepad_connect 0
+expect_text x: 0
+gamepad_axis 0 LEFT_X 1
+expect_text x: 10
+gamepad_axis 0 LEFT_X 0
+gamepad_button 0 RIGHT_FACE_DOWN
+expect_text jumps: 1
+gamepad_axis 0 LEFT_X -0.9
+expect_text x: 0
+expect_no_text jumps: 2
