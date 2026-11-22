@@ -12,15 +12,18 @@ static void check(bool cond, const std::string &what) {
     std::printf("  FAIL: %s\n", what.c_str());
   }
 }
+
 static bool near(float a, float b, float tol = 1e-4f) {
   return std::fabs(a - b) <= tol;
 }
+
 static CharacterMotor motor_at(float x, float y, float z) {
   CharacterMotor m;
   m.position = {x, y, z};
   m.grounded = true;
   return m;
 }
+
 int main() {
   const float dt = 0.1f;
   auto flat = [](float, float) { return 0.f; };
@@ -88,6 +91,7 @@ int main() {
     Vec3 a = run(), b = run();
     check(a.x == b.x && a.y == b.y && a.z == b.z, "same steps, same path");
   }
+
   std::printf("character3d: %d/%d checks passed\n", checks - failures, checks);
   return failures == 0 ? 0 : 1;
 }
