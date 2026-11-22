@@ -46,8 +46,8 @@ struct SliderStyle {
   std::optional<Color> track;
   std::optional<Color> fill;
   std::optional<Color> handle;
-  std::optional<Size> handle_size;
-  std::optional<Size> track_thickness;
+  Size handle_size = pixels(16.f);
+  Size track_thickness = pixels(8.f);
 };
 enum struct IconPosition { Left, Right };
 

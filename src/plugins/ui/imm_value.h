@@ -179,11 +179,9 @@ ElementResult slider(HasUIContext auto &ctx, EntityParent ep_pair,
   slider_bg.template addComponentIfMissing<InFocusCluster>();
 
   const bool styled = config.slider_style.has_value();
-  const SliderStyle slider_style =
-      styled ? config.slider_style.value() : SliderStyle{};
-  const Size knob_size = slider_style.handle_size.value_or(pixels(16.f));
-  const Size track_thickness_sz =
-      slider_style.track_thickness.value_or(pixels(8.f));
+  const SliderStyle slider_style = config.slider_style.value_or(SliderStyle{});
+  const Size knob_size = slider_style.handle_size;
+  const Size track_thickness_sz = slider_style.track_thickness;
   if (styled)
     slider_bg.removeComponentIfExists<HasColor>();
 

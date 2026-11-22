@@ -468,8 +468,7 @@ TEST(slider_style_forwards_through_apply_overrides) {
           .fill = Color{1,2,3,255}, .handle_size = pixels(20.f)}));
   CHECK(merged.slider_style.has_value());
   if (merged.slider_style) {
-    CHECK(merged.slider_style->handle_size.has_value());
-    CHECK(std::fabs(merged.slider_style->handle_size->value - 20.f) < 0.01f);
+    CHECK(std::fabs(merged.slider_style->handle_size.value - 20.f) < 0.01f);
     CHECK(merged.slider_style->fill.has_value());
   }
   CHECK(!base.slider_style.has_value());
