@@ -168,4 +168,32 @@ TEST(skip_tabbing_does_not_affect_hit_testing) {
   CHECK(h.context().is_hot(child.ent().id));
 }
 
+TEST(with_hoverable_makes_a_div_hot_without_a_click_listener) {
+  ImmTestHarness h;
+  auto turn = div(h.context(), mk(h.root(), 0),
+                  ComponentConfig{}
+                      .with_size(ComponentSize{pixels(300), pixels(40)})
+                      .with_absolute_position(0.f, 0.f)
+                      .with_hoverable()
+                      .with_debug_name("turn"));
+  h.layout_only();
+  CHECK(turn.ent().is_missing<HasClickListener>());
+
+  resolve_at(h, 20.f, 20.f);
+  CHECK(h.context().is_hot(turn.ent().id));
+  CHECK(h.context().mouse_in_subtree(turn.ent().id));
+}
+
+TEST(a_plain_div_is_never_hot) {
+  ImmTestHarness h;
+  auto turn = div(h.context(), mk(h.root(), 0),
+                  ComponentConfig{}
+                      .with_size(ComponentSize{pixels(300), pixels(40)})
+                      .with_absolute_position(0.f, 0.f)
+                      .with_debug_name("turn"));
+  h.layout_only();
+  resolve_at(h, 20.f, 20.f);
+  CHECK(!h.context().mouse_in_subtree(turn.ent().id));
+}
+
 int main() { return ui_test::run_registered_tests("subtree hover"); }

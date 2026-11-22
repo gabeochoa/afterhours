@@ -206,7 +206,7 @@ TEST(stepper_system_uses_press_and_configured_repeat_instead_of_every_held_frame
   CHECK(index == 4);
 }
 
-TEST(slider_system_still_advances_on_every_held_frame) {
+TEST(slider_held_key_paces_by_repeat_not_frames) {
   ImmTestHarness h;
   using Action = ui_test::TestInputAction;
   float value = .5f;
@@ -227,14 +227,42 @@ TEST(slider_system_still_advances_on_every_held_frame) {
   HandleLeftRight<Action> system;
   system.context = &context;
   control->get<UIComponent>().was_rendered_to_screen = true;
-  for (int frame = 0; frame < 3; ++frame) {
-    context.last_action = Action::None;
-    context.all_actions[magic_enum::enum_index(Action::WidgetRight).value()] = true;
+  const auto bit = magic_enum::enum_index(Action::WidgetRight).value();
+  const auto frame = [&](bool pressed, bool repeat) {
+    context.last_action = pressed ? Action::WidgetRight : Action::None;
+    context.all_actions.reset();
     context.all_actions_repeat.reset();
+    context.all_actions[bit] = true;
+    context.all_actions_repeat[bit] = repeat;
     system.for_each_with(*control, control->get<UIComponent>(),
                          control->get<HasLeftRightListener>(), 1.f / 60);
-    CHECK(std::abs(control->get<HasSliderState>().value - (.51f + frame * .01f)) < .0001f);
+  };
+  frame(true, false);
+  CHECK(std::abs(control->get<HasSliderState>().value - .51f) < .0001f);
+  // Held with no repeat tick: value must not move, whatever the frame rate.
+  for (int i = 0; i < 5; ++i) {
+    frame(false, false);
+    CHECK(std::abs(control->get<HasSliderState>().value - .51f) < .0001f);
   }
+  frame(false, true);
+  CHECK(std::abs(control->get<HasSliderState>().value - .52f) < .0001f);
+}
+
+// A held slider key must advance the value about the same per second at low
+// and high frame rates: the count comes from the same input::Repeat pacing
+// the input system feeds into pressed_or_repeat.
+TEST(slider_repeat_rate_is_frame_rate_independent) {
+  const auto steps_per_second = [](int fps) {
+    input::Repeat repeat{.delay = 0.25f, .rate = 0.05f};
+    const float dt = 1.f / static_cast<float>(fps);
+    int fires = 0;
+    for (int frame = 0; frame < fps; ++frame) fires += repeat.tick(true, dt);
+    return fires;
+  };
+  const int at30 = steps_per_second(30);
+  const int at120 = steps_per_second(120);
+  CHECK(std::abs(at30 - at120) <= 1);
+  CHECK(at30 >= 16 && at30 <= 17);
 }
 
 // Empty containers must not divide by zero (GAPS: empty containers).

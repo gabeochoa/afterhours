@@ -74,6 +74,9 @@ inline void register_builtin_handlers(SystemManager &sm) {
   sm.register_update_system(std::make_unique<HandleMouseDownCommand>());
   sm.register_update_system(std::make_unique<HandleMouseUpCommand>());
   sm.register_update_system(std::make_unique<HandleScrollWheelCommand>());
+  sm.register_update_system(std::make_unique<HandleGamepadConnectCommand>());
+  sm.register_update_system(std::make_unique<HandleGamepadButtonCommand>());
+  sm.register_update_system(std::make_unique<HandleGamepadAxisCommand>());
   sm.register_update_system(std::make_unique<HandleDragToCommand>());
   sm.register_update_system(std::make_unique<HandleWaitCommand>());
   sm.register_update_system(std::make_unique<HandleWaitFramesCommand>());

@@ -48,6 +48,21 @@ AFTER_HOURS_USE_METAL
   headless (offscreen) rendering; headless honours Config.hidpi to supersample
   captures.
 
+AFTER_HOURS_USE_PSX
+- selects the PSX validation backend (src/backends/psx): like the none
+  backend it records draw calls instead of issuing them, and in addition it
+  charges every texture, render target and font atlas to a simulated
+  PlayStation 1 or PlayStation 2 VRAM, warning when art would not fit the
+  real console (texture over the hardware maximum, VRAM full, frame over
+  the primitive budget). Configure it once with
+  `psx::budget::configure({.console = psx::Console::PS1})`; the profile
+  carries the render setup (resolution, depth, buffering), whose
+  framebuffers are reserved out of VRAM first. The budget API
+  (src/backends/psx/budget.h) also works standalone on the raylib/sokol
+  backends: call `psx::budget::alloc_texture` / `free_texture` around your
+  own loads. It validates that rendering fits a console; it does not emit
+  a console binary. See examples/catalog/utility/psx_budget.
+
 AFTER_HOURS_IMM_UI
 - enables the immediate-mode UI helpers (div/button/slider/...)
 
@@ -59,8 +74,10 @@ AFTER_HOURS_REPLACE_LOGGING
   `log_trace`, `log_info`, `log_warn`, `log_error` as `(fmt, args...)`, and `log_once_per(duration, level, fmt, args...)`
 - `fmt` uses `{}` placeholders (std::format style); `duration` is a `std::chrono` duration and `level` is a `VENDOR_LOG_*` value
 - functions or macros both work, but a macro must expand to one statement (`do { ... } while (0)`): the library calls these from brace-less `if`/`else`
-- `log_file.h` only sees what reaches `log_sink_fn`; forward your logs to it yourself if you want them in the file
+- `log_file.h` only sees what reaches `log_sink_fn`; forward your logs to it yourself if you want them in the file. The sink flushes every line (a crash keeps the tail), buffers up to 512 pre-init lines (oldest dropped) and replays them on `log_file::open(path)`; reopening truncates
 - `crash::report()` logs through `log_error`, so a `log_error` that aborts recurses under `crash::install_handler()`
+- `log_file.h` only sees what reaches `log_sink_fn`; forward your logs to it yourself if you want them in the file
+- `crash::report()` writes to stderr and `log_sink_fn` directly, not through `log_error`, so an aborting `log_error` is safe under `crash::install_handler()`; a replaced-logging host sees crash lines only via the sink
 
 ```cpp
 // my_log.h -- include before any afterhours header
@@ -116,7 +133,7 @@ afterhours names six value types through macros, so a game can hand it its own:
 | `RectangleType` | `raylib::Rectangle` | `MyRectangle` | `x, y, width, height` |
 | `ColorType` | `raylib::Color` | `MyColor` | `r, g, b, a` (`unsigned char`) |
 | `FontType` | `raylib::Font` | `MyFont` (empty) | none |
-| `TextureType` | `raylib::Texture2D` | `MyTexture` | `width, height` (sokol adds GPU ids) |
+| `TextureType` | `raylib::Texture2D` | `MyTexture` | `width, height` (sokol adds GPU ids, psx adds a budget id) |
 
 All six are optional. To use your own type, `#define` the macro (or pass `-D`) before the first afterhours include. Any afterhours header can be the first, because they all pull in `developer.h`, which reads the macros once. Define one any later and afterhours and your code end up using different types.
 
@@ -215,6 +232,8 @@ use `tools/web.mk` for raylib games.
 - [Optional APIs](docs/plugins.md) and [profiling](docs/profiling.md)
 - [Measurements](docs/profiling-measurements.md) and [text measurement](docs/font-atlas-measurement.md)
 - [Resizing, scaling, pillarbox / letterbox](docs/letterboxing.md)
+- [Native macOS desktop integration](docs/macos-desktop.md) — app-side, by decision
+- [Wire-versioning policy](docs/wire-versioning.md)
 - [Backlog](todo.md), [research](docs/roadmap.md), and [changelog](CHANGELOG.md)
 
 ## License

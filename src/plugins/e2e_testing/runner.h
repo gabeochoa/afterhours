@@ -113,8 +113,8 @@ constexpr std::array<std::string_view, 7> coord_commands = {
     "middle_click", "middle_down"
 };
 
-constexpr std::array<std::string_view, 16> single_arg_commands = {
-    "key", "select_all", "screenshot", "arrow",
+constexpr std::array<std::string_view, 17> single_arg_commands = {
+    "key", "select_all", "screenshot", "expect_screenshot", "arrow",
     "action", "hold", "release", "click_ui",
     "click_text", "click_button", "focus_ui",
     "toggle_checkbox", "expect_focused",
@@ -407,6 +407,7 @@ class E2ERunner {
         draining_pending_ = false;
         current_script_idx_ = 0;
         current_script_errors_ = 0;
+        pending_cmds_.clear();
         reset_command_error_count();
     }
 
@@ -550,6 +551,12 @@ class E2ERunner {
         return !has_pending_commands();
     }
     bool has_commands() const { return !commands_.empty(); }
+    size_t pending_command_count() const {
+        size_t n = 0;
+        for (const auto &e : pending_cmds_)
+            if (e && !e->get<PendingE2ECommand>().is_consumed()) n++;
+        return n;
+    }
     float elapsed_time() const { return elapsed_time_; }
 
     std::vector<ScriptResult> results() const {
@@ -692,6 +699,7 @@ class E2ERunner {
             wall_deadline = detail::wall_deadline_after(cmd.wall_seconds);
         auto &entity = EntityHelper::createEntity();
         auto &pending = entity.addComponent<PendingE2ECommand>();
+        pending_cmds_.push_back(EntityHelper::getEntityAsSharedPtr(entity));
         pending.name = cmd.name;
         pending.args = cmd.args;
         pending.line_number = cmd.line_number;
@@ -735,25 +743,46 @@ class E2ERunner {
         }
     }
 
-    bool has_pending_commands() const {
+    void prune_pending_cmds() const {
+        auto &list = pending_cmds_;
+        list.erase(std::remove_if(list.begin(), list.end(),
+                                 [](const EntityType &e) {
+                                     return !e || e->get<PendingE2ECommand>().is_consumed();
+                                 }),
+                   list.end());
+    }
+
+    void adopt_external_pending() const {
         auto pending =
             EntityQuery().whereHasComponent<PendingE2ECommand>().gen();
         for (const Entity &e : pending) {
-            if (!e.get<PendingE2ECommand>().is_consumed()) return true;
+            auto sp = EntityHelper::getEntityAsSharedPtr(e);
+            if (std::find(pending_cmds_.begin(), pending_cmds_.end(), sp) ==
+                pending_cmds_.end())
+                pending_cmds_.push_back(sp);
         }
-        return false;
+    }
+
+    bool has_pending_commands() const {
+        prune_pending_cmds();
+        if (pending_cmds_.empty()) {
+            adopt_external_pending();
+            prune_pending_cmds();
+        }
+        return !pending_cmds_.empty();
     }
 
     void consume_all_pending_commands() {
-        auto pending =
-            EntityQuery().whereHasComponent<PendingE2ECommand>().gen();
-        for (Entity &e : pending) {
-            auto &cmd = e.get<PendingE2ECommand>();
+        adopt_external_pending();
+        for (auto &e : pending_cmds_) {
+            if (!e) continue;
+            auto &cmd = e->get<PendingE2ECommand>();
             if (!cmd.is_consumed()) {
                 cmd.consume();
-                e.cleanup = true;
+                e->cleanup = true;
             }
         }
+        pending_cmds_.clear();
     }
 
     // Commands sitting unconsumed right now. The runner blocks on these, so at
@@ -761,15 +790,13 @@ class E2ERunner {
     // so lives in register_unknown_handler, which is part of the pack you
     // forgot to register.
     std::string unconsumed_command_names() const {
+        adopt_external_pending();
         std::string names;
-        auto pending =
-            EntityQuery().whereHasComponent<PendingE2ECommand>().gen();
-        for (const Entity &e : pending) {
-            const auto &cmd = e.get<PendingE2ECommand>();
-            if (cmd.is_consumed())
-                continue;
-            if (!names.empty())
-                names += ", ";
+        for (const auto &e : pending_cmds_) {
+            if (!e) continue;
+            const auto &cmd = e->get<PendingE2ECommand>();
+            if (cmd.is_consumed()) continue;
+            if (!names.empty()) names += ", ";
             names += cmd.name;
         }
         return names;
@@ -826,6 +853,7 @@ class E2ERunner {
     }
 
     std::vector<ParsedCommand> commands_;
+    mutable std::vector<EntityType> pending_cmds_;
     std::string script_path_;
     std::size_t index_ = 0;
     float wait_time_ = 0.0f;         // Seconds remaining before next command

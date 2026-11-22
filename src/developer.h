@@ -72,6 +72,12 @@ struct MyTexture {
   uint32_t view_id = 0;
   uint32_t sampler_id = 0;
 };
+#elif defined(AFTER_HOURS_USE_PSX)
+struct MyTexture {
+  float width = 0;
+  float height = 0;
+  uint64_t budget_id = 0;
+};
 #else
 // Fallback / "none" backend: no GPU, so a texture is just its dimensions.
 struct MyTexture {
