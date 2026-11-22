@@ -16,6 +16,7 @@ namespace ah_std = tl; // fallback to tl::expected/unexpected
 #endif
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -41,6 +42,7 @@ template <typename T> struct Library {
   using iterator = typename Storage::iterator;
   using const_iterator = typename Storage::const_iterator;
 
+  // Dense intern index for this library only; not an EntityHandle (no slot/gen).
   using Handle = uint32_t;
   static constexpr Handle invalid_handle = UINT32_MAX;
 
@@ -48,14 +50,14 @@ template <typename T> struct Library {
 
  private:
   std::unordered_map<std::string, Handle> handle_by_name;
-  std::vector<T *> by_handle;
+  std::vector<std::optional<std::string>> name_for_handle;
 
  public:
   [[nodiscard]] Handle intern(const std::string &name) {
     auto [it, inserted] = handle_by_name.emplace(name, Handle{});
     if (inserted) {
-      it->second = static_cast<Handle>(by_handle.size());
-      by_handle.push_back(nullptr);
+      it->second = static_cast<Handle>(name_for_handle.size());
+      name_for_handle.emplace_back(std::nullopt);
     }
     return it->second;
   }
@@ -81,7 +83,7 @@ template <typename T> struct Library {
       return ah_std::unexpected(Error::DUPLICATE_NAME);
     }
     storage[name] = item;
-    by_handle[intern(name)] = &storage[name];
+    name_for_handle[intern(name)] = name;
     return name;
   }
 
@@ -91,7 +93,7 @@ template <typename T> struct Library {
                type_name<T>());
       throw std::out_of_range("Library: unknown handle");
     }
-    return *by_handle.at(handle);
+    return storage.at(name_for_handle.at(handle).value());
   }
 
   [[nodiscard]] const T &get(Handle handle) const {
@@ -100,14 +102,17 @@ template <typename T> struct Library {
                type_name<T>());
       throw std::out_of_range("Library: unknown handle");
     }
-    return *by_handle.at(handle);
+    return storage.at(name_for_handle.at(handle).value());
   }
 
   [[nodiscard]] bool contains(Handle handle) const {
-    return handle < by_handle.size() && by_handle[handle] != nullptr;
+    return handle < name_for_handle.size() &&
+           name_for_handle[handle].has_value();
   }
 
-  void reset_handles() { by_handle.assign(by_handle.size(), nullptr); }
+  void reset_handles() {
+    name_for_handle.assign(name_for_handle.size(), std::nullopt);
+  }
 
   [[nodiscard]] T &get(const std::string &name) {
     if (!this->contains(name)) {
