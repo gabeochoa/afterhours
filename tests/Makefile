@@ -140,6 +140,7 @@ ALL_TESTS := \
 	input_remap_test \
 	file_watcher_test \
 	render_capture_test \
+	presented_frame_test \
 	triangle_winding_test \
 	charts_test \
 	system_profile_test \
@@ -381,6 +382,7 @@ RAYLIB_TESTS := \
 	input_activity_snapshot_test \
 	input_enum_actions_test \
 	render_capture_test \
+	presented_frame_test \
 	triangle_winding_test \
 	clipboard_test \
 	mk_cost_test \

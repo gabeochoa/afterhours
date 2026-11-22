@@ -314,6 +314,22 @@ struct window_manager : developer::Plugin {
                        vp.dest.y + p.y / vp.scale};
   }
 
+  struct PresentedFrame {
+    int window_w = 0;
+    int window_h = 0;
+    Viewport viewport{};
+  };
+
+  static PresentedFrame presented_frame(int window_w, int window_h) {
+    return PresentedFrame{window_w, window_h,
+                          content_viewport(window_w, window_h)};
+  }
+
+  static Vector2Type present_logical(Vector2Type p, int window_w,
+                                     int window_h) {
+    return content_to_window(p, window_w, window_h);
+  }
+
   struct ProvidesCurrentResolution : public BaseComponent {
     bool should_refetch = true;
     Resolution current_resolution;
