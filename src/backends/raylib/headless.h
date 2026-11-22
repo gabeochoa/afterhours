@@ -33,6 +33,9 @@ struct RaylibHeadless {
   RenderTextureType render_texture{};
   Config config{};
   bool initialized = false;
+  int logical_w_ = 0;
+  int logical_h_ = 0;
+  int render_scale_ = 1;
 
   /// Initialize the headless backend with the given configuration.
   /// Creates a headless GL context, initializes rlgl, and sets up a render
@@ -45,9 +48,14 @@ struct RaylibHeadless {
     }
 
     config = cfg;
+    logical_w_ = cfg.width;
+    logical_h_ = cfg.height;
+    render_scale_ =
+        cfg.hidpi ? (cfg.hidpi_scale > 1 ? cfg.hidpi_scale : 2) : 1;
+    graphics::render_scale() = render_scale_;
 
     // Initialize headless GL context
-    if (!gl.init(cfg.width, cfg.height)) {
+    if (!gl.init(cfg.width * render_scale_, cfg.height * render_scale_)) {
       return false;
     }
 
@@ -55,7 +63,7 @@ struct RaylibHeadless {
     raylib::rlLoadExtensions(gl.get_proc_address());
 
     // Initialize rlgl with the specified dimensions
-    raylib::rlglInit(cfg.width, cfg.height);
+    raylib::rlglInit(cfg.width * render_scale_, cfg.height * render_scale_);
     raylib::rlSetBlendMode(raylib::RL_BLEND_ALPHA);
 
     // Try to enable font/texture loading that normally requires InitWindow.
@@ -65,7 +73,8 @@ struct RaylibHeadless {
     try_load_default_font();
 
     // Create render texture for offscreen rendering
-    render_texture = raylib::LoadRenderTexture(cfg.width, cfg.height);
+    render_texture = raylib::LoadRenderTexture(cfg.width * render_scale_,
+                                               cfg.height * render_scale_);
 
     // Check if render texture was created successfully
     if (render_texture.id == 0) {
@@ -125,7 +134,17 @@ struct RaylibHeadless {
   }
 
   /// Begin rendering to the render texture.
-  inline void begin_frame() { raylib::BeginTextureMode(render_texture); }
+  inline void begin_frame() {
+    raylib::BeginTextureMode(render_texture);
+    if (render_scale_ != 1) {
+      raylib::rlDrawRenderBatchActive();
+      raylib::rlMatrixMode(RL_PROJECTION);
+      raylib::rlLoadIdentity();
+      raylib::rlOrtho(0, logical_w_, logical_h_, 0, 0.0, 1.0);
+      raylib::rlMatrixMode(RL_MODELVIEW);
+      raylib::rlLoadIdentity();
+    }
+  }
 
   /// End rendering to the render texture.
   inline void end_frame() { raylib::EndTextureMode(); }

@@ -257,6 +257,8 @@ struct RunConfig {
   float fixed_dt = 0.f;
   int sim_steps = 1;
 
+  int capture_scale = 1;
+
   float step_dt(float wall_dt, float time_scale = 1.f) const {
     return fixed_dt > 0.f ? fixed_dt : wall_dt * time_scale;
   }
