@@ -20,6 +20,8 @@ struct Options {
     std::size_t max_systems = 256;
     std::size_t max_counters = 32;
     bool sample_process = true;
+    double spike_threshold_ms = 0;
+    std::size_t spike_capacity = 4;
 };
 struct SystemSample {
     std::string name;
@@ -34,8 +36,14 @@ struct SystemSample {
     double mean_ms() const { return calls ? total_ms / static_cast<double>(calls) : 0; }
 };
 struct Counter { std::string name, unit; double value = 0; };
+struct Spike {
+    std::uint64_t frame = 0;
+    double frame_ms = 0;
+    std::vector<SystemSample> systems;
+};
 struct Snapshot {
     std::vector<double> frame_ms;
+    std::vector<Spike> spikes;
     std::vector<SystemSample> systems;
     std::vector<Counter> counters;
     std::uint64_t frames = 0;
@@ -124,12 +132,27 @@ class Collector {
         return false;
 #endif
     }
+    void set_spike_threshold_ms(double ms) {
+#if AFTERHOURS_ENABLE_PROFILING
+        options_.spike_threshold_ms = ms > 0 && std::isfinite(ms) ? ms : 0;
+#else
+        (void)ms;
+#endif
+    }
+    std::vector<Spike> spikes() const {
+#if AFTERHOURS_ENABLE_PROFILING
+        return spikes_;
+#else
+        return {};
+#endif
+    }
     void reset() {
 #if AFTERHOURS_ENABLE_PROFILING
         const bool restart = recording();
         stop();
         systems_.clear();
         counters_.clear();
+        spikes_.clear();
         frames_ = dropped_ = 0;
         last_process_ = {};
         cpu_percent_.reset();
@@ -160,6 +183,17 @@ class Collector {
             value.sample.total_ms += value.sample.last_frame_ms;
             value.sample.calls += std::exchange(value.frame_calls, 0);
         }
+        if (options_.spike_threshold_ms > 0 && elapsed_ms > options_.spike_threshold_ms && options_.spike_capacity > 0) {
+            Spike spike;
+            spike.frame = frames_;
+            spike.frame_ms = elapsed_ms;
+            spike.systems.reserve(systems_.size());
+            for (const auto &[key, value] : systems_)
+                spike.systems.push_back(value.sample);
+            spikes_.push_back(std::move(spike));
+            if (spikes_.size() > options_.spike_capacity)
+                spikes_.erase(spikes_.begin());
+        }
 #else
         (void)elapsed_ms;
 #endif
@@ -184,6 +218,7 @@ class Collector {
     Snapshot snapshot(bool include_system_history = false) const {
         Snapshot result;
 #if AFTERHOURS_ENABLE_PROFILING
+        result.spikes = spikes_;
         result.cpu_percent = cpu_percent_;
         result.resident_mb = resident_mb_;
         result.frames = frames_;
@@ -253,6 +288,7 @@ class Collector {
     std::vector<double> history_;
     std::map<Key, Accum, Less> systems_;
     std::vector<Counter> counters_;
+    std::vector<Spike> spikes_;
     std::uint64_t token_ = 0, frames_ = 0, dropped_ = 0;
     detail::Clock::time_point frame_start_{};
     detail::Clock::time_point process_time_{};

@@ -4,6 +4,8 @@
 #include <utility>
 #include <map>
 #include <chrono>
+#include <format>
+#include <sstream>
 
 #include <functional>
 #include <optional>
@@ -82,9 +84,101 @@ inline void disable() { profiling::default_collector().stop(); }
 
 } // namespace builtin_profile
 
+inline std::string escape_json_string(std::string_view in) {
+    std::string out;
+    out.reserve(in.size());
+    for (const char c : in) {
+        switch (c) {
+        case '"': out += "\\\""; break;
+        case '\\': out += "\\\\"; break;
+        case '\n': out += "\\n"; break;
+        case '\r': out += "\\r"; break;
+        case '\t': out += "\\t"; break;
+        default: out += c; break;
+        }
+    }
+    return out;
+}
+
+inline const char *phase_name(SystemPhase phase) {
+    switch (phase) {
+    case SystemPhase::Render: return "render";
+    case SystemPhase::FixedUpdate: return "fixed";
+    default: return "update";
+    }
+}
+
+inline std::string snapshot_json(const profiling::Snapshot &snapshot) {
+    std::ostringstream out;
+    out << std::format(
+        "{{\"frames\":{},\"fps\":{:.3f},\"average_frame_ms\":{:.3f},"
+        "\"p50_ms\":{:.3f},\"p95_ms\":{:.3f},\"p99_ms\":{:.3f},"
+        "\"dropped_system_samples\":{},\"systems\":[",
+        snapshot.frames, snapshot.fps, snapshot.average_frame_ms,
+        snapshot.p50_ms, snapshot.p95_ms, snapshot.p99_ms,
+        snapshot.dropped_system_samples);
+    bool first = true;
+    for (const auto &sample : snapshot.systems) {
+        if (!first) out << ',';
+        first = false;
+        out << std::format(
+            "{{\"name\":\"{}\",\"phase\":\"{}\",\"mean_ms\":{:.3f},"
+            "\"average_frame_ms\":{:.3f},\"recent_average_frame_ms\":{:.3f},"
+            "\"peak_frame_ms\":{:.3f},\"last_frame_ms\":{:.3f},\"calls\":{}}}",
+            escape_json_string(sample.name), phase_name(sample.phase),
+            sample.mean_ms(), sample.average_frame_ms,
+            sample.recent_average_frame_ms, sample.peak_frame_ms,
+            sample.last_frame_ms, sample.calls);
+    }
+    out << "],\"counters\":[";
+    bool first_counter = true;
+    for (const auto &counter : snapshot.counters) {
+        if (!first_counter) out << ',';
+        first_counter = false;
+        out << std::format("{{\"name\":\"{}\",\"unit\":\"{}\",\"value\":{:.3f}}}",
+                           escape_json_string(counter.name),
+                           escape_json_string(counter.unit), counter.value);
+    }
+    out << "]}";
+    return out.str();
+}
+
 struct HandleDumpProfileCommand : System<PendingE2ECommand> {
     void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
         if (cmd.is_consumed() || !cmd.is("dump_profile")) return;
+
+        bool want_json = false;
+        int count = 20;
+        bool count_seen = false;
+        for (std::size_t i = 0; i < cmd.args.size(); ++i) {
+            const std::string &arg = cmd.args[i];
+            if (arg == "--json") { want_json = true; continue; }
+            if (arg.size() > 2 && arg[0] == '-' && arg[1] == '-') {
+                cmd.fail("dump_profile: unknown flag '" + arg + "'");
+                return;
+            }
+            if (!count_seen) {
+                count = cmd.arg_as<int>(i, 0);
+                count_seen = true;
+            }
+        }
+        if (want_json) {
+            if (!profiling::available) {
+                cmd.fail("dump_profile --json unavailable: rebuild with "
+                         "AFTERHOURS_ENABLE_PROFILING=1 to collect it");
+                return;
+            }
+            const auto snapshot =
+                profiling::default_collector().snapshot();
+            if (!snapshot.frames) {
+                cmd.fail("dump_profile --json unavailable: no frames recorded "
+                         "(enable the builtin profile first)");
+                return;
+            }
+            log_info("{}", snapshot_json(snapshot));
+            cmd.consume();
+            return;
+        }
 
         PerfProvider &p = provider();
         if (!p.top_entries) {
@@ -92,7 +186,6 @@ struct HandleDumpProfileCommand : System<PendingE2ECommand> {
             return;
         }
 
-        int count = cmd.has_args(1) ? cmd.arg_as<int>(0) : 20;
         std::vector<PerfEntry> entries = p.top_entries(count);
         std::sort(entries.begin(), entries.end(),
                   [](const PerfEntry &a, const PerfEntry &b) {
@@ -188,8 +281,17 @@ struct HandleExpectP99BelowCommand : System<PendingE2ECommand> {
     }
 };
 
+struct HandleResetProfileCommand : System<PendingE2ECommand> {
+    void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
+        if (cmd.is_consumed() || !cmd.is("reset_profile")) return;
+        builtin_profile::reset();
+        cmd.consume();
+    }
+};
+
 inline void register_perf_commands(SystemManager &sm) {
     sm.register_update_system(std::make_unique<HandleDumpProfileCommand>());
+    sm.register_update_system(std::make_unique<HandleResetProfileCommand>());
     sm.register_update_system(std::make_unique<HandleExpectFpsAboveCommand>());
     sm.register_update_system(std::make_unique<HandleExpectP99BelowCommand>());
 }

@@ -14,6 +14,7 @@ struct TextAreaConfig {
   float line_height = 20.f; // Pixels per line
   bool word_wrap = true;    // Enable word wrapping
   size_t max_lines = 0;     // Maximum number of lines (0 = unlimited)
+  bool single_line = false; // Enter submits; pasted breaks become spaces
 };
 
 /// State component for multiline text input (text area).

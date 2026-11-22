@@ -5,6 +5,9 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#if defined(AFTER_HOURS_DEBUG)
+#include <source_location>
+#endif
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -171,6 +174,7 @@ struct EntityQuery {
     auto &whereHasComponent() {
         static_assert(sizeof...(Ts) > 0,
                       "whereHasComponent<> needs at least one component type");
+        (note_required(components::get_type_id<Ts>()), ...);
         return add_mod(new WhereHasComponent<Ts...>());
     }
     template<typename T>
@@ -296,6 +300,7 @@ struct EntityQuery {
     auto &whereHasComponent() {
         static_assert(sizeof...(Ts) > 0,
                       "whereHasComponent<> needs at least one component type");
+        (note_required(components::get_type_id<Ts>()), ...);
         return add_filter([](const Entity &e) { return e.has<Ts...>(); });
     }
     template<typename T>
@@ -351,6 +356,7 @@ struct EntityQuery {
     // -----------------------------------------------------------------------
     template<typename T, typename Fn>
     TReturn &whereComponentAndLambda(Fn &&pred) {
+        note_required(components::get_type_id<T>());
         return add_filter([pred = std::forward<Fn>(pred)](const Entity &e) {
             return e.has<T>() && pred(e.get<T>());
         });
@@ -359,6 +365,7 @@ struct EntityQuery {
     // The value is copied into the filter; a FilterFn outlives the call.
     template<typename T, typename M>
     TReturn &whereFieldHasValue(M T::*field, std::type_identity_t<M> value) {
+        note_required(components::get_type_id<T>());
         return add_filter([field, value = std::move(value)](const Entity &e) {
             return e.has<T>() && e.get<T>().*field == value;
         });
@@ -460,6 +467,12 @@ struct EntityQuery {
     [[nodiscard]] RefEntities gen() const {
         if (!ran_query) return values_ignore_cache({});
         return ents;
+    }
+
+    // Materializes into caller-owned scratch (not lazy).
+    RefEntities &gen_into(RefEntities &scratch) const {
+        run_query_into({}, scratch);
+        return scratch;
     }
 
     template<typename Fn>
@@ -623,11 +636,29 @@ struct EntityQuery {
         bool ignore_temp_warning = false;
     };
 
-    EntityQuery(const QueryOptions &options = {})
-        : EntityQuery(EntityHelper::get_default_collection(), options) {}
+    EntityQuery(const QueryOptions &options = {}
+#if defined(AFTER_HOURS_DEBUG)
+                ,
+                const std::source_location location =
+                    std::source_location::current()
+#endif
+                )
+        : EntityQuery(EntityHelper::get_default_collection(), options
+#if defined(AFTER_HOURS_DEBUG)
+                      ,
+                      location
+#endif
+                      ) {
+    }
 
     explicit EntityQuery(EntityCollection &collection,
-                         const QueryOptions &options = {})
+                         const QueryOptions &options = {}
+#if defined(AFTER_HOURS_DEBUG)
+                         ,
+                         const std::source_location location =
+                             std::source_location::current()
+#endif
+                         )
         : entities(init_entities_ref(collection, options)),
           source(&collection),
           source_temp_empty(collection.get_temp().empty()) {
@@ -648,7 +679,19 @@ struct EntityQuery {
                     log_warn("  temp entity {}: null", i);
                 }
             }
+#if defined(AFTER_HOURS_DEBUG)
+            const char *file =
+                location.file_name() ? location.file_name() : "<unknown>";
+            const char *base = file;
+            for (const char *p = file; *p; ++p) {
+                if (*p == '/' || *p == '\\') base = p + 1;
+            }
+            log_error("query will miss {} ents in temp (query at {}:{} in {})",
+                      size, base, location.line(),
+                      location.function_name());
+#else
             log_error("query will miss {} ents in temp", size);
+#endif
         }
     }
     explicit EntityQuery(const Entities &entsIn) : entities(entsIn) {}
@@ -664,9 +707,31 @@ struct EntityQuery {
     bool source_temp_empty = true;
     // A candidate set to walk instead of the whole collection. Empty-but-set
     // means "provably nothing matches", which is different from unset.
-    std::optional<Entities> seed;
+    mutable std::optional<Entities> seed;
 
-    const Entities &pool() const { return seed ? *seed : entities; }
+    std::array<std::uint16_t, 4> required_ids{};
+    std::uint8_t required_count = 0;
+    void note_required(const ComponentID id) {
+        if (id > 0xFFFF) return;
+        const auto short_id = static_cast<std::uint16_t>(id);
+        for (std::uint8_t i = 0; i < required_count; i++)
+            if (required_ids[i] == short_id) return;
+        if (required_count < required_ids.size())
+            required_ids[required_count++] = short_id;
+    }
+
+    const Entities &pool() const {
+        if (seed) return *seed;
+        if (required_count && source && source_temp_empty) {
+            if (required_count == 1)
+                return source->membership_for(required_ids[0]);
+            seed = source->membership_candidates(std::vector<ComponentID>(
+                required_ids.begin(),
+                required_ids.begin() + required_count));
+            return *seed;
+        }
+        return entities;
+    }
 
     // Helper to initialize the entities reference in the constructor.
     // If force_merge is requested, merge first, then return the (now-updated)
@@ -734,6 +799,14 @@ struct EntityQuery {
     }
 
     RefEntities run_query(const UnderlyingOptions options) const {
+        RefEntities out;
+        run_query_into(options, out);
+        return out;
+    }
+
+    void run_query_into(const UnderlyingOptions options,
+                        RefEntities &out) const {
+        out.clear();
         // Fast path: if we only need to know whether *any* entity matches (or
         // to return the first match), we can short-circuit as long as we aren't
         // ordering results. No upfront allocation needed.
@@ -749,12 +822,11 @@ struct EntityQuery {
                     }
                 }
                 if (ok) {
-                    RefEntities result;
-                    result.push_back(const_cast<Entity &>(e));
-                    return result;
+                    out.push_back(const_cast<Entity &>(e));
+                    return;
                 }
             }
-            return {};
+            return;
         }
 
         // One ordered result needs the minimum, not a sorted list. Only when
@@ -765,25 +837,23 @@ struct EntityQuery {
             orderby_index.has_value() && *orderby_index < mods.size();
         if (options.stop_on_first && orderby && !filters_after_sort) {
             RefEntities candidates;
-            candidates.reserve(entities.size() / 2);
+            candidates.reserve(pool().size() / 2);
             for (const auto &e_ptr : pool()) {
                 if (!e_ptr) continue;
                 Entity &e = *e_ptr;
                 if (passes(e, 0, mods.size())) candidates.push_back(e);
             }
-            if (candidates.empty()) return {};
+            if (candidates.empty()) return;
             auto best = std::min_element(
                 candidates.begin(), candidates.end(),
                 [&](const Entity &a, const Entity &b) {
                     return (*orderby)(a, b);
                 });
-            RefEntities result;
-            result.push_back(*best);
-            return result;
+            out.push_back(*best);
+            return;
         }
 
-        RefEntities out;
-        out.reserve(mods.empty() ? entities.size() : entities.size() / 2);
+        out.reserve(mods.empty() ? pool().size() : pool().size() / 2);
 
         // Mods registered before the orderby filter the scan; the rest run
         // after the sort, so each operation applies at its position in the
@@ -810,8 +880,6 @@ struct EntityQuery {
             }
             out.erase(out.begin() + static_cast<long>(kept), out.end());
         }
-
-        return out;
     }
 };
 }  // namespace afterhours
