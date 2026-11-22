@@ -45,12 +45,12 @@ struct Effect {
   graphics::ShaderType shader{};
   bool loaded = false;
   std::unordered_map<std::string, int> locations;
-  struct LastValue {
+  struct PreviousValue {
     int type = 0;
     float v[4] = {};
     bool valid = false;
   };
-  std::unordered_map<std::string, LastValue> last_values;
+  std::unordered_map<std::string, PreviousValue> last_values;
   int upload_count = 0;
 
   static Effect load(const std::string &name, const std::string &file = "") {
@@ -114,7 +114,7 @@ struct Effect {
   }
 
   void upload(const char *uniform, int type, const float *data, int n) {
-    LastValue &last = last_values[uniform];
+    PreviousValue &last = last_values[uniform];
     if (last.valid && last.type == type &&
         std::equal(data, data + n, last.v, [](float a, float b) { return a == b; }))
       return;
