@@ -62,6 +62,10 @@ inline RectangleType pad(RectangleType r, float all) {
   return pad(r, Sides::all(all));
 }
 
+// pad under the geometry name; negative grows.
+inline RectangleType inset(RectangleType r, Sides s) { return pad(r, s); }
+inline RectangleType inset(RectangleType r, float all) { return pad(r, all); }
+
 inline RectangleType expand(RectangleType r, Sides s) {
   return RectangleType{r.x - s.left, r.y - s.top, r.width + s.left + s.right,
                        r.height + s.top + s.bottom};
@@ -91,6 +95,72 @@ inline Split cut_right(RectangleType r, float w) {
   const float take = std::clamp(w, 0.f, r.width);
   return {RectangleType{r.x, r.y, r.width - take, r.height},
           RectangleType{r.x + r.width - take, r.y, take, r.height}};
+}
+
+// Always {strip, rest}; the cut_* keep spatial order.
+enum class Edge { top, bottom, left, right };
+struct Take {
+  RectangleType strip;
+  RectangleType rest;
+};
+
+inline Take cut(RectangleType r, Edge edge, float amount) {
+  switch (edge) {
+    case Edge::top: {
+      auto [strip, rest] = cut_top(r, amount);
+      return {strip, rest};
+    }
+    case Edge::bottom: {
+      auto [rest, strip] = cut_bottom(r, amount);
+      return {strip, rest};
+    }
+    case Edge::left: {
+      auto [strip, rest] = cut_left(r, amount);
+      return {strip, rest};
+    }
+    case Edge::right: {
+      auto [rest, strip] = cut_right(r, amount);
+      return {strip, rest};
+    }
+  }
+  return {r, RectangleType{r.x, r.y, 0, 0}};
+}
+
+// Nine placements; align_* are the centre row/column.
+enum class Align {
+  top_left,
+  top,
+  top_right,
+  left,
+  center,
+  right,
+  bottom_left,
+  bottom,
+  bottom_right
+};
+
+inline RectangleType align_within(RectangleType r, float w, float h,
+                                  Align align) {
+  const float fx = (align == Align::left || align == Align::top_left ||
+                    align == Align::bottom_left)
+                       ? 0.f
+                       : (align == Align::center || align == Align::top ||
+                          align == Align::bottom)
+                             ? 0.5f
+                             : 1.f;
+  const float fy = (align == Align::top_left || align == Align::top ||
+                    align == Align::top_right)
+                       ? 0.f
+                       : (align == Align::center || align == Align::left ||
+                          align == Align::right)
+                             ? 0.5f
+                             : 1.f;
+  return RectangleType{r.x + (r.width - w) * fx, r.y + (r.height - h) * fy, w,
+                       h};
+}
+inline RectangleType align_within(RectangleType r, RectangleType size,
+                                  Align align) {
+  return align_within(r, size.width, size.height, align);
 }
 
 inline RectangleType align_center(RectangleType r, float w, float h) {
@@ -127,6 +197,35 @@ inline Vector2Type center(RectangleType r) {
 inline bool contains(RectangleType r, Vector2Type p) {
   return p.x >= r.x && p.y >= r.y && p.x <= r.x + r.width &&
          p.y <= r.y + r.height;
+}
+
+inline bool is_empty(RectangleType r) {
+  return r.width <= 0.f || r.height <= 0.f;
+}
+
+// The region both rects cover; empty when they do not overlap.
+inline RectangleType intersection(RectangleType a, RectangleType b) {
+  const float x1 = std::max(a.x, b.x);
+  const float y1 = std::max(a.y, b.y);
+  const float x2 = std::min(a.x + a.width, b.x + b.width);
+  const float y2 = std::min(a.y + a.height, b.y + b.height);
+  return RectangleType{x1, y1, std::max(0.f, x2 - x1),
+                       std::max(0.f, y2 - y1)};
+}
+
+// Bounding box of both.
+inline RectangleType bounding(RectangleType a, RectangleType b) {
+  const float x1 = std::min(a.x, b.x);
+  const float y1 = std::min(a.y, b.y);
+  const float x2 = std::max(a.x + a.width, b.x + b.width);
+  const float y2 = std::max(a.y + a.height, b.y + b.height);
+  return RectangleType{x1, y1, x2 - x1, y2 - y1};
+}
+
+inline bool contains(RectangleType r, RectangleType inner) {
+  return inner.x >= r.x && inner.y >= r.y &&
+         inner.x + inner.width <= r.x + r.width &&
+         inner.y + inner.height <= r.y + r.height;
 }
 
 // Touching edges do not overlap: two rects from the same cut share an edge and
