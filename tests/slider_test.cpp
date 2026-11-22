@@ -367,4 +367,112 @@ TEST(slider_pending_drag_beats_the_callers_value) {
   CHECK(std::fabs(value - 0.21f) < 1e-4f);
 }
 
+
+
+namespace {
+Entity &build_styled_slider(ImmTestHarness &h, float &value) {
+  auto row = hstack(h.context(), mk(h.root(), 0),
+                    ComponentConfig{}
+                        .with_size(ComponentSize{pixels(400), pixels(40)})
+                        .with_debug_name("row"));
+  slider(h.context(), mk(row.ent(), 0), value,
+         ComponentConfig{}
+             .with_size(ComponentSize{pixels(300), pixels(36)})
+             .with_slider_style(SliderStyle{
+                 .track = Color{10, 20, 30, 255},
+                 .fill = Color{200, 30, 90, 255},
+                 .handle = Color{30, 200, 90, 255},
+                 .handle_size = pixels(16.f),
+                 .track_thickness = pixels(8.f)})
+             .with_debug_name("styled_sl"));
+  h.layout_only();
+  UIComponent *bg = h.find("slider_background");
+  return AutoLayout::to_ent_static(bg->id);
+}
+Color color_of(ImmTestHarness &h, const char *name) {
+  UIComponent *c = h.find(name);
+  if (!c) return Color{0,0,0,0};
+  Entity &e = AutoLayout::to_ent_static(c->id);
+  return e.has<HasColor>() ? e.get<HasColor>().color() : Color{0,0,0,0};
+}
+bool color_eq(Color a, Color b){ return a.r==b.r&&a.g==b.g&&a.b==b.b; }
+}
+
+TEST(slider_part_styling_applies_colours_and_sizes) {
+  ImmTestHarness h;
+  float value = 0.5f;
+  build_styled_slider(h, value);
+  h.begin_frame();
+  build_styled_slider(h, value);
+
+  UIComponent *bg = h.find("slider_background");
+  UIComponent *track = h.find("slider_track");
+  UIComponent *fill = h.find("slider_fill");
+  UIComponent *handle = h.find("slider_handle");
+  CHECK(bg != nullptr && track != nullptr && fill != nullptr && handle != nullptr);
+  if (!bg || !track || !fill || !handle) return;
+  CHECK(color_eq(color_of(h,"slider_track"), Color{10,20,30,255}));
+  CHECK(color_eq(color_of(h,"slider_fill"), Color{200,30,90,255}));
+  CHECK(color_eq(color_of(h,"slider_handle"), Color{30,200,90,255}));
+  Rectangle tr = bg->rect(), tk = track->rect(), fl = fill->rect(), hr = handle->rect();
+  CHECK(std::fabs(hr.width - 16.f) < 0.05f);
+  CHECK(std::fabs(hr.height - 16.f) < 0.05f);
+  CHECK(std::fabs(tk.height - 8.f) < 0.05f);
+  CHECK(std::fabs(tk.width - tr.width) < 0.05f);
+  CHECK(std::fabs((tk.y + tk.height*0.5f) - (tr.y + tr.height*0.5f)) < 0.05f);
+  CHECK(std::fabs((hr.y + hr.height*0.5f) - (tr.y + tr.height*0.5f)) < 1.f);
+  const float centre = 0.5f * (tr.width - 16.f) + 8.f;
+  CHECK(std::fabs(hr.x - tr.x - 0.5f * (tr.width - 16.f)) < 0.05f);
+  CHECK(std::fabs(fl.width - centre) < 0.5f);
+  CHECK(std::fabs(fl.x - tk.x) < 0.05f);
+}
+
+TEST(slider_part_styling_knob_travel_ends) {
+  for (float v : {0.f, 1.f}) {
+    ImmTestHarness h;
+    float value = v;
+    build_styled_slider(h, value);
+    h.begin_frame();
+    build_styled_slider(h, value);
+    UIComponent *bg = h.find("slider_background");
+    UIComponent *handle = h.find("slider_handle");
+    CHECK(bg != nullptr && handle != nullptr);
+    if (!bg || !handle) continue;
+    Rectangle tr = bg->rect(), hr = handle->rect();
+    if (v == 0.f) CHECK(std::fabs(hr.x - tr.x) < 0.05f);
+    if (v == 1.f) CHECK(std::fabs(hr.x + hr.width - (tr.x + tr.width)) < 0.05f);
+  }
+}
+
+TEST(slider_part_styling_drag_maps_over_knob_travel) {
+  ImmTestHarness h;
+  float value = 0.f;
+  Entity &bg = build_styled_slider(h, value);
+  h.begin_frame();
+  build_styled_slider(h, value);
+  UIComponent *track = h.find("slider_background");
+  CHECK(track != nullptr);
+  if (!track) return;
+  const Rectangle tr = track->rect();
+  const float x = tr.x + 8.f + 0.25f * (tr.width - 16.f);
+  h.context().mouse.pos = {x, tr.y + tr.height * 0.5f};
+  h.context().mouse.just_pressed = true;
+  bg.get<HasDragListener>().cb(bg);
+  CHECK(std::fabs(bg.get<HasSliderState>().value - 0.25f) < 0.01f);
+}
+
+TEST(slider_style_forwards_through_apply_overrides) {
+  ComponentConfig base;
+  auto merged = base.apply_overrides(
+      ComponentConfig{}.with_slider_style(SliderStyle{
+          .fill = Color{1,2,3,255}, .handle_size = pixels(20.f)}));
+  CHECK(merged.slider_style.has_value());
+  if (merged.slider_style) {
+    CHECK(std::fabs(merged.slider_style->handle_size.value - 20.f) < 0.01f);
+    CHECK(merged.slider_style->fill.has_value());
+  }
+  CHECK(!base.slider_style.has_value());
+}
+
 int main() { return ui_test::run_registered_tests("slider tests"); }
+
