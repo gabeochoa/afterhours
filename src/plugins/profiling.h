@@ -8,6 +8,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 #if AFTERHOURS_ENABLE_PROFILING
 #include "process_metrics.h"
@@ -89,7 +90,7 @@ inline Snapshot select_frames(const Snapshot &source, std::size_t first, std::si
     return result;
 }
 
-inline const char *phase_name(SystemPhase phase) {
+inline std::string_view phase_name(SystemPhase phase) {
     switch (phase) {
         case SystemPhase::Update: return "Update";
         case SystemPhase::FixedUpdate: return "FixedUpdate";
