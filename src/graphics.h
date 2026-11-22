@@ -22,7 +22,7 @@ using PlatformAPI = RaylibPlatformAPI;
 using PlatformAPI = MetalPlatformAPI;
 #else
 #error                                                                         \
-    "No graphics backend defined. Define AFTER_HOURS_USE_RAYLIB, AFTER_HOURS_USE_SOKOL, AFTER_HOURS_USE_METAL, or AFTER_HOURS_USE_VULKAN (AFTER_HOURS_USE_NONE has no graphics API)."
+    "No graphics backend defined. Define AFTER_HOURS_USE_RAYLIB, AFTER_HOURS_USE_SOKOL, AFTER_HOURS_USE_METAL, or AFTER_HOURS_USE_VULKAN (AFTER_HOURS_USE_NONE and AFTER_HOURS_USE_PSX have no graphics API)."
 #endif
 
 using Camera2D = PlatformAPI::Camera2D;

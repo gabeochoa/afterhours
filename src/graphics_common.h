@@ -67,6 +67,19 @@ struct ShaderType {
 };
 } // namespace afterhours::graphics
 
+#elif defined(AFTER_HOURS_USE_PSX)
+
+namespace afterhours::graphics {
+struct RenderTextureType {
+  int width = 0;
+  int height = 0;
+  uint64_t budget_id = 0;
+};
+struct ShaderType {
+  uint32_t id = 0;
+};
+}
+
 #else // no backend
 
 namespace afterhours::graphics {
