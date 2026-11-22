@@ -426,4 +426,85 @@ TEST(a_disabled_control_blocks_the_click_for_what_is_under_it) {
   CHECK(under_fired == 0);
 }
 
+// Hanabi tab + close-x shape: real button()s at the SAME render layer.
+// The later sibling is painted on top, so it takes the click.
+TEST(same_layer_overlapping_buttons_later_sibling_wins) {
+  ImmTestHarness h;
+  int tab_fired = 0, close_fired = 0;
+  h.begin_frame();
+  auto tab = button(h.context(), mk(h.root(), 0),
+                    ComponentConfig{}.with_size(ComponentSize{pixels(200), pixels(40)})
+                        .with_absolute_position(0.f, 0.f).with_label("Tab").with_debug_name("tab"));
+  tab.ent().get<HasClickListener>().cb = [&](Entity &) { ++tab_fired; };
+  auto close = button(h.context(), mk(h.root(), 1),
+                      ComponentConfig{}.with_size(ComponentSize{pixels(24), pixels(24)})
+                          .with_absolute_position(170.f, 8.f).with_label("x").with_debug_name("close"));
+  close.ent().get<HasClickListener>().cb = [&](Entity &) { ++close_fired; };
+  h.layout_only(); mark_rendered();
+  press_at(h.context(), 180.f, 20.f); // overlap
+  run_clicks(h);
+  CHECK(close_fired == 1); CHECK(tab_fired == 0);
+  // non-overlap region: tab only
+  tab_fired = close_fired = 0;
+  press_at(h.context(), 50.f, 20.f);
+  run_clicks(h);
+  CHECK(tab_fired == 1); CHECK(close_fired == 0);
+}
+
+TEST(close_child_of_tab_wins_overlap) {
+  ImmTestHarness h;
+  int tab_fired = 0, close_fired = 0;
+  h.begin_frame();
+  auto tab = div(h.context(), mk(h.root(), 0),
+                 ComponentConfig{}.with_size(ComponentSize{pixels(200), pixels(40)})
+                     .with_absolute_position(0.f, 0.f).with_debug_name("tab2"));
+  tab.ent().addComponentIfMissing<HasClickListener>([&](Entity &) { ++tab_fired; });
+  auto close = button(h.context(), mk(tab.ent(), 0),
+                      ComponentConfig{}.with_size(ComponentSize{pixels(24), pixels(24)})
+                          .with_absolute_position(170.f, 8.f).with_label("x").with_debug_name("close2"));
+  close.ent().get<HasClickListener>().cb = [&](Entity &) { ++close_fired; };
+  h.layout_only(); mark_rendered();
+  press_at(h.context(), 180.f, 20.f);
+  run_clicks(h);
+  CHECK(close_fired == 1); CHECK(tab_fired == 0);
+}
+
+TEST(higher_layer_earlier_button_wins_over_later_button) {
+  ImmTestHarness h;
+  int over_fired = 0, under_fired = 0;
+  h.begin_frame();
+  auto over = button(h.context(), mk(h.root(), 0),
+                     ComponentConfig{}.with_size(ComponentSize{pixels(40), pixels(40)})
+                         .with_absolute_position(0.f, 0.f).with_render_layer(5).with_label("o").with_debug_name("overB"));
+  over.ent().get<HasClickListener>().cb = [&](Entity &) { ++over_fired; };
+  auto under = button(h.context(), mk(h.root(), 1),
+                      ComponentConfig{}.with_size(ComponentSize{pixels(200), pixels(80)})
+                          .with_absolute_position(0.f, 0.f).with_label("u").with_debug_name("underB"));
+  under.ent().get<HasClickListener>().cb = [&](Entity &) { ++under_fired; };
+  h.layout_only(); mark_rendered();
+  press_at(h.context(), 20.f, 20.f);
+  run_clicks(h);
+  CHECK(over_fired == 1); CHECK(under_fired == 0);
+}
+
+// A disabled top button blocks: it does not fire, and the click does not
+// fall through to the button under it.
+TEST(disabled_top_button_blocks_under_button) {
+  ImmTestHarness h;
+  int under_fired = 0, over_fired = 0;
+  h.begin_frame();
+  auto under = button(h.context(), mk(h.root(), 0),
+                      ComponentConfig{}.with_size(ComponentSize{pixels(200), pixels(40)})
+                          .with_absolute_position(0.f, 0.f).with_label("Under").with_debug_name("underD"));
+  under.ent().get<HasClickListener>().cb = [&](Entity &) { ++under_fired; };
+  auto over = button(h.context(), mk(h.root(), 1),
+                     ComponentConfig{}.with_size(ComponentSize{pixels(200), pixels(40)})
+                         .with_absolute_position(0.f, 0.f).with_disabled(true).with_label("Over").with_debug_name("overD"));
+  over.ent().get<HasClickListener>().cb = [&](Entity &) { ++over_fired; };
+  h.layout_only(); mark_rendered();
+  press_at(h.context(), 100.f, 20.f);
+  run_clicks(h);
+  CHECK(over_fired == 0); CHECK(under_fired == 0);
+}
+
 int main() { return ui_test::run_registered_tests("hit priority"); }

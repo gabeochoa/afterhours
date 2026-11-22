@@ -71,6 +71,7 @@ inline Vector2Type field_local_point(const UIComponent &cmp,
 /// - with_max_lines(size_t) - Maximum lines, 0 = unlimited (default: 0)
 /// - with_auto_grow(bool) - Height follows content, capped by max_lines
 /// - with_submit_on_enter(bool) - Enter submits, Shift+Enter breaks the line
+/// - with_single_line(bool) - One row: Enter submits, breaks become spaces
 ///
 /// Usage:
 /// ```cpp
@@ -131,8 +132,12 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       [&](HasTextAreaState &s) {
         // Update area config from component config
         s.area_config.line_height = line_height;
-        s.area_config.word_wrap = config.text_area_word_wrap;
-        s.area_config.max_lines = config.text_area_max_lines;
+        s.area_config.single_line = config.text_area_single_line;
+        s.area_config.word_wrap =
+            config.text_area_word_wrap && !config.text_area_single_line;
+        s.area_config.max_lines = config.text_area_single_line
+                                      ? 1
+                                      : config.text_area_max_lines;
 
         if (s.text() != text)
           replace_text_externally(s, text);
@@ -152,7 +157,10 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Apply default size if not set
   if (config.size.is_default) {
-    config.size = ComponentSize(pixels(200), pixels(100));
+    config.size = config.text_area_single_line
+                      ? ComponentSize(pixels(200),
+                                      pixels(line_height + vertical_padding))
+                      : ComponentSize(pixels(200), pixels(100));
   }
 
   // Auto-grow uses the PREVIOUS frame's wrap, which is the only one that
@@ -261,8 +269,10 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
         .x;
   };
   // The 6px horizontal padding each side is already out of viewport_width.
-  const float wrap_width =
-      config.text_area_word_wrap ? viewport_width : 0.f;
+  const float wrap_width = (config.text_area_word_wrap &&
+                            !config.text_area_single_line)
+                               ? viewport_width
+                               : 0.f;
   state.layout_cache.rebuild(display_text, wrap_width, line_height,
                              line_width);
   const auto &vlines = state.layout_cache.lines();
@@ -596,8 +606,8 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     if (ctx.pressed(InputAction::WidgetPress)) {
       const bool shift = input::is_key_down(keys::LEFT_SHIFT) ||
                          input::is_key_down(keys::RIGHT_SHIFT);
-      const bool wants_newline =
-          !config.text_area_submit_on_enter || shift;
+      const bool wants_newline = !config.text_area_single_line &&
+                                 (!config.text_area_submit_on_enter || shift);
       if (wants_newline) {
         if (editable && insert_newline(state)) {
           reset_blink(state);
