@@ -127,6 +127,7 @@ ALL_TESTS := \
 	settings_save_test \
 	settings_comment_test \
 	settings_path_test \
+	settings_table_test \
 	files_test_roots_test \
 	files_e2e_temp_roots_test \
 	files_e2e_tmpdir_env_test \
