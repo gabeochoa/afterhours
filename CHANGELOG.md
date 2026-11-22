@@ -6,6 +6,9 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+### Added
+
+- **Settings files keep their comments.** JSON settings may now use `//` and `/* */` comments and trailing commas, and a load→save cycle patches only changed values in the original text, so comments and formatting elsewhere survive byte-for-byte. Unquoted keys and other JSON5 syntax are not supported. Covered by `settings_comment_test`.
 ### Internal / perf
 
 - **Component queries and system passes walk per-component membership lists instead of every entity.** `EntityCollection` now keeps, per component type, the merged entities holding it (in entity-vector order, rebuilt in one pass when entity/component membership changes), and `EntityQuery::whereHasComponent` plus `System` iteration start from the smallest relevant list. No API or behavior change: same results, same iteration order, verified by `entity_membership_test`, which also counts entities visited (10 matches in a 4,000-entity world are visited 10 times, where the old scan visited 4,000). For Cartographer's 8.7k-entity valley pass and Puzzle's no-visible-UI frame, the per-system cost now scales with matches, not world size. Upkeep is one rebuild pass over entities + component pairs on the first walk after a change, and nothing per walk while unchanged.
