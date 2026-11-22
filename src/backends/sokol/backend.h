@@ -984,6 +984,10 @@ struct MetalPlatformAPI {
     if (cfg.audio)
       log_warn("RunConfig::audio is ignored: the sokol backend has no audio "
                "device");
+    if (cfg.window_x >= 0 || cfg.window_y >= 0)
+      log_warn("RunConfig window position is ignored: sapp_desc has no "
+               "position field, so the sokol backend cannot place the "
+               "window before creation");
     metal_detail::g_init_fn = cfg.init;
     metal_detail::g_frame_fn = cfg.frame;
     metal_detail::g_cleanup_fn = cfg.cleanup;

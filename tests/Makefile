@@ -192,6 +192,7 @@ ALL_TESTS := \
 	fixed_tick_rate_test \
 	sound_playback_test \
 	headless_runconfig_test \
+	window_state_runconfig_test \
 	harness_spellings_test \
 	fit_content_test \
 	label_inset_test \
@@ -398,6 +399,7 @@ RAYLIB_TESTS := \
 	label_inset_test \
 	fit_content_test \
 	headless_runconfig_test \
+	window_state_runconfig_test \
 	harness_spellings_test \
 	fixed_timestep_test \
 	audio_lifecycle_test \
