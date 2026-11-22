@@ -232,6 +232,7 @@ ALL_TESTS := \
 	capture_attribution_test \
 	capture_frame_boundary_test \
 	draw_commands_test \
+	screen_luma_test \
 	color_contrast_test \
 	auto_text_color_test \
 	scissor_coalescing_test \
