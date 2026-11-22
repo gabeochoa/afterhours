@@ -11,3 +11,5 @@
 #ifndef EM_ASM_PTR
 #define EM_ASM_PTR(...) 0
 #endif
+
+extern "C" char *emscripten_get_callstack(void);

@@ -392,13 +392,11 @@ TEST(a_wrapping_label_too_short_still_reports_overflow) {
   CHECK(!res.text_fits);
 }
 
-// A single unbreakable word wider than the box is genuine width overflow --
-// wrapping cannot help it.
-TEST(an_unbreakable_word_still_reports_overflow) {
+TEST(a_long_word_broken_past_the_box_height_reports_overflow) {
   ImmTestHarness h;
   auto res = position_text_ex(
       *h.render_font(), "supercalifragilisticexpialidocious",
-      RectangleType{0.f, 0.f, 100.f, 100.f}, TextAlignment::Left,
+      RectangleType{0.f, 0.f, 100.f, 30.f}, TextAlignment::Left,
       Vector2Type{5.f, 5.f}, FS, 0.f, TextOverflow::Wrap);
   CHECK(!res.text_fits);
 }

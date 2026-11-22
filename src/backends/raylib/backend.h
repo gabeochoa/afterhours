@@ -194,6 +194,8 @@ struct RaylibPlatformAPI {
   struct color_type {
     unsigned char r, g, b, a;
   };
+  // Raylib has no GetWindowState, so requested flag bits are tracked here.
+  static inline unsigned int window_state_flags_ = 0;
 
   // ── Constants ──
   static constexpr unsigned int FLAG_WINDOW_RESIZABLE =
@@ -215,18 +217,25 @@ struct RaylibPlatformAPI {
   static bool window_should_close() { return raylib::WindowShouldClose(); }
   static bool is_window_ready() { return raylib::IsWindowReady(); }
   static bool is_window_fullscreen() { return raylib::IsWindowFullscreen(); }
+  static bool is_window_focused() {
+    return raylib::IsWindowReady() && raylib::IsWindowFocused();
+  }
   static void toggle_fullscreen() { raylib::ToggleFullscreen(); }
   static void minimize_window() { raylib::MinimizeWindow(); }
   static void set_window_size(int w, int h) { raylib::SetWindowSize(w, h); }
   static void set_window_min_size(int w, int h) {
     raylib::SetWindowMinSize(w, h);
   }
+  static bool window_resize_pending() { return false; }
   static void set_window_state(unsigned int flags) {
     raylib::SetWindowState(flags);
+    window_state_flags_ |= flags;
   }
   static void clear_window_state(unsigned int flags) {
     raylib::ClearWindowState(flags);
+    window_state_flags_ &= ~flags;
   }
+  static unsigned int window_state() { return window_state_flags_; }
 
   // ── Config ──
   static void set_config_flags(unsigned int flags) {
@@ -345,6 +354,10 @@ struct RaylibPlatformAPI {
       if (cfg.flags)
         set_config_flags(cfg.flags);
       init_window(cfg.width, cfg.height, cfg.title);
+      // InitWindow has no position parameter; this lands before the first
+      // frame, so the window never presents at the default placement.
+      if (cfg.window_x >= 0 && cfg.window_y >= 0)
+        raylib::SetWindowPosition(cfg.window_x, cfg.window_y);
       if (cfg.target_fps > 0)
         set_target_fps(cfg.target_fps);
     }
