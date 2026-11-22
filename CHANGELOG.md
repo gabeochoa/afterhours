@@ -6,6 +6,9 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+### Behaviour
+
+- **E2E UI lookups wait for a render checkpoint.** `click_ui`/`click_text`/`click_button`/`click_label`/`focus_ui`/`toggle_checkbox`/`set_slider`/`select_dropdown`, `assert_ui`, `assert_ui_text`, `expect_no_ui`, `expect_point_in`, `dump_ui`, `expect_text*` and `assert_no_overflow` no longer resolve against a view drawn before the latest logic ticks when a host batches ticks: the runner stamps the render generation at dispatch and lookups retry until a newer render lands (not-found clicks now retry to the usual timeout instead of failing on first sight). Hosts that dispatch commands by hand can stamp `PendingE2ECommand::seen_render` the same way; unarmed commands evaluate immediately as before. Covered by `e2e_render_checkpoint_test`.
 ### Added
 
 - **Settings files keep their comments.** JSON settings may now use `//` and `/* */` comments and trailing commas, and a load→save cycle patches only changed values in the original text, so comments and formatting elsewhere survive byte-for-byte. Unquoted keys and other JSON5 syntax are not supported. Covered by `settings_comment_test`.
