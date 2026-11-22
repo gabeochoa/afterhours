@@ -232,6 +232,7 @@ inline void apply_layout(Entity &entity, const ComponentConfig &config) {
 
   if (config.is_absolute)
     entity.get<UIComponent>().make_absolute();
+  entity.get<UIComponent>().absolute_anchor = config.absolute_anchor;
 }
 
 // Resolve the ScalingMode cascade: component > screen > app default.
@@ -555,6 +556,9 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
       // doesn't get applied again at render time.
       uic.absolute_pos_x = resolved_tx;
       uic.absolute_pos_y = resolved_ty;
+      uic.absolute_offset_x = config.translate_x;
+      uic.absolute_offset_y = config.translate_y;
+      uic.absolute_offset_is_size = true;
       mods.translate_x = 0.f;
       mods.translate_y = 0.f;
     } else {
@@ -573,6 +577,7 @@ inline void apply_visuals(HasUIContext auto &ctx, Entity &entity,
     // Always reset absolute position when no translate is set
     entity.get<UIComponent>().absolute_pos_x = 0.f;
     entity.get<UIComponent>().absolute_pos_y = 0.f;
+    entity.get<UIComponent>().absolute_offset_is_size = false;
   }
 }
 

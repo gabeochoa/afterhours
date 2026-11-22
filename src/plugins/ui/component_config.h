@@ -146,6 +146,8 @@ struct ComponentConfig {
   float scale = 1.0f; // Visual scale applied after layout (smooth animations)
   Size translate_x = pixels(0.0f);
   Size translate_y = pixels(0.0f);
+  // Trailing: (x,y) insets from far edges; explicit size grows inward.
+  AbsoluteAnchor absolute_anchor = AbsoluteAnchor::LeadingTop;
 
   // debugs
   std::string debug_name = "";
@@ -981,6 +983,15 @@ struct ComponentConfig {
   ComponentConfig &with_absolute_position(Size x, Size y) {
     return with_absolute_position().with_translate(x, y);
   }
+  ComponentConfig &with_absolute_position(AbsoluteAnchor anchor, Size x,
+                                          Size y) {
+    absolute_anchor = anchor;
+    return with_absolute_position(x, y);
+  }
+  ComponentConfig &with_absolute_position(AbsoluteAnchor anchor, float x,
+                                          float y) {
+    return with_absolute_position(anchor, pixels(x), pixels(y));
+  }
   ComponentConfig &with_internal(bool internal = true) {
     is_internal = internal;
     return *this;
@@ -1262,6 +1273,8 @@ struct ComponentConfig {
 
     if (overrides.is_absolute)
       merged.is_absolute = overrides.is_absolute;
+    if (overrides.absolute_anchor != AbsoluteAnchor::LeadingTop)
+      merged.absolute_anchor = overrides.absolute_anchor;
     if (overrides.flex_direction != FlexDirection::Column)
       merged.flex_direction = overrides.flex_direction;
     if (overrides.render_layer != 0)
