@@ -6,6 +6,7 @@
 using namespace afterhours;
 
 static int checks_run = 0, checks_passed = 0;
+
 static void check(bool cond, const std::string &what) {
   checks_run++;
   if (cond) checks_passed++;

@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <cstddef>
 #include <optional>
 #include <set>
@@ -22,6 +21,7 @@ template <typename State, typename Id = EntityID> struct EditorCore {
     selection_.insert(id);
     primary_ = id;
   }
+
   void toggle(Id id) {
     if (selection_.erase(id)) {
       if (primary_ == id)
@@ -32,38 +32,53 @@ template <typename State, typename Id = EntityID> struct EditorCore {
       primary_ = id;
     }
   }
+
   void deselect(Id id) { toggle_off(id); }
+
   void clear_selection() { selection_.clear(); primary_.reset(); }
+
   [[nodiscard]] bool is_selected(Id id) const { return selection_.contains(id); }
+
   [[nodiscard]] const std::set<Id> &selected() const { return selection_; }
+
   [[nodiscard]] std::optional<Id> primary() const { return primary_; }
+
   [[nodiscard]] std::size_t selection_size() const { return selection_.size(); }
 
   void execute(typename CommandHistory<State>::CommandPtr cmd, State &state) {
     history.execute(std::move(cmd), state);
     ++revision_;
   }
+
   void record(typename CommandHistory<State>::CommandPtr cmd) {
     history.push(std::move(cmd));
     ++revision_;
   }
+
   void mark_dirty() { ++revision_; }
+
   bool undo(State &state) {
     if (!history.undo(state)) return false;
     --revision_;
     return true;
   }
+
   bool redo(State &state) {
     if (!history.redo(state)) return false;
     ++revision_;
     return true;
   }
+
   [[nodiscard]] bool dirty() const { return revision_ != saved_revision_; }
+
   [[nodiscard]] bool can_undo() const { return history.can_undo(); }
+
   [[nodiscard]] bool can_redo() const { return history.can_redo(); }
+
   [[nodiscard]] std::string undo_label() const {
     return history.next_undo_description();
   }
+
   [[nodiscard]] std::string redo_label() const {
     return history.next_redo_description();
   }
@@ -84,4 +99,4 @@ private:
   long long saved_revision_ = 0;
 };
 
-}
+} // namespace afterhours::editor
