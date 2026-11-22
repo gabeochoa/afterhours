@@ -221,6 +221,7 @@ ALL_TESTS := \
 	tab_order_test \
 	reset_focus_test \
 	cleanup_order_test \
+	attachment_test \
 	canonical_snapshot_test \
 	entity_pool_test \
 	entity_query_test \
