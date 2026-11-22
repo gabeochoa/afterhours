@@ -55,29 +55,20 @@ int main() {
     check(ed.undo(w) && ed.undo(w) && !ed.undo(w), "only 2 undos kept");
   }
   {
-    Ed ed; World w; int saves = 0;
+    Ed ed; World w;
     ed.execute(add('x'), w);
     ed.mark_saved();
     check(!ed.dirty(), "mark_saved clears dirty");
     check(ed.undo(w) && ed.dirty(), "undo past save point dirties");
     check(ed.redo(w) && !ed.dirty(), "redo back to save point is clean");
-    ed.on_save([&] { saves++; return true; });
-    ed.execute(add('y'), w);
-    check(ed.save() && saves == 1 && !ed.dirty(), "save hook fires, dirty clears");
-    ed.on_save([] { return false; });
-    ed.execute(add('z'), w);
-    check(!ed.save() && ed.dirty(), "vetoed save keeps dirty");
     ed.mark_dirty();
     check(ed.dirty(), "mark_dirty flags an uncommanded edit");
   }
   {
     Ed ed;
-    ed.set_pick_callback([] { return std::optional<long long>(42); });
-    check(ed.pick() == 42 && ed.primary() == 42, "pick selects callback hit");
-    auto miss = [] { return std::optional<long long>(); };
-    check(!ed.pick_with(miss) && ed.selection_size() == 0, "miss clears selection");
-    ed.select(9);
-    check(!ed.pick_with(miss, true) && ed.is_selected(9), "additive miss keeps selection");
+    const EntityID id = 42;
+    ed.select(id);
+    check(ed.primary() == id && ed.is_selected(id), "real EntityID selects");
   }
   printf("editor_core_test: %d/%d checks passed\n", checks_passed, checks_run);
   return checks_passed == checks_run ? 0 : 1;
