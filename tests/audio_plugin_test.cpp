@@ -32,7 +32,7 @@ void check_near(float actual, float expected, const char *what) {
                      expected, actual);
     }
 }
-}  // namespace
+}
 
 namespace raylib {
 Sound LoadSound(const char *) {
@@ -75,7 +75,7 @@ void UnloadMusicStream(Music) {}
 void PlayMusicStream(Music) {}
 void StopMusicStream(Music) {}
 void UpdateMusicStream(Music) {}
-}  // namespace raylib
+}
 
 int main() {
     using Audio = afterhours::sound_system;
@@ -136,7 +136,12 @@ int main() {
         check(rec.name == "bird" && rec.bus == "ambience", "record names sound+bus");
         check_near(rec.volume, 0.4f, "record volume = effects 0.8 * falloff 0.5");
         check_near(rec.pan, 0.5f, "record pan centred ahead");
-        check(rec.positional, "record marked positional");
+        check(rec.position.has_value(), "play_at record position is set");
+        if (rec.position) {
+            check_near(rec.position->x, 0.f, "record position x round-trips");
+            check_near(rec.position->y, 0.f, "record position y round-trips");
+            check_near(rec.position->z, -2.f, "record position z round-trips");
+        }
     }
     check(!Audio::play_at("bird", {0.f, 0.f, -20.f}),
           "play_at out of range plays nothing");
@@ -153,6 +158,15 @@ int main() {
     sounds.play_loaded("chirp_a1");
     check(sounds.is_playing("chirp_a1"), "pool alias play is playing");
     check(Audio::expect_sound_played("chirp_a1"), "pool alias play logged");
+    check(Audio::play_log().size() == 1 &&
+              !Audio::play_log().front().position.has_value(),
+          "plain play record position is unset");
+
+    Audio::clear_play_log();
+    music.play("song");
+    check(Audio::play_log().size() == 1 &&
+              !Audio::play_log().front().position.has_value(),
+          "music play record position is unset");
 
     // Prefix-policy plays must record too (they bypass play()).
     Audio::clear_play_log();

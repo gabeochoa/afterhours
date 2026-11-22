@@ -4,6 +4,7 @@
 #include <cmath>
 #include <functional>
 #include <map>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -19,15 +20,13 @@
 namespace afterhours {
 
 struct sound_system : developer::Plugin {
-    // Logged even on stub backends, where PlaySound itself is a no-op.
     struct PlayRecord {
         std::string name;
         std::string bus;
         float volume = 1.f;
         float pan = 0.5f;
         float pitch = 1.f;
-        bool positional = false;
-        Vector3Type position{0.f, 0.f, 0.f};
+        std::optional<Vector3Type> position;
     };
 
     struct Listener {
@@ -47,7 +46,6 @@ struct sound_system : developer::Plugin {
         float distance = 0.f;
     };
 
-    // Inverse-distance: full at/inside reference_distance, silent at max_distance.
     static SpatialGain spatial_gain(const Listener &listener,
                                     const Vector3Type &source,
                                     float max_distance,
@@ -90,6 +88,19 @@ struct sound_system : developer::Plugin {
         [[nodiscard]] const SoundType &get(const std::string &name) const {
             return impl.get(name);
         }
+        using Handle = Library<SoundType>::Handle;
+        [[nodiscard]] Handle intern(const std::string &name) {
+            return impl.intern(name);
+        }
+        [[nodiscard]] SoundType &get(Handle handle) {
+            return impl.get(handle);
+        }
+        [[nodiscard]] const SoundType &get(Handle handle) const {
+            return impl.get(handle);
+        }
+        [[nodiscard]] bool contains(Handle handle) const {
+            return impl.contains(handle);
+        }
         [[nodiscard]] bool contains(const std::string &name) const {
             return impl.contains(name);
         }
@@ -107,7 +118,6 @@ struct sound_system : developer::Plugin {
             bus_volumes[bus] = std::max(0.f, volume);
             for (const auto &[name, b] : bus_by_name)
                 if (b == bus && contains(name)) apply_volume(name);
-            // Sounds with no explicit bus live on "effects".
             if (bus == "effects") {
                 for (const auto &kv : impl.storage)
                     if (!bus_by_name.contains(kv.first)) apply_volume(kv.first);
@@ -135,7 +145,6 @@ struct sound_system : developer::Plugin {
             if (!was_present && contains(name)) bus_by_name[name] = bus;
             if (contains(name)) apply_volume(name);
         }
-        // Applies bus/master gain, like load().
         bool add(const std::string &name, SoundType sound,
                  const std::string &bus = "effects") {
             auto res = impl.add(name.c_str(), sound);
@@ -156,7 +165,6 @@ struct sound_system : developer::Plugin {
                        load_sound_from_samples(samples, sample_rate, channels),
                        bus);
         }
-        // Pool aliases are named "<name>_a0..N"; play_with_alias_or_name rotates them.
         void load_pool(const char *filename, const char *name, int copies,
                        const std::string &bus = "effects") {
             load_on_bus(filename, name, bus);
@@ -185,7 +193,6 @@ struct sound_system : developer::Plugin {
 
         void play(const char *const name) { play_loaded(name); }
 
-        // Only play_at overrides gain/pan/pitch; plain plays keep load/bus gain.
         void play_loaded(const std::string &name, float volume_scale = 1.f,
                          float pan = 0.5f, float pitch = 1.f,
                          bool positional = false,
@@ -205,7 +212,9 @@ struct sound_system : developer::Plugin {
             ::afterhours::PlaySound(sound);
             record_play(PlayRecord{name, bus_of(name),
                                    effective_volume(name) * volume_scale, pan,
-                                   pitch, positional, position});
+                                   pitch,
+                                   positional ? std::optional<Vector3Type>(position)
+                                              : std::nullopt});
         }
 
         void stop(const std::string &name) {
@@ -307,6 +316,19 @@ struct sound_system : developer::Plugin {
         [[nodiscard]] const MusicType &get(const std::string &name) const {
             return impl.get(name);
         }
+        using Handle = Library<MusicType>::Handle;
+        [[nodiscard]] Handle intern(const std::string &name) {
+            return impl.intern(name);
+        }
+        [[nodiscard]] MusicType &get(Handle handle) {
+            return impl.get(handle);
+        }
+        [[nodiscard]] const MusicType &get(Handle handle) const {
+            return impl.get(handle);
+        }
+        [[nodiscard]] bool contains(Handle handle) const {
+            return impl.contains(handle);
+        }
         [[nodiscard]] bool contains(const std::string &name) const {
             return impl.contains(name);
         }
@@ -362,7 +384,7 @@ struct sound_system : developer::Plugin {
             auto &music = get(name);
             ::afterhours::PlayMusicStream(music);
             record_play(PlayRecord{name, bus_of(name), effective_volume(name),
-                                   0.5f, 1.f, false, Vector3Type{0.f, 0.f, 0.f}});
+                                   0.5f, 1.f, std::nullopt});
         }
         void stop(const std::string &name) {
             if (contains(name)) ::afterhours::StopMusicStream(get(name));
@@ -558,7 +580,6 @@ struct sound_system : developer::Plugin {
     }
     [[nodiscard]] static const Listener &listener() { return listener_; }
 
-    // Returns false, playing nothing, when unknown or out of range.
     static bool play_at(const char *name, Vector3Type position,
                         float base_volume = 1.f,
                         float default_max_distance = 50.f,

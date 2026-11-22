@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "../logging.h"
+#include "../warn_once.h"
 
 namespace afterhours {
 
@@ -83,6 +84,113 @@ inline void UnloadMusicStream(raylib::Music music) {
 inline raylib::Music LoadMusicStream(const char *filename) {
   return raylib::LoadMusicStream(filename);
 }
+
+using AudioStreamType = raylib::AudioStream;
+// Fill callback: buffer is interleaved 32-bit float, frames*channels long.
+using StreamFillCallback = raylib::AudioCallback;
+
+inline AudioStreamType LoadAudioStream(unsigned int sample_rate,
+                                       unsigned int sample_size,
+                                       unsigned int channels) {
+  return raylib::LoadAudioStream(sample_rate, sample_size, channels);
+}
+inline bool IsAudioStreamValid(AudioStreamType stream) {
+  return raylib::IsAudioStreamValid(stream);
+}
+inline void UnloadAudioStream(AudioStreamType stream) {
+  raylib::UnloadAudioStream(stream);
+}
+inline void PlayAudioStream(AudioStreamType stream) {
+  raylib::PlayAudioStream(stream);
+}
+inline void PauseAudioStream(AudioStreamType stream) {
+  raylib::PauseAudioStream(stream);
+}
+inline void ResumeAudioStream(AudioStreamType stream) {
+  raylib::ResumeAudioStream(stream);
+}
+inline void StopAudioStream(AudioStreamType stream) {
+  raylib::StopAudioStream(stream);
+}
+inline bool IsAudioStreamPlaying(AudioStreamType stream) {
+  return raylib::IsAudioStreamPlaying(stream);
+}
+inline void SetAudioStreamCallback(AudioStreamType stream,
+                                   StreamFillCallback callback) {
+  raylib::SetAudioStreamCallback(stream, callback);
+}
+
+// RAII raw stream; format is fixed at creation. No non-raylib version:
+// raylib has no userdata for the callback, so it must be a plain function.
+class AudioStream {
+ public:
+  AudioStream() = default;
+  AudioStream(int sample_rate, int channels, StreamFillCallback fill) {
+    open(sample_rate, channels, fill);
+  }
+  ~AudioStream() { close(); }
+  AudioStream(const AudioStream &) = delete;
+  AudioStream &operator=(const AudioStream &) = delete;
+  AudioStream(AudioStream &&other) noexcept : stream_(other.stream_) {
+    other.stream_ = AudioStreamType{};
+  }
+  AudioStream &operator=(AudioStream &&other) noexcept {
+    if (this != &other) {
+      close();
+      stream_ = other.stream_;
+      other.stream_ = AudioStreamType{};
+    }
+    return *this;
+  }
+
+  bool open(int sample_rate, int channels, StreamFillCallback fill) {
+    close();
+    if (sample_rate <= 0 || channels <= 0 || fill == nullptr) return false;
+    stream_ = raylib::LoadAudioStream(
+        static_cast<unsigned int>(sample_rate), 32,
+        static_cast<unsigned int>(channels));
+    if (!raylib::IsAudioStreamValid(stream_)) {
+      stream_ = AudioStreamType{};
+      return false;
+    }
+    raylib::SetAudioStreamCallback(stream_, fill);
+    return true;
+  }
+  void close() {
+    if (!valid()) return;
+    raylib::StopAudioStream(stream_);
+    raylib::UnloadAudioStream(stream_);
+    stream_ = AudioStreamType{};
+  }
+  [[nodiscard]] bool valid() const {
+    return stream_.buffer != nullptr && raylib::IsAudioStreamValid(stream_);
+  }
+  void start() {
+    if (valid()) raylib::PlayAudioStream(stream_);
+  }
+  void pause() {
+    if (valid()) raylib::PauseAudioStream(stream_);
+  }
+  void resume() {
+    if (valid()) raylib::ResumeAudioStream(stream_);
+  }
+  void stop() {
+    if (valid()) raylib::StopAudioStream(stream_);
+  }
+  [[nodiscard]] bool is_playing() const {
+    return valid() && raylib::IsAudioStreamPlaying(stream_);
+  }
+  [[nodiscard]] int sample_rate() const {
+    return static_cast<int>(stream_.sampleRate);
+  }
+  [[nodiscard]] int channels() const {
+    return static_cast<int>(stream_.channels);
+  }
+  [[nodiscard]] AudioStreamType native() const { return stream_; }
+
+ private:
+  AudioStreamType stream_{};
+};
 #else
 struct SoundStub {};
 struct MusicStub {
@@ -132,7 +240,6 @@ inline void UnloadMusicStream(MusicStub) {}
 inline MusicStub LoadMusicStream(const char *) { return MusicStub{}; }
 #endif
 
-// Samples are copied; empty/invalid input returns an empty sound.
 inline SoundType load_sound_from_samples(std::span<const float> samples,
                                          int sample_rate, int channels = 1) {
   if (samples.empty() || sample_rate <= 0 || channels <= 0) return SoundType{};
@@ -140,7 +247,6 @@ inline SoundType load_sound_from_samples(std::span<const float> samples,
   const auto frames =
       static_cast<unsigned int>(samples.size() / static_cast<size_t>(channels));
   if (frames == 0) return SoundType{};
-  // raylib takes ownership of nothing here: copy, load, then free ours.
   float *copy = static_cast<float *>(
       std::malloc(samples.size() * sizeof(float)));
   if (!copy) return SoundType{};
@@ -154,6 +260,7 @@ inline SoundType load_sound_from_samples(std::span<const float> samples,
   std::free(copy);
   return sound;
 #else
+  warn_once(0, "@notimplemented load_sound_from_samples on this backend");
   return SoundType{};
 #endif
 }
