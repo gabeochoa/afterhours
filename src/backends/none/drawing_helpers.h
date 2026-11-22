@@ -17,6 +17,7 @@
 #include "../../plugins/color.h"
 #include "../../plugins/texture_manager.h"
 #include "font_helper.h"
+#include "../../warn_once.h"
 
 namespace afterhours {
 
@@ -141,8 +142,12 @@ struct blend_scope {
   blend_scope &operator=(const blend_scope &) = delete;
 };
 
-inline void begin_shader_mode(graphics::ShaderType &) {}
-inline void end_shader_mode() {}
+inline void begin_shader_mode(graphics::ShaderType &) {
+  warn_once(0, "@notimplemented begin_shader_mode on the none backend");
+}
+inline void end_shader_mode() {
+  warn_once(0, "@notimplemented end_shader_mode on the none backend");
+}
 
 inline void begin_scissor_mode(int, int, int, int) {
   log_error("@notimplemented begin_scissor_mode");
@@ -211,8 +216,12 @@ inline void draw_ellipse_lines(int, int, float, float, Color) {
 }
 // Recorded as the triangle's bounding box: enough for a test to assert a
 // callout tail exists and points the right way, without a polygon in DrawCall.
-inline void draw_quad(const Vector2Type (&)[4], Color) {}
-inline void draw_texture_quad(TextureType, const Vector2Type (&)[4], Color) {}
+inline void draw_quad(const Vector2Type (&)[4], Color) {
+  warn_once(0, "@notimplemented draw_quad on the none backend");
+}
+inline void draw_texture_quad(TextureType, const Vector2Type (&)[4], Color) {
+  warn_once(0, "@notimplemented draw_texture_quad on the none backend");
+}
 
 inline void draw_triangle(Vector2Type a, Vector2Type b, Vector2Type c,
                           Color color) {
@@ -233,7 +242,9 @@ inline void draw_poly_lines(Vector2Type, int, float, float, Color) {
 inline void draw_poly_lines_ex(Vector2Type, int, float, float, float, Color) {
   log_error("@notimplemented draw_poly_lines_ex");
 }
-inline void set_mouse_cursor(int) {}
+inline void set_mouse_cursor(int) {
+  warn_once(0, "@notimplemented set_mouse_cursor on the none backend");
+}
 
 namespace detail {
 inline afterhours::Font &default_font_override() {
@@ -253,6 +264,14 @@ inline afterhours::Font get_unset_font() { return get_default_font(); }
 
 inline graphics::RenderTextureType load_render_texture(int, int) {
   log_error("@notimplemented load_render_texture");
+  return {};
+}
+inline graphics::RenderTextureType load_render_texture_with_samples(int, int, int) {
+  log_error("@notimplemented load_render_texture_with_samples");
+  return {};
+}
+inline graphics::RenderTextureType load_msaa_render_texture(int, int, int) {
+  log_error("@notimplemented load_msaa_render_texture");
   return {};
 }
 
@@ -298,10 +317,18 @@ capture_render_texture_to_memory(const graphics::RenderTextureType &) {
 }
 
 inline std::optional<RgbaCapture>
-capture_render_texture_rgba(const graphics::RenderTextureType &) { return std::nullopt; }
+capture_render_texture_rgba(const graphics::RenderTextureType &) {
+  warn_once(0, "@notimplemented capture_render_texture_rgba on the none "
+               "backend");
+  return std::nullopt;
+}
 
 inline std::optional<PngCapture>
-capture_render_texture_png(const graphics::RenderTextureType &) { return std::nullopt; }
+capture_render_texture_png(const graphics::RenderTextureType &) {
+  warn_once(0, "@notimplemented capture_render_texture_png on the none "
+               "backend");
+  return std::nullopt;
+}
 
 inline std::vector<uint8_t> capture_screen_to_memory() {
   log_error("@notimplemented capture_screen_to_memory");
@@ -337,9 +364,13 @@ inline void set_texture_filter(TextureType &, int) {
   log_error("@notimplemented set_texture_filter");
 }
 
-inline void set_texture_wrap(TextureType &, int) {}
+inline void set_texture_wrap(TextureType &, int) {
+  warn_once(0, "@notimplemented set_texture_wrap on the none backend");
+}
 
-inline void draw_fps(int, int) {}
+inline void draw_fps(int, int) {
+  warn_once(0, "@notimplemented draw_fps on the none backend");
+}
 
 inline TextureType load_texture_with_color_key(const char *, const Color,
                                                const Color, int) {

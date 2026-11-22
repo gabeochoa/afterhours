@@ -63,7 +63,6 @@ struct UpdateTooltips : System<UIContext<InputAction>> {
     if (state == nullptr)
       return;
 
-    // Find the hovered element that actually wants a tooltip. The hot element
     // is often a child that has none, so walk up: hovering a button's label
     // should still count as hovering the button.
     EntityID owner = -1;
@@ -75,26 +74,34 @@ struct UpdateTooltips : System<UIContext<InputAction>> {
     float padding = 8.f;
     float gap = 4.f;
 
-    for (int id = context.hot_id; id >= 0;) {
-      OptEntity oe = UICollectionHolder::getEntityForID(id);
-      if (!oe.valid())
-        break;
-      Entity &e = oe.asE();
-      if (e.has<HasTooltip>() && e.has<UIComponent>()) {
-        owner = id;
-        anchor = e.get<UIComponent>().rect();
-        text = e.get<HasTooltip>().text;
-        delay = e.get<HasTooltip>().delay;
-        placement = e.get<HasTooltip>().placement;
-        font_size = e.get<HasTooltip>().font_size;
-        padding = e.get<HasTooltip>().padding;
-        gap = e.get<HasTooltip>().gap;
-        break;
+    auto find_owner = [&](EntityID start) {
+      for (int id = start; id >= 0;) {
+        OptEntity oe = UICollectionHolder::getEntityForID(id);
+        if (!oe.valid())
+          break;
+        Entity &e = oe.asE();
+        if (e.has<HasTooltip>() && e.has<UIComponent>()) {
+          owner = id;
+          anchor = e.get<UIComponent>().rect();
+          text = e.get<HasTooltip>().text;
+          delay = e.get<HasTooltip>().delay;
+          placement = e.get<HasTooltip>().placement;
+          font_size = e.get<HasTooltip>().font_size;
+          padding = e.get<HasTooltip>().padding;
+          gap = e.get<HasTooltip>().gap;
+          return;
+        }
+        if (!e.has<UIComponent>())
+          break;
+        id = e.get<UIComponent>().parent;
       }
-      if (!e.has<UIComponent>())
-        break;
-      id = e.get<UIComponent>().parent;
-    }
+    };
+
+    find_owner(context.hot_id);
+    const bool from_focus = owner == -1 && context.focus_visible() &&
+                            context.has_interacted;
+    if (from_focus)
+      find_owner(context.focus_id);
 
     if (owner == -1) {
       // Field by field: BaseComponent is not assignable.
@@ -112,12 +119,13 @@ struct UpdateTooltips : System<UIContext<InputAction>> {
       state->elapsed = 0.f;
       state->showing = -1;
       state->text.clear();
-      return;
+      if (!from_focus)
+        return;
+    } else {
+      state->elapsed += dt;
+      if (!from_focus && state->elapsed < delay)
+        return;
     }
-
-    state->elapsed += dt;
-    if (state->elapsed < delay)
-      return;
 
     state->showing = owner;
     state->anchor = anchor;

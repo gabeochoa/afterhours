@@ -1,0 +1,11 @@
+# Allowlist for tests/theme_bypass_check.sh: one entry per file that keeps raw
+# Color{...} literals, with the exact hit count and why each is legitimate.
+# A count mismatch (new literal added, or one removed) fails the lint.
+src/plugins/ui/color_swatch.h 2 gradient fade to/from transparent in the swatch editor; the fade endpoints are the point
+src/plugins/ui/components.h 11 caller-supplied defaults (shadow/overlay alpha, track/fill, tint params) that callers may override
+src/plugins/ui/imm_controls.h 4 white text on imagery in the media overlay, fixed alpha; no theme usage exists for that state
+src/plugins/ui/imm_value.h 1 slider track gray with fixed alpha; a muted fill, not a themed surface
+src/plugins/ui/layout_inspector.h 1 orange diagnostic orange in the debug inspector overlay
+src/plugins/ui/line_chart.h 1 translucent series fill; alpha on a caller-supplied line color
+src/plugins/ui/rendering.h 5 computed contrast ring + debug drag overlay; semantic, not themed surfaces
+src/plugins/ui/validation_systems.h 3 severity red/orange/yellow for validation borders; semantic status colors

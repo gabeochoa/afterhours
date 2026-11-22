@@ -15,6 +15,7 @@
 #include "color.h"
 #include "ui/element_result.h"
 #include "ui/imm_components.h"
+#include "ui/menu.h"
 #include "ui/rendering.h"
 #include "ui/text_input/text_input.h"
 #include "ui/systems.h"
@@ -252,6 +253,26 @@ struct modal : developer::Plugin {
             return *root;
         }
 
+        static bool focus_in_temporary_layer(auto &ctx) {
+            for (EntityID cur = ctx.focus_id, depth = 0;
+                 depth < 64 && cur >= 0 && cur != ctx.ROOT; ++depth) {
+                auto opt = ui::UICollectionHolder::getEntityForID(cur);
+                if (!opt.valid()) return false;
+                Entity &e = opt.asE();
+                if (e.get_or_default(&ui::imm::HasMenuState::was_open_last_frame,
+                                     false))
+                    return true;
+                if (e.get_or_default(&ui::HasDropdownState::was_open_last_frame,
+                                     false))
+                    return true;
+                if (e.template has<text_input::HasTextInputState>())
+                    return true;
+                if (!e.template has<ui::UIComponent>()) return false;
+                cur = e.template get<ui::UIComponent>().parent;
+            }
+            return false;
+        }
+
         static void sync_input(ui::imm::HasUIContext auto &ctx) {
             const auto &stack = get_modal_root().modal_stack;
             if (stack.empty()) { ctx.remove_input_gate("modal"); return; }
@@ -378,16 +399,14 @@ struct modal : developer::Plugin {
             auto [backdrop_entity, backdrop_parent] = deref(backdrop_ep);
 
             if (!m.presenting()) {
-                // Add ShouldHide to modal and backdrop when not open
-                entity.template addComponentIfMissing<ShouldHide>();
-                backdrop_entity.template addComponentIfMissing<ShouldHide>();
+                entity.template toggleComponent<ShouldHide>(true);
+                backdrop_entity.template toggleComponent<ShouldHide>(true);
                 return {false, entity};
             }
             const float presence_value = presence.started() ? presence.value() : 1.f;
 
-            // Remove ShouldHide when open
-            entity.template removeComponentIfExists<ShouldHide>();
-            backdrop_entity.template removeComponentIfExists<ShouldHide>();
+            entity.template toggleComponent<ShouldHide>(false);
+            backdrop_entity.template toggleComponent<ShouldHide>(false);
 
             // Layer this modal by its depth in the stack so nested modals (and
             // their backdrops) render above the modal beneath them instead of
@@ -901,7 +920,9 @@ struct modal : developer::Plugin {
 
             // Check for escape key (via InputAction if available)
             if constexpr (magic_enum::enum_contains<InputAction>("MenuBack")) {
-                if (context->pressed(InputAction::MenuBack)) {
+                if (context->last_action == InputAction::MenuBack &&
+                    !detail::focus_in_temporary_layer(*context)) {
+                    context->pressed(InputAction::MenuBack);
                     if (top_modal.closed_by == ClosedBy::CloseRequest ||
                         top_modal.closed_by == ClosedBy::Any) {
                         modal::close(top_id, DialogResult::Cancelled);
