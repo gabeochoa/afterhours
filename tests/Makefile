@@ -121,6 +121,7 @@ ALL_TESTS := \
 	audio_stream_test \
 	synth_beep_test \
 	settings_save_test \
+	settings_comment_test \
 	settings_path_test \
 	files_test_roots_test \
 	files_e2e_temp_roots_test \
@@ -152,9 +153,11 @@ ALL_TESTS := \
 	log_file_test \
 	crash_handler_test \
 	crash_handler_reentry_test \
+	crash_handler_web_sim_test \
 	crash_report_file_test \
 	setting_row_style_test \
 	singleton_iteration_test \
+	singleton_add_test \
 	ui_idle_cost_test \
 	press_delay_test \
 	graphics_key_injection_test \
@@ -433,6 +436,13 @@ $(RAYLIB_BINS): CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(RAYLIB_BINS): INCLUDES_T = $(INCLUDES_RAYLIB)
 $(RAYLIB_BINS): LDFLAGS_T  = $(LDFLAGS_RAYLIB)
 
+$(OUT)/crash_handler_web_sim_test: CXXFLAGS_T = $(CXXFLAGS) -D__EMSCRIPTEN__
+$(OUT)/crash_handler_web_sim_test: INCLUDES_T = -Iweb_sim $(INCLUDES)
+
+# Shift+Enter is a raw is_key_down check, and the key injector is only wired in
+# behind this macro. Without it the backend is asked directly and answers false
+# with no window, so the modifier half of a chord cannot be tested at all.
+$(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(subst $(RAYLIB_LIB)/libraylib.a,-L$(RAYLIB_LIB) -lraylib,$(LDFLAGS_RAYLIB))
 # These two tests double every raylib input function they exercise and stub
 # the rest (input_raylib_unused_stubs.h), so they link no raylib at all.
 # Linking the real archive pulls rcore.c.o for the unused window/rlgl entry
