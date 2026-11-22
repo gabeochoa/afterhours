@@ -58,7 +58,7 @@ ElementResult dropdown(HasUIContext auto &ctx, EntityParent ep_pair,
   if (config.size.is_default) {
     auto &styling_defaults = UIStylingDefaults::get();
     if (auto def =
-            styling_defaults.get_component_config(ComponentType::Dropdown)) {
+            styling_defaults.find_component_config(ComponentType::Dropdown)) {
       config.size = def->size;
     } else {
       config.size = ComponentSize(children(default_component_size.x),
@@ -271,7 +271,7 @@ ElementResult navigation_bar(HasUIContext auto &ctx, EntityParent ep_pair,
 
   if (config.size.is_default) {
     auto &styling_defaults = UIStylingDefaults::get();
-    if (auto def = styling_defaults.get_component_config(
+    if (auto def = styling_defaults.find_component_config(
             ComponentType::NavigationBar)) {
       config.size = def->size;
     } else {
@@ -385,7 +385,7 @@ ElementResult tab_container(HasUIContext auto &ctx, EntityParent ep_pair,
   // Apply styling defaults if available
   if (config.size.is_default) {
     auto &styling_defaults = UIStylingDefaults::get();
-    if (auto def = styling_defaults.get_component_config(
+    if (auto def = styling_defaults.find_component_config(
             ComponentType::TabContainer)) {
       config.size = def->size;
     } else {
@@ -493,7 +493,7 @@ ElementResult decorative_frame(
   // Apply styling defaults if available
   if (config.size.is_default) {
     auto &styling_defaults = UIStylingDefaults::get();
-    if (auto def = styling_defaults.get_component_config(
+    if (auto def = styling_defaults.find_component_config(
             ComponentType::DecorativeFrame)) {
       config.size = def->size;
     } else {
