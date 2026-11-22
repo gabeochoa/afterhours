@@ -214,6 +214,7 @@ ALL_TESTS := \
 	query_seed_test \
 	query_skip_mods_test \
 	capture_attribution_test \
+	capture_frame_boundary_test \
 	draw_commands_test \
 	color_contrast_test \
 	auto_text_color_test \
@@ -499,7 +500,7 @@ $(OUT)/sokol_geometry_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 # The multi-TU sokol rules emit a .d covering only sokol_impl.cc, so header
 # edits rebuild nothing without an explicit prerequisite (stale-binary trap).
 $(OUT)/sokol_blend_test: ../src/backends/sokol/drawing_helpers.h
-$(OUT)/sokol_capture_test: ../src/backends/sokol/drawing_helpers.h
+$(OUT)/sokol_capture_test: ../src/backends/sokol/drawing_helpers.h ../src/capture.h ../src/graphics_common.h
 $(OUT)/sokol_geometry_test: ../src/backends/sokol/drawing_helpers.h
 $(OUT)/sokol_hidpi_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_hidpi_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++

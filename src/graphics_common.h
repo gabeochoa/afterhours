@@ -99,6 +99,8 @@ concept ColorLike = requires(C c) {
 
 } // namespace afterhours
 
+#include "capture.h"
+
 namespace afterhours::graphics {
 
 struct Config {
@@ -320,6 +322,7 @@ inline void shutdown() {
 }
 
 inline void begin_frame() {
+  capture::begin_frame();
   auto &backend = get_backend();
   if (backend.begin_frame) {
     backend.begin_frame();
