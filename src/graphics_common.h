@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "frame_loop.h"
+#include <cmath>
 #include <concepts>
 #include <cstdint>
 #include <filesystem>
@@ -256,6 +257,8 @@ struct RunConfig {
   float fixed_dt = 0.f;
   int sim_steps = 1;
 
+  int capture_scale = 1;
+
   float step_dt(float wall_dt, float time_scale = 1.f) const {
     return fixed_dt > 0.f ? fixed_dt : wall_dt * time_scale;
   }
@@ -270,12 +273,53 @@ struct RunConfig {
   frame_loop::Mode frame_mode = frame_loop::Mode::Continuous;
 };
 
+struct PresentedFrame {
+  int window_w = 0;
+  int window_h = 0;
+  int canvas_w = 0;
+  int canvas_h = 0;
+  float dest_x = 0.f;
+  float dest_y = 0.f;
+  float dest_w = 0.f;
+  float dest_h = 0.f;
+  float scale = 1.f;
+};
+
+inline PresentedFrame presented_frame(int canvas_w, int canvas_h, int window_w,
+                                      int window_h) {
+  PresentedFrame pf;
+  pf.canvas_w = canvas_w;
+  pf.canvas_h = canvas_h;
+  pf.window_w = window_w;
+  pf.window_h = window_h;
+  pf.dest_w = static_cast<float>(window_w);
+  pf.dest_h = static_cast<float>(window_h);
+  if (canvas_w <= 0 || canvas_h <= 0 || window_w <= 0 || window_h <= 0)
+    return pf;
+  int dest_w = window_w;
+  int dest_h = static_cast<int>(
+      std::round(static_cast<double>(dest_w) * canvas_h / canvas_w));
+  if (dest_h > window_h) {
+    dest_h = window_h;
+    dest_w = static_cast<int>(
+        std::round(static_cast<double>(dest_h) * canvas_w / canvas_h));
+  }
+  pf.dest_x = static_cast<float>((window_w - dest_w) / 2);
+  pf.dest_y = static_cast<float>((window_h - dest_h) / 2);
+  pf.dest_w = static_cast<float>(dest_w);
+  pf.dest_h = static_cast<float>(dest_h);
+  pf.scale = dest_w > 0 ? static_cast<float>(canvas_w) / dest_w : 1.f;
+  return pf;
+}
+
 struct BackendInterface {
   bool (*init)(const Config &) = nullptr;
   void (*shutdown)() = nullptr;
   void (*begin_frame)() = nullptr;
   void (*end_frame)() = nullptr;
   bool (*capture_frame)(const std::filesystem::path &) = nullptr;
+  bool (*capture_presented_frame)(const std::filesystem::path &, int, int) =
+      nullptr;
   float (*get_delta_time)() = nullptr;
   bool (*is_headless)() = nullptr;
   RenderTextureType &(*get_render_texture)() = nullptr;
@@ -353,6 +397,15 @@ inline bool capture_frame(const std::filesystem::path &path) {
   auto &backend = get_backend();
   if (backend.capture_frame) {
     return backend.capture_frame(path);
+  }
+  return false;
+}
+
+inline bool capture_presented_frame(const std::filesystem::path &path,
+                                    int window_w, int window_h) {
+  auto &backend = get_backend();
+  if (backend.capture_presented_frame) {
+    return backend.capture_presented_frame(path, window_w, window_h);
   }
   return false;
 }

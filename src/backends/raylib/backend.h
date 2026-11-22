@@ -158,6 +158,34 @@ inline RenderTextureType &raylib_get_render_texture() {
       storage());
 }
 
+inline bool raylib_capture_presented_frame(const std::filesystem::path &path,
+                                           int window_w, int window_h) {
+  RenderTextureType &rt = raylib_get_render_texture();
+  if (rt.id == 0 || window_w <= 0 || window_h <= 0)
+    return false;
+  raylib::Image canvas = raylib::LoadImageFromTexture(rt.texture);
+  if (canvas.data == nullptr)
+    return false;
+  raylib::ImageFlipVertical(&canvas);
+  const PresentedFrame pf =
+      presented_frame(rt.texture.width, rt.texture.height, window_w, window_h);
+  raylib::Image presented =
+      raylib::GenImageColor(window_w, window_h, raylib::BLACK);
+  raylib::Image scaled = raylib::ImageCopy(canvas);
+  raylib::ImageResize(&scaled, static_cast<int>(pf.dest_w),
+                      static_cast<int>(pf.dest_h));
+  raylib::ImageDraw(&presented, scaled,
+                    raylib::Rectangle{0.f, 0.f, pf.dest_w, pf.dest_h},
+                    raylib::Rectangle{pf.dest_x, pf.dest_y, pf.dest_w,
+                                      pf.dest_h},
+                    raylib::WHITE);
+  const bool ok = raylib::ExportImage(presented, path.string().c_str());
+  raylib::UnloadImage(scaled);
+  raylib::UnloadImage(presented);
+  raylib::UnloadImage(canvas);
+  return ok;
+}
+
 /// Ensure the raylib backend is registered. Call this before graphics::init().
 /// Safe to call multiple times.
 inline void ensure_registered() {
@@ -169,6 +197,7 @@ inline void ensure_registered() {
     iface.begin_frame = raylib_begin_frame;
     iface.end_frame = raylib_end_frame;
     iface.capture_frame = raylib_capture_frame;
+    iface.capture_presented_frame = raylib_capture_presented_frame;
     iface.get_delta_time = raylib_get_delta_time;
     iface.is_headless = raylib_is_headless;
     iface.get_render_texture = raylib_get_render_texture;

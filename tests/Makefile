@@ -133,12 +133,14 @@ ALL_TESTS := \
 	input_binding_codec_test \
 	input_prompts_test \
 	input_device_activity_test \
+	input_activity_snapshot_test \
 	input_chord_specificity_test \
 	input_enum_actions_test \
 	input_repeat_test \
 	input_remap_test \
 	file_watcher_test \
 	render_capture_test \
+	presented_frame_test \
 	triangle_winding_test \
 	charts_test \
 	system_profile_test \
@@ -347,6 +349,7 @@ ALL_TESTS += sokol_geometry_test
 # Own process: the Metal backend cannot be re-initialised, so this cannot be a
 # section of sokol_blend_test.
 ALL_TESTS += sokol_hidpi_test
+ALL_TESTS += capture_supersample_test
 ALL_TESTS += sokol_resize_test
 ALL_TESTS += sokol_multires_capture_test
 ALL_TESTS += sokol_headless_run_test
@@ -378,8 +381,10 @@ RAYLIB_TESTS := \
 	terminal_ui_test \
 	text_stroke_render_test \
 	input_device_activity_test \
+	input_activity_snapshot_test \
 	input_enum_actions_test \
 	render_capture_test \
+	presented_frame_test \
 	triangle_winding_test \
 	clipboard_test \
 	mk_cost_test \
@@ -474,7 +479,7 @@ $(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(
 
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/middle_click_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
-$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/e2e_gamepad_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
+$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/input_activity_snapshot_test $(OUT)/e2e_gamepad_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 
 # Filter to sources: the .d files list every header as a prerequisite, and a
 # bare $^ would hand them all to clang. .cc is the sokol implementation TU.
@@ -550,6 +555,10 @@ $(OUT)/sokol_geometry_test: ../src/backends/sokol/drawing_helpers.h
 $(OUT)/sokol_hidpi_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_hidpi_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_hidpi_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/capture_supersample_test: ../examples/web/sokol_impl.cc
+$(OUT)/capture_supersample_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
+$(OUT)/capture_supersample_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/capture_supersample_test: ../src/backends/sokol/drawing_helpers.h ../src/backends/sokol/backend.h
 $(OUT)/sokol_resize_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_resize_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_resize_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
