@@ -145,6 +145,7 @@ ALL_TESTS := \
 	allocation_counters_test \
 	profiling_test \
 	profiling_disabled_test \
+	profiling_collapsed_test \
 	spike_capture_test \
 	perf_provider_warn_test \
 	blend_mode_test \
