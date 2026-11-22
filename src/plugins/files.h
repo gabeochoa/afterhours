@@ -182,6 +182,8 @@ struct files : developer::Plugin {
   };
   inline static TestRoots *active_test_roots = nullptr;
 
+  static bool maybe_install_e2e_test_roots(int argc, char *argv[]);
+
   // Non-templated version for PluginCore concept compatibility
   // Note: For actual files functionality, use the overload with game_name.
   static void add_singleton_components(Entity &entity) {
