@@ -71,7 +71,7 @@ inline void enable() {
     p.top_entries = [](int count) {
         std::vector<PerfEntry> out;
         for (const auto &sample : profiling::default_collector().snapshot().systems) {
-            out.push_back({sample.name, static_cast<float>(sample.mean_ms()), std::nullopt, sample.calls});
+            out.push_back({sample.name, static_cast<float>(sample.mean_ms()), sample.entity_count, sample.calls});
         }
         std::sort(out.begin(), out.end(), [](const auto &a, const auto &b) { return a.ms > b.ms; });
         if (count > 0 && out.size() > static_cast<std::size_t>(count)) out.resize(count);
@@ -205,7 +205,11 @@ struct HandleDumpProfileCommand : System<PendingE2ECommand> {
         log_info("--- Top {} systems by avg time ---", entries.size());
         for (const PerfEntry &e : entries) {
             if (e.calls) {
-                log_info("  {:.2f}ms mean  {} ({} calls)", e.ms, e.name, *e.calls);
+                if (e.entity_count)
+                    log_info("  {:.2f}ms mean  {} ({} calls, {} entities)", e.ms, e.name, *e.calls,
+                             *e.entity_count);
+                else
+                    log_info("  {:.2f}ms mean  {} ({} calls)", e.ms, e.name, *e.calls);
             } else if (e.entity_count.has_value()) {
                 log_info("  {:.2f}ms  {} ({} entities)", e.ms, e.name,
                          *e.entity_count);

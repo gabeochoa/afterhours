@@ -32,6 +32,7 @@ struct SystemSample {
     double recent_average_frame_ms = 0;
     double peak_frame_ms = 0;
     std::uint64_t calls = 0;
+    int entity_count = 0;
     std::vector<double> frame_history;
     double mean_ms() const { return calls ? total_ms / static_cast<double>(calls) : 0; }
 };
@@ -83,6 +84,7 @@ inline Snapshot select_frames(const Snapshot &source, std::size_t first, std::si
         }
         selected.average_frame_ms = selected.recent_average_frame_ms = selected.total_ms / static_cast<double>(count);
         selected.last_frame_ms = sample.frame_history[last];
+        selected.entity_count = sample.entity_count;
         result.systems.push_back(std::move(selected));
     }
     return result;
@@ -105,8 +107,8 @@ class Collector {
     bool start() {
 #if AFTERHOURS_ENABLE_PROFILING
         if (token_) return true;
-        token_ = detail::subscribe(this, [](void *context, std::string_view name, SystemPhase phase, double ms) {
-            static_cast<Collector *>(context)->record(name, phase, ms);
+        token_ = detail::subscribe(this, [](void *context, std::string_view name, SystemPhase phase, double ms, int entity_count) {
+            static_cast<Collector *>(context)->record(name, phase, ms, entity_count);
         });
         frame_start_ = detail::Clock::now();
         return token_ != 0;
@@ -182,6 +184,7 @@ class Collector {
             value.history[frame_index] = value.sample.last_frame_ms;
             value.sample.total_ms += value.sample.last_frame_ms;
             value.sample.calls += std::exchange(value.frame_calls, 0);
+            value.sample.entity_count = value.frame_entity_count;
         }
         if (options_.spike_threshold_ms > 0 && elapsed_ms > options_.spike_threshold_ms && options_.spike_capacity > 0) {
             Spike spike;
@@ -283,6 +286,7 @@ class Collector {
         double frame_ms = 0;
         double recent_ms = 0;
         std::uint64_t frame_calls = 0;
+        int frame_entity_count = 0;
     };
     Options options_;
     std::vector<double> history_;
@@ -306,7 +310,7 @@ class Collector {
         last_process_ = current;
         process_time_ = now;
     }
-    void record(std::string_view name, SystemPhase phase, double ms) {
+    void record(std::string_view name, SystemPhase phase, double ms, int entity_count) {
         auto it = systems_.find(KeyView{name, phase});
         if (it == systems_.end()) {
             if (systems_.size() >= options_.max_systems) { ++dropped_; return; }
@@ -315,6 +319,7 @@ class Collector {
         auto &value = it->second;
         ++value.frame_calls;
         value.frame_ms += ms;
+        value.frame_entity_count = entity_count;
     }
 #endif
 };
