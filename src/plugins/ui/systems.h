@@ -9,11 +9,14 @@
 #include "../../ecs.h"
 #include "../../logging.h"
 #include "../autolayout.h"
+#include "../clipboard.h"
 #include "../input_system.h"
 #include "../window_manager.h"
 #include "components.h"
 #include "context.h"
 #include "entity_management.h"
+#include "selectable_text.h"
+#include "text_measure.h"
 #include "fmt/format.h"
 #include "theme.h"
 #include "ui_collection.h"
@@ -182,6 +185,10 @@ struct UIEntityMappingCache : BaseComponent {
 /// System that builds the entity mapping cache once per frame.
 /// Must run before RunAutoLayout and TrackIfComponentWillBeRendered.
 struct BuildUIEntityMapping : System<> {
+  // All the work is in once(); the per-entity pass would visit every entity
+  // and do nothing (the base for_each_with is empty).
+  bool should_iterate() const override { return false; }
+
   virtual void once(float) override {
     auto *cache = EntityHelper::get_singleton_cmp<UIEntityMappingCache>();
     if (!cache) {
@@ -226,6 +233,7 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
   virtual void for_each_with(Entity &entity, UIContext<InputAction> &context,
                              float dt) override {
     context.render_cmds.clear();
+    context.focus_order.clear();
     context.dt = dt;
     context.last_action = InputAction::None;
     context.last_action_modifiers = 0;
@@ -818,6 +826,11 @@ struct ResolveHitTarget : SystemWithUIContext<> {
   void resolve() {
     if (!context)
       return;
+    if (context->pointer_is_owned_externally()) {
+      context->set_hot(context->ROOT);
+      context->set_active(context->ROOT);
+      return;
+    }
 
     EntityID winner = context->ROOT;
     int best_layer = std::numeric_limits<int>::min();
@@ -858,7 +871,8 @@ private:
   // Every guard HandleClicks applies before it would fire, so resolution and
   // firing agree on who is eligible.
   bool is_candidate(const Entity &e, const UIComponent &cmp) const {
-    if (e.is_missing<HasClickListener>() && e.is_missing<HasDragListener>())
+    if (!e.has_any<HasClickListener, HasDragListener, HasSelectableText,
+                   Hoverable>())
       return false;
     // Opted out of hit-testing entirely: the element behind it wins instead.
     if (e.has<IgnorePointerEvents>() || detail::in_inert_subtree(e))
@@ -1081,23 +1095,7 @@ struct CloseDropdownOnClickOutside : System<HasDropdownState, UIComponent> {
 // not ShouldHide, was rendered this frame, and input is allowed.
 template <typename InputAction>
 bool can_be_focused(UIContext<InputAction> &ctx, const Entity &e) {
-  if (e.template is_missing<HasClickListener>() &&
-      e.template is_missing<HasDragListener>() &&
-      e.template is_missing<HasLeftRightListener>())
-    return false;
-  if (e.template has<SkipWhenTabbing>())
-    return false;
-  if (e.template has<DoesNotTakeFocus>())
-    return false;
-  if (e.template has<ShouldHide>() || detail::in_inert_subtree(e))
-    return false;
-  if (e.template is_missing<UIComponent>() ||
-      e.template get<UIComponent>().skip_when_tabbing ||
-      !e.template get<UIComponent>().was_rendered_to_screen)
-    return false;
-  if (!ctx.is_input_allowed(e.id))
-    return false;
-  return true;
+  return ctx.is_tab_focusable(e);
 }
 
 template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
@@ -1106,6 +1104,13 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
   virtual void once(float) override {
     this->context =
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    if (!context)
+      return;
+    context->focus_order = context->build_tab_order();
+    for (EntityID id : context->focus_order)
+      context->focused_ids.insert(id);
+    if (!context->focus_order.empty())
+      context->try_to_grab(context->focus_order.front());
   }
 
   virtual ~HandleTabbing() {}
@@ -1265,6 +1270,118 @@ struct HandleDrags : SystemWithUIContext<ui::HasDragListener> {
 };
 
 template <typename InputAction>
+struct HandleSelectableText : SystemWithUIContext<ui::HasSelectableText> {
+  UIContext<InputAction> *context = nullptr;
+  float now_ = 0.f;
+
+  virtual void once(float dt) override {
+    context = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    if (!context)
+      return;
+    now_ += dt;
+
+    if (context->text_selection_entity != context->ROOT) {
+      OptEntity owner =
+          UICollectionHolder::getEntityForID(context->text_selection_entity);
+      if (!owner.valid() || !owner.asE().template has<HasSelectableText>())
+        context->clear_text_selection();
+    }
+
+    if constexpr (magic_enum::enum_contains<InputAction>("TextCopy")) {
+      if (context->has_selection() && context->pressed(InputAction::TextCopy))
+        clipboard::set_text(context->selected_text());
+    }
+
+    if (context->mouse.just_pressed &&
+        context->active_id != context->text_selection_entity)
+      context->clear_text_selection();
+  }
+
+  virtual void for_each_with(Entity &entity, UIComponent &component,
+                             HasSelectableText &selectable, float) override {
+    if (!component.was_rendered_to_screen || component.should_hide ||
+        entity.has<ShouldHide>())
+      return;
+    if (!entity.has<HasLabel>())
+      return;
+
+    const bool pressed_here =
+        context->mouse.just_pressed && context->is_active(entity.id);
+    const bool dragging_here =
+        context->mouse.left_down && !context->mouse.just_pressed &&
+        context->is_active(entity.id) &&
+        context->text_selection_entity == entity.id;
+    if (!pressed_here && !dragging_here)
+      return;
+
+    const HasLabel &label = entity.get<HasLabel>();
+    if (label.label.empty())
+      return;
+
+    RectangleType rect = component.rect();
+    if (entity.has<HasUIModifiers>())
+      rect = entity.get<HasUIModifiers>().apply_modifier(rect);
+    rect = detail::apply_ancestor_transform(entity, rect);
+    const Vector2Type inset =
+        resolve_text_inset(context->theme, label.text_inset);
+    const std::string font_name = component.resolved_font_name();
+    const float screen_h =
+        context->screen_height > 0.f ? context->screen_height : 720.f;
+    const float ui_scale = imm::ThemeDefaults::get().theme.ui_scale;
+    const float font_size =
+        resolve_to_pixels(component.font_size, screen_h,
+                          component.resolved_scaling_mode, ui_scale);
+    const float spacing = 1.f + label.letter_spacing;
+    auto measure = [&](const auto &s) {
+      return measure_text_line(std::string(s), font_name, font_size, spacing)
+          .x;
+    };
+    float line_height =
+        label.line_height.has_value()
+            ? resolve_to_pixels(*label.line_height, screen_h,
+                                component.resolved_scaling_mode, ui_scale)
+            : measure_text_line("Ag", font_name, font_size, spacing).y;
+    if (line_height <= 0.f)
+      line_height = font_size;
+    if (line_height <= 0.f)
+      return;
+
+    const float wrap_width = label.text_overflow == TextOverflow::Wrap
+                                 ? std::max(0.f, rect.width - 2.f * inset.x)
+                                 : 1e9f;
+    selectable_text::refresh_layout(selectable, label.label, wrap_width,
+                                    font_size, line_height, measure);
+
+    const Vector2Type origin{
+        rect.x + label.text_x_offset + inset.x,
+        rect.y + label.text_y_offset +
+            std::max(0.f, (rect.height - selectable.layout.total_height()) *
+                              0.5f)};
+    const Vector2Type local{context->mouse.pos.x - origin.x,
+                            context->mouse.pos.y - origin.y};
+    const float avail = std::max(0.f, rect.width - 2.f * inset.x);
+    const size_t pos = selectable_text::offset_at(
+        selectable.layout, label.label, local, line_height, label.alignment,
+        avail, measure);
+
+    if (pressed_here) {
+      const bool shift = input::is_key_down(keys::LEFT_SHIFT) ||
+                         input::is_key_down(keys::RIGHT_SHIFT);
+      text_selection::Selection sel;
+      if (context->text_selection_entity == entity.id)
+        sel = context->label_text_selection;
+      const int streak =
+          text_selection::register_click(selectable.clicks, now_, pos);
+      selectable_text::apply_click(sel, label.label, pos, streak, shift);
+      context->set_text_selection(entity.id, sel.anchor, sel.cursor);
+    } else {
+      context->set_text_selection(entity.id,
+                                  context->label_text_selection.anchor, pos);
+    }
+  }
+};
+
+template <typename InputAction>
 struct HandleLeftRight : SystemWithUIContext<ui::HasLeftRightListener> {
   UIContext<InputAction> *context;
 
@@ -1295,7 +1412,9 @@ struct HandleLeftRight : SystemWithUIContext<ui::HasLeftRightListener> {
 
 private:
   bool direction_triggered(const Entity &entity, InputAction action) {
-    if (entity.has<HasStepperState>()) return context->pressed_or_repeat(action);
+    // Sliders and steppers step a value: pace held keys by time, not frames.
+    if (entity.has<HasStepperState>() || entity.has<HasSliderState>())
+      return context->pressed_or_repeat(action);
     return context->pressed(action) || context->is_held_down(action);
   }
 
@@ -1801,6 +1920,8 @@ inline void create_or_update_drag_spacer(DragGroupState &state) {
 }
 
 template <typename InputAction> struct HandleDragGroupsPreLayout : System<> {
+  bool should_iterate() const override { return false; }
+
   /// runs BEFORE RunAutoLayout.
   /// - Hides the dragged entity (should_hide) so layout skips it.
   /// - Inserts a spacer entity at the current hover position so the layout
@@ -1833,6 +1954,8 @@ template <typename InputAction> struct HandleDragGroupsPreLayout : System<> {
 };
 
 template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
+  bool should_iterate() const override { return false; }
+
   /// runs AFTER RunAutoLayout and HandleDrags.
   /// - Detects drag start (mouse press inside a drag_group child).
   /// - While dragging: updates hover_group / hover_index, creates an overlay
@@ -2067,7 +2190,9 @@ struct HandleScrollbarDrag : SystemWithUIContext<HasScrollView> {
     if (!context)
       return;
     if (!cmp.was_rendered_to_screen || cmp.should_hide ||
-        entity.has<ShouldHide>() || !context->is_input_allowed(entity.id)) {
+        entity.has<ShouldHide>() ||
+        context->pointer_is_owned_externally() ||
+        !context->is_input_allowed(entity.id)) {
       scroll.dragging_scrollbar = false;
       return;
     }
@@ -2263,7 +2388,9 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
     if (rect.width <= 0.0f || rect.height <= 0.0f)
       return;
 
-    if (!context || !context->is_input_allowed(entity.id)) return;
+    if (!context || context->pointer_is_owned_externally() ||
+        !context->is_input_allowed(entity.id))
+      return;
 
     if (!is_mouse_inside(context->mouse.pos, detail::hit_rect(entity, cmp)))
       return;
