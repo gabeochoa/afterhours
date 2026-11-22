@@ -145,6 +145,7 @@ struct ComponentConfig {
   float scale = 1.0f; // Visual scale applied after layout (smooth animations)
   Size translate_x = pixels(0.0f);
   Size translate_y = pixels(0.0f);
+  // Trailing: (x,y) insets from far edges; explicit size grows inward.
   AbsoluteAnchor absolute_anchor = AbsoluteAnchor::LeadingTop;
 
   // debugs

@@ -236,6 +236,18 @@ TEST(leading_pixels_unchanged) {
   CHECK_APPROX(r.width, 200.f); CHECK_APPROX(r.height, 150.f);
 }
 
+TEST(trailing_bottom_percent_offset_and_percent_size) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(300));
+  auto &child = t.make_ui(percent(0.25f), percent(0.2f));
+  set_abs(child, AbsoluteAnchor::TrailingBottom, percent(0.05f), percent(0.1f));
+  t.add_child(root, child); t.run(root);
+  auto r = t.ui(child).rect();
+  CHECK_APPROX(r.width, 100.f); CHECK_APPROX(r.height, 60.f);
+  CHECK_APPROX(r.x, 280.f); CHECK_APPROX(r.y, 210.f);
+  CHECK_APPROX(r.x + r.width, 380.f); CHECK_APPROX(r.y + r.height, 270.f);
+}
+
 TEST(trailing_via_absolute_pos_fields) {
   TestLayout t;
   auto &root = t.make_ui(pixels(400), pixels(300));
