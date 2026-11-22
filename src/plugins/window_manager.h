@@ -220,7 +220,9 @@ struct window_manager : developer::Plugin {
   }
   static Resolution fetch_current_resolution() { return headless_resolution; }
   static Resolution fetch_raw_window_size() { return headless_resolution; }
-  static void set_window_size(const int, const int) {
+  static void set_window_size(const int width, const int height) {
+    if (width > 0 && height > 0)
+      headless_resolution = Resolution{width, height};
     warn_once(0, "@notimplemented window_manager::set_window_size on this "
                  "backend");
   }

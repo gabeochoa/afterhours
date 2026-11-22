@@ -216,6 +216,18 @@ inline std::vector<ParsedCommand> parse_script(const std::string &path) {
             cmd.args.push_back(w_str);
             cmd.args.push_back(h_str);
             cmd.wait_seconds = 5 * frame;
+        } else if (cmd.name == "resize_steps") {
+            std::string w_str = args.next(), h_str = args.next();
+            std::string steps_str = args.next();
+            cmd.args.push_back(w_str);
+            cmd.args.push_back(h_str);
+            cmd.args.push_back(steps_str);
+            cmd.wait_seconds = 2 * frame;
+        } else if (cmd.name == "wait_resized") {
+            std::string w_str = args.next(), h_str = args.next();
+            cmd.args.push_back(w_str);
+            cmd.args.push_back(h_str);
+            cmd.wait_seconds = 1 * frame;
         } else if (cmd.name == "wait") {
             float seconds = 1.0f;
             std::istringstream(args.next()) >> seconds;

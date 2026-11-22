@@ -84,7 +84,8 @@ struct PendingE2ECommand : BaseComponent {
 
   // Check if this is a wait command (exempt from timeout)
   bool is_wait_command() const {
-    return name == "wait" || name == "wait_frames" || name == "wait_wall";
+    return name == "wait" || name == "wait_frames" || name == "wait_wall" ||
+           name == "wait_resized" || name == "resize_steps";
   }
 
   // Check if this is a specific command

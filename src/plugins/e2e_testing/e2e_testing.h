@@ -86,6 +86,8 @@ inline void register_builtin_handlers(SystemManager &sm) {
       std::make_unique<HandleExpectTextInsensitiveCommand>());
   sm.register_update_system(std::make_unique<HandleExpectNoTextCommand>());
   sm.register_update_system(std::make_unique<HandleResizeCommand>());
+  sm.register_update_system(std::make_unique<HandleResizeStepsCommand>());
+  sm.register_update_system(std::make_unique<HandleWaitResizedCommand>());
   sm.register_update_system(
       std::make_unique<HandleExpectWindowSizeCommand>());
   sm.register_update_system(std::make_unique<HandleAssertNoOverflowCommand>());
