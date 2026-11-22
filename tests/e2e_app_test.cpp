@@ -1,13 +1,17 @@
 #include "ui_test_harness.h"
 #include <afterhours/src/plugins/e2e_testing/app.h>
+
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <string>
+
 using namespace afterhours;
 using namespace afterhours::testing;
+
 static int checks_run = 0;
 static int checks_passed = 0;
+
 static void check(bool cond, const std::string &what) {
   checks_run++;
   if (cond)
@@ -15,9 +19,12 @@ static void check(bool cond, const std::string &what) {
   else
     fprintf(stderr, "  FAIL: %s\n", what.c_str());
 }
+
 static int lambda_arg = 0;
+
 struct MyCommand : System<PendingE2ECommand> {
   inline static int seen = 0;
+
   void for_each_with(Entity &, PendingE2ECommand &cmd, float) override {
     if (cmd.is_consumed() || !cmd.is("my_cmd"))
       return;
@@ -25,6 +32,7 @@ struct MyCommand : System<PendingE2ECommand> {
     cmd.consume();
   }
 };
+
 int main() {
   printf("=== E2EApp ===\n\n");
   EntityCollection collection;

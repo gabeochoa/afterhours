@@ -1,10 +1,12 @@
 #pragma once
+
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <memory>
 #include <string>
+
 #include "../../drawing_helpers.h"
 #include "../../graphics.h"
 #include "../../random_engine.h"
@@ -13,6 +15,7 @@
 #include "platform_test_input.h"
 #include "runner.h"
 #include "test_input.h"
+
 namespace afterhours {
 namespace testing {
 struct E2EApp {
@@ -23,6 +26,7 @@ struct E2EApp {
   std::string pending_screenshot;
   std::function<const graphics::RenderTextureType *()> screenshot_source;
   int exit_code = 0;
+
   static std::unique_ptr<E2EApp>
   create(int argc, char *argv[],
          const std::function<void(SystemManager &)> &register_custom = {},
@@ -36,11 +40,12 @@ struct E2EApp {
     configure_runner(app->runner, app->args);
     E2EApp *self = app.get();
     register_builtin_handlers(app->handlers);
-    app->handlers.register_update_system(std::make_unique<HandleScreenshotCommand>(
-        [self](const std::string &name) {
-          self->pending_screenshot = name;
-          return true;
-        }));
+    app->handlers.register_update_system(
+        std::make_unique<HandleScreenshotCommand>(
+            [self](const std::string &name) {
+              self->pending_screenshot = name;
+              return true;
+            }));
     app->handlers.register_update_system(
         std::make_unique<HandleResetTestStateCommand>(
             [self] { self->pending_screenshot.clear(); }));
@@ -59,6 +64,7 @@ struct E2EApp {
     }
     return app;
   }
+
   static std::shared_ptr<E2EApp>
   attach(graphics::RunConfig &cfg, int argc, char *argv[],
          const std::function<void(SystemManager &)> &register_custom = {},
@@ -100,16 +106,19 @@ struct E2EApp {
     };
     return app;
   }
+
   void set_seed(std::uint32_t seed) {
     RandomEngine::get().set_seed(seed);
     runner.set_reset_callback([seed] { RandomEngine::get().set_seed(seed); });
   }
+
   void tick(float dt) {
     test_input::reset_frame();
     runner.tick(dt);
     EntityHelper::merge_entity_arrays();
     handlers.tick_all(EntityHelper::get_entities_for_mod(), dt);
   }
+
   void post_render(const graphics::RenderTextureType &target) {
     if (pending_screenshot.empty())
       return;
@@ -130,11 +139,14 @@ struct E2EApp {
     if (!out)
       log_warn("e2e: screenshot '{}' failed to write {}", name, path.string());
   }
+
   bool finished() const { return runner.is_finished(); }
+
   int finish() const {
     runner.print_results();
     return runner.is_finished() && !runner.has_failed() ? 0 : 1;
   }
 };
-}
-}
+
+} // namespace testing
+} // namespace afterhours
