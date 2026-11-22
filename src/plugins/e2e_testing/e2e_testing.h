@@ -86,6 +86,8 @@ inline void register_builtin_handlers(SystemManager &sm) {
       std::make_unique<HandleExpectTextInsensitiveCommand>());
   sm.register_update_system(std::make_unique<HandleExpectNoTextCommand>());
   sm.register_update_system(std::make_unique<HandleResizeCommand>());
+  sm.register_update_system(
+      std::make_unique<HandleExpectWindowSizeCommand>());
   sm.register_update_system(std::make_unique<HandleAssertNoOverflowCommand>());
   // Note: screenshot and reset_test_state need callbacks, registered separately
 }
@@ -158,7 +160,6 @@ inline void register_shared_handlers(SystemManager &sm, SystemManager &pack) {
 //
 // Semantic actions (preferred):  action WidgetLeft, hold WidgetLeft, release
 // Component commands:  click_ui, click_button, toggle_checkbox, set_slider
-// Assertions:  expect_focused, expect_checkbox, expect_slider
 // Raw key fallbacks:  tab, enter, escape, arrow
 
 } // namespace testing

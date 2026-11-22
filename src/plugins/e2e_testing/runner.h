@@ -121,8 +121,9 @@ constexpr std::array<std::string_view, 17> single_arg_commands = {
     "right_click_ui", "right_click_text", "expect_draw_calls_below"
 };
 
-constexpr std::array<std::string_view, 4> two_arg_commands = {
-    "set_slider", "select_dropdown", "expect_slider", "expect_checkbox"
+constexpr std::array<std::string_view, 5> two_arg_commands = {
+    "set_slider", "select_dropdown", "expect_slider", "expect_checkbox",
+    "expect_window_size"
 };
 
 constexpr std::array<std::string_view, 1> three_arg_commands = {
