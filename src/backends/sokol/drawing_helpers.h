@@ -1606,6 +1606,8 @@ inline void draw_texture_rec(TextureType tex, RectangleType src,
   draw_texture_pro(tex, src, dest, Vector2Type{0.0f, 0.0f}, 0.0f, tint);
 }
 
+// Provided by capture_impl.h, compiled only under SOKOL_METAL.
+#if defined(SOKOL_METAL)
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id,
                                              int width, int height,
                                              const char *path);
@@ -1615,6 +1617,7 @@ extern "C" int metal_capture_render_texture_to_memory(
 extern "C" int metal_capture_render_texture_png_to_memory(
     uint32_t color_img_id, int width, int height,
     uint8_t **out_data, int *out_size);
+#endif
 
 #ifdef AFTER_HOURS_USE_VULKAN
 extern "C" bool vulkan_capture_render_texture(uint32_t color_img_id,
@@ -1635,9 +1638,11 @@ inline bool capture_render_texture(const graphics::RenderTextureType &rt,
 #ifdef AFTER_HOURS_USE_VULKAN
   return vulkan_capture_render_texture(render_texture_capture_image_id(rt), rt.width, rt.height,
                                        path.string().c_str());
-#else
+#elif defined(SOKOL_METAL)
   return metal_capture_render_texture(render_texture_capture_image_id(rt), rt.width, rt.height,
                                       path.c_str());
+#else
+  return false;
 #endif
 }
 
@@ -1660,7 +1665,7 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   RgbaCapture result{rt.width, rt.height, {data, data + size}};
   free(data);
   return result;
-#else
+#elif defined(SOKOL_METAL)
   uint8_t *data = nullptr;
   int size = 0;
   if (!metal_capture_render_texture_to_memory(render_texture_capture_image_id(rt), rt.width,
@@ -1675,6 +1680,8 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   RgbaCapture result{rt.width, rt.height, {data, data + size}};
   free(data);
   return result;
+#else
+  return std::nullopt;
 #endif
 }
 
@@ -1694,7 +1701,7 @@ capture_render_texture_png(const graphics::RenderTextureType &rt) {
   PngCapture result{{data, data + size}};
   free(data);
   return result;
-#else
+#elif defined(SOKOL_METAL)
   uint8_t *data = nullptr;
   int size = 0;
   if (!metal_capture_render_texture_png_to_memory(render_texture_capture_image_id(rt), rt.width,
@@ -1707,6 +1714,8 @@ capture_render_texture_png(const graphics::RenderTextureType &rt) {
   PngCapture result{{data, data + size}};
   free(data);
   return result;
+#else
+  return std::nullopt;
 #endif
 }
 
