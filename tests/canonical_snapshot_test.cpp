@@ -1,4 +1,3 @@
-// Canonical snapshots must agree regardless of creation/allocation order.
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 
@@ -25,8 +24,6 @@ struct World {
   std::unordered_map<EntityHandle, std::string> ids;
 };
 
-// Build the same logical world; `order` is creation order, `slot_base`
-// simulates unrelated allocations shifting runtime handles.
 static World build(const std::vector<int> &order, std::uint32_t slot_base,
                    int bravo_hp = 20) {
   const std::vector<Fighter> fighters = {{"alpha", 10, 1}, {"bravo", bravo_hp, 1}, {"charlie", 30, 2}};
@@ -54,7 +51,7 @@ static World build(const std::vector<int> &order, std::uint32_t slot_base,
 int main() {
   printf("Running canonical snapshot tests...\n\n");
   World a = build({0, 1, 2}, 0);
-  World b = build({2, 0, 1}, 100); // shuffled creation + shifted slots
+  World b = build({2, 0, 1}, 100);
   CHECK(a.snap.encode() == b.snap.encode());
   CHECK(a.snap.hash() == b.snap.hash());
   CHECK(!snapshot::first_difference(a.snap, b.snap).has_value());

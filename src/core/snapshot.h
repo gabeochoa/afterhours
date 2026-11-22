@@ -91,8 +91,7 @@ take_components(Converter &&convert, const Options &opt = {}) {
   return out;
 }
 
-// Canonical (allocation/creation-order independent) snapshots: entities are
-// keyed by a caller-supplied stable identity, never by runtime handle.
+// Canonical snapshots: keyed by stable identity, never runtime handle.
 using Field = std::pair<std::string, std::string>;
 
 struct CanonicalEntity {
