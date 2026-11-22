@@ -42,8 +42,10 @@ void _require_settings_cpp_compiled();
     (!defined(AFTERHOURS_SETTINGS_OUTPUT_BITSERY) &&                           \
      !defined(AFTERHOURS_SETTINGS_OUTPUT_RAW_STRING))
 #ifndef JSON_TYPE
+#define AFTERHOURS_SETTINGS_NLOHMANN_JSON
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
+#include "settings_json_preserve.h"
 #else
 using json = JSON_TYPE;
 #endif
@@ -85,6 +87,7 @@ struct settings : developer::Plugin {
   template <typename SettingsData> struct ProvidesSettings : BaseComponent {
     SettingsData data;
     std::string settings_file;
+    std::string raw_settings_text;
     std::vector<std::function<void(const SettingsData &)>> on_change_callbacks;
 
     ProvidesSettings() = default;
@@ -133,8 +136,16 @@ struct settings : developer::Plugin {
                  settings_path.string().c_str());
         return false;
       }
+#ifdef AFTERHOURS_SETTINGS_NLOHMANN_JSON
+      std::string raw((std::istreambuf_iterator<char>(ifs)),
+                      std::istreambuf_iterator<char>());
+      ifs.close();
+      j = settings_preserve::parse_tolerant(raw);
+      provider->raw_settings_text = raw;
+#else
       ifs >> j;
       ifs.close();
+#endif
       provider->data = SettingsData::from_json(j);
       log_info("{} loaded from JSON: {}", type_name<SettingsData>(),
                settings_path.string().c_str());
@@ -204,8 +215,17 @@ struct settings : developer::Plugin {
                            const fs::path &settings_path) {
     try {
       json j = provider->data.to_json();
-      const auto content = j.dump(2); // Pretty print with 2-space indent
+      std::string content = j.dump(2);
+#ifdef AFTERHOURS_SETTINGS_NLOHMANN_JSON
+      if (!provider->raw_settings_text.empty()) {
+        auto spliced = settings_preserve::splice(provider->raw_settings_text, j);
+        if (!spliced.empty()) content = spliced;
+      }
+#endif
       if (!files::write_string_atomic(settings_path, content)) return false;
+#ifdef AFTERHOURS_SETTINGS_NLOHMANN_JSON
+      provider->raw_settings_text = content;
+#endif
       log_info("{} saved to JSON: {}", type_name<SettingsData>(),
                settings_path.string().c_str());
       return true;

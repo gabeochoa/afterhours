@@ -4,8 +4,10 @@
 #include <functional>
 #include <memory>
 #include <set>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
+#include <utility>
 #include <unordered_set>
 #include <vector>
 
@@ -491,6 +493,15 @@ struct EntityCollection {
              type_name<Component>(), id);
   }
 
+  template <typename Component, typename... Args>
+  Component &add_singleton(Args &&...args) {
+    Entity &ent = createPermanentEntity();
+    Component &cmp = ent.addComponent<Component>(std::forward<Args>(args)...);
+    registerSingleton<Component>(ent);
+    merge_entity_arrays();
+    return cmp;
+  }
+
   template <typename Component> RefEntity get_singleton() const {
     const ComponentID id = components::get_type_id<Component>();
     if (!singletonMap.contains(id)) {
@@ -537,6 +548,12 @@ struct EntityCollection {
     if (!ent.has<Component>())
       return nullptr;
     return &(ent.get<Component>());
+  }
+
+  // get_singleton_cmp but for matching multiple singleton components at the same time
+  template <typename... Components>
+  std::tuple<Components *...> get_unique() const {
+    return {get_singleton_cmp<Components>()...};
   }
 
   template <typename Component> Component &get_singleton_cmp_enforce() const {
