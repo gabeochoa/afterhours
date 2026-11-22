@@ -174,6 +174,7 @@ int main() {
     printf("SOME TESTS FAILED!\n");
     return 1;
   }
+
   printf("ALL TESTS PASSED.\n");
   return 0;
 }
