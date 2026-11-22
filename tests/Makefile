@@ -184,6 +184,7 @@ ALL_TESTS := \
 	e2e_defer_unknown_test \
 	e2e_pending_list_test \
 	e2e_results_test \
+	e2e_script_headers_test \
 	point_in_element_test \
 	e2e_ui_gestures_test \
 	mouse_axis_action_test \
@@ -270,6 +271,7 @@ ALL_TESTS := \
 	text_stroke_render_test \
 	multiline_text_test \
 	subtree_hover_test \
+	hover_focus_name_test \
 	inert_test \
 	menu_test \
 	color_swatch_test \
