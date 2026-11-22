@@ -1,0 +1,7 @@
+# One intermediate size per frame from 800x600, then wait until the
+# resolution and the drawable both read 1000x800 and a frame has been
+# presented at that size.
+resize_steps 1000 800 4
+wait_resized 1000 800
+resize_steps 800 600 2
+wait_resized 800 600
