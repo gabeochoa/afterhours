@@ -47,9 +47,11 @@ struct ProximityPool {
   Entity *entity_at(size_t slot) const {
     return slot < slots_.size() ? slots_[slot].entity : nullptr;
   }
+
   int desired_at(size_t slot) const {
     return slot < slots_.size() ? slots_[slot].desired : -1;
   }
+
   const Vector3Type *position_at(size_t slot) const {
     if (slot >= slots_.size() || slots_[slot].desired < 0)
       return nullptr;
