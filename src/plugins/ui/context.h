@@ -339,16 +339,14 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   bool has_focus(EntityID id) const { return focus_id == id; }
 
   [[nodiscard]] EntityID entity_by_debug_name(std::string_view name) const {
-    auto query = EntityQuery<>(UICollectionHolder::get().collection,
-                               {.ignore_temp_warning = true})
-                     .whereHasComponent<UIComponentDebug>()
-                     .whereLambda([&](const Entity &e) {
-                       return e.get<UIComponentDebug>().name() == name;
-                     })
-                     .first();
-    for (Entity &entity : query.gen())
-      return entity.id;
-    return ROOT;
+    const auto entity = EntityQuery<>(UICollectionHolder::get().collection,
+                                      {.ignore_temp_warning = true})
+                            .whereHasComponent<UIComponentDebug>()
+                            .whereLambda([&](const Entity &e) {
+                              return e.get<UIComponentDebug>().name() == name;
+                            })
+                            .gen_first();
+    return entity ? entity.asE().id : ROOT;
   }
 
   // Hover/focus by debug name, for render and game systems that know a
