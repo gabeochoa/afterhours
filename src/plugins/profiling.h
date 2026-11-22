@@ -4,11 +4,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <format>
+#include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 #if AFTERHOURS_ENABLE_PROFILING
-#include <map>
 #include "process_metrics.h"
 #endif
 
@@ -20,6 +22,8 @@ struct Options {
     std::size_t max_systems = 256;
     std::size_t max_counters = 32;
     bool sample_process = true;
+    double spike_threshold_ms = 0;
+    std::size_t spike_capacity = 4;
 };
 struct SystemSample {
     std::string name;
@@ -30,12 +34,19 @@ struct SystemSample {
     double recent_average_frame_ms = 0;
     double peak_frame_ms = 0;
     std::uint64_t calls = 0;
+    int entity_count = 0;
     std::vector<double> frame_history;
     double mean_ms() const { return calls ? total_ms / static_cast<double>(calls) : 0; }
 };
 struct Counter { std::string name, unit; double value = 0; };
+struct Spike {
+    std::uint64_t frame = 0;
+    double frame_ms = 0;
+    std::vector<SystemSample> systems;
+};
 struct Snapshot {
     std::vector<double> frame_ms;
+    std::vector<Spike> spikes;
     std::vector<SystemSample> systems;
     std::vector<Counter> counters;
     std::uint64_t frames = 0;
@@ -75,9 +86,35 @@ inline Snapshot select_frames(const Snapshot &source, std::size_t first, std::si
         }
         selected.average_frame_ms = selected.recent_average_frame_ms = selected.total_ms / static_cast<double>(count);
         selected.last_frame_ms = sample.frame_history[last];
+        selected.entity_count = sample.entity_count;
         result.systems.push_back(std::move(selected));
     }
     return result;
+}
+
+inline std::string_view phase_name(SystemPhase phase) {
+    switch (phase) {
+        case SystemPhase::Update: return "Update";
+        case SystemPhase::FixedUpdate: return "FixedUpdate";
+        case SystemPhase::Render: return "Render";
+    }
+    return "Update";
+}
+
+inline std::string snapshot_to_collapsed(const Snapshot &snapshot) {
+    std::map<std::string, double> totals;
+    for (const auto &sample : snapshot.systems) {
+        std::string name = sample.name;
+        for (char &c : name)
+            if (c == ';' || c == '\n' || c == '\r') c = '_';
+        totals["frame;" + std::string(phase_name(sample.phase)) + ";" + name] += sample.total_ms;
+    }
+    std::string out;
+    for (const auto &[stack, ms] : totals) {
+        if (!std::isfinite(ms) || ms <= 0) continue;
+        out += std::format("{} {:.3f}\n", stack, ms);
+    }
+    return out;
 }
 
 class Collector {
@@ -97,8 +134,8 @@ class Collector {
     bool start() {
 #if AFTERHOURS_ENABLE_PROFILING
         if (token_) return true;
-        token_ = detail::subscribe(this, [](void *context, std::string_view name, SystemPhase phase, double ms) {
-            static_cast<Collector *>(context)->record(name, phase, ms);
+        token_ = detail::subscribe(this, [](void *context, std::string_view name, SystemPhase phase, double ms, int entity_count) {
+            static_cast<Collector *>(context)->record(name, phase, ms, entity_count);
         });
         frame_start_ = detail::Clock::now();
         return token_ != 0;
@@ -124,12 +161,27 @@ class Collector {
         return false;
 #endif
     }
+    void set_spike_threshold_ms(double ms) {
+#if AFTERHOURS_ENABLE_PROFILING
+        options_.spike_threshold_ms = ms > 0 && std::isfinite(ms) ? ms : 0;
+#else
+        (void)ms;
+#endif
+    }
+    std::vector<Spike> spikes() const {
+#if AFTERHOURS_ENABLE_PROFILING
+        return spikes_;
+#else
+        return {};
+#endif
+    }
     void reset() {
 #if AFTERHOURS_ENABLE_PROFILING
         const bool restart = recording();
         stop();
         systems_.clear();
         counters_.clear();
+        spikes_.clear();
         frames_ = dropped_ = 0;
         last_process_ = {};
         cpu_percent_.reset();
@@ -159,6 +211,18 @@ class Collector {
             value.history[frame_index] = value.sample.last_frame_ms;
             value.sample.total_ms += value.sample.last_frame_ms;
             value.sample.calls += std::exchange(value.frame_calls, 0);
+            value.sample.entity_count = value.frame_entity_count;
+        }
+        if (options_.spike_threshold_ms > 0 && elapsed_ms > options_.spike_threshold_ms && options_.spike_capacity > 0) {
+            Spike spike;
+            spike.frame = frames_;
+            spike.frame_ms = elapsed_ms;
+            spike.systems.reserve(systems_.size());
+            for (const auto &[key, value] : systems_)
+                spike.systems.push_back(value.sample);
+            spikes_.push_back(std::move(spike));
+            if (spikes_.size() > options_.spike_capacity)
+                spikes_.erase(spikes_.begin());
         }
 #else
         (void)elapsed_ms;
@@ -184,6 +248,7 @@ class Collector {
     Snapshot snapshot(bool include_system_history = false) const {
         Snapshot result;
 #if AFTERHOURS_ENABLE_PROFILING
+        result.spikes = spikes_;
         result.cpu_percent = cpu_percent_;
         result.resident_mb = resident_mb_;
         result.frames = frames_;
@@ -248,11 +313,13 @@ class Collector {
         double frame_ms = 0;
         double recent_ms = 0;
         std::uint64_t frame_calls = 0;
+        int frame_entity_count = 0;
     };
     Options options_;
     std::vector<double> history_;
     std::map<Key, Accum, Less> systems_;
     std::vector<Counter> counters_;
+    std::vector<Spike> spikes_;
     std::uint64_t token_ = 0, frames_ = 0, dropped_ = 0;
     detail::Clock::time_point frame_start_{};
     detail::Clock::time_point process_time_{};
@@ -270,7 +337,7 @@ class Collector {
         last_process_ = current;
         process_time_ = now;
     }
-    void record(std::string_view name, SystemPhase phase, double ms) {
+    void record(std::string_view name, SystemPhase phase, double ms, int entity_count) {
         auto it = systems_.find(KeyView{name, phase});
         if (it == systems_.end()) {
             if (systems_.size() >= options_.max_systems) { ++dropped_; return; }
@@ -279,6 +346,7 @@ class Collector {
         auto &value = it->second;
         ++value.frame_calls;
         value.frame_ms += ms;
+        value.frame_entity_count = entity_count;
     }
 #endif
 };

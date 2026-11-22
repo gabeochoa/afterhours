@@ -1,5 +1,8 @@
 #pragma once
 
+#include <algorithm>
+#include <cassert>
+#include <cmath>
 #include <filesystem>
 #include <string>
 
@@ -34,11 +37,21 @@ struct E2EArgs {
   float time_scale = 1.0f;
   int capture_interval = 0;
   std::string results_json;
+  int capture_scale = 1;
 
   // For RunConfig::display, so a consumer need not map the bool themselves.
   graphics::DisplayMode display_mode() const {
     return headless ? graphics::DisplayMode::Headless
                     : graphics::DisplayMode::Windowed;
+  }
+
+  void apply_to(graphics::Config &cfg) const {
+    cfg.hidpi = capture_scale > 1;
+    if (capture_scale > 1)
+      cfg.hidpi_scale = capture_scale;
+  }
+  void apply_to(graphics::RunConfig &cfg) const {
+    cfg.capture_scale = capture_scale;
   }
 };
 
@@ -102,6 +115,9 @@ inline E2EArgs parse_e2e_args(int argc, char *argv[]) {
       args.time_scale = std::stof(value());
     } else if (key == "--capture-interval") {
       args.capture_interval = std::stoi(value());
+    } else if (key == "--capture-scale") {
+      const int scale = std::stoi(value());
+      args.capture_scale = scale > 1 ? scale : 1;
     }
   }
   return args;
@@ -126,6 +142,29 @@ inline int count_e2e_scripts(const std::string &dir) {
     if (entry.path().extension() == ".e2e")
       ++count;
   return count;
+}
+
+inline int substeps_for_time_scale(float time_scale) {
+  return std::max(1, static_cast<int>(std::lround(time_scale)));
+}
+
+inline int apply_time_scale(graphics::RunConfig &cfg, float time_scale) {
+  // fixed_dt is a runtime RunConfig field, not a compile-time constant, so a
+  // static_assert cannot check it. A negative value is never legitimate (0
+  // means variable dt), so assert loudly instead of silently selecting
+  // variable-dt mode.
+  assert(cfg.fixed_dt >= 0.f &&
+         "fixed_dt must not be negative; 0 selects variable dt");
+  if (cfg.fixed_dt > 0.f)
+    cfg.sim_steps = std::max(1, cfg.sim_steps) * substeps_for_time_scale(time_scale);
+  return cfg.step_count();
+}
+
+inline void run_fixed_steps(SystemManager &sm, Entities &entities,
+                            const graphics::RunConfig &cfg, float wall_dt) {
+  const float dt = cfg.step_dt(wall_dt);
+  for (int i = 0; i < cfg.step_count(); ++i)
+    sm.fixed_tick(entities, dt);
 }
 
 inline void configure_runner(E2ERunner &runner, const E2EArgs &args) {
