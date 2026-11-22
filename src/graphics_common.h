@@ -144,6 +144,7 @@ concept PlatformBackend = requires {
   { T::window_should_close() } -> std::same_as<bool>;
   { T::is_window_ready() } -> std::same_as<bool>;
   { T::is_window_fullscreen() } -> std::same_as<bool>;
+  { T::is_window_focused() } -> std::same_as<bool>;
   { T::toggle_fullscreen() } -> std::same_as<void>;
   { T::minimize_window() } -> std::same_as<void>;
   { T::set_window_size(int{}, int{}) } -> std::same_as<void>;

@@ -83,6 +83,7 @@ ALL_TESTS := \
 	font_atlas_measure_test \
 	font_prewarm_test \
 	font_points_test \
+	window_focus_test \
 	glyph_placeholder_test \
 	monospace_cell_test \
 	font_memory_test \
@@ -347,6 +348,7 @@ RAYLIB_TESTS := \
 	auto_text_color_test \
 	value_types_test \
 	wrappers_test \
+	window_focus_test \
 	window_state_test \
 	edit_keys_test \
 	default_font_test \
