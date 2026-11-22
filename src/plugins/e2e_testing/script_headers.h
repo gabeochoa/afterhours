@@ -194,28 +194,6 @@ inline ScriptHeaders parse_script_headers(const std::string &path) {
     text << file.rdbuf();
     return parse_script_headers_text(text.str());
 }
-inline std::string effective_batch(const ScriptHeaders &headers,
-                                   const std::string &script_name) {
-    return headers.batch.empty() ? script_name : headers.batch;
-}
-inline std::vector<std::vector<std::size_t>> group_by_batch(
-    const std::vector<ScriptHeaders> &headers,
-    const std::vector<std::string> &names) {
-    std::vector<std::vector<std::size_t>> groups;
-    std::vector<std::string> keys;
-    for (std::size_t i = 0; i < headers.size(); ++i) {
-        const std::string name = i < names.size() ? names[i] : std::to_string(i);
-        const std::string key = effective_batch(headers[i], name);
-        const auto it = std::find(keys.begin(), keys.end(), key);
-        if (it == keys.end()) {
-            keys.push_back(key);
-            groups.push_back({i});
-        } else {
-            groups[static_cast<std::size_t>(it - keys.begin())].push_back(i);
-        }
-    }
-    return groups;
-}
 
 }
 }
