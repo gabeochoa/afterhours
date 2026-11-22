@@ -206,38 +206,6 @@ struct WaveStub {
 using SoundType = SoundStub;
 using MusicType = MusicStub;
 using WaveType = WaveStub;
-
-inline void InitAudioDevice() {}
-inline void CloseAudioDevice() {}
-inline bool IsAudioDeviceReady() { return false; }
-inline void SetMasterVolume(float) {}
-inline float GetMasterVolume() { return 0.f; }
-inline void SetAudioStreamBufferSizeDefault(int) {}
-
-inline void PlaySound(SoundStub) {}
-inline void StopSound(SoundStub) {}
-inline void PauseSound(SoundStub) {}
-inline void ResumeSound(SoundStub) {}
-inline void SetSoundPitch(SoundStub, float) {}
-inline void SetSoundPan(SoundStub, float) {}
-inline bool IsSoundPlaying(SoundStub) { return false; }
-inline void SetSoundVolume(SoundStub, float) {}
-inline void UnloadSound(SoundStub) {}
-inline SoundStub LoadSound(const char *) { return SoundStub{}; }
-inline SoundStub LoadSoundFromWave(WaveStub) { return SoundStub{}; }
-inline SoundStub LoadSoundAlias(SoundStub) { return SoundStub{}; }
-inline void UnloadSoundAlias(SoundStub) {}
-
-inline void UnloadWave(WaveStub w) { std::free(w.data); }
-inline bool ExportWave(WaveStub, const char *) { return false; }
-
-inline void PlayMusicStream(MusicStub) {}
-inline void StopMusicStream(MusicStub) {}
-inline bool IsMusicStreamPlaying(MusicStub) { return false; }
-inline void UpdateMusicStream(MusicStub) {}
-inline void SetMusicVolume(MusicStub, float) {}
-inline void UnloadMusicStream(MusicStub) {}
-inline MusicStub LoadMusicStream(const char *) { return MusicStub{}; }
 #endif
 
 inline SoundType load_sound_from_samples(std::span<const float> samples,

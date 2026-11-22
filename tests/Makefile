@@ -175,6 +175,7 @@ ALL_TESTS := \
 	card_and_type_scale_test \
 	fixed_timestep_test \
 	audio_lifecycle_test \
+	audio_stub_build_test \
 	notimplemented_log_test \
 	local_time_test \
 	font_catalog_test \

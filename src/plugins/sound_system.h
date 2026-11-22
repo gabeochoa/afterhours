@@ -132,7 +132,11 @@ struct sound_system : developer::Plugin {
                    get_bus_volume(bus_of(name));
         }
         void apply_volume(const std::string &name) {
+#ifdef AFTER_HOURS_USE_RAYLIB
             ::afterhours::SetSoundVolume(get(name), effective_volume(name));
+#else
+            (void)name;
+#endif
         }
 
         void load(const char *filename, const char *name) {
@@ -169,6 +173,7 @@ struct sound_system : developer::Plugin {
                        const std::string &bus = "effects") {
             load_on_bus(filename, name, bus);
             if (!contains(name)) return;
+#ifdef AFTER_HOURS_USE_RAYLIB
             for (int i = 0; i < copies; ++i) {
                 const std::string alias =
                     std::string{name} + "_a" + std::to_string(i);
@@ -180,6 +185,9 @@ struct sound_system : developer::Plugin {
                     apply_volume(alias);
                 }
             }
+#else
+            (void)copies;
+#endif
         }
 
         void set_range(const std::string &name, float max_distance) {
@@ -202,6 +210,7 @@ struct sound_system : developer::Plugin {
                          name.c_str());
                 return;
             }
+#ifdef AFTER_HOURS_USE_RAYLIB
             auto &sound = get(name);
             if (positional) {
                 ::afterhours::SetSoundVolume(
@@ -210,6 +219,7 @@ struct sound_system : developer::Plugin {
                 ::afterhours::SetSoundPitch(sound, pitch);
             }
             ::afterhours::PlaySound(sound);
+#endif
             record_play(PlayRecord{name, bus_of(name),
                                    effective_volume(name) * volume_scale, pan,
                                    pitch,
@@ -218,16 +228,33 @@ struct sound_system : developer::Plugin {
         }
 
         void stop(const std::string &name) {
+#ifdef AFTER_HOURS_USE_RAYLIB
             if (contains(name)) ::afterhours::StopSound(get(name));
+#else
+            (void)name;
+#endif
         }
         void pause(const std::string &name) {
+#ifdef AFTER_HOURS_USE_RAYLIB
             if (contains(name)) ::afterhours::PauseSound(get(name));
+#else
+            (void)name;
+#endif
         }
         void resume(const std::string &name) {
+#ifdef AFTER_HOURS_USE_RAYLIB
             if (contains(name)) ::afterhours::ResumeSound(get(name));
+#else
+            (void)name;
+#endif
         }
         [[nodiscard]] bool is_playing(const std::string &name) {
+#ifdef AFTER_HOURS_USE_RAYLIB
             return contains(name) && ::afterhours::IsSoundPlaying(get(name));
+#else
+            (void)name;
+            return false;
+#endif
         }
 
         void play_random_match(const std::string &prefix) {
@@ -253,11 +280,13 @@ struct sound_system : developer::Plugin {
                 log_warn("got no matches for your prefix search: {}", prefix);
                 return;
             }
+#ifdef AFTER_HOURS_USE_RAYLIB
             for (auto it = matches.first; it != matches.second; ++it) {
                 if (::afterhours::IsSoundPlaying(it->second)) {
                     return;
                 }
             }
+#endif
             play_loaded(matches.first->first);
         }
 
@@ -267,12 +296,14 @@ struct sound_system : developer::Plugin {
                 log_warn("got no matches for your prefix search: {}", prefix);
                 return;
             }
+#ifdef AFTER_HOURS_USE_RAYLIB
             for (auto it = matches.first; it != matches.second; ++it) {
                 if (!::afterhours::IsSoundPlaying(it->second)) {
                     play_loaded(it->first);
                     return;
                 }
             }
+#endif
             play_loaded(matches.first->first);
         }
 
@@ -298,10 +329,19 @@ struct sound_system : developer::Plugin {
         struct SoundLibraryImpl : Library<SoundType> {
             virtual SoundType convert_filename_to_object(
                 const char *, const char *filename) override {
+#ifdef AFTER_HOURS_USE_RAYLIB
                 return ::afterhours::LoadSound(filename);
+#else
+                (void)filename;
+                return SoundType{};
+#endif
             }
             virtual void unload(SoundType sound) override {
+#ifdef AFTER_HOURS_USE_RAYLIB
                 ::afterhours::UnloadSound(sound);
+#else
+                (void)sound;
+#endif
             }
         } impl;
     };
@@ -350,7 +390,11 @@ struct sound_system : developer::Plugin {
                    get_bus_volume(bus_of(name));
         }
         void apply_volume(const std::string &name) {
+#ifdef AFTER_HOURS_USE_RAYLIB
             ::afterhours::SetMusicVolume(get(name), effective_volume(name));
+#else
+            (void)name;
+#endif
         }
         void load(const char *filename, const char *name) {
             load_on_bus(filename, name, bus_of(name));
@@ -381,13 +425,19 @@ struct sound_system : developer::Plugin {
                          name.c_str());
                 return;
             }
+#ifdef AFTER_HOURS_USE_RAYLIB
             auto &music = get(name);
             ::afterhours::PlayMusicStream(music);
+#endif
             record_play(PlayRecord{name, bus_of(name), effective_volume(name),
                                    0.5f, 1.f, std::nullopt});
         }
         void stop(const std::string &name) {
+#ifdef AFTER_HOURS_USE_RAYLIB
             if (contains(name)) ::afterhours::StopMusicStream(get(name));
+#else
+            (void)name;
+#endif
         }
 
         void update_volume(const float new_v) {
@@ -404,7 +454,11 @@ struct sound_system : developer::Plugin {
 
         void update() {
             for (const auto &kv : impl.storage) {
+#ifdef AFTER_HOURS_USE_RAYLIB
                 ::afterhours::UpdateMusicStream(kv.second);
+#else
+                (void)kv;
+#endif
             }
         }
 
@@ -416,10 +470,19 @@ struct sound_system : developer::Plugin {
         struct MusicLibraryImpl : Library<MusicType> {
             virtual MusicType convert_filename_to_object(
                 const char *, const char *filename) override {
+#ifdef AFTER_HOURS_USE_RAYLIB
                 return ::afterhours::LoadMusicStream(filename);
+#else
+                (void)filename;
+                return MusicType{};
+#endif
             }
             virtual void unload(MusicType music) override {
+#ifdef AFTER_HOURS_USE_RAYLIB
                 ::afterhours::UnloadMusicStream(music);
+#else
+                (void)music;
+#endif
             }
         } impl;
     };
@@ -513,7 +576,12 @@ struct sound_system : developer::Plugin {
                     const std::string &alias_name = names[try_index];
                     if (lib.contains(alias_name)) {
                         auto &s = lib.get(alias_name);
+#ifdef AFTER_HOURS_USE_RAYLIB
                         if (!::afterhours::IsSoundPlaying(s)) {
+#else
+                        if (true) {
+                            (void)s;
+#endif
                             lib.play_loaded(alias_name);
                             idx = (try_index + 1) % names.size();
                             return;
