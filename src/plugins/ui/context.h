@@ -21,6 +21,7 @@
 #include "../../../vendor/magic_enum/magic_enum.hpp"
 #endif
 #include <set>
+#include <string_view>
 #include <vector>
 
 #include "../../drawing_helpers.h"
@@ -29,6 +30,7 @@
 #include "../../warn_once.h"
 #include "../input_system.h"
 #include "components.h"
+#include "text_selection.h"
 #include "theme.h"
 #include "ui_collection.h"
 // UIComponent, for the parent-chain walk in contains_in_subtree. Not pulled in
@@ -175,6 +177,10 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   EntityID FAKE = -2;
 
   std::set<EntityID> focused_ids;
+  std::vector<EntityID> focus_order;
+
+  EntityID text_selection_entity = ROOT;
+  text_selection::Selection label_text_selection;
 
   EntityID hot_id = ROOT;          // hot means the mouse is over this element
   EntityID prev_hot_id = ROOT;     // previous frame's hot_id (for animations)
@@ -198,6 +204,17 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   bool grab_initial_focus = true;
   const char *focus_set_file = nullptr;
   int focus_set_line = 0;
+
+  bool pointer_owned_externally = false;
+
+  void claim_pointer_ownership() {
+    pointer_owned_externally = true;
+    hot_id = prev_hot_id = active_id = prev_active_id = ROOT;
+  }
+  void release_pointer_ownership() { pointer_owned_externally = false; }
+  [[nodiscard]] bool pointer_is_owned_externally() const {
+    return pointer_owned_externally;
+  }
 
   MousePointerState mouse;
   InputAction last_action = InputAction::None;
@@ -278,6 +295,36 @@ template <typename InputAction> struct UIContext final : BaseComponent {
                        [id](const auto &pair) { return pair.second(id); });
   }
 
+  [[nodiscard]] bool has_selection() const {
+    return text_selection_entity != ROOT &&
+           label_text_selection.has_selection();
+  }
+  [[nodiscard]] text_selection::Range selection_range() const {
+    return label_text_selection.range();
+  }
+  void set_text_selection(EntityID id, size_t anchor, size_t cursor) {
+    text_selection_entity = id;
+    label_text_selection.anchor = anchor;
+    label_text_selection.cursor = cursor;
+  }
+  void clear_text_selection() {
+    text_selection_entity = ROOT;
+    label_text_selection.collapse_to(0);
+  }
+  [[nodiscard]] std::string_view selected_text() const {
+    if (!has_selection())
+      return "";
+    OptEntity opt = UICollectionHolder::getEntityForID(text_selection_entity);
+    if (!opt.valid() || !opt.asE().template has<HasLabel>())
+      return "";
+    const std::string &label = opt.asE().template get<HasLabel>().label;
+    const text_selection::Range r = label_text_selection.range();
+    if (r.start >= label.size())
+      return "";
+    return std::string_view(label).substr(
+        r.start, std::min(r.length(), label.size() - r.start));
+  }
+
   [[nodiscard]] bool is_hot(EntityID id) const { return hot_id == id; };
   [[nodiscard]] bool is_active(EntityID id) const { return active_id == id; };
   // For animations: check previous frame's state (since current frame state
@@ -290,6 +337,34 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   void set_active(EntityID id) { active_id = id; }
 
   bool has_focus(EntityID id) const { return focus_id == id; }
+
+  [[nodiscard]] EntityID entity_by_debug_name(std::string_view name) const {
+    const auto entity = EntityQuery<>(UICollectionHolder::get().collection,
+                                      {.ignore_temp_warning = true})
+                            .whereHasComponent<UIComponentDebug>()
+                            .whereLambda([&](const Entity &e) {
+                              return e.get<UIComponentDebug>().name() == name;
+                            })
+                            .gen_first();
+    return entity ? entity.asE().id : ROOT;
+  }
+
+  // Hover/focus by debug name, for render and game systems that know a
+  // widget's name but not its entity. A name no entity carries is false.
+  [[nodiscard]] bool is_hovered(std::string_view name) const {
+    const EntityID id = entity_by_debug_name(name);
+    return id != ROOT && is_hot(id);
+  }
+  [[nodiscard]] bool is_focused(std::string_view name) const {
+    const EntityID id = entity_by_debug_name(name);
+    return id != ROOT && has_focus(id);
+  }
+  // True when the focus ring sits on the named element (visual_focus_id,
+  // which follows focus clusters, trays and :focus-visible).
+  [[nodiscard]] bool is_focus_visible(std::string_view name) const {
+    const EntityID id = entity_by_debug_name(name);
+    return id != ROOT && visual_focus_id == id;
+  }
   // Records WHERE focus was set, not just that it was. A screen whose Tab
   // order breaks has to find the last writer, and nothing reported it: the
   // search was guess-and-rebuild. File and line rather than a built string,
@@ -376,7 +451,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   /// plain div is the obvious first thing to try and would otherwise never
   /// fire, so it says so rather than quietly answering no.
   [[nodiscard]] bool is_right_click(EntityID id) const {
-    if (!mouse.right_just_released)
+    if (pointer_owned_externally || !mouse.right_just_released)
       return false;
     if (contains_in_subtree(id, prev_hot_id))
       return true;
@@ -384,7 +459,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     return false;
   }
   [[nodiscard]] bool is_middle_click(EntityID id) const {
-    if (!mouse.middle_just_released)
+    if (pointer_owned_externally || !mouse.middle_just_released)
       return false;
     if (contains_in_subtree(id, prev_hot_id))
       return true;
@@ -402,8 +477,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
   }
 
   void active_if_mouse_inside(EntityID id, RectangleType rect) {
-    // Check if input is blocked for this element (e.g., by a modal)
-    if (!is_input_allowed(id)) {
+    if (pointer_owned_externally || !is_input_allowed(id)) {
       return;
     }
 
@@ -429,7 +503,14 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     last_processed = ROOT;
     hot_id = ROOT;
     active_id = ROOT;
+    clear_text_selection();
+    pointer_owned_externally = false;
+    // Pristine, not just unfocused: has_interacted/focus_modality left set
+    // would draw (or suppress) a ring the fresh context would not.
+    has_interacted = false;
+    focus_modality = FocusSource::Grab;
     focused_ids.clear();
+    focus_order.clear();
     render_cmds.clear();
     input_gates.clear();
     last_action = InputAction::None;
@@ -471,7 +552,7 @@ template <typename InputAction> struct UIContext final : BaseComponent {
     if (!opt.has_value())
       return;
     const Entity &e = opt.asE();
-    if (e.has<HasClickListener>() || e.has<HasDragListener>())
+    if (e.has_any<HasClickListener, HasDragListener, Hoverable>())
       return; // hot could have landed here; the click was simply elsewhere
     warn_once(id,
               "{}({}) will never fire: this element has no click "
@@ -546,6 +627,104 @@ template <typename InputAction> struct UIContext final : BaseComponent {
            opt.asE().template has<ConsumesDirectionalInput>();
   }
 
+  [[nodiscard]] bool is_tab_focusable(const Entity &e) const {
+    if (!e.template has_any<HasClickListener, HasDragListener,
+                            HasLeftRightListener>())
+      return false;
+    if (e.template has_any<SkipWhenTabbing, DoesNotTakeFocus, ShouldHide>())
+      return false;
+    EntityID cur_id = e.id;
+    for (int depth = 0; depth < 64 && cur_id >= 0; ++depth) {
+      OptEntity cur = UICollectionHolder::getEntityForID(cur_id);
+      if (!cur.valid())
+        break;
+      if (cur.asE().template has<Inert>())
+        return false;
+      if (!cur.asE().template has<UIComponent>())
+        break;
+      cur_id = cur.asE().template get<UIComponent>().parent;
+    }
+    if (e.template is_missing<UIComponent>() ||
+        e.template get<UIComponent>().skip_when_tabbing ||
+        !e.template get<UIComponent>().was_rendered_to_screen)
+      return false;
+    return is_input_allowed(e.id);
+  }
+
+  [[nodiscard]] std::vector<EntityID> build_tab_order() const {
+    std::vector<EntityID> order;
+    std::set<EntityID> visited;
+    const auto visit = [&](auto &&self, Entity &entity) -> void {
+      if (!visited.insert(entity.id).second)
+        return;
+      if (is_tab_focusable(entity))
+        order.push_back(entity.id);
+      if (!entity.template has<UIComponent>())
+        return;
+      for (EntityID child_id : entity.get<UIComponent>().children) {
+        OptEntity child = UICollectionHolder::getEntityForID(child_id);
+        if (child.has_value() && child.asE().template has<UIComponent>())
+          self(self, child.asE());
+      }
+    };
+    for (const auto &e : UICollectionHolder::get().collection.get_entities()) {
+      if (e && e->template has<UIComponent>() &&
+          e->get<UIComponent>().parent == -1)
+        visit(visit, *e);
+    }
+    for (const auto &e : UICollectionHolder::get().collection.get_entities()) {
+      if (e && !visited.contains(e->id) && is_tab_focusable(*e))
+        order.push_back(e->id);
+    }
+    return order;
+  }
+
+  [[nodiscard]] EntityID nearest_focus_scope(EntityID id) const {
+    EntityID cur = id;
+    for (int depth = 0; depth < 64 && cur >= 0; ++depth) {
+      OptEntity opt = UICollectionHolder::getEntityForID(cur);
+      if (!opt.valid())
+        return ROOT;
+      Entity &e = opt.asE();
+      if (e.template has<FocusScope>())
+        return e.id;
+      if (!e.template has<UIComponent>())
+        return ROOT;
+      cur = e.get<UIComponent>().parent;
+    }
+    return ROOT;
+  }
+
+  [[nodiscard]] std::vector<EntityID>
+  tab_order_for(EntityID focused, const std::vector<EntityID> &order) const {
+    const EntityID scope = nearest_focus_scope(focused);
+    if (scope == ROOT)
+      return order;
+    std::vector<EntityID> scoped;
+    for (EntityID id : order)
+      if (nearest_focus_scope(id) == scope)
+        scoped.push_back(id);
+    return scoped;
+  }
+
+  void move_focus(int dir) {
+    const std::vector<EntityID> order = build_tab_order();
+    focus_order = order;
+    const std::vector<EntityID> scoped = tab_order_for(focus_id, order);
+    if (scoped.empty())
+      return;
+    const auto it = std::find(scoped.begin(), scoped.end(), focus_id);
+    if (it == scoped.end()) {
+      set_focus(dir < 0 ? scoped.back() : scoped.front(),
+                FocusSource::Explicit);
+      return;
+    }
+    const long n = static_cast<long>(scoped.size());
+    const long idx = (static_cast<long>(it - scoped.begin()) + dir) % n;
+    set_focus(scoped[static_cast<size_t>(idx < 0 ? idx + n : idx)],
+              FocusSource::Explicit);
+  }
+
   void process_tabbing(EntityID id) {
     if (has_focus(id)) {
       // Arrow Up/Down move focus just like Tab / Shift+Tab, EXCEPT when the
@@ -553,33 +732,31 @@ template <typename InputAction> struct UIContext final : BaseComponent {
       // adjusting a value) or the app has taken them over wholesale.
       const bool arrows_navigate =
           theme.arrows_tab && !focused_consumes_directional_input();
+      bool forward = false, backward = false;
       if constexpr (magic_enum::enum_contains<InputAction>("WidgetNext")) {
-        bool forward = pressed(InputAction::WidgetNext);
+        forward = pressed(InputAction::WidgetNext);
         if constexpr (magic_enum::enum_contains<InputAction>("WidgetDown")) {
           if (arrows_navigate && pressed(InputAction::WidgetDown))
             forward = true;
         }
-        if (forward) {
-          set_focus(ROOT);
-          if constexpr (magic_enum::enum_contains<InputAction>("WidgetMod")) {
-            if (is_held_down(InputAction::WidgetMod)) {
-              set_focus(last_processed);
-            }
-          }
-        }
       }
       if constexpr (magic_enum::enum_contains<InputAction>("WidgetBack")) {
-        bool backward = pressed(InputAction::WidgetBack);
+        backward = pressed(InputAction::WidgetBack);
         if constexpr (magic_enum::enum_contains<InputAction>("WidgetUp")) {
           if (arrows_navigate && pressed(InputAction::WidgetUp))
             backward = true;
         }
-        if (backward) {
-          set_focus(last_processed);
+      }
+      if (forward) {
+        bool reverse = false;
+        if constexpr (magic_enum::enum_contains<InputAction>("WidgetMod")) {
+          reverse = is_held_down(InputAction::WidgetMod);
         }
+        move_focus(reverse ? -1 : 1);
+      } else if (backward) {
+        move_focus(-1);
       }
     }
-    // before any returns
     last_processed = id;
   }
 
