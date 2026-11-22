@@ -8,6 +8,8 @@
 namespace afterhours {
 namespace skeletal {
 
+#ifdef AFTER_HOURS_USE_RAYLIB
+
 using Vec3 = ::afterhours::Vec3;
 using Quat = ::afterhours::Quat;
 using Mat4 = ::afterhours::Mat4;
@@ -23,6 +25,7 @@ struct Skeleton {
   std::vector<int> parent;
   std::vector<Mat4> inverse_bind;
 };
+
 struct Pose { std::vector<TRS> local; };
 
 inline Pose bind_pose(std::size_t joints) {
@@ -49,8 +52,11 @@ inline void compute_skinning(const Skeleton &sk,
 }
 
 struct Vec3Track { std::vector<float> times; std::vector<Vec3> values; };
+
 struct QuatTrack { std::vector<float> times; std::vector<Quat> values; };
+
 struct JointTracks { Vec3Track pos; QuatTrack rot; Vec3Track scale; };
+
 struct Clip {
   float duration = 0.f;
   std::vector<JointTracks> joints;
@@ -75,6 +81,7 @@ inline Vec3 sample(const Vec3Track &tr, float t, Vec3 fallback) {
   detail::segment(tr.times, t, i, f);
   return lerp(tr.values[i], tr.values[i + 1], f);
 }
+
 inline Quat sample(const QuatTrack &tr, float t, Quat fallback) {
   if (tr.values.empty()) return fallback;
   if (tr.values.size() == 1) return tr.values[0];
@@ -92,5 +99,9 @@ inline void sample(const Clip &clip, float t, Pose &out) {
   }
 }
 
-}
-}
+#else
+// TODO: GLM for non-raylib backends
+#endif
+
+} // namespace skeletal
+} // namespace afterhours

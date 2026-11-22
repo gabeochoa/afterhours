@@ -384,6 +384,7 @@ endif
 
 RAYLIB_TESTS := \
 	auto_text_color_test \
+	skeletal_test \
 	math3d_test \
 	value_types_test \
 	wrappers_test \
