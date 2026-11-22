@@ -43,6 +43,8 @@ inline bool is_pinching() {
   return pinch_active.load(std::memory_order_relaxed);
 }
 
+enum class Availability { Available, Unavailable, Unknown };
+
 #if defined(__APPLE__) && defined(AFTER_HOURS_ENABLE_MACOS_GESTURES)
 
 } // namespace gestures
@@ -60,6 +62,7 @@ namespace detail {
 // included, to keep AppKit headers out of a C++ TU.
 inline constexpr unsigned long long kEventMaskMagnify = 1ULL << 30;
 inline bool monitor_installed = false;
+inline bool monitor_attempted = false;
 } // namespace detail
 
 /// Call once after the window exists. Idempotent.
@@ -70,6 +73,7 @@ inline bool monitor_installed = false;
 inline void install_pinch_monitor() {
   if (detail::monitor_installed)
     return;
+  detail::monitor_attempted = true;
 
   Class ns_event = objc_getClass("NSEvent");
   if (!ns_event) {
@@ -117,6 +121,14 @@ inline void install_pinch_monitor() {
   detail::monitor_installed = true;
 }
 
+inline Availability gesture_availability() {
+  if (detail::monitor_installed)
+    return Availability::Available;
+  if (detail::monitor_attempted)
+    return Availability::Unavailable;
+  return Availability::Unknown;
+}
+
 #else
 
 /// No-op off macOS, or when the opt-in macro is not set.
@@ -125,6 +137,10 @@ inline void install_pinch_monitor() {
 /// unconditionally at startup is the right thing to do, and a mouse-only
 /// machine should not be nagged for it.
 inline void install_pinch_monitor() {}
+
+inline Availability gesture_availability() {
+  return Availability::Unavailable;
+}
 
 #endif
 

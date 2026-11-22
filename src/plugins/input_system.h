@@ -888,6 +888,15 @@ struct input : developer::Plugin {
         return gestures::is_pinching();
     }
 
+    static gestures::Availability gesture_availability() {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        if (testing::test_input::detail::test_mode) {
+            return gestures::Availability::Available;
+        }
+#endif
+        return gestures::gesture_availability();
+    }
+
     enum struct DeviceMedium {
         None,
         Keyboard,
