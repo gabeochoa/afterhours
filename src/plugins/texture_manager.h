@@ -2,6 +2,7 @@
 #pragma once
 #include "../config.h"
 #include "../developer.h"
+#include "../warn_once.h"
 
 namespace afterhours {
 namespace texture_manager {
@@ -40,7 +41,10 @@ inline void draw_texture_pro(const Texture sheet, const Rectangle frame,
 #else
 // No graphics backend selected: sprites are a no-op.
 inline void draw_texture_pro(const Texture, const Rectangle, const Rectangle,
-                             const Vector2Type, const float, const Color) {}
+                             const Vector2Type, const float, const Color) {
+  warn_once(0, "@notimplemented texture_manager::draw_texture_pro on this "
+               "backend (no raylib/sokol); nothing is drawn");
+}
 #endif
 #endif
 

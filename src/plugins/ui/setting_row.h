@@ -181,8 +181,11 @@ ElementResult setting_row(HasUIContext auto &ctx, EntityParent ep_pair,
     config.with_size(ComponentSize{percent(1.0f), pixels((int)row_h)});
   }
 
-  // Add consistent spacing between rows
-  config.with_margin(Margin{.bottom = pixels(row_config.row_spacing)});
+  // Default row spacing, only when the caller set no margin of their own:
+  // an unconditional with_margin would wipe a caller margin wholesale.
+  if (!config.has_margin()) {
+    config.with_margin(Margin{.bottom = pixels(row_config.row_spacing)});
+  }
 
   // Guarded like size above. It used to be unconditional, so a caller asking
   // for a bigger face got 22px anyway -- and 22 is under some apps' own
