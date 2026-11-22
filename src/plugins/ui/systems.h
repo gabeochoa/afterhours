@@ -182,6 +182,10 @@ struct UIEntityMappingCache : BaseComponent {
 /// System that builds the entity mapping cache once per frame.
 /// Must run before RunAutoLayout and TrackIfComponentWillBeRendered.
 struct BuildUIEntityMapping : System<> {
+  // All the work is in once(); the per-entity pass would visit every entity
+  // and do nothing (the base for_each_with is empty).
+  bool should_iterate() const override { return false; }
+
   virtual void once(float) override {
     auto *cache = EntityHelper::get_singleton_cmp<UIEntityMappingCache>();
     if (!cache) {
@@ -226,6 +230,7 @@ struct BeginUIContextManager : System<UIContext<InputAction>> {
   virtual void for_each_with(Entity &entity, UIContext<InputAction> &context,
                              float dt) override {
     context.render_cmds.clear();
+    context.focus_order.clear();
     context.dt = dt;
     context.last_action = InputAction::None;
     context.last_action_modifiers = 0;
@@ -818,6 +823,11 @@ struct ResolveHitTarget : SystemWithUIContext<> {
   void resolve() {
     if (!context)
       return;
+    if (context->pointer_is_owned_externally()) {
+      context->set_hot(context->ROOT);
+      context->set_active(context->ROOT);
+      return;
+    }
 
     EntityID winner = context->ROOT;
     int best_layer = std::numeric_limits<int>::min();
@@ -858,7 +868,8 @@ private:
   // Every guard HandleClicks applies before it would fire, so resolution and
   // firing agree on who is eligible.
   bool is_candidate(const Entity &e, const UIComponent &cmp) const {
-    if (e.is_missing<HasClickListener>() && e.is_missing<HasDragListener>())
+    if (e.is_missing<HasClickListener>() && e.is_missing<HasDragListener>() &&
+        e.is_missing<Hoverable>())
       return false;
     // Opted out of hit-testing entirely: the element behind it wins instead.
     if (e.has<IgnorePointerEvents>() || detail::in_inert_subtree(e))
@@ -1081,23 +1092,7 @@ struct CloseDropdownOnClickOutside : System<HasDropdownState, UIComponent> {
 // not ShouldHide, was rendered this frame, and input is allowed.
 template <typename InputAction>
 bool can_be_focused(UIContext<InputAction> &ctx, const Entity &e) {
-  if (e.template is_missing<HasClickListener>() &&
-      e.template is_missing<HasDragListener>() &&
-      e.template is_missing<HasLeftRightListener>())
-    return false;
-  if (e.template has<SkipWhenTabbing>())
-    return false;
-  if (e.template has<DoesNotTakeFocus>())
-    return false;
-  if (e.template has<ShouldHide>() || detail::in_inert_subtree(e))
-    return false;
-  if (e.template is_missing<UIComponent>() ||
-      e.template get<UIComponent>().skip_when_tabbing ||
-      !e.template get<UIComponent>().was_rendered_to_screen)
-    return false;
-  if (!ctx.is_input_allowed(e.id))
-    return false;
-  return true;
+  return ctx.is_tab_focusable(e);
 }
 
 template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
@@ -1106,6 +1101,13 @@ template <typename InputAction> struct HandleTabbing : SystemWithUIContext<> {
   virtual void once(float) override {
     this->context =
         EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    if (!context)
+      return;
+    context->focus_order = context->build_tab_order();
+    for (EntityID id : context->focus_order)
+      context->focused_ids.insert(id);
+    if (!context->focus_order.empty())
+      context->try_to_grab(context->focus_order.front());
   }
 
   virtual ~HandleTabbing() {}
@@ -1295,7 +1297,9 @@ struct HandleLeftRight : SystemWithUIContext<ui::HasLeftRightListener> {
 
 private:
   bool direction_triggered(const Entity &entity, InputAction action) {
-    if (entity.has<HasStepperState>()) return context->pressed_or_repeat(action);
+    // Sliders and steppers step a value: pace held keys by time, not frames.
+    if (entity.has<HasStepperState>() || entity.has<HasSliderState>())
+      return context->pressed_or_repeat(action);
     return context->pressed(action) || context->is_held_down(action);
   }
 
@@ -1801,6 +1805,8 @@ inline void create_or_update_drag_spacer(DragGroupState &state) {
 }
 
 template <typename InputAction> struct HandleDragGroupsPreLayout : System<> {
+  bool should_iterate() const override { return false; }
+
   /// runs BEFORE RunAutoLayout.
   /// - Hides the dragged entity (should_hide) so layout skips it.
   /// - Inserts a spacer entity at the current hover position so the layout
@@ -1833,6 +1839,8 @@ template <typename InputAction> struct HandleDragGroupsPreLayout : System<> {
 };
 
 template <typename InputAction> struct HandleDragGroupsPostLayout : System<> {
+  bool should_iterate() const override { return false; }
+
   /// runs AFTER RunAutoLayout and HandleDrags.
   /// - Detects drag start (mouse press inside a drag_group child).
   /// - While dragging: updates hover_group / hover_index, creates an overlay
@@ -2067,7 +2075,9 @@ struct HandleScrollbarDrag : SystemWithUIContext<HasScrollView> {
     if (!context)
       return;
     if (!cmp.was_rendered_to_screen || cmp.should_hide ||
-        entity.has<ShouldHide>() || !context->is_input_allowed(entity.id)) {
+        entity.has<ShouldHide>() ||
+        context->pointer_is_owned_externally() ||
+        !context->is_input_allowed(entity.id)) {
       scroll.dragging_scrollbar = false;
       return;
     }
@@ -2263,7 +2273,9 @@ struct HandleScrollInput : SystemWithUIContext<HasScrollView> {
     if (rect.width <= 0.0f || rect.height <= 0.0f)
       return;
 
-    if (!context || !context->is_input_allowed(entity.id)) return;
+    if (!context || context->pointer_is_owned_externally() ||
+        !context->is_input_allowed(entity.id))
+      return;
 
     if (!is_mouse_inside(context->mouse.pos, detail::hit_rect(entity, cmp)))
       return;
