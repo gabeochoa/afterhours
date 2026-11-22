@@ -200,6 +200,7 @@ ALL_TESTS := \
 	files_atomic_write_test \
 	files_resource_path_test \
 	files_cache_path_test \
+	files_documents_test \
 	capture_test \
 	capture_perf_test \
 	polyline_test \
@@ -463,6 +464,7 @@ $(OUT)/files_test_roots_test: ../src/plugins/files.cpp
 $(OUT)/files_e2e_temp_roots_test: ../src/plugins/files.cpp
 $(OUT)/files_e2e_tmpdir_env_test: ../src/plugins/files.cpp
 $(OUT)/files_cache_path_test: ../src/plugins/files.cpp
+$(OUT)/files_documents_test: ../src/plugins/files.cpp
 $(OUT)/bundle_test: ../src/plugins/files.cpp
 $(OUT)/file_watcher_test: ../src/plugins/file_watcher.cpp
 
