@@ -38,8 +38,7 @@ inline void reset_allocation_counters() {
   detail::total_bytes.store(0, std::memory_order_relaxed);
 }
 
-// Feed the current tally into a profiling Collector's counters. Templated so
-// this header stays free of the profiling include (which cycles via system.h).
+// Feed the current tally into a profiling Collector's counters.
 template <typename Collector> bool feed_alloc_counters(Collector &collector) {
   const auto snapshot = allocation_counters();
   bool ok = collector.counter("alloc.count", "allocations",

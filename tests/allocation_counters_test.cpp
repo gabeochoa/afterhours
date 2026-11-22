@@ -15,7 +15,6 @@ TEST(allocations_are_counted_exactly) {
     CHECK(counted.live_allocations == 7);
     CHECK(counted.live_bytes == 7 * 4 * sizeof(int));
     CHECK(counted.total_bytes == 7 * 4 * sizeof(int));
-    // A second element type feeds the same process-wide tally.
     developer::DebugAllocator<double> doubles;
     auto *extra = doubles.allocate(3);
     CHECK(developer::allocation_counters().allocations == 8);
