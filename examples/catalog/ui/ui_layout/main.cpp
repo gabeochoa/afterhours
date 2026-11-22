@@ -1033,25 +1033,28 @@ TEST_CASE("top pixel margin on grandparent") {
     auto [grandparent, parent, child] =
         grandparent_setup_margin(sophie, Axis::top, pixels(10.f));
 
+    // Percent sizes are charged their own margin: the grandparent's
+    // percent(0.5) height share is H2, so the rect is H2 - 10 and the
+    // bounds (rect + margin) come back to exactly H2.
     auto grandparent_bounds =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = 370};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
     auto grandparent_rect =
-        Rectangle{.x = 0, .y = 10, .width = 100, .height = H2};
+        Rectangle{.x = 0, .y = 10, .width = 100, .height = H2 - 10.f};
     CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
     CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
 
     auto parent_bounds =
-        Rectangle{.x = 0, .y = 10, .width = 100, .height = (H2) / 2.f};
+        Rectangle{.x = 0, .y = 10, .width = 100, .height = (H2 - 10.f) / 2.f};
     auto parent_rect =
-        Rectangle{.x = 0, .y = 10, .width = 100, .height = (H2) / 2.f};
+        Rectangle{.x = 0, .y = 10, .width = 100, .height = (H2 - 10.f) / 2.f};
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
     // Note: current layout allows fractional pixel sizes here (no rounding up).
     auto child_bounds =
-        Rectangle{.x = 0, .y = 10, .width = 100, .height = (H2) / 4.f};
+        Rectangle{.x = 0, .y = 10, .width = 100, .height = (H2 - 10.f) / 4.f};
     auto child_rect =
-        Rectangle{.x = 0, .y = 10, .width = 100, .height = (H2) / 4.f};
+        Rectangle{.x = 0, .y = 10, .width = 100, .height = (H2 - 10.f) / 4.f};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1089,24 +1092,24 @@ TEST_CASE("bottom pixel margin on grandparent") {
         grandparent_setup_margin(sophie, Axis::bottom, pixels(10.f));
 
     auto grandparent_bounds =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = 370};
-    auto grandparent_rect =
         Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+    auto grandparent_rect =
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = H2 - 10.f};
     CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
     CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
 
     auto parent_bounds =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = (H2) / 2.f};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = (H2 - 10.f) / 2.f};
     auto parent_rect =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = (H2) / 2.f};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = (H2 - 10.f) / 2.f};
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
     // Note: current layout allows fractional pixel sizes here (no rounding up).
     auto child_bounds =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = (H2) / 4.f};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = (H2 - 10.f) / 4.f};
     auto child_rect =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = (H2) / 4.f};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = (H2 - 10.f) / 4.f};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1150,16 +1153,16 @@ TEST_CASE("top pixel margin on parent") {
     CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
     CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
 
-    auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 190};
+    auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 180};
     auto parent_rect =
-        Rectangle{.x = 0, .y = 10, .width = 100, .height = 180};
+        Rectangle{.x = 0, .y = 10, .width = 100, .height = 170};
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
     auto child_bounds =
-        Rectangle{.x = 0, .y = 10, .width = 100, .height = 90};
+        Rectangle{.x = 0, .y = 10, .width = 100, .height = 85};
     auto child_rect =
-        Rectangle{.x = 0, .y = 10, .width = 100, .height = 90};
+        Rectangle{.x = 0, .y = 10, .width = 100, .height = 85};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1176,16 +1179,16 @@ TEST_CASE("left pixel margin on parent") {
     CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
     CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
 
-    auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 110, .height = 180};
+    auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 180};
     auto parent_rect =
-        Rectangle{.x = 10, .y = 0, .width = 100, .height = H4};
+        Rectangle{.x = 10, .y = 0, .width = 90, .height = H4};
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
     auto child_bounds =
-        Rectangle{.x = 10, .y = 0, .width = 100, .height = H4 / 2.f};
+        Rectangle{.x = 10, .y = 0, .width = 90, .height = H4 / 2.f};
     auto child_rect =
-        Rectangle{.x = 10, .y = 0, .width = 100, .height = H4 / 2.f};
+        Rectangle{.x = 10, .y = 0, .width = 90, .height = H4 / 2.f};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1202,16 +1205,16 @@ TEST_CASE("bottom pixel margin on parent") {
     CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
     CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
 
-    auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 190};
+    auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 180};
     auto parent_rect =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = 180};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = 170};
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
     auto child_bounds =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = 85};
     auto child_rect =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = 85};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1228,16 +1231,16 @@ TEST_CASE("right pixel margin on parent") {
     CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
     CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
 
-    auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 110, .height = 180};
+    auto parent_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 180};
     auto parent_rect =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = H4};
+        Rectangle{.x = 0, .y = 0, .width = 90, .height = H4};
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
     auto child_bounds =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = H4 / 2.f};
+        Rectangle{.x = 0, .y = 0, .width = 90, .height = H4 / 2.f};
     auto child_rect =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = H4 / 2.f};
+        Rectangle{.x = 0, .y = 0, .width = 90, .height = H4 / 2.f};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1259,9 +1262,9 @@ TEST_CASE("top pixel margin on child") {
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
-    auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 100};
+    auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
     auto child_rect =
-        Rectangle{.x = 0, .y = 10, .width = 100, .height = 90};
+        Rectangle{.x = 0, .y = 10, .width = 100, .height = 80};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1283,9 +1286,9 @@ TEST_CASE("left pixel margin on child") {
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
-    auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 110, .height = 90};
+    auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
     auto child_rect =
-        Rectangle{.x = 10, .y = 0, .width = 100, .height = H8};
+        Rectangle{.x = 10, .y = 0, .width = 90, .height = H8};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1307,9 +1310,9 @@ TEST_CASE("bottom pixel margin on child") {
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
-    auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 100};
+    auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
     auto child_rect =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = 80};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1331,9 +1334,9 @@ TEST_CASE("right pixel margin on child") {
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
-    auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 110, .height = 90};
+    auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
     auto child_rect =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = H8};
+        Rectangle{.x = 0, .y = 0, .width = 90, .height = H8};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1346,23 +1349,23 @@ TEST_CASE("top percent margin on grandparent") {
     float gap = HEIGHT * 0.1f;
 
     auto grandparent_bounds =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = 432};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
     auto grandparent_rect =
-        Rectangle{.x = 0, .y = gap, .width = 100, .height = H2};
+        Rectangle{.x = 0, .y = gap, .width = 100, .height = H2 - gap};
     CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
     CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
 
     auto parent_bounds =
-        Rectangle{.x = 0, .y = gap, .width = 100, .height = (H2) / 2.f};
+        Rectangle{.x = 0, .y = gap, .width = 100, .height = (H2 - gap) / 2.f};
     auto parent_rect =
-        Rectangle{.x = 0, .y = gap, .width = 100, .height = (H2) / 2.f};
+        Rectangle{.x = 0, .y = gap, .width = 100, .height = (H2 - gap) / 2.f};
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
     auto child_bounds = Rectangle{
-        .x = 0, .y = gap, .width = 100, .height = std::ceil((H2) / 4.f)};
+        .x = 0, .y = gap, .width = 100, .height = std::ceil((H2 - gap) / 4.f)};
     auto child_rect = Rectangle{
-        .x = 0, .y = gap, .width = 100, .height = std::ceil((H2) / 4.f)};
+        .x = 0, .y = gap, .width = 100, .height = std::ceil((H2 - gap) / 4.f)};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1408,23 +1411,23 @@ TEST_CASE("bottom percent margin on grandparent") {
     float gap = HEIGHT * 0.1f;
 
     auto grandparent_bounds =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = 432};
-    auto grandparent_rect =
         Rectangle{.x = 0, .y = 0, .width = 100, .height = H2};
+    auto grandparent_rect =
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = H2 - gap};
     CHECK_THAT(to_bounds(grandparent), RectMatcher(grandparent_bounds));
     CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
 
     auto parent_bounds =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = (H2) / 2.f};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = (H2 - gap) / 2.f};
     auto parent_rect =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = (H2) / 2.f};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = (H2 - gap) / 2.f};
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
     auto child_bounds = Rectangle{
-        .x = 0, .y = 0, .width = 100, .height = std::ceil((H2) / 4.f)};
+        .x = 0, .y = 0, .width = 100, .height = std::ceil((H2 - gap) / 4.f)};
     auto child_rect = Rectangle{
-        .x = 0, .y = 0, .width = 100, .height = std::ceil((H2) / 4.f)};
+        .x = 0, .y = 0, .width = 100, .height = std::ceil((H2 - gap) / 4.f)};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1477,15 +1480,15 @@ TEST_CASE("top percent margin on parent") {
     CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
 
     auto parent_bounds =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = 216};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = 180};
     auto parent_rect =
-        Rectangle{.x = 0, .y = 36, .width = 100, .height = 180};
+        Rectangle{.x = 0, .y = 36, .width = 100, .height = 144};
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
     auto child_bounds =
-        Rectangle{.x = 0, .y = 36, .width = 100, .height = 90};
-    auto child_rect = Rectangle{.x = 0, .y = 36, .width = 100, .height = 90};
+        Rectangle{.x = 0, .y = 36, .width = 100, .height = 72};
+    auto child_rect = Rectangle{.x = 0, .y = 36, .width = 100, .height = 72};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1502,21 +1505,23 @@ TEST_CASE("left percent margin on parent") {
     CHECK_THAT(to_bounds(grandparent), RectMatcher(gp_bounds));
     CHECK_THAT(to_rect(grandparent), RectMatcher(gp_rect));
 
-    // bounds includes the margin; rect is the content box inset by it
+    // bounds includes the margin; rect is the content box inset by it.
+    // The parent's width is percent(1) of 100, charged its own margin,
+    // so rect + margin comes back to exactly 100.
     auto p_bounds =
-        Rectangle{.x = 0, .y = 0, .width = 100 + gap, .height = H2 / 2.f};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = H2 / 2.f};
     auto p_rect =
-        Rectangle{.x = gap, .y = 0, .width = 100, .height = H2 / 2.f};
+        Rectangle{.x = gap, .y = 0, .width = 100 - gap, .height = H2 / 2.f};
     CHECK_THAT(to_bounds(parent), RectMatcher(p_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(p_rect));
 
     auto child_bounds = Rectangle{.x = gap,
                                   .y = 0,
-                                  .width = 100,
+                                  .width = 100 - gap,
                                   .height = std::ceil((H2 / 2.f) / 2.f)};
     auto child_rect = Rectangle{.x = gap,
                                 .y = 0,
-                                .width = 100,
+                                .width = 100 - gap,
                                 .height = std::ceil((H2 / 2.f) / 2.f)};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
@@ -1537,15 +1542,15 @@ TEST_CASE("bottom percent margin on parent") {
     CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
 
     auto parent_bounds =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = 216};
-    auto parent_rect =
         Rectangle{.x = 0, .y = 0, .width = 100, .height = 180};
+    auto parent_rect =
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = 144};
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
     auto child_bounds =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
-    auto child_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = 72};
+    auto child_rect = Rectangle{.x = 0, .y = 0, .width = 100, .height = 72};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1565,19 +1570,19 @@ TEST_CASE("right percent margin on parent") {
     CHECK_THAT(to_rect(grandparent), RectMatcher(grandparent_rect));
 
     auto parent_bounds =
-        Rectangle{.x = 0, .y = 0, .width = 110, .height = 180};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = 180};
     auto parent_rect =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = H2 / 2.f};
+        Rectangle{.x = 0, .y = 0, .width = 90, .height = H2 / 2.f};
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
     auto child_bounds = Rectangle{.x = 0,
                                   .y = 0,
-                                  .width = 100,
+                                  .width = 90,
                                   .height = std::ceil((H2 / 2.f) / 2.f)};
     auto child_rect = Rectangle{.x = 0,
                                 .y = 0,
-                                .width = 100,
+                                .width = 90,
                                 .height = std::ceil((H2 / 2.f) / 2.f)};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
@@ -1602,9 +1607,9 @@ TEST_CASE("top percent margin on child") {
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
-    auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 108};
+    auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
     auto child_rect =
-        Rectangle{.x = 0, .y = 18, .width = 100, .height = 90};
+        Rectangle{.x = 0, .y = 18, .width = 100, .height = 72};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1631,9 +1636,9 @@ TEST_CASE("left percent margin on child") {
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
     auto child_bounds =
-        Rectangle{.x = 0, .y = 0, .width = 110, .height = 90};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
     auto child_rect =
-        Rectangle{.x = gap, .y = 0, .width = 100, .height = H2 / 4.f};
+        Rectangle{.x = gap, .y = 0, .width = 100 - gap, .height = H2 / 4.f};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1657,9 +1662,9 @@ TEST_CASE("bottom percent margin on child") {
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
-    auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 108};
+    auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
     auto child_rect =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
+        Rectangle{.x = 0, .y = 0, .width = 100, .height = 72};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }
@@ -1683,9 +1688,9 @@ TEST_CASE("right percent margin on child") {
     CHECK_THAT(to_bounds(parent), RectMatcher(parent_bounds));
     CHECK_THAT(to_rect(parent), RectMatcher(parent_rect));
 
-    auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 110, .height = 90};
+    auto child_bounds = Rectangle{.x = 0, .y = 0, .width = 100, .height = 90};
     auto child_rect =
-        Rectangle{.x = 0, .y = 0, .width = 100, .height = H8};
+        Rectangle{.x = 0, .y = 0, .width = 90, .height = H8};
     CHECK_THAT(to_bounds(child), RectMatcher(child_bounds));
     CHECK_THAT(to_rect(child), RectMatcher(child_rect));
 }

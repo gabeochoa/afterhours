@@ -422,9 +422,9 @@ inline void apply_motion_hook(Ctx &ctx, Entity &entity,
     hc.skip_hover_override = true;
   }
   if (mv.blur.has_value())
-    entity.addComponentIfMissing<ui::HasBlur>().radius = *mv.blur;
+    entity.toggleComponent<ui::HasBlur>(true)->radius = *mv.blur;
   else if (config.blur == 0.f)
-    entity.removeComponentIfExists<ui::HasBlur>();
+    entity.toggleComponent<ui::HasBlur>(false);
 }
 
 template <typename Ctx> inline void register_bridge() {
