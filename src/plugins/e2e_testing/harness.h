@@ -36,11 +36,21 @@ struct E2EArgs {
   float time_scale = 1.0f;
   int capture_interval = 0;
   std::string results_json;
+  int capture_scale = 1;
 
   // For RunConfig::display, so a consumer need not map the bool themselves.
   graphics::DisplayMode display_mode() const {
     return headless ? graphics::DisplayMode::Headless
                     : graphics::DisplayMode::Windowed;
+  }
+
+  void apply_to(graphics::Config &cfg) const {
+    cfg.hidpi = capture_scale > 1;
+    if (capture_scale > 1)
+      cfg.hidpi_scale = capture_scale;
+  }
+  void apply_to(graphics::RunConfig &cfg) const {
+    cfg.capture_scale = capture_scale;
   }
 };
 
@@ -104,6 +114,9 @@ inline E2EArgs parse_e2e_args(int argc, char *argv[]) {
       args.time_scale = std::stof(value());
     } else if (key == "--capture-interval") {
       args.capture_interval = std::stoi(value());
+    } else if (key == "--capture-scale") {
+      const int scale = std::stoi(value());
+      args.capture_scale = scale > 1 ? scale : 1;
     }
   }
   return args;

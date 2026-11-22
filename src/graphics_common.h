@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "frame_loop.h"
+#include <cmath>
 #include <concepts>
 #include <cstdint>
 #include <filesystem>
@@ -52,6 +53,9 @@ struct RenderTextureType {
   uint32_t tex_view_id = 0;
   uint32_t sampler_id = 0;
   uint32_t sgl_ctx_id = 0;
+  uint32_t resolve_img_id = 0;
+  uint32_t resolve_view_id = 0;
+  int sample_count = 1;
   int width = 0;   // physical, i.e. logical * scale
   int height = 0;
   // Supersample factor. Drawing stays in logical coords (width / scale) and
@@ -63,6 +67,19 @@ struct ShaderType {
   uint32_t id = 0;
 };
 } // namespace afterhours::graphics
+
+#elif defined(AFTER_HOURS_USE_PSX)
+
+namespace afterhours::graphics {
+struct RenderTextureType {
+  int width = 0;
+  int height = 0;
+  uint64_t budget_id = 0;
+};
+struct ShaderType {
+  uint32_t id = 0;
+};
+}
 
 #else // no backend
 
@@ -96,6 +113,8 @@ concept ColorLike = requires(C c) {
 
 } // namespace afterhours
 
+#include "capture.h"
+
 namespace afterhours::graphics {
 
 struct Config {
@@ -108,6 +127,7 @@ struct Config {
   int target_fps = 60;
   unsigned int config_flags = 0;
   bool enable_msaa = true;
+  int msaa_samples = 1;
   bool audio = false;
   // Supersample the render texture at design*dpi (crisp on Retina); game keeps
   // logical coords. Honoured by raylib windowed and sokol headless capture.
@@ -138,12 +158,15 @@ concept PlatformBackend = requires {
   { T::window_should_close() } -> std::same_as<bool>;
   { T::is_window_ready() } -> std::same_as<bool>;
   { T::is_window_fullscreen() } -> std::same_as<bool>;
+  { T::is_window_focused() } -> std::same_as<bool>;
   { T::toggle_fullscreen() } -> std::same_as<void>;
   { T::minimize_window() } -> std::same_as<void>;
   { T::set_window_size(int{}, int{}) } -> std::same_as<void>;
   { T::set_window_min_size(int{}, int{}) } -> std::same_as<void>;
+  { T::window_resize_pending() } -> std::same_as<bool>;
   { T::set_window_state(unsigned{}) } -> std::same_as<void>;
   { T::clear_window_state(unsigned{}) } -> std::same_as<void>;
+  { T::window_state() } -> std::same_as<unsigned>;
 
   // ── Config ──
   { T::set_config_flags(unsigned{}) } -> std::same_as<void>;
@@ -215,6 +238,12 @@ concept PlatformBackend = requires {
 struct RunConfig {
   int width = 1280;
   int height = 720;
+  // Initial window position (screen coordinates). Negative leaves the
+  // backend's default placement. Honored by raylib (at creation, before the
+  // first frame); sokol's sapp_desc has no position field, so it is ignored
+  // there with a warning.
+  int window_x = -1;
+  int window_y = -1;
   const char *title = "Afterhours Replace Me";
   int target_fps = 60;
   unsigned int flags = 0;
@@ -227,6 +256,8 @@ struct RunConfig {
 
   float fixed_dt = 0.f;
   int sim_steps = 1;
+
+  int capture_scale = 1;
 
   float step_dt(float wall_dt, float time_scale = 1.f) const {
     return fixed_dt > 0.f ? fixed_dt : wall_dt * time_scale;
@@ -242,12 +273,53 @@ struct RunConfig {
   frame_loop::Mode frame_mode = frame_loop::Mode::Continuous;
 };
 
+struct PresentedFrame {
+  int window_w = 0;
+  int window_h = 0;
+  int canvas_w = 0;
+  int canvas_h = 0;
+  float dest_x = 0.f;
+  float dest_y = 0.f;
+  float dest_w = 0.f;
+  float dest_h = 0.f;
+  float scale = 1.f;
+};
+
+inline PresentedFrame presented_frame(int canvas_w, int canvas_h, int window_w,
+                                      int window_h) {
+  PresentedFrame pf;
+  pf.canvas_w = canvas_w;
+  pf.canvas_h = canvas_h;
+  pf.window_w = window_w;
+  pf.window_h = window_h;
+  pf.dest_w = static_cast<float>(window_w);
+  pf.dest_h = static_cast<float>(window_h);
+  if (canvas_w <= 0 || canvas_h <= 0 || window_w <= 0 || window_h <= 0)
+    return pf;
+  int dest_w = window_w;
+  int dest_h = static_cast<int>(
+      std::round(static_cast<double>(dest_w) * canvas_h / canvas_w));
+  if (dest_h > window_h) {
+    dest_h = window_h;
+    dest_w = static_cast<int>(
+        std::round(static_cast<double>(dest_h) * canvas_w / canvas_h));
+  }
+  pf.dest_x = static_cast<float>((window_w - dest_w) / 2);
+  pf.dest_y = static_cast<float>((window_h - dest_h) / 2);
+  pf.dest_w = static_cast<float>(dest_w);
+  pf.dest_h = static_cast<float>(dest_h);
+  pf.scale = dest_w > 0 ? static_cast<float>(canvas_w) / dest_w : 1.f;
+  return pf;
+}
+
 struct BackendInterface {
   bool (*init)(const Config &) = nullptr;
   void (*shutdown)() = nullptr;
   void (*begin_frame)() = nullptr;
   void (*end_frame)() = nullptr;
   bool (*capture_frame)(const std::filesystem::path &) = nullptr;
+  bool (*capture_presented_frame)(const std::filesystem::path &, int, int) =
+      nullptr;
   float (*get_delta_time)() = nullptr;
   bool (*is_headless)() = nullptr;
   RenderTextureType &(*get_render_texture)() = nullptr;
@@ -314,6 +386,7 @@ inline void shutdown() {
 }
 
 inline void begin_frame() {
+  capture::begin_frame();
   auto &backend = get_backend();
   if (backend.begin_frame) {
     backend.begin_frame();
@@ -324,6 +397,15 @@ inline bool capture_frame(const std::filesystem::path &path) {
   auto &backend = get_backend();
   if (backend.capture_frame) {
     return backend.capture_frame(path);
+  }
+  return false;
+}
+
+inline bool capture_presented_frame(const std::filesystem::path &path,
+                                    int window_w, int window_h) {
+  auto &backend = get_backend();
+  if (backend.capture_presented_frame) {
+    return backend.capture_presented_frame(path, window_w, window_h);
   }
   return false;
 }

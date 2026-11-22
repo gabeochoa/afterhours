@@ -10,6 +10,9 @@
 #include "backends/raylib/drawing_helpers.h"
 #elif defined(AFTER_HOURS_SOKOL)
 #include "backends/sokol/drawing_helpers.h"
+#elif defined(AFTER_HOURS_USE_PSX)
+#define AFTER_HOURS_BACKEND_PSX
+#include "backends/psx/drawing_helpers.h"
 #else
 // The `none` backend records draw calls rather than issuing them (see its
 // drawing_helpers.h). Callers that want to assert on what was drawn -- tests,
