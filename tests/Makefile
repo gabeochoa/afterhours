@@ -145,6 +145,7 @@ ALL_TESTS := \
 	allocation_counters_test \
 	profiling_test \
 	profiling_disabled_test \
+	profiling_collapsed_test \
 	spike_capture_test \
 	perf_provider_warn_test \
 	blend_mode_test \
@@ -172,6 +173,7 @@ ALL_TESTS := \
 	overlay_layer_test \
 	unhandled_command_test \
 	e2e_retry_test \
+	e2e_window_size_test \
 	e2e_register_command_test \
 	e2e_screenshot_test \
 	e2e_expect_screenshot_test \
@@ -190,6 +192,7 @@ ALL_TESTS := \
 	local_time_test \
 	font_catalog_test \
 	frame_rate_stats_test \
+	tunable_test \
 	graphics_concepts_pedantic_test \
 	fixed_tick_rate_test \
 	sound_playback_test \
@@ -231,6 +234,7 @@ ALL_TESTS := \
 	capture_attribution_test \
 	capture_frame_boundary_test \
 	draw_commands_test \
+	screen_luma_test \
 	color_contrast_test \
 	auto_text_color_test \
 	scissor_coalescing_test \
@@ -345,6 +349,7 @@ ALL_TESTS += sokol_hidpi_test
 ALL_TESTS += sokol_resize_test
 ALL_TESTS += sokol_multires_capture_test
 ALL_TESTS += sokol_headless_run_test
+ALL_TESTS += web_metal_symbols_test
 ALL_TESTS += sokol_include_order_test
 ALL_TESTS += sokol_wrappers_test
 ALL_TESTS += sokol_frame_dt_test
@@ -527,6 +532,15 @@ $(OUT)/sokol_capture_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 $(OUT)/sokol_geometry_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_geometry_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
 $(OUT)/sokol_geometry_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
+$(OUT)/web_metal_symbols_test: web_metal_symbols_test.cpp web_sim/web_probe.cpp web_sim/emscripten.h
+	$(CXX) $(CXXFLAGS) -c -DAFTER_HOURS_USE_SOKOL -DSOKOL_GLES3=1 -D__EMSCRIPTEN__ -isystem $(CURDIR)/web_sim $(INCLUDES) web_sim/web_probe.cpp -o $(OUT)/web_probe_web.o
+	@if nm -u $(OUT)/web_probe_web.o | grep -E '_?(metal|vulkan)_'; then echo "web probe references Metal/Vulkan symbols (R-144 regression)"; exit 1; fi
+	$(CXX) $(CXXFLAGS) -c -DAFTER_HOURS_USE_SOKOL -DSOKOL_METAL=1 $(INCLUDES) web_sim/web_probe.cpp -o $(OUT)/web_probe_native.o
+	@if ! nm -u $(OUT)/web_probe_native.o | grep -q '_metal_create_system_device'; then echo "native control lost Metal symbols (over-exclusion)"; exit 1; fi
+	@echo "web: no undefined metal_*/vulkan_* symbols" > $(OUT)/web_metal_symbols.audit
+	@echo "native: metal_* symbols referenced" >> $(OUT)/web_metal_symbols.audit
+	$(CXX) $(CXXFLAGS) -DWEB_METAL_AUDIT_PATH=\"$$(realpath $(OUT)/web_metal_symbols.audit)\" $(INCLUDES) $< -o $@
+
 # The multi-TU sokol rules emit a .d covering only sokol_impl.cc, so header
 # edits rebuild nothing without an explicit prerequisite (stale-binary trap).
 $(OUT)/sokol_blend_test: ../src/backends/sokol/drawing_helpers.h

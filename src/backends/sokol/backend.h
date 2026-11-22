@@ -73,10 +73,14 @@ extern "C" bool metal_window_resize_pending(void);
 extern "C" void metal_install_live_resize_draw(void);
 #endif
 
-// Implemented in capture_impl.h (the SOKOL_IMPL Objective-C++ TU).
+// Implemented in capture_impl.h (the SOKOL_IMPL Objective-C++ TU), which is
+// only compiled under SOKOL_METAL. Declare under the same condition so web
+// (SOKOL_GLES3) builds never reference Metal symbols.
+#if defined(SOKOL_METAL)
 extern "C" const void *metal_create_system_device(void);
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id, int width,
                                              int height, const char *path);
+#endif
 
 // Implemented in vulkan_device.h (the SOKOL_IMPL TU), headless device only.
 #ifdef AFTER_HOURS_USE_VULKAN
@@ -1109,7 +1113,7 @@ inline bool metal_init(const Config &cfg) {
       return false;
     }
     desc.environment.vulkan = vk_env;
-#else
+#elif defined(SOKOL_METAL)
     const void *device = metal_create_system_device();
     if (!device) {
       log_error("metal headless: MTLCreateSystemDefaultDevice failed (no GPU?)");
@@ -1117,6 +1121,12 @@ inline bool metal_init(const Config &cfg) {
       return false;
     }
     desc.environment.metal.device = device;
+#else
+    // No Metal/Vulkan device to create under (e.g. SOKOL_GLES3 web build);
+    // say so instead of referencing Metal symbols that do not exist there.
+    log_error("sokol headless: unsupported graphics API for device creation");
+    metal_detail::g_headless = false;
+    return false;
 #endif
     // No swapchain to query, so give load_render_texture sane defaults.
     desc.environment.defaults.color_format = SG_PIXELFORMAT_BGRA8;
@@ -1193,10 +1203,12 @@ inline bool metal_capture_frame(const std::filesystem::path &path) {
   return vulkan_capture_render_texture(
       rt.resolve_img_id ? rt.resolve_img_id : rt.color_img_id, rt.width,
       rt.height, path.string().c_str());
-#else
+#elif defined(SOKOL_METAL)
   return metal_capture_render_texture(
       rt.resolve_img_id ? rt.resolve_img_id : rt.color_img_id, rt.width,
       rt.height, path.string().c_str());
+#else
+  return false;
 #endif
 }
 
