@@ -78,6 +78,7 @@ TEST(form_text_insert_mutates_bound_and_external_write_reflects) {
     h.context().set_focus(f->id);
     h.context().focused_ids = {f->id};
   }
+
   emit();
   state.cursor_position = value.size();
   state.selection_anchor.reset();

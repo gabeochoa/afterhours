@@ -495,12 +495,7 @@ $(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(
 
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/middle_click_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 $(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/wheel_input_test $(OUT)/edit_keys_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
-<<<<<<< HEAD
-$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/input_activity_snapshot_test $(OUT)/e2e_gamepad_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
-$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/form_binding_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
-=======
-$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/form_binding_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
->>>>>>> d74e953c (comments: sicko trim repair - restore Makefile code lines)
+$(OUT)/text_area_test $(OUT)/scroll_input_gate_test $(OUT)/edit_keys_test $(OUT)/graphics_key_injection_test $(OUT)/input_activity_snapshot_test $(OUT)/e2e_gamepad_test $(OUT)/form_binding_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB) -DAFTER_HOURS_ENABLE_E2E_TESTING
 
 # Filter to sources: the .d files list every header as a prerequisite, and a
 # bare $^ would hand them all to clang. .cc is the sokol implementation TU.
