@@ -269,6 +269,7 @@ ALL_TESTS := \
 	text_stroke_render_test \
 	multiline_text_test \
 	subtree_hover_test \
+	hover_focus_name_test \
 	inert_test \
 	menu_test \
 	color_swatch_test \
