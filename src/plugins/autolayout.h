@@ -451,8 +451,10 @@ struct AutoLayout {
       return no_change;
     }
     return exp.dim == Dim::Percent
-               ? exp.value *
-                     (parent.computed[axis] - parent.computed_padd[axis])
+               ? fmaxf(0.f,
+                       exp.value * (parent.computed[axis] -
+                                    parent.computed_padd[axis]) -
+                           widget.computed_margin[axis])
                : no_change;
   }
 
@@ -1187,7 +1189,9 @@ struct AutoLayout {
         const float avail = widget.computed[axis] - widget.computed_padd[axis];
         if (avail <= 0.f)
           continue;
-        child->computed[axis] = child->desired[axis].value * avail;
+        child->computed[axis] =
+            fmaxf(0.f, child->desired[axis].value * avail -
+                           child->computed_margin[axis]);
       }
     }
 
