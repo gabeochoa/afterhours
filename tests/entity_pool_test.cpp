@@ -4,6 +4,7 @@
 #include <afterhours/ah.h>
 
 #include <cassert>
+#include <cstddef>
 #include <cstdio>
 #include <set>
 #include <vector>
@@ -218,6 +219,36 @@ TEST(tags_clean_after_recycle) {
 
   Entity &e2 = ec.createEntity();
   CHECK(e2.tags.none());
+  ec.cleanup();
+  e2.cleanup = true;
+  ec.cleanup();
+}
+
+TEST(user_data_defaults_and_shares_id_cache_line) {
+  // Structural, not timing: the stamp must land in the header line already
+  // touched for id, not behind componentArray + a heap dereference.
+  Entity e;
+  const auto *base = reinterpret_cast<const char *>(&e);
+  CHECK((reinterpret_cast<const char *>(&e.user_data) - base) / 64 ==
+        (reinterpret_cast<const char *>(&e.id) - base) / 64);
+  CHECK(reinterpret_cast<const char *>(&e.componentArray) >
+        reinterpret_cast<const char *>(&e.user_data));
+  CHECK(e.user_data == 0);
+  e.user_data = 0x123456789ull;
+  CHECK(e.user_data == 0x123456789ull);
+  CHECK(e.componentSet.none()); // writing it creates no component
+}
+
+TEST(user_data_cleared_on_recycle) {
+  EntityCollection ec;
+  ec.reserve_entities(1);
+  Entity &e1 = ec.createEntity();
+  e1.user_data = 42;
+  ec.cleanup();
+  e1.cleanup = true;
+  ec.cleanup();
+  Entity &e2 = ec.createEntity();
+  CHECK(e2.user_data == 0);
   ec.cleanup();
   e2.cleanup = true;
   ec.cleanup();
