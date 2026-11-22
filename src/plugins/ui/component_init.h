@@ -60,30 +60,34 @@ UIStylingDefaults::has_component_defaults(ComponentType component_type) const {
   return component_configs.find(component_type) != component_configs.end();
 }
 
-inline ComponentConfig
-UIStylingDefaults::merge_with_defaults(ComponentType component_type,
-                                       const ComponentConfig &config) const {
+inline void UIStylingDefaults::merge_with_defaults_into(
+    ComponentType component_type, ComponentConfig &config) const {
   const ComponentConfig *defaults = find_component_config(component_type);
-  ComponentConfig result = config;
 
-  // Apply default font name if the user didn't set one explicitly
-  if (result.font_name == UIComponent::UNSET_FONT &&
+  if (config.font_name == UIComponent::UNSET_FONT &&
       default_font_name != UIComponent::UNSET_FONT) {
-    result.font_name = default_font_name;
+    config.font_name = default_font_name;
   }
 
   // Apply default font size only if the user didn't explicitly set one
   // (via with_font_size, with_font_tier, or with_font)
-  if (result.font_size_is_default &&
+  if (config.font_size_is_default &&
       default_font_name != UIComponent::UNSET_FONT) {
-    result.font_size = default_font_size;
+    config.font_size = default_font_size;
   }
 
-  if (!defaults) {
-    return result;
+  if (defaults) {
+    ComponentConfig merged = defaults->apply_overrides(config);
+    config = std::move(merged);
   }
+}
 
-  return defaults->apply_overrides(result);
+inline ComponentConfig
+UIStylingDefaults::merge_with_defaults(ComponentType component_type,
+                                       const ComponentConfig &config) const {
+  ComponentConfig result = config;
+  merge_with_defaults_into(component_type, result);
+  return result;
 }
 
 namespace detail {
@@ -105,7 +109,7 @@ inline void overwrite_defaults(HasUIContext auto &ctx,
   if (!config.is_internal) {
     // Always merge with defaults to apply global default font/size,
     // even if no per-component-type defaults are registered.
-    config = styling_defaults.merge_with_defaults(component_type, config);
+    styling_defaults.merge_with_defaults_into(component_type, config);
   }
 
   config.with_internal(true);
@@ -371,16 +375,15 @@ inline void apply_on_draw(Entity &entity, const ComponentConfig &config) {
 }
 
 inline void apply_render_layer(HasUIContext auto &ctx, Entity &entity,
-                               Entity &parent, ComponentConfig &config) {
+                               Entity &parent, const ComponentConfig &config) {
   const int parent_layer = parent.get<UIComponent>().render_layer;
   // An offset is relative to the parent; otherwise inherit, so a child is at
   // least on its parent's layer.
-  config.render_layer =
-      config.render_layer_offset != 0
-          ? parent_layer + config.render_layer_offset
-          : std::max(config.render_layer, parent_layer);
-  entity.get<UIComponent>().render_layer = config.render_layer;
-  ctx.queue_render(RenderInfo{entity.id, config.render_layer});
+  const int layer = config.render_layer_offset != 0
+                        ? parent_layer + config.render_layer_offset
+                        : std::max(config.render_layer, parent_layer);
+  entity.get<UIComponent>().render_layer = layer;
+  ctx.queue_render(RenderInfo{entity.id, layer});
 }
 
 inline void apply_nine_slice(Entity &entity, const ComponentConfig &config) {
@@ -593,7 +596,7 @@ inline void apply_restyle(HasUIContext auto &ctx, Entity &entity,
 }
 
 inline bool add_missing_components(HasUIContext auto &ctx, Entity &entity,
-                                   Entity &parent, ComponentConfig config,
+                                   Entity &parent, const ComponentConfig &config,
                                    const std::string &debug_name = "") {
   (void)debug_name;
   bool created = false;
