@@ -357,12 +357,16 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
         placeholder_row ? config.placeholder
                         : (row.empty() ? " " : row); // Space prevents zero-height
 
+    const float row_scale =
+        field_cmp.resolved_scaling_mode == ScalingMode::Adaptive
+            ? ctx.theme.ui_scale
+            : 1.f;
     div(ctx, mk(field_entity, static_cast<int>(line_idx)),
         ComponentConfig{}
             .with_label(line_text)
             .with_scaling_mode(field_cmp.resolved_scaling_mode)
-            .with_size(
-                ComponentSize{pixels(viewport_width), pixels(line_height)})
+            .with_size(ComponentSize{percent(1.f),
+                                     pixels(line_height / row_scale)})
             .with_font(config.font_name == UIComponent::UNSET_FONT
                            ? UIComponent::DEFAULT_FONT
                            : config.font_name,
