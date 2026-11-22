@@ -225,6 +225,7 @@ struct Theme {
   Color success{43, 126, 87, 255}; // Green
   Color warning{178, 116, 23, 255}; // Amber
   Color focus{155, 199, 255, 255};
+  Color selection{70, 130, 220, 110}; // Selection highlight
 
   std::optional<Color> border;
   std::optional<Color> border_muted;

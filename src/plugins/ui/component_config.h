@@ -41,6 +41,14 @@ struct TextureConfig {
 // See: https://en.cppreference.com/w/cpp/language/constraints
 
 enum struct ButtonVariant { Filled, Outline, Ghost };
+
+struct SliderStyle {
+  std::optional<Color> track;
+  std::optional<Color> fill;
+  std::optional<Color> handle;
+  Size handle_size = pixels(16.f);
+  Size track_thickness = pixels(8.f);
+};
 enum struct IconPosition { Left, Right };
 
 struct ComponentConfig {
@@ -187,6 +195,8 @@ struct ComponentConfig {
   // Text input: readonly mode (focusable, selectable, but not editable)
   bool text_readonly = false;
 
+  bool text_selectable = false;
+
   // Text input: clipboard operations this field refuses. All allowed by
   // default; masking a field does not change them.
   bool text_copy_disabled = false;
@@ -198,6 +208,8 @@ struct ComponentConfig {
 
   std::optional<std::string> checkbox_checked_indicator;
   std::optional<std::string> checkbox_unchecked_indicator;
+
+  std::optional<SliderStyle> slider_style;
 
   // Glyphs on a toggle_switch track. Unset draws nothing.
   std::optional<std::string> toggle_on_indicator;
@@ -435,6 +447,10 @@ struct ComponentConfig {
     text_readonly = ro;
     return *this;
   }
+  ComponentConfig &with_selectable_text(bool selectable = true) {
+    text_selectable = selectable;
+    return *this;
+  }
   ComponentConfig &with_copy_disabled(bool disabled = true) {
     text_copy_disabled = disabled;
     return *this;
@@ -445,6 +461,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_paste_disabled(bool disabled = true) {
     text_paste_disabled = disabled;
+    return *this;
+  }
+  ComponentConfig &with_slider_style(const SliderStyle &style) {
+    slider_style = style;
     return *this;
   }
   ComponentConfig &with_toggle_indicators(const std::string &on,
@@ -1356,6 +1376,8 @@ struct ComponentConfig {
       merged.mask_char = overrides.mask_char;
     if (overrides.text_readonly)
       merged.text_readonly = true;
+    if (overrides.text_selectable)
+      merged.text_selectable = true;
     if (overrides.text_copy_disabled)
       merged.text_copy_disabled = true;
     if (overrides.text_cut_disabled)
@@ -1386,6 +1408,8 @@ struct ComponentConfig {
     if (overrides.checkbox_unchecked_indicator.has_value())
       merged.checkbox_unchecked_indicator =
           overrides.checkbox_unchecked_indicator;
+    if (overrides.slider_style.has_value())
+      merged.slider_style = overrides.slider_style;
     if (overrides.toggle_on_indicator.has_value())
       merged.toggle_on_indicator = overrides.toggle_on_indicator;
     if (overrides.toggle_off_indicator.has_value())
