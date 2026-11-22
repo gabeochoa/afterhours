@@ -24,9 +24,11 @@ struct Registry {
     if (builders_.find(name) == builders_.end()) order_.push_back(name);
     builders_[std::move(name)] = std::move(builder); // re-define replaces, keeps position
   }
+
   [[nodiscard]] bool has(std::string_view name) const {
     return builders_.find(std::string(name)) != builders_.end();
   }
+
   [[nodiscard]] std::vector<std::string> names() const { return order_; }
   void clear() { builders_.clear(); order_.clear(); }
 
@@ -34,6 +36,7 @@ struct Registry {
   OptEntity spawn(EntityCollection &collection, std::string_view name) const {
     return spawn(collection, name, nullptr);
   }
+
   OptEntity spawn(EntityCollection &collection, std::string_view name,
                   const ApplyFn &overrides) const {
     auto it = builders_.find(std::string(name));
@@ -57,6 +60,7 @@ inline Registry &registry() {
 inline void define(std::string name, ApplyFn builder) {
   registry().define(std::move(name), std::move(builder));
 }
+
 inline bool has(std::string_view name) { return registry().has(name); }
 inline std::vector<std::string> names() { return registry().names(); }
 inline void clear() { registry().clear(); }
@@ -65,6 +69,7 @@ inline OptEntity spawn(EntityCollection &collection, std::string_view name,
                        const ApplyFn &overrides = nullptr) {
   return registry().spawn(collection, name, overrides);
 }
+
 inline OptEntity spawn(std::string_view name,
                        const ApplyFn &overrides = nullptr) {
   return spawn(EntityHelper::get_default_collection(), name, overrides);

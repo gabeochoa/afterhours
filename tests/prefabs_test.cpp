@@ -63,6 +63,7 @@ int main() {
     CHECK(local.names() == std::vector<std::string>({"b", "a"}));
     CHECK(!local.spawn(ec, "ice_machine").has_value());
   }
+
   prefabs::clear();
   printf("%d/%d checks passed\n", passed, run);
   return passed == run ? 0 : 1;
