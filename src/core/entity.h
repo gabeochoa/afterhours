@@ -32,6 +32,9 @@ inline std::atomic_int ENTITY_ID_GEN = 0;
 struct Entity {
   EntityID id;
   int entity_type = 0;
+  // App-owned word in the header cache line: the library never reads it, so
+  // a per-frame stamp costs no componentArray/heap chase. Cleared on recycle.
+  std::uint64_t user_data = 0;
 
   // Runtime-only metadata used by the handle-based store.
   // - INVALID_SLOT means this entity has not been assigned a stable slot yet
@@ -60,6 +63,7 @@ struct Entity {
     tags.reset();
     cleanup = false;
     entity_type = 0;
+    user_data = 0;
     ah_slot_index = EntityHandle::INVALID_SLOT;
     id = new_id;
   }
@@ -113,6 +117,12 @@ struct Entity {
   template <typename A, typename B, typename... Rest>
   bool is_missing_any() const {
     return is_missing<A>() || is_missing_any<B, Rest...>();
+  }
+
+  template <typename A> bool has_any() const { return has<A>(); }
+
+  template <typename A, typename B, typename... Rest> bool has_any() const {
+    return has<A>() || has_any<B, Rest...>();
   }
 
   template <typename T> void removeComponent() {
@@ -170,6 +180,19 @@ struct Entity {
     if (this->is_missing<T>())
       return;
     return removeComponent<T>();
+  }
+
+  template <typename T, typename... Args>
+  T *toggleComponent(bool on, Args &&...args) {
+    if (!on) {
+      removeComponentIfExists<T>();
+      return nullptr;
+    }
+    if constexpr (std::is_constructible_v<T, Args &&...>) {
+      return &addComponentIfMissing<T>(std::forward<Args>(args)...);
+    } else {
+      return has<T>() ? &get<T>() : nullptr;
+    }
   }
 
   template <typename A> void addAll() { addComponent<A>(); }

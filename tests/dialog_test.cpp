@@ -372,4 +372,116 @@ TEST(stacked_modals_have_one_backdrop_each) {
   CHECK(backdrops == 2);
 }
 
+// R-172: every close path must hand the background its clicks back on the
+// next frame. Open the modal, prove the gate blocks the trigger, close via
+// one path, run a frame, prove the trigger is clickable again.
+// Frame bookkeeping follows the shipped order: user systems run, then the
+// post-update pass clears visibility and re-marks only what was built (here
+// layout_only() marks everything, so an unbuilt modal is unmarked by hand),
+// then the input-block system syncs the gate.
+
+TEST(modal_gate_releases_after_programmatic_close) {
+  ImmTestHarness h;
+  ensure_modal_singleton();
+  modal::detail::get_modal_root().modal_stack.clear();
+  auto trigger = button(h.context(), mk(h.root(), 9), ComponentConfig{}.with_label("Open"));
+  bool open = true;
+  auto emit = [&] { return afterhours::modal(h.context(), mk(h.root(), 0), open,
+                                              ModalConfig{}.with_show_close_button(false)); };
+  auto panel = emit();
+  h.layout_only();
+  CHECK(!h.context().is_input_allowed(trigger.ent().id));
+  modal::close(panel.ent().id, DialogResult::Confirmed);
+  h.begin_frame();
+  emit();  // modal_impl consumes pending_close -> open=false -> finish_close
+  h.layout_only();
+  CHECK(modal::detail::get_modal_root().modal_stack.empty());
+  CHECK(h.context().is_input_allowed(trigger.ent().id));
+}
+
+TEST(modal_gate_releases_after_watcher_dismiss) {
+  ImmTestHarness h;
+  ensure_modal_singleton();
+  modal::detail::get_modal_root().modal_stack.clear();
+  EntityHelper::registerSingleton<UIContext<ui_test::TestInputAction>>(h.context_entity());
+  modal::ModalCloseWatcherSystem<ui_test::TestInputAction> watcher;
+  auto trigger = button(h.context(), mk(h.root(), 9), ComponentConfig{}.with_label("Open"));
+  bool open = true;
+  auto emit = [&] { return afterhours::modal(h.context(), mk(h.root(), 0), open,
+                                              ModalConfig{}.with_show_close_button(false)); };
+  auto panel = emit();
+  h.layout_only(); watcher.once(0);
+  CHECK(!h.context().is_input_allowed(trigger.ent().id));
+  h.context().last_action = ui_test::TestInputAction::MenuBack;
+  watcher.once(0);
+  CHECK(panel.ent().get<modal::Modal>().pending_close);
+  h.begin_frame();
+  emit();
+  h.layout_only();
+  CHECK(modal::detail::get_modal_root().modal_stack.empty());
+  CHECK(h.context().is_input_allowed(trigger.ent().id));
+  EntityHelper::get_default_collection().singletonMap.erase(
+      components::get_type_id<UIContext<ui_test::TestInputAction>>());
+}
+
+TEST(modal_gate_releases_when_modal_stops_being_built) {
+  ImmTestHarness h;
+  ensure_modal_singleton();
+  modal::detail::get_modal_root().modal_stack.clear();
+  EntityHelper::registerSingleton<UIContext<ui_test::TestInputAction>>(h.context_entity());
+  modal::ModalInputBlockSystem<ui_test::TestInputAction> block;
+  auto trigger = button(h.context(), mk(h.root(), 9), ComponentConfig{}.with_label("Open"));
+  h.context().set_focus(trigger.ent().id);
+  bool open = true;
+  auto panel = afterhours::modal(h.context(), mk(h.root(), 0), open,
+                                 ModalConfig{}.with_show_close_button(false));
+  auto action = button(h.context(), mk(panel.ent(), 1), ComponentConfig{}.with_label("Close"));
+  h.context().set_focus(action.ent().id);
+  h.layout_only(); block.once(0);
+  CHECK(!h.context().is_input_allowed(trigger.ent().id));
+  // Next frame the caller no longer builds the modal at all (modal_impl never
+  // runs), so layout marks everything except the unbuilt panel.
+  h.begin_frame();
+  button(h.context(), mk(h.root(), 9), ComponentConfig{}.with_label("Open"));
+  h.layout_only();
+  panel.cmp().was_rendered_to_screen = false;  // ClearVisibity + TrackIf
+  block.once(0);
+  CHECK(modal::detail::get_modal_root().modal_stack.empty());
+  CHECK(h.context().is_input_allowed(trigger.ent().id));
+  CHECK(h.context().focus_id == trigger.ent().id);
+  EntityHelper::get_default_collection().singletonMap.erase(
+      components::get_type_id<UIContext<ui_test::TestInputAction>>());
+}
+
+TEST(modal_gate_releases_when_closed_from_another_call_site) {
+  ImmTestHarness h;
+  ensure_modal_singleton();
+  modal::detail::get_modal_root().modal_stack.clear();
+  EntityHelper::registerSingleton<UIContext<ui_test::TestInputAction>>(h.context_entity());
+  modal::ModalInputBlockSystem<ui_test::TestInputAction> block;
+  auto trigger = button(h.context(), mk(h.root(), 9), ComponentConfig{}.with_label("Open"));
+  bool open = true;
+  auto emit_a = [&] { return afterhours::modal(h.context(), mk(h.root(), 0), open,
+                                                ModalConfig{}.with_show_close_button(false)); };
+  auto panel_a = emit_a();
+  h.layout_only(); block.once(0);
+  CHECK(!h.context().is_input_allowed(trigger.ent().id));
+  // Next frame the owning screen is gone: the close runs from a different
+  // call site (different file/line/function -> different entity), so the
+  // open=false never reaches panel_a and panel_a is never built again.
+  h.begin_frame();
+  bool closed_open = false;
+  auto panel_b = afterhours::modal(h.context(), mk(h.root(), 1), closed_open,
+                                   ModalConfig{}.with_show_close_button(false));
+  CHECK(panel_b.ent().id != panel_a.ent().id);
+  button(h.context(), mk(h.root(), 9), ComponentConfig{}.with_label("Open"));
+  h.layout_only();
+  panel_a.cmp().was_rendered_to_screen = false;  // unbuilt: no render cmd
+  block.once(0);
+  CHECK(modal::detail::get_modal_root().modal_stack.empty());
+  CHECK(h.context().is_input_allowed(trigger.ent().id));
+  EntityHelper::get_default_collection().singletonMap.erase(
+      components::get_type_id<UIContext<ui_test::TestInputAction>>());
+}
+
 int main() { return ui_test::run_registered_tests("dialog tests"); }

@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "../logging.h"
+#include "../warn_once.h"
 
 namespace afterhours {
 
@@ -152,6 +153,7 @@ inline SoundType load_sound_from_samples(std::span<const float> samples,
   std::free(copy);
   return sound;
 #else
+  warn_once(0, "@notimplemented load_sound_from_samples on this backend");
   return SoundType{};
 #endif
 }
