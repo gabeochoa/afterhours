@@ -29,11 +29,13 @@ struct Grid {
   [[nodiscard]] bool in_bounds(int x, int y) const {
     return x >= 0 && y >= 0 && x < w && y < h;
   }
+
   [[nodiscard]] bool in_bounds(Cell c) const { return in_bounds(c.x, c.y); }
   [[nodiscard]] std::size_t index(Cell c) const {
     return static_cast<std::size_t>(c.y) * static_cast<std::size_t>(w) +
            static_cast<std::size_t>(c.x);
   }
+
   [[nodiscard]] int at(Cell c) const { return tiles[index(c)]; }
   void set(Cell c, int tile) { tiles[index(c)] = tile; }
 };
