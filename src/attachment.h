@@ -42,15 +42,15 @@ inline Pose2D compose(const Pose2D &parent, const Pose2D &local) {
           parent.y + local.x * s + local.y * c, parent.angle_deg + local.angle_deg};
 }
 
-inline Entity *find(EntityCollection &ec, EntityID id) {
+inline OptEntity find(EntityCollection &ec, EntityID id) {
   for (auto &sp : ec.get_entities_for_mod())
-    if (sp && sp->id == id) return sp.get();
-  return nullptr;
+    if (sp && sp->id == id) return *sp;
+  return {};
 }
-inline const Entity *find(const EntityCollection &ec, EntityID id) {
+inline OptEntity find(const EntityCollection &ec, EntityID id) {
   for (auto &sp : ec.get_entities())
-    if (sp && sp->id == id) return sp.get();
-  return nullptr;
+    if (sp && sp->id == id) return *sp;
+  return {};
 }
 
 inline bool attach(Entity &child, Entity &parent, Pose2D local = {},
@@ -73,7 +73,7 @@ inline bool attach(EntityCollection &ec, Entity &child, Entity &parent,
   if (filter && !filter(child, parent)) return false;
   for (EntityID cur = parent.id; cur >= 0;) {
     if (cur == child.id) return false;
-    const Entity *e = find(ec, cur);
+    const OptEntity e = find(ec, cur);
     if (!e || !e->has<AttachedTo>() || !e->get<AttachedTo>().attached()) break;
     cur = e->get<AttachedTo>().parent;
   }
@@ -100,9 +100,9 @@ inline std::optional<Pose2D> world_pose(const EntityCollection &ec,
                                         const Entity &e, int depth = 0) {
   if (depth > 64) return std::nullopt;
   if (is_attached(e)) {
-    const Entity *p = find(ec, e.get<AttachedTo>().parent);
+    const OptEntity p = find(ec, e.get<AttachedTo>().parent);
     if (!p) return std::nullopt;
-    auto pw = world_pose(ec, *p, depth + 1);
+    auto pw = world_pose(ec, p.asE(), depth + 1);
     if (!pw) return std::nullopt;
     return compose(*pw, e.get<AttachedTo>().local);
   }
@@ -114,7 +114,7 @@ inline int prune(EntityCollection &ec) {
   int n = 0;
   for (auto &sp : ec.get_entities_for_mod()) {
     if (!sp || !is_attached(*sp)) continue;
-    const Entity *p = find(ec, sp->get<AttachedTo>().parent);
+    const OptEntity p = find(ec, sp->get<AttachedTo>().parent);
     if (sp->cleanup || !p || p->cleanup) { detach(*sp); n++; }
   }
   return n;

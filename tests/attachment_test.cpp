@@ -48,7 +48,7 @@ static void test_cleanup_detaches() {
   CHECK(attachment::attach(ec, c, p2)); c.cleanup = true;
   CHECK(attachment::prune(ec) == 1); CHECK(!attachment::is_attached(c));
   ec.cleanup();
-  CHECK(attachment::find(ec, p.id) == nullptr);
+  CHECK(!attachment::find(ec, p.id));
 }
 static void test_filter_rejection() {
   EntityCollection ec; auto &p = ec.createEntity(); auto &c = ec.createEntity();
