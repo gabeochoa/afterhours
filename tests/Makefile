@@ -117,6 +117,7 @@ ALL_TESTS := \
 	text_alignment_test \
 	sound_volume_test \
 	audio_plugin_test \
+	audio_stream_test \
 	synth_beep_test \
 	settings_save_test \
 	settings_path_test \
@@ -176,6 +177,7 @@ ALL_TESTS := \
 	audio_lifecycle_test \
 	notimplemented_log_test \
 	local_time_test \
+	font_catalog_test \
 	frame_rate_stats_test \
 	graphics_concepts_pedantic_test \
 	fixed_tick_rate_test \
@@ -286,6 +288,7 @@ ALL_TESTS := \
 	system_tags_test \
 	should_run_overload_test \
 	library_duplicate_test \
+	library_intern_test \
 	shared_handlers_test \
 	default_font_test \
 	load_font_size_test \
@@ -460,6 +463,8 @@ $(OUT)/sound_volume_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/sound_volume_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/audio_plugin_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/audio_plugin_test: INCLUDES_T = $(INCLUDES_RAYLIB)
+$(OUT)/audio_stream_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
+$(OUT)/audio_stream_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
 $(OUT)/files_test_roots_test: ../src/plugins/files.cpp
