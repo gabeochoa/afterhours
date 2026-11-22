@@ -18,6 +18,7 @@
 #include <string>
 
 #include "logging.h"
+#include "warn_once.h"
 
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(_WIN32)
 #include <execinfo.h>
@@ -74,6 +75,7 @@ inline void write_backtrace_to(std::FILE *out) {
     std::fprintf(out, "  #%-2d %s\n", i - 2, symbols[i]);
   std::free(symbols);
 #else
+  warn_once(0, "@notimplemented crash::write_backtrace_to on this platform");
   (void)out;
 #endif
 }
@@ -136,6 +138,12 @@ inline std::terminate_handler &previous_terminate() {
   static std::terminate_handler handler = nullptr;
   return handler;
 }
+
+inline constexpr int fatal_signals[] = {SIGSEGV, SIGABRT,
+#ifdef SIGBUS
+                                        SIGBUS,
+#endif
+                                        SIGILL, SIGFPE};
 
 inline bool write_report_file(const char *what) {
   if (report_path_buffer()[0] == '\0')
@@ -215,11 +223,7 @@ inline void install_handler() {
   if (detail::installed())
     return;
   detail::installed() = true;
-  for (int sig : {SIGSEGV, SIGABRT,
-#ifdef SIGBUS
-                  SIGBUS,
-#endif
-                  SIGILL, SIGFPE})
+  for (int sig : detail::fatal_signals)
     std::signal(sig, detail::on_signal);
   detail::previous_terminate() = std::set_terminate(detail::on_terminate);
 }
@@ -239,11 +243,7 @@ inline void install(const char *report_path) {
 }
 
 inline void uninstall() {
-  for (int sig : {SIGSEGV, SIGABRT,
-#ifdef SIGBUS
-                  SIGBUS,
-#endif
-                  SIGILL, SIGFPE})
+  for (int sig : detail::fatal_signals)
     std::signal(sig, SIG_DFL);
   if (detail::previous_terminate() != nullptr)
     std::set_terminate(detail::previous_terminate());
