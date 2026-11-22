@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <set>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -547,6 +548,12 @@ struct EntityCollection {
     if (!ent.has<Component>())
       return nullptr;
     return &(ent.get<Component>());
+  }
+
+  // get_singleton_cmp but for matching multiple singleton components at the same time
+  template <typename... Components>
+  std::tuple<Components *...> get_unique() const {
+    return {get_singleton_cmp<Components>()...};
   }
 
   template <typename Component> Component &get_singleton_cmp_enforce() const {
