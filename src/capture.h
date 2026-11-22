@@ -92,17 +92,16 @@ inline void begin_frame() {
   frame_clear_pending() = true;
 }
 
-// A view, not a `const std::string &`: that made every `const char *` caller
-// build a string before this could return early.
+// const char*: a string_view would strlen before the early-out.
 inline void record(const char *op, const RectangleType &rect,
-                   const ColorType &color, std::string_view text = {}) {
+                   const ColorType &color, const char *text = nullptr) {
   if (!enabled())
     return;
   if (frame_clear_pending()) {
     calls().clear();
     frame_clear_pending() = false;
   }
-  calls().push_back({op, rect, color, std::string(text), current_entity(),
+  calls().push_back({op, rect, color, text ? text : "", current_entity(),
                      current_layer()});
 }
 

@@ -388,6 +388,59 @@ TEST(shift_enter_still_breaks_when_submitting_on_enter) {
   CHECK(!submitted);
 }
 
+namespace {
+std::string after_single_line_enter(bool shift, bool *submitted) {
+  ImmTestHarness h;
+  std::string text = "ab";
+  auto emit = [&] {
+    auto r = text_area(h.context(), mk(h.root(), 0), text,
+                       area_config(200.f, 100.f).with_single_line());
+    r.ent().template addComponentIfMissing<ti::HasTextInputListener>();
+    r.ent().template get<ti::HasTextInputListener>().on_submit =
+        [submitted](Entity &) { *submitted = true; };
+  };
+  h.begin_frame(); emit(); h.layout_only();
+  if (UIComponent *f = h.find("text_area_field"))
+    h.context().focus_id = f->id;
+  testing::input_injector::reset_all();
+  if (shift) testing::input_injector::set_key_held(keys::LEFT_SHIFT);
+  h.context().last_action = ui_test::TestInputAction::WidgetPress;
+  h.begin_frame(); emit(); h.layout_only();
+  testing::input_injector::reset_all();
+  return text;
+}
+} // namespace
+
+TEST(single_line_enter_submits_without_breaking) {
+  bool submitted = false;
+  const std::string out = after_single_line_enter(false, &submitted);
+  CHECK(submitted);
+  CHECK(out == "ab");
+}
+TEST(single_line_shift_enter_also_submits) {
+  bool submitted = false;
+  const std::string out = after_single_line_enter(true, &submitted);
+  CHECK(submitted);
+  CHECK(out == "ab");
+}
+TEST(single_line_does_not_wrap_long_text) {
+  ImmTestHarness h;
+  std::string text = "the quick brown fox jumps over the lazy dog";
+  two_frames(h, [&] {
+    text_area(h.context(), mk(h.root(), 0), text,
+              area_config(200.f, 200.f).with_single_line());
+  });
+  CHECK(count_line_divs() == 1);
+}
+TEST(single_line_paste_maps_breaks_to_spaces) {
+  ti::HasTextAreaState s;
+  s.storage.insert(0, "ab");
+  s.cursor_position = 2;
+  s.area_config.single_line = true;
+  ti::insert_pasted_text(s, "x\ny\tz");
+  CHECK(s.text() == "abx y z");
+}
+
 // ---------------------------------------------------------------------------
 // Clipping
 // ---------------------------------------------------------------------------
