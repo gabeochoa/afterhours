@@ -74,6 +74,9 @@ inline void register_builtin_handlers(SystemManager &sm) {
   sm.register_update_system(std::make_unique<HandleMouseDownCommand>());
   sm.register_update_system(std::make_unique<HandleMouseUpCommand>());
   sm.register_update_system(std::make_unique<HandleScrollWheelCommand>());
+  sm.register_update_system(std::make_unique<HandleGamepadConnectCommand>());
+  sm.register_update_system(std::make_unique<HandleGamepadButtonCommand>());
+  sm.register_update_system(std::make_unique<HandleGamepadAxisCommand>());
   sm.register_update_system(std::make_unique<HandleDragToCommand>());
   sm.register_update_system(std::make_unique<HandleWaitCommand>());
   sm.register_update_system(std::make_unique<HandleWaitFramesCommand>());
@@ -85,6 +88,8 @@ inline void register_builtin_handlers(SystemManager &sm) {
   sm.register_update_system(std::make_unique<HandleResizeCommand>());
   sm.register_update_system(std::make_unique<HandleResizeStepsCommand>());
   sm.register_update_system(std::make_unique<HandleWaitResizedCommand>());
+  sm.register_update_system(
+      std::make_unique<HandleExpectWindowSizeCommand>());
   sm.register_update_system(std::make_unique<HandleAssertNoOverflowCommand>());
   // Note: screenshot and reset_test_state need callbacks, registered separately
 }
@@ -157,7 +162,6 @@ inline void register_shared_handlers(SystemManager &sm, SystemManager &pack) {
 //
 // Semantic actions (preferred):  action WidgetLeft, hold WidgetLeft, release
 // Component commands:  click_ui, click_button, toggle_checkbox, set_slider
-// Assertions:  expect_focused, expect_checkbox, expect_slider
 // Raw key fallbacks:  tab, enter, escape, arrow
 
 } // namespace testing

@@ -10,7 +10,7 @@ using namespace afterhours;
 TEST(collector_coexists_with_hook_and_separates_phases) {
     profiling::Collector collector({3, 4, 1});
     int begins = 0, ends = 0;
-    SystemManager::set_profile_hook({[&](auto, auto) { ++begins; }, [&](auto, auto) { ++ends; }});
+    SystemManager::set_profile_hook({[&](auto, auto) { ++begins; }, [&](auto, auto, auto) { ++ends; }});
     SystemManager manager;
     manager.register_update_system([](float) { std::this_thread::sleep_for(std::chrono::milliseconds(2)); });
     manager.register_render_system([](float) {});
@@ -50,7 +50,7 @@ TEST(frame_averages_include_idle_frames_and_expire_old_work) {
     const auto record = [&](std::string_view name, double ms) {
         for (const auto &observer : profiling::detail::observers) {
             if (observer.context != &collector) continue;
-            observer.callback(observer.context, name, SystemPhase::Update, ms);
+            observer.callback(observer.context, name, SystemPhase::Update, ms, 0);
         }
     };
     record("work", 2);
@@ -212,7 +212,7 @@ TEST(selected_frames_use_matching_system_history_after_ring_wrap) {
     for (int i = 1; i <= 5; ++i) {
         for (const auto &observer : profiling::detail::observers)
             if (observer.context == &collector)
-                observer.callback(observer.context, "work", SystemPhase::Update, i * 2.);
+                observer.callback(observer.context, "work", SystemPhase::Update, i * 2., 0);
         collector.end_frame(i * 10.);
     }
     CHECK(collector.snapshot().systems[0].frame_history.empty());
