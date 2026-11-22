@@ -31,6 +31,7 @@ struct toast : developer::Plugin {
     static inline ui::Size HEIGHT = ui::h720(48.0f);
     static inline ui::Size PADDING = ui::h720(14.0f);
     static inline ui::Size TOAST_GAP = ui::h720(8.0f);
+    // TODO: let apps configure MAX_VISIBLE like WIDTH/HEIGHT/position
     static inline int MAX_VISIBLE = 3;
 
     // Helper to resolve a Size to actual pixels given screen dimensions
@@ -180,15 +181,20 @@ struct toast : developer::Plugin {
         using namespace ui;
 
         {
-            std::vector<Entity *> live;
-            for (Entity &e : EntityQuery().whereHasComponent<Toast>().gen())
-                if (!e.cleanup && !e.get<Toast>().is_expired())
-                    live.push_back(&e);
-            std::sort(live.begin(), live.end(), [](Entity *a, Entity *b) {
-                return a->get<Toast>().elapsed > b->get<Toast>().elapsed;
-            });
+            RefEntities live = EntityQuery()
+                                   .whereHasComponent<Toast>()
+                                   .whereLambda([](const Entity &e) {
+                                       return !e.cleanup &&
+                                              !e.get<Toast>().is_expired();
+                                   })
+                                   .gen();
+            std::sort(live.begin(), live.end(),
+                      [](Entity &a, Entity &b) {
+                          return a.get<Toast>().elapsed >
+                                 b.get<Toast>().elapsed;
+                      });
             while (static_cast<int>(live.size()) >= MAX_VISIBLE) {
-                live.front()->cleanup = true;
+                live.front().get().cleanup = true;
                 live.erase(live.begin());
             }
         }
