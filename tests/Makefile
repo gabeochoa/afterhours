@@ -176,6 +176,7 @@ ALL_TESTS := \
 	audio_lifecycle_test \
 	notimplemented_log_test \
 	local_time_test \
+	font_catalog_test \
 	frame_rate_stats_test \
 	graphics_concepts_pedantic_test \
 	fixed_tick_rate_test \
