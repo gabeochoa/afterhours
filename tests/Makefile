@@ -191,6 +191,7 @@ ALL_TESTS := \
 	mouse_axis_action_test \
 	card_and_type_scale_test \
 	fixed_timestep_test \
+	time_scale_substeps_test \
 	audio_lifecycle_test \
 	audio_stub_build_test \
 	notimplemented_log_test \
@@ -427,6 +428,7 @@ RAYLIB_TESTS := \
 	window_state_runconfig_test \
 	harness_spellings_test \
 	fixed_timestep_test \
+	time_scale_substeps_test \
 	audio_lifecycle_test \
 	sound_playback_test \
 	card_and_type_scale_test \

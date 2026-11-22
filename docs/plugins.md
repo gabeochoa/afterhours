@@ -137,6 +137,21 @@ Text commands such as `type`, `expect_text` and the value in `expect_input_text`
 
 `wait SECONDS` and `wait_until SECONDS cmd ...` count the host's `dt`, so `--time-scale 4` makes them four times faster in real time and a slow headless tick makes them slower. That is right for anything the frame loop drives. A thread, subprocess or socket keeps real time instead, so use `wait_wall SECONDS` to pause the script for that long on `steady_clock`, or `wait_until_wall SECONDS cmd ...` to retry a check until a real-time deadline. Frames keep running during both. The per-script timeout pauses until the deadline, and `is_idle_waiting()` stays false, so the host renders every frame. An expired `wait_until_wall` fails the script with the last mismatch, e.g. `wait_until_wall 2s: worker still busy`. A custom handler that calls `retry()` inside one is not timed out after 30 frames.
 
+## E2E --time-scale on a fixed-step sim
+
+`--time-scale N` runs N fixed ticks of `fixed_dt` per frame. It never scales dt.
+
+Wire it up with `afterhours::testing` in `src/plugins/e2e_testing/harness.h`:
+
+```cpp
+graphics::RunConfig cfg;
+cfg.fixed_dt = 1.f / 60.f;
+apply_time_scale(cfg, args.time_scale);          // sim_steps *= substeps
+run_fixed_steps(systems, entities, cfg, dt);    // step_count() fixed_ticks
+```
+
+`substeps_for_time_scale` rounds a fractional scale to a whole step, minimum 1. Without `fixed_dt`, `apply_time_scale` does nothing.
+
 ## Image tint
 
 Use `ComponentConfig{}.with_image_tint({255, 120, 60, 200})` with `image`, `sprite`, `image_button`, or `with_texture`. RGB multiplies the source pixels; tint alpha multiplies the widget's opacity and ancestor opacity. Omitting the option restores white tint on a reused widget. Backgrounds and labels keep their own colors.
