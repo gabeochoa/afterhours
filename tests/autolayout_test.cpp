@@ -721,12 +721,7 @@ TEST(screen_pct_half) {
   CHECK_APPROX(t.ui(root).computed[Axis::Y], 360.f);
 }
 
-// ---------------------------------------------------------------------------
-// percent(1.0) child + margin overflows the parent on the cross axis by
-// design (content-box model: percent fills 100% of content area, margin then
-// offsets position). See d41e1d8.
-// ---------------------------------------------------------------------------
-TEST(margin_offsets_percent_child_into_overflow) {
+TEST(margin_shrinks_percent_child_to_fit) {
   TestLayout t;
   auto &root = t.make_ui(pixels(300), pixels(300));
   t.ui(root).set_flex_direction(FlexDirection::Column);
@@ -737,22 +732,59 @@ TEST(margin_offsets_percent_child_into_overflow) {
   t.add_child(root, child);
   t.run(root);
 
-  // Post-d41e1d8 content-box model: percent(1.0f) resolves to 100% of the
-  // parent's content area (300) WITHOUT subtracting margin, and margin then
-  // offsets the position. So a full-width child + margin overflows the parent
-  // by design on the cross axis — the child's own size is the content box, not
-  // a margin-inset box. (Cross axis in a Column gets no error correction.)
   auto r = t.ui(child).rect();
   CHECK(r.x >= 0.f);
   CHECK(r.y >= 0.f);
-  // cross axis (X): full content-box width, offset by margin -> right edge 310
   CHECK_APPROX(r.x, 10.f);
-  CHECK_APPROX(r.width, 300.f);
-  CHECK_APPROX(r.x + r.width, 310.f);
-  // main axis (Y): pixels(100) child + 10 margin offset fits within the 300 parent
+  CHECK_APPROX(r.width, 280.f);
+  CHECK_APPROX(r.x + r.width, 290.f);
   CHECK(r.y + r.height <= 300.f + 1.f);
-  // No overflow warning: the child sticks out by exactly its margin, which the
-  // content-box model guarantees, so flagging it would be unactionable noise.
+}
+
+TEST(percent_margin_fits_next_to_margin) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(736), pixels(100));
+
+  auto &child = t.make_ui(percent(1.0f), pixels(50));
+  t.ui(child).set_desired_margin(Margin{.left = pixels(16)});
+  t.add_child(root, child);
+  t.run(root);
+
+  auto r = t.ui(child).rect();
+  CHECK_APPROX(r.x, 16.f);
+  CHECK_APPROX(r.width, 720.f);
+  CHECK_APPROX(r.x + r.width, 736.f);
+}
+
+TEST(percent_half_siblings_with_margins_fit) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(100));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+
+  auto &c1 = t.make_ui(percent(0.5f), pixels(50));
+  t.ui(c1).set_desired_margin(pixels(10), Axis::X);
+  auto &c2 = t.make_ui(percent(0.5f), pixels(50));
+  t.ui(c2).set_desired_margin(pixels(10), Axis::X);
+  t.add_child(root, c1);
+  t.add_child(root, c2);
+  t.run(root);
+
+  CHECK_APPROX(t.ui(c1).computed[Axis::X], 180.f);
+  CHECK_APPROX(t.ui(c2).computed[Axis::X], 180.f);
+  auto r2 = t.ui(c2).rect();
+  CHECK(r2.x + r2.width <= 400.f + 0.5f);
+}
+
+TEST(percent_margin_larger_than_share_clamps_to_zero) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(100), pixels(100));
+
+  auto &child = t.make_ui(percent(0.1f), pixels(50));
+  t.ui(child).set_desired_margin(pixels(10), Axis::X);
+  t.add_child(root, child);
+  t.run(root);
+
+  CHECK_APPROX(t.ui(child).computed[Axis::X], 0.f);
 }
 
 // ---------------------------------------------------------------------------
@@ -2754,10 +2786,8 @@ TEST(absolute_percent_with_margin) {
   t.run(root);
 
   auto r = t.ui(child).rect();
-  // Size should be 50% of parent, not reduced by margins
-  CHECK_APPROX(r.width, 200.f);
-  CHECK_APPROX(r.height, 200.f);
-  // Position offset by margins
+  CHECK_APPROX(r.width, 160.f);
+  CHECK_APPROX(r.height, 180.f);
   CHECK_APPROX(r.x, 40.f);
   CHECK_APPROX(r.y, 20.f);
 }
