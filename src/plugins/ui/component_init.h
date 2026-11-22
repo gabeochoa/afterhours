@@ -11,6 +11,7 @@
 #include "../color.h"
 #include "../texture_manager.h"
 #include "../window_manager.h"
+#include "accessibility.h"
 #include "component_config.h"
 #include "components.h"
 #include "context.h"

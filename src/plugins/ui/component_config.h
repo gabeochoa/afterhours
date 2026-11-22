@@ -11,6 +11,7 @@
 #include "../autolayout.h"
 #include "../color.h"
 #include "../texture_manager.h"
+#include "accessibility.h"
 #include "components.h"
 #include "extension.h"
 #include "overlay.h"
