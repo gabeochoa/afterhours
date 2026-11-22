@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <numeric>
 #include <vector>
 
 namespace afterhours {
@@ -46,14 +47,14 @@ public:
 
   // Removes the fold hiding `model_index` (or starting there). False if none.
   bool unfold_model(size_t model_index) {
-    for (size_t i = 0; i < folds_.size(); i++) {
-      if (model_index >= folds_[i].begin && model_index < folds_[i].end) {
-        folds_.erase(folds_.begin() + static_cast<long>(i));
-        rebuild();
-        return true;
-      }
-    }
-    return false;
+    const auto it = std::find_if(folds_.begin(), folds_.end(), [&](const FoldRange &f) {
+      return model_index >= f.begin && model_index < f.end;
+    });
+    if (it == folds_.end())
+      return false;
+    folds_.erase(it);
+    rebuild();
+    return true;
   }
 
   // Removes the fold shown at visible row `visible`. False if not a fold row.
@@ -110,9 +111,10 @@ public:
     const size_t k = fold_containing(model);
     if (k < folds_.size())
       return visible_start(k);
-    size_t before = 0;
-    while (before < folds_.size() && folds_[before].end <= model)
-      before++;
+    const size_t before = static_cast<size_t>(std::partition_point(
+        folds_.begin(), folds_.end(),
+        [&](const FoldRange &f) { return f.end <= model; }) -
+        folds_.begin());
     return model - hidden_prefix_[before] + before;
   }
 
@@ -127,12 +129,10 @@ private:
   }
 
   void rebuild() {
-    std::vector<FoldRange> clean;
-    for (auto r : folds_) {
+    std::vector<FoldRange> clean = folds_;
+    for (auto &r : clean)
       r.end = std::min(r.end, model_count_);
-      if (r.begin < r.end)
-        clean.push_back(r);
-    }
+    std::erase_if(clean, [](const FoldRange &r) { return r.begin >= r.end; });
     std::sort(clean.begin(), clean.end(), [](const FoldRange &a, const FoldRange &b) {
       return a.begin != b.begin ? a.begin < b.begin : a.end < b.end;
     });
@@ -144,8 +144,10 @@ private:
         folds_.push_back(r);
     }
     hidden_prefix_.assign(folds_.size() + 1, 0);
-    for (size_t k = 0; k < folds_.size(); k++)
-      hidden_prefix_[k + 1] = hidden_prefix_[k] + folds_[k].size();
+    std::transform(folds_.begin(), folds_.end(), hidden_prefix_.begin() + 1,
+                   [](const FoldRange &r) { return r.size(); });
+    std::partial_sum(hidden_prefix_.begin() + 1, hidden_prefix_.end(),
+                     hidden_prefix_.begin() + 1);
     hidden_ = hidden_prefix_.back();
   }
 
