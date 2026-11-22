@@ -283,6 +283,7 @@ ALL_TESTS := \
 	config_strings_test \
 	overdraw_audit_test \
 	virtual_list_test \
+	folded_range_test \
 	text_action_names_test \
 	sizing_repro_test \
 	slider_test \
