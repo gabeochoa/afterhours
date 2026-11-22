@@ -234,6 +234,7 @@ ALL_TESTS := \
 	pointer_owner_test \
 	two_trees_test \
 	text_selection_test \
+	selectable_text_test \
 	text_stroke_test \
 	text_stroke_render_test \
 	multiline_text_test \
