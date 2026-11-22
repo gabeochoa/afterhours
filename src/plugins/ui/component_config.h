@@ -195,6 +195,8 @@ struct ComponentConfig {
   // Text input: readonly mode (focusable, selectable, but not editable)
   bool text_readonly = false;
 
+  bool text_selectable = false;
+
   // Text input: clipboard operations this field refuses. All allowed by
   // default; masking a field does not change them.
   bool text_copy_disabled = false;
@@ -443,6 +445,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_readonly(bool ro = true) {
     text_readonly = ro;
+    return *this;
+  }
+  ComponentConfig &with_selectable_text(bool selectable = true) {
+    text_selectable = selectable;
     return *this;
   }
   ComponentConfig &with_copy_disabled(bool disabled = true) {
@@ -1370,6 +1376,8 @@ struct ComponentConfig {
       merged.mask_char = overrides.mask_char;
     if (overrides.text_readonly)
       merged.text_readonly = true;
+    if (overrides.text_selectable)
+      merged.text_selectable = true;
     if (overrides.text_copy_disabled)
       merged.text_copy_disabled = true;
     if (overrides.text_cut_disabled)
