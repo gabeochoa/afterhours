@@ -190,6 +190,7 @@ ALL_TESTS := \
 	local_time_test \
 	font_catalog_test \
 	frame_rate_stats_test \
+	tunable_test \
 	graphics_concepts_pedantic_test \
 	fixed_tick_rate_test \
 	sound_playback_test \
