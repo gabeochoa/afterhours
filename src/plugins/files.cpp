@@ -39,6 +39,9 @@
 
 #ifndef __EMSCRIPTEN__
 #include <cstdint>
+#if !defined(_WIN32)
+#include <sys/wait.h>
+#endif
 #include <unistd.h> // chdir 
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
@@ -108,10 +111,19 @@ std::filesystem::path resolve_resource_root(const std::string &root_folder) {
 #endif // !__EMSCRIPTEN__
 
 namespace {
+std::filesystem::path e2e_tmp_base() {
+  const char *env = std::getenv("E2E_TMPDIR");
+  return env && env[0] ? std::filesystem::path(env) : std::filesystem::path{};
+}
+}
+
+namespace {
 std::pair<std::filesystem::path, std::filesystem::path>
 default_roots(const std::string &game_name) {
   if (files::active_test_roots)
     return {files::active_test_roots->save, files::active_test_roots->config};
+  if (const fs::path e2e = e2e_tmp_base(); !e2e.empty())
+    return {e2e / "save", e2e / "config"};
 #ifdef __EMSCRIPTEN__
   return {fs::path("/save") / game_name, fs::path("/config") / game_name};
 #else
@@ -244,9 +256,28 @@ void files::init(const std::string &game_name, const std::string &root_folder) {
   sweep_temp_files(get_save_path());
 }
 
+bool files::maybe_install_e2e_test_roots(int argc, char *argv[]) {
+  bool e2e = false;
+  for (int i = 1; i < argc; ++i) {
+    const std::string key = std::string(argv[i]).substr(0, std::string(argv[i]).find('='));
+    if (key == "--e2e" || key == "--test-mode" || key == "--test-script" ||
+        key == "--test-script-dir")
+      e2e = true;
+  }
+  if (!e2e || active_test_roots)
+    return false;
+  if (const char *opt_out = std::getenv("AFTERHOURS_NO_E2E_TEMPROOTS");
+      opt_out && opt_out[0])
+    return false;
+  new TestRoots();
+  return true;
+}
+
 files::TestRoots::TestRoots() {
   std::error_code ec;
-  const fs::path base = fs::temp_directory_path(ec);
+  fs::path base = e2e_tmp_base();
+  if (base.empty())
+    base = fs::temp_directory_path(ec);
   std::random_device rd;
   for (int attempt = 0; attempt < 100 && root.empty(); ++attempt) {
     fs::path candidate =
@@ -351,6 +382,91 @@ fs::path files::get_executable_dir() {
   return {};
 #else
   return executable_dir();
+#endif
+}
+
+fs::path files::get_documents_path() {
+#ifdef __EMSCRIPTEN__
+  log_error("@notimplemented files::get_documents_path on Emscripten");
+  return {};
+#else
+  // platform_folders.h has non-inline defs: include only here.
+  return fs::path(sago::getDocumentsFolder());
+#endif
+}
+
+std::optional<std::vector<std::string>>
+files::reveal_command(const fs::path &path) {
+#ifdef __EMSCRIPTEN__
+  log_error("@notimplemented files::reveal_command on Emscripten");
+  return std::nullopt;
+#endif
+  std::error_code ec;
+  if (!fs::exists(path, ec))
+    return std::nullopt;
+#if defined(__APPLE__)
+  return std::vector<std::string>{"open", "-R", path.string()};
+#elif defined(_WIN32)
+  return fs::is_directory(path, ec)
+             ? std::vector<std::string>{"explorer.exe", path.string()}
+             : std::vector<std::string>{"explorer.exe",
+                                        "/select," + path.string()};
+#else
+  // xdg-open cannot select a file; open its containing folder instead.
+  const fs::path dir =
+      fs::is_directory(path, ec) ? path : path.parent_path();
+  if (dir.empty())
+    return std::nullopt;
+  return std::vector<std::string>{"xdg-open", dir.string()};
+#endif
+}
+
+bool files::reveal(const fs::path &path) {
+  auto cmd = reveal_command(path);
+  if (!cmd)
+    return false;
+#if defined(_WIN32)
+  std::string cmdline;
+  for (size_t i = 0; i < cmd->size(); ++i) {
+    if (i)
+      cmdline += ' ';
+    cmdline += '"';
+    for (const char c : (*cmd)[i])
+      cmdline += c == '"' ? std::string("\\\"") : std::string(1, c);
+    cmdline += '"';
+  }
+  STARTUPINFOA si{};
+  PROCESS_INFORMATION pi{};
+  if (!::CreateProcessA(nullptr, cmdline.data(), nullptr, nullptr, FALSE, 0,
+                        nullptr, nullptr, &si, &pi))
+    return false;
+  ::WaitForSingleObject(pi.hProcess, INFINITE);
+  DWORD code = 1;
+  const bool ok =
+      ::GetExitCodeProcess(pi.hProcess, &code) && code == 0;
+  ::CloseHandle(pi.hThread);
+  ::CloseHandle(pi.hProcess);
+  return ok;
+#elif defined(__EMSCRIPTEN__)
+  log_error("@notimplemented files::reveal on Emscripten");
+  return false;
+#else
+  const pid_t pid = ::fork();
+  if (pid < 0)
+    return false;
+  if (pid == 0) {
+    std::vector<char *> argv;
+    argv.reserve(cmd->size() + 1);
+    for (auto &s : *cmd)
+      argv.push_back(s.data());
+    argv.push_back(nullptr);
+    ::execvp(argv.front(), argv.data());
+    ::_exit(127);
+  }
+  int status = 0;
+  if (::waitpid(pid, &status, 0) < 0)
+    return false;
+  return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 #endif
 }
 
