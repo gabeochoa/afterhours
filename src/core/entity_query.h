@@ -723,6 +723,8 @@ struct EntityQuery {
     const Entities &pool() const {
         if (seed) return *seed;
         if (required_count && source && source_temp_empty) {
+            if (required_count == 1)
+                return source->membership_for(required_ids[0]);
             seed = source->membership_candidates(std::vector<ComponentID>(
                 required_ids.begin(),
                 required_ids.begin() + required_count));
