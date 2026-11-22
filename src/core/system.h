@@ -152,6 +152,10 @@ class SystemBase {
         return {};
     }
 
+    virtual const std::vector<ComponentID> *membership_requirements() const {
+        return nullptr;
+    }
+
     virtual void for_each(Entity &, const float) = 0;
     virtual void for_each(const Entity &, const float) const = 0;
 
@@ -503,6 +507,22 @@ struct System
         return OnlySingletons<ComponentsOnly>::find(coll);
     }
 
+    template<typename>
+    struct PositiveIds;
+    template<typename... Cs>
+    struct PositiveIds<type_list<Cs...>> {
+        static const std::vector<ComponentID> &get() {
+            static const std::vector<ComponentID> ids{
+                components::get_type_id<Cs>()...};
+            return ids;
+        }
+    };
+
+    const std::vector<ComponentID> *membership_requirements() const override {
+        const auto &ids = PositiveIds<ComponentsOnly>::get();
+        return ids.empty() ? nullptr : &ids;
+    }
+
     using ForEachBase::for_each_with;
     using ForEachBase::for_each_with_derived;
 };
@@ -546,6 +566,16 @@ inline void run_system_over(Sys &system, Entities &entities, const float dt,
         only.has_value()) {
         Entity &ent = *only.value();
         if (!skip_cleanup || !ent.cleanup) visit(ent);
+    } else if (!system.include_derived_children &&
+               system.membership_requirements() &&
+               &entities == &coll.get_entities()) {
+        const Entities candidates =
+            coll.membership_candidates(*system.membership_requirements());
+        for (const auto &entity : candidates) {
+            if (!entity) continue;
+            if (skip_cleanup && entity->cleanup) continue;
+            visit(*entity);
+        }
     } else {
         // Index-based so a push_back to entities (e.g. a for_each that
         // triggers a merge) doesn't invalidate our iterator.

@@ -228,6 +228,7 @@ ALL_TESTS := \
 	canonical_snapshot_test \
 	entity_pool_test \
 	entity_query_test \
+	entity_membership_test \
 	temp_warning_caller_test \
 	query_scratch_test \
 	get_or_default_test \

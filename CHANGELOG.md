@@ -6,6 +6,9 @@ Started partway through the project's life, so it does not go all the way back.
 
 ## Unreleased
 
+### Internal / perf
+
+- **Component queries and system passes walk per-component membership lists instead of every entity.** `EntityCollection` now keeps, per component type, the merged entities holding it (in entity-vector order, rebuilt in one pass when entity/component membership changes), and `EntityQuery::whereHasComponent` plus `System` iteration start from the smallest relevant list. No API or behavior change: same results, same iteration order, verified by `entity_membership_test`, which also counts entities visited (10 matches in a 4,000-entity world are visited 10 times, where the old scan visited 4,000). For Cartographer's 8.7k-entity valley pass and Puzzle's no-visible-UI frame, the per-system cost now scales with matches, not world size. Upkeep is one rebuild pass over entities + component pairs on the first walk after a change, and nothing per walk while unchanged.
 ### Added
 
 - **E2E `reset_profile` command and `dump_profile --json`.** `reset_profile` clears the builtin collector's frames/systems/counters while recording continues, so the next `dump_profile` covers only the window after it (Cartographer R-238). `dump_profile --json` logs one single-line JSON object with the full snapshot — frames, fps, p50/p95/p99, per-system mean/average/recent/peak/last/calls, counters — for machine consumers (Cartographer R-233). The JSON reads the builtin collector, not the pluggable provider, and fails loudly with no frames or with profiling compiled out. A snapshot-diff tool is deliberately deferred. Covered by `system_profile_test`.
