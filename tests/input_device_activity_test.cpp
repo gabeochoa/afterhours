@@ -1,5 +1,6 @@
 #define FMT_HEADER_ONLY
 #include <afterhours/src/plugins/input_prompts.h>
+#include "input_raylib_unused_stubs.h"
 #include <cassert>
 
 namespace {

@@ -511,8 +511,7 @@ struct HandleClickLabelCommand : System<PendingE2ECommand> {
     }
 
     Entity &target = *matches[0];
-    if (target.is_missing<ui::HasClickListener>() &&
-        target.is_missing<ui::HasDragListener>()) {
+    if (!target.has_any<ui::HasClickListener, ui::HasDragListener>()) {
       cmd.fail(std::format("click_label \"{}\": element has no click listener", text));
       return;
     }
