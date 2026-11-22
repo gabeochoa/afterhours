@@ -13,7 +13,9 @@
 // raylib only. The none and sokol backends get a stub whose loads always
 // fail, so ModelLibrary::load returns false there instead of drawing nothing.
 
+#include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -140,7 +142,7 @@ out vec4 finalColor;
 void main() { finalColor = texture(texture0, fragTexCoord) * colDiffuse; })";
   ShaderType shader = raylib::LoadShaderFromMemory(vs, fs);
   // raylib 5.5 looks the instance attribute up under MATRIX_MODEL; 5.6 moves
-  // it to SHADER_LOC_VERTEX_INSTANCE_TX.
+  // it to raylib::SHADER_LOC_VERTEX_INSTANCE_TX.
   shader.locs[raylib::SHADER_LOC_MATRIX_MODEL] =
       raylib::GetShaderLocationAttrib(shader, "instanceTransform");
   return shader;
@@ -258,10 +260,158 @@ inline MatrixType model_transform(Vector3Type pos, float yaw_deg,
   return m;
 }
 
+inline MatrixType multiply(const MatrixType &left, const MatrixType &right) {
+  MatrixType r{};
+  r.m0 = left.m0 * right.m0 + left.m1 * right.m4 + left.m2 * right.m8 + left.m3 * right.m12;
+  r.m1 = left.m0 * right.m1 + left.m1 * right.m5 + left.m2 * right.m9 + left.m3 * right.m13;
+  r.m2 = left.m0 * right.m2 + left.m1 * right.m6 + left.m2 * right.m10 + left.m3 * right.m14;
+  r.m3 = left.m0 * right.m3 + left.m1 * right.m7 + left.m2 * right.m11 + left.m3 * right.m15;
+  r.m4 = left.m4 * right.m0 + left.m5 * right.m4 + left.m6 * right.m8 + left.m7 * right.m12;
+  r.m5 = left.m4 * right.m1 + left.m5 * right.m5 + left.m6 * right.m9 + left.m7 * right.m13;
+  r.m6 = left.m4 * right.m2 + left.m5 * right.m6 + left.m6 * right.m10 + left.m7 * right.m14;
+  r.m7 = left.m4 * right.m3 + left.m5 * right.m7 + left.m6 * right.m11 + left.m7 * right.m15;
+  r.m8 = left.m8 * right.m0 + left.m9 * right.m4 + left.m10 * right.m8 + left.m11 * right.m12;
+  r.m9 = left.m8 * right.m1 + left.m9 * right.m5 + left.m10 * right.m9 + left.m11 * right.m13;
+  r.m10 = left.m8 * right.m2 + left.m9 * right.m6 + left.m10 * right.m10 + left.m11 * right.m14;
+  r.m11 = left.m8 * right.m3 + left.m9 * right.m7 + left.m10 * right.m11 + left.m11 * right.m15;
+  r.m12 = left.m12 * right.m0 + left.m13 * right.m4 + left.m14 * right.m8 + left.m15 * right.m12;
+  r.m13 = left.m12 * right.m1 + left.m13 * right.m5 + left.m14 * right.m9 + left.m15 * right.m13;
+  r.m14 = left.m12 * right.m2 + left.m13 * right.m6 + left.m14 * right.m10 + left.m15 * right.m14;
+  r.m15 = left.m12 * right.m3 + left.m13 * right.m7 + left.m14 * right.m11 + left.m15 * right.m15;
+  return r;
+}
+#ifndef MAX_MATERIAL_MAPS
+#define MAX_MATERIAL_MAPS 12
+#endif
+inline void to_float16(const std::vector<MatrixType> &transforms, float *out) {
+  for (size_t i = 0; i < transforms.size(); i++) {
+    const MatrixType &m = transforms[i];
+    float *d = out + i * 16;
+    d[0] = m.m0;   d[1] = m.m1;   d[2] = m.m2;   d[3] = m.m3;
+    d[4] = m.m4;   d[5] = m.m5;   d[6] = m.m6;   d[7] = m.m7;
+    d[8] = m.m8;   d[9] = m.m9;   d[10] = m.m10; d[11] = m.m11;
+    d[12] = m.m12; d[13] = m.m13; d[14] = m.m14; d[15] = m.m15;
+  }
+}
+inline void draw_mesh_instanced_persistent(const raylib::Mesh &mesh,
+                                           const raylib::Material &material,
+                                           ShaderType shader,
+                                           unsigned int instance_vbo,
+                                           int count) {
+  if (count <= 0 || instance_vbo == 0) return;
+  raylib::rlEnableShader(shader.id);
+  auto vec4 = [&](int loc, raylib::Color c) {
+    float v[4] = {static_cast<float>(c.r) / 255.f, static_cast<float>(c.g) / 255.f,
+                  static_cast<float>(c.b) / 255.f, static_cast<float>(c.a) / 255.f};
+    raylib::rlSetUniform(loc, v, raylib::SHADER_UNIFORM_VEC4, 1);
+  };
+  if (material.shader.locs[raylib::SHADER_LOC_COLOR_DIFFUSE] != -1)
+    vec4(material.shader.locs[raylib::SHADER_LOC_COLOR_DIFFUSE],
+         material.maps[raylib::MATERIAL_MAP_DIFFUSE].color);
+  if (material.shader.locs[raylib::SHADER_LOC_COLOR_SPECULAR] != -1)
+    vec4(material.shader.locs[raylib::SHADER_LOC_COLOR_SPECULAR],
+         material.maps[raylib::SHADER_LOC_COLOR_SPECULAR].color);
+  MatrixType view = raylib::rlGetMatrixModelview();
+  MatrixType proj = raylib::rlGetMatrixProjection();
+  if (material.shader.locs[raylib::SHADER_LOC_MATRIX_VIEW] != -1)
+    raylib::rlSetUniformMatrix(material.shader.locs[raylib::SHADER_LOC_MATRIX_VIEW], view);
+  if (material.shader.locs[raylib::SHADER_LOC_MATRIX_PROJECTION] != -1)
+    raylib::rlSetUniformMatrix(material.shader.locs[raylib::SHADER_LOC_MATRIX_PROJECTION], proj);
+  raylib::rlEnableVertexArray(mesh.vaoId);
+  raylib::rlEnableVertexBuffer(instance_vbo);
+  for (unsigned int i = 0; i < 4; i++) {
+    unsigned int loc = static_cast<unsigned int>(material.shader.locs[raylib::SHADER_LOC_MATRIX_MODEL] + i);
+    raylib::rlEnableVertexAttribute(loc);
+    raylib::rlSetVertexAttribute(loc, 4, RL_FLOAT, 0, sizeof(MatrixType), static_cast<int>(i * sizeof(raylib::Vector4)));
+    raylib::rlSetVertexAttributeDivisor(loc, 1);
+  }
+  raylib::rlDisableVertexBuffer();
+  raylib::rlDisableVertexArray();
+  MatrixType model_view = multiply(raylib::rlGetMatrixTransform(), view);
+  if (material.shader.locs[raylib::SHADER_LOC_MATRIX_NORMAL] != -1) {
+    MatrixType identity = model_transform({0, 0, 0}, 0.f, {1, 1, 1});
+    raylib::rlSetUniformMatrix(material.shader.locs[raylib::SHADER_LOC_MATRIX_NORMAL], identity);
+  }
+  for (int i = 0; i < MAX_MATERIAL_MAPS; i++) {
+    if (material.maps[i].texture.id > 0) {
+      raylib::rlActiveTextureSlot(i);
+      if ((i == raylib::MATERIAL_MAP_IRRADIANCE) || (i == raylib::MATERIAL_MAP_PREFILTER) ||
+          (i == raylib::MATERIAL_MAP_CUBEMAP))
+        raylib::rlEnableTextureCubemap(material.maps[i].texture.id);
+      else
+        raylib::rlEnableTexture(material.maps[i].texture.id);
+      raylib::rlSetUniform(material.shader.locs[raylib::SHADER_LOC_MAP_DIFFUSE + i], &i, raylib::SHADER_UNIFORM_INT, 1);
+    }
+  }
+  if (!raylib::rlEnableVertexArray(mesh.vaoId)) {
+    raylib::rlEnableVertexBuffer(mesh.vboId[RL_DEFAULT_SHADER_ATTRIB_LOCATION_POSITION]);
+    raylib::rlSetVertexAttribute(material.shader.locs[raylib::SHADER_LOC_VERTEX_POSITION], 3, RL_FLOAT, 0, 0, 0);
+    raylib::rlEnableVertexAttribute(material.shader.locs[raylib::SHADER_LOC_VERTEX_POSITION]);
+    raylib::rlEnableVertexBuffer(mesh.vboId[RL_DEFAULT_SHADER_ATTRIB_LOCATION_TEXCOORD]);
+    raylib::rlSetVertexAttribute(material.shader.locs[raylib::SHADER_LOC_VERTEX_TEXCOORD01], 2, RL_FLOAT, 0, 0, 0);
+    raylib::rlEnableVertexAttribute(material.shader.locs[raylib::SHADER_LOC_VERTEX_TEXCOORD01]);
+    if (material.shader.locs[raylib::SHADER_LOC_VERTEX_NORMAL] != -1) {
+      raylib::rlEnableVertexBuffer(mesh.vboId[RL_DEFAULT_SHADER_ATTRIB_LOCATION_NORMAL]);
+      raylib::rlSetVertexAttribute(material.shader.locs[raylib::SHADER_LOC_VERTEX_NORMAL], 3, RL_FLOAT, 0, 0, 0);
+      raylib::rlEnableVertexAttribute(material.shader.locs[raylib::SHADER_LOC_VERTEX_NORMAL]);
+    }
+    if (material.shader.locs[raylib::SHADER_LOC_VERTEX_COLOR] != -1) {
+      if (mesh.vboId[RL_DEFAULT_SHADER_ATTRIB_LOCATION_COLOR] != 0) {
+        raylib::rlEnableVertexBuffer(mesh.vboId[RL_DEFAULT_SHADER_ATTRIB_LOCATION_COLOR]);
+        raylib::rlSetVertexAttribute(material.shader.locs[raylib::SHADER_LOC_VERTEX_COLOR], 4, RL_UNSIGNED_BYTE, 1, 0, 0);
+        raylib::rlEnableVertexAttribute(material.shader.locs[raylib::SHADER_LOC_VERTEX_COLOR]);
+      } else {
+        float value[4] = {1.f, 1.f, 1.f, 1.f};
+        raylib::rlSetVertexAttributeDefault(material.shader.locs[raylib::SHADER_LOC_VERTEX_COLOR], value, raylib::SHADER_ATTRIB_VEC4, 4);
+        raylib::rlDisableVertexAttribute(material.shader.locs[raylib::SHADER_LOC_VERTEX_COLOR]);
+      }
+    }
+    if (material.shader.locs[raylib::SHADER_LOC_VERTEX_TANGENT] != -1) {
+      raylib::rlEnableVertexBuffer(mesh.vboId[RL_DEFAULT_SHADER_ATTRIB_LOCATION_TANGENT]);
+      raylib::rlSetVertexAttribute(material.shader.locs[raylib::SHADER_LOC_VERTEX_TANGENT], 4, RL_FLOAT, 0, 0, 0);
+      raylib::rlEnableVertexAttribute(material.shader.locs[raylib::SHADER_LOC_VERTEX_TANGENT]);
+    }
+    if (material.shader.locs[raylib::SHADER_LOC_VERTEX_TEXCOORD02] != -1) {
+      raylib::rlEnableVertexBuffer(mesh.vboId[RL_DEFAULT_SHADER_ATTRIB_LOCATION_TEXCOORD2]);
+      raylib::rlSetVertexAttribute(material.shader.locs[raylib::SHADER_LOC_VERTEX_TEXCOORD02], 2, RL_FLOAT, 0, 0, 0);
+      raylib::rlEnableVertexAttribute(material.shader.locs[raylib::SHADER_LOC_VERTEX_TEXCOORD02]);
+    }
+    if (mesh.indices != NULL) raylib::rlEnableVertexBufferElement(mesh.vboId[RL_DEFAULT_SHADER_ATTRIB_LOCATION_INDICES]);
+  }
+  int eyes = raylib::rlIsStereoRenderEnabled() ? 2 : 1;
+  for (int eye = 0; eye < eyes; eye++) {
+    MatrixType mvp{};
+    if (eyes == 1) mvp = multiply(model_view, proj);
+    else {
+      raylib::rlViewport(eye * raylib::rlGetFramebufferWidth() / 2, 0, raylib::rlGetFramebufferWidth() / 2, raylib::rlGetFramebufferHeight());
+      mvp = multiply(multiply(model_view, raylib::rlGetMatrixViewOffsetStereo(eye)), raylib::rlGetMatrixProjectionStereo(eye));
+    }
+    raylib::rlSetUniformMatrix(material.shader.locs[raylib::SHADER_LOC_MATRIX_MVP], mvp);
+    if (mesh.indices != NULL) raylib::rlDrawVertexArrayElementsInstanced(0, mesh.triangleCount * 3, 0, count);
+    else raylib::rlDrawVertexArrayInstanced(0, mesh.vertexCount, count);
+  }
+  for (int i = 0; i < MAX_MATERIAL_MAPS; i++) {
+    if (material.maps[i].texture.id > 0) {
+      raylib::rlActiveTextureSlot(i);
+      if ((i == raylib::MATERIAL_MAP_IRRADIANCE) || (i == raylib::MATERIAL_MAP_PREFILTER) ||
+          (i == raylib::MATERIAL_MAP_CUBEMAP))
+        raylib::rlDisableTextureCubemap();
+      else
+        raylib::rlDisableTexture();
+    }
+  }
+  raylib::rlDisableVertexArray();
+  raylib::rlDisableVertexBuffer();
+  raylib::rlDisableVertexBufferElement();
+  raylib::rlDisableShader();
+}
+
+
 // Collects one transform per copy, grouped by model, and draws each group
-// with one draw_model_instanced. Call add() while walking the entities, then
-// flush() once a frame. flush() empties the groups but keeps their storage,
-// so a steady scene stops allocating after its first frame.
+// with one instanced draw. Call add() while walking the entities, then
+// flush() once a frame. flush() empties the groups but keeps their storage
+// and their GPU instance buffer, so a steady scene stops allocating after
+// its first frame and re-uploads nothing while its transforms stay put.
 //
 // Groups are keyed by the model's address; ModelLibrary models keep theirs
 // while loaded. Copies that need a different shader or uniforms go in a
@@ -293,8 +443,8 @@ struct InstanceBatcher {
       on_group(*g.model, g.key,
                std::span<const MatrixType>(g.transforms.data(),
                                            g.transforms.size()));
-      draw_model_instanced(*g.model, shader, g.transforms.data(),
-                           static_cast<int>(g.transforms.size()));
+      sync_instance_buffer(g);
+      draw_group_persistent(g, shader);
       g.transforms.clear();
     }
   }
@@ -303,6 +453,20 @@ struct InstanceBatcher {
     for (Group &g : groups) g.transforms.clear();
   }
 
+  ~InstanceBatcher() {
+    for (Group &g : groups)
+      if (g.instance_vbo != 0) raylib::rlUnloadVertexBuffer(g.instance_vbo);
+  }
+  [[nodiscard]] size_t buffer_creates() const {
+    size_t n = 0;
+    for (const Group &g : groups) n += g.buffer_creates;
+    return n;
+  }
+  [[nodiscard]] size_t buffer_uploads() const {
+    size_t n = 0;
+    for (const Group &g : groups) n += g.buffer_uploads;
+    return n;
+  }
   [[nodiscard]] size_t copies() const {
     size_t n = 0;
     for (const Group &g : groups) n += g.transforms.size();
@@ -321,6 +485,11 @@ private:
     const ModelType *model;
     uint32_t key;
     std::vector<MatrixType> transforms;
+    unsigned int instance_vbo = 0;
+    size_t instance_capacity = 0;
+    std::vector<MatrixType> uploaded;
+    size_t buffer_creates = 0;
+    size_t buffer_uploads = 0;
   };
   struct GroupId {
     const ModelType *model;
@@ -338,6 +507,51 @@ private:
   std::vector<Group> groups;
   std::unordered_map<GroupId, size_t, GroupIdHash> index;
 
+  static void sync_instance_buffer(Group &g) {
+    const size_t want = g.transforms.size();
+    if (want == 0) return;
+    const size_t bytes = want * sizeof(MatrixType);
+    if (g.instance_vbo == 0 || want > g.instance_capacity) {
+      const size_t cap =
+          g.instance_capacity == 0 ? want
+                                   : std::max(want, g.instance_capacity * 2);
+      if (g.instance_vbo != 0) raylib::rlUnloadVertexBuffer(g.instance_vbo);
+      std::vector<float> flat(cap * 16);
+      to_float16(g.transforms, flat.data());
+      g.instance_vbo = raylib::rlLoadVertexBuffer(
+          flat.data(), static_cast<int>(cap * sizeof(raylib::float16)), true);
+      g.instance_capacity = cap;
+      g.uploaded = g.transforms;
+      g.buffer_creates++;
+      return;
+    }
+    if (g.uploaded.size() != want ||
+        std::memcmp(g.uploaded.data(), g.transforms.data(), bytes) != 0) {
+      std::vector<float> flat(want * 16);
+      to_float16(g.transforms, flat.data());
+      raylib::rlUpdateVertexBuffer(g.instance_vbo, flat.data(),
+                                   static_cast<int>(want * sizeof(raylib::float16)), 0);
+      g.uploaded = g.transforms;
+      g.buffer_uploads++;
+    }
+  }
+  static void draw_group_persistent(Group &g, ShaderType shader) {
+    int loc = shader.locs[raylib::SHADER_LOC_MATRIX_MODEL];
+    int count = static_cast<int>(g.transforms.size());
+    for (int i = 0; i < g.model->meshCount; i++) {
+      raylib::Material material = g.model->materials[g.model->meshMaterial[i]];
+      material.shader = shader;
+      draw_mesh_instanced_persistent(g.model->meshes[i], material, shader,
+                                     g.instance_vbo, count);
+      if (loc < 0 || !raylib::rlEnableVertexArray(g.model->meshes[i].vaoId))
+        continue;
+      for (int c = 0; c < 4; c++) {
+        raylib::rlDisableVertexAttribute(static_cast<unsigned int>(loc + c));
+        raylib::rlSetVertexAttributeDivisor(static_cast<unsigned int>(loc + c), 0);
+      }
+      raylib::rlDisableVertexArray();
+    }
+  }
   Group &group_for(const ModelType &model, uint32_t key) {
     auto [it, inserted] = index.try_emplace(GroupId{&model, key}, groups.size());
     if (inserted) groups.push_back({&model, key, {}});
