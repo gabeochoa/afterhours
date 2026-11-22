@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../config.h"
+#include "../../frame_loop.h"
 
 #ifdef AFTER_HOURS_SOKOL
 
@@ -38,7 +39,7 @@ inline std::function<void()> g_init_fn;
 inline std::function<void()> g_frame_fn;
 inline std::function<void()> g_cleanup_fn;
 inline int g_target_fps = 0;
-inline double g_frame_elapsed = 0.0;
+inline frame_loop::CadenceDriver g_cadence;
 inline uint64_t g_last_frame_tick = 0;
 inline double g_frame_dt = 0.0;
 inline bool g_on_demand = false;
