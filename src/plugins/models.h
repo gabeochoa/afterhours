@@ -21,6 +21,7 @@
 #include "../graphics_common.h"
 #include "../library.h"
 #include "../logging.h"
+#include "../warn_once.h"
 #include "../singleton.h"
 #include "color.h"
 
@@ -354,23 +355,50 @@ using MatrixType = ::MatrixType;
 inline Bounds model_bounds(const ModelType &) { return {}; }
 inline int model_triangle_count(const ModelType &) { return 0; }
 
-inline ModelType load_model(const char *) { return {}; }
+inline ModelType load_model(const char *) {
+  warn_once(0, "@notimplemented load_model on this backend (models are "
+               "raylib-only); returning an empty model");
+  return {};
+}
 inline void unload_model(ModelType) {}
 template <typename V>
 inline void draw_model(const ModelType &, V, float, V,
-                       Color = {255, 255, 255, 255}) {}
-template <typename S> inline void set_model_shader(ModelType &, S) {}
-inline ShaderStub load_instancing_shader() { return {}; }
-inline ShaderStub load_lit_shader(const char * = DEFAULT_LIGHTING) { return {}; }
+                       Color = {255, 255, 255, 255}) {
+  warn_once(0, "@notimplemented draw_model on this backend (models are "
+               "raylib-only); nothing is drawn");
+}
+template <typename S> inline void set_model_shader(ModelType &, S) {
+  warn_once(0, "@notimplemented set_model_shader on this backend (models "
+               "are raylib-only)");
+}
+inline ShaderStub load_instancing_shader() {
+  warn_once(0, "@notimplemented load_instancing_shader on this backend "
+               "(models are raylib-only); returning an empty shader");
+  return {};
+}
+inline ShaderStub load_lit_shader(const char * = DEFAULT_LIGHTING) {
+  warn_once(0, "@notimplemented load_lit_shader on this backend (models "
+               "are raylib-only); returning an empty shader");
+  return {};
+}
 template <typename S, typename V>
-inline void apply_lighting(S, const Lighting &, V) {}
+inline void apply_lighting(S, const Lighting &, V) {
+  warn_once(0, "@notimplemented apply_lighting on this backend (models "
+               "are raylib-only)");
+}
 template <typename S, typename M>
-inline void draw_model_instanced(const ModelType &, S, const M *, int) {}
+inline void draw_model_instanced(const ModelType &, S, const M *, int) {
+  warn_once(0, "@notimplemented draw_model_instanced on this backend "
+               "(models are raylib-only); nothing is drawn");
+}
 struct InstanceBatcher {
   template <typename M> void add(const ModelType &, const M &, uint32_t = 0) {}
   template <typename V> void add(const ModelType &, V, float, V, uint32_t = 0) {}
   template <typename S> void flush(S) {}
-  template <typename S, typename F> void flush(S, F &&) {}
+  template <typename S, typename F> void flush(S, F &&) {
+    warn_once(0, "@notimplemented InstanceBatcher::flush on this backend "
+                 "(models are raylib-only); nothing is drawn");
+  }
   void clear() {}
   [[nodiscard]] size_t copies() const { return 0; }
   [[nodiscard]] size_t group_count() const { return 0; }
@@ -411,6 +439,17 @@ struct ModelLibrary {
   [[nodiscard]] const ModelType &get(const std::string &name) const {
     return impl.get(name);
   }
+  using Handle = Library<ModelType>::Handle;
+  [[nodiscard]] Handle intern(const std::string &name) {
+    return impl.intern(name);
+  }
+  [[nodiscard]] ModelType &get(Handle handle) { return impl.get(handle); }
+  [[nodiscard]] const ModelType &get(Handle handle) const {
+    return impl.get(handle);
+  }
+  [[nodiscard]] bool contains(Handle handle) const {
+    return impl.contains(handle);
+  }
   [[nodiscard]] bool contains(const std::string &name) const {
     return impl.contains(name);
   }
@@ -421,6 +460,7 @@ struct ModelLibrary {
   void unload_all() {
     impl.unload_all();
     impl.storage.clear();
+    impl.reset_handles();
   }
 
 private:
