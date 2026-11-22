@@ -84,6 +84,7 @@ struct ComponentConfig {
   Theme::Usage color_usage = Theme::Usage::Default;
   std::optional<Color> custom_color;
   std::optional<Color> hover_color; // Per-component hover background override
+  std::optional<bool> skip_hover_override;
   // Text color settings (explicit override)
   Theme::Usage text_color_usage = Theme::Usage::Default;
   std::optional<Color> custom_text_color;
@@ -112,6 +113,7 @@ struct ComponentConfig {
   std::optional<Vector2Type> text_inset;
   std::optional<CursorType> cursor_type; // Cursor to show on hover
   bool skip_when_tabbing = false;
+  bool focus_scope = false;
   std::optional<float> focus_ring_offset;
   // Per-component ring thickness, overriding Theme::focus_ring_thickness.
   // Unset means the theme's value; 0 opts this component out of the ring.
@@ -119,6 +121,7 @@ struct ComponentConfig {
   bool ignore_pointer_events = false; // invisible to hit-testing
   bool inert = false;
   bool takes_focus = true;
+  bool hoverable = false;
   // User data, not localizable copy: the pseudo-locale stress leaves this
   // label (and this component's RTL mirroring) alone.
   bool pseudo_locale_exempt = false;
@@ -142,8 +145,7 @@ struct ComponentConfig {
   // is known. An absolute number cannot say "above whatever contains me".
   int render_layer_offset = 0;
 
-  // Custom-draw callbacks (see HasOnDraw): bg draws behind the widget's fill,
-  // fg on top of all its primitives, both receiving the widget's final rect.
+  // Custom-draw callbacks (see HasOnDraw), receiving the final rect.
   std::string tooltip_text;
   float tooltip_delay = 0.5f;
   std::optional<Size> tooltip_font_size;
@@ -151,6 +153,7 @@ struct ComponentConfig {
   float tooltip_gap = 4.f;
   RenderPrimitive::CustomDrawFn on_draw_bg;
   RenderPrimitive::CustomDrawFn on_draw_fg;
+  RenderPrimitive::CustomDrawFn on_draw_over;
 
   std::string font_name = UIComponent::UNSET_FONT;
   colors::FontWeight font_weight = colors::FontWeight::Regular;
@@ -214,6 +217,7 @@ struct ComponentConfig {
   size_t text_area_max_lines = 0;            // Max lines (0 = unlimited)
   bool text_area_auto_grow = false;          // Height follows the content
   bool text_area_submit_on_enter = false;    // Enter submits, Shift+Enter breaks
+  bool text_area_single_line = false;        // One row: Enter submits
   size_t virtual_list_overscan = VIRTUAL_LIST_OVERSCAN_DEFAULT;
 
   // Button variant configuration
@@ -231,6 +235,7 @@ struct ComponentConfig {
   std::optional<TextUnitMotion> unit_motion;
   float blur = 0.f;
   graphics::ShaderType *shader = nullptr;
+  std::optional<blend::Mode> blend_mode;
   float origin_x = 0.5f;
   float origin_y = 0.5f;
 
@@ -395,6 +400,10 @@ struct ComponentConfig {
     hover_color = color;
     return *this;
   }
+  ComponentConfig &with_skip_hover_override(bool skip = true) {
+    skip_hover_override = skip;
+    return *this;
+  }
 
   // Backwards-compatible aliases kept intentionally while call sites migrate.
   ComponentConfig &with_color_usage(Theme::Usage usage) {
@@ -469,6 +478,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_word_wrap(bool enabled) {
     text_area_word_wrap = enabled;
+    // Labels read text_overflow, not text_area_word_wrap -- without this a
+    // plain label silently stayed one line, so with_word_wrap only ever
+    // wrapped a text_area.
+    text_overflow = enabled ? TextOverflow::Wrap : TextOverflow::Clip;
     return *this;
   }
   ComponentConfig &with_max_lines(size_t max) {
@@ -485,6 +498,11 @@ struct ComponentConfig {
   // default, so a text_area keeps Enter meaning newline.
   ComponentConfig &with_submit_on_enter(bool enabled = true) {
     text_area_submit_on_enter = enabled;
+    return *this;
+  }
+  // One row: Enter submits, pasted breaks become spaces.
+  ComponentConfig &with_single_line(bool enabled = true) {
+    text_area_single_line = enabled;
     return *this;
   }
   ComponentConfig &with_virtual_list_overscan(size_t overscan) {
@@ -595,16 +613,24 @@ struct ComponentConfig {
     tooltip_gap = gap;
     return *this;
   }
+  // Hit rule for overlaps: highest layer wins; on a tie the element later
+  // in tree (paint) order wins -- so a close-x button drawn after its tab,
+  // or nested inside it, takes the click.
   ComponentConfig &with_render_layer(int layer) {
     render_layer = layer;
     return *this;
   }
+  // bg: behind fill; fg: over own primitives; over: over whole subtree.
   ComponentConfig &with_on_draw_bg(RenderPrimitive::CustomDrawFn fn) {
     on_draw_bg = std::move(fn);
     return *this;
   }
   ComponentConfig &with_on_draw_fg(RenderPrimitive::CustomDrawFn fn) {
     on_draw_fg = std::move(fn);
+    return *this;
+  }
+  ComponentConfig &with_on_draw_over(RenderPrimitive::CustomDrawFn fn) {
+    on_draw_over = std::move(fn);
     return *this;
   }
   ComponentConfig &with_disabled(bool dis) {
@@ -617,6 +643,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_skip_tabbing(bool skip) {
     skip_when_tabbing = skip;
+    return *this;
+  }
+  ComponentConfig &with_focus_scope(bool scope = true) {
+    focus_scope = scope;
     return *this;
   }
   ComponentConfig &with_focus_ring_offset(float offset) {
@@ -645,6 +675,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_takes_focus(bool takes = true) {
     takes_focus = takes;
+    return *this;
+  }
+  ComponentConfig &with_hoverable(bool on = true) {
+    hoverable = on;
     return *this;
   }
   ComponentConfig &with_pseudo_locale_exempt(bool exempt = true) {
@@ -687,6 +721,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_shader(graphics::ShaderType &s) {
     shader = &s;
+    return *this;
+  }
+  ComponentConfig &with_blend_mode(blend::Mode m) {
+    blend_mode = m;
     return *this;
   }
   ComponentConfig &with_blur(float radius) {
@@ -1076,6 +1114,7 @@ struct ComponentConfig {
   bool is_disabled() const { return disabled; }
   bool is_hidden() const { return hidden; }
   bool skips_when_tabbing() const { return skip_when_tabbing; }
+  bool is_focus_scope() const { return focus_scope; }
   bool selects_on_focus() const { return select_on_focus; }
   bool has_click_activation_override() const {
     return click_activation != ClickActivationMode::Default;
@@ -1153,6 +1192,8 @@ struct ComponentConfig {
       merged.hidden = overrides.hidden;
     if (overrides.skips_when_tabbing())
       merged.skip_when_tabbing = overrides.skip_when_tabbing;
+    if (overrides.is_focus_scope())
+      merged.focus_scope = true;
     if (overrides.focus_ring_offset.has_value())
       merged.focus_ring_offset = overrides.focus_ring_offset;
     if (overrides.focus_ring_thickness.has_value())
@@ -1165,6 +1206,8 @@ struct ComponentConfig {
       merged.inert = true;
     if (!overrides.takes_focus)
       merged.takes_focus = false;
+    if (overrides.hoverable)
+      merged.hoverable = true;
     if (overrides.pseudo_locale_exempt)
       merged.pseudo_locale_exempt = true;
     if (overrides.selects_on_focus())
@@ -1244,6 +1287,8 @@ struct ComponentConfig {
       merged.on_draw_bg = overrides.on_draw_bg;
     if (overrides.on_draw_fg)
       merged.on_draw_fg = overrides.on_draw_fg;
+    if (overrides.on_draw_over)
+      merged.on_draw_over = overrides.on_draw_over;
 
     // Size constraints
     if (overrides.min_width.dim != Dim::None)
@@ -1270,6 +1315,8 @@ struct ComponentConfig {
     // Colour and corner detail
     if (overrides.hover_color.has_value())
       merged.hover_color = overrides.hover_color;
+    if (overrides.skip_hover_override.has_value())
+      merged.skip_hover_override = overrides.skip_hover_override;
     // Defaults true, so only a caller turning it off can be detected.
     if (!overrides.auto_text_color)
       merged.auto_text_color = false;
@@ -1328,6 +1375,8 @@ struct ComponentConfig {
       merged.text_area_auto_grow = true;
     if (overrides.text_area_submit_on_enter)
       merged.text_area_submit_on_enter = true;
+    if (overrides.text_area_single_line)
+      merged.text_area_single_line = true;
     if (overrides.virtual_list_overscan != VIRTUAL_LIST_OVERSCAN_DEFAULT)
       merged.virtual_list_overscan = overrides.virtual_list_overscan;
 
@@ -1364,6 +1413,8 @@ struct ComponentConfig {
       merged.blur = overrides.blur;
     if (overrides.shader)
       merged.shader = overrides.shader;
+    if (overrides.blend_mode.has_value())
+      merged.blend_mode = overrides.blend_mode;
     if (overrides.origin_x != 0.5f || overrides.origin_y != 0.5f) {
       merged.origin_x = overrides.origin_x;
       merged.origin_y = overrides.origin_y;
