@@ -1,5 +1,6 @@
 #define FMT_HEADER_ONLY
 #include <afterhours/src/plugins/input_system.h>
+#include "input_raylib_unused_stubs.h"
 #include <cassert>
 
 namespace {
@@ -54,4 +55,15 @@ int main() {
         assert(collector.inputs_pressed.size() == 1);
         frame(0);
     }
+    // Negative direction was untested: same axis, dir -1, plus id guard.
+    input::AxisEdges edges;
+    trigger = -.9f;
+    edges.update(0);
+    assert(edges.pressed(0, {static_cast<input::GamepadAxis>(TRIGGER_AXIS), -1}));
+    assert(!edges.pressed(0, {static_cast<input::GamepadAxis>(TRIGGER_AXIS), 1}));
+    assert(!edges.pressed(-1, {static_cast<input::GamepadAxis>(TRIGGER_AXIS), -1}));
+    assert(!edges.pressed(input::MAX_GAMEPAD_ID,
+                           {static_cast<input::GamepadAxis>(TRIGGER_AXIS), -1}));
+    edges.update(0);
+    assert(!edges.pressed(0, {static_cast<input::GamepadAxis>(TRIGGER_AXIS), -1}));
 }

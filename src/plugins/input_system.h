@@ -1087,16 +1087,22 @@ struct input : developer::Plugin {
         void update(int max_gamepad) {
             previous = held;
             held.fill(0);
-            for (int id = 0; id <= max_gamepad && id < MAX_GAMEPAD_ID; ++id) {
-                if (!is_gamepad_available(id)) continue;
-                for (int axis = 0; axis < AXIS_COUNT; ++axis)
-                    for (int dir : {-1, 1})
-                        if (visit_axis(id, {static_cast<GamepadAxis>(axis), dir}) > 0.f)
-                            held[static_cast<std::size_t>(id)] |= bit(axis, dir);
+            const int ids = max_gamepad < 0 ? 0 : std::min(max_gamepad, MAX_GAMEPAD_ID - 1) + 1;
+            bool available = false;
+            for (int flat = 0; flat < ids * AXIS_COUNT * 2; ++flat) {
+                const int id = flat / (AXIS_COUNT * 2);
+                const int b = flat % (AXIS_COUNT * 2);
+                if (b == 0) available = is_gamepad_available(id);
+                if (!available) continue;
+                const int axis = b / 2;
+                const int dir = (b % 2) ? 1 : -1;
+                if (visit_axis(id, {static_cast<GamepadAxis>(axis), dir}) > 0.f)
+                    held[static_cast<std::size_t>(id)] |= bit(axis, dir);
             }
         }
         bool pressed(GamepadID id, GamepadAxisWithDir a) const {
             const int axis = static_cast<int>(a.axis);
+            // TODO: compile-time id bound if GamepadID gains a range type.
             if (id < 0 || id >= MAX_GAMEPAD_ID || axis < 0 || axis >= AXIS_COUNT) return false;
             const std::uint16_t b = bit(axis, a.dir);
             const auto i = static_cast<std::size_t>(id);
