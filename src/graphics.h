@@ -53,6 +53,9 @@ inline void set_window_size(int w, int h) { PlatformAPI::set_window_size(w, h); 
 inline void set_window_min_size(int w, int h) {
   PlatformAPI::set_window_min_size(w, h);
 }
+inline bool window_resize_pending() {
+  return PlatformAPI::window_resize_pending();
+}
 inline void set_window_state(unsigned int flags) {
   PlatformAPI::set_window_state(flags);
 }

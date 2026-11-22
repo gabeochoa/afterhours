@@ -105,12 +105,9 @@ ElementResult toggle_button(HasUIContext auto &ctx, EntityParent ep_pair,
 
   entity.get<UIComponent>().flex_direction = config.flex_direction;
 
-  if (config.disabled) {
-    entity.removeComponentIfExists<HasClickListener>();
+  if (!entity.toggleComponent<HasClickListener>(!config.disabled,
+                                                [](Entity &) {}))
     return ElementResult{false, entity, value};
-  }
-
-  entity.addComponentIfMissing<HasClickListener>([](Entity &) {});
 
   bool clicked = entity.get<HasClickListener>().down;
   if (clicked) {

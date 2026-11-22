@@ -270,6 +270,43 @@ inline bool is_key_released(int key, BackendFn backend_fn) {
   return backend_fn(key);
 }
 
+template <typename BackendFn>
+inline bool is_gamepad_available(int id, BackendFn backend_fn) {
+  if (input_injector::is_gamepad_available(id))
+    return true;
+  if (detail::test_mode)
+    return false;
+  return backend_fn(id);
+}
+
+template <typename BackendFn>
+inline bool is_gamepad_button_pressed(int id, int button,
+                                      BackendFn backend_fn) {
+  if (input_injector::is_gamepad_available(id))
+    return input_injector::consume_gamepad_press(id, button);
+  if (detail::test_mode)
+    return false;
+  return backend_fn(id, button);
+}
+
+template <typename BackendFn>
+inline bool is_gamepad_button_down(int id, int button, BackendFn backend_fn) {
+  if (input_injector::is_gamepad_available(id))
+    return input_injector::is_gamepad_button_down(id, button);
+  if (detail::test_mode)
+    return false;
+  return backend_fn(id, button);
+}
+
+template <typename BackendFn>
+inline float get_gamepad_axis(int id, int axis, BackendFn backend_fn) {
+  if (input_injector::is_gamepad_available(id))
+    return input_injector::get_gamepad_axis(id, axis);
+  if (detail::test_mode)
+    return 0.f;
+  return backend_fn(id, axis);
+}
+
 // Get next character (wraps backend call)
 // Note: The queue approach naturally prevents re-reading (chars are popped)
 // so we don't use char_consumed flag here - that's for non-queue scenarios
