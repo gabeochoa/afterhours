@@ -71,22 +71,25 @@ inline std::vector<DrawnCall> &calls() {
 
 inline void enable() { enabled() = true; }
 inline void disable() { enabled() = false; }
-inline void clear() { calls().clear(); }
 
-// Who decides when a frame starts.
-//
-// The UI render pass used to clear the buffer at its own start, which threw
-// away everything drawn before it -- for a game, the entire world. An app that
-// calls begin_frame() takes that over, so world draws survive to be asserted
-// on. One that never calls it keeps the old behaviour.
 inline bool &app_owns_frame() {
   static bool owned = false;
   return owned;
 }
 
+inline bool &frame_clear_pending() {
+  static bool pending = false;
+  return pending;
+}
+
+inline void clear() {
+  calls().clear();
+  frame_clear_pending() = false;
+}
+
 inline void begin_frame() {
   app_owns_frame() = true;
-  clear();
+  frame_clear_pending() = true;
 }
 
 // const char*: a string_view would strlen before the early-out.
@@ -94,6 +97,10 @@ inline void record(const char *op, const RectangleType &rect,
                    const ColorType &color, const char *text = nullptr) {
   if (!enabled())
     return;
+  if (frame_clear_pending()) {
+    calls().clear();
+    frame_clear_pending() = false;
+  }
   calls().push_back({op, rect, color, text ? text : "", current_entity(),
                      current_layer()});
 }

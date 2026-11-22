@@ -189,8 +189,7 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   if (config.size.is_default) {
     auto &styling_defaults = UIStylingDefaults::get();
     if (auto def =
-            styling_defaults.get_component_config(ComponentType::Checkbox);
-        def.has_value()) {
+            styling_defaults.find_component_config(ComponentType::Checkbox)) {
       config.size = def->size;
     } else {
       config.size = ComponentSize(pixels(default_component_size.x),
@@ -232,15 +231,11 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
     Entity &label_ent = div(ctx, mk(entity), label_config).ent();
     label_ent.template addComponentIfMissing<InFocusCluster>();
     // A checkbox's label is part of its hit target; only the indicator was.
-    if (config.disabled) {
-      label_ent.template removeComponentIfExists<HasClickListener>();
-    } else {
-      label_ent.template addComponentIfMissing<HasClickListener>(
-          [](Entity &) {});
-      // A click listener is what makes a thing focusable, and the indicator
-      // beside it is already the tab stop for this checkbox.
+    if (auto *listener = label_ent.template toggleComponent<HasClickListener>(
+            !config.disabled, [](Entity &) {})) {
+      // Indicator is the tab stop; the label is only a hit target.
       label_ent.template addComponentIfMissing<SkipWhenTabbing>();
-      if (label_ent.template get<HasClickListener>().down) {
+      if (listener->down) {
         state.on = !state.on;
         label_clicked = true;
       }
@@ -288,10 +283,8 @@ ElementResult checkbox(HasUIContext auto &ctx, EntityParent ep_pair,
   const auto &text = state.on ? config.checkbox_checked_indicator
                               : config.checkbox_unchecked_indicator;
   indicator.template get<HasLabel>().set_label(text.value_or(""));
-  if (state.on && !text.has_value())
-    indicator.template addComponentIfMissing<HasCheckboxMark>();
-  else
-    indicator.template removeComponentIfExists<HasCheckboxMark>();
+  indicator.template toggleComponent<HasCheckboxMark>(
+      state.on && !text.has_value());
 
   if (toggle_result || label_clicked) {
     state.changed_since = true;
