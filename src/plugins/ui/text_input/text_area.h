@@ -487,14 +487,12 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                            input::is_key_down(keys::RIGHT_SHIFT);
 
         // Double click selects the word, triple selects the visual row.
-        constexpr float MULTI_CLICK_TIME = 0.4f;
-        constexpr size_t MULTI_CLICK_DIST = 3;
         const float now = static_cast<float>(graphics::get_time());
         const size_t moved = at > s.last_click_pos ? at - s.last_click_pos
                                                    : s.last_click_pos - at;
         if (s.last_click_time >= 0.f &&
-            (now - s.last_click_time) < MULTI_CLICK_TIME &&
-            moved <= MULTI_CLICK_DIST)
+            (now - s.last_click_time) < text_selection::kMultiClickTime &&
+            moved <= text_selection::kMultiClickDist)
           s.click_count++;
         else
           s.click_count = 1;

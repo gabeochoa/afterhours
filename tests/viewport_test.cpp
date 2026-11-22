@@ -99,6 +99,42 @@ TEST(without_a_content_resolution_it_is_identity) {
   CHECK(near(mapped.y, p.y));
 }
 
+TEST(auto_resolution_stale_after_resize_maps_unletterboxed) {
+  auto *pcr = EntityHelper::get_singleton_cmp<
+      window_manager::ProvidesCurrentResolution>();
+  CHECK(pcr != nullptr);
+  pcr->current_resolution = window_manager::Resolution{1100, 760};
+  pcr->should_refetch = true;
+  const auto saved_headless = window_manager::headless_resolution;
+  window_manager::headless_resolution = window_manager::Resolution{1100, 820};
+  const auto mapped =
+      window_manager::window_to_content(Vector2Type{140.f, 400.f}, 1100, 820);
+  printf("  stale-auto mapped %.1f,%.1f (want 140,400)\n", mapped.x, mapped.y);
+  CHECK(near(mapped.x, 140.f));
+  CHECK(near(mapped.y, 400.f));
+  window_manager::headless_resolution = saved_headless;
+  set_content_resolution(1280, 720);
+}
+
+TEST(collect_refreshes_auto_but_not_fixed_resolution) {
+  Entity &e = EntityHelper::createPermanentEntity();
+  const auto saved_headless = window_manager::headless_resolution;
+  window_manager::headless_resolution = window_manager::Resolution{1100, 820};
+  window_manager::CollectCurrentResolution collect;
+  window_manager::ProvidesCurrentResolution auto_pcr;
+  auto_pcr.current_resolution = window_manager::Resolution{1100, 760};
+  collect.for_each_with(e, auto_pcr, 0.f);
+  CHECK(auto_pcr.current_resolution.width == 1100);
+  CHECK(auto_pcr.current_resolution.height == 820);
+  CHECK(auto_pcr.should_refetch);
+  window_manager::ProvidesCurrentResolution fixed_pcr(
+      window_manager::Resolution{1280, 720});
+  collect.for_each_with(e, fixed_pcr, 0.f);
+  CHECK(fixed_pcr.current_resolution.width == 1280);
+  CHECK(fixed_pcr.current_resolution.height == 720);
+  window_manager::headless_resolution = saved_headless;
+}
+
 // A saved resolution index past this machine's list falls back to current.
 TEST(stale_resolution_index_falls_back_to_current) {
   set_content_resolution(1280, 720);

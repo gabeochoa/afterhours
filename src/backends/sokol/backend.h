@@ -490,6 +490,12 @@ inline void sokol_event_cb(const sapp_event *ev) {
     s.scroll_x += ev->scroll_x;
     s.scroll_y += ev->scroll_y;
     break;
+  case SAPP_EVENTTYPE_FOCUSED:
+    g_window_focused = true;
+    break;
+  case SAPP_EVENTTYPE_UNFOCUSED:
+    g_window_focused = false;
+    break;
   default:
     break;
   }
@@ -532,6 +538,9 @@ struct MetalPlatformAPI {
   }
   static bool is_window_ready() { return metal_detail::g_initialized; }
   static bool is_window_fullscreen() { return sapp_is_fullscreen(); }
+  static bool is_window_focused() {
+    return !metal_detail::g_headless && metal_detail::g_window_focused;
+  }
   static void toggle_fullscreen() { sapp_toggle_fullscreen(); }
   static void minimize_window() {
     log_error("@notimplemented minimize_window");
@@ -984,6 +993,10 @@ struct MetalPlatformAPI {
     if (cfg.audio)
       log_warn("RunConfig::audio is ignored: the sokol backend has no audio "
                "device");
+    if (cfg.window_x >= 0 || cfg.window_y >= 0)
+      log_warn("RunConfig window position is ignored: sapp_desc has no "
+               "position field, so the sokol backend cannot place the "
+               "window before creation");
     metal_detail::g_init_fn = cfg.init;
     metal_detail::g_frame_fn = cfg.frame;
     metal_detail::g_cleanup_fn = cfg.cleanup;

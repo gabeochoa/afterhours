@@ -78,9 +78,12 @@ ALL_TESTS := \
 	command_picker_ui_test \
 	terminal_test \
 	terminal_commands_test \
+	state_commands_test \
 	terminal_ui_test \
 	font_atlas_measure_test \
+	font_prewarm_test \
 	font_points_test \
+	window_focus_test \
 	glyph_placeholder_test \
 	monospace_cell_test \
 	font_memory_test \
@@ -116,10 +119,15 @@ ALL_TESTS := \
 	text_unit_motion_test \
 	text_alignment_test \
 	sound_volume_test \
+	audio_plugin_test \
+	audio_stream_test \
 	synth_beep_test \
 	settings_save_test \
+	settings_comment_test \
 	settings_path_test \
 	files_test_roots_test \
+	files_e2e_temp_roots_test \
+	files_e2e_tmpdir_env_test \
 	clipboard_test \
 	native_dialogs_test \
 	input_binding_codec_test \
@@ -134,8 +142,10 @@ ALL_TESTS := \
 	triangle_winding_test \
 	charts_test \
 	system_profile_test \
+	allocation_counters_test \
 	profiling_test \
 	profiling_disabled_test \
+	spike_capture_test \
 	perf_provider_warn_test \
 	blend_mode_test \
 	rect_test \
@@ -147,8 +157,12 @@ ALL_TESTS := \
 	log_file_test \
 	crash_handler_test \
 	crash_handler_reentry_test \
+	crash_handler_web_sim_test \
+	crash_report_file_test \
 	setting_row_style_test \
 	singleton_iteration_test \
+	get_unique_test \
+	singleton_add_test \
 	ui_idle_cost_test \
 	press_delay_test \
 	graphics_key_injection_test \
@@ -163,6 +177,7 @@ ALL_TESTS := \
 	e2e_expect_screenshot_test \
 	e2e_is_running_test \
 	e2e_defer_unknown_test \
+	e2e_pending_list_test \
 	e2e_results_test \
 	point_in_element_test \
 	e2e_ui_gestures_test \
@@ -170,13 +185,16 @@ ALL_TESTS := \
 	card_and_type_scale_test \
 	fixed_timestep_test \
 	audio_lifecycle_test \
+	audio_stub_build_test \
 	notimplemented_log_test \
 	local_time_test \
+	font_catalog_test \
 	frame_rate_stats_test \
 	graphics_concepts_pedantic_test \
 	fixed_tick_rate_test \
 	sound_playback_test \
 	headless_runconfig_test \
+	window_state_runconfig_test \
 	harness_spellings_test \
 	fit_content_test \
 	label_inset_test \
@@ -184,7 +202,9 @@ ALL_TESTS := \
 	pseudo_locale_test \
 	editing_capability_test \
 	autolayout_test \
+	trailing_anchor_test \
 	dialog_test \
+	escape_owner_test \
 	dump_ui_test \
 	scroll_anchor_test \
 	measure_config_test \
@@ -196,6 +216,7 @@ ALL_TESTS := \
 	files_atomic_write_test \
 	files_resource_path_test \
 	files_cache_path_test \
+	files_documents_test \
 	capture_test \
 	capture_perf_test \
 	polyline_test \
@@ -207,6 +228,7 @@ ALL_TESTS := \
 	query_seed_test \
 	query_skip_mods_test \
 	capture_attribution_test \
+	capture_frame_boundary_test \
 	draw_commands_test \
 	color_contrast_test \
 	auto_text_color_test \
@@ -216,8 +238,11 @@ ALL_TESTS := \
 	tab_order_test \
 	reset_focus_test \
 	cleanup_order_test \
+	attachment_test \
+	canonical_snapshot_test \
 	entity_pool_test \
 	entity_query_test \
+	entity_membership_test \
 	temp_warning_caller_test \
 	query_scratch_test \
 	get_or_default_test \
@@ -232,6 +257,7 @@ ALL_TESTS := \
 	pointer_owner_test \
 	two_trees_test \
 	text_selection_test \
+	selectable_text_test \
 	text_stroke_test \
 	text_stroke_render_test \
 	multiline_text_test \
@@ -240,7 +266,10 @@ ALL_TESTS := \
 	menu_test \
 	color_swatch_test \
 	overlay_placement_test \
+	tooltip_test \
 	progress_bar_test \
+	psx_budget_test \
+	psx_backend_test \
 	pagination_test \
 	random_engine_test \
 	render_order_test \
@@ -253,8 +282,10 @@ ALL_TESTS := \
 	defer_test \
 	draw_sort_test \
 	config_size_test \
+	config_strings_test \
 	overdraw_audit_test \
 	virtual_list_test \
+	folded_range_test \
 	text_action_names_test \
 	sizing_repro_test \
 	slider_test \
@@ -276,6 +307,7 @@ ALL_TESTS := \
 	system_tags_test \
 	should_run_overload_test \
 	library_duplicate_test \
+	library_intern_test \
 	shared_handlers_test \
 	default_font_test \
 	load_font_size_test \
@@ -323,6 +355,7 @@ RAYLIB_TESTS := \
 	auto_text_color_test \
 	value_types_test \
 	wrappers_test \
+	window_focus_test \
 	window_state_test \
 	edit_keys_test \
 	default_font_test \
@@ -351,6 +384,7 @@ RAYLIB_TESTS := \
 	frustum_test \
 	instance_batcher_test \
 	dialog_test \
+	escape_owner_test \
 	dump_ui_test \
 	scroll_anchor_test \
 	measure_config_test \
@@ -375,6 +409,7 @@ RAYLIB_TESTS := \
 	label_inset_test \
 	fit_content_test \
 	headless_runconfig_test \
+	window_state_runconfig_test \
 	harness_spellings_test \
 	fixed_timestep_test \
 	audio_lifecycle_test \
@@ -414,6 +449,13 @@ $(RAYLIB_BINS): CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(RAYLIB_BINS): INCLUDES_T = $(INCLUDES_RAYLIB)
 $(RAYLIB_BINS): LDFLAGS_T  = $(LDFLAGS_RAYLIB)
 
+$(OUT)/crash_handler_web_sim_test: CXXFLAGS_T = $(CXXFLAGS) -D__EMSCRIPTEN__
+$(OUT)/crash_handler_web_sim_test: INCLUDES_T = -Iweb_sim $(INCLUDES)
+
+# Shift+Enter is a raw is_key_down check, and the key injector is only wired in
+# behind this macro. Without it the backend is asked directly and answers false
+# with no window, so the modifier half of a chord cannot be tested at all.
+$(OUT)/input_device_activity_test $(OUT)/input_enum_actions_test: LDFLAGS_T = $(subst $(RAYLIB_LIB)/libraylib.a,-L$(RAYLIB_LIB) -lraylib,$(LDFLAGS_RAYLIB))
 # These two tests double every raylib input function they exercise and stub
 # the rest (input_raylib_unused_stubs.h), so they link no raylib at all.
 # Linking the real archive pulls rcore.c.o for the unused window/rlgl entry
@@ -448,10 +490,17 @@ $(OUT)/graphics_concepts_pedantic_test: CXXFLAGS_T += -Wpedantic -Werror
 $(OUT)/graphics_concepts_pedantic_test: INCLUDES_T = -I$(INCLUDE_ROOT) -isystem $(AFTERHOURS_ROOT)/vendor -isystem $(BREW_PREFIX)/include
 $(OUT)/sound_volume_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/sound_volume_test: INCLUDES_T = $(INCLUDES_RAYLIB)
+$(OUT)/audio_plugin_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
+$(OUT)/audio_plugin_test: INCLUDES_T = $(INCLUDES_RAYLIB)
+$(OUT)/audio_stream_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
+$(OUT)/audio_stream_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
 $(OUT)/files_test_roots_test: ../src/plugins/files.cpp
+$(OUT)/files_e2e_temp_roots_test: ../src/plugins/files.cpp
+$(OUT)/files_e2e_tmpdir_env_test: ../src/plugins/files.cpp
 $(OUT)/files_cache_path_test: ../src/plugins/files.cpp
+$(OUT)/files_documents_test: ../src/plugins/files.cpp
 $(OUT)/bundle_test: ../src/plugins/files.cpp
 $(OUT)/file_watcher_test: ../src/plugins/file_watcher.cpp
 
@@ -480,7 +529,7 @@ $(OUT)/sokol_geometry_test: LDFLAGS_T += $(SOKOL_FRAMEWORKS)
 # The multi-TU sokol rules emit a .d covering only sokol_impl.cc, so header
 # edits rebuild nothing without an explicit prerequisite (stale-binary trap).
 $(OUT)/sokol_blend_test: ../src/backends/sokol/drawing_helpers.h
-$(OUT)/sokol_capture_test: ../src/backends/sokol/drawing_helpers.h
+$(OUT)/sokol_capture_test: ../src/backends/sokol/drawing_helpers.h ../src/capture.h ../src/graphics_common.h
 $(OUT)/sokol_geometry_test: ../src/backends/sokol/drawing_helpers.h
 $(OUT)/sokol_hidpi_test: ../examples/web/sokol_impl.cc
 $(OUT)/sokol_hidpi_test: CXXFLAGS_T += -DAFTER_HOURS_USE_SOKOL -x objective-c++
@@ -607,6 +656,7 @@ profiling-render-benchmark: $(OUT)/profiling_render_benchmark_on $(OUT)/profilin
 	$(OUT)/profiling_render_benchmark_on panel 3000 "$(PROFILING_FONT)"
 
 $(OUT)/font_atlas_measure_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
+$(OUT)/font_prewarm_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/font_points_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/glyph_placeholder_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"
 $(OUT)/load_font_size_test: CXXFLAGS_T += -DAFTERHOURS_TEST_FIXTURES=\"$(CURDIR)/fixtures\"

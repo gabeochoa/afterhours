@@ -15,6 +15,7 @@
 #include "color.h"
 #include "ui/element_result.h"
 #include "ui/imm_components.h"
+#include "ui/menu.h"
 #include "ui/rendering.h"
 #include "ui/text_input/text_input.h"
 #include "ui/systems.h"
@@ -250,6 +251,26 @@ struct modal : developer::Plugin {
                 root = &next.asE();
             }
             return *root;
+        }
+
+        static bool focus_in_temporary_layer(auto &ctx) {
+            for (EntityID cur = ctx.focus_id, depth = 0;
+                 depth < 64 && cur >= 0 && cur != ctx.ROOT; ++depth) {
+                auto opt = ui::UICollectionHolder::getEntityForID(cur);
+                if (!opt.valid()) return false;
+                Entity &e = opt.asE();
+                if (e.get_or_default(&ui::imm::HasMenuState::was_open_last_frame,
+                                     false))
+                    return true;
+                if (e.get_or_default(&ui::HasDropdownState::was_open_last_frame,
+                                     false))
+                    return true;
+                if (e.template has<text_input::HasTextInputState>())
+                    return true;
+                if (!e.template has<ui::UIComponent>()) return false;
+                cur = e.template get<ui::UIComponent>().parent;
+            }
+            return false;
         }
 
         static void sync_input(ui::imm::HasUIContext auto &ctx) {
@@ -899,7 +920,9 @@ struct modal : developer::Plugin {
 
             // Check for escape key (via InputAction if available)
             if constexpr (magic_enum::enum_contains<InputAction>("MenuBack")) {
-                if (context->pressed(InputAction::MenuBack)) {
+                if (context->last_action == InputAction::MenuBack &&
+                    !detail::focus_in_temporary_layer(*context)) {
+                    context->pressed(InputAction::MenuBack);
                     if (top_modal.closed_by == ClosedBy::CloseRequest ||
                         top_modal.closed_by == ClosedBy::Any) {
                         modal::close(top_id, DialogResult::Cancelled);

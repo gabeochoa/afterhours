@@ -13,6 +13,7 @@
 #include "../texture_manager.h"
 #include "components.h"
 #include "extension.h"
+#include "overlay.h"
 #include "text_unit_motion.h"
 #include "render_primitives.h"
 #include "rounded_corners.h"
@@ -41,6 +42,14 @@ struct TextureConfig {
 // See: https://en.cppreference.com/w/cpp/language/constraints
 
 enum struct ButtonVariant { Filled, Outline, Ghost };
+
+struct SliderStyle {
+  std::optional<Color> track;
+  std::optional<Color> fill;
+  std::optional<Color> handle;
+  Size handle_size = pixels(16.f);
+  Size track_thickness = pixels(8.f);
+};
 enum struct IconPosition { Left, Right };
 
 struct ComponentConfig {
@@ -137,6 +146,8 @@ struct ComponentConfig {
   float scale = 1.0f; // Visual scale applied after layout (smooth animations)
   Size translate_x = pixels(0.0f);
   Size translate_y = pixels(0.0f);
+  // Trailing: (x,y) insets from far edges; explicit size grows inward.
+  AbsoluteAnchor absolute_anchor = AbsoluteAnchor::LeadingTop;
 
   // debugs
   std::string debug_name = "";
@@ -148,6 +159,7 @@ struct ComponentConfig {
   // Custom-draw callbacks (see HasOnDraw), receiving the final rect.
   std::string tooltip_text;
   float tooltip_delay = 0.5f;
+  overlay::Placement tooltip_placement = overlay::Placement::Below;
   std::optional<Size> tooltip_font_size;
   float tooltip_padding = 8.f;
   float tooltip_gap = 4.f;
@@ -187,6 +199,8 @@ struct ComponentConfig {
   // Text input: readonly mode (focusable, selectable, but not editable)
   bool text_readonly = false;
 
+  bool text_selectable = false;
+
   // Text input: clipboard operations this field refuses. All allowed by
   // default; masking a field does not change them.
   bool text_copy_disabled = false;
@@ -198,6 +212,8 @@ struct ComponentConfig {
 
   std::optional<std::string> checkbox_checked_indicator;
   std::optional<std::string> checkbox_unchecked_indicator;
+
+  std::optional<SliderStyle> slider_style;
 
   // Glyphs on a toggle_switch track. Unset draws nothing.
   std::optional<std::string> toggle_on_indicator;
@@ -435,6 +451,10 @@ struct ComponentConfig {
     text_readonly = ro;
     return *this;
   }
+  ComponentConfig &with_selectable_text(bool selectable = true) {
+    text_selectable = selectable;
+    return *this;
+  }
   ComponentConfig &with_copy_disabled(bool disabled = true) {
     text_copy_disabled = disabled;
     return *this;
@@ -445,6 +465,10 @@ struct ComponentConfig {
   }
   ComponentConfig &with_paste_disabled(bool disabled = true) {
     text_paste_disabled = disabled;
+    return *this;
+  }
+  ComponentConfig &with_slider_style(const SliderStyle &style) {
+    slider_style = style;
     return *this;
   }
   ComponentConfig &with_toggle_indicators(const std::string &on,
@@ -591,7 +615,7 @@ struct ComponentConfig {
     rounded_corners = std::bitset<4>().reset();
     return *this;
   }
-  ComponentConfig &with_debug_name(const std::string &name) {
+  ComponentConfig &with_debug_name(std::string_view name) {
     debug_name = name;
     return *this;
   }
@@ -599,6 +623,10 @@ struct ComponentConfig {
   ComponentConfig &with_tooltip(const std::string &text, float delay = 0.5f) {
     tooltip_text = text;
     tooltip_delay = delay;
+    return *this;
+  }
+  ComponentConfig &with_tooltip_placement(overlay::Placement placement) {
+    tooltip_placement = placement;
     return *this;
   }
   ComponentConfig &with_tooltip_font_size(Size size) {
@@ -955,6 +983,15 @@ struct ComponentConfig {
   ComponentConfig &with_absolute_position(Size x, Size y) {
     return with_absolute_position().with_translate(x, y);
   }
+  ComponentConfig &with_absolute_position(AbsoluteAnchor anchor, Size x,
+                                          Size y) {
+    absolute_anchor = anchor;
+    return with_absolute_position(x, y);
+  }
+  ComponentConfig &with_absolute_position(AbsoluteAnchor anchor, float x,
+                                          float y) {
+    return with_absolute_position(anchor, pixels(x), pixels(y));
+  }
   ComponentConfig &with_internal(bool internal = true) {
     is_internal = internal;
     return *this;
@@ -1152,8 +1189,8 @@ struct ComponentConfig {
     return *this;
   }
 
-  ComponentConfig apply_overrides(const ComponentConfig &overrides) const {
-    ComponentConfig merged = *this;
+  ComponentConfig &apply_overrides_from(const ComponentConfig &overrides) {
+    ComponentConfig &merged = *this;
 
     if (overrides.has_padding()) {
       merged.padding = overrides.padding;
@@ -1179,7 +1216,7 @@ struct ComponentConfig {
       merged.label_alignment = overrides.label_alignment;
 
     if (!overrides.label.empty())
-      merged.label = overrides.label;
+      if (merged.label != overrides.label) merged.label = overrides.label;
 
     if (overrides.has_any_rounded_corners())
       merged.rounded_corners = overrides.rounded_corners;
@@ -1216,7 +1253,7 @@ struct ComponentConfig {
       merged.click_activation = overrides.click_activation;
 
     if (overrides.has_font_override()) {
-      merged.font_name = overrides.font_name;
+      if (merged.font_name != overrides.font_name) merged.font_name = overrides.font_name;
     }
     if (overrides.font_weight != colors::FontWeight::Regular) {
       merged.font_weight = overrides.font_weight;
@@ -1236,6 +1273,8 @@ struct ComponentConfig {
 
     if (overrides.is_absolute)
       merged.is_absolute = overrides.is_absolute;
+    if (overrides.absolute_anchor != AbsoluteAnchor::LeadingTop)
+      merged.absolute_anchor = overrides.absolute_anchor;
     if (overrides.flex_direction != FlexDirection::Column)
       merged.flex_direction = overrides.flex_direction;
     if (overrides.render_layer != 0)
@@ -1243,14 +1282,15 @@ struct ComponentConfig {
     if (overrides.render_layer_offset != 0)
       merged.render_layer_offset = overrides.render_layer_offset;
     if (!overrides.tooltip_text.empty()) {
-      merged.tooltip_text = overrides.tooltip_text;
+      if (merged.tooltip_text != overrides.tooltip_text) merged.tooltip_text = overrides.tooltip_text;
       merged.tooltip_delay = overrides.tooltip_delay;
+      merged.tooltip_placement = overrides.tooltip_placement;
       merged.tooltip_font_size = overrides.tooltip_font_size;
       merged.tooltip_padding = overrides.tooltip_padding;
       merged.tooltip_gap = overrides.tooltip_gap;
     }
     if (!overrides.debug_name.empty())
-      merged.debug_name = overrides.debug_name;
+      if (merged.debug_name != overrides.debug_name) merged.debug_name = overrides.debug_name;
 
     // Flexbox alignment properties
     if (overrides.justify_content != JustifyContent::FlexStart)
@@ -1339,7 +1379,7 @@ struct ComponentConfig {
     if (overrides.text_stroke_config.has_value())
       merged.text_stroke_config = overrides.text_stroke_config;
     if (!overrides.styled_label.empty())
-      merged.styled_label = overrides.styled_label;
+      if (merged.styled_label != overrides.styled_label) merged.styled_label = overrides.styled_label;
 
     // Interaction
     if (overrides.cursor_type.has_value())
@@ -1356,6 +1396,8 @@ struct ComponentConfig {
       merged.mask_char = overrides.mask_char;
     if (overrides.text_readonly)
       merged.text_readonly = true;
+    if (overrides.text_selectable)
+      merged.text_selectable = true;
     if (overrides.text_copy_disabled)
       merged.text_copy_disabled = true;
     if (overrides.text_cut_disabled)
@@ -1363,7 +1405,7 @@ struct ComponentConfig {
     if (overrides.text_paste_disabled)
       merged.text_paste_disabled = true;
     if (!overrides.placeholder.empty())
-      merged.placeholder = overrides.placeholder;
+      if (merged.placeholder != overrides.placeholder) merged.placeholder = overrides.placeholder;
     if (overrides.text_area_line_height.has_value())
       merged.text_area_line_height = overrides.text_area_line_height;
     // Defaults true; see auto_text_color.
@@ -1382,18 +1424,20 @@ struct ComponentConfig {
 
     // Indicator glyphs
     if (overrides.checkbox_checked_indicator.has_value())
-      merged.checkbox_checked_indicator = overrides.checkbox_checked_indicator;
+      if (merged.checkbox_checked_indicator != overrides.checkbox_checked_indicator) merged.checkbox_checked_indicator = overrides.checkbox_checked_indicator;
     if (overrides.checkbox_unchecked_indicator.has_value())
-      merged.checkbox_unchecked_indicator =
-          overrides.checkbox_unchecked_indicator;
+      if (merged.checkbox_unchecked_indicator != overrides.checkbox_unchecked_indicator)
+        merged.checkbox_unchecked_indicator = overrides.checkbox_unchecked_indicator;
+    if (overrides.slider_style.has_value())
+      merged.slider_style = overrides.slider_style;
     if (overrides.toggle_on_indicator.has_value())
-      merged.toggle_on_indicator = overrides.toggle_on_indicator;
+      if (merged.toggle_on_indicator != overrides.toggle_on_indicator) merged.toggle_on_indicator = overrides.toggle_on_indicator;
     if (overrides.toggle_off_indicator.has_value())
-      merged.toggle_off_indicator = overrides.toggle_off_indicator;
+      if (merged.toggle_off_indicator != overrides.toggle_off_indicator) merged.toggle_off_indicator = overrides.toggle_off_indicator;
     if (overrides.dropdown_open_indicator.has_value())
-      merged.dropdown_open_indicator = overrides.dropdown_open_indicator;
+      if (merged.dropdown_open_indicator != overrides.dropdown_open_indicator) merged.dropdown_open_indicator = overrides.dropdown_open_indicator;
     if (overrides.dropdown_closed_indicator.has_value())
-      merged.dropdown_closed_indicator = overrides.dropdown_closed_indicator;
+      if (merged.dropdown_closed_indicator != overrides.dropdown_closed_indicator) merged.dropdown_closed_indicator = overrides.dropdown_closed_indicator;
 
     // Button and icon
     if (overrides.button_variant != ButtonVariant::Filled)
@@ -1426,15 +1470,21 @@ struct ComponentConfig {
     // set-flag per field, written by the with_* setters, so the merge is a
     // loop over flags and a new field cannot be forgotten.
     // config_size_test guards the list until then.
+    return *this;
+  }
+
+  ComponentConfig apply_overrides(const ComponentConfig &overrides) const {
+    ComponentConfig merged = *this;
+    merged.apply_overrides_from(overrides);
     return merged;
   }
 
   // Static method to create inheritable config from parent
   static ComponentConfig inherit_from(const ComponentConfig &parent,
-                                      const std::string &debug_name = "") {
-    return ComponentConfig{}
-        .with_debug_name(debug_name)
-        .apply_inheritable_from(parent);
+                                      std::string_view debug_name = "") {
+    ComponentConfig result;
+    result.with_debug_name(debug_name).apply_inheritable_from(parent);
+    return result;
   }
 
   // Copies only inheritable fields from parent into this config
@@ -1445,7 +1495,7 @@ struct ComponentConfig {
     skip_when_tabbing = parent.skip_when_tabbing;
     select_on_focus = parent.select_on_focus;
     click_activation = parent.click_activation;
-    font_name = parent.font_name;
+    if (font_name != parent.font_name) font_name = parent.font_name;
     font_weight = parent.font_weight;
     font_size = parent.font_size;
     font_size_explicitly_set = parent.font_size_explicitly_set;
