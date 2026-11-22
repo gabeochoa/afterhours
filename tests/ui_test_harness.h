@@ -282,8 +282,10 @@ struct ImmTestHarness {
     return &font_entity->get<FontManager>();
   }
 
+  float layout_scale = 1.0f;
+
   template <typename Renderer> const std::vector<DrawCall> &render_with() {
-    layout_only();
+    layout_only(false, {800, 600}, layout_scale);
     render_font();
 
     // Same rule as the UI render pass: an app that took the frame boundary

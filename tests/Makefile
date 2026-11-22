@@ -205,6 +205,7 @@ ALL_TESTS := \
 	pseudo_locale_test \
 	editing_capability_test \
 	autolayout_test \
+	origin_rounding_test \
 	trailing_anchor_test \
 	dialog_test \
 	escape_owner_test \
