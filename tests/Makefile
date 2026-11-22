@@ -117,10 +117,13 @@ ALL_TESTS := \
 	text_alignment_test \
 	sound_volume_test \
 	audio_plugin_test \
+	audio_stream_test \
 	synth_beep_test \
 	settings_save_test \
 	settings_path_test \
 	files_test_roots_test \
+	files_e2e_temp_roots_test \
+	files_e2e_tmpdir_env_test \
 	clipboard_test \
 	native_dialogs_test \
 	input_binding_codec_test \
@@ -174,6 +177,7 @@ ALL_TESTS := \
 	audio_lifecycle_test \
 	notimplemented_log_test \
 	local_time_test \
+	font_catalog_test \
 	frame_rate_stats_test \
 	graphics_concepts_pedantic_test \
 	fixed_tick_rate_test \
@@ -198,6 +202,7 @@ ALL_TESTS := \
 	files_atomic_write_test \
 	files_resource_path_test \
 	files_cache_path_test \
+	files_documents_test \
 	capture_test \
 	capture_perf_test \
 	polyline_test \
@@ -218,6 +223,8 @@ ALL_TESTS := \
 	tab_order_test \
 	reset_focus_test \
 	cleanup_order_test \
+	attachment_test \
+	canonical_snapshot_test \
 	entity_pool_test \
 	entity_query_test \
 	temp_warning_caller_test \
@@ -256,6 +263,7 @@ ALL_TESTS := \
 	defer_test \
 	draw_sort_test \
 	config_size_test \
+	config_strings_test \
 	overdraw_audit_test \
 	virtual_list_test \
 	text_action_names_test \
@@ -279,6 +287,7 @@ ALL_TESTS := \
 	system_tags_test \
 	should_run_overload_test \
 	library_duplicate_test \
+	library_intern_test \
 	shared_handlers_test \
 	default_font_test \
 	load_font_size_test \
@@ -453,10 +462,15 @@ $(OUT)/sound_volume_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/sound_volume_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/audio_plugin_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/audio_plugin_test: INCLUDES_T = $(INCLUDES_RAYLIB)
+$(OUT)/audio_stream_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
+$(OUT)/audio_stream_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
 $(OUT)/files_test_roots_test: ../src/plugins/files.cpp
+$(OUT)/files_e2e_temp_roots_test: ../src/plugins/files.cpp
+$(OUT)/files_e2e_tmpdir_env_test: ../src/plugins/files.cpp
 $(OUT)/files_cache_path_test: ../src/plugins/files.cpp
+$(OUT)/files_documents_test: ../src/plugins/files.cpp
 $(OUT)/bundle_test: ../src/plugins/files.cpp
 $(OUT)/file_watcher_test: ../src/plugins/file_watcher.cpp
 

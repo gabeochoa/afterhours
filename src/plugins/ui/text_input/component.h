@@ -140,7 +140,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   // Apply default size
   if (config.size.is_default) {
     auto def =
-        UIStylingDefaults::get().get_component_config(ComponentType::TextInput);
+        UIStylingDefaults::get().find_component_config(ComponentType::TextInput);
     config.size = def ? def->size
                       : ComponentSize(pixels(default_component_size.x * 1.5f),
                                       pixels(default_component_size.y));
