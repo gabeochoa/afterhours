@@ -83,6 +83,7 @@ ALL_TESTS := \
 	font_atlas_measure_test \
 	font_prewarm_test \
 	font_points_test \
+	window_focus_test \
 	glyph_placeholder_test \
 	monospace_cell_test \
 	font_memory_test \
@@ -192,6 +193,7 @@ ALL_TESTS := \
 	fixed_tick_rate_test \
 	sound_playback_test \
 	headless_runconfig_test \
+	window_state_runconfig_test \
 	harness_spellings_test \
 	fit_content_test \
 	label_inset_test \
@@ -348,6 +350,7 @@ RAYLIB_TESTS := \
 	auto_text_color_test \
 	value_types_test \
 	wrappers_test \
+	window_focus_test \
 	window_state_test \
 	edit_keys_test \
 	default_font_test \
@@ -400,6 +403,7 @@ RAYLIB_TESTS := \
 	label_inset_test \
 	fit_content_test \
 	headless_runconfig_test \
+	window_state_runconfig_test \
 	harness_spellings_test \
 	fixed_timestep_test \
 	audio_lifecycle_test \

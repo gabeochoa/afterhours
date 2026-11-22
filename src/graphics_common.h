@@ -157,6 +157,7 @@ concept PlatformBackend = requires {
   { T::window_should_close() } -> std::same_as<bool>;
   { T::is_window_ready() } -> std::same_as<bool>;
   { T::is_window_fullscreen() } -> std::same_as<bool>;
+  { T::is_window_focused() } -> std::same_as<bool>;
   { T::toggle_fullscreen() } -> std::same_as<void>;
   { T::minimize_window() } -> std::same_as<void>;
   { T::set_window_size(int{}, int{}) } -> std::same_as<void>;
@@ -236,6 +237,12 @@ concept PlatformBackend = requires {
 struct RunConfig {
   int width = 1280;
   int height = 720;
+  // Initial window position (screen coordinates). Negative leaves the
+  // backend's default placement. Honored by raylib (at creation, before the
+  // first frame); sokol's sapp_desc has no position field, so it is ignored
+  // there with a warning.
+  int window_x = -1;
+  int window_y = -1;
   const char *title = "Afterhours Replace Me";
   int target_fps = 60;
   unsigned int flags = 0;

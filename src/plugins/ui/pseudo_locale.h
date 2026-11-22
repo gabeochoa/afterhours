@@ -30,6 +30,7 @@ namespace ui {
 // transformed; a label that displays user data after the fact (a posted
 // message, initials, a count badge) opts out per component with
 // with_pseudo_locale_exempt(), which also exempts it from RTL mirroring.
+// TODO: make these normal locales instead of a separate PseudoLocale enum.
 enum class PseudoLocale {
   None,
   DoubleWords,

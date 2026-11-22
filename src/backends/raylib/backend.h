@@ -217,6 +217,9 @@ struct RaylibPlatformAPI {
   static bool window_should_close() { return raylib::WindowShouldClose(); }
   static bool is_window_ready() { return raylib::IsWindowReady(); }
   static bool is_window_fullscreen() { return raylib::IsWindowFullscreen(); }
+  static bool is_window_focused() {
+    return raylib::IsWindowReady() && raylib::IsWindowFocused();
+  }
   static void toggle_fullscreen() { raylib::ToggleFullscreen(); }
   static void minimize_window() { raylib::MinimizeWindow(); }
   static void set_window_size(int w, int h) { raylib::SetWindowSize(w, h); }
@@ -351,6 +354,10 @@ struct RaylibPlatformAPI {
       if (cfg.flags)
         set_config_flags(cfg.flags);
       init_window(cfg.width, cfg.height, cfg.title);
+      // InitWindow has no position parameter; this lands before the first
+      // frame, so the window never presents at the default placement.
+      if (cfg.window_x >= 0 && cfg.window_y >= 0)
+        raylib::SetWindowPosition(cfg.window_x, cfg.window_y);
       if (cfg.target_fps > 0)
         set_target_fps(cfg.target_fps);
     }
