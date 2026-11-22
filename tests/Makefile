@@ -116,6 +116,7 @@ ALL_TESTS := \
 	text_unit_motion_test \
 	text_alignment_test \
 	sound_volume_test \
+	audio_plugin_test \
 	synth_beep_test \
 	settings_save_test \
 	settings_path_test \
@@ -147,6 +148,7 @@ ALL_TESTS := \
 	log_file_test \
 	crash_handler_test \
 	crash_handler_reentry_test \
+	crash_report_file_test \
 	setting_row_style_test \
 	singleton_iteration_test \
 	ui_idle_cost_test \
@@ -233,6 +235,7 @@ ALL_TESTS := \
 	pointer_owner_test \
 	two_trees_test \
 	text_selection_test \
+	selectable_text_test \
 	text_stroke_test \
 	text_stroke_render_test \
 	multiline_text_test \
@@ -449,6 +452,8 @@ $(OUT)/graphics_concepts_pedantic_test: CXXFLAGS_T += -Wpedantic -Werror
 $(OUT)/graphics_concepts_pedantic_test: INCLUDES_T = -I$(INCLUDE_ROOT) -isystem $(AFTERHOURS_ROOT)/vendor -isystem $(BREW_PREFIX)/include
 $(OUT)/sound_volume_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
 $(OUT)/sound_volume_test: INCLUDES_T = $(INCLUDES_RAYLIB)
+$(OUT)/audio_plugin_test: CXXFLAGS_T = $(CXXFLAGS_RAYLIB)
+$(OUT)/audio_plugin_test: INCLUDES_T = $(INCLUDES_RAYLIB)
 $(OUT)/files_atomic_write_test: ../src/plugins/files.cpp
 $(OUT)/files_resource_path_test: ../src/plugins/files.cpp
 $(OUT)/files_test_roots_test: ../src/plugins/files.cpp
