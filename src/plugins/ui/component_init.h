@@ -264,11 +264,18 @@ inline void apply_label(HasUIContext auto &ctx, Entity &entity,
       config.unit_motion.has_value() || config.pseudo_locale_exempt
           ? PseudoLocale::None
           : UIStylingDefaults::get().pseudo_locale;
-  if (!config.tooltip_text.empty())
-    entity.addComponentIfMissing<ui::HasTooltip>(
-        pseudo_localize(config.tooltip_text, pseudo), config.tooltip_delay,
-        ui::overlay::Placement::Below, config.tooltip_font_size,
-        config.tooltip_padding, config.tooltip_gap);
+  if (auto *tip = entity.toggleComponent<ui::HasTooltip>(
+          !config.tooltip_text.empty(),
+          pseudo_localize(config.tooltip_text, pseudo), config.tooltip_delay,
+          config.tooltip_placement, config.tooltip_font_size,
+          config.tooltip_padding, config.tooltip_gap)) {
+    tip->text = pseudo_localize(config.tooltip_text, pseudo);
+    tip->delay = config.tooltip_delay;
+    tip->placement = config.tooltip_placement;
+    tip->font_size = config.tooltip_font_size;
+    tip->padding = config.tooltip_padding;
+    tip->gap = config.tooltip_gap;
+  }
 
   if (config.label.empty() && !entity.has<ui::HasLabel>())
     return;

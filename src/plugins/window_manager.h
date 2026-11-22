@@ -218,12 +218,8 @@ struct window_manager : developer::Plugin {
   static Resolution fetch_maximum_resolution() {
     return Resolution{.width = 1280, .height = 720};
   }
-  static Resolution fetch_current_resolution() {
-    return Resolution{.width = 1280, .height = 720};
-  }
-  static Resolution fetch_raw_window_size() {
-    return Resolution{.width = 1280, .height = 720};
-  }
+  static Resolution fetch_current_resolution() { return headless_resolution; }
+  static Resolution fetch_raw_window_size() { return headless_resolution; }
   static void set_window_size(const int, const int) {
     warn_once(0, "@notimplemented window_manager::set_window_size on this "
                  "backend");
@@ -276,8 +272,11 @@ struct window_manager : developer::Plugin {
     if (pcr == nullptr || window_w <= 0 || window_h <= 0)
       return vp;
 
-    const float content_w = static_cast<float>(pcr->current_resolution.width);
-    const float content_h = static_cast<float>(pcr->current_resolution.height);
+    const Resolution effective = pcr->should_refetch
+                                     ? fetch_current_resolution()
+                                     : pcr->current_resolution;
+    const float content_w = static_cast<float>(effective.width);
+    const float content_h = static_cast<float>(effective.height);
     if (content_w <= 0.f || content_h <= 0.f)
       return vp;
 
@@ -329,10 +328,8 @@ struct window_manager : developer::Plugin {
   struct CollectCurrentResolution : System<ProvidesCurrentResolution> {
     virtual void for_each_with(Entity &, ProvidesCurrentResolution &pCR,
                                const float) override {
-      const Resolution latest = fetch_current_resolution();
-      if (pCR.should_refetch || !(latest == pCR.current_resolution)) {
-        pCR.current_resolution = latest;
-        pCR.should_refetch = false;
+      if (pCR.should_refetch) {
+        pCR.current_resolution = fetch_current_resolution();
       }
     }
   };
