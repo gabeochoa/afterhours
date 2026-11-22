@@ -259,13 +259,11 @@ struct modal : developer::Plugin {
                 auto opt = ui::UICollectionHolder::getEntityForID(cur);
                 if (!opt.valid()) return false;
                 Entity &e = opt.asE();
-                if (e.template has<ui::imm::HasMenuState>() &&
-                    e.template get<ui::imm::HasMenuState>()
-                        .was_open_last_frame)
+                if (e.get_or_default(&ui::imm::HasMenuState::was_open_last_frame,
+                                     false))
                     return true;
-                if (e.template has<ui::HasDropdownState>() &&
-                    e.template get<ui::HasDropdownState>()
-                        .was_open_last_frame)
+                if (e.get_or_default(&ui::HasDropdownState::was_open_last_frame,
+                                     false))
                     return true;
                 if (e.template has<text_input::HasTextInputState>())
                     return true;
