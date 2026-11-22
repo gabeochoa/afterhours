@@ -20,6 +20,7 @@
 // breaks the source did not have -- see the note on joined_text.
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -54,7 +55,7 @@ namespace detail {
 // One visual line, as coloured runs.
 using TextRunLine = std::vector<TextSpan>;
 
-// Greedy word-wrap over styled runs. Over-wide words get their own line;
+// Greedy word-wrap over styled runs. Over-wide words break between graphemes;
 // '\n' is a hard break, so '\n\n' leaves a blank line.
 //
 // `measure(text, weight)` returns the pixel width of `text` in that weight.
@@ -180,6 +181,13 @@ wrap_ranges(const std::string &text, float max_width,
   while (true) {
     const size_t nl = text.find('\n', source_begin);
     const size_t source_end = nl == std::string::npos ? text.size() : nl;
+    if (measure_range(source_begin, source_end) <= max_width) {
+      lines.push_back({source_begin, source_end});
+      if (nl == std::string::npos)
+        return lines;
+      source_begin = nl + 1;
+      continue;
+    }
     size_t begin = source_begin;
     size_t end = source_begin;
     size_t i = source_begin;
@@ -195,6 +203,33 @@ wrap_ranges(const std::string &text, float max_width,
       if (end > begin && measure_range(begin, word_end) > max_width) {
         lines.push_back({begin, end});
         begin = word;
+      }
+      if ((end <= begin || begin == word) &&
+          measure_range(begin, word_end) > max_width) {
+        const size_t base = begin;
+        std::vector<UnitSpan> graphemes;
+        split_graphemes(std::string_view(text).substr(base, word_end - base),
+                        graphemes);
+        size_t first = 0;
+        while (measure_range(base + graphemes[first].begin, word_end) >
+               max_width) {
+          size_t lo = first + 1;
+          size_t hi = graphemes.size();
+          while (lo < hi) {
+            const size_t mid = lo + (hi - lo + 1) / 2;
+            if (measure_range(base + graphemes[first].begin,
+                              base + graphemes[mid - 1].end) <= max_width)
+              lo = mid;
+            else
+              hi = mid - 1;
+          }
+          if (lo == graphemes.size())
+            break;
+          lines.push_back({base + graphemes[first].begin,
+                           base + graphemes[lo - 1].end});
+          first = lo;
+        }
+        begin = base + graphemes[first].begin;
       }
       end = word_end;
       i = word_end;
@@ -297,10 +332,6 @@ text_run_offsets(const TextRunLine &line, MeasureFn &&measure,
   return offsets;
 }
 
-// Greedy word-wrap: split `text` into lines each no wider than `max_width`,
-// using `measure` to size candidate lines. Words wider than max_width are
-// placed on their own line (not character-split). Returns at least one line
-// for non-empty input. `measure` returns the pixel width of a string.
 template <typename MeasureFn>
 static inline std::vector<std::string>
 wrap_text_to_width(const std::string &text, float max_width,
@@ -528,6 +559,61 @@ inline std::string substring(const std::vector<detail::TextRunLine> &lines,
     return "";
   return all.substr(range.start, std::min(range.length(),
                                           all.size() - range.start));
+}
+
+inline constexpr float kMultiClickTime = 0.4f;
+inline constexpr size_t kMultiClickDist = 3;
+
+struct ClickStreak {
+  float last_time = -1.f;
+  size_t last_pos = 0;
+  int count = 0;
+};
+
+inline int register_click(ClickStreak &streak, float now, size_t pos) {
+  const size_t dist = pos > streak.last_pos ? pos - streak.last_pos
+                                            : streak.last_pos - pos;
+  if (streak.last_time >= 0.f && (now - streak.last_time) < kMultiClickTime &&
+      dist <= kMultiClickDist)
+    streak.count++;
+  else
+    streak.count = 1;
+  streak.last_time = now;
+  streak.last_pos = pos;
+  return streak.count;
+}
+
+namespace detail_sel {
+inline bool is_word_separator(char c) {
+  return std::isspace(static_cast<unsigned char>(c)) ||
+         std::ispunct(static_cast<unsigned char>(c));
+}
+}
+
+inline Range word_range_at(const std::string &text, size_t pos) {
+  if (text.empty())
+    return Range{0, 0};
+  pos = std::min(pos, text.size() - 1);
+  if (detail_sel::is_word_separator(text[pos]))
+    return Range{pos, pos + 1};
+  size_t start = pos;
+  while (start > 0 && !detail_sel::is_word_separator(text[start - 1]))
+    start--;
+  size_t end = pos;
+  while (end < text.size() && !detail_sel::is_word_separator(text[end]))
+    end++;
+  return Range{start, end};
+}
+
+inline Range line_range_at(const std::string &text, size_t pos) {
+  pos = std::min(pos, text.size());
+  size_t start = pos;
+  while (start > 0 && text[start - 1] != '\n')
+    start--;
+  size_t end = pos;
+  while (end < text.size() && text[end] != '\n')
+    end++;
+  return Range{start, end};
 }
 
 } // namespace text_selection
