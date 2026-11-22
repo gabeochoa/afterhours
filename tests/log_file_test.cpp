@@ -92,6 +92,42 @@ int main() {
         "and not the previous run's");
   afterhours::log_file::close();
 
+  // The pre-init buffer is capped and keeps the recent lines: the startup
+  // failure is at the end of the buffer, so the oldest lines drop first.
+  for (int i = 0; i < 600; i++)
+    log_info("cap line {}", i);
+  const auto cap_path = temp_log("afh_log_file_cap_test.txt");
+  std::filesystem::remove(cap_path);
+  afterhours::log_file::open(cap_path.string().c_str());
+  const std::string capped = read_all(cap_path);
+  check(capped.find("cap line 599") != std::string::npos,
+        "the most recent buffered line survives the cap");
+  check(capped.find("cap line 0") == std::string::npos,
+        "the oldest buffered line dropped once the cap filled");
+  int kept = 0;
+  for (std::size_t at = capped.find("cap line "); at != std::string::npos;
+       at = capped.find("cap line ", at + 1))
+    kept++;
+  check(kept == 512, "exactly the capped number of lines replay");
+  check(capped.find("cap line 88") < capped.find("cap line 599") &&
+            capped.find("cap line 88") != std::string::npos,
+        "the kept lines replay in order");
+  afterhours::log_file::close();
+  std::filesystem::remove(cap_path);
+
+  // A host's own sink still wins: logging.h calls whatever log_sink_fn
+  // points at now, so assigning a different one takes over.
+  static std::string captured;
+  captured.clear();
+  log_sink_fn = [](const char *, const char *m) {
+    captured += m;
+    captured += "\n";
+  };
+  log_info("for the replacement sink");
+  check(captured.find("for the replacement sink") != std::string::npos,
+        "a replacement sink receives the line");
+  log_sink_fn = afterhours::log_file::detail::write_line;
+
   // A path that cannot be opened must not take the process with it.
   afterhours::log_file::open("/definitely/not/a/directory/log.txt");
   log_info("still alive");

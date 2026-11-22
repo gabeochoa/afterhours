@@ -59,8 +59,10 @@ AFTER_HOURS_REPLACE_LOGGING
   `log_trace`, `log_info`, `log_warn`, `log_error` as `(fmt, args...)`, and `log_once_per(duration, level, fmt, args...)`
 - `fmt` uses `{}` placeholders (std::format style); `duration` is a `std::chrono` duration and `level` is a `VENDOR_LOG_*` value
 - functions or macros both work, but a macro must expand to one statement (`do { ... } while (0)`): the library calls these from brace-less `if`/`else`
-- `log_file.h` only sees what reaches `log_sink_fn`; forward your logs to it yourself if you want them in the file
+- `log_file.h` only sees what reaches `log_sink_fn`; forward your logs to it yourself if you want them in the file. The sink flushes every line (a crash keeps the tail), buffers up to 512 pre-init lines (oldest dropped) and replays them on `log_file::open(path)`; reopening truncates
 - `crash::report()` logs through `log_error`, so a `log_error` that aborts recurses under `crash::install_handler()`
+- `log_file.h` only sees what reaches `log_sink_fn`; forward your logs to it yourself if you want them in the file
+- `crash::report()` writes to stderr and `log_sink_fn` directly, not through `log_error`, so an aborting `log_error` is safe under `crash::install_handler()`; a replaced-logging host sees crash lines only via the sink
 
 ```cpp
 // my_log.h -- include before any afterhours header
@@ -215,6 +217,8 @@ use `tools/web.mk` for raylib games.
 - [Optional APIs](docs/plugins.md) and [profiling](docs/profiling.md)
 - [Measurements](docs/profiling-measurements.md) and [text measurement](docs/font-atlas-measurement.md)
 - [Resizing, scaling, pillarbox / letterbox](docs/letterboxing.md)
+- [Native macOS desktop integration](docs/macos-desktop.md) — app-side, by decision
+- [Wire-versioning policy](docs/wire-versioning.md)
 - [Backlog](todo.md), [research](docs/roadmap.md), and [changelog](CHANGELOG.md)
 
 ## License

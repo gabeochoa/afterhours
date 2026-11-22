@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "../core/base_component.h"
 #include "../ecs.h"
@@ -182,6 +183,8 @@ struct files : developer::Plugin {
   };
   inline static TestRoots *active_test_roots = nullptr;
 
+  static bool maybe_install_e2e_test_roots(int argc, char *argv[]);
+
   // Non-templated version for PluginCore concept compatibility
   // Note: For actual files functionality, use the overload with game_name.
   static void add_singleton_components(Entity &entity) {
@@ -216,6 +219,18 @@ struct files : developer::Plugin {
   // Directory containing the running executable, or empty if unknown.
   // Available before init(); empty on Emscripten.
   static fs::path get_executable_dir();
+
+  // The user's Documents folder (~/Documents etc.), or empty on Emscripten.
+  // Available before init(); the caller adds its own subfolder.
+  static fs::path get_documents_path();
+
+  // Show path in the platform file manager (Finder/Explorer/open folder).
+  // False when the path does not exist or the platform is unsupported
+  // (Emscripten). Testable seam: reveal_command() builds the invocation
+  // without running it, so tests never pop a window.
+  static std::optional<std::vector<std::string>>
+  reveal_command(const fs::path &path);
+  static bool reveal(const fs::path &path);
 
   static void for_resources_in_group(
       const std::string &group,
