@@ -17,7 +17,6 @@ namespace testing {
 struct SpawnSpec {
     std::string label;
     std::vector<std::string> argv;
-    std::string raw;
 };
 
 struct WaitForLogSpec {
@@ -161,7 +160,6 @@ inline ScriptHeaders parse_script_headers_text(const std::string &text) {
                 SpawnSpec spec;
                 spec.label = words[0];
                 spec.argv.assign(words.begin() + 1, words.end());
-                spec.raw = value;
                 headers.spawns.push_back(std::move(spec));
             }
         } else if (key == "wait_for_log") {
