@@ -73,10 +73,14 @@ extern "C" bool metal_window_resize_pending(void);
 extern "C" void metal_install_live_resize_draw(void);
 #endif
 
-// Implemented in capture_impl.h (the SOKOL_IMPL Objective-C++ TU).
+// Implemented in capture_impl.h (the SOKOL_IMPL Objective-C++ TU), which is
+// only compiled under SOKOL_METAL. Declare under the same condition so web
+// (SOKOL_GLES3) builds never reference Metal symbols.
+#if defined(SOKOL_METAL)
 extern "C" const void *metal_create_system_device(void);
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id, int width,
                                              int height, const char *path);
+#endif
 
 // Implemented in vulkan_device.h (the SOKOL_IMPL TU), headless device only.
 #ifdef AFTER_HOURS_USE_VULKAN
@@ -490,6 +494,12 @@ inline void sokol_event_cb(const sapp_event *ev) {
     s.scroll_x += ev->scroll_x;
     s.scroll_y += ev->scroll_y;
     break;
+  case SAPP_EVENTTYPE_FOCUSED:
+    g_window_focused = true;
+    break;
+  case SAPP_EVENTTYPE_UNFOCUSED:
+    g_window_focused = false;
+    break;
   default:
     break;
   }
@@ -532,6 +542,9 @@ struct MetalPlatformAPI {
   }
   static bool is_window_ready() { return metal_detail::g_initialized; }
   static bool is_window_fullscreen() { return sapp_is_fullscreen(); }
+  static bool is_window_focused() {
+    return !metal_detail::g_headless && metal_detail::g_window_focused;
+  }
   static void toggle_fullscreen() { sapp_toggle_fullscreen(); }
   static void minimize_window() {
     log_error("@notimplemented minimize_window");
@@ -984,6 +997,10 @@ struct MetalPlatformAPI {
     if (cfg.audio)
       log_warn("RunConfig::audio is ignored: the sokol backend has no audio "
                "device");
+    if (cfg.window_x >= 0 || cfg.window_y >= 0)
+      log_warn("RunConfig window position is ignored: sapp_desc has no "
+               "position field, so the sokol backend cannot place the "
+               "window before creation");
     metal_detail::g_init_fn = cfg.init;
     metal_detail::g_frame_fn = cfg.frame;
     metal_detail::g_cleanup_fn = cfg.cleanup;
@@ -1096,7 +1113,7 @@ inline bool metal_init(const Config &cfg) {
       return false;
     }
     desc.environment.vulkan = vk_env;
-#else
+#elif defined(SOKOL_METAL)
     const void *device = metal_create_system_device();
     if (!device) {
       log_error("metal headless: MTLCreateSystemDefaultDevice failed (no GPU?)");
@@ -1104,6 +1121,12 @@ inline bool metal_init(const Config &cfg) {
       return false;
     }
     desc.environment.metal.device = device;
+#else
+    // No Metal/Vulkan device to create under (e.g. SOKOL_GLES3 web build);
+    // say so instead of referencing Metal symbols that do not exist there.
+    log_error("sokol headless: unsupported graphics API for device creation");
+    metal_detail::g_headless = false;
+    return false;
 #endif
     // No swapchain to query, so give load_render_texture sane defaults.
     desc.environment.defaults.color_format = SG_PIXELFORMAT_BGRA8;
@@ -1180,10 +1203,12 @@ inline bool metal_capture_frame(const std::filesystem::path &path) {
   return vulkan_capture_render_texture(
       rt.resolve_img_id ? rt.resolve_img_id : rt.color_img_id, rt.width,
       rt.height, path.string().c_str());
-#else
+#elif defined(SOKOL_METAL)
   return metal_capture_render_texture(
       rt.resolve_img_id ? rt.resolve_img_id : rt.color_img_id, rt.width,
       rt.height, path.string().c_str());
+#else
+  return false;
 #endif
 }
 

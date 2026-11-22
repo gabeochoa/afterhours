@@ -8,12 +8,16 @@
 
 #include "../../ecs.h"
 #include "../../logging.h"
+#include "../../rect.h"
 #include "../autolayout.h"
+#include "../clipboard.h"
 #include "../input_system.h"
 #include "../window_manager.h"
 #include "components.h"
 #include "context.h"
 #include "entity_management.h"
+#include "selectable_text.h"
+#include "text_measure.h"
 #include "fmt/format.h"
 #include "theme.h"
 #include "ui_collection.h"
@@ -30,16 +34,7 @@ namespace ui {
 namespace detail {
 static inline RectangleType intersect_rects(const RectangleType &a,
                                             const RectangleType &b) {
-  float x1 = std::max(a.x, b.x);
-  float y1 = std::max(a.y, b.y);
-  float x2 = std::min(a.x + a.width, b.x + b.width);
-  float y2 = std::min(a.y + a.height, b.y + b.height);
-  RectangleType r;
-  r.x = x1;
-  r.y = y1;
-  r.width = std::max(0.0f, x2 - x1);
-  r.height = std::max(0.0f, y2 - y1);
-  return r;
+  return rect::intersection(a, b);
 }
 
 // Walk the full ancestor chain and intersect ALL clip rects (HasScrollView and
@@ -81,7 +76,7 @@ compute_intersected_clip_rect(const Entity &entity, bool include_self = true) {
       break;
     Entity &parent = opt_parent.asE();
 
-    if (parent.has<HasScrollView>() || parent.has<HasClipChildren>()) {
+    if (parent.has_any<HasScrollView, HasClipChildren>()) {
       if (parent.has<HasScrollView>()) {
         const HasScrollView &sv = parent.get<HasScrollView>();
         if (sv.auto_overflow && !sv.needs_scroll_y() &&
@@ -868,8 +863,8 @@ private:
   // Every guard HandleClicks applies before it would fire, so resolution and
   // firing agree on who is eligible.
   bool is_candidate(const Entity &e, const UIComponent &cmp) const {
-    if (e.is_missing<HasClickListener>() && e.is_missing<HasDragListener>() &&
-        e.is_missing<Hoverable>())
+    if (!e.has_any<HasClickListener, HasDragListener, HasSelectableText,
+                   Hoverable>())
       return false;
     // Opted out of hit-testing entirely: the element behind it wins instead.
     if (e.has<IgnorePointerEvents>() || detail::in_inert_subtree(e))
@@ -1267,6 +1262,118 @@ struct HandleDrags : SystemWithUIContext<ui::HasDragListener> {
 };
 
 template <typename InputAction>
+struct HandleSelectableText : SystemWithUIContext<ui::HasSelectableText> {
+  UIContext<InputAction> *context = nullptr;
+  float now_ = 0.f;
+
+  virtual void once(float dt) override {
+    context = EntityHelper::get_singleton_cmp<ui::UIContext<InputAction>>();
+    if (!context)
+      return;
+    now_ += dt;
+
+    if (context->text_selection_entity != context->ROOT) {
+      OptEntity owner =
+          UICollectionHolder::getEntityForID(context->text_selection_entity);
+      if (!owner.valid() || !owner.asE().template has<HasSelectableText>())
+        context->clear_text_selection();
+    }
+
+    if constexpr (magic_enum::enum_contains<InputAction>("TextCopy")) {
+      if (context->has_selection() && context->pressed(InputAction::TextCopy))
+        clipboard::set_text(context->selected_text());
+    }
+
+    if (context->mouse.just_pressed &&
+        context->active_id != context->text_selection_entity)
+      context->clear_text_selection();
+  }
+
+  virtual void for_each_with(Entity &entity, UIComponent &component,
+                             HasSelectableText &selectable, float) override {
+    if (!component.was_rendered_to_screen || component.should_hide ||
+        entity.has<ShouldHide>())
+      return;
+    if (!entity.has<HasLabel>())
+      return;
+
+    const bool pressed_here =
+        context->mouse.just_pressed && context->is_active(entity.id);
+    const bool dragging_here =
+        context->mouse.left_down && !context->mouse.just_pressed &&
+        context->is_active(entity.id) &&
+        context->text_selection_entity == entity.id;
+    if (!pressed_here && !dragging_here)
+      return;
+
+    const HasLabel &label = entity.get<HasLabel>();
+    if (label.label.empty())
+      return;
+
+    RectangleType rect = component.rect();
+    if (entity.has<HasUIModifiers>())
+      rect = entity.get<HasUIModifiers>().apply_modifier(rect);
+    rect = detail::apply_ancestor_transform(entity, rect);
+    const Vector2Type inset =
+        resolve_text_inset(context->theme, label.text_inset);
+    const std::string font_name = component.resolved_font_name();
+    const float screen_h =
+        context->screen_height > 0.f ? context->screen_height : 720.f;
+    const float ui_scale = imm::ThemeDefaults::get().theme.ui_scale;
+    const float font_size =
+        resolve_to_pixels(component.font_size, screen_h,
+                          component.resolved_scaling_mode, ui_scale);
+    const float spacing = 1.f + label.letter_spacing;
+    auto measure = [&](const auto &s) {
+      return measure_text_line(std::string(s), font_name, font_size, spacing)
+          .x;
+    };
+    float line_height =
+        label.line_height.has_value()
+            ? resolve_to_pixels(*label.line_height, screen_h,
+                                component.resolved_scaling_mode, ui_scale)
+            : measure_text_line("Ag", font_name, font_size, spacing).y;
+    if (line_height <= 0.f)
+      line_height = font_size;
+    if (line_height <= 0.f)
+      return;
+
+    const float wrap_width = label.text_overflow == TextOverflow::Wrap
+                                 ? std::max(0.f, rect.width - 2.f * inset.x)
+                                 : 1e9f;
+    selectable_text::refresh_layout(selectable, label.label, wrap_width,
+                                    font_size, line_height, measure);
+
+    const Vector2Type origin{
+        rect.x + label.text_x_offset + inset.x,
+        rect.y + label.text_y_offset +
+            std::max(0.f, (rect.height - selectable.layout.total_height()) *
+                              0.5f)};
+    const Vector2Type local{context->mouse.pos.x - origin.x,
+                            context->mouse.pos.y - origin.y};
+    const float avail = std::max(0.f, rect.width - 2.f * inset.x);
+    const size_t pos = selectable_text::offset_at(
+        selectable.layout, label.label, local, line_height, label.alignment,
+        avail, measure);
+
+    if (pressed_here) {
+      const bool shift = input::is_key_down(keys::LEFT_SHIFT) ||
+                         input::is_key_down(keys::RIGHT_SHIFT);
+      text_selection::Selection sel;
+      if (context->text_selection_entity == entity.id)
+        sel = context->label_text_selection;
+      const int streak =
+          text_selection::register_click(selectable.clicks, now_, pos);
+      selectable_text::apply_click(sel, label.label, pos, streak, shift);
+      context->set_text_selection(entity.id, sel.anchor, sel.cursor);
+    } else {
+      context->set_text_selection(entity.id,
+                                  context->label_text_selection.anchor, pos);
+    }
+  }
+};
+
+template <typename InputAction>
 struct HandleLeftRight : SystemWithUIContext<ui::HasLeftRightListener> {
   UIContext<InputAction> *context;
 
@@ -1298,7 +1405,7 @@ struct HandleLeftRight : SystemWithUIContext<ui::HasLeftRightListener> {
 private:
   bool direction_triggered(const Entity &entity, InputAction action) {
     // Sliders and steppers step a value: pace held keys by time, not frames.
-    if (entity.has<HasStepperState>() || entity.has<HasSliderState>())
+    if (entity.has_any<HasStepperState, HasSliderState>())
       return context->pressed_or_repeat(action);
     return context->pressed(action) || context->is_held_down(action);
   }
@@ -1690,22 +1797,17 @@ inline OptEntity find_drag_tagged(DragTag tag) {
 /// Mark every entity carrying the given DragTag for cleanup.
 inline void cleanup_drag_tagged(DragTag tag) {
   auto &ui_coll = UICollectionHolder::get().collection;
-  for (Entity &e : EntityQuery(ui_coll, {.ignore_temp_warning = true})
-                       .whereHasTag(tag)
-                       .gen()) {
-    e.cleanup = true;
-  }
+  EntityQuery(ui_coll, {.ignore_temp_warning = true})
+      .whereHasTag(tag)
+      .for_each_stream([](Entity &e) { e.cleanup = true; });
 }
 
 /// Clear the given DragTag from every entity that has it.
 inline void untag_all(DragTag tag) {
   auto &ui_coll = UICollectionHolder::get().collection;
-  for (Entity &e : EntityQuery(ui_coll, {.ignore_temp_warning = true})
-                       .whereHasTag(tag)
-                       // TODO we need gen_for_each() or something
-                       .gen()) {
-    e.disableTag(tag);
-  }
+  EntityQuery(ui_coll, {.ignore_temp_warning = true})
+      .whereHasTag(tag)
+      .for_each_stream([tag](Entity &e) { e.disableTag(tag); });
 }
 
 /// Create or update the floating overlay entity at the given position.

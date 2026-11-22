@@ -152,6 +152,10 @@ class SystemBase {
         return {};
     }
 
+    virtual const std::vector<ComponentID> *membership_requirements() const {
+        return nullptr;
+    }
+
     virtual void for_each(Entity &, const float) = 0;
     virtual void for_each(const Entity &, const float) const = 0;
 
@@ -503,6 +507,22 @@ struct System
         return OnlySingletons<ComponentsOnly>::find(coll);
     }
 
+    template<typename>
+    struct PositiveIds;
+    template<typename... Cs>
+    struct PositiveIds<type_list<Cs...>> {
+        static const std::vector<ComponentID> &get() {
+            static const std::vector<ComponentID> ids{
+                components::get_type_id<Cs>()...};
+            return ids;
+        }
+    };
+
+    const std::vector<ComponentID> *membership_requirements() const override {
+        const auto &ids = PositiveIds<ComponentsOnly>::get();
+        return ids.empty() ? nullptr : &ids;
+    }
+
     using ForEachBase::for_each_with;
     using ForEachBase::for_each_with_derived;
 };
@@ -521,21 +541,23 @@ enum struct SystemPhase { Update, FixedUpdate, Render };
 // it a consumer can only time systems it wrote.
 struct SystemProfileHook {
     std::function<void(std::string_view, SystemPhase)> begin;
-    std::function<void(std::string_view, SystemPhase)> end;
+    std::function<void(std::string_view, SystemPhase, int)> end;
     explicit operator bool() const { return begin && end; }
 };
 
 // One iteration pass, shared by every phase and by the UI collection runner.
 // Templated on the system so the const render pass still picks the const
-// for_each overloads.
+// for_each overloads. Returns entities visited (entries iterated, not matches).
 template<typename Sys>
-inline void run_system_over(Sys &system, Entities &entities, const float dt,
+inline int run_system_over(Sys &system, Entities &entities, const float dt,
                             const EntityCollection &coll,
                             const bool skip_cleanup) {
-    if (!system.should_iterate()) return;
+    if (!system.should_iterate()) return 0;
     system.on_iteration_begin(dt);
+    int visited = 0;
 
     auto visit = [&](auto &entity) {
+        ++visited;
         if (system.include_derived_children)
             system.for_each_derived(entity, dt);
         else
@@ -546,6 +568,16 @@ inline void run_system_over(Sys &system, Entities &entities, const float dt,
         only.has_value()) {
         Entity &ent = *only.value();
         if (!skip_cleanup || !ent.cleanup) visit(ent);
+    } else if (!system.include_derived_children &&
+               system.membership_requirements() &&
+               &entities == &coll.get_entities()) {
+        const Entities candidates =
+            coll.membership_candidates(*system.membership_requirements());
+        for (const auto &entity : candidates) {
+            if (!entity) continue;
+            if (skip_cleanup && entity->cleanup) continue;
+            visit(*entity);
+        }
     } else {
         // Index-based so a push_back to entities (e.g. a for_each that
         // triggers a merge) doesn't invalidate our iterator.
@@ -558,6 +590,7 @@ inline void run_system_over(Sys &system, Entities &entities, const float dt,
         }
     }
     system.on_iteration_end(dt);
+    return visited;
 }
 
 struct SystemManager {
@@ -574,6 +607,7 @@ struct SystemManager {
     struct ProfileScope {
         const SystemBase *sys = nullptr;
         SystemPhase phase{};
+        int entity_count = 0;
 #if AFTERHOURS_ENABLE_PROFILING
         profiling::detail::TimingScope timing;
 #endif
@@ -595,8 +629,11 @@ struct SystemManager {
         // Re-checked: a system may clear the hook while it runs, and calling
         // a cleared std::function here would throw out of a destructor.
         ~ProfileScope() {
+#if AFTERHOURS_ENABLE_PROFILING
+            timing.entity_count = entity_count;
+#endif
             if (sys && profile_hook().end)
-                profile_hook().end(sys->name(), phase);
+                profile_hook().end(sys->name(), phase, entity_count);
             crash::set_running_system(nullptr);
         }
         ProfileScope(const ProfileScope &) = delete;
@@ -642,8 +679,9 @@ struct SystemManager {
             if (!system->should_run(dt)) continue;
             ProfileScope profile_scope(system.get(), SystemPhase::Update);
             system->once(dt);
-            run_system_over(*system, entities, dt,
-                            EntityHelper::get_default_collection(), false);
+            profile_scope.entity_count = run_system_over(
+                *system, entities, dt, EntityHelper::get_default_collection(),
+                false);
             system->after(dt);
             EntityHelper::merge_entity_arrays();
         }
@@ -654,8 +692,9 @@ struct SystemManager {
             if (!system->should_run(dt)) continue;
             ProfileScope profile_scope(system.get(), SystemPhase::FixedUpdate);
             system->once(dt);
-            run_system_over(*system, entities, dt,
-                            EntityHelper::get_default_collection(), false);
+            profile_scope.entity_count = run_system_over(
+                *system, entities, dt, EntityHelper::get_default_collection(),
+                false);
             system->after(dt);
         }
     }
@@ -665,8 +704,9 @@ struct SystemManager {
             if (!system->should_run(dt)) continue;
             ProfileScope profile_scope(system.get(), SystemPhase::Render);
             system->once(dt);
-            run_system_over(*system, entities, dt,
-                            EntityHelper::get_default_collection(), false);
+            profile_scope.entity_count = run_system_over(
+                *system, entities, dt, EntityHelper::get_default_collection(),
+                false);
             system->after(dt);
 #ifndef AFTERHOURS_SINGLE_RENDER_PASS
             const SystemBase &sys = *system;

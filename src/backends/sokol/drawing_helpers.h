@@ -36,6 +36,8 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
                          const Vector2Type position, const float font_size,
                          const float, const Color color, const float = 0.0f,
                          const float = 0.0f, const float = 0.0f) {
+  capture::record("text", RectangleType{position.x, position.y, 0.f, font_size},
+                  color, content ? content : "");
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx)
     return;
@@ -43,8 +45,6 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
                                       : graphics::metal_detail::g_active_font;
   if (fid == FONS_INVALID)
     return;
-  capture::record("text", RectangleType{position.x, position.y, 0.f, font_size},
-                  color, content ? content : "");
   fonsSetFont(ctx, fid);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
@@ -71,11 +71,11 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
 
 inline void draw_text(const char *content, const float x, const float y,
                       const float font_size, const Color color) {
+  capture::record("text", RectangleType{x, y, 0.f, font_size}, color,
+                  content ? content : "");
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx || graphics::metal_detail::g_active_font == FONS_INVALID)
     return;
-  capture::record("text", RectangleType{x, y, 0.f, font_size}, color,
-                  content ? content : "");
   fonsSetFont(ctx, graphics::metal_detail::g_active_font);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
@@ -108,15 +108,26 @@ inline void draw_rectangle(const RectangleType rect, const Color color) {
   sgl_end();
 }
 
+namespace metal_draw_detail {
+inline void fill_rect(const RectangleType rect, const Color color) {
+  sgl_begin_quads();
+  set_color(color);
+  sgl_v2f(rect.x, rect.y);
+  sgl_v2f(rect.x + rect.width, rect.y);
+  sgl_v2f(rect.x + rect.width, rect.y + rect.height);
+  sgl_v2f(rect.x, rect.y + rect.height);
+  sgl_end();
+}
+}
+
 inline void draw_rectangle_outline(const RectangleType rect, const Color color,
                                    const float thickness) {
-  // Draw 4 thin rects to form an outline
   capture::record("rectangle_outline", rect, color);
   float x = rect.x, y = rect.y, w = rect.width, h = rect.height, t = thickness;
-  draw_rectangle(RectangleType{x, y, w, t}, color);             // top
-  draw_rectangle(RectangleType{x, y + h - t, w, t}, color);     // bottom
-  draw_rectangle(RectangleType{x, y + t, t, h - 2 * t}, color); // left
-  draw_rectangle(RectangleType{x + w - t, y + t, t, h - 2 * t}, color); // right
+  metal_draw_detail::fill_rect(RectangleType{x, y, w, t}, color);
+  metal_draw_detail::fill_rect(RectangleType{x, y + h - t, w, t}, color);
+  metal_draw_detail::fill_rect(RectangleType{x, y + t, t, h - 2 * t}, color);
+  metal_draw_detail::fill_rect(RectangleType{x + w - t, y + t, t, h - 2 * t}, color);
 }
 
 inline void draw_rectangle_outline(const RectangleType rect,
@@ -1595,6 +1606,8 @@ inline void draw_texture_rec(TextureType tex, RectangleType src,
   draw_texture_pro(tex, src, dest, Vector2Type{0.0f, 0.0f}, 0.0f, tint);
 }
 
+// Provided by capture_impl.h, compiled only under SOKOL_METAL.
+#if defined(SOKOL_METAL)
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id,
                                              int width, int height,
                                              const char *path);
@@ -1604,6 +1617,7 @@ extern "C" int metal_capture_render_texture_to_memory(
 extern "C" int metal_capture_render_texture_png_to_memory(
     uint32_t color_img_id, int width, int height,
     uint8_t **out_data, int *out_size);
+#endif
 
 #ifdef AFTER_HOURS_USE_VULKAN
 extern "C" bool vulkan_capture_render_texture(uint32_t color_img_id,
@@ -1624,9 +1638,11 @@ inline bool capture_render_texture(const graphics::RenderTextureType &rt,
 #ifdef AFTER_HOURS_USE_VULKAN
   return vulkan_capture_render_texture(render_texture_capture_image_id(rt), rt.width, rt.height,
                                        path.string().c_str());
-#else
+#elif defined(SOKOL_METAL)
   return metal_capture_render_texture(render_texture_capture_image_id(rt), rt.width, rt.height,
                                       path.c_str());
+#else
+  return false;
 #endif
 }
 
@@ -1649,7 +1665,7 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   RgbaCapture result{rt.width, rt.height, {data, data + size}};
   free(data);
   return result;
-#else
+#elif defined(SOKOL_METAL)
   uint8_t *data = nullptr;
   int size = 0;
   if (!metal_capture_render_texture_to_memory(render_texture_capture_image_id(rt), rt.width,
@@ -1664,6 +1680,8 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   RgbaCapture result{rt.width, rt.height, {data, data + size}};
   free(data);
   return result;
+#else
+  return std::nullopt;
 #endif
 }
 
@@ -1683,7 +1701,7 @@ capture_render_texture_png(const graphics::RenderTextureType &rt) {
   PngCapture result{{data, data + size}};
   free(data);
   return result;
-#else
+#elif defined(SOKOL_METAL)
   uint8_t *data = nullptr;
   int size = 0;
   if (!metal_capture_render_texture_png_to_memory(render_texture_capture_image_id(rt), rt.width,
@@ -1696,6 +1714,8 @@ capture_render_texture_png(const graphics::RenderTextureType &rt) {
   PngCapture result{{data, data + size}};
   free(data);
   return result;
+#else
+  return std::nullopt;
 #endif
 }
 
