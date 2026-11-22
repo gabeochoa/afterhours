@@ -74,14 +74,14 @@ template <typename M> std::string format_setting_value(const M &value) {
 } // namespace detail
 
 template <typename T, typename M>
-SettingField<T> setting_field(std::string name, M T::*member) {
+SettingField<T> setting_field(std::string_view name, M T::*member) {
   static_assert(std::is_same_v<M, bool> || std::is_integral_v<M> ||
                     std::is_floating_point_v<M> ||
                     std::is_same_v<M, std::string>,
                 "setting_field supports bool, int, long, float, double, "
                 "std::string members");
   SettingField<T> field;
-  field.name = std::move(name);
+  field.name = std::string(name);
   field.kind = detail::setting_kind_for<M>();
   field.to_json = [member](const T &obj) { return json(obj.*member); };
   field.check_json = [name = field.name, kind = field.kind](
