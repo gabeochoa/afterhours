@@ -228,6 +228,28 @@ inline Font load_font_for_string(const std::string &,
   return load_font_from_file(font_file.c_str());
 }
 
+inline void prewarm_text(const Font font, const char *text,
+                         const float size) {
+  auto *ctx = graphics::metal_detail::g_fons_ctx;
+  if (!ctx || !text || !std::isfinite(size) || size <= 0.f)
+    return;
+  int fid = (font.id != FONS_INVALID) ? font.id
+                                      : graphics::metal_detail::g_active_font;
+  if (fid == FONS_INVALID)
+    return;
+  std::string shown;
+  text = drawable_text(fid, text, shown);
+  const float dpi = graphics::metal_detail::dpi_scale();
+  fonsSetFont(ctx, fid);
+  fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
+  fonsSetSize(ctx, dpi > 1.01f ? size * dpi : size);
+  FONStextIter iter;
+  FONSquad quad{};
+  if (fonsTextIterInit(ctx, &iter, 0, 0, text, nullptr))
+    while (fonsTextIterNext(ctx, &iter, &quad)) {
+    }
+}
+
 // Advance width, same as measure_text.
 
 inline Vector2Type measure_text(const Font font, const char *text,
