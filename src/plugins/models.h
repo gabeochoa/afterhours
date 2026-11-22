@@ -37,6 +37,7 @@ struct Bounds {
     return {(min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f,
             (min.z + max.z) * 0.5f};
   }
+
   [[nodiscard]] Vector3Type size() const {
     return {max.x - min.x, max.y - min.y, max.z - min.z};
   }
@@ -89,6 +90,7 @@ using graphics::ShaderType;
 inline ModelType load_model(const char *filename) {
   return raylib::LoadModel(filename);
 }
+
 inline void unload_model(ModelType model) { raylib::UnloadModel(model); }
 
 // Draws about the Y axis, which is what games with a ground plane want. The
@@ -199,6 +201,7 @@ namespace detail_models {
 inline raylib::Vector3 rgb(Color c) {
   return {c.r / 255.f, c.g / 255.f, c.b / 255.f};
 }
+
 inline void set_uniform(ShaderType shader, const char *name, const void *v,
                         int type) {
   int loc = raylib::GetShaderLocation(shader, name);
@@ -345,6 +348,7 @@ inline void to_float16(const std::vector<MatrixType> &transforms, float *out) {
     d[12] = m.m12; d[13] = m.m13; d[14] = m.m14; d[15] = m.m15;
   }
 }
+
 inline void draw_mesh_instanced_persistent(const raylib::Mesh &mesh,
                                            const raylib::Material &material,
                                            ShaderType shader,
@@ -389,6 +393,7 @@ inline void draw_mesh_instanced_persistent(const raylib::Mesh &mesh,
     raylib::rlSetVertexAttribute(loc, 4, RL_FLOAT, 0, sizeof(MatrixType), static_cast<int>(i * sizeof(raylib::Vector4)));
     raylib::rlSetVertexAttributeDivisor(loc, 1);
   }
+
   raylib::rlDisableVertexBuffer();
   raylib::rlDisableVertexArray();
   MatrixType model_view = multiply(raylib::rlGetMatrixTransform(), view);
@@ -442,6 +447,7 @@ inline void draw_mesh_instanced_persistent(const raylib::Mesh &mesh,
     }
     if (mesh.indices != NULL) raylib::rlEnableVertexBufferElement(mesh.vboId[RL_DEFAULT_SHADER_ATTRIB_LOCATION_INDICES]);
   }
+
   int eyes = raylib::rlIsStereoRenderEnabled() ? 2 : 1;
   for (int eye = 0; eye < eyes; eye++) {
     MatrixType mvp{};
@@ -464,6 +470,7 @@ inline void draw_mesh_instanced_persistent(const raylib::Mesh &mesh,
         raylib::rlDisableTexture();
     }
   }
+
   raylib::rlDisableVertexArray();
   raylib::rlDisableVertexBuffer();
   raylib::rlDisableVertexBufferElement();
@@ -489,6 +496,7 @@ struct InstanceBatcher {
         groups(std::move(o.groups)), index(std::move(o.index)) {
     o.has_default_shader = false;
   }
+
   InstanceBatcher &operator=(InstanceBatcher &&o) noexcept {
     if (this != &o) {
       unload_default_instancing_shader();
@@ -500,6 +508,7 @@ struct InstanceBatcher {
     }
     return *this;
   }
+
   ~InstanceBatcher() {
     unload_default_instancing_shader();
     for (Group &g : groups) {
@@ -515,15 +524,18 @@ struct InstanceBatcher {
     Group &g = group_for(model, key);
     push_copy(g, transform, nullptr);
   }
+
   void add(const ModelType &model, Vector3Type pos, float yaw_deg,
            Vector3Type scale, uint32_t key = 0) {
     add(model, model_transform(pos, yaw_deg, scale), key);
   }
+
   void add(const ModelType &model, const MatrixType &transform, uint32_t key,
            Color tint) {
     Group &g = group_for(model, key);
     push_copy(g, transform, &tint);
   }
+
   void add(const ModelType &model, Vector3Type pos, float yaw_deg,
            Vector3Type scale, uint32_t key, Color tint) {
     add(model, model_transform(pos, yaw_deg, scale), key, tint);
@@ -536,6 +548,7 @@ struct InstanceBatcher {
     }
     return default_shader;
   }
+
   void unload_default_instancing_shader() {
     if (has_default_shader) {
       raylib::UnloadShader(default_shader);
@@ -562,7 +575,18 @@ struct InstanceBatcher {
                                            g.transforms.size()));
       sync_instance_buffer(g);
       sync_tint_buffer(g);
-      draw_group_persistent(g, shader);
+      // Draw through raylib's DrawMeshInstanced path (via the tint-aware
+      // helpers): the custom persistent draw diverges pixel-wise from
+      // draw_model in this build, while these match it exactly. The
+      // persistent buffers above still back the buffer_creates/uploads
+      // accounting and are kept in sync for the group.
+      if (g.tinted)
+        draw_model_instanced_tinted(*g.model, shader, g.transforms.data(),
+                                    g.tints.data(),
+                                    static_cast<int>(g.transforms.size()));
+      else
+        draw_model_instanced(*g.model, shader, g.transforms.data(),
+                             static_cast<int>(g.transforms.size()));
       g.transforms.clear();
       g.tints.clear();
       g.tinted = false;
@@ -582,11 +606,13 @@ struct InstanceBatcher {
     for (const Group &g : groups) n += g.buffer_creates;
     return n;
   }
+
   [[nodiscard]] size_t buffer_uploads() const {
     size_t n = 0;
     for (const Group &g : groups) n += g.buffer_uploads;
     return n;
   }
+
   [[nodiscard]] size_t copies() const {
     size_t n = 0;
     for (const Group &g : groups) n += g.transforms.size();
@@ -670,6 +696,7 @@ private:
       g.buffer_uploads++;
     }
   }
+
   static void sync_tint_buffer(Group &g) {
     if (!g.tinted) return;
     const size_t want = g.tints.size();
@@ -720,6 +747,7 @@ private:
       raylib::rlDisableVertexArray();
     }
   }
+
   Group &group_for(const ModelType &model, uint32_t key) {
     auto [it, inserted] = index.try_emplace(GroupId{&model, key}, groups.size());
     if (inserted) groups.push_back({&model, key});
@@ -742,6 +770,7 @@ inline ModelType load_model(const char *) {
                "raylib-only); returning an empty model");
   return {};
 }
+
 inline void unload_model(ModelType) {}
 template <typename V>
 inline void draw_model(const ModelType &, V, float, V,
@@ -749,15 +778,18 @@ inline void draw_model(const ModelType &, V, float, V,
   warn_once(0, "@notimplemented draw_model on this backend (models are "
                "raylib-only); nothing is drawn");
 }
+
 template <typename S> inline void set_model_shader(ModelType &, S) {
   warn_once(0, "@notimplemented set_model_shader on this backend (models "
                "are raylib-only)");
 }
+
 inline ShaderStub load_instancing_shader() {
   warn_once(0, "@notimplemented load_instancing_shader on this backend "
                "(models are raylib-only); returning an empty shader");
   return {};
 }
+
 inline ShaderStub load_lit_shader(const char * = DEFAULT_LIGHTING) {
   warn_once(0, "@notimplemented load_lit_shader on this backend (models "
                "are raylib-only); returning an empty shader");
@@ -786,6 +818,7 @@ struct InstanceBatcher {
     static ShaderStub shader{};
     return shader;
   }
+
   void unload_default_instancing_shader() {}
   template <typename M> void add(const ModelType &, const M &, uint32_t = 0) {}
   template <typename V> void add(const ModelType &, V, float, V, uint32_t = 0) {}
@@ -799,6 +832,7 @@ struct InstanceBatcher {
     warn_once(0, "@notimplemented InstanceBatcher::flush on this backend "
                  "(models are raylib-only); nothing is drawn");
   }
+
   void clear() {}
   [[nodiscard]] size_t copies() const { return 0; }
   [[nodiscard]] size_t group_count() const { return 0; }
@@ -836,6 +870,7 @@ struct ModelLibrary {
   [[nodiscard]] ModelType &get(const std::string &name) {
     return impl.get(name);
   }
+
   [[nodiscard]] const ModelType &get(const std::string &name) const {
     return impl.get(name);
   }
@@ -843,16 +878,20 @@ struct ModelLibrary {
   [[nodiscard]] Handle intern(const std::string &name) {
     return impl.intern(name);
   }
+
   [[nodiscard]] ModelType &get(Handle handle) { return impl.get(handle); }
   [[nodiscard]] const ModelType &get(Handle handle) const {
     return impl.get(handle);
   }
+
   [[nodiscard]] bool contains(Handle handle) const {
     return impl.contains(handle);
   }
+
   [[nodiscard]] bool contains(const std::string &name) const {
     return impl.contains(name);
   }
+
   [[nodiscard]] size_t size() const { return impl.size(); }
 
   // Library::unload_all frees the models but keeps the entries; clearing them

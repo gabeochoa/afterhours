@@ -76,6 +76,7 @@ int main() {
     printf("instance_batcher_test: %d/%d checks passed\n", checks_passed, checks_run);
     return 1;
   }
+
   const ModelType &tree = models.get("tree");
   const ModelType &lantern = models.get("lantern");
 
@@ -159,6 +160,7 @@ int main() {
             std::abs(pa[i].b - pb[i].b) + std::abs(pa[i].a - pb[i].a);
     if (d > 6) differ++;
   }
+
   printf("  %d covered pixels, %d differ\n", covered, differ);
   check(covered > 2000, "the scene is on screen");
   check(differ <= covered / 200, "batched frame matches draw_model per copy");
