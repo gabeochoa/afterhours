@@ -71,6 +71,8 @@ struct EntityCollection {
     std::size_t index_considers = 0; // entities examined during a rebuild
     std::size_t index_rebuilds = 0;  // passes over the entity vector
     std::size_t bucket_resolves = 0; // handles turned back into entities
+    std::size_t membership_rebuilds = 0;
+    std::size_t membership_candidates = 0;
   };
   static Stats &stats() {
     static Stats s;
@@ -192,6 +194,77 @@ struct EntityCollection {
     return [key_of, key](const Entity &e) {
       return e.has<C>() && key_of(e.get<C>()) == key;
     };
+  }
+
+  mutable std::vector<Entities> membership_lists_;
+  mutable std::size_t membership_version_ = static_cast<std::size_t>(-1);
+  mutable std::size_t membership_mutation_ = static_cast<std::size_t>(-1);
+  mutable std::size_t membership_size_ = static_cast<std::size_t>(-1);
+
+  bool membership_is_fresh() const {
+    return membership_version_ == version &&
+           membership_mutation_ ==
+               COMPONENT_MUTATION_GEN.load(std::memory_order_relaxed) &&
+           membership_size_ == entities_DO_NOT_USE.size();
+  }
+
+  void ensure_membership_fresh() const {
+    if (membership_is_fresh())
+      return;
+    if (membership_lists_.size() != max_num_components)
+      membership_lists_.assign(max_num_components, Entities{});
+    for (auto &list : membership_lists_)
+      list.clear();
+    ++stats().membership_rebuilds;
+    for (const auto &sp : entities_DO_NOT_USE) {
+      if (!sp)
+        continue;
+      for (std::size_t c = sp->componentSet.next_set(0);
+           c < max_num_components; c = sp->componentSet.next_set(c + 1))
+        membership_lists_[c].push_back(sp);
+    }
+    membership_version_ = version;
+    membership_mutation_ =
+        COMPONENT_MUTATION_GEN.load(std::memory_order_relaxed);
+    membership_size_ = entities_DO_NOT_USE.size();
+  }
+
+  const Entities &membership_for(ComponentID id) const {
+    static const Entities none;
+    ensure_membership_fresh();
+    if (id >= membership_lists_.size())
+      return none;
+    return membership_lists_[id];
+  }
+
+  Entities membership_candidates(
+      const std::vector<ComponentID> &ids) const {
+    Entities out;
+    if (ids.empty())
+      return out;
+    ensure_membership_fresh();
+    const Entities *smallest = nullptr;
+    for (const ComponentID id : ids) {
+      if (id >= membership_lists_.size())
+        return out;
+      const Entities &list = membership_lists_[id];
+      if (!smallest || list.size() < smallest->size())
+        smallest = &list;
+    }
+    out.reserve(smallest->size());
+    for (const auto &sp : *smallest) {
+      bool has_all = true;
+      for (const ComponentID id : ids) {
+        if (!sp->componentSet.test(id)) {
+          has_all = false;
+          break;
+        }
+      }
+      if (has_all)
+        out.push_back(sp);
+    }
+    stats().membership_candidates += out.size();
+    return out;
   }
 
   // Bump a slot generation counter so old handles become stale.
@@ -389,6 +462,7 @@ struct EntityCollection {
   void merge_entity_arrays() {
     if (temp_entities.empty())
       return;
+    ++version;
 
     for (const auto &entity : temp_entities) {
       if (!entity)

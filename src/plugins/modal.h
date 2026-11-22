@@ -401,16 +401,14 @@ struct modal : developer::Plugin {
             auto [backdrop_entity, backdrop_parent] = deref(backdrop_ep);
 
             if (!m.presenting()) {
-                // Add ShouldHide to modal and backdrop when not open
-                entity.template addComponentIfMissing<ShouldHide>();
-                backdrop_entity.template addComponentIfMissing<ShouldHide>();
+                entity.template toggleComponent<ShouldHide>(true);
+                backdrop_entity.template toggleComponent<ShouldHide>(true);
                 return {false, entity};
             }
             const float presence_value = presence.started() ? presence.value() : 1.f;
 
-            // Remove ShouldHide when open
-            entity.template removeComponentIfExists<ShouldHide>();
-            backdrop_entity.template removeComponentIfExists<ShouldHide>();
+            entity.template toggleComponent<ShouldHide>(false);
+            backdrop_entity.template toggleComponent<ShouldHide>(false);
 
             // Layer this modal by its depth in the stack so nested modals (and
             // their backdrops) render above the modal beneath them instead of

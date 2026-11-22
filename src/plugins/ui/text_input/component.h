@@ -140,7 +140,7 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
   // Apply default size
   if (config.size.is_default) {
     auto def =
-        UIStylingDefaults::get().get_component_config(ComponentType::TextInput);
+        UIStylingDefaults::get().find_component_config(ComponentType::TextInput);
     config.size = def ? def->size
                       : ComponentSize(pixels(default_component_size.x * 1.5f),
                                       pixels(default_component_size.y));
@@ -510,14 +510,13 @@ ElementResult text_input(HasUIContext auto &ctx, EntityParent ep_pair,
                      : display_pos;
 
         // Multi-click detection (double = word, triple = select all)
-        constexpr float MULTI_CLICK_TIME = 0.4f;
-        constexpr size_t MULTI_CLICK_DIST = 3;
         float now = static_cast<float>(graphics::get_time());
         if (s.last_click_time >= 0.f &&
-            (now - s.last_click_time) < MULTI_CLICK_TIME &&
+            (now - s.last_click_time) < text_selection::kMultiClickTime &&
             (click_pos > s.last_click_pos
                  ? click_pos - s.last_click_pos
-                 : s.last_click_pos - click_pos) <= MULTI_CLICK_DIST) {
+                 : s.last_click_pos - click_pos) <=
+                text_selection::kMultiClickDist) {
           s.click_count++;
         } else {
           s.click_count = 1;
