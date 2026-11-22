@@ -264,6 +264,7 @@ ALL_TESTS := \
 	menu_test \
 	color_swatch_test \
 	overlay_placement_test \
+	tooltip_test \
 	progress_bar_test \
 	psx_budget_test \
 	psx_backend_test \
