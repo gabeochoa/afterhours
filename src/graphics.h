@@ -22,7 +22,7 @@ using PlatformAPI = RaylibPlatformAPI;
 using PlatformAPI = MetalPlatformAPI;
 #else
 #error                                                                         \
-    "No graphics backend defined. Define AFTER_HOURS_USE_RAYLIB, AFTER_HOURS_USE_SOKOL, AFTER_HOURS_USE_METAL, or AFTER_HOURS_USE_VULKAN (AFTER_HOURS_USE_NONE has no graphics API)."
+    "No graphics backend defined. Define AFTER_HOURS_USE_RAYLIB, AFTER_HOURS_USE_SOKOL, AFTER_HOURS_USE_METAL, or AFTER_HOURS_USE_VULKAN (AFTER_HOURS_USE_NONE and AFTER_HOURS_USE_PSX have no graphics API)."
 #endif
 
 using Camera2D = PlatformAPI::Camera2D;
@@ -47,6 +47,7 @@ inline bool is_window_ready() { return PlatformAPI::is_window_ready(); }
 inline bool is_window_fullscreen() {
   return PlatformAPI::is_window_fullscreen();
 }
+inline bool is_window_focused() { return PlatformAPI::is_window_focused(); }
 inline void toggle_fullscreen() { PlatformAPI::toggle_fullscreen(); }
 inline void minimize_window() { PlatformAPI::minimize_window(); }
 inline void set_window_size(int w, int h) { PlatformAPI::set_window_size(w, h); }

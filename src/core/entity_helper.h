@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "../debug_allocator.h"
@@ -137,6 +138,12 @@ struct EntityHelper {
 
   template <typename Component> static void registerSingleton(Entity &ent) {
     get_default_collection().registerSingleton<Component>(ent);
+  }
+
+  template <typename Component, typename... Args>
+  static Component &add_singleton(Args &&...args) {
+    return get_default_collection().add_singleton<Component>(
+        std::forward<Args>(args)...);
   }
 
   template <typename Component> static RefEntity get_singleton() {
