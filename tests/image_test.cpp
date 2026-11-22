@@ -85,6 +85,34 @@ static void check_cpu() {
   std::filesystem::remove(path);
   check(!image_size(path), "image_size(path) rejects a missing file");
   check(!load_image(path), "load_image rejects a missing file");
+
+  auto made = make_image(2, 2, Color{9, 8, 7, 6});
+  check(made && made->width == 2 && made->height == 2 &&
+            made->rgba.size() == 16 &&
+            same(made->pixel(1, 1), Color{9, 8, 7, 6}),
+        "make_image fills every texel");
+  check(!make_image(0, 2, Color{0, 0, 0, 0}), "make_image rejects zero width");
+  check(!make_image(2, 2, Color{0, 0, 0, 0}, {.max_bytes = 15}),
+        "make_image honors max_bytes");
+
+  auto encoded = made ? encode_image(*made) : std::nullopt;
+  check(encoded && image_size(*encoded)->width == 2, "encode_image writes a PNG");
+  auto roundtrip = encoded ? decode_image(*encoded) : std::nullopt;
+  check(roundtrip && made && roundtrip->rgba == made->rgba,
+        "encode_image round-trips through decode_image");
+  check(encoded && encoded->size() > 8 && (*encoded)[0] == 0x89 &&
+            (*encoded)[1] == 0x50,
+        "encode_image output starts with the PNG signature");
+  check(!encode_image(Image{}), "encode_image rejects an empty image");
+
+  auto export_path = std::filesystem::temp_directory_path() /
+                     ("afterhours_image_export_test_" +
+                      std::to_string(::getpid()) + ".png");
+  check(made && export_image(*made, export_path), "export_image writes the file");
+  auto reloaded = load_image(export_path);
+  check(reloaded && made && reloaded->rgba == made->rgba,
+        "export_image round-trips through load_image");
+  std::filesystem::remove(export_path);
 }
 
 #ifndef AFTER_HOURS_USE_NONE
