@@ -108,10 +108,19 @@ std::filesystem::path resolve_resource_root(const std::string &root_folder) {
 #endif // !__EMSCRIPTEN__
 
 namespace {
+std::filesystem::path e2e_tmp_base() {
+  const char *env = std::getenv("E2E_TMPDIR");
+  return env && env[0] ? std::filesystem::path(env) : std::filesystem::path{};
+}
+}
+
+namespace {
 std::pair<std::filesystem::path, std::filesystem::path>
 default_roots(const std::string &game_name) {
   if (files::active_test_roots)
     return {files::active_test_roots->save, files::active_test_roots->config};
+  if (const fs::path e2e = e2e_tmp_base(); !e2e.empty())
+    return {e2e / "save", e2e / "config"};
 #ifdef __EMSCRIPTEN__
   return {fs::path("/save") / game_name, fs::path("/config") / game_name};
 #else
@@ -244,9 +253,28 @@ void files::init(const std::string &game_name, const std::string &root_folder) {
   sweep_temp_files(get_save_path());
 }
 
+bool files::maybe_install_e2e_test_roots(int argc, char *argv[]) {
+  bool e2e = false;
+  for (int i = 1; i < argc; ++i) {
+    const std::string key = std::string(argv[i]).substr(0, std::string(argv[i]).find('='));
+    if (key == "--e2e" || key == "--test-mode" || key == "--test-script" ||
+        key == "--test-script-dir")
+      e2e = true;
+  }
+  if (!e2e || active_test_roots)
+    return false;
+  if (const char *opt_out = std::getenv("AFTERHOURS_NO_E2E_TEMPROOTS");
+      opt_out && opt_out[0])
+    return false;
+  new TestRoots();
+  return true;
+}
+
 files::TestRoots::TestRoots() {
   std::error_code ec;
-  const fs::path base = fs::temp_directory_path(ec);
+  fs::path base = e2e_tmp_base();
+  if (base.empty())
+    base = fs::temp_directory_path(ec);
   std::random_device rd;
   for (int attempt = 0; attempt < 100 && root.empty(); ++attempt) {
     fs::path candidate =
