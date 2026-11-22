@@ -66,6 +66,13 @@ inline std::ostream &operator<<(std::ostream &os, const Dim &dim) {
   return os;
 }
 
+enum struct AbsoluteAnchor {
+  LeadingTop,
+  TrailingTop,
+  LeadingBottom,
+  TrailingBottom,
+};
+
 enum class ScreenReference { LayoutAxis, Height };
 
 struct Size {

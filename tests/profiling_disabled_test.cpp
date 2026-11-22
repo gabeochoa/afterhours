@@ -9,7 +9,7 @@ int main() {
     AFTERHOURS_PROFILE_COUNTER(collector, "counter", "", ++evaluated);
     if (collector.start() || evaluated != 0) return 1;
     int calls = 0;
-    afterhours::SystemManager::set_profile_hook({[&](auto, auto) { ++calls; }, [](auto, auto) {}});
+    afterhours::SystemManager::set_profile_hook({[&](auto, auto) { ++calls; }, [](auto, auto, auto) {}});
     afterhours::SystemManager manager;
     manager.register_update_system([](float) {});
     afterhours::Entities entities;

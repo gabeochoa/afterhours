@@ -36,6 +36,8 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
                          const Vector2Type position, const float font_size,
                          const float, const Color color, const float = 0.0f,
                          const float = 0.0f, const float = 0.0f) {
+  capture::record("text", RectangleType{position.x, position.y, 0.f, font_size},
+                  color, content ? content : "");
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx)
     return;
@@ -43,8 +45,6 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
                                       : graphics::metal_detail::g_active_font;
   if (fid == FONS_INVALID)
     return;
-  capture::record("text", RectangleType{position.x, position.y, 0.f, font_size},
-                  color, content ? content : "");
   fonsSetFont(ctx, fid);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
@@ -71,11 +71,11 @@ inline void draw_text_ex(const afterhours::Font font, const char *content,
 
 inline void draw_text(const char *content, const float x, const float y,
                       const float font_size, const Color color) {
+  capture::record("text", RectangleType{x, y, 0.f, font_size}, color,
+                  content ? content : "");
   auto *ctx = graphics::metal_detail::g_fons_ctx;
   if (!ctx || graphics::metal_detail::g_active_font == FONS_INVALID)
     return;
-  capture::record("text", RectangleType{x, y, 0.f, font_size}, color,
-                  content ? content : "");
   fonsSetFont(ctx, graphics::metal_detail::g_active_font);
   fonsSetAlign(ctx, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
   fonsSetColor(ctx, sfons_rgba(color.r, color.g, color.b, color.a));
@@ -108,15 +108,26 @@ inline void draw_rectangle(const RectangleType rect, const Color color) {
   sgl_end();
 }
 
+namespace metal_draw_detail {
+inline void fill_rect(const RectangleType rect, const Color color) {
+  sgl_begin_quads();
+  set_color(color);
+  sgl_v2f(rect.x, rect.y);
+  sgl_v2f(rect.x + rect.width, rect.y);
+  sgl_v2f(rect.x + rect.width, rect.y + rect.height);
+  sgl_v2f(rect.x, rect.y + rect.height);
+  sgl_end();
+}
+}
+
 inline void draw_rectangle_outline(const RectangleType rect, const Color color,
                                    const float thickness) {
-  // Draw 4 thin rects to form an outline
   capture::record("rectangle_outline", rect, color);
   float x = rect.x, y = rect.y, w = rect.width, h = rect.height, t = thickness;
-  draw_rectangle(RectangleType{x, y, w, t}, color);             // top
-  draw_rectangle(RectangleType{x, y + h - t, w, t}, color);     // bottom
-  draw_rectangle(RectangleType{x, y + t, t, h - 2 * t}, color); // left
-  draw_rectangle(RectangleType{x + w - t, y + t, t, h - 2 * t}, color); // right
+  metal_draw_detail::fill_rect(RectangleType{x, y, w, t}, color);
+  metal_draw_detail::fill_rect(RectangleType{x, y + h - t, w, t}, color);
+  metal_draw_detail::fill_rect(RectangleType{x, y + t, t, h - 2 * t}, color);
+  metal_draw_detail::fill_rect(RectangleType{x + w - t, y + t, t, h - 2 * t}, color);
 }
 
 inline void draw_rectangle_outline(const RectangleType rect,
@@ -1038,7 +1049,14 @@ inline sgl_context sgl_context_for(sg_pixel_format color_fmt,
   return ctx;
 }
 
-inline graphics::RenderTextureType load_render_texture(int w, int h) {
+inline uint32_t render_texture_capture_image_id(
+    const graphics::RenderTextureType &rt) {
+  return rt.resolve_img_id ? rt.resolve_img_id : rt.color_img_id;
+}
+
+inline graphics::RenderTextureType load_render_texture_with_samples(int w,
+                                                                      int h,
+                                                                      int samples) {
   graphics::RenderTextureType rt;
   rt.width = w;
   rt.height = h;
@@ -1051,9 +1069,10 @@ inline graphics::RenderTextureType load_render_texture(int w, int h) {
   sg_pixel_format depth_fmt = env.depth_format;
   if (depth_fmt == _SG_PIXELFORMAT_DEFAULT)
     depth_fmt = SG_PIXELFORMAT_DEPTH_STENCIL;
-  int sc = env.sample_count;
+  int sc = samples > 1 ? samples : env.sample_count;
   if (sc <= 0)
     sc = 1;
+  rt.sample_count = sc;
 
   sg_image_desc cd{};
   cd.usage.color_attachment = true;
@@ -1111,13 +1130,53 @@ inline graphics::RenderTextureType load_render_texture(int w, int h) {
     return rt;
   }
 
+  // sokol validates that pairing: tex/capture read the 1x resolve image.
+  sg_image resolve{};
+  sg_view resolve_view{};
+  if (sc > 1) {
+    sg_image_desc rd{};
+    rd.usage.resolve_attachment = true;
+    rd.usage.immutable = true;
+    rd.width = w;
+    rd.height = h;
+    rd.pixel_format = color_fmt;
+    rd.sample_count = 1;
+    rd.label = "rt-resolve";
+    resolve = sg_make_image(&rd);
+    if (sg_query_image_state(resolve) != SG_RESOURCESTATE_VALID) {
+      log_error("load_render_texture: resolve image creation failed");
+      sg_destroy_image(resolve);
+      sg_destroy_view(depth_view);
+      sg_destroy_view(color_view);
+      sg_destroy_image(depth);
+      sg_destroy_image(color);
+      return rt;
+    }
+    sg_view_desc rvd{};
+    rvd.resolve_attachment.image = resolve;
+    rvd.label = "rt-resolve-view";
+    resolve_view = sg_make_view(&rvd);
+    if (sg_query_view_state(resolve_view) != SG_RESOURCESTATE_VALID) {
+      log_error("load_render_texture: resolve view creation failed");
+      sg_destroy_view(resolve_view);
+      sg_destroy_image(resolve);
+      sg_destroy_view(depth_view);
+      sg_destroy_view(color_view);
+      sg_destroy_image(depth);
+      sg_destroy_image(color);
+      return rt;
+    }
+  }
+
   sg_view_desc tvd{};
-  tvd.texture.image = color;
+  tvd.texture.image = sc > 1 ? resolve : color;
   tvd.label = "rt-tex-view";
   sg_view tex_view = sg_make_view(&tvd);
   if (sg_query_view_state(tex_view) != SG_RESOURCESTATE_VALID) {
     log_error("load_render_texture: texture view creation failed");
     sg_destroy_view(tex_view);
+    if (resolve_view.id) sg_destroy_view(resolve_view);
+    if (resolve.id) sg_destroy_image(resolve);
     sg_destroy_view(depth_view);
     sg_destroy_view(color_view);
     sg_destroy_image(depth);
@@ -1136,6 +1195,8 @@ inline graphics::RenderTextureType load_render_texture(int w, int h) {
     log_error("load_render_texture: sampler creation failed");
     sg_destroy_sampler(smp);
     sg_destroy_view(tex_view);
+    if (resolve_view.id) sg_destroy_view(resolve_view);
+    if (resolve.id) sg_destroy_image(resolve);
     sg_destroy_view(depth_view);
     sg_destroy_view(color_view);
     sg_destroy_image(depth);
@@ -1153,6 +1214,8 @@ inline graphics::RenderTextureType load_render_texture(int w, int h) {
     log_error("load_render_texture: sgl context creation failed");
     sg_destroy_sampler(smp);
     sg_destroy_view(tex_view);
+    if (resolve_view.id) sg_destroy_view(resolve_view);
+    if (resolve.id) sg_destroy_image(resolve);
     sg_destroy_view(depth_view);
     sg_destroy_view(color_view);
     sg_destroy_image(depth);
@@ -1165,15 +1228,29 @@ inline graphics::RenderTextureType load_render_texture(int w, int h) {
   rt.color_view_id = color_view.id;
   rt.depth_view_id = depth_view.id;
   rt.tex_view_id = tex_view.id;
+  rt.resolve_img_id = resolve.id;
+  rt.resolve_view_id = resolve_view.id;
   rt.sampler_id = smp.id;
   rt.sgl_ctx_id = sgl_ctx.id;
   return rt;
+}
+
+inline graphics::RenderTextureType load_render_texture(int w, int h) {
+  return load_render_texture_with_samples(w, h, 1);
+}
+inline graphics::RenderTextureType load_msaa_render_texture(int w, int h,
+                                                             int samples) {
+  return load_render_texture_with_samples(w, h, samples);
 }
 
 inline void unload_render_texture(graphics::RenderTextureType &rt) {
   // The sgl context is shared and outlives this texture, see sgl_context_for.
   if (rt.tex_view_id)
     sg_destroy_view({rt.tex_view_id});
+  if (rt.resolve_view_id)
+    sg_destroy_view({rt.resolve_view_id});
+  if (rt.resolve_img_id)
+    sg_destroy_image({rt.resolve_img_id});
   if (rt.depth_view_id)
     sg_destroy_view({rt.depth_view_id});
   if (rt.color_view_id)
@@ -1224,13 +1301,34 @@ inline void begin_texture_mode(graphics::RenderTextureType &rt) {
   pass.action.depth.load_action = SG_LOADACTION_CLEAR;
   pass.action.depth.clear_value = 1.0f;
   pass.attachments.colors[0] = {rt.color_view_id};
+  if (rt.resolve_view_id) {
+    pass.attachments.resolves[0] = {rt.resolve_view_id};
+    pass.action.colors[0].store_action = SG_STOREACTION_DONTCARE;
+  }
   pass.attachments.depth_stencil = {rt.depth_view_id};
   sg_begin_pass(&pass);
   graphics::metal_detail::g_pass_active = true;
   graphics::metal_detail::g_active_rt_color_view_id = rt.color_view_id;
 
   sgl_defaults();
-  sgl_load_pipeline(graphics::metal_detail::g_blend_pip);
+  if (rt.sample_count > 1) {
+    // sokol checks sample counts: blend here, not g_blend_pip.
+    static std::unordered_map<uint32_t, uint32_t> msaa_blend_pips;
+    auto it = msaa_blend_pips.find(rt.sgl_ctx_id);
+    if (it == msaa_blend_pips.end()) {
+      sg_pipeline_desc bd{};
+      bd.colors[0].blend.enabled = true;
+      bd.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
+      bd.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+      bd.colors[0].blend.src_factor_alpha = SG_BLENDFACTOR_ONE;
+      bd.colors[0].blend.dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+      const sgl_pipeline pip = sgl_make_pipeline(&bd);
+      it = msaa_blend_pips.emplace(rt.sgl_ctx_id, pip.id).first;
+    }
+    sgl_load_pipeline({it->second});
+  } else {
+    sgl_load_pipeline(graphics::metal_detail::g_blend_pip);
+  }
   sgl_matrix_mode_projection();
   // Apply GL→Metal clip-space Z fixup before the ortho projection.
   // clang-format off
@@ -1508,6 +1606,8 @@ inline void draw_texture_rec(TextureType tex, RectangleType src,
   draw_texture_pro(tex, src, dest, Vector2Type{0.0f, 0.0f}, 0.0f, tint);
 }
 
+// Provided by capture_impl.h, compiled only under SOKOL_METAL.
+#if defined(SOKOL_METAL)
 extern "C" bool metal_capture_render_texture(uint32_t color_img_id,
                                              int width, int height,
                                              const char *path);
@@ -1517,6 +1617,7 @@ extern "C" int metal_capture_render_texture_to_memory(
 extern "C" int metal_capture_render_texture_png_to_memory(
     uint32_t color_img_id, int width, int height,
     uint8_t **out_data, int *out_size);
+#endif
 
 #ifdef AFTER_HOURS_USE_VULKAN
 extern "C" bool vulkan_capture_render_texture(uint32_t color_img_id,
@@ -1535,11 +1636,13 @@ inline bool capture_render_texture(const graphics::RenderTextureType &rt,
   if (rt.color_img_id == 0)
     return false;
 #ifdef AFTER_HOURS_USE_VULKAN
-  return vulkan_capture_render_texture(rt.color_img_id, rt.width, rt.height,
+  return vulkan_capture_render_texture(render_texture_capture_image_id(rt), rt.width, rt.height,
                                        path.string().c_str());
-#else
-  return metal_capture_render_texture(rt.color_img_id, rt.width, rt.height,
+#elif defined(SOKOL_METAL)
+  return metal_capture_render_texture(render_texture_capture_image_id(rt), rt.width, rt.height,
                                       path.c_str());
+#else
+  return false;
 #endif
 }
 
@@ -1550,7 +1653,7 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
 #ifdef AFTER_HOURS_USE_VULKAN
   uint8_t *data = nullptr;
   int size = 0;
-  if (!vulkan_capture_render_texture_to_memory(rt.color_img_id, rt.width,
+  if (!vulkan_capture_render_texture_to_memory(render_texture_capture_image_id(rt), rt.width,
                                                rt.height, &data, &size)) {
     return {};
   }
@@ -1562,10 +1665,10 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   RgbaCapture result{rt.width, rt.height, {data, data + size}};
   free(data);
   return result;
-#else
+#elif defined(SOKOL_METAL)
   uint8_t *data = nullptr;
   int size = 0;
-  if (!metal_capture_render_texture_to_memory(rt.color_img_id, rt.width,
+  if (!metal_capture_render_texture_to_memory(render_texture_capture_image_id(rt), rt.width,
                                               rt.height, &data, &size)) {
     return {};
   }
@@ -1577,6 +1680,8 @@ capture_render_texture_rgba(const graphics::RenderTextureType &rt) {
   RgbaCapture result{rt.width, rt.height, {data, data + size}};
   free(data);
   return result;
+#else
+  return std::nullopt;
 #endif
 }
 
@@ -1586,7 +1691,7 @@ capture_render_texture_png(const graphics::RenderTextureType &rt) {
 #ifdef AFTER_HOURS_USE_VULKAN
   uint8_t *data = nullptr;
   int size = 0;
-  if (!vulkan_capture_render_texture_png_to_memory(rt.color_img_id, rt.width,
+  if (!vulkan_capture_render_texture_png_to_memory(render_texture_capture_image_id(rt), rt.width,
                                                    rt.height, &data, &size))
     return std::nullopt;
   if (!data || size <= 0) {
@@ -1596,10 +1701,10 @@ capture_render_texture_png(const graphics::RenderTextureType &rt) {
   PngCapture result{{data, data + size}};
   free(data);
   return result;
-#else
+#elif defined(SOKOL_METAL)
   uint8_t *data = nullptr;
   int size = 0;
-  if (!metal_capture_render_texture_png_to_memory(rt.color_img_id, rt.width,
+  if (!metal_capture_render_texture_png_to_memory(render_texture_capture_image_id(rt), rt.width,
                                                  rt.height, &data, &size))
     return std::nullopt;
   if (!data || size <= 0) {
@@ -1609,6 +1714,8 @@ capture_render_texture_png(const graphics::RenderTextureType &rt) {
   PngCapture result{{data, data + size}};
   free(data);
   return result;
+#else
+  return std::nullopt;
 #endif
 }
 

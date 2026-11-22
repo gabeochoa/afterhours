@@ -71,6 +71,7 @@ inline Vector2Type field_local_point(const UIComponent &cmp,
 /// - with_max_lines(size_t) - Maximum lines, 0 = unlimited (default: 0)
 /// - with_auto_grow(bool) - Height follows content, capped by max_lines
 /// - with_submit_on_enter(bool) - Enter submits, Shift+Enter breaks the line
+/// - with_single_line(bool) - One row: Enter submits, breaks become spaces
 ///
 /// Usage:
 /// ```cpp
@@ -131,8 +132,12 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
       [&](HasTextAreaState &s) {
         // Update area config from component config
         s.area_config.line_height = line_height;
-        s.area_config.word_wrap = config.text_area_word_wrap;
-        s.area_config.max_lines = config.text_area_max_lines;
+        s.area_config.single_line = config.text_area_single_line;
+        s.area_config.word_wrap =
+            config.text_area_word_wrap && !config.text_area_single_line;
+        s.area_config.max_lines = config.text_area_single_line
+                                      ? 1
+                                      : config.text_area_max_lines;
 
         if (s.text() != text)
           replace_text_externally(s, text);
@@ -152,7 +157,10 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
 
   // Apply default size if not set
   if (config.size.is_default) {
-    config.size = ComponentSize(pixels(200), pixels(100));
+    config.size = config.text_area_single_line
+                      ? ComponentSize(pixels(200),
+                                      pixels(line_height + vertical_padding))
+                      : ComponentSize(pixels(200), pixels(100));
   }
 
   // Auto-grow uses the PREVIOUS frame's wrap, which is the only one that
@@ -261,8 +269,10 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
         .x;
   };
   // The 6px horizontal padding each side is already out of viewport_width.
-  const float wrap_width =
-      config.text_area_word_wrap ? viewport_width : 0.f;
+  const float wrap_width = (config.text_area_word_wrap &&
+                            !config.text_area_single_line)
+                               ? viewport_width
+                               : 0.f;
   state.layout_cache.rebuild(display_text, wrap_width, line_height,
                              line_width);
   const auto &vlines = state.layout_cache.lines();
@@ -347,12 +357,16 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
         placeholder_row ? config.placeholder
                         : (row.empty() ? " " : row); // Space prevents zero-height
 
+    const float row_scale =
+        field_cmp.resolved_scaling_mode == ScalingMode::Adaptive
+            ? ctx.theme.ui_scale
+            : 1.f;
     div(ctx, mk(field_entity, static_cast<int>(line_idx)),
         ComponentConfig{}
             .with_label(line_text)
             .with_scaling_mode(field_cmp.resolved_scaling_mode)
-            .with_size(
-                ComponentSize{pixels(viewport_width), pixels(line_height)})
+            .with_size(ComponentSize{percent(1.f),
+                                     pixels(line_height / row_scale)})
             .with_font(config.font_name == UIComponent::UNSET_FONT
                            ? UIComponent::DEFAULT_FONT
                            : config.font_name,
@@ -477,14 +491,12 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
                            input::is_key_down(keys::RIGHT_SHIFT);
 
         // Double click selects the word, triple selects the visual row.
-        constexpr float MULTI_CLICK_TIME = 0.4f;
-        constexpr size_t MULTI_CLICK_DIST = 3;
         const float now = static_cast<float>(graphics::get_time());
         const size_t moved = at > s.last_click_pos ? at - s.last_click_pos
                                                    : s.last_click_pos - at;
         if (s.last_click_time >= 0.f &&
-            (now - s.last_click_time) < MULTI_CLICK_TIME &&
-            moved <= MULTI_CLICK_DIST)
+            (now - s.last_click_time) < text_selection::kMultiClickTime &&
+            moved <= text_selection::kMultiClickDist)
           s.click_count++;
         else
           s.click_count = 1;
@@ -596,8 +608,8 @@ ElementResult text_area(HasUIContext auto &ctx, EntityParent ep_pair,
     if (ctx.pressed(InputAction::WidgetPress)) {
       const bool shift = input::is_key_down(keys::LEFT_SHIFT) ||
                          input::is_key_down(keys::RIGHT_SHIFT);
-      const bool wants_newline =
-          !config.text_area_submit_on_enter || shift;
+      const bool wants_newline = !config.text_area_single_line &&
+                                 (!config.text_area_submit_on_enter || shift);
       if (wants_newline) {
         if (editable && insert_newline(state)) {
           reset_blink(state);

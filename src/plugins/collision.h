@@ -42,7 +42,7 @@ struct collision : developer::Plugin {
 
     virtual void once(float) override {
       ids.clear();
-      collidables = EntityQuery().whereHasComponent<Transform>().gen();
+      EntityQuery().whereHasComponent<Transform>().gen_into(collidables);
     }
 
     struct Config {

@@ -388,6 +388,59 @@ TEST(shift_enter_still_breaks_when_submitting_on_enter) {
   CHECK(!submitted);
 }
 
+namespace {
+std::string after_single_line_enter(bool shift, bool *submitted) {
+  ImmTestHarness h;
+  std::string text = "ab";
+  auto emit = [&] {
+    auto r = text_area(h.context(), mk(h.root(), 0), text,
+                       area_config(200.f, 100.f).with_single_line());
+    r.ent().template addComponentIfMissing<ti::HasTextInputListener>();
+    r.ent().template get<ti::HasTextInputListener>().on_submit =
+        [submitted](Entity &) { *submitted = true; };
+  };
+  h.begin_frame(); emit(); h.layout_only();
+  if (UIComponent *f = h.find("text_area_field"))
+    h.context().focus_id = f->id;
+  testing::input_injector::reset_all();
+  if (shift) testing::input_injector::set_key_held(keys::LEFT_SHIFT);
+  h.context().last_action = ui_test::TestInputAction::WidgetPress;
+  h.begin_frame(); emit(); h.layout_only();
+  testing::input_injector::reset_all();
+  return text;
+}
+} // namespace
+
+TEST(single_line_enter_submits_without_breaking) {
+  bool submitted = false;
+  const std::string out = after_single_line_enter(false, &submitted);
+  CHECK(submitted);
+  CHECK(out == "ab");
+}
+TEST(single_line_shift_enter_also_submits) {
+  bool submitted = false;
+  const std::string out = after_single_line_enter(true, &submitted);
+  CHECK(submitted);
+  CHECK(out == "ab");
+}
+TEST(single_line_does_not_wrap_long_text) {
+  ImmTestHarness h;
+  std::string text = "the quick brown fox jumps over the lazy dog";
+  two_frames(h, [&] {
+    text_area(h.context(), mk(h.root(), 0), text,
+              area_config(200.f, 200.f).with_single_line());
+  });
+  CHECK(count_line_divs() == 1);
+}
+TEST(single_line_paste_maps_breaks_to_spaces) {
+  ti::HasTextAreaState s;
+  s.storage.insert(0, "ab");
+  s.cursor_position = 2;
+  s.area_config.single_line = true;
+  ti::insert_pasted_text(s, "x\ny\tz");
+  CHECK(s.text() == "abx y z");
+}
+
 // ---------------------------------------------------------------------------
 // Clipping
 // ---------------------------------------------------------------------------
@@ -1517,6 +1570,100 @@ TEST(down_arrow_stays_in_a_focused_text_area) {
   h.context().last_action = ui_test::TestInputAction::WidgetDown;
   h.context().process_tabbing(field->id);
   CHECK(h.context().has_focus(field->id));
+}
+
+TEST(r037_line_rows_stay_inside_field_under_zoom) {
+  for (float scale : {1.0f, 1.4f, 2.0f}) {
+    for (auto mode : {ScalingMode::Adaptive, ScalingMode::Proportional}) {
+      for (float width : {200.f, 300.f, 450.f}) {
+        ImmTestHarness h;
+        h.context().theme.ui_scale = scale;
+        h.context().scaling_mode = mode;
+        std::string text = "hi\nbye";
+        auto emit = [&] {
+          text_area(h.context(), mk(h.root(), 0), text,
+                    ComponentConfig{}
+                        .with_size(ComponentSize{pixels(width), pixels(150)})
+                        .with_font(UIComponent::DEFAULT_FONT, WIDGET_FONT)
+                        .with_line_height(pixels(LINE_H))
+                        .with_scaling_mode(mode));
+        };
+        for (int i = 0; i < 2; i++) {
+          h.begin_frame();
+          emit();
+          h.layout_only(false, {800, 600}, scale);
+        }
+        auto *field = h.find("text_area_field");
+        CHECK(field != nullptr);
+        if (!field) continue;
+        const auto fr = field->rect();
+        const float expect_h =
+            mode == ScalingMode::Adaptive ? LINE_H * scale : LINE_H;
+        int rows = 0;
+        for (const auto &e :
+             UICollectionHolder::get().collection.get_entities()) {
+          if (!e || !e->has<UIComponentDebug>() ||
+              e->get<UIComponentDebug>().name() != "text_area_line")
+            continue;
+          ++rows;
+          const auto lr = e->get<UIComponent>().rect();
+          CHECK(lr.x >= fr.x - 0.5f);
+          CHECK(lr.x + lr.width <=
+                fr.x + fr.width - field->computed_padd[Axis::right] + 0.5f);
+          CHECK_APPROX(lr.height, expect_h);
+        }
+        CHECK(rows == 2);
+      }
+    }
+  }
+}
+
+TEST(r037_line_rows_stay_inside_field_when_scrolled) {
+  ImmTestHarness h;
+  const float scale = 1.4f;
+  h.context().theme.ui_scale = scale;
+  h.context().scaling_mode = ScalingMode::Adaptive;
+  std::string text = "a\nb\nc\nd\ne\nf";
+  Entity *area = nullptr;
+  auto emit = [&] {
+    area = &text_area(h.context(), mk(h.root(), 0), text,
+                      ComponentConfig{}
+                          .with_size(ComponentSize{pixels(300), pixels(70)})
+                          .with_font(UIComponent::DEFAULT_FONT, WIDGET_FONT)
+                          .with_line_height(pixels(LINE_H))
+                          .with_scaling_mode(ScalingMode::Adaptive))
+               .ent();
+  };
+  for (int i = 0; i < 2; i++) {
+    h.begin_frame();
+    emit();
+    h.layout_only(false, {800, 600}, scale);
+  }
+  CHECK(area != nullptr);
+  if (!area) return;
+  auto *field = h.find("text_area_field");
+  CHECK(field != nullptr);
+  if (!field) return;
+  const auto fr = field->rect();
+  area->get<ti::HasTextAreaState>().scroll_offset_y = LINE_H * scale;
+  for (int i = 0; i < 2; i++) {
+    h.begin_frame();
+    emit();
+    h.layout_only(false, {800, 600}, scale);
+  }
+  int rows = 0;
+  for (const auto &e : UICollectionHolder::get().collection.get_entities()) {
+    if (!e || !e->has<UIComponentDebug>() ||
+        e->get<UIComponentDebug>().name() != "text_area_line")
+      continue;
+    ++rows;
+    const auto lr = e->get<UIComponent>().rect();
+    CHECK(lr.x >= fr.x - 0.5f);
+    CHECK(lr.x + lr.width <=
+          fr.x + fr.width - field->computed_padd[Axis::right] + 0.5f);
+    CHECK_APPROX(lr.height, LINE_H * scale);
+  }
+  CHECK(rows > 0);
 }
 
 int main() { return ui_test::run_registered_tests("text_area"); }

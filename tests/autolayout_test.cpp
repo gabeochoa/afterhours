@@ -3809,6 +3809,109 @@ TEST(text_is_measured_with_the_drawn_weight_and_letter_spacing) {
   EntityHelper::cleanup();
 }
 
+
+TEST(align_items_stretch_row_fills_cross_axis) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(400));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_align_items(AlignItems::Stretch);
+  auto &child = t.make_ui(pixels(100), Size{});
+  t.add_child(root, child);
+  t.run(root);
+  CHECK_APPROX(t.ui(child).computed[Axis::Y], 400.f);
+  CHECK_APPROX(t.ui(child).computed_rel[Axis::Y], 0.f);
+}
+
+TEST(align_items_stretch_column_fills_cross_axis) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(400));
+  t.ui(root).set_flex_direction(FlexDirection::Column);
+  t.ui(root).set_align_items(AlignItems::Stretch);
+  auto &child = t.make_ui(Size{}, pixels(50));
+  t.add_child(root, child);
+  t.run(root);
+  CHECK_APPROX(t.ui(child).computed[Axis::X], 400.f);
+  CHECK_APPROX(t.ui(child).computed_rel[Axis::X], 0.f);
+}
+
+TEST(align_items_stretch_respects_padding_and_margin) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(400));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_align_items(AlignItems::Stretch);
+  t.ui(root).set_desired_padding(pixels(10), Axis::Y);
+  auto &child = t.make_ui(pixels(100), Size{});
+  t.ui(child).set_desired_margin(pixels(5), Axis::Y);
+  t.add_child(root, child);
+  t.run(root);
+  CHECK_APPROX(t.ui(child).computed[Axis::Y], 370.f);
+}
+
+TEST(align_items_stretch_does_not_resize_explicit_child) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(400));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_align_items(AlignItems::Stretch);
+  auto &child = t.make_ui(pixels(100), pixels(50));
+  t.add_child(root, child);
+  t.run(root);
+  CHECK_APPROX(t.ui(child).computed[Axis::Y], 50.f);
+}
+
+TEST(align_items_stretch_does_not_resize_children_sized_child) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(400));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_align_items(AlignItems::Stretch);
+  auto &child = t.make_ui(pixels(100), children());
+  auto &inner = t.make_ui(pixels(10), pixels(30));
+  t.add_child(root, child);
+  t.add_child(child, inner);
+  t.run(root);
+  CHECK_APPROX(t.ui(child).computed[Axis::Y], 30.f);
+}
+
+TEST(align_items_stretch_in_children_row_parent) {
+  TestLayout t;
+  auto &root = t.make_ui(children(), children());
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_align_items(AlignItems::Stretch);
+  auto &fixed = t.make_ui(pixels(100), pixels(50));
+  auto &stretch = t.make_ui(pixels(100), Size{});
+  t.add_child(root, fixed);
+  t.add_child(root, stretch);
+  t.run(root);
+  CHECK_APPROX(t.ui(root).computed[Axis::Y], 50.f);
+  CHECK_APPROX(t.ui(stretch).computed[Axis::Y], 50.f);
+}
+
+TEST(align_items_stretch_in_children_column_parent) {
+  TestLayout t;
+  auto &root = t.make_ui(children(), children());
+  t.ui(root).set_flex_direction(FlexDirection::Column);
+  t.ui(root).set_align_items(AlignItems::Stretch);
+  auto &fixed = t.make_ui(pixels(50), pixels(100));
+  auto &stretch = t.make_ui(Size{}, pixels(100));
+  t.add_child(root, fixed);
+  t.add_child(root, stretch);
+  t.run(root);
+  CHECK_APPROX(t.ui(root).computed[Axis::X], 50.f);
+  CHECK_APPROX(t.ui(stretch).computed[Axis::X], 50.f);
+}
+
+TEST(align_items_stretch_size_flows_to_percent_child) {
+  TestLayout t;
+  auto &root = t.make_ui(pixels(400), pixels(400));
+  t.ui(root).set_flex_direction(FlexDirection::Row);
+  t.ui(root).set_align_items(AlignItems::Stretch);
+  auto &child = t.make_ui(pixels(100), Size{});
+  auto &inner = t.make_ui(pixels(10), percent(1.0f));
+  t.add_child(root, child);
+  t.add_child(child, inner);
+  t.run(root);
+  CHECK_APPROX(t.ui(inner).computed[Axis::Y], 400.f);
+}
+
 // ============================================================================
 // Main
 // ============================================================================
