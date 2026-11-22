@@ -140,6 +140,7 @@ ALL_TESTS := \
 	triangle_winding_test \
 	charts_test \
 	system_profile_test \
+	allocation_counters_test \
 	profiling_test \
 	profiling_disabled_test \
 	spike_capture_test \
