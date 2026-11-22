@@ -81,7 +81,7 @@ inline void write_backtrace() {
 }
 
 inline void write_backtrace_to(std::FILE *out) {
-#if (defined(__GNUC__) || defined(__clang__)) && !defined(_WIN32)
+#ifdef AFTER_HOURS_HAS_EXECINFO
   void *frames[64];
   const int count = backtrace(frames, 64);
   char **symbols = backtrace_symbols(frames, count);
@@ -90,6 +90,9 @@ inline void write_backtrace_to(std::FILE *out) {
   for (int i = 2; i < count; i++)
     std::fprintf(out, "  #%-2d %s\n", i - 2, symbols[i]);
   std::free(symbols);
+#elif defined(AFTER_HOURS_HAS_EMSCRIPTEN_STACK)
+  if (const char *stack = emscripten_get_callstack())
+    std::fprintf(out, "%s\n", stack);
 #else
   warn_once(0, "@notimplemented crash::write_backtrace_to on this platform");
   (void)out;
