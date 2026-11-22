@@ -7,7 +7,8 @@
 // keeps a function pointer and this keeps the buffer and its includes.
 //
 // The path isn't known until files::init runs, so lines are buffered until
-// then.
+// then. Only default-path logging reaches the sink: under
+// AFTER_HOURS_REPLACE_LOGGING the host's own macros own the output.
 
 #include <cstdio>
 #include <string>
@@ -36,8 +37,10 @@ inline std::vector<std::string> &pending() {
 // Per line, not per buffer: a crash takes an unflushed tail with it.
 inline void write_line(const char *level, const char *message) {
   if (handle() == nullptr) {
-    if (pending().size() < max_buffered_lines)
-      pending().push_back(std::string(level) + " " + message);
+    // A ring, not a full stop: the recent lines are the ones that matter.
+    if (pending().size() >= max_buffered_lines)
+      pending().erase(pending().begin());
+    pending().push_back(std::string(level) + " " + message);
     return;
   }
   std::fprintf(handle(), "%s %s\n", level, message);
