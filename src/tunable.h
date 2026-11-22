@@ -8,7 +8,11 @@
 #include <type_traits>
 #include <vector>
 #include "logging.h"
+// Developer-only: live tuning for development builds, not a shipping game
+// API. Everything here lives in afterhours::developer so call sites read
+// developer::tunable<...> / developer::reload_tunables(...).
 namespace afterhours {
+namespace developer {
 struct tunable_reload_result {
   std::size_t applied = 0;
   std::size_t changed = 0;
@@ -162,4 +166,5 @@ template <typename T> class tunable : public tunable_detail::entry {
   bool registered_ = false;
   std::function<void(const T &)> callback_;
 };
-}
+} // namespace developer
+} // namespace afterhours
