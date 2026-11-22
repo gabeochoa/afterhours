@@ -56,6 +56,11 @@ frames/systems/counters while recording continues, so the next dump covers
 only the window after it. Missing metrics must stay unavailable.
 `tools/sample_to_collapsed.py` converts macOS sample output.
 
+`profiling::snapshot_to_collapsed(snapshot)` serializes a snapshot to
+folded-stack lines (`frame;<phase>;<system> <total_ms>`, aggregated and sorted
+by stack) for flamegraph.pl. Snapshots hold per-system totals only, so stacks
+are one level deep; zero totals are omitted.
+
 ```sh
 nice -n 10 make -C tests -j2 profiling-benchmark
 nice -n 10 make -C tests -j2 profiling-render-benchmark PROFILING_FONT=/path/to/font.ttf
