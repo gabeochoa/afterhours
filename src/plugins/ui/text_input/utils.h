@@ -628,7 +628,12 @@ inline void insert_pasted_text(State &s, const std::string &clip) {
     }
     const bool is_break = cp == '\n' || cp == '\r';
     if constexpr (AnyTextAreaState<State>) {
-      if (is_break)
+      if (s.area_config.single_line) {
+        if (is_break || cp == '\t')
+          insert_char(s, ' ');
+        else
+          insert_char(s, cp);
+      } else if (is_break)
         insert_newline(s);
       else
         insert_char(s, cp);

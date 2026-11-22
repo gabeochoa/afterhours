@@ -120,6 +120,10 @@ struct UIComponent : BaseComponent {
   // absolute elements so their children are positioned correctly.
   float absolute_pos_x = 0.f;
   float absolute_pos_y = 0.f;
+  AbsoluteAnchor absolute_anchor = AbsoluteAnchor::LeadingTop;
+  Size absolute_offset_x = pixels(0.f);
+  Size absolute_offset_y = pixels(0.f);
+  bool absolute_offset_is_size = false;
 
   // Resolved scaling mode for this component (set during creation from the
   // cascade: component override > screen context > app default).
@@ -150,6 +154,10 @@ struct UIComponent : BaseComponent {
   // Float overload for backwards compatibility
   auto &enable_font(const std::string &font_name_, float fs) {
     return enable_font(font_name_, pixels(fs));
+  }
+
+  [[nodiscard]] std::string resolved_font_name() const {
+    return font_name == UNSET_FONT ? std::string(DEFAULT_FONT) : font_name;
   }
 
   Rectangle rect() const {
@@ -582,7 +590,6 @@ struct HasLabel : BaseComponent {
   // its own color) instead of the single `label` string. `label` still holds the
   // concatenated text so layout/measurement/overflow work unchanged.
   std::vector<TextSpan> spans;
-  std::string font_name = UIComponent::UNSET_FONT;
   bool is_disabled = false;
 
   // For auto-contrast text color calculation

@@ -47,7 +47,13 @@ compiles it out.
 `src/plugins/e2e_testing/perf_commands.h` adapts the collector. Custom providers can
 supply optional FPS, p99 and top entries through `set_provider(...)`; explicitly call
 `register_perf_commands(sm)`. Commands are `dump_profile [count]`,
-`expect_fps_above <fps>` and `expect_p99_below <ms>`. Missing metrics must stay unavailable.
+`dump_profile --json`, `reset_profile`, `expect_fps_above <fps>` and
+`expect_p99_below <ms>`. `--json` logs one single-line JSON object with the
+full builtin-collector snapshot (frames, fps, percentiles, per-system
+mean/average/recent/peak/last/calls, counters) for machine consumers; a
+snapshot-diff tool is deliberately deferred. `reset_profile` clears
+frames/systems/counters while recording continues, so the next dump covers
+only the window after it. Missing metrics must stay unavailable.
 `tools/sample_to_collapsed.py` converts macOS sample output.
 
 `profiling::snapshot_to_collapsed(snapshot)` serializes a snapshot to

@@ -51,6 +51,27 @@ int main() {
   capture::record("rectangle", r, c);
   check(capture::calls().size() == 1, "disable stops recording, keeps history");
 
+  capture::enable();
+  capture::clear();
+  capture::record("rectangle", r, c);
+  capture::begin_frame();
+  check(capture::app_owns_frame(), "begin_frame takes the frame boundary");
+  check(capture::calls().size() == 1,
+        "finished frame stays readable after begin_frame");
+  capture::record("circle", r, c);
+  check(capture::calls().size() == 1 &&
+            capture::calls()[0].op == std::string("circle"),
+        "first draw of the new frame flushes the old one");
+
+  capture::begin_frame();
+  capture::disable();
+  capture::record("rectangle", r, c);
+  capture::enable();
+  capture::record("text", r, c, "fresh");
+  check(capture::calls().size() == 1 &&
+            capture::calls()[0].text == std::string("fresh"),
+        "pending clear survives a disabled stretch");
+
   capture::disable();
   capture::clear();
 

@@ -14,9 +14,14 @@ namespace ah_std = tl; // fallback to tl::expected/unexpected
 #include "../expected.hpp"
 namespace ah_std = tl; // fallback to tl::expected/unexpected
 #endif
+#include <cstdint>
 #include <map>
+#include <optional>
+#include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "logging.h"
 #include "type_name.h"
@@ -37,7 +42,29 @@ template <typename T> struct Library {
   using iterator = typename Storage::iterator;
   using const_iterator = typename Storage::const_iterator;
 
+  // Dense intern index for this library only; not an EntityHandle (no slot/gen).
+  using Handle = uint32_t;
+  static constexpr Handle invalid_handle = UINT32_MAX;
+
   Storage storage;
+
+ private:
+  std::unordered_map<std::string, Handle> handle_by_name;
+  std::vector<std::optional<std::string>> name_for_handle;
+
+ public:
+  [[nodiscard]] Handle intern(const std::string &name) {
+    auto [it, inserted] = handle_by_name.emplace(name, Handle{});
+    if (inserted) {
+      it->second = static_cast<Handle>(name_for_handle.size());
+      name_for_handle.emplace_back(std::nullopt);
+    }
+    return it->second;
+  }
+
+  [[nodiscard]] Handle intern(const char *name) {
+    return intern(std::string(name ? name : ""));
+  }
 
   [[nodiscard]] auto size() const { return storage.size(); }
   [[nodiscard]] auto begin() const { return storage.begin(); }
@@ -56,7 +83,35 @@ template <typename T> struct Library {
       return ah_std::unexpected(Error::DUPLICATE_NAME);
     }
     storage[name] = item;
+    name_for_handle[intern(name)] = name;
     return name;
+  }
+
+  [[nodiscard]] T &get(Handle handle) {
+    if (!contains(handle)) {
+      log_warn("asking for an item by unknown handle {} for {}", handle,
+               type_name<T>());
+      throw std::out_of_range("Library: unknown handle");
+    }
+    return storage.at(name_for_handle.at(handle).value());
+  }
+
+  [[nodiscard]] const T &get(Handle handle) const {
+    if (!contains(handle)) {
+      log_warn("asking for an item by unknown handle {} for {}", handle,
+               type_name<T>());
+      throw std::out_of_range("Library: unknown handle");
+    }
+    return storage.at(name_for_handle.at(handle).value());
+  }
+
+  [[nodiscard]] bool contains(Handle handle) const {
+    return handle < name_for_handle.size() &&
+           name_for_handle[handle].has_value();
+  }
+
+  void reset_handles() {
+    name_for_handle.assign(name_for_handle.size(), std::nullopt);
   }
 
   [[nodiscard]] T &get(const std::string &name) {
@@ -101,6 +156,7 @@ template <typename T> struct Library {
     for (auto kv : storage) {
       unload(kv.second);
     }
+    reset_handles();
   }
   virtual void unload(T) = 0;
 

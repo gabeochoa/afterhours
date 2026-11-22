@@ -49,26 +49,31 @@
 // is picked by platform (Metal on Apple, Vulkan on Windows, GLES3 on
 // Emscripten). AFTER_HOURS_USE_METAL is a legacy alias for USE_SOKOL;
 // AFTER_HOURS_USE_VULKAN forces the Vulkan API. AFTER_HOURS_USE_NONE
-// selects the none backend. AFTER_HOURS_USE_D3D11 is not implemented yet.
 #if defined(AFTER_HOURS_USE_D3D11)
 #error "AFTER_HOURS_USE_D3D11 is not implemented yet"
 #endif
 #if defined(AFTER_HOURS_USE_RAYLIB) &&                                          \
     (defined(AFTER_HOURS_USE_SOKOL) || defined(AFTER_HOURS_USE_METAL) ||       \
-     defined(AFTER_HOURS_USE_VULKAN) || defined(AFTER_HOURS_USE_NONE))
-#error "AFTER_HOURS_USE_RAYLIB is mutually exclusive with the sokol / none backends"
+     defined(AFTER_HOURS_USE_VULKAN) || defined(AFTER_HOURS_USE_NONE) ||        \
+     defined(AFTER_HOURS_USE_PSX))
+#error "AFTER_HOURS_USE_RAYLIB is mutually exclusive with the sokol / none / psx backends"
 #endif
 #if defined(AFTER_HOURS_USE_NONE) &&                                           \
     (defined(AFTER_HOURS_USE_SOKOL) || defined(AFTER_HOURS_USE_METAL) ||       \
+     defined(AFTER_HOURS_USE_VULKAN) || defined(AFTER_HOURS_USE_PSX))
+#error "AFTER_HOURS_USE_NONE is mutually exclusive with the sokol / psx backends"
+#endif
+#if defined(AFTER_HOURS_USE_PSX) &&                                            \
+    (defined(AFTER_HOURS_USE_SOKOL) || defined(AFTER_HOURS_USE_METAL) ||       \
      defined(AFTER_HOURS_USE_VULKAN))
-#error "AFTER_HOURS_USE_NONE is mutually exclusive with the sokol backends"
+#error "AFTER_HOURS_USE_PSX is mutually exclusive with the sokol backends"
 #endif
 #if defined(AFTER_HOURS_USE_VULKAN) && (defined(__APPLE__) || defined(__EMSCRIPTEN__))
 #error "AFTER_HOURS_USE_VULKAN is not available on Apple / Emscripten"
 #endif
 #if !defined(AFTER_HOURS_USE_RAYLIB) && !defined(AFTER_HOURS_USE_SOKOL) &&     \
     !defined(AFTER_HOURS_USE_METAL) && !defined(AFTER_HOURS_USE_VULKAN) &&     \
-    !defined(AFTER_HOURS_USE_NONE)
+    !defined(AFTER_HOURS_USE_NONE) && !defined(AFTER_HOURS_USE_PSX)
 #define AFTER_HOURS_USE_RAYLIB 1
 #endif
 #if defined(AFTER_HOURS_USE_SOKOL) || defined(AFTER_HOURS_USE_METAL) ||       \

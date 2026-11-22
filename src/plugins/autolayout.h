@@ -121,6 +121,34 @@ struct AutoLayout {
                              fetch_screen_value_(Axis::Y));
   }
 
+  void resolve_absolute_rel(UIComponent &child, float container_w,
+                            float container_h) {
+    const auto offset = [&](Axis axis, float container) {
+      if (!child.absolute_offset_is_size)
+        return axis == Axis::X ? child.absolute_pos_x : child.absolute_pos_y;
+      const Size &exp = axis == Axis::X ? child.absolute_offset_x
+                                        : child.absolute_offset_y;
+      return exp.dim == Dim::Percent
+                 ? exp.value * container
+                 : resolve_to_pixels(exp, fetch_screen_value_(axis),
+                                     child.resolved_scaling_mode, ui_scale,
+                                     fetch_screen_value_(Axis::Y));
+    };
+    const float ox = offset(Axis::X, container_w);
+    const float oy = offset(Axis::Y, container_h);
+    const bool trail_x = child.absolute_anchor == AbsoluteAnchor::TrailingTop ||
+                         child.absolute_anchor == AbsoluteAnchor::TrailingBottom;
+    const bool trail_y = child.absolute_anchor == AbsoluteAnchor::LeadingBottom ||
+                         child.absolute_anchor == AbsoluteAnchor::TrailingBottom;
+    child.computed_rel[Axis::X] =
+        trail_x ? container_w - ox - snapped_extent(child, Axis::X) : ox;
+    child.computed_rel[Axis::Y] =
+        trail_y ? container_h - oy - snapped_extent(child, Axis::Y) : oy;
+    if (child.rtl_mirrored && !trail_x)
+      child.computed_rel[Axis::X] = container_w - child.computed_rel[Axis::X] -
+                                    snapped_extent(child, Axis::X);
+  }
+
   auto &set_grid_snapping(bool enabled) {
     enable_grid_snapping = enabled;
     return *this;
@@ -1628,17 +1656,7 @@ struct AutoLayout {
 
       // Dont worry about any children that are absolutely positioned
       if (child.absolute) {
-        // Set computed_rel from the absolute position stored on UIComponent.
-        // This is set during component init from with_absolute_position(x, y).
-        child.computed_rel[Axis::X] = child.absolute_pos_x;
-        child.computed_rel[Axis::Y] = child.absolute_pos_y;
-        // RTL mirroring swaps the layout order too: an absolute child
-        // anchors from the other side of the parent's content box, so a
-        // column pinned left in LTR stands on the right in RTL -- the
-        // page-level mirror real RTL interfaces perform.
-        if (child.rtl_mirrored)
-          child.computed_rel[Axis::X] = container_w - child.absolute_pos_x -
-                                        snapped_extent(child, Axis::X);
+        resolve_absolute_rel(child, container_w, container_h);
         compute_relative_positions(child);
         continue;
       }
@@ -1981,7 +1999,13 @@ struct AutoLayout {
     al.calculate_those_with_parents(widget);
     al.calculate_those_with_children(widget);
     al.solve_violations(widget);
-    if (widget.absolute) {
+    if (widget.absolute && widget.parent != -1) {
+      UIComponent &parent = al.cmp(widget.parent);
+      al.resolve_absolute_rel(
+          widget,
+          fmaxf(0.f, parent.computed[Axis::X] - parent.computed_padd[Axis::X]),
+          fmaxf(0.f, parent.computed[Axis::Y] - parent.computed_padd[Axis::Y]));
+    } else if (widget.absolute) {
       widget.computed_rel[Axis::X] = widget.absolute_pos_x;
       widget.computed_rel[Axis::Y] = widget.absolute_pos_y;
     }

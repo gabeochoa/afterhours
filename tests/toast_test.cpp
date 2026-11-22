@@ -16,7 +16,6 @@ TEST(toast_inherits_font_defaults_and_retains_them_across_screens) {
   auto notice = toast::send_info(h.context(), "Saved");
   defaults.set_default_font("NextScreenFont", pixels(24));
   CHECK(notice.cmp().font_name == "NotificationFont");
-  CHECK(notice.ent().get<HasLabel>().font_name == "NotificationFont");
   CHECK(notice.cmp().font_size.dim == Dim::ScreenPercent);
   CHECK_APPROX(notice.cmp().font_size.value * 720.f, 18.f);
   CHECK(notice.cmp().font_size_explicitly_set);
@@ -32,7 +31,6 @@ TEST(toast_has_a_font_when_no_app_default_is_configured) {
   defaults.set_default_font(UIComponent::UNSET_FONT, pixels(16));
   auto notice = toast::send_info(h.context(), "Ready");
   CHECK(notice.cmp().font_name == UIComponent::DEFAULT_FONT);
-  CHECK(notice.ent().get<HasLabel>().font_name == UIComponent::DEFAULT_FONT);
   CHECK_APPROX(notice.cmp().font_size.value, 16.f);
   defaults.set_default_font(saved_name, saved_size);
 }
