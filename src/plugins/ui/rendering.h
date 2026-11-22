@@ -17,6 +17,8 @@
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
 #include "../e2e_testing/test_input.h"
 #include "../e2e_testing/visible_text.h"
+#include "selectable_text.h"
+#include "text_measure.h"
 #endif
 #include "../../memory/arena.h"
 #include "../input_system.h"
@@ -36,6 +38,16 @@ namespace ui {
 // get_first_glyph_bearing() in font_helper.h. No more hardcoded offset.
 
 namespace detail {
+
+static inline RectangleType snap_origin(RectangleType rect,
+                                        ScalingMode mode, float ui_scale) {
+  const float scale = mode == ScalingMode::Adaptive ? ui_scale : 1.0f;
+  if (scale <= 0.f)
+    return rect;
+  rect.x = std::round(rect.x * scale) / scale;
+  rect.y = std::round(rect.y * scale) / scale;
+  return rect;
+}
 
 static inline float compute_effective_opacity(const Entity &entity);
 
@@ -137,7 +149,7 @@ static inline OptEntity find_clip_ancestor(const Entity &entity) {
     }
     Entity &parent = opt_parent.asE();
 
-    if (parent.has<HasScrollView>() || parent.has<HasClipChildren>()) {
+    if (parent.has_any<HasScrollView, HasClipChildren>()) {
       return opt_parent;
     }
     if (!parent.has<UIComponent>())
@@ -244,7 +256,9 @@ focus_ring_for(const UIContext<InputAction> &context, const Entity &entity,
 
   const float ring_offset =
       cmp.focus_ring_offset.value_or(context.theme.focus_ring_offset);
-  ring.rect = cmp.focus_rect(ring_offset);
+  ring.rect = detail::snap_origin(cmp.focus_rect(ring_offset),
+                                   cmp.resolved_scaling_mode,
+                                   context.theme.ui_scale);
   if (entity.has<HasUIModifiers>())
     ring.rect = entity.get<HasUIModifiers>().apply_modifier(ring.rect);
   ring.rect = detail::apply_ancestor_transform(entity, ring.rect);
@@ -363,6 +377,92 @@ inline void collect_focus_paint(RenderCommandBuffer &buffer, const FocusPaint &p
   buffer.add_rounded_rectangle_outline(ring.rect, ring.color, ring.roundness,
       ring.segments, ring.corners, paint.layer, paint.entity_id, ring.thickness, paint.rotation);
   if (paint.clip) buffer.add_scissor_end(paint.layer, paint.entity_id);
+}
+
+struct OverPaint {
+  EntityID entity_id;
+  size_t after_command;
+  size_t command_index;
+  int layer;
+};
+
+// One entry per entity with on_draw_over: fire after its last descendant
+// command (same subtree search as the focus ring), innermost first.
+template <typename InputAction>
+inline std::vector<OverPaint> prepare_over_paints(
+    const UIContext<InputAction> &context) {
+  std::vector<OverPaint> out;
+  for (size_t i = 0; i < context.render_cmds.size(); ++i) {
+    auto opt = UICollectionHolder::getEntityForID(context.render_cmds[i].id);
+    if (!opt.valid() || !opt->template has<HasOnDraw>() ||
+        !opt->template get<HasOnDraw>().over || !opt->template has<UIComponent>())
+      continue;
+    const Entity &entity = opt.asE();
+    if (is_hidden_for_render(entity)) continue;
+    std::set<EntityID> descendants{entity.id};
+    std::vector<EntityID> pending{entity.id};
+    while (!pending.empty()) {
+      const auto id = pending.back();
+      pending.pop_back();
+      auto child = UICollectionHolder::getEntityForID(id);
+      if (!child.valid() || !child->template has<UIComponent>()) continue;
+      for (auto next : child->template get<UIComponent>().children)
+        if (descendants.insert(next).second) pending.push_back(next);
+    }
+    size_t after = i;
+    for (size_t j = context.render_cmds.size(); j > 0; --j)
+      if (descendants.contains(context.render_cmds[j - 1].id)) {
+        after = j - 1;
+        break;
+      }
+    out.push_back({entity.id, after, i, context.render_cmds[i].layer});
+  }
+  // Same after_command: inner (later in document order) paints first.
+  std::stable_sort(out.begin(), out.end(), [](const OverPaint &a, const OverPaint &b) {
+    if (a.after_command != b.after_command) return a.after_command < b.after_command;
+    return a.command_index > b.command_index;
+  });
+  return out;
+}
+
+inline RectangleType on_draw_rect(const Entity &entity) {
+  RectangleType r = entity.get<UIComponent>().rect();
+  if (entity.has<HasUIModifiers>())
+    r = entity.get<HasUIModifiers>().apply_modifier(r);
+  return apply_ancestor_transform(entity, r);
+}
+
+inline void draw_over_paint(const OverPaint &paint) {
+  auto opt = UICollectionHolder::getEntityForID(paint.entity_id);
+  if (!opt.valid() || !opt->template has<HasOnDraw>() ||
+      !opt->template get<HasOnDraw>().over)
+    return;
+  const Entity &entity = opt.asE();
+  const auto [has_clip, clip] = compute_intersected_clip_rect(entity);
+  const bool clipped = has_clip && !entity.has<HasScrollView>();
+  if (clipped)
+    begin_scissor_mode(static_cast<int>(clip.x), static_cast<int>(clip.y),
+                       static_cast<int>(clip.width), static_cast<int>(clip.height));
+  capture::Scope attribute(paint.entity_id, paint.layer);
+  entity.get<HasOnDraw>().over(on_draw_rect(entity));
+  if (clipped) end_scissor_mode();
+}
+
+inline void collect_over_paint(RenderCommandBuffer &buffer, const OverPaint &paint) {
+  auto opt = UICollectionHolder::getEntityForID(paint.entity_id);
+  if (!opt.valid() || !opt->template has<HasOnDraw>() ||
+      !opt->template get<HasOnDraw>().over)
+    return;
+  const Entity &entity = opt.asE();
+  const auto [has_clip, clip] = compute_intersected_clip_rect(entity);
+  const bool clipped = has_clip && !entity.has<HasScrollView>();
+  if (clipped)
+    buffer.add_scissor_start(static_cast<int>(clip.x), static_cast<int>(clip.y),
+                             static_cast<int>(clip.width), static_cast<int>(clip.height),
+                             paint.layer, paint.entity_id);
+  buffer.add_custom(on_draw_rect(entity), &entity.get<HasOnDraw>().over,
+                    paint.layer, paint.entity_id);
+  if (clipped) buffer.add_scissor_end(paint.layer, paint.entity_id);
 }
 
 } // namespace detail
@@ -842,6 +942,35 @@ static inline Vector2Type default_text_inset() {
   return resolve_text_inset(imm::ThemeDefaults::get().theme);
 }
 
+template <typename InputAction, typename DrawRect>
+inline void paint_label_text_selection(UIContext<InputAction> &context,
+                                       Entity &entity, const HasLabel &hasLabel,
+                                       const UIComponent &cmp, float block_left,
+                                       float block_top, float block_height,
+                                       float avail_width, float wrap_width,
+                                       float font_size, float line_height,
+                                       DrawRect &&draw) {
+  if (!entity.template has<HasSelectableText>() ||
+      context.text_selection_entity != entity.id || !context.has_selection())
+    return;
+  auto &sel = entity.template get<HasSelectableText>();
+  const std::string font_name = cmp.resolved_font_name();
+  const float spacing = 1.f + hasLabel.letter_spacing;
+  auto measure = [&](const auto &s) {
+    return measure_text_line(std::string(s), font_name, font_size, spacing).x;
+  };
+  selectable_text::refresh_layout(sel, hasLabel.label, wrap_width, font_size,
+                                  line_height, measure);
+  const Vector2Type origin{
+      block_left,
+      block_top + std::max(0.f, (block_height - sel.layout.total_height()) *
+                                    0.5f)};
+  for (const RectangleType &r : selectable_text::selection_rects(
+           sel.layout, hasLabel.label, context.selection_range(), origin,
+           line_height, hasLabel.alignment, avail_width, measure))
+    draw(r, context.theme.selection);
+}
+
 static inline void draw_text_in_rect(
     const ui::FontManager &fm, const std::string &text, RectangleType rect,
     TextAlignment alignment, Color color, bool show_debug_indicator = false,
@@ -903,8 +1032,7 @@ static inline void draw_text_in_rect(
       return measure_text(font, s.c_str(), font_size, spacing).x;
     };
 
-    // Greedy word wrap. Words wider than max_width are placed on their own
-    // line (not character-split) — callers that need hard breaks can size up.
+    // Greedy word wrap. Words wider than max_width break between graphemes.
     std::vector<std::string> lines =
         detail::wrap_text_to_width(text, max_width, line_width);
 
@@ -1550,8 +1678,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         entity.get<HasCircularProgressState>();
 
     // Calculate center and radius from the draw_rect
-    float centerX = draw_rect.x + draw_rect.width / 2.0f;
-    float centerY = draw_rect.y + draw_rect.height / 2.0f;
+    const float centerX = rect::center(draw_rect).x;
+    const float centerY = rect::center(draw_rect).y;
     float outerRadius = std::min(draw_rect.width, draw_rect.height) / 2.0f;
     float innerRadius = outerRadius - state.thickness;
     if (innerRadius < 0.0f)
@@ -1651,7 +1779,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       return;
     const UIComponent &cmp = entity.get<UIComponent>();
     const float effective_opacity = detail::compute_effective_opacity(entity);
-    RectangleType draw_rect = cmp.rect();
+    RectangleType draw_rect = detail::snap_origin(
+        cmp.rect(), cmp.resolved_scaling_mode, context.theme.ui_scale);
     if (entity.has<HasUIModifiers>())
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
     draw_rect = detail::apply_ancestor_transform(entity, draw_rect);
@@ -1676,8 +1805,8 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
 
     // Push rotation transform - all subsequent drawing will be rotated around
     // component center
-    float centerX = draw_rect.x + draw_rect.width / 2.0f;
-    float centerY = draw_rect.y + draw_rect.height / 2.0f;
+    const float centerX = rect::center(draw_rect).x;
+    const float centerY = rect::center(draw_rect).y;
     push_rotation(centerX, centerY, rotation);
 
     // Draw shadow first (behind the element)
@@ -1856,6 +1985,32 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
                            static_cast<int>(label_clip.y),
                            static_cast<int>(label_clip.width),
                            static_cast<int>(label_clip.height));
+      if (entity.has<HasSelectableText>()) {
+        const std::string sel_font = cmp.resolved_font_name();
+        const float sel_fs =
+            explicit_fs > 0.f
+                ? explicit_fs
+                : position_text_ex(font_manager, hasLabel.label, label_rect,
+                                   hasLabel.alignment, immediate_inset,
+                                   explicit_fs, hasLabel.letter_spacing,
+                                   hasLabel.text_overflow, false)
+                      .rect.height;
+        const float sel_lh =
+            label_line_h > 0.f
+                ? label_line_h
+                : measure_text_line("Ag", sel_font, sel_fs,
+                                    1.f + hasLabel.letter_spacing)
+                      .y;
+        paint_label_text_selection(
+            context, entity, hasLabel, cmp, label_rect.x + immediate_inset.x,
+            label_rect.y, label_rect.height,
+            std::max(0.f, label_rect.width - 2.f * immediate_inset.x),
+            hasLabel.text_overflow == TextOverflow::Wrap && explicit_fs > 0.f
+                ? std::max(0.f, label_rect.width - 2.f * immediate_inset.x)
+                : 1e9f,
+            sel_fs, sel_lh,
+            [](const RectangleType &r, Color c) { draw_rectangle(r, c); });
+      }
       // Without this branch with_styled_label is a no-op here, so the same
       // UI renders differently depending on `use_batched`.
       if (!hasLabel.spans.empty()) {
@@ -1978,17 +2133,20 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       detail::update_scroll_view_content_size(entity);
     }
 
-    if (entity.has<HasColor>() || entity.has<HasLabel>() ||
-        entity.has<ui::HasImage>() ||
-        entity.has<texture_manager::HasTexture>() ||
-        entity.has<FocusClusterRoot>() || entity.has<HasOnDraw>() ||
-        entity.has<HasCircularProgressState>() || entity.has<HasScrollView>() ||
+    if (entity.has_any<HasColor, HasLabel, HasBorder, HasNineSliceBorder,
+                       HasBevelBorder, ui::HasImage,
+                       texture_manager::HasTexture, FocusClusterRoot, HasOnDraw,
+                       HasCircularProgressState, HasScrollView>() ||
         context.visual_focus_id == entity.id) {
       const bool shaded = entity.has<HasShader>() && entity.get<HasShader>().shader &&
                           entity.get<HasShader>().shader->id != 0;
       if (shaded)
         ::afterhours::begin_shader_mode(*entity.get<HasShader>().shader);
+      std::optional<blend_scope> blend;
+      if (entity.has<HasBlend>())
+        blend.emplace(entity.get<HasBlend>().mode);
       render_me(context, font_manager, entity);
+      blend.reset();
       if (shaded)
         ::afterhours::end_shader_mode();
     }
@@ -2028,14 +2186,11 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
         [](RenderInfo a, RenderInfo b) { return a.layer < b.layer; });
 #endif
 
-    // The buffer holds THIS frame, so an assertion reads what is on screen
-    // rather than everything drawn since the process started. Skipped when the
-    // app calls capture::begin_frame(): clearing here would throw away what it
-    // drew before the UI, which for a game is the whole world.
     if (capture::enabled() && !capture::app_owns_frame())
       capture::clear();
 
     const auto focus_paint = detail::prepare_focus_paint(context);
+    const auto over_paints = detail::prepare_over_paints(context);
     const auto scrollbar = [](const RenderInfo &cmd, RectangleType rect,
                               ColorType color, bool has_clip, RectangleType clip) {
       capture::Scope attribute(cmd.id, cmd.layer);
@@ -2055,16 +2210,18 @@ struct RenderImm : System<UIContext<InputAction>, FontManager> {
       }
       auto id = cmd.id;
       OptEntity opt_ent = UICollectionHolder::getEntityForID(id);
-      if (!opt_ent.valid())
-        continue; // Skip stale entity IDs
-      Entity &ent = opt_ent.asE();
-      capture::Scope attribute(ent.id, cmd.layer);
-      render(context, font_manager, ent);
+      if (opt_ent.valid()) {
+        Entity &ent = opt_ent.asE();
+        capture::Scope attribute(ent.id, cmd.layer);
+        render(context, font_manager, ent);
+        if (context.is_hot(ent.id) && ent.has<HasCursor>()) {
+          cursor_to_set = to_cursor_id(ent.get<HasCursor>().cursor);
+        }
+      }
       if (focus_paint && focus_paint->after_command == index)
         detail::draw_focus_paint(*focus_paint);
-      if (context.is_hot(ent.id) && ent.has<HasCursor>()) {
-        cursor_to_set = to_cursor_id(ent.get<HasCursor>().cursor);
-      }
+      for (const auto &over : over_paints)
+        if (over.after_command == index) detail::draw_over_paint(over);
     }
     detail::draw_layer_scrollbars(context, layer_begin, context.render_cmds.size(), scrollbar);
     set_mouse_cursor(cursor_to_set);
@@ -2165,8 +2322,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     const HasCircularProgressState &state =
         entity.get<HasCircularProgressState>();
 
-    float centerX = draw_rect.x + draw_rect.width / 2.0f;
-    float centerY = draw_rect.y + draw_rect.height / 2.0f;
+    const float centerX = rect::center(draw_rect).x;
+    const float centerY = rect::center(draw_rect).y;
     float outerRadius = std::min(draw_rect.width, draw_rect.height) / 2.0f;
     float innerRadius = outerRadius - state.thickness;
     if (innerRadius < 0.0f)
@@ -2267,7 +2424,8 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     const UIComponent &cmp = entity.get<UIComponent>();
 
     const float effective_opacity = detail::compute_effective_opacity(entity);
-    RectangleType draw_rect = cmp.rect();
+    RectangleType draw_rect = detail::snap_origin(
+        cmp.rect(), cmp.resolved_scaling_mode, context.theme.ui_scale);
     if (entity.has<HasUIModifiers>())
       draw_rect = entity.get<HasUIModifiers>().apply_modifier(draw_rect);
     draw_rect = detail::apply_ancestor_transform(entity, draw_rect);
@@ -2517,8 +2675,28 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
         label_rect.y += label_inset.y;
         label_rect.width = std::max(0.f, label_rect.width - 2.f * label_inset.x);
         label_rect.height = std::max(0.f, label_rect.height - 2.f * label_inset.y);
-        float centerX = draw_rect.x + draw_rect.width / 2.0f;
-        float centerY = draw_rect.y + draw_rect.height / 2.0f;
+        const float centerX = rect::center(draw_rect).x;
+        const float centerY = rect::center(draw_rect).y;
+
+        if (entity.has<HasSelectableText>()) {
+          const std::string sel_font = cmp.resolved_font_name();
+          const bool sel_wraps =
+              hasLabel.text_overflow == TextOverflow::Wrap && explicit_fs > 0.f;
+          const float sel_fs = sel_wraps ? explicit_fs : result.rect.height;
+          const float sel_lh =
+              label_line_h > 0.f
+                  ? label_line_h
+                  : measure_text_line("Ag", sel_font, sel_fs,
+                                      1.f + hasLabel.letter_spacing)
+                        .y;
+          paint_label_text_selection(
+              context, entity, hasLabel, cmp, label_rect.x, label_rect.y,
+              label_rect.height, label_rect.width,
+              sel_wraps ? label_rect.width : 1e9f, sel_fs, sel_lh,
+              [&](const RectangleType &r, Color c) {
+                buffer.add_rectangle(r, c, layer, entity.id);
+              });
+        }
 
         // Wrap into lines of coloured runs, one command per run. Plain text is
         // the single-run case. Wrapping needs an explicit font size (see
@@ -2776,16 +2954,20 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       detail::update_scroll_view_content_size(entity);
     }
 
-    if (entity.has<HasColor>() || entity.has<HasLabel>() ||
-        entity.has<ui::HasImage>() ||
-        entity.has<texture_manager::HasTexture>() ||
-        entity.has<FocusClusterRoot>() || entity.has<HasOnDraw>() ||
-        entity.has<HasCircularProgressState>() || entity.has<HasScrollView>() ||
+    if (entity.has_any<HasColor, HasLabel, HasBorder, HasNineSliceBorder,
+                       HasBevelBorder, ui::HasImage,
+                       texture_manager::HasTexture, FocusClusterRoot, HasOnDraw,
+                       HasCircularProgressState, HasScrollView>() ||
         context.visual_focus_id == entity.id) {
       const bool shaded = entity.has<HasShader>() && entity.get<HasShader>().shader;
       if (shaded)
         buffer.add_shader_start(entity.get<HasShader>().shader, layer, entity.id);
+      const bool blended = entity.has<HasBlend>();
+      if (blended)
+        buffer.add_blend_start(entity.get<HasBlend>().mode, layer, entity.id);
       collect_me(buffer, context, font_manager, entity, layer);
+      if (blended)
+        buffer.add_blend_end(layer, entity.id);
       if (shaded)
         buffer.add_shader_end(layer, entity.id);
     }
@@ -2802,7 +2984,6 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
     Arena &arena = get_render_arena();
     arena.reset();
 
-    // Same reason as RenderImm: the buffer is one frame, not the whole run.
     if (capture::enabled() && !capture::app_owns_frame())
       capture::clear();
 
@@ -2832,6 +3013,7 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
 
     // Collect all commands
     const auto focus_paint = detail::prepare_focus_paint(context);
+    const auto over_paints = detail::prepare_over_paints(context);
     const auto scrollbar = [&](const RenderInfo &cmd, RectangleType rect,
                                ColorType color, bool has_clip, RectangleType clip) {
       if (has_clip)
@@ -2853,15 +3035,17 @@ struct RenderBatched : System<UIContext<InputAction>, FontManager> {
       auto id = cmd.id;
       auto layer = cmd.layer;
       OptEntity opt_ent = UICollectionHolder::getEntityForID(id);
-      if (!opt_ent.valid())
-        continue; // Skip stale entity IDs
-      Entity &ent = opt_ent.asE();
-      collect(buffer, context, font_manager, ent, layer);
+      if (opt_ent.valid()) {
+        Entity &ent = opt_ent.asE();
+        collect(buffer, context, font_manager, ent, layer);
+        if (context.is_hot(ent.id) && ent.has<HasCursor>()) {
+          cursor_to_set = to_cursor_id(ent.get<HasCursor>().cursor);
+        }
+      }
       if (focus_paint && focus_paint->after_command == index)
         detail::collect_focus_paint(buffer, *focus_paint);
-      if (context.is_hot(ent.id) && ent.has<HasCursor>()) {
-        cursor_to_set = to_cursor_id(ent.get<HasCursor>().cursor);
-      }
+      for (const auto &over : over_paints)
+        if (over.after_command == index) detail::collect_over_paint(buffer, over);
     }
     detail::draw_layer_scrollbars(context, layer_begin, context.render_cmds.size(), scrollbar);
     set_mouse_cursor(cursor_to_set);

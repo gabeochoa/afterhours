@@ -70,7 +70,7 @@ struct ValidateMinTouchTarget : System<> {
     for (Entity &entity : EntityQuery(UICollectionHolder::get().collection)
                               .whereHasComponent<UIComponent>().gen()) {
       if (entity.cleanup ||
-          (!entity.has<HasClickListener>() && !entity.has<HasDragListener>()) ||
+          !entity.has_any<HasClickListener, HasDragListener>() ||
           entity.has<IgnorePointerEvents>())
         continue;
       const auto &cmp = entity.get<UIComponent>();

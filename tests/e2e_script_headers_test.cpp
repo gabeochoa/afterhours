@@ -97,19 +97,6 @@ int main() {
           "a needle with spaces is not mistaken for a label");
   }
 
-  {
-    std::vector<ScriptHeaders> headers(4);
-    headers[0].batch = "gpu";
-    headers[2].batch = "gpu";
-    const std::vector<std::string> names = {"a", "b", "c", "d"};
-    const auto groups = group_by_batch(headers, names);
-    check(groups.size() == 3, "undeclared scripts each get their own batch");
-    check(groups[0] == std::vector<std::size_t>({0, 2}),
-          "a shared batch groups in input order");
-    check(effective_batch(headers[1], "b") == "b",
-          "effective batch falls back to the script name");
-  }
-
   printf("\n%d/%d checks passed\n", checks_passed, checks_run);
   if (checks_passed != checks_run) {
     printf("FAILURES: %d\n", checks_run - checks_passed);

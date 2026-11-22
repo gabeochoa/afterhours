@@ -21,9 +21,13 @@
 #ifndef STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
 #endif
+#ifndef STB_IMAGE_WRITE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#endif
 #endif
 
 #include <stb/stb_image.h>
+#include <stb/stb_image_write.h>
 
 // ── Impl-TU sentinel ─────────────────────────────────────────────────────────
 // The sokol/Metal backend requires exactly ONE Objective-C++ translation unit
