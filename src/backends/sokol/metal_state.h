@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../config.h"
+#include "../../frame_loop.h"
 
 #ifdef AFTER_HOURS_SOKOL
 
@@ -38,7 +39,7 @@ inline std::function<void()> g_init_fn;
 inline std::function<void()> g_frame_fn;
 inline std::function<void()> g_cleanup_fn;
 inline int g_target_fps = 0;
-inline double g_frame_elapsed = 0.0;
+inline frame_loop::CadenceDriver g_cadence;
 inline uint64_t g_last_frame_tick = 0;
 inline double g_frame_dt = 0.0;
 inline bool g_on_demand = false;
@@ -66,6 +67,9 @@ inline bool g_in_texture_mode = false;
 inline bool g_pass_active = false;
 inline uint32_t g_active_rt_color_view_id = 0;
 inline unsigned int g_window_state_flags = 0;
+// Last FOCUSED/UNFOCUSED event seen; sokol has no focus poll, so this is the
+// whole answer. False until the first FOCUSED arrives.
+inline bool g_window_focused = false;
 
 struct ShaderRuntimeState {
   bool ps1_enabled = false;
