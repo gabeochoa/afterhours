@@ -440,8 +440,7 @@ separator(HasUIContext auto &ctx, EntityParent ep_pair,
   Size separator_thickness = h720(8.0f * 0.25f); // 2px at 720p
 
   if (auto def =
-          styling_defaults.get_component_config(ComponentType::Separator);
-      def.has_value()) {
+          styling_defaults.find_component_config(ComponentType::Separator)) {
     // Use configured thickness from styling defaults
     if (!def->size.is_default) {
       separator_thickness = orientation == SeparatorOrientation::Horizontal

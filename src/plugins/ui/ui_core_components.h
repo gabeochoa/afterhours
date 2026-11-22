@@ -156,6 +156,10 @@ struct UIComponent : BaseComponent {
     return enable_font(font_name_, pixels(fs));
   }
 
+  [[nodiscard]] std::string resolved_font_name() const {
+    return font_name == UNSET_FONT ? std::string(DEFAULT_FONT) : font_name;
+  }
+
   Rectangle rect() const {
     if (absolute) {
       // Absolute positioning: margins are position offsets only, don't shrink
@@ -586,7 +590,6 @@ struct HasLabel : BaseComponent {
   // its own color) instead of the single `label` string. `label` still holds the
   // concatenated text so layout/measurement/overflow work unchanged.
   std::vector<TextSpan> spans;
-  std::string font_name = UIComponent::UNSET_FONT;
   bool is_disabled = false;
 
   // For auto-contrast text color calculation
