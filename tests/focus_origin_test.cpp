@@ -222,4 +222,28 @@ TEST(without_initial_focus_nothing_is_focused_until_tab) {
   CHECK(!h.context().pressed(ui_test::TestInputAction::WidgetNext));
 }
 
+TEST(apply_flags_clears_skip_grid_snap_and_select_on_focus) {
+  using namespace afterhours::ui::imm;
+  ImmTestHarness h;
+  auto &ctx = h.context();
+  const auto build = [&](bool on) {
+    h.begin_frame();
+    return div(ctx, mk(h.root(), 0),
+               ComponentConfig{}
+                   .with_size({pixels(100), pixels(40)})
+                   .with_skip_grid_snap(on)
+                   .with_select_on_focus(on))
+        .ent()
+        .id;
+  };
+  const EntityID first = build(true);
+  Entity &on = UICollectionHolder::getEntityForID(first).asE();
+  CHECK(on.get<UIComponent>().skip_grid_snap);
+  CHECK(on.has<SelectOnFocus>());
+  CHECK(build(false) == first);
+  Entity &off = UICollectionHolder::getEntityForID(first).asE();
+  CHECK(!off.get<UIComponent>().skip_grid_snap);
+  CHECK(!off.has<SelectOnFocus>());
+}
+
 int main() { return ui_test::run_registered_tests("focus origin tests"); }

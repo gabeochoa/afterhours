@@ -53,12 +53,36 @@ TEST(wrap_one_word_per_line) {
   CHECK(lines[2] == "three");
 }
 
-// A single word wider than the width is not character-split; it occupies its
-// own (overflowing) line.
-TEST(wrap_long_word_not_split) {
+TEST(wrap_long_word_breaks_between_characters) {
   auto lines = wrap_text_to_width("supercalifragilistic", 50.f, measure10);
-  CHECK(lines.size() == 1);
-  CHECK(lines[0] == "supercalifragilistic");
+  CHECK(lines.size() == 4);
+  CHECK(lines[0] == "super");
+  CHECK(lines[3] == "istic");
+}
+
+TEST(wrap_long_word_after_short_words_starts_its_own_line) {
+  auto lines = wrap_text_to_width("see abcdefghij ok", 50.f, measure10);
+  CHECK(lines.size() == 4);
+  CHECK(lines[0] == "see");
+  CHECK(lines[1] == "abcde");
+  CHECK(lines[2] == "fghij");
+  CHECK(lines[3] == "ok");
+}
+
+TEST(wrap_long_word_never_splits_a_grapheme) {
+  const std::string flag = "\xF0\x9F\x87\xBA\xF0\x9F\x87\xB8";
+  auto lines = wrap_text_to_width("ab" + flag + "cd", 30.f, [](const std::string &s) {
+    return 10.f * static_cast<float>(s.size() > 4 ? s.size() / 4 + 1 : s.size());
+  });
+  for (const auto &line : lines)
+    CHECK(line.find("\xF0\x9F\x87\xBA") == std::string::npos ||
+          line.find(flag) != std::string::npos);
+}
+
+TEST(wrap_glyph_wider_than_the_width_still_makes_progress) {
+  auto lines = wrap_text_to_width("abc", 5.f, measure10);
+  CHECK(lines.size() == 3);
+  CHECK(lines[2] == "c");
 }
 
 // Empty text yields a single empty line (never zero lines).
@@ -297,11 +321,13 @@ TEST(wrap_lines_utf8_offsets_are_byte_offsets) {
   CHECK(lines[2].begin == 13 && lines[2].end == text.size());
 }
 
-TEST(wrap_lines_long_word_keeps_its_own_line) {
+TEST(wrap_lines_long_word_breaks_into_source_ranges) {
   const auto lines = wrap_lines("ab supercalifragilistic cd", 50.f, measure10);
-  CHECK(lines.size() == 3);
-  CHECK(lines[1].begin == 3 && lines[1].end == 23);
-  CHECK(lines[1].width == 200.f);
+  CHECK(lines.size() == 6);
+  CHECK(lines[1].begin == 3 && lines[1].end == 8);
+  CHECK(lines[1].width == 50.f);
+  CHECK(lines[4].begin == 18 && lines[4].end == 23);
+  CHECK(lines[5].begin == 24 && lines[5].end == 26);
 }
 
 TEST(wrap_lines_empty_text_is_one_empty_line) {
