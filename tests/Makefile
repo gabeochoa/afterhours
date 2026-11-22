@@ -155,6 +155,7 @@ ALL_TESTS := \
 	crash_report_file_test \
 	setting_row_style_test \
 	singleton_iteration_test \
+	singleton_add_test \
 	ui_idle_cost_test \
 	press_delay_test \
 	graphics_key_injection_test \
