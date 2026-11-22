@@ -78,6 +78,7 @@ ALL_TESTS := \
 	command_picker_ui_test \
 	terminal_test \
 	terminal_commands_test \
+	state_commands_test \
 	terminal_ui_test \
 	font_atlas_measure_test \
 	font_prewarm_test \
@@ -140,8 +141,10 @@ ALL_TESTS := \
 	triangle_winding_test \
 	charts_test \
 	system_profile_test \
+	allocation_counters_test \
 	profiling_test \
 	profiling_disabled_test \
+	spike_capture_test \
 	perf_provider_warn_test \
 	blend_mode_test \
 	rect_test \
