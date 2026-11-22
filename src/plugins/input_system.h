@@ -4,6 +4,7 @@
 #include <array>
 
 #include <cmath>
+#include <cstdint>
 #include <algorithm>
 #include <map>
 #include <variant>
@@ -32,6 +33,9 @@ struct input : developer::Plugin {
     static constexpr float DEADZONE = 0.25f;
     static constexpr float MOUSE_DELTA_SCALE = 40.f;
     static constexpr int MAX_GAMEPAD_ID = 8;
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    static_assert(testing::input_injector::GAMEPAD_COUNT == MAX_GAMEPAD_ID);
+#endif
 
     struct ProvidesInputConfig : BaseComponent {
         float gamepad_deadzone = DEADZONE;
@@ -144,7 +148,12 @@ struct input : developer::Plugin {
 #endif
     }
     static bool is_gamepad_available(const GamepadID id) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_gamepad_available(
+            id, raylib::IsGamepadAvailable);
+#else
         return raylib::IsGamepadAvailable(id);
+#endif
     }
     static bool is_key_pressed(const KeyCode keycode) {
 #ifdef AFTER_HOURS_ENABLE_E2E_TESTING
@@ -197,15 +206,30 @@ struct input : developer::Plugin {
     }
     static float get_gamepad_axis_mvt(const GamepadID gamepad_id,
                                       const GamepadAxis axis) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::get_gamepad_axis(
+            gamepad_id, axis, raylib::GetGamepadAxisMovement);
+#else
         return raylib::GetGamepadAxisMovement(gamepad_id, axis);
+#endif
     }
     static bool is_gamepad_button_pressed(const GamepadID gamepad_id,
                                           const GamepadButton button) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_gamepad_button_pressed(
+            gamepad_id, button, raylib::IsGamepadButtonPressed);
+#else
         return raylib::IsGamepadButtonPressed(gamepad_id, button);
+#endif
     }
     static bool is_gamepad_button_down(const GamepadID gamepad_id,
                                        const GamepadButton button) {
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+        return testing::test_input::is_gamepad_button_down(
+            gamepad_id, button, raylib::IsGamepadButtonDown);
+#else
         return raylib::IsGamepadButtonDown(gamepad_id, button);
+#endif
     }
 
     static void draw_text(const std::string &text, const int x, const int y,
@@ -668,6 +692,27 @@ struct input : developer::Plugin {
 
     // Gamepad not yet supported on Metal — return safe defaults silently
     // since the input system polls these every frame.
+#ifdef AFTER_HOURS_ENABLE_E2E_TESTING
+    static bool is_gamepad_available(const GamepadID id) {
+        return testing::test_input::is_gamepad_available(
+            id, [](int) { return false; });
+    }
+    static float get_gamepad_axis_mvt(const GamepadID id,
+                                      const GamepadAxis axis) {
+        return testing::test_input::get_gamepad_axis(
+            id, axis, [](int, int) { return 0.f; });
+    }
+    static bool is_gamepad_button_pressed(const GamepadID id,
+                                          const GamepadButton button) {
+        return testing::test_input::is_gamepad_button_pressed(
+            id, button.value, [](int, int) { return false; });
+    }
+    static bool is_gamepad_button_down(const GamepadID id,
+                                       const GamepadButton button) {
+        return testing::test_input::is_gamepad_button_down(
+            id, button.value, [](int, int) { return false; });
+    }
+#else
     static bool is_gamepad_available(const GamepadID) { return false; }
     static float get_gamepad_axis_mvt(const GamepadID, const GamepadAxis) {
         return 0.f;
@@ -679,6 +724,7 @@ struct input : developer::Plugin {
     static bool is_gamepad_button_down(const GamepadID, const GamepadButton) {
         return false;
     }
+#endif
 
     static void draw_text(const std::string &, const int, const int,
                           const int) {
@@ -762,6 +808,8 @@ struct input : developer::Plugin {
         return false;
     }
     static bool is_key_pressed_repeat(const KeyCode) {
+        warn_once(0, "@notimplemented is_key_pressed_repeat on this "
+                     "backend (no raylib/sokol)");
         return false;
     }
     static bool is_key_down(const KeyCode) {
@@ -911,6 +959,20 @@ struct input : developer::Plugin {
         return mods;
     }
 
+    template <typename KeyCheckFn>
+    static uint8_t modifiers_from(KeyCheckFn key_check) {
+        uint8_t mods = 0;
+        if (key_check(keys::LEFT_SHIFT) || key_check(keys::RIGHT_SHIFT))
+            mods |= KeyChord::MOD_SHIFT;
+        if (key_check(keys::LEFT_CONTROL) || key_check(keys::RIGHT_CONTROL))
+            mods |= KeyChord::MOD_CTRL;
+        if (key_check(keys::LEFT_ALT) || key_check(keys::RIGHT_ALT))
+            mods |= KeyChord::MOD_ALT;
+        if (key_check(keys::LEFT_SUPER) || key_check(keys::RIGHT_SUPER))
+            mods |= KeyChord::MOD_SUPER;
+        return mods;
+    }
+
     struct GamepadAxisWithDir {
         GamepadAxis axis;
         int dir = -1;
@@ -1025,7 +1087,7 @@ struct input : developer::Plugin {
         const GamepadID id, const ValidInputs &valid_inputs,
         KeyCheckFn key_check, ButtonCheckFn button_check) {
         ActionCheckResult result;
-        uint8_t current_mods = get_current_modifiers();
+        uint8_t current_mods = modifiers_from(key_check);
         for (const auto &inp : valid_inputs) {
             DeviceMedium temp_medium = DeviceMedium::None;
             float temp = 0.f;
@@ -1143,12 +1205,28 @@ struct input : developer::Plugin {
         }
     };
 
+    struct InputActivity {
+        bool any = false;
+        bool pressed = false;
+        std::uint64_t frame = 0;
+        std::uint64_t last_activity_frame = 0;
+    };
+
     struct InputCollector : public BaseComponent {
         DeviceActivity device_activity;
+        InputActivity activity;
         std::vector<input::ActionDone> inputs;
         std::vector<input::ActionDone> inputs_pressed;
         std::vector<input::ActionDone> inputs_pressed_repeat;
         float since_last_input = 0.f;
+
+        void note_activity_frame() {
+            ++activity.frame;
+            activity.pressed = !inputs_pressed.empty() ||
+                               !inputs_pressed_repeat.empty();
+            activity.any = activity.pressed || !inputs.empty();
+            if (activity.any) activity.last_activity_frame = activity.frame;
+        }
     };
 
     using InputCollectorInputAction = InputCollector;
@@ -1217,6 +1295,10 @@ struct input : developer::Plugin {
         [[nodiscard]] float since_last_input() {
             return data.value().get().since_last_input;
         }
+
+        [[nodiscard]] InputActivity input_activity() const {
+            return data.value().get().activity;
+        }
     };
 
     static auto get_input_collector() -> PossibleInputCollector {
@@ -1224,6 +1306,12 @@ struct input : developer::Plugin {
         InputCollector *ic = EntityHelper::get_singleton_cmp<InputCollector>();
         if (ic == nullptr) return {};
         return *ic;
+    }
+
+    static InputActivity input_activity() {
+        auto collector = get_input_collector();
+        if (!collector.has_value()) return {};
+        return collector.input_activity();
     }
 
     template <typename Action>
@@ -1304,6 +1392,7 @@ struct input : developer::Plugin {
             suppress_permissive_duplicates(collector.inputs_pressed);
             suppress_permissive_duplicates(collector.inputs_pressed_repeat);
 
+            collector.note_activity_frame();
             if (collector.inputs.empty()) {
                 collector.since_last_input += dt;
             } else {
@@ -1460,6 +1549,7 @@ struct LayeredInputSystem
         if (layer_it == mapper.layers.end()) {
             collector.device_activity.end_frame(input::is_mouse_button_down(0) || input::is_mouse_button_down(1));
             // No mapping for this layer, nothing to poll
+            collector.note_activity_frame();
             if (collector.inputs.empty()) {
                 collector.since_last_input += dt;
             }
@@ -1491,6 +1581,7 @@ struct LayeredInputSystem
         input::suppress_permissive_duplicates(collector.inputs_pressed);
         input::suppress_permissive_duplicates(collector.inputs_pressed_repeat);
 
+        collector.note_activity_frame();
         if (collector.inputs.empty()) {
             collector.since_last_input += dt;
         } else {

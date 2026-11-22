@@ -14,7 +14,7 @@ namespace afterhours {
 enum struct SystemPhase;
 namespace profiling::detail {
 using Clock = std::chrono::steady_clock;
-using Callback = void (*)(void *, std::string_view, SystemPhase, double);
+using Callback = void (*)(void *, std::string_view, SystemPhase, double, int);
 struct Observer {
     std::uint64_t token = 0;
     void *context = nullptr;
@@ -46,6 +46,7 @@ struct TimingScope {
     Clock::time_point start{};
     std::string_view name;
     SystemPhase phase;
+    int entity_count = 0;
     bool active = false;
     TimingScope(std::string_view label, SystemPhase p) : name(label), phase(p) {
         if (!observer_count) return;
@@ -61,7 +62,7 @@ struct TimingScope {
         for (std::size_t i = 0; i < observers.size(); ++i) {
             const auto observer = observers[i];
             if (!tokens[i] || observer.token != tokens[i]) continue;
-            observer.callback(observer.context, name, phase, elapsed);
+            observer.callback(observer.context, name, phase, elapsed, entity_count);
         }
     }
     TimingScope(const TimingScope &) = delete;

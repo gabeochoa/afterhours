@@ -78,10 +78,6 @@ struct Fixture {
   }
 };
 
-// Entities VISITED, which is the cost. The counter has to come before
-// whereHasComponent: put it after and the component test short-circuits first,
-// so it reports the handful that matched and hides the whole walk. Measured
-// that mistake before fixing it.
 static std::size_t scan_evals(EntityCollection &ec, EntityHandle parent) {
   std::size_t visited = 0;
   auto r = EntityQuery(ec)
@@ -89,9 +85,8 @@ static std::size_t scan_evals(EntityCollection &ec, EntityHandle parent) {
                  visited++;
                  return true;
                })
-               .whereHasComponent<Child>()
                .whereLambda([&](const Entity &e) {
-                 return e.get<Child>().parent == parent;
+                 return e.has<Child>() && e.get<Child>().parent == parent;
                })
                .gen();
   (void)r;
