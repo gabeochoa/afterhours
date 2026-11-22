@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <filesystem>
 #include <string>
@@ -148,6 +149,12 @@ inline int substeps_for_time_scale(float time_scale) {
 }
 
 inline int apply_time_scale(graphics::RunConfig &cfg, float time_scale) {
+  // fixed_dt is a runtime RunConfig field, not a compile-time constant, so a
+  // static_assert cannot check it. A negative value is never legitimate (0
+  // means variable dt), so assert loudly instead of silently selecting
+  // variable-dt mode.
+  assert(cfg.fixed_dt >= 0.f &&
+         "fixed_dt must not be negative; 0 selects variable dt");
   if (cfg.fixed_dt > 0.f)
     cfg.sim_steps = std::max(1, cfg.sim_steps) * substeps_for_time_scale(time_scale);
   return cfg.step_count();
